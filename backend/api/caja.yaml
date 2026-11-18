@@ -129,6 +129,17 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/CajaEmitido" } }
+  /api/v1/admin/caja/anulaciones:
+    get:
+      operationId: AnulacionesPorPersona
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso; hora argentina), schema: { type: string } }
+      responses:
+        "200":
+          description: Las ventas del mostrador anuladas en el mes (por la fecha de la anulación, sin tope), por quien las anuló
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaAnulaciones" } }
 components:
   responses:
     CajaHecho:
@@ -148,6 +159,14 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problema" }
   schemas:
+    CajaAnulaciones:
+      type: object
+      required: [quien, cantidad, total, devuelto]
+      properties:
+        quien: { type: string }
+        cantidad: { type: integer }
+        total: { type: number, format: double }
+        devuelto: { type: number, format: double, description: Efectivo que salió del cajón por esas anulaciones }
     Problema:
       type: object
       required: [title, status]

@@ -259,11 +259,41 @@ func Plural(n float64, singular, plural string) string {
 	return jsmath.Texto(n) + " " + plural
 }
 
+// TotalesDeFilas suma las filas como lo hacía la pantalla: sirve para los
+// casos guardados del golden, que no traen los totales del período.
+func TotalesDeFilas(filas []FilaDeReporte) TotalesDelReporte {
+	var t TotalesDelReporte
+	costeados := 0
+	costo := 0.0
+	for _, f := range filas {
+		t.Total = float64(t.Total + f.Total)
+		t.Cantidad = float64(t.Cantidad + f.Cantidad)
+		t.NetoVenta = float64(t.NetoVenta + f.NetoVenta)
+		t.LineasSinCosto = float64(t.LineasSinCosto + f.LineasSinCosto)
+		if f.Costo != nil {
+			costeados++
+			t.NetoCosteado = float64(t.NetoCosteado + f.NetoCosteado)
+			costo = float64(costo + *f.Costo)
+		}
+	}
+	if costeados > 0 {
+		t.Costo = &costo
+	}
+	t.Filas = len(filas)
+	return t
+}
+
 // CsvReporteDeVentas es el CSV de app/admin/reportes/exportar.
-func CsvReporteDeVentas(corte string, filas []FilaDeReporte) string {
+//
+// **El margen se puede rehacer en la planilla.** Va la columna «Neto con
+// costo» (NetoCosteado): el margen es esa columna menos el costo. Sin ella
+// el contador hacía Neto − Costo, le daba otra cifra y concluía que el
+// archivo estaba mal. El renglón Total es el del período entero (t), no la
+// suma de las filas, que en los cortes con tope son las 50 primeras.
+func CsvReporteDeVentas(corte string, filas []FilaDeReporte, t TotalesDelReporte) string {
 	numero := func(v float64) string { return csvexcel.NumeroCsv(v, 2) }
 	texto := func(v *string) string { return csvexcel.TextoCsv(v) }
-	t := func(v string) string { return csvexcel.Texto(v) }
+	tx := func(v string) string { return csvexcel.Texto(v) }
 	entero := csvexcel.EnteroCsv
 	cantidad := entero
 	if corte == "producto" {
@@ -275,37 +305,26 @@ func CsvReporteDeVentas(corte string, filas []FilaDeReporte) string {
 	if corte == "producto" {
 		unidades = "Unidades"
 	}
-	lineas := []string{strings.Join([]string{t(encabezado), t("Detalle"), t(unidades), t("Total"), t("Neto sin IVA"),
-		t("Costo"), t("Margen"), t("Renglones sin costo")}, ";")}
+	lineas := []string{strings.Join([]string{tx(encabezado), tx("Detalle"), tx(unidades), tx("Total"), tx("Neto sin IVA"),
+		tx("Neto con costo"), tx("Costo"), tx("Margen"), tx("Renglones sin costo")}, ";")}
 	for _, f := range filas {
-		costo, margen := "", ""
+		costeado, costo, margen := "", "", ""
 		if m := MargenDeLaFila(f); m != nil {
+			costeado = numero(f.NetoCosteado)
 			costo = numero(*f.Costo)
 			margen = numero(*m)
 		}
-		lineas = append(lineas, strings.Join([]string{t(f.Etiqueta), texto(f.Detalle), cantidad(f.Cantidad), numero(f.Total),
-			numero(f.NetoVenta), costo, margen, entero(f.LineasSinCosto)}, ";"))
+		lineas = append(lineas, strings.Join([]string{tx(f.Etiqueta), texto(f.Detalle), cantidad(f.Cantidad), numero(f.Total),
+			numero(f.NetoVenta), costeado, costo, margen, entero(f.LineasSinCosto)}, ";"))
 	}
-	// El neto del total es el de todas las filas, como «Vendido sin IVA» en
-	// pantalla; el margen, el de lo costeado.
-	var total, netoTotal, costeado, costoTotal, sinCosto float64
-	costeados := 0
-	for _, f := range filas {
-		total = float64(total + f.Total)
-		netoTotal = float64(netoTotal + f.NetoVenta)
-		sinCosto = float64(sinCosto + f.LineasSinCosto)
-		if f.Costo != nil {
-			costeados++
-			costeado = float64(costeado + f.NetoCosteado)
-			costoTotal = float64(costoTotal + *f.Costo)
-		}
+	costeado, costo, margen := "", "", ""
+	if m := t.MargenDelTotal(); m != nil {
+		costeado = numero(t.NetoCosteado)
+		costo = numero(*t.Costo)
+		margen = numero(*m)
 	}
-	costo, margen := "", ""
-	if costeados > 0 {
-		costo = numero(costoTotal)
-		margen = numero(costeado - costoTotal)
-	}
-	lineas = append(lineas, strings.Join([]string{t("Total"), t(""), t(""), numero(total), numero(netoTotal), costo, margen, entero(sinCosto)}, ";"))
+	lineas = append(lineas, strings.Join([]string{tx("Total"), tx(""), tx(""), numero(t.Total), numero(t.NetoVenta),
+		costeado, costo, margen, entero(t.LineasSinCosto)}, ";"))
 	return "\ufeff" + strings.Join(lineas, "\r\n") + "\r\n"
 }
 

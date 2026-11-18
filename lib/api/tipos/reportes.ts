@@ -325,6 +325,33 @@ export interface components {
              */
             netoCosteado: number;
         };
+        ReporteDeVentas: {
+            filas: components["schemas"]["ReporteFila"][];
+            totales: components["schemas"]["ReporteTotales"];
+        };
+        /** @description El período entero con los mismos filtros, sin el tope de filas del corte */
+        ReporteTotales: {
+            /**
+             * Format: double
+             * @description Con IVA; subtotales de renglones o total de los pedidos
+             */
+            total: number;
+            /**
+             * Format: double
+             * @description Unidades o operaciones
+             */
+            cantidad: number;
+            /** Format: double */
+            netoVenta: number;
+            /** Format: double */
+            netoCosteado: number;
+            /** Format: double */
+            costo: number | null;
+            /** Format: double */
+            lineasSinCosto: number;
+            /** @description Cuántas filas tiene el corte entero */
+            filas: number;
+        };
         ReporteMes: {
             clave: string;
             etiqueta: string;
@@ -401,9 +428,17 @@ export interface components {
             total: number;
             cantidad: number;
         };
+        /** @description facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado */
+        CierreVendido: {
+            /** Format: double */
+            total: number;
+            facturado: components["schemas"]["CierreTotales"];
+            interno: components["schemas"]["CierreTotales"];
+            sinFactura: components["schemas"]["CierreTotales"];
+        };
         CierreResumen: {
             ventas: components["schemas"]["CierreTotalesConIva"];
-            sinFactura: components["schemas"]["CierreTotales"];
+            vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
             retencionesPracticadas: components["schemas"]["CierreTotales"];
@@ -490,6 +525,13 @@ export interface components {
              * @description Sin IVA
              */
             ventasNetas: number;
+            /**
+             * Format: double
+             * @description La parte de ventasNetas sin costo cargado; queda afuera del resultado
+             */
+            ventasSinCosto: number;
+            /** @description ventasNetas lleva restado el descuento del pedido (regla del negocio) */
+            conDescuento: boolean;
             /** Format: double */
             costo: number;
             /** Format: double */
@@ -650,13 +692,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Las filas del corte pedido, sin las canceladas */
+            /** @description Las filas del corte pedido (hasta 50 en producto, rubro y cliente), sin las canceladas, y los totales del período entero */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReporteFila"][];
+                    "application/json": components["schemas"]["ReporteDeVentas"];
                 };
             };
         };

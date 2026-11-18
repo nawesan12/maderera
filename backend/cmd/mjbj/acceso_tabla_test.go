@@ -34,6 +34,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"ListarCajasFisicas":             "/admin/caja",                   // GET /api/v1/admin/caja/cajas-fisicas
 	"CrearCajaFisica":                "/admin/caja",                   // POST /api/v1/admin/caja/cajas-fisicas
 	"EmitidoPorCaja":                 "/admin/caja",                   // GET /api/v1/admin/caja/emitido
+	"AnulacionesPorPersona":          "/admin/caja",                   // GET /api/v1/admin/caja/anulaciones
 	"GuardarFondoBase":               "/admin/caja",                   // PUT /api/v1/admin/caja/sucursales/{id}/fondo-base
 	"SucursalesConCaja":              "/admin/caja",                   // GET /api/v1/admin/caja/sucursales
 	"TurnosCerrados":                 "/admin/caja",                   // GET /api/v1/admin/caja/turnos-cerrados

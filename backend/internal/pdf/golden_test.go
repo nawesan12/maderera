@@ -303,7 +303,9 @@ func diferencia(a, b string) (float64, error) {
 //     (el mismo «Vendido sin IVA» de la pantalla) y el margen se mide contra
 //     NetoCosteado, la venta de los renglones con costo. Los casos guardados
 //     llevan NetoCosteado = NetoVenta en las filas con costo, que era la
-//     cuenta de antes.
+//     cuenta de antes. Después, en la revisión de T2: la columna «Neto
+//     c/costo», la base del margen en la cabecera y lo vendido sin costo en
+//     plata (los casos guardados no traen Totales: se suman las filas).
 func TestActualizarGolden(t *testing.T) {
 	pedido := os.Getenv("PDF_ACTUALIZAR")
 	if pedido == "" {

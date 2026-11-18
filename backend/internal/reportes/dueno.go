@@ -2,6 +2,7 @@ package reportes
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -92,15 +93,22 @@ type PlataHoy struct {
 	Total       float64       `json:"total"`
 }
 
-// Resultado es ventas netas − costo − gastos de un lapso.
+// Resultado es ventas netas − lo vendido sin costo − costo − gastos de un
+// lapso.
 type Resultado struct {
 	VentasNetas float64 `json:"ventasNetas"`
-	Costo       float64 `json:"costo"`
-	Gastos      float64 `json:"gastos"`
-	Resultado   float64 `json:"resultado"`
-	// LineasSinCosto: renglones vendidos sin costo cargado. Con alguno, el
-	// costo está corto y el resultado, inflado.
+	// VentasSinCosto es la parte de VentasNetas de los renglones sin costo
+	// cargado (o en $0): queda afuera del resultado, como queda afuera del
+	// margen de Reportes.
+	VentasSinCosto float64 `json:"ventasSinCosto"`
+	Costo          float64 `json:"costo"`
+	Gastos         float64 `json:"gastos"`
+	Resultado      float64 `json:"resultado"`
+	// LineasSinCosto: cuántos renglones forman VentasSinCosto.
 	LineasSinCosto int `json:"lineasSinCosto"`
+	// ConDescuento: la regla del negocio resta el descuento del pedido de
+	// las ventas, y VentasNetas ya no es el «Vendido sin IVA» de Reportes.
+	ConDescuento bool `json:"conDescuento"`
 }
 
 // ResultadoComparado es el del lapso y el del anterior.
@@ -120,8 +128,11 @@ type ResultadoComparado struct {
 // cheque o cuenta corriente no salió del cajón, y la anulación de una venta
 // cobrada así no es plata que se fue.
 //
-// ConFacturaViva son las que siguen con su factura autorizada y sin nota de
-// crédito que la anule: para el fisco esa venta existe y su IVA se debe.
+// ConFacturaViva son las ventas anuladas, de cualquier fecha y origen, que
+// siguen con su factura autorizada y sin nota de crédito que la acredite:
+// para el fisco esa venta existe y su IVA se debe. Es el mismo número que el
+// pendiente del Cierre; contar solo las de la semana hacía que la misma
+// cosa diera dos cantidades, y una de hace diez días dejaba de verse.
 type Anuladas struct {
 	Cantidad       int     `json:"cantidad"`
 	Total          float64 `json:"total"`
@@ -244,7 +255,8 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 	desde := InicioDelDia(ahora).AddDate(0, 0, -6)
 	hasta := InicioDelDia(ahora).AddDate(0, 0, 1)
 	err := s.pool.QueryRow(ctx, `
-		SELECT count(*)::int, coalesce(sum(o.total), 0), (count(*) FILTER (WHERE `+fragmentos.FacturaViva+`))::int,
+		SELECT count(*)::int, coalesce(sum(o.total), 0),
+		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND `+fragmentos.FacturaViva+`),
 		  (SELECT coalesce(-sum(m.monto), 0) FROM cash_movements m
 		   JOIN orders d ON d.id = m.order_id AND d.origen = 'mostrador' AND d.estado = 'cancelado'
 		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2)
@@ -368,7 +380,8 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 	return p, nil
 }
 
-// ResultadoEntre es ventas netas − costo − gastos. Las ventas son instantes
+// ResultadoEntre es ventas netas − costo − gastos, sobre lo que tiene costo.
+// Las ventas son instantes
 // (el lapso argentino [idesde, ihasta)); los gastos se guardan como día, a
 // las 0 UTC del día del formulario, y se cortan en [ddesde, dhasta) (ver
 // cierre.go).
@@ -377,36 +390,58 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 // renglón sin su IVA y su costo al momento de vender. Así el número del
 // inicio, el del cierre y el de Reportes son el mismo.
 //
+// **Lo vendido sin costo queda afuera, y se dice cuánto es.** Restarle el
+// costo de una parte a la venta del todo contaba cada renglón sin costo como
+// ganancia entera: con $4M de $10M sin costo cargado, la Ganancia del mes
+// mostraba esos $4M como plata ganada mientras Reportes, con la misma
+// venta, medía el margen sobre lo costeado. Ahora es una sola regla: el
+// resultado sale de lo que tiene costo y VentasSinCosto va al lado, en
+// plata. Los gastos van enteros.
+//
 // Dos reglas las decide el dueño en Reglas del negocio: si los gastos entran
 // con su IVA o sin él (el neto de la factura de compra a la que están atados;
 // un gasto suelto no tiene el IVA aparte y entra entero), y si a las ventas
 // se les resta el descuento del pedido (prorrateado en sus renglones).
 func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, dhasta time.Time) (Resultado, error) {
 	var r Resultado
-	var neto, costo, gastos jsmath.Num
+	var neto, sinCosto, costo, gastos jsmath.Num
 	sinIva := s.ajuste(ctx, "ganancia_gastos", "con_iva") == "sin_iva"
-	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
-	ventas := "coalesce(sum(margenes.neto), 0)"
-	if conDescuento {
-		ventas = "coalesce(sum(margenes.neto * CASE WHEN o.subtotal > 0 THEN (o.total - o.costo_envio) / o.subtotal ELSE 1 END), 0)"
-	}
+	r.ConDescuento = s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	gasto := "e.importe"
 	if sinIva {
 		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
 	}
 	err := s.pool.QueryRow(ctx, `
-		SELECT `+ventas+`, coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
+		SELECT `+ventasNetas(r.ConDescuento, "margenes.neto")+`,
+		  `+ventasNetas(r.ConDescuento, "(margenes.neto - coalesce(margenes.neto_costeado, 0))")+`,
+		  coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
 		  (SELECT coalesce(sum(`+gasto+`), 0) FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
 		   WHERE e.fecha >= $3 AND e.fecha < $4)
 		FROM orders o `+margenes+`
 		WHERE o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2`, idesde, ihasta, ddesde, dhasta).
-		Scan(&neto, &costo, &r.LineasSinCosto, &gastos)
+		Scan(&neto, &sinCosto, &costo, &r.LineasSinCosto, &gastos)
 	if err != nil {
 		return r, err
 	}
-	r.VentasNetas, r.Costo, r.Gastos = jsmath.Redondear2(neto.F()), jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
-	r.Resultado = jsmath.Redondear2(float64(r.VentasNetas-r.Costo) - r.Gastos)
+	r.VentasNetas, r.VentasSinCosto = jsmath.Redondear2(neto.F()), jsmath.Redondear2(sinCosto.F())
+	r.Costo, r.Gastos = jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
+	r.Resultado = jsmath.Redondear2(float64(float64(r.VentasNetas-r.VentasSinCosto)-r.Costo) - r.Gastos)
 	return r, nil
+}
+
+// ventasNetas suma `neto` (una expresión sobre margenes) de los pedidos `o`,
+// con el descuento del pedido prorrateado si la regla lo pide. La usan el
+// resultado y el reparto de lo vendido del Cierre, para que den lo mismo.
+// Con `filtro`, solo las filas que lo cumplen.
+func ventasNetas(conDescuento bool, neto string, filtro ...string) string {
+	donde := ""
+	if len(filtro) > 0 {
+		donde = " FILTER (WHERE " + strings.Join(filtro, " AND ") + ")"
+	}
+	if conDescuento {
+		neto += " * CASE WHEN o.subtotal > 0 THEN (o.total - o.costo_envio) / o.subtotal ELSE 1 END"
+	}
+	return "coalesce(sum(" + neto + ")" + donde + ", 0)"
 }
 
 // diaUTC es el día argentino de t como lo guardan los gastos (las 0 UTC).

@@ -254,6 +254,13 @@ type PedidoListado struct {
 	// «Cobrar $X» del reparto lo leen de acá, con la misma regla que «Me
 	// deben».
 	SinCobrar *float64 `json:"sinCobrar"`
+	// PagoEnRevision: el cliente informó una transferencia que nadie
+	// verificó (fragmentos.PagoEnRevision). No es «sin cobrar»: el reparto
+	// no tiene que pedirle la plata otra vez.
+	PagoEnRevision bool `json:"pagoEnRevision"`
+	// EntregadoAt es el último paso a «entregado» del historial; nil si no
+	// se entregó. «Sin cobrar» cuenta los días desde ahí.
+	EntregadoAt *time.Time `json:"entregadoAt"`
 }
 
 // EstadoSinCobrar es el filtro del historial que lleva el renglón «N
@@ -321,7 +328,10 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.contacto_nombre, c.razon_social, b.name, b.slug, o.estado::text, o.tipo_entrega::text,
 		       o.direccion_entrega, o.medio_pago::text, o.estado_pago::text, o.total::text, o.created_at,
-		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio, `+fragmentos.SinCobrarDelPedido+`::float8
+		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio, `+fragmentos.SinCobrarDelPedido+`::float8,
+		       `+fragmentos.PagoEnRevision+`,
+		       CASE WHEN o.estado = 'entregado' THEN (SELECT max(h.created_at) FROM order_status_history h
+		                                             WHERE h.order_id = o.id AND h.estado = 'entregado') END
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -337,7 +347,8 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		var p PedidoListado
 		var total string
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.Sucursal, &p.SucursalSlug, &p.Estado, &p.TipoEntrega,
-			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio, &p.SinCobrar); err != nil {
+			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio, &p.SinCobrar,
+			&p.PagoEnRevision, &p.EntregadoAt); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)

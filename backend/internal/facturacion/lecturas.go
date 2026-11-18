@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Las lecturas de lib/dal/admin/facturacion.ts y de misComprobantes.
@@ -39,6 +40,10 @@ type Listado struct {
 	Medios           []string   `json:"medios"`
 }
 
+// EstadoAnuladaViva es el filtro de las facturas con CAE de ventas anuladas
+// a las que les falta acreditar algo (fragmentos.FacturaViva).
+const EstadoAnuladaViva = "anulada-viva"
+
 // Filtros son los de listarComprobantes.
 type Filtros struct {
 	Estado   string
@@ -60,7 +65,13 @@ func condicionesDeListado(f Filtros) (string, []any) {
 		args = append(args, v)
 		return "$" + strconv.Itoa(len(args))
 	}
-	if f.Estado != "" && f.Estado != "todos" {
+	switch {
+	case f.Estado == EstadoAnuladaViva:
+		// Las facturas de ventas anuladas que siguen con su débito: a donde
+		// llevan el Resumen y el Cierre, cada una con su nota de crédito a
+		// un clic.
+		cond = append(cond, "i.order_id IN (SELECT id FROM orders WHERE estado = 'cancelado')", fragmentos.FacturaSinAcreditar)
+	case f.Estado != "" && f.Estado != "todos":
 		cond = append(cond, "i.estado::text = "+arg(f.Estado))
 	}
 	if f.Desde != nil {

@@ -479,15 +479,66 @@ func TestEmitidoConLaAnulacion(t *testing.T) {
 				f.Motivo == nil || *f.Motivo != "se equivocó de medida" || f.InvoiceTipo == nil || *f.InvoiceTipo != "factura_b" {
 				t.Errorf("anulada: %+v", f)
 			}
-			// La nota de crédito está, pero no la anula entera: sigue viva.
+			// La nota de crédito está, pero no nombra a la factura: no la
+			// acredita y sigue viva.
 			if !f.FacturaViva {
 				t.Errorf("factura viva: %+v", f)
 			}
 		}
 	}
-	e.id(t, `update invoices set estado = 'anulada' where tipo = 'factura_b' returning id`)
+	e.id(t, `update invoices set comprobante_origen_id = (select id from invoices where tipo = 'factura_b') where tipo = 'nota_credito_b' returning id`)
 	_, b = pedir(t, adm, "GET", e.u+"emitido?periodo=2026-10", nil)
 	if strings.Contains(b, `"facturaViva":true`) {
-		t.Errorf("con la factura anulada ya no está viva: %s", b)
+		t.Errorf("acreditada entera por su nota ya no está viva: %s", b)
+	}
+}
+
+// Las anulaciones por persona salen de Go, sin el tope de 200 de lo emitido
+// y por la fecha de la anulación: con 230 ventas en octubre, las tres que
+// Ana anuló el 2 cuentan aunque «Emitido» solo traiga las 200 más nuevas; la
+// venta del 30/10 anulada el 2/11 es de noviembre, no de octubre.
+func TestAnulacionesPorPersonaSinTope(t *testing.T) {
+	e := armar(t)
+	adm, _ := e.staff(t, "admin@prueba.test", "admin")
+	_, ana := e.staff(t, "ana@prueba.test", "vendedor")
+	e.id(t, `update "user" set name = 'Ana' where id = $1 returning id`, ana)
+	e.id(t, `insert into orders (numero, contacto_nombre, branch_id, origen, medio_pago, total, created_at, estado)
+		select 'M-' || g, 'Cliente', $1, 'mostrador', 'efectivo', 100, $2::timestamptz + g * interval '2 hours', 'entregado'
+		from generate_series(1, 230) g returning id`, e.central, time.Date(2026, 10, 1, 9, 0, 0, 0, Argentina))
+	turno := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, '2026-10-01T11:00:00Z') returning id`, e.central, ana)
+	anular := func(numero string, cuando time.Time, efectivo float64) {
+		id := e.id(t, `update orders set estado = 'cancelado' where numero = $1 returning id`, numero)
+		e.id(t, `insert into order_status_history (order_id, estado, created_by_user_id, created_at) values ($1, 'cancelado', $2, $3) returning id`, id, ana, cuando)
+		if efectivo > 0 {
+			e.id(t, `insert into cash_movements (session_id, tipo, monto, order_id, created_at) values ($1, 'devolucion', $2, $3, $4) returning id`,
+				turno, -efectivo, id, cuando)
+		}
+	}
+	for _, n := range []string{"M-1", "M-2", "M-3"} {
+		anular(n, time.Date(2026, 10, 2, 10, 0, 0, 0, Argentina), 100)
+	}
+	tarde := e.id(t, `insert into orders (numero, contacto_nombre, branch_id, origen, medio_pago, total, created_at, estado)
+		values ('M-T', 'Cliente', $1, 'mostrador', 'debito', 500, '2026-10-30T15:00:00Z', 'entregado') returning numero`, e.central)
+	anular(tarde, time.Date(2026, 11, 2, 10, 0, 0, 0, Argentina), 0)
+
+	_, b := pedir(t, adm, "GET", e.u+"emitido?periodo=2026-10", nil)
+	var emitido []Emitido
+	_ = json.Unmarshal([]byte(b), &emitido)
+	if len(emitido) != 200 || strings.Contains(b, `"numero":"M-1"`) {
+		t.Fatalf("lo emitido corta en 200 y las anuladas del 2 quedaron afuera: %d", len(emitido))
+	}
+	leer := func(periodo string) []AnulacionesDeUnaPersona {
+		_, b := pedir(t, adm, "GET", e.u+"anulaciones?periodo="+periodo, nil)
+		var a []AnulacionesDeUnaPersona
+		if err := json.Unmarshal([]byte(b), &a); err != nil {
+			t.Fatal(b)
+		}
+		return a
+	}
+	if a := leer("2026-10"); len(a) != 1 || a[0] != (AnulacionesDeUnaPersona{Quien: "Ana", Cantidad: 3, Total: 300, Devuelto: 300}) {
+		t.Errorf("octubre: %+v", a)
+	}
+	if a := leer("2026-11"); len(a) != 1 || a[0] != (AnulacionesDeUnaPersona{Quien: "Ana", Cantidad: 1, Total: 500}) {
+		t.Errorf("noviembre: %+v", a)
 	}
 }

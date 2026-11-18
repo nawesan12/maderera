@@ -159,8 +159,9 @@ func TestReporteDeVentasYMeses(t *testing.T) {
 		[4]any{placa, 1.0, 700.0, nil})
 
 	_, b, _ := pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
-	var filas []FilaDeReporte
-	_ = json.Unmarshal([]byte(b), &filas)
+	var rep ReporteDeVentas
+	_ = json.Unmarshal([]byte(b), &rep)
+	filas := rep.Filas
 	if len(filas) != 2 || filas[0].Etiqueta != "Fenólico" || filas[0].Cantidad != 3 || filas[0].Total != 1815 || filas[0].NetoVenta != 1500 ||
 		*filas[0].Costo != 1250 || filas[0].LineasSinCosto != 0 || *filas[0].Detalle != "18 mm" {
 		t.Fatalf("por producto: %s", b)
@@ -184,7 +185,7 @@ func TestReporteDeVentasYMeses(t *testing.T) {
 	if !strings.Contains(b, `"etiqueta":"Aserradero"`) || strings.Contains(b, "Casa Central") {
 		t.Errorf("por sucursal filtrado: %s", b)
 	}
-	if c, b, _ := pedir(t, adm, e.u+"reportes/ventas?corte=canal&periodo=mes&sucursal=no-es-un-id"); c != 200 || b != "[]\n" {
+	if c, b, _ := pedir(t, adm, e.u+"reportes/ventas?corte=canal&periodo=mes&sucursal=no-es-un-id"); c != 200 || !strings.HasPrefix(b, `{"filas":[],`) {
 		t.Errorf("un id roto filtra todo, no rompe: %d %s", c, b)
 	}
 	_, b, _ = pedir(t, adm, e.u+"reportes/ventas?corte=canal&periodo=mes")

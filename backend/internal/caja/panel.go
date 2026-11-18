@@ -498,6 +498,56 @@ func (p *Panel) EmitidoPorCaja(ctx context.Context, desde, hasta time.Time) ([]E
 	return out, filas.Err()
 }
 
+// AnulacionesDeUnaPersona son las ventas del mostrador que anuló alguien
+// en el mes.
+type AnulacionesDeUnaPersona struct {
+	Quien    string  `json:"quien"`
+	Cantidad int     `json:"cantidad"`
+	Total    float64 `json:"total"`
+	// Devuelto es el efectivo que salió del cajón por esas anulaciones (los
+	// movimientos «devolucion»): lo que importa para el control. La parte
+	// con tarjeta o a cuenta nunca entró al cajón.
+	Devuelto float64 `json:"devuelto"`
+}
+
+// AnulacionesPorPersona cuenta las anulaciones del mostrador entre `desde` y
+// `hasta` (incluido) por quien las hizo, la que más anuló primero.
+//
+// Va por la fecha de la anulación (el último paso a «cancelado» del
+// historial, la misma regla que AnuladasDeLaSemana del Resumen) y sin tope.
+// La pantalla las sumaba sobre lo emitido, que corta en las 200 ventas más
+// nuevas y por la fecha de la venta: en un mes de más de 200 ventas las
+// anulaciones de la primera quincena no contaban, y la venta del 30
+// anulada el 2 no aparecía en ningún mes. Es el control para que no falte
+// plata: no puede informar de menos sin avisar.
+func (p *Panel) AnulacionesPorPersona(ctx context.Context, desde, hasta time.Time) ([]AnulacionesDeUnaPersona, error) {
+	filas, err := p.pool.Query(ctx, `
+		SELECT coalesce(a.quien, 'Sin nombre'), count(*)::int, coalesce(sum(o.total), 0),
+		       coalesce(sum((SELECT -sum(m.monto) FROM cash_movements m WHERE m.order_id = o.id AND m.tipo = 'devolucion')), 0)
+		FROM orders o
+		JOIN LATERAL (SELECT h.created_at, hu.name AS quien FROM order_status_history h
+		              LEFT JOIN "user" hu ON hu.id = h.created_by_user_id
+		              WHERE h.order_id = o.id AND h.estado = 'cancelado'
+		              ORDER BY h.created_at DESC LIMIT 1) a ON true
+		WHERE o.origen = 'mostrador' AND o.estado = 'cancelado' AND a.created_at >= $1 AND a.created_at <= $2
+		GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1`, desde, hasta)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	out := []AnulacionesDeUnaPersona{}
+	for filas.Next() {
+		var a AnulacionesDeUnaPersona
+		var total, devuelto jsmath.Num
+		if err := filas.Scan(&a.Quien, &a.Cantidad, &total, &devuelto); err != nil {
+			return nil, err
+		}
+		a.Total, a.Devuelto = total.F(), devuelto.F()
+		out = append(out, a)
+	}
+	return out, filas.Err()
+}
+
 // AsignarVentaAlTurno es asignarVentaAlTurno: mete una venta suelta en un
 // turno de su sucursal, con la hora en que se cobró.
 //

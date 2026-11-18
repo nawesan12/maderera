@@ -486,8 +486,8 @@ func (q *Queries) CrearParteDeRecibo(ctx context.Context, arg CrearParteDeRecibo
 }
 
 const crearRecibo = `-- name: CrearRecibo :one
-INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id)
-VALUES ($1, $2, $3, $4, $8::text::numeric, $5, $6, $7)
+INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id, order_id)
+VALUES ($1, $2, $3, $4, $9::text::numeric, $5, $6, $7, $8)
 RETURNING id
 `
 
@@ -499,6 +499,7 @@ type CrearReciboParams struct {
 	Origen          OrigenRecibo `json:"origen"`
 	Concepto        *string      `json:"concepto"`
 	CreatedByUserID *string      `json:"createdByUserId"`
+	OrderID         *string      `json:"orderId"`
 	Total           string       `json:"total"`
 }
 
@@ -511,6 +512,7 @@ func (q *Queries) CrearRecibo(ctx context.Context, arg CrearReciboParams) (strin
 		arg.Origen,
 		arg.Concepto,
 		arg.CreatedByUserID,
+		arg.OrderID,
 		arg.Total,
 	)
 	var id string
@@ -810,15 +812,16 @@ func (q *Queries) PedidoParaCobrar(ctx context.Context, id string) (PedidoParaCo
 }
 
 const reciboPorID = `-- name: ReciboPorID :one
-SELECT id, numero, customer_id, total, estado FROM receipts WHERE id = $1
+SELECT id, numero, customer_id, total, estado, account_movement_id FROM receipts WHERE id = $1
 `
 
 type ReciboPorIDRow struct {
-	ID         string       `json:"id"`
-	Numero     string       `json:"numero"`
-	CustomerID *string      `json:"customerId"`
-	Total      jsmath.Num   `json:"total"`
-	Estado     EstadoRecibo `json:"estado"`
+	ID                string       `json:"id"`
+	Numero            string       `json:"numero"`
+	CustomerID        *string      `json:"customerId"`
+	Total             jsmath.Num   `json:"total"`
+	Estado            EstadoRecibo `json:"estado"`
+	AccountMovementID *string      `json:"accountMovementId"`
 }
 
 func (q *Queries) ReciboPorID(ctx context.Context, id string) (ReciboPorIDRow, error) {
@@ -830,6 +833,7 @@ func (q *Queries) ReciboPorID(ctx context.Context, id string) (ReciboPorIDRow, e
 		&i.CustomerID,
 		&i.Total,
 		&i.Estado,
+		&i.AccountMovementID,
 	)
 	return i, err
 }

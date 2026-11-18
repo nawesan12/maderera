@@ -348,7 +348,7 @@ components:
     PedidoListado:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
-        total, items, customerId, createdAt, zonaEnvio, sinCobrar]
+        total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -367,6 +367,8 @@ components:
         customerId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         sinCobrar: { $ref: "#/components/schemas/SinCobrar" }
+        pagoEnRevision: { type: boolean, description: Una transferencia informada que nadie verificó todavía }
+        entregadoAt: { type: string, format: date-time, nullable: true, description: El último paso a entregado del historial }
     SinCobrar:
       type: number
       format: double

@@ -28,10 +28,10 @@ paths:
         - $ref: "#/components/parameters/Sucursal"
       responses:
         "200":
-          description: Las filas del corte pedido, sin las canceladas
+          description: Las filas del corte pedido (hasta 50 en producto, rubro y cliente), sin las canceladas, y los totales del período entero
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/ReporteFila" } }
+              schema: { $ref: "#/components/schemas/ReporteDeVentas" }
   /api/v1/admin/reportes/ventas/meses:
     get:
       operationId: VentasPorMes
@@ -253,6 +253,24 @@ components:
         costo: { type: number, format: double, nullable: true, description: null si ningún renglón tiene costo }
         lineasSinCosto: { type: number, format: double, description: Renglones sin costo o con costo en cero }
         netoCosteado: { type: number, format: double, description: Sin IVA, solo los renglones con costo; el margen es netoCosteado − costo }
+    ReporteDeVentas:
+      type: object
+      required: [filas, totales]
+      properties:
+        filas: { type: array, items: { $ref: "#/components/schemas/ReporteFila" } }
+        totales: { $ref: "#/components/schemas/ReporteTotales" }
+    ReporteTotales:
+      type: object
+      description: El período entero con los mismos filtros, sin el tope de filas del corte
+      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas]
+      properties:
+        total: { type: number, format: double, description: Con IVA; subtotales de renglones o total de los pedidos, según el corte }
+        cantidad: { type: number, format: double, description: Unidades o operaciones, según el corte }
+        netoVenta: { type: number, format: double }
+        netoCosteado: { type: number, format: double }
+        costo: { type: number, format: double, nullable: true }
+        lineasSinCosto: { type: number, format: double }
+        filas: { type: integer, description: Cuántas filas tiene el corte entero }
     ReporteMes:
       type: object
       required: [clave, etiqueta, total]
@@ -334,14 +352,23 @@ components:
         iva: { type: number, format: double }
         total: { type: number, format: double }
         cantidad: { type: integer }
+    CierreVendido:
+      type: object
+      description: facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado
+      required: [total, facturado, interno, sinFactura]
+      properties:
+        total: { type: number, format: double }
+        facturado: { $ref: "#/components/schemas/CierreTotales" }
+        interno: { $ref: "#/components/schemas/CierreTotales" }
+        sinFactura: { $ref: "#/components/schemas/CierreTotales" }
     CierreResumen:
       type: object
-      required: [ventas, sinFactura, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, resultado]
+      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, resultado]
       properties:
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
-        # Lo vendido en el mes sin factura autorizada, sin IVA (el total del pedido prorrateado por la
-        # alícuota de sus renglones). Es del circuito interno: no entra en los asientos ni en ningún archivo.
-        sinFactura: { $ref: "#/components/schemas/CierreTotales" }
+        # Lo vendido en el mes sin IVA (el «Vendido sin IVA» del resultado) partido según su factura. No entra
+        # en los asientos ni en ningún archivo.
+        vendido: { $ref: "#/components/schemas/CierreVendido" }
         compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
         gastos: { $ref: "#/components/schemas/CierreTotales" }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
@@ -428,9 +455,11 @@ components:
         cantidad: { type: integer }
     Resultado:
       type: object
-      required: [ventasNetas, costo, gastos, resultado, lineasSinCosto]
+      required: [ventasNetas, ventasSinCosto, costo, gastos, resultado, lineasSinCosto, conDescuento]
       properties:
         ventasNetas: { type: number, format: double, description: Sin IVA }
+        ventasSinCosto: { type: number, format: double, description: La parte de ventasNetas sin costo cargado; queda afuera del resultado }
+        conDescuento: { type: boolean, description: ventasNetas lleva restado el descuento del pedido (regla del negocio) }
         costo: { type: number, format: double }
         gastos: { type: number, format: double }
         resultado: { type: number, format: double }

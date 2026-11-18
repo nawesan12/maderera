@@ -1,11 +1,16 @@
 package reportes
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"mjbj/internal/csvexcel"
+	"mjbj/internal/facturacion"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/pruebas"
 )
 
@@ -126,7 +131,9 @@ func TestNumerosDelDueno(t *testing.T) {
 	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	var r ResumenDelMes
 	_ = json.Unmarshal([]byte(cuerpo), &r)
-	if r.Resultado.Actual.Resultado != 300 || r.Resultado.Anterior != (Resultado{VentasNetas: 600, Costo: 300, Gastos: 80, Resultado: 220, LineasSinCosto: 1}) {
+	// Septiembre: los 100 de V-4, sin costo, quedan afuera del resultado.
+	if r.Resultado.Actual.Resultado != 300 ||
+		r.Resultado.Anterior != (Resultado{VentasNetas: 600, VentasSinCosto: 100, Costo: 300, Gastos: 80, Resultado: 120, LineasSinCosto: 1}) {
 		t.Errorf("resultado del cierre: %+v", r.Resultado)
 	}
 }
@@ -264,6 +271,7 @@ func TestAnuladasDeLaSemana(t *testing.T) {
 	conNota := anulada("M-3", 250, time.Date(2026, 10, 10, 18, 0, 0, 0, Argentina), 0)
 	factura(conNota, "factura_b", "anulada", 2)
 	factura(conNota, "nota_credito_b", "autorizada", 3)
+	e.exec(t, `update invoices set comprobante_origen_id = (select id from invoices where numero = 2) where numero = 3`)
 	// Hace siete días a las 23:30: afuera, con su devolución.
 	anulada("M-4", 999, time.Date(2026, 10, 8, 23, 30, 0, 0, Argentina), 999)
 	// Una venta vigente no cuenta.
@@ -282,7 +290,8 @@ func TestAnuladasDeLaSemana(t *testing.T) {
 // Un costo en $0 no es un costo: el renglón cuenta como sin costo y no suma
 // al margen. La fila que mezcla renglones con y sin costo mide su margen
 // contra la venta de los que tienen (NetoCosteado). Y Reportes, la Ganancia
-// del mes y el resultado del Cierre dan la misma venta sin IVA.
+// del mes y el resultado del Cierre dan la misma venta sin IVA; la Ganancia
+// deja afuera lo vendido sin costo, como el margen de Reportes.
 func TestCostoCeroYUnSoloVendido(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
@@ -293,13 +302,11 @@ func TestCostoCeroYUnSoloVendido(t *testing.T) {
 		[4]any{placa, 1.0, 1210.0, 600.0}, [4]any{placa, 1.0, 605.0, 0.0}, [4]any{tirante, 1.0, 121.0, nil})
 
 	_, cuerpo, _ := pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
-	var filas []FilaDeReporte
-	if err := json.Unmarshal([]byte(cuerpo), &filas); err != nil {
+	var rep ReporteDeVentas
+	if err := json.Unmarshal([]byte(cuerpo), &rep); err != nil {
 		t.Fatal(cuerpo)
 	}
-	var vendido float64
-	for _, f := range filas {
-		vendido += f.NetoVenta
+	for _, f := range rep.Filas {
 		if f.Etiqueta == "Fenólico" {
 			if f.Costo == nil || *f.Costo != 600 || f.NetoCosteado != 1000 || f.NetoVenta != 1500 || f.LineasSinCosto != 1 {
 				t.Errorf("fenólico: %+v", f)
@@ -309,28 +316,97 @@ func TestCostoCeroYUnSoloVendido(t *testing.T) {
 			}
 		}
 	}
-	if vendido != 1600 {
-		t.Errorf("vendido sin IVA en Reportes: %v", vendido)
+	vendido := rep.Totales.NetoVenta
+	if vendido != 1600 || rep.Totales.NetoCosteado != 1000 || rep.Totales.LineasSinCosto != 2 {
+		t.Errorf("totales de Reportes: %+v", rep.Totales)
 	}
 	_, cuerpo, _ = pedir(t, adm, e.u+"inicio/dueno")
 	var n NumerosDelDueno
 	_ = json.Unmarshal([]byte(cuerpo), &n)
-	if g := n.Ganancia.Actual; g.VentasNetas != vendido || g.Costo != 600 || g.LineasSinCosto != 2 {
-		t.Errorf("ganancia: %+v", g)
+	// 1600 vendido, 600 sin costo afuera, 600 de costo: 400, el margen de
+	// Reportes (1000 − 600). Contar los 600 sin costo daba 1000.
+	quiere := Resultado{VentasNetas: vendido, VentasSinCosto: 600, Costo: 600, Resultado: 400, LineasSinCosto: 2}
+	if g := n.Ganancia.Actual; g != quiere {
+		t.Errorf("ganancia: %+v, quería %+v", g, quiere)
+	}
+	if m := rep.Totales.MargenDelTotal(); m == nil || *m != n.Ganancia.Actual.Resultado {
+		t.Errorf("la ganancia sin gastos es el margen de Reportes: %v", m)
 	}
 	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	var r ResumenDelMes
 	_ = json.Unmarshal([]byte(cuerpo), &r)
-	if r.Resultado.Actual.VentasNetas != vendido {
-		t.Errorf("resultado del cierre: %+v", r.Resultado.Actual)
+	if r.Resultado.Actual != quiere || r.Vendido.Total != vendido {
+		t.Errorf("resultado del cierre: %+v, vendido %+v", r.Resultado.Actual, r.Vendido)
 	}
 }
 
-// «Sin factura» del Cierre: lo vendido en el mes sin factura autorizada, con
-// el neto de la cabecera (envío y descuento incluidos). La factura en
-// borrador no factura; la cancelada no cuenta; la venta facturada en otro
-// mes tampoco es «sin factura». Y no llega a los asientos.
-func TestCierreSinFactura(t *testing.T) {
+// Los totales de Reportes son los del período entero, no la suma de las 50
+// filas que se ven: con 60 productos, cada corte da el mismo «Vendido sin
+// IVA», el mismo costo y el mismo margen que la Ganancia del mes. Y el CSV
+// cierra el total con esos números.
+func TestTotalesDeReportesSinTope(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	e.catalogo(t)
+	cat := e.id(t, `select id from categories limit 1`)
+	cuando := time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina)
+	for i := range 60 {
+		p := e.id(t, `insert into products (slug, name, category_id, description, unit) values ($1, $1, $2, '', 'unidad') returning id`,
+			fmt.Sprintf("p%02d", i), cat)
+		v := e.id(t, `insert into product_variants (product_id, sku, label) values ($1, $2, 'u') returning id`, p, fmt.Sprintf("S%02d", i))
+		var costo any = float64(50 + i)
+		if i%3 == 0 {
+			costo = nil
+		}
+		e.pedido(t, fmt.Sprintf("T-%02d", i), e.central, "entregado", "mostrador", cuando, nil, [4]any{v, 1.0, float64(121 * (i + 1)), costo})
+	}
+	// Uno sin vendedor ni usuario y un renglón libre, sin variante: también
+	// cuentan.
+	e.pedido(t, "T-L", e.central, "entregado", "tienda", cuando, nil, [4]any{nil, 1.0, 242.0, nil})
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	_ = json.Unmarshal([]byte(cuerpo), &n)
+	g := n.Ganancia.Actual
+	for _, corte := range []string{"producto", "rubro", "elaboracion", "cliente", "vendedor", "sucursal", "canal"} {
+		_, cuerpo, _ := pedir(t, adm, e.u+"reportes/ventas?periodo=mes&corte="+corte)
+		var rep ReporteDeVentas
+		if err := json.Unmarshal([]byte(cuerpo), &rep); err != nil {
+			t.Fatal(cuerpo)
+		}
+		tt := rep.Totales
+		if jsmath.Redondear2(tt.NetoVenta) != g.VentasNetas || tt.Costo == nil || jsmath.Redondear2(*tt.Costo) != g.Costo ||
+			jsmath.Redondear2(tt.NetoVenta-tt.NetoCosteado) != g.VentasSinCosto {
+			t.Errorf("%s: totales %+v, ganancia %+v", corte, tt, g)
+		}
+		if corte == "producto" && (len(rep.Filas) != 50 || tt.Filas != 61) {
+			t.Errorf("producto: %d filas, %d en total", len(rep.Filas), tt.Filas)
+		}
+		// Los cortes sin tope suman exacto sus filas.
+		if corte != "producto" && corte != "rubro" && corte != "cliente" {
+			suma := 0.0
+			for _, f := range rep.Filas {
+				suma += f.NetoVenta
+			}
+			if jsmath.Redondear2(suma) != g.VentasNetas {
+				t.Errorf("%s: las filas suman %v, el total %v", corte, suma, g.VentasNetas)
+			}
+		}
+	}
+	_, csv, _ := pedir(t, adm, e.u+"reportes/ventas/archivo?corte=producto&periodo=mes")
+	lineas := strings.Split(strings.TrimSpace(csv), "\r\n")
+	total := strings.Split(lineas[len(lineas)-1], ";")
+	if len(lineas) != 52 || total[4] != csvexcel.NumeroCsv(g.VentasNetas, 2) || total[6] != csvexcel.NumeroCsv(g.Costo, 2) {
+		t.Errorf("total del csv: %d líneas, %v", len(lineas), total)
+	}
+}
+
+// El Cierre parte el «Vendido sin IVA» según la factura, con la misma base
+// (los renglones), y las tres partes suman exacto: facturado (de cualquier
+// mes), el ticket interno del mostrador y lo que tendría que estar
+// facturado. La factura en borrador no factura, la cancelada no cuenta y
+// nada de esto va a los asientos.
+func TestCierreVendidoPorFactura(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	placa, _ := e.catalogo(t)
@@ -341,14 +417,17 @@ func TestCierreSinFactura(t *testing.T) {
 	}
 	facturado := e.pedido(t, "F-1", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
 	factura(facturado, "autorizada", 1, "761", "2026-10-05T15:00:00Z")
-	// Sin factura: 1210 con IVA más 121 de envío → 1100 sin IVA.
-	sinFactura := e.pedido(t, "F-2", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
-	e.exec(t, `update orders set total = 1331 where id = $1`, sinFactura)
-	// En borrador: 605 → 500.
+	// Interno: del mostrador y sin comprobante. Con 121 de envío, que no es
+	// venta de renglones: 1000.
+	interno := e.pedido(t, "F-2", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
+	e.exec(t, `update orders set total = 1331, costo_envio = 121 where id = $1`, interno)
+	// Sin factura: el comprobante quedó en borrador (500), y un pedido web
+	// (100).
 	borrador := e.pedido(t, "F-3", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 605.0, 300.0})
 	factura(borrador, "borrador", 2, nil, "2026-10-05T15:00:00Z")
+	e.pedido(t, "F-6", e.central, "pendiente", "tienda", octubre, nil, [4]any{placa, 1.0, 121.0, 60.0})
 	e.pedido(t, "F-4", e.central, "cancelado", "mostrador", octubre, nil, [4]any{placa, 1.0, 999.0, 1.0})
-	// De octubre, facturado el 2 de noviembre: no es «sin factura».
+	// De octubre, facturado el 2 de noviembre: facturado.
 	tarde := e.pedido(t, "F-5", e.central, "entregado", "mostrador", time.Date(2026, 10, 31, 20, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1210.0, 600.0})
 	factura(tarde, "autorizada", 3, "762", "2026-11-02T15:00:00Z")
 
@@ -357,31 +436,79 @@ func TestCierreSinFactura(t *testing.T) {
 	if err := json.Unmarshal([]byte(cuerpo), &r); err != nil {
 		t.Fatal(cuerpo)
 	}
-	if r.SinFactura != (Totales{Total: 1600, Cantidad: 2}) {
-		t.Errorf("sin factura: %+v", r.SinFactura)
+	v := r.Vendido
+	quiere := VendidoDelMes{Total: 3600, Facturado: Totales{2000, 2}, Interno: Totales{1000, 1}, SinFactura: Totales{600, 2}}
+	if v != quiere {
+		t.Errorf("vendido: %+v, quería %+v", v, quiere)
+	}
+	if v.Total != r.Resultado.Actual.VentasNetas || jsmath.Redondear2(v.Facturado.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
+		t.Errorf("no cierra con el resultado: %+v %+v", v, r.Resultado.Actual)
 	}
 	if r.Ventas.Cantidad != 1 || r.Ventas.Neto != 1000 {
-		t.Errorf("facturado: %+v", r.Ventas)
+		t.Errorf("facturado neto: %+v", r.Ventas)
+	}
+	// Con la regla del descuento, las partes siguen sumando el resultado.
+	e.exec(t, `update site_settings set valor = 'si' where clave = 'ganancia_descuento'`)
+	e.exec(t, `update orders set subtotal = 1210, total = 1089 where id = $1`, facturado)
+	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	_ = json.Unmarshal([]byte(cuerpo), &r)
+	if v := r.Vendido; v.Total != r.Resultado.Actual.VentasNetas || v.Total != 3500 || !r.Resultado.Actual.ConDescuento ||
+		jsmath.Redondear2(v.Facturado.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
+		t.Errorf("con descuento: %+v %+v", v, r.Resultado.Actual)
 	}
 	_, asientos, _ := pedir(t, adm, e.u+"cierre/asientos?periodo=2026-10")
-	if strings.Contains(asientos, "1600") || strings.Contains(strings.ToLower(asientos), "sin factura") {
-		t.Errorf("«sin factura» no va a los asientos: %s", asientos)
+	if strings.Contains(strings.ToLower(asientos), "sin factura") || strings.Contains(strings.ToLower(asientos), "interno") {
+		t.Errorf("lo vendido sin factura no va a los asientos: %s", asientos)
 	}
 }
 
-// Una venta anulada con factura viva es un pendiente del cierre.
+// «Factura viva» se decide por los importes: la nota de crédito que ARCA
+// rechazó no acredita aunque la original haya quedado «anulada», y dos notas
+// parciales con CAE que suman el total sí, aunque la original siga
+// «autorizada». El Resumen y el Cierre cuentan lo mismo, de cualquier fecha,
+// y Facturación las lista.
 func TestCierreAnuladaConFacturaViva(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	viva := e.pedido(t, "A-1", e.central, "cancelado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil)
-	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
-		values ('factura_b', 3, 1, 'X', 100, 21, 0, 0, 0, 121, 'autorizada', '2026-10-05T15:00:00Z', '761', $1)`, viva)
-	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
-	if !strings.Contains(cuerpo, `"clave":"facturas-vivas"`) || !strings.Contains(cuerpo, `"cantidad":1`) {
-		t.Errorf("pendientes: %s", cuerpo)
+	original := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 1, 'X', 100, 21, 0, 0, 0, 121, 'autorizada', '2026-10-05T15:00:00Z', '761', $1) returning id`, viva)
+	nota := func(numero int, total float64, estado string, cae any) string {
+		return e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id, comprobante_origen_id)
+			values ('nota_credito_b', 3, $1, 'X', 0, 0, 0, 0, 0, $2, $3, '2026-10-06T15:00:00Z', $4, $5, $6) returning id`, numero, total, estado, cae, viva, original)
 	}
-	e.exec(t, `update invoices set estado = 'anulada'`)
-	if _, cuerpo, _ = pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10"); strings.Contains(cuerpo, "facturas-vivas") {
-		t.Errorf("con la nota de crédito ya no es pendiente: %s", cuerpo)
+	cuenta := func() (string, int, string) {
+		_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+		_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+		var n NumerosDelDueno
+		_ = json.Unmarshal([]byte(cuerpo), &n)
+		pag, err := facturacion.Nuevo(e.pool, silencio).ListarPagina(context.Background(),
+			facturacion.Filtros{Estado: facturacion.EstadoAnuladaViva}, 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lista, _ := json.Marshal(pag.Filas)
+		return pend, n.Anuladas.ConFacturaViva, string(lista)
+	}
+	if pend, resumen, lista := cuenta(); !strings.Contains(pend, `"clave":"facturas-vivas"`) || resumen != 1 ||
+		!strings.Contains(lista, original) || strings.Contains(lista, "nota_credito_b") {
+		t.Errorf("viva: %s · resumen %d · %s", pend, resumen, lista)
+	}
+	// AnularConNota: la original pasa a «anulada» y la nota queda sin CAE;
+	// ARCA la rechaza. El débito sigue: sigue viva.
+	e.exec(t, `update invoices set estado = 'anulada' where id = $1`, original)
+	nota(2, 121, "rechazada", nil)
+	if pend, resumen, _ := cuenta(); !strings.Contains(pend, "facturas-vivas") || resumen != 1 {
+		t.Errorf("con la nota rechazada sigue viva: %s · %d", pend, resumen)
+	}
+	// Dos parciales con CAE que suman el total, y la original «autorizada».
+	e.exec(t, `update invoices set estado = 'autorizada' where id = $1`, original)
+	nota(3, 100, "autorizada", "763")
+	if pend, _, _ := cuenta(); !strings.Contains(pend, "facturas-vivas") {
+		t.Errorf("con una parcial sigue viva: %s", pend)
+	}
+	nota(4, 21, "autorizada", "764")
+	if pend, resumen, lista := cuenta(); strings.Contains(pend, "facturas-vivas") || resumen != 0 || strings.Contains(lista, original) {
+		t.Errorf("acreditada entera ya no es viva: %s · %d · %s", pend, resumen, lista)
 	}
 }

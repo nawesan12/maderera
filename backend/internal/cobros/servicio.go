@@ -19,6 +19,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Servicio son las acciones de cobro y de cheques del panel.
@@ -94,15 +95,34 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			c.BranchID = p.BranchID
 			texto = "Cobro del pedido " + p.Numero
 			numeroPedido = p.Numero
+			c.OrderID = &p.ID
+			// La deuda de un pedido de contado no está en la cuenta: el pago
+			// tampoco (ver Cobro.FueraDeLaCuenta).
+			if err := tx.QueryRow(ctx, `SELECT o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
+				AND NOT EXISTS (SELECT 1 FROM account_movements am
+				                WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+				FROM orders o WHERE o.id = $1`, p.ID).Scan(&c.FueraDeLaCuenta); err != nil {
+				return err
+			}
 		}
 		c.Concepto = &texto
 		var err error
 		if r, err = EmitirRecibo(ctx, tx, c); err != nil {
 			return err
 		}
-		if p != nil && r.Total+0.005 >= p.Total {
-			if err := q.PedidoPagado(ctx, p.ID); err != nil {
+		// Pagado cuando lo cobrado cubre el total: este recibo, los
+		// anteriores del mismo pedido y lo cobrado en línea. Mirar solo este
+		// recibo contra el total empujaba a cobrar otra vez la seña.
+		if p != nil {
+			var pagado bool
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= o.total FROM orders o WHERE o.id = $1`, p.ID).
+				Scan(&pagado); err != nil {
 				return err
+			}
+			if pagado {
+				if err := q.PedidoPagado(ctx, p.ID); err != nil {
+					return err
+				}
 			}
 		}
 		_, err = cola.Encolar(ctx, q, TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})

@@ -5,8 +5,8 @@
 SELECT nombre, razon_social FROM customers WHERE id = $1;
 
 -- name: CrearRecibo :one
-INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id)
-VALUES ($1, $2, $3, $4, sqlc.arg(total)::text::numeric, $5, $6, $7)
+INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id, order_id)
+VALUES ($1, $2, $3, $4, sqlc.arg(total)::text::numeric, $5, $6, $7, $8)
 RETURNING id;
 
 -- name: CrearParteDeRecibo :exec
@@ -50,7 +50,7 @@ VALUES ($1, 'ingreso', sqlc.arg(monto)::text::numeric, $2, $3);
 SELECT pg_advisory_xact_lock(hashtext(sqlc.arg(recibo)::text));
 
 -- name: ReciboPorID :one
-SELECT id, numero, customer_id, total, estado FROM receipts WHERE id = $1;
+SELECT id, numero, customer_id, total, estado, account_movement_id FROM receipts WHERE id = $1;
 
 -- name: ChequesDelRecibo :many
 SELECT cheque_id FROM receipt_parts WHERE receipt_id = $1 AND cheque_id IS NOT NULL;

@@ -38,6 +38,18 @@ type DatosReporteVentas struct {
 	// Filtros: lo que acota el reporte, ya escrito. Vacío es null.
 	Filtros *string `json:"filtros"`
 	Emisor  *Emisor `json:"emisor"`
+	// Totales: los del período entero (reportes.TotalesDelReporte). Sin
+	// ellos —los casos guardados del golden— se suman las filas.
+	Totales *TotalesDelReporte `json:"totales,omitempty"`
+}
+
+// TotalesDelReporte son las cifras de la cabecera.
+type TotalesDelReporte struct {
+	Total          float64  `json:"total"`
+	NetoVenta      float64  `json:"netoVenta"`
+	NetoCosteado   float64  `json:"netoCosteado"`
+	Costo          *float64 `json:"costo"`
+	LineasSinCosto float64  `json:"lineasSinCosto"`
 }
 
 // ReporteDeVentas arma el PDF. ahora no se usa (el período viene escrito).
@@ -57,37 +69,47 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 	h.Raya(y, 0, Color{})
 	y -= 16
 
-	total, netoTotal, costeado, costoTotal, sinCosto := 0.0, 0.0, 0.0, 0.0, 0.0
-	costeadas := 0
-	for _, f := range d.Filas {
-		total = total + f.Total
-	}
-	for _, f := range d.Filas {
-		netoTotal = netoTotal + f.NetoVenta
-		if f.Costo != nil {
-			costeadas++
-			costeado = costeado + f.NetoCosteado
+	// La cabecera es la del período entero: con el tope de filas de los
+	// cortes, sumar las filas daba un total corto.
+	t := TotalesDelReporte{}
+	if d.Totales != nil {
+		t = *d.Totales
+	} else {
+		costeadas, costoTotal := 0, 0.0
+		for _, f := range d.Filas {
+			t.Total = t.Total + f.Total
+		}
+		for _, f := range d.Filas {
+			t.NetoVenta = t.NetoVenta + f.NetoVenta
+			if f.Costo != nil {
+				costeadas++
+				t.NetoCosteado = t.NetoCosteado + f.NetoCosteado
+			}
+		}
+		for _, f := range d.Filas {
+			if f.Costo != nil {
+				costoTotal = costoTotal + *f.Costo
+			}
+		}
+		for _, f := range d.Filas {
+			t.LineasSinCosto = t.LineasSinCosto + f.LineasSinCosto
+		}
+		if costeadas > 0 {
+			t.Costo = &costoTotal
 		}
 	}
-	for _, f := range d.Filas {
-		if f.Costo != nil {
-			costoTotal = costoTotal + *f.Costo
-		}
-	}
-	for _, f := range d.Filas {
-		sinCosto = sinCosto + f.LineasSinCosto
-	}
+	total := t.Total
 
 	cifras := [][2]string{{Moneda(total), "vendido, con IVA"}}
-	if costeadas > 0 {
-		base := costeado
+	if t.Costo != nil {
+		base := t.NetoCosteado
 		if base == 0 || base != base { // costeado || 1
 			base = 1
 		}
 		cifras = append(cifras,
-			[2]string{Moneda(netoTotal), "neto sin IVA"},
-			[2]string{Moneda(costoTotal), "costo"},
-			[2]string{numeroJS(jsmath.Round(((costeado-costoTotal)/base)*100)) + "%", "margen"},
+			[2]string{Moneda(t.NetoVenta), "neto sin IVA"},
+			[2]string{Moneda(*t.Costo), "costo"},
+			[2]string{numeroJS(jsmath.Round(((t.NetoCosteado-*t.Costo)/base)*100)) + "%", "margen sobre " + Moneda(t.NetoCosteado)},
 		)
 	}
 
@@ -102,12 +124,9 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 
 	y -= Mm(18)
 
-	if sinCosto > 0 {
-		cuantos := "renglones no tienen"
-		if sinCosto == 1 {
-			cuantos = "renglón no tiene"
-		}
-		h.Escribir(numeroJS(sinCosto)+" "+cuantos+" costo cargado: el margen es sobre el resto.",
+	// Lo vendido sin costo, en plata: el margen se mide sin eso.
+	if sinCosto := t.NetoVenta - t.NetoCosteado; t.LineasSinCosto > 0 && sinCosto >= 0.5 {
+		h.Escribir(Moneda(sinCosto)+" vendidos sin costo cargado, afuera del margen.",
 			Opciones{X: Margen, Y: y, Tamano: 8, Color: TintaSuave})
 		y -= 16
 	}
@@ -118,9 +137,11 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 		derecha bool
 	}
 	columnas := []columna{
-		{strings.Replace(d.Titulo, "Por ", "", 1), Mm(74), false},
+		{strings.Replace(d.Titulo, "Por ", "", 1), Mm(66), false},
 		{"Cant.", Mm(18), true},
 		{"Total", Mm(28), true},
+		// El neto contra el que se mide el margen, para poder rehacerlo.
+		{"Neto c/costo", Mm(24), true},
 		{"Margen", Mm(26), true},
 		{"Part.", Mm(16), true},
 	}
@@ -148,9 +169,10 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 			y = AltoA4 - Margen
 			encabezado()
 		}
-		margen := "—"
+		margen, costeado := "—", "—"
 		if f.Costo != nil {
 			margen = Moneda(f.NetoCosteado - *f.Costo)
+			costeado = Moneda(f.NetoCosteado)
 		}
 		participacion := "—"
 		if total > 0 {
@@ -160,6 +182,7 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 			f.Etiqueta,
 			intlUnDecimal(jsmath.Round(f.Cantidad), true),
 			Moneda(f.Total),
+			costeado,
 			margen,
 			participacion,
 		}

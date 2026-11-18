@@ -42,6 +42,14 @@ type Cobro struct {
 	Circuito   string // blanco | negro
 	Caja       *Caja
 	UsuarioID  *string
+	// OrderID: el pedido que cobra el recibo, si cobra uno (lo resta
+	// fragmentos.SinCobrarDelPedido).
+	OrderID *string
+	// FueraDeLaCuenta: el recibo cobra un pedido cuya deuda no está en la
+	// cuenta corriente (de contado, sin su «compra» asentada). Su pago
+	// tampoco va a la cuenta: dejaba al cliente con saldo a favor, que «Me
+	// deben» no suma, mientras el pedido seguía reclamando el total.
+	FueraDeLaCuenta bool
 }
 
 // ReciboEmitido es lo que devuelve EmitirRecibo.
@@ -94,6 +102,7 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 	id, err := q.CrearRecibo(ctx, sqlc.CrearReciboParams{
 		Numero: numero, CustomerID: c.CustomerID, RecibidoDe: recibidoDe, BranchID: c.BranchID,
 		Total: jsmath.Fijo2(total), Origen: sqlc.OrigenRecibo(c.Origen), Concepto: c.Concepto, CreatedByUserID: c.UsuarioID,
+		OrderID: c.OrderID,
 	})
 	if err != nil {
 		return ReciboEmitido{}, err
@@ -128,7 +137,7 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 	// Un solo movimiento por recibo, por el total: el detalle de con qué pagó
 	// está en el recibo.
 	r := ReciboEmitido{ReceiptID: id, Numero: numero, Total: total}
-	if c.CustomerID != nil {
+	if c.CustomerID != nil && !c.FueraDeLaCuenta {
 		detalle := "Recibo " + numero
 		if c.Concepto != nil && *c.Concepto != "" {
 			detalle = *c.Concepto + " — recibo " + numero
@@ -313,7 +322,9 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 		}
 	}
 	var anulacion *string
-	if r.CustomerID != nil {
+	// Solo se revierte en la cuenta lo que pasó por la cuenta: el recibo de
+	// un pedido de contado no la tocó (Cobro.FueraDeLaCuenta).
+	if r.CustomerID != nil && r.AccountMovementID != nil {
 		// Lo que ya volvió a la cuenta por reintegros parciales de Mercado
 		// Pago de este recibo no se devuelve otra vez: la deuda vuelve por el
 		// total menos esos tramos.

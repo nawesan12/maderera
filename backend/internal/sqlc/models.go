@@ -6008,6 +6008,7 @@ type Receipt struct {
 	AnuladoPorUserID    *string      `json:"anuladoPorUserId"`
 	CreatedByUserID     *string      `json:"createdByUserId"`
 	CreatedAt           time.Time    `json:"createdAt"`
+	OrderID             *string      `json:"orderId"`
 }
 
 type ReceiptPart struct {

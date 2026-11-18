@@ -322,6 +322,13 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             sinCobrar: components["schemas"]["SinCobrar"];
+            /** @description Una transferencia informada que nadie verificó todavía */
+            pagoEnRevision: boolean;
+            /**
+             * Format: date-time
+             * @description El último paso a entregado del historial
+             */
+            entregadoAt: string | null;
         };
         /**
          * Format: double

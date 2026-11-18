@@ -157,7 +157,7 @@ func TestGoldenReporteDeVentas(t *testing.T) {
 		if l := LeerCorte(c.Corte); l != c.Leido {
 			t.Fatalf("%d corte %q: %q, TS %q", i, c.Corte, l, c.Leido)
 		}
-		if csv := CsvReporteDeVentas(c.Leido, c.Filas); csv != c.Csv {
+		if csv := CsvReporteDeVentas(c.Leido, c.Filas, TotalesDeFilas(c.Filas)); csv != c.Csv {
 			t.Fatalf("%d csv:\n go %q\n ts %q", i, csv, c.Csv)
 		}
 	}

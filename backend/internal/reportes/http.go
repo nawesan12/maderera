@@ -137,20 +137,23 @@ func (a *API) ReporteDeVentasArchivo(ctx context.Context, r reportesapi.ReporteD
 	corte := LeerCorte(texto(r.Params.Corte))
 	p := a.periodo(r.Params.Periodo)
 	rubro, sucursal := texto(r.Params.Rubro), texto(r.Params.Sucursal)
-	filas, err := a.s.ReporteDeVentas(ctx, corte, p, Filtros{rubro, sucursal})
+	rep, err := a.s.ReporteDeVentas(ctx, corte, p, Filtros{rubro, sucursal})
 	if err != nil {
 		return nil, err
 	}
+	filas, t := rep.Filas, rep.Totales
 	nombre := "ventas-" + corte + "-" + p.Clave
 	if texto(r.Params.Formato) != "pdf" {
-		return csv(nombre+".csv", CsvReporteDeVentas(corte, filas)), nil
+		return csv(nombre+".csv", CsvReporteDeVentas(corte, filas, t)), nil
 	}
 	emisor, err := documentos.EmisorDe(ctx, a.s.pool)
 	if err != nil {
 		return nil, err
 	}
 	d := pdf.DatosReporteVentas{Titulo: EtiquetaDeCorte(corte), Periodo: p.Etiqueta, Filtros: FiltrosDelPdf(rubro, sucursal), Emisor: emisor,
-		Filas: make([]pdf.FilaDeReporte, len(filas))}
+		Filas: make([]pdf.FilaDeReporte, len(filas)),
+		Totales: &pdf.TotalesDelReporte{Total: t.Total, NetoVenta: t.NetoVenta, NetoCosteado: t.NetoCosteado, Costo: t.Costo,
+			LineasSinCosto: t.LineasSinCosto}}
 	for i, f := range filas {
 		d.Filas[i] = pdf.FilaDeReporte{Clave: f.Clave, Etiqueta: f.Etiqueta, Detalle: f.Detalle, Cantidad: f.Cantidad, Total: f.Total,
 			NetoVenta: f.NetoVenta, Costo: f.Costo, LineasSinCosto: f.LineasSinCosto, NetoCosteado: f.NetoCosteado}

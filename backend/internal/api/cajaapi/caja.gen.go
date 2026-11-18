@@ -23,6 +23,16 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// CajaAnulaciones defines model for CajaAnulaciones.
+type CajaAnulaciones struct {
+	Cantidad int `json:"cantidad"`
+
+	// Devuelto Efectivo que salió del cajón por esas anulaciones
+	Devuelto float64 `json:"devuelto"`
+	Quien    string  `json:"quien"`
+	Total    float64 `json:"total"`
+}
+
 // CajaEmitido defines model for CajaEmitido.
 type CajaEmitido struct {
 	Anulada    bool       `json:"anulada"`
@@ -141,6 +151,12 @@ type CajaHecho struct {
 	Ok     string  `json:"ok"`
 }
 
+// AnulacionesPorPersonaParams defines parameters for AnulacionesPorPersona.
+type AnulacionesPorPersonaParams struct {
+	// Periodo aaaa-mm (si falta
+	Periodo *string `form:"periodo,omitempty" json:"periodo,omitempty"`
+}
+
 // CrearCajaFisicaJSONBody defines parameters for CrearCajaFisica.
 type CrearCajaFisicaJSONBody map[string]interface{}
 
@@ -186,6 +202,9 @@ type AsignarVentaAlTurnoJSONRequestBody AsignarVentaAlTurnoJSONBody
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
+	// (GET /api/v1/admin/caja/anulaciones)
+	AnulacionesPorPersona(w http.ResponseWriter, r *http.Request, params AnulacionesPorPersonaParams)
+
 	// (GET /api/v1/admin/caja/cajas-fisicas)
 	ListarCajasFisicas(w http.ResponseWriter, r *http.Request)
 
@@ -225,6 +244,39 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// AnulacionesPorPersona operation middleware
+func (siw *ServerInterfaceWrapper) AnulacionesPorPersona(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AnulacionesPorPersonaParams
+
+	// ------------- Optional query parameter "periodo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "periodo", r.URL.Query(), &params.Periodo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "periodo"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "periodo", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnulacionesPorPersona(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListarCajasFisicas operation middleware
 func (siw *ServerInterfaceWrapper) ListarCajasFisicas(w http.ResponseWriter, r *http.Request) {
@@ -615,6 +667,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/ventas-sueltas/{id}/asignar", wrapper.AsignarVentaAlTurno)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/turnos-para-asignar", wrapper.TurnosParaAsignar)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/emitido", wrapper.EmitidoPorCaja)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/anulaciones", wrapper.AnulacionesPorPersona)
 
 	return m
 }
@@ -626,6 +679,28 @@ type CajaHechoJSONResponse struct {
 }
 
 type ProblemaApplicationProblemPlusJSONResponse Problema
+
+type AnulacionesPorPersonaRequestObject struct {
+	Params AnulacionesPorPersonaParams
+}
+
+type AnulacionesPorPersonaResponseObject interface {
+	VisitAnulacionesPorPersonaResponse(w http.ResponseWriter) error
+}
+
+type AnulacionesPorPersona200JSONResponse []CajaAnulaciones
+
+func (response AnulacionesPorPersona200JSONResponse) VisitAnulacionesPorPersonaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListarCajasFisicasRequestObject struct {
 }
@@ -916,6 +991,9 @@ func (response AsignarVentaAlTurno422ApplicationProblemPlusJSONResponse) VisitAs
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
+	// (GET /api/v1/admin/caja/anulaciones)
+	AnulacionesPorPersona(ctx context.Context, request AnulacionesPorPersonaRequestObject) (AnulacionesPorPersonaResponseObject, error)
+
 	// (GET /api/v1/admin/caja/cajas-fisicas)
 	ListarCajasFisicas(ctx context.Context, request ListarCajasFisicasRequestObject) (ListarCajasFisicasResponseObject, error)
 
@@ -984,6 +1062,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// AnulacionesPorPersona operation middleware
+func (sh *strictHandler) AnulacionesPorPersona(w http.ResponseWriter, r *http.Request, params AnulacionesPorPersonaParams) {
+	var request AnulacionesPorPersonaRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AnulacionesPorPersona(ctx, request.(AnulacionesPorPersonaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AnulacionesPorPersona")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AnulacionesPorPersonaResponseObject); ok {
+		if err := validResponse.VisitAnulacionesPorPersonaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListarCajasFisicas operation middleware
@@ -1264,42 +1368,44 @@ func (sh *strictHandler) AsignarVentaAlTurno(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"777RhHx19b8BAA==",
+	"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",
+	"fHPzvwEA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

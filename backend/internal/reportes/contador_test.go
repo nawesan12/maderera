@@ -19,6 +19,10 @@ func TestListadosDelContador(t *testing.T) {
 	_ = pool.QueryRow(ctx, `insert into customers (nombre, cuit) values ('Obra Pérez', '20-12345678-9') returning id`).Scan(&cli)
 	_, _ = pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto, created_at) values
 		($1, 'compra', 1000, '2026-07-01'), ($1, 'compra', 500, '2026-11-10'), ($1, 'pago', -300, '2026-11-12')`, cli)
+	// Dado de baja, pero todavía debe: tiene que figurar.
+	var baja string
+	_ = pool.QueryRow(ctx, `insert into customers (nombre, active) values ('Dado de Baja', false) returning id`).Scan(&baja)
+	_, _ = pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto, created_at) values ($1, 'compra', 4321, '2026-11-01')`, baja)
 	_ = pool.QueryRow(ctx, `insert into suppliers (nombre) values ('Faplac') returning id`).Scan(&prov)
 	_, _ = pool.Exec(ctx, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, fecha_vencimiento, neto, iva21, total)
 		values ($1, 'factura_a', 3, 41, '2026-10-01', '2026-10-31', 1000, 210, 1210)`, prov)
@@ -31,6 +35,9 @@ func TestListadosDelContador(t *testing.T) {
 	// El pago de 300 cancela lo más viejo: quedan 700 de julio (más de 90) y 500 al día.
 	if !strings.Contains(d, "Obra Pérez") || !strings.Contains(d, "500,00") || !strings.Contains(d, "700,00") || !strings.Contains(d, "1200,00") {
 		t.Fatalf("deudores:\n%s", d)
+	}
+	if !strings.Contains(d, "Dado de Baja") || !strings.Contains(d, "4321,00") {
+		t.Fatalf("el dado de baja que debe no está:\n%s", d)
 	}
 	c, err := s.CsvCuentasAPagar(ctx, ahora)
 	if err != nil {

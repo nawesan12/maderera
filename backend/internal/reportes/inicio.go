@@ -362,7 +362,9 @@ type otros struct {
 //     el día en que se comprometió entregarlo (entregar_el, o si no el
 //     necesita_para de su presupuesto) y ese día pasó.
 //     Un pedido no guarda una fecha comprometida propia: el que no salió de
-//     un presupuesto con fecha no puede estar atrasado.
+//     un presupuesto con fecha no puede estar atrasado. Se comparan días en
+//     hora argentina: `entregar_el` es date, y pasado a timestamptz en la
+//     sesión de Postgres (UTC) un pedido para hoy figuraba atrasado.
 //   - Corte sin retirar: terminado (retirado es otro estado).
 //   - WhatsApp sin contestar: abierta con mensajes sin leer, el mismo
 //     criterio que el número del menú.
@@ -381,7 +383,8 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 		  CASE WHEN $2 THEN (SELECT count(*)::int FROM quotes WHERE estado IN ('pendiente', 'revision') AND responde_hasta < $5) ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*)::int FROM orders o LEFT JOIN quotes q ON q.id = o.quote_id
 		                     WHERE o.estado NOT IN ('entregado', 'cancelado')
-		                       AND coalesce(o.entregar_el::timestamptz, q.necesita_para) < $6) ELSE 0 END,
+		                       AND coalesce(o.entregar_el, (q.necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date)
+		                           < ($6 AT TIME ZONE 'America/Argentina/Buenos_Aires')::date) ELSE 0 END,
 		  CASE WHEN $4 THEN (SELECT count(*)::int FROM cutting_orders WHERE estado = 'terminado') ELSE 0 END,
 		  coalesce((SELECT valor FROM site_settings WHERE clave = 'tienda_activa'), 'si')`,
 		ve("/admin/whatsapp"), ve("/admin/presupuestos"), ve("/admin/pedidos"), ve("/admin/cortes"), ahora, hoy).

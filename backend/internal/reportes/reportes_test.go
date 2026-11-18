@@ -556,3 +556,37 @@ func TestElPagoAnuladoVaConSuContraasiento(t *testing.T) {
 		t.Errorf("noviembre: %v", c)
 	}
 }
+
+// Un pedido para entregar hoy no está atrasado en ningún momento del día
+// argentino, ni a las 21 h (medianoche UTC) ni a las 0 h; el de ayer, sí.
+func TestPedidoParaHoyNoEstaAtrasado(t *testing.T) {
+	e := armar(t)
+	ar, _ := time.LoadLocation("America/Argentina/Buenos_Aires")
+	creado := time.Date(2026, 11, 10, 12, 0, 0, 0, ar)
+	hoy := e.pedido(t, "P-HOY", e.central, "pendiente", "mostrador", creado, nil)
+	ayer := e.pedido(t, "P-AYER", e.central, "pendiente", "mostrador", creado, nil)
+	e.exec(t, `update orders set entregar_el = '2026-11-18' where id = $1`, hoy)
+	e.exec(t, `update orders set entregar_el = '2026-11-17' where id = $1`, ayer)
+	ve := func(string) bool { return true }
+	for _, ahora := range []time.Time{
+		time.Date(2026, 11, 18, 0, 5, 0, 0, ar),
+		time.Date(2026, 11, 18, 12, 0, 0, 0, ar),
+		time.Date(2026, 11, 18, 21, 30, 0, 0, ar),
+	} {
+		o, err := e.s.otrosPendientes(context.Background(), ve, ahora)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if o.pedidosAtrasados != 1 {
+			t.Fatalf("a las %s: %d atrasados (solo el de ayer)", ahora.Format("15:04"), o.pedidosAtrasados)
+		}
+	}
+	// El 17 a las 21 h (ya 18 en UTC), el de ayer todavía es de hoy.
+	o, err := e.s.otrosPendientes(context.Background(), ve, time.Date(2026, 11, 17, 21, 30, 0, 0, ar))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.pedidosAtrasados != 0 {
+		t.Fatalf("el 17 a las 21 h: %d atrasados", o.pedidosAtrasados)
+	}
+}

@@ -165,7 +165,6 @@ export default async function GastosPage({
           <Vacio
             icono={Receipt}
             titulo={`Sin gastos en ${etiqueta}`}
-            detalle="Los gastos de otro mes se miran cambiando el mes de arriba."
           />
         ) : (
           <div className="overflow-x-auto">

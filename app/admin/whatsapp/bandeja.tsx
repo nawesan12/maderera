@@ -279,7 +279,7 @@ export function Bandeja({
         />
       ) : (
         <section className={`tarjeta hidden items-center justify-center p-10 text-center lg:flex ${alto}`}>
-          <p className="text-base text-muted-foreground">Elegí una conversación de la lista para leerla y contestar.</p>
+          <p className="text-base text-muted-foreground">Elegí una conversación.</p>
         </section>
       )}
 

@@ -103,13 +103,11 @@ export function DialogoImportar() {
 
         {!previa ? (
           <div className="space-y-4">
-            <ol className="space-y-2 text-base text-muted-foreground">
-              <li>
-                1. Descargá la planilla con el botón <strong>Exportar</strong>.
-              </li>
-              <li>2. Cambiá los precios en Excel y guardá el archivo.</li>
-              <li>3. Subilo acá: antes de aplicar nada vas a ver qué cambia.</li>
-            </ol>
+            {/* Antes de aplicar nada se ve qué cambia. */}
+            <p className="text-base text-muted-foreground">
+              La planilla sale de <strong>Exportar</strong>: cambiá los precios
+              en Excel y subila acá.
+            </p>
 
             <label
               onDragOver={(e) => {

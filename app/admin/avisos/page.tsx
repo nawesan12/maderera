@@ -61,11 +61,10 @@ export default async function AvisosPage() {
             <h2 className="text-base font-medium">
               Los correos todavía no salen
             </h2>
+            {/* Hasta entonces cada aviso se arma completo y queda abajo como
+                simulado, para revisar los textos sin escribirle a nadie. */}
             <p className="mt-1 text-base text-muted-foreground">
-              {correo.detalle} Hasta entonces cada aviso se arma completo y
-              queda en la bitácora de abajo marcado como{" "}
-              <strong>simulado</strong>, para poder revisar los textos sin
-              escribirle a nadie.
+              {correo.detalle} Quedan abajo como <strong>simulado</strong>.
             </p>
           </div>
         </section>
@@ -79,12 +78,12 @@ export default async function AvisosPage() {
           <BellRing className="h-5 w-5 text-muted-foreground" />
           Avisos de venta en el teléfono
         </h2>
+        {/* Cuando entra una compra por el sitio o se acredita un pago, el panel
+            avisa como cualquier aplicación. Se activa por dispositivo. */}
         <p className="mt-1 text-base text-muted-foreground">
-          Cuando entra una compra por el sitio o se acredita un pago, el panel
-          avisa como cualquier aplicación. Se activa por dispositivo, y en el
-          teléfono conviene{" "}
-          <strong className="text-foreground">instalar el panel</strong> desde el
-          menú del navegador: en iPhone, es la única forma de que funcione.
+          En iPhone solo funciona con el panel{" "}
+          <strong className="text-foreground">instalado</strong> desde el menú
+          del navegador.
         </p>
         <div className="mt-3">
           <AvisosPush />
@@ -119,7 +118,7 @@ export default async function AvisosPage() {
           <Vacio
             icono={MessageCircle}
             titulo="Todavía no salió ningún aviso"
-            detalle="Se mandan solos cuando un pedido cambia de estado. Acá van quedando los que ya salieron, con su resultado."
+            // Se mandan solos cuando un pedido cambia de estado; acá quedan los que salieron, con su resultado.
           />
         ) : (
           <ul className="divide-y">

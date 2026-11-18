@@ -217,12 +217,12 @@ function Formulario({
               defaultValue={punto?.numeroInicial ?? 0}
               className="h-10 w-full rounded-lg border bg-background px-3 text-base sm:w-56"
             />
+            {/* El sistema numera desde el siguiente: evita que el primer
+                comprobante salga con el número 1 y choque con una serie que ARCA
+                ya tiene registrada. Se saca del último comprobante emitido en
+                Quality Software para este punto de venta. */}
             <p className="mt-1.5 text-base text-muted-foreground">
-              El sistema numera desde el siguiente. Es lo que evita que el
-              primer comprobante salga con el número 1 y choque con una serie
-              que ARCA ya tiene registrada. Se saca del último comprobante
-              emitido en Quality Software para este punto de venta; cero es
-              correcto solo si el punto de venta es nuevo.
+              Cero solo si el punto de venta es nuevo.
             </p>
           </div>
         </Seccion>

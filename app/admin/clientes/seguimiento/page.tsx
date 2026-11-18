@@ -60,7 +60,8 @@ export default async function SeguimientoPage() {
           <Vacio
             icono={ClipboardList}
             titulo="Todavía no hay ningún seguimiento"
-            detalle="Se abren desde la ficha de un cliente o con el botón de acá abajo: «llamar el martes por la factura 1234». Lo que tenga fecha vencida aparece en el Para hoy del panel."
+            // Se abren desde la ficha de un cliente o con el botón de abajo. Lo que
+            // tenga fecha vencida aparece en el Para hoy del panel.
           />
         </section>
       ) : null}

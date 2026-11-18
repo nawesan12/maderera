@@ -102,8 +102,7 @@ export default async function CierrePage({
                 : `${rotos.length} asientos no cierran`}
             </h2>
             <p className="text-sm">
-              El debe y el haber tienen que dar igual. Si se exporta así, el
-              sistema del estudio rechaza el archivo entero.
+              Si se exporta así, el estudio rechaza el archivo entero.
             </p>
           </header>
           <ul className="divide-y divide-linea">

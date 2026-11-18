@@ -311,8 +311,8 @@ export default async function FichaComprobantePage({
 
               {!discrimina && totalIva > 0 && (
                 <p className="pt-1 text-sm text-muted-foreground">
-                  IVA contenido: {moneda.format(totalIva)}. En esta factura no se
-                  discrimina, pero se informa a ARCA igual.
+                  {/* En esta factura no se discrimina, pero se informa a ARCA igual. */}
+                  IVA contenido: {moneda.format(totalIva)}
                 </p>
               )}
             </dl>

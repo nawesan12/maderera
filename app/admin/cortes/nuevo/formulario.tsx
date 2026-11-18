@@ -473,8 +473,7 @@ export function FormularioCorte({
           {mitad && placa?.color && (
             <p className="tarjeta-atencion px-4 py-3 text-base md:col-span-2">
               La placa es <strong>{placa.color}</strong>: fijate cómo corre el
-              dibujo antes de partirla. Al ancho, las dos mitades quedan con la
-              veta cruzada.
+              dibujo antes de partirla.
             </p>
           )}
         </Seccion>

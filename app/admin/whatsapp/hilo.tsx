@@ -203,8 +203,8 @@ export function Hilo({
       {detalle.bajaAt && (
         <p className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
           <BellOff className="h-4 w-4 shrink-0" />
-          Pidió no recibir avisos automáticos ({detalle.bajaDetalle ?? "sin detalle"}). Las respuestas a lo que pregunte
-          salen igual.
+          {/* Las respuestas a lo que pregunte salen igual. */}
+          Pidió no recibir avisos automáticos ({detalle.bajaDetalle ?? "sin detalle"}).
         </p>
       )}
 
@@ -252,7 +252,7 @@ export function Hilo({
             </>
           ) : (
             <>
-              Pasaron más de 24 horas desde su último mensaje: WhatsApp solo deja mandar un mensaje preparado.
+              Pasaron más de 24 horas: solo se puede mandar un mensaje preparado.
               <button type="button" onClick={() => setModo("plantilla")} className="font-medium underline">
                 Elegir uno
               </button>
@@ -373,7 +373,8 @@ export function Hilo({
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-keyshortcuts="Alt+W"
-                title="Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra. (Alt + W)"
+                // Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra.
+                title="Alt + W"
                 className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10"
               >
                 <Smartphone className="h-5 w-5" />
@@ -384,7 +385,7 @@ export function Hilo({
             <button
               type="submit"
               disabled={enviando}
-              title="Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h."
+              // Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h.
               className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}

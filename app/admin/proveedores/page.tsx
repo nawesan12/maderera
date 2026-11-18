@@ -36,9 +36,6 @@ export default async function ProveedoresPage({
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[26px] font-bold tracking-tight">Proveedores</h1>
-          <p className="mt-1 text-base text-muted-foreground">
-            A quién se le compra y cuánto se le debe hoy.
-          </p>
         </div>
         <DialogoProveedor />
       </header>
@@ -74,11 +71,7 @@ export default async function ProveedoresPage({
                 ? "Ningún proveedor coincide con esa búsqueda"
                 : "Todavía no hay proveedores cargados"
             }
-            detalle={
-              q
-                ? "Probá con parte del nombre o con el CUIT."
-                : "La ficha del proveedor guarda sus condiciones de pago, sus facturas y su cuenta corriente."
-            }
+            // La ficha del proveedor guarda sus condiciones de pago, sus facturas y su cuenta corriente.
             accion={q ? undefined : <DialogoProveedor />}
           />
         ) : (

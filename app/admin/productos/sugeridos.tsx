@@ -45,8 +45,9 @@ export function ProductosSugeridos({
           productId={productId}
           tipo="complementario"
           titulo="También vas a necesitar"
-          detalle="Lo que se lleva junto: el sellador del deck, los tornillos del machimbre."
-          vacio="Sin complementos cargados, la ficha no muestra este bloque."
+          // Lo que se lleva junto: el sellador del deck, los tornillos del machimbre.
+          // Sin complementos cargados, la ficha no muestra este bloque.
+          vacio="Ninguno cargado."
           cargados={cargados.filter((s) => s.tipo === "complementario")}
           candidatos={candidatos}
         />
@@ -54,8 +55,9 @@ export function ProductosSugeridos({
           productId={productId}
           tipo="similar"
           titulo="Alternativas"
-          detalle="Con qué se reemplaza cuando no convence o no hay stock."
-          vacio="Sin alternativas cargadas, la ficha muestra otros productos de la misma categoría."
+          // Con qué se reemplaza cuando no convence o no hay stock. Sin
+          // alternativas cargadas, la ficha muestra otros de la misma categoría.
+          vacio="Ninguna cargada."
           cargados={cargados.filter((s) => s.tipo === "similar")}
           candidatos={candidatos}
         />
@@ -68,7 +70,6 @@ function Lista({
   productId,
   tipo,
   titulo,
-  detalle,
   vacio,
   cargados,
   candidatos,
@@ -76,7 +77,6 @@ function Lista({
   productId: string;
   tipo: "complementario" | "similar";
   titulo: string;
-  detalle: string;
   vacio: string;
   cargados: SugeridoCargado[];
   candidatos: Candidato[];
@@ -109,7 +109,6 @@ function Lista({
   return (
     <div>
       <h3 className="text-base font-medium">{titulo}</h3>
-      <p className="mt-0.5 text-sm text-muted-foreground">{detalle}</p>
 
       <ul className="mt-3 space-y-2">
         {cargados.length === 0 && (

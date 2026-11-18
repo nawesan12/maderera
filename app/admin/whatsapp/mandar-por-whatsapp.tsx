@@ -39,7 +39,7 @@ export function MandarPorWhatsapp({
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        title="Sale por la Cloud API de Meta con el PDF pegado, y Meta lo cobra. «Avisar por WhatsApp» lo manda desde el teléfono, gratis."
+        // Sale por la Cloud API de Meta con el PDF pegado, y Meta lo cobra. «Avisar por WhatsApp» lo manda desde el teléfono, gratis.
         className={`inline-flex ${alto} items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted`}
       >
         <MessageCircle className="h-4 w-4 text-brand-green" />

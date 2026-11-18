@@ -129,15 +129,15 @@ export function CompositorPlantilla({
 
       {!ventanaAbierta && (
         <p className="estado-espera mb-2.5 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm text-[var(--estado-tinta)]">
-          Pasaron más de 24 horas desde su último mensaje: WhatsApp solo deja mandar un mensaje preparado. Cuando
-          conteste, se vuelve a poder escribir libremente.
+          {/* Cuando conteste, se vuelve a poder escribir libremente. */}
+          Pasaron más de 24 horas: solo se puede mandar un mensaje preparado.
         </p>
       )}
 
       {plantillas.length === 0 ? (
         <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
-          No hay mensajes preparados aprobados todavía. Hay que cargarlos en Meta, esperar la aprobación y
-          sincronizarlos desde la configuración.
+          {/* Se cargan en Meta, se espera la aprobación y se sincronizan desde la configuración. */}
+          No hay mensajes preparados aprobados.
         </p>
       ) : (
         <div className="space-y-2.5">

@@ -60,10 +60,9 @@ export function ExportarAsientos({
                 ? "Hay un asiento que no cierra"
                 : `Hay ${rotos} asientos que no cierran`}
             </DialogTitle>
+            {/* Están listados más abajo en la pantalla, con la diferencia de cada uno. */}
             <DialogDescription className="text-base">
-              El sistema del estudio rechaza el archivo entero si viene un
-              asiento donde el debe y el haber no dan igual. Están listados más
-              abajo en esta pantalla, con la diferencia de cada uno.
+              El sistema del estudio rechaza el archivo entero.
             </DialogDescription>
           </DialogHeader>
 

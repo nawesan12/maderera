@@ -35,8 +35,8 @@ export function EditorDeLista({
         <p className="text-base font-semibold">{lista.nombre}</p>
         <p className="text-sm text-muted-foreground">
           {lista.itemsPropios > 0
-            ? `${lista.itemsPropios} precios propios cargados, que pisan al porcentaje`
-            : "Sin precios propios: todo sale del porcentaje sobre la general"}
+            ? `${lista.itemsPropios} precios propios, pisan al porcentaje`
+            : "Sin precios propios"}
         </p>
       </div>
 

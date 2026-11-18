@@ -216,11 +216,7 @@ export function GaleriaImagenes({
         />
       </label>
 
-      {imagenes.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          La foto marcada como principal es la que se ve en el catálogo.
-        </p>
-      )}
+      {/* La foto marcada como principal es la que se ve en el catálogo. */}
     </div>
   );
 }

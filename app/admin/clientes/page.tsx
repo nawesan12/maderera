@@ -117,9 +117,6 @@ export default async function ClientesPage({
         <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
           <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-base font-medium">Ningún cliente coincide</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá con otro nombre, CUIT o rubro.
-          </p>
         </div>
       ) : (
         <>

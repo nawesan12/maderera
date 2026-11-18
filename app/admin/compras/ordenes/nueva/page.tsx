@@ -70,17 +70,16 @@ export default async function NuevaOrdenPage({
         <h1 className="mt-2 text-[26px] font-bold tracking-tight">
           Nueva orden de compra
         </h1>
+        {/* Nace en borrador: cuenta como "en camino" recién cuando se marca como enviada. */}
         <p className="mt-1 text-base text-muted-foreground">
-          Los costos van <strong>netos</strong>. Nace en borrador: cuenta como
-          &quot;en camino&quot; recién cuando se marca como enviada.
+          Los costos van <strong>netos</strong>.
         </p>
       </div>
 
       {renglones.length > 0 && (
         <p className="tarjeta-atencion px-4 py-3 text-base">
           Vienen <strong>{renglones.length}</strong> renglones del reporte de
-          reposición, con la cantidad sugerida. Falta elegir el proveedor y
-          revisar los costos.
+          reposición. Falta elegir el proveedor y revisar los costos.
         </p>
       )}
 

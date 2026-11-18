@@ -45,11 +45,8 @@ export default async function CandidatosPage() {
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
             <PackageX className="h-6 w-6 text-muted-foreground" />
           </div>
+          {/* Todos los productos activos se vendieron hace poco, tienen stock y tienen precio. */}
           <p className="text-base font-medium">No hay nada para revisar</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Todos los productos activos se vendieron hace poco, tienen stock y
-            tienen precio.
-          </p>
         </section>
       ) : (
         <section className="tarjeta">

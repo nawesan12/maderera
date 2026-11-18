@@ -48,14 +48,11 @@ export function AvisoConexion({
 
         <div className="min-w-[16rem] flex-1">
           <h2 className="text-base font-medium">Modo demostración</h2>
-          <p className="mt-1 text-base text-muted-foreground">
-            La bandeja funciona completa y guarda todo, pero{" "}
-            <span className="font-medium text-foreground">
-              los mensajes no salen a WhatsApp
-            </span>
-            . Para que salgan de verdad hay que dar de alta el número en la
-            Cloud API de Meta: verificar la empresa, migrar el número y hacer
-            aprobar los textos de los avisos.
+          {/* La bandeja funciona completa y guarda todo. Para que los mensajes
+              salgan hay que dar de alta el número en la Cloud API de Meta:
+              verificar la empresa, migrar el número y hacer aprobar los textos. */}
+          <p className="mt-1 text-base font-medium">
+            Los mensajes no salen a WhatsApp.
           </p>
         </div>
 

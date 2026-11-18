@@ -58,10 +58,8 @@ export function BarraSuperior({
       )}
 
       {cola.sinSubir > 0 && (
-        <span
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera"
-          title="Se suben solas cuando vuelva la conexión."
-        >
+        // Se suben solas cuando vuelve la conexión.
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera">
           {cola.sinSubir} ventas sin enviar
         </span>
       )}
@@ -74,10 +72,8 @@ export function BarraSuperior({
       )}
 
       {conexion.desfasajeMin !== null && (
-        <span
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-problema"
-          title="La hora de esta máquina se usa para las ventas hechas sin conexión."
-        >
+        // La hora de esta máquina se usa para las ventas hechas sin conexión.
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-problema">
           Reloj corrido {conexion.desfasajeMin} min
         </span>
       )}

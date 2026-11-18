@@ -36,11 +36,8 @@ export default async function NuevaFacturaPage() {
 
       {!emisor.cuit ? (
         <section className="tarjeta-atencion p-5">
+          {/* Sin los datos fiscales de la empresa no se puede emitir ningún comprobante. */}
           <h2 className="text-base font-medium">Falta cargar el CUIT</h2>
-          <p className="mt-1 text-base text-muted-foreground">
-            Sin los datos fiscales de la empresa no se puede emitir ningún
-            comprobante.
-          </p>
           <Link
             href="/admin/arca/configuracion"
             className="mt-3 inline-flex h-10 items-center rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"

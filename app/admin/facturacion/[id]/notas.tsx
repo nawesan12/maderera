@@ -101,8 +101,9 @@ export function NotasSobreElComprobante({
       {modo === "credito" ? (
         <>
           <p className="text-sm text-muted-foreground">
-            Poné cuánto se acredita de cada renglón. El precio unitario sale de
-            la factura original. <strong>El comprobante no queda anulado.</strong>
+            {/* El precio unitario sale de la factura original. */}
+            Poné cuánto se acredita de cada renglón.{" "}
+            <strong>El comprobante no queda anulado.</strong>
           </p>
 
           <ul className="divide-y divide-linea rounded-lg border border-linea">

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, UserPlus, UsersRound } from "lucide-react";
+import { ArrowLeft, UserPlus } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { listarVendedores } from "@/lib/dal/admin/vendedores";
 import { EditorDeVendedor, FilaDeVendedor } from "./editor";
@@ -35,16 +35,9 @@ export default async function VendedoresPage() {
         titulo="Vendedores"
       />
 
-      <div className="tarjeta p-5">
-        <p className="flex items-start gap-2.5 text-base text-muted-foreground">
-          <UsersRound className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-          <span>
-            El vendedor asignado sale en el presupuesto impreso y ordena el
-            reporte de ventas. Un vendedor que se va se <strong>desactiva</strong>,
-            no se borra: sus ventas históricas lo siguen nombrando.
-          </span>
-        </p>
-      </div>
+      {/* El vendedor asignado sale en el presupuesto impreso y ordena el reporte
+          de ventas. Uno que se va se desactiva, no se borra: sus ventas
+          históricas lo siguen nombrando. */}
 
       <section className="tarjeta p-5">
         <h2 className="text-base font-semibold">
@@ -57,7 +50,7 @@ export default async function VendedoresPage() {
           <Vacio
             icono={UserPlus}
             titulo="Todavía no hay vendedores cargados"
-            detalle="Un vendedor se asigna a la ficha del cliente, y después los presupuestos y los pedidos lo heredan solos."
+            // Se asigna a la ficha del cliente, y los presupuestos y pedidos lo heredan solos.
             accion={{ texto: "Agregar el primero", href: "#agregar" }}
           />
         ) : (

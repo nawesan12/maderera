@@ -31,9 +31,6 @@ export default async function RecepcionesPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[26px] font-bold tracking-tight">Recepciones</h1>
-          <p className="mt-1 text-base text-muted-foreground">
-            Lo que entró al depósito, con el costo que trajo.
-          </p>
         </div>
         <Link
           href="/admin/recepciones/nueva"
@@ -46,8 +43,8 @@ export default async function RecepcionesPage() {
 
       {borradores > 0 && (
         <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
-          {borradores} recepci{borradores > 1 ? "ones" : "ón"} en borrador: la
-          mercadería todavía no entró al stock ni movió el costo.
+          {borradores} recepci{borradores > 1 ? "ones" : "ón"} en borrador: todavía
+          no entró al stock.
         </p>
       )}
 

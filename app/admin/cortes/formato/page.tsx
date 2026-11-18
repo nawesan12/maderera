@@ -34,20 +34,14 @@ export default async function FormatoDeCortePage() {
 
       <div className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3">
         <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-        <div className="space-y-2 text-base">
-          <p>
-            <strong>Esto se ajusta contra la máquina, no de memoria.</strong> El
-            formato que sale de acá arranca siendo un CSV que abre en Excel y que
-            casi cualquier optimizador importa mapeando las columnas a mano.
-          </p>
-          <p className="text-muted-foreground">
-            Para dejarlo fino hace falta saber qué programa usa el taller (Cut
-            Rite, Ardis, Corte Certo, Optimik…), su versión, y —sobre todo— tener
-            un archivo de trabajo real de ellos para comparar. Con eso se ajustan
-            acá las columnas, el separador y la unidad, y se prueba importando
-            hasta que entre limpio.
-          </p>
-        </div>
+        {/* El formato arranca siendo un CSV que abre en Excel y que casi cualquier
+            optimizador importa mapeando las columnas a mano. Para dejarlo fino hace
+            falta saber qué programa usa el taller (Cut Rite, Ardis, Corte Certo,
+            Optimik…), su versión y un archivo de trabajo real para comparar; con eso
+            se ajustan las columnas, el separador y la unidad hasta que entre limpio. */}
+        <p className="text-base font-medium">
+          Se ajusta contra la máquina, no de memoria.
+        </p>
       </div>
 
       <EditorDeFormato perfiles={perfiles} />

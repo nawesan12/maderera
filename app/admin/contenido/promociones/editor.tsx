@@ -154,8 +154,8 @@ export function EditorDePromo({ promo }: { promo: PromoEditable | null }) {
           />
           {quienPaga === "banco" ? (
             <p className="text-base text-muted-foreground">
-              <strong>En el mostrador no se descuenta:</strong> el cliente paga
-              el total y el banco se lo devuelve.
+              <strong>En el mostrador no se descuenta:</strong> lo devuelve el
+              banco.
             </p>
           ) : (
             <p className="text-base text-muted-foreground">

@@ -80,10 +80,10 @@ export function ResolverSolicitud({
           <p className="flex items-start gap-2 rounded-lg bg-brand-cream/60 p-3 text-base">
             <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
             <span>
+              {/* Si el correo coincide se usa esa; si no, se crea otra: el CUIT solo
+                  no prueba que sea la misma persona. Las fichas se unen desde la ficha. */}
               Ya existe la ficha <strong>{clienteExistente.nombre}</strong> con ese
-              CUIT. Si el correo coincide, se usa esa; si no, se crea otra: el CUIT
-              solo no prueba que sea la misma persona. Confirmalo con el cliente y
-              uní las fichas desde su ficha.
+              CUIT. Se usa solo si coincide el correo.
             </span>
           </p>
         )}
@@ -153,9 +153,7 @@ export function ResolverSolicitud({
           >
             Cancelar
           </button>
-          <p className="w-full text-base text-muted-foreground">
-            Le mandamos un correo con los datos de su acceso.
-          </p>
+          {/* Le llega un correo con los datos de su acceso. */}
         </div>
       </form>
     );
@@ -176,9 +174,7 @@ export function ResolverSolicitud({
         placeholder="El CUIT no corresponde a una actividad del rubro."
         className="w-full rounded-lg border bg-background px-3 py-2 text-base"
       />
-      <p className="text-base text-muted-foreground">
-        Se lo mandamos tal cual por correo, así que conviene que se entienda solo.
-      </p>
+      <p className="text-base text-muted-foreground">Le llega tal cual por correo.</p>
 
       {estadoRechazar.error && (
         <p className="flex items-start gap-2 text-base text-destructive">

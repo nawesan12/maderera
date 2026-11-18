@@ -100,7 +100,7 @@ export default async function CampanaPage({ params }: { params: Promise<{ id: st
               {campana.iniciadaAt && `Empezó el ${hora(campana.iniciadaAt)}`}
               {campana.terminadaAt && ` · terminó el ${hora(campana.terminadaAt)}`}
               {campana.creadaPorNombre && ` · armada por ${campana.creadaPorNombre}`}
-              {campana.omitidos > 0 && ". Omitidos: se dieron de baja antes de su turno, o se canceló el envío."}
+              {/* Omitidos: se dieron de baja antes de su turno, o se canceló el envío. */}
             </p>
           </section>
 

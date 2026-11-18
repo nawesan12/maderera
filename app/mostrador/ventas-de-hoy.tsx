@@ -96,8 +96,9 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
 
             <div className="space-y-3.5">
               <p className="text-base leading-relaxed text-muted-foreground">
+                {/* Nada se borra: queda todo asentado al revés. */}
                 Vuelve el stock, sale la plata de la caja y se cancela la deuda si
-                la había. Nada se borra: queda todo asentado al revés.
+                la había.
               </p>
 
               <label className="block">

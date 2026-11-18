@@ -1,9 +1,14 @@
 import { cache } from "react";
 import "server-only";
 
-import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
+import {
+  cachearPublico,
+  ETIQUETAS,
+  etiquetaDeListado,
+  etiquetaDeProducto,
+} from "@/lib/cache-publico";
 import { normalizarBusqueda } from "@/lib/busqueda";
-import { api, apiInterna, apiPublica, datos } from "@/lib/api/servidor";
+import { api, apiInterna, apiPublica, apiPublicaDelVisitante, datos } from "@/lib/api/servidor";
 import { listaVigente } from "@/lib/dal/precios-sesion";
 import type { StockLevel } from "@/lib/stock-level";
 
@@ -176,10 +181,30 @@ function consulta(filtros: FiltrosCatalogo) {
   };
 }
 
-/** Los mismos filtros con la búsqueda canónica: son la clave de la caché. */
+/*
+ * **Qué se cachea y con qué etiqueta** (tanda T8).
+ *
+ * Cada listado lleva `catalogo` —lo que invalidan las acciones del panel— y
+ * la etiqueta de su categoría, o la de «todo». La ficha lleva la de su
+ * producto. Así el aviso del stock que manda Go (la migración 00169) rearma
+ * solo el listado y la ficha de lo que se vendió, y no el catálogo entero.
+ *
+ * **La búsqueda libre no se cachea.** Cada texto distinto era una entrada
+ * nueva, para siempre y sin tope: un bot que prueba palabras llenaba la
+ * caché. Con las claves de Go (filtrar y ordenar sin armar tarjetas) buscar
+ * es barato, y Go le pone tope por IP; por eso va con la IP de quien busca.
+ */
+const etiquetasDeListado = (filtros: FiltrosCatalogo) => [
+  ETIQUETAS.catalogo,
+  etiquetaDeListado(filtros.categoria),
+];
+
+/** Los mismos filtros con la búsqueda canónica. */
 function claveDeFiltros(filtros: FiltrosCatalogo): FiltrosCatalogo {
   return filtros.busqueda ? { ...filtros, busqueda: normalizarBusqueda(filtros.busqueda) } : filtros;
 }
+
+const hayBusqueda = (filtros: FiltrosCatalogo) => Boolean(filtros.busqueda && normalizarBusqueda(filtros.busqueda));
 
 /** Categorías con la cantidad real de productos activos. */
 export const listarCategorias = cache(
@@ -210,15 +235,18 @@ export const rubrosDeCategoria = cache(
   ),
 );
 
+async function productosPublicosSinCache(filtros: FiltrosCatalogo, cliente = apiPublica): Promise<ProductoListado[]> {
+  return datos(
+    await cliente.GET("/api/v1/catalogo/productos", {
+      params: { query: { ...consulta(filtros), publico: true } },
+    }),
+  ) as ProductoListado[];
+}
+
 const productosPublicosCacheados = cachearPublico(
-  async (filtros: FiltrosCatalogo): Promise<ProductoListado[]> =>
-    datos(
-      await apiPublica.GET("/api/v1/catalogo/productos", {
-        params: { query: { ...consulta(filtros), publico: true } },
-      }),
-    ) as ProductoListado[],
+  (filtros: FiltrosCatalogo) => productosPublicosSinCache(filtros),
   ["catalogo", "productos"],
-  ETIQUETAS.catalogo,
+  etiquetasDeListado,
 );
 
 /**
@@ -228,6 +256,7 @@ const productosPublicosCacheados = cachearPublico(
  */
 export async function listarProductosPublicos(filtros: FiltrosCatalogo = {}): Promise<ProductoListado[]> {
   if (filtros.ids && filtros.ids.length === 0) return [];
+  if (hayBusqueda(filtros)) return productosPublicosSinCache(filtros, await apiPublicaDelVisitante());
   return productosPublicosCacheados(claveDeFiltros(filtros));
 }
 
@@ -239,13 +268,16 @@ export async function listarProductosPublicos(filtros: FiltrosCatalogo = {}): Pr
  * derivada, lo viejo deja de servirse. Sin esto, cada carga del catálogo de un
  * profesional armaba los 2000 productos de nuevo.
  */
+async function productosPorListaSinCache(filtros: FiltrosCatalogo, lista: string): Promise<ProductoListado[]> {
+  return datos(
+    await apiInterna.GET("/api/v1/catalogo/productos", { params: { query: { ...consulta(filtros), lista } } }),
+  ) as ProductoListado[];
+}
+
 const productosPorListaCacheados = cachearPublico(
-  async (filtros: FiltrosCatalogo, lista: string, _factor: number): Promise<ProductoListado[]> =>
-    datos(
-      await apiInterna.GET("/api/v1/catalogo/productos", { params: { query: { ...consulta(filtros), lista } } }),
-    ) as ProductoListado[],
+  (filtros: FiltrosCatalogo, lista: string, _factor: number) => productosPorListaSinCache(filtros, lista),
   ["catalogo", "productos-por-lista"],
-  ETIQUETAS.catalogo,
+  etiquetasDeListado,
 );
 
 /** El catálogo a la lista de quien mira. */
@@ -253,36 +285,84 @@ export async function listarProductos(filtros: FiltrosCatalogo = {}): Promise<Pr
   if (filtros.ids && filtros.ids.length === 0) return [];
   const lista = await listaVigente();
   if (!lista.esDiferenciada || !lista.id) return listarProductosPublicos(filtros);
+  if (hayBusqueda(filtros)) return productosPorListaSinCache(filtros, lista.id);
   return productosPorListaCacheados(claveDeFiltros(filtros), lista.id, lista.factorDerivado);
 }
 
+export interface ResumenDeCatalogo {
+  cantidad: number;
+  /** El menor precio positivo. Null con la tienda apagada o sin precios. */
+  desde: number | null;
+  /** La primera foto en el orden del listado. */
+  imagen: string | null;
+}
+
 /**
- * Los productos en oferta para quien mira, memoizados: el catálogo arma el
- * panel de filtros dos veces (el cajón del teléfono y la columna del
- * escritorio) y las dos los piden.
+ * Cuántos son, desde cuánto y una foto, sin armar el listado: lo que piden el
+ * metadata de una categoría y su imagen para compartir. Antes cada uno se
+ * bajaba la categoría entera para contarla.
  */
-export const productosEnOferta = cache(() => listarProductos({ soloOfertas: true }));
+export const resumenPublico = cachearPublico(
+  async (filtros: FiltrosCatalogo): Promise<ResumenDeCatalogo> =>
+    datos(
+      await apiPublica.GET("/api/v1/catalogo/productos/resumen", {
+        params: { query: { ...consulta(filtros), publico: true } },
+      }),
+    ),
+  ["catalogo", "resumen"],
+  etiquetasDeListado,
+);
+
+/** El resumen a la lista de quien mira (el factor va en la clave, como el listado). */
+const resumenPorLista = cachearPublico(
+  async (filtros: FiltrosCatalogo, lista: string, _factor: number): Promise<ResumenDeCatalogo> =>
+    datos(
+      await apiInterna.GET("/api/v1/catalogo/productos/resumen", {
+        params: { query: { ...consulta(filtros), lista } },
+      }),
+    ),
+  ["catalogo", "resumen-por-lista"],
+  etiquetasDeListado,
+);
+
+/**
+ * Cuántos productos en oferta hay para quien mira, memoizado: el catálogo arma
+ * el panel de filtros dos veces (el cajón del teléfono y la columna del
+ * escritorio) y las dos lo piden. Antes se bajaba el listado de ofertas
+ * entero para hacerle `.length`.
+ */
+export const cantidadDeOfertas = cache(async (): Promise<number> => {
+  const lista = await listaVigente();
+  const r =
+    lista.esDiferenciada && lista.id
+      ? await resumenPorLista({ soloOfertas: true }, lista.id, lista.factorDerivado)
+      : await resumenPublico({ soloOfertas: true });
+  return r.cantidad;
+});
 
 /**
  * Una página del catálogo a precio de público, con el total para decir «viste
  * N de M». El recorte y el tope (5 páginas, que evita ?pagina=9999) los hace Go.
  */
+async function paginaSinCache(filtros: FiltrosCatalogo, pagina: number, cliente = apiPublica): Promise<PaginaDeCatalogo> {
+  if (filtros.ids && filtros.ids.length === 0) {
+    return { productos: [], total: 0, hayMas: false, topeAlcanzado: false };
+  }
+  return datos(
+    await cliente.GET("/api/v1/catalogo/productos/pagina", {
+      params: { query: { ...consulta(filtros), pagina: Math.max(1, Math.floor(pagina) || 1), publico: true } },
+    }),
+  ) as PaginaDeCatalogo;
+}
+
 const paginaCacheada = cachearPublico(
-  async (filtros: FiltrosCatalogo, pagina: number): Promise<PaginaDeCatalogo> => {
-    if (filtros.ids && filtros.ids.length === 0) {
-      return { productos: [], total: 0, hayMas: false, topeAlcanzado: false };
-    }
-    return datos(
-      await apiPublica.GET("/api/v1/catalogo/productos/pagina", {
-        params: { query: { ...consulta(filtros), pagina: Math.max(1, Math.floor(pagina) || 1), publico: true } },
-      }),
-    ) as PaginaDeCatalogo;
-  },
+  (filtros: FiltrosCatalogo, pagina: number) => paginaSinCache(filtros, pagina),
   ["catalogo", "pagina"],
-  ETIQUETAS.catalogo,
+  etiquetasDeListado,
 );
 
-export function paginaDeProductosPublica(filtros: FiltrosCatalogo = {}, pagina = 1): Promise<PaginaDeCatalogo> {
+export async function paginaDeProductosPublica(filtros: FiltrosCatalogo = {}, pagina = 1): Promise<PaginaDeCatalogo> {
+  if (hayBusqueda(filtros)) return paginaSinCache(filtros, pagina, await apiPublicaDelVisitante());
   return paginaCacheada(claveDeFiltros(filtros), pagina);
 }
 
@@ -304,7 +384,7 @@ const fichaCacheada = cachearPublico(
   // clave de antes, una entrada guardada por la versión anterior volvía sin
   // esos campos y tiraba la página.
   ["catalogo", "producto", "v2"],
-  ETIQUETAS.catalogo,
+  (slug) => [ETIQUETAS.catalogo, etiquetaDeProducto(slug)],
 );
 
 export const obtenerProductoPublico = cache(async (slug: string): Promise<ProductoDetalle | null> => {
@@ -378,5 +458,6 @@ export const datosDePortada = cachearPublico(
     };
   },
   ["portada"],
-  ETIQUETAS.catalogo,
+  // Muestra ofertas y destacados con stock: una venta la cambia.
+  [ETIQUETAS.catalogo, etiquetaDeListado()],
 );

@@ -159,7 +159,7 @@ func (s *Servicio) Sugeridos(ctx context.Context, productID, categoria, excluirS
 	if len(r.Similares) == 0 {
 		r.Similares = []ProductoListado{}
 		if len(sim) == 0 {
-			deCategoria, err := s.Productos(ctx, Filtros{Categoria: categoria}, general)
+			deCategoria, err := s.Claves(ctx, Filtros{Categoria: categoria}, general)
 			if err != nil {
 				return Sugeridos{}, err
 			}
@@ -167,6 +167,9 @@ func (s *Servicio) Sugeridos(ctx context.Context, productID, categoria, excluirS
 				if p.Slug != excluirSlug && len(r.Similares) < limite {
 					r.Similares = append(r.Similares, p)
 				}
+			}
+			if err := s.hidratar(ctx, r.Similares); err != nil {
+				return Sugeridos{}, err
 			}
 		}
 	}
@@ -207,7 +210,7 @@ func (s *Servicio) Complementos(ctx context.Context, variantes []string, limite 
 	if len(candidatos) == 0 {
 		return []ProductoListado{}, nil
 	}
-	productos, err := s.Productos(ctx, Filtros{IDs: candidatos}, lista)
+	productos, err := s.Claves(ctx, Filtros{IDs: candidatos}, lista)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +220,7 @@ func (s *Servicio) Complementos(ctx context.Context, variantes []string, limite 
 			out = append(out, p)
 		}
 	}
-	return out, nil
+	return out, s.hidratar(ctx, out)
 }
 
 // Portada es datosDePortada.
@@ -239,7 +242,8 @@ func (s *Servicio) Portada(ctx context.Context) (Portada, error) {
 	if err != nil {
 		return Portada{}, err
 	}
-	todos, err := s.Productos(ctx, Filtros{}, general)
+	// Todos para contar; fotos solo para los ocho que se muestran.
+	todos, err := s.Claves(ctx, Filtros{}, general)
 	if err != nil {
 		return Portada{}, err
 	}
@@ -268,5 +272,8 @@ func (s *Servicio) Portada(ctx context.Context) (Portada, error) {
 			}
 		}
 	}
-	return p, nil
+	if err := s.hidratar(ctx, p.Ofertas); err != nil {
+		return Portada{}, err
+	}
+	return p, s.hidratar(ctx, p.Destacados)
 }

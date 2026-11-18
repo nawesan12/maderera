@@ -64,6 +64,22 @@ export const api = cache(async () =>
 export const apiPublica = createClient<paths>({ baseUrl: API_URL, cache: "no-store" });
 
 /**
+ * Como `apiPublica` —sin la cookie, a precio de público—, pero con la IP de
+ * quien mira: para lo público que **no** se cachea (la búsqueda libre del
+ * catálogo), que Go frena por IP. Sin la IP, todas las visitas compartirían
+ * un solo cupo. Lee la petición, así que no sirve en el prerender.
+ */
+export const apiPublicaDelVisitante = cache(async () => {
+  const h = await headers();
+  const out: Record<string, string> = {};
+  const ip = h.get("x-forwarded-for") ?? h.get("x-real-ip");
+  if (ip) out["x-forwarded-for"] = ip;
+  const agente = h.get("user-agent");
+  if (agente) out["user-agent"] = agente;
+  return createClient<paths>({ baseUrl: API_URL, cache: "no-store", headers: out });
+});
+
+/**
  * Para lo que solo puede pedir el servidor de Next: los precios de una lista
  * dada (`lista=<id>`), sin la cookie de nadie, para guardarlos en la caché por
  * lista. Va con el secreto que comparte con la API (API_SECRETO_INTERNO); sin

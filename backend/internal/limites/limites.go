@@ -48,6 +48,11 @@ const (
 	// Más generoso que Corte porque se pide en cada cambio del despiece,
 	// pero con techo: es CPU pura y la ruta es anónima.
 	Plano Accion = "plano"
+	// Busqueda es la búsqueda libre del catálogo público: solo de Go. Desde
+	// la tanda T8 no se guarda en la caché de Next —cada texto distinto era
+	// una entrada para siempre—, así que cada «?buscar=» que arma un bot
+	// llega a la base. Una persona no escribe dos búsquedas por segundo.
+	Busqueda Accion = "busqueda"
 )
 
 // Los valores de LIMITES en lib/limites/index.ts.
@@ -65,6 +70,7 @@ var limites = map[Accion]Limite{
 	Diagnostico:    {20, time.Hour},
 	Carrito:        {60, time.Hour},
 	Plano:          {600, 10 * time.Minute},
+	Busqueda:       {120, time.Minute},
 }
 
 // Veredicto es si pasa, cuántos le quedan y cuánto esperar si no.

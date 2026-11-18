@@ -103,6 +103,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalogo/productos/resumen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos son, desde cuánto y una foto, sin armar el listado (el metadata de una categoría, su imagen para compartir y el contador de ofertas) */
+        get: operations["ResumenDeProductos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalogo/productos/{slug}": {
         parameters: {
             query?: never;
@@ -345,6 +362,16 @@ export interface components {
             stockAserradero: components["schemas"]["NivelStock"];
             hayStock: boolean;
         };
+        ResumenDeCatalogo: {
+            cantidad: number;
+            /**
+             * Format: double
+             * @description el menor precio positivo; null con la tienda apagada o sin precios
+             */
+            desde: number | null;
+            /** @description la primera foto en el orden del listado */
+            imagen: string | null;
+        };
         PaginaDeCatalogo: {
             productos: components["schemas"]["ProductoListado"][];
             total: number;
@@ -578,6 +605,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProductoListado"][];
                 };
             };
+            429: components["responses"]["Problema"];
         };
     };
     PaginaDeProductos: {
@@ -617,6 +645,46 @@ export interface operations {
                     "application/json": components["schemas"]["PaginaDeCatalogo"];
                 };
             };
+            429: components["responses"]["Problema"];
+        };
+    };
+    ResumenDeProductos: {
+        parameters: {
+            query?: {
+                categoria?: components["parameters"]["filtro_categoria"];
+                subcategoria?: components["parameters"]["filtro_subcategoria"];
+                busqueda?: components["parameters"]["filtro_busqueda"];
+                stock?: components["parameters"]["filtro_stock"];
+                orden?: components["parameters"]["filtro_orden"];
+                soloOfertas?: components["parameters"]["filtro_soloOfertas"];
+                marca?: components["parameters"]["filtro_marca"];
+                /** @description Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno». */
+                ids?: components["parameters"]["filtro_ids"];
+                /** @description Precios de la lista general, sin mirar la sesión (lo que se cachea para todos) */
+                publico?: components["parameters"]["filtro_publico"];
+                /**
+                 * @description Los precios de esta lista, sin mirar la sesión. Solo con
+                 *     `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+                 *     los guarda en su caché por lista); si no, 403.
+                 */
+                lista?: components["parameters"]["filtro_lista"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El resumen */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumenDeCatalogo"];
+                };
+            };
+            429: components["responses"]["Problema"];
         };
     };
     Producto: {

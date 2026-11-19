@@ -1930,3 +1930,39 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   50 × 25 mm con `@page`); se arma en `/admin/stock/etiquetas`.
 - Sin migraciones: los índices que hacen falta (trigramas de nombre, sku,
   etiqueta y marca; `inventory` por variante) ya estaban.
+
+## T3 (18/11): controles sobre la plata del personal
+
+- **La segunda firma es un PIN de admin** (`internal/autorizacion`, migración
+  00141): 6 a 8 dígitos, scrypt como la clave, cargado desde el menú del admin
+  con su contraseña (`PUT /api/v1/sesion/pin`). Dos admins pueden tener el
+  mismo (rechazarlo delataba el del otro). Cuentan **solo los errores**: 5
+  cada 15 min por sucursal y 10 en el día; al tercero seguido, push a los
+  admins. Si la base falla, no pasa (al revés que `limites`). Los errores se
+  cuentan con el pool, no con la transacción de quien pide. Un PIN correcto
+  da una ficha HMAC de dos minutos atada a la operación y al monto.
+- **El precio de lista lo pone Go** (`precios.PreciosDeLista`; la lista del
+  cliente se mudó de `mostrador` a `precios`). Lo dejado de cobrar es
+  `ventas.DesvioDeLaVenta`: bajo la lista por renglón sin compensar, más el
+  descuento tipeado; la escala por medio de pago no cuenta. Pasado
+  `descuento_sin_autorizacion_pct` (0/5/10, regla de `/admin/reglas`), PIN.
+  La misma regla para el presupuesto vencido que se respeta. `lib/mostrador/
+  importes.ts` la repite para avisar antes de cobrar (prueba en
+  `tests/desvio-venta.test.ts`): si se cambia una, se cambia la otra.
+- **El corte se cobra con `cortes.ACobrar`**: el plano libre, salvo que el
+  acomodo a mano gaste más placas.
+- **La clave de la venta y del recibo van con su huella**: la misma clave
+  con otro contenido da 409. La venta se busca por clave antes del crédito.
+- La venta sin conexión no se rechaza por precio ni por crédito: se marca
+  (`bajo_lista_sin_autorizar`) y sale en rojo en el inicio y en el cierre.
+- **Lo que llega de la cola con el turno cerrado entra con la hora de
+  llegada** (y `declarado_at`): el esperado del cierre suma hasta
+  `cerrada_at` y lo tardío va aparte.
+- Sale `POST /admin/pedidos/{id}/cobrado`; entra `/cobro` por
+  `cobros.EmitirRecibo`. `roles.ManejanPlata` (admin y vendedor) en el cobro y
+  la facturación desde la ficha del pedido.
+- El aserradero lee `PedidoParaElTaller` (sin plata); la ficha completa es de
+  quien entra a Pedidos.
+- Ojo con `TestGananciaSegunLasReglas` (reportes): falla entre las 21 y las
+  24 de Argentina, porque el gasto se carga con `current_date` de la base (en
+  UTC) y el lapso se arma en hora local. No es de T3.

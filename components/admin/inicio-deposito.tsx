@@ -168,8 +168,12 @@ function Lista({
             veta; eran dos estilos en la misma pantalla (comité final). */}
         <h2 className="flex items-center gap-2.5 text-[19px] font-bold tracking-tight">
           <span className="wood-divider w-8 shrink-0" aria-hidden="true" />
-          {titulo}
-          {total > 0 && <span className="tabular font-semibold text-texto-2"> · {total}</span>}
+          {/* El título y la cifra en un solo span: sueltos, el gap del h2 los
+              separaba y el «·» quedaba lejos del título y pegado a la cifra. */}
+          <span>
+            {titulo}
+            {total > 0 && <span className="font-semibold tabular-nums text-texto-2"> · {total}</span>}
+          </span>
         </h2>
         {/* Con más de cinco se dice cuántos son: si no, parece que hay cinco. */}
         {total > TOPE && (

@@ -21,6 +21,9 @@ describe("detalles del panel", () => {
     const deposito = leer("components/admin/inicio-deposito.tsx");
     expect(deposito).toContain('<h2 className="flex items-center gap-2.5 text-[19px] font-bold tracking-tight">');
     expect(deposito).toContain("wood-divider w-8");
+    // El «·» pegado al título: título y cifra en el mismo span, fuera del gap.
+    expect(deposito).toMatch(/<span>\s*\{titulo\}\s*\{total > 0 && <span className="[^"]*tabular-nums[^"]*"> · \{total\}<\/span>\}\s*<\/span>/);
+    expect(deposito).not.toMatch(/className="tabular [^"]*"> · \{total\}/);
   });
 
   it("en Precios «Ajustar precios» manda y los ajustes van un escalón abajo", () => {

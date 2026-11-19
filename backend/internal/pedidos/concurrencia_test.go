@@ -310,3 +310,36 @@ func TestNoSeCancelaUnPedidoConRemito(t *testing.T) {
 		t.Fatalf("cancelar con el remito anulado: %v", err)
 	}
 }
+
+// Un pedido pagado en línea no tiene recibo: cancelarlo dejaba la plata del
+// cliente adentro (comité final, M2). Con el pago aprobado sin devolver no
+// se cancela; el depósito no lo cancela nunca; y con el reintegro completo,
+// sí, quien maneja la plata.
+func TestCancelarConPagoEnLinea(t *testing.T) {
+	e := armar(t)
+	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	_, dep := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
+	pedido := e.id(t, `insert into orders (numero, contacto_nombre, branch_id, origen, medio_pago, total, estado)
+		values ('P-2026-0009', 'Juan', $1, 'tienda', 'mercado_pago', 1210, 'pendiente') returning id`, e.sucursal)
+	pago := e.id(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, acreditado_at)
+		values ($1, 'pedido', 'mercado_pago', 'visa', 1210, 'aprobado', now()) returning id`, pedido)
+	if _, err := e.s.Cancelar(context.Background(), dep, pedido, nil); !esProblema(err, 403) {
+		t.Errorf("el depósito cancela un pedido pagado: %v", err)
+	}
+	_, err := e.s.Cancelar(context.Background(), ven, pedido, nil)
+	if !esProblema(err, 422) || !strings.Contains(err.Error(), "primero devolvé el pago") {
+		t.Errorf("cancelar con el pago sin devolver: %v", err)
+	}
+	// Un reintegro parcial no alcanza.
+	e.exec(t, `insert into payment_refunds (payment_id, importe, acumulado) values ($1, 210, 210)`, pago)
+	if _, err := e.s.Cancelar(context.Background(), ven, pedido, nil); !esProblema(err, 422) || !strings.Contains(err.Error(), "1.000") {
+		t.Errorf("con el reintegro parcial: %v", err)
+	}
+	e.exec(t, `update payments set estado = 'reintegrado' where id = $1`, pago)
+	if _, err := e.s.Cancelar(context.Background(), dep, pedido, nil); !esProblema(err, 403) {
+		t.Errorf("el depósito cancela un pedido reintegrado: %v", err)
+	}
+	if _, err := e.s.Cancelar(context.Background(), ven, pedido, nil); err != nil {
+		t.Errorf("con el reintegro completo se cancela: %v", err)
+	}
+}

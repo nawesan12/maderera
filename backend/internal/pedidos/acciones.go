@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math"
+	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,6 +23,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/reservas"
+	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
 	"mjbj/internal/ventas/fragmentos"
@@ -266,6 +269,26 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 			return fallo("Ya se cobró con el recibo " + strings.Join(recibos, ", ") +
 				": primero hay que anularlo y devolver la plata.")
 		}
+		// Y con el pago en línea (comité final, M2): el pedido pagado en el
+		// sitio no tiene recibo, así que el freno de arriba no lo veía, y el
+		// depósito lo cancelaba con la plata del cliente adentro y sin nadie
+		// que se la devuelva. Primero el reintegro (Mercado Pago o la
+		// transferencia de vuelta); y aun reintegrado, lo cancela solo quien
+		// maneja la plata.
+		var pagado, sinDevolver float64
+		if err := tx.QueryRow(ctx, `
+			SELECT coalesce(sum(p.monto), 0)::float8,
+			       coalesce(sum(p.monto - coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0))
+			                FILTER (WHERE p.estado = 'aprobado'), 0)::float8
+			FROM payments p WHERE p.order_id = $1 AND p.estado IN ('aprobado', 'reintegrado')`, id).Scan(&pagado, &sinDevolver); err != nil {
+			return err
+		}
+		if pagado > 0.005 && !manejaPlata(ses) {
+			return plataforma.NuevoProblema(http.StatusForbidden, "El pedido se pagó en línea: lo cancela administración o un vendedor.")
+		}
+		if sinDevolver > 0.005 {
+			return fallo("El pedido tiene un pago aprobado de " + formato.Moneda(sinDevolver) + ": primero devolvé el pago.")
+		}
 		if p.customerID != nil {
 			if devuelto, err = devolverDeuda(ctx, tx, *p.customerID, p.numero, motivo, ses.UserID); err != nil {
 				return err
@@ -300,6 +323,11 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 // referencia, que es como los asienta el checkout) menos lo que ya se
 // devolvió por una cancelación anterior: así se devuelve una sola vez aunque
 // el pedido se cancele dos veces. Devuelve cuánto devolvió.
+// manejaPlata: el rol de la sesión está en roles.ManejanPlata.
+func manejaPlata(ses *auth.Sesion) bool {
+	return ses != nil && ses.RolStaff != nil && slices.Contains(roles.ManejanPlata, *ses.RolStaff)
+}
+
 func devolverDeuda(ctx context.Context, tx pgx.Tx, cliente, numero string, motivo *string, usuario string) (float64, error) {
 	var pendiente jsmath.Num
 	if err := tx.QueryRow(ctx, `

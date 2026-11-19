@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, PenLine, Search, Scissors } from "lucide-react";
 import { formatearPrecio } from "@/lib/formato";
 import { enterDelBuscador } from "@/lib/mostrador/atajos";
-import { cantidadDelRenglon, leerTipeo, type LineaDeVenta } from "@/lib/mostrador/importes";
+import { leerTipeo, vaSinDecimales, type LineaDeVenta } from "@/lib/mostrador/importes";
 import type { CopiaLista } from "@/lib/mostrador/offline/use-copia-local";
 import type { ResultadoDeMostrador } from "@/lib/mostrador/tipos";
 import { formatearCantidad } from "@/lib/unidades";
@@ -28,7 +28,7 @@ export function Buscador({
   onElegir,
   onSuelta,
   onCortar,
-  onSinPrecio,
+  onNoEntra,
   sePuedeCortar,
   sinConexion,
 }: {
@@ -43,8 +43,8 @@ export function Buscador({
   onSuelta: (descripcion: string) => void;
   /** Abre el corte a medida sobre esa placa. */
   onCortar: (placa: ResultadoDeMostrador) => void;
-  /** Se quiso agregar algo sin precio: no entra. */
-  onSinPrecio: (nombre: string) => void;
+  /** Se quiso agregar algo que no entra así (sin precio, o con decimales lo que va entero). */
+  onNoEntra: (texto: string) => void;
   /** Sin conexión, Ctrl+Enter sobre una placa no cobra. */
   sinConexion: boolean;
   /**
@@ -143,16 +143,26 @@ export function Buscador({
    * vende entero, `Mayús + Enter` agrega la placa entera en vez de inventar
    * una presentación que el servidor después descartaría.
    */
+  /** El aviso de lo que no tiene precio, con las dos salidas que hay. */
+  function sinPrecio(r: (typeof resultados)[number]) {
+    return `${r.producto} — ${r.medida} no tiene precio. Cargalo a mano o ponele precio en Precios.`;
+  }
+
   function elegir(r: (typeof resultados)[number], presentacion: Presentacion = null, yCobrar = false) {
     const producto = comoSeVende(r);
     const pres = presentacion && admiteMedia(producto) ? presentacion : null;
     const unidad = unidadDeLinea(producto);
+    // «2,5*bisagra» no se redondea a tres sin decir nada: no entra, y se
+    // dice por qué (revisión del carril F).
+    if (vaSinDecimales({ variantId: r.variantId, unidad }, cantidad)) {
+      onNoEntra(`${r.producto} — ${r.medida} va sin decimales.`);
+      return;
+    }
     onElegir({
       variantId: r.variantId,
       descripcion: descripcionConPresentacion(`${r.producto} — ${r.medida}`, pres),
       unidad,
-      // «2,5*bisagra» son tres bisagras: lo que se vende por unidad va entero.
-      cantidad: cantidadDelRenglon({ variantId: r.variantId, unidad }, cantidad),
+      cantidad,
       precioUnitario: precioDeLinea(r.precio, producto, pres),
       precioLista: precioDeLinea(r.precio, producto, pres),
       presentacion: pres,
@@ -218,7 +228,7 @@ export function Buscador({
                 onCortar(r as ResultadoDeMostrador);
                 setTexto("");
               } else if (accion.que === "sinPrecio" && r) {
-                onSinPrecio(`${r.producto} — ${r.medida}`);
+                onNoEntra(sinPrecio(r));
               } else if (accion.que === "agregar" && r) {
                 elegir(r, accion.media, accion.yCobrar);
               } else if (accion.que === "aMano") {
@@ -279,7 +289,7 @@ export function Buscador({
             >
               <button
                 // Sin precio no se agrega (decisión 4): no hay productos a $0.
-                onClick={() => (r.precio > 0 ? elegir(r) : onSinPrecio(`${r.producto} — ${r.medida}`))}
+                onClick={() => (r.precio > 0 ? elegir(r) : onNoEntra(sinPrecio(r)))}
                 aria-disabled={!(r.precio > 0)}
                 className={`flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hundida ${
                   r.precio > 0 ? "" : "text-muted-foreground"

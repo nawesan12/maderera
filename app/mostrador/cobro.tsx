@@ -18,6 +18,7 @@ import {
 import { CamposDeCheque, DatosDeTarjeta, PagoPartido } from "./medios-de-pago";
 import { PromosDelBanco } from "./promos";
 import { type Cliente, type UltimaVenta, papelDeLaVenta } from "./tipos";
+import { cuentaSinConexion } from "@/lib/mostrador/cuenta-sin-conexion";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 
 export function Cobro({
@@ -246,7 +247,11 @@ export function Cobro({
                 <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Se le anota a
                 </p>
-                {cliente ? (
+                {cliente && !enLinea && cuentaSinConexion(cliente) ? (
+                  <p className="estado-problema mt-2.5 rounded-xl bg-[var(--estado-fondo)] p-3.5 text-base text-[var(--estado-tinta)]">
+                    {cuentaSinConexion(cliente)}
+                  </p>
+                ) : cliente ? (
                   <p className="mt-2.5 rounded-xl border border-linea p-3.5 text-base">
                     {/* Se lleva la mercadería y el total queda como deuda en su cuenta. */}
                     <span className="font-medium">{cliente.nombre}</span>
@@ -481,6 +486,11 @@ export function Cobro({
 
       </div>
 
+      {/* El aviso, el papel de la venta y el total con «Cobrar», juntos. Abajo
+          de `lg` van fijos al pie de la pantalla: en la tablet vertical la
+          página scrollea, y el aviso que quedaba al final de la página no se
+          veía desde los renglones («no pasa nada», revisión del carril F). */}
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-card shadow-[0_-8px_24px_rgb(0_0_0/0.08)] lg:static lg:z-auto lg:shadow-none">
       {/* Cómo salió la venta. Fuera del scroll a propósito: un "no se pudo
           cobrar" al final de una columna que hay que scrollear es un aviso que
           nadie lee. */}
@@ -562,9 +572,7 @@ export function Cobro({
         </div>
       )}
 
-      {/* Abajo de `lg` queda fijo al pie de la pantalla: en la tablet vertical
-          la página scrollea, y el total y «Cobrar» tienen que estar siempre. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-linea bg-card p-4 shadow-[0_-8px_24px_rgb(0_0_0/0.08)] lg:static lg:z-auto lg:shadow-none">
+      <div className="border-t border-linea p-4">
         {descuento > 0 && (
           <>
             <p className="flex items-baseline justify-between text-base text-muted-foreground">
@@ -657,6 +665,7 @@ export function Cobro({
           </button>
         </div>
         )}
+      </div>
       </div>
     </div>
   );

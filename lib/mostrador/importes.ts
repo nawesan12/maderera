@@ -74,6 +74,15 @@ export function cantidadDelRenglon(l: Pick<LineaDeVenta, "variantId" | "unidad">
 }
 
 /**
+ * Si la cantidad no entra en lo que se vende por unidad: «2,5*bisagra» desde
+ * el buscador. Ahí no se redondea —cobraba tres bisagras, y 0,4 cobraba una,
+ * sin decir nada—: no se agrega y se avisa (revisión del carril F).
+ */
+export function vaSinDecimales(l: Pick<LineaDeVenta, "variantId" | "unidad">, cantidad: number): boolean {
+  return cantidadDelRenglon(l, cantidad) !== cantidad;
+}
+
+/**
  * El renglón de las pasadas del corte a medida: sin variante y en «pasada»,
  * la misma marca que mira Go (`esPasada` en mostrador/controles.go).
  *

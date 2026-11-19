@@ -44,7 +44,8 @@ import { Buscador } from "./buscador";
 import { PanelDeCaja } from "./caja";
 import { Cobro } from "./cobro";
 import { CorteAMedida, hayAlgoCargado, type EstadoDelCorte } from "./corte-a-medida";
-import { conElCorte, paraCobrar, sinElCorte, type CorteEnLaVenta } from "@/lib/mostrador/cortes-de-la-venta";
+import { cuentaSinConexion } from "@/lib/mostrador/cuenta-sin-conexion";
+import { conElCorte, cortesSinRenglones, paraCobrar, sinElCorte, type CorteEnLaVenta } from "@/lib/mostrador/cortes-de-la-venta";
 import { sumar, Lineas } from "./lineas";
 import { cobrarSinConexion as guardarSinConexion, useColaDelMostrador } from "./sin-conexion";
 import { faltaIdentificarComprador } from "@/lib/fiscal/umbral";
@@ -385,6 +386,8 @@ export function VistaMostrador({
     !enPausa &&
     !faltaCaja &&
     !(medio === "cuenta_corriente" && !cliente) &&
+    // Sin conexión, ni la cuenta bloqueada ni el que no tiene cuenta.
+    !(medio === "cuenta_corriente" && !conexion.enLinea && cuentaSinConexion(cliente) !== null) &&
     !(partes !== null && Math.abs(restanteDePartes) > 0.01) &&
     // El cheque se cobra con sus datos: sin número no se lo encuentra en el banco.
     !(partes === null && medio === "cheque" && revisarChequeDePago(aChequeDePago(cheque)) !== null) &&
@@ -468,6 +471,7 @@ export function VistaMostrador({
         branchId: sucursal.id,
         usuarioId: usuario.userId,
         lineas,
+        cortes,
         cliente,
         medio,
         pagosDeLaVenta,
@@ -630,6 +634,28 @@ export function VistaMostrador({
     if (distintos) setOtrosPrecios(precios);
   }
 
+  /**
+   * Reabre un corte de la venta para corregirlo, con el precio de la placa
+   * para el cliente de ahora: si se eligió otro cliente después de agregarlo,
+   * el renglón volvía a armarse con el precio del anterior y podía pedir un
+   * PIN sin motivo (revisión del carril F).
+   */
+  async function corregirCorte(id: string) {
+    const c = cortes.find((x) => x.id === id);
+    if (!c) return;
+    let placa = c.placa;
+    try {
+      const precios = await preciosDelCliente([c.placa.variantId], cliente?.id ?? null);
+      const precio = precios[c.placa.variantId];
+      if (precio > 0) placa = { ...c.placa, precio };
+    } catch {
+      // Sin respuesta queda el precio con el que se agregó: Go igual pone el
+      // de lista y, si hace falta, pide el PIN.
+    }
+    setCorrigiendo({ ...c, placa });
+    setCortando(placa);
+  }
+
   function aplicarPrecios() {
     if (!otrosPrecios) return;
     setLineas((prev) =>
@@ -715,6 +741,10 @@ export function VistaMostrador({
           router.refresh();
           return;
         }
+        // Las tarifas de corte se cargaron al abrir la pantalla: si el admin
+        // cambió una, se traen las nuevas para que «Corregir» arme el corte
+        // con ellas (texto de revisarCobroDelCorte, mostrador/controles.go).
+        if (r.error.startsWith("Las tarifas de corte cambiaron")) router.refresh();
         setAviso({ tipo: "error", texto: r.error });
         return;
       }
@@ -880,8 +910,9 @@ export function VistaMostrador({
       {/* Abajo de `lg` (la tablet vertical) la venta y el cobro van uno abajo
           del otro, la página scrollea y el total con «Cobrar» queda fijo abajo
           (comité final, M15): a 768 px el panel de 420 dejaba el total en «$» y
-          cortaba los medios. El `pb-56` es el lugar de esa barra. */}
-      <div className="panel textura hidden min-h-screen flex-col bg-background pb-56 text-foreground sm:flex lg:h-screen lg:overflow-hidden lg:pb-0">
+          cortaba los medios. El `pb-80` es el lugar de esa barra, con el aviso
+          y el papel de la venta que van con ella. */}
+      <div className="panel textura hidden min-h-screen flex-col bg-background pb-80 text-foreground sm:flex lg:h-screen lg:overflow-hidden lg:pb-0">
         <BarraSuperior
           conexion={conexion}
           cola={cola}
@@ -921,19 +952,15 @@ export function VistaMostrador({
               }}
               onSuelta={setSuelta}
               onCortar={setCortando}
-              onSinPrecio={(nombre) => setAviso({ tipo: "error", texto: `${nombre} no tiene precio.` })}
+              onNoEntra={(texto) => setAviso({ tipo: "error", texto })}
               sePuedeCortar={conexion.enLinea}
               sinConexion={!conexion.enLinea}
             />
             <Lineas
               lineas={lineas}
+              sinCargo={cortesSinRenglones(lineas, cortes).map((c) => ({ id: c.id, descripcion: c.corte.materialDescripcion }))}
               onCambiar={setLineas}
-              onEditarCorte={(id) => {
-                const c = cortes.find((x) => x.id === id);
-                if (!c) return;
-                setCorrigiendo(c);
-                setCortando(c.placa);
-              }}
+              onEditarCorte={(id) => void corregirCorte(id)}
               onQuitarCorte={(id) => {
                 const r = sinElCorte(lineas, cortes, id);
                 setLineas(r.lineas);

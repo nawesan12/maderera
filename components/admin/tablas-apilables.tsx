@@ -56,11 +56,8 @@ export function TablasApilables() {
         }
       }
     };
-    let cancelar = cuandoEsteQuieto(window, rotular);
-    const programar = () => {
-      cancelar();
-      cancelar = cuandoEsteQuieto(window, rotular);
-    };
+    const { programar, cancelar } = rotularAgrupado(window, rotular);
+    programar();
     const observador = new MutationObserver(programar);
     observador.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", programar);
@@ -71,6 +68,33 @@ export function TablasApilables() {
     };
   }, []);
   return null;
+}
+
+/**
+ * Junta los pedidos de rotular en una sola espera.
+ *
+ * Si ya hay una en marcha, el pedido nuevo no la reinicia: la espera que
+ * está corre igual y rotula lo que haya en ese momento. Antes cada cambio
+ * cancelaba y arrancaba otra, y en una pantalla que se refresca en vivo (el
+ * tablero) o con un buscador que redibuja en cada tecla el plazo volvía a
+ * cero sin parar: la tabla apilada en el celular quedaba sin nombres en las
+ * celdas (revisión del comité).
+ */
+export function rotularAgrupado(ventana: VentanaQuieta, fn: () => void): { programar: () => void; cancelar: () => void } {
+  let cancelarEspera: (() => void) | null = null;
+  return {
+    programar() {
+      if (cancelarEspera) return;
+      cancelarEspera = cuandoEsteQuieto(ventana, () => {
+        cancelarEspera = null;
+        fn();
+      });
+    },
+    cancelar() {
+      cancelarEspera?.();
+      cancelarEspera = null;
+    },
+  };
 }
 
 /** Lo que `cuandoEsteQuieto` usa de `window`: así se prueba sin navegador. */

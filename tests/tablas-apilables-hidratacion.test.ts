@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { cuandoEsteQuieto, type VentanaQuieta } from "@/components/admin/tablas-apilables";
+import { cuandoEsteQuieto, rotularAgrupado, type VentanaQuieta } from "@/components/admin/tablas-apilables";
 
 /**
  * Comité final: las tablas apilables escribían `data-label` antes de que
@@ -65,6 +65,41 @@ describe("las tablas apilables esperan a la hidratación", () => {
     const rotular = vi.fn();
     const cancelar = cuandoEsteQuieto(v, rotular);
     v.cargar();
+    cancelar();
+    v.quedarQuieta();
+    expect(rotular).not.toHaveBeenCalled();
+  });
+});
+
+describe("los cambios seguidos no posponen el rótulo para siempre", () => {
+  it("un cambio con una espera en marcha no la reinicia", () => {
+    const v = ventana("complete");
+    const rotular = vi.fn();
+    const { programar } = rotularAgrupado(v, rotular);
+    programar();
+    // Un tablero en vivo: cambia una y otra vez antes de quedar quieto.
+    for (let i = 0; i < 20; i++) programar();
+    expect(v.ociosos.size).toBe(1);
+    v.quedarQuieta();
+    expect(rotular).toHaveBeenCalledTimes(1);
+  });
+
+  it("después de rotular, el cambio siguiente vuelve a programar", () => {
+    const v = ventana("complete");
+    const rotular = vi.fn();
+    const { programar } = rotularAgrupado(v, rotular);
+    programar();
+    v.quedarQuieta();
+    programar();
+    v.quedarQuieta();
+    expect(rotular).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancelar al desmontar no rotula", () => {
+    const v = ventana("complete");
+    const rotular = vi.fn();
+    const { programar, cancelar } = rotularAgrupado(v, rotular);
+    programar();
     cancelar();
     v.quedarQuieta();
     expect(rotular).not.toHaveBeenCalled();

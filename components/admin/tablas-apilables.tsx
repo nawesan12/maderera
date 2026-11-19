@@ -56,23 +56,65 @@ export function TablasApilables() {
         }
       }
     };
-    rotular();
-    let pendiente = 0;
-    const observador = new MutationObserver(() => {
-      cancelAnimationFrame(pendiente);
-      pendiente = requestAnimationFrame(rotular);
-    });
-    observador.observe(document.body, { childList: true, subtree: true });
-    const alCambiarElTamano = () => {
-      cancelAnimationFrame(pendiente);
-      pendiente = requestAnimationFrame(rotular);
+    let cancelar = cuandoEsteQuieto(window, rotular);
+    const programar = () => {
+      cancelar();
+      cancelar = cuandoEsteQuieto(window, rotular);
     };
-    window.addEventListener("resize", alCambiarElTamano);
+    const observador = new MutationObserver(programar);
+    observador.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", programar);
     return () => {
-      window.removeEventListener("resize", alCambiarElTamano);
+      window.removeEventListener("resize", programar);
       observador.disconnect();
-      cancelAnimationFrame(pendiente);
+      cancelar();
     };
   }, []);
   return null;
+}
+
+/** Lo que `cuandoEsteQuieto` usa de `window`: así se prueba sin navegador. */
+export interface VentanaQuieta {
+  document: { readyState: string };
+  addEventListener(tipo: "load", fn: () => void, opciones?: { once?: boolean }): void;
+  removeEventListener(tipo: "load", fn: () => void): void;
+  requestIdleCallback?: (fn: () => void, opciones?: { timeout?: number }) => number;
+  cancelIdleCallback?: (id: number) => void;
+  setTimeout(fn: () => void, ms: number): number;
+  clearTimeout(id: number): void;
+}
+
+/**
+ * Corre `fn` cuando la página terminó de cargar y React no tiene nada
+ * pendiente, y devuelve con qué cancelarlo.
+ *
+ * Por qué no enseguida (comité final): el efecto de este componente corre
+ * apenas él se hidrata, pero las partes de la página que llegan después
+ * —cada Suspense que se transmite— todavía no. Escribir `data-label` sobre
+ * ese HTML antes de que React lo hidrate es una diferencia entre el servidor
+ * y el cliente, y salían los avisos de hidratación en ocho pantallas. El
+ * MutationObserver lo empeoraba: se dispara justo cuando llega el HTML
+ * nuevo, antes de hidratarlo. `requestIdleCallback` espera a que el hilo
+ * esté libre, y la hidratación son tareas que lo ocupan.
+ */
+export function cuandoEsteQuieto(ventana: VentanaQuieta, fn: () => void): () => void {
+  let id: number | null = null;
+  let cancelado = false;
+  const enReposo = () => {
+    if (cancelado) return;
+    if (ventana.requestIdleCallback) {
+      id = ventana.requestIdleCallback(fn, { timeout: 1000 });
+    } else {
+      id = ventana.setTimeout(fn, 150);
+    }
+  };
+  if (ventana.document.readyState === "complete") enReposo();
+  else ventana.addEventListener("load", enReposo, { once: true });
+  return () => {
+    cancelado = true;
+    ventana.removeEventListener("load", enReposo);
+    if (id === null) return;
+    if (ventana.requestIdleCallback && ventana.cancelIdleCallback) ventana.cancelIdleCallback(id);
+    else ventana.clearTimeout(id);
+  };
 }

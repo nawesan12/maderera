@@ -268,7 +268,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	// como el tramo de arriba. Sin esto la nota de crédito acreditaba
 	// Deudores, la caja tenía la salida y el CSV no tenía el reintegro.
 	rs, err = s.lectura.Query(ctx, `
-		SELECT t.created_at, t.importe, r.numero, r.recibido_de, t.medio::text, r.id
+		SELECT t.created_at, t.importe, r.numero, r.recibido_de, t.medio::text, r.id, `+cobros.ReintegroDeLoFacturado+`
 		FROM receipt_refunds t JOIN receipts r ON r.id = t.receipt_id
 		WHERE t.created_at >= $1 AND t.created_at <= $2
 		ORDER BY t.created_at, t.id`, idesde, ihasta)
@@ -279,7 +279,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		var fecha time.Time
 		var importe jsmath.Num
 		var numero, cliente, medio, recibo string
-		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio, &recibo); err != nil {
+		var facturado bool
+		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio, &recibo, &facturado); err != nil {
 			rs.Close()
 			return nil, err
 		}
@@ -289,8 +290,11 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			medio = "transferencia"
 		}
 		c := CobroAAsentar{Fecha: fecha, Comprobante: "por devolución del recibo " + numero, Cliente: cliente, Importe: importe.F(), Medio: medio}
+		// Lo devuelto de una factura con CAE vuelve entero al blanco, contra
+		// la nota de crédito (cobros.ReintegroDeLoFacturado); lo demás, con el
+		// reparto del recibo.
 		rep, ok := reparto.Recibos[recibo]
-		if !ok {
+		if facturado || !ok {
 			asientos = append(asientos, AsientoDeReintegro(c))
 			continue
 		}

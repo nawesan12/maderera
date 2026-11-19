@@ -66,9 +66,28 @@ const (
 	// EventoTramo es un tramo de un reintegro parcial de un pago con recibo
 	// (el ID es el del recibo): vuelve en la misma proporción que el recibo.
 	// También lo que una devolución de la venta le devuelve al recibo
-	// (receipt_refunds).
+	// (receipt_refunds) cuando lo devuelto no se había facturado con CAE.
 	EventoTramo
+	// EventoReintegroFacturado es lo que una devolución de mercadería
+	// facturada con CAE le devuelve a un recibo: vuelve entero a Deudores del
+	// blanco, contra la nota de crédito que lo acreditó ahí
+	// (ReintegroDeLoFacturado).
+	EventoReintegroFacturado
 )
+
+// ReintegroDeLoFacturado dice, sobre la fila `t` de receipt_refunds, si la
+// devolución que lo hizo devolvió mercadería de una factura con CAE.
+//
+// Entonces el reintegro va entero al blanco, y no en la proporción del
+// recibo (revisión del carril E): un recibo de $1000 que canceló $600 de
+// factura y $400 de deuda B, con una devolución de $200 de lo facturado,
+// asentaba Deudores 120 en el blanco y 80 en el B. La nota de crédito ya
+// había acreditado los 200 en el blanco: Deudores quedaba en −80 en el
+// blanco y en +80 en el B, sin ninguna venta B que lo respaldara. Lo que no
+// salió de una factura con CAE sigue con el reparto del recibo (decisión a
+// confirmar con el contador).
+const ReintegroDeLoFacturado = `EXISTS (SELECT 1 FROM devoluciones dvf JOIN invoices fdv ON fdv.id = dvf.invoice_id
+	WHERE dvf.id = t.devolucion_id AND fdv.cae IS NOT NULL AND fdv.cae_ambiente IS DISTINCT FROM 'homologacion')`
 
 // Reparto es en qué se reparte un recibo.
 type Reparto struct {
@@ -270,6 +289,8 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 				bolsas[e.Clave] = append(bolsas[e.Clave], b)
 				deRecibo[e.ID] = b
 			}
+		case EventoReintegroFacturado:
+			deudores = r2(deudores + e.Monto)
 		case EventoTramo:
 			if rep, ok := res.Recibos[e.ID]; ok {
 				t := TramoPorCircuito(rep, e.Monto)
@@ -426,9 +447,24 @@ SELECT * FROM (
   FROM payment_refunds t JOIN receipt_parts x ON x.payment_id = t.payment_id JOIN receipts r ON r.id = x.receipt_id
   WHERE t.account_movement_id IS NOT NULL AND t.created_at <= $1 AND {R}
   UNION ALL
-  SELECT ` + claveDeRecibo + `, t.created_at, 4, r.id::text, t.importe::float8, 0, 0, false, NULL, NULL, NULL, '', 0, 0, '', '{}', 0, ''
+  SELECT ` + claveDeRecibo + `, t.created_at, CASE WHEN ` + ReintegroDeLoFacturado + ` THEN 5 ELSE 4 END, r.id::text, t.importe::float8,
+    0, 0, false, NULL, NULL, NULL, '', 0, 0, '', '{}', 0, ''
   FROM receipt_refunds t JOIN receipts r ON r.id = t.receipt_id
   WHERE t.created_at <= $1 AND {R}
+  UNION ALL
+  -- El cheque de un cliente que rebota y le devuelve la deuda (la nota de
+  -- débito del cheque): el cierre lo asienta contra Deudores del blanco si
+  -- el cheque es del blanco (AsientoDeCheque), así que acá también. Sin esto
+  -- el listado de deudores, que sale de este reparto, dejaba afuera al
+  -- cliente que debe un cheque rechazado, y el control contra el mayor de
+  -- 1.1.03 quedaba encendido para siempre.
+  SELECT 'c:' || m.customer_id::text, e.at, 1, 'cheque:' || c.id::text, (-c.importe)::float8, 0, 0, false, NULL, NULL, NULL,
+    '', 0, 0, '', '{}', 0, ''
+  FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
+  CROSS JOIN LATERAL (SELECT am.customer_id FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito'
+                      ORDER BY am.created_at LIMIT 1) m
+  WHERE c.sentido = 'recibido' AND c.circuito <> 'negro' AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado', 'entregado')
+    AND e.at <= $1 AND {M}
   UNION ALL
   SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text, r.total::float8,
     coalesce((SELECT sum(importe) FROM receipt_parts WHERE receipt_id = r.id AND medio = 'retencion'), 0)::float8,
@@ -451,9 +487,10 @@ SELECT * FROM (
 // lo del cliente o de la factura, con índice) y el de afuera deja la clave
 // exacta.
 var (
-	eventosDeTodas = strings.NewReplacer("{I}", "true", "{P}", "true", "{R}", "true").Replace(eventosSQL)
+	eventosDeTodas = strings.NewReplacer("{I}", "true", "{P}", "true", "{R}", "true", "{M}", "true").Replace(eventosSQL)
 
 	eventosDeUnaClave = strings.NewReplacer(
+		"{M}", `m.customer_id = $3::uuid`,
 		"{I}", `(i.customer_id = $3::uuid OR i.id = $4::uuid OR i.order_id = $6::uuid)`,
 		"{P}", `(p.customer_id = $3::uuid OR p.order_id = $6::uuid OR p.order_id IN (SELECT i.order_id FROM invoices i
 			WHERE (i.customer_id = $3::uuid OR i.id = $4::uuid) AND i.order_id IS NOT NULL))`,

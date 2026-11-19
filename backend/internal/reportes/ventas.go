@@ -258,7 +258,7 @@ func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, a
 	}[corte]
 	filas := "0"
 	if grupo != "" {
-		filas = "(SELECT count(DISTINCT " + grupo + `) FROM `+deLosRenglones+`
+		filas = "(SELECT count(DISTINCT " + grupo + `) FROM ` + deLosRenglones + `
 			LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products p ON p.id = v.product_id
 			LEFT JOIN categories c ON c.id = p.category_id WHERE ` + where + ")"
 	} else if corte == "cliente" {

@@ -48,7 +48,7 @@ const consultaDeMetricas = `
 		  (SELECT count(*)::int FROM orders WHERE estado NOT IN ('entregado', 'cancelado')),
 		  (SELECT count(DISTINCT customer_id)::int FROM orders
 		    WHERE estado NOT IN ('entregado', 'cancelado') AND customer_id IS NOT NULL)
-		FROM (SELECT o.estado, o.fecha AS created_at, o.monto AS total FROM `+hechosDeVenta+` o) hechos
+		FROM (SELECT o.estado, o.fecha AS created_at, o.monto AS total FROM ` + hechosDeVenta + ` o) hechos
 		WHERE estado <> 'cancelado' AND ($1::timestamptz IS NULL OR created_at >= least($1::timestamptz, $3::timestamptz))`
 
 // MetricasDelResumen es metricasDelResumen: las ventas del período (hora

@@ -300,8 +300,11 @@ func TestPartesPorCircuito(t *testing.T) {
 
 // El listado de deudores del contador sale del reparto y el mayor de 1.1.03
 // de los asientos (comité final, M7): si no coinciden, el cierre lo dice.
-// Con las facturas y los recibos de siempre coinciden; el cheque rechazado
-// que le devuelve la deuda al cliente mueve 1.1.03 y el reparto no lo ve.
+// Con las facturas y los recibos de siempre coinciden. El cheque rechazado
+// que le devuelve la deuda al cliente mueve 1.1.03, y el reparto también lo
+// cuenta (revisión del carril E): el cliente figura en el listado con lo que
+// debe y los dos siguen coincidiendo. Antes el listado lo dejaba afuera y el
+// aviso quedaba encendido todos los meses.
 func TestElListadoDeDeudoresContraElMayor(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
@@ -317,8 +320,15 @@ func TestElListadoDeDeudoresContraElMayor(t *testing.T) {
 	e.exec(t, `update cheque_estados set at = '2026-10-11T15:00:00Z' where cheque_id = $1`, cheque)
 	e.exec(t, `insert into account_movements (customer_id, tipo, monto, cheque_id, created_at) values ($1, 'nota_debito', 200, $2, '2026-10-11T15:00:00Z')`, cli, cheque)
 	_, pend, _ = pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
-	if !strings.Contains(pend, `"clave":"deudores-mayor"`) || !strings.Contains(pend, "200") {
+	if strings.Contains(pend, `"clave":"deudores-mayor"`) {
 		t.Errorf("el cheque rechazado separa el listado del mayor: %s", pend)
+	}
+	d, err := e.s.CsvDeudores(context.Background(), time.Date(2026, 10, 31, 12, 0, 0, 0, Argentina))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(d, "Gómez") || !strings.Contains(d, "800,00") {
+		t.Errorf("el cliente con el cheque rechazado no está en el listado:\n%s", d)
 	}
 }
 

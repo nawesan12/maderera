@@ -45,6 +45,11 @@ const SinCobrarDelPedido = `(CASE WHEN o.estado <> 'cancelado' AND o.estado_pago
 	  AND NOT ` + PagoEnRevision + `
 	THEN nullif(greatest(` + ACobrarDelPedido + ` - ` + CobradoDelPedido + `, 0), 0) END)`
 
+// NotaEntregadoSinCobrar encabeza la nota del historial de un pedido que se
+// entregó con algo sin cobrar (lo deja «Avanzar» y el remito que completa
+// el pedido).
+const NotaEntregadoSinCobrar = "Entregado sin cobrar"
+
 // ACobrarDelPedido es el total de la fila `o` menos lo que las devoluciones
 // le bajaron de la deuda (destino «deuda»): lo que hay que cobrar.
 const ACobrarDelPedido = `(o.total - coalesce((SELECT sum(dv.importe) FROM devoluciones dv WHERE dv.order_id = o.id AND dv.destino = 'deuda'), 0))`

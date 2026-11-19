@@ -714,3 +714,32 @@ func TestLaDevolucionParcialBajaLoVendido(t *testing.T) {
 		t.Errorf("reportes: %+v", rep.Totales)
 	}
 }
+
+// La mercadería que salió con un remito parcial y no se cobró está en «Me
+// deben» (comité final, M4): lo remitido menos lo cobrado. Si lo cobrado
+// cubre lo remitido, no; y el remito anulado no cuenta.
+func TestMeDebenConRemitosParciales(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	cuando := time.Date(2026, 10, 12, 10, 0, 0, 0, Argentina)
+	conRemito := func(numero string, estadoRemito string) string {
+		id := e.pedido(t, numero, e.central, "listo", "presupuesto", cuando, nil, [4]any{placa, 1.0, 600.0, nil}, [4]any{tirante, 1.0, 400.0, nil})
+		e.exec(t, `update orders set estado_pago = 'pendiente', medio_pago = 'efectivo' where id = $1`, id)
+		remito := e.id(t, `insert into deliveries (numero, order_id, estado) values ($1, $2, $3) returning id`, "R-"+numero, id, estadoRemito)
+		e.exec(t, `insert into delivery_items (delivery_id, order_item_id, cantidad) select $1, id, 1 from order_items where order_id = $2 and variant_id = $3`, remito, id, placa)
+		return id
+	}
+	conRemito("P-1", "entregada")
+	cobrado := conRemito("P-2", "entregada")
+	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, acreditado_at) values ($1, 'pedido', 'transferencia', 'transferencia', 700, 'aprobado', now())`, cobrado)
+	conRemito("P-3", "anulada")
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if q := (Monto{Total: 600, Cantidad: 1}); n.MeDeben.PedidosSinCobrar != q {
+		t.Errorf("sin cobrar: %+v, quería %+v", n.MeDeben.PedidosSinCobrar, q)
+	}
+}

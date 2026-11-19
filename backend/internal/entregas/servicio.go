@@ -33,12 +33,14 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Los avisos al cliente que dejan el remito preparado y el firmado, en la
@@ -309,11 +311,21 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 			return err
 		}
 		if control.Completo && pedido.estado != "entregado" {
+			// Como «Avanzar» a entregado: si falta cobrar, la nota lo dice con
+			// la misma cabecera, y queda quién soltó la mercadería.
+			nota := "Remito " + numero + ": se retiró todo lo que quedaba"
+			var falta *float64
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8 FROM orders o WHERE o.id = $1`, f.OrderID).Scan(&falta); err != nil {
+				return err
+			}
+			if falta != nil && *falta > 0.009 {
+				nota = fragmentos.NotaEntregadoSinCobrar + " · " + formato.Moneda(*falta) + " · " + nota
+			}
 			if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'entregado', updated_at = now() WHERE id = $1`, f.OrderID); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'entregado', $2, $3)`,
-				f.OrderID, "Remito "+numero+": se retiró todo lo que quedaba", usuario); err != nil {
+				f.OrderID, nota, usuario); err != nil {
 				return err
 			}
 		}

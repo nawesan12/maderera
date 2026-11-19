@@ -59,7 +59,7 @@ type Resultado struct {
 
 // NotaEntregadoSinCobrar encabeza la nota del historial de un pedido que se
 // entregó con algo sin cobrar.
-const NotaEntregadoSinCobrar = "Entregado sin cobrar"
+const NotaEntregadoSinCobrar = fragmentos.NotaEntregadoSinCobrar
 
 // OrdenDelPedido es el recorrido, fijo y de una sola dirección.
 var OrdenDelPedido = []string{"pendiente", "preparando", "listo", "en-camino", "entregado"}

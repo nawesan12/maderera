@@ -247,6 +247,21 @@ func (s *Servicio) deudaDeClientes(ctx context.Context, hoy time.Time) (map[stri
 	return out, nil
 }
 
+// sinCobrarDeLoQueSalio es, sobre la fila `o`, lo que se debe de la
+// mercadería que ya salió: del pedido entregado, todo lo que falta cobrar;
+// del que salió en parte con remitos, lo remitido (a su precio, en la
+// proporción del total del pedido) menos lo cobrado, sin pasar lo que falta.
+// Con solo los entregados, la obra que se lleva la mitad con un remito y no
+// pagó nada no aparecía en «Me deben» hasta el último remito (comité final,
+// M4).
+const sinCobrarDeLoQueSalio = `(CASE WHEN o.estado = 'entregado' THEN ` + fragmentos.SinCobrarDelPedido + `
+	WHEN ` + fragmentos.SinCobrarDelPedido + ` IS NULL THEN NULL
+	ELSE least(` + fragmentos.SinCobrarDelPedido + `, greatest(o.total * coalesce((
+	  SELECT sum(di.cantidad * oi.subtotal / nullif(oi.cantidad, 0)) FROM delivery_items di
+	  JOIN deliveries d ON d.id = di.delivery_id AND d.estado <> 'anulada' JOIN order_items oi ON oi.id = di.order_item_id
+	  WHERE d.order_id = o.id) / nullif((SELECT sum(oi.subtotal) FROM order_items oi WHERE oi.order_id = o.id), 0), 0)
+	  - ` + fragmentos.CobradoDelPedido + `, 0)) END)`
+
 // MeDeben suma la deuda de los clientes.
 func (s *Servicio) MeDeben(ctx context.Context, ahora time.Time) (MeDeben, error) {
 	var m MeDeben
@@ -265,7 +280,9 @@ func (s *Servicio) MeDeben(ctx context.Context, ahora time.Time) (MeDeben, error
 	var sinCobrar jsmath.Num
 	if err := s.pool.QueryRow(ctx, `
 		SELECT coalesce(sum(saldo), 0), count(*)::int
-		FROM (SELECT `+fragmentos.SinCobrarDelPedido+` AS saldo FROM orders o WHERE o.estado = 'entregado') x
+		FROM (SELECT `+sinCobrarDeLoQueSalio+` AS saldo FROM orders o
+		      WHERE o.estado = 'entregado'
+		         OR (o.estado <> 'cancelado' AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada'))) x
 		WHERE saldo > 0.009`).Scan(&sinCobrar, &m.PedidosSinCobrar.Cantidad); err != nil {
 		return m, err
 	}

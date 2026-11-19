@@ -1649,7 +1649,7 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
 /* Salvo lo que pidió quedarse en una línea: importes, códigos, la píldora
    de estado y lo que se corta con puntos suspensivos. */
 .panel main table:not([data-tabla="fija"]) :is(td, th):not(.whitespace-nowrap, .truncate, .tabular),
-.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, .whitespace-nowrap, .truncate, [class*="rounded-full"], code, kbd, button, a[class*="h-"]) {
+.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, .codigo, .whitespace-nowrap, .truncate, [class*="rounded-full"], code, kbd, button, a[class*="h-"]) {
   white-space: normal !important;
 }
 
@@ -1689,11 +1689,27 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
     border: 0;
     text-align: right;
     white-space: normal;
-    overflow-wrap: anywhere;
+    /* `break-word`, no `anywhere`: lo mismo que en `table[data-apilada]`
+       (abajo). En el teléfono la tabla se apila por esta media query y
+       `tablas-apilables.tsx` no la marca, así que sin esto «PED-1086»
+       seguía saliendo «PED-» / «1086» justo donde más se usa. */
+    overflow-wrap: break-word;
+  }
+  /* Los números y los códigos no se parten nunca: se encoge el rótulo. */
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) > :is(.tabular, .codigo),
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td.tabular, td.codigo) {
+    white-space: nowrap !important;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) > * {
+    min-width: 0;
   }
   :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td[data-label]:not([data-label=""])::before {
     content: attr(data-label);
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     max-width: 45%;
     text-align: left;
     font-size: 13px;
@@ -1756,7 +1772,9 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
 /* Los números y los códigos no se parten nunca: se encoge el rótulo. */
 :is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) > :is(.tabular, .codigo),
 :is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td.tabular, td.codigo) {
-  white-space: nowrap;
+  /* `!important`: la regla de arriba que deja bajar el texto en las tablas
+     del panel también lo es. */
+  white-space: nowrap !important;
 }
 :is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) > * {
   min-width: 0;

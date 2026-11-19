@@ -276,7 +276,13 @@ export function Entregas({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAbierto(false)}
+                  onClick={() => {
+                    // Lo marcado «Va sin decimales» es de lo que se tipeó: al
+                    // reabrir, el cartel quedaba y «Generar remito» seguía
+                    // bloqueado con un valor que ya estaba bien.
+                    setConDecimales(new Set());
+                    setAbierto(false);
+                  }}
                   className="inline-flex h-10 items-center rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted"
                 >
                   Cancelar

@@ -350,7 +350,6 @@ function CargaPorMedida({
   );
 }
 
-/** Una fila de motivos: el signo adelante y un chip por motivo, que ejecuta. */
 /**
  * El − de la fila, con su motivo.
  *
@@ -383,6 +382,9 @@ function RestaRapida({
         {paso !== 1 && <span className="text-sm">media</span>}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-3">
+        {/* Cuánto resta, a la vista: el − de la placa que se vende partida
+            resta media. */}
+        <p className="mb-2 text-sm font-semibold">Restar {nombrePaso}</p>
         <FilaDeMotivos
           signo={-1}
           motivos={MOTIVOS_QUE_RESTAN}
@@ -395,6 +397,7 @@ function RestaRapida({
   );
 }
 
+/** Una fila de motivos: el signo adelante y un chip por motivo, que ejecuta. */
 function FilaDeMotivos({
   signo,
   motivos,

@@ -231,3 +231,38 @@ describe("la cantidad tipeada en el buscador", () => {
     });
   });
 });
+
+/**
+ * El renglón del corte se muestra por su importe (T4): su cantidad es de
+ * pasadas y su nombre, de piezas, y el que «corregía» el 14 a 6 cobraba menos
+ * de la mitad. La marca es la misma que mira Go (`esPasada`).
+ */
+describe("esLineaDelCorte", () => {
+  it("es el renglón sin variante en «pasada», y nada más", async () => {
+    const { esLineaDelCorte } = await import("@/lib/mostrador/importes");
+    expect(esLineaDelCorte({ variantId: null, unidad: "pasada" })).toBe(true);
+    expect(esLineaDelCorte({ unidad: "pasada" })).toBe(true);
+    expect(esLineaDelCorte({ variantId: "v1", unidad: "pasada" })).toBe(false);
+    expect(esLineaDelCorte({ variantId: null, unidad: "m" })).toBe(false);
+    expect(esLineaDelCorte({ variantId: null, unidad: "unidad" })).toBe(false);
+  });
+});
+
+/**
+ * «Vaciar» en Safari (T4): el blur de «No» llega sin destino cuando se toca
+ * el botón rojo, y desarmar ahí lo hacía desaparecer antes del clic.
+ */
+describe("desarmaAlPerderFoco", () => {
+  const dentro = { id: "vaciar" };
+  const grupo = { contains: (n: unknown) => n === dentro };
+  it("no desarma cuando el foco no se fue a ningún lado", async () => {
+    const { desarmaAlPerderFoco } = await import("@/app/mostrador/lineas");
+    expect(desarmaAlPerderFoco(grupo, null)).toBe(false);
+    expect(desarmaAlPerderFoco(grupo, undefined)).toBe(false);
+  });
+  it("no desarma entre sus dos botones, y sí al irse a otro elemento", async () => {
+    const { desarmaAlPerderFoco } = await import("@/app/mostrador/lineas");
+    expect(desarmaAlPerderFoco(grupo, dentro)).toBe(false);
+    expect(desarmaAlPerderFoco(grupo, { id: "buscador" })).toBe(true);
+  });
+});

@@ -280,7 +280,9 @@ export function CorteAMedida({
        * la sierra: «pasadas» es palabra de taller y esta línea la lee el
        * cliente en la pantalla (T4, hallazgo 44). Lo que se cobra sigue
        * siendo por pasada, en la unidad y la cantidad, que es lo que mira Go
-       * (`esPasada`: sin variante y en «pasada»).
+       * (`esPasada`: sin variante y en «pasada»). Por eso la venta y el ticket
+       * muestran solo su importe (`esLineaDelCorte`): una cantidad de 14 al
+       * lado de «6 piezas» se «corregía» a 6.
        */
       const cuantas = validas.reduce((n, p) => n + p.cantidad, 0);
       lineas.push({

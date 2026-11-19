@@ -53,6 +53,19 @@ export interface LineaDeVenta {
 }
 
 /**
+ * El renglón de las pasadas del corte a medida: sin variante y en «pasada»,
+ * la misma marca que mira Go (`esPasada` en mostrador/controles.go).
+ *
+ * Su cantidad es de pasadas y su descripción nombra las piezas, así que en
+ * pantalla y en el papel no se muestra la cantidad: «6 piezas» al lado de un
+ * 14 se leía como un error, y el vendedor que «corregía» el 14 a 6 cobraba
+ * menos de la mitad del corte (T4). Se cambia volviendo a abrir el corte.
+ */
+export function esLineaDelCorte(l: { variantId?: string | null; unidad: string }): boolean {
+  return l.variantId == null && l.unidad === "pasada";
+}
+
+/**
  * Lo que la venta deja de cobrar contra la lista, con la regla de Go
  * (ventas.DesvioDeLaVenta): por renglón lo que quedó por debajo de su lista
  * (uno por encima no compensa), más el descuento tipeado sobre el total. La

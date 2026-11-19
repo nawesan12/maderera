@@ -62,7 +62,8 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 		Neto: c.Neto, Iva21: c.Iva21, Iva27: c.Iva27, Iva105: c.Iva105, Exento: c.Exento, TributosTotal: c.TributosTotal, Total: c.Total,
 		Cae: de(c.Cae), CaeVencimiento: dia(c.CaeVencimiento), FechaEmision: DiaArgentino(c.FechaEmision), FechaVencimiento: dia(c.FechaVencimiento),
 		Observaciones: de(c.Observaciones), Estado: c.Estado, Items: make([]pdf.ItemComprobante, len(c.Items)),
-		Tributos: make([]pdf.TributoComprobante, len(c.Tributos))}
+		Homologacion: c.CaeAmbiente != nil && *c.CaeAmbiente == "homologacion",
+		Tributos:     make([]pdf.TributoComprobante, len(c.Tributos))}
 	for i, x := range c.Items {
 		cp.Items[i] = pdf.ItemComprobante{Descripcion: x.Descripcion, Unidad: x.Unidad, Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario,
 			AlicuotaIva: x.AlicuotaIva, Subtotal: x.Subtotal}

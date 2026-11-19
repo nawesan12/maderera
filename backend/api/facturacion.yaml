@@ -733,7 +733,7 @@ components:
         importe: { type: string }
     ComprobanteCompleto:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl]
+      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -755,6 +755,7 @@ components:
         total: { type: string }
         cae: { type: string, nullable: true }
         caeVencimiento: { type: string, format: date-time, nullable: true }
+        caeAmbiente: { type: string, nullable: true, description: De qué ambiente de ARCA salió el CAE (homologacion o produccion) }
         observacionesArca: { type: string, nullable: true }
         comprobanteOrigenId: { type: string, nullable: true }
         acreditado: { type: string }

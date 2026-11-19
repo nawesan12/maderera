@@ -357,7 +357,7 @@ SELECT * FROM (
     0::float8 AS negro, false AS pendiente, NULL::float8 AS rd, NULL::float8 AS ra, NULL::float8 AS rb,
     i.tipo::text AS tipo_cbte, i.punto_venta::bigint AS pv, i.numero::bigint AS nro, i.receptor_nombre AS cliente,
     '{}'::text[] AS destinos, 0::float8 AS por_facturar, coalesce(i.order_id::text, '') AS pedido
-  FROM invoices i WHERE i.cae IS NOT NULL AND i.estado <> 'borrador' AND i.fecha_emision <= $1 AND {I}
+  FROM invoices i WHERE i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion' AND i.estado <> 'borrador' AND i.fecha_emision <= $1 AND {I}
   UNION ALL
   SELECT coalesce('c:' || i.customer_id::text, 'f:' || i.id::text), p.fecha, 1, p.id::text, p.monto::float8, 0, 0, false, NULL, NULL, NULL,
     '', 0, 0, '', '{}', 0, ''
@@ -374,6 +374,7 @@ SELECT * FROM (
     LEFT JOIN LATERAL (
       SELECT i.id, i.customer_id, i.fecha_emision FROM invoices i
       WHERE i.order_id = p.order_id AND i.tipo::text LIKE 'factura%' AND i.estado <> 'borrador' AND i.cae IS NOT NULL
+        AND i.cae_ambiente IS DISTINCT FROM 'homologacion'
       ORDER BY (i.estado = 'anulada'), i.fecha_emision LIMIT 1) f ON true
     WHERE p.estado IN ('aprobado', 'reintegrado') AND {P}
       AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)

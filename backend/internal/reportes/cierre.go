@@ -42,8 +42,10 @@ func instantes(desde, hasta time.Time) (time.Time, time.Time) {
 
 // conCae: solo cuentan los comprobantes que ARCA autorizó (las anuladas
 // también, porque su nota de crédito resta aparte). Los rechazados y los
-// emitidos sin CAE todavía no existen para el fisco.
-const conCae = `estado <> 'borrador' AND cae IS NOT NULL`
+// emitidos sin CAE todavía no existen para el fisco, y un CAE de
+// homologación tampoco: es de prueba. Sin ambiente guardado (los de antes de
+// guardarlo que no se marcaron, las pruebas que lo cargan a mano) cuenta.
+const conCae = `estado <> 'borrador' AND cae IS NOT NULL AND cae_ambiente IS DISTINCT FROM 'homologacion'`
 
 func numero(n jsmath.Num) float64 { return n.F() }
 
@@ -73,10 +75,12 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 			rs.Close()
 			return nil, err
 		}
-		asientos = append(asientos, AsientoDeVenta(VentaAAsentar{Fecha: fecha,
+		venta := AsientoDeVenta(VentaAAsentar{Fecha: fecha,
 			Comprobante: NombreComprobante(tipo) + " " + NumeroFormateado(pv, nro), Cliente: cliente,
 			Neto: neto.F(), Iva: float64(float64(i21.F()+i105.F()) + i27.F()), Tributos: trib.F(), Total: total.F(),
-			EsNotaDeCredito: strings.HasPrefix(tipo, "nota_credito"), Exento: exento.F()}))
+			EsNotaDeCredito: strings.HasPrefix(tipo, "nota_credito"), Exento: exento.F()})
+		venta.Instante = true
+		asientos = append(asientos, venta)
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
@@ -86,6 +90,9 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	cobros, err := s.asientosDeCobro(ctx, idesde, ihasta)
 	if err != nil {
 		return nil, err
+	}
+	for i := range cobros {
+		cobros[i].Instante = true
 	}
 	asientos = append(asientos, cobros...)
 
@@ -140,6 +147,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		if circuito == CircuitoNegro {
 			pago.Circuito = CircuitoNegro
 		}
+		pago.Instante = true
 		// Como el recibo anulado: el pago queda en su mes y la anulación va
 		// con su contraasiento en la fecha en que se anuló, así un mes ya
 		// cerrado no cambia.
@@ -148,7 +156,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		}
 		if anulado != nil && entre(*anulado, idesde, ihasta) {
 			anulacion := asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones))
-			anulacion.Circuito = pago.Circuito
+			anulacion.Circuito, anulacion.Instante = pago.Circuito, true
 			asientos = append(asientos, anulacion)
 		}
 	}
@@ -223,6 +231,19 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	if sinFactura > 0 {
 		out = append(out, PendienteDelCierre{"facturas", "Recepciones sin factura de compra",
 			"Entró la mercadería pero falta el papel: ese IVA todavía no se computa como crédito.", sinFactura, "/admin/compras/facturas"})
+	}
+	// Los emitidos hasta el fin del mes (argentino) que ARCA todavía no
+	// autorizó: no están en el libro ni en el CSV, y si se autorizan el mes
+	// que viene salen con la fecha de ese día. Sin los borradores (no se
+	// emitieron) ni los dados de baja (ya no están en invoices).
+	var sinCAE int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE cae IS NULL AND estado IN ('emitida', 'rechazada')
+		AND fecha_emision <= $1`, ihasta).Scan(&sinCAE); err != nil {
+		return nil, err
+	}
+	if sinCAE > 0 {
+		out = append(out, PendienteDelCierre{"sin-cae", "Comprobantes sin CAE",
+			"Emitidos y sin autorizar: no entran al libro IVA hasta que ARCA los autorice.", sinCAE, "/admin/facturacion"})
 	}
 	mas, err := s.pendientesDeLosCircuitos(ctx, desde, hasta)
 	if err != nil {
@@ -326,7 +347,7 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		}
 		rs, err := s.pool.Query(ctx, `SELECT d FROM unnest($1::text[]) d WHERE
 			(d LIKE 'o:%' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = substr(d, 3)::uuid AND o.estado NOT IN ('cancelado', 'entregado')
-			  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NOT NULL)))
+			  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion')))
 			OR (d LIKE 'i:%' AND EXISTS (SELECT 1 FROM invoices i WHERE i.id = substr(d, 3)::uuid AND i.cae IS NULL
 			  AND i.estado IN ('emitida', 'rechazada')))`, lista)
 		if err != nil {

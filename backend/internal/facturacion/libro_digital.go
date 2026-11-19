@@ -29,6 +29,7 @@ func (s *Servicio) LibroIvaDigital(ctx context.Context, desde, hasta time.Time) 
 func (s *Servicio) ventasDelLibroDigital(ctx context.Context, desde, hasta time.Time) ([]fiscal.ComprobanteDelLibro, error) {
 	filas, err := s.pool.Query(ctx, `SELECT id, fecha_emision, tipo::text, punto_venta, numero, receptor_nombre, receptor_cuit,
 		exento::float8, total::float8 FROM invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND cae IS NOT NULL
+		AND cae_ambiente IS DISTINCT FROM 'homologacion'
 		ORDER BY fecha_emision, numero`, desde, hasta)
 	if err != nil {
 		return nil, err

@@ -181,7 +181,15 @@ export default async function FichaComprobantePage({
       )}
 
       {/* Estado fiscal: es lo primero que hay que saber del comprobante */}
-      {comprobante.cae ? (
+      {comprobante.cae && comprobante.caeAmbiente === "homologacion" ? (
+        // Un CAE de prueba no es una autorización: no va al libro IVA.
+        <section className="tarjeta-atencion flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5">
+          <ShieldAlert className="h-5 w-5 shrink-0 text-brand-orange" />
+          <p className="text-base">
+            Homologación · <span className="tabular">CAE {comprobante.cae}</span>
+          </p>
+        </section>
+      ) : comprobante.cae ? (
         <section className="estado-ok flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[var(--estado-tinta)]/30 bg-[var(--estado-fondo)] px-5 py-3.5">
           <ShieldCheck className="h-5 w-5 shrink-0 text-green-700" />
           <p className="text-base text-green-900">

@@ -740,6 +740,8 @@ export interface components {
             cae: string | null;
             /** Format: date-time */
             caeVencimiento: string | null;
+            /** @description De qué ambiente de ARCA salió el CAE (homologacion o produccion) */
+            caeAmbiente: string | null;
             observacionesArca: string | null;
             comprobanteOrigenId: string | null;
             acreditado: string;

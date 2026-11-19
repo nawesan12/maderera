@@ -62,6 +62,10 @@ type Asiento struct {
 	// circuito B (los gastos y pagos marcados así, y la parte B de los
 	// recibos).
 	Circuito string `json:"circuito,omitempty"`
+	// Instante: la fecha es un momento (una venta, un cobro, un pago, el
+	// cambio de estado de un cheque) y el CSV la fecha en hora argentina. Si
+	// no, es un día guardado a las 0 UTC (un gasto, una factura de compra).
+	Instante bool `json:"-"`
 }
 
 // CircuitoNegro es el circuito B.
@@ -449,18 +453,24 @@ func NumeroFormateado(puntoVenta, numero int64) string {
 	return fmt.Sprintf("%04d-%08d", puntoVenta, numero)
 }
 
-// fechaCsvUTC es fechaCsv en la zona de Next (UTC): ver CsvAsientos.
-func fechaCsvUTC(t time.Time) string {
-	t = t.UTC()
+// fechaCsv es la fecha del asiento en el CSV: un instante en hora argentina
+// (una factura del 31 a las 22 es del 31, y ARCA la autorizó con esa fecha),
+// un día tal como se guardó (a las 0 UTC).
+func fechaCsv(a Asiento) string {
+	t := a.Fecha.UTC()
+	if a.Instante {
+		t = a.Fecha.In(Argentina)
+	}
 	return fmt.Sprintf("%02d/%02d/%d", t.Day(), int(t.Month()), t.Year())
 }
 
 // CsvAsientos es app/admin/cierre/exportar: un renglón por línea con el
 // número de asiento repetido, y los totales.
 //
-// La fecha va en UTC, como el mes del cierre (ver CierreDelMes): los gastos y
-// las facturas de compra guardan el día a las 0 UTC, y en hora argentina
-// saldrían un día antes.
+// La fecha de los días (los gastos y las facturas de compra, a las 0 UTC) va
+// en UTC: en hora argentina saldrían un día antes. La de los instantes (las
+// ventas, los cobros, los pagos), en hora argentina: en UTC, una factura del
+// 31 a las 22 salía del 1 (ver fechaCsv).
 //
 // Uno por circuito: el del estudio lleva solo el blanco, y el del circuito B
 // (`circuito` = "negro") es otro archivo, con su propia numeración.
@@ -484,7 +494,7 @@ func CsvAsientos(todos []Asiento, circuito string) string {
 			if r.Haber != 0 {
 				haber = csvexcel.NumeroCsv(r.Haber, 2)
 			}
-			filas = append(filas, []string{csvexcel.Texto(numero), fechaCsvUTC(a.Fecha), csvexcel.Texto(a.Concepto),
+			filas = append(filas, []string{csvexcel.Texto(numero), fechaCsv(a), csvexcel.Texto(a.Concepto),
 				csvexcel.Texto(r.Cuenta), csvexcel.Texto(r.Nombre), debe, haber, csvexcel.Texto(obs)})
 		}
 	}

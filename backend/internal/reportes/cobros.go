@@ -215,6 +215,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		LEFT JOIN LATERAL (
 		  SELECT i.id, i.fecha_emision, i.tipo::text AS tipo, i.punto_venta, i.numero, i.receptor_nombre FROM invoices i
 		  WHERE i.order_id = p.order_id AND i.tipo::text LIKE 'factura%' AND i.estado <> 'borrador' AND i.cae IS NOT NULL
+		    AND i.cae_ambiente IS DISTINCT FROM 'homologacion'
 		  ORDER BY (i.estado = 'anulada'), i.fecha_emision LIMIT 1) f ON true
 		WHERE p.estado IN ('aprobado', 'reintegrado')
 		  AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)

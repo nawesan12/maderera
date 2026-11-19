@@ -541,3 +541,64 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	}
 	return &p, nil
 }
+
+// PedidoParaElTaller es la ficha del aserradero (T3, hallazgo 40): lo que se
+// corta y para quién. La ficha completa le mostraba los precios, el saldo de
+// la cuenta, el mail y el teléfono del cliente.
+type PedidoParaElTaller struct {
+	ID          string          `json:"id"`
+	Numero      string          `json:"numero"`
+	Cliente     string          `json:"cliente"`
+	Empresa     *string         `json:"empresa"`
+	CustomerID  *string         `json:"customerId"`
+	BranchID    *string         `json:"branchId"`
+	Sucursal    *string         `json:"sucursal"`
+	Estado      string          `json:"estado"`
+	TipoEntrega string          `json:"tipoEntrega"`
+	EntregarEl  *string         `json:"entregarEl"`
+	Notas       *string         `json:"notas"`
+	Items       []ItemDelTaller `json:"items"`
+}
+
+// ItemDelTaller es un renglón sin precio.
+type ItemDelTaller struct {
+	VariantID    *string `json:"variantId"`
+	Descripcion  string  `json:"descripcion"`
+	Unidad       string  `json:"unidad"`
+	Cantidad     string  `json:"cantidad"`
+	Presentacion *string `json:"presentacion"`
+}
+
+// ParaElTaller lee esa ficha, o nil si el pedido no existe.
+func (s *Servicio) ParaElTaller(ctx context.Context, id string) (*PedidoParaElTaller, error) {
+	var p PedidoParaElTaller
+	err := s.pool.QueryRow(ctx, `
+		SELECT o.id, o.numero, o.contacto_nombre, c.razon_social, o.customer_id, o.branch_id, b.name, o.estado::text,
+		       o.tipo_entrega::text, to_char(o.entregar_el, 'YYYY-MM-DD'), o.notas
+		FROM orders o
+		LEFT JOIN customers c ON c.id = o.customer_id
+		LEFT JOIN branches b ON b.id = o.branch_id
+		WHERE o.id = $1`, id).Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.CustomerID, &p.BranchID, &p.Sucursal,
+		&p.Estado, &p.TipoEntrega, &p.EntregarEl, &p.Notas)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT variant_id, descripcion, unidad, cantidad::text, presentacion
+		FROM order_items WHERE order_id = $1 ORDER BY orden, id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Items, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (ItemDelTaller, error) {
+		var it ItemDelTaller
+		err := r.Scan(&it.VariantID, &it.Descripcion, &it.Unidad, &it.Cantidad, &it.Presentacion)
+		return it, err
+	})
+	if p.Items == nil {
+		p.Items = []ItemDelTaller{}
+	}
+	return &p, err
+}

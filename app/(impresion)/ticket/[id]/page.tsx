@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
-import { requireStaff } from "@/lib/dal/session";
+import { requireStaffRole } from "@/lib/dal/session";
+import { quienEntra } from "@/lib/roles";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
@@ -50,7 +51,8 @@ async function Contenido({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireStaff();
+  // El ticket lleva los importes: quien entra a Pedidos, no el aserradero.
+  await requireStaffRole(...(quienEntra("/admin/pedidos") ?? []));
 
   const { id } = await params;
   const pedido = await obtenerPedido(id);

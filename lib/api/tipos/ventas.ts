@@ -38,6 +38,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pedidos/{id}/taller": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Lo que necesita el aserradero para cargar el corte de un pedido, sin importes ni datos de contacto */
+        get: operations["PedidoParaElTaller"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pedidos/{id}/avanzar": {
         parameters: {
             query?: never;
@@ -379,6 +398,31 @@ export interface components {
             ganancia: number;
             sinCosto: number;
         };
+        /**
+         * @description La ficha para quien corta (el aserradero): qué y para quién, sin
+         *     importes, mail, teléfono, saldo, pagos ni margen. Un tipo aparte y no
+         *     la ficha con los importes en cero: un $0 en el papel se lee «gratis».
+         */
+        PedidoParaElTaller: {
+            id: string;
+            numero: string;
+            cliente: string;
+            empresa: string | null;
+            customerId: string | null;
+            branchId: string | null;
+            sucursal: string | null;
+            estado: string;
+            tipoEntrega: string;
+            entregarEl: string | null;
+            notas: string | null;
+            items: {
+                variantId: string | null;
+                descripcion: string;
+                unidad: string;
+                cantidad: string;
+                presentacion: string | null;
+            }[];
+        };
         FichaDePedido: {
             id: string;
             numero: string;
@@ -499,6 +543,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FichaDePedido"];
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+        };
+    };
+    PedidoParaElTaller: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pedido, sin plata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PedidoParaElTaller"];
                 };
             };
             401: components["responses"]["Problema"];

@@ -19,8 +19,9 @@ package main
 //     facturar): roles.ManejanPlata. El depósito abre Pedidos pero no cobra.
 //   - "personal": todo el personal, a propósito. Hoy: el push (cada uno
 //     activa el suyo), el buscador del encabezado (filtra adentro según el
-//     rol), los datos del emisor (van en todo lo que se imprime) y la ficha
-//     del pedido (la abre también el aserradero desde /admin/cortes/nuevo).
+//     rol), los datos del emisor (van en todo lo que se imprime) y el pedido
+//     para el taller (sin plata: lo abre el aserradero desde
+//     /admin/cortes/nuevo).
 //
 // Cuando una ruta la usan varias pantallas, va la más amplia de ellas.
 var pantallaDeCadaRuta = map[string]string{
@@ -210,7 +211,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"CambiarEntregaDelPedido":        "/admin/presupuestos",           // PUT /api/v1/admin/pedidos/{id}/entrega
 	"CortesDelPedido":                "/admin/cortes",                 // GET /api/v1/admin/pedidos/{id}/cortes
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos
-	"FichaDePedido":                  "personal",                      // GET /api/v1/admin/pedidos/{id}
+	"FichaDePedido":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}
+	"PedidoParaElTaller":             "personal",                      // GET /api/v1/admin/pedidos/{id}/taller
 	"ListarPedidos":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos
 	"ChequesTerminados":              "/admin/cheques",                // GET /api/v1/admin/cheques/terminados
 	"CobranzasDelPeriodo":            "/admin/pagos",                  // GET /api/v1/admin/cobranzas

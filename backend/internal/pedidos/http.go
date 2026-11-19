@@ -55,6 +55,7 @@ func (o respuesta) VisitCambiarEntregaDelPedidoResponse(w http.ResponseWriter) e
 	return o.escribir(w)
 }
 func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitPedidoParaElTallerResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCobrarPedidoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
@@ -107,15 +108,32 @@ func (a *API) ListarPedidos(ctx context.Context, r ventasapi.ListarPedidosReques
 	return ok(v), err
 }
 
-// FichaDePedido la lee todo el personal, como obtenerPedido: además del
-// tablero la piden el ticket impreso y el alta de un corte (que también ve
-// el aserradero).
+// FichaDePedido la lee quien entra a Pedidos (el tablero y el ticket
+// impreso). El aserradero la leía para cargar el corte de un pedido, y con
+// ella los precios, el saldo, el mail y el teléfono del cliente: ahora usa
+// PedidoParaElTaller (T3, hallazgo 40).
 func (a *API) FichaDePedido(ctx context.Context, r ventasapi.FichaDePedidoRequestObject) (ventasapi.FichaDePedidoResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := pedidos(ctx)
 	if err != nil {
 		return nil, err
 	}
 	p, err := a.s.Pedido(ctx, r.Id.String(), ses.Tiene(sqlc.StaffRoleAdmin))
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, noEsta("No se encontró el pedido.")
+	}
+	return ok(p), nil
+}
+
+// PedidoParaElTaller: todo el personal (el aserradero carga el corte de un
+// pedido desde /admin/cortes/nuevo). Sin plata ni datos de contacto.
+func (a *API) PedidoParaElTaller(ctx context.Context, r ventasapi.PedidoParaElTallerRequestObject) (ventasapi.PedidoParaElTallerResponseObject, error) {
+	if _, err := auth.ExigirStaff(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.ParaElTaller(ctx, r.Id.String())
 	if err != nil {
 		return nil, err
 	}

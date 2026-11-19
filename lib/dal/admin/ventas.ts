@@ -128,6 +128,18 @@ export async function obtenerPedido(id: string): Promise<PedidoCompleto | null> 
   };
 }
 
+export type PedidoParaElTaller = Esquemas["PedidoParaElTaller"];
+
+/**
+ * El pedido sin plata ni datos de contacto: lo que necesita quien carga el
+ * corte de un pedido (también el aserradero, que no ve la ficha completa).
+ */
+export async function pedidoParaElTaller(id: string): Promise<PedidoParaElTaller | null> {
+  const r = await (await api()).GET("/api/v1/admin/pedidos/{id}/taller", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  return datos(r);
+}
+
 /*
  * La numeración de pedidos y presupuestos está en Go (internal/numeracion)
  * y, mientras el mostrador y el carrito sigan en TS, también en

@@ -58,6 +58,20 @@ paths:
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/taller:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: PedidoParaElTaller
+      summary: Lo que necesita el aserradero para cargar el corte de un pedido, sin importes ni datos de contacto
+      responses:
+        "200":
+          description: El pedido, sin plata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoParaElTaller" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/avanzar:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
@@ -437,6 +451,36 @@ components:
         costo: { type: number, format: double }
         ganancia: { type: number, format: double }
         sinCosto: { type: integer }
+    PedidoParaElTaller:
+      type: object
+      description: |
+        La ficha para quien corta (el aserradero): qué y para quién, sin
+        importes, mail, teléfono, saldo, pagos ni margen. Un tipo aparte y no
+        la ficha con los importes en cero: un $0 en el papel se lee «gratis».
+      required: [id, numero, cliente, empresa, customerId, branchId, sucursal, estado, tipoEntrega, entregarEl, notas, items]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        empresa: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        branchId: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        estado: { type: string }
+        tipoEntrega: { type: string }
+        entregarEl: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            required: [variantId, descripcion, unidad, cantidad, presentacion]
+            properties:
+              variantId: { type: string, nullable: true }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: string }
+              presentacion: { type: string, nullable: true }
     FichaDePedido:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,

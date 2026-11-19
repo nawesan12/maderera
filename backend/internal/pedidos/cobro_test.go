@@ -69,3 +69,27 @@ func TestCobroDelPedido(t *testing.T) {
 		t.Error("cubierto el total, queda pagado")
 	}
 }
+
+// El aserradero ve el pedido sin plata (T3, hallazgo 40): la ficha completa
+// le da 403 y la del taller no trae importes, mail, teléfono ni saldo.
+func TestPedidoParaElTaller(t *testing.T) {
+	e := armar(t)
+	ase, _ := e.staff(t, "aserradero@prueba.test", sqlc.StaffRoleAserradero)
+	pedido := e.id(t, `insert into orders (numero, contacto_nombre, contacto_email, contacto_telefono, branch_id, origen, estado, subtotal, total)
+		values ('PED-8', 'Ana', 'ana@prueba.test', '2235551234', $1, 'presupuesto', 'pendiente', 84500, 84500) returning id`, e.sucursal)
+	e.exec(t, `insert into order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal)
+		values ($1, $2, 'Fenólico 18 mm', 'placa', 1, 84500, 84500)`, pedido, e.placa)
+	u := e.srv.URL + "/api/v1/admin/pedidos/" + pedido
+	if c, _ := pedir(t, ase, "GET", u, nil); c != 403 {
+		t.Fatalf("la ficha completa: %d", c)
+	}
+	c, b := pedir(t, ase, "GET", u+"/taller", nil)
+	if c != 200 || !strings.Contains(b, `"numero":"PED-8"`) || !strings.Contains(b, `"cantidad":"1.00"`) {
+		t.Fatalf("taller: %d %s", c, b)
+	}
+	for _, no := range []string{"84500", "ana@prueba.test", "2235551234", "total", "saldo", "precio"} {
+		if strings.Contains(b, no) {
+			t.Errorf("la ficha del taller trae %q: %s", no, b)
+		}
+	}
+}

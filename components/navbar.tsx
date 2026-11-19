@@ -117,8 +117,15 @@ const enlacesDirectos = [
   // barra superior, que en el teléfono ni existe, y la clienta pidió que la
   // cuenta profesional se encuentre sin buscarla.
   { name: "Profesionales", href: "/profesionales" },
-  { name: "Sucursales", href: "/sucursales" },
 ];
+
+/*
+ * Sucursales va en la barra de arriba, con el teléfono y el horario: es dónde
+ * encontrarnos, lo mismo que esa barra. En la de abajo no entraba: medida
+ * (revisión del comité), a 1024, 1280 y desde 1536 px la barra se pasaba del
+ * ancho y «Ingresar» quedaba cortado. En el teléfono sigue en el cajón.
+ */
+const enlaceSucursales = { name: "Sucursales", href: "/sucursales" };
 
 /*
  * "Catálogo" no está en esta lista y no es un olvido.
@@ -219,6 +226,13 @@ export function Navbar({
           */}
           <div className="ml-auto flex items-center gap-3.5">
             <Link
+              href={enlaceSucursales.href}
+              className="uppercase tracking-[0.07em] transition-colors hover:text-white"
+            >
+              {enlaceSucursales.name}
+            </Link>
+            <span className="text-white/20">|</span>
+            <Link
               href="/contacto"
               className="uppercase tracking-[0.07em] transition-colors hover:text-white"
             >
@@ -243,7 +257,7 @@ export function Navbar({
 
       {/* Barra principal */}
       <nav className="sticky top-0 z-50 border-b border-linea-suave bg-[var(--chrome-fondo)] backdrop-blur-[12px]">
-        <div className="contenedor flex h-[72px] items-center gap-6">
+        <div className="contenedor flex h-[72px] items-center gap-5 xl:gap-6">
           {/* El logo, más grande y con el nombre siempre a la vista: la
               clienta pidió que tenga más presencia y que nunca se pierda. */}
           <Link href="/" className="shrink-0">
@@ -284,13 +298,13 @@ export function Navbar({
               <EnlaceDeSeccion
                 href="/catalogo"
                 clase={(activa) =>
-                  `relative flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                  `relative flex h-10 items-center gap-1.5 rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                     productsOpen || activa
                       ? "bg-sitio-alt text-acento-texto"
                       : "text-foreground"
                   } ${
                     activa
-                      ? "after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      ? "after:absolute after:inset-x-[9px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : ""
                   }`
                 }
@@ -463,9 +477,9 @@ export function Navbar({
                 key={link.href}
                 href={link.href}
                 clase={(activa) =>
-                  `relative flex h-10 items-center whitespace-nowrap rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
+                  `relative flex h-10 items-center whitespace-nowrap rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
                     activa
-                      ? "text-acento-texto after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      ? "text-acento-texto after:absolute after:inset-x-[9px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : "text-foreground"
                   }`
                 }
@@ -492,7 +506,7 @@ export function Navbar({
               onMouseLeave={() => setMasOpen(false)}
             >
               <button
-                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                   masOpen ? "bg-sitio-alt text-acento-texto" : "text-texto-2"
                 }`}
                 aria-expanded={masOpen}
@@ -529,25 +543,21 @@ export function Navbar({
                 sin el flotante, en una computadora solo se abría desde el
                 catálogo y el 404, y quien estaba en la portada, una ficha o
                 el corte no tenía cómo llamarlo ni retomar la charla. En el
-                celular vive en el menú. Entre lg y 2xl la barra no da para la
-                etiqueta entera, pero el personaje solo no decía qué era
-                (comité final): ahí va «Ayuda», que entra. */}
+                celular vive en el menú. El personaje solo no decía qué era
+                (comité final), y la etiqueta entera no entra: medida, desde
+                2xl dejaba la barra justa al píxel. Va «Ayuda» en todos los
+                anchos, y sin aria-label: el nombre es el texto que se ve, así
+                quien dice «clic en Ayuda» por voz lo encuentra. */}
             <button
               type="button"
               aria-haspopup="dialog"
-              aria-label={ETIQUETA_ASISTENTE}
               onClick={abrirAsistente}
               className="hidden h-10 items-center gap-2 rounded-[11px] px-2 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto lg:flex"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-naranja-claro">
                 <PersonajeAsistente className="h-4 w-4 text-acento-sobre-claro" />
               </span>
-              <span aria-hidden className="whitespace-nowrap text-[13px] font-bold uppercase tracking-[0.045em] 2xl:hidden">
-                Ayuda
-              </span>
-              <span aria-hidden className="hidden text-[13px] font-bold uppercase tracking-[0.045em] 2xl:inline">
-                {ETIQUETA_ASISTENTE}
-              </span>
+              <span className="whitespace-nowrap text-[13px] font-bold uppercase tracking-[0.045em]">Ayuda</span>
             </button>
 
             <ThemeToggle />
@@ -695,7 +705,7 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Navegación
                   </p>
-                  {[...enlacesDirectos, ...enlacesMas].map((link) => (
+                  {[...enlacesDirectos, enlaceSucursales, ...enlacesMas].map((link) => (
                     <EnlaceDeSeccion
                       key={link.href}
                       href={link.href}

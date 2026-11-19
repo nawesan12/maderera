@@ -5,9 +5,22 @@ const leer = (ruta: string) => readFileSync(new URL(`../${ruta}`, import.meta.ur
 
 /** Comité final: detalles del sitio público. */
 describe("detalles del sitio público", () => {
-  it("el asistente tiene rótulo entre lg y 2xl", () => {
+  it("el asistente dice «Ayuda» y ese es su nombre", () => {
     const barra = leer("components/navbar.tsx");
-    expect(barra).toMatch(/2xl:hidden">\s*Ayuda\s*<\/span>/);
+    const boton = barra.slice(barra.indexOf("onClick={abrirAsistente}") - 200, barra.indexOf(">Ayuda</span>") + 20);
+    expect(boton).toContain(">Ayuda</span>");
+    // Sin aria-label que tape el texto visible (WCAG 2.5.3) ni texto escondido.
+    expect(boton).not.toContain("aria-label");
+    expect(boton).not.toMatch(/aria-hidden className="[^"]*">\s*Ayuda/);
+  });
+
+  it("Sucursales va en la barra de arriba y en el cajón, no en la de abajo", () => {
+    // Medido: con Sucursales, la barra se pasaba del ancho a 1024, 1280 y 1536 px.
+    const barra = leer("components/navbar.tsx");
+    const directos = barra.slice(barra.indexOf("const enlacesDirectos"), barra.indexOf("];", barra.indexOf("const enlacesDirectos")));
+    expect(directos).not.toContain("/sucursales");
+    expect(barra).toContain("href={enlaceSucursales.href}");
+    expect(barra).toContain("[...enlacesDirectos, enlaceSucursales, ...enlacesMas]");
   });
 
   it("el WhatsApp flotante se va mientras se escribe en el teléfono", () => {

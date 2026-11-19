@@ -160,10 +160,14 @@ function Lista({
 }) {
   return (
     <section>
-      <div className="mb-2.5 flex items-baseline justify-between gap-3">
+      <div className="mb-3.5 flex items-center justify-between gap-3">
         {/* La cifra va acá y no en «Para hoy»: la misma cuenta dos veces,
-            una arriba de la otra, era medio scroll de más en el teléfono. */}
-        <h2 className="text-[17px] font-bold tracking-tight">
+            una arriba de la otra, era medio scroll de más en el teléfono.
+            El título es como los de las otras secciones del inicio («Para
+            hoy», «Empezar algo»: Encabezado de app/admin/page.tsx), con su
+            veta; eran dos estilos en la misma pantalla (comité final). */}
+        <h2 className="flex items-center gap-2.5 text-[19px] font-bold tracking-tight">
+          <span className="wood-divider w-8 shrink-0" aria-hidden="true" />
           {titulo}
           {total > 0 && <span className="tabular font-semibold text-texto-2"> · {total}</span>}
         </h2>

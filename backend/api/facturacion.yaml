@@ -276,6 +276,48 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Emitido" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/padron-iibb:
+    get:
+      operationId: PadronIibb
+      description: El padrón de ARBA de los clientes, vigente hoy o después. Solo el admin.
+      responses:
+        "200":
+          description: Las filas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [cuit, cliente, alicuota, desde, hasta]
+                  properties:
+                    cuit: { type: string }
+                    cliente: { type: string, nullable: true }
+                    alicuota: { type: number, format: double }
+                    desde: { type: string }
+                    hasta: { type: string }
+    post:
+      operationId: ImportarPadronIibb
+      description: Importa el archivo mensual de ARBA (el .txt o el .zip) y se queda con los CUIT de los clientes. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Lo que se cargó
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [leidos, cargados, desde, hasta]
+                properties:
+                  leidos: { type: integer }
+                  cargados: { type: integer }
+                  desde: { type: string }
+                  hasta: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/facturacion/comprobantes/{id}/devolucion:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -610,7 +652,7 @@ components:
         errores: { type: object, additionalProperties: { type: string } }
     EmisorFiscal:
       type: object
-      required: [id, razonSocial, nombreFantasia, cuit, condicionIva, domicilio, localidad, codigoPostal, telefono, email, ingresosBrutos, regimenIibb, alicuotaPercepcionIibb, percibeIibb, inicioActividades, leyenda, updatedAt]
+      required: [id, razonSocial, nombreFantasia, cuit, condicionIva, domicilio, localidad, codigoPostal, telefono, email, ingresosBrutos, regimenIibb, alicuotaPercepcionIibb, alicuotaIibbSinPadron, percibeIibb, inicioActividades, leyenda, updatedAt]
       properties:
         id: { type: string }
         razonSocial: { type: string }
@@ -624,7 +666,8 @@ components:
         email: { type: string, nullable: true }
         ingresosBrutos: { type: string, nullable: true }
         regimenIibb: { type: string, enum: [local, convenio_multilateral, exento, no_inscripto] }
-        alicuotaPercepcionIibb: { type: string }
+        alicuotaPercepcionIibb: { type: string, description: La alícuota única de antes; ya no se usa (la percepción sale del padrón) }
+        alicuotaIibbSinPadron: { type: string, nullable: true, description: La alícuota para quien no figura en el padrón; nula, no se le percibe }
         percibeIibb: { type: boolean }
         inicioActividades: { type: string, format: date-time, nullable: true }
         leyenda: { type: string, nullable: true }

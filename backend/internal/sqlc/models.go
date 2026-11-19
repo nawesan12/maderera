@@ -5105,6 +5105,7 @@ type ConfiguracionFiscal struct {
 	InicioActividades      *time.Time   `json:"inicioActividades"`
 	Leyenda                *string      `json:"leyenda"`
 	UpdatedAt              time.Time    `json:"updatedAt"`
+	AlicuotaIibbSinPadron  *jsmath.Num  `json:"alicuotaIibbSinPadron"`
 }
 
 type ConsultasCorte struct {

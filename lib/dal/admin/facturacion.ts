@@ -141,6 +141,19 @@ export async function obtenerComprobante(id: string): Promise<ComprobanteComplet
   return conFechas(datos(r));
 }
 
+export interface FilaDelPadron {
+  cuit: string;
+  cliente: string | null;
+  alicuota: number;
+  desde: string;
+  hasta: string;
+}
+
+/** El padrón de ARBA de los clientes, vigente hoy o después. */
+export async function padronIibb(): Promise<FilaDelPadron[]> {
+  return datos(await (await api()).GET("/api/v1/admin/facturacion/padron-iibb"));
+}
+
 export type DatosDeDevolucion = Esquemas["DatosDeDevolucion"];
 
 /**

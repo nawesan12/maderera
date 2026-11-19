@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -83,6 +84,10 @@ func (o respuesta) VisitNotaDeCreditoParcialResponse(w http.ResponseWriter) erro
 	return o.escribir(w)
 }
 func (o respuesta) VisitNotaDeDebitoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitPadronIibbResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitImportarPadronIibbResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitDatosDeDevolucionResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -604,6 +609,28 @@ func (a *API) NotaDeCreditoParcial(ctx context.Context, r facturacionapi.NotaDeC
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "factura", r.Id.String(),
 		"Emitió una nota de crédito parcial: "+motivo, map[string]any{"notaDeCreditoId": id})
 	return emitido(id), nil
+}
+
+func (a *API) PadronIibb(ctx context.Context, _ facturacionapi.PadronIibbRequestObject) (facturacionapi.PadronIibbResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.Padron(ctx)
+	return ok(p), err
+}
+
+func (a *API) ImportarPadronIibb(ctx context.Context, r facturacionapi.ImportarPadronIibbRequestObject) (facturacionapi.ImportarPadronIibbResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := a.s.ImportarPadron(ctx, ses.UserID, r.Body)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "configuracion", "",
+		fmt.Sprintf("Importó el padrón de ARBA del %s al %s: %d clientes", res.Desde, res.Hasta, res.Cargados), nil)
+	return ok(res), nil
 }
 
 func (a *API) DatosDeDevolucion(ctx context.Context, r facturacionapi.DatosDeDevolucionRequestObject) (facturacionapi.DatosDeDevolucionResponseObject, error) {

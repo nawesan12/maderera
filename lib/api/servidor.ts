@@ -26,7 +26,7 @@ export const API_URL = process.env.API_URL ?? "http://127.0.0.1:8080";
  * (Math.random) antes de llamarlos, y con cacheComponents eso, antes de leer
  * la petición, rompe el prerender. Leyendo primero, la página ya es dinámica.
  */
-async function cabecerasDelPedido(): Promise<Record<string, string>> {
+export async function cabecerasDelPedido(): Promise<Record<string, string>> {
   const [h, c] = await Promise.all([headers(), cookies()]);
   const out: Record<string, string> = {};
   const cookie = c.toString();

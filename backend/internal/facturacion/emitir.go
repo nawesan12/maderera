@@ -143,7 +143,24 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 			return "", errEmision(`"` + l.Descripcion + `": ` + fiscal.MensajeAlicuota)
 		}
 	}
-	im := fiscal.Importes(entradas, d.TributosDados, config.PercibeIibb, jsmath.Numero(config.AlicuotaPercepcionIibb))
+	// La percepción de IIBB sale del padrón de ARBA, receptor por receptor
+	// (fiscal.PercepcionIibb): antes era una alícuota para todos, también
+	// para el consumidor final.
+	percibe, alicuota := false, 0.0
+	if config.PercibeIibb && d.TributosDados == nil && d.ReceptorCuit != nil {
+		dia := s.ahora().In(fiscal.Argentina).Format("2006-01-02")
+		fila, err := filaDelPadron(ctx, tx, *d.ReceptorCuit, dia)
+		if err != nil {
+			return "", err
+		}
+		var sinPadron *float64
+		if config.AlicuotaIibbSinPadron != nil {
+			x := jsmath.Numero(*config.AlicuotaIibbSinPadron)
+			sinPadron = &x
+		}
+		alicuota, percibe = fiscal.PercepcionIibb(d.ReceptorCondicionIva, *d.ReceptorCuit, fila, dia, sinPadron)
+	}
+	im := fiscal.Importes(entradas, d.TributosDados, percibe, alicuota)
 	// Una B sin documento desde el umbral: ARCA la rechaza y el número
 	// quemado traba a los que vienen detrás. Se frena antes de tomarlo.
 	if m := fiscal.FaltaIdentificarComprador(tipo, im.Total, d.ReceptorCuit, s.ahora()); m != "" {

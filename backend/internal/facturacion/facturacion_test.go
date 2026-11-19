@@ -56,8 +56,11 @@ func armar(t *testing.T, conArca bool) *entorno {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// El simulador hace de ARCA de producción: un CAE de homologación
+		// queda fuera del libro y del reparto (TestCaeDeHomologacion), y las
+		// pruebas miran comprobantes que valen.
 		vars = map[string]string{"ARCA_CUIT": cuitEmisor, "ARCA_CERTIFICADO": cert, "ARCA_CLAVE_PRIVADA": clave,
-			"ARCA_URL_WSAA": e.sim.URLWsaa(), "ARCA_URL_WSFE": e.sim.URLWsfe()}
+			"ARCA_URL_WSAA": e.sim.URLWsaa(), "ARCA_URL_WSFE": e.sim.URLWsfe(), "ARCA_AMBIENTE": "produccion"}
 	}
 	e.s = s.ConEntorno(func(k string) string { return vars[k] })
 	m := http.NewServeMux()
@@ -726,8 +729,11 @@ func TestEmisorYPuntosDeVenta(t *testing.T) {
 	e := armar(t, false)
 	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
 	vendedor := e.staff(t, "v@mjbj.test", sqlc.StaffRoleVendedor)
+	// La percepción sale del padrón de ARBA (fiscal.PercepcionIibb): sin
+	// padrón vigente no se enciende, y la alícuota es la del que no figura.
+	e.exec(t, `INSERT INTO padron_iibb (cuit, alicuota, vigencia_desde, vigencia_hasta) VALUES ('30712345671', 2, current_date - 1, current_date + 30)`)
 	campos := map[string]string{"razonSocial": "Maderera Juan B. Justo S.R.L.", "cuit": "30-58944525-9", "condicionIva": "responsable_inscripto",
-		"alicuotaPercepcionIibb": "3,5", "percibeIibb": "on", "inicioActividades": "1981-03-01", "localidad": ""}
+		"alicuotaIibbSinPadron": "3,5", "percibeIibb": "on", "inicioActividades": "1981-03-01", "localidad": ""}
 	if st, _ := pedir(t, vendedor, "PUT", e.srv.URL+"/api/v1/admin/facturacion/emisor", campos); st != 403 {
 		t.Fatalf("vendedor: %d", st)
 	}
@@ -736,12 +742,15 @@ func TestEmisorYPuntosDeVenta(t *testing.T) {
 	}
 	_, b := pedir(t, admin, "GET", e.srv.URL+"/api/v1/fiscal/emisor", nil)
 	em := leerJSON[Emisor](t, b)
-	if em.AlicuotaPercepcionIibb != "3.50" || !em.PercibeIibb || em.Localidad != "Mar del Plata" || em.Cuit == nil || *em.Cuit != cuitEmisor {
+	if em.AlicuotaIibbSinPadron == nil || *em.AlicuotaIibbSinPadron != "3.500" || !em.PercibeIibb || em.Localidad != "Mar del Plata" ||
+		em.Cuit == nil || *em.Cuit != cuitEmisor {
 		t.Fatalf("emisor: %s", b)
 	}
-	// Con percepción: la factura lleva el tributo.
+	// Con percepción: la factura al inscripto que no figura lleva el
+	// tributo con la alícuota del que no figura.
 	ctx := context.Background()
-	id, _ := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "CF", ReceptorCondicionIva: "consumidor_final",
+	cuitRI := "20123456786"
+	id, _ := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "RI", ReceptorCuit: &cuitRI, ReceptorCondicionIva: "responsable_inscripto",
 		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 1210}}}})
 	c, _ := e.s.Obtener(ctx, id)
 	if c.TributosTotal != "35.00" || c.Total != "1245.00" || len(c.Tributos) != 1 {

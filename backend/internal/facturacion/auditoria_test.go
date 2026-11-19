@@ -17,7 +17,9 @@ import (
 // cerraba (10048), y la percepción de IIBB se calculaba sobre lo exento.
 func TestExentoNoVaAlNeto(t *testing.T) {
 	e := armar(t, true)
-	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true, alicuota_percepcion_iibb = 3`)
+	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true`)
+	// La alícuota sale del padrón de ARBA del receptor.
+	e.exec(t, `INSERT INTO padron_iibb (cuit, alicuota, vigencia_desde, vigencia_hasta) VALUES ('30712345671', 3, current_date - 1, current_date + 30)`)
 	admin := e.staff(t, "admin@mjbj.test", sqlc.StaffRoleAdmin)
 	campos := map[string]string{"receptorNombre": "Gómez SRL", "receptorCuit": "30-71234567-1", "receptorCondicionIva": "responsable_inscripto"}
 	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(campos,

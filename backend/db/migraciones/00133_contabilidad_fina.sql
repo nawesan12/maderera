@@ -88,6 +88,11 @@ CREATE TABLE padron_iibb (
 );
 CREATE INDEX padron_iibb_vigencia_idx ON padron_iibb (vigencia_hasta);
 
+-- A quien no figura en el padrón: lo decide el contador (ARBA tiene reglas
+-- para el que no figura). Nula, el valor de entrada, es no percibir.
+ALTER TABLE configuracion_fiscal ADD COLUMN alicuota_iibb_sin_padron numeric(6, 3)
+	CHECK (alicuota_iibb_sin_padron >= 0 AND alicuota_iibb_sin_padron <= 100);
+
 -- La alícuota única deja de usarse: con la percepción encendida, desde hoy
 -- se percibiría por padrón y el padrón está vacío, así que nadie se
 -- enteraría de que se dejó de percibir. Se apaga y el cierre lo muestra.
@@ -102,6 +107,7 @@ UPDATE invoices SET cae_ambiente = 'homologacion' WHERE cae IS NOT NULL;
 
 -- +goose Down
 ALTER TABLE invoices DROP COLUMN cae_ambiente;
+ALTER TABLE configuracion_fiscal DROP COLUMN alicuota_iibb_sin_padron;
 DROP TABLE padron_iibb;
 DROP TRIGGER cheques_estado_anotado ON cheques;
 DROP FUNCTION anotar_estado_de_cheque();

@@ -3,6 +3,7 @@ package facturacion
 import (
 	"context"
 	"math"
+	"strings"
 	"time"
 
 	"mjbj/internal/auth"
@@ -34,6 +35,9 @@ type datosEmisor struct {
 	alicuota                                       float64
 	percibe                                        bool
 	inicio                                         *time.Time
+	// sinPadron es la alícuota para quien no figura en el padrón (nil: no
+	// se le percibe).
+	sinPadron *float64
 }
 
 // validarEmisor es el esquema de guardarDatosEmisor.
@@ -66,6 +70,13 @@ func validarEmisor(c map[string]string) (datosEmisor, error) {
 		return d, err
 	}
 	d.percibe = c["percibeIibb"] == "on"
+	if t := strings.TrimSpace(c["alicuotaIibbSinPadron"]); t != "" {
+		x := precios.ParsearImporte(t)
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 || x > 100 {
+			return d, plataforma.Invalido(map[string]string{"alicuotaIibbSinPadron": "La alícuota va en porcentaje, de 0 a 100."})
+		}
+		d.sinPadron = &x
+	}
 	if !hayAlic {
 		alicTexto = "0"
 	}
@@ -99,12 +110,31 @@ func (s *Servicio) GuardarEmisor(ctx context.Context, ses *auth.Sesion, c map[st
 	if err != nil {
 		return "", err
 	}
+	// La percepción sale del padrón de ARBA: encenderla sin padrón vigente
+	// es un interruptor que miente (no percibe a nadie, y el agente responde
+	// con su plata por lo que no percibió).
+	if d.percibe {
+		hay, err := hayPadronVigente(ctx, s.pool, s.ahora())
+		if err != nil {
+			return "", err
+		}
+		if !hay {
+			return "", plataforma.Invalido(map[string]string{"percibeIibb": "Cargá el padrón de ARBA antes de encender la percepción."})
+		}
+	}
+	var sinPadron *string
+	if d.sinPadron != nil {
+		t := jsmath.ToFixed(*d.sinPadron, 3)
+		sinPadron = &t
+	}
+	// La alícuota única de antes queda en cero al guardar: ya no se usa, y
+	// mientras tenga algo el cierre avisa que la percepción se apagó.
 	if _, err := s.pool.Exec(ctx, `UPDATE configuracion_fiscal SET razon_social = $2, nombre_fantasia = $3, cuit = $4,
 		condicion_iva = $5::condicion_iva, domicilio = $6, localidad = $7, codigo_postal = $8, telefono = $9, email = $10,
-		ingresos_brutos = $11, regimen_iibb = $12::regimen_iibb, alicuota_percepcion_iibb = $13::numeric, percibe_iibb = $14,
-		inicio_actividades = $15, leyenda = $16, updated_at = now() WHERE id = $1`,
+		ingresos_brutos = $11, regimen_iibb = $12::regimen_iibb, alicuota_percepcion_iibb = 0, percibe_iibb = $13,
+		inicio_actividades = $14, leyenda = $15, alicuota_iibb_sin_padron = $16::numeric, updated_at = now() WHERE id = $1`,
 		emisor.ID, d.razon, d.fantasia, d.cuit, d.condicion, d.domicilio, d.localidad, d.cp, d.tel, d.email, d.iibb, d.regimen,
-		jsmath.ToFixed(d.alicuota, 2), d.percibe, d.inicio, d.ley); err != nil {
+		d.percibe, d.inicio, d.ley, sinPadron); err != nil {
 		return "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "configuracion", "", "Cambió los datos fiscales del emisor", nil)

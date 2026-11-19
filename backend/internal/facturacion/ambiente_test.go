@@ -16,18 +16,26 @@ func TestCaeDeHomologacion(t *testing.T) {
 	e := armar(t, true)
 	ctx := context.Background()
 	admin := e.staff(t, "ambiente@mjbj.test", sqlc.StaffRoleAdmin)
-	id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "CF", ReceptorCondicionIva: "consumidor_final",
+	// El simulador de las pruebas hace de producción; acá, de homologación.
+	homo := e.s.ConEntorno(func(k string) string {
+		if k == "ARCA_AMBIENTE" {
+			return ""
+		}
+		return e.s.env(k)
+	})
+	prod := e.s
+	id, err := homo.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "CF", ReceptorCondicionIva: "consumidor_final",
 		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 3, PrecioFinalUnitario: 1210}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.s.Autorizar(ctx, id); err != nil {
+	if _, err := homo.Autorizar(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	var ambiente string
 	e.uno(t, `SELECT cae_ambiente FROM invoices WHERE id = $1`, &ambiente, id)
 	if ambiente != "homologacion" {
-		t.Fatalf("el CAE del simulador quedó con ambiente %q", ambiente)
+		t.Fatalf("el CAE de homologación quedó con ambiente %q", ambiente)
 	}
 
 	// Fuera del libro IVA del mes.
@@ -39,24 +47,18 @@ func TestCaeDeHomologacion(t *testing.T) {
 	}
 
 	// En producción no se le hace nota.
-	prod := e.s.ConEntorno(func(k string) string {
-		if k == "ARCA_AMBIENTE" {
-			return "produccion"
-		}
-		return e.s.env(k)
-	})
 	unidad := []fiscal.CantidadAAcreditar{{ItemID: primerItem(t, e, id), Cantidad: 1}}
 	if _, err := prod.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err == nil || !strings.Contains(Mensaje(err), "homologación") {
 		t.Fatalf("nota de producción sobre un CAE de prueba: %v", err)
 	}
 	// En homologación, sí (es todo de prueba).
-	if _, err := e.s.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err != nil {
+	if _, err := homo.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// Al revés: un CAE de producción no lleva notas de prueba.
 	e.exec(t, `UPDATE invoices SET cae_ambiente = 'produccion' WHERE id = $1`, id)
-	if _, err := e.s.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err == nil || !strings.Contains(Mensaje(err), "producción") {
+	if _, err := homo.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err == nil || !strings.Contains(Mensaje(err), "producción") {
 		t.Fatalf("nota de prueba sobre un CAE real: %v", err)
 	}
 }

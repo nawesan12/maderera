@@ -72,31 +72,35 @@ var ErrNoEsta = errors.New("no está")
 
 // Emisor es la fila de configuracion_fiscal, como la devolvía drizzle.
 type Emisor struct {
-	ID                     string     `json:"id"`
-	RazonSocial            string     `json:"razonSocial"`
-	NombreFantasia         *string    `json:"nombreFantasia"`
-	Cuit                   *string    `json:"cuit"`
-	CondicionIva           string     `json:"condicionIva"`
-	Domicilio              *string    `json:"domicilio"`
-	Localidad              string     `json:"localidad"`
-	CodigoPostal           *string    `json:"codigoPostal"`
-	Telefono               *string    `json:"telefono"`
-	Email                  *string    `json:"email"`
-	IngresosBrutos         *string    `json:"ingresosBrutos"`
-	RegimenIibb            string     `json:"regimenIibb"`
-	AlicuotaPercepcionIibb string     `json:"alicuotaPercepcionIibb"`
-	PercibeIibb            bool       `json:"percibeIibb"`
-	InicioActividades      *time.Time `json:"inicioActividades"`
-	Leyenda                *string    `json:"leyenda"`
-	UpdatedAt              time.Time  `json:"updatedAt"`
+	ID                     string  `json:"id"`
+	RazonSocial            string  `json:"razonSocial"`
+	NombreFantasia         *string `json:"nombreFantasia"`
+	Cuit                   *string `json:"cuit"`
+	CondicionIva           string  `json:"condicionIva"`
+	Domicilio              *string `json:"domicilio"`
+	Localidad              string  `json:"localidad"`
+	CodigoPostal           *string `json:"codigoPostal"`
+	Telefono               *string `json:"telefono"`
+	Email                  *string `json:"email"`
+	IngresosBrutos         *string `json:"ingresosBrutos"`
+	RegimenIibb            string  `json:"regimenIibb"`
+	AlicuotaPercepcionIibb string  `json:"alicuotaPercepcionIibb"`
+	// AlicuotaIibbSinPadron es para quien no figura en el padrón de ARBA
+	// (la decide el contador); nil, no se le percibe.
+	AlicuotaIibbSinPadron *string    `json:"alicuotaIibbSinPadron"`
+	PercibeIibb           bool       `json:"percibeIibb"`
+	InicioActividades     *time.Time `json:"inicioActividades"`
+	Leyenda               *string    `json:"leyenda"`
+	UpdatedAt             time.Time  `json:"updatedAt"`
 }
 
 const columnasEmisor = `id, razon_social, nombre_fantasia, cuit, condicion_iva::text, domicilio, localidad, codigo_postal, telefono,
-	email, ingresos_brutos, regimen_iibb::text, alicuota_percepcion_iibb::text, percibe_iibb, inicio_actividades, leyenda, updated_at`
+	email, ingresos_brutos, regimen_iibb::text, alicuota_percepcion_iibb::text, alicuota_iibb_sin_padron::text, percibe_iibb, inicio_actividades,
+	leyenda, updated_at`
 
 func (e *Emisor) campos() []any {
 	return []any{&e.ID, &e.RazonSocial, &e.NombreFantasia, &e.Cuit, &e.CondicionIva, &e.Domicilio, &e.Localidad, &e.CodigoPostal,
-		&e.Telefono, &e.Email, &e.IngresosBrutos, &e.RegimenIibb, &e.AlicuotaPercepcionIibb, &e.PercibeIibb, &e.InicioActividades,
+		&e.Telefono, &e.Email, &e.IngresosBrutos, &e.RegimenIibb, &e.AlicuotaPercepcionIibb, &e.AlicuotaIibbSinPadron, &e.PercibeIibb, &e.InicioActividades,
 		&e.Leyenda, &e.UpdatedAt}
 }
 

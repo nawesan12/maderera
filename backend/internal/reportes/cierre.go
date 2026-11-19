@@ -308,6 +308,24 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		out = append(out, PendienteDelCierre{"sin-cae", "Comprobantes sin CAE",
 			"Emitidos y sin autorizar: no entran al libro IVA hasta que ARCA los autorice.", sinCAE, "/admin/facturacion"})
 	}
+	// La percepción de IIBB sale del padrón de ARBA, que es mensual. Con la
+	// percepción encendida y el padrón vencido no se le percibe a nadie; y la
+	// que estaba encendida con la alícuota única de antes se apagó con la
+	// migración (00133) hasta que se cargue el padrón.
+	var percibe, apagada, vigente bool
+	if err := s.pool.QueryRow(ctx, `SELECT coalesce(bool_or(percibe_iibb), false), coalesce(bool_or(NOT percibe_iibb AND alicuota_percepcion_iibb > 0), false),
+		EXISTS (SELECT 1 FROM padron_iibb WHERE vigencia_desde <= $1::date AND vigencia_hasta >= $1::date)
+		FROM configuracion_fiscal`, s.ahora().In(Argentina).Format("2006-01-02")).Scan(&percibe, &apagada, &vigente); err != nil {
+		return nil, err
+	}
+	if percibe && !vigente {
+		out = append(out, PendienteDelCierre{"padron-iibb", "Padrón IIBB vencido",
+			"La percepción está encendida y no hay padrón de ARBA vigente: no se le percibe a nadie.", 1, "/admin/arca"})
+	}
+	if apagada {
+		out = append(out, PendienteDelCierre{"percepcion-apagada", "Percepción de IIBB apagada",
+			"Se apagó hasta cargar el padrón de ARBA: la alícuota única ya no se usa.", 1, "/admin/arca"})
+	}
 	mas, err := s.pendientesDeLosCircuitos(ctx, desde, hasta)
 	if err != nil {
 		return nil, err

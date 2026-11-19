@@ -171,6 +171,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"ListarDadosDeBaja":              "/admin/facturacion",            // GET /api/v1/admin/facturacion/dados-de-baja
 	"NotaDeCreditoParcial":           "/admin/facturacion",            // POST /api/v1/admin/facturacion/comprobantes/{id}/nota-de-credito
 	"NotaDeDebito":                   "/admin/facturacion",            // POST /api/v1/admin/facturacion/comprobantes/{id}/nota-de-debito
+	"PadronIibb":                     "admin",                         // GET /api/v1/admin/facturacion/padron-iibb
+	"ImportarPadronIibb":             "admin",                         // POST /api/v1/admin/facturacion/padron-iibb
 	"DatosDeDevolucion":              "/admin/facturacion",            // GET /api/v1/admin/facturacion/comprobantes/{id}/devolucion
 	"DevolucionParcial":              "/admin/facturacion",            // POST /api/v1/admin/facturacion/comprobantes/{id}/devolucion
 	"ListarComprobantes":             "/admin/facturacion",            // GET /api/v1/admin/facturacion/comprobantes

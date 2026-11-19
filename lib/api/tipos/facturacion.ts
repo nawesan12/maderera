@@ -290,6 +290,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/padron-iibb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description El padrón de ARBA de los clientes, vigente hoy o después. Solo el admin. */
+        get: operations["PadronIibb"];
+        put?: never;
+        /** @description Importa el archivo mensual de ARBA (el .txt o el .zip) y se queda con los CUIT de los clientes. Solo el admin. */
+        post: operations["ImportarPadronIibb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/facturacion/comprobantes/{id}/devolucion": {
         parameters: {
             query?: never;
@@ -611,7 +629,10 @@ export interface components {
             ingresosBrutos: string | null;
             /** @enum {string} */
             regimenIibb: "local" | "convenio_multilateral" | "exento" | "no_inscripto";
+            /** @description La alícuota única de antes; ya no se usa (la percepción sale del padrón) */
             alicuotaPercepcionIibb: string;
+            /** @description La alícuota para quien no figura en el padrón; nula */
+            alicuotaIibbSinPadron: string | null;
             percibeIibb: boolean;
             /** Format: date-time */
             inicioActividades: string | null;
@@ -1360,6 +1381,63 @@ export interface operations {
         };
         responses: {
             200: components["responses"]["Emitido"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    PadronIibb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las filas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        cuit: string;
+                        cliente: string | null;
+                        /** Format: double */
+                        alicuota: number;
+                        desde: string;
+                        hasta: string;
+                    }[];
+                };
+            };
+        };
+    };
+    ImportarPadronIibb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Lo que se cargó */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        leidos: number;
+                        cargados: number;
+                        desde: string;
+                        hasta: string;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };

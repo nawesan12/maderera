@@ -38,7 +38,8 @@ export interface DatosEmisor {
   email: string;
   ingresosBrutos: string;
   regimenIibb: string;
-  alicuotaPercepcionIibb: string;
+  /** Para quien no figura en el padrón de ARBA; vacío, no se le percibe. */
+  alicuotaIibbSinPadron: string;
   percibeIibb: boolean;
   inicioActividades: string;
   leyenda: string;
@@ -152,10 +153,12 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
             defaultValue={emisor.ingresosBrutos}
             tabular
           />
+          {/* La percepción sale del padrón de ARBA, cliente por cliente; esta
+              es la del que no figura, y la decide el contador. */}
           <Campo
-            id="alicuotaPercepcionIibb"
-            etiqueta="Alícuota de percepción (%)"
-            defaultValue={emisor.alicuotaPercepcionIibb}
+            id="alicuotaIibbSinPadron"
+            etiqueta="Sin padrón (%)"
+            defaultValue={emisor.alicuotaIibbSinPadron}
             tabular
           />
           <div className="md:col-span-2">

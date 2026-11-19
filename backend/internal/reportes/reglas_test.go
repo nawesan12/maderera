@@ -35,7 +35,13 @@ func TestGananciaSegunLasReglas(t *testing.T) {
 	s := Nuevo(pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	desde := time.Now().AddDate(0, 0, -1)
 	hasta := time.Now().AddDate(0, 0, 1)
-	dia := func(t time.Time) time.Time { return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC) }
+	// El día en UTC, como el current_date de la base de pruebas: con el de la
+	// máquina, entre las 21 y las 24 de Buenos Aires el gasto de hoy caía
+	// fuera del rango y la prueba fallaba según la hora.
+	dia := func(t time.Time) time.Time {
+		t = t.UTC()
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	}
 
 	r, err := s.ResultadoEntre(ctx, desde, hasta, dia(desde), dia(hasta))
 	if err != nil {

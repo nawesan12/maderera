@@ -38,7 +38,10 @@ func TestGananciaSegunLasReglas(t *testing.T) {
 	// El día en UTC, como current_date de la base de pruebas: con el día
 	// local, entre las 21 y las 24 de Argentina el gasto de «hoy» (ya mañana
 	// en UTC) quedaba afuera.
-	dia := func(t time.Time) time.Time { t = t.UTC(); return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC) }
+	dia := func(t time.Time) time.Time {
+		t = t.UTC()
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	}
 
 	r, err := s.ResultadoEntre(ctx, desde, hasta, dia(desde), dia(hasta))
 	if err != nil {

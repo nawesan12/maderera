@@ -324,6 +324,11 @@ export interface components {
             instrucciones: string | null;
         } | null;
         PanelDePagos: {
+            /**
+             * @description Si el checkout de Mercado Pago está abierto; sin el secreto del webhook queda apagado
+             * @enum {string}
+             */
+            mercadoPago: "encendido" | "sin_secreto" | "apagado" | "demo";
             pagos: components["schemas"]["CobroListado"][];
             resumen: components["schemas"]["ResumenPagos"];
             avisos: components["schemas"]["AvisoDePago"][];

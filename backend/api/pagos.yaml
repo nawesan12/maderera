@@ -345,8 +345,12 @@ components:
         instrucciones: { type: string, nullable: true }
     PanelDePagos:
       type: object
-      required: [pagos, resumen, avisos, datosBancarios]
+      required: [pagos, resumen, avisos, datosBancarios, mercadoPago]
       properties:
+        mercadoPago:
+          type: string
+          enum: [encendido, sin_secreto, apagado, demo]
+          description: Si el checkout de Mercado Pago está abierto; sin el secreto del webhook queda apagado
         pagos: { type: array, items: { $ref: "#/components/schemas/CobroListado" } }
         resumen: { $ref: "#/components/schemas/ResumenPagos" }
         avisos: { type: array, items: { $ref: "#/components/schemas/AvisoDePago" } }

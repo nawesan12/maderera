@@ -259,7 +259,8 @@ func (a *API) PanelDePagos(ctx context.Context, r pagosapi.PanelDePagosRequestOb
 	if err != nil {
 		return nil, err
 	}
-	return ok(map[string]any{"pagos": pagos, "resumen": resumen, "avisos": avisos, "datosBancarios": datos}), nil
+	return ok(map[string]any{"pagos": pagos, "resumen": resumen, "avisos": avisos, "datosBancarios": datos,
+		"mercadoPago": a.s.cfg.EstadoMercadoPago()}), nil
 }
 
 func (a *API) GuardarDatosBancarios(ctx context.Context, r pagosapi.GuardarDatosBancariosRequestObject) (pagosapi.GuardarDatosBancariosResponseObject, error) {

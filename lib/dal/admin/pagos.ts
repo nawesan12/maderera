@@ -55,5 +55,6 @@ export async function panelDePagos(periodo: string, estado?: string) {
       }),
     ),
     datosBancarios: (p.datosBancarios ?? null) as DatosBancariosDelPanel | null,
+    mercadoPago: p.mercadoPago,
   };
 }

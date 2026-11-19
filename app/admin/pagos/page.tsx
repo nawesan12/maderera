@@ -81,7 +81,7 @@ export default async function PagosPage({
   const periodo = resolverPeriodo(leerPeriodo(params.periodo));
   const pagina = leerPagina(params.pagina);
 
-  const [{ pagos, resumen, datosBancarios: banco }, cobranzas] = await Promise.all([
+  const [{ pagos, resumen, datosBancarios: banco, mercadoPago }, cobranzas] = await Promise.all([
     panelDePagos(periodo.clave),
     cobranzasDelPeriodo(periodo.clave, pagina, POR_PAGINA),
   ]);
@@ -98,6 +98,13 @@ export default async function PagosPage({
     <div className="space-y-6">
       <EncabezadoPanel titulo="Cobros" resumen={periodo.etiqueta}>
         <FiltroPeriodo actual={periodo.clave} />
+        {/* Sin token, o con token y sin el secreto del webhook (los avisos se
+            descartarían): el checkout no se ofrece. */}
+        {(mercadoPago === "apagado" || mercadoPago === "sin_secreto") && (
+          <span className="estado-problema inline-flex h-11 items-center rounded-full bg-[var(--estado-fondo)] px-4 text-base font-medium text-[var(--estado-tinta)]">
+            Mercado Pago apagado
+          </span>
+        )}
         <DatosBancarios datos={banco} />
         <Link
           href="/admin/facturacion"
@@ -108,7 +115,7 @@ export default async function PagosPage({
         </Link>
       </EncabezadoPanel>
 
-      {!resumen.enVivo && (
+      {mercadoPago === "demo" && !resumen.enVivo && (
         <section className="tarjeta-atencion flex items-center gap-3 p-4">
           <FlaskConical className="h-5 w-5 shrink-0 text-brand-orange" />
           <h2 className="text-base font-medium">

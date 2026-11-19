@@ -13,10 +13,16 @@ test("la portada muestra productos y categorías", async ({ page }) => {
 });
 
 test("buscar con y sin tilde encuentra lo mismo", async ({ page }) => {
+  // Solo los enlaces a la vista: la tarjeta se dibuja dos veces (la de público
+  // y la de quien mira, por streaming) y la segunda espera escondida hasta que
+  // React la cambia, así que contar todo el DOM daba 3 o 4 según el momento.
+  const fenolico = page.locator("a[href='/catalogo/fenolico']:visible");
   await page.goto("/catalogo?buscar=fenólico");
-  const conTilde = await page.locator("a[href='/catalogo/fenolico']").count();
+  await expect(fenolico.first()).toBeVisible();
+  const conTilde = await fenolico.count();
   await page.goto("/catalogo?buscar=FENOLICO");
-  const sinTilde = await page.locator("a[href='/catalogo/fenolico']").count();
+  await expect(fenolico.first()).toBeVisible();
+  const sinTilde = await fenolico.count();
   expect(conTilde).toBeGreaterThan(0);
   expect(sinTilde).toBe(conTilde);
 });

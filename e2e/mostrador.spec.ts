@@ -58,7 +58,8 @@ test("una venta en línea desde la pantalla, y su anulación", async ({ page }) 
   const numero = (await aviso.textContent())!.match(/PED-\d+/)![0];
 
   // Anularla desde la lista de ventas de hoy, que está en el panel de la caja.
-  await page.getByRole("button", { name: /^Caja/ }).click();
+  // Cerrada, la píldora de la barra dice «Abrir caja» (T4) y abre el mismo panel.
+  await page.getByRole("button", { name: /^(Caja|Abrir caja)/ }).click();
   await page.getByRole("button", { name: `Anular ${numero}` }).click();
   await page.getByPlaceholder("Se cargó la medida equivocada").fill("Prueba de punta a punta");
   await page.getByRole("button", { name: "Anular la venta" }).click();

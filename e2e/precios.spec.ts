@@ -14,16 +14,19 @@ test("un precio editado en la grilla queda guardado y en el historial", async ({
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   await page.goto("/admin/precios");
 
-  // Uno que ya tenga precio, para volver a dejarlo como estaba.
-  const editar = page.getByRole("button", { name: /^Editar precio, actualmente \$\s?[1-9]/ }).first();
-  const antes = (await editar.getAttribute("aria-label"))!.replace("Editar precio, actualmente ", "");
-  const numeroAntes = antes.replace(/[^\d]/g, "");
+  // Uno de la lista general que ya tenga precio, para volver a dejarlo como
+  // estaba. El rótulo nombra la lista (T7); la grilla y la lista del teléfono
+  // están las dos en la página y el CSS muestra una: se cuentan las visibles.
+  const editar = page.getByRole("button", { name: /^Editar precio de lista, actualmente \$\s?[1-9]/ }).locator("visible=true").first();
   // Se cuentan los que ya valen 12.345: una corrida cortada a la mitad puede
   // haber dejado uno, y la prueba no tiene que depender de eso.
-  const nuevo = page.getByRole("button", { name: /^Editar precio, actualmente \$\s12\.345$/ });
+  const nuevo = page.getByRole("button", { name: /^Editar precio de lista, actualmente \$\s12\.345$/ }).locator("visible=true");
   const yaHabia = await nuevo.count();
 
   await editar.click();
+  // El precio exacto, con centavos, sale del campo: el rótulo va redondeado.
+  const numeroAntes = await page.getByLabel("Nuevo precio").inputValue();
+  expect(Number(numeroAntes.replace(/\./g, "").replace(",", "."))).toBeGreaterThan(0);
   await page.getByLabel("Nuevo precio").fill("12345");
   await page.getByLabel("Nuevo precio").press("Enter");
   await expect(page.getByText("Precio actualizado.").first()).toBeVisible();

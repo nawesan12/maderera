@@ -67,9 +67,9 @@ test("un pago a proveedor se registra y se anula", async ({ page }) => {
   await page.goto("/admin/compras/pagos");
   // Sin proveedor elegido de entrada: el formulario arranca de a quién se le paga.
   await page.getByLabel("A quién se le paga").selectOption({ index: 1 });
-  // Las facturas del proveedor llegan y reinician el total: se espera.
+  // Las facturas del proveedor llegan después; el total escrito antes ya no
+  // se pierde cuando llegan (antes «Pagar» quedaba apagado).
   await expect(page.getByRole("heading", { name: "Qué facturas se pagan" })).toBeVisible();
-  await page.waitForLoadState("networkidle");
   await page.getByLabel("Total del pago").fill("1");
   await page.getByPlaceholder("N.º de operación").first().fill(`E2E-${Date.now()}`);
   await page.getByRole("button", { name: /^Pagar/ }).click();
@@ -82,6 +82,8 @@ test("un pago a proveedor se registra y se anula", async ({ page }) => {
   await page.getByRole("button", { name: /^Anular/ }).first().click();
   await page.getByRole("dialog").getByLabel("Motivo").fill("Prueba de punta a punta");
   await page.getByRole("dialog").getByRole("button", { name: "Anular el pago" }).click();
+  // El diálogo se cierra cuando Go contestó: recargar antes cortaba la anulación.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.reload();
   await expect(page.getByText("Prueba de punta a punta")).toBeVisible();
 });

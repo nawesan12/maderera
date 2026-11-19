@@ -20,7 +20,12 @@ test("el armador de /corte dibuja el plano mientras se tipea", async ({ page }) 
   test.skip(!(await largo.isVisible()), "no hay placas cortables en los datos de desarrollo");
   await largo.fill("900");
   await page.getByPlaceholder("400").first().fill("600");
-  await expect(page.locator("svg rect").first()).toBeVisible();
+  // En el teléfono el plano está detrás de «Plano», al lado de «Piezas». Y se
+  // mira el plano y no cualquier rect: el primero de la página es un ícono,
+  // que en el teléfono va escondido.
+  const verPlano = page.getByRole("group", { name: "Qué ver" }).getByRole("button", { name: /^Plano/ });
+  if (await verPlano.isVisible()) await verPlano.click();
+  await expect(page.getByRole("region", { name: "Plano" }).locator("svg rect").first()).toBeVisible();
 });
 
 test.describe("el panel", () => {

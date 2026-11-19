@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Download, FileText, ImageOff, Percent, Tags } from "lucide-react";
+import { CreditCard, Download, FileText, ImageOff, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { leerPagina, Paginador } from "@/components/admin/paginador";
 import { fechaHora, haceCuanto, moneda, plural } from "@/components/admin/formato";
@@ -116,7 +116,9 @@ export default async function PreciosPage({
           href="/admin/precios/formas-de-pago"
           className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium text-texto-2 transition-colors hover:bg-muted hover:text-foreground"
         >
-          <Percent className="h-5 w-5" />
+          {/* La tarjeta y no el %: el % es de «Ajustar precios», a dos
+              botones, y el mismo ícono para dos cosas hacía dudar. */}
+          <CreditCard className="h-5 w-5" />
           Formas de pago
         </Link>
         <Link

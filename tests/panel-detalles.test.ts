@@ -33,5 +33,8 @@ describe("detalles del panel", () => {
       const enlace = pagina.slice(pagina.indexOf(`href="/admin/precios/${ruta}"`));
       expect(enlace.slice(0, enlace.indexOf(">")), ruta).not.toMatch(/\bborder\b/);
     }
+    const formas = pagina.slice(pagina.indexOf('href="/admin/precios/formas-de-pago"'), pagina.indexOf("Formas de pago\n"));
+    expect(formas).toContain("<CreditCard");
+    expect(formas).not.toContain("<Percent");
   });
 });

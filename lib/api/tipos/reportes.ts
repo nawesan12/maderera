@@ -607,6 +607,8 @@ export interface components {
                     /** @description anuladas en que la mercadería no volvió */
                     sinDevolver: number;
                     retiros: components["schemas"]["Monto"];
+                    /** @description renglones de sus ventas cargados a mano, sin producto del catálogo */
+                    aMano: components["schemas"]["Monto"];
                 }[];
             };
             meDeben: {

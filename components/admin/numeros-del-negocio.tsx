@@ -242,6 +242,10 @@ function ElPersonal({ personas }: { personas: Persona[] }) {
                 (p.sinDevolver > 0 ? ` · ${p.sinDevolver} sin devolver la mercadería` : ""),
               problema: p.sinDevolver > 0,
             },
+            // Lo cargado a mano no tiene lista contra la cual medirse
+            // (comité final, M12): se ve, sin PIN por ahora.
+            p.aMano.cantidad > 0 &&
+              `${plural(p.aMano.cantidad, "renglón a mano", "renglones a mano")} · ${moneda.format(p.aMano.total)}`,
             p.firmo.cantidad > 0 &&
               `Firmó ${plural(p.firmo.cantidad, "autorización", "autorizaciones")} · ${moneda.format(p.firmo.total)}`,
             p.retiros.cantidad > 0 && {

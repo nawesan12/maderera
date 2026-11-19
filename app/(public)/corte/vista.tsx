@@ -762,6 +762,7 @@ function EditorDeGrupo({
                   <SelectorDeCanto
                     chico
                     rotulo
+                    conEstado
                     largo={Number(f.largo) || 0}
                     ancho={Number(f.ancho) || 0}
                     lados={f.lados}
@@ -816,6 +817,7 @@ function EditorDeGrupo({
             largo={medida.largo}
             ancho={Number(tiras.ancho) || 80}
             soloLargos
+            conEstado
             lados={{ ...tiras.lados, izquierda: false, derecha: false }}
             alCambiar={(lados) => alCambiar({ tiras: { ...tiras, lados: { ...lados, izquierda: false, derecha: false } } })}
           />
@@ -852,7 +854,9 @@ function ElegirTapacanto({
     <input
       value={grupo.canto}
       onChange={(e) => alCambiar({ canto: e.target.value, cantoId: null })}
-      placeholder="Tapacanto"
+      // El ejemplo vuelve (comité final): «Tapacanto» solo no decía qué
+      // escribir, y el color es lo que pregunta quien atiende.
+      placeholder="Tapacanto: blanco, o el de la placa"
       aria-label={tapacantos.length > 0 ? "Otro tapacanto" : undefined}
       className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
     />

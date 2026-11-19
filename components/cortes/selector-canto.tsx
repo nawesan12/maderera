@@ -1,5 +1,7 @@
 "use client";
 
+import { ladosDelCanto } from "@/lib/cortes/armador";
+
 /**
  * Qué lados de la pieza llevan tapacanto, tocándolos sobre el dibujo.
  *
@@ -41,6 +43,7 @@ export function SelectorDeCanto({
   soloLargos,
   chico,
   rotulo,
+  conEstado,
 }: {
   largo: number;
   ancho: number;
@@ -53,6 +56,12 @@ export function SelectorDeCanto({
   chico?: boolean;
   /** En el teléfono, «Canto» arriba, como las etiquetas chicas de las medidas. */
   rotulo?: boolean;
+  /**
+   * Debajo del dibujo, qué lleva: «Sin canto», «2 largos y 1 ancho». En el
+   * armador público el dibujo solo no decía nada a quien no sabe que los
+   * lados se tocan (comité final); el mostrador no lo necesita.
+   */
+  conEstado?: boolean;
 }) {
   // La pieza a escala, con un tope para que una tira de 2 m no quede como una
   // raya ni un cuadrado como una estampilla.
@@ -132,6 +141,18 @@ export function SelectorDeCanto({
         {!soloLargos &&
           lado("derecha", "en el ancho de la derecha", chico ? "bottom-3 right-0.5 top-3 w-5 pointer-coarse:right-0 pointer-coarse:w-6" : "bottom-3 right-0 top-3 w-6", false)}
       </div>
+      {conEstado && (
+        <span aria-hidden className="mt-0.5 text-xs text-texto-3">
+          {estadoDelCanto(lados, soloLargos)}
+        </span>
+      )}
     </div>
   );
+}
+
+/** «Sin canto», «1 largo», «2 largos y 2 anchos». */
+export function estadoDelCanto(lados: LadosConCanto, soloLargos?: boolean): string {
+  const { cantoLargo, cantoAncho } = contarCanto(lados);
+  const cuales = ladosDelCanto(cantoLargo, soloLargos ? 0 : cantoAncho);
+  return cuales ? cuales.charAt(0).toUpperCase() + cuales.slice(1) : "Sin canto";
 }

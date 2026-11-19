@@ -154,7 +154,7 @@ describe("el mensaje de WhatsApp", () => {
         "Tapacanto: PVC Blanco",
         "",
         "Placa: Fibrofácil 3 (media, al largo)",
-        "• 1 de 690 × 390 mm",
+        "• 1 de 690 × 390 mm, sin canto",
         "https://mjbj.test/corte/c/abc",
       ].join("\n"),
     );
@@ -217,5 +217,22 @@ describe("el selector de canto", () => {
     expect(fuente).not.toMatch(/"Ninguno"|"4 lados"|"2 lados"/);
     expect(fuente).toMatch(/pointer-coarse:pointer-events-none/);
     expect(fuente.match(/pointer-coarse:(h|w)-6/g)).toHaveLength(4);
+  });
+});
+
+describe("el canto en el armador público (comité final)", () => {
+  it("el rótulo dice qué lleva, o «Sin canto»", async () => {
+    const { estadoDelCanto, SIN_CANTO } = await import("@/components/cortes/selector-canto");
+    expect(estadoDelCanto(SIN_CANTO)).toBe("Sin canto");
+    expect(estadoDelCanto({ ...SIN_CANTO, arriba: true })).toBe("1 largo");
+    expect(estadoDelCanto({ arriba: true, abajo: true, izquierda: true, derecha: false })).toBe("2 largos y 1 ancho");
+    expect(estadoDelCanto({ arriba: true, abajo: false, izquierda: true, derecha: true }, true)).toBe("1 largo");
+  });
+
+  it("la planilla y las tiras lo muestran, y el tapacanto trae el ejemplo", async () => {
+    const { readFileSync } = await import("node:fs");
+    const vista = readFileSync(new URL("../app/(public)/corte/vista.tsx", import.meta.url), "utf8");
+    expect(vista.match(/<SelectorDeCanto[\s\S]*?conEstado/g)).toHaveLength(2);
+    expect(vista).toContain('placeholder="Tapacanto: blanco, o el de la placa"');
   });
 });

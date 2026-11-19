@@ -185,17 +185,29 @@ export interface GrupoDelMensaje {
 }
 
 /**
+ * «1 largo», «2 largos y 2 anchos», o vacío si no lleva canto. Lo usan el
+ * mensaje y el rótulo debajo del dibujo del canto.
+ */
+export function ladosDelCanto(cantoLargo: number, cantoAncho: number): string {
+  return [
+    cantoLargo ? `${cantoLargo} ${cantoLargo === 1 ? "largo" : "largos"}` : "",
+    cantoAncho ? `${cantoAncho} ${cantoAncho === 1 ? "ancho" : "anchos"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" y ");
+}
+
+/**
  * El pedido del corte, escrito para WhatsApp como lo anota quien atiende:
  * cada placa con sus medidas y su canto, y al final el enlace al plano. Con
  * una sola placa queda igual que antes de los grupos.
  */
 export function textoDelPedido(grupos: GrupoDelMensaje[], enlace: string): string {
+  // «Sin canto» dicho (comité final): callado, quien atiende no sabía si la
+  // pieza no llevaba o si se habían olvidado de marcarlo.
   const lados = (p: PiezaDelPedido) => {
-    const partes = [
-      p.cantoLargo ? `${p.cantoLargo} ${p.cantoLargo === 1 ? "largo" : "largos"}` : "",
-      p.cantoAncho ? `${p.cantoAncho} ${p.cantoAncho === 1 ? "ancho" : "anchos"}` : "",
-    ].filter(Boolean);
-    return partes.length ? `, canto en ${partes.join(" y ")}` : "";
+    const cuales = ladosDelCanto(p.cantoLargo, p.cantoAncho);
+    return cuales ? `, canto en ${cuales}` : ", sin canto";
   };
   const bloques = grupos.map((g) =>
     [

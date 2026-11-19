@@ -223,7 +223,10 @@ export function FormularioPago({
       // Si se llegó desde una factura, viene tildada por su saldo entero.
       const objetivo = filas.find((f) => f.id === facturaInicial);
       setAplicado(objetivo ? { [objetivo.id]: String(objetivo.saldo) } : {});
-      setTotalTocado(null);
+      // El total que ya se escribió no se borra: si las facturas tardaban en
+      // llegar, el importe tipeado desaparecía y «Pagar» quedaba apagado sin
+      // decir por qué. Cambiar de proveedor ya lo limpia (`elegirProveedor`).
+      if (objetivo) setTotalTocado(null);
     });
     return () => {
       vivo = false;

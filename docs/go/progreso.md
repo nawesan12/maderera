@@ -2146,3 +2146,34 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - Quedó sin tocar, esperando a Nahuel: el campo «Sierra» del corte del
   mostrador (pedido suyo del 30/9). La revisión propone sacarlo y corregir el
   disco desde `/admin/cortes`.
+
+## Comité final, carril G (19/11): rendimiento, taller, remitos y sitio público
+
+- El padrón de ARBA abre su transacción con `SET LOCAL statement_timeout =
+  '20min'`: con los 30 s del pool principal (T8) moría a la mitad de la
+  subida. El 57014 ya no dice «otra operación en curso» (sigue siendo 503).
+  Cualquier operación nueva que lea un archivo grande dentro de una
+  transacción necesita lo mismo.
+- Migraciones del carril: 00180 (Ferretería y Cubiertas sin foto de banco) y
+  00181 (fuera la nota «Cuenta creada con cliente:create.»). Las dos son
+  datos y no esperan nada antes del despliegue.
+- Las tablas apilables rotulan con `requestIdleCallback` después de la carga:
+  escribir `data-label` antes de que React hidratara daba los avisos de
+  hidratación.
+
+### Decisiones a confirmar
+
+- **Dónde se corta (decisión 7 del dueño, hallazgo 46)** — lo confirma la
+  clienta. Default aplicado: se corta en el aserradero y nada del sitio
+  ofrece cortar en Casa Central. El chip de Casa Central del armador público
+  no aparece, el subtítulo sale de la sucursal elegida y los servicios de
+  cada local leen de `DONDE_SE_CORTA` (`lib/sucursales.ts`). Si la respuesta
+  es otra, se cambia `SUCURSALES_QUE_CORTAN` y nada más.
+
+### Pendiente
+
+- **«Sucursales como lista» (hallazgo 35)**: no se hizo. La página de
+  sucursales sigue con una tarjeta grande por local; falta pasarla a lista.
+- Las tarjetas de categoría que dicen «3 productos»: la cuenta está bien
+  (los productos activos, la misma condición del listado). Es la base local
+  la que tiene tres por rubro.

@@ -84,7 +84,7 @@ describe("el Enter del buscador", () => {
   });
 
   it("Enter solo agrega y no cobra", () => {
-    expect(enterDelBuscador({ ...base, texto: "pino", hayResultado: true })).toEqual({
+    expect(enterDelBuscador({ ...base, texto: "pino", hayResultado: true, resuelto: true })).toEqual({
       que: "agregar",
       media: null,
       yCobrar: false,
@@ -92,22 +92,22 @@ describe("el Enter del buscador", () => {
   });
 
   it("una placa que se corta abre el corte y no cobra, aunque el diálogo no esté montado", () => {
-    expect(enterDelBuscador({ ...base, ctrl: true, texto: "mdf", hayResultado: true, seCorta: true })).toEqual({
+    expect(enterDelBuscador({ ...base, ctrl: true, texto: "mdf", hayResultado: true, seCorta: true, resuelto: true })).toEqual({
       que: "cortar",
     });
   });
 
   it("Mayús y Alt son media placa y nunca cobran, aunque venga Ctrl", () => {
-    expect(enterDelBuscador({ ...base, shift: true, texto: "mdf", hayResultado: true })).toMatchObject({
+    expect(enterDelBuscador({ ...base, shift: true, texto: "mdf", hayResultado: true, resuelto: true })).toMatchObject({
       media: "media_largo",
       yCobrar: false,
     });
-    expect(enterDelBuscador({ ...base, alt: true, texto: "mdf", hayResultado: true })).toMatchObject({
+    expect(enterDelBuscador({ ...base, alt: true, texto: "mdf", hayResultado: true, resuelto: true })).toMatchObject({
       media: "media_ancho",
       yCobrar: false,
     });
     expect(
-      enterDelBuscador({ ...base, ctrl: true, shift: true, texto: "mdf", hayResultado: true, seCorta: true }),
+      enterDelBuscador({ ...base, ctrl: true, shift: true, texto: "mdf", hayResultado: true, seCorta: true, resuelto: true }),
     ).toMatchObject({ que: "agregar", media: "media_largo", yCobrar: false });
   });
 
@@ -119,5 +119,15 @@ describe("el Enter del buscador", () => {
     expect(enterDelBuscador({ ...base, ctrl: true, texto: "pi" })).toEqual({ que: "esperar" });
     // «3*» todavía no es una búsqueda, pero ya hay algo escrito.
     expect(enterDelBuscador({ ...base, ctrl: true, texto: "3*" })).toEqual({ que: "esperar" });
+  });
+
+  it("con la lista de la búsqueda anterior a la vista, ni agrega ni cobra", () => {
+    // Sin copia local: «mdf 18» tipeado, la lista de «mdf 1» todavía en
+    // pantalla. Ctrl+Enter metía el MDF de 15 y cobraba (comité de T4).
+    expect(enterDelBuscador({ ...base, ctrl: true, texto: "mdf 18", hayResultado: true })).toEqual({ que: "esperar" });
+    expect(enterDelBuscador({ ...base, texto: "mdf 18", hayResultado: true })).toEqual({ que: "esperar" });
+    expect(enterDelBuscador({ ...base, ctrl: true, texto: "mdf 18", hayResultado: true, seCorta: true })).toEqual({
+      que: "esperar",
+    });
   });
 });

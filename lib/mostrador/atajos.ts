@@ -166,8 +166,14 @@ export type EnterDelBuscador =
  * - Ctrl+Enter sobre una placa que se corta abre el corte y no cobra: el
  *   corte todavía no está armado.
  * - Mayús o Alt + Enter son media placa y nunca cobran, aunque venga Ctrl.
- * - Con texto que no encontró nada, abre la carga a mano; si todavía está
- *   buscando, espera. Ninguna de las dos cobra.
+ * - Con texto que no encontró nada, abre la carga a mano. Ninguna de las
+ *   dos cobra.
+ * - Mientras no se sabe qué hay para **este** texto, espera, aunque haya un
+ *   resultado a la vista: sin copia local, la lista es la de la búsqueda
+ *   anterior durante los 180 ms y la ida al servidor. Con «mdf 18» tipeado y
+ *   la lista de «mdf 1» todavía en pantalla, Ctrl+Enter metía el MDF de 15 y
+ *   cobraba e imprimía en el acto (comité de T4); y un lector de códigos, que
+ *   tipea y aprieta Enter en el mismo instante, agregaba el de antes.
  * - Con el buscador vacío la tecla sigue de largo y cobra: es el caso de
  *   todos los días, porque terminada cada línea el foco vuelve acá.
  */
@@ -181,14 +187,18 @@ export function enterDelBuscador(t: {
   hayResultado: boolean;
   /** Si ese resultado es una placa con medidas y se puede cortar ahora. */
   seCorta: boolean;
-  /** Si ya se sabe qué hay para este texto. */
+  /**
+   * Si ya se sabe qué hay para este texto: con la copia local, siempre; sin
+   * ella, cuando volvió la búsqueda de este mismo texto.
+   */
   resuelto: boolean;
 }): EnterDelBuscador {
   if (t.texto.trim() === "") return { que: "soltar" };
+  if (!t.resuelto) return { que: "esperar" };
   if (t.hayResultado) {
     if (t.ctrl && !t.shift && !t.alt && t.seCorta) return { que: "cortar" };
     const media = t.shift ? "media_largo" : t.alt ? "media_ancho" : null;
     return { que: "agregar", media, yCobrar: t.ctrl && !t.shift && !t.alt };
   }
-  return t.resuelto ? { que: "aMano" } : { que: "esperar" };
+  return { que: "aMano" };
 }

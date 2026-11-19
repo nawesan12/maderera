@@ -10,15 +10,24 @@
  * vence mañana: la misma cifra de 44 px, en la misma hoja. Qué es urgente lo
  * decide Go (`backend/internal/reportes/inicio.go`), con el mismo criterio
  * para el aviso diario. El orden de cada grupo se conserva.
+ *
+ * `omitir` son las claves que la pantalla ya muestra de otra forma: el
+ * depósito tiene la cola y lo que hay para preparar en listas, y la cifra
+ * arriba repetía lo mismo, en grande, medio scroll antes del primer botón.
  */
-export function partirPendientes<T extends { urgente?: boolean }>(
+export function partirPendientes<T extends { clave: string; urgente?: boolean }>(
   pendientes: T[],
+  omitir: readonly string[] = [],
 ): { paraHoy: T[]; pendientes: T[] } {
+  const quedan = pendientes.filter((p) => !omitir.includes(p.clave));
   return {
-    paraHoy: pendientes.filter((p) => p.urgente),
-    pendientes: pendientes.filter((p) => !p.urgente),
+    paraHoy: quedan.filter((p) => p.urgente),
+    pendientes: quedan.filter((p) => !p.urgente),
   };
 }
+
+/** Lo que el depósito ve en sus listas de Inicio, y no en «Para hoy». */
+export const CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO = ["cortes", "preparar"] as const;
 
 /**
  * Cuántos de los meses del gráfico tienen ventas (en alguna sucursal).

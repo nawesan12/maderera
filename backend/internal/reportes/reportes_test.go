@@ -610,6 +610,11 @@ func TestLoQueVenceEn48HorasEsDeHoy(t *testing.T) {
 	quiere := map[string]bool{"cheques-48h": true, "cheques": false, "compras-48h": true, "compras": false}
 	vistos := map[string]bool{}
 	for _, p := range ps {
+		// Lo que vence pronto es de hoy, pero no está vencido: no va en rojo.
+		if p.Vencido && p.Clave != "cheques-vencidos" && p.Clave != "compras-vencidas" && p.Clave != "pedidos-atrasados" &&
+			p.Clave != "presupuestos-sin-responder" && p.Clave != "deuda-vencida" {
+			t.Errorf("%s marcado vencido", p.Clave)
+		}
 		if u, ok := quiere[p.Clave]; ok {
 			vistos[p.Clave] = true
 			if p.Urgente != u || p.Cantidad != 1 {

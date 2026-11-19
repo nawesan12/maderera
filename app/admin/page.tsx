@@ -16,7 +16,7 @@ import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { trabajoPendiente } from "@/lib/dal/admin/pendientes";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
-import { partirPendientes } from "@/lib/inicio";
+import { CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO, partirPendientes } from "@/lib/inicio";
 import {
   InicioDelDeposito,
   InicioDelDepositoCargando,
@@ -92,7 +92,10 @@ export default async function ResumenPage({
    * vendedor y el depósito los veían al abrir el panel.
    */
   const veLosNumeros = staffRole === "admin";
-  const { paraHoy, pendientes: sinApuro } = partirPendientes(pendientes);
+  const { paraHoy, pendientes: sinApuro } = partirPendientes(
+    pendientes,
+    staffRole === "deposito" ? CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO : [],
+  );
 
   return (
     <div className="space-y-8">
@@ -101,20 +104,22 @@ export default async function ResumenPage({
       {paraHoy.length > 0 && (
         <section>
           <Encabezado titulo="Para hoy" />
-          {/* Una hoja con los números en columnas, no una caja por número: lo
-              urgente se distingue por el color de la cifra. */}
+          {/* Una hoja con los números en columnas, no una caja por número.
+              Todo lo de acá es de hoy; el rojo queda para lo vencido (Go lo
+              marca), así sigue diciendo algo: con «3 pedidos por preparar»
+              también en rojo, la hoja era una alarma todas las mañanas. */}
           <div className="tarjeta grid divide-y divide-linea-suave sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 [&>*]:sm:border-l [&>*]:sm:border-linea-suave [&>*:first-child]:sm:border-l-0">
             {paraHoy.map((p) => (
               <Link
                 key={p.clave}
                 href={p.href}
                 className={`group flex flex-col gap-2 px-6 py-5 transition-colors hover:bg-hundida/60 ${
-                  p.urgente ? "estado-problema" : ""
+                  p.vencido ? "estado-problema" : ""
                 }`}
               >
                 <span
                   className={`tabular text-[44px] font-extrabold leading-none tracking-[-0.04em] ${
-                    p.urgente ? "text-[var(--estado-tinta)]" : ""
+                    p.vencido ? "text-[var(--estado-tinta)]" : ""
                   }`}
                 >
                   {p.cantidad}

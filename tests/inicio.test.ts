@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mesesConVentas, paraPreparar, partirPendientes } from "@/lib/inicio";
+import {
+  CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO,
+  mesesConVentas,
+  paraPreparar,
+  partirPendientes,
+} from "@/lib/inicio";
 
 // Hallazgo 31 (T7): la primera pantalla del panel.
 
@@ -13,6 +18,20 @@ describe("partirPendientes", () => {
     ]);
     expect(paraHoy.map((p) => p.clave)).toEqual(["preparar", "cheques-48h"]);
     expect(pendientes.map((p) => p.clave)).toEqual(["reponer", "catalogo-foto"]);
+  });
+
+  it("saca lo que la pantalla ya muestra en una lista", () => {
+    const { paraHoy, pendientes } = partirPendientes(
+      [
+        { clave: "preparar", urgente: true },
+        { clave: "cortes", urgente: true },
+        { clave: "pedidos-atrasados", urgente: true },
+        { clave: "cortes-sin-retirar" },
+      ],
+      CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO,
+    );
+    expect(paraHoy.map((p) => p.clave)).toEqual(["pedidos-atrasados"]);
+    expect(pendientes.map((p) => p.clave)).toEqual(["cortes-sin-retirar"]);
   });
 
   it("sin urgentes, «Para hoy» queda vacío", () => {

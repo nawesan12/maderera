@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Flame } from "lucide-react";
 import { AccionesCorte } from "@/app/admin/cortes/acciones";
 import { AccionesPedido } from "@/app/admin/pedidos/acciones";
 import { Vacio } from "@/components/admin/vacio";
@@ -20,18 +21,46 @@ const TOPE = 5;
  * empezar un corte. Son las mismas llamadas de Cortes y Pedidos, que el
  * depósito ya tiene: no hay ruta nueva. **No lleva importes**: el renglón
  * del pedido se arma sin el total (`paraPreparar`).
+ *
+ * **La cola tiene orden y la seccionadora es una sola.** Arriba va lo que
+ * está en la máquina, con su «Marcar terminado»: sin eso, el corte empezado
+ * desaparecía de la lista y para terminarlo había que ir a Cortes. «Empezar»
+ * va solo en el primero y solo con la máquina libre; con un botón naranja en
+ * cada renglón, la pantalla invitaba a empezar el tercero antes que el
+ * primero. El urgente lleva la llama, como en la tarjeta del tablero.
  */
 export async function InicioDelDeposito() {
-  const [cola, pedidos] = await Promise.all([
+  const [enLaMaquina, cola, pedidos] = await Promise.all([
+    listarCortes({ estado: "en-proceso" }),
     listarCortes({ estado: "en-cola" }),
     listarPedidos({ vista: "tablero" }),
   ]);
   const preparar = paraPreparar(pedidos, TOPE);
+  const maquinaLibre = enLaMaquina.length === 0;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <RefrescarSolo />
       <Lista titulo="La cola" total={cola.length} href="/admin/cortes">
+        {enLaMaquina.map((c) => (
+          <div
+            key={c.id}
+            className="flex items-center gap-3 border-b border-linea-suave bg-hundida/60 px-4 py-3"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-acento-texto">En la máquina</p>
+              <Link
+                href={`/admin/cortes/${c.id}`}
+                className="block truncate text-base font-semibold hover:underline"
+              >
+                {c.cliente}
+              </Link>
+            </div>
+            <div className="shrink-0">
+              <AccionesCorte id={c.id} estado={c.estado} urgente={c.urgente} soloMaquina />
+            </div>
+          </div>
+        ))}
         {cola.length === 0 ? (
           <Vacio titulo="Nada en la cola" />
         ) : (
@@ -45,23 +74,33 @@ export async function InicioDelDeposito() {
                   {i + 1}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <Link
-                    href={`/admin/cortes/${c.id}`}
-                    className="block truncate text-base font-semibold hover:underline"
-                  >
-                    {c.cliente}
-                  </Link>
+                  <p className="flex min-w-0 items-center gap-1.5">
+                    {c.urgente && (
+                      <Flame
+                        className="h-4 w-4 shrink-0 text-brand-orange"
+                        aria-label="Urgente"
+                      />
+                    )}
+                    <Link
+                      href={`/admin/cortes/${c.id}`}
+                      className="truncate text-base font-semibold hover:underline"
+                    >
+                      {c.cliente}
+                    </Link>
+                  </p>
                   <p className="truncate text-sm text-texto-2">
                     <span className="tabular whitespace-nowrap">
                       {c.placas} {c.placas === 1 ? "placa" : "placas"} ·{" "}
-                      {formatearDecimal(c.metrosCuadrados, 2, { fijo: true })} m²
+                      {formatearDecimal(c.metrosCuadrados)} m²
                     </span>{" "}
                     · {c.material}
                   </p>
                 </div>
-                <div className="shrink-0">
-                  <AccionesCorte id={c.id} estado={c.estado} urgente={c.urgente} soloMaquina />
-                </div>
+                {i === 0 && maquinaLibre && (
+                  <div className="shrink-0">
+                    <AccionesCorte id={c.id} estado={c.estado} urgente={c.urgente} soloMaquina />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -122,7 +161,12 @@ function Lista({
   return (
     <section>
       <div className="mb-2.5 flex items-baseline justify-between gap-3">
-        <h2 className="text-[17px] font-bold tracking-tight">{titulo}</h2>
+        {/* La cifra va acá y no en «Para hoy»: la misma cuenta dos veces,
+            una arriba de la otra, era medio scroll de más en el teléfono. */}
+        <h2 className="text-[17px] font-bold tracking-tight">
+          {titulo}
+          {total > 0 && <span className="tabular font-semibold text-texto-2"> · {total}</span>}
+        </h2>
         {/* Con más de cinco se dice cuántos son: si no, parece que hay cinco. */}
         {total > TOPE && (
           <Link

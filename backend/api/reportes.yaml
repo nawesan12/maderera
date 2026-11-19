@@ -416,6 +416,7 @@ components:
         detalle: { type: string }
         href: { type: string }
         urgente: { type: boolean }
+        vencido: { type: boolean }
     Monto:
       type: object
       required: [total, cantidad]

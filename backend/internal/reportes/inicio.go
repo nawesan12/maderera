@@ -235,6 +235,12 @@ type Pendiente struct {
 	Detalle  *string `json:"detalle,omitempty"`
 	Href     string  `json:"href"`
 	Urgente  bool    `json:"urgente,omitempty"`
+	// Vencido: lo que ya pasó de fecha o se está perdiendo (un cheque o una
+	// factura vencidos, deuda vencida, un pedido atrasado, un presupuesto sin
+	// respuesta en plazo). Es lo único que «Para hoy» pinta de rojo: preparar
+	// o cortar es el trabajo de cualquier mañana, y una pared roja todos los
+	// días deja de mirarse.
+	Vencido bool `json:"vencido,omitempty"`
 }
 
 func detalle(s string) *string { return &s }
@@ -313,7 +319,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	agregar(c.cortes, Pendiente{Clave: "cortes", Texto: uno(c.cortes, "corte en la cola", "cortes en la cola"),
 		Detalle: detalle("Esperando la seccionadora"), Href: "/admin/cortes", Urgente: true})
 	agregar(c.chequesVencidos, Pendiente{Clave: "cheques-vencidos", Texto: uno(c.chequesVencidos, "cheque pasado de fecha", "cheques pasados de fecha"),
-		Detalle: detalle("Venció y sigue en cartera"), Href: "/admin/cheques", Urgente: true})
+		Detalle: detalle("Venció y sigue en cartera"), Href: "/admin/cheques", Urgente: true, Vencido: true})
 	// Lo que vence en las próximas 48 horas es de hoy: un cheque que vence
 	// mañana se deposita o se cubre hoy, no «esta semana».
 	agregar(c.chequesEn48, Pendiente{Clave: "cheques-48h", Texto: uno(c.chequesEn48, "cheque vence en 48 horas", "cheques vencen en 48 horas"),
@@ -321,7 +327,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	agregar(c.chequesPorVencer, Pendiente{Clave: "cheques", Texto: uno(c.chequesPorVencer, "cheque vence esta semana", "cheques vencen esta semana"),
 		Detalle: detalle("Los recibidos hay que depositarlos; los entregados, cubrirlos"), Href: "/admin/cheques"})
 	agregar(c.comprasVencidas, Pendiente{Clave: "compras-vencidas", Texto: uno(c.comprasVencidas, "factura de compra vencida", "facturas de compra vencidas"),
-		Detalle: detalle("Pasó el vencimiento y sigue sin pagarse del todo"), Href: "/admin/compras/facturas", Urgente: true})
+		Detalle: detalle("Pasó el vencimiento y sigue sin pagarse del todo"), Href: "/admin/compras/facturas", Urgente: true, Vencido: true})
 	agregar(c.comprasEn48, Pendiente{Clave: "compras-48h", Texto: uno(c.comprasEn48, "factura de compra vence en 48 horas", "facturas de compra vencen en 48 horas"),
 		Href: "/admin/compras/facturas", Urgente: true})
 	agregar(c.comprasPorVencer, Pendiente{Clave: "compras", Texto: uno(c.comprasPorVencer, "factura de compra vence esta semana", "facturas de compra vencen esta semana"),
@@ -338,13 +344,13 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Href: "/admin/whatsapp?filtro=sin-leer", Urgente: true})
 	agregar(o.presupuestosVencidos, Pendiente{Clave: "presupuestos-sin-responder", Texto: uno(o.presupuestosVencidos,
 		"presupuesto pasado del plazo de respuesta", "presupuestos pasados del plazo de respuesta"),
-		Href: "/admin/presupuestos?estado=abiertos", Urgente: true})
+		Href: "/admin/presupuestos?estado=abiertos", Urgente: true, Vencido: true})
 	agregar(o.pedidosAtrasados, Pendiente{Clave: "pedidos-atrasados", Texto: uno(o.pedidosAtrasados, "pedido atrasado", "pedidos atrasados"),
-		Href: "/admin/pedidos", Urgente: true})
+		Href: "/admin/pedidos", Urgente: true, Vencido: true})
 	agregar(o.cortesSinRetirar, Pendiente{Clave: "cortes-sin-retirar", Texto: uno(o.cortesSinRetirar, "corte terminado sin retirar", "cortes terminados sin retirar"),
 		Href: "/admin/cortes"})
 	agregar(o.clientesConVencido, Pendiente{Clave: "deuda-vencida", Texto: uno(o.clientesConVencido, "cliente con deuda vencida", "clientes con deuda vencida"),
-		Href: "/admin/clientes", Urgente: true})
+		Href: "/admin/clientes", Urgente: true, Vencido: true})
 	agregar(o.sinPrecio, Pendiente{Clave: "catalogo-precio", Texto: uno(o.sinPrecio, "medida sin precio", "medidas sin precio"), Href: "/admin/precios"})
 	agregar(o.sinFoto, Pendiente{Clave: "catalogo-foto", Texto: uno(o.sinFoto, "medida sin foto", "medidas sin foto"), Href: "/admin/productos"})
 	agregar(o.sinStock, Pendiente{Clave: "catalogo-stock", Texto: uno(o.sinStock, "medida sin stock", "medidas sin stock"), Href: "/admin/stock"})

@@ -20,8 +20,10 @@ export interface Pendiente {
   /** Por qué importa hoy. Una línea. */
   detalle?: string;
   href: string;
-  /** Lo que no puede esperar se pinta; el resto se lee en gris. */
+  /** Lo que no puede esperar va en «Para hoy»; el resto, en «Pendientes». */
   urgente?: boolean;
+  /** Ya pasó de fecha o se pierde: lo único que «Para hoy» pinta de rojo. */
+  vencido?: boolean;
 }
 
 /** Lo pendiente del rol de la sesión. */

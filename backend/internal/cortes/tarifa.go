@@ -151,6 +151,24 @@ type MedidaDePlaca struct {
 
 func verdadero(p *float64) bool { return p != nil && *p != 0 && !math.IsNaN(*p) }
 
+// MotorMediaConSierra es el motor desde el que la media placa descuenta el
+// disco. Un trabajo guardado se arma de nuevo cada vez que se lee: si la
+// mitad cambiara para todos, uno en la máquina abriría con otro plano, uno
+// cortado mostraría una hoja que no fue, y uno vendido con N medias placas
+// podría pedir N+1. Así que la cuenta nueva vale para lo que nace con ella
+// (las tres altas guardan este motor) y lo de antes queda como nació, igual
+// que el motor de búsqueda (motor 2).
+const MotorMediaConSierra = 3
+
+// SierraDeLaMitad es el disco que se le descuenta a la media placa de un
+// trabajo guardado: el suyo desde el motor 3, ninguno antes.
+func SierraDeLaMitad(motor int32, sierra float64) float64 {
+	if motor < MotorMediaConSierra {
+		return 0
+	}
+	return sierra
+}
+
 // ResolverMedida es medidaDePlaca: lo cargado a mano, la variante o la de
 // plaza, y encima la mitad.
 //

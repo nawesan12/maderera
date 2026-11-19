@@ -458,12 +458,12 @@ func abrirCorte(ctx context.Context, tx pgx.Tx, c cortes.CorteResuelto, pedido s
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO cutting_orders (numero, customer_id, order_id, contacto_nombre, branch_id, variant_id, material_descripcion,
 		                            placa_largo_mm, placa_ancho_mm, mitad, placas, ancho_sierra_mm, pasadas, canto_descripcion,
-		                            estado, notas, created_by_user_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12::numeric, $13, $14, 'en-cola', 'Pedido desde el sitio', $15)
+		                            estado, notas, created_by_user_id, motor_plano)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12::numeric, $13, $14, 'en-cola', 'Pedido desde el sitio', $15, $16)
 		RETURNING id`,
 		numero, cliente, pedido, d.Nombre, d.SucursalID, c.Placa.VariantID, c.Placa.Descripcion, entero(c.PlacaLargoMm),
 		entero(c.PlacaAnchoMm), c.Mitad, int32(c.Placas), jsmath.Texto(c.AnchoSierraMm), int32(c.Pasadas), c.CantoDescripcion,
-		usuario).Scan(&id); err != nil {
+		usuario, int32(cortes.MotorMediaConSierra)).Scan(&id); err != nil {
 		return err
 	}
 	for i, p := range c.Piezas {

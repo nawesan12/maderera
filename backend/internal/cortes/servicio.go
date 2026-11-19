@@ -297,8 +297,9 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		}
 		c.PrecioPlaca = precio
 	}
-	// Con la sierra del trabajo: la media placa sale de partirla con ese disco.
-	c.Medida = ResolverMedida(c.PropiaLargoMm, c.PropiaAnchoMm, c.VarianteLargoMm, c.VarianteAnchoMm, c.Mitad, c.AnchoSierraMm)
+	// Con la sierra del trabajo, si nació con el motor que la descuenta: la
+	// media placa de uno viejo es la que se le vendió.
+	c.Medida = ResolverMedida(c.PropiaLargoMm, c.PropiaAnchoMm, c.VarianteLargoMm, c.VarianteAnchoMm, c.Mitad, SierraDeLaMitad(c.MotorPlano, c.AnchoSierraMm))
 	return &c, nil
 }
 
@@ -595,16 +596,17 @@ func (s *Servicio) CambiarSierra(ctx context.Context, ses *auth.Sesion, id, valo
 		return "", error422("Ese trabajo ya pasó por la máquina: su plano es el que se cortó.")
 	}
 	anterior := c.AnchoSierraMm
-	c.AnchoSierraMm, c.MotorPlano = *ancho, 2
-	// La media placa depende del disco: con otro ancho, otra mitad.
+	// Cambiar el disco rehace el plano con el motor de hoy, y el de hoy
+	// descuenta el disco de la media placa: con otro ancho, otra mitad.
+	c.AnchoSierraMm, c.MotorPlano = *ancho, MotorMediaConSierra
 	c.Medida = ResolverMedida(c.PropiaLargoMm, c.PropiaAnchoMm, c.VarianteLargoMm, c.VarianteAnchoMm, c.Mitad, c.AnchoSierraMm)
 	if UnidadesDelCorte(c) > TopeDeUnidades {
 		return "", error422(msgDemasiadasPiezas)
 	}
 	plano := PlanoDelCorte(c)
 	if _, err := s.pool.Exec(ctx, `
-		UPDATE cutting_orders SET ancho_sierra_mm = $2, motor_plano = 2, placas = $3, pasadas = $4, updated_at = now()
-		WHERE id = $1`, id, jsmath.Num(*ancho), len(plano.Placas), plano.PasadasCobrables); err != nil {
+		UPDATE cutting_orders SET ancho_sierra_mm = $2, motor_plano = $5, placas = $3, pasadas = $4, updated_at = now()
+		WHERE id = $1`, id, jsmath.Num(*ancho), len(plano.Placas), plano.PasadasCobrables, int32(MotorMediaConSierra)); err != nil {
 		return "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "corte", id,

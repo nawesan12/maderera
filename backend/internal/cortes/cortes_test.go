@@ -172,6 +172,27 @@ func TestAltaColaYFicha(t *testing.T) {
 	var id string
 	_ = e.pool.QueryRow(context.Background(), `select id::text from cutting_orders where numero = 'CRT-1'`).Scan(&id)
 
+	// La media placa con el disco vale para lo que nace con el motor 3. Un
+	// trabajo de antes (motor 2) sigue con la mitad con que se vendió: su
+	// plano se arma de nuevo en cada lectura y no puede cambiar en la máquina.
+	var motorAlta int32
+	_ = e.pool.QueryRow(context.Background(), `select motor_plano from cutting_orders where id = $1`, id).Scan(&motorAlta)
+	if motorAlta != MotorMediaConSierra {
+		t.Errorf("motor del alta: %d", motorAlta)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set mitad = 'largo' where id = $1`, id)
+	for _, caso := range []struct {
+		motor int32
+		ancho float64
+	}{{2, 915}, {1, 915}, {MotorMediaConSierra, 912}} {
+		_, _ = e.pool.Exec(context.Background(), `update cutting_orders set motor_plano = $2 where id = $1`, id, caso.motor)
+		c, err := Nuevo(e.pool, silencio).Obtener(context.Background(), id)
+		if err != nil || c.Medida.Ancho != caso.ancho {
+			t.Errorf("motor %d: media de %v (quería %v), %v", caso.motor, c.Medida.Ancho, caso.ancho, err)
+		}
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set mitad = null where id = $1`, id)
+
 	_, b = pedir(t, ven, "GET", u+"?busqueda=gomez&estado=en-cola", nil)
 	var cola []CorteListado
 	_ = json.Unmarshal([]byte(b), &cola)
@@ -235,7 +256,7 @@ func TestAltaColaYFicha(t *testing.T) {
 	var motor int
 	var sierra float64
 	_ = e.pool.QueryRow(context.Background(), `select motor_plano, ancho_sierra_mm::float8 from cutting_orders where id = $1`, id).Scan(&motor, &sierra)
-	if motor != 2 || sierra != 3.2 {
+	if motor != MotorMediaConSierra || sierra != 3.2 {
 		t.Errorf("motor %d, sierra %v", motor, sierra)
 	}
 	// El acomodo a mano: se guarda y vuelve al automático con la lista vacía.

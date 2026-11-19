@@ -744,12 +744,12 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, pedido, usuari
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO cutting_orders (numero, customer_id, order_id, contacto_nombre, branch_id, variant_id, material_descripcion,
 		                            placa_largo_mm, placa_ancho_mm, mitad, placas, pasadas, canto_descripcion, acomodo_manual,
-		                            ancho_sierra_mm, estado, created_by_user_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::numeric, 'en-cola', $16)
+		                            ancho_sierra_mm, estado, created_by_user_id, motor_plano)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::numeric, 'en-cola', $16, $17)
 		RETURNING id`,
 		numero, v.CustomerID, pedido, v.ContactoNombre, v.BranchID, k.VariantID, k.MaterialDescripcion,
 		k.PlacaLargoMm, k.PlacaAnchoMm, k.Mitad, k.Placas, k.Pasadas, k.CantoDescripcion, k.AcomodoManual,
-		jsmath.Texto(sierra), usuario).Scan(&corte); err != nil {
+		jsmath.Texto(sierra), usuario, int32(cortes.MotorMediaConSierra)).Scan(&corte); err != nil {
 		return err
 	}
 	for i, p := range k.Piezas {

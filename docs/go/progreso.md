@@ -1992,15 +1992,16 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 
 ## T4 (18/11): el mostrador sin sustos
 
-- **Antes de desplegar, obligatorio:** correr
-  `scripts/sql/t4-media-placa-en-cola.sql` (solo lee) contra producción y
-  anotar acá el resultado. La media placa pasa a descontar el disco
-  (`floor((entera − sierra) / 2)`, `ResolverMedida` y `medidaDePlaca`) y el
-  plano de un trabajo se recalcula al leerlo: un trabajo en cola de media
-  placa con una pieza justo de la mitad vieja aparece como «no entra». Si la
-  consulta devuelve filas, se decide con cada uno antes del despliegue (otro
-  disco desde la ficha, placa entera, o hablar con el cliente: en el depósito
-  esa pieza tampoco entraba). Resultado en producción: _pendiente_.
+- La media placa descuenta el disco (`floor((entera − sierra) / 2)`,
+  `ResolverMedida` y `medidaDePlaca`) **solo desde `motor_plano` 3**
+  (`cortes.MotorMediaConSierra`). El plano de un trabajo guardado se arma de
+  nuevo en cada lectura: si la mitad cambiara para todos, uno en la máquina
+  abriría con otro plano, uno cortado con una hoja que no fue, y uno vendido
+  con N medias podría pedir N+1 (dos de 303 entraban en 610 y en 608 no). Las
+  tres altas (panel, mostrador, sitio) guardan el 3 a mano, sin tocar el
+  default de la columna; cambiar el disco lo sube. Lo que no se guarda
+  (consulta, sitio, el corte del mostrador antes de cobrar) usa la regla
+  nueva. No hay paso manual antes de desplegar.
 - Las teclas: `accionDeLaTecla` (`lib/mostrador/atajos.ts`) ignora la tecla
   que un campo ya usó (`defaultPrevented`). Sirve **porque `useAtajos`
   escucha en burbuja**; en captura vuelve el error de Ctrl+Enter que cobraba

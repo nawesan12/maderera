@@ -101,9 +101,10 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string) ([]Corte
 	if c := condicionBusqueda(busqueda, []string{"co.numero", "co.contacto_nombre", "co.material_descripcion"}, &args); c != "" {
 		cond = append(cond, c)
 	} else if estado == "" || estado == "todos" {
-		// En el tablero, de lo retirado solo lo de hoy: la columna juntaba
-		// todo desde el primer día. Lo anterior se encuentra buscando.
-		cond = append(cond, `(co.estado <> 'retirado' OR co.updated_at >= (date_trunc('day', now() AT TIME ZONE 'America/Argentina/Buenos_Aires') AT TIME ZONE 'America/Argentina/Buenos_Aires'))`)
+		// En el tablero, de lo retirado y lo cancelado solo lo de hoy: las
+		// columnas juntaban todo desde el primer día (los cancelados, comité
+		// final). Lo anterior se encuentra buscando o filtrando por estado.
+		cond = append(cond, `(co.estado NOT IN ('retirado', 'cancelado') OR co.updated_at >= (date_trunc('day', now() AT TIME ZONE 'America/Argentina/Buenos_Aires') AT TIME ZONE 'America/Argentina/Buenos_Aires'))`)
 	}
 	where := ""
 	if len(cond) > 0 {

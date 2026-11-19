@@ -297,8 +297,13 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 			return ResultadoVenta{}, err
 		}
 		pasaElLimite = !cr.Puede
-		// Una de la cola entra igual: ya sucedió (y queda marcada abajo).
-		if !cr.Puede && !sinConexion {
+		// Una de la cola entra igual si un admin la habría podido autorizar
+		// (pasarse del límite): ya sucedió, y queda marcada abajo. La que no
+		// se autoriza nunca —la cuenta bloqueada— se rechaza también sin
+		// conexión: «numeroProvisorio» lo manda el navegador, y alcanzaba
+		// con ponerlo para cargarle deuda a un cliente bloqueado (comité
+		// final, M1; antes de T3 ya se rechazaba).
+		if !cr.Puede && (!sinConexion || !cr.Autorizable) {
 			if !cr.Autorizable {
 				m := "No se puede cargar a cuenta corriente."
 				if cr.Motivo != nil {

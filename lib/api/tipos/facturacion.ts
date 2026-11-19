@@ -197,6 +197,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/comprobantes/{id}/serie": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que la ficha de un comprobante sin CAE muestra antes de reintentar o de darlo de baja: cuántos anteriores sin CAE se autorizan antes, qué pendientes bajan un número con la baja, la deuda que se va con él y por qué no se puede dar de baja (sin consultar a ARCA). Solo el admin. */
+        get: operations["SerieDelComprobante"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/comprobantes/{id}/baja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Saca de la serie un comprobante que ARCA no autorizó y corre un número para abajo los pendientes que vienen detrás. Se frena si tiene CAE, si un posterior tiene CAE, si tiene notas, si tiene cobros (con recibo vivo o con plata sin recibo), si ARCA ya tiene el número o si los que se corren no son los que vio el admin (`corren`, los ids en orden). Lo que era queda en el listado de dados de baja. Solo el admin. */
+        post: operations["DarDeBajaComprobante"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/dados-de-baja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Los comprobantes dados de baja, el más nuevo primero, con quién, cuándo, por qué y a quién se le corrió el número. Solo el admin. */
+        get: operations["ListarDadosDeBaja"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/facturacion/comprobantes/{id}/anular": {
         parameters: {
             query?: never;
@@ -229,6 +284,63 @@ export interface paths {
         put?: never;
         /** @description Una nota de crédito por parte de los renglones. No anula el original. Solo el admin. */
         post: operations["NotaDeCreditoParcial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/padron-iibb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description El padrón de ARBA de los clientes, vigente hoy o después. Solo el admin. */
+        get: operations["PadronIibb"];
+        put?: never;
+        /** @description Importa el archivo mensual de ARBA (el .txt o el .zip) y se queda con los CUIT de los clientes. Solo el admin. */
+        post: operations["ImportarPadronIibb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/comprobantes/{id}/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que se puede devolver de la factura de una venta (renglones, tope por caja y por cuenta, sucursales). 404 si no es de una venta. Solo el admin. */
+        get: operations["DatosDeDevolucion"];
+        put?: never;
+        /** @description Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta o afuera). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin. */
+        post: operations["DevolucionParcial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/comprobantes/{id}/devolucion/calculo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description El importe que saldría con esos renglones (con los tributos y el resto exacto del renglón que se cierra), sin hacer nada. Solo el admin. */
+        post: operations["CalcularDevolucion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -448,6 +560,85 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Corrimiento: {
+            invoiceId: string;
+            /** Format: int64 */
+            de: number;
+            /** Format: int64 */
+            a: number;
+            receptorNombre: string;
+            customerId: string | null;
+            recibos?: string[];
+        };
+        SerieDelComprobante: {
+            anterioresSinCae: number;
+            corren: components["schemas"]["Corrimiento"][];
+            /** Format: double */
+            deuda: number;
+            bloqueo: string | null;
+        };
+        ResultadoDeBaja: {
+            id: string;
+            etiqueta: string;
+            corridos: components["schemas"]["Corrimiento"][];
+        };
+        DadoDeBaja: {
+            id: string;
+            tipo: string;
+            /** Format: int64 */
+            puntoVenta: number;
+            /** Format: int64 */
+            numero: number;
+            receptorNombre: string;
+            /** Format: double */
+            total: number;
+            /** Format: date-time */
+            fechaEmision: string;
+            motivo: string;
+            usuarioNombre: string;
+            /** Format: date-time */
+            createdAt: string;
+            renumerados: components["schemas"]["Corrimiento"][];
+        };
+        RenglonesADevolver: {
+            itemId: string;
+            /** Format: double */
+            cantidad: number;
+            alStock: boolean;
+            /** Format: double */
+            delAcopio?: number | null;
+        }[];
+        DatosDeDevolucion: {
+            pedido: string;
+            renglones: {
+                itemId: string;
+                descripcion: string;
+                unidad: string;
+                /** Format: double */
+                cantidad: number;
+                /** Format: double */
+                queda: number;
+                /** Format: double */
+                unitario: number;
+                alStock: boolean;
+                /** Format: double */
+                enAcopio: number;
+            }[];
+            /** Format: double */
+            caja: number;
+            /** Format: double */
+            cuenta: number;
+            /** Format: double */
+            afuera: number;
+            ventaAnulada: boolean;
+            conCliente: boolean;
+            sucursal: string | null;
+            sucursales: {
+                id: string;
+                nombre: string;
+                cajaAbierta: boolean;
+            }[];
+        };
         Problema: {
             title: string;
             status: number;
@@ -470,13 +661,22 @@ export interface components {
             ingresosBrutos: string | null;
             /** @enum {string} */
             regimenIibb: "local" | "convenio_multilateral" | "exento" | "no_inscripto";
+            /** @description La alícuota única de antes; ya no se usa (la percepción sale del padrón) */
             alicuotaPercepcionIibb: string;
+            /** @description La alícuota para quien no figura en el padrón; nula */
+            alicuotaIibbSinPadron: string | null;
             percibeIibb: boolean;
             /** Format: date-time */
             inicioActividades: string | null;
             leyenda: string | null;
             /** Format: date-time */
             updatedAt: string;
+            /** @description El primer mes de la posición de IVA (AAAA-MM): el que sigue a la última DDJJ presentada */
+            ivaDesde: string | null;
+            /** @description El saldo técnico con que arranca */
+            ivaSaldoTecnico: string;
+            /** @description El saldo de libre disponibilidad con que arranca */
+            ivaSaldoLibre: string;
         };
         /** @enum {string} */
         CondicionIva: "responsable_inscripto" | "monotributista" | "exento" | "consumidor_final" | "no_categorizado";
@@ -599,12 +799,19 @@ export interface components {
             cae: string | null;
             /** Format: date-time */
             caeVencimiento: string | null;
+            /** @description De qué ambiente de ARCA salió el CAE (homologacion o produccion) */
+            caeAmbiente: string | null;
             observacionesArca: string | null;
             comprobanteOrigenId: string | null;
             acreditado: string;
             debitado: string;
             /** Format: date-time */
             fechaEmision: string;
+            /**
+             * Format: date-time
+             * @description La fecha con que se emitió, si al reintentar salió con la del día
+             */
+            fechaEmisionOriginal?: string | null;
             /** Format: date-time */
             fechaVencimiento: string | null;
             observaciones: string | null;
@@ -1101,6 +1308,79 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    SerieDelComprobante: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La serie */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SerieDelComprobante"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DarDeBajaComprobante: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    motivo: string;
+                    corren: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description La baja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultadoDeBaja"];
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    ListarDadosDeBaja: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las bajas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DadoDeBaja"][];
+                };
+            };
+        };
+    };
     AnularComprobante: {
         parameters: {
             query?: never;
@@ -1139,6 +1419,162 @@ export interface operations {
         };
         responses: {
             200: components["responses"]["Emitido"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    PadronIibb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Las filas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        cuit: string;
+                        cliente: string | null;
+                        /** Format: double */
+                        alicuota: number;
+                        desde: string;
+                        hasta: string;
+                    }[];
+                };
+            };
+        };
+    };
+    ImportarPadronIibb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Lo que se cargó */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        leidos: number;
+                        cargados: number;
+                        desde: string;
+                        hasta: string;
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    DatosDeDevolucion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los datos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatosDeDevolucion"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DevolucionParcial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    /** @enum {string} */
+                    destino: "caja" | "cuenta" | "afuera";
+                    motivo: string;
+                    /** @enum {string|null} */
+                    sinStock?: "rota" | "otro" | null;
+                    sucursalId?: string | null;
+                    /** Format: double */
+                    importe?: number | null;
+                    renglones: components["schemas"]["RenglonesADevolver"];
+                };
+            };
+        };
+        responses: {
+            /** @description La devolución hecha (o la misma, si la clave ya se usó) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        notaId: string;
+                        /** Format: double */
+                        importe: number;
+                        repetida: boolean;
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    CalcularDevolucion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: components["schemas"]["RenglonesADevolver"];
+                };
+            };
+        };
+        responses: {
+            /** @description El importe */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: double */
+                        importe: number;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };

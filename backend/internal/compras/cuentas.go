@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"mjbj/internal/csvexcel"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/planilla"
@@ -230,6 +231,80 @@ func CalcularRetencion(base, acumuladoMes, retenidoMes float64, r Regimen, inscr
 		return Retencion{imponible, alicuota, 0, motivo("No llega al mínimo de retención del régimen.")}
 	}
 	return Retencion{imponible, alicuota, aRetener, nil}
+}
+
+// Condiciones del proveedor frente a Ganancias (suppliers.condicion_ganancias).
+const (
+	GananciasInscripto   = "inscripto"
+	GananciasNoInscripto = "no_inscripto"
+	GananciasExento      = "exento"
+)
+
+// ProveedorParaRetener es lo que la retención necesita saber del proveedor.
+type ProveedorParaRetener struct {
+	Cuit         *string
+	CondicionIva string
+	// CondicionGanancias nil es «no se sabe».
+	CondicionGanancias *string
+	// ExentoHasta es el último día (argentino, "2006-01-02") en que vale el
+	// certificado de exclusión.
+	ExentoHasta *string
+}
+
+// SujetoARetencion dice si a ese proveedor se le retiene ese impuesto en un
+// pago del día `dia` ("2006-01-02", argentino), con qué tabla (inscripto o
+// no) y, si no, por qué. Antes «inscripto» era tener CUIT cargado, y nada
+// impedía retenerle Ganancias a un monotributista.
+//
+//   - **Ganancias**: al monotributista no (paga el impuesto en la cuota), y
+//     lo que diga su condición de Ganancias no importa: una ficha que pasó de
+//     RI a monotributo la conserva. Sin condición cargada no se retiene y el
+//     pago se frena: ante la duda la ley aplica la tabla de no inscripto, y la
+//     diferencia la paga el agente. El exento no, mientras su certificado de
+//     exclusión esté vigente; vencido, se le retiene como inscripto.
+//   - **IVA**: solo al responsable inscripto.
+//   - **IIBB y SUSS**: con el criterio de siempre (inscripto si tiene CUIT):
+//     dependen del padrón provincial y de la actividad, que el sistema todavía
+//     no tiene.
+func SujetoARetencion(impuesto string, p ProveedorParaRetener, dia string) (aplica, inscripto bool, motivo string) {
+	switch impuesto {
+	case "ganancias":
+		if p.CondicionIva == fiscal.Monotributista {
+			return false, false, "Es monotributista: no se le retiene Ganancias."
+		}
+		if p.CondicionGanancias == nil {
+			return false, false, "Cargá la condición de Ganancias del proveedor antes de retenerle."
+		}
+		switch *p.CondicionGanancias {
+		case GananciasInscripto:
+			return true, true, ""
+		case GananciasNoInscripto:
+			return true, false, ""
+		case GananciasExento:
+			if p.ExentoHasta == nil {
+				return false, false, "Cargá hasta cuándo vale la exención de Ganancias del proveedor."
+			}
+			if dia <= *p.ExentoHasta {
+				return false, false, "Está exento de Ganancias hasta el " + diaEnPapel(*p.ExentoHasta) + "."
+			}
+			return true, true, ""
+		}
+		return false, false, "Cargá la condición de Ganancias del proveedor antes de retenerle."
+	case "iva":
+		if p.CondicionIva != fiscal.ResponsableInscripto {
+			return false, false, "Solo se le retiene IVA a un responsable inscripto."
+		}
+		return true, true, ""
+	}
+	return true, p.Cuit != nil && *p.Cuit != "", ""
+}
+
+// diaEnPapel pasa "2006-01-02" a "02/01/2006".
+func diaEnPapel(d string) string {
+	if len(d) != 10 {
+		return d
+	}
+	return d[8:10] + "/" + d[5:7] + "/" + d[0:4]
 }
 
 // --- los controles del pago ---

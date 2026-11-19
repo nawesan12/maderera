@@ -7,7 +7,7 @@ describe("motivosDeRechazo", () => {
       "[10016] El numero o fecha del comprobante no se corresponde con el proximo a autorizar. Consultar metodo FECompUltimoAutorizado.",
     );
     expect(m.codigo).toBe("10016");
-    expect(m.queHacer).toMatch(/no es el siguiente/);
+    expect(m.queHacer).toMatch(/fecha de hoy/);
     expect(m.original).toMatch(/^\[10016\]/);
   });
 
@@ -31,6 +31,19 @@ describe("motivosDeRechazo", () => {
       "Emitido sin autorización de ARCA. El comprobante no tiene valor fiscal hasta que se cargue el certificado y se lo reenvíe.",
     );
     expect(m.queHacer).toMatch(/falta conectar/);
+  });
+
+  it("lo que no es del receptor apunta a la baja: sin CAE no hay nada que anular", () => {
+    const [importes] = motivosDeRechazo("[10048] ImpTotal");
+    const [general] = motivosDeRechazo("Algo raro pasó");
+    expect(importes.queHacer).toMatch(/dalo de baja/i);
+    expect(importes.queHacer).not.toMatch(/anul/i);
+    expect(general.queHacer).toMatch(/dalo de baja/i);
+  });
+
+  it("la fecha fuera de rango se arregla reintentando", () => {
+    const [m] = motivosDeRechazo("[99] CbteFch fuera de rango");
+    expect(m.queHacer).toMatch(/Volvé a mandarlo: sale con la fecha de hoy/);
   });
 
   it("vacío no da nada", () => {

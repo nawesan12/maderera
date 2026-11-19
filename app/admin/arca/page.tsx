@@ -160,9 +160,7 @@ export default async function ArcaPage({
               <tr>
                 <td className="py-2.5 text-muted-foreground">Percibe a clientes</td>
                 <td className="py-2.5 text-right">
-                  {emisor.percibeIibb
-                    ? `Sí, ${Number(emisor.alicuotaPercepcionIibb)} %`
-                    : "No"}
+                  {emisor.percibeIibb ? "Sí, por padrón" : "No"}
                 </td>
               </tr>
               <Fila titulo="Percibido" valor={libro.totales.tributos} />

@@ -217,6 +217,9 @@ type RenglonDelCierre struct {
 	Cantidad   int     `json:"cantidad"`
 	Total      float64 `json:"total"`
 	Devolucion bool    `json:"devolucion"`
+	// Quien hizo las devoluciones parciales del renglón (nil en las ventas y
+	// en las anulaciones): el control de las devoluciones es verlas.
+	Quien *string `json:"quien"`
 }
 
 // CierresDeTurnos es el cierre Z de cada turno: las ventas de la sucursal en
@@ -231,6 +234,11 @@ type RenglonDelCierre struct {
 // devolución aparece en el turno en que se anuló. El momento de la anulación
 // es la fila «cancelado» del historial del pedido (la escribe el mostrador
 // al anular); para las anuladas antes de eso, la última actualización.
+//
+// Las devoluciones parciales (facturacion.DevolucionParcial) van en el turno
+// de la sucursal adonde entró la mercadería, el día que se hicieron, por medio
+// y por quién las hizo. La anulación posterior de esa venta resta lo que ya
+// devolvieron: es lo que de verdad salió en ese turno.
 func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map[string][]RenglonDelCierre, error) {
 	por := map[string][]RenglonDelCierre{}
 	if len(sesiones) == 0 {
@@ -239,7 +247,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 	filas, err := c.Query(ctx, `
 		SELECT s.id, false, coalesce(p.medio::text, o.medio_pago::text),
 		       count(DISTINCT o.id)::int,
-		       coalesce(sum(coalesce(p.importe, o.total)), 0)
+		       coalesce(sum(coalesce(p.importe, o.total)), 0), NULL::text
 		FROM cash_sessions s
 		JOIN orders o ON o.branch_id = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL
 		     AND o.created_at >= s.abierta_at
@@ -250,7 +258,9 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		UNION ALL
 		SELECT s.id, true, coalesce(p.medio::text, a.medio_pago::text),
 		       count(DISTINCT a.id)::int,
-		       -coalesce(sum(coalesce(p.importe, a.total)), 0)
+		       -coalesce(sum(coalesce(p.importe, a.total) - coalesce((SELECT sum(d.importe) FROM devoluciones d WHERE d.order_id = a.id
+		          AND d.destino = CASE coalesce(p.medio::text, a.medio_pago::text) WHEN 'efectivo' THEN 'caja' WHEN 'cuenta_corriente' THEN 'cuenta' END), 0)), 0),
+		       NULL::text
 		FROM cash_sessions s
 		JOIN LATERAL (
 		  SELECT o.id, o.medio_pago, o.total,
@@ -262,7 +272,16 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		) a ON a.anulada_at >= s.abierta_at AND (s.cerrada_at IS NULL OR a.anulada_at <= s.cerrada_at)
 		LEFT JOIN order_payments p ON p.order_id = a.id
 		WHERE s.id = ANY($1::uuid[])
-		GROUP BY s.id, coalesce(p.medio::text, a.medio_pago::text)`, sesiones)
+		GROUP BY s.id, coalesce(p.medio::text, a.medio_pago::text)
+		UNION ALL
+		SELECT s.id, true, CASE d.destino WHEN 'caja' THEN 'efectivo' ELSE 'cuenta_corriente' END,
+		       count(*)::int, -sum(d.importe), coalesce(u.name, 'Sin usuario')
+		FROM cash_sessions s
+		JOIN devoluciones d ON d.branch_id = s.branch_id AND d.created_at >= s.abierta_at
+		     AND (s.cerrada_at IS NULL OR d.created_at <= s.cerrada_at)
+		LEFT JOIN "user" u ON u.id = d.created_by_user_id
+		WHERE s.id = ANY($1::uuid[])
+		GROUP BY s.id, d.destino, u.name`, sesiones)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +291,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		var medio *string
 		var r RenglonDelCierre
 		var total jsmath.Num
-		if err := filas.Scan(&id, &r.Devolucion, &medio, &r.Cantidad, &total); err != nil {
+		if err := filas.Scan(&id, &r.Devolucion, &medio, &r.Cantidad, &total, &r.Quien); err != nil {
 			return nil, err
 		}
 		r.MedioPago = "sin especificar"

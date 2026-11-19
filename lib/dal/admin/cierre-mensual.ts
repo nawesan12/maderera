@@ -20,9 +20,18 @@ import type { Esquemas } from "@/lib/api/tipos";
 export type Asiento = Omit<Esquemas["CierreAsiento"], "fecha"> & { fecha: Date };
 export type PendienteDelCierre = Esquemas["CierrePendiente"];
 
-/** Los asientos del período, en orden de fecha, cada uno con si balancea. */
-export async function asientosDelPeriodo(periodo: string): Promise<Asiento[]> {
-  const filas = datos(await (await api()).GET("/api/v1/admin/cierre/asientos", { params: { query: { periodo } } }));
+/**
+ * Los asientos del período, en orden de fecha, cada uno con si balancea. Los
+ * del estudio por omisión; con `negro`, los del circuito B (los gastos y
+ * pagos marcados así y la parte de los recibos que paga ventas sin factura).
+ */
+export async function asientosDelPeriodo(
+  periodo: string,
+  circuito: "blanco" | "negro" = "blanco",
+): Promise<Asiento[]> {
+  const filas = datos(
+    await (await api()).GET("/api/v1/admin/cierre/asientos", { params: { query: { periodo, circuito } } }),
+  );
   return filas.map((a) => ({ ...a, fecha: new Date(a.fecha) }));
 }
 

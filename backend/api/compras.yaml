@@ -181,13 +181,15 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, nombre, cuit, condicionIva, diasPago]
+                  required: [id, nombre, cuit, condicionIva, diasPago, condicionGanancias, exentoGananciasHasta]
                   properties:
                     id: { type: string }
                     nombre: { type: string }
                     cuit: { type: string, nullable: true }
                     condicionIva: { type: string }
                     diasPago: { type: integer }
+                    condicionGanancias: { type: string, nullable: true, enum: [inscripto, no_inscripto, exento, null] }
+                    exentoGananciasHasta: { type: string, nullable: true, description: Último día de la exención (YYYY-MM-DD) }
   /api/v1/admin/compras/lista-proveedor/vista-previa:
     post:
       operationId: VistaPreviaDeLista
@@ -771,8 +773,12 @@ components:
         errores: { type: object, additionalProperties: { type: string } }
     ProveedorListado:
       type: object
-      required: [id, nombre, razonSocial, cuit, rubro, contacto, telefono, email, diasPago, estado, saldo, ultimoMovimiento]
+      required: [id, nombre, razonSocial, cuit, rubro, contacto, telefono, email, diasPago, estado, saldo, ultimoMovimiento, condicionIva,
+        condicionGanancias, exentoGananciasHasta]
       properties:
+        condicionIva: { type: string }
+        condicionGanancias: { type: string, nullable: true, enum: [inscripto, no_inscripto, exento, null] }
+        exentoGananciasHasta: { type: string, nullable: true }
         id: { type: string }
         nombre: { type: string }
         razonSocial: { type: string, nullable: true }
@@ -788,7 +794,7 @@ components:
     Proveedor:
       type: object
       required: [id, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, rubro, contacto, diasPago, cbu, aliasCbu, estado,
-        notas, codigoLegacy, active, createdAt, updatedAt, convenios, saldo, movimientos]
+        notas, codigoLegacy, active, createdAt, updatedAt, convenios, condicionGanancias, exentoGananciasHasta, saldo, movimientos]
       properties:
         id: { type: string }
         nombre: { type: string }
@@ -810,6 +816,8 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         convenios: { type: string, nullable: true }
+        condicionGanancias: { type: string, nullable: true, enum: [inscripto, no_inscripto, exento, null] }
+        exentoGananciasHasta: { type: string, nullable: true, description: Último día de la exención (YYYY-MM-DD) }
         saldo: { type: number, format: double }
         movimientos:
           type: array

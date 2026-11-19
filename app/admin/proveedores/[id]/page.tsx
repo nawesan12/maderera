@@ -185,6 +185,8 @@ export default async function ProveedorPage({
               aliasCbu: proveedor.aliasCbu,
               diasPago: proveedor.diasPago,
               notas: proveedor.notas,
+              condicionGanancias: proveedor.condicionGanancias,
+              exentoGananciasHasta: proveedor.exentoGananciasHasta,
             }}
           />
         </div>

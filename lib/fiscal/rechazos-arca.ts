@@ -23,18 +23,22 @@ export interface MotivoDeRechazo {
   queHacer: string;
 }
 
+// El 10016 es el número o la fecha. Reintentar arregla los dos: el sistema
+// pide el número que corresponde y lo manda con la fecha de hoy.
 const NUMERACION =
-  "El número no es el siguiente que espera ARCA. Volvé a mandarlo a autorizar: el sistema pide el número que corresponde. Si sigue, avisá a quien mantiene el sistema.";
+  "El número o la fecha no son los que espera ARCA. Volvé a mandarlo: sale con la fecha de hoy y el número que corresponde. Si sigue, dalo de baja.";
 const RECEPTOR_DOCUMENTO =
   "El CUIT o documento del cliente está mal o no existe en ARCA. Corregí el receptor y volvé a mandarlo.";
 const RECEPTOR_CUIT_A =
-  "Una factura A necesita el CUIT del cliente. Corregí el receptor o emití una B.";
+  "Una factura A necesita el CUIT del cliente. Corregí el receptor; si no lo tiene, dalo de baja y emití una B.";
 const CONDICION_IVA =
-  "La condición frente al IVA del cliente no corresponde con el tipo de factura. Revisá la ficha del cliente (responsable inscripto, monotributista, consumidor final) y volvé a mandarlo.";
+  "La condición frente al IVA del cliente no corresponde con el tipo de factura. Corregí el receptor y volvé a mandarlo; si le corresponde otra letra, dalo de baja y emitilo de nuevo.";
+// Sin CAE no hay nada que anular: lo que no es del receptor se da de baja,
+// que libera el número y destraba la serie.
 const IMPORTES =
-  "Los importes no cierran (neto, IVA y total). Anulá el comprobante y emitilo de nuevo; si se repite, avisá a quien mantiene el sistema.";
+  "Los importes no cierran (neto, IVA y total). Dalo de baja y emitilo de nuevo; si se repite, avisá a quien mantiene el sistema.";
 const FECHA =
-  "La fecha del comprobante está fuera de lo que ARCA acepta. Volvé a mandarlo a autorizar en el día.";
+  "La fecha del comprobante está fuera de lo que ARCA acepta. Volvé a mandarlo: sale con la fecha de hoy.";
 const PUNTO_DE_VENTA =
   "El punto de venta no está habilitado en ARCA para facturar desde el sistema. Revisalo en Configuración de ARCA.";
 const CONEXION =
@@ -44,7 +48,7 @@ const SERVICIO =
 const SIN_CERTIFICADO =
   "Todavía no se mandó a ARCA: falta conectar el sistema (el certificado). Cuando esté, volvé a mandarlo a autorizar.";
 const GENERAL =
-  "Revisá los datos del cliente y los importes, y volvé a mandarlo. Si no se resuelve, pasale el texto de ARCA a quien mantiene el sistema.";
+  "Revisá los datos del cliente y volvé a mandarlo. Si no se resuelve, dalo de baja y emitilo de nuevo, y pasale el texto de ARCA a quien mantiene el sistema.";
 
 /** Los códigos de WSFEv1 que se ven en la práctica. */
 const POR_CODIGO: Record<string, string> = {

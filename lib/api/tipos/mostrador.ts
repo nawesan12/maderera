@@ -412,8 +412,10 @@ export interface components {
              * @description En negativo si es una devolución
              */
             total: number;
-            /** @description Ventas anuladas durante el turno (la venta queda en el Z de su turno) */
+            /** @description Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) */
             devolucion: boolean;
+            /** @description Quién hizo las devoluciones parciales del renglón */
+            quien: string | null;
         };
         MostradorPantalla: {
             turno: components["schemas"]["MostradorTurno"] | null;
@@ -565,6 +567,7 @@ export interface operations {
                     "application/json": {
                         ok: string;
                         facturaPendiente?: string;
+                        facturaSinCae?: boolean;
                     };
                 };
             };

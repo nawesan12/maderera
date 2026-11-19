@@ -35,6 +35,9 @@ type Linea struct {
 	fiscal.LineaEntrada
 	// En una nota parcial: qué renglón del original corrige.
 	ItemOrigenID *string `json:"itemOrigenId,omitempty"`
+	// De qué renglón del pedido sale (la factura de una venta): la
+	// devolución sabe así qué variante vuelve al stock.
+	OrderItemID *string `json:"-"`
 }
 
 // DatosEmision es DatosEmision de emitir.ts.
@@ -140,7 +143,37 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 			return "", errEmision(`"` + l.Descripcion + `": ` + fiscal.MensajeAlicuota)
 		}
 	}
-	im := fiscal.Importes(entradas, d.TributosDados, config.PercibeIibb, jsmath.Numero(config.AlicuotaPercepcionIibb))
+	// La percepción de IIBB sale del padrón de ARBA, receptor por receptor
+	// (fiscal.PercepcionIibb): antes era una alícuota para todos, también
+	// para el consumidor final.
+	percibe, alicuota := false, 0.0
+	if config.PercibeIibb && d.TributosDados == nil && d.ReceptorCuit != nil {
+		dia := s.ahora().In(fiscal.Argentina).Format("2006-01-02")
+		fila, err := filaDelPadron(ctx, tx, *d.ReceptorCuit, dia)
+		if err != nil {
+			return "", err
+		}
+		// La alícuota de quien no figura vale solo si hay un padrón vigente
+		// en el que no figura. Con el padrón vencido no figura nadie: a cada
+		// inscripto se le percibía la de «no figura», aunque estuviera en el
+		// padrón con 0,5 % o exento, y eso solo se corrige con notas.
+		vigente, err := hayPadronVigente(ctx, tx, s.ahora())
+		if err != nil {
+			return "", err
+		}
+		var sinPadron *float64
+		if config.AlicuotaIibbSinPadron != nil && vigente {
+			x := jsmath.Numero(*config.AlicuotaIibbSinPadron)
+			sinPadron = &x
+		}
+		alicuota, percibe = fiscal.PercepcionIibb(d.ReceptorCondicionIva, *d.ReceptorCuit, fila, dia, sinPadron)
+	}
+	im := fiscal.Importes(entradas, d.TributosDados, percibe, alicuota)
+	// Una B sin documento desde el umbral: ARCA la rechaza y el número
+	// quemado traba a los que vienen detrás. Se frena antes de tomarlo.
+	if m := fiscal.FaltaIdentificarComprador(tipo, im.Total, d.ReceptorCuit, s.ahora()); m != "" {
+		return "", errEmision(m)
+	}
 
 	numero, err := s.siguienteNumero(ctx, tx, p.numero, tipo)
 	if err != nil {
@@ -161,9 +194,9 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 	lote := &pgx.Batch{}
 	for i, l := range im.Totales.Lineas {
 		lote.Queue(`INSERT INTO invoice_items (invoice_id, descripcion, unidad, cantidad, precio_unitario, alicuota_iva, neto, iva, subtotal,
-			invoice_item_origen_id, orden) VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7::numeric, $8::numeric, $9::numeric, $10, $11)`,
+			invoice_item_origen_id, orden, order_item_id) VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7::numeric, $8::numeric, $9::numeric, $10, $11, $12)`,
 			id, l.Descripcion, l.Unidad, f(l.Cantidad), jsmath.ToFixed(l.PrecioUnitarioNeto, 4), f(l.Alicuota), f(l.Neto), f(l.Iva),
-			f(l.Subtotal), d.Lineas[i].ItemOrigenID, i)
+			f(l.Subtotal), d.Lineas[i].ItemOrigenID, i, d.Lineas[i].OrderItemID)
 	}
 	for _, t := range im.Tributos {
 		lote.Queue(`INSERT INTO invoice_tributos (invoice_id, codigo, descripcion, base_imponible, alicuota, importe)

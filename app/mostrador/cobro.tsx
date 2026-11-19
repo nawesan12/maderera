@@ -42,6 +42,7 @@ export function Cobro({
   onComprobante,
   cuit,
   onCuit,
+  pideDocumento,
   letra,
   medio,
   onMedio,
@@ -88,6 +89,8 @@ export function Cobro({
   onComprobante: (c: "interno" | "fiscal") => void;
   cuit: string;
   onCuit: (v: string) => void;
+  /** Una B desde el umbral de ARCA: el documento se pide antes de cobrar. */
+  pideDocumento: boolean;
   letra: string | null;
   medio: MedioDeMostrador;
   onMedio: (m: MedioDeMostrador) => void;
@@ -391,12 +394,15 @@ export function Cobro({
               </button>
             </div>
 
-            {comprobante === "fiscal" && !cliente && (
+            {/* Con un cliente sin CUIT el campo vuelve si la venta llega al
+                umbral de la B: el documento tipeado es el que va a ARCA. */}
+            {comprobante === "fiscal" && (!cliente || (pideDocumento && !cliente.cuit)) && (
               <CuitSuelto
                 cuit={cuit}
                 onCuit={onCuit}
                 enLinea={enLinea}
                 onCliente={onCliente}
+                obligatorio={pideDocumento}
               />
             )}
           </div>

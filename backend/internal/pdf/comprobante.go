@@ -44,28 +44,31 @@ type TributoComprobante struct {
 // ComprobantePdf es la interfaz ComprobantePdf del TS. Los null de texto
 // valen lo mismo que la tira vacía (el TS los usa como falsos).
 type ComprobantePdf struct {
-	Tipo                 string               `json:"tipo"`
-	PuntoVenta           float64              `json:"puntoVenta"`
-	Numero               float64              `json:"numero"`
-	ReceptorNombre       string               `json:"receptorNombre"`
-	ReceptorCuit         string               `json:"receptorCuit"`
-	ReceptorCondicionIva string               `json:"receptorCondicionIva"`
-	ReceptorDomicilio    string               `json:"receptorDomicilio"`
-	Neto                 string               `json:"neto"`
-	Iva21                string               `json:"iva21"`
-	Iva27                string               `json:"iva27"`
-	Iva105               string               `json:"iva105"`
-	Exento               string               `json:"exento"`
-	TributosTotal        string               `json:"tributosTotal"`
-	Total                string               `json:"total"`
-	Cae                  string               `json:"cae"`
-	CaeVencimiento       *time.Time           `json:"caeVencimiento"`
-	FechaEmision         time.Time            `json:"fechaEmision"`
-	FechaVencimiento     *time.Time           `json:"fechaVencimiento"`
-	Observaciones        string               `json:"observaciones"`
-	Estado               string               `json:"estado"`
-	Items                []ItemComprobante    `json:"items"`
-	Tributos             []TributoComprobante `json:"tributos"`
+	Tipo                 string  `json:"tipo"`
+	PuntoVenta           float64 `json:"puntoVenta"`
+	Numero               float64 `json:"numero"`
+	ReceptorNombre       string  `json:"receptorNombre"`
+	ReceptorCuit         string  `json:"receptorCuit"`
+	ReceptorCondicionIva string  `json:"receptorCondicionIva"`
+	ReceptorDomicilio    string  `json:"receptorDomicilio"`
+	Neto                 string  `json:"neto"`
+	Iva21                string  `json:"iva21"`
+	Iva27                string  `json:"iva27"`
+	Iva105               string  `json:"iva105"`
+	Exento               string  `json:"exento"`
+	TributosTotal        string  `json:"tributosTotal"`
+	Total                string  `json:"total"`
+	Cae                  string  `json:"cae"`
+	// Homologacion: el CAE salió del ambiente de prueba de ARCA y no tiene
+	// valor fiscal. Lleva su marca de agua.
+	Homologacion     bool                 `json:"homologacion,omitempty"`
+	CaeVencimiento   *time.Time           `json:"caeVencimiento"`
+	FechaEmision     time.Time            `json:"fechaEmision"`
+	FechaVencimiento *time.Time           `json:"fechaVencimiento"`
+	Observaciones    string               `json:"observaciones"`
+	Estado           string               `json:"estado"`
+	Items            []ItemComprobante    `json:"items"`
+	Tributos         []TributoComprobante `json:"tributos"`
 }
 
 // EmisorFiscal es el emisor del comprobante: el del encabezado más los
@@ -166,6 +169,10 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 
 	marcas := func() {
 		if c.Cae == "" {
+			h.MarcaDeAgua("Sin valor fiscal")
+		} else if c.Homologacion {
+			// Lo que le importa al que lo recibe; «homologación» no lo
+			// entiende nadie del otro lado del mostrador.
 			h.MarcaDeAgua("Sin valor fiscal")
 		}
 		if c.Estado == "anulada" {

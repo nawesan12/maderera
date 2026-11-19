@@ -14,7 +14,8 @@ export function Opciones<T extends string>({
 }: {
   valor: T | null;
   alCambiar: (v: T) => void;
-  opciones: { valor: T; texto: string }[];
+  /** Una opción deshabilitada se ve y no se elige: dice sola que no corresponde. */
+  opciones: { valor: T; texto: string; deshabilitada?: boolean }[];
   /** Para el lector de pantalla: qué se está eligiendo. */
   etiqueta: string;
 }) {
@@ -28,8 +29,9 @@ export function Opciones<T extends string>({
             type="button"
             role="radio"
             aria-checked={elegida}
+            disabled={o.deshabilitada}
             onClick={() => alCambiar(o.valor)}
-            className={`h-11 rounded-lg px-4 text-base font-medium transition-colors ${
+            className={`h-11 rounded-lg px-4 text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               elegida ? "boton-accion" : "bg-hundida hover:bg-muted"
             }`}
           >

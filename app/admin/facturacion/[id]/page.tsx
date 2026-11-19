@@ -15,8 +15,8 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, fechaLarga, moneda, plural } from "@/lib/formato";
-import { obtenerComprobante } from "@/lib/dal/admin/facturacion";
+import { fechaCorta, fechaLarga, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
+import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
   nombreComprobante,
@@ -29,6 +29,27 @@ import {
   FormularioCobro,
 } from "./acciones";
 import { NotasSobreElComprobante } from "./notas";
+import { DarDeBaja } from "./baja";
+
+const MES = new Intl.DateTimeFormat("es-AR", { month: "long", timeZone: ZONA });
+
+/**
+ * Lo que cambia al mandar a ARCA un comprobante sin CAE: sale con la fecha de
+ * hoy si es de otro día (ARCA acepta pocos días para atrás) y, si cambia el
+ * mes, la venta pasa al mes de hoy en el libro IVA; antes salen los
+ * anteriores de la serie que tampoco tienen CAE.
+ */
+function consecuenciasDelEnvio(fecha: Date, anteriores: number): string[] {
+  const out: string[] = [];
+  const dia = hoyEnArgentina(fecha);
+  const hoy = hoyEnArgentina();
+  if (dia < hoy) {
+    out.push("Sale con fecha de hoy");
+    if (dia.slice(0, 7) !== hoy.slice(0, 7)) out.push(`pasa a ${MES.format(new Date())}`);
+  }
+  if (anteriores > 0) out.push(`antes ${anteriores === 1 ? "sale" : "salen"} ${plural(anteriores, "anterior", "anteriores")}`);
+  return out;
+}
 
 const CONDICIONES: Record<string, string> = {
   responsable_inscripto: "Responsable inscripto",
@@ -89,6 +110,18 @@ export default async function FichaComprobantePage({
     Number(comprobante.iva105) +
     Number(comprobante.iva27);
   const anulada = comprobante.estado === "anulada";
+  // La serie solo importa sin CAE: el reintento y la baja.
+  const serie = comprobante.cae ? null : await serieDelComprobante(id);
+  // La factura de una venta, ya autorizada, se corrige con una devolución, y
+  // no se anula sola: se anula la venta, que devuelve el stock y la plata.
+  // Con la venta anulada queda solo anular la factura.
+  const deLaVenta =
+    comprobante.orderId && comprobante.cae && comprobante.tipo.startsWith("factura") && comprobante.estado !== "anulada"
+      ? await datosDeDevolucion(id)
+      : null;
+  const devolucion = deLaVenta && !deLaVenta.ventaAnulada ? deLaVenta : null;
+  // Devuelta entera, ya no hay venta que anular: falta cerrar la factura.
+  const devueltaEntera = devolucion?.renglones.every((r) => r.queda <= 0) ?? false;
 
   return (
     <div className="space-y-6">
@@ -113,6 +146,8 @@ export default async function FichaComprobantePage({
           </div>
           <p className="mt-0.5 text-base text-muted-foreground">
             Emitida el {fechaLarga.format(comprobante.fechaEmision)}
+            {comprobante.fechaEmisionOriginal &&
+              ` · antes ${fechaCorta.format(comprobante.fechaEmisionOriginal)}`}
             {comprobante.sucursal ? ` · ${comprobante.sucursal}` : ""}
           </p>
         </div>
@@ -151,7 +186,15 @@ export default async function FichaComprobantePage({
       )}
 
       {/* Estado fiscal: es lo primero que hay que saber del comprobante */}
-      {comprobante.cae ? (
+      {comprobante.cae && comprobante.caeAmbiente === "homologacion" ? (
+        // Un CAE de prueba no es una autorización: no va al libro IVA.
+        <section className="tarjeta-atencion flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5">
+          <ShieldAlert className="h-5 w-5 shrink-0 text-brand-orange" />
+          <p className="text-base">
+            De prueba · <span className="tabular">CAE {comprobante.cae}</span>
+          </p>
+        </section>
+      ) : comprobante.cae ? (
         <section className="estado-ok flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[var(--estado-tinta)]/30 bg-[var(--estado-fondo)] px-5 py-3.5">
           <ShieldCheck className="h-5 w-5 shrink-0 text-green-700" />
           <p className="text-base text-green-900">
@@ -187,6 +230,10 @@ export default async function FichaComprobantePage({
               <BotonAutorizar
                 id={comprobante.id}
                 rechazado={comprobante.estado === "rechazada"}
+                consecuencias={consecuenciasDelEnvio(
+                  comprobante.fechaEmision,
+                  serie?.anterioresSinCae ?? 0,
+                )}
               />
             </div>
           )}
@@ -198,6 +245,21 @@ export default async function FichaComprobantePage({
                 cuit={comprobante.receptorCuit}
                 condicion={comprobante.receptorCondicionIva}
                 domicilio={comprobante.receptorDomicilio}
+              />
+            </div>
+          )}
+          {/* La salida de una serie trabada: irreversible, así que va última
+              y plegada. Un borrador no tiene número que liberar. */}
+          {serie && comprobante.estado !== "borrador" && (
+            <div className="mt-3">
+              <DarDeBaja
+                id={comprobante.id}
+                puntoVenta={comprobante.puntoVenta}
+                numero={comprobante.numero}
+                corren={serie.corren}
+                deuda={serie.deuda}
+                receptor={comprobante.receptorNombre}
+                bloqueo={serie.bloqueo}
               />
             </div>
           )}
@@ -442,32 +504,40 @@ export default async function FichaComprobantePage({
             </Link>
           )}
 
-          {!anulada && comprobante.estado !== "borrador" && (
+          {/* Sin CAE no hay nada que anular ni que corregir con una nota:
+              ARCA rechazaría la nota, y anularlo dejaba el número trabando la
+              serie. Lo que no tiene CAE se da de baja, arriba. */}
+          {!anulada && comprobante.estado !== "borrador" && comprobante.cae && (
             <>
               {/* Las notas van antes que anular a propósito: acreditar dos
                   placas falladas es lo frecuente y anular la factura entera es
                   la excepción. El orden empuja hacia la corrección más chica. */}
-              <section className="tarjeta p-5">
-                <NotasSobreElComprobante
-                  invoiceId={comprobante.id}
-                  items={comprobante.items.map((i) => ({
-                    id: i.id,
-                    descripcion: i.descripcion,
-                    cantidad: Number(i.cantidad),
-                    subtotal: Number(i.subtotal),
-                  }))}
-                  total={Number(comprobante.total)}
-                  acreditado={Number(comprobante.acreditado)}
-                  revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
-                />
-              </section>
+              {!deLaVenta?.ventaAnulada && (
+                <section className="tarjeta p-5">
+                  <NotasSobreElComprobante
+                    invoiceId={comprobante.id}
+                    items={comprobante.items.map((i) => ({
+                      id: i.id,
+                      descripcion: i.descripcion,
+                      cantidad: Number(i.cantidad),
+                      subtotal: Number(i.subtotal),
+                    }))}
+                    total={Number(comprobante.total)}
+                    acreditado={Number(comprobante.acreditado)}
+                    revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                    devolucion={devolucion}
+                  />
+                </section>
+              )}
 
-              <section className="tarjeta p-5">
-                <AnularComprobante
-                  id={comprobante.id}
-                  revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
-                />
-              </section>
+              {(!devolucion || devueltaEntera) && (
+                <section className="tarjeta p-5">
+                  <AnularComprobante
+                    id={comprobante.id}
+                    revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                  />
+                </section>
+              )}
             </>
           )}
         </div>

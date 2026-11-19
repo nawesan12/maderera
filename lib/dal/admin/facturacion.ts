@@ -113,9 +113,11 @@ type Crudo = Esquemas["ComprobanteCompleto"];
 type CobroCrudo = Crudo["cobros"][number];
 
 export interface ComprobanteCompleto
-  extends Omit<Crudo, "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros"> {
+  extends Omit<Crudo, "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros" | "fechaEmisionOriginal"> {
   tipo: TipoComprobante;
   fechaEmision: Date;
+  /** La fecha con que se emitió, si al reintentar salió con la del día. */
+  fechaEmisionOriginal: Date | null;
   fechaVencimiento: Date | null;
   caeVencimiento: Date | null;
   cobros: (Omit<CobroCrudo, "fecha" | "createdAt"> & { fecha: Date; createdAt: Date })[];
@@ -125,6 +127,7 @@ function conFechas(c: Crudo): ComprobanteCompleto {
   return {
     ...c,
     fechaEmision: new Date(c.fechaEmision),
+    fechaEmisionOriginal: c.fechaEmisionOriginal ? new Date(c.fechaEmisionOriginal) : null,
     fechaVencimiento: c.fechaVencimiento ? new Date(c.fechaVencimiento) : null,
     caeVencimiento: c.caeVencimiento ? new Date(c.caeVencimiento) : null,
     cobros: c.cobros.map((p) => ({ ...p, fecha: new Date(p.fecha), createdAt: new Date(p.createdAt) })),
@@ -136,6 +139,32 @@ export async function obtenerComprobante(id: string): Promise<ComprobanteComplet
   const r = await (await api()).GET("/api/v1/comprobantes/{id}", { params: { path: { id } } });
   if (r.response.status === 404 || r.response.status === 400) return null;
   return conFechas(datos(r));
+}
+
+export interface FilaDelPadron {
+  cuit: string;
+  cliente: string | null;
+  alicuota: number;
+  desde: string;
+  hasta: string;
+}
+
+/** El padrón de ARBA de los clientes, vigente hoy o después. */
+export async function padronIibb(): Promise<FilaDelPadron[]> {
+  return datos(await (await api()).GET("/api/v1/admin/facturacion/padron-iibb"));
+}
+
+export type DatosDeDevolucion = Esquemas["DatosDeDevolucion"];
+
+/**
+ * Lo que se puede devolver de la factura de una venta: los renglones con lo
+ * que queda, el tope por caja y por cuenta, y las sucursales. null si la
+ * factura no es de una venta (lleva nota de crédito común).
+ */
+export async function datosDeDevolucion(id: string): Promise<DatosDeDevolucion | null> {
+  const r = await (await api()).GET("/api/v1/admin/facturacion/comprobantes/{id}/devolucion", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  return datos(r);
 }
 
 /**
@@ -157,6 +186,36 @@ export async function comprobanteDelCliente(id: string, customerId: string) {
   const comprobante = await obtenerComprobante(id);
   if (!comprobante || comprobante.customerId !== customerId) return null;
   return comprobante;
+}
+
+/**
+ * La serie de un comprobante sin CAE: cuántos anteriores arrastra el
+ * reintento, quiénes bajan un número si se lo da de baja, la deuda que se va
+ * con él y por qué no se puede (sin preguntarle a ARCA: eso lo hace la baja).
+ */
+export async function serieDelComprobante(id: string) {
+  const r = await (await api()).GET("/api/v1/admin/facturacion/comprobantes/{id}/serie", {
+    params: { path: { id } },
+  });
+  if (r.response.status === 404 || r.response.status === 403) return null;
+  return datos(r);
+}
+
+export type DadoDeBaja = Omit<Esquemas["DadoDeBaja"], "fechaEmision" | "createdAt" | "tipo"> & {
+  tipo: TipoComprobante;
+  fechaEmision: Date;
+  createdAt: Date;
+};
+
+/** Los comprobantes dados de baja, el más nuevo primero. */
+export async function dadosDeBaja(): Promise<DadoDeBaja[]> {
+  const filas = datos(await (await api()).GET("/api/v1/admin/facturacion/dados-de-baja"));
+  return filas.map((f) => ({
+    ...f,
+    tipo: f.tipo as TipoComprobante,
+    fechaEmision: new Date(f.fechaEmision),
+    createdAt: new Date(f.createdAt),
+  }));
 }
 
 /** Números del período, para la cabecera de la pantalla. */

@@ -472,6 +472,11 @@ func correrAPI() error {
 			}),
 		checkoutapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
+	if cfg.Pagos.EstadoMercadoPago() == pagos.MercadoPagoSinSecreto {
+		// Con token y sin secreto los avisos se descartarían: el checkout
+		// queda cerrado hasta que se cargue MP_WEBHOOK_SECRET.
+		log.Error("Mercado Pago apagado: falta MP_WEBHOOK_SECRET", "variable", "MP_WEBHOOK_SECRET")
+	}
 	apiPagos := pagos.NuevaAPI(pagos.Nuevo(pool, cfg.Pagos, log),
 		pagos.Extras{Lim: lim, Disco: subidas.Nuevo(cfg.Subidas), Push: push.Nuevo(cfg.Push, q, log)}, cfg.Interna)
 	apiPagos.Rutas(m)
@@ -499,6 +504,8 @@ func correrAPI() error {
 	// Cada pedido se valida contra el contrato de su dominio antes de llegar
 	// al handler.
 	var h http.Handler = m
+	// El padrón de ARBA sube directo a Go y pesa unos 200 MB.
+	h = plataforma.ConMasTiempoParaLeer(h, http.MethodPost, "/api/v1/admin/facturacion/padron-iibb", 20*time.Minute)
 	for _, spec := range []func() (*openapi3.T, error){sesionapi.GetSwagger, catalogoapi.GetSwagger, contenidoapi.GetSwagger, productosapi.GetSwagger, stockapi.GetSwagger, preciosapi.GetSwagger, cuentasapi.GetSwagger, bitacoraapi.GetSwagger, portalapi.GetSwagger, existenciaapi.GetSwagger, buscadorapi.GetSwagger, facturacionapi.GetSwagger} {
 		s, err := spec()
 		if err != nil {

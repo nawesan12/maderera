@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -82,6 +84,19 @@ func (o respuesta) VisitNotaDeCreditoParcialResponse(w http.ResponseWriter) erro
 	return o.escribir(w)
 }
 func (o respuesta) VisitNotaDeDebitoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitPadronIibbResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitImportarPadronIibbResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDatosDeDevolucionResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDevolucionParcialResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitCalcularDevolucionResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitGuardarEmisorFiscalResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -115,6 +130,13 @@ func (o respuesta) VisitAutorizarComprobanteInternoResponse(w http.ResponseWrite
 	return o.escribir(w)
 }
 func (o respuesta) VisitLetraQueSaldriaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitSerieDelComprobanteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDarDeBajaComprobanteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitListarDadosDeBajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitComprobanteDeLaVentaResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -453,7 +475,14 @@ func (a *API) AutorizarComprobante(ctx context.Context, r facturacionapi.Autoriz
 // autorizarYAnotar pide el CAE, deja el intento en la bitácora y, si salió,
 // encola el aviso al cliente.
 func (a *API) autorizarYAnotar(ctx context.Context, ses *auth.Sesion, id string) (respuesta, error) {
-	m, err := a.s.Autorizar(ctx, id)
+	m, cadena, err := a.s.AutorizarConFechas(ctx, id)
+	// Las fechas se movieron aunque ARCA después haya rechazado: quedan
+	// anotadas igual.
+	for _, f := range cadena.Movidas {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "factura", f.InvoiceID,
+			f.Etiqueta+" sale a ARCA con fecha "+f.A.In(fiscal.Argentina).Format("02/01/2006")+" (se emitió el "+
+				f.De.In(fiscal.Argentina).Format("02/01/2006")+")", f)
+	}
 	motivo := Mensaje(err)
 	if err != nil && motivo == "" {
 		return respuesta{}, err
@@ -463,11 +492,15 @@ func (a *API) autorizarYAnotar(ctx context.Context, ses *auth.Sesion, id string)
 		desc = "Intentó autorizar un comprobante en ARCA y falló: " + motivo
 	}
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "factura", id, desc, nil)
+	// Cada comprobante que la cadena autorizó (este y los anteriores) tiene
+	// su cliente esperando el definitivo, aunque ARCA después rechace este.
+	for _, autorizado := range cadena.Autorizados {
+		if err := a.s.AvisarFactura(ctx, autorizado); err != nil {
+			a.s.log.Error("encolando el aviso de la factura", "invoiceId", autorizado, "error", err)
+		}
+	}
 	if motivo != "" {
 		return ok(map[string]string{"error": motivo}), nil
-	}
-	if err := a.s.AvisarFactura(ctx, id); err != nil {
-		a.s.log.Error("encolando el aviso de la factura", "invoiceId", id, "error", err)
 	}
 	return mensaje(m), nil
 }
@@ -488,6 +521,50 @@ func (a *API) CorregirReceptorYReintentar(ctx context.Context, r facturacionapi.
 		return nil, err
 	}
 	return res, nil
+}
+
+func (a *API) SerieDelComprobante(ctx context.Context, r facturacionapi.SerieDelComprobanteRequestObject) (facturacionapi.SerieDelComprobanteResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.Serie(ctx, r.Id.String())
+	if errors.Is(err, ErrNoEsta) {
+		return nil, noEsta("No encontramos el comprobante.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (a *API) DarDeBajaComprobante(ctx context.Context, r facturacionapi.DarDeBajaComprobanteRequestObject) (facturacionapi.DarDeBajaComprobanteResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	motivo := trimJS(r.Body.Motivo)
+	if largoJS(motivo) < 4 {
+		return nil, comoProblema(errEmision("Escribí el motivo de la baja."))
+	}
+	if largoJS(motivo) > 300 {
+		return nil, comoProblema(errEmision("El motivo es muy largo."))
+	}
+	v, err := a.s.DarDeBaja(ctx, ses, r.Id.String(), motivo, r.Body.Corren)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	return ok(v), nil
+}
+
+func (a *API) ListarDadosDeBaja(ctx context.Context, _ facturacionapi.ListarDadosDeBajaRequestObject) (facturacionapi.ListarDadosDeBajaResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.DadosDeBaja(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
 }
 
 func (a *API) AnularComprobante(ctx context.Context, r facturacionapi.AnularComprobanteRequestObject) (facturacionapi.AnularComprobanteResponseObject, error) {
@@ -535,6 +612,88 @@ func (a *API) NotaDeCreditoParcial(ctx context.Context, r facturacionapi.NotaDeC
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "factura", r.Id.String(),
 		"Emitió una nota de crédito parcial: "+motivo, map[string]any{"notaDeCreditoId": id})
 	return emitido(id), nil
+}
+
+func (a *API) PadronIibb(ctx context.Context, _ facturacionapi.PadronIibbRequestObject) (facturacionapi.PadronIibbResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.Padron(ctx)
+	return ok(p), err
+}
+
+func (a *API) ImportarPadronIibb(ctx context.Context, r facturacionapi.ImportarPadronIibbRequestObject) (facturacionapi.ImportarPadronIibbResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := a.s.ImportarPadron(ctx, ses.UserID, r.Body)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "configuracion", "",
+		fmt.Sprintf("Importó el padrón de ARBA del %s al %s: %d clientes", res.Desde, res.Hasta, res.Cargados), nil)
+	return ok(res), nil
+}
+
+func (a *API) DatosDeDevolucion(ctx context.Context, r facturacionapi.DatosDeDevolucionRequestObject) (facturacionapi.DatosDeDevolucionResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	d, err := a.s.ParaDevolver(ctx, r.Id.String())
+	if errors.Is(err, ErrNoEsta) || err == nil && d == nil {
+		return nil, noEsta("Ese comprobante no es la factura de una venta.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(d), nil
+}
+
+func (a *API) DevolucionParcial(ctx context.Context, r facturacionapi.DevolucionParcialRequestObject) (facturacionapi.DevolucionParcialResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	p := PedidoDeDevolucion{InvoiceID: r.Id.String(), Clave: b.Clave, Destino: string(b.Destino), Motivo: b.Motivo}
+	if b.SinStock != nil {
+		p.SinStock = string(*b.SinStock)
+	}
+	if b.SucursalId != nil {
+		p.BranchID = *b.SucursalId
+	}
+	p.Renglones = renglonesADevolver(b.Renglones)
+	p.Importe = b.Importe
+	d, err := a.s.DevolucionParcial(ctx, ses.UserID, p)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	if !d.Repetida {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "factura", r.Id.String(),
+			"Devolución de "+formato.Moneda(d.Importe)+" por "+p.Destino+": "+trimJS(p.Motivo),
+			map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID, "sinStock": p.SinStock, "sucursalId": p.BranchID})
+	}
+	return ok(d), nil
+}
+
+func renglonesADevolver(rs facturacionapi.RenglonesADevolver) []RenglonADevolver {
+	out := make([]RenglonADevolver, len(rs))
+	for i, x := range rs {
+		out[i] = RenglonADevolver{ItemID: x.ItemId, Cantidad: x.Cantidad, AlStock: x.AlStock, DelAcopio: x.DelAcopio}
+	}
+	return out
+}
+
+func (a *API) CalcularDevolucion(ctx context.Context, r facturacionapi.CalcularDevolucionRequestObject) (facturacionapi.CalcularDevolucionResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	total, err := a.s.CalcularDevolucion(ctx, r.Id.String(), renglonesADevolver(r.Body.Renglones))
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	return ok(map[string]float64{"importe": total}), nil
 }
 
 func (a *API) NotaDeDebito(ctx context.Context, r facturacionapi.NotaDeDebitoRequestObject) (facturacionapi.NotaDeDebitoResponseObject, error) {
@@ -609,7 +768,7 @@ func (a *API) AutorizarComprobanteInterno(ctx context.Context, r facturacionapi.
 	if err := a.soloInterno(ctx); err != nil {
 		return nil, err
 	}
-	m, err := a.s.Autorizar(ctx, r.Id.String())
+	m, err := a.s.AutorizarAlEmitir(ctx, r.Id.String())
 	if motivo := Mensaje(err); motivo != "" {
 		return ok(map[string]string{"error": motivo}), nil
 	}

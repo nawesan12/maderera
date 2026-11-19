@@ -10,7 +10,7 @@ info:
     facturar un pedido y ver si ya se facturó, quien entra a /admin/pedidos
     (el botón está en la ficha del pedido); un comprobante, quien entra a
     /admin/pedidos o su cliente; anular, las notas, corregir el receptor de
-    un rechazado, el libro IVA ventas, el emisor y los puntos de venta: solo
+    un rechazado, dar de baja uno sin CAE, el libro IVA ventas, el emisor y los puntos de venta: solo
     el admin. El emisor, el comprobante y su PDF
     los puede pedir también el servidor de Next con el secreto interno (las
     hojas impresas, los avisos, WhatsApp), y las rutas /interno son solo
@@ -185,6 +185,60 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ResultadoDeAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/serie:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: SerieDelComprobante
+      description: >-
+        Lo que la ficha de un comprobante sin CAE muestra antes de reintentar o de darlo de baja: cuántos anteriores
+        sin CAE se autorizan antes, qué pendientes bajan un número con la baja, la deuda que se va con él y por qué no
+        se puede dar de baja (sin consultar a ARCA). Solo el admin.
+      responses:
+        "200":
+          description: La serie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SerieDelComprobante" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/baja:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: DarDeBajaComprobante
+      description: >-
+        Saca de la serie un comprobante que ARCA no autorizó y corre un número para abajo los pendientes que vienen
+        detrás. Se frena si tiene CAE, si un posterior tiene CAE, si tiene notas, si tiene cobros (con recibo vivo o
+        con plata sin recibo), si ARCA ya tiene el número o si los que se corren no son los que vio el admin (`corren`,
+        los ids en orden). Lo que era queda en el listado de dados de baja. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo, corren]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+                corren: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: La baja
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoDeBaja" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/dados-de-baja:
+    get:
+      operationId: ListarDadosDeBaja
+      description: Los comprobantes dados de baja, el más nuevo primero, con quién, cuándo, por qué y a quién se le corrió el número. Solo el admin.
+      responses:
+        "200":
+          description: Las bajas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DadoDeBaja" } }
   /api/v1/admin/facturacion/comprobantes/{id}/anular:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -221,6 +275,121 @@ paths:
                       cantidad: { type: number, format: double, nullable: true }
       responses:
         "200": { $ref: "#/components/responses/Emitido" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/padron-iibb:
+    get:
+      operationId: PadronIibb
+      description: El padrón de ARBA de los clientes, vigente hoy o después. Solo el admin.
+      responses:
+        "200":
+          description: Las filas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [cuit, cliente, alicuota, desde, hasta]
+                  properties:
+                    cuit: { type: string }
+                    cliente: { type: string, nullable: true }
+                    alicuota: { type: number, format: double }
+                    desde: { type: string }
+                    hasta: { type: string }
+    post:
+      operationId: ImportarPadronIibb
+      description: Importa el archivo mensual de ARBA (el .txt o el .zip) y se queda con los CUIT de los clientes. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Lo que se cargó
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [leidos, cargados, desde, hasta]
+                properties:
+                  leidos: { type: integer }
+                  cargados: { type: integer }
+                  desde: { type: string }
+                  hasta: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/devolucion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: DatosDeDevolucion
+      description: Lo que se puede devolver de la factura de una venta (renglones, tope por caja y por cuenta, sucursales). 404 si no es de una venta. Solo el admin.
+      responses:
+        "200":
+          description: Los datos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatosDeDevolucion" }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DevolucionParcial
+      description: Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta o afuera). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, destino, motivo, renglones]
+              additionalProperties: false
+              properties:
+                clave: { type: string }
+                destino: { type: string, enum: [caja, cuenta, afuera] }
+                motivo: { type: string }
+                sinStock: { type: string, enum: [rota, otro], nullable: true }
+                sucursalId: { type: string, nullable: true }
+                importe: { type: number, format: double, nullable: true }
+                renglones: { $ref: "#/components/schemas/RenglonesADevolver" }
+      responses:
+        "200":
+          description: La devolución hecha (o la misma, si la clave ya se usó)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, notaId, importe, repetida]
+                properties:
+                  id: { type: string }
+                  notaId: { type: string }
+                  importe: { type: number, format: double }
+                  repetida: { type: boolean }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/devolucion/calculo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: CalcularDevolucion
+      description: El importe que saldría con esos renglones (con los tributos y el resto exacto del renglón que se cierra), sin hacer nada. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [renglones]
+              additionalProperties: false
+              properties:
+                renglones: { $ref: "#/components/schemas/RenglonesADevolver" }
+      responses:
+        "200":
+          description: El importe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [importe]
+                properties:
+                  importe: { type: number, format: double }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/facturacion/comprobantes/{id}/nota-de-debito:
     parameters:
@@ -421,6 +590,91 @@ components:
               invoiceId: { type: string }
               aviso: { type: string, description: "Solo la factura manual de contado: el efectivo no entró a ningún arqueo" }
   schemas:
+    Corrimiento:
+      type: object
+      required: [invoiceId, de, a, receptorNombre, customerId]
+      properties:
+        invoiceId: { type: string }
+        de: { type: integer, format: int64 }
+        a: { type: integer, format: int64 }
+        receptorNombre: { type: string }
+        customerId: { type: string, nullable: true }
+        recibos: { type: array, items: { type: string } }
+    SerieDelComprobante:
+      type: object
+      required: [anterioresSinCae, corren, deuda, bloqueo]
+      properties:
+        anterioresSinCae: { type: integer }
+        corren: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+        deuda: { type: number, format: double }
+        bloqueo: { type: string, nullable: true }
+    ResultadoDeBaja:
+      type: object
+      required: [id, etiqueta, corridos]
+      properties:
+        id: { type: string }
+        etiqueta: { type: string }
+        corridos: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+    DadoDeBaja:
+      type: object
+      required: [id, tipo, puntoVenta, numero, receptorNombre, total, fechaEmision, motivo, usuarioNombre, createdAt, renumerados]
+      properties:
+        id: { type: string }
+        tipo: { type: string }
+        puntoVenta: { type: integer, format: int64 }
+        numero: { type: integer, format: int64 }
+        receptorNombre: { type: string }
+        total: { type: number, format: double }
+        fechaEmision: { type: string, format: date-time }
+        motivo: { type: string }
+        usuarioNombre: { type: string }
+        createdAt: { type: string, format: date-time }
+        renumerados: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+    RenglonesADevolver:
+      type: array
+      items:
+        type: object
+        required: [itemId, cantidad, alStock]
+        additionalProperties: false
+        properties:
+          itemId: { type: string }
+          cantidad: { type: number, format: double }
+          alStock: { type: boolean }
+          delAcopio: { type: number, format: double, nullable: true }
+    DatosDeDevolucion:
+      type: object
+      required: [pedido, renglones, caja, cuenta, afuera, conCliente, sucursal, sucursales, ventaAnulada]
+      properties:
+        pedido: { type: string }
+        renglones:
+          type: array
+          items:
+            type: object
+            required: [itemId, descripcion, unidad, cantidad, queda, unitario, alStock, enAcopio]
+            properties:
+              itemId: { type: string }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: number, format: double }
+              queda: { type: number, format: double }
+              unitario: { type: number, format: double }
+              alStock: { type: boolean }
+              enAcopio: { type: number, format: double }
+        caja: { type: number, format: double }
+        cuenta: { type: number, format: double }
+        afuera: { type: number, format: double }
+        ventaAnulada: { type: boolean }
+        conCliente: { type: boolean }
+        sucursal: { type: string, nullable: true }
+        sucursales:
+          type: array
+          items:
+            type: object
+            required: [id, nombre, cajaAbierta]
+            properties:
+              id: { type: string }
+              nombre: { type: string }
+              cajaAbierta: { type: boolean }
     Problema:
       type: object
       required: [title, status]
@@ -431,7 +685,7 @@ components:
         errores: { type: object, additionalProperties: { type: string } }
     EmisorFiscal:
       type: object
-      required: [id, razonSocial, nombreFantasia, cuit, condicionIva, domicilio, localidad, codigoPostal, telefono, email, ingresosBrutos, regimenIibb, alicuotaPercepcionIibb, percibeIibb, inicioActividades, leyenda, updatedAt]
+      required: [id, razonSocial, nombreFantasia, cuit, condicionIva, domicilio, localidad, codigoPostal, telefono, email, ingresosBrutos, regimenIibb, alicuotaPercepcionIibb, alicuotaIibbSinPadron, percibeIibb, inicioActividades, leyenda, updatedAt, ivaDesde, ivaSaldoTecnico, ivaSaldoLibre]
       properties:
         id: { type: string }
         razonSocial: { type: string }
@@ -445,11 +699,15 @@ components:
         email: { type: string, nullable: true }
         ingresosBrutos: { type: string, nullable: true }
         regimenIibb: { type: string, enum: [local, convenio_multilateral, exento, no_inscripto] }
-        alicuotaPercepcionIibb: { type: string }
+        alicuotaPercepcionIibb: { type: string, description: La alícuota única de antes; ya no se usa (la percepción sale del padrón) }
+        alicuotaIibbSinPadron: { type: string, nullable: true, description: La alícuota para quien no figura en el padrón; nula, no se le percibe }
         percibeIibb: { type: boolean }
         inicioActividades: { type: string, format: date-time, nullable: true }
         leyenda: { type: string, nullable: true }
         updatedAt: { type: string, format: date-time }
+        ivaDesde: { type: string, nullable: true, description: "El primer mes de la posición de IVA (AAAA-MM): el que sigue a la última DDJJ presentada" }
+        ivaSaldoTecnico: { type: string, description: El saldo técnico con que arranca }
+        ivaSaldoLibre: { type: string, description: El saldo de libre disponibilidad con que arranca }
     CondicionIva: { type: string, enum: [responsable_inscripto, monotributista, exento, consumidor_final, no_categorizado] }
     TipoComprobante: { type: string, enum: [factura_a, factura_b, factura_c, nota_credito_a, nota_credito_b, nota_credito_c, nota_debito_a, nota_debito_b, nota_debito_c] }
     EstadoComprobante: { type: string, enum: [borrador, emitida, autorizada, anulada, rechazada] }
@@ -554,7 +812,7 @@ components:
         importe: { type: string }
     ComprobanteCompleto:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl]
+      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -576,11 +834,13 @@ components:
         total: { type: string }
         cae: { type: string, nullable: true }
         caeVencimiento: { type: string, format: date-time, nullable: true }
+        caeAmbiente: { type: string, nullable: true, description: De qué ambiente de ARCA salió el CAE (homologacion o produccion) }
         observacionesArca: { type: string, nullable: true }
         comprobanteOrigenId: { type: string, nullable: true }
         acreditado: { type: string }
         debitado: { type: string }
         fechaEmision: { type: string, format: date-time }
+        fechaEmisionOriginal: { type: string, format: date-time, nullable: true, description: "La fecha con que se emitió, si al reintentar salió con la del día" }
         fechaVencimiento: { type: string, format: date-time, nullable: true }
         observaciones: { type: string, nullable: true }
         puntoVentaNombre: { type: string, nullable: true }

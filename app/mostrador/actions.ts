@@ -259,7 +259,8 @@ export async function emitirPresupuestoDeMostrador(presupuesto: {
 
 /**
  * Anula una venta del mostrador. Si la venta tenía factura, esto **no** emite
- * la nota de crédito: avisa que hace falta.
+ * la nota de crédito: avisa que hace falta. Sin CAE no hay nota posible (Go
+ * la rechaza): esa factura se da de baja, o la serie la mandaría a ARCA.
  */
 export async function anularVenta(orderId: string, motivo: string): Promise<EstadoMostrador> {
   const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/anular", {
@@ -270,9 +271,11 @@ export async function anularVenta(orderId: string, motivo: string): Promise<Esta
   refrescar();
   return {
     ok: r.data.ok,
-    avisoFiscal: r.data.facturaPendiente
-      ? "La venta tenía factura. Emitile la nota de crédito desde Facturación."
-      : undefined,
+    avisoFiscal: !r.data.facturaPendiente
+      ? undefined
+      : r.data.facturaSinCae
+        ? "La venta tenía factura sin CAE. Dala de baja desde Facturación."
+        : "La venta tenía factura. Emitile la nota de crédito desde Facturación.",
   };
 }
 

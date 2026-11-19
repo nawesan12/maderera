@@ -37,7 +37,7 @@ export async function NumerosDelNegocio({
     ventasPorSucursal(),
   ]);
 
-  const { meDeben, debo, cheques, plataHoy: plata, ganancia } = n;
+  const { meDeben, debo, cheques, plataHoy: plata, ganancia, devoluciones } = n;
 
   return (
     <div className="space-y-4">
@@ -57,15 +57,23 @@ export async function NumerosDelNegocio({
         <Tarjeta
           titulo="Debo"
           valor={debo.total}
-          href="/admin/compras/facturas"
+          // El total es el libro de cada proveedor, el mismo de Pagos: la
+          // tarjeta lleva ahí para que las dos cifras se vean iguales.
+          href="/admin/compras/pagos"
           alerta={debo.vencido > 0}
           renglones={[
             debo.vencido > 0
               ? `${moneda.format(debo.vencido)} vencido · ${plural(debo.facturasVencidas, "factura")}`
               : "Nada vencido",
+            // Lo de la semana es la cifra con que el dueño decide los pagos:
+            // va siempre. Lo que se debe sin factura (el saldo de ISIS, un
+            // remito) explica por qué el total pasa a las facturas, pero
+            // después de la migración casi todos los proveedores lo tienen:
+            // si reemplazaba a la semana, la semana no se veía nunca más.
             debo.estaSemana > 0
               ? `${moneda.format(debo.estaSemana)} vence esta semana`
               : "Nada vence esta semana",
+            ...(debo.sinFactura > 0 ? [`${moneda.format(debo.sinFactura)} sin factura`] : []),
           ]}
         />
         <Tarjeta
@@ -120,6 +128,11 @@ export async function NumerosDelNegocio({
           variacion={metricas.variacionVentas}
           renglones={[
             plural(metricas.pedidosSinEntregar, "pedido sin entregar", "pedidos sin entregar"),
+            // Las devoluciones del mes van a la vista: la plata que sale de
+            // la caja por una devolución se controla mirándola.
+            ...(devoluciones.cantidad > 0
+              ? [`Devoluciones del mes ${moneda.format(devoluciones.total)} · ${plural(devoluciones.cantidad, "devolución", "devoluciones")}`]
+              : []),
           ]}
         />
       </div>

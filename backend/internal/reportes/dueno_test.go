@@ -1,11 +1,14 @@
 package reportes
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	"mjbj/internal/compras"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/pruebas"
 )
 
@@ -43,6 +46,9 @@ func TestNumerosDelDueno(t *testing.T) {
 	compra("nota_credito_a", 5, 100, nil)
 	pago := e.id(t, `insert into supplier_payments (supplier_id, total, neto) values ($1, 600, 600) returning id`, prov)
 	e.exec(t, `insert into supplier_payment_allocations (payment_id, purchase_invoice_id, importe) values ($1, $2, 400), ($1, $3, 200)`, pago, f1, f4)
+	// El libro del proveedor, como lo dejan CargarFactura y el pago: las
+	// cuatro facturas, la nota de crédito y el pago.
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto) values ($1, 'factura', 1750), ($1, 'nota_credito', -100), ($1, 'pago', -600)`, prov)
 
 	// Cheques: a cobrar, el vencido en cartera y el depositado que vence el
 	// 20; a cubrir, el propio del 17. No: el de fin de noviembre, ni el de un
@@ -99,7 +105,9 @@ func TestNumerosDelDueno(t *testing.T) {
 	if n.MeDeben != (MeDeben{Total: 1300, Vencido: 800, Clientes: 1, ClientesConVencido: 1}) {
 		t.Errorf("me deben: %+v", n.MeDeben)
 	}
-	if n.Debo != (Debo{Total: 1150, Facturas: 3, Vencido: 600, FacturasVencidas: 1, EstaSemana: 500, FacturasEstaSemana: 1}) {
+	// El libro debe 1050 (la nota de crédito sin imputar resta): lo de esta
+	// semana se topea en lo que queda después de lo vencido.
+	if n.Debo != (Debo{Total: 1050, Facturas: 3, Vencido: 600, FacturasVencidas: 1, EstaSemana: 450, FacturasEstaSemana: 1, Proveedores: 1}) {
 		t.Errorf("debo: %+v", n.Debo)
 	}
 	if n.Cheques != (ChequesDeLaSemana{ACobrar: Monto{300, 2}, ACubrir: Monto{300, 1}}) {
@@ -185,5 +193,86 @@ func TestParaHoyLoQueSeSumo(t *testing.T) {
 	e.exec(t, `update site_settings set valor = 'si' where clave = 'tienda_activa'`)
 	if _, cuerpo, _ = pedir(t, adm, e.u+"inicio/pendientes"); strings.Contains(cuerpo, "catalogo-") {
 		t.Errorf("tienda encendida: %s", cuerpo)
+	}
+}
+
+// **«Debo» daba una cifra en el Resumen y otra en Pagos.** El Resumen sumaba
+// solo las facturas de compra: dejaba afuera el saldo inicial de ISIS, los
+// ajustes y la deuda que nace con el remito, y un pago sin imputar lo dejaba
+// por encima de lo que se debe. Ahora sale del libro de cada proveedor, el
+// mismo que lista Pagos (incluidos los inactivos con deuda), y las dos
+// pantallas dicen lo mismo.
+func TestDeboSaleDelLibro(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	proveedor := func(nombre, estado string) string {
+		return e.id(t, `insert into suppliers (nombre, estado) values ($1, $2::estado_proveedor) returning id`, nombre, estado)
+	}
+	libro := func(prov, tipo string, monto float64) {
+		e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto) values ($1, $2::tipo_movimiento_proveedor, $3)`, prov, tipo, monto)
+	}
+	// El saldo inicial que vino de ISIS, sin ninguna factura.
+	isis := proveedor("Saldo de ISIS", "activo")
+	libro(isis, "ajuste", 1000)
+	// Lo recibido con remito, todavía sin factura.
+	remito := proveedor("Con remito", "activo")
+	libro(remito, "factura", 500)
+	// Una factura vencida de 800 y un pago a cuenta de 500 sin imputar: se
+	// deben 300 y lo vencido no puede pasar de ahí.
+	aCuenta := proveedor("Pago a cuenta", "activo")
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
+		values ($1, 'factura_a', 1, 1, 800, 0, 0, 0, 0, 800, '2026-09-01T00:00:00Z', '2026-10-01T00:00:00Z')`, aCuenta)
+	libro(aCuenta, "factura", 800)
+	libro(aCuenta, "pago", -500)
+	// Un anticipo: el saldo a favor no descuenta lo que se le debe a otro.
+	anticipo := proveedor("Anticipo", "activo")
+	libro(anticipo, "pago", -200)
+	// Uno al que ya no se le compra, con deuda.
+	inactivo := proveedor("Inactivo", "inactivo")
+	libro(inactivo, "ajuste", 100)
+	// Uno dado de baja del todo no cuenta.
+	borrado := proveedor("Borrado", "activo")
+	libro(borrado, "ajuste", 9999)
+	e.exec(t, `update suppliers set active = false where id = $1`, borrado)
+
+	d, err := e.s.Debo(ctx, ahoraDePrueba)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d != (Debo{Total: 1900, Facturas: 1, Vencido: 300, FacturasVencidas: 1, SinFactura: 1600, Proveedores: 4}) {
+		t.Fatalf("debo: %+v", d)
+	}
+	// La misma cifra que Pagos: la suma de los libros con saldo positivo.
+	lista, err := compras.Nuevo(e.pool, silencio).ListarProveedores(ctx, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	suma := 0.0
+	for _, p := range lista {
+		if p.Saldo > 0.005 {
+			suma += p.Saldo
+		}
+	}
+	if jsmath.Redondear2(suma) != d.Total {
+		t.Fatalf("Pagos dice %v y el Resumen %v", suma, d.Total)
+	}
+}
+
+func TestDeudaConProveedor(t *testing.T) {
+	casos := []struct {
+		libro, facturado, vencido, semana float64
+		quiere                            DeudaDeUnProveedor
+	}{
+		{0, 500, 500, 0, DeudaDeUnProveedor{}},
+		{-200, 0, 0, 0, DeudaDeUnProveedor{}},
+		{1000, 0, 0, 0, DeudaDeUnProveedor{Debe: 1000, SinFactura: 1000}},
+		{300, 800, 800, 0, DeudaDeUnProveedor{Debe: 300, Vencido: 300}},
+		{1050, 1150, 600, 500, DeudaDeUnProveedor{Debe: 1050, Vencido: 600, EstaSemana: 450}},
+		{1500, 1000, 400, 300, DeudaDeUnProveedor{Debe: 1500, Vencido: 400, EstaSemana: 300, SinFactura: 500}},
+	}
+	for _, c := range casos {
+		if r := DeudaConProveedor(c.libro, c.facturado, c.vencido, c.semana); r != c.quiere {
+			t.Errorf("%+v: %+v", c, r)
+		}
 	}
 }

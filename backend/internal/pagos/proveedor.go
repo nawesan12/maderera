@@ -64,16 +64,44 @@ type Proveedor interface {
 // dejaba a cualquiera aprobar su propio pago desde /pago-demo.
 func (c Config) ModoDemo() bool { return c.Proveedor == "demo" }
 
-// Elegir es proveedorPagos(): el demo si se pidió, Mercado Pago si hay token,
-// y nil si no hay con qué cobrar (el pago online está apagado).
+// Elegir es proveedorPagos(): el demo si se pidió, Mercado Pago si hay token
+// **y secreto del webhook**, y nil si no hay con qué cobrar (el pago online
+// está apagado).
+//
+// Sin el secreto, FirmaValida da falso y cada aviso se descarta: se cobraba
+// y no se acreditaba nunca (revisión del comité, hallazgo 38). Así no se abre
+// ningún checkout nuevo; lo que ya quedó pendiente se rescata con
+// «Reconsultar», que va por PorNombre y solo necesita el token.
 func (c Config) Elegir() Proveedor {
 	if c.ModoDemo() {
 		return demo{c}
 	}
-	if c.AccessToken != "" {
+	if c.AccessToken != "" && c.WebhookSecret != "" {
 		return &mercadoPago{c, &http.Client{Timeout: 20 * time.Second}}
 	}
 	return nil
+}
+
+// Estados de Mercado Pago para el panel.
+const (
+	MercadoPagoEncendido  = "encendido"
+	MercadoPagoSinSecreto = "sin_secreto"
+	MercadoPagoApagado    = "apagado"
+	MercadoPagoDemo       = "demo"
+)
+
+// EstadoMercadoPago dice si el checkout de Mercado Pago está abierto y, si
+// no, por qué: sin token, o con token y sin el secreto del webhook.
+func (c Config) EstadoMercadoPago() string {
+	switch {
+	case c.ModoDemo():
+		return MercadoPagoDemo
+	case c.AccessToken != "" && c.WebhookSecret != "":
+		return MercadoPagoEncendido
+	case c.AccessToken != "":
+		return MercadoPagoSinSecreto
+	}
+	return MercadoPagoApagado
 }
 
 // PorNombre es proveedorPorNombre: nil si ese proveedor no está encendido.

@@ -42,8 +42,8 @@ export function Hero({
           se veía era texto sobre rayas. */}
       <div className="absolute inset-0 lg:left-auto lg:w-[46%]">
         <Image
-          src="/fotos/premium_photo-1663133630972-d9b620dfea27.jpg"
-          alt="Corte de madera con sierra en el aserradero"
+          src="/fotos/photo-1422246654994-34520d5a0340.jpg"
+          alt="Pilas de tablas en el depósito"
           fill
           className="object-cover object-center"
           preload
@@ -52,8 +52,11 @@ export function Hero({
           sizes="(min-width: 1024px) 46vw, 60vw"
         />
         {/* El degradado solo funde el borde contra el fondo del texto. Antes
-            cubría el 38% del panel y se comía justo la sierra, que es lo que
-            hay que ver. */}
+            cubría el 38% del panel y se comía las cabezas de las tablas, que
+            son lo que hay que ver. La foto es oscura de por sí y se funde con
+            el fondo sin taparla más. Antes era una foto de Unsplash+ con la
+            marca de agua encima: ninguna foto `premium_` vuelve a entrar
+            (tests/fotos.test.ts). */}
         <div
           className="absolute inset-0 hidden bg-[linear-gradient(to_right,var(--color-oscuro-marca),rgb(38_35_31_/_0.45)_14%,transparent_34%)] lg:block"
           aria-hidden="true"

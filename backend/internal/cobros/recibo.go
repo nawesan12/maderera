@@ -144,6 +144,12 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 		if err := q.AtarMovimientoAlRecibo(ctx, sqlc.AtarMovimientoAlReciboParams{ID: id, AccountMovementID: &mov}); err != nil {
 			return ReciboEmitido{}, err
 		}
+		// El reparto entre los circuitos se fija ahora y no se recalcula
+		// (reparto.go). Sin cliente lo fija quien ata el recibo a la factura
+		// que cobra, que es de donde sale la cuenta.
+		if _, err := FijarReparto(ctx, tx, id); err != nil {
+			return ReciboEmitido{}, err
+		}
 	}
 
 	var efectivo []float64

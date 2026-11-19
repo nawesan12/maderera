@@ -99,7 +99,7 @@ paths:
   /api/v1/admin/cierre/asientos:
     get:
       operationId: AsientosDelPeriodo
-      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      parameters: [{ $ref: "#/components/parameters/Mes" }, { $ref: "#/components/parameters/Circuito" }]
       responses:
         "200":
           description: Los asientos del mes en orden de fecha, cada uno con si balancea
@@ -109,7 +109,7 @@ paths:
   /api/v1/admin/cierre/asientos-csv:
     get:
       operationId: AsientosCsv
-      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      parameters: [{ $ref: "#/components/parameters/Mes" }, { $ref: "#/components/parameters/Circuito" }]
       responses:
         "200":
           description: Los asientos del mes en CSV, un renglón por línea
@@ -239,6 +239,13 @@ components:
     RubroProducto: { name: rubro, in: query, description: El slug de la subcategoría, schema: { type: string } }
     SucursalSlug: { name: sucursal, in: query, description: casa-central, aserradero o todos, schema: { type: string } }
     Mes: { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+    Circuito:
+      name: circuito
+      in: query
+      description: >-
+        blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la
+        parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv.
+      schema: { type: string, enum: [blanco, negro] }
   schemas:
     ReporteFila:
       type: object
@@ -300,6 +307,7 @@ components:
         fecha: { type: string, format: date-time }
         concepto: { type: string }
         balancea: { type: boolean }
+        circuito: { type: string, enum: [negro], description: "Solo en los del circuito B" }
         renglones:
           type: array
           items:
@@ -335,14 +343,29 @@ components:
         cantidad: { type: integer }
     CierreResumen:
       type: object
-      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, resultado]
+      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, iva, resultado]
       properties:
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
         compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
         gastos: { $ref: "#/components/schemas/CierreTotales" }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
-        posicionIva: { type: number, format: double, description: Positivo, hay que depositar }
+        posicionIva: { type: number, format: double, description: Débito menos crédito del mes, sin percepciones ni saldos }
+        iva:
+          type: object
+          description: La posición de IVA con percepciones, retenciones y los saldos técnico y de libre disponibilidad que se arrastran
+          required: [debito, credito, saldoTecnicoAnterior, percepciones, retenciones, saldoLibreAnterior, aDepositar, saldoTecnico, saldoLibre, sinArranque]
+          properties:
+            debito: { type: number, format: double }
+            credito: { type: number, format: double }
+            saldoTecnicoAnterior: { type: number, format: double }
+            percepciones: { type: number, format: double }
+            retenciones: { type: number, format: double }
+            saldoLibreAnterior: { type: number, format: double }
+            aDepositar: { type: number, format: double }
+            saldoTecnico: { type: number, format: double }
+            saldoLibre: { type: number, format: double }
+            sinArranque: { type: boolean, description: Sin el mes y los saldos de la última DDJJ presentada }
         resultado: { $ref: "#/components/schemas/ResultadoComparado" }
     InicioMetricas:
       type: object
@@ -441,8 +464,15 @@ components:
         variacion: { type: number, format: double, nullable: true }
     NumerosDelDueno:
       type: object
-      required: [meDeben, debo, cheques, plataHoy, ganancia]
+      required: [meDeben, debo, cheques, plataHoy, ganancia, devoluciones]
       properties:
+        devoluciones:
+          type: object
+          description: Las devoluciones parciales del mes en curso.
+          required: [total, cantidad]
+          properties:
+            total: { type: number, format: double }
+            cantidad: { type: integer }
         meDeben:
           type: object
           required: [total, vencido, clientes, clientesConVencido]
@@ -453,7 +483,10 @@ components:
             clientesConVencido: { type: integer }
         debo:
           type: object
-          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana]
+          description: >-
+            El libro de cada proveedor (supplier_movements), como Pagos a proveedores, con los inactivos que deben.
+            Lo vencido y lo de esta semana salen de las facturas, sin pasar el libro de cada uno.
+          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana, sinFactura, proveedores]
           properties:
             total: { type: number, format: double }
             facturas: { type: integer }
@@ -461,6 +494,8 @@ components:
             facturasVencidas: { type: integer }
             estaSemana: { type: number, format: double }
             facturasEstaSemana: { type: integer }
+            sinFactura: { type: number, format: double, description: "Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)" }
+            proveedores: { type: integer }
         cheques:
           type: object
           required: [aCobrar, aCubrir]

@@ -211,31 +211,36 @@ type TributoDeFactura struct {
 
 // Completo es el comprobante con renglones, cobros y tributos (leerComprobante).
 type Completo struct {
-	ID                   string             `json:"id"`
-	Tipo                 string             `json:"tipo"`
-	PuntoVenta           int64              `json:"puntoVenta"`
-	Numero               int64              `json:"numero"`
-	Estado               string             `json:"estado"`
-	CustomerID           *string            `json:"customerId"`
-	OrderID              *string            `json:"orderId"`
-	ReceptorNombre       string             `json:"receptorNombre"`
-	ReceptorCuit         *string            `json:"receptorCuit"`
-	ReceptorCondicionIva string             `json:"receptorCondicionIva"`
-	ReceptorDomicilio    *string            `json:"receptorDomicilio"`
-	Neto                 string             `json:"neto"`
-	Iva21                string             `json:"iva21"`
-	Iva105               string             `json:"iva105"`
-	Iva27                string             `json:"iva27"`
-	Exento               string             `json:"exento"`
-	TributosTotal        string             `json:"tributosTotal"`
-	Total                string             `json:"total"`
-	Cae                  *string            `json:"cae"`
-	CaeVencimiento       *time.Time         `json:"caeVencimiento"`
-	ObservacionesArca    *string            `json:"observacionesArca"`
-	ComprobanteOrigenID  *string            `json:"comprobanteOrigenId"`
-	Acreditado           string             `json:"acreditado"`
-	Debitado             string             `json:"debitado"`
-	FechaEmision         time.Time          `json:"fechaEmision"`
+	ID                   string     `json:"id"`
+	Tipo                 string     `json:"tipo"`
+	PuntoVenta           int64      `json:"puntoVenta"`
+	Numero               int64      `json:"numero"`
+	Estado               string     `json:"estado"`
+	CustomerID           *string    `json:"customerId"`
+	OrderID              *string    `json:"orderId"`
+	ReceptorNombre       string     `json:"receptorNombre"`
+	ReceptorCuit         *string    `json:"receptorCuit"`
+	ReceptorCondicionIva string     `json:"receptorCondicionIva"`
+	ReceptorDomicilio    *string    `json:"receptorDomicilio"`
+	Neto                 string     `json:"neto"`
+	Iva21                string     `json:"iva21"`
+	Iva105               string     `json:"iva105"`
+	Iva27                string     `json:"iva27"`
+	Exento               string     `json:"exento"`
+	TributosTotal        string     `json:"tributosTotal"`
+	Total                string     `json:"total"`
+	Cae                  *string    `json:"cae"`
+	CaeVencimiento       *time.Time `json:"caeVencimiento"`
+	// CaeAmbiente: un CAE de homologación es de prueba (no va al libro IVA
+	// y el PDF lo dice).
+	CaeAmbiente         *string   `json:"caeAmbiente"`
+	ObservacionesArca   *string   `json:"observacionesArca"`
+	ComprobanteOrigenID *string   `json:"comprobanteOrigenId"`
+	Acreditado          string    `json:"acreditado"`
+	Debitado            string    `json:"debitado"`
+	FechaEmision        time.Time `json:"fechaEmision"`
+	// La fecha con que se emitió, si al reintentar salió con la del día.
+	FechaEmisionOriginal *time.Time         `json:"fechaEmisionOriginal"`
 	FechaVencimiento     *time.Time         `json:"fechaVencimiento"`
 	Observaciones        *string            `json:"observaciones"`
 	PuntoVentaNombre     *string            `json:"puntoVentaNombre"`
@@ -255,13 +260,14 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 	var c Completo
 	err := s.pool.QueryRow(ctx, `SELECT i.id, i.tipo::text, i.punto_venta, i.numero, i.estado::text, i.customer_id, i.order_id,
 		i.receptor_nombre, i.receptor_cuit, i.receptor_condicion_iva::text, i.receptor_domicilio, i.neto::text, i.iva21::text,
-		i.iva105::text, i.iva27::text, i.exento::text, i.tributos::text, i.total::text, i.cae, i.cae_vencimiento, i.observaciones_arca,
-		i.comprobante_origen_id, i.acreditado::text, i.debitado::text, i.fecha_emision, i.fecha_vencimiento, i.observaciones, p.nombre, b.name
+		i.iva105::text, i.iva27::text, i.exento::text, i.tributos::text, i.total::text, i.cae, i.cae_vencimiento, i.cae_ambiente, i.observaciones_arca,
+		i.comprobante_origen_id, i.acreditado::text, i.debitado::text, i.fecha_emision, i.fecha_vencimiento, i.observaciones, p.nombre, b.name,
+		i.fecha_emision_original
 		FROM invoices i LEFT JOIN puntos_venta p ON p.id = i.punto_venta_id LEFT JOIN branches b ON b.id = p.branch_id
 		WHERE i.id = $1`, id).Scan(&c.ID, &c.Tipo, &c.PuntoVenta, &c.Numero, &c.Estado, &c.CustomerID, &c.OrderID, &c.ReceptorNombre,
 		&c.ReceptorCuit, &c.ReceptorCondicionIva, &c.ReceptorDomicilio, &c.Neto, &c.Iva21, &c.Iva105, &c.Iva27, &c.Exento,
-		&c.TributosTotal, &c.Total, &c.Cae, &c.CaeVencimiento, &c.ObservacionesArca, &c.ComprobanteOrigenID, &c.Acreditado,
-		&c.Debitado, &c.FechaEmision, &c.FechaVencimiento, &c.Observaciones, &c.PuntoVentaNombre, &c.Sucursal)
+		&c.TributosTotal, &c.Total, &c.Cae, &c.CaeVencimiento, &c.CaeAmbiente, &c.ObservacionesArca, &c.ComprobanteOrigenID, &c.Acreditado,
+		&c.Debitado, &c.FechaEmision, &c.FechaVencimiento, &c.Observaciones, &c.PuntoVentaNombre, &c.Sucursal, &c.FechaEmisionOriginal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -441,6 +447,7 @@ func (s *Servicio) LibroIva(ctx context.Context, desde, hasta time.Time) (Libro,
 	filas, err := s.pool.Query(ctx, `SELECT id, fecha_emision, tipo::text, punto_venta, numero, receptor_nombre, receptor_cuit,
 		receptor_condicion_iva::text, neto::float8, iva21::float8, iva105::float8, iva27::float8, exento::float8, tributos::float8,
 		total::float8, cae, estado::text FROM invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND cae IS NOT NULL
+		AND cae_ambiente IS DISTINCT FROM 'homologacion'
 		ORDER BY fecha_emision, numero`, desde, hasta)
 	if err != nil {
 		return Libro{}, err
@@ -521,6 +528,8 @@ type Pedido struct {
 
 // ItemDePedido es un renglón del pedido, con su alícuota.
 type ItemDePedido struct {
+	// ID es el renglón del pedido: va a la factura, no a la respuesta.
+	ID             string  `json:"-"`
 	Descripcion    string  `json:"descripcion"`
 	Unidad         string  `json:"unidad"`
 	Cantidad       string  `json:"cantidad"`
@@ -548,7 +557,7 @@ func (s *Servicio) PedidoParaFacturar(ctx context.Context, id string) (*Pedido, 
 	// producto solo para renglones viejos que no la tienen. El TS leía la
 	// del producto de hoy: si cambió después de la venta, la factura salía
 	// con otra alícuota que la que se cobró.
-	filas, err := s.pool.Query(ctx, `SELECT oi.descripcion, oi.unidad, oi.cantidad::text, oi.precio_unitario::text,
+	filas, err := s.pool.Query(ctx, `SELECT oi.id, oi.descripcion, oi.unidad, oi.cantidad::text, oi.precio_unitario::text,
 		coalesce(oi.alicuota_iva, pr.alicuota_iva)::text
 		FROM order_items oi LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products pr ON pr.id = v.product_id
 		WHERE oi.order_id = $1 ORDER BY oi.orden`, id)
@@ -559,7 +568,7 @@ func (s *Servicio) PedidoParaFacturar(ctx context.Context, id string) (*Pedido, 
 	p.Items = []ItemDePedido{}
 	for filas.Next() {
 		var i ItemDePedido
-		if err := filas.Scan(&i.Descripcion, &i.Unidad, &i.Cantidad, &i.PrecioUnitario, &i.Alicuota); err != nil {
+		if err := filas.Scan(&i.ID, &i.Descripcion, &i.Unidad, &i.Cantidad, &i.PrecioUnitario, &i.Alicuota); err != nil {
 			return nil, err
 		}
 		p.Items = append(p.Items, i)

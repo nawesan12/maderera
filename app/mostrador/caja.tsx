@@ -173,12 +173,13 @@ export function PanelDeCaja({
                   <dl className="mt-2 divide-y divide-linea-tenue rounded-xl border border-linea">
                     {cierre.map((r) => (
                       <div
-                        key={`${r.devolucion ? "dev-" : ""}${r.medioPago}`}
+                        key={`${r.devolucion ? "dev-" : ""}${r.medioPago}-${r.quien ?? ""}`}
                         className="flex items-baseline justify-between gap-3 px-4 py-2.5"
                       >
                         <dt className="text-base">
                           {r.devolucion && "Devolución · "}
                           {NOMBRE_DEL_MEDIO[r.medioPago] ?? r.medioPago}
+                          {r.quien && ` · ${r.quien}`}
                           <span className="ml-1.5 text-sm text-muted-foreground">
                             ({r.cantidad})
                           </span>

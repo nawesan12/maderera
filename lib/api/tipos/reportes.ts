@@ -363,6 +363,11 @@ export interface components {
             fecha: string;
             concepto: string;
             balancea: boolean;
+            /**
+             * @description Solo en los del circuito B
+             * @enum {string}
+             */
+            circuito?: "negro";
             renglones: {
                 cuenta: string;
                 nombre: string;
@@ -401,9 +406,32 @@ export interface components {
             retencionesSufridas: components["schemas"]["CierreTotales"];
             /**
              * Format: double
-             * @description Positivo
+             * @description Débito menos crédito del mes
              */
             posicionIva: number;
+            /** @description La posición de IVA con percepciones, retenciones y los saldos técnico y de libre disponibilidad que se arrastran */
+            iva: {
+                /** Format: double */
+                debito: number;
+                /** Format: double */
+                credito: number;
+                /** Format: double */
+                saldoTecnicoAnterior: number;
+                /** Format: double */
+                percepciones: number;
+                /** Format: double */
+                retenciones: number;
+                /** Format: double */
+                saldoLibreAnterior: number;
+                /** Format: double */
+                aDepositar: number;
+                /** Format: double */
+                saldoTecnico: number;
+                /** Format: double */
+                saldoLibre: number;
+                /** @description Sin el mes y los saldos de la última DDJJ presentada */
+                sinArranque: boolean;
+            };
             resultado: components["schemas"]["ResultadoComparado"];
         };
         InicioMetricas: {
@@ -498,6 +526,12 @@ export interface components {
             variacion: number | null;
         };
         NumerosDelDueno: {
+            /** @description Las devoluciones parciales del mes en curso. */
+            devoluciones: {
+                /** Format: double */
+                total: number;
+                cantidad: number;
+            };
             meDeben: {
                 /** Format: double */
                 total: number;
@@ -506,6 +540,7 @@ export interface components {
                 clientes: number;
                 clientesConVencido: number;
             };
+            /** @description El libro de cada proveedor (supplier_movements), como Pagos a proveedores, con los inactivos que deben. Lo vencido y lo de esta semana salen de las facturas, sin pasar el libro de cada uno. */
             debo: {
                 /** Format: double */
                 total: number;
@@ -516,6 +551,12 @@ export interface components {
                 /** Format: double */
                 estaSemana: number;
                 facturasEstaSemana: number;
+                /**
+                 * Format: double
+                 * @description Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)
+                 */
+                sinFactura: number;
+                proveedores: number;
             };
             cheques: {
                 aCobrar: components["schemas"]["Monto"];
@@ -598,6 +639,8 @@ export interface components {
         SucursalSlug: string;
         /** @description aaaa-mm (si falta */
         Mes: string;
+        /** @description blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv. */
+        Circuito: "blanco" | "negro";
     };
     requestBodies: never;
     headers: never;
@@ -754,6 +797,8 @@ export interface operations {
             query?: {
                 /** @description aaaa-mm (si falta */
                 periodo?: components["parameters"]["Mes"];
+                /** @description blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv. */
+                circuito?: components["parameters"]["Circuito"];
             };
             header?: never;
             path?: never;
@@ -777,6 +822,8 @@ export interface operations {
             query?: {
                 /** @description aaaa-mm (si falta */
                 periodo?: components["parameters"]["Mes"];
+                /** @description blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv. */
+                circuito?: components["parameters"]["Circuito"];
             };
             header?: never;
             path?: never;

@@ -71,6 +71,10 @@ type ProveedorListado struct {
 	Estado           string     `json:"estado"`
 	Saldo            float64    `json:"saldo"`
 	UltimoMovimiento *time.Time `json:"ultimoMovimiento"`
+	// Para que el pago no ofrezca los regímenes que no le corresponden.
+	CondicionIva         string  `json:"condicionIva"`
+	CondicionGanancias   *string `json:"condicionGanancias"`
+	ExentoGananciasHasta *string `json:"exentoGananciasHasta"`
 }
 
 // ListarProveedores es listarProveedores: los vivos, con el saldo sumado en
@@ -86,7 +90,7 @@ func (s *Servicio) ListarProveedores(ctx context.Context, busqueda, estado strin
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT s.id, s.nombre, s.razon_social, s.cuit, s.rubro, s.contacto, s.telefono, s.email, s.dias_pago, s.estado::text,
-		  saldos.saldo, saldos.ultimo
+		  saldos.saldo, saldos.ultimo, s.condicion_iva::text, s.condicion_ganancias, to_char(s.exento_ganancias_hasta, 'YYYY-MM-DD')
 		FROM suppliers s
 		LEFT JOIN (SELECT supplier_id, sum(monto) AS saldo, max(created_at) AS ultimo FROM supplier_movements GROUP BY supplier_id) saldos
 		  ON saldos.supplier_id = s.id
@@ -98,7 +102,8 @@ func (s *Servicio) ListarProveedores(ctx context.Context, busqueda, estado strin
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ProveedorListado, error) {
 		var p ProveedorListado
 		var saldo *jsmath.Num
-		err := r.Scan(&p.ID, &p.Nombre, &p.RazonSocial, &p.Cuit, &p.Rubro, &p.Contacto, &p.Telefono, &p.Email, &p.DiasPago, &p.Estado, &saldo, &p.UltimoMovimiento)
+		err := r.Scan(&p.ID, &p.Nombre, &p.RazonSocial, &p.Cuit, &p.Rubro, &p.Contacto, &p.Telefono, &p.Email, &p.DiasPago, &p.Estado, &saldo, &p.UltimoMovimiento,
+			&p.CondicionIva, &p.CondicionGanancias, &p.ExentoGananciasHasta)
 		p.Saldo = numOCero(saldo)
 		return p, err
 	})
@@ -120,28 +125,31 @@ type MovimientoDeCuenta struct {
 
 // Proveedor es la ficha completa, con el libro de la cuenta.
 type Proveedor struct {
-	ID           string               `json:"id"`
-	Nombre       string               `json:"nombre"`
-	RazonSocial  *string              `json:"razonSocial"`
-	Cuit         *string              `json:"cuit"`
-	CondicionIva string               `json:"condicionIva"`
-	Email        *string              `json:"email"`
-	Telefono     *string              `json:"telefono"`
-	Direccion    *string              `json:"direccion"`
-	Rubro        *string              `json:"rubro"`
-	Contacto     *string              `json:"contacto"`
-	DiasPago     int32                `json:"diasPago"`
-	Cbu          *string              `json:"cbu"`
-	AliasCbu     *string              `json:"aliasCbu"`
-	Estado       string               `json:"estado"`
-	Notas        *string              `json:"notas"`
-	CodigoLegacy *string              `json:"codigoLegacy"`
-	Active       bool                 `json:"active"`
-	CreatedAt    time.Time            `json:"createdAt"`
-	UpdatedAt    time.Time            `json:"updatedAt"`
-	Convenios    *string              `json:"convenios"`
-	Saldo        float64              `json:"saldo"`
-	Movimientos  []MovimientoDeCuenta `json:"movimientos"`
+	ID           string    `json:"id"`
+	Nombre       string    `json:"nombre"`
+	RazonSocial  *string   `json:"razonSocial"`
+	Cuit         *string   `json:"cuit"`
+	CondicionIva string    `json:"condicionIva"`
+	Email        *string   `json:"email"`
+	Telefono     *string   `json:"telefono"`
+	Direccion    *string   `json:"direccion"`
+	Rubro        *string   `json:"rubro"`
+	Contacto     *string   `json:"contacto"`
+	DiasPago     int32     `json:"diasPago"`
+	Cbu          *string   `json:"cbu"`
+	AliasCbu     *string   `json:"aliasCbu"`
+	Estado       string    `json:"estado"`
+	Notas        *string   `json:"notas"`
+	CodigoLegacy *string   `json:"codigoLegacy"`
+	Active       bool      `json:"active"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Convenios    *string   `json:"convenios"`
+	// CondicionGanancias (nil: no se sabe) y hasta cuándo vale la exención.
+	CondicionGanancias   *string              `json:"condicionGanancias"`
+	ExentoGananciasHasta *string              `json:"exentoGananciasHasta"`
+	Saldo                float64              `json:"saldo"`
+	Movimientos          []MovimientoDeCuenta `json:"movimientos"`
 }
 
 // ObtenerProveedor es obtenerProveedor: la ficha y los últimos 200
@@ -153,10 +161,11 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 	var p Proveedor
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, nombre, razon_social, cuit, condicion_iva::text, email, telefono, direccion, rubro, contacto, dias_pago,
-		  cbu, alias_cbu, estado::text, notas, codigo_legacy, active, created_at, updated_at, convenios
+		  cbu, alias_cbu, estado::text, notas, codigo_legacy, active, created_at, updated_at, convenios, condicion_ganancias,
+		  to_char(exento_ganancias_hasta, 'YYYY-MM-DD')
 		FROM suppliers WHERE id = $1`, id).Scan(&p.ID, &p.Nombre, &p.RazonSocial, &p.Cuit, &p.CondicionIva, &p.Email, &p.Telefono,
 		&p.Direccion, &p.Rubro, &p.Contacto, &p.DiasPago, &p.Cbu, &p.AliasCbu, &p.Estado, &p.Notas, &p.CodigoLegacy, &p.Active,
-		&p.CreatedAt, &p.UpdatedAt, &p.Convenios)
+		&p.CreatedAt, &p.UpdatedAt, &p.Convenios, &p.CondicionGanancias, &p.ExentoGananciasHasta)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -222,13 +231,16 @@ type ProveedorParaElegir struct {
 	Cuit         *string `json:"cuit"`
 	CondicionIva string  `json:"condicionIva"`
 	DiasPago     int32   `json:"diasPago"`
+	// Para no ofrecer en el pago los regímenes que no le corresponden.
+	CondicionGanancias   *string `json:"condicionGanancias"`
+	ExentoGananciasHasta *string `json:"exentoGananciasHasta"`
 }
 
 // ProveedoresParaElegir son los activos, por nombre.
 func (s *Servicio) ProveedoresParaElegir(ctx context.Context) ([]ProveedorParaElegir, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT id, nombre, cuit, condicion_iva::text, dias_pago FROM suppliers
-		WHERE active AND estado = 'activo' ORDER BY nombre`)
+		SELECT id, nombre, cuit, condicion_iva::text, dias_pago, condicion_ganancias, to_char(exento_ganancias_hasta, 'YYYY-MM-DD')
+		FROM suppliers WHERE active AND estado = 'activo' ORDER BY nombre`)
 	if err != nil {
 		return nil, err
 	}
@@ -248,14 +260,15 @@ func (s *Servicio) GuardarProveedor(ctx context.Context, ses *auth.Sesion, m map
 		return "", "", err
 	}
 	args := []any{f.Nombre, f.RazonSocial, f.Cuit, f.CondicionIva, f.Contacto, f.Telefono, f.Email, f.Direccion, f.Rubro,
-		f.Cbu, f.AliasCbu, int32(f.DiasPago), f.Notas}
+		f.Cbu, f.AliasCbu, int32(f.DiasPago), f.Notas, f.CondicionGanancias, f.ExentoGananciasHasta}
 	if f.ID != nil {
 		// Como el TS: la edición no pregunta si existe (un id que no está no
 		// cambia nada y contesta igual).
 		if _, err := s.pool.Exec(ctx, `
 			UPDATE suppliers SET nombre = $1, razon_social = $2, cuit = $3, condicion_iva = $4::condicion_iva, contacto = $5,
-			  telefono = $6, email = $7, direccion = $8, rubro = $9, cbu = $10, alias_cbu = $11, dias_pago = $12, notas = $13
-			WHERE id = $14`, append(args, *f.ID)...); err != nil {
+			  telefono = $6, email = $7, direccion = $8, rubro = $9, cbu = $10, alias_cbu = $11, dias_pago = $12, notas = $13,
+			  condicion_ganancias = $14, exento_ganancias_hasta = $15::date
+			WHERE id = $16`, append(args, *f.ID)...); err != nil {
 			return "", "", err
 		}
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "proveedor", *f.ID, "Editó la ficha de "+f.Nombre, nil)
@@ -263,8 +276,9 @@ func (s *Servicio) GuardarProveedor(ctx context.Context, ses *auth.Sesion, m map
 	}
 	var id string
 	if err := s.pool.QueryRow(ctx, `
-		INSERT INTO suppliers (nombre, razon_social, cuit, condicion_iva, contacto, telefono, email, direccion, rubro, cbu, alias_cbu, dias_pago, notas)
-		VALUES ($1, $2, $3, $4::condicion_iva, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`, args...).Scan(&id); err != nil {
+		INSERT INTO suppliers (nombre, razon_social, cuit, condicion_iva, contacto, telefono, email, direccion, rubro, cbu, alias_cbu, dias_pago, notas,
+		  condicion_ganancias, exento_ganancias_hasta)
+		VALUES ($1, $2, $3, $4::condicion_iva, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::date) RETURNING id`, args...).Scan(&id); err != nil {
 		return "", "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "proveedor", id, "Dio de alta a "+f.Nombre, nil)

@@ -246,6 +246,27 @@ func nulo(s string) *string {
 	return &s
 }
 
+// reabrirDeudaConElProveedor anota en la cuenta del proveedor al que se le
+// pagó con el cheque que el banco rechazó un ajuste por su importe.
+func reabrirDeudaConElProveedor(ctx context.Context, tx pgx.Tx, cheque sqlc.Cheque, motivo, usuario string) error {
+	var proveedor string
+	err := tx.QueryRow(ctx, `SELECT p.supplier_id FROM supplier_payment_parts x JOIN supplier_payments p ON p.id = x.payment_id
+		WHERE x.cheque_id = $1 AND p.anulado_at IS NULL ORDER BY p.fecha DESC LIMIT 1`, cheque.ID).Scan(&proveedor)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	detalle := NombreDelCheque(string(cheque.Tipo), cheque.Banco, cheque.Numero) + " rechazado por el banco"
+	if motivo != "" {
+		detalle += ": " + motivo
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
+		VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5)`, proveedor, jsmath.Fijo2(float64(cheque.Importe)), cheque.Numero, detalle, usuario)
+	return err
+}
+
 // CambiarEstado es cambiarEstadoDeCheque: aceptar uno informado emite el
 // recibo; rechazar uno que ya contaba devuelve la deuda con una nota de
 // débito; los dos avisan al cliente.
@@ -264,6 +285,10 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 	debitado := false
 	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
+		// Quién: lo lee el trigger que anota el cambio en cheque_estados.
+		if _, err := tx.Exec(ctx, `SELECT set_config('mjbj.usuario', $1, true)`, ses.UserID); err != nil {
+			return err
+		}
 		if err := q.BloquearCheque(ctx, id); err != nil {
 			return err
 		}
@@ -368,6 +393,15 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 				return err
 			}
 			debitado = true
+		}
+		// El cheque que le dimos a un proveedor (uno propio o uno de la
+		// cartera endosado) y rebotó: le volvemos a deber. La deuda se
+		// reabre en su libro, así el libro y el mayor de Proveedores dicen
+		// lo mismo (el cierre asienta el rechazo contra Proveedores).
+		if hacia == "rechazado" && desde == "entregado" {
+			if err := reabrirDeudaConElProveedor(ctx, tx, cheque, m, ses.UserID); err != nil {
+				return err
+			}
 		}
 		if hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido {
 			if _, err := cola.Encolar(ctx, q, TrabajoChequeRechazado, map[string]any{"chequeId": id, "porElBanco": desde != "informado"}, time.Time{}); err != nil {

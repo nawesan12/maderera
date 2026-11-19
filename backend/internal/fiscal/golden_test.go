@@ -227,6 +227,7 @@ func TestGoldenNotas(t *testing.T) {
 		}
 	}
 	cargar(t, "notas", &casos)
+	divergentes := 0
 	f := func(s string) float64 { var x float64; _ = json.Unmarshal([]byte(s), &x); return x }
 	for i, c := range casos {
 		items := make([]ItemOriginal, len(c.Items))
@@ -250,6 +251,22 @@ func TestGoldenNotas(t *testing.T) {
 			}
 			continue
 		}
+		// Divergencia a propósito (revisión del comité, T6): el renglón que
+		// se lleva todo lo que le queda devuelve su subtotal exacto, y el TS
+		// el unitario redondeado por la cantidad (100 en 3 daba 99,99). En
+		// esos casos se mira la regla nueva y no el TS.
+		if cierraConOtroPrecio(g.Lineas, items) {
+			for _, l := range g.Lineas {
+				for _, it := range items {
+					if it.ID == l.ItemOrigenID && math.Abs(l.Cantidad-it.Cantidad) < 1e-9 &&
+						math.Abs(Redondear(float64(l.Cantidad*l.PrecioFinalUnitario))-it.Subtotal) > 0.001 {
+						t.Fatalf("%d: el renglón %s no devuelve su subtotal: %+v", i, it.ID, l)
+					}
+				}
+			}
+			divergentes++
+			continue
+		}
 		if g.Problema != c.R.Problema {
 			t.Fatalf("%d: problema %q, TS %q", i, g.Problema, c.R.Problema)
 		}
@@ -268,7 +285,7 @@ func TestGoldenNotas(t *testing.T) {
 		}
 		compararTributos(t, i, g.TributosDados, c.R.TributosDados)
 	}
-	t.Logf("%d casos", len(casos))
+	t.Logf("%d casos (%d con el renglón cerrado a su subtotal, distinto del TS a propósito)", len(casos), divergentes)
 
 	var sueltas []struct {
 		Total, Acreditado, Monto num
@@ -505,4 +522,18 @@ func TestGoldenWsaa(t *testing.T) {
 		t.Fatal("TRA vacío")
 	}
 	_ = reflect.DeepEqual
+}
+
+// cierraConOtroPrecio: algún renglón entero de la nota tiene un precio que
+// no es el unitario redondeado del TS.
+func cierraConOtroPrecio(lineas []LineaDeNota, items []ItemOriginal) bool {
+	for _, l := range lineas {
+		for _, it := range items {
+			if it.ID == l.ItemOrigenID && it.Cantidad > 0 && math.Abs(l.Cantidad-it.Cantidad) < 1e-9 &&
+				l.PrecioFinalUnitario != Redondear(it.Subtotal/it.Cantidad) {
+				return true
+			}
+		}
+	}
+	return false
 }

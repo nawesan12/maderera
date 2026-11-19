@@ -144,7 +144,9 @@ export default async function FichaPedidoPage({
               <Printer className="h-5 w-5" aria-hidden="true" />
               Imprimir
             </a>
-            {factura && (
+            {/* Un pedido cancelado no se factura; si tiene comprobante, el
+                enlace sigue. */}
+            {factura && (facturado || pedido.estado !== "cancelado") && (
               <BotonFacturar
                 orderId={pedido.id}
                 comprobante={

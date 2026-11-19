@@ -36,10 +36,11 @@ export default async function CierrePage({
   const { periodo: crudo } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
 
-  const [resumen, pendientes, asientos] = await Promise.all([
+  const [resumen, pendientes, asientos, asientosB] = await Promise.all([
     resumenDelMes(periodo.clave),
     pendientesDelCierre(periodo.clave),
     asientosDelPeriodo(periodo.clave),
+    asientosDelPeriodo(periodo.clave, "negro"),
   ]);
 
   const etiqueta = new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString(
@@ -211,18 +212,69 @@ export default async function CierrePage({
           )}
         </article>
 
+        {/* Lo primero que se mira es cuánto hay que depositar: grande. Si no
+            hay nada, el saldo a favor que pasa al mes que viene. Abajo, más
+            chico, de dónde sale. */}
         <article className="tarjeta p-5">
-          <h2 className="text-lg font-semibold">Posición de IVA</h2>
-          <p
-            className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
-              resumen.posicionIva >= 0 ? "text-saldo-debe" : "text-saldo-favor"
-            }`}
-          >
-            {formatearMonto(Math.abs(resumen.posicionIva))}
-          </p>
-          <p className="mt-2 text-base text-muted-foreground">
-            {resumen.posicionIva >= 0 ? "A depositar" : "Saldo a favor"}
-          </p>
+          <h2 className="text-lg font-semibold">IVA</h2>
+          {/* Sin los saldos de la última DDJJ el número no parte de lo
+              presentado: no se muestra uno inventado. */}
+          {resumen.iva.sinArranque ? (
+            <Link
+              href="/admin/arca/configuracion"
+              className="mt-2 inline-block text-base font-medium text-acento-texto hover:underline"
+            >
+              Falta la última DDJJ
+            </Link>
+          ) : (
+            <>
+              <p
+                className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
+                  resumen.iva.aDepositar > 0 ? "text-saldo-debe" : "text-saldo-favor"
+                }`}
+              >
+                {formatearMonto(
+                  resumen.iva.aDepositar > 0
+                    ? resumen.iva.aDepositar
+                    : resumen.iva.saldoTecnico + resumen.iva.saldoLibre,
+                )}
+              </p>
+              <p className="mt-2 text-base text-muted-foreground">
+                {resumen.iva.aDepositar > 0 ? "A depositar" : "Saldo a favor"}
+              </p>
+            </>
+          )}
+          <dl className="tabular mt-4 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            {(
+              [
+                ["Débito", resumen.iva.debito],
+                ["Crédito", -resumen.iva.credito],
+                ["Saldo técnico anterior", -resumen.iva.saldoTecnicoAnterior],
+                ["Percepciones", -resumen.iva.percepciones],
+                ["Retenciones", -resumen.iva.retenciones],
+                ["Libre disponibilidad anterior", -resumen.iva.saldoLibreAnterior],
+              ] as const
+            )
+              .filter(([, v]) => Math.abs(v) > 0.005)
+              .map(([k, v]) => (
+                <div key={k} className="contents">
+                  <dt>{k}</dt>
+                  <dd className="text-right">{formatearMonto(v)}</dd>
+                </div>
+              ))}
+            {resumen.iva.saldoTecnico > 0.005 && (
+              <div className="contents">
+                <dt>Saldo técnico</dt>
+                <dd className="text-right">{formatearMonto(resumen.iva.saldoTecnico)}</dd>
+              </div>
+            )}
+            {resumen.iva.saldoLibre > 0.005 && (
+              <div className="contents">
+                <dt>Libre disponibilidad</dt>
+                <dd className="text-right">{formatearMonto(resumen.iva.saldoLibre)}</dd>
+              </div>
+            )}
+          </dl>
         </article>
       </section>
 
@@ -279,7 +331,29 @@ export default async function CierrePage({
           anulaciones y las ventas facturadas que se cobraron en el mostrador
           o en línea), compras, pagos a proveedores y gastos, con código y
           nombre de cuenta para que el estudio los remapee al plan que usa. El
-          libro diario, el mayor y el balance los lleva el estudio. */}
+          libro diario, el mayor y el balance los lleva el estudio.
+
+          Solo el circuito blanco: lo marcado «en negro» y la parte de los
+          recibos que paga ventas sin factura van en otro archivo, abajo de
+          todo y lejos del botón del estudio, con la B en el nombre. Que un
+          día se mande el equivocado tiene que costar. */}
+      {asientosB.length > 0 && (
+        <section className="tarjeta-hundida flex flex-wrap items-center justify-between gap-3 rounded-xl px-5 py-4">
+          <div>
+            <h2 className="text-base font-semibold">Circuito B</h2>
+            <p className="tabular text-sm text-muted-foreground">
+              {asientosB.length === 1 ? "1 asiento" : `${asientosB.length} asientos`}
+            </p>
+          </div>
+          <a
+            href={`/admin/cierre/exportar?periodo=${periodo.clave}&circuito=negro`}
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-background"
+          >
+            <Download className="h-4 w-4" />
+            Asientos B
+          </a>
+        </section>
+      )}
     </div>
   );
 }

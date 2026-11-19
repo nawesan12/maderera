@@ -20,6 +20,8 @@ import {
 import { enfocar } from "./atajos";
 import { SaldoDelCliente } from "./cuenta-del-cliente";
 import type { Cliente } from "./tipos";
+import { moneda } from "@/lib/formato";
+import { MONTO_IDENTIFICAR_CONSUMIDOR_FINAL } from "@/lib/fiscal/umbral";
 
 export function BuscadorDeCliente({
   cliente,
@@ -288,23 +290,37 @@ export function CuitSuelto({
   onCuit,
   enLinea,
   onCliente,
+  obligatorio = false,
 }: {
   cuit: string;
   onCuit: (v: string) => void;
   enLinea: boolean;
   onCliente: (c: Cliente | null) => void;
+  /**
+   * La venta llega al monto desde el que la B identifica al comprador
+   * (lib/fiscal/umbral.ts): el campo pasa a pedirse, y un DNI también sirve.
+   */
+  obligatorio?: boolean;
 }) {
   const [alta, setAlta] = useState(false);
   const leido = leerDocumento(cuit);
   const digitos = cuit.replace(/\D/g, "");
   const valido = !("error" in leido) && leido.tipo === "cuit";
-  const problema = digitos.length >= 11 && !valido ? "Ese CUIT no es válido: revisá los números." : null;
+  const problema = obligatorio
+    ? digitos.length >= 7 && "error" in leido
+      ? leido.error
+      : null
+    : digitos.length >= 11 && !valido
+      ? "Ese CUIT no es válido: revisá los números."
+      : null;
 
   return (
     <div className="mt-2.5">
       <label className="block">
-        <span className="text-base text-muted-foreground">
-          CUIT, si lo quiere a nombre de una empresa
+        <span className={obligatorio ? "text-base font-medium" : "text-base text-muted-foreground"}>
+          {obligatorio
+            ? `Desde ${moneda.format(MONTO_IDENTIFICAR_CONSUMIDOR_FINAL)}, DNI o CUIT del comprador`
+            : "CUIT, si lo quiere a nombre de una empresa"}
         </span>
         <input
           value={cuit}
@@ -317,7 +333,8 @@ export function CuitSuelto({
           }}
           inputMode="numeric"
           aria-invalid={Boolean(problema)}
-          placeholder="Sin CUIT: sale a consumidor final"
+          aria-required={obligatorio}
+          placeholder={obligatorio ? undefined : "Sin CUIT: sale a consumidor final"}
           className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
         />
       </label>

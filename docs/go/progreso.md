@@ -2022,3 +2022,33 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - **Sin verificar a ojo** (no hay servidor en el carril): la placa en
   celular y escritorio, en claro y en oscuro; la veta al 7 %; la hoja del
   asistente en el celular. Va para el carril que verifica.
+
+## T1 del comité: lo que no podía esperar (18/11, rama `carril-a`)
+
+- **Facturación con salida** (`internal/facturacion/baja.go`): sin CAE no se
+  anula ni se hacen notas; un comprobante sin CAE se da de baja y los
+  pendientes de su serie bajan un número. Toma `CandadoCAE` y después el de
+  la serie (`fiscal.ClaveDeLock`), siempre en ese orden: Autorizar nunca toma
+  el de la serie y la emisión nunca el del CAE. La fila se borra (no se le
+  vacía el número) y la foto entera queda en `invoices_dadas_de_baja` (00130).
+- **Al reintentar, la fecha de hoy** (`arca.alDia`), con el reloj del
+  servicio (`s.ahora`), no `now()` de la base. La original queda en
+  `invoices.fecha_emision_original`.
+- **Umbral de la B** en `fiscal/umbral.go`, con vigencia; espejo en
+  `lib/fiscal/umbral.ts` para el mostrador (una prueba los compara).
+- **«Debo»** sale del libro de cada proveedor (`supplier_movements`), como
+  Pagos.
+- **Circuitos en el CSV** (`cobros/reparto.go`): cada recibo se reparte al
+  emitirse (00131) entre Deudores, Anticipos de clientes y B, y no se
+  recalcula. Lo aprendido: recalcular con toda la historia cambiaba meses ya
+  mandados al estudio; recorrer en orden de fecha y guardar el reparto los
+  deja quietos.
+- **Corrección de T1** (revisión del comité): «algo por facturar» se mira a
+  la fecha del recibo (`order_status_history`, `arca_log`), la seña queda
+  atada a sus pedidos y facturas y llega hasta lo que falta facturar; el
+  cierre solo lee, y los recibos de antes se fijan con **`mjbj repartos`**
+  (va en el despliegue, después de la 00132 y antes de cargar el
+  certificado). Las partes se reparten por prioridad de medio, no en
+  proporción. La venta del mostrador ya no autoriza lo atrasado: la serie se
+  autoriza desde Facturación (`AutorizarConFechas`), con bitácora y aviso de
+  cada comprobante.

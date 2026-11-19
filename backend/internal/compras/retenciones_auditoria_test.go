@@ -55,6 +55,9 @@ func TestElCertificadoMuestraElCalculo(t *testing.T) {
 	if _, err := e.pool.Exec(ctx, `update regimenes_retencion set minimo_no_imponible = 224000, minimo_retencion = 0 where id = $1`, gan); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := e.pool.Exec(ctx, `update suppliers set condicion_ganancias = 'inscripto' where id = $1`, e.proveedor); err != nil {
+		t.Fatal(err)
+	}
 	pago := map[string]any{"supplierId": e.proveedor, "total": 200000, "medio": "transferencia",
 		"retenciones": []any{map[string]any{"regimenId": gan, "base": 200000}}}
 	if c, b := pedir(t, adm, "POST", e.u+"compras/pagos", pago); c != 200 {

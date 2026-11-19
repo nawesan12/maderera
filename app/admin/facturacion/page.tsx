@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FilePlus2, Landmark, ReceiptText, TriangleAlert } from "lucide-react";
+import { FilePlus2, Landmark, ReceiptText, Trash2, TriangleAlert } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
 import { FiltroRango } from "@/components/admin/filtro-rango";
 import { leerPeriodo, leerRango, resolverPeriodo } from "@/lib/periodos";
 import { BuscadorDeComprobantes } from "./buscador";
 import { AcentoEstado, EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, moneda, plural } from "@/lib/formato";
+import { fechaCorta, hoyEnArgentina, moneda, plural } from "@/lib/formato";
 import {
+  dadosDeBaja,
   estadoArca,
   listarComprobantesPagina,
   resumenFacturacion,
@@ -72,13 +73,18 @@ export default async function FacturacionPage({
    * el filtro entero: antes se pedían 200 (o 500) y se sumaba lo que había
    * llegado, sin avisar que había más.
    */
-  const [lista, rechazados, sinAutorizar, resumen, arca] = await Promise.all([
+  const [lista, rechazados, sinAutorizar, resumen, arca, bajas] = await Promise.all([
     listarComprobantesPagina(filtros, pagina, POR_PAGINA),
     listarComprobantesPagina({ estado: "rechazada" }, 1, 100),
     listarComprobantesPagina({ estado: "emitida" }, 1, 100),
     resumenFacturacion(periodo),
     estadoArca(),
+    dadosDeBaja(),
   ]);
+  // Una baja borra un comprobante de este listado: que se vea cuántas hubo
+  // en el mes, al lado de los otros accesos.
+  const mes = hoyEnArgentina().slice(0, 7);
+  const bajasDelMes = bajas.filter((b) => hoyEnArgentina(b.createdAt).startsWith(mes)).length;
 
   const queSeMira = rango
     ? `del ${fechaCorta.format(rango.desde)} al ${fechaCorta.format(rango.hasta)}`
@@ -91,6 +97,18 @@ export default async function FacturacionPage({
         resumen={`${queSeMira.charAt(0).toUpperCase()}${queSeMira.slice(1)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${moneda.format(lista.suma)} en ${plural(lista.total, "comprobante")}`}
       >
         {!rango && <FiltroPeriodo actual={periodo.clave} />}
+        {bajas.length > 0 && (
+          <Link
+            href="/admin/facturacion/dados-de-baja"
+            className="tarjeta inline-flex h-11 items-center gap-2 px-3.5 text-base font-medium transition-colors hover:text-acento-texto"
+          >
+            <Trash2 className="h-5 w-5" />
+            Dados de baja
+            {bajasDelMes > 0 && (
+              <span className="tabular rounded-full bg-hundida px-2 text-sm">{bajasDelMes}</span>
+            )}
+          </Link>
+        )}
         <Link
           href="/admin/arca"
           className="tarjeta inline-flex h-11 items-center gap-2 px-3.5 text-base font-medium transition-colors hover:text-acento-texto"

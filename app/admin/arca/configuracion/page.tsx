@@ -13,10 +13,12 @@ import {
   configuracionFiscalActual,
   estadoArca,
   listarPuntosVenta,
+  padronIibb,
 } from "@/lib/dal/admin/facturacion";
 import { listarSucursales } from "@/lib/dal/admin/inventory";
 import { FormularioEmisor } from "../emisor";
 import { PuntosDeVenta } from "../puntos-venta";
+import { PadronIibb } from "../padron";
 
 export const metadata: Metadata = { title: "Configuración de ARCA" };
 
@@ -39,11 +41,12 @@ export const metadata: Metadata = { title: "Configuración de ARCA" };
  * El ambiente de homologación se dice «de prueba».
  */
 export default async function ConfiguracionArcaPage() {
-  const [emisor, estado, puntos, sucursales] = await Promise.all([
+  const [emisor, estado, puntos, sucursales, padron] = await Promise.all([
     configuracionFiscalActual(),
     estadoArca(),
     listarPuntosVenta(),
     listarSucursales(),
+    padronIibb(),
   ]);
 
   return (
@@ -122,16 +125,28 @@ export default async function ConfiguracionArcaPage() {
               email: emisor.email ?? "",
               ingresosBrutos: emisor.ingresosBrutos ?? "",
               regimenIibb: emisor.regimenIibb,
-              alicuotaPercepcionIibb: String(
-                Number(emisor.alicuotaPercepcionIibb),
-              ),
+              alicuotaIibbSinPadron:
+                emisor.alicuotaIibbSinPadron == null ? "" : String(Number(emisor.alicuotaIibbSinPadron)),
               percibeIibb: emisor.percibeIibb,
               inicioActividades: emisor.inicioActividades
                 ? emisor.inicioActividades.toISOString().slice(0, 10)
                 : "",
               leyenda: emisor.leyenda ?? "",
+              ivaDesde: emisor.ivaDesde ?? "",
+              ivaSaldoTecnico: emisor.ivaDesde ? String(Number(emisor.ivaSaldoTecnico)) : "",
+              ivaSaldoLibre: emisor.ivaDesde ? String(Number(emisor.ivaSaldoLibre)) : "",
             }}
           />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="flex items-center gap-2 text-lg font-medium">
+          <Landmark className="h-5 w-5 text-muted-foreground" />
+          Padrón IIBB
+        </h2>
+        <div className="mt-4">
+          <PadronIibb filas={padron} />
         </div>
       </section>
 

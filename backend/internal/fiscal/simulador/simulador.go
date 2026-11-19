@@ -37,6 +37,7 @@ import (
 	"github.com/smallstep/pkcs7"
 
 	"mjbj/internal/cuit"
+	"mjbj/internal/fiscal"
 )
 
 // Simulador guarda lo autorizado por punto de venta y tipo.
@@ -53,6 +54,7 @@ type Simulador struct {
 
 	mu         sync.Mutex
 	ultimos    map[clave]int64
+	fechas     map[clave]string // CbteFch del último autorizado
 	emitidos   map[claveCbte]Emitido
 	tickets    map[string]time.Time // token → vence
 	porServ    map[string]string    // certificado+servicio → token vigente
@@ -87,7 +89,7 @@ func Nuevo() *Simulador {
 // Armar lo crea sin servidor (para montarlo en otro, como el comando del
 // benchmark).
 func Armar() *Simulador {
-	return &Simulador{DuracionTicket: 12 * time.Hour, Ahora: time.Now, ultimos: map[clave]int64{},
+	return &Simulador{DuracionTicket: 12 * time.Hour, Ahora: time.Now, ultimos: map[clave]int64{}, fechas: map[clave]string{},
 		emitidos: map[claveCbte]Emitido{}, tickets: map[string]time.Time{}, porServ: map[string]string{},
 		llamadas: map[string]int{}, siguiente: 76_000_000_000_000}
 }
@@ -562,8 +564,32 @@ func (s *Simulador) solicitar(b []byte) string {
 	if d.MonID != "PES" {
 		agregar("10032", "[sim] Solo se aceptan comprobantes en pesos.")
 	}
-	if _, err := time.Parse("20060102", d.CbteFch); err != nil {
+	if fch, err := time.ParseInLocation("20060102", d.CbteFch, fiscal.Argentina); err != nil {
 		agregar("10016", "El numero o fecha del comprobante no se corresponde con el proximo a autorizar. Consultar metodo FECompUltimoAutorizado.")
+	} else {
+		// Venta de bienes: hasta cinco días antes o después de hoy, y nunca
+		// antes que el último autorizado de la serie. Es lo que traba lo
+		// emitido sin certificado si se manda con su fecha original.
+		hoy := s.Ahora().In(fiscal.Argentina)
+		hoy = time.Date(hoy.Year(), hoy.Month(), hoy.Day(), 0, 0, 0, 0, fiscal.Argentina)
+		s.mu.Lock()
+		previa := s.fechas[clave{pv, tipo}]
+		s.mu.Unlock()
+		switch {
+		case fch.Before(hoy.AddDate(0, 0, -5)) || fch.After(hoy.AddDate(0, 0, 5)):
+			agregar("10016", "[sim] La fecha del comprobante (CbteFch) no puede ser anterior ni posterior en más de 5 días a la fecha de envío.")
+		case previa != "" && d.CbteFch < previa:
+			agregar("10016", "El numero o fecha del comprobante no se corresponde con el proximo a autorizar. Consultar metodo FECompUltimoAutorizado.")
+		}
+	}
+	// Una B a consumidor final sin documento desde el umbral.
+	if (tipo == 6 || tipo == 7 || tipo == 8) && d.DocTipo == 99 {
+		if total, ok := centavos(d.ImpTotal); ok {
+			if fch, err := time.ParseInLocation("20060102", d.CbteFch, fiscal.Argentina); err == nil &&
+				float64(total) >= fiscal.MontoIdentificarConsumidorFinal(fch)*100 {
+				agregar("10015", "[sim] Desde el monto que fija ARCA, el comprobante B tiene que identificar al receptor (DocTipo y DocNro).")
+			}
+		}
 	}
 
 	cab := `<FeCabResp><Cuit>` + p.Body.Inner.Auth.Cuit + `</Cuit><PtoVta>` + strconv.FormatInt(pv, 10) + `</PtoVta><CbteTipo>` + strconv.FormatInt(tipo, 10) +
@@ -587,6 +613,7 @@ func (s *Simulador) solicitar(b []byte) string {
 	fch, _ := time.Parse("20060102", d.CbteFch)
 	vence := fch.AddDate(0, 0, 10).Format("20060102")
 	s.ultimos[clave{pv, tipo}] = d.CbteDesde
+	s.fechas[clave{pv, tipo}] = d.CbteFch
 	s.emitidos[claveCbte{pv, tipo, d.CbteDesde}] = Emitido{Tipo: tipo, PuntoVenta: pv, Numero: d.CbteDesde, DocTipo: d.DocTipo,
 		DocNro: d.DocNro, CbteFch: d.CbteFch, ImpTotal: d.ImpTotal, Cae: cae, Vence: vence}
 	s.mu.Unlock()

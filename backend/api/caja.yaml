@@ -168,12 +168,13 @@ components:
         esperado: { type: number, format: double, nullable: true, description: El efectivo que tendría que haber ahora en el turno abierto }
     CajaRenglonDelCierre:
       type: object
-      required: [medioPago, cantidad, total, devolucion]
+      required: [medioPago, cantidad, total, devolucion, quien]
       properties:
         medioPago: { type: string }
         cantidad: { type: integer }
         total: { type: number, format: double, description: En negativo si es una devolución }
-        devolucion: { type: boolean, description: Ventas anuladas durante el turno (la venta queda en el Z de su turno) }
+        devolucion: { type: boolean, description: Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) }
+        quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
     TurnoCerrado:
       type: object
       required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, cierre]

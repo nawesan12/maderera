@@ -38,10 +38,15 @@ export interface DatosEmisor {
   email: string;
   ingresosBrutos: string;
   regimenIibb: string;
-  alicuotaPercepcionIibb: string;
+  /** Para quien no figura en el padrón de ARBA; vacío, no se le percibe. */
+  alicuotaIibbSinPadron: string;
   percibeIibb: boolean;
   inicioActividades: string;
   leyenda: string;
+  /** El arranque de la posición de IVA: el mes que sigue a la última DDJJ y sus saldos. */
+  ivaDesde: string;
+  ivaSaldoTecnico: string;
+  ivaSaldoLibre: string;
 }
 
 const CONDICIONES = [
@@ -152,10 +157,12 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
             defaultValue={emisor.ingresosBrutos}
             tabular
           />
+          {/* La percepción sale del padrón de ARBA, cliente por cliente; esta
+              es la del que no figura, y la decide el contador. */}
           <Campo
-            id="alicuotaPercepcionIibb"
-            etiqueta="Alícuota de percepción (%)"
-            defaultValue={emisor.alicuotaPercepcionIibb}
+            id="alicuotaIibbSinPadron"
+            etiqueta="Sin padrón (%)"
+            defaultValue={emisor.alicuotaIibbSinPadron}
             tabular
           />
           <div className="md:col-span-2">
@@ -174,6 +181,14 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
               defecto={emisor.percibeIibb}
             />
           </div>
+        </Seccion>
+
+        {/* La posición de IVA del cierre parte de acá: el contador lo vuelve a
+            cargar cada vez que presenta. */}
+        <Seccion titulo="Última DDJJ de IVA" icono={Receipt}>
+          <Campo id="ivaDesde" etiqueta="Desde" type="month" defaultValue={emisor.ivaDesde} tabular />
+          <Campo id="ivaSaldoTecnico" etiqueta="Saldo técnico" defaultValue={emisor.ivaSaldoTecnico} tabular />
+          <Campo id="ivaSaldoLibre" etiqueta="Libre disponibilidad" defaultValue={emisor.ivaSaldoLibre} tabular />
         </Seccion>
 
         <Seccion titulo="Leyenda" icono={ScrollText} columnas={1}>

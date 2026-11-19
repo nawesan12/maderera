@@ -2,8 +2,10 @@ package reportes
 
 import (
 	"context"
+	"math"
 	"time"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
 )
 
@@ -35,6 +37,74 @@ import (
 // Los reintegros (el pago reintegrado, la venta del mostrador anulada, los
 // tramos de un reintegro parcial en payment_refunds) son el cobro al revés.
 
+// reciboAAsentar es un recibo del período con sus partes.
+type reciboAAsentar struct {
+	id, numero, cliente string
+	emitido             time.Time
+	anulado             *time.Time
+	partes              []ParteDeRecibo
+}
+
+func recibos2partes(rs []*reciboAAsentar) map[string]*[]ParteDeRecibo {
+	out := make(map[string]*[]ParteDeRecibo, len(rs))
+	for _, r := range rs {
+		out[r.id] = &r.partes
+	}
+	return out
+}
+
+// retencionesPorImpuesto parte la «retencion» de cada recibo en las de cada
+// impuesto (retenciones_sufridas del recibo), así cada una va a la cuenta de
+// su impuesto. Si no suman lo mismo que la parte (un recibo viejo, una carga
+// a mano), la parte queda entera y va a Retenciones sufridas.
+func (s *Servicio) retencionesPorImpuesto(ctx context.Context, partes map[string]*[]ParteDeRecibo) error {
+	if len(partes) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(partes))
+	for id := range partes {
+		ids = append(ids, id)
+	}
+	rs, err := s.pool.Query(ctx, `SELECT receipt_id::text, impuesto::text, sum(importe)::float8 FROM retenciones_sufridas
+		WHERE receipt_id = ANY($1::uuid[]) GROUP BY receipt_id, impuesto ORDER BY receipt_id, impuesto`, ids)
+	if err != nil {
+		return err
+	}
+	defer rs.Close()
+	porRecibo := map[string][]ParteDeRecibo{}
+	for rs.Next() {
+		var id, impuesto string
+		var importe float64
+		if err := rs.Scan(&id, &impuesto, &importe); err != nil {
+			return err
+		}
+		porRecibo[id] = append(porRecibo[id], ParteDeRecibo{Medio: "retencion", Importe: importe, Impuesto: impuesto})
+	}
+	if err := rs.Err(); err != nil {
+		return err
+	}
+	for id, sufridas := range porRecibo {
+		ps := partes[id]
+		var enParte, enSufridas float64
+		var resto []ParteDeRecibo
+		for _, p := range *ps {
+			if p.Medio == "retencion" {
+				enParte = float64(enParte + p.Importe)
+			} else {
+				resto = append(resto, p)
+			}
+		}
+		for _, p := range sufridas {
+			enSufridas = float64(enSufridas + p.Importe)
+		}
+		if math.Abs(enParte-enSufridas) > toleranciaAsiento {
+			continue
+		}
+		*ps = append(sufridas, resto...)
+	}
+	return nil
+}
+
 func mayorFecha(a time.Time, b *time.Time) time.Time {
 	if b != nil && b.After(a) {
 		return *b
@@ -44,10 +114,42 @@ func mayorFecha(a time.Time, b *time.Time) time.Time {
 
 func entre(t, desde, hasta time.Time) bool { return !t.Before(desde) && !t.After(hasta) }
 
+// repartoHasta recorre las cuentas hasta `hasta` (cobros.RepartirCobros).
+// Solo lee: los recibos de antes que no tienen el reparto fijado se calculan
+// con la misma regla que los fijaría (cobros.FijarRepartosDeAntes, el
+// comando «mjbj repartos»), pero no se guardan. Mirar el cierre es un GET.
+func (s *Servicio) repartoHasta(ctx context.Context, hasta time.Time) (cobros.ResultadoDelReparto, error) {
+	ev, err := cobros.CargarEventos(ctx, s.pool, hasta, "")
+	if err != nil {
+		return cobros.ResultadoDelReparto{}, err
+	}
+	return cobros.RepartirCobros(ev), nil
+}
+
 // asientosDeCobro son los cobros del período, con idesde/ihasta ya en el
 // mes argentino (son instantes).
+//
+// Los recibos se asientan con su reparto entre los circuitos
+// (cobros.Reparto): lo que cancela facturas con CAE contra Deudores, la seña
+// contra Anticipos de clientes y lo que paga ventas sin factura en el
+// circuito B. Cuando sale la factura de una seña, el anticipo se le aplica.
 func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
 	asientos := []Asiento{}
+	reparto, err := s.repartoHasta(ctx, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	for _, ap := range reparto.Aplicaciones {
+		if !entre(ap.Fecha, idesde, ihasta) {
+			continue
+		}
+		e := ap.Evento
+		concepto := "Aplica anticipo · " + NombreComprobante(e.TipoComprobante) + " " + NumeroFormateado(e.PuntoVenta, e.Numero) + " · " + e.Cliente
+		if ap.Importe < 0 {
+			concepto = "Desaplica anticipo · anulación del recibo " + e.Cliente
+		}
+		asientos = append(asientos, AsientoDeAplicacion(ap.Fecha, concepto, ap.Importe))
+	}
 
 	// 1. Los cobros de una factura de antes de los recibos.
 	rs, err := s.lectura.Query(ctx, `
@@ -77,56 +179,61 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 
 	// 2. Los recibos emitidos o anulados en el período.
 	rs, err = s.lectura.Query(ctx, `
-		SELECT r.id, r.numero, r.recibido_de, r.created_at, r.anulado_at, p.medio::text, p.importe
-		FROM receipts r JOIN receipt_parts p ON p.receipt_id = r.id
+		SELECT r.id, r.numero, r.recibido_de, r.created_at, r.anulado_at, p.medio::text, p.importe, coalesce(ch.circuito = 'negro', false)
+		FROM receipts r JOIN receipt_parts p ON p.receipt_id = r.id LEFT JOIN cheques ch ON ch.id = p.cheque_id
 		WHERE (r.created_at >= $1 AND r.created_at <= $2) OR (r.anulado_at >= $1 AND r.anulado_at <= $2)
 		ORDER BY r.created_at, r.id, p.orden`, idesde, ihasta)
 	if err != nil {
 		return nil, err
 	}
-	type recibo struct {
-		numero, cliente string
-		emitido         time.Time
-		anulado         *time.Time
-		partes          []ParteDeRecibo
-	}
-	var recibos []*recibo
-	porID := map[string]*recibo{}
+	var recibos []*reciboAAsentar
+	porID := map[string]*reciboAAsentar{}
 	for rs.Next() {
 		var id, numero, cliente, medio string
 		var emitido time.Time
 		var anulado *time.Time
 		var importe jsmath.Num
-		if err := rs.Scan(&id, &numero, &cliente, &emitido, &anulado, &medio, &importe); err != nil {
+		var negro bool
+		if err := rs.Scan(&id, &numero, &cliente, &emitido, &anulado, &medio, &importe, &negro); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		r, ok := porID[id]
 		if !ok {
-			r = &recibo{numero: numero, cliente: cliente, emitido: emitido, anulado: anulado}
+			r = &reciboAAsentar{id: id, numero: numero, cliente: cliente, emitido: emitido, anulado: anulado}
 			porID[id] = r
 			recibos = append(recibos, r)
 		}
-		r.partes = append(r.partes, ParteDeRecibo{Medio: medio, Importe: importe.F()})
+		r.partes = append(r.partes, ParteDeRecibo{Medio: medio, Importe: importe.F(), Negro: negro})
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
 		return nil, err
 	}
+	if err := s.retencionesPorImpuesto(ctx, recibos2partes(recibos)); err != nil {
+		return nil, err
+	}
 	for _, r := range recibos {
-		if entre(r.emitido, idesde, ihasta) {
-			asientos = append(asientos, AsientoDeRecibo(ReciboAAsentar{Fecha: r.emitido, Numero: r.numero, Cliente: r.cliente, Partes: r.partes}))
+		rep, ok := reparto.Recibos[r.id]
+		if !ok {
+			continue
 		}
+		if entre(r.emitido, idesde, ihasta) {
+			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: r.emitido, Numero: r.numero, Cliente: r.cliente,
+				Partes: r.partes, Reparto: &rep})...)
+		}
+		// La anulación, con el mismo reparto al revés.
 		if r.anulado != nil && entre(*r.anulado, idesde, ihasta) {
-			asientos = append(asientos, AsientoDeRecibo(ReciboAAsentar{Fecha: *r.anulado, Numero: r.numero, Cliente: r.cliente,
-				Partes: r.partes, Anulacion: true}))
+			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: *r.anulado, Numero: r.numero, Cliente: r.cliente,
+				Partes: r.partes, Anulacion: true, Reparto: &rep})...)
 		}
 	}
 
 	// 3. El tramo de un reintegro parcial de un pago con recibo: solo el que
-	// devolvió deuda a la cuenta (con movimiento), igual que la cuenta.
+	// devolvió deuda a la cuenta (con movimiento), igual que la cuenta. Vuelve
+	// a cada circuito en la proporción del reparto del recibo.
 	rs, err = s.lectura.Query(ctx, `
-		SELECT f.created_at, f.importe, r.numero, r.recibido_de, x.medio::text
+		SELECT f.created_at, f.importe, r.numero, r.recibido_de, x.medio::text, r.id
 		FROM payment_refunds f
 		JOIN receipt_parts x ON x.payment_id = f.payment_id
 		JOIN receipts r ON r.id = x.receipt_id
@@ -138,13 +245,18 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	for rs.Next() {
 		var fecha time.Time
 		var importe jsmath.Num
-		var numero, cliente, medio string
-		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio); err != nil {
+		var numero, cliente, medio, recibo string
+		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio, &recibo); err != nil {
 			rs.Close()
 			return nil, err
 		}
-		asientos = append(asientos, AsientoDeReintegro(CobroAAsentar{Fecha: fecha, Comprobante: "parcial del recibo " + numero,
-			Cliente: cliente, Importe: importe.F(), Medio: medio}))
+		c := CobroAAsentar{Fecha: fecha, Comprobante: "parcial del recibo " + numero, Cliente: cliente, Importe: importe.F(), Medio: medio}
+		rep, ok := reparto.Recibos[recibo]
+		if !ok {
+			asientos = append(asientos, AsientoDeReintegro(c))
+			continue
+		}
+		asientos = append(asientos, AsientosDeTramo(c, cobros.TramoPorCircuito(rep, importe.F()))...)
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
@@ -169,6 +281,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		LEFT JOIN LATERAL (
 		  SELECT i.id, i.fecha_emision, i.tipo::text AS tipo, i.punto_venta, i.numero, i.receptor_nombre FROM invoices i
 		  WHERE i.order_id = p.order_id AND i.tipo::text LIKE 'factura%' AND i.estado <> 'borrador' AND i.cae IS NOT NULL
+		    AND i.cae_ambiente IS DISTINCT FROM 'homologacion'
 		  ORDER BY (i.estado = 'anulada'), i.fecha_emision LIMIT 1) f ON true
 		WHERE p.estado IN ('aprobado', 'reintegrado')
 		  AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)

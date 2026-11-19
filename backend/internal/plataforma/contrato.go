@@ -30,6 +30,8 @@ func ValidarContra(spec *openapi3.T) (func(http.Handler) http.Handler, error) {
 		AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
 		MultiError:         true,
 	}
+	binario := *opciones
+	binario.ExcludeRequestBody = true
 	return func(sig http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ruta, params, err := router.FindRoute(r)
@@ -41,7 +43,15 @@ func ValidarContra(spec *openapi3.T) (func(http.Handler) http.Handler, error) {
 				sig.ServeHTTP(w, r)
 				return
 			}
-			entrada := &openapi3filter.RequestValidationInput{Request: r, PathParams: params, Route: ruta, Options: opciones}
+			o := opciones
+			// Un archivo crudo (application/octet-stream) no tiene nada que
+			// validar adentro, y validarlo es leerlo entero en memoria: el
+			// padrón de ARBA son cientos de megas. Se lee al consumirlo.
+			if ruta.Operation != nil && ruta.Operation.RequestBody != nil && ruta.Operation.RequestBody.Value != nil &&
+				ruta.Operation.RequestBody.Value.Content.Get("application/octet-stream") != nil {
+				o = &binario
+			}
+			entrada := &openapi3filter.RequestValidationInput{Request: r, PathParams: params, Route: ruta, Options: o}
 			if err := openapi3filter.ValidateRequest(r.Context(), entrada); err != nil {
 				EscribirProblema(w, &Problema{
 					Titulo:  "El pedido no cumple el contrato",

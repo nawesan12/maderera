@@ -561,7 +561,7 @@ function VistaDeCorte({
             <PlanoSimple plano={planoActual} unaColumna />
           ) : (
             <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl bg-hundida">
-              <span className="tabular text-texto-3">
+              <span className="tabular-nums text-texto-3">
                 {actual.medida.largo} × {actual.medida.ancho} mm
               </span>
             </div>
@@ -711,7 +711,7 @@ function EditorDeGrupo({
           <div className="min-w-[220px] flex-1">
             <ElegirTapacanto key={grupo.clave} grupo={grupo} tapacantos={tapacantos} alCambiar={alCambiar} />
           </div>
-          <span className="tabular pb-3 text-sm text-texto-3">
+          <span className="pb-3 text-sm tabular-nums text-texto-3">
             {nombreDeLaMitad(mitad)} · {medida.largo} × {medida.ancho} mm
           </span>
         </div>
@@ -822,7 +822,7 @@ function EditorDeGrupo({
             alCambiar={(lados) => alCambiar({ tiras: { ...tiras, lados: { ...lados, izquierda: false, derecha: false } } })}
           />
           {piezas[0] && (
-            <p className="tabular w-full text-sm text-texto-2">
+            <p className="w-full text-sm tabular-nums text-texto-2">
               {piezas[0].cantidad} tiras de {piezas[0].largoMm} × {piezas[0].anchoMm} mm
             </p>
           )}

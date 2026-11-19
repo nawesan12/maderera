@@ -22,4 +22,17 @@ describe("las medidas del sitio", () => {
     expect(ficha).not.toMatch(/className="tabular[^"-]*"[^>]*>\s*\{(v|medida)\.label\}/);
     expect(ficha).not.toContain('<p className="tabular mt-1');
   });
+
+  it("las del armador de cortes van en sans", () => {
+    const armador = leer("app/(public)/corte/vista.tsx");
+    // Las medidas del armador: la de la placa y la de las tiras.
+    expect(armador).not.toMatch(/className="tabular [^"]*">\s*\{(nombreDeLaMitad|piezas\[0\]\.cantidad|actual\.medida)/);
+    expect(armador).toMatch(/tabular-nums text-texto-3">\s*\{nombreDeLaMitad/);
+    expect(armador).toMatch(/tabular-nums text-texto-2">\s*\{piezas\[0\]\.cantidad\} tiras/);
+  });
+
+  it("el estado del canto no se sale de su columna en la planilla", () => {
+    const canto = leer("components/cortes/selector-canto.tsx");
+    expect(canto).toMatch(/chico \? "@2xl:hidden" : ""/);
+  });
 });

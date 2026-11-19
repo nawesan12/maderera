@@ -141,8 +141,12 @@ export function SelectorDeCanto({
         {!soloLargos &&
           lado("derecha", "en el ancho de la derecha", chico ? "bottom-3 right-0.5 top-3 w-5 pointer-coarse:right-0 pointer-coarse:w-6" : "bottom-3 right-0 top-3 w-6", false)}
       </div>
+      {/* En la planilla de escritorio la columna mide 92 px y «2 largos y 2
+          anchos» no entra: se montaba sobre «Cant.» y «Veta» y estiraba cada
+          renglón (revisión del comité). Ahí el estado lo dicen las barras y el
+          encabezado de la columna, como pasa con «Canto». */}
       {conEstado && (
-        <span aria-hidden className="mt-0.5 text-xs text-texto-3">
+        <span aria-hidden className={`mt-0.5 text-xs text-texto-3 ${chico ? "@2xl:hidden" : ""}`}>
           {estadoDelCanto(lados, soloLargos)}
         </span>
       )}

@@ -2411,3 +2411,72 @@ Se aplicó el default prudente; lo valida Nahuel (o el contador donde se dice).
 - Las tarjetas de categoría que dicen «3 productos»: la cuenta está bien
   (los productos activos, la misma condición del listado). Es la base local
   la que tiene tres por rubro.
+
+## 19/11/2026: comité final y despliegue
+
+Desplegado en `main` be0a156: las 8 tandas del comité del 18/11 y los
+arreglos del comité final (los informes están en `docs/comite/`). Antes de
+desplegar pasaron todas las verificaciones:
+
+- `go test ./...`;
+- tsc, y lint con 0 errores;
+- vitest: 954 pruebas;
+- `next build`;
+- E2E: 81 pasan y 48 se saltean.
+
+Pasos del despliegue que se corrieron en la VPS:
+
+- **Índices inválidos:** `select count(*) from pg_index where not indisvalid`
+  dio 0.
+- **Repartos:**
+  `docker compose --env-file .env.produccion -f docker-compose.prod.yml run --rm --no-deps -T api repartos`
+  fijó 0 recibos, porque la base de producción está vacía.
+
+Producción se recorrió de solo lectura: el sitio público y admin, vendedor y
+depósito, a 1440 y a 390 px. No hubo errores, desbordes de costado ni errores
+de JS.
+
+### Decididas por Nahuel (19/11/2026)
+
+Los defaults del dueño de las listas «Decisiones a confirmar» de arriba
+quedan confirmados:
+
+- **Ctrl+Enter** agrega y cobra, pero nunca sin conexión sobre una placa ni
+  con precio $0.
+- **El mostrador** se usa en la computadora y en la tablet vertical. En el
+  teléfono muestra un aviso.
+- **Precio $0:** no hay productos legítimos a $0, así que se bloquea en todas
+  partes.
+- **Renglones a mano:** se ven por vendedor en «Controles del personal», sin
+  PIN por ahora.
+- **Cancelar un pedido pagado:** primero el reintegro, y solo los roles que
+  manejan plata. Con una transferencia en revisión no se cancela.
+- **Varios cortes por venta:** se admiten, y reabrir uno lo edita y reemplaza
+  sus renglones.
+- **Dónde se corta:** el armador público no ofrece cortar en Casa Central
+  hasta que lo confirme la clienta.
+- **«Ganancia del mes»:** con más del 50 % de lo vendido sin costo, dice «Sin
+  costos cargados».
+
+### Siguen a confirmar con el contador
+
+- Retenciones de un pago B.
+- Cheque endosado entre circuitos (hoy, prohibido).
+- Cobro sin cliente de un pedido facturado.
+- Devolución de un pedido cobrado con recibo.
+- CSV de Deudores sin el circuito B.
+- El centavo de las notas de crédito parciales.
+- Cómo se autoriza la serie trabada de más de 50 comprobantes sin CAE.
+
+Cada una tiene aplicado el default prudente que se describe arriba.
+
+### Pendiente
+
+- La devolución «por afuera» con tarjeta o transferencia de una venta del
+  mostrador no tiene asiento de reintegro.
+- La pantalla de pagos a proveedores lista cheques de los dos circuitos.
+- `reportes/reposicion.go` no resta las devoluciones.
+- «Deudores-mayor» rehace el reparto en cada vista del cierre: medirlo con el
+  volumen de ISIS.
+- «Sucursales como lista» (hallazgo 35) y Sucursales en la barra de arriba:
+  los confirma la clienta.

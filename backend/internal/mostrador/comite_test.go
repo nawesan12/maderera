@@ -96,7 +96,7 @@ func TestVariosCortesEnUnaVenta(t *testing.T) {
 
 	// El corte corregido con los renglones viejos todavía en la venta: lo
 	// cobrado pasa lo del plano y se rechaza.
-	noCierra := "El corte de Fenólico 18 mm no cierra con su plano. Abrilo de nuevo y volvé a agregarlo."
+	noCierra := "El corte de Fenólico 18 mm no cierra con su plano. Tocá «Corregir» en el corte y guardalo."
 	doble := append(renglones(0, pg, sg), renglones(0, pg, sg)...)
 	v = e.venta("transferencia", doble...)
 	v["cortes"] = []any{grande}

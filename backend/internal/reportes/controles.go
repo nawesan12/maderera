@@ -106,13 +106,15 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 	if err := filas.Err(); err != nil {
 		return c, err
 	}
-	// Los renglones a mano: de quien vendió.
+	// Los renglones a mano: de quien vendió. Los del corte se marcan al
+	// venderse (del_corte, migración 00175), no por su unidad: «Cargar a
+	// mano» deja escribir «pasada».
 	filas, err = s.pool.Query(ctx, `
 		SELECT o.created_by_user_id, coalesce(u.name, 'Sin nombre'), count(*)::int, coalesce(sum(oi.subtotal), 0)
 		FROM order_items oi JOIN orders o ON o.id = oi.order_id LEFT JOIN "user" u ON u.id = o.created_by_user_id
 		WHERE o.origen = 'mostrador' AND o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2
 		  AND o.created_by_user_id IS NOT NULL AND oi.variant_id IS NULL
-		  AND oi.unidad <> 'pasada' AND NOT (oi.unidad = 'm' AND oi.descripcion LIKE 'Tapacanto%')
+		  AND NOT oi.del_corte
 		GROUP BY 1, 2`, desde, hasta)
 	if err != nil {
 		return c, err

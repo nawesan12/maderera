@@ -50,9 +50,23 @@ func huellaDeVenta(v VentaPedida) string {
 	}
 	for _, l := range v.Lineas {
 		escribir(opt(l.VariantID), l.Descripcion, num(l.Cantidad), num(l.PrecioUnitario), opt(l.Presentacion))
+		// De qué corte sale el renglón, y abajo cada despiece: un reintento
+		// con la misma clave y otro despiece se tomaba como la misma venta,
+		// y el despiece nuevo no llegaba al taller (revisión del carril F).
+		// Solo si hay: la huella de una venta sin cortes queda como antes.
+		if l.Corte != nil {
+			escribir("corte", strconv.Itoa(*l.Corte))
+		}
 	}
 	for _, p := range v.Pagos {
 		escribir(p.Medio, num(p.Importe))
+	}
+	for _, k := range v.Cortes {
+		escribir("despiece", opt(k.VariantID), opt(k.Mitad), opt(k.AcomodoManual))
+		for _, p := range k.Piezas {
+			escribir(strconv.Itoa(p.LargoMm), strconv.Itoa(p.AnchoMm), strconv.Itoa(p.Cantidad),
+				strconv.Itoa(p.RespetaVeta), strconv.Itoa(p.CantoLargo), strconv.Itoa(p.CantoAncho))
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -155,7 +169,7 @@ func esCanto(l ventas.LineaDeVenta) bool {
 // pasadas y el tapacanto), que era lo que se miraba antes de A2. Si algún
 // renglón ya viene atado, no se adivina nada.
 func atarRenglonesAlCorte(v *VentaPedida) {
-	if len(v.Cortes) != 1 {
+	if !v.CorteSuelto || len(v.Cortes) != 1 {
 		return
 	}
 	for _, l := range v.Lineas {
@@ -220,7 +234,12 @@ func (s *Servicio) revisarCobroDelCorte(ctx context.Context, v VentaPedida, i in
 	presentacion := presentacionDeMitad(k.Mitad)
 	placas, pasadas, metros := 0.0, 0.0, 0.0
 	hayPasadas, hayCanto := false, false
-	noCierra := "El corte de " + k.MaterialDescripcion + " no cierra con su plano. Abrilo de nuevo y volvé a agregarlo."
+	noCierra := "El corte de " + k.MaterialDescripcion + " no cierra con su plano. Tocá «Corregir» en el corte y guardalo."
+	// La pantalla carga las tarifas al abrirse: si el admin creó o activó
+	// una después, Go pide las pasadas o el canto que la pantalla no puso, y
+	// «Corregir» con las tarifas viejas no lo arreglaba nunca. Este texto lo
+	// reconoce la pantalla (vista.tsx) para traer las nuevas.
+	tarifasNuevas := "Las tarifas de corte cambiaron. Tocá «Corregir» en el corte de " + k.MaterialDescripcion + " y guardalo."
 	for _, l := range v.Lineas {
 		if l.Corte == nil || *l.Corte != i {
 			continue
@@ -243,11 +262,17 @@ func (s *Servicio) revisarCobroDelCorte(ctx context.Context, v VentaPedida, i in
 		return noCierra, nil
 	}
 	if (hayPasadas || (tarifa != nil && tarifa.PrecioPorPasada > 0)) && math.Abs(pasadas-float64(cobro.Pasadas)) > 1e-6 {
+		if !hayPasadas {
+			return tarifasNuevas, nil
+		}
 		return noCierra, nil
 	}
 	// El canto se mide en metros con dos decimales (MetrosDeTapacanto): una
 	// diferencia de redondeo no es canto de más ni de menos.
 	if (hayCanto || (tarifa != nil && tarifa.PrecioPorMetroCanto > 0)) && math.Abs(metrosDelPlano-metros) > 0.005 {
+		if !hayCanto {
+			return tarifasNuevas, nil
+		}
 		return noCierra, nil
 	}
 	return "", nil
@@ -264,13 +289,7 @@ func (s *Servicio) planoDelCorte(ctx context.Context, k CorteDeMostrador) (corte
 	}
 	// La sierra va antes que la medida: la media placa sale de partirla con
 	// ese disco (T4, hallazgo 23).
-	sierra := float64(cortes.AnchoDeSierraMm)
-	_ = s.pool.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra)
-	if k.AnchoSierraMm != nil {
-		if a := cortes.LeerAnchoDeSierra(jsmath.Texto(*k.AnchoSierraMm)); a != nil {
-			sierra = *a
-		}
-	}
+	sierra := sierraConfigurada(ctx, s.pool)
 	medida := cortes.ResolverMedida(nil, nil, largo, ancho, k.Mitad, sierra)
 	piezas := make([]cortes.PiezaAcortar, len(k.Piezas))
 	conCanto := make([]cortes.PiezaConCanto, len(k.Piezas))
@@ -285,6 +304,17 @@ func (s *Servicio) planoDelCorte(ctx context.Context, k CorteDeMostrador) (corte
 		d.Fijadas = cortes.LeerAcomodoManual(*k.AcomodoManual)
 	}
 	return cortes.ACobrar(d), cortes.MetrosDeTapacanto(conCanto)
+}
+
+// sierraConfigurada es el disco de /admin/calculadora. El que manda el
+// navegador (`anchoSierraMm`) no se cree: la pantalla ya no tiene el campo,
+// y mandar 0,5 en vez de 4 acomodaba más piezas por placa, cobraba menos
+// placas o pasadas sin PIN y le daba al taller un disco irreal (revisión
+// del carril F). Lo usan el cobro del corte y el trabajo del taller.
+func sierraConfigurada(ctx context.Context, c precios.Consultador) float64 {
+	sierra := float64(cortes.AnchoDeSierraMm)
+	_ = c.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra)
+	return sierra
 }
 
 // presentacionDeMitad es la presentación de la media placa de la que sale el

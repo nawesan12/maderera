@@ -197,7 +197,7 @@ func TestCorteQueEsquivaLaMediaPlaca(t *testing.T) {
 	// Sin el material, el corte no cierra con su plano: se rechaza (comité
 	// final, A2; antes pedía el PIN por la placa que faltaba).
 	_, m, _ := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
-	if m["ok"] != false || m["autorizacion"] != nil || m["error"] != "El corte de Fenólico 18 mm no cierra con su plano. Abrilo de nuevo y volvé a agregarlo." {
+	if m["ok"] != false || m["autorizacion"] != nil || m["error"] != "El corte de Fenólico 18 mm no cierra con su plano. Tocá «Corregir» en el corte y guardalo." {
 		t.Fatalf("acomodo que esquiva la media placa: %v", m)
 	}
 	// Con la placa entera cobrada, pasa.
@@ -413,14 +413,16 @@ func TestPasadasDelCorteConTarifa(t *testing.T) {
 		t.Fatalf("pasada a $1: %s", b)
 	}
 	// Sin el renglón de las pasadas, o sin el canto, el corte no cierra con
-	// su plano: se rechaza, no se autoriza (comité final, A2).
-	noCierra := "El corte de Fenólico 18 mm no cierra con su plano. Abrilo de nuevo y volvé a agregarlo."
+	// su plano: se rechaza, no se autoriza (comité final, A2). Es lo que
+	// manda la pantalla abierta antes de que el admin cargara la tarifa, y
+	// el texto lo dice para que traiga las nuevas (revisión del carril F).
+	tarifasNuevas := "Las tarifas de corte cambiaron. Tocá «Corregir» en el corte de Fenólico 18 mm y guardalo."
 	_, m, b = vender(e.lineaPlaca(2), canto)
-	if m["error"] != noCierra || m["autorizacion"] != nil {
+	if m["error"] != tarifasNuevas || m["autorizacion"] != nil {
 		t.Fatalf("sin pasadas: %s", b)
 	}
 	_, m, b = vender(e.lineaPlaca(2), pasadas(2500))
-	if m["error"] != noCierra || m["autorizacion"] != nil {
+	if m["error"] != tarifasNuevas || m["autorizacion"] != nil {
 		t.Fatalf("sin canto: %s", b)
 	}
 	// Todo a tarifa: pasa, con la tarifa como precio de lista de los renglones.

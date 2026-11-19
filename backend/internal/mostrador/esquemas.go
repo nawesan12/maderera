@@ -65,6 +65,11 @@ type VentaPedida struct {
 	// distintas, o la misma en dos trabajos), cada uno con sus renglones
 	// atados por LineaDeVenta.Corte (comité final, A2).
 	Cortes []CorteDeMostrador
+	// CorteSuelto: vino en «corte», el formato de antes, con los renglones
+	// sin atar. Solo entonces se atan por cómo se ven (atarRenglonesAlCorte):
+	// con «cortes» un corte sin renglones (sin tarifa y por debajo de media
+	// placa) se llevaba la placa suelta del mismo material.
+	CorteSuelto bool
 	// PIN de un admin, o la Ficha que devolvió un PIN anterior para esta
 	// misma venta (internal/autorizacion).
 	PIN   string
@@ -223,6 +228,7 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	// atarRenglonesAlCorte); «cortes», la lista de ahora.
 	if c := l.Objeto("corte", true, false); c != nil {
 		v.Cortes = append(v.Cortes, *leerCorte(c))
+		v.CorteSuelto = true
 	}
 	l.Objetos("cortes", zodjs.Lista{Opcional: true, Max: TopeDeCortes}, func(_ int, c *zodjs.Lector) {
 		v.Cortes = append(v.Cortes, *leerCorte(c))
@@ -251,6 +257,11 @@ func LeerLoteDeLaCola(crudo any) ([]VentaPedida, *zodjs.Lector) {
 		}
 		v.UsuarioID = e.Cadena("usuarioId", zodjs.Texto{Opcional: true})
 		v.FirmaUsuario = e.Cadena("firmaUsuario", zodjs.Texto{Opcional: true, Nulo: true})
+		// Los cortes armados con conexión y cobrados después sin ella: sin
+		// esto el trabajo no llegaba nunca al taller (revisión del carril F).
+		e.Objetos("cortes", zodjs.Lista{Opcional: true, Max: TopeDeCortes}, func(_ int, c *zodjs.Lector) {
+			v.Cortes = append(v.Cortes, *leerCorte(c))
+		})
 		lote = append(lote, v)
 	})
 	return lote, l

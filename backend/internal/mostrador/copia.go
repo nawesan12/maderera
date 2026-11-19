@@ -249,7 +249,11 @@ type ClienteDeLaCopia struct {
 	PriceListID   *string `json:"priceListId"`
 	Estado        string  `json:"estado"`
 	LimiteCredito float64 `json:"limiteCredito"`
-	Busqueda      string  `json:"busqueda"`
+	// Sin conexión la pantalla no deja elegir cuenta corriente para la
+	// cuenta bloqueada ni sin límite: la cola rechaza la bloqueada cuando
+	// la mercadería ya salió (revisión del carril F).
+	CuentaBloqueada bool   `json:"cuentaBloqueada"`
+	Busqueda        string `json:"busqueda"`
 }
 
 // PadronDelMostrador es la respuesta de GET /api/mostrador/clientes.
@@ -268,7 +272,7 @@ func (s *Servicio) Padron(ctx context.Context, desde *time.Time) (PadronDelMostr
 		args = append(args, *desde)
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT id, nombre, razon_social, cuit, condicion_iva::text, price_list_id, estado::text, limite_credito
+		SELECT id, nombre, razon_social, cuit, condicion_iva::text, price_list_id, estado::text, limite_credito, cuenta_bloqueada
 		FROM customers WHERE active = true`+cambiados+`
 		ORDER BY nombre`, args...)
 	if err != nil {
@@ -278,7 +282,7 @@ func (s *Servicio) Padron(ctx context.Context, desde *time.Time) (PadronDelMostr
 	for filas.Next() {
 		var c ClienteDeLaCopia
 		var lim jsmath.Num
-		if err := filas.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.PriceListID, &c.Estado, &lim); err != nil {
+		if err := filas.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.PriceListID, &c.Estado, &lim, &c.CuentaBloqueada); err != nil {
 			return p, err
 		}
 		c.LimiteCredito = lim.F()

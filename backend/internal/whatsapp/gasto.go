@@ -26,10 +26,14 @@ type ConfigDeGasto struct {
 
 // ConfigDeGasto lee la fila de la sesión.
 func (s *Servicio) ConfigDeGasto(ctx context.Context) (ConfigDeGasto, error) {
+	return configDeGastoCon(ctx, s.pool)
+}
+
+func configDeGastoCon(ctx context.Context, q consultor) (ConfigDeGasto, error) {
 	var tope *jsmath.Num
 	var tarifas []byte
 	var a80, a100 *string
-	err := s.pool.QueryRow(ctx, `select tope_mensual_usd, tarifas, tope_aviso80, tope_aviso100 from whatsapp_sesion limit 1`).
+	err := q.QueryRow(ctx, `select tope_mensual_usd, tarifas, tope_aviso80, tope_aviso100 from whatsapp_sesion limit 1`).
 		Scan(&tope, &tarifas, &a80, &a100)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return ConfigDeGasto{}, err
@@ -61,14 +65,18 @@ type GastoDelMes struct {
 // (estimados: plantilla → utilidad, texto → servicio). Lo del teléfono, lo
 // importado y lo de la demostración no se cuentan.
 func (s *Servicio) GastoDelMes(ctx context.Context, ahora time.Time) (GastoDelMes, error) {
+	return gastoDelMesCon(ctx, s.pool, ahora)
+}
+
+func gastoDelMesCon(ctx context.Context, q consultor, ahora time.Time) (GastoDelMes, error) {
 	inicio := InicioDelMesArgentino(ahora)
-	cfg, err := s.ConfigDeGasto(ctx)
+	cfg, err := configDeGastoCon(ctx, q)
 	if err != nil {
 		return GastoDelMes{}, err
 	}
 	const porAPI = `direccion = 'saliente' and created_at >= $1 and importado = false and (origen is null or origen <> 'telefono')`
 	filas := []FilaDeGasto{}
-	r, err := s.pool.Query(ctx, `select cobro_categoria, cobrable, count(*)::int from whatsapp_mensajes
+	r, err := q.Query(ctx, `select cobro_categoria, cobrable, count(*)::int from whatsapp_mensajes
 		where `+porAPI+` and cobro_categoria is not null group by cobro_categoria, cobrable`, inicio)
 	if err != nil {
 		return GastoDelMes{}, err
@@ -84,7 +92,7 @@ func (s *Servicio) GastoDelMes(ctx context.Context, ahora time.Time) (GastoDelMe
 		filas = append(filas, f)
 	}
 	r.Close()
-	r, err = s.pool.Query(ctx, `select plantilla is not null, count(*)::int from whatsapp_mensajes
+	r, err = q.Query(ctx, `select plantilla is not null, count(*)::int from whatsapp_mensajes
 		where `+porAPI+` and cobro_categoria is null and wa_message_id is not null and wa_message_id not like 'demo-%'
 		  and estado in ('enviado', 'entregado', 'leido') group by plantilla is not null`, inicio)
 	if err != nil {
@@ -123,7 +131,7 @@ func (s *Servicio) topeAlcanzadoCon(ctx context.Context, q consultor) bool {
 	if u, err := s.usoDelMesCon(ctx, q, s.ahora()); err == nil && u.Alcanzado {
 		return true
 	}
-	g, err := s.GastoDelMes(ctx, s.ahora())
+	g, err := gastoDelMesCon(ctx, q, s.ahora())
 	return err == nil && g.Alcanzado
 }
 

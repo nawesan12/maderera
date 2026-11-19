@@ -654,10 +654,18 @@ func TestVentasACuentaSimultaneasRespetanElLimite(t *testing.T) {
 			_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
 			mu.Lock()
 			defer mu.Unlock()
+			// Frenada es la que pide el PIN por crédito. Las que llegan a la
+			// revisión de afuera con las tres primeras ya cargadas reciben
+			// «Hace falta el PIN de un administrador»; las que la pasaron a
+			// la par y frenan adentro de la transacción, «Supera el límite…».
+			// Las dos piden lo mismo. En la Mac llegaban todas juntas y salía
+			// siempre el segundo texto; en el runner de la CI, más lento, se
+			// espaciaban y aparecía el primero.
+			aut, _ := m["autorizacion"].(map[string]any)
 			switch {
 			case m["ok"] == true:
 				hechas++
-			case strings.HasPrefix(fmt.Sprint(m["error"]), "Supera el límite de crédito"):
+			case aut != nil && aut["motivo"] == "credito" && aut["monto"] == 300.0:
 				frenadas++
 			default:
 				t.Errorf("respuesta inesperada: %s", b)

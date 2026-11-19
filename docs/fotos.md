@@ -56,7 +56,14 @@ El código MJBJ de cada foto (el número entre paréntesis en el nombre del
 archivo) es el `sku` de la medida. La lista vive en Go:
 `backend/internal/fotos/biblioteca.go`. Hoy tiene 13 fotos y 14 códigos
 (392, 391, 4145, 4159, 4147, 5743, 12724, 4696, 4172, 12848, 12850, 12851,
-12801, 9035); los tres enchapados llevan además una foto de cerca de la veta.
+12801, 9035); los tres enchapados llevan además el canto de cerca, a tamaño
+real (arriba la chapa, abajo las capas del aglomerado): 16 archivos.
+
+**El recorte de las placas va sobre el canto.** El canto es lo que dice qué
+placa es y de qué espesor; en la foto entera ocupaba el 8–10 % de abajo y en
+la tarjeta cuadrada la placa se leía como una muestra de color. Las de la
+biblioteca se recortan ancladas abajo y el doble de cerca: el canto queda en
+el 20–30 % de abajo. Las de esquina (melamina) y el ranurado van enteras.
 
 Cuándo se engancha una foto:
 
@@ -65,39 +72,83 @@ Cuándo se engancha una foto:
   antes de contestar.
 - **Nunca al guardar** una medida que ya existía: una foto que la clienta borró
   a propósito no vuelve.
+- **Cuando el importador cambia una medida de producto** (en ISIS el código
+  pasó a otro artículo): el producto nuevo se lleva la foto.
 - **En lote**, `mjbj fotos adjuntar`, para lo que ya estaba cargado: solo
   productos sin ninguna foto.
+- **Nunca una que la clienta borró**: borrar una foto de la biblioteca desde
+  el panel la anota en `fotos_biblioteca_descartadas`, y ni crear la medida
+  otra vez ni el lote la devuelven.
+
+El enganche corre después del commit, con su propio plazo de 30 s y sin el
+corte del pedido: si se cierra la pestaña en medio de un lote grande, las
+medidas ya guardadas reciben su foto igual.
 
 Cada producto recibe su copia del archivo (borrar la foto de uno no deja al
-otro sin foto). `product_images.origen_biblioteca` (migración 00186) dice de
-qué archivo salió cada foto: así la melamina en aglomerado (12724) y en MDF
-(4696), si son medidas del mismo producto, suman cada una la suya.
+otro sin foto). La migración 00186 suma a `product_images` dos columnas:
+`origen_biblioteca` (de qué archivo salió) y `variant_id` (la medida que
+muestra). Así la melamina en aglomerado (12724) y en MDF (4696), si son
+medidas del mismo producto, suman cada una la suya; **la foto principal es la
+de la medida que la ficha elige primero**, y al elegir otra medida la galería
+pasa a su foto. Una foto que subió la clienta, si está primera, sigue primera.
 
 ### Subirla a producción
 
-Después de desplegar (la 00185 y la 00186 las aplica `desplegar.sh`):
+El orden importa por dos cosas: `desplegar.sh` migra **antes** de construir la
+aplicación, y las fotos de `public/sitio/` llegan recién con la aplicación
+nueva.
+
+- **00186** (columnas de la biblioteca): la necesita la API nueva, tiene que
+  ir antes. No rompe la versión anterior (ninguna consulta usa `SELECT *`
+  sobre `product_images`).
+- **00185** (portadas propias): durante los minutos del build, la versión
+  anterior sigue andando con la base ya migrada. Lo que tenga en caché sigue
+  igual; si en ese rato vence la caché de la portada o del catálogo, esas
+  tarjetas de rubro salen sin foto hasta que arranca la nueva (que arranca
+  con la caché vacía). Por eso la 00185 **no le avisa a Next**: ese aviso lo
+  consumía la versión anterior y forzaba justamente ese hueco. Hoy la base
+  no tiene productos y el riesgo es de minutos; si molesta, desplegar fuera
+  del horario del local.
+
+Pasos, después de que `desplegar.sh` termina bien:
 
 ```sh
-# 1. Desde la máquina donde se procesó
-scp -r salida/biblioteca mjbj@179.197.224.61:<carpeta del despliegue>/entrada-fotos
+# 1. Desde la máquina donde se procesó: la carpeta vacía y los archivos
+#    sueltos adentro. Con `scp -r salida/biblioteca …` sobre una
+#    `entrada-fotos` que ya existía, quedaban en `entrada-fotos/biblioteca/`
+#    y `cargar` no veía ninguno.
+ssh mjbj@179.197.224.61 'rm -rf <carpeta del despliegue>/entrada-fotos && mkdir <carpeta del despliegue>/entrada-fotos'
+scp salida/biblioteca/*.webp mjbj@179.197.224.61:<carpeta del despliegue>/entrada-fotos/
 
 # 2. En la VPS, en la carpeta del despliegue
-chmod -R a+rX entrada-fotos   # la imagen corre como nonroot (65532)
-docker compose --env-file .env.produccion -f docker-compose.prod.yml \
-  run --rm --no-deps -v "$PWD/entrada-fotos:/entrada:ro" api fotos cargar /entrada
-docker compose --env-file .env.produccion -f docker-compose.prod.yml \
-  run --rm --no-deps api fotos adjuntar --probar
-docker compose --env-file .env.produccion -f docker-compose.prod.yml \
-  run --rm --no-deps api fotos adjuntar
+alias dc='docker compose --env-file .env.produccion -f docker-compose.prod.yml'
+ls entrada-fotos | wc -l                 # 16
+chmod -R a+rX entrada-fotos              # la imagen corre como nonroot (65532)
+
+# 3. Quién es dueño del volumen privado: la API escribe ahí como 65532
+#    (los comprobantes ya lo hacen, así que lo normal es que ande).
+docker volume ls --format '{{.Name}}' | grep privado    # p. ej. mjbj_privado
+docker run --rm -v mjbj_privado:/v alpine stat -c '%n %u %a' /v
+#    Si /v es de 1001 con 755 y no hay /v/biblioteca, `cargar` va a dar
+#    «permission denied» (sin copiar nada). Se arregla con:
+#    docker run --rm -v mjbj_privado:/v alpine sh -c 'mkdir -p /v/biblioteca && chown 65532 /v/biblioteca'
+
+# 4. Cargar y comprobar
+dc run --rm --no-deps -v "$PWD/entrada-fotos:/entrada:ro" api fotos cargar /entrada
+#    → tiene que terminar en «Listo: 16 de 16 copiadas en /datos/privado/biblioteca.»
+dc run --rm --no-deps api fotos adjuntar --probar     # hoy: 0 (la base no tiene productos)
+dc run --rm --no-deps api fotos adjuntar              # hoy: «Listo: 0 fotos puestas.»
 rm -rf entrada-fotos
 ```
 
 Sin `mjbj` delante de `fotos`: la imagen ya tiene `ENTRYPOINT ["/mjbj"]`.
-`cargar` revisa cada archivo (que sea WebP, de 1600 px o más, de 8 MB o menos)
-y si uno no pasa no copia ninguno; avisa cuáles de la lista faltan y cuáles
-sobran. Hoy la base no tiene productos, así que `adjuntar` tiene que dar 0: el
-enganche al importar ya lo cubre. Se puede volver a correr después de que la
-maderera importe.
+`cargar` revisa cada archivo (que sea WebP, de 1600 px o más —1400 el canto
+de cerca—, de 8 MB o menos) y **no copia ninguno** si uno no pasa, si falta
+alguno de la lista o si la carpeta no tiene ninguno: termina con error y no
+con «0 copiadas». Para cargar a propósito una parte, `fotos cargar --parcial
+/entrada`. Avisa cuáles faltan y cuáles sobran. Hoy la base no tiene
+productos, así que `adjuntar` tiene que dar 0: el enganche al importar ya lo
+cubre. Se puede volver a correr después de que la maderera importe.
 
 ### Sumar una foto
 
@@ -114,11 +165,17 @@ maderera importe.
   El PDF vectorial dice «JUAN B. JUSTO»; el logotipo del sitio sale de ahí.
 - **`STOCK PLACAS` y `FENOLICOS TERCIPLAK`:** en grande, las marcas de los
   proveedores (Terciplak, Aguerco, LP, Placas Rivadavia). La primera foto del
-  sitio no es una publicidad de nadie; la portada es el galpón propio.
+  sitio no es una publicidad de nadie; la portada es el galpón propio, y
+  recortada por debajo del 47 % de la altura, porque arriba también se leen
+  las cajas «LP Mult-Plac».
+- **La página 26 del catálogo de Moldava** (las puntas de las molduras): era
+  un escaneo en blanco y negro con la trama de imprenta. El bloque del proceso
+  de /moldava lleva los perfiles de punta de la estantería, en color.
 - **`FENOLICOS PLACAS RIVADAVIA`:** la pintada de otro proveedor en el medio.
 - **`SIDING` como portada:** blanco sobre blanco, se veía vacía. Va el OSB.
-- **Las de 640 px:** las 14 de Moldava, los entramados 52010 y 52012, MADERAS
-  VARIOS (además parecen de un proveedor) y las placas chicas.
+- **Las de 640 px:** las 14 de Moldava (para la biblioteca; el zócalo 9076 sí
+  va como portada de Molduras, que es una tarjeta chica), los entramados 52010
+  y 52012, MADERAS VARIOS (además parecen de un proveedor) y las placas chicas.
 - **Las 12 de WhatsApp de Moldava:** las mismas, peores.
 - **Muestras de Fibraplac y San Juan:** esperan qué colores trabaja la maderera.
   Cuando lleguen: los colores lisos no van como foto (van como dato del color),
@@ -154,3 +211,7 @@ maderera importe.
     placas apiladas).
 11. El vector de los íconos de rubro de las historias de Instagram, para usarlos
     como portada de los rubros sin foto propia.
+12. Fotos propias para Cubiertas (es la única tarjeta de la portada que queda
+    lisa) y para techos, pisos y decks, que siguen con fotos de banco.
+13. Si la foto del galpón con las cajas de LP Mult-Plac se puede mostrar
+    entera. La portada la usa recortada por debajo de las cajas.

@@ -5078,6 +5078,15 @@ type Cheque struct {
 	MotivoRechazo   *string       `json:"motivoRechazo"`
 }
 
+type ChequeEstado struct {
+	ID              string             `json:"id"`
+	ChequeID        string             `json:"chequeId"`
+	Desde           EstadoCheque       `json:"desde"`
+	Hacia           EstadoCheque       `json:"hacia"`
+	At              pgtype.Timestamptz `json:"at"`
+	CreatedByUserID *string            `json:"createdByUserId"`
+}
+
 type ConfiguracionFiscal struct {
 	ID                     string       `json:"id"`
 	RazonSocial            string       `json:"razonSocial"`
@@ -5339,6 +5348,23 @@ type DeliveryItem struct {
 	Orden       int32      `json:"orden"`
 }
 
+type Devolucione struct {
+	ID                string             `json:"id"`
+	Clave             string             `json:"clave"`
+	OrderID           string             `json:"orderId"`
+	InvoiceID         string             `json:"invoiceId"`
+	NotaID            string             `json:"notaId"`
+	Importe           jsmath.Num         `json:"importe"`
+	Destino           string             `json:"destino"`
+	BranchID          *string            `json:"branchId"`
+	SinStock          *string            `json:"sinStock"`
+	Motivo            string             `json:"motivo"`
+	CashMovementID    *string            `json:"cashMovementId"`
+	AccountMovementID *string            `json:"accountMovementId"`
+	CreatedByUserID   *string            `json:"createdByUserId"`
+	CreatedAt         pgtype.Timestamptz `json:"createdAt"`
+}
+
 type EmailAviso struct {
 	ID         string    `json:"id"`
 	Evento     string    `json:"evento"`
@@ -5520,6 +5546,7 @@ type Invoice struct {
 	Acreditado           jsmath.Num        `json:"acreditado"`
 	Debitado             jsmath.Num        `json:"debitado"`
 	FechaEmisionOriginal *time.Time        `json:"fechaEmisionOriginal"`
+	CaeAmbiente          *string           `json:"caeAmbiente"`
 }
 
 type InvoiceItem struct {
@@ -5535,6 +5562,7 @@ type InvoiceItem struct {
 	Subtotal            jsmath.Num `json:"subtotal"`
 	Orden               int32      `json:"orden"`
 	InvoiceItemOrigenID *string    `json:"invoiceItemOrigenId"`
+	OrderItemID         *string    `json:"orderItemId"`
 }
 
 type InvoicePayment struct {
@@ -5680,6 +5708,16 @@ type OrderStatusHistory struct {
 	Nota            *string      `json:"nota"`
 	CreatedByUserID *string      `json:"createdByUserId"`
 	CreatedAt       time.Time    `json:"createdAt"`
+}
+
+type PadronIibb struct {
+	ID            string             `json:"id"`
+	Cuit          string             `json:"cuit"`
+	Alicuota      jsmath.Num         `json:"alicuota"`
+	VigenciaDesde pgtype.Date        `json:"vigenciaDesde"`
+	VigenciaHasta pgtype.Date        `json:"vigenciaHasta"`
+	CargadoPor    *string            `json:"cargadoPor"`
+	CargadoAt     pgtype.Timestamptz `json:"cargadoAt"`
 }
 
 type Payment struct {
@@ -6179,26 +6217,28 @@ type Subcategory struct {
 }
 
 type Supplier struct {
-	ID           string          `json:"id"`
-	Nombre       string          `json:"nombre"`
-	RazonSocial  *string         `json:"razonSocial"`
-	Cuit         *string         `json:"cuit"`
-	CondicionIva CondicionIva    `json:"condicionIva"`
-	Email        *string         `json:"email"`
-	Telefono     *string         `json:"telefono"`
-	Direccion    *string         `json:"direccion"`
-	Rubro        *string         `json:"rubro"`
-	Contacto     *string         `json:"contacto"`
-	DiasPago     int32           `json:"diasPago"`
-	Cbu          *string         `json:"cbu"`
-	AliasCbu     *string         `json:"aliasCbu"`
-	Estado       EstadoProveedor `json:"estado"`
-	Notas        *string         `json:"notas"`
-	CodigoLegacy *string         `json:"codigoLegacy"`
-	Active       bool            `json:"active"`
-	CreatedAt    time.Time       `json:"createdAt"`
-	UpdatedAt    time.Time       `json:"updatedAt"`
-	Convenios    *string         `json:"convenios"`
+	ID                   string          `json:"id"`
+	Nombre               string          `json:"nombre"`
+	RazonSocial          *string         `json:"razonSocial"`
+	Cuit                 *string         `json:"cuit"`
+	CondicionIva         CondicionIva    `json:"condicionIva"`
+	Email                *string         `json:"email"`
+	Telefono             *string         `json:"telefono"`
+	Direccion            *string         `json:"direccion"`
+	Rubro                *string         `json:"rubro"`
+	Contacto             *string         `json:"contacto"`
+	DiasPago             int32           `json:"diasPago"`
+	Cbu                  *string         `json:"cbu"`
+	AliasCbu             *string         `json:"aliasCbu"`
+	Estado               EstadoProveedor `json:"estado"`
+	Notas                *string         `json:"notas"`
+	CodigoLegacy         *string         `json:"codigoLegacy"`
+	Active               bool            `json:"active"`
+	CreatedAt            time.Time       `json:"createdAt"`
+	UpdatedAt            time.Time       `json:"updatedAt"`
+	Convenios            *string         `json:"convenios"`
+	CondicionGanancias   *string         `json:"condicionGanancias"`
+	ExentoGananciasHasta pgtype.Date     `json:"exentoGananciasHasta"`
 }
 
 type SupplierMovement struct {

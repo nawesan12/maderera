@@ -232,12 +232,13 @@ export default async function CajaPage({
                         <div className="flex flex-wrap gap-2">
                           {cierre.map((r) => (
                             <span
-                              key={`${r.devolucion ? "dev-" : ""}${r.medioPago}`}
+                              key={`${r.devolucion ? "dev-" : ""}${r.medioPago}-${r.quien ?? ""}`}
                               className="inline-flex items-baseline gap-1.5 rounded-full bg-muted px-3 py-1 text-sm"
                             >
                               <span className="text-muted-foreground">
                                 {r.devolucion && "Devolución · "}
                                 {MEDIOS[r.medioPago] ?? r.medioPago}
+                                {r.quien && ` · ${r.quien}`}
                               </span>
                               <span className="tabular font-semibold">
                                 {formatearMonto(r.total)}

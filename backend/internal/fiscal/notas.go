@@ -17,6 +17,10 @@ type ItemOriginal struct {
 	AlicuotaIva float64 `json:"alicuotaIva"`
 	// Acreditado es cuánto de la cantidad ya devolvieron otras notas.
 	Acreditado float64 `json:"acreditado"`
+	// AcreditadoImporte es cuánta plata de este renglón ya devolvieron (la
+	// suma de los subtotales de esas notas): el renglón que se cierra se
+	// lleva lo que queda y no un unitario redondeado por la cantidad.
+	AcreditadoImporte float64 `json:"acreditadoImporte"`
 }
 
 // CantidadAAcreditar es cuánto de un renglón.
@@ -50,6 +54,18 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 		}
 		return 0
 	}
+	// El renglón que se lleva todo lo que le queda devuelve el subtotal que
+	// queda, no el unitario redondeado por la cantidad: 100 en 3 da 33,33
+	// de unitario, y la nota por las 3 salía por 99,99 y el original no se
+	// cerraba nunca. El precio queda sin redondear a propósito: la cuenta
+	// del renglón (cantidad × precio, redondeado) da el resto exacto.
+	precioDelResto := func(i ItemOriginal, cantidad, importeTomado float64) float64 {
+		resto := i.Subtotal - i.AcreditadoImporte - importeTomado
+		if cantidad <= 0 || resto <= 0 {
+			return unitario(i)
+		}
+		return resto / cantidad
+	}
 	if parciales == nil {
 		// Por el total: lo que queda de cada renglón.
 		out := make([]LineaDeNota, 0, len(items))
@@ -60,7 +76,7 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 					continue
 				}
 			}
-			out = append(out, LineaDeNota{i.Descripcion, i.Unidad, cantidad, unitario(i), i.AlicuotaIva, i.ID})
+			out = append(out, LineaDeNota{i.Descripcion, i.Unidad, cantidad, precioDelResto(i, cantidad, 0), i.AlicuotaIva, i.ID})
 		}
 		return out, nil
 	}
@@ -71,6 +87,7 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 	// original: dos notas parciales de 6 sobre 10 placas pasaban, y una sola
 	// con el renglón dos veces también.
 	tomado := map[string]float64{}
+	tomadoImporte := map[string]float64{}
 	for _, p := range parciales {
 		var item *ItemOriginal
 		for k := range items {
@@ -93,8 +110,13 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 			return nil, &ErrorDeNota{`De "` + item.Descripcion + `" ya se acreditaron ` + jsmath.Texto(Redondear(item.Cantidad-queda)) +
 				` de ` + jsmath.Texto(item.Cantidad) + `: quedan ` + jsmath.Texto(Redondear(math.Max(0, queda))) + `.`}
 		}
+		precio := unitario(*item)
+		if queda-p.Cantidad <= toleranciaCantidad {
+			precio = precioDelResto(*item, p.Cantidad, tomadoImporte[item.ID])
+		}
 		tomado[item.ID] += p.Cantidad
-		out = append(out, LineaDeNota{item.Descripcion, item.Unidad, p.Cantidad, unitario(*item), item.AlicuotaIva, item.ID})
+		tomadoImporte[item.ID] += Redondear(float64(p.Cantidad * precio))
+		out = append(out, LineaDeNota{item.Descripcion, item.Unidad, p.Cantidad, precio, item.AlicuotaIva, item.ID})
 	}
 	return out, nil
 }
@@ -179,6 +201,9 @@ func Importes(lineas []LineaEntrada, tributosDados []Tributo, percibeIibb bool, 
 // Original son los importes guardados del comprobante que se corrige.
 type Original struct {
 	Neto, Iva21, Iva105, Iva27, Exento, Total, Acreditado float64
+	// TributosDevueltos son, por código, los tributos que ya devolvieron
+	// otras notas: la que cierra el original devuelve lo que queda.
+	TributosDevueltos map[string]Tributo
 }
 
 // CalculoDeNota es lo que emitirNotaDeCredito calcula antes de emitir.
@@ -225,6 +250,18 @@ func CalcularNota(o Original, items []ItemOriginal, parciales []CantidadAAcredit
 		proporcion = jsMin(1, neto/base)
 	}
 	dados := ProrratearTributos(tributos, proporcion)
+	// La nota que se lleva todo lo que queda de todos los renglones cierra
+	// el original: sus tributos son lo que falta devolver, no un prorrateo.
+	// Dos parciales de una percepción de 10 prorrateadas daban 3,33 y 6,66.
+	if cierraElOriginal(items, lineas) && len(o.TributosDevueltos) > 0 {
+		dados = make([]Tributo, len(tributos))
+		for k, t := range tributos {
+			d := o.TributosDevueltos[t.Codigo]
+			t.Base = Redondear(t.Base - d.Base)
+			t.Importe = Redondear(t.Importe - d.Importe)
+			dados[k] = t
+		}
+	}
 	st := 0.0
 	for _, x := range dados {
 		st += x.Importe
@@ -233,6 +270,21 @@ func CalcularNota(o Original, items []ItemOriginal, parciales []CantidadAAcredit
 	c := CalculoDeNota{Lineas: lineas, Neto: neto, Proporcion: proporcion, TributosDados: dados, Total: total}
 	c.Problema = RevisarAcreditacion(o.Total, o.Acreditado, total)
 	return c
+}
+
+// cierraElOriginal dice si, con estas líneas, a ningún renglón le queda
+// nada por acreditar.
+func cierraElOriginal(items []ItemOriginal, lineas []LineaDeNota) bool {
+	tomado := map[string]float64{}
+	for _, l := range lineas {
+		tomado[l.ItemOrigenID] += l.Cantidad
+	}
+	for _, i := range items {
+		if i.Cantidad-i.Acreditado-tomado[i.ID] > toleranciaCantidad {
+			return false
+		}
+	}
+	return true
 }
 
 // jsMin es Math.min de dos: NaN si alguno es NaN.

@@ -389,7 +389,7 @@ func (a *arca) recuperar(ctx context.Context, c *comprobanteArca) (string, error
 		return "", err
 	}
 	obs := "Recuperado de ARCA: el CAE se había otorgado y no llegó a guardarse."
-	if err := a.s.guardarCAE(ctx, c.id, q.Cae, q.CaeVencimiento, &obs); err != nil {
+	if err := a.s.guardarCAE(ctx, c.id, q.Cae, q.CaeVencimiento, &obs, a.cfg.Ambiente); err != nil {
 		return "", err
 	}
 	a.autorizados = append(a.autorizados, c.id)
@@ -561,7 +561,7 @@ func (a *arca) aplicar(ctx context.Context, c *comprobanteArca, r fiscal.Resulta
 			return "", err
 		}
 	}
-	if err := a.s.guardarCAE(ctx, c.id, r.Cae, r.CaeVencimiento, nulo(r.Observaciones)); err != nil {
+	if err := a.s.guardarCAE(ctx, c.id, r.Cae, r.CaeVencimiento, nulo(r.Observaciones), a.cfg.Ambiente); err != nil {
 		return "", err
 	}
 	a.autorizados = append(a.autorizados, c.id)
@@ -575,9 +575,11 @@ func nulo(s string) *string {
 	return &s
 }
 
-func (s *Servicio) guardarCAE(ctx context.Context, id, cae string, vence *time.Time, obs *string) error {
+// guardarCAE deja el CAE con el ambiente del que salió: un CAE de homologación no tiene valor fiscal
+// y queda fuera del libro IVA y del cierre (ver reportes.conCae).
+func (s *Servicio) guardarCAE(ctx context.Context, id, cae string, vence *time.Time, obs *string, ambiente string) error {
 	_, err := s.pool.Exec(ctx, `UPDATE invoices SET estado = 'autorizada', cae = $2, cae_vencimiento = $3, observaciones_arca = $4,
-		updated_at = now() WHERE id = $1 AND cae IS NULL`, id, cae, vence, obs)
+		cae_ambiente = nullif($5, ''), updated_at = now() WHERE id = $1 AND cae IS NULL`, id, cae, vence, obs, ambiente)
 	return err
 }
 

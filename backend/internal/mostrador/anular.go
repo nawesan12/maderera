@@ -122,6 +122,18 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 	}
 	parteEfectivo := parte(ventas.Efectivo)
 	parteCuenta := parte(ventas.CuentaCorriente)
+	// Lo que ya devolvieron las devoluciones parciales no vuelve otra vez.
+	// Cada una sale por el medio por el que entró y con ese tope
+	// (facturacion.DevolucionParcial), así que restar por medio alcanza; el
+	// piso en cero es por las dudas.
+	var porCaja, porCuenta float64
+	if err := tx.QueryRow(ctx, `SELECT coalesce(sum(importe) FILTER (WHERE destino = 'caja'), 0)::float8,
+		coalesce(sum(importe) FILTER (WHERE destino = 'cuenta'), 0)::float8 FROM devoluciones WHERE order_id = $1`, id).
+		Scan(&porCaja, &porCuenta); err != nil {
+		return ResultadoAnulacion{}, err
+	}
+	parteEfectivo = jsmath.Redondear2(max(0, parteEfectivo-porCaja))
+	parteCuenta = jsmath.Redondear2(max(0, parteCuenta-porCuenta))
 
 	// Los cheques con que se pagó: si alguno ya salió de la cartera, no.
 	type cheque struct{ id, estado, numero string }
@@ -257,8 +269,13 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 // salió con la venta»). Un acopio con el remito anulado se quedaba sin
 // reservas con la mercadería en el galpón, y anular la venta la devolvía
 // otra vez: el físico subía de la nada. Ahora se suman los movimientos de la
-// venta («Mostrador V-…») y de sus remitos («Remito REM-…» y su anulación),
-// por variante y sucursal: vuelve lo que dé negativo, adonde salió.
+// venta («Mostrador V-…»), de sus remitos («Remito REM-…» y su anulación) y
+// de sus devoluciones parciales (por id, no por el texto de la nota), por
+// variante: vuelve lo que falte, a las sucursales de donde salió.
+//
+// Por variante y no por sucursal: una devolución que entró por otra
+// sucursal ya devolvió parte de lo que salió de la de la venta, y sumado por
+// sucursal se devolvía dos veces.
 func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario string) error {
 	filas, err := tx.Query(ctx, `
 		SELECT variant_id, branch_id, (-sum(qty))::text FROM inventory_movements
@@ -266,13 +283,13 @@ func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario 
 		  AND type IN ('venta', 'devolucion')
 		  AND (note = $2
 		       OR note IN (SELECT 'Remito ' || numero FROM deliveries WHERE order_id = $1)
-		       OR note IN (SELECT 'Anulación del remito ' || numero FROM deliveries WHERE order_id = $1))
+		       OR note IN (SELECT 'Anulación del remito ' || numero FROM deliveries WHERE order_id = $1)
+		       OR (documento_tipo = 'devolucion' AND documento_id IN (SELECT id FROM devoluciones WHERE order_id = $1)))
 		GROUP BY variant_id, branch_id ORDER BY variant_id, branch_id`, pedido, "Mostrador "+numero)
 	if err != nil {
 		return err
 	}
-	var vueltas []reservas.LineaDevuelta
-	var stocks []reservas.Stock
+	var netos []reservas.LineaDevuelta
 	for filas.Next() {
 		var l reservas.LineaDevuelta
 		var cantidad string
@@ -280,14 +297,17 @@ func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario 
 			filas.Close()
 			return err
 		}
-		if l.Cantidad = ventas.CantidadDeStock(jsmath.Numero(cantidad)); l.Cantidad > 0 {
-			vueltas = append(vueltas, l)
-			stocks = append(stocks, reservas.Stock{Variante: l.VariantID, Sucursal: l.BranchID})
-		}
+		l.Cantidad = ventas.CantidadDeStock(jsmath.Numero(cantidad))
+		netos = append(netos, l)
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {
 		return err
+	}
+	vueltas := LoQueFaltaDevolver(netos)
+	var stocks []reservas.Stock
+	for _, l := range vueltas {
+		stocks = append(stocks, reservas.Stock{Variante: l.VariantID, Sucursal: l.BranchID})
 	}
 	filas, err = tx.Query(ctx, `SELECT variant_id, branch_id FROM stock_reservations WHERE order_id = $1 AND estado = 'activa'`, pedido)
 	if err != nil {
@@ -325,4 +345,29 @@ func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario 
 		}
 	}
 	return nil
+}
+
+// LoQueFaltaDevolver recibe, por variante y sucursal, lo que salió neto
+// (negativo: entró más de lo que salió, una devolución por otra sucursal) y
+// devuelve lo que vuelve a cada sucursal de salida: por variante, lo que
+// sobró en otras sucursales se descuenta de las de salida, en orden.
+func LoQueFaltaDevolver(netos []reservas.LineaDevuelta) []reservas.LineaDevuelta {
+	sobra := map[string]float64{}
+	for _, l := range netos {
+		if l.Cantidad < 0 {
+			sobra[l.VariantID] += -l.Cantidad
+		}
+	}
+	var out []reservas.LineaDevuelta
+	for _, l := range netos {
+		if l.Cantidad <= 0 {
+			continue
+		}
+		descuento := min(l.Cantidad, sobra[l.VariantID])
+		sobra[l.VariantID] -= descuento
+		if c := ventas.CantidadDeStock(l.Cantidad - descuento); c > 0 {
+			out = append(out, reservas.LineaDevuelta{VariantID: l.VariantID, BranchID: l.BranchID, Cantidad: c})
+		}
+	}
+	return out
 }

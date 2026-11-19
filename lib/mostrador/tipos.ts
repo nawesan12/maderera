@@ -61,7 +61,10 @@ export interface RenglonDelCierre {
   total: number;
   /**
    * Ventas anuladas durante este turno. La venta anulada sigue en el Z del
-   * turno en que se vendió: el cierre de un turno no cambia después.
+   * turno en que se vendió: el cierre de un turno no cambia después. Y las
+   * devoluciones parciales hechas en este turno.
    */
   devolucion: boolean;
+  /** Quién hizo las devoluciones parciales de la fila. */
+  quien?: string | null;
 }

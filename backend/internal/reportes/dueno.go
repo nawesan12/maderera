@@ -119,6 +119,9 @@ type NumerosDelDueno struct {
 	Cheques  ChequesDeLaSemana  `json:"cheques"`
 	PlataHoy PlataHoy           `json:"plataHoy"`
 	Ganancia ResultadoComparado `json:"ganancia"`
+	// Devoluciones del mes (argentino): la plata que salió por devoluciones
+	// parciales. El control de las devoluciones es que el dueño las vea.
+	Devoluciones Totales `json:"devoluciones"`
 }
 
 // NumerosDelDueno arma los cinco bloques.
@@ -138,7 +141,13 @@ func (s *Servicio) NumerosDelDueno(ctx context.Context) (NumerosDelDueno, error)
 	if n.PlataHoy, err = s.PlataHoy(ctx, ahora); err != nil {
 		return n, err
 	}
-	n.Ganancia, err = s.GananciaDelMes(ctx, ahora)
+	if n.Ganancia, err = s.GananciaDelMes(ctx, ahora); err != nil {
+		return n, err
+	}
+	a := ahora.In(Argentina)
+	inicio := time.Date(a.Year(), a.Month(), 1, 0, 0, 0, 0, Argentina)
+	err = s.pool.QueryRow(ctx, `SELECT coalesce(sum(importe), 0)::float8, count(*)::int FROM devoluciones WHERE created_at >= $1`, inicio).
+		Scan(&n.Devoluciones.Total, &n.Devoluciones.Cantidad)
 	return n, err
 }
 

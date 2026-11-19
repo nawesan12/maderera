@@ -36,7 +36,7 @@ export async function NumerosDelNegocio({
     ventasPorSucursal(),
   ]);
 
-  const { meDeben, debo, cheques, plataHoy: plata, ganancia } = n;
+  const { meDeben, debo, cheques, plataHoy: plata, ganancia, devoluciones } = n;
 
   return (
     <div className="space-y-4">
@@ -127,6 +127,11 @@ export async function NumerosDelNegocio({
           variacion={metricas.variacionVentas}
           renglones={[
             plural(metricas.pedidosSinEntregar, "pedido sin entregar", "pedidos sin entregar"),
+            // Las devoluciones del mes van a la vista: la plata que sale de
+            // la caja por una devolución se controla mirándola.
+            ...(devoluciones.cantidad > 0
+              ? [`Devoluciones del mes ${moneda.format(devoluciones.total)} · ${plural(devoluciones.cantidad, "devolución", "devoluciones")}`]
+              : []),
           ]}
         />
       </div>

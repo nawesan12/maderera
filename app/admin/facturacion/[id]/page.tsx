@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, fechaLarga, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
-import { obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
+import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
   nombreComprobante,
@@ -112,6 +112,11 @@ export default async function FichaComprobantePage({
   const anulada = comprobante.estado === "anulada";
   // La serie solo importa sin CAE: el reintento y la baja.
   const serie = comprobante.cae ? null : await serieDelComprobante(id);
+  // La factura de una venta, ya autorizada, se corrige con una devolución.
+  const devolucion =
+    comprobante.orderId && comprobante.cae && comprobante.tipo.startsWith("factura") && comprobante.estado !== "anulada"
+      ? await datosDeDevolucion(id)
+      : null;
 
   return (
     <div className="space-y-6">
@@ -506,6 +511,7 @@ export default async function FichaComprobantePage({
                   total={Number(comprobante.total)}
                   acreditado={Number(comprobante.acreditado)}
                   revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                  devolucion={devolucion}
                 />
               </section>
 

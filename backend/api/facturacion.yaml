@@ -276,6 +276,60 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Emitido" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/devolucion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: DatosDeDevolucion
+      description: Lo que se puede devolver de la factura de una venta (renglones, tope por caja y por cuenta, sucursales). 404 si no es de una venta. Solo el admin.
+      responses:
+        "200":
+          description: Los datos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatosDeDevolucion" }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DevolucionParcial
+      description: Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja o cuenta). La clave hace que el reintento devuelva la misma. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, destino, motivo, renglones]
+              additionalProperties: false
+              properties:
+                clave: { type: string }
+                destino: { type: string, enum: [caja, cuenta] }
+                motivo: { type: string }
+                sinStock: { type: string, enum: [rota, otro], nullable: true }
+                sucursalId: { type: string, nullable: true }
+                renglones:
+                  type: array
+                  items:
+                    type: object
+                    required: [itemId, cantidad, alStock]
+                    additionalProperties: false
+                    properties:
+                      itemId: { type: string }
+                      cantidad: { type: number, format: double }
+                      alStock: { type: boolean }
+      responses:
+        "200":
+          description: La devolución hecha (o la misma, si la clave ya se usó)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, notaId, importe, repetida]
+                properties:
+                  id: { type: string }
+                  notaId: { type: string }
+                  importe: { type: number, format: double }
+                  repetida: { type: boolean }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/facturacion/comprobantes/{id}/nota-de-debito:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -515,6 +569,37 @@ components:
         usuarioNombre: { type: string }
         createdAt: { type: string, format: date-time }
         renumerados: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+    DatosDeDevolucion:
+      type: object
+      required: [pedido, renglones, caja, cuenta, conCliente, sucursal, sucursales]
+      properties:
+        pedido: { type: string }
+        renglones:
+          type: array
+          items:
+            type: object
+            required: [itemId, descripcion, unidad, cantidad, queda, unitario, alStock]
+            properties:
+              itemId: { type: string }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: number, format: double }
+              queda: { type: number, format: double }
+              unitario: { type: number, format: double }
+              alStock: { type: boolean }
+        caja: { type: number, format: double }
+        cuenta: { type: number, format: double }
+        conCliente: { type: boolean }
+        sucursal: { type: string, nullable: true }
+        sucursales:
+          type: array
+          items:
+            type: object
+            required: [id, nombre, cajaAbierta]
+            properties:
+              id: { type: string }
+              nombre: { type: string }
+              cajaAbierta: { type: boolean }
     Problema:
       type: object
       required: [title, status]

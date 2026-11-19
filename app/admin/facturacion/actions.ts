@@ -244,6 +244,35 @@ export async function acreditarParcial(
 }
 
 /**
+ * Devolución de una venta: la nota, el stock y la plata en una operación de
+ * Go. La clave la genera la pantalla al abrir el formulario: un doble clic o
+ * un reintento devuelven la misma devolución.
+ */
+export async function devolver(
+  invoiceId: string,
+  pedido: {
+    clave: string;
+    destino: "caja" | "cuenta";
+    motivo: string;
+    sinStock: "rota" | "otro" | null;
+    sucursalId: string | null;
+    renglones: { itemId: string; cantidad: number; alStock: boolean }[];
+  },
+): Promise<EstadoFactura> {
+  if (!UUID.test(invoiceId)) return { error: "No encontramos el comprobante." };
+  const r = await (await api()).POST("/api/v1/admin/facturacion/comprobantes/{id}/devolucion", {
+    params: { path: { id: invoiceId } },
+    body: pedido,
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+
+  refrescar(invoiceId);
+  revalidatePath("/admin/caja");
+  revalidatePath("/admin/stock");
+  redirect(`/admin/facturacion/${r.data.notaId}`);
+}
+
+/**
  * Nota de débito: le carga algo más al cliente sobre una factura ya emitida.
  * El importe se carga **final, con IVA adentro**.
  */

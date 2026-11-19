@@ -77,12 +77,20 @@ var ErrNoEsta = errors.New("no está")
 
 /* ------------------------------ saldos ------------------------------ */
 
+// Lo pedido es lo que queda después de las devoluciones parciales: lo que
+// se devolvió mientras estaba en acopio ya no se entrega (la devolución bajó
+// su reserva).
 const consultaSaldo = `
-	SELECT oi.id, oi.descripcion, oi.unidad, oi.cantidad::text,
+	SELECT oi.id, oi.descripcion, oi.unidad, greatest(oi.cantidad - coalesce((
+	    SELECT sum(ni.cantidad) FROM invoice_items ni
+	    JOIN invoice_items fi ON fi.id = ni.invoice_item_origen_id
+	    JOIN devoluciones dv ON dv.nota_id = ni.invoice_id
+	    WHERE fi.order_item_id = oi.id %[2]s
+	  ), 0), 0)::text,
 	  coalesce((
 	    SELECT sum(di.cantidad) FROM delivery_items di
 	    JOIN deliveries d ON d.id = di.delivery_id
-	    WHERE di.order_item_id = oi.id AND d.estado <> 'anulada' %s
+	    WHERE di.order_item_id = oi.id AND d.estado <> 'anulada' %[1]s
 	  ), 0)::text
 	FROM order_items oi WHERE oi.order_id = $1 ORDER BY oi.orden`
 
@@ -108,7 +116,7 @@ func SaldoDeAcopio(ctx context.Context, db consultor, pedido string) ([]Renglon,
 	if !plataforma.UUIDValido(pedido) {
 		return []Renglon{}, nil
 	}
-	return leerSaldo(ctx, db, sprintf(consultaSaldo, ""), pedido)
+	return leerSaldo(ctx, db, sprintf(consultaSaldo, "", ""), pedido)
 }
 
 // SaldoAlRemito es qué quedaba en acopio **cuando se hizo ese remito**: se
@@ -116,7 +124,8 @@ func SaldoDeAcopio(ctx context.Context, db consultor, pedido string) ([]Renglon,
 // mismo que el día que se firmó.
 func SaldoAlRemito(ctx context.Context, db consultor, pedido, remito string) ([]Renglon, error) {
 	rs, err := leerSaldo(ctx, db, sprintf(consultaSaldo,
-		`AND d.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`), pedido, remito)
+		`AND d.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`,
+		`AND dv.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`), pedido, remito)
 	if err != nil {
 		return nil, err
 	}

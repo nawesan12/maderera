@@ -27,6 +27,7 @@ package reservas
 import (
 	"context"
 	"errors"
+	"math"
 	"sort"
 
 	"github.com/jackc/pgx/v5"
@@ -237,6 +238,76 @@ func LiberarReservas(ctx context.Context, tx Tx, pedido string) error {
 		return err
 	}
 	return nil
+}
+
+// ReducirReserva baja hasta `cantidad` (en unidades de stock) lo apartado
+// para un renglón del pedido, sin tocar el físico: la devolución de algo que
+// sigue en acopio no vuelve al galpón porque nunca salió. Devuelve cuánto
+// bajó; lo que falte salió de verdad y vuelve al físico. El que llama ya
+// tomó los candados de esos stocks (BloquearEnOrden).
+func ReducirReserva(ctx context.Context, tx Tx, orderItemID string, cantidad float64) (float64, error) {
+	filas, err := tx.Query(ctx, `SELECT id, variant_id, branch_id, cantidad FROM stock_reservations
+		WHERE order_item_id = $1 AND estado = 'activa' ORDER BY created_at FOR UPDATE`, orderItemID)
+	if err != nil {
+		return 0, err
+	}
+	type reserva struct {
+		id, variante, sucursal string
+		cantidad               jsmath.Num
+	}
+	var activas []reserva
+	for filas.Next() {
+		var r reserva
+		if err := filas.Scan(&r.id, &r.variante, &r.sucursal, &r.cantidad); err != nil {
+			filas.Close()
+			return 0, err
+		}
+		activas = append(activas, r)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return 0, err
+	}
+	bajo := 0.0
+	for _, r := range activas {
+		falta := ventas.CantidadDeStock(cantidad - bajo)
+		if falta <= 0 {
+			break
+		}
+		quita := math.Min(falta, r.cantidad.F())
+		if r.cantidad.F()-quita < 0.0005 {
+			_, err = tx.Exec(ctx, `UPDATE stock_reservations SET estado = 'liberada', resuelto_at = now() WHERE id = $1`, r.id)
+		} else {
+			_, err = tx.Exec(ctx, `UPDATE stock_reservations SET cantidad = cantidad - $2::numeric WHERE id = $1`, r.id, num(quita))
+		}
+		if err != nil {
+			return 0, err
+		}
+		if err := moverReservado(ctx, tx, r.variante, r.sucursal, -quita); err != nil {
+			return 0, err
+		}
+		bajo = ventas.CantidadDeStock(bajo + quita)
+	}
+	return bajo, nil
+}
+
+// ReservasDelRenglon son los stocks (variante y sucursal) de las reservas
+// activas de un renglón: los candados que toma ReducirReserva.
+func ReservasDelRenglon(ctx context.Context, tx Tx, orderItemID string) ([]Stock, error) {
+	filas, err := tx.Query(ctx, `SELECT variant_id, branch_id FROM stock_reservations WHERE order_item_id = $1 AND estado = 'activa'`, orderItemID)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	var out []Stock
+	for filas.Next() {
+		var s Stock
+		if err := filas.Scan(&s.Variante, &s.Sucursal); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, filas.Err()
 }
 
 // SalidaDeMercaderia es un renglón que sale con un remito. Completa dice

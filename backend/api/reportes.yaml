@@ -448,8 +448,15 @@ components:
         variacion: { type: number, format: double, nullable: true }
     NumerosDelDueno:
       type: object
-      required: [meDeben, debo, cheques, plataHoy, ganancia]
+      required: [meDeben, debo, cheques, plataHoy, ganancia, devoluciones]
       properties:
+        devoluciones:
+          type: object
+          description: Las devoluciones parciales del mes en curso.
+          required: [total, cantidad]
+          properties:
+            total: { type: number, format: double }
+            cantidad: { type: integer }
         meDeben:
           type: object
           required: [total, vencido, clientes, clientesConVencido]

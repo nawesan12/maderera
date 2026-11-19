@@ -78,6 +78,9 @@ func LetraDe(tipo string) string {
 // comprobante asociado).
 func EsNotaDeCredito(tipo string) bool { return strings.HasPrefix(tipo, "nota_credito") }
 
+// EsFactura dice si es una factura (no una nota).
+func EsFactura(tipo string) bool { return strings.HasPrefix(tipo, "factura") }
+
 // EsRectificativo cubre las dos notas.
 func EsRectificativo(tipo string) bool {
 	return strings.HasPrefix(tipo, "nota_credito") || strings.HasPrefix(tipo, "nota_debito")

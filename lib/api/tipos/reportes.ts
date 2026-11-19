@@ -502,6 +502,12 @@ export interface components {
             variacion: number | null;
         };
         NumerosDelDueno: {
+            /** @description Las devoluciones parciales del mes en curso. */
+            devoluciones: {
+                /** Format: double */
+                total: number;
+                cantidad: number;
+            };
             meDeben: {
                 /** Format: double */
                 total: number;

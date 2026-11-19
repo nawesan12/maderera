@@ -290,6 +290,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/comprobantes/{id}/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que se puede devolver de la factura de una venta (renglones, tope por caja y por cuenta, sucursales). 404 si no es de una venta. Solo el admin. */
+        get: operations["DatosDeDevolucion"];
+        put?: never;
+        /** @description Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja o cuenta). La clave hace que el reintento devuelva la misma. Solo el admin. */
+        post: operations["DevolucionParcial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/facturacion/comprobantes/{id}/nota-de-debito": {
         parameters: {
             query?: never;
@@ -542,6 +562,32 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             renumerados: components["schemas"]["Corrimiento"][];
+        };
+        DatosDeDevolucion: {
+            pedido: string;
+            renglones: {
+                itemId: string;
+                descripcion: string;
+                unidad: string;
+                /** Format: double */
+                cantidad: number;
+                /** Format: double */
+                queda: number;
+                /** Format: double */
+                unitario: number;
+                alStock: boolean;
+            }[];
+            /** Format: double */
+            caja: number;
+            /** Format: double */
+            cuenta: number;
+            conCliente: boolean;
+            sucursal: string | null;
+            sucursales: {
+                id: string;
+                nombre: string;
+                cajaAbierta: boolean;
+            }[];
         };
         Problema: {
             title: string;
@@ -1312,6 +1358,76 @@ export interface operations {
         };
         responses: {
             200: components["responses"]["Emitido"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    DatosDeDevolucion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los datos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatosDeDevolucion"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DevolucionParcial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    /** @enum {string} */
+                    destino: "caja" | "cuenta";
+                    motivo: string;
+                    /** @enum {string|null} */
+                    sinStock?: "rota" | "otro" | null;
+                    sucursalId?: string | null;
+                    renglones: {
+                        itemId: string;
+                        /** Format: double */
+                        cantidad: number;
+                        alStock: boolean;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description La devolución hecha (o la misma, si la clave ya se usó) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        notaId: string;
+                        /** Format: double */
+                        importe: number;
+                        repetida: boolean;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };

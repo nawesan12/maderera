@@ -524,6 +524,8 @@ type Pedido struct {
 
 // ItemDePedido es un renglón del pedido, con su alícuota.
 type ItemDePedido struct {
+	// ID es el renglón del pedido: va a la factura, no a la respuesta.
+	ID             string  `json:"-"`
 	Descripcion    string  `json:"descripcion"`
 	Unidad         string  `json:"unidad"`
 	Cantidad       string  `json:"cantidad"`
@@ -551,7 +553,7 @@ func (s *Servicio) PedidoParaFacturar(ctx context.Context, id string) (*Pedido, 
 	// producto solo para renglones viejos que no la tienen. El TS leía la
 	// del producto de hoy: si cambió después de la venta, la factura salía
 	// con otra alícuota que la que se cobró.
-	filas, err := s.pool.Query(ctx, `SELECT oi.descripcion, oi.unidad, oi.cantidad::text, oi.precio_unitario::text,
+	filas, err := s.pool.Query(ctx, `SELECT oi.id, oi.descripcion, oi.unidad, oi.cantidad::text, oi.precio_unitario::text,
 		coalesce(oi.alicuota_iva, pr.alicuota_iva)::text
 		FROM order_items oi LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products pr ON pr.id = v.product_id
 		WHERE oi.order_id = $1 ORDER BY oi.orden`, id)
@@ -562,7 +564,7 @@ func (s *Servicio) PedidoParaFacturar(ctx context.Context, id string) (*Pedido, 
 	p.Items = []ItemDePedido{}
 	for filas.Next() {
 		var i ItemDePedido
-		if err := filas.Scan(&i.Descripcion, &i.Unidad, &i.Cantidad, &i.PrecioUnitario, &i.Alicuota); err != nil {
+		if err := filas.Scan(&i.ID, &i.Descripcion, &i.Unidad, &i.Cantidad, &i.PrecioUnitario, &i.Alicuota); err != nil {
 			return nil, err
 		}
 		p.Items = append(p.Items, i)

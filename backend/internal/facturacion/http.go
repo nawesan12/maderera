@@ -14,6 +14,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -82,6 +83,12 @@ func (o respuesta) VisitNotaDeCreditoParcialResponse(w http.ResponseWriter) erro
 	return o.escribir(w)
 }
 func (o respuesta) VisitNotaDeDebitoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitDatosDeDevolucionResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDevolucionParcialResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitGuardarEmisorFiscalResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -597,6 +604,49 @@ func (a *API) NotaDeCreditoParcial(ctx context.Context, r facturacionapi.NotaDeC
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "factura", r.Id.String(),
 		"Emitió una nota de crédito parcial: "+motivo, map[string]any{"notaDeCreditoId": id})
 	return emitido(id), nil
+}
+
+func (a *API) DatosDeDevolucion(ctx context.Context, r facturacionapi.DatosDeDevolucionRequestObject) (facturacionapi.DatosDeDevolucionResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	d, err := a.s.ParaDevolver(ctx, r.Id.String())
+	if errors.Is(err, ErrNoEsta) || err == nil && d == nil {
+		return nil, noEsta("Ese comprobante no es la factura de una venta.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(d), nil
+}
+
+func (a *API) DevolucionParcial(ctx context.Context, r facturacionapi.DevolucionParcialRequestObject) (facturacionapi.DevolucionParcialResponseObject, error) {
+	ses, err := admin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	p := PedidoDeDevolucion{InvoiceID: r.Id.String(), Clave: b.Clave, Destino: string(b.Destino), Motivo: b.Motivo,
+		Renglones: make([]RenglonADevolver, len(b.Renglones))}
+	if b.SinStock != nil {
+		p.SinStock = string(*b.SinStock)
+	}
+	if b.SucursalId != nil {
+		p.BranchID = *b.SucursalId
+	}
+	for i, x := range b.Renglones {
+		p.Renglones[i] = RenglonADevolver{ItemID: x.ItemId, Cantidad: x.Cantidad, AlStock: x.AlStock}
+	}
+	d, err := a.s.DevolucionParcial(ctx, ses.UserID, p)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	if !d.Repetida {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "factura", r.Id.String(),
+			"Devolución de "+formato.Moneda(d.Importe)+" por "+p.Destino+": "+trimJS(p.Motivo),
+			map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID, "sinStock": p.SinStock, "sucursalId": p.BranchID})
+	}
+	return ok(d), nil
 }
 
 func (a *API) NotaDeDebito(ctx context.Context, r facturacionapi.NotaDeDebitoRequestObject) (facturacionapi.NotaDeDebitoResponseObject, error) {

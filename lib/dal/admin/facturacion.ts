@@ -141,6 +141,19 @@ export async function obtenerComprobante(id: string): Promise<ComprobanteComplet
   return conFechas(datos(r));
 }
 
+export type DatosDeDevolucion = Esquemas["DatosDeDevolucion"];
+
+/**
+ * Lo que se puede devolver de la factura de una venta: los renglones con lo
+ * que queda, el tope por caja y por cuenta, y las sucursales. null si la
+ * factura no es de una venta (lleva nota de crédito común).
+ */
+export async function datosDeDevolucion(id: string): Promise<DatosDeDevolucion | null> {
+  const r = await (await api()).GET("/api/v1/admin/facturacion/comprobantes/{id}/devolucion", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  return datos(r);
+}
+
 /**
  * El comprobante leído con el secreto interno, para los avisos y WhatsApp:
  * **quien llama ya decidió que se puede ver**.

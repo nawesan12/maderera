@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2, MinusCircle, PlusCircle } from "lucide-react";
+import { Loader2, MinusCircle, PlusCircle, Undo2 } from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
+import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { acreditarParcial, debitar, type EstadoFactura } from "../actions";
 import { Confirmar } from "@/components/admin/confirmar";
+import { Devolucion } from "./devolucion";
 
 interface Renglon {
   id: string;
@@ -22,6 +24,10 @@ interface Renglon {
  *
  * **Una nota parcial no anula el original.** Para anular está el botón de
  * anular, que es una decisión explícita con consecuencias en el libro IVA.
+ *
+ * La factura de una venta no lleva nota parcial suelta: lleva Devolución,
+ * que además devuelve el stock y la plata (una nota sola bajaba el IVA y
+ * dejaba la caja, la cuenta y el depósito como si nada).
  */
 export function NotasSobreElComprobante({
   invoiceId,
@@ -29,6 +35,7 @@ export function NotasSobreElComprobante({
   total,
   acreditado,
   revierteConDebito = false,
+  devolucion = null,
 }: {
   invoiceId: string;
   items: Renglon[];
@@ -36,6 +43,8 @@ export function NotasSobreElComprobante({
   acreditado: number;
   /** Es una nota de crédito: se revierte con una nota de débito. */
   revierteConDebito?: boolean;
+  /** La factura es de una venta: en vez de la nota parcial, la devolución. */
+  devolucion?: DatosDeDevolucion | null;
 }) {
   const reverso = revierteConDebito ? "Nota de débito parcial (revierte la nota de crédito)" : "Nota de crédito parcial";
   const [modo, setModo] = useState<"credito" | "debito" | null>(null);
@@ -73,8 +82,8 @@ export function NotasSobreElComprobante({
               onClick={() => setModo("credito")}
               className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
             >
-              <MinusCircle className="h-4 w-4" />
-              {reverso}
+              {devolucion ? <Undo2 className="h-4 w-4" /> : <MinusCircle className="h-4 w-4" />}
+              {devolucion ? "Devolución" : reverso}
             </button>
           )}
           <button
@@ -88,6 +97,10 @@ export function NotasSobreElComprobante({
         </div>
       </div>
     );
+  }
+
+  if (modo === "credito" && devolucion) {
+    return <Devolucion invoiceId={invoiceId} datos={devolucion} alCancelar={() => setModo(null)} />;
   }
 
   return (

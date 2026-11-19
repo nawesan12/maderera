@@ -110,7 +110,7 @@ paths:
                   format: double
                   minimum: 0
                   description: Lo que se contó en el estante. El stock queda en este número, sea lo que sea que había
-                motivo: { type: string, enum: [ingreso, rotura, conteo, devolucion, otro] }
+                motivo: { type: string, enum: [ingreso, rotura, conteo, devolucion, faltante, correccion, otro] }
       responses:
         "200":
           description: El cambio («Casa Central 3 → 5»), o vacío si la cantidad era cero

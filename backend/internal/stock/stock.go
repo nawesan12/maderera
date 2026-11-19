@@ -336,8 +336,42 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, variante, sucu
 
 // MotivosDeAjuste es por qué se tocó el stock a mano, para el libro de
 // movimientos: un faltante por rotura no es lo mismo que uno por conteo.
+//
+// «correccion» es el «Deshacer» del ajuste rápido: el movimiento inverso de
+// uno que se cargó mal. Queda en el libro con su nombre, y no como «otro»: un
+// libro lleno de «otro» no le dice nada a nadie (T4, hallazgo 21).
 var MotivosDeAjuste = map[string]string{
-	"ingreso": "Ingreso", "rotura": "Rotura", "conteo": "Conteo", "devolucion": "Devolución", "otro": "Ajuste",
+	"ingreso": "Ingreso", "rotura": "Rotura", "conteo": "Conteo", "devolucion": "Devolución",
+	"faltante": "Faltante", "correccion": "Corrección", "otro": "Ajuste",
+}
+
+// revisarDireccion: el motivo dice para qué lado va el stock. Un ingreso que
+// resta o una rotura que suma dejan el libro diciendo lo contrario de lo que
+// pasó; la pantalla convertía en silencio una «rotura» que sumaba en «otro»
+// (T4, hallazgo 21). La devolución va para los dos lados —la del cliente
+// entra, la al proveedor sale—, y la corrección y «otro» también: deshacer
+// una rotura es sumar.
+func revisarDireccion(motivo string, delta float64, contado *float64) error {
+	mal := func(m string) error { return plataforma.Invalido(map[string]string{"motivo": m}) }
+	if contado != nil {
+		if motivo != "" && motivo != "conteo" {
+			return mal("Lo contado va con el motivo «Conteo».")
+		}
+		return nil
+	}
+	switch motivo {
+	case "conteo":
+		return mal("Para contar hay que decir cuánto hay.")
+	case "ingreso":
+		if delta < 0 {
+			return mal("Un ingreso suma: para sacar, elegí otro motivo.")
+		}
+	case "rotura", "faltante":
+		if delta > 0 {
+			return mal("«" + MotivosDeAjuste[motivo] + "» resta: para sumar, elegí otro motivo.")
+		}
+	}
+	return nil
 }
 
 // AjustarCon es Ajustar con el motivo y, si viene `contado`, fijando el stock
@@ -359,6 +393,9 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 	}
 	if _, ok := MotivosDeAjuste[motivo]; motivo != "" && !ok {
 		return "", plataforma.Invalido(map[string]string{"motivo": "Ese motivo no existe."})
+	}
+	if err := revisarDireccion(motivo, cantidad, contado); err != nil {
+		return "", err
 	}
 	if cantidad == 0 && contado == nil {
 		return "", nil

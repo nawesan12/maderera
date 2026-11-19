@@ -411,3 +411,66 @@ func TestGrillaPaginadaYSucursalesDeLaBase(t *testing.T) {
 		t.Errorf("ajuste en una sucursal que no existe: %d", c)
 	}
 }
+
+// El motivo dice para qué lado va el stock (T4, hallazgo 21): un ingreso que
+// resta o una rotura que suma dejaban el libro diciendo lo contrario de lo que
+// pasó. La devolución y la corrección (el «Deshacer») van para los dos lados.
+func TestElMotivoDiceLaDireccion(t *testing.T) {
+	e := armar(t)
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	u := e.srv.URL + "/api/v1/admin/stock/ajuste"
+	ajuste := func(cantidad float64, motivo string, contado *float64) (int, string) {
+		cuerpo := map[string]any{"variantId": e.tornillo, "branchSlug": "casa-central", "cantidad": cantidad, "motivo": motivo}
+		if contado != nil {
+			cuerpo["contado"] = *contado
+		}
+		return pedir(t, dep, "POST", u, cuerpo)
+	}
+	diez := 10.0
+	if c, b := ajuste(0, "conteo", &diez); c != 200 {
+		t.Fatalf("conteo inicial: %d %s", c, b)
+	}
+
+	rechazos := []struct {
+		cantidad float64
+		motivo   string
+		contado  *float64
+		dice     string
+	}{
+		{-2, "ingreso", nil, "Un ingreso suma"},
+		{2, "rotura", nil, "resta"},
+		{2, "faltante", nil, "resta"},
+		{-2, "conteo", nil, "cuánto hay"},
+		{0, "rotura", &diez, "Conteo"},
+	}
+	for _, r := range rechazos {
+		if c, b := ajuste(r.cantidad, r.motivo, r.contado); c != 422 || !strings.Contains(b, r.dice) {
+			t.Errorf("%s %v: %d %s", r.motivo, r.cantidad, c, b)
+		}
+	}
+	if q := e.qty(t, e.tornillo, e.central); q != 10 {
+		t.Fatalf("un rechazo movió el stock: %v", q)
+	}
+
+	aceptados := []struct {
+		cantidad float64
+		motivo   string
+	}{
+		{3, "ingreso"}, {-1, "rotura"}, {-1, "faltante"}, {2, "devolucion"}, {-2, "devolucion"},
+		{1, "correccion"}, {-1, "correccion"}, {1, "otro"}, {-1, "otro"},
+	}
+	for _, a := range aceptados {
+		if c, b := ajuste(a.cantidad, a.motivo, nil); c != 200 {
+			t.Errorf("%s %v: %d %s", a.motivo, a.cantidad, c, b)
+		}
+	}
+	// 10 + 3 − 1 − 1 + 2 − 2 + 1 − 1 + 1 − 1
+	if q := e.qty(t, e.tornillo, e.central); q != 11 {
+		t.Fatalf("stock: %v", q)
+	}
+	var nota string
+	_ = e.pool.QueryRow(context.Background(), `select note from inventory_movements where variant_id = $1 and note like 'Corrección%' order by created_at limit 1`, e.tornillo).Scan(&nota)
+	if !strings.HasPrefix(nota, "Corrección desde Stock") {
+		t.Fatalf("la corrección no quedó con su nombre en el libro: %q", nota)
+	}
+}

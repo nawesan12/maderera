@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Download, FileText, ShoppingCart } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
-import { formatearMonto, plural } from "@/components/admin/formato";
+import { formatearMonto, formatearPorcentaje, plural } from "@/components/admin/formato";
 import {
   CORTES,
   leerCorte,
@@ -184,7 +184,7 @@ export default async function ReportesPage({
                   {formatearMonto(margenTotal)}
                   {conCosto > 0 && (
                     <span className="ml-2 text-base font-semibold text-muted-foreground">
-                      {((margenTotal / conCosto) * 100).toFixed(1)}%
+                      {formatearPorcentaje((margenTotal / conCosto) * 100)}
                     </span>
                   )}
                 </p>
@@ -284,7 +284,7 @@ export default async function ReportesPage({
                                   </span>
                                   {pct !== null && (
                                     <span className="tabular ml-2 text-sm text-muted-foreground">
-                                      {pct.toFixed(1)}%
+                                      {formatearPorcentaje(pct)}
                                     </span>
                                   )}
                                   {f.lineasSinCosto > 0 && (
@@ -310,7 +310,7 @@ export default async function ReportesPage({
                           />
                         </div>
                         <span className="tabular w-12 text-right text-sm text-muted-foreground">
-                          {parte.toFixed(1)}%
+                          {formatearPorcentaje(parte)}
                         </span>
                       </div>
                     </td>

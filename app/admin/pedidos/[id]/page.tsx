@@ -9,7 +9,7 @@ import {
   ETAPAS_RETIRO,
   Pasos,
 } from "@/components/admin/pasos";
-import { fechaHora, moneda } from "@/components/admin/formato";
+import { fechaHora, formatearPorcentaje, moneda } from "@/components/admin/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
@@ -301,7 +301,7 @@ export default async function FichaPedidoPage({
                   {moneda.format(margen.ganancia)}
                   {margen.neto > 0 && (
                     <span className="ml-2 text-base text-muted-foreground">
-                      {((margen.ganancia / margen.neto) * 100).toFixed(1)}%
+                      {formatearPorcentaje((margen.ganancia / margen.neto) * 100)}
                     </span>
                   )}
                 </p>

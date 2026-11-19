@@ -46,6 +46,16 @@ export function formatearMonto(valor: string | number | null): string {
   return moneda.format(numero);
 }
 
+const UN_DECIMAL = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/**
+ * «12,5%»: un porcentaje con coma decimal y un decimal. `toFixed` ponía el
+ * punto («12.5%») en Reportes y en la ficha del pedido (comité final).
+ */
+export function formatearPorcentaje(valor: number): string {
+  return `${UN_DECIMAL.format(valor)}%`;
+}
+
 /**
  * Un importe de la base, listo para meter en un campo editable.
  *

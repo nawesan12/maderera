@@ -30,6 +30,7 @@ export function sumar(lineas: LineaDeVenta[], nueva: LineaDeVenta): LineaDeVenta
 
 export function Lineas({
   lineas,
+  sinCargo,
   onCambiar,
   onEditarCorte,
   onQuitarCorte,
@@ -37,6 +38,12 @@ export function Lineas({
   onNoVaciar,
 }: {
   lineas: LineaDeVenta[];
+  /**
+   * Los cortes que no cobran nada (sin tarifa y por debajo de media placa):
+   * no tienen renglón, pero van al taller, y sin una fila no se podían
+   * corregir ni sacar (revisión del carril F).
+   */
+  sinCargo: { id: string; descripcion: string }[];
   onCambiar: (l: LineaDeVenta[]) => void;
   /** Reabre el corte del renglón para corregirlo. */
   onEditarCorte: (corteId: string) => void;
@@ -46,7 +53,7 @@ export function Lineas({
   /** Se arrepintió de vaciar: el cursor vuelve al buscador. */
   onNoVaciar: () => void;
 }) {
-  if (lineas.length === 0) {
+  if (lineas.length === 0 && sinCargo.length === 0) {
     return (
       <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-linea text-center">
         {/* Por nombre, por medida o pasando el código. Lo que no esté —un corte,
@@ -93,8 +100,11 @@ export function Lineas({
           // rechaza un corte que no cobra lo de su plano (comité final, A2).
           // La pasada suelta, sin corte atado, también: su cantidad es de
           // pasadas y su nombre, de piezas (ver esLineaDelCorte).
+          // Solo lo atado a un corte: una «pasada» cargada a mano se ve con su
+          // cantidad y su precio, como cualquier renglón a mano (revisión del
+          // carril F; antes decía «del plano» y escondía las dos cosas).
           const corteId = l.corteId;
-          const delCorte = esLineaDelCorte(l) || corteId != null;
+          const delCorte = corteId != null;
           return (
             <li key={`${l.variantId ?? "suelta"}-${i}`} className="flex items-center gap-3 px-4 py-3">
               <span className="min-w-0 flex-1">
@@ -201,6 +211,32 @@ export function Lineas({
             </li>
           );
         })}
+        {sinCargo.map((c) => (
+          <li key={c.id} className="flex items-center gap-3 px-4 py-3">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base font-medium">Corte de {c.descripcion}</span>
+              <span className="block text-sm text-muted-foreground">sin cargo · va al taller</span>
+            </span>
+            <span className="flex w-[16.25rem] shrink-0 justify-end">
+              <button
+                type="button"
+                onClick={() => onEditarCorte(c.id)}
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-3 text-base font-medium transition-colors hover:bg-hundida"
+              >
+                <Scissors className="h-4 w-4" />
+                Corregir
+              </button>
+            </span>
+            <span className="tabular w-32 shrink-0 text-right text-lg font-semibold">{formatearMonto(0)}</span>
+            <button
+              onClick={() => onQuitarCorte(c.id)}
+              aria-label={`Quitar el corte de ${c.descripcion}`}
+              className="w-8 shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </li>
+        ))}
       </ul>
     </div>
   );

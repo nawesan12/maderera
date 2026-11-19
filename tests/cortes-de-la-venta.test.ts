@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { conElCorte, paraCobrar, sinElCorte } from "@/lib/mostrador/cortes-de-la-venta";
-import { cantidadDelRenglon, type LineaDeVenta } from "@/lib/mostrador/importes";
+import { conElCorte, cortesSinRenglones, paraCobrar, sinElCorte } from "@/lib/mostrador/cortes-de-la-venta";
+import { cantidadDelRenglon, vaSinDecimales, type LineaDeVenta } from "@/lib/mostrador/importes";
+import { cuentaSinConexion } from "@/lib/mostrador/cuenta-sin-conexion";
+import { estaCalculando } from "@/lib/cortes/en-vivo";
 import { enterDelBuscador } from "@/lib/mostrador/atajos";
 import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
 
@@ -65,14 +67,27 @@ describe("los cortes de la venta", () => {
     expect(go.lineas.some((l) => "corteId" in l)).toBe(false);
   });
 
-  it("sacar un corte saca todos sus renglones, y el que quedó sin renglones no viaja", () => {
+  it("sacar un corte saca todos sus renglones y el corte", () => {
     let r = conElCorte([], [], { id: "a", placa, corte: despiece("MDF"), estado: 0 }, [renglon({}), renglon({ unidad: "m", descripcion: "Tapacanto" })]);
     r = conElCorte(r.lineas, r.cortes, { id: "b", placa, corte: despiece("Fenólico"), estado: 0 }, [renglon({})]);
     const sin = sinElCorte(r.lineas, r.cortes, "a");
     expect(sin.lineas).toHaveLength(1);
     expect(paraCobrar(sin.lineas, sin.cortes).lineas[0].corte).toBe(0);
-    // Un corte cuyos renglones no están (se vació la venta a mano) no llega al taller.
-    expect(paraCobrar([], r.cortes).cortes).toHaveLength(0);
+    expect(paraCobrar(sin.lineas, sin.cortes).cortes.map((c) => c.materialDescripcion)).toEqual(["Fenólico"]);
+  });
+
+  // Revisión del carril F: sin tarifa y por debajo de media placa el corte no
+  // cobra nada, y se descartaba: el trabajo no llegaba al taller.
+  it("el corte que no cobra nada viaja igual y se ve aparte", () => {
+    let r = conElCorte([], [], { id: "a", placa, corte: despiece("MDF"), estado: 0 }, []);
+    r = conElCorte([...r.lineas, renglon({ variantId: "t", descripcion: "Tornillo", unidad: "unidad" })], r.cortes, { id: "b", placa, corte: despiece("Fenólico"), estado: 0 }, [renglon({})]);
+    const go = paraCobrar(r.lineas, r.cortes);
+    expect(go.cortes.map((c) => c.materialDescripcion)).toEqual(["MDF", "Fenólico"]);
+    expect(go.lineas.map((l) => l.corte)).toEqual([undefined, 1]);
+    expect(cortesSinRenglones(r.lineas, r.cortes).map((c) => c.id)).toEqual(["a"]);
+    // Y se saca como cualquier corte.
+    const sin = sinElCorte(r.lineas, r.cortes, "a");
+    expect(paraCobrar(sin.lineas, sin.cortes).cortes).toHaveLength(1);
   });
 });
 
@@ -101,5 +116,37 @@ describe("Ctrl+Enter en el buscador", () => {
     expect(enterDelBuscador({ ...base, esPlaca: true, sinConexion: true })).toEqual({ que: "agregar", media: null, yCobrar: false });
     expect(enterDelBuscador({ ...base, esPlaca: false, sinConexion: true })).toMatchObject({ yCobrar: true });
     expect(enterDelBuscador({ ...base, esPlaca: true, sinConexion: false })).toMatchObject({ yCobrar: true });
+  });
+});
+
+/** Revisión del carril F: «2,5*bisagra» no se redondea en silencio. */
+describe("lo que va sin decimales desde el buscador", () => {
+  it("no entra con decimales lo que se vende por unidad", () => {
+    expect(vaSinDecimales({ variantId: "b", unidad: "unidad" }, 2.5)).toBe(true);
+    expect(vaSinDecimales({ variantId: "b", unidad: "unidad" }, 0.4)).toBe(true);
+    expect(vaSinDecimales({ variantId: "b", unidad: "unidad" }, 3)).toBe(false);
+    expect(vaSinDecimales({ variantId: "p", unidad: "placa" }, 1.5)).toBe(false);
+  });
+});
+
+/** Revisión del carril F: sin conexión no se le anota a una cuenta que la cola va a rechazar. */
+describe("cuenta corriente sin conexión", () => {
+  it("frena la cuenta bloqueada y la que no tiene límite", () => {
+    expect(cuentaSinConexion({ nombre: "Ana", cuentaBloqueada: true, limiteCredito: 1000 })).toBe("La cuenta corriente de Ana está bloqueada.");
+    expect(cuentaSinConexion({ nombre: "Ana", limiteCredito: 0 })).toBe("Ana no tiene cuenta corriente.");
+    expect(cuentaSinConexion({ nombre: "Ana", limiteCredito: 1000 })).toBeNull();
+    // Una copia vieja del padrón, sin esos datos: no frena (Go marca la venta).
+    expect(cuentaSinConexion({ nombre: "Ana" })).toBeNull();
+    expect(cuentaSinConexion(null)).toBeNull();
+  });
+});
+
+/** Revisión del carril F: Ctrl+Enter rápido en el corte agregaba el plano anterior. */
+describe("el plano en vivo", () => {
+  it("está calculando desde que cambia lo cargado hasta que llega su respuesta", () => {
+    expect(estaCalculando('{"a":1}', null)).toBe(true);
+    expect(estaCalculando('{"a":2}', '{"a":1}')).toBe(true);
+    expect(estaCalculando('{"a":2}', '{"a":2}')).toBe(false);
+    expect(estaCalculando(null, null)).toBe(false);
   });
 });

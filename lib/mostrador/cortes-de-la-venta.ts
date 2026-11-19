@@ -59,21 +59,34 @@ export function sinElCorte<C extends { id: string }>(
 }
 
 /**
- * Lo que viaja a Go: los cortes que siguen en la venta, en orden, y cada
- * renglón con el índice de su corte (`corte`) en vez del id de la pantalla.
- * Un corte sin renglones no viaja: el taller cortaría algo que no se cobró.
+ * Lo que viaja a Go: los cortes de la venta, en orden, y cada renglón con el
+ * índice de su corte (`corte`) en vez del id de la pantalla.
+ *
+ * Viajan todos, también el que no tiene renglones: sin tarifa de corte y por
+ * debajo de media placa no se cobra nada, y el trabajo igual tiene que nacer
+ * en el taller. Hasta la revisión del carril F se descartaba, y el despiece
+ * no llegaba nunca. Sacar el corte de la venta saca sus renglones y el corte
+ * (`sinElCorte`), así que acá no queda ninguno huérfano.
  */
 export function paraCobrar(
   lineas: LineaDeVenta[],
   cortes: { id: string; corte: CorteDeMostrador }[],
 ): { lineas: LineaDeVenta[]; cortes: CorteDeMostrador[] } {
-  const vivos = cortes.filter((c) => lineas.some((l) => l.corteId === c.id));
-  const indice = new Map(vivos.map((c, i) => [c.id, i]));
+  const indice = new Map(cortes.map((c, i) => [c.id, i]));
   return {
     lineas: lineas.map(({ corteId, ...l }) => {
       const i = corteId != null ? indice.get(corteId) : undefined;
       return i === undefined ? l : { ...l, corte: i };
     }),
-    cortes: vivos.map((c) => c.corte),
+    cortes: cortes.map((c) => c.corte),
   };
+}
+
+/**
+ * Los cortes que no tienen renglones en la venta: no se cobran, pero van al
+ * taller. La pantalla los muestra aparte para poder corregirlos o sacarlos;
+ * sin renglón no aparecían ni «Corregir» ni la papelera.
+ */
+export function cortesSinRenglones<C extends { id: string }>(lineas: LineaDeVenta[], cortes: C[]): C[] {
+  return cortes.filter((c) => !lineas.some((l) => l.corteId === c.id));
 }

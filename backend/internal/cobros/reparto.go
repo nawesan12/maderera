@@ -327,8 +327,8 @@ SELECT coalesce(array_agg(d.destino ORDER BY d.destino), '{}'::text[]) AS destin
 FROM (
   SELECT 'i:' || i.id::text AS destino, i.total AS monto FROM invoices i
   WHERE i.tipo::text NOT LIKE 'nota_credito%' AND i.estado <> 'borrador' AND i.created_at <= r.created_at
-    AND CASE WHEN r.customer_id IS NOT NULL THEN i.customer_id = r.customer_id
-        ELSE i.id IN (SELECT ip.invoice_id FROM invoice_payments ip WHERE ip.receipt_id = r.id) END
+    AND i.id IN (SELECT x.id FROM invoices x WHERE x.customer_id = r.customer_id
+                 UNION ALL SELECT ip.invoice_id FROM invoice_payments ip WHERE r.customer_id IS NULL AND ip.receipt_id = r.id)
     AND CASE WHEN i.cae IS NULL THEN i.estado IN ('emitida', 'rechazada') ELSE ` + caeA + ` > r.created_at END
   UNION ALL
   SELECT 'o:' || o.id::text, o.total FROM orders o

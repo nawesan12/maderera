@@ -287,50 +287,6 @@ func devolverDeuda(ctx context.Context, tx pgx.Tx, cliente, numero string, motiv
 	return monto, err
 }
 
-// MarcarPagado anota como cobrado lo que ya se cobró por otro lado. Un
-// pedido a cuenta corriente no pasa por acá: su cobro baja la deuda, y eso
-// va con recibo. Con medio, queda anotado con qué pagó: el botón marcaba
-// pagado sin preguntar, y el pedido seguía sin saber cómo entró la plata.
-func (s *Servicio) MarcarPagado(ctx context.Context, ses *auth.Sesion, id string, elegido *string) (*Resultado, error) {
-	if elegido != nil && !medioValido(*elegido) {
-		return nil, fallo("Ese medio de pago no existe.")
-	}
-	if elegido != nil && *elegido == "cuenta_corriente" {
-		return nil, fallo("A cuenta corriente no es un cobro: queda como deuda del cliente.")
-	}
-	var p *filaDePedido
-	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
-		var err error
-		if p, err = bloquearPedido(ctx, tx, id); err != nil {
-			return err
-		}
-		if p.estadoPago == "pagado" {
-			return fallo("Ya figura como pagado.")
-		}
-		if p.medioPago != nil && *p.medioPago == "cuenta_corriente" && p.customerID != nil {
-			return fallo("Es a cuenta corriente: registrá el cobro con el medio con que pagó, así sale el recibo y baja la deuda.")
-		}
-		if elegido != nil {
-			p.medioPago = elegido
-		}
-		_, err = tx.Exec(ctx, `UPDATE orders SET estado_pago = 'pagado', medio_pago = coalesce($2::medio_pago, medio_pago), updated_at = now() WHERE id = $1`, id, elegido)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	medio := "sin medio"
-	if p.medioPago != nil {
-		medio = *p.medioPago
-	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCobrar, "pedido", id, "Marcó "+p.numero+" como cobrado ("+medio+")",
-		struct {
-			Total     string  `json:"total"`
-			MedioPago *string `json:"medioPago"`
-		}{p.total, p.medioPago})
-	return &Resultado{Ok: p.numero + " quedó cobrado.", Numero: p.numero}, nil
-}
-
 // EstadosDePresupuesto son los del enum estado_presupuesto.
 var EstadosDePresupuesto = []string{"pendiente", "revision", "enviado", "aceptado", "rechazado", "vencido"}
 

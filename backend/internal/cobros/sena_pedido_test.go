@@ -42,7 +42,7 @@ func TestSenaDeUnPedidoDeContado(t *testing.T) {
 	}
 	s := Nuevo(b.pool, silencio)
 
-	sena, err := s.CobrarACliente(ctx, ses, b.cliente, pedido, "", `[{"medio":"efectivo","importe":"30000"}]`)
+	sena, err := s.CobrarACliente(ctx, ses, b.cliente, pedido, "", `[{"medio":"efectivo","importe":"30000"}]`, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestSenaDeUnPedidoDeContado(t *testing.T) {
 	}
 
 	// El resto con otro recibo: lo cobrado cubre el total y queda pagado.
-	if _, err := s.CobrarACliente(ctx, ses, b.cliente, pedido, "", `[{"medio":"efectivo","importe":"70000"}]`); err != nil {
+	if _, err := s.CobrarACliente(ctx, ses, b.cliente, pedido, "", `[{"medio":"efectivo","importe":"70000"}]`, ""); err != nil {
 		t.Fatal(err)
 	}
 	if estadoPago() != "pagado" || falta() != nil {

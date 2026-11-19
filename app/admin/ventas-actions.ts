@@ -108,24 +108,6 @@ export async function convertirEnPedido(quoteId: string, entrega?: EntregaDelPed
 }
 
 /* -------------------------------------------------------------------------- */
-/* Cobro                                                                       */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Marca un pedido como cobrado: lo que ya se cobró por otro lado. Un pedido a
- * cuenta corriente no pasa por acá (su cobro va con recibo).
- */
-export async function marcarPagado(id: string, medioPago?: Exclude<MedioDelPedido, "cuenta_corriente">): Promise<EstadoVenta> {
-  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cobrado", {
-    params: { path: { id } },
-    body: medioPago ? { medioPago } : {},
-  });
-  if (!r.data) return fallo(r);
-  refrescar();
-  return { ok: r.data.ok };
-}
-
-/* -------------------------------------------------------------------------- */
 /* Alta de presupuesto desde el panel                                          */
 /* -------------------------------------------------------------------------- */
 

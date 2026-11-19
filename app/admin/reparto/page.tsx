@@ -6,6 +6,8 @@ import { moneda, plural } from "@/components/admin/formato";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
 import { requireStaff } from "@/lib/dal/session";
 import { AccionesPedido } from "../pedidos/acciones";
+import { cobroDelPedido } from "../pedidos/cobro";
+import { MANEJAN_PLATA } from "@/lib/roles";
 
 export const metadata = { title: "Reparto" };
 
@@ -18,7 +20,9 @@ export const metadata = { title: "Reparto" };
  * prepara (para saber qué falta antes de salir) y lo que ya está en la calle.
  */
 export default async function RepartoPage() {
-  await requireStaff();
+  const { staffRole } = await requireStaff();
+  // El depósito reparte pero no cobra (MANEJAN_PLATA).
+  const cobra = staffRole != null && MANEJAN_PLATA.includes(staffRole);
   const pedidos = (await listarPedidos({ vista: "tablero" })).filter(
     (p) => p.tipoEntrega === "envio" && !["entregado", "cancelado"].includes(p.estado),
   );
@@ -107,7 +111,7 @@ export default async function RepartoPage() {
                       estado={p.estado}
                       estadoPago={p.estadoPago}
                       tipoEntrega={p.tipoEntrega}
-                      cobro={p.sinCobrar != null ? { numero: p.numero, total: p.sinCobrar, medioPago: p.medioPago } : null}
+                      cobro={cobra && p.sinCobrar != null ? cobroDelPedido(p) : null}
                       sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
                     />
                   </li>

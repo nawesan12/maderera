@@ -206,7 +206,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"SaldoDeAcopio":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/acopio
 	"AvanzarPedido":                  "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/avanzar
 	"CancelarPedido":                 "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/cancelar
-	"MarcarPedidoCobrado":            "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/cobrado
+	"CobrarPedido":                   "plata",                         // POST /api/v1/admin/pedidos/{id}/cobro
 	"CambiarEntregaDelPedido":        "/admin/presupuestos",           // PUT /api/v1/admin/pedidos/{id}/entrega
 	"CortesDelPedido":                "/admin/cortes",                 // GET /api/v1/admin/pedidos/{id}/cortes
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos

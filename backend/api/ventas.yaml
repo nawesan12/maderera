@@ -107,24 +107,38 @@ paths:
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
-  /api/v1/admin/pedidos/{id}/cobrado:
+  /api/v1/admin/pedidos/{id}/cobro:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
-      operationId: MarcarPedidoCobrado
+      operationId: CobrarPedido
+      summary: Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [partes]
               additionalProperties: false
               properties:
-                medioPago: { $ref: "#/components/schemas/MedioPago" }
+                partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+                clave: { type: string, maxLength: 64, description: "la del intento: un reintento devuelve el mismo recibo" }
       responses:
-        "200": { $ref: "#/components/responses/Hecho" }
+        "200":
+          description: El recibo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: string }
+                  receiptId: { type: string }
+                  aviso: { type: string }
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/presupuestos:
     get:

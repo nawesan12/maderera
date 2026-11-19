@@ -183,6 +183,7 @@ paths:
                 orderId: { type: string }
                 concepto: { type: string }
                 partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+                clave: { type: string, maxLength: 64, description: "la del intento, generada al abrir el cobro: un reintento devuelve el mismo recibo" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }

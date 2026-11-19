@@ -203,6 +203,7 @@ paths:
               properties:
                 branchId: { type: string }
                 partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+                clave: { type: string, maxLength: 64, description: "la del intento: un reintento devuelve el mismo recibo" }
       responses:
         "200":
           description: El recibo

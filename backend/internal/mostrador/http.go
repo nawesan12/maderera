@@ -224,7 +224,11 @@ func (a *API) CobrarCuentaEnMostrador(ctx context.Context, r mostradorapi.Cobrar
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.CobrarCuenta(ctx, ses, r.Id, r.Body.BranchId, r.Body.Partes)
+	clave := ""
+	if r.Body.Clave != nil {
+		clave = *r.Body.Clave
+	}
+	v, err := a.s.CobrarCuenta(ctx, ses, r.Id, r.Body.BranchId, r.Body.Partes, clave)
 	if err != nil {
 		return nil, comoProblema(err)
 	}

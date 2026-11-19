@@ -302,7 +302,11 @@ export async function cobrarCuentaEnMostrador(
   const branchId = (formData.get("branchId") as string | null) ?? "";
   const r = await (await api()).POST("/api/v1/mostrador/clientes/{id}/cobro", {
     params: { path: { id: customerId || "-" } },
-    body: { branchId, partes: (formData.get("partes") as string | null) ?? "" },
+    body: {
+      branchId,
+      partes: (formData.get("partes") as string | null) ?? "",
+      clave: (formData.get("clave") as string | null) || undefined,
+    },
   });
   if (!r.data) return error(r);
   revalidatePath("/admin/clientes");

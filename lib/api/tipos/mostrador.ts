@@ -756,6 +756,8 @@ export interface operations {
                     branchId: string;
                     /** @description el JSON de las partes, como lo arma el formulario */
                     partes: string;
+                    /** @description la del intento: un reintento devuelve el mismo recibo */
+                    clave?: string;
                 };
             };
         };

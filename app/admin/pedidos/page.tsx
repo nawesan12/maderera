@@ -12,7 +12,8 @@ import { BuscadorPedidos } from "./buscador";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { requireStaff } from "@/lib/dal/session";
-import { puedeEntrar } from "@/lib/roles";
+import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
+import { cobroDelPedido } from "./cobro";
 import { avisosManuales, type AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
 import { numerosDelDueno } from "@/lib/dal/admin/resumen";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
@@ -42,7 +43,10 @@ export default async function PedidosPage({
   // En «listo» y «en camino» el cliente tiene que enterarse: el botón gratis
   // va en la tarjeta, sin entrar al pedido.
   // Solo para quien atiende el WhatsApp de la maderera (no depósito).
-  const atiende = puedeEntrar("/admin/whatsapp", (await requireStaff()).staffRole);
+  const { staffRole: rol } = await requireStaff();
+  const atiende = puedeEntrar("/admin/whatsapp", rol);
+  // El depósito abre el tablero pero no cobra (MANEJAN_PLATA).
+  const cobra = rol != null && MANEJAN_PLATA.includes(rol);
   const [avisosListo, avisosEnCamino] = atiende
     ? await Promise.all([
         avisosManuales("listo", "order", pedidos.filter((p) => p.estado === "listo").map((p) => p.id)),
@@ -108,7 +112,7 @@ export default async function PedidosPage({
                   vacio={columna.vacio}
                 >
                   {enColumna.map((pedido) => (
-                    <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} />
+                    <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} cobra={cobra} />
                   ))}
                 </ColumnaTablero>
               );
@@ -341,7 +345,7 @@ async function Historial({
   );
 }
 
-function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoManualListo | null }) {
+function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso: AvisoManualListo | null; cobra: boolean }) {
   // La misma regla que «Me deben»: un pedido a cuenta corriente no se cobra
   // en la puerta.
   const sinCobrar = pedido.sinCobrar != null;
@@ -408,12 +412,7 @@ function TarjetaPedido({ pedido, aviso }: { pedido: PedidoListado; aviso: AvisoM
           estado={pedido.estado}
           estadoPago={pedido.estadoPago}
           tipoEntrega={pedido.tipoEntrega}
-          cobroACuenta={
-            pedido.medioPago === "cuenta_corriente" && pedido.customerId
-              ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
-              : null
-          }
-          cobro={{ numero: pedido.numero, total: pedido.sinCobrar ?? Number(pedido.total), medioPago: pedido.medioPago }}
+          cobro={cobra ? cobroDelPedido(pedido) : null}
           sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
           compacto
         />

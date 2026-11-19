@@ -5,9 +5,13 @@
 SELECT nombre, razon_social FROM customers WHERE id = $1;
 
 -- name: CrearRecibo :one
-INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id, order_id)
-VALUES ($1, $2, $3, $4, sqlc.arg(total)::text::numeric, $5, $6, $7, $8)
+INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id, order_id, clave, huella)
+VALUES ($1, $2, $3, $4, sqlc.arg(total)::text::numeric, $5, $6, $7, $8, $9, $10)
 RETURNING id;
+
+-- name: ReciboPorClave :one
+SELECT id, numero, total::float8 AS total, coalesce(huella, '') AS huella, account_movement_id
+FROM receipts WHERE clave = $1;
 
 -- name: CrearParteDeRecibo :exec
 INSERT INTO receipt_parts (receipt_id, medio, importe, cheque_id, payment_id, referencia, orden)

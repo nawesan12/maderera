@@ -45,6 +45,14 @@ const (
 // comoProblema pasa un ErrorDeCobro a un 422 con su mensaje.
 func comoProblema(err error) error {
 	var e *ErrorDeCobro
+	var sinCaja *ErrSinCaja
+	switch {
+	case errors.Is(err, ErrClaveDeOtroCobro):
+		return plataforma.NuevoProblema(409, ErrClaveDeOtroCobro.Mensaje)
+	case errors.As(err, &sinCaja):
+		// La sucursal va aparte: la pantalla abre la caja ahí mismo.
+		return plataforma.Invalido(map[string]string{"cobro": sinCaja.Error(), "sinCaja": sinCaja.Sucursal})
+	}
 	if errors.As(err, &e) {
 		return plataforma.Invalido(map[string]string{"cobro": e.Mensaje})
 	}
@@ -60,7 +68,10 @@ type ResultadoDeCobro struct {
 
 // CobrarACliente es registrarCobroDeCliente: un cobro desde la ficha, a
 // cuenta o de un pedido (que queda pagado si el recibo lo cubre).
-func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas string) (ResultadoDeCobro, error) {
+//
+// `clave` la genera la pantalla al abrir el diálogo: un reintento devuelve
+// el mismo recibo (EmitirRecibo) y no vuelve a avisar ni a marcar el pedido.
+func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(cliente) || (pedido != "" && !plataforma.UUIDValido(pedido)) || plataforma.LargoJS(strings.TrimSpace(concepto)) > 200 {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"customerId": "Falta el cliente."})
 	}
@@ -86,7 +97,7 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			}
 			p = &fila
 		}
-		c := Cobro{CustomerID: &cliente, Origen: "panel", Partes: partes, Caja: &Caja{Buscar: true}, UsuarioID: &ses.UserID}
+		c := Cobro{CustomerID: &cliente, Origen: "panel", Partes: partes, Caja: &Caja{Buscar: true}, UsuarioID: &ses.UserID, Clave: clave}
 		texto := "Pago a cuenta"
 		if t := strings.TrimSpace(concepto); t != "" {
 			texto = t
@@ -110,6 +121,9 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 		if r, err = EmitirRecibo(ctx, tx, c); err != nil {
 			return err
 		}
+		if r.Repetido {
+			return nil
+		}
 		// Pagado cuando lo cobrado cubre el total: este recibo, los
 		// anteriores del mismo pedido y lo cobrado en línea. Mirar solo este
 		// recibo contra el total empujaba a cobrar otra vez la seña.
@@ -130,6 +144,9 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	})
 	if err != nil {
 		return ResultadoDeCobro{}, comoProblema(err)
+	}
+	if r.Repetido {
+		return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", ReceiptID: &r.ReceiptID}, nil
 	}
 	desc := "Emitió el recibo " + r.Numero + " por " + jsmath.Fijo2(r.Total)
 	if numeroPedido != "" {

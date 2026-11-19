@@ -262,7 +262,7 @@ func (a *API) CobrarACliente(ctx context.Context, r cuentasapi.CobrarAClienteReq
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.cobros.CobrarACliente(ctx, ses, r.Id, texto(r.Body.OrderId), texto(r.Body.Concepto), r.Body.Partes)
+	v, err := a.cobros.CobrarACliente(ctx, ses, r.Id, texto(r.Body.OrderId), texto(r.Body.Concepto), r.Body.Partes, texto(r.Body.Clave))
 	return ok(v), err
 }
 

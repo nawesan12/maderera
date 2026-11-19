@@ -289,11 +289,13 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 		and carga->>'estado' in ('preparando', 'listo')`, pedido.ID); n != 2 {
 		t.Errorf("avisos encolados al avanzar: %v", n)
 	}
-	// Cobrarlo, dos veces.
-	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido.ID+"/cobrado", nil); c != 200 || !strings.Contains(b, "PED-1000 quedó cobrado.") {
+	// Cobrarlo, dos veces: con recibo, y la segunda ya no hay saldo.
+	total := e.texto(t, `select total::text from orders where id = $1`, pedido.ID)
+	partes := `[{"medio":"transferencia","importe":"` + total + `"}]`
+	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido.ID+"/cobro", map[string]any{"partes": partes, "clave": "cobro-1"}); c != 200 || !strings.Contains(b, "Recibo REC-") {
 		t.Fatalf("cobrar: %d %s", c, b)
 	}
-	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido.ID+"/cobrado", nil); c != 422 || !strings.Contains(b, "Ya figura como pagado.") {
+	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido.ID+"/cobro", map[string]any{"partes": partes, "clave": "cobro-2"}); c != 422 || !strings.Contains(b, "PED-1000 ya está cobrado.") {
 		t.Fatalf("cobrar dos veces: %d %s", c, b)
 	}
 	// Cancelar libera lo reservado; cancelarlo de nuevo, no.

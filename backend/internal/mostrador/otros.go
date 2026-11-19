@@ -177,7 +177,8 @@ type CobroDeCuenta struct {
 // CobrarCuenta cobra la cuenta corriente de un cliente en el mostrador con
 // cobros.EmitirRecibo (la única forma de registrar un pago): el efectivo
 // entra al turno abierto de la sucursal; sin turno, no se cobra efectivo.
-func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, sucursal, partesCrudas string) (CobroDeCuenta, error) {
+// La clave del intento hace repetible el cobro (cobros.Cobro.Clave).
+func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, sucursal, partesCrudas, clave string) (CobroDeCuenta, error) {
 	if !plataforma.UUIDValido(cliente) || !plataforma.UUIDValido(sucursal) {
 		return CobroDeCuenta{}, rechazo("Falta el cliente.")
 	}
@@ -210,9 +211,12 @@ func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, 
 		concepto := "Pago de cuenta corriente"
 		if r, err = cobros.EmitirRecibo(ctx, tx, cobros.Cobro{
 			CustomerID: &cliente, BranchID: &sucursal, Origen: "mostrador", Concepto: &concepto,
-			Partes: partes, Caja: c, UsuarioID: &ses.UserID,
+			Partes: partes, Caja: c, UsuarioID: &ses.UserID, Clave: clave,
 		}); err != nil {
 			return err
+		}
+		if r.Repetido {
+			return nil
 		}
 		_, err = cola.Encolar(ctx, sqlc.New(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})
 		return err
@@ -224,8 +228,10 @@ func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, 
 	if err != nil {
 		return CobroDeCuenta{}, err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCobrar, "cliente", cliente,
-		"Cobró la cuenta en el mostrador con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+	if !r.Repetido {
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCobrar, "cliente", cliente,
+			"Cobró la cuenta en el mostrador con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+	}
 	return CobroDeCuenta{Ok: "Recibo " + r.Numero + " por " + formato.MonedaEntera(r.Total) + ".", ReceiptID: r.ReceiptID, Numero: r.Numero}, nil
 }
 

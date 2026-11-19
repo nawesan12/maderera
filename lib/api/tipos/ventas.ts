@@ -93,7 +93,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/pedidos/{id}/cobrado": {
+    "/api/v1/admin/pedidos/{id}/cobro": {
         parameters: {
             query?: never;
             header?: never;
@@ -104,7 +104,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["MarcarPedidoCobrado"];
+        /** Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal */
+        post: operations["CobrarPedido"];
         delete?: never;
         options?: never;
         head?: never;
@@ -571,7 +572,7 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
-    MarcarPedidoCobrado: {
+    CobrarPedido: {
         parameters: {
             query?: never;
             header?: never;
@@ -580,18 +581,34 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": {
-                    medioPago?: components["schemas"]["MedioPago"];
+                    /** @description el JSON de las partes, como lo arma el formulario */
+                    partes: string;
+                    /** @description la del intento: un reintento devuelve el mismo recibo */
+                    clave?: string;
                 };
             };
         };
         responses: {
-            200: components["responses"]["Hecho"];
+            /** @description El recibo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                        receiptId?: string;
+                        aviso?: string;
+                    };
+                };
+            };
             401: components["responses"]["Problema"];
             403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+            409: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
         };
     };

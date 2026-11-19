@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/api/ventasapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/cobros"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -53,12 +54,10 @@ func (o respuesta) VisitListarPedidosResponse(w http.ResponseWriter) error { ret
 func (o respuesta) VisitCambiarEntregaDelPedidoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
-func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
-func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
-func (o respuesta) VisitMarcarPedidoCobradoResponse(w http.ResponseWriter) error {
-	return o.escribir(w)
-}
+func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitCobrarPedidoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error { return o.escribir(w) }
@@ -154,17 +153,14 @@ func (a *API) CancelarPedido(ctx context.Context, r ventasapi.CancelarPedidoRequ
 	return ok(v), nil
 }
 
-func (a *API) MarcarPedidoCobrado(ctx context.Context, r ventasapi.MarcarPedidoCobradoRequestObject) (ventasapi.MarcarPedidoCobradoResponseObject, error) {
-	ses, err := pedidos(ctx)
+// CobrarPedido: quien mueve plata (roles.ManejanPlata). El depósito abre
+// la ficha pero no cobra. Reemplaza a «marcar cobrado» (T3, hallazgo 5).
+func (a *API) CobrarPedido(ctx context.Context, r ventasapi.CobrarPedidoRequestObject) (ventasapi.CobrarPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
 	if err != nil {
 		return nil, err
 	}
-	var medio *string
-	if r.Body != nil && r.Body.MedioPago != nil {
-		m := string(*r.Body.MedioPago)
-		medio = &m
-	}
-	v, err := a.s.MarcarPagado(ctx, ses, r.Id.String(), medio)
+	v, err := cobros.Nuevo(a.s.pool, a.s.log).CobrarPedido(ctx, ses, r.Id.String(), r.Body.Partes, texto(r.Body.Clave))
 	if err != nil {
 		return nil, err
 	}

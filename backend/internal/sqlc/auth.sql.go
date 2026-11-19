@@ -108,7 +108,7 @@ func (q *Queries) CrearCuentaConClave(ctx context.Context, arg CrearCuentaConCla
 
 const crearFichaManual = `-- name: CrearFichaManual :exec
 INSERT INTO customers (user_id, nombre, email, tipo, limite_credito, notas)
-VALUES ($1, $2, $3, 'particular', 0, 'Cuenta creada con cliente:create.')
+VALUES ($1, $2, $3, 'particular', 0, NULL)
 `
 
 type CrearFichaManualParams struct {
@@ -117,6 +117,8 @@ type CrearFichaManualParams struct {
 	Email  *string `json:"email"`
 }
 
+// Sin nota: «Cuenta creada con cliente:create.» salía en la ficha del
+// cliente, con el nombre del comando del sistema viejo (comité final).
 func (q *Queries) CrearFichaManual(ctx context.Context, arg CrearFichaManualParams) error {
 	_, err := q.db.Exec(ctx, crearFichaManual, arg.UserID, arg.Nombre, arg.Email)
 	return err

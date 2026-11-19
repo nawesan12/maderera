@@ -90,6 +90,8 @@ UPDATE profiles SET role = 'profesional', updated_at = now() WHERE user_id = $1;
 -- name: TieneFicha :one
 SELECT EXISTS (SELECT 1 FROM customers WHERE user_id = $1);
 
+-- Sin nota: «Cuenta creada con cliente:create.» salía en la ficha del
+-- cliente, con el nombre del comando del sistema viejo (comité final).
 -- name: CrearFichaManual :exec
 INSERT INTO customers (user_id, nombre, email, tipo, limite_credito, notas)
-VALUES ($1, $2, $3, 'particular', 0, 'Cuenta creada con cliente:create.');
+VALUES ($1, $2, $3, 'particular', 0, NULL);

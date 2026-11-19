@@ -48,7 +48,7 @@ export function Lineas({
 }) {
   if (lineas.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-linea text-center">
+      <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-linea text-center">
         {/* Por nombre, por medida o pasando el código. Lo que no esté —un corte,
             un flete— se carga a mano desde el mismo buscador. */}
         <p className="text-lg font-medium text-muted-foreground">

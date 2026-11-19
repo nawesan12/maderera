@@ -182,7 +182,7 @@ export function Cobro({
         />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {/*
           Qué clase de operación es. Va primero porque decide el resto: contado
           deja elegir el medio, cuenta corriente lo fija y acopio reserva en vez
@@ -562,7 +562,9 @@ export function Cobro({
         </div>
       )}
 
-      <div className="border-t border-linea p-4">
+      {/* Abajo de `lg` queda fijo al pie de la pantalla: en la tablet vertical
+          la página scrollea, y el total y «Cobrar» tienen que estar siempre. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-linea bg-card p-4 shadow-[0_-8px_24px_rgb(0_0_0/0.08)] lg:static lg:z-auto lg:shadow-none">
         {descuento > 0 && (
           <>
             <p className="flex items-baseline justify-between text-base text-muted-foreground">

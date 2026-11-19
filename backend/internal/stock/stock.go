@@ -462,6 +462,16 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 		if m, ok := MotivosDeAjuste[motivo]; ok && motivo != "otro" {
 			que = m + " desde Stock"
 		}
+		// La devolución va para los dos lados, y el libro dice cuál: la que
+		// entra es de un cliente y la que sale, a un proveedor (comité de T4:
+		// la pantalla solo la ofrecía sumando, y la del proveedor quedaba
+		// como «Faltante»).
+		if motivo == "devolucion" {
+			que = "Devolución de cliente desde Stock"
+			if cantidad < 0 {
+				que = "Devolución al proveedor desde Stock"
+			}
+		}
 		nota := que + " (" + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo) + ")"
 		ok = suc.Name + ": " + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo)
 		return q.RegistrarMovimiento(ctx, sqlc.RegistrarMovimientoParams{VariantID: variante, BranchID: suc.ID, Type: tipo,

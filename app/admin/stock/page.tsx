@@ -343,6 +343,7 @@ function TarjetaStock({
               <div className="mt-2">
                 <AjusteRapido
                   variantId={fila.variantId}
+                  producto={`${fila.productName} ${fila.label}`}
                   branchSlug={s.slug}
                   actual={s.qty}
                   unidad={fila.unidad}

@@ -14,6 +14,7 @@ import {
   metrosDePiezas,
 } from "@/lib/unidades";
 import { formatearUnidad } from "@/lib/formato";
+import { avisoDelAjuste, MOTIVOS_QUE_RESTAN, MOTIVOS_QUE_SUMAN, teclaDelAjuste } from "@/lib/stock-ajuste";
 import { ajustarStock, type MotivoDeAjuste } from "./ajuste-actions";
 
 /**
@@ -32,6 +33,7 @@ import { ajustarStock, type MotivoDeAjuste } from "./ajuste-actions";
  */
 export function AjusteRapido({
   variantId,
+  producto,
   branchSlug,
   sucursal,
   unidad,
@@ -39,6 +41,8 @@ export function AjusteRapido({
   actual,
 }: {
   variantId: string;
+  /** El nombre de la fila, para el aviso: con dos ajustes seguidos se deshacía el que no era. */
+  producto: string;
   branchSlug: string;
   sucursal: string;
   unidad: string;
@@ -84,12 +88,13 @@ export function AjusteRapido({
     cantidad: number,
     extra?: { contado?: number; motivo?: MotivoDeAjuste },
   ) {
+    const titulo = avisoDelAjuste(producto, mensaje);
     if (extra?.contado !== undefined || cantidad === 0) {
-      toast.success(mensaje);
+      toast.success(titulo);
       return;
     }
     let usado = false;
-    toast.success(mensaje, {
+    toast.success(titulo, {
       duration: 10_000,
       classNames: { title: "text-base", actionButton: "!h-10 !px-4 !text-base !font-semibold" },
       action: {
@@ -101,7 +106,7 @@ export function AjusteRapido({
             const r = await ajustarStock(variantId, branchSlug, -cantidad, { motivo: "correccion" });
             if (r.error) toast.error(r.error, { duration: 10_000 });
             else {
-              if (r.ok) toast.success(r.ok);
+              if (r.ok) toast.success(avisoDelAjuste(producto, r.ok));
               router.refresh();
             }
           });
@@ -159,24 +164,6 @@ export function AjusteRapido({
  * que se contó, y la cuenta a metros la hace el sistema a la vista. Se puede
  * pasar a metros sueltos para un recorte que no es una pieza entera.
  */
-/*
- * El motivo fija la dirección: los de arriba suman y los de abajo restan, y
- * cada uno ejecuta. Antes había un motivo elegido aparte y dos botones
- * Sumar/Restar, y una «rotura» que sumaba se convertía callada en «otro»
- * (T4, hallazgo 21). Go rechaza las combinaciones que no tienen sentido.
- *
- * «Faltante» y no «Otro»: abajo, restando, «otro» no le decía nada a quien
- * lee el libro.
- */
-const SUMAN: { valor: MotivoDeAjuste; texto: string }[] = [
-  { valor: "ingreso", texto: "Ingreso" },
-  { valor: "devolucion", texto: "Devolución" },
-];
-const RESTAN: { valor: MotivoDeAjuste; texto: string }[] = [
-  { valor: "rotura", texto: "Rotura" },
-  { valor: "faltante", texto: "Faltante" },
-];
-
 function CargaPorMedida({
   unidad,
   largoMm,
@@ -241,7 +228,7 @@ function CargaPorMedida({
         <Ruler className="h-4 w-4" />
         Cargar
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 gap-3 p-4">
+      <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] gap-3 p-4">
         <p className="text-base font-medium">
           {sucursal} · hay <span className="tabular">{formatearCantidad(actual)}</span>
         </p>
@@ -302,13 +289,12 @@ function CargaPorMedida({
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                // Enter es «Ingreso», el chip que lo dice. Restar se toca: es
-                // lo que no se puede hacer por costumbre.
-                if (modo === "contar") contar();
-                else cargar(1, "ingreso");
-              }
+              // La regla, con su prueba, en `teclaDelAjuste`.
+              const accion = teclaDelAjuste(e, modo);
+              if (accion === null) return;
+              e.preventDefault();
+              if (accion === "contar") contar();
+              else if (accion === "ingreso") cargar(1, "ingreso");
             }}
             className="tabular mt-1 block h-11 w-full rounded-md border bg-background px-3 text-lg text-foreground"
             placeholder={porPiezas && largoMm ? "12" : enteros ? "200" : "3,5"}
@@ -347,8 +333,8 @@ function CargaPorMedida({
             {/* Sin cantidad los chips están apagados: tocar «Rotura» antes de
                 poner el número no puede descontar nada. */}
             <div className="space-y-2">
-              <FilaDeMotivos signo={1} motivos={SUMAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
-              <FilaDeMotivos signo={-1} motivos={RESTAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
+              <FilaDeMotivos signo={1} motivos={MOTIVOS_QUE_SUMAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
+              <FilaDeMotivos signo={-1} motivos={MOTIVOS_QUE_RESTAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
             </div>
           </>
         ) : (

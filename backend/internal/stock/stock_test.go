@@ -473,4 +473,12 @@ func TestElMotivoDiceLaDireccion(t *testing.T) {
 	if !strings.HasPrefix(nota, "Corrección desde Stock") {
 		t.Fatalf("la corrección no quedó con su nombre en el libro: %q", nota)
 	}
+	// La devolución dice de qué lado fue.
+	for quiere, signo := range map[string]string{"Devolución de cliente desde Stock": "ingreso", "Devolución al proveedor desde Stock": "egreso"} {
+		var hay bool
+		_ = e.pool.QueryRow(context.Background(), `select exists (select 1 from inventory_movements where variant_id = $1 and note like $2 || '%' and type = $3::movement_type)`, e.tornillo, quiere, signo).Scan(&hay)
+		if !hay {
+			t.Errorf("falta en el libro: %q (%s)", quiere, signo)
+		}
+	}
 }

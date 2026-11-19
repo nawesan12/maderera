@@ -21,6 +21,7 @@ import {
 } from "../entregas-actions";
 import { fechaHora } from "@/components/admin/formato";
 import type { RenglonPendiente } from "@/lib/entregas";
+import { seOfreceLaFirma } from "@/lib/entregas/firma";
 import type { RemitoListado } from "@/lib/dal/admin/entregas";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
@@ -347,7 +348,9 @@ function FilaRemito({
         <span className="text-base text-amber-700">Sin firmar</span>
       )}
 
-      <div className="flex items-center gap-2">
+      {/* Con flex-wrap: Imprimir, PDF, WhatsApp, Firmar y Anular en una
+          sola fila se iban de la pantalla a 390 px (comité final, M17). */}
+      <div className="flex flex-wrap items-center gap-2">
         <Link
           href={`/remito/${remito.id}`}
           target="_blank"
@@ -367,7 +370,7 @@ function FilaRemito({
 
         {whatsapp && remito.estado !== "anulada" && <MandarPorWhatsapp tipo="remito" id={remito.id} compacto />}
 
-        {remito.firmaToken && (
+        {seOfreceLaFirma(remito) && (
           <LinkDeFirma ruta={`/firmar/${remito.firmaToken}`} compacto />
         )}
 

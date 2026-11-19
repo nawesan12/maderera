@@ -62,8 +62,12 @@ func LeerTopeMensajes(valor string) int {
 }
 
 func (s *Servicio) topeMensajes(ctx context.Context) (int, error) {
+	return topeMensajesCon(ctx, s.pool)
+}
+
+func topeMensajesCon(ctx context.Context, q consultor) (int, error) {
 	var v string
-	err := s.pool.QueryRow(ctx, `select valor from site_settings where clave = 'whatsapp_tope_mensajes'`).Scan(&v)
+	err := q.QueryRow(ctx, `select valor from site_settings where clave = 'whatsapp_tope_mensajes'`).Scan(&v)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TopeMensajesPorOmision, nil
 	}
@@ -80,13 +84,17 @@ func (s *Servicio) UsoDelMes(ctx context.Context, ahora time.Time) (UsoDelMes, e
 }
 
 // consultor es el pool o una transacción: EnviarYRegistrar cuenta adentro de
-// la suya, con el candado del tope tomado.
+// la suya, con el candado del tope tomado. Todo lo que se lee ahí adentro va
+// por `q`: pedirle otra conexión al pool con el candado tomado se traba en
+// cuanto el pool se llena de envíos que esperan ese mismo candado (cada uno
+// con su conexión agarrada y ninguno la suelta).
 type consultor interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 func (s *Servicio) usoDelMesCon(ctx context.Context, q consultor, ahora time.Time) (UsoDelMes, error) {
-	tope, err := s.topeMensajes(ctx)
+	tope, err := topeMensajesCon(ctx, q)
 	if err != nil {
 		return UsoDelMes{}, err
 	}

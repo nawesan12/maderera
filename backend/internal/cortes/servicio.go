@@ -458,12 +458,21 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 var ordenDeLaCola = []string{"en-cola", "en-proceso", "terminado", "retirado"}
 
 // Avanzar pasa el corte al siguiente paso de la cola. Un cancelado no avanza.
-func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (string, error) {
+//
+// desde es el estado que vio quien tocó (vacío: no se controla). Con una
+// pantalla de hace un minuto, o el taller y el panel a la vez, «Empezar»
+// sobre un corte que ya estaba en la máquina lo daba por terminado sin
+// cortarlo. El UPDATE además exige el estado leído: dos toques a la vez dan
+// un solo paso.
+func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde string) (string, error) {
 	var estado, numero string
 	if err := s.pool.QueryRow(ctx, `SELECT estado::text, numero FROM cutting_orders WHERE id = $1`, id).Scan(&estado, &numero); errors.Is(err, pgx.ErrNoRows) {
 		return "", noEncontrado
 	} else if err != nil {
 		return "", err
+	}
+	if desde != "" && desde != estado {
+		return "", yaCambio(numero, estado)
 	}
 	pos := -1
 	for i, e := range ordenDeLaCola {
@@ -478,12 +487,28 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (st
 		return "", error422("El corte ya está retirado.")
 	}
 	sig := ordenDeLaCola[pos+1]
-	if _, err := s.pool.Exec(ctx, `UPDATE cutting_orders SET estado = $2::estado_corte, updated_at = now() WHERE id = $1`, id, sig); err != nil {
+	tag, err := s.pool.Exec(ctx, `UPDATE cutting_orders SET estado = $2::estado_corte, updated_at = now() WHERE id = $1 AND estado = $3::estado_corte`, id, sig, estado)
+	if err != nil {
 		return "", err
+	}
+	if tag.RowsAffected() == 0 {
+		var ahora string
+		_ = s.pool.QueryRow(ctx, `SELECT estado::text FROM cutting_orders WHERE id = $1`, id).Scan(&ahora)
+		return "", yaCambio(numero, ahora)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "corte", id, numero+": "+estado+" → "+sig, nil)
 	texto := map[string]string{"en-proceso": "en la máquina", "terminado": "terminado", "retirado": "retirado"}[sig]
 	return numero + " quedó " + texto + ".", nil
+}
+
+// yaCambio es el 409 de un avance sobre un estado que ya no es el que se vio.
+func yaCambio(numero, estado string) error {
+	texto := map[string]string{"en-cola": "en la cola", "en-proceso": "en la máquina", "terminado": "terminado",
+		"retirado": "retirado", "cancelado": "cancelado"}[estado]
+	if texto == "" {
+		texto = estado
+	}
+	return plataforma.NuevoProblema(http.StatusConflict, numero+" ya estaba "+texto+": se actualizó la lista.")
 }
 
 // AlternarUrgente marca o desmarca el corte como urgente.

@@ -162,7 +162,7 @@ func TestAvanzarYCancelarALaVez(t *testing.T) {
 		aLaVez(2, func(i int) {
 			var err error
 			if i == 0 {
-				_, err = e.s.Avanzar(context.Background(), ses, id)
+				_, err = e.s.Avanzar(context.Background(), ses, id, "")
 			} else {
 				_, err = e.s.Cancelar(context.Background(), ses, id, nil)
 			}
@@ -190,7 +190,7 @@ func TestAvanzarALaVezNoRepiteEstados(t *testing.T) {
 	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	id := e.pedido(t, ven, 1)
 	aLaVez(3, func(int) {
-		if _, err := e.s.Avanzar(context.Background(), ses, id); err != nil {
+		if _, err := e.s.Avanzar(context.Background(), ses, id, ""); err != nil {
 			t.Errorf("avanzar: %v", err)
 		}
 	})

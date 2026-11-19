@@ -61,10 +61,10 @@ export function AccionesPedido({
     startTransition(async () => {
       const resultado = await fn();
       if (resultado.error) toast.error(resultado.error);
-      else {
-        toast.success(resultado.ok ?? "Listo.");
-        router.refresh();
-      }
+      else toast.success(resultado.ok ?? "Listo.");
+      // También con error: si fue un 409 («ya estaba en la máquina»), la
+      // pantalla tiene que mostrar el estado de verdad.
+      router.refresh();
     });
   }
 
@@ -92,7 +92,7 @@ export function AccionesPedido({
 
       {etiqueta && (
         <button
-          onClick={() => accion(() => avanzarPedido(id))}
+          onClick={() => accion(() => avanzarPedido(id, estado))}
           disabled={pendiente}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >

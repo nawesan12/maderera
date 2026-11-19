@@ -191,7 +191,11 @@ func (a *API) AvanzarCorte(ctx context.Context, r cortesapi.AvanzarCorteRequestO
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.Avanzar(ctx, ses, r.Id.String())
+	desde := ""
+	if r.Params.Desde != nil {
+		desde = *r.Params.Desde
+	}
+	m, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde)
 	if err != nil {
 		return nil, err
 	}

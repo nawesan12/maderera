@@ -284,6 +284,15 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 			t.Fatalf("avanzar: %d %s", c, b)
 		}
 	}
+	// Un «Marcar listo» de una pantalla vieja, con el pedido ya listo: sin
+	// el estado que vio, pasaba a entregado con remito y aviso al cliente.
+	if c, b := pedir(t, dep, "POST", u+"pedidos/"+pedido.ID+"/avanzar?desde=preparando", nil); c != 409 || !strings.Contains(b, "PED-1000 ya estaba listo para retirar") {
+		t.Fatalf("avanzar desde un estado viejo: %d %s", c, b)
+	}
+	var estadoAhora string
+	if err := e.pool.QueryRow(context.Background(), `select estado::text from orders where id = $1`, pedido.ID).Scan(&estadoAhora); err != nil || estadoAhora != "listo" {
+		t.Fatalf("el pedido se movió igual: %s %v", estadoAhora, err)
+	}
 	// Cada avance deja su aviso al cliente en la cola, con el estado.
 	if n := e.numero(t, `select count(*) from trabajos where tipo = 'pedido.estado' and carga->>'orderId' = $1
 		and carga->>'estado' in ('preparando', 'listo')`, pedido.ID); n != 2 {

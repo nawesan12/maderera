@@ -61,6 +61,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Con `desde`, el estado que vio quien toca: si el corte ya cambió (otra pantalla, el taller, una pestaña de hace un minuto), 409 y no se avanza un paso de más. */
         post: operations["AvanzarCorte"];
         delete?: never;
         options?: never;
@@ -1039,7 +1040,9 @@ export interface operations {
     };
     AvanzarCorte: {
         parameters: {
-            query?: never;
+            query?: {
+                desde?: string;
+            };
             header?: never;
             path: {
                 id: components["parameters"]["Id"];
@@ -1050,6 +1053,7 @@ export interface operations {
         responses: {
             200: components["responses"]["Ok"];
             404: components["responses"]["Problema"];
+            409: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
         };
     };

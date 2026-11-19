@@ -41,10 +41,13 @@ function fallo(r: Respuesta): EstadoVenta {
 /**
  * Avanza el pedido al siguiente estado. El recorrido es fijo y de una sola
  * dirección; uno de retiro pasa de "listo" a "entregado", uno con envío a
- * "en camino".
+ * "en camino". `desde` es el estado que se veía: si ya cambió, Go contesta
+ * 409 en vez de dar un paso de más (que en un retiro emite el remito).
  */
-export async function avanzarPedido(id: string): Promise<EstadoVenta> {
-  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/avanzar", { params: { path: { id } } });
+export async function avanzarPedido(id: string, desde?: string): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/avanzar", {
+    params: { path: { id }, query: desde ? { desde } : {} },
+  });
   if (!r.data) return fallo(r);
 
   // El WhatsApp y el correo al cliente los encoló Go con el avance: salen

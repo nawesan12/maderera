@@ -41,4 +41,21 @@ describe("la foto de la tarjeta para compartir", () => {
     expect(await fotoParaTarjeta("/x")).toBeNull();
     expect(await fotoParaTarjeta(null)).toBeNull();
   });
+
+  it("la misma foto no se vuelve a traer ni a convertir", async () => {
+    const webp = await sharp({ create: { width: 800, height: 600, channels: 3, background: "#a07040" } }).webp().toBuffer();
+    responder(webp, "image/webp");
+    const primera = await fotoParaTarjeta("/subidas/producto-repetida.webp");
+    const segunda = await fotoParaTarjeta("/subidas/producto-repetida.webp");
+    expect(segunda).toBe(primera);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it("lo que falló no queda recordado", async () => {
+    responder(Buffer.from("<html>"), "text/html");
+    expect(await fotoParaTarjeta("/subidas/todavia-no.webp")).toBeNull();
+    const jpeg = await sharp({ create: { width: 40, height: 30, channels: 3, background: "#000" } }).jpeg().toBuffer();
+    responder(jpeg, "image/jpeg");
+    expect(await fotoParaTarjeta("/subidas/todavia-no.webp")).not.toBeNull();
+  });
 });

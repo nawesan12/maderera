@@ -72,7 +72,7 @@ export function EncabezadoPublico({
       {/* La «M» del logo, grande y a un costado: la firma de la maderera en
           cada sección (notas del 9/11/2026). */}
       {!foto && (
-        <Isotipo className="pointer-events-none absolute -right-4 top-1/2 hidden h-[150px] -translate-y-1/2 rotate-[-8deg] text-[#EC7D38] opacity-[0.16] md:block" />
+        <Isotipo className="pointer-events-none absolute -right-4 top-1/2 hidden h-[150px] -translate-y-1/2 rotate-[-8deg] text-marca-naranja opacity-[0.16] md:block" />
       )}
       <div className="contenedor relative">
         <nav

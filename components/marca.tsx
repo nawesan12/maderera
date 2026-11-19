@@ -31,7 +31,7 @@ export function Logotipo({ className = "", titulo = true }: { className?: string
       aria-label={titulo ? "Maderera Juan B. Justo" : undefined}
       aria-hidden={titulo ? undefined : true}
     >
-      <path fill="var(--marca-naranja, #EC7D38)" fillRule="evenodd" d={TRAZO_ISOTIPO} />
+      <path className="fill-marca-naranja" fillRule="evenodd" d={TRAZO_ISOTIPO} />
       <path fill="currentColor" fillRule="evenodd" d={TRAZO_NOMBRE} />
     </svg>
   );
@@ -57,7 +57,7 @@ export function Marca({
   /** Dónde se está: «Panel», «Taller». Va debajo, sin tocar el logotipo. */
   etiqueta?: string;
 }) {
-  const color = tono === "oscuro" ? "text-white" : "text-[#505052] dark:text-white";
+  const color = tono === "oscuro" ? "text-white" : "text-marca-gris dark:text-white";
   if (!etiqueta) return <Logotipo className={`${ALTOS[tamano]} ${color}`} />;
   return (
     <span className="flex flex-col items-start gap-1.5">

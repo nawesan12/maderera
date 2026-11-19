@@ -673,6 +673,7 @@ async function Resultados({ params }: { params: Params }) {
             key={producto.id}
             product={producto}
             whatsapp={whatsapp}
+            filtro={{ cat: params.cat, rubro: params.rubro }}
           />
         ))}
       </div>

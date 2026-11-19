@@ -113,8 +113,10 @@ export const SELECCION = [
     ancho: 1920,
     alto: 1280,
     calidad: 85,
-    foco: [0.55, 0.5],
-    zoom: 1.1,
+    // Abajo, en los cantos de la pila: arriba el film lleva impresa la marca
+    // del fabricante.
+    foco: [0.62, 0.82],
+    zoom: 1.5,
   },
   {
     origen: P + "FENOLICO CON FILM MIRALUZ.jpg",
@@ -123,8 +125,8 @@ export const SELECCION = [
     alto: 800,
     calidad: 85,
     tipo: "banda",
-    foco: [0.5, 0.5],
-    zoom: 1,
+    foco: [0.5, 0.75],
+    zoom: 1.15,
   },
   // Moldava: la estantería en color, en banda para el encabezado…
   {

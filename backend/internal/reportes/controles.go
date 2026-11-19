@@ -25,11 +25,22 @@ type ControlDePersona struct {
 	Autorizado     float64 `json:"autorizado"`
 	// SinConexion: ventas sin conexión que pasaron lo libre sin PIN.
 	SinConexion Monto `json:"sinConexion"`
-	// Anuladas por esta persona; SinDevolver, las que «se la llevó».
-	Anuladas    Monto `json:"anuladas"`
-	SinDevolver int   `json:"sinDevolver"`
+	// CreditoSinAutorizar: ventas sin conexión que cargaron a cuenta pasado
+	// el límite o con mora, sin PIN: deuda nueva que nadie firmó.
+	CreditoSinAutorizar Monto `json:"creditoSinAutorizar"`
+	// Anuladas por esta persona; SinFirma, las que anuló sin PIN de nadie
+	// (hoy solo las propias con tarjeta o transferencia de hace un rato);
+	// SinDevolver, las que «se la llevó».
+	Anuladas         Monto `json:"anuladas"`
+	AnuladasSinFirma Monto `json:"anuladasSinFirma"`
+	SinDevolver      int   `json:"sinDevolver"`
 	// Retiros que llegaron con la caja cerrada o dejaron el cajón bajo la base.
 	Retiros Monto `json:"retiros"`
+	// Firmo: lo que este admin autorizó con su PIN o su sesión (lo dejado de
+	// cobrar de las ventas y lo anulado). Un PIN aprendido firma a nombre del
+	// dueño: acá se ve cuántas firmas lleva, para poder decir «esas no fui
+	// yo».
+	Firmo Monto `json:"firmo"`
 }
 
 // Controles es el bloque entero.
@@ -63,25 +74,27 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.created_by_user_id, coalesce(u.name, 'Sin nombre'),
 		       coalesce(sum(o.dejado_de_cobrar), 0), coalesce(sum(o.dejado_de_cobrar) FILTER (WHERE o.autorizado_por IS NOT NULL), 0),
-		       (count(*) FILTER (WHERE o.bajo_lista_sin_autorizar))::int, coalesce(sum(o.dejado_de_cobrar) FILTER (WHERE o.bajo_lista_sin_autorizar), 0)
+		       (count(*) FILTER (WHERE o.bajo_lista_sin_autorizar))::int, coalesce(sum(o.dejado_de_cobrar) FILTER (WHERE o.bajo_lista_sin_autorizar), 0),
+		       (count(*) FILTER (WHERE o.credito_sin_autorizar > 0))::int, coalesce(sum(o.credito_sin_autorizar), 0)
 		FROM orders o LEFT JOIN "user" u ON u.id = o.created_by_user_id
 		WHERE o.created_at >= $1 AND o.created_at < $2 AND o.estado <> 'cancelado'
-		  AND (o.dejado_de_cobrar > 0 OR o.bajo_lista_sin_autorizar) AND o.created_by_user_id IS NOT NULL
+		  AND (o.dejado_de_cobrar > 0 OR o.bajo_lista_sin_autorizar OR o.credito_sin_autorizar > 0) AND o.created_by_user_id IS NOT NULL
 		GROUP BY 1, 2`, desde, hasta)
 	if err != nil {
 		return c, err
 	}
 	for filas.Next() {
 		var id, nombre string
-		var dejado, autorizado, sinConexion jsmath.Num
-		var n int
-		if err := filas.Scan(&id, &nombre, &dejado, &autorizado, &n, &sinConexion); err != nil {
+		var dejado, autorizado, sinConexion, credito jsmath.Num
+		var n, nc int
+		if err := filas.Scan(&id, &nombre, &dejado, &autorizado, &n, &sinConexion, &nc, &credito); err != nil {
 			filas.Close()
 			return c, err
 		}
 		p := de(id, nombre)
 		p.DejadoDeCobrar, p.Autorizado = dejado.F(), autorizado.F()
 		p.SinConexion = Monto{Total: sinConexion.F(), Cantidad: n}
+		p.CreditoSinAutorizar = Monto{Total: credito.F(), Cantidad: nc}
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {
@@ -90,7 +103,9 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 	// Las anulaciones: de quien anuló.
 	filas, err = s.pool.Query(ctx, `
 		SELECT a.quien_id, coalesce(a.quien, 'Sin nombre'), count(*)::int, coalesce(sum(o.total), 0),
-		       (count(*) FILTER (WHERE o.mercaderia_no_volvio))::int
+		       (count(*) FILTER (WHERE o.mercaderia_no_volvio))::int,
+		       (count(*) FILTER (WHERE o.anulacion_autorizada_por IS NULL))::int,
+		       coalesce(sum(o.total) FILTER (WHERE o.anulacion_autorizada_por IS NULL), 0)
 		FROM orders o
 		JOIN LATERAL (SELECT h.created_at, h.created_by_user_id AS quien_id, hu.name AS quien FROM order_status_history h
 		              LEFT JOIN "user" hu ON hu.id = h.created_by_user_id
@@ -103,14 +118,15 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 	}
 	for filas.Next() {
 		var id, nombre string
-		var n, sinDevolver int
-		var total jsmath.Num
-		if err := filas.Scan(&id, &nombre, &n, &total, &sinDevolver); err != nil {
+		var n, sinDevolver, sinFirma int
+		var total, totalSinFirma jsmath.Num
+		if err := filas.Scan(&id, &nombre, &n, &total, &sinDevolver, &sinFirma, &totalSinFirma); err != nil {
 			filas.Close()
 			return c, err
 		}
 		p := de(id, nombre)
 		p.Anuladas, p.SinDevolver = Monto{Total: total.F(), Cantidad: n}, sinDevolver
+		p.AnuladasSinFirma = Monto{Total: totalSinFirma.F(), Cantidad: sinFirma}
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {
@@ -140,14 +156,48 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 	if err := filas.Err(); err != nil {
 		return c, err
 	}
+	// Las firmas de cada admin: las ventas que autorizó (lo dejado de cobrar)
+	// y las anulaciones que firmó (su total), sin contar las propias.
+	filas, err = s.pool.Query(ctx, `
+		SELECT f.quien, coalesce(u.name, 'Sin nombre'), count(*)::int, coalesce(sum(f.monto), 0)
+		FROM (
+		  SELECT o.autorizado_por AS quien, o.dejado_de_cobrar AS monto FROM orders o
+		  WHERE o.autorizado_por IS NOT NULL AND o.autorizado_por IS DISTINCT FROM o.created_by_user_id
+		    AND o.created_at >= $1 AND o.created_at < $2
+		  UNION ALL
+		  SELECT o.anulacion_autorizada_por, o.total FROM orders o
+		  JOIN LATERAL (SELECT h.created_at, h.created_by_user_id FROM order_status_history h
+		                WHERE h.order_id = o.id AND h.estado = 'cancelado' ORDER BY h.created_at DESC LIMIT 1) a ON true
+		  WHERE o.anulacion_autorizada_por IS NOT NULL AND o.anulacion_autorizada_por IS DISTINCT FROM a.created_by_user_id
+		    AND a.created_at >= $1 AND a.created_at < $2
+		) f LEFT JOIN "user" u ON u.id = f.quien
+		GROUP BY 1, 2`, desde, hasta)
+	if err != nil {
+		return c, err
+	}
+	for filas.Next() {
+		var id, nombre string
+		var n int
+		var total jsmath.Num
+		if err := filas.Scan(&id, &nombre, &n, &total); err != nil {
+			filas.Close()
+			return c, err
+		}
+		de(id, nombre).Firmo = Monto{Total: total.F(), Cantidad: n}
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return c, err
+	}
 	for _, p := range porID {
 		c.Personas = append(c.Personas, *p)
 	}
-	// Primero lo que no firmó nadie: sin conexión, «se la llevó», retiros.
+	// Primero lo que no firmó nadie: sin conexión (precio y crédito), «se la
+	// llevó», retiros.
 	sort.Slice(c.Personas, func(i, j int) bool {
 		a, b := c.Personas[i], c.Personas[j]
-		pa := a.SinConexion.Total + a.Retiros.Total + float64(a.SinDevolver)*1e9 + (a.DejadoDeCobrar - a.Autorizado)
-		pb := b.SinConexion.Total + b.Retiros.Total + float64(b.SinDevolver)*1e9 + (b.DejadoDeCobrar - b.Autorizado)
+		pa := a.SinConexion.Total + a.CreditoSinAutorizar.Total + a.Retiros.Total + float64(a.SinDevolver)*1e9 + (a.DejadoDeCobrar - a.Autorizado)
+		pb := b.SinConexion.Total + b.CreditoSinAutorizar.Total + b.Retiros.Total + float64(b.SinDevolver)*1e9 + (b.DejadoDeCobrar - b.Autorizado)
 		if pa != pb {
 			return pa > pb
 		}

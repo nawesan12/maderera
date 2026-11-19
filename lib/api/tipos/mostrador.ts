@@ -301,6 +301,11 @@ export interface components {
              * @description lo que se autoriza (lo dejado de cobrar
              */
             monto: number;
+            /**
+             * Format: double
+             * @description con motivo precio
+             */
+            credito?: number;
             pinIncorrecto?: boolean;
             /** Format: date-time */
             bloqueadoHasta?: string;

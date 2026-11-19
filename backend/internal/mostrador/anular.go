@@ -10,6 +10,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/autorizacion"
+	"mjbj/internal/caja"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
@@ -40,8 +41,9 @@ type PedidoDeAnulacion struct {
 	PIN, Ficha         string
 }
 
-// minutosParaCorregir: una venta propia recién hecha se anula sin PIN aunque
-// esté cobrada (se cargó mal y el cliente sigue ahí).
+// minutosParaCorregir: una venta propia recién hecha con tarjeta o
+// transferencia se anula sin PIN (se cargó mal y el cliente sigue ahí). Con
+// efectivo o cuenta corriente, no: ver firmaParaAnular.
 const minutosParaCorregir = 5 * time.Minute
 
 // Anular es anularVentaDeMostrador: **nada se borra, todo se revierte.** El
@@ -56,8 +58,15 @@ const minutosParaCorregir = 5 * time.Minute
 // clásico, y el faltante aparecía recién en el inventario. Ahora:
 //
 //   - Un admin anula siempre (su sesión es la firma).
-//   - Un vendedor, sin PIN, solo una venta suya, del turno abierto de su
-//     sucursal, y que no esté cobrada o sea de hace menos de cinco minutos.
+//   - Un vendedor, sin PIN, solo una venta suya, de hoy, del turno abierto
+//     de su sucursal, de hace menos de cinco minutos y que **no movió
+//     efectivo ni deuda**: tarjeta, transferencia, Mercado Pago, cheque. Esa
+//     devolución se ve en el banco.
+//   - Efectivo o cuenta corriente piden el PIN siempre (revisión de T3): con
+//     la ventana de cinco minutos, cobrar en efectivo, dejar ir al cliente y
+//     anular con «Volvió» a los tres minutos seguía siendo el robo clásico,
+//     solo que apurado; y una venta a cuenta corriente contaba como «sin
+//     cobrar» y se anulaba sin PIN en todo el turno, borrando la deuda.
 //   - «Se la llevó» (la mercadería no vuelve) pide el PIN siempre.
 //   - Todo lo demás pide el PIN de un admin.
 //
@@ -108,16 +117,24 @@ func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido
 		total            jsmath.Num
 		sucursal, vendio *string
 		creada           time.Time
-		cobrada          bool
-		enElTurno        bool
+		// cajonODeuda: la venta metió efectivo en el cajón o deuda en la
+		// cuenta (o es una vieja sin detalle de pagos y no se sabe).
+		cajonODeuda bool
+		enElTurno   bool
+		// noSeAnula: ya anulada o no es del mostrador. Lo dice la
+		// transacción; pedir un PIN para eso es llamar al admin para
+		// nada.
+		noSeAnula bool
 	}
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.total, o.branch_id, o.created_by_user_id, o.created_at,
-		       coalesce((SELECT sum(importe) FROM order_payments WHERE order_id = o.id AND medio <> 'cuenta_corriente'), 0) > 0
-		         OR (NOT EXISTS (SELECT 1 FROM order_payments WHERE order_id = o.id) AND o.medio_pago IS DISTINCT FROM 'cuenta_corriente'),
-		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = o.branch_id AND cs.estado = 'abierta' AND cs.abierta_at <= o.created_at)
+		       coalesce((SELECT sum(importe) FROM order_payments WHERE order_id = o.id AND medio IN ('efectivo', 'cuenta_corriente')), 0) > 0
+		         OR (NOT EXISTS (SELECT 1 FROM order_payments WHERE order_id = o.id)
+		             AND (o.medio_pago IS NULL OR o.medio_pago IN ('efectivo', 'cuenta_corriente'))),
+		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = o.branch_id AND cs.estado = 'abierta' AND cs.abierta_at <= o.created_at),
+		       o.estado = 'cancelado' OR o.origen <> 'mostrador'
 		FROM orders o WHERE o.id::text = $1`, pedido).
-		Scan(&p.total, &p.sucursal, &p.vendio, &p.creada, &p.cobrada, &p.enElTurno)
+		Scan(&p.total, &p.sucursal, &p.vendio, &p.creada, &p.cajonODeuda, &p.enElTurno, &p.noSeAnula)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// El «no encontramos la venta» lo dice la transacción.
 		return nil, nil, nil
@@ -128,9 +145,16 @@ func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido
 	if ses.Tiene(sqlc.StaffRoleAdmin) {
 		return &autorizacion.Firma{UserID: ses.UserID, Nombre: ses.Nombre}, nil, nil
 	}
+	if p.noSeAnula {
+		return nil, nil, nil
+	}
 	propia := p.vendio != nil && *p.vendio == ses.UserID
-	reciente := s.ahora().Sub(p.creada) < minutosParaCorregir
-	if a.VolvioLaMercaderia && propia && p.enElTurno && (!p.cobrada || reciente) {
+	ahora := s.ahora()
+	reciente := ahora.Sub(p.creada) < minutosParaCorregir
+	// De hoy, en el día argentino: una caja que quedó abierta de un día para
+	// el otro no vuelve «del turno» a las ventas de ayer.
+	deHoy := p.creada.In(caja.Argentina).Format(time.DateOnly) == ahora.In(caja.Argentina).Format(time.DateOnly)
+	if a.VolvioLaMercaderia && propia && p.enElTurno && deHoy && reciente && !p.cajonODeuda {
 		return nil, nil, nil
 	}
 	sucursal := ""

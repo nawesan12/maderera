@@ -293,9 +293,38 @@ func TestQuienAnula(t *testing.T) {
 		return m
 	}
 
-	// Propia, del turno y recién hecha: sin PIN.
-	if m := anular(ven, vender(ven, "efectivo"), map[string]any{}); m["ok"] != "Venta anulada." {
+	// Propia, del turno, recién hecha y por transferencia: sin PIN (la
+	// devolución se ve en el banco).
+	if m := anular(ven, vender(ven, "transferencia"), map[string]any{}); m["ok"] != "Venta anulada." {
 		t.Fatalf("propia y reciente: %v", m)
+	}
+	// En efectivo, aunque sea propia y de hace un minuto: PIN. Cobrar, dejar
+	// ir al cliente y anular con «Volvió» era el robo clásico, apurado.
+	if m := anular(ven, vender(ven, "efectivo"), map[string]any{}); autorizacionDe(t, m)["motivo"] != "anular" {
+		t.Fatalf("propia en efectivo: %v", m)
+	}
+	// A cuenta corriente tampoco: «sin cobrar» borraba la deuda sin PIN.
+	aCuenta := e.venta("cuenta_corriente", e.lineaPlaca(1))
+	aCuenta["customerId"] = e.cliente
+	_, mc, bc := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", aCuenta)
+	if mc["ok"] != true {
+		t.Fatalf("venta a cuenta: %s", bc)
+	}
+	if m := anular(ven, mc["orderId"].(string), map[string]any{}); autorizacionDe(t, m)["motivo"] != "anular" {
+		t.Fatalf("propia a cuenta: %v", m)
+	}
+	// Una caja abierta desde ayer no vuelve «del turno» a la venta de ayer.
+	deAyer := vender(ven, "transferencia")
+	if _, err := e.pool.Exec(ctx, `update cash_sessions set abierta_at = now() - interval '2 days' where estado = 'abierta';
+		update orders set created_at = now() - interval '1 day' where id = '`+deAyer+`'`); err != nil {
+		t.Fatal(err)
+	}
+	if m := anular(ven, deAyer, map[string]any{}); m["autorizacion"] == nil {
+		t.Fatalf("de ayer con la caja abierta desde antes: %v", m)
+	}
+	// Las que firmó un admin y las que no, separadas para el dueño.
+	if n := e.num(t, `select count(*)::float8 from orders where estado = 'cancelado' and anulacion_autorizada_por is null`); n != 1 {
+		t.Errorf("anuladas sin firma: %v", n)
 	}
 	// De otro vendedor: PIN.
 	ajena := vender(otro, "efectivo")
@@ -347,4 +376,100 @@ func TestQuienAnula(t *testing.T) {
 		t.Fatalf("admin: %v", m)
 	}
 	_ = jsmath.Fijo2
+}
+
+// Las pasadas y el canto del corte tienen precio de lista: la tarifa de la
+// placa (cutting_rates). Puestas a $1, o borradas, ya no salen gratis sin PIN
+// (revisión de T3).
+func TestPasadasDelCorteConTarifa(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	e.conPIN(t)
+	if _, err := e.pool.Exec(context.Background(), `insert into cutting_rates (material, precio_por_pasada, precio_por_metro_canto, activo)
+		values ('Placas', 2500, 900, true)`); err != nil {
+		t.Fatal(err)
+	}
+	// Treinta piezas de 600 × 400 con canto en un largo: dos placas, siete
+	// pasadas cobrables y 18 m de tapacanto.
+	pieza := map[string]any{"largoMm": 600, "anchoMm": 400, "cantidad": 30, "respetaVeta": 0, "cantoLargo": 1, "cantoAncho": 0, "etiqueta": nil, "aclaracion": nil}
+	corte := map[string]any{
+		"variantId": e.placa, "materialDescripcion": "Fenólico 18 mm", "placaLargoMm": 2440, "placaAnchoMm": 1220,
+		"mitad": nil, "placas": 2, "pasadas": 7, "acomodoManual": nil, "cantoDescripcion": nil, "piezas": []any{pieza},
+	}
+	pasadas := func(precio float64) map[string]any {
+		return map[string]any{"variantId": nil, "descripcion": "Corte a medida — 7 pasadas", "unidad": "pasada", "cantidad": 7, "precioUnitario": precio}
+	}
+	canto := map[string]any{"variantId": nil, "descripcion": "Tapacanto pegado", "unidad": "m", "cantidad": 18, "precioUnitario": 900}
+	vender := func(lineas ...map[string]any) (int, map[string]any, string) {
+		v := e.venta("transferencia", lineas...)
+		v["corte"] = corte
+		return pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
+	}
+	// Con la pasada a $1: lo dejado de cobrar es la tarifa, y pide el PIN.
+	_, m, b := vender(e.lineaPlaca(2), pasadas(1), canto)
+	if a := autorizacionDe(t, m); a["motivo"] != "precio" || a["monto"] != float64(7*2499) {
+		t.Fatalf("pasada a $1: %s", b)
+	}
+	// Sin el renglón de las pasadas: lo que falta se valúa a la tarifa, no a $0.
+	_, m, b = vender(e.lineaPlaca(2), canto)
+	if a := autorizacionDe(t, m); a["monto"] != float64(7*2500) {
+		t.Fatalf("sin pasadas: %s", b)
+	}
+	// Sin el canto, lo mismo.
+	_, m, b = vender(e.lineaPlaca(2), pasadas(2500))
+	if a := autorizacionDe(t, m); a["monto"] != float64(18*900) {
+		t.Fatalf("sin canto: %s", b)
+	}
+	// Todo a tarifa: pasa, con la tarifa como precio de lista de los renglones.
+	st, m, b := vender(e.lineaPlaca(2), pasadas(2500), canto)
+	if st != 200 || m["ok"] != true {
+		t.Fatalf("a tarifa: %d %s", st, b)
+	}
+	if s := e.txt(t, `select string_agg(coalesce(precio_lista::text, '-'), ' ' order by orden) from order_items where order_id = $1`, m["orderId"]); s != "45000.50 2500.00 900.00" {
+		t.Errorf("precio de lista de los renglones: %s", s)
+	}
+}
+
+// Sin conexión, la venta a cuenta pasada del límite entra (ya ocurrió) pero
+// queda marcada con lo que se cargó: antes no dejaba rastro.
+func TestVentaSinConexionPasadaDelLimite(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	if _, err := e.pool.Exec(context.Background(), `update customers set limite_credito = 1000 where id = $1`, e.cliente); err != nil {
+		t.Fatal(err)
+	}
+	venta := e.venta("cuenta_corriente", e.lineaPlaca(1))
+	venta["customerId"] = e.cliente
+	venta["numeroProvisorio"] = "CAJA1-010"
+	venta["cobradaAt"] = time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	lote := map[string]any{"cuerpo": map[string]any{"ventas": []any{venta}}}
+	_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/descarga", lote)
+	r0 := m["resultados"].([]any)[0].(map[string]any)
+	if r0["estado"] != "sincronizada" {
+		t.Fatalf("se rechazó: %s", b)
+	}
+	if s := e.txt(t, `select credito_sin_autorizar::text || ' ' || bajo_lista_sin_autorizar::text from orders where id = $1`, r0["orderId"]); s != "45000.50 false" {
+		t.Errorf("marcada: %s", s)
+	}
+	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like '%a cuenta pasado el límite sin autorizar ($45000.50)%'`); n != 1 {
+		t.Errorf("bitácora: %v", n)
+	}
+}
+
+// En línea, el precio y el crédito a la vez piden un PIN con las dos cifras.
+func TestPINConPrecioYCredito(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	e.conPIN(t)
+	if _, err := e.pool.Exec(context.Background(), `update customers set limite_credito = 1000 where id = $1`, e.cliente); err != nil {
+		t.Fatal(err)
+	}
+	l := e.lineaPlaca(1)
+	l["precioUnitario"] = 30000
+	v := e.venta("cuenta_corriente", l)
+	v["customerId"] = e.cliente
+	_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
+	if a := autorizacionDe(t, m); a["motivo"] != "precio" || a["monto"] != 15000.5 || a["credito"] != float64(30000) {
+		t.Fatalf("las dos cifras: %s", b)
+	}
 }

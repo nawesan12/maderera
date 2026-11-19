@@ -184,9 +184,11 @@ type Persona = Awaited<ReturnType<typeof numerosDelDueno>>["controles"]["persona
 /**
  * La plata del personal en los últimos siete días (T3): lo que cada uno dejó
  * de cobrar —y cuánto de eso firmó un admin—, sus ventas sin conexión bajo la
- * lista, lo que anuló y sus retiros tardíos o bajo la base. Estaba solo en la
- * bitácora, que el dueño no lee. En rojo lo que no firmó nadie; cada nombre
- * lleva a su bitácora.
+ * lista o a cuenta pasado el límite, lo que anuló (y cuánto sin PIN), sus
+ * retiros tardíos o bajo la base y, de cada admin, cuántas autorizaciones
+ * lleva firmadas: un PIN aprendido firma a su nombre, y así se ve. Estaba
+ * solo en la bitácora, que el dueño no lee. En rojo lo que no firmó nadie;
+ * cada nombre lleva a su bitácora.
  */
 function ElPersonal({ personas }: { personas: Persona[] }) {
   return (
@@ -203,12 +205,23 @@ function ElPersonal({ personas }: { personas: Persona[] }) {
               texto: `${plural(p.sinConexion.cantidad, "venta sin conexión", "ventas sin conexión")} bajo la lista · ${moneda.format(p.sinConexion.total)}`,
               problema: true,
             },
+            p.creditoSinAutorizar.cantidad > 0 && {
+              texto: `${plural(p.creditoSinAutorizar.cantidad, "venta sin conexión", "ventas sin conexión")} a cuenta pasado el límite · ${moneda.format(p.creditoSinAutorizar.total)}`,
+              problema: true,
+            },
             p.anuladas.cantidad > 0 && {
               texto:
                 `Anuló ${plural(p.anuladas.cantidad, "venta")} · ${moneda.format(p.anuladas.total)}` +
+                (p.anuladasSinFirma.cantidad > 0 && p.anuladasSinFirma.cantidad < p.anuladas.cantidad
+                  ? ` · ${p.anuladasSinFirma.cantidad} sin PIN`
+                  : p.anuladasSinFirma.cantidad > 0
+                    ? " · sin PIN"
+                    : "") +
                 (p.sinDevolver > 0 ? ` · ${p.sinDevolver} sin devolver la mercadería` : ""),
               problema: p.sinDevolver > 0,
             },
+            p.firmo.cantidad > 0 &&
+              `Firmó ${plural(p.firmo.cantidad, "autorización", "autorizaciones")} · ${moneda.format(p.firmo.total)}`,
             p.retiros.cantidad > 0 && {
               texto: `${plural(p.retiros.cantidad, "retiro")} tarde o bajo la base · ${moneda.format(p.retiros.total)}`,
               problema: true,

@@ -565,7 +565,10 @@ export interface components {
                      */
                     autorizado: number;
                     sinConexion: components["schemas"]["Monto"];
+                    creditoSinAutorizar: components["schemas"]["Monto"];
                     anuladas: components["schemas"]["Monto"];
+                    anuladasSinFirma: components["schemas"]["Monto"];
+                    firmo: components["schemas"]["Monto"];
                     /** @description anuladas en que la mercadería no volvió */
                     sinDevolver: number;
                     retiros: components["schemas"]["Monto"];

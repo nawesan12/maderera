@@ -298,6 +298,15 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido.ID+"/cobro", map[string]any{"partes": partes, "clave": "cobro-2"}); c != 422 || !strings.Contains(b, "PED-1000 ya está cobrado.") {
 		t.Fatalf("cobrar dos veces: %d %s", c, b)
 	}
+	// Cobrado, no se cancela con el recibo vivo: la plata quedaba en el
+	// arqueo sin destino. Con el recibo anulado, sí.
+	if c, b := pedir(t, dep, "POST", u+"pedidos/"+pedido.ID+"/cancelar", map[string]any{"motivo": "Se arrepintió"}); c != 422 ||
+		!strings.Contains(b, "Ya se cobró con el recibo REC-") {
+		t.Fatalf("cancelar cobrado: %d %s", c, b)
+	}
+	if _, err := e.pool.Exec(context.Background(), `update receipts set estado = 'anulado' where order_id = $1`, pedido.ID); err != nil {
+		t.Fatal(err)
+	}
 	// Cancelar libera lo reservado; cancelarlo de nuevo, no.
 	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido.ID+"/cancelar", map[string]any{"motivo": "Se arrepintió"}); c != 200 ||
 		!strings.Contains(b, "Pedido cancelado.") {

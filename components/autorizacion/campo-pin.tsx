@@ -1,24 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, Loader2 } from "lucide-react";
+import { KeyRound, Loader2, X } from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
 
 /** Lo que contesta Go cuando falta el PIN de un admin (internal/autorizacion). */
 export interface Autorizacion {
   motivo: "precio" | "credito" | "anular" | "presupuesto";
   monto: number;
+  /** Con motivo precio: lo que además pasa el límite de cuenta corriente. */
+  credito?: number;
   pinIncorrecto?: boolean;
   bloqueadoHasta?: string;
   sinAdmins?: boolean;
 }
 
-/** Qué se autoriza, en el idioma del mostrador. */
+/**
+ * Qué se autoriza, en el idioma del mostrador. Con el precio y el crédito a
+ * la vez van las dos cifras: el admin que firma un redondeo tiene que ver
+ * también la deuda que firma (autorizacion.QueSeAutoriza en Go).
+ */
 function queSeAutoriza(a: Autorizacion): string {
+  const credito = a.credito && a.credito > 0 ? ` · ${formatearMonto(a.credito)} a cuenta, pasado el límite` : "";
   switch (a.motivo) {
     case "precio":
     case "presupuesto":
-      return `${formatearMonto(a.monto)} abajo del precio`;
+      return `${formatearMonto(a.monto)} abajo del precio${credito}`;
     case "credito":
       return `${formatearMonto(a.monto)} a cuenta, pasado el límite`;
     case "anular":
@@ -35,9 +42,10 @@ function hora(iso: string): string {
  *
  * La venta no se corta ni abre otra pantalla: aparece un solo campo con el
  * foco puesto y, al lado, la cifra que se autoriza. El admin teclea y Enter
- * reenvía lo mismo; Esc vuelve atrás. Un PIN equivocado tiembla y lo dice, y
- * bloqueado muestra hasta cuándo: que nadie siga probando delante del
- * cliente.
+ * reenvía lo mismo; Esc o la cruz vuelven atrás (la cruz también con el
+ * campo bloqueado, que no toma el foco y no recibe el Esc). Un PIN
+ * equivocado tiembla y lo dice, y bloqueado muestra hasta cuándo: que nadie
+ * siga probando delante del cliente.
  */
 export function CampoPin({
   autorizacion,
@@ -130,6 +138,16 @@ export function CampoPin({
       >
         {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : leyenda}
       </span>
+      <button
+        type="button"
+        onClick={onCancelar}
+        aria-label="Volver"
+        className={`inline-flex shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground ${
+          grande ? "h-16 w-16" : "h-12 w-12"
+        }`}
+      >
+        <X className="h-5 w-5" />
+      </button>
     </div>
   );
 }

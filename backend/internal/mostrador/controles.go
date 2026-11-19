@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -94,18 +95,92 @@ func conPrecioDeLista(ctx context.Context, c precios.Consultador, lineas []venta
 	return nil
 }
 
+// tarifaDelCorte es la tarifa de la placa del corte (cutting_rates) para la
+// lista del cliente, con la misma búsqueda que el mostrador (corte-a-medida)
+// y la ficha del corte: primero la categoría, después el producto; sin la
+// propia de la lista, la general.
+// Nil si el corte no tiene placa o la placa no tiene tarifa.
+func tarifaDelCorte(ctx context.Context, c precios.Consultador, k *CorteDeMostrador, lista precios.Lista) (*cortes.TarifaDeCorte, error) {
+	if k == nil || len(k.Piezas) == 0 || k.VariantID == nil {
+		return nil, nil
+	}
+	var categoria, producto, medida string
+	err := c.QueryRow(ctx, `
+		SELECT coalesce(c.name, ''), p.name, coalesce(pv.label, '') FROM product_variants pv
+		JOIN products p ON p.id = pv.product_id LEFT JOIN categories c ON c.id = p.category_id
+		WHERE pv.id::text = $1`, *k.VariantID).Scan(&categoria, &producto, &medida)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	filas, err := c.Query(ctx, `
+		SELECT material, price_list_id::text, precio_por_pasada, precio_por_metro_canto
+		FROM cutting_rates WHERE activo ORDER BY material ASC`)
+	if err != nil {
+		return nil, err
+	}
+	tarifas, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (cortes.TarifaDeCorte, error) {
+		var t cortes.TarifaDeCorte
+		var pp, pc jsmath.Num
+		err := r.Scan(&t.Material, &t.PriceListID, &pp, &pc)
+		t.PrecioPorPasada, t.PrecioPorMetroCanto = pp.F(), pc.F()
+		return t, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	// La lista general no tiene tarifa propia: es la de público (la misma
+	// cuenta que el mostrador, que busca con la lista del cliente o ninguna).
+	var id *string
+	if lista.Diferenciada() {
+		id = lista.ID
+	}
+	return cortes.BuscarTarifa(tarifas, []string{categoria, producto + " " + medida, producto}, id), nil
+}
+
+// esPasada y esCanto son los renglones de servicio que agrega el corte
+// (app/mostrador/corte-a-medida.tsx): sin variante, en «pasada» o en metros
+// de «Tapacanto».
+func esPasada(l ventas.LineaDeVenta) bool { return l.VariantID == nil && l.Unidad == "pasada" }
+func esCanto(l ventas.LineaDeVenta) bool {
+	return l.VariantID == nil && l.Unidad == "m" && strings.HasPrefix(l.Descripcion, "Tapacanto")
+}
+
+// conTarifaDelCorte les da precio de lista a las pasadas y al tapacanto del
+// corte: la tarifa que cargó el admin (revisión de T3). Sin eso, el renglón
+// sin variante entraba a su propio precio, y poner la pasada a $1 dejaba
+// de cobrar el servicio entero sin PIN.
+func conTarifaDelCorte(lineas []ventas.LineaDeVenta, t *cortes.TarifaDeCorte) {
+	if t == nil {
+		return
+	}
+	for i := range lineas {
+		switch {
+		case esPasada(lineas[i]) && t.PrecioPorPasada > 0:
+			p := t.PrecioPorPasada
+			lineas[i].PrecioLista = &p
+		case esCanto(lineas[i]) && t.PrecioPorMetroCanto > 0:
+			p := t.PrecioPorMetroCanto
+			lineas[i].PrecioLista = &p
+		}
+	}
+}
+
 // faltaDelCorte vuelve a calcular lo que se cobra del corte (cortes.ACobrar)
 // y devuelve, en plata de lista, lo que los renglones de la venta no traen:
-// placas de material de menos o pasadas de menos. Acomodar a mano las piezas
-// para que cada placa quede por debajo de la mitad ya no deja de cobrar el
-// material (T3, hallazgo 11).
+// placas de material de menos, pasadas de menos o metros de tapacanto de
+// menos. Acomodar a mano las piezas para que cada placa quede por debajo de
+// la mitad ya no deja de cobrar el material (T3, hallazgo 11).
 //
 // El material son los renglones de la variante de la placa con la
 // presentación del corte (media o entera); las pasadas, los renglones sin
-// variante en «pasada». La pasada que falta se valúa al precio de la pasada
-// de la venta; sin ese renglón, no hay contra qué (una pasada sin tarifa no
-// se cobraba nunca).
-func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista precios.Lista) (float64, error) {
+// variante en «pasada»; el canto, los de «Tapacanto» en metros. Lo que falta
+// se valúa con la tarifa del corte, no con el precio que se tipeó (que podía
+// ser $1, o nada si se borró el renglón). Sin tarifa, la pasada que falta va
+// al precio de la pasada de la venta.
+func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista precios.Lista, tarifa *cortes.TarifaDeCorte) (float64, error) {
 	k := v.Corte
 	if k == nil || len(k.Piezas) == 0 {
 		return 0, nil
@@ -124,9 +199,12 @@ func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista preci
 		}
 	}
 	piezas := make([]cortes.PiezaAcortar, len(k.Piezas))
+	conCanto := make([]cortes.PiezaConCanto, len(k.Piezas))
 	for i, p := range k.Piezas {
 		piezas[i] = cortes.PiezaAcortar{LargoMm: float64(p.LargoMm), AnchoMm: float64(p.AnchoMm), Cantidad: float64(p.Cantidad),
 			RespetaVeta: float64(p.RespetaVeta), Etiqueta: p.Etiqueta, CantoLargo: float64(p.CantoLargo), CantoAncho: float64(p.CantoAncho)}
+		conCanto[i] = cortes.PiezaConCanto{LargoMm: float64(p.LargoMm), AnchoMm: float64(p.AnchoMm), Cantidad: float64(p.Cantidad),
+			CantoLargo: float64(p.CantoLargo), CantoAncho: float64(p.CantoAncho)}
 	}
 	d := cortes.DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra}
 	if k.AcomodoManual != nil {
@@ -135,15 +213,20 @@ func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista preci
 	cobro := cortes.ACobrar(d)
 
 	presentacion := presentacionDeMitad(k.Mitad)
-	placas, pasadas, precioPasada := 0.0, 0.0, 0.0
+	placas, pasadas, metros, precioPasada := 0.0, 0.0, 0.0, 0.0
 	for _, l := range v.Lineas {
 		switch {
 		case k.VariantID != nil && l.VariantID != nil && *l.VariantID == *k.VariantID && mismaPresentacion(l.Presentacion, presentacion):
 			placas += l.Cantidad
-		case l.VariantID == nil && l.Unidad == "pasada":
+		case esPasada(l):
 			pasadas += l.Cantidad
 			precioPasada = l.PrecioUnitario
+		case esCanto(l):
+			metros += l.Cantidad
 		}
+	}
+	if tarifa != nil && tarifa.PrecioPorPasada > 0 {
+		precioPasada = tarifa.PrecioPorPasada
 	}
 	falta := 0.0
 	if f := float64(cobro.Placas) - placas; f > 0 && k.VariantID != nil {
@@ -157,6 +240,11 @@ func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista preci
 	}
 	if f := float64(cobro.Pasadas) - pasadas; f > 0 {
 		falta += float64(f * precioPasada)
+	}
+	// El canto se mide en metros con dos decimales (MetrosDeTapacanto): una
+	// diferencia de redondeo no es canto que falta.
+	if f := cortes.MetrosDeTapacanto(conCanto) - metros; f > 0.005 && tarifa != nil {
+		falta += float64(f * tarifa.PrecioPorMetroCanto)
 	}
 	return ventas.ACentavos(falta), nil
 }

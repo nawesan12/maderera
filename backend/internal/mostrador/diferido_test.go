@@ -54,6 +54,16 @@ func TestRetiroTardioNoCambiaElArqueo(t *testing.T) {
 		t.Errorf("bitácora: %v", n)
 	}
 
+	// Un ingreso sin conexión de ese turno sí suma al esperado: la plata
+	// estaba en el cajón cuando se contó. Dejarlo afuera dejaba un sobrante
+	// falso para siempre; sumarlo solo puede agrandar un faltante.
+	ingreso := `{"clave":"8f2b5c1e-1d2a-4c3b-9a8e-0000000000dd","branchId":"` + e.central + `","tipo":"ingreso","monto":700,"motivo":"Cambio","hechoAt":"` + hecho + `"}`
+	_, _, b = crudo(t, ven, "POST", e.u+"/api/mostrador/caja/movimientos", ingreso)
+	igualJSON(t, "ingreso tardío", b, `{"ok":true,"nuevo":true,"sessionId":"`+turno+`"}`)
+	if c := cerrados(); c.Esperado != 6700 || c.Tardios != 2 || c.TardiosMonto != 200 {
+		t.Fatalf("el ingreso tardío: %+v", c)
+	}
+
 	// Una venta sin conexión de ese turno que pasó lo libre sin PIN se ve en
 	// el cierre, con lo que dejó de cobrar.
 	if _, err := e.pool.Exec(ctx, `insert into orders (numero, contacto_nombre, origen, branch_id, total, dejado_de_cobrar, bajo_lista_sin_autorizar, cobrada_at)
@@ -62,6 +72,14 @@ func TestRetiroTardioNoCambiaElArqueo(t *testing.T) {
 	}
 	if c := cerrados(); c.BajoLista != 1 || c.BajoListaMonto != 15000.5 {
 		t.Fatalf("bajo la lista en el cierre: %+v", c)
+	}
+	// Y la que cargó a cuenta pasada del límite, también.
+	if _, err := e.pool.Exec(ctx, `insert into orders (numero, contacto_nombre, origen, branch_id, total, credito_sin_autorizar, cobrada_at)
+		values ('PED-10', 'CF', 'mostrador', $1, 80000, 80000, now() - interval '22 hours')`, e.central); err != nil {
+		t.Fatal(err)
+	}
+	if c := cerrados(); c.CreditoSinAutorizar != 1 || c.CreditoSinAutorizarMonto != 80000 {
+		t.Fatalf("a cuenta pasado el límite en el cierre: %+v", c)
 	}
 }
 

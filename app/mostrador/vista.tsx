@@ -218,6 +218,21 @@ export function VistaMostrador({
   const [partes, setPartes] = useState<ParteDePago[] | null>(null);
 
   /*
+   * El PIN pedido y la ficha valen para la venta como estaba cuando Go los
+   * pidió. Si cambian los renglones, el cliente, el medio, el pago partido o
+   * el descuento, se van: vuelve el botón de cobrar con el total recalculado
+   * y el admin no firma una cifra vieja. (Se ajusta al renderizar, como
+   * CampoPin, y no en un efecto.)
+   */
+  const queSeCobra = JSON.stringify([lineas, cliente?.id ?? null, medio, partes, tipoDesc, valorDesc]);
+  const [cobroVisto, setCobroVisto] = useState(queSeCobra);
+  if (cobroVisto !== queSeCobra) {
+    setCobroVisto(queSeCobra);
+    if (pidePin) setPidePin(null);
+    if (ficha) setFicha(null);
+  }
+
+  /*
    * Lo fijo del ticket. Sale de lo que la pantalla ya tiene, así que el papel
    * se puede armar sin preguntarle nada a nadie.
    */

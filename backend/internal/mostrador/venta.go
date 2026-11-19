@@ -73,13 +73,19 @@ type ResultadoVenta struct {
 	DejadoDeCobrar float64 `json:"-"`
 	AutorizadoPor  string  `json:"-"`
 	BajoLista      bool    `json:"-"`
+	// CreditoSinAutorizar: lo que una venta sin conexión cargó a cuenta
+	// pasado el límite, sin PIN.
+	CreditoSinAutorizar float64 `json:"-"`
 }
 
 // Autorizacion es lo que la pantalla necesita para pedir el PIN: el motivo,
 // la cifra que se autoriza y cómo salió el último intento.
 type Autorizacion struct {
-	Motivo         string     `json:"motivo"`
-	Monto          float64    `json:"monto"`
+	Motivo string  `json:"motivo"`
+	Monto  float64 `json:"monto"`
+	// Credito: lo que además pasa el límite de cuenta corriente, cuando el
+	// mismo PIN firma el precio y el crédito. El admin ve las dos cifras.
+	Credito        float64    `json:"credito,omitempty"`
 	PinIncorrecto  bool       `json:"pinIncorrecto,omitempty"`
 	BloqueadoHasta *time.Time `json:"bloqueadoHasta,omitempty"`
 	SinAdmins      bool       `json:"sinAdmins,omitempty"`
@@ -88,7 +94,7 @@ type Autorizacion struct {
 // faltaDeAutorizacion pasa la falta del PIN a lo que contesta la venta.
 func faltaDeAutorizacion(f *autorizacion.Falta) ResultadoVenta {
 	return ResultadoVenta{Error: f.Mensaje(), Autorizacion: &Autorizacion{
-		Motivo: string(f.Motivo), Monto: f.Monto, PinIncorrecto: f.PinIncorrecto, BloqueadoHasta: f.BloqueadoHasta, SinAdmins: f.SinAdmins,
+		Motivo: string(f.Motivo), Monto: f.Monto, Credito: f.Credito, PinIncorrecto: f.PinIncorrecto, BloqueadoHasta: f.BloqueadoHasta, SinAdmins: f.SinAdmins,
 	}}
 }
 
@@ -182,6 +188,12 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	if err := conPrecioDeLista(ctx, s.pool, v.Lineas, lista); err != nil {
 		return ResultadoVenta{}, err
 	}
+	// Y el de las pasadas y el canto del corte, la tarifa de su placa.
+	tarifa, err := tarifaDelCorte(ctx, s.pool, v.Corte, lista)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	conTarifaDelCorte(v.Lineas, tarifa)
 
 	subtotal := ventas.TotalDeLaVenta(v.Lineas)
 
@@ -240,7 +252,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 
 	// Lo que se deja de cobrar: bajo la lista, el descuento tipeado y lo que
 	// el corte no trae. La escala automática no cuenta.
-	faltaCorte, err := s.faltaDelCorte(ctx, v, lista)
+	faltaCorte, err := s.faltaDelCorte(ctx, v, lista, tarifa)
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
@@ -261,12 +273,14 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	// (con el candado del cliente); si se autorizó, no.
 	revisarLimite := false
 	pideCredito := false
+	pasaElLimite := false
 	if parteCuenta > 0 && v.CustomerID != nil {
 		cr, err := cobros.Credito(ctx, q, *v.CustomerID, parteCuenta, ahora)
 		if err != nil {
 			return ResultadoVenta{}, err
 		}
-		// Una de la cola entra igual: ya sucedió.
+		pasaElLimite = !cr.Puede
+		// Una de la cola entra igual: ya sucedió (y queda marcada abajo).
 		if !cr.Puede && !sinConexion {
 			if !cr.Autorizable {
 				m := "No se puede cargar a cuenta corriente."
@@ -280,16 +294,29 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 		revisarLimite = cr.Puede
 	}
 
-	// Un solo PIN autoriza la venta entera: lo que deja de cobrar y lo que
-	// pasa el límite. La cifra que se muestra es la de la plata que no entra.
+	// Un solo PIN autoriza la venta entera, pero con las dos cifras a la
+	// vista y en la ficha: lo que deja de cobrar y lo que pasa el límite.
+	// Antes se mostraba solo lo primero, y el admin que firmaba un redondeo
+	// de $3.000 aprobaba sin verlo un millón de deuda de un moroso.
+	//
+	// Sin conexión no se pide: se marca, las dos cosas, y se avisa en el
+	// momento (Descargar). Quien corta el wifi para no llamar al admin no
+	// se ahorra que el admin se entere.
 	var firma *autorizacion.Firma
 	bajoListaSinAutorizar := false
-	if (pidePrecio || pideCredito) && sinConexion {
+	creditoSinAutorizar := 0.0
+	if sinConexion {
 		bajoListaSinAutorizar = pidePrecio
+		if pasaElLimite {
+			creditoSinAutorizar = parteCuenta
+		}
 	} else if pidePrecio || pideCredito {
 		pedidoDePIN := autorizacion.Pedido{Motivo: autorizacion.Precio, Monto: desvio.Total, Clave: v.Clave, Sucursal: v.BranchID, PIN: v.PIN, Ficha: v.Ficha}
-		if !pidePrecio {
+		switch {
+		case !pidePrecio:
 			pedidoDePIN.Motivo, pedidoDePIN.Monto = autorizacion.Credito, parteCuenta
+		case pideCredito:
+			pedidoDePIN.Credito = parteCuenta
 		}
 		firma, err = s.aut.Exigir(ctx, ses, pedidoDePIN)
 		var falta *autorizacion.Falta
@@ -317,6 +344,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 		subtotal: subtotal, descuento: descuento, motivoAutomatico: motivoAutomatico, lineas: lineas, total: total,
 		pagos: pagos, medioPago: medioPago, parteEfectivo: parteEfectivo, parteCuenta: parteCuenta, vendedor: vendedor, ahora: ahora,
 		revisarLimite: revisarLimite, huella: huella, dejado: desvio.Total, bajoLista: bajoListaSinAutorizar,
+		creditoSinAutorizar: creditoSinAutorizar,
 	}
 	if firma != nil {
 		calc.autorizadoPor = &firma.UserID
@@ -350,7 +378,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
-	r.DejadoDeCobrar, r.BajoLista = desvio.Total, bajoListaSinAutorizar
+	r.DejadoDeCobrar, r.BajoLista, r.CreditoSinAutorizar = desvio.Total, bajoListaSinAutorizar, creditoSinAutorizar
 	if firma != nil && (pidePrecio || pideCredito) {
 		r.AutorizadoPor = firma.Nombre
 	}
@@ -374,10 +402,11 @@ type ventaCalculada struct {
 	revisarLimite bool
 	// Lo de T3: la huella de la venta, lo dejado de cobrar, quién lo
 	// autorizó y si es una venta sin conexión bajo la lista sin autorizar.
-	huella        string
-	dejado        float64
-	autorizadoPor *string
-	bajoLista     bool
+	huella              string
+	dejado              float64
+	autorizadoPor       *string
+	bajoLista           bool
+	creditoSinAutorizar float64
 }
 
 func texto(s string) *string { return &s }
@@ -483,14 +512,14 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		INSERT INTO orders (numero, clave_mostrador, numero_provisorio, cobrada_at, sincronizada_at, created_at,
 		                    customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen, tipo_entrega,
 		                    subtotal, descuento, descuento_motivo, total, medio_pago, estado_pago, seller_id, notas, created_by_user_id,
-		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar)
+		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar)
 		VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), $7, $8, $9, $10, $11, 'mostrador', 'retiro',
-		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24)
+		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric)
 		RETURNING id`,
 		numero, v.Clave, v.NumeroProvisorio, v.CobradaAt, sincronizada, cobrada,
 		v.CustomerID, v.ContactoNombre, v.ContactoTelefono, v.BranchID, estado,
 		jsmath.Fijo2(c.subtotal), jsmath.Fijo2(c.descuento), motivo, jsmath.Fijo2(c.total), c.medioPago, estadoPago,
-		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista).Scan(&pedido)
+		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar)).Scan(&pedido)
 	if err != nil {
 		return ResultadoVenta{}, err
 	}

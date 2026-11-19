@@ -10,6 +10,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
 )
 
@@ -58,12 +59,18 @@ func (s *Servicio) CrearPresupuesto(ctx context.Context, ses *auth.Sesion, cabec
 			ses.Nombre, sellerID, validoHasta, ses.UserID, c.NecesitaPara).Scan(&id); err != nil {
 			return err
 		}
+		// El precio de lista de cada renglón queda guardado: al pasar a pedido
+		// se mide contra él lo que se deja de cobrar (ConvertirConEntrega).
+		listas, err := listasAlEmitir(ctx, tx, c.CustomerID, alta.Lineas)
+		if err != nil {
+			return err
+		}
 		for i, l := range alta.Lineas {
 			x := alta.Items[i]
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden)
-				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8)`,
-				id, l.VariantID, l.Descripcion, l.Unidad, x.Cantidad, x.PrecioUnitario, x.Subtotal, i); err != nil {
+				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden, precio_lista)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric)`,
+				id, l.VariantID, l.Descripcion, l.Unidad, x.Cantidad, x.PrecioUnitario, x.Subtotal, i, fijo2ONulo(listas[i])); err != nil {
 				return err
 			}
 		}
@@ -86,4 +93,18 @@ func (s *Servicio) CrearPresupuesto(ctx context.Context, ses *auth.Sesion, cabec
 		return nil, err
 	}
 	return &Resultado{Ok: conv.Ok + " Salió del presupuesto " + numero + ".", ID: conv.ID, Numero: conv.Numero}, nil
+}
+
+// listasAlEmitir es el precio de lista de hoy de cada renglón, para la
+// lista del cliente.
+func listasAlEmitir(ctx context.Context, tx pgx.Tx, cliente *string, lineas []LineaDePresupuesto) ([]*float64, error) {
+	lista, err := precios.ListaDelCliente(ctx, tx, cliente)
+	if err != nil {
+		return nil, err
+	}
+	r := make([]precios.RenglonConVariante, len(lineas))
+	for i, l := range lineas {
+		r[i] = precios.RenglonConVariante{VariantID: l.VariantID}
+	}
+	return precios.PreciosDeLista(ctx, tx, r, lista)
 }

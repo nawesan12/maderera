@@ -5631,6 +5631,7 @@ type Order struct {
 	HuellaMostrador        *string      `json:"huellaMostrador"`
 	AnulacionAutorizadaPor *string      `json:"anulacionAutorizadaPor"`
 	MercaderiaNoVolvio     bool         `json:"mercaderiaNoVolvio"`
+	CreditoSinAutorizar    jsmath.Num   `json:"creditoSinAutorizar"`
 }
 
 type OrderItem struct {
@@ -5981,17 +5982,18 @@ type Quote struct {
 }
 
 type QuoteItem struct {
-	ID             string     `json:"id"`
-	QuoteID        string     `json:"quoteId"`
-	VariantID      *string    `json:"variantId"`
-	Descripcion    string     `json:"descripcion"`
-	Unidad         string     `json:"unidad"`
-	Cantidad       jsmath.Num `json:"cantidad"`
-	PrecioUnitario jsmath.Num `json:"precioUnitario"`
-	Subtotal       jsmath.Num `json:"subtotal"`
-	Notas          *string    `json:"notas"`
-	Orden          int32      `json:"orden"`
-	Presentacion   *string    `json:"presentacion"`
+	ID             string      `json:"id"`
+	QuoteID        string      `json:"quoteId"`
+	VariantID      *string     `json:"variantId"`
+	Descripcion    string      `json:"descripcion"`
+	Unidad         string      `json:"unidad"`
+	Cantidad       jsmath.Num  `json:"cantidad"`
+	PrecioUnitario jsmath.Num  `json:"precioUnitario"`
+	Subtotal       jsmath.Num  `json:"subtotal"`
+	Notas          *string     `json:"notas"`
+	Orden          int32       `json:"orden"`
+	Presentacion   *string     `json:"presentacion"`
+	PrecioLista    *jsmath.Num `json:"precioLista"`
 }
 
 type RateLimit struct {

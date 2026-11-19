@@ -235,6 +235,9 @@ export function CorteAMedida({
         unidad: "pasada",
         cantidad: pasadasACobrar,
         precioUnitario: precioPorPasada,
+        // La tarifa es su precio de lista, como en Go (conTarifaDelCorte):
+        // bajarla a mano pinta el total y, pasado lo libre, pide el PIN.
+        precioLista: precioPorPasada,
       });
     }
 
@@ -245,6 +248,7 @@ export function CorteAMedida({
         unidad: "m",
         cantidad: metrosCanto,
         precioUnitario: precioPorMetroCanto,
+        precioLista: precioPorMetroCanto,
       });
     }
 

@@ -248,6 +248,13 @@ export interface components {
              * @description Lo que dejaron de cobrar
              */
             bajoListaMonto: number;
+            /** @description Ventas sin conexión del turno que cargaron a cuenta corriente pasado el límite sin PIN */
+            creditoSinAutorizar: number;
+            /**
+             * Format: double
+             * @description Lo que cargaron a cuenta
+             */
+            creditoSinAutorizarMonto: number;
             cierre: components["schemas"]["CajaRenglonDelCierre"][];
         };
         CajaFisica: {

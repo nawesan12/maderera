@@ -9,6 +9,7 @@ import (
 
 	"mjbj/internal/api/mostradorapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -388,7 +389,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, v VentaPedida) 
 // controlDeLaVenta es el detalle de la bitácora: lo dejado de cobrar y quién
 // lo autorizó (también va en columnas de orders, para sumarlo).
 func controlDeLaVenta(r ResultadoVenta) any {
-	if r.DejadoDeCobrar <= 0 && r.AutorizadoPor == "" && !r.BajoLista {
+	if r.DejadoDeCobrar <= 0 && r.AutorizadoPor == "" && !r.BajoLista && r.CreditoSinAutorizar <= 0 {
 		return nil
 	}
 	d := map[string]any{"dejadoDeCobrar": r.DejadoDeCobrar}
@@ -397,6 +398,9 @@ func controlDeLaVenta(r ResultadoVenta) any {
 	}
 	if r.BajoLista {
 		d["bajoListaSinAutorizar"] = true
+	}
+	if r.CreditoSinAutorizar > 0 {
+		d["creditoSinAutorizar"] = r.CreditoSinAutorizar
 	}
 	return d
 }
@@ -479,7 +483,21 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 				// inicio del panel.
 				desc += ": bajo lista sin autorizar ($" + f2(r.DejadoDeCobrar) + ")"
 			}
+			if r.CreditoSinAutorizar > 0 {
+				desc += ": a cuenta pasado el límite sin autorizar ($" + f2(r.CreditoSinAutorizar) + ")"
+			}
 			s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, desc, controlDeLaVenta(r))
+			// Y se avisa en el momento, no a fin de semana: el número
+			// provisorio lo pone el puesto, así que «sin conexión» puede ser
+			// un wifi apagado a propósito para no llamar al admin.
+			if r.BajoLista || r.CreditoSinAutorizar > 0 {
+				motivo, monto, credito := autorizacion.Precio, r.DejadoDeCobrar, r.CreditoSinAutorizar
+				if !r.BajoLista {
+					motivo, monto, credito = autorizacion.Credito, r.CreditoSinAutorizar, 0
+				}
+				s.aut.Avisar(ctx, "Venta sin conexión sin PIN", r.Numero+" de "+nombreDe(ctx, s, usuario, ses)+": "+
+					autorizacion.QueSeAutoriza(motivo, monto, credito)+".")
+			}
 		}
 		nueva := r.Nueva
 		res := ResultadoDeCola{Clave: v.Clave, Estado: "sincronizada", Numero: r.Numero, OrderID: r.OrderID, Nueva: &nueva}
@@ -495,4 +513,16 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 	}
 	out.ServidorAt = FechaJS(s.ahora())
 	return out
+}
+
+// nombreDe es el nombre de quien vendió (el de la sesión, si es quien sube).
+func nombreDe(ctx context.Context, s *Servicio, usuario string, ses *auth.Sesion) string {
+	if usuario == ses.UserID {
+		return ses.Nombre
+	}
+	var n string
+	if err := s.pool.QueryRow(ctx, `SELECT name FROM "user" WHERE id = $1`, usuario).Scan(&n); err != nil {
+		return ses.Nombre
+	}
+	return n
 }

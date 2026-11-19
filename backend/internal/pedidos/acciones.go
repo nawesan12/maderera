@@ -234,6 +234,23 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 			return fallo("Ya salió mercadería con el remito " + strings.Join(remitos, ", ") +
 				": anulalo en la ficha del pedido, así vuelve al depósito, y después cancelá.")
 		}
+		// Lo mismo con la plata (revisión de T3): desde que todo cobro del
+		// pedido sale con recibo, cancelarlo con el recibo vivo dejaba la plata
+		// en el arqueo imputada a un pedido cancelado, sin saldo a favor ni
+		// devolución, y retirarla después no decía a quién se le devolvió.
+		// Primero se anula el recibo y se devuelve la plata; recién ahí se
+		// cancela. Así el depósito, que abre Pedidos, tampoco cancela un
+		// pedido cobrado.
+		var recibos []string
+		if err := tx.QueryRow(ctx, `
+			SELECT coalesce(array_agg(numero ORDER BY numero), '{}') FROM receipts
+			WHERE order_id = $1 AND estado = 'emitido'`, id).Scan(&recibos); err != nil {
+			return err
+		}
+		if len(recibos) > 0 {
+			return fallo("Ya se cobró con el recibo " + strings.Join(recibos, ", ") +
+				": primero hay que anularlo y devolver la plata.")
+		}
 		if p.customerID != nil {
 			if devuelto, err = devolverDeuda(ctx, tx, *p.customerID, p.numero, motivo, ses.UserID); err != nil {
 				return err
@@ -420,12 +437,17 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			customerID, email, telefono, branchID, notas, sellerID *string
 			nombre, subtotal, total, estado                        string
 			validoHasta                                            *time.Time
+			// Quien lo emitió, si es un admin: sus precios ya son su firma.
+			adminID, adminNombre *string
 		}
 		err := tx.QueryRow(ctx, `
-			SELECT numero, customer_id, contacto_nombre, contacto_email, contacto_telefono, branch_id, subtotal::text, total::text,
-			       notas, seller_id, estado::text, valido_hasta
-			FROM quotes WHERE id = $1 FOR UPDATE`, quoteID).Scan(&numeroPresupuesto, &q.customerID, &q.nombre, &q.email, &q.telefono,
-			&q.branchID, &q.subtotal, &q.total, &q.notas, &q.sellerID, &q.estado, &q.validoHasta)
+			SELECT q.numero, q.customer_id, q.contacto_nombre, q.contacto_email, q.contacto_telefono, q.branch_id, q.subtotal::text, q.total::text,
+			       q.notas, q.seller_id, q.estado::text, q.valido_hasta, u.id, u.name
+			FROM quotes q
+			LEFT JOIN profiles p ON p.user_id = q.created_by_user_id AND p.role = 'staff' AND p.staff_role = 'admin'
+			LEFT JOIN "user" u ON u.id = p.user_id
+			WHERE q.id = $1 FOR UPDATE OF q`, quoteID).Scan(&numeroPresupuesto, &q.customerID, &q.nombre, &q.email, &q.telefono,
+			&q.branchID, &q.subtotal, &q.total, &q.notas, &q.sellerID, &q.estado, &q.validoHasta, &q.adminID, &q.adminNombre)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return noEsta("No se encontró el presupuesto.")
 		}
@@ -442,12 +464,12 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		}
 
 		type linea struct {
-			variantID, presentacion                     *string
+			variantID, presentacion, listaAlEmitir      *string
 			descripcion, unidad, cantidad, precio, subt string
 			orden                                       int
 		}
 		filas, err := tx.Query(ctx, `
-			SELECT variant_id, presentacion, descripcion, unidad, cantidad::text, precio_unitario::text, subtotal::text, orden
+			SELECT variant_id, presentacion, descripcion, unidad, cantidad::text, precio_unitario::text, subtotal::text, orden, precio_lista::text
 			FROM quote_items WHERE quote_id = $1 ORDER BY orden, id`, quoteID)
 		if err != nil {
 			return err
@@ -455,7 +477,7 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		var lineas []linea
 		for filas.Next() {
 			var l linea
-			if err := filas.Scan(&l.variantID, &l.presentacion, &l.descripcion, &l.unidad, &l.cantidad, &l.precio, &l.subt, &l.orden); err != nil {
+			if err := filas.Scan(&l.variantID, &l.presentacion, &l.descripcion, &l.unidad, &l.cantidad, &l.precio, &l.subt, &l.orden, &l.listaAlEmitir); err != nil {
 				filas.Close()
 				return err
 			}
@@ -492,7 +514,15 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		for i := range renglones {
 			renglones[i].PrecioLista = listas[i]
 		}
-		if PresupuestoVencido(q.estado, q.validoHasta, s.ahora()) {
+		// Lo que se deja de cobrar se mide siempre (T3, revisión): antes solo
+		// con el presupuesto vencido, y armar un presupuesto al 40 % abajo en
+		// el mostrador y pasarlo a pedido en el acto era el atajo para no
+		// llamar al admin. Uno vigente se mide contra la lista del día en que
+		// se emitió (la que prometió el precio); uno sin esa lista guardada
+		// (anterior a la 00142, o de la tienda), contra la de hoy.
+		vencido := PresupuestoVencido(q.estado, q.validoHasta, s.ahora())
+		motivo := autorizacion.Precio
+		if vencido {
 			switch ent.Precios {
 			case "actualizar":
 				// Cada renglón con lista vuelve al precio de hoy; el subtotal y
@@ -511,33 +541,46 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 				q.subtotal = jsmath.Fijo2(ventas.ACentavos(nuevo))
 				q.total = jsmath.Fijo2(ventas.ACentavos(nuevo + extra))
 			case "respetar":
-				d := ventas.DesvioDeLaVenta(renglones, 0, 0)
-				libre, err := precios.PorcentajeLibre(ctx, tx)
-				if err != nil {
-					return err
-				}
-				if !d.DentroDeLoLibre(libre) {
-					// La misma regla y el mismo umbral que el mostrador: una
-					// diferencia de diez pesos no llama al admin.
-					sucursal := ""
-					if q.branchID != nil {
-						sucursal = *q.branchID
-					}
-					firma, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Presupuesto, Monto: d.Total,
-						Clave: quoteID, Sucursal: sucursal, PIN: ent.PIN, Ficha: ent.Ficha})
-					var falta *autorizacion.Falta
-					if errors.As(err, &falta) {
-						return faltaDePIN(falta)
-					}
-					if err != nil {
-						return err
-					}
-					autorizadoPor = &firma.UserID
-					quienAutorizo = firma.Nombre
-				}
+				motivo = autorizacion.Presupuesto
 			default:
 				return plataforma.Invalido(map[string]string{"precios": "El presupuesto venció: elegí si se actualizan los precios o se respetan."})
 			}
+		} else {
+			for i := range lineas {
+				if lineas[i].listaAlEmitir != nil && renglones[i].VariantID != nil {
+					v := jsmath.Numero(*lineas[i].listaAlEmitir)
+					renglones[i].PrecioLista = &v
+				}
+			}
+		}
+		d := ventas.DesvioDeLaVenta(renglones, 0, 0)
+		libre, err := precios.PorcentajeLibre(ctx, tx)
+		if err != nil {
+			return err
+		}
+		switch {
+		case d.DentroDeLoLibre(libre):
+			// La misma regla y el mismo umbral que el mostrador: una
+			// diferencia de diez pesos no llama al admin.
+		case !vencido && q.adminID != nil:
+			// Lo emitió un admin con esos precios: ya firmó él.
+			autorizadoPor, quienAutorizo = q.adminID, *q.adminNombre
+		default:
+			sucursal := ""
+			if q.branchID != nil {
+				sucursal = *q.branchID
+			}
+			firma, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: motivo, Monto: d.Total,
+				Clave: quoteID, Sucursal: sucursal, PIN: ent.PIN, Ficha: ent.Ficha})
+			var falta *autorizacion.Falta
+			if errors.As(err, &falta) {
+				return faltaDePIN(falta)
+			}
+			if err != nil {
+				return err
+			}
+			autorizadoPor = &firma.UserID
+			quienAutorizo = firma.Nombre
 		}
 		dejado = ventas.DesvioDeLaVenta(renglones, 0, 0).Total
 
@@ -608,7 +651,7 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 				                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista)
 				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $13::numeric)`,
 				pedidoID, l.variantID, l.descripcion, l.unidad, l.cantidad, l.precio, l.subt, f.Presentacion,
-				jsmath.Texto(f.StockPorUnidad), reservas.CostoPorUnidadDeVenta(costo, f.StockPorUnidad), alicuota, l.orden, fijo2ONulo(listas[i])); err != nil {
+				jsmath.Texto(f.StockPorUnidad), reservas.CostoPorUnidadDeVenta(costo, f.StockPorUnidad), alicuota, l.orden, fijo2ONulo(renglones[i].PrecioLista)); err != nil {
 				return err
 			}
 		}

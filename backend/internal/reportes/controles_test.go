@@ -12,7 +12,8 @@ import (
 
 // Lo que el dueño ve del personal (T3): sin PIN cargado se avisa, y cada
 // persona con lo que dejó de cobrar (autorizado o no), sus ventas sin
-// conexión bajo la lista, lo que anuló y sus retiros tardíos.
+// conexión bajo la lista o a cuenta pasado el límite, lo que anuló (y cuánto
+// sin PIN), sus retiros tardíos y, de cada admin, lo que firmó.
 func TestControlesDelPersonal(t *testing.T) {
 	pool := pruebas.Base(t)
 	ctx := context.Background()
@@ -41,6 +42,8 @@ func TestControlesDelPersonal(t *testing.T) {
 		('PED-2', 'B', 'mostrador', 1000, 40, null, 'juan')`)
 	exec(`insert into orders (numero, contacto_nombre, origen, total, dejado_de_cobrar, bajo_lista_sin_autorizar, created_by_user_id) values
 		('PED-3', 'C', 'mostrador', 700, 250, true, 'juan')`)
+	exec(`insert into orders (numero, contacto_nombre, origen, total, credito_sin_autorizar, created_by_user_id) values
+		('PED-5', 'E', 'mostrador', 90000, 90000, 'juan')`)
 	var anulada string
 	_ = pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, origen, estado, total, mercaderia_no_volvio, created_by_user_id)
 		values ('PED-4', 'D', 'mostrador', 'cancelado', 5000, true, 'juan') returning id`).Scan(&anulada)
@@ -49,12 +52,18 @@ func TestControlesDelPersonal(t *testing.T) {
 	exec(`insert into cash_movements (session_id, tipo, monto, creado_por, declarado_at) values ($1, 'retiro', -800, 'juan', now() - interval '1 day')`, turno)
 
 	c, err = s.ControlesDelPersonal(ctx, ahora)
-	if err != nil || c.SinPIN || len(c.Personas) != 1 {
+	if err != nil || c.SinPIN || len(c.Personas) != 2 {
 		t.Fatalf("con datos: %+v %v", c, err)
 	}
+	// Juan primero: lo que no firmó nadie va arriba.
 	p := c.Personas[0]
 	if p.Nombre != "Juan" || p.DejadoDeCobrar != 590 || p.Autorizado != 300 || p.SinConexion != (Monto{250, 1}) ||
-		p.Anuladas != (Monto{5000, 1}) || p.SinDevolver != 1 || p.Retiros != (Monto{800, 1}) {
+		p.CreditoSinAutorizar != (Monto{90000, 1}) || p.Anuladas != (Monto{5000, 1}) || p.AnuladasSinFirma != (Monto{5000, 1}) ||
+		p.SinDevolver != 1 || p.Retiros != (Monto{800, 1}) {
 		t.Fatalf("Juan: %+v", p)
+	}
+	// Y Marta, con lo que firmó: un PIN aprendido firma a su nombre.
+	if m := c.Personas[1]; m.Nombre != "Marta" || m.Firmo != (Monto{300, 1}) {
+		t.Fatalf("Marta: %+v", m)
 	}
 }

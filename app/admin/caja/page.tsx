@@ -236,10 +236,16 @@ export default async function CajaPage({
                           </span>
                         )}
                         {/* Las ventas sin conexión del turno que pasaron lo
-                            libre sin PIN: ya pasaron, se ven en rojo. */}
+                            libre o el límite de cuenta corriente sin PIN: ya
+                            pasaron, se ven en rojo. */}
                         {t.bajoLista > 0 && (
                           <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
                             {t.bajoLista} sin conexión bajo la lista · {formatearMonto(t.bajoListaMonto)}
+                          </span>
+                        )}
+                        {t.creditoSinAutorizar > 0 && (
+                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
+                            {t.creditoSinAutorizar} sin conexión a cuenta pasado el límite · {formatearMonto(t.creditoSinAutorizarMonto)}
                           </span>
                         )}
                       </td>

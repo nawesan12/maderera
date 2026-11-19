@@ -60,12 +60,23 @@ func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p Presupue
 			asesor, vendedor, valido, ses.UserID).Scan(&id); err != nil {
 			return err
 		}
+		// El precio del navegador se guarda como lo que se presupuestó, pero
+		// al lado queda el de la lista: pasar el presupuesto a pedido mide
+		// contra él lo que se deja de cobrar y, pasado lo libre, pide el PIN.
+		// Sin eso, «Presupuesto» en vez de «Cobrar» esquivaba el control.
+		lista, err := ListaDelCliente(ctx, tx, p.CustomerID)
+		if err != nil {
+			return err
+		}
+		if err := conPrecioDeLista(ctx, tx, p.Lineas, lista); err != nil {
+			return err
+		}
 		for i, l := range p.Lineas {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, presentacion, orden)
-				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9)`,
+				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, presentacion, orden, precio_lista)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9, $10::numeric)`,
 				id, l.VariantID, l.Descripcion, l.Unidad, jsmath.Fijo2(l.Cantidad), jsmath.Fijo2(l.PrecioUnitario),
-				jsmath.Fijo2(jsmath.Round(float64(float64(l.Cantidad*l.PrecioUnitario)*100))/100), l.Presentacion, i); err != nil {
+				jsmath.Fijo2(jsmath.Round(float64(float64(l.Cantidad*l.PrecioUnitario)*100))/100), l.Presentacion, i, fijo2ONulo(l.PrecioLista)); err != nil {
 				return err
 			}
 		}

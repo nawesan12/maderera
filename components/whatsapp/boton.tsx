@@ -42,6 +42,7 @@ export function BotonWhatsapp({
   tamano = "normal",
   className,
   "aria-label": etiqueta,
+  deshabilitado = false,
 }: {
   enlace: string;
   /** El texto. Con `tamano="icono"` no va, y entonces `aria-label` es obligatorio. */
@@ -50,10 +51,16 @@ export function BotonWhatsapp({
   tamano?: keyof typeof TAMANOS;
   className?: string;
   "aria-label"?: string;
+  /**
+   * Sin enlace: lo que se mandaría está mal (la cantidad de la consulta,
+   * comité final M19). Un `<a>` sin `href` no se activa ni con el teclado.
+   */
+  deshabilitado?: boolean;
 }) {
   return (
     <a
-      href={enlace}
+      href={deshabilitado ? undefined : enlace}
+      aria-disabled={deshabilitado || undefined}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={etiqueta}
@@ -61,6 +68,7 @@ export function BotonWhatsapp({
         "inline-flex items-center justify-center rounded-[10px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-whatsapp-boton",
         VARIANTES[variante],
         TAMANOS[tamano],
+        deshabilitado && "pointer-events-none opacity-50",
         className,
       )}
     >

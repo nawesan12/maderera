@@ -10,7 +10,7 @@ import { useTienda } from "@/lib/tienda-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
-import { cantidadDeConsulta, cantidadInvalida, enlaceDeConsulta, textoDeConsulta } from "@/lib/catalogo/consulta";
+import { cantidadDeConsulta, enlaceDeConsulta, problemaDeCantidad, textoDeConsulta } from "@/lib/catalogo/consulta";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
@@ -480,7 +480,10 @@ function ConsultaDeLaMedida({
   // Con media placa se cuentan medias: el sufijo lo dice, para que «12» no
   // se lea como doce placas enteras.
   const sufijo = presentacion ? "medias" : formatearUnidad(unidad);
-  const invalida = cantidadInvalida(cantidadTexto, unidad);
+  // Lo inválido se marca y no se manda (comité final, M19): antes «15000»
+  // salía como 9999 y «2,5» placas salía sin cantidad, sin que nadie lo viera.
+  const problema = problemaDeCantidad(cantidadTexto, unidad);
+  const invalida = problema !== null;
 
   return (
     <>
@@ -521,16 +524,27 @@ function ConsultaDeLaMedida({
             placeholder="Cant."
             aria-label={`Cantidad, en ${presentacion ? "medias placas" : formatearUnidadPlural(unidad)}`}
             aria-invalid={invalida || undefined}
+            aria-describedby={invalida ? "problema-de-cantidad" : undefined}
             className="tabular h-full w-full min-w-0 bg-transparent pl-3.5 text-[17px] font-semibold outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-texto-3"
           />
           <span aria-hidden className="text-[14.5px] text-texto-2">
             {sufijo}
           </span>
         </label>
-        <BotonWhatsapp enlace={enlace(texto)} tamano="grande" className="min-w-0 flex-1 px-3">
+        <BotonWhatsapp
+          enlace={enlace(texto)}
+          tamano="grande"
+          deshabilitado={invalida}
+          className="min-w-0 flex-1 px-3"
+        >
           <span className="truncate">Consultar precio</span>
         </BotonWhatsapp>
       </div>
+      {problema && (
+        <p id="problema-de-cantidad" role="alert" className="-mt-1 text-[14.5px] text-acento-texto">
+          {problema}
+        </p>
+      )}
     </>
   );
 }

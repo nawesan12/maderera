@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   TOPE_DE_CANTIDAD,
   cantidadConUnidad,
   cantidadDeConsulta,
   cantidadInvalida,
+  problemaDeCantidad,
   enlaceDeConsulta,
   textoDeConsulta,
 } from "@/lib/catalogo/consulta";
@@ -40,8 +42,19 @@ describe("cantidad de la consulta", () => {
     expect(cantidadDeConsulta("20 m²", "metro_cuadrado")).toBe(20);
   });
 
-  it("topea en 9999", () => {
-    expect(cantidadDeConsulta("150000", "placa")).toBe(TOPE_DE_CANTIDAD);
+  it("arriba de 9999 no hay cantidad, y el campo lo dice", () => {
+    expect(cantidadDeConsulta(String(TOPE_DE_CANTIDAD), "placa")).toBe(TOPE_DE_CANTIDAD);
+    expect(cantidadDeConsulta("150000", "placa")).toBeNull();
+    expect(cantidadInvalida("150000", "placa")).toBe(true);
+    expect(problemaDeCantidad("150000", "placa")).toBe("Hasta 9.999.");
+  });
+
+  it("dice qué tiene de malo lo tipeado", () => {
+    expect(problemaDeCantidad("", "placa")).toBeNull();
+    expect(problemaDeCantidad("12", "placa")).toBeNull();
+    expect(problemaDeCantidad("doce", "placa")).toBe("Poné un número.");
+    expect(problemaDeCantidad("0", "placa")).toBe("Poné un número.");
+    expect(problemaDeCantidad("2,5", "placa")).toBe("Sin decimales.");
   });
 
   it("singular y plural, con la unidad dicha en una oración", () => {
@@ -87,5 +100,13 @@ describe("enlace de wa.me", () => {
     expect(crudo).toContain("%C2%B2"); // ²
     expect(crudo).toContain("%26"); // &
     expect(decodeURIComponent(crudo)).toBe(texto);
+  });
+});
+
+describe("el campo de la cantidad en la ficha", () => {
+  const ficha = readFileSync(new URL("../components/catalogo/selector-variante.tsx", import.meta.url), "utf8");
+  it("con una cantidad que no sirve no manda el mensaje y dice por qué", () => {
+    expect(ficha).toContain("deshabilitado={invalida}");
+    expect(ficha).toMatch(/role="alert"[^>]*>\s*\{problema\}/);
   });
 });

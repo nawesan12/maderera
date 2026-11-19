@@ -530,7 +530,8 @@ export function Navbar({
                 catálogo y el 404, y quien estaba en la portada, una ficha o
                 el corte no tenía cómo llamarlo ni retomar la charla. En el
                 celular vive en el menú. Entre lg y 2xl la barra no da para la
-                etiqueta: queda el personaje, con su nombre en aria-label. */}
+                etiqueta entera, pero el personaje solo no decía qué era
+                (comité final): ahí va «Ayuda», que entra. */}
             <button
               type="button"
               aria-haspopup="dialog"
@@ -541,7 +542,10 @@ export function Navbar({
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-naranja-claro">
                 <PersonajeAsistente className="h-4 w-4 text-acento-sobre-claro" />
               </span>
-              <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] 2xl:inline">
+              <span aria-hidden className="whitespace-nowrap text-[13px] font-bold uppercase tracking-[0.045em] 2xl:hidden">
+                Ayuda
+              </span>
+              <span aria-hidden className="hidden text-[13px] font-bold uppercase tracking-[0.045em] 2xl:inline">
                 {ETIQUETA_ASISTENTE}
               </span>
             </button>

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
-import { MessageCircle, Printer, Receipt } from "lucide-react";
+import { Printer, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { clienteDeLaSesion, miCuentaCorriente } from "@/lib/dal/cuenta";
 import { datosParaTransferir } from "@/lib/dal/pagos";
 import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 export const metadata: Metadata = { title: "Cuenta corriente" };
 
@@ -35,15 +36,9 @@ export default async function CuentaCorrientePage({
           después, dentro de un límite acordado. Si te interesa, escribinos y lo
           vemos.
         </p>
-        <a
-          href={whatsapp}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
-        >
-          <MessageCircle className="h-4 w-4" />
+        <BotonWhatsapp enlace={whatsapp} className="mt-5">
           Consultar por cuenta corriente
-        </a>
+        </BotonWhatsapp>
       </div>
     );
   }

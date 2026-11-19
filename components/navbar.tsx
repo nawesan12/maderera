@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { PersonajeAsistente } from "@/components/asistente/personaje";
+import { ETIQUETA_ASISTENTE, abrirAsistente } from "@/lib/asistente/abrir";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { useEstado } from "@/lib/estado-context";
@@ -432,7 +434,7 @@ export function Navbar({
                         rel="noopener noreferrer"
                         className="group/ayuda mt-auto flex items-center gap-3 rounded-xl border border-linea-suave bg-card px-3 py-3 transition-colors hover:border-accion/40"
                       >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#25D366]/12 text-[#128C4A]">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-whatsapp-boton text-white">
                           <MessageCircle className="h-[17px] w-[17px]" />
                         </span>
                         <span className="min-w-0">
@@ -519,6 +521,27 @@ export function Navbar({
 
           {/* Acciones */}
           <div className="ml-auto flex items-center gap-2">
+            {/* El asistente en la barra de escritorio (corrección de T5):
+                sin el flotante, en una computadora solo se abría desde el
+                catálogo y el 404, y quien estaba en la portada, una ficha o
+                el corte no tenía cómo llamarlo ni retomar la charla. En el
+                celular vive en el menú. Entre lg y 2xl la barra no da para la
+                etiqueta: queda el personaje, con su nombre en aria-label. */}
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              aria-label={ETIQUETA_ASISTENTE}
+              onClick={abrirAsistente}
+              className="hidden h-10 items-center gap-2 rounded-[11px] px-2 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto lg:flex"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-naranja-claro">
+                <PersonajeAsistente className="h-4 w-4 text-acento-sobre-claro" />
+              </span>
+              <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] 2xl:inline">
+                {ETIQUETA_ASISTENTE}
+              </span>
+            </button>
+
             <ThemeToggle />
 
             <Suspense fallback={<SesionDeEscritorio sesion={undefined} />}>
@@ -627,6 +650,25 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Y además
                   </p>
+                  {/* El asistente, como una fila más. Se abre recién cuando el
+                      cajón terminó de irse (200 ms): el cajón le devuelve el
+                      foco a la hamburguesa al desmontarse, y si el asistente
+                      ya estaba abierto le sacaba el foco del campo. Así, al
+                      cerrar el asistente el foco vuelve a la hamburguesa. */}
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setTimeout(abrirAsistente, 220);
+                    }}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-bold uppercase tracking-[0.045em] hover:bg-sitio-alt"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-naranja-claro">
+                      <PersonajeAsistente className="h-[18px] w-[18px] text-acento-sobre-claro" />
+                    </span>
+                    {ETIQUETA_ASISTENTE}
+                  </button>
                   {lasHerramientas.map((h) => (
                     <Link
                       key={h.href}

@@ -7,6 +7,8 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useTienda } from "@/lib/tienda-context";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
+import { EntradaAlAsistente } from "@/components/asistente/entrada";
 
 export interface CategoriaFiltro {
   slug: string;
@@ -109,6 +111,11 @@ export function BarraCatalogo({
           aria-label="Buscar productos"
         />
       </div>
+
+      {/* El asistente al lado del buscador: es donde está quien no sabe cómo
+          se llama lo que busca. En el celular va en su propio renglón, abajo
+          de todo, para no robarle ancho al campo. */}
+      <EntradaAlAsistente className="order-last w-full justify-center sm:order-none sm:w-auto" />
 
       <div className="flex items-center gap-2">
         <label
@@ -339,7 +346,7 @@ export function PanelCategorias({
       <div className="mt-[22px] rounded-xl bg-oscuro-marca p-4 text-white">
         <p className="text-[15px] font-semibold">¿No encontrás la medida?</p>
         <p className="mt-1.5 text-[13.5px] leading-normal text-white/70">
-          Lo cortamos en el aserradero. Mandanos el despiece y te cotizamos.
+          Lo cortamos {DONDE_SE_CORTA.frase}. Mandanos el despiece y te cotizamos.
         </p>
         <Link
           href="/corte"

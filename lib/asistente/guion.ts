@@ -1,3 +1,5 @@
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
+import { CUENTA_PROFESIONAL_EN_EL_ASISTENTE } from "@/lib/profesionales/beneficios";
 /**
  * El guion del asistente del sitio.
  *
@@ -131,7 +133,7 @@ const PASOS: PasoDelGuion[] = [
   {
     id: "cortes",
     mensaje:
-      "Sí. Cortamos placas a medida en el aserradero: pasanos el despiece con las medidas en milímetros y te lo preparamos. Si son muchas piezas, lo más cómodo es mandarlo por WhatsApp y te cotizamos el corte junto con el material.",
+      `Sí. Cortamos placas a medida ${DONDE_SE_CORTA.frase}: pasanos el despiece con las medidas en milímetros y te lo preparamos. Si son muchas piezas, lo más cómodo es mandarlo por WhatsApp y te cotizamos el corte junto con el material.`,
     opciones: [
       { texto: "Mandar el despiece", va: "persona" },
       { texto: "Calcular cuántas placas necesito", va: "calc-placas" },
@@ -157,8 +159,7 @@ const PASOS: PasoDelGuion[] = [
   },
   {
     id: "profesionales",
-    mensaje:
-      "Si sos carpintero, constructor, arquitecto o tenés una empresa, podés pedir la cuenta profesional: tenés precios de lista propia, cuenta corriente y descuentos por cantidad. Se pide desde el portal y lo aprobamos nosotros.",
+    mensaje: CUENTA_PROFESIONAL_EN_EL_ASISTENTE,
     accion: { tipo: "ir", ruta: "/profesionales" },
     opciones: [],
   },

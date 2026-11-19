@@ -199,6 +199,20 @@ func TestAltaColaYFicha(t *testing.T) {
 		t.Errorf("el plano de la ficha no es el del motor")
 	}
 
+	// Con el estado que vio: si ya cambió, 409 y no se avanza un paso de más
+	// (el «Empezar» de una pantalla vieja daba por terminado un corte que
+	// estaba en la máquina).
+	if code, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar?desde=en-proceso", nil); code != 409 || !strings.Contains(b, "ya estaba en la cola") {
+		t.Errorf("desde viejo: %d %s", code, b)
+	}
+	if code, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar?desde=en-cola", nil); code != 200 || !strings.Contains(b, "quedó en la máquina") {
+		t.Errorf("desde al día: %d %s", code, b)
+	}
+	if code, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar?desde=en-cola", nil); code != 409 || !strings.Contains(b, "ya estaba en la máquina") {
+		t.Errorf("segundo toque: %d %s", code, b)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-cola' where id = $1`, id)
+
 	// La cola: avanza hasta retirado y ahí se frena.
 	for _, quiere := range []string{"quedó en la máquina", "quedó terminado", "quedó retirado", "El corte ya está retirado."} {
 		_, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar", nil)

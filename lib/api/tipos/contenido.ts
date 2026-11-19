@@ -1655,7 +1655,7 @@ export interface operations {
             content: {
                 "application/json": {
                     nombre: string;
-                    email: string;
+                    email?: string;
                     telefono?: string;
                     motivo: string;
                     mensaje: string;

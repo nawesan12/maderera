@@ -1994,3 +1994,31 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   respuesta» de a 30 (`espera`), monto sumado en la base, y la tarea diaria
   `vencer-presupuestos` vence los enviados un mes después de su validez.
   `/catalogo/productos` acepta `limite` y `sinFotos`.
+
+## T5 del comité: el sitio con cara propia (18/11, rama `carril-c`)
+
+- **Migración 00150**: saca de `product_images` las fotos de banco (las 8
+  portadas, las 3 viejas de la 00105 y la «madera» del sembrado). Copia en
+  `product_images_rubro_00150`; el Down la devuelve con su id y su orden.
+  `db/migracion_00150_test.go` la corre sobre datos. **Antes de aplicarla en
+  producción**, contar con la consulta del encabezado de la migración las
+  filas `/fotos/%` creadas después del 18/11: esas no vinieron de la 00105.
+- **La migración encola `next.revalidar`** (etiqueta `catalogo`, `/`,
+  `/catalogo`, `/moldava`) si borró algo: sin eso las fichas armadas de
+  antemano seguirían con la foto vieja. Hace falta el worker corriendo con
+  `REVALIDAR_SECRETO`; si no está, revalidar a mano por
+  `/api/interno/revalidar`.
+- **Sin fotos, el feed de Merchant sale vacío.** `lib/merchant.ts` saltea
+  el producto sin foto (Merchant no acepta una imagen de relleno), y desde la
+  00150 casi ninguno tiene. **Condición para prender la tienda**: cargar las
+  fotos reales; el panel de productos ya cuenta los «sin foto». El JSON-LD sí
+  tiene respaldo: sin foto usa la placa de `/og/producto/<slug>`.
+- **Contacto**: `email` dejó de ser obligatorio en el contrato. Go pide
+  WhatsApp o correo (`contacto`), el teléfono que `whatsapp.AWaId` entiende
+  (acepta «590-3118» y rechaza lo que no se puede contestar), y el
+  limitador cuenta por IP y por correo o por el `wa_id` del teléfono.
+- **Pendiente de la clienta**: dónde se cortan las placas
+  (`DONDE_SE_CORTA` en `lib/sucursales.ts`).
+- **Sin verificar a ojo** (no hay servidor en el carril): la placa en
+  celular y escritorio, en claro y en oscuro; la veta al 7 %; la hoja del
+  asistente en el celular. Va para el carril que verifica.

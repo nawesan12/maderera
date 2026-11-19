@@ -7,7 +7,6 @@ import {
   Clock,
   Mail,
   MapPin,
-  MessageCircle,
   Navigation,
   Phone,
 } from "lucide-react";
@@ -18,6 +17,7 @@ import { telefonoParaMarcar } from "@/lib/formato";
 import { REDES } from "@/lib/empresa";
 import { metadatosDePagina, sucursalJsonLd } from "@/lib/seo";
 import { SUCURSALES, sucursalPublicada } from "@/lib/sucursales";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /**
  * La ficha de cada sucursal.
@@ -179,7 +179,7 @@ export default async function SucursalPage({
               href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
               className={buttonVariants({
                 className:
-                  "h-[46px] rounded-[9px] bg-accion px-[18px] text-[15px] font-semibold text-white hover:bg-accion-hover",
+                  "h-11 rounded-[10px] bg-accion px-5 text-[15px] font-semibold text-white hover:bg-accion-hover",
               })}
             >
               <Phone className="mr-2 h-4 w-4" />
@@ -189,20 +189,14 @@ export default async function SucursalPage({
               href={comoLlegar}
               target="_blank"
               rel="noopener noreferrer"
-              className={buttonVariants({ variant: "outline", className: "h-[46px]" })}
+              className={buttonVariants({ variant: "outline", className: "h-11 rounded-[10px] px-5 text-[15px]" })}
             >
               <Navigation className="mr-2 h-4 w-4" />
               Cómo llegar
             </a>
-            <a
-              href={`https://wa.me/${sucursal.whatsapp.replace(/\D/g, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ className: "h-[46px]" })}
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
+            <BotonWhatsapp enlace={`https://wa.me/${sucursal.whatsapp.replace(/\D/g, "")}`}>
               WhatsApp
-            </a>
+            </BotonWhatsapp>
           </div>
 
           {sucursal.foto && (

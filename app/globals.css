@@ -77,6 +77,8 @@
   --color-naranja-claro: var(--naranja-claro);
   --color-naranja-tenue: var(--naranja-tenue);
   --color-verde-whatsapp: var(--verde-whatsapp);
+  --color-whatsapp-boton: var(--whatsapp-boton);
+  --color-whatsapp-boton-hover: var(--whatsapp-boton-hover);
   --color-rojo-oferta: var(--rojo-oferta);
   --color-saldo-debe: var(--saldo-debe);
   --color-saldo-favor: var(--saldo-favor);
@@ -179,6 +181,12 @@
   --naranja-claro: #fdeada;
   --naranja-tenue: #fdf5ec;
   --verde-whatsapp: #2a7247; /* era #2f7d4f: 4,16:1 sobre su propio fondo claro */
+  /* El fondo de todo botón de WhatsApp, el flotante incluido (hallazgo 27,
+     18/11/2026). No es el verde de la marca de WhatsApp: #25D366 con texto
+     blanco da 1,9:1. Este da 5,8:1 y no cambia en oscuro, como `--accion`:
+     el tono que deja leer el blanco encima es uno solo. */
+  --whatsapp-boton: #2a7247;
+  --whatsapp-boton-hover: #22603b;
   --rojo-oferta: #a52a1a;
 
   /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
@@ -1480,7 +1488,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 }
 
 /* Botones de acción, inflados. */
-:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca) {
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca) {
   background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.17), rgb(0 0 0 / 0.07));
   box-shadow: var(--relieve-brillo), var(--relieve-sombra);
   text-shadow: 0 1px 0 rgb(0 0 0 / 0.16);
@@ -1490,17 +1498,17 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
     background-color 160ms ease;
 }
 
-:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca):hover {
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca):hover {
   transform: translateY(-1px);
 }
 
-:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca):is(:active, [aria-pressed="true"], [aria-selected="true"]) {
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca):is(:active, [aria-pressed="true"], [aria-selected="true"]) {
   background-image: linear-gradient(to bottom, rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.05));
   box-shadow: var(--relieve-hundido);
   transform: translateY(1px);
 }
 
-:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary):disabled {
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary):disabled {
   box-shadow: none;
   transform: none;
 }
@@ -1510,20 +1518,20 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
    también llevan `.border`: sin excluirlos, el degradado claro tapaba el
    naranja y el texto blanco quedaba ilegible. Los desplegables van hundidos,
    como los campos. */
-:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca, .border-transparent, [class*="border-white"], [data-slot="select-trigger"]):not([aria-pressed="true"]) {
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca, .border-transparent, [class*="border-white"], [data-slot="select-trigger"]):not([aria-pressed="true"]) {
   border-color: transparent;
   background-image: linear-gradient(to bottom, var(--card), var(--hundida));
   box-shadow: var(--relieve-suave);
 }
 
-:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca, .border-transparent, [class*="border-white"], [data-slot="select-trigger"]):active {
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca, .border-transparent, [class*="border-white"], [data-slot="select-trigger"]):active {
   box-shadow: inset 0 2px 4px rgb(60 50 40 / 0.16);
   background-image: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca),
-  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-primary, .bg-oscuro-marca):hover {
+  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca),
+  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca):hover {
     transition: none;
     transform: none;
   }
@@ -1596,19 +1604,18 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   background-color: var(--accion);
 }
 
-/* En /corte (la página se marca con `data-sin-flotantes`) el WhatsApp
-   flotante sobra —la página tiene su propio «Pedir por WhatsApp»— y en el
-   teléfono los dos botones tapaban el canto y la veta de la pieza. Va en CSS
-   y no con `usePathname`: leer la ruta en el layout frena el prerender de
+/* En /corte (la página se marca con
+   `data-sin-flotantes`) el WhatsApp flotante sobra: cada una tiene su propio
+   botón de WhatsApp con el texto ya armado, y en el teléfono el flotante
+   tapaba el canto de la pieza o «Consultar precio por WhatsApp». Va en CSS y
+   no con `usePathname`: leer la ruta en el layout frena el prerender de
    /corte/c/[token]. */
-body:has([data-sin-flotantes]) .flotante-whatsapp {
+/* En la ficha, solo mientras el selector se ve: lo maneja `ZonaSinFlotante`,
+   porque ahí el botón de la ficha queda arriba y al bajar hace falta el
+   flotante. */
+body:has([data-sin-flotantes]) .flotante-whatsapp,
+html[data-zona-sin-flotante] .flotante-whatsapp {
   display: none;
-}
-
-@media (max-width: 639px) {
-  body:has([data-sin-flotantes]) .flotante-asistente {
-    display: none;
-  }
 }
 
 /* --- El panel en el teléfono (18/11/2026) ---------------------------------
@@ -1642,7 +1649,7 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
 /* Salvo lo que pidió quedarse en una línea: importes, códigos, la píldora
    de estado y lo que se corta con puntos suspensivos. */
 .panel main table:not([data-tabla="fija"]) :is(td, th):not(.whitespace-nowrap, .truncate, .tabular),
-.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, .whitespace-nowrap, .truncate, [class*="rounded-full"], code, kbd, button, a[class*="h-"]) {
+.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, .codigo, .whitespace-nowrap, .truncate, [class*="rounded-full"], code, kbd, button, a[class*="h-"]) {
   white-space: normal !important;
 }
 
@@ -1682,11 +1689,27 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
     border: 0;
     text-align: right;
     white-space: normal;
-    overflow-wrap: anywhere;
+    /* `break-word`, no `anywhere`: lo mismo que en `table[data-apilada]`
+       (abajo). En el teléfono la tabla se apila por esta media query y
+       `tablas-apilables.tsx` no la marca, así que sin esto «PED-1086»
+       seguía saliendo «PED-» / «1086» justo donde más se usa. */
+    overflow-wrap: break-word;
+  }
+  /* Los números y los códigos no se parten nunca: se encoge el rótulo. */
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) > :is(.tabular, .codigo),
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td.tabular, td.codigo) {
+    white-space: nowrap !important;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) > * {
+    min-width: 0;
   }
   :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td[data-label]:not([data-label=""])::before {
     content: attr(data-label);
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     max-width: 45%;
     text-align: left;
     font-size: 13px;
@@ -1741,11 +1764,28 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
   border: 0;
   text-align: right;
   white-space: normal;
-  overflow-wrap: anywhere;
+  /* `break-word` y no `anywhere`: con `anywhere` la celda se podía achicar
+     hasta una letra y partía «PED-1086» en «PED-» / «1086» y «−10%» en «−1» /
+     «0%». Así una palabra solo se parte si no entra sola en el renglón. */
+  overflow-wrap: break-word;
+}
+/* Los números y los códigos no se parten nunca: se encoge el rótulo. */
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) > :is(.tabular, .codigo),
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td.tabular, td.codigo) {
+  /* `!important`: la regla de arriba que deja bajar el texto en las tablas
+     del panel también lo es. */
+  white-space: nowrap !important;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) > * {
+  min-width: 0;
 }
 :is(.panel, [data-slot="dialog-content"]) table[data-apilada] td[data-label]:not([data-label=""])::before {
   content: attr(data-label);
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   max-width: 45%;
   text-align: left;
   font-size: 13px;
@@ -1810,13 +1850,6 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
   text-align: left;
 }
 
-/* En /corte, hasta que hay tres columnas, la barra fija de abajo lleva el
-   WhatsApp: el asistente flotante la tapaba. */
-@media (max-width: 1023px) {
-  body:has([data-sin-flotantes]) .flotante-asistente {
-    display: none;
-  }
-}
 
 /* --- La firma del panel (18/11/2026) --------------------------------------
    «Hacé las interfaces del admin menos genéricas.» Un solo título para todas
@@ -1900,4 +1933,30 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
   letter-spacing: 0.04em;
   color: var(--texto-2, var(--muted-foreground));
   white-space: nowrap;
+}
+
+/* --- La placa de producto (hallazgo 25, 18/11/2026) ----------------------
+   Lo que ocupa el lugar de la foto mientras el producto no tenga una propia.
+   Los colores los pone el componente (lib/catalogo/placa.ts, donde una prueba
+   mide el contraste); acá va el cambio de tema y la veta.
+
+   La veta es un solo SVG, escrito una vez como data-URI: el navegador lo
+   decodifica una vez para todas las tarjetas, en vez de un filtro por placa.
+   `feTurbulence` con la frecuencia muy baja a lo ancho y alta a lo alto da
+   rayas largas; la opacidad es baja a propósito (7 %): tiene que sugerir
+   madera, no parecer una foto de madera. */
+.placa {
+  background-color: var(--placa-fondo);
+  color: var(--placa-texto);
+}
+.dark .placa {
+  background-color: var(--placa-fondo-oscuro);
+  color: var(--placa-texto-oscuro);
+}
+.placa-veta {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' preserveAspectRatio='none'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.09' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.15 0 0 0 0 0.07 0 0 0 -1.6 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)' opacity='0.07'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+}
+.dark .placa-veta {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' preserveAspectRatio='none'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.09' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.92 0 0 0 0 0.8 0 0 0 -1.6 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)' opacity='0.06'/%3E%3C/svg%3E");
 }

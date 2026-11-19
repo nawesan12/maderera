@@ -3,6 +3,7 @@ package contenido
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -13,6 +14,7 @@ import (
 	"mjbj/internal/email"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/whatsapp"
 )
 
 // Lo que queda del sitio público: los documentos técnicos, las lecturas de
@@ -232,6 +234,13 @@ type Consulta struct {
 type ResultadoConsulta string
 
 // validar sigue el esquema de zod del TS, con los mismos mensajes.
+//
+// **WhatsApp o correo, alguno de los dos** (hallazgo 47, 18/11/2026). El
+// formulario pedía el correo sí o sí y dejaba el WhatsApp como opcional, al
+// revés de como escribe la gente de acá: el carpintero contesta por WhatsApp y
+// el correo lo tiene para la AFIP. Si están los dos se validan los dos; el
+// error de que falten los dos va en `contacto`, que el formulario muestra una
+// sola vez debajo del par.
 func (c *Consulta) validar() error {
 	c.Nombre, c.Email, c.Telefono, c.Mensaje = strings.TrimSpace(c.Nombre), strings.TrimSpace(c.Email),
 		strings.TrimSpace(c.Telefono), strings.TrimSpace(c.Mensaje)
@@ -239,11 +248,21 @@ func (c *Consulta) validar() error {
 	if n := largo(c.Nombre); n < 3 || n > 120 {
 		return plataforma.Invalido(map[string]string{"nombre": "Escribí tu nombre."})
 	}
-	if !plataforma.CorreoValido(c.Email) {
-		return plataforma.Invalido(map[string]string{"email": "Revisá el correo: es por donde te contestamos."})
+	if c.Email == "" && c.Telefono == "" {
+		return plataforma.Invalido(map[string]string{"contacto": "Dejanos un WhatsApp o un correo para contestarte."})
 	}
-	if largo(c.Telefono) > 40 {
-		return plataforma.Invalido(map[string]string{"telefono": "Revisá el teléfono."})
+	// El WhatsApp vale si se le puede contestar con un toque: lo decide el
+	// mismo normalizador que arma el enlace del correo y la clave del
+	// limitador (corrección de T5). Antes se contaban ocho dígitos, y eso
+	// rechazaba «590-3118» —un número de acá de siete, que se completa con
+	// el 223— y dejaba pasar «12345678», que llegaba sin el botón para
+	// contestar mientras a la persona se le decía «te contestamos por
+	// WhatsApp». El ejemplo del mensaje no es el número de la casa.
+	if c.Telefono != "" && (largo(c.Telefono) > 40 || whatsapp.AWaId(c.Telefono) == "") {
+		return plataforma.Invalido(map[string]string{"telefono": "Revisá el WhatsApp: con la característica, como 223 15 123-4567."})
+	}
+	if c.Email != "" && !plataforma.CorreoValido(c.Email) {
+		return plataforma.Invalido(map[string]string{"email": "Revisá el correo: es por donde te contestamos."})
 	}
 	if _, ok := Motivos[c.Motivo]; !ok {
 		return plataforma.Invalido(map[string]string{"motivo": "Elegí el motivo de la consulta."})
@@ -252,6 +271,44 @@ func (c *Consulta) validar() error {
 		return plataforma.Invalido(map[string]string{"mensaje": "Contanos un poco más para poder ayudarte."})
 	}
 	return nil
+}
+
+// ClaveDelLimite es la segunda cuenta del limitador, además de la IP: el
+// correo si lo dejó y, si no, los dígitos del teléfono. Sin esto, quien
+// manda solo WhatsApp quedaba contado únicamente por IP, y detrás de un
+// celular con datos móviles la IP cambia a cada rato.
+func (c Consulta) ClaveDelLimite() (nombre, valor string) {
+	if c.Email != "" {
+		return "correo", c.Email
+	}
+	// El mismo número escrito de otra forma («0223 15…», «+54 9 223…») tiene
+	// que caer en la misma cuenta: si no, alcanza con cambiar los espacios.
+	if id := whatsapp.AWaId(c.Telefono); id != "" {
+		return "telefono", id
+	}
+	return "telefono", whatsapp.SoloDigitos(c.Telefono)
+}
+
+// enlaceParaContestar es el wa.me de quien escribió, con el saludo ya
+// cargado, o "" si el número no se entiende. Es lo que hace que una consulta
+// sin correo no se enfríe: quien atiende la casilla la contesta con un toque,
+// sin copiar el número a mano.
+func enlaceParaContestar(c Consulta) string {
+	id := whatsapp.AWaId(c.Telefono)
+	if id == "" {
+		return ""
+	}
+	saludo := "Hola " + primerNombre(c.Nombre) + ", te escribimos de la Maderera Juan B. Justo por tu consulta en la web."
+	// %20 y no «+»: WhatsApp no siempre lee el «+» como espacio.
+	return "https://wa.me/" + id + "?text=" + strings.ReplaceAll(url.QueryEscape(saludo), "+", "%20")
+}
+
+// primerNombre es la primera palabra del nombre, para el saludo.
+func primerNombre(nombre string) string {
+	if campos := strings.Fields(nombre); len(campos) > 0 {
+		return campos[0]
+	}
+	return nombre
 }
 
 // recortar son los primeros n caracteres (no bytes), como slice() de JS
@@ -265,16 +322,26 @@ func recortar(s string, n int) string {
 }
 
 // EnviarConsulta manda la consulta a la casilla de la maderera, con
-// Responder-A de quien escribió, y la anota en notifications_log.
+// Responder-A de quien escribió si dejó correo y el botón de WhatsApp si dejó
+// teléfono, y la anota en notifications_log.
 func (s *Servicio) EnviarConsulta(ctx context.Context, envio email.Proveedor, cfg ConfigContacto, c Consulta) (ResultadoConsulta, error) {
 	if err := c.validar(); err != nil {
 		return "", err
 	}
 	motivo := Motivos[c.Motivo]
 	asunto := motivo + " — " + c.Nombre
-	datos := []email.Bloque{{Etiqueta: "Nombre", Valor: c.Nombre}, {Etiqueta: "Correo", Valor: c.Email}}
+	datos := []email.Bloque{{Etiqueta: "Nombre", Valor: c.Nombre}}
 	if c.Telefono != "" {
-		datos = append(datos, email.Bloque{Etiqueta: "Teléfono", Valor: c.Telefono})
+		datos = append(datos, email.Bloque{Etiqueta: "WhatsApp", Valor: c.Telefono})
+	}
+	if c.Email != "" {
+		datos = append(datos, email.Bloque{Etiqueta: "Correo", Valor: c.Email})
+	}
+	// Con WhatsApp, el botón del correo abre la conversación. Sin correo es
+	// la única forma de contestar; con los dos, la más rápida.
+	var cta *email.Enlace
+	if enlace := enlaceParaContestar(c); enlace != "" {
+		cta = &email.Enlace{Texto: "Contestar por WhatsApp", URL: enlace}
 	}
 	html, texto := email.Envolver(cfg.URLDelSitio(), email.Opciones{
 		Titulo:   "Consulta desde el sitio",
@@ -282,7 +349,10 @@ func (s *Servicio) EnviarConsulta(ctx context.Context, envio email.Proveedor, cf
 		Saludo:   motivo,
 		Parrafos: []string{strings.ReplaceAll(email.Escapar(c.Mensaje), "\n", "<br>")},
 		Datos:    datos,
+		CTA:      cta,
 	})
+	// Responder-A es el correo de quien escribió; sin correo queda vacío y el
+	// proveedor pone la casilla de respuestas de siempre (email.go).
 	r := envio.Enviar(ctx, email.Mensaje{Para: cfg.Casilla, Asunto: asunto, HTML: html, Texto: texto, ResponderA: c.Email})
 	estado := ResultadoConsulta("fallida")
 	switch {

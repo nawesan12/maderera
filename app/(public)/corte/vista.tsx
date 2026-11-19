@@ -30,7 +30,7 @@ import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto
 import { formatearMonto } from "@/lib/formato";
 import { agregarCorteAlCarrito, guardarConsultaDeCorte } from "./actions";
 import { useTienda } from "@/lib/tienda-context";
-import { HORARIO_CORTES } from "@/lib/sucursales";
+import { DONDE_SE_CORTA, HORARIO_CORTES, dondeSeCortaAlEmpezar } from "@/lib/sucursales";
 
 /**
  * El despiece a medio cargar queda en el navegador: en la obra se corta la
@@ -192,7 +192,7 @@ function VistaDeCorte({
   ]);
   // El aserradero es donde está la seccionadora: es la que arranca elegida.
   const [sucursal, setSucursal] = useState(
-    sucursales.find((s) => s.slug === "aserradero")?.slug ?? sucursales[0]?.slug ?? "",
+    sucursales.find((s) => s.slug === DONDE_SE_CORTA.sucursal)?.slug ?? sucursales[0]?.slug ?? "",
   );
   const [aviso, setAviso] = useState<string | null>(null);
   const [guardando, empezar] = useTransition();
@@ -365,7 +365,10 @@ function VistaDeCorte({
       type="button"
       onClick={pedirPorWhatsapp}
       disabled={!sePuede || guardando || !destino?.whatsapp}
-      className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[10px] bg-verde-whatsapp px-5 text-base font-semibold text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+      // Un <button> y no `BotonWhatsapp`: antes de abrir WhatsApp guarda el
+      // corte. Se ve igual que todos (hallazgo 27): el mismo verde y el alto
+      // de `tamano="grande"`.
+      className="inline-flex h-[50px] shrink-0 items-center justify-center gap-2.5 rounded-[10px] bg-whatsapp-boton px-5 text-base font-semibold text-white transition-colors hover:bg-whatsapp-boton-hover disabled:opacity-50"
     >
       {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
       Pedir por WhatsApp
@@ -380,7 +383,7 @@ function VistaDeCorte({
       <header className="superficie flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl px-5 py-3.5">
         <div className="mr-auto">
           <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em]">Corte de placas a medida</h1>
-          <p className="text-sm text-texto-2">En el aserradero · {HORARIO_CORTES}</p>
+          <p className="text-sm text-texto-2">{dondeSeCortaAlEmpezar()} · {HORARIO_CORTES}</p>
         </div>
 
         <dl className="hidden items-center gap-6 sm:flex">
@@ -799,7 +802,7 @@ function ElegirTapacanto({
     <input
       value={grupo.canto}
       onChange={(e) => alCambiar({ canto: e.target.value, cantoId: null })}
-      placeholder="Tapacanto: blanco, o el de la placa"
+      placeholder="Tapacanto"
       aria-label={tapacantos.length > 0 ? "Otro tapacanto" : undefined}
       className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
     />

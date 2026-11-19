@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  MessageCircle,
   Plus,
   Search,
   Send,
@@ -30,6 +29,8 @@ import {
 import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
+import { ETIQUETA_ASISTENTE, EVENTO_ABRIR_ASISTENTE } from "@/lib/asistente/abrir";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /** Dónde queda el equipaje mientras dure la pestaña. */
 const CLAVE_EQUIPAJE = "mjbj-asistente-equipaje";
@@ -63,6 +64,16 @@ type Renglon =
  * Todo el estado vive acá y nada se guarda: cerrar el panel es empezar de
  * nuevo. Una conversación a medias que reaparece tres días después es peor que
  * ninguna.
+ *
+ * **Cerrado no dibuja nada** (hallazgo 27, 18/11/2026). Era un círculo
+ * naranja flotante al lado del WhatsApp: no decía qué era y en la ficha tapaba
+ * el botón principal. Ahora lo abren la barra de escritorio, el buscador del
+ * catálogo, el menú del celular y la página de «no existe», con
+ * `abrirAsistente()`.
+ *
+ * Abierto es un diálogo: en el celular, una hoja desde abajo; desde `sm`, una
+ * ventana en la esquina. El foco entra al campo, Tab no se escapa del panel,
+ * Escape lo cierra y el foco vuelve a lo que lo abrió.
  */
 export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }) {
   const [abierto, setAbierto] = useState(false);
@@ -84,6 +95,59 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   const [ultimaConsulta, setUltimaConsulta] = useState<string | null>(null);
 
   const finRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const campoRef = useRef<HTMLInputElement>(null);
+  /** Lo que tenía el foco al abrir, para devolvérselo al cerrar. */
+  const origenRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const abrir = () => {
+      origenRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setAbierto(true);
+    };
+    document.addEventListener(EVENTO_ABRIR_ASISTENTE, abrir);
+    return () => document.removeEventListener(EVENTO_ABRIR_ASISTENTE, abrir);
+  }, []);
+
+  function cerrar() {
+    setAbierto(false);
+    // El menú del celular se cierra al abrir el asistente: si lo que lo abrió
+    // ya no está en la página, el foco va al contenido y no al vacío.
+    const origen = origenRef.current;
+    if (origen?.isConnected) origen.focus();
+    else document.getElementById("contenido")?.focus();
+  }
+
+  useEffect(() => {
+    if (!abierto) return;
+    campoRef.current?.focus();
+
+    function teclado(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cerrar();
+        return;
+      }
+      if (e.key !== "Tab" || !panelRef.current) return;
+      // El foco queda adentro: lo de atrás no se ve (en el celular la hoja lo
+      // tapa) y tabular hacia allá es perderse.
+      const enfocables = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (enfocables.length === 0) return;
+      const primero = enfocables[0];
+      const ultimo = enfocables[enfocables.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero.focus();
+      }
+    }
+    document.addEventListener("keydown", teclado);
+    return () => document.removeEventListener("keydown", teclado);
+  }, [abierto]);
 
   /*
    * Una sola llamada, y solo al abrir.
@@ -254,38 +318,33 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   // Los botones del guion, más los que dejó la última respuesta escrita.
   const opciones = [...extra.sugerencias, ...paso.opciones];
 
-  if (!abierto) {
-    return (
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        aria-label="Abrir el asistente"
-        className="flotante-asistente fixed bottom-4 right-[4.25rem] z-50 flex h-12 w-12 items-center justify-center rounded-full bg-accion text-white shadow-lg transition-all hover:scale-110 hover:shadow-xl sm:bottom-6 sm:right-[5.5rem] sm:h-14 sm:w-14"
-      >
-        <PersonajeAsistente className="h-7 w-7" />
-      </button>
-    );
-  }
+  if (!abierto) return null;
 
   return (
+    <>
+    {/* El fondo del celular: la hoja tapa casi toda la pantalla y lo de atrás
+        no se usa mientras tanto. Tocarlo cierra, como en cualquier hoja. */}
+    <div aria-hidden className="fixed inset-0 z-50 bg-black/30 sm:hidden" onClick={cerrar} />
     <div
+      ref={panelRef}
       role="dialog"
-      aria-label="Asistente"
-      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[min(80vh,620px)] flex-col overflow-hidden rounded-2xl superficie shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.45)] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[420px]"
+      aria-modal="true"
+      aria-labelledby="asistente-titulo"
+      className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col overflow-hidden rounded-t-2xl superficie pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_-12px_rgb(60_50_40_/_0.45)] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:max-h-[min(80vh,620px)] sm:w-[420px] sm:rounded-2xl sm:pb-0 sm:shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.45)]"
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-linea px-4 py-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-naranja-claro">
           <PersonajeAsistente className="h-5 w-5 text-acento-texto" />
         </span>
         <div className="flex-1">
-          <p className="font-semibold leading-tight">Te ayudo a encontrar</p>
+          <p id="asistente-titulo" className="font-semibold leading-tight">{ETIQUETA_ASISTENTE}</p>
           <p className="text-sm text-texto-3">Maderera Juan B. Justo</p>
         </div>
         <button
           type="button"
-          onClick={() => setAbierto(false)}
+          onClick={cerrar}
           aria-label="Cerrar el asistente"
-          className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-sitio-alt"
+          className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-sitio-alt"
         >
           <X className="h-4 w-4" />
         </button>
@@ -329,6 +388,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
                   void preguntar();
                 }
               }}
+              ref={campoRef}
               placeholder="Escribime lo que necesitás…"
               className="pl-9"
               aria-label="Escribí tu consulta"
@@ -371,15 +431,9 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
         )}
 
         {aWhatsapp && (
-          <Button
-            render={
-              <a href={enlaceWhatsapp} target="_blank" rel="noopener noreferrer" />
-            }
-            className="w-full bg-[#25D366] text-white hover:bg-[#1fb757]"
-          >
-            <MessageCircle className="h-4 w-4" />
+          <BotonWhatsapp enlace={enlaceWhatsapp} className="w-full">
             Escribir por WhatsApp
-          </Button>
+          </BotonWhatsapp>
         )}
 
         {irA && (
@@ -403,6 +457,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
         </div>
       </div>
     </div>
+    </>
   );
 }
 

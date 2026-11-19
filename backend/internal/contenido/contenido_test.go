@@ -519,6 +519,109 @@ func TestContacto(t *testing.T) {
 	}
 }
 
+// Con WhatsApp y sin correo (hallazgo 47): sale, sin Responder-A de quien
+// escribió y con el botón para contestarle por WhatsApp. Sin ninguno de los
+// dos, o con un teléfono de juguete, no sale.
+func TestContactoSoloWhatsapp(t *testing.T) {
+	e := armar(t)
+	u := e.srv.URL + "/api/v1/contenido/contacto"
+	// Cada pedido desde otra IP, para probar la cuenta por teléfono sin que
+	// la de IP la tape (el servidor de prueba escucha en loopback y por eso
+	// confía en X-Forwarded-For, como detrás de Caddy).
+	desde := func(ip string, cuerpo map[string]string) (int, string) {
+		t.Helper()
+		crudo, _ := json.Marshal(cuerpo)
+		req, _ := http.NewRequest("POST", u, bytes.NewReader(crudo))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", ip)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	base := func(tel string) map[string]string {
+		return map[string]string{"nombre": "Raúl Pérez", "telefono": tel, "motivo": "presupuesto", "mensaje": "12 placas de fenólico de 18"}
+	}
+
+	if c, b := desde("10.0.0.1", map[string]string{"nombre": "Raúl", "motivo": "presupuesto", "mensaje": "12 placas de fenólico"}); c != 422 || !strings.Contains(b, `"contacto"`) || !strings.Contains(b, "WhatsApp o un correo") {
+		t.Errorf("sin WhatsApp ni correo: %d %s", c, b)
+	}
+	// Lo que no se puede contestar con un toque se rechaza, aunque tenga
+	// ocho dígitos o más: un número de Buenos Aires con uno de menos.
+	for _, tel := range []string{"1234", "12345678", "11 2345 678"} {
+		if c, b := desde("10.0.0.1", base(tel)); c != 422 || !strings.Contains(b, `"telefono"`) {
+			t.Errorf("%q pasó y no tiene a quién contestar: %d %s", tel, c, b)
+		}
+	}
+	if c, b := desde("10.0.0.2", base("0223 15-590-3118")); c != 200 || !strings.Contains(b, `"resultado":"enviada"`) {
+		t.Fatalf("solo WhatsApp: %d %s", c, b)
+	}
+	m := e.correo.Enviados[0]
+	if m.ResponderA != "" {
+		t.Errorf("sin correo no hay a quién responder, y salió con %q", m.ResponderA)
+	}
+	if !strings.Contains(m.HTML, "https://wa.me/5492235903118?text=Hola%20Ra%C3%BAl") || !strings.Contains(m.Texto, "Contestar por WhatsApp: https://wa.me/5492235903118") {
+		t.Errorf("el correo no trae el enlace para contestar:\n%s", m.Texto)
+	}
+	if strings.Contains(m.Texto, "Correo") {
+		t.Errorf("sin correo, el renglón «Correo» sobra:\n%s", m.Texto)
+	}
+
+	// La cuenta por teléfono: tres por hora, aunque cada una venga de otra
+	// IP; el mismo número escrito de otra forma es el mismo número.
+	_, _ = desde("10.0.0.3", base("223 590 3118"))
+	_, _ = desde("10.0.0.4", base("2235903118"))
+	if c, b := desde("10.0.0.5", base("(0223) 590-3118")); c != 429 {
+		t.Errorf("la cuarta del mismo teléfono: %d %s", c, b)
+	}
+	// Y la IP sigue contando aunque el teléfono cambie.
+	for _, tel := range []string{"223 111 2222", "223 111 3333"} {
+		_, _ = desde("10.0.0.9", base(tel))
+	}
+	_, _ = desde("10.0.0.9", base("223 111 4444"))
+	if c, b := desde("10.0.0.9", base("223 111 5555")); c != 429 {
+		t.Errorf("la cuarta desde la misma IP con otro teléfono: %d %s", c, b)
+	}
+}
+
+// El número local de siete dígitos, como lo dice la gente de acá, pasa: el
+// normalizador le pone el 223.
+func TestTelefonoDeLaConsulta(t *testing.T) {
+	casos := map[string]bool{
+		"590-3118":           true,
+		"15 590-3118":        true,
+		"0223 15-590-3118":   true,
+		"+54 9 11 2345-6789": true,
+		"12345678":           false,
+		"11 2345 678":        false,
+		"1234":               false,
+	}
+	for tel, vale := range casos {
+		c := Consulta{Nombre: "Raúl Pérez", Telefono: tel, Motivo: "presupuesto", Mensaje: "12 placas de fenólico de 18"}
+		if err := c.validar(); (err == nil) != vale {
+			t.Errorf("%q: se esperaba válido=%v y dio %v", tel, vale, err)
+		}
+	}
+}
+
+func TestClaveDelLimite(t *testing.T) {
+	casos := []struct {
+		c             Consulta
+		nombre, valor string
+	}{
+		{Consulta{Email: "ana@cliente.com", Telefono: "223 590-3118"}, "correo", "ana@cliente.com"},
+		{Consulta{Telefono: "+54 9 223 590-3118"}, "telefono", "5492235903118"},
+	}
+	for _, k := range casos {
+		if n, v := k.c.ClaveDelLimite(); n != k.nombre || v != k.valor {
+			t.Errorf("%+v: %s %s", k.c, n, v)
+		}
+	}
+}
+
 func TestSucursalesEnviosYEscalas(t *testing.T) {
 	e := armar(t)
 	ctx := context.Background()

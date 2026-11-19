@@ -131,7 +131,11 @@ func (a *API) AvanzarPedido(ctx context.Context, r ventasapi.AvanzarPedidoReques
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.Avanzar(ctx, ses, r.Id.String())
+	desde := ""
+	if r.Params.Desde != nil {
+		desde = *r.Params.Desde
+	}
+	v, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde)
 	if err != nil {
 		return nil, err
 	}

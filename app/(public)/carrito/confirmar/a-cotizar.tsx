@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, MessageCircle, Ruler } from "lucide-react";
+import { ArrowLeft, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { quitarLosQueSeCotizan } from "./actions";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 export interface ItemACotizar {
   id: string;
@@ -63,15 +64,9 @@ export function ACotizar({
       </ul>
 
       <div className="mt-5 space-y-2.5">
-        <Button
-          render={
-            <a href={enlace} target="_blank" rel="noopener noreferrer" />
-          }
-          className="h-[52px] w-full rounded-[10px] bg-[#25D366] text-base font-semibold text-white hover:bg-[#1fb757]"
-        >
-          <MessageCircle className="h-4 w-4" />
+        <BotonWhatsapp enlace={enlace} tamano="grande" className="w-full">
           Pedir la cotización por WhatsApp
-        </Button>
+        </BotonWhatsapp>
 
         {/* Con productos con precio en el mismo presupuesto, el pedido no tiene
             por qué esperar a la cotización: se sacan estos y sigue. */}

@@ -237,6 +237,15 @@ export default async function PreciosPage({
  * lista contra la profesional, una medida contra la siguiente). En tarjetas
  * de dos columnas con foto de 80 px entraban seis por pantalla y había que
  * leer cada una para ver dos números.
+ *
+ * En el teléfono la tabla apilada era una tarjeta de 260 px por medida, con
+ * «Código:», «Lista:», «Cambió:» uno abajo del otro: 13.000 px de página.
+ * Donde la tabla no entra entera va una lista propia de dos renglones por
+ * medida, sin foto ni «Cambió», que en el teléfono no se miran. Lo decide el
+ * ancho del bloque (`@container`, 896 px: lo que piden las columnas fijas más
+ * el nombre) y no el de la pantalla, porque el menú lateral se come 244 px:
+ * con `md` y un ancho mínimo, una tablet o una notebook con el menú abierto
+ * corrían la tabla de costado, y eso no pasa en ningún ancho.
  */
 function Grilla({
   filas,
@@ -249,26 +258,114 @@ function Grilla({
 }) {
   if (filas.length === 0) return null;
   return (
-    <div className="tarjeta overflow-x-auto">
-      {/* Anchos fijos: las tablas de los tres grupos quedan alineadas. */}
-      <table className="w-full min-w-[720px] table-fixed text-base">
-        <thead>
-          <tr className="border-b text-left text-sm text-muted-foreground">
-            <th className="w-14 px-3 py-2.5" />
-            <th className="px-3 py-2.5 font-medium">Producto</th>
-            <th className="w-48 px-3 py-2.5 font-medium">Código</th>
-            <th className="w-36 px-3 py-2.5 text-right font-medium">Lista</th>
-            <th className="w-40 px-3 py-2.5 text-right font-medium">Profesional</th>
-            <th className="w-32 px-3 py-2.5 text-right font-medium">Cambió</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="@container">
+      <div className="tarjeta hidden overflow-hidden @4xl:block">
+        {/* Anchos fijos: las tablas de los tres grupos quedan alineadas. */}
+        <table className="w-full table-fixed text-base">
+          <thead>
+            <tr className="border-b text-left text-sm text-muted-foreground">
+              <th className="w-14 px-3 py-2.5" />
+              <th className="px-3 py-2.5 font-medium">Producto</th>
+              <th className="w-48 px-3 py-2.5 font-medium">Código</th>
+              <th className="w-36 px-3 py-2.5 text-right font-medium">Lista</th>
+              <th className="w-40 px-3 py-2.5 text-right font-medium">Profesional</th>
+              <th className="w-32 px-3 py-2.5 text-right font-medium">Cambió</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((fila) => (
+              <FilaDePrecio key={fila.variantId} fila={fila} generalId={generalId} profesionalId={profesionalId} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="tarjeta overflow-hidden @4xl:hidden">
+        {/* Un solo encabezado arriba y no un rótulo por renglón: los dos
+            precios quedan en la misma columna en toda la lista. */}
+        <div
+          className="grid grid-cols-[1fr_3.25rem_1fr] gap-1.5 border-b px-3 py-2 text-sm font-medium text-muted-foreground"
+          aria-hidden="true"
+        >
+          <span className="text-right">Lista</span>
+          <span />
+          <span className="text-right">Profesional</span>
+        </div>
+        <ul className="divide-y divide-border/60">
           {filas.map((fila) => (
-            <FilaDePrecio key={fila.variantId} fila={fila} generalId={generalId} profesionalId={profesionalId} />
+            <RenglonDePrecio key={fila.variantId} fila={fila} generalId={generalId} profesionalId={profesionalId} />
           ))}
-        </tbody>
-      </table>
+        </ul>
+      </div>
     </div>
+  );
+}
+
+/**
+ * La brecha es cuánto más barato le sale al profesional. Negativa es un
+ * precio profesional por encima del de lista: casi seguro un error de carga,
+ * y se marca en rojo en vez de decir «−-107%». La usan la tabla y la lista
+ * del teléfono: escrita dos veces, se desfasaban.
+ */
+function Brecha({ brecha }: { brecha: number | null }) {
+  if (brecha === null) return null;
+  const texto = Math.abs(brecha).toString().replace(".", ",");
+  return brecha >= 0 ? (
+    <span className="tabular whitespace-nowrap text-sm text-brand-orange">−{texto}%</span>
+  ) : (
+    <span
+      className="tabular estado-problema whitespace-nowrap text-sm font-semibold"
+      title="El precio profesional es más alto que el de lista"
+    >
+      +{texto}%
+    </span>
+  );
+}
+
+function RenglonDePrecio({
+  fila,
+  generalId,
+  profesionalId,
+}: {
+  fila: FilaPrecio;
+  generalId?: string;
+  profesionalId?: string;
+}) {
+  return (
+    <li className="px-3 py-2">
+      {/* Lo que separa una medida de otra es la medida: entera, y se corta
+          el nombre. */}
+      <p className="flex min-w-0 items-baseline gap-2 px-2">
+        <Link
+          href={`/admin/productos/${fila.productId}`}
+          className="min-w-0 flex-1 truncate font-medium hover:text-brand-orange"
+        >
+          {fila.producto}
+        </Link>
+        <span className="shrink-0 whitespace-nowrap text-sm text-muted-foreground">{fila.medida}</span>
+      </p>
+      <div className="mt-0.5 grid grid-cols-[1fr_3.25rem_1fr] items-center gap-1.5">
+        <div>
+          {generalId && (
+            <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" tactil />
+          )}
+        </div>
+        <div className="text-center">
+          <Brecha brecha={fila.brecha} />
+        </div>
+        <div>
+          {profesionalId && (
+            <PrecioEditable
+              variantId={fila.variantId}
+              priceListId={profesionalId}
+              valor={fila.precioProfesional}
+              rotulo="Profesional"
+              tactil
+            />
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -307,24 +404,14 @@ function FilaDePrecio({
       <td className="tabular px-3 py-1.5 text-sm text-muted-foreground">{fila.sku}</td>
       <td className="px-3 py-1.5">
         {generalId && (
-          <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} />
+          <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" />
         )}
       </td>
       <td className="px-3 py-1.5">
         <div className="flex items-center justify-end gap-1.5">
-          {/* La brecha es cuánto más barato le sale al profesional. Negativa
-              es un precio profesional por encima del de lista: casi seguro un
-              error de carga, y se marca en rojo en vez de decir «−-107%». */}
-          {fila.brecha !== null &&
-            (fila.brecha >= 0 ? (
-              <span className="tabular text-sm text-brand-orange">−{fila.brecha.toString().replace(".", ",")}%</span>
-            ) : (
-              <span className="tabular estado-problema text-sm font-semibold" title="El precio profesional es más alto que el de lista">
-                +{Math.abs(fila.brecha).toString().replace(".", ",")}%
-              </span>
-            ))}
+          <Brecha brecha={fila.brecha} />
           {profesionalId && (
-            <PrecioEditable variantId={fila.variantId} priceListId={profesionalId} valor={fila.precioProfesional} />
+            <PrecioEditable variantId={fila.variantId} priceListId={profesionalId} valor={fila.precioProfesional} rotulo="Profesional" />
           )}
         </div>
       </td>

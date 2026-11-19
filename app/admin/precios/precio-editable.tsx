@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { editarPrecio } from "./actions";
+import { precioTipeado, textoParaEditar } from "@/lib/precios/editar";
 
 /**
  * Precio editable en la propia tabla.
@@ -16,14 +17,23 @@ export function PrecioEditable({
   variantId,
   priceListId,
   valor,
+  rotulo,
+  tactil = false,
 }: {
   variantId: string;
   priceListId: string;
   valor: string;
+  /** De qué lista es («Lista», «Profesional»): va en lo que lee el lector de pantalla. */
+  rotulo?: string;
+  /**
+   * En el teléfono se toca con el dedo: 44 px de alto como mínimo, o se
+   * abre el precio de al lado. Un precio mal cargado es plata perdida.
+   */
+  tactil?: boolean;
 }) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
-  const [texto, setTexto] = useState(valor);
+  const [texto, setTexto] = useState(() => textoParaEditar(valor));
   const [guardando, startTransition] = useTransition();
 
   const formateado = new Intl.NumberFormat("es-AR", {
@@ -33,16 +43,16 @@ export function PrecioEditable({
   }).format(Number(valor));
 
   function guardar() {
-    const limpio = texto.replace(/\./g, "").replace(",", ".");
+    const nuevo = precioTipeado(texto, valor);
 
-    if (Number(limpio) === Number(valor)) {
+    if (nuevo === null) {
       setEditando(false);
       return;
     }
 
-    if (!Number.isFinite(Number(limpio)) || Number(limpio) < 0) {
+    if (Number.isNaN(nuevo)) {
       toast.error("Ese precio no es válido.");
-      setTexto(valor);
+      setTexto(textoParaEditar(valor));
       setEditando(false);
       return;
     }
@@ -51,13 +61,13 @@ export function PrecioEditable({
       const datos = new FormData();
       datos.set("variantId", variantId);
       datos.set("priceListId", priceListId);
-      datos.set("precio", limpio);
+      datos.set("precio", String(nuevo));
 
       const resultado = await editarPrecio({}, datos);
 
       if (resultado.error) {
         toast.error(resultado.error);
-        setTexto(valor);
+        setTexto(textoParaEditar(valor));
       } else {
         toast.success(resultado.ok ?? "Precio actualizado.");
         router.refresh();
@@ -66,15 +76,18 @@ export function PrecioEditable({
     });
   }
 
+  const alto = tactil ? "min-h-11 py-2" : "py-1";
+  const de = rotulo ? ` de ${rotulo.toLowerCase()}` : "";
+
   if (!editando) {
     return (
       <button
         onClick={() => {
-          setTexto(valor);
+          setTexto(textoParaEditar(valor));
           setEditando(true);
         }}
-        className="tabular w-full rounded-md px-2 py-1 text-right text-base transition-colors hover:bg-muted"
-        aria-label={`Editar precio, actualmente ${formateado}`}
+        className={`tabular w-full whitespace-nowrap rounded-md px-2 ${alto} text-right text-base transition-colors hover:bg-muted`}
+        aria-label={`Editar precio${de}, actualmente ${formateado}`}
       >
         {Number(valor) > 0 ? formateado : "—"}
       </button>
@@ -91,7 +104,7 @@ export function PrecioEditable({
       onKeyDown={(e) => {
         if (e.key === "Enter") guardar();
         if (e.key === "Escape") {
-          setTexto(valor);
+          setTexto(textoParaEditar(valor));
           setEditando(false);
         }
       }}
@@ -100,8 +113,8 @@ export function PrecioEditable({
          al campo siguiente como en el resto del panel. Ver
          `components/admin/enter-avanza.tsx`. */
       data-enter="enviar"
-      className="tabular w-full rounded-md border border-brand-orange bg-card px-2 py-1 text-right text-base outline-none"
-      aria-label="Nuevo precio"
+      className={`tabular w-full rounded-md border border-brand-orange bg-card px-2 ${alto} text-right text-base outline-none`}
+      aria-label={`Nuevo precio${de}`}
     />
   );
 }

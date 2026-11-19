@@ -5796,6 +5796,15 @@ type ProductImage struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type ProductImagesRubro00150 struct {
+	ID        string    `json:"id"`
+	ProductID string    `json:"productId"`
+	Url       string    `json:"url"`
+	Alt       *string   `json:"alt"`
+	SortOrder int32     `json:"sortOrder"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type ProductReview struct {
 	ID            string       `json:"id"`
 	ProductID     string       `json:"productId"`

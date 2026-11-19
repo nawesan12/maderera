@@ -48,5 +48,8 @@ var argentina = func() *time.Location {
 // fallo es el { error } de una acción, para mostrar tal cual.
 func fallo(m string) error { return plataforma.NuevoProblema(http.StatusUnprocessableEntity, m) }
 
+// yaCambio es un 409: lo que se quiso hacer partía de un estado que ya no es.
+func yaCambio(m string) error { return plataforma.NuevoProblema(http.StatusConflict, m) }
+
 // noEsta es un 404 con su mensaje.
 func noEsta(m string) error { return plataforma.NuevoProblema(http.StatusNotFound, m) }

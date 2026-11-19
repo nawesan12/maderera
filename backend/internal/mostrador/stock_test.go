@@ -141,7 +141,7 @@ func TestAvanzarAEntregadoSacaConRemito(t *testing.T) {
 	ctx := context.Background()
 	pedido := e.ventaEnAcopio(t, ses.UserID, 5) // queda «listo», de retiro
 	ps := pedidos.Nuevo(e.pool, silencio)
-	res, err := ps.Avanzar(ctx, ses, pedido)
+	res, err := ps.Avanzar(ctx, ses, pedido, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import { Compass, MessageCircle, Search } from "lucide-react";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
+import { EntradaAlAsistente } from "@/components/asistente/entrada";
 
 /**
  * Página no encontrada, dentro del sitio.
@@ -66,6 +67,12 @@ export default async function NoEncontrado() {
               Si sabés qué buscabas, te lo encontramos.
             </p>
           </a>
+        </div>
+
+        {/* Quien no sabe cómo se llama lo que buscaba: el asistente pregunta
+            por el uso y no por el nombre. */}
+        <div className="mt-6 flex justify-center">
+          <EntradaAlAsistente />
         </div>
       </div>
     </>

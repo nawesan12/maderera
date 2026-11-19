@@ -73,10 +73,17 @@ paths:
   /api/v1/admin/cortes/{id}/avanzar:
     post:
       operationId: AvanzarCorte
-      parameters: [{ $ref: "#/components/parameters/Id" }]
+      description: >-
+        Con `desde`, el estado que vio quien toca: si el corte ya cambió
+        (otra pantalla, el taller, una pestaña de hace un minuto), 409 y no
+        se avanza un paso de más.
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: desde, in: query, schema: { type: string, maxLength: 40 } }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "404": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/urgente:
     post:

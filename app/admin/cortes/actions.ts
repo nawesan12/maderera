@@ -20,9 +20,15 @@ function fallo(r: { error?: unknown }, porDefecto?: string): EstadoCorte {
   return { error: mensajeDe(r.error as Problema | undefined, porDefecto) };
 }
 
-/** Avanza el corte al siguiente paso de la cola. */
-export async function avanzarCorte(id: string): Promise<EstadoCorte> {
-  const r = await (await api()).POST("/api/v1/admin/cortes/{id}/avanzar", { params: { path: { id } } });
+/**
+ * Avanza el corte al siguiente paso de la cola. `desde` es el estado que se
+ * veía en la pantalla: si ya cambió, Go contesta 409 en vez de dar un paso de
+ * más.
+ */
+export async function avanzarCorte(id: string, desde?: string): Promise<EstadoCorte> {
+  const r = await (await api()).POST("/api/v1/admin/cortes/{id}/avanzar", {
+    params: { path: { id }, query: desde ? { desde } : {} },
+  });
   if (!r.data) return fallo(r, "No se encontró el corte.");
   revalidatePath("/admin/cortes");
   revalidatePath("/admin");

@@ -124,3 +124,26 @@ export function sucursalPublicada(slug: string): SucursalPublicada | undefined {
  * sábados de 8 a 12.
  */
 export const HORARIO_CORTES = "Lun a Vie 8 a 16 h · Sáb 8 a 12 h";
+
+/**
+ * Dónde se cortan las placas, en un solo lugar (hallazgo 46 del comité,
+ * 18/11/2026).
+ *
+ * **PENDIENTE de confirmar con la clienta**: el brief del 5/9 anuncia el corte
+ * en Casa Central («Servicio de corte de placas a medida», arriba) y el
+ * armador de cortes manda al aserradero. Hasta que conteste no se elige: se
+ * deja lo que el sitio ya decía en casi todas partes, y todas esas frases —el
+ * armador, el catálogo, contacto, nosotros, mi cuenta y el asistente— leen de
+ * acá, para que la respuesta se cambie en una sola línea.
+ */
+export const DONDE_SE_CORTA = {
+  /** La sucursal que el armador de cortes elige de entrada. */
+  sucursal: "aserradero",
+  /** Cómo se dice en una oración: «lo cortamos en el aserradero». */
+  frase: "en el aserradero",
+} as const;
+
+/** La frase con mayúscula, para cuando empieza el renglón. */
+export function dondeSeCortaAlEmpezar(): string {
+  return DONDE_SE_CORTA.frase.charAt(0).toUpperCase() + DONDE_SE_CORTA.frase.slice(1);
+}

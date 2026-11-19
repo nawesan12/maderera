@@ -17,25 +17,21 @@ const ETAPAS = [
     valor: "pendiente" as const,
     titulo: "Para hacer",
     estado: "pendiente",
-    vacio: "Nada pendiente.",
   },
   {
     valor: "hablando" as const,
     titulo: "Hablando",
     estado: "en-proceso",
-    vacio: "Ninguna conversación abierta.",
   },
   {
     valor: "promesa" as const,
     titulo: "Prometió",
     estado: "espera",
-    vacio: "Ninguna promesa anotada.",
   },
   {
     valor: "cerrado" as const,
     titulo: "Cerrado",
     estado: "listo",
-    vacio: "Nada cerrado todavía.",
   },
 ];
 
@@ -58,7 +54,6 @@ export function TableroDeSeguimiento({
               titulo={etapa.titulo}
               cantidad={suyas.length}
               estado={etapa.estado}
-              vacio={etapa.vacio}
               detalle={
                 suyas.filter((g) => g.vencida).length > 0
                   ? `${suyas.filter((g) => g.vencida).length} vencidas`

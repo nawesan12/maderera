@@ -590,3 +590,49 @@ func TestPedidoParaHoyNoEstaAtrasado(t *testing.T) {
 		t.Fatalf("el 17 a las 21 h: %d atrasados", o.pedidosAtrasados)
 	}
 }
+
+// T7: un cheque o una factura de compra que vence en las próximas 48 horas
+// va en «Para hoy» (urgente); lo que vence más adelante en la semana queda
+// en «Pendientes».
+func TestLoQueVenceEn48HorasEsDeHoy(t *testing.T) {
+	e := armar(t)
+	e.exec(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado) values
+		('recibido', '2001', 'Nación', now() + interval '20 hours', 100, 'cartera'),
+		('entregado', '2002', 'Nación', now() + interval '5 days', 100, 'entregado')`)
+	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
+		values ($1, 'factura_a', 1, 1, 100, 0, 0, 0, 0, 100, now(), now() + interval '30 hours'),
+		       ($1, 'factura_a', 1, 2, 100, 0, 0, 0, 0, 100, now(), now() + interval '6 days')`, prov)
+	ps, err := e.s.PendientesDelRol(context.Background(), "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	quiere := map[string]bool{"cheques-48h": true, "cheques": false, "compras-48h": true, "compras": false}
+	vistos := map[string]bool{}
+	for _, p := range ps {
+		// Lo que vence pronto es de hoy, pero no está vencido: no va en rojo.
+		if p.Vencido && p.Clave != "cheques-vencidos" && p.Clave != "compras-vencidas" && p.Clave != "pedidos-atrasados" &&
+			p.Clave != "presupuestos-sin-responder" && p.Clave != "deuda-vencida" {
+			t.Errorf("%s marcado vencido", p.Clave)
+		}
+		if u, ok := quiere[p.Clave]; ok {
+			vistos[p.Clave] = true
+			if p.Urgente != u || p.Cantidad != 1 {
+				t.Errorf("%s: urgente %v, cantidad %d", p.Clave, p.Urgente, p.Cantidad)
+			}
+		}
+	}
+	if len(vistos) != len(quiere) {
+		t.Errorf("faltan pendientes: %v", vistos)
+	}
+	// El depósito no ve cheques ni compras.
+	ps, err = e.s.PendientesDelRol(context.Background(), "deposito")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range ps {
+		if strings.HasPrefix(p.Clave, "cheques") || strings.HasPrefix(p.Clave, "compras") {
+			t.Errorf("el depósito ve %s", p.Clave)
+		}
+	}
+}

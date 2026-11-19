@@ -3,13 +3,16 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, MapPin, MessageCircle, Scissors, Truck, Users } from "lucide-react";
+import { ArrowRight, MapPin, Scissors, Truck, Users } from "lucide-react";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
 import { ANIO_FUNDACION, numerosDeLaEmpresa } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { ALCANCE_MOLDAVA, masDeAnios } from "@/lib/empresa";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
+import { tienda } from "@/lib/dal/contenido";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /**
  * Quiénes somos (notas del 9/11/2026: «hacer más enriquecida la página»).
@@ -41,14 +44,26 @@ function fotosDeLaGaleria(): string[] {
   }
 }
 
-const SERVICIOS = [
-  { icono: Scissors, titulo: "Corte a medida", detalle: "Seccionadora en el aserradero.", href: "/corte" },
-  { icono: Truck, titulo: "Entregas", detalle: "En Mar del Plata y zona.", href: "/sucursales" },
-  { icono: Users, titulo: "Cuenta profesional", detalle: "Precios de gremio y cuenta corriente.", href: "/profesionales" },
-];
+/** Con la tienda apagada no hay «precios de gremio» que ver (hallazgo 28). */
+function servicios(tiendaActiva: boolean) {
+  return [
+    { icono: Scissors, titulo: "Corte a medida", detalle: `Seccionadora ${DONDE_SE_CORTA.frase}.`, href: "/corte" },
+    { icono: Truck, titulo: "Entregas", detalle: "En Mar del Plata y zona.", href: "/sucursales" },
+    {
+      icono: Users,
+      titulo: "Cuenta profesional",
+      detalle: tiendaActiva ? "Precios de gremio y cuenta corriente." : "Cuenta corriente y documentación técnica.",
+      href: "/profesionales",
+    },
+  ];
+}
 
 export default async function NosotrosPage() {
-  const [numeros, sucursales] = await Promise.all([numerosDeLaEmpresa(), listarSucursalesPublicas()]);
+  const [numeros, sucursales, laTienda] = await Promise.all([
+    numerosDeLaEmpresa(),
+    listarSucursalesPublicas(),
+    tienda(),
+  ]);
   const fotos = fotosDeLaGaleria();
 
   const cifras = [
@@ -121,15 +136,9 @@ export default async function NosotrosPage() {
                     </a>
                   )}
                   {s.whatsapp && (
-                    <a
-                      href={`https://wa.me/${s.whatsapp}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-verde-whatsapp px-4 font-semibold text-white"
-                    >
-                      <MessageCircle className="h-4 w-4" />
+                    <BotonWhatsapp enlace={`https://wa.me/${s.whatsapp}`} className="px-4">
                       WhatsApp
-                    </a>
+                    </BotonWhatsapp>
                   )}
                 </div>
               </div>
@@ -142,7 +151,7 @@ export default async function NosotrosPage() {
         <div className="contenedor">
           <h2 className="text-[32px] font-bold tracking-[-0.03em]">Lo que hacemos</h2>
           <div className="mt-7 grid gap-4 md:grid-cols-3">
-            {SERVICIOS.map((s) => (
+            {servicios(laTienda.activa).map((s) => (
               <Link
                 key={s.titulo}
                 href={s.href}

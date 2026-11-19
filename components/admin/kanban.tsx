@@ -14,13 +14,22 @@ import { claseDeFamilia } from "@/components/admin/etiqueta-estado";
  */
 export function Tablero({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-[18px] pb-1.5 pt-0.5">
+    <div className="@container mt-[18px] pb-1.5 pt-0.5">
       {/*
-        Las columnas se reparten el ancho y, cuando no entran, bajan a la fila
-        siguiente; en el teléfono quedan una abajo de la otra. Antes el tablero
-        se corría de costado, y en el celular eso era ver una columna y media.
+        Con lugar (1024 px de tablero, lo que pide el peor caso: cuatro
+        columnas con trabajo de 240 px), una sola fila de izquierda a derecha
+        como avanza el trabajo: la columna con tarjetas se lleva el ancho y la
+        vacía se angosta (el peso lo pone cada columna). Repartido en partes
+        iguales, las vacías ocupaban lo mismo que la llena.
+
+        Sin ese lugar, dos por fila en orden (la tercera abajo de la primera),
+        y en el teléfono una abajo de la otra. **Nunca de costado**: la regla
+        del 18/11 vale también adentro de un bloque, y una tablet o una
+        notebook con el menú abierto dejaban «Listos» detrás de un scroll sin
+        ninguna señal. Se mide el tablero (`@container`) y no la pantalla,
+        porque el menú lateral se come 244 px.
       */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,268px),1fr))] items-start gap-3">
+      <div className="grid items-start gap-3 @xl:grid-cols-2 @5xl:flex">
         {children}
       </div>
     </div>
@@ -35,7 +44,6 @@ export function ColumnaTablero({
   cantidad,
   detalle,
   estado,
-  vacio,
   children,
 }: {
   titulo: string;
@@ -47,7 +55,6 @@ export function ColumnaTablero({
    * pintarla, así que no hay forma de que dos pantallas la pinten distinto.
    */
   estado: string;
-  vacio: string;
   children: React.ReactNode;
 }) {
   const [expandida, setExpandida] = useState(false);
@@ -62,7 +69,15 @@ export function ColumnaTablero({
     // La pizarra del aserradero: el nombre de la etapa y, grande, cuánto hay
     // en ella. La raya de color aparece solo donde hay trabajo; vacía, la
     // columna queda baja y en gris (pedido de Nahuel, 18/11: «menos genérico»).
-    <section className="tarjeta-hundida flex flex-col overflow-hidden rounded-xl">
+    // Vacía es solo el encabezado con el 0, angosta: el 0 ya dice que no hay
+    // nada, y una caja con «Nada esperando» no agrega.
+    <section
+      className={`tarjeta-hundida flex min-w-0 flex-col overflow-hidden rounded-xl ${
+        cantidad > 0
+          ? "@5xl:min-w-[240px] @5xl:flex-[3_1_0%]"
+          : "@5xl:min-w-[132px] @5xl:flex-[1_1_0%]"
+      }`}
+    >
       <header className="sticky top-0 z-[2] px-3.5 pb-2 pt-3">
         <span
           className={`${claseDeFamilia(estado)} mb-2.5 block h-[3px] w-[34px] rounded-full ${
@@ -70,7 +85,9 @@ export function ColumnaTablero({
           }`}
           aria-hidden="true"
         />
-        <div className="flex items-baseline gap-2.5">
+        {/* El título nunca se parte: si no entra al lado del número (la
+            columna vacía y angosta), baja entero abajo del 0. */}
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span
             className={`tabular text-[28px] font-bold leading-none tracking-[-0.03em] ${
               cantidad > 0 ? "text-foreground" : "text-texto-3"
@@ -78,15 +95,17 @@ export function ColumnaTablero({
           >
             {cantidad}
           </span>
-          <h2 className={`text-[15px] font-semibold tracking-[-0.01em] ${cantidad > 0 ? "" : "text-texto-2"}`}>
+          <h2 className={`whitespace-nowrap text-[15px] font-semibold tracking-[-0.01em] ${cantidad > 0 ? "" : "text-texto-2"}`}>
             {titulo}
           </h2>
-          {detalle && (
-            <span className="tabular ml-auto text-[13px] text-texto-2">
-              {detalle}
-            </span>
-          )}
         </div>
+        {/* En su renglón: al lado del título, «$ 1.234.567» no entraba y bajaba
+            desordenado. */}
+        {detalle && (
+          <p className="tabular mt-1 whitespace-nowrap text-[13px] text-texto-2">
+            {detalle}
+          </p>
+        )}
       </header>
 
       {/*
@@ -95,27 +114,21 @@ export function ColumnaTablero({
         para ver qué hay en las otras, que es justo lo que el tablero venía a
         resolver.
       */}
-      <div className="flex max-h-[calc(100vh-300px)] flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
-        {cantidad === 0 ? (
-          <p className="px-1 pb-2 text-sm text-texto-3">
-            {vacio}
-          </p>
-        ) : (
-          <>
-            {visibles}
+      {cantidad > 0 && (
+        <div className="flex max-h-[calc(100vh-300px)] flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
+          {visibles}
 
-            {hayDeMas && !expandida && (
-              <button
-                onClick={() => setExpandida(true)}
-                className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-linea text-sm text-texto-2 transition-colors hover:bg-card hover:text-foreground"
-              >
-                <ChevronDown className="h-4 w-4" />
-                Ver {ocultas} más
-              </button>
-            )}
-          </>
-        )}
-      </div>
+          {hayDeMas && !expandida && (
+            <button
+              onClick={() => setExpandida(true)}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-linea text-sm text-texto-2 transition-colors hover:bg-card hover:text-foreground"
+            >
+              <ChevronDown className="h-4 w-4" />
+              Ver {ocultas} más
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }

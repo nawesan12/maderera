@@ -59,11 +59,17 @@ paths:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
       operationId: AvanzarPedido
+      description: >-
+        Con `desde`, el estado que vio quien toca: si el pedido ya cambió,
+        409 y no se avanza un paso de más (que en un retiro emite el remito).
+      parameters:
+        - { name: desde, in: query, schema: { type: string, maxLength: 40 } }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/cancelar:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]

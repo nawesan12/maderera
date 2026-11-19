@@ -9,6 +9,7 @@ import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { listarProductosPublicos, POR_PAGINA } from "@/lib/dal/catalog";
 import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /**
  * Moldava, la línea propia.
@@ -116,14 +117,9 @@ export default async function MoldavaPage() {
             >
               Pedir cuenta mayorista
             </Link>
-            <a
-              href={whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center rounded-[10px] border border-linea bg-card px-5 font-semibold transition-colors hover:bg-muted"
-            >
+            <BotonWhatsapp enlace={whatsapp} variante="secundario">
               Consultar por WhatsApp
-            </a>
+            </BotonWhatsapp>
           </div>
         </section>
 

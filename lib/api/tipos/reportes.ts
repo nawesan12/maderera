@@ -469,6 +469,7 @@ export interface components {
             detalle?: string;
             href: string;
             urgente?: boolean;
+            vencido?: boolean;
         };
         Monto: {
             /** Format: double */

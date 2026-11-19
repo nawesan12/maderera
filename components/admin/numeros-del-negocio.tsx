@@ -8,6 +8,7 @@ import {
   ventasPorSucursal,
 } from "@/lib/dal/admin/resumen";
 import type { resolverPeriodo } from "@/lib/periodos";
+import { MESES_PARA_EL_GRAFICO, mesesConVentas } from "@/lib/inicio";
 
 /**
  * Los números del negocio: lo que el dueño de una maderera pregunta cuando
@@ -125,7 +126,14 @@ export async function NumerosDelNegocio({
 
       <section className="tarjeta p-5">
         <h2 className="mb-4 text-lg font-semibold">Ventas por sucursal</h2>
-        <GraficoVentas datos={ventas} />
+        {/* Con menos de tres meses vendidos el gráfico son barras vacías:
+            se muestra el mes en curso de cada sucursal, que es la cifra que
+            se mira. */}
+        {mesesConVentas(ventas) >= MESES_PARA_EL_GRAFICO ? (
+          <GraficoVentas datos={ventas} />
+        ) : (
+          <MesPorSucursal mes={ventas[ventas.length - 1]} />
+        )}
       </section>
     </div>
   );
@@ -197,5 +205,36 @@ function Tarjeta({
         ))}
       </ul>
     </Link>
+  );
+}
+
+/** El mes en curso de cada sucursal, en dos cifras. */
+function MesPorSucursal({
+  mes,
+}: {
+  mes?: { mes: string; central: number; aserradero: number };
+}) {
+  const filas = [
+    { nombre: "Casa Central", valor: mes?.central ?? 0 },
+    { nombre: "Aserradero", valor: mes?.aserradero ?? 0 },
+  ];
+  return (
+    <dl className="grid gap-4 sm:grid-cols-2">
+      {filas.map((f) => (
+        <div key={f.nombre} className="flex flex-col gap-1.5">
+          <dt className="text-base font-semibold text-texto-2">
+            {f.nombre}
+            {mes && <span className="font-normal"> · {mes.mes}</span>}
+          </dt>
+          <dd
+            className={`tabular font-bold leading-none tracking-[-0.03em] ${
+              f.valor === 0 ? "text-[24px] text-texto-3" : "text-[34px]"
+            }`}
+          >
+            {moneda.format(f.valor)}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }

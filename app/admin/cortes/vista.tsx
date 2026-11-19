@@ -7,6 +7,7 @@ import {
 } from "@/components/admin/kanban";
 import { haceCuanto } from "@/components/admin/formato";
 import { diasDesde } from "@/lib/formato";
+import { formatearDecimal } from "@/lib/unidades";
 
 /** Más de esto en el tablero, el corte se marca como demorado. */
 const DIAS_DE_DEMORA = 3;
@@ -25,10 +26,10 @@ import type { AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
  * corta primero.
  */
 const COLUMNAS = [
-  { estado: "en-cola", titulo: "En cola", vacio: "Nada esperando." },
-  { estado: "en-proceso", titulo: "En la máquina", vacio: "La máquina está libre." },
-  { estado: "terminado", titulo: "Terminados", vacio: "Nada terminado." },
-  { estado: "retirado", titulo: "Retirados", vacio: "Nada retirado hoy." },
+  { estado: "en-cola", titulo: "En cola" },
+  { estado: "en-proceso", titulo: "En la máquina" },
+  { estado: "terminado", titulo: "Terminados" },
+  { estado: "retirado", titulo: "Retirados" },
 ] as const;
 
 export function TableroDeCortes({
@@ -63,11 +64,15 @@ export function TableroDeCortes({
               key={columna.estado}
               titulo={columna.titulo}
               cantidad={enColumna.length}
+              // Con la misma función que las tarjetas: si el encabezado
+              // dice 4 y las tarjetas suman 4,32, parece que falta algo. Sin
+              // decimales fijos: es una sola cifra, no una columna que alinear.
               detalle={
-                enColumna.length > 0 ? `${Math.round(metros)} m²` : undefined
+                enColumna.length > 0
+                  ? `${formatearDecimal(metros)} m²`
+                  : undefined
               }
               estado={columna.estado}
-              vacio={columna.vacio}
             >
               {enColumna.map((corte, i) => (
                 <TarjetaCorte
@@ -114,9 +119,11 @@ function TarjetaCorte({
               {posicion}
             </span>
           )}
+          {/* Dos renglones antes de cortar: con el ancho solo, los nombres
+              largos de cliente se perdían. */}
           <Link
             href={`/admin/cortes/${corte.id}`}
-            className="truncate text-base font-medium hover:text-brand-orange"
+            className="line-clamp-2 break-words text-base font-medium hover:text-brand-orange"
           >
             {corte.cliente}
           </Link>
@@ -139,7 +146,10 @@ function TarjetaCorte({
       <dl className="mt-2.5 grid grid-cols-3 gap-2 rounded-md bg-muted/60 px-2.5 py-2">
         <Cifra valor={corte.placas} etiqueta={corte.placas === 1 ? "placa" : "placas"} />
         <Cifra valor={corte.piezas} etiqueta={corte.piezas === 1 ? "pieza" : "piezas"} />
-        <Cifra valor={corte.metrosCuadrados} etiqueta="m²" />
+        <Cifra
+          valor={formatearDecimal(corte.metrosCuadrados, 2, { fijo: true })}
+          etiqueta="m²"
+        />
       </dl>
 
       {corte.notas && (
@@ -182,7 +192,7 @@ function TarjetaCorte({
   );
 }
 
-function Cifra({ valor, etiqueta }: { valor: number; etiqueta: string }) {
+function Cifra({ valor, etiqueta }: { valor: number | string; etiqueta: string }) {
   return (
     <div className="text-center">
       <dd className="tabular text-base font-medium">{valor}</dd>

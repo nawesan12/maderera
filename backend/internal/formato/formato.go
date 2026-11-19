@@ -133,3 +133,21 @@ func MonedaEntera(v float64) string {
 	}
 	return signo + "$ " + Miles(e)
 }
+
+// Decimal es formatearDecimal (lib/unidades.ts) en modo texto: es-AR con
+// hasta `max` decimales y sin ceros de más («4,32», «2,5», «1.234,5»). Lo
+// que redondea a cero sale «0», nunca «-0». Es lo que escribe el bot: el
+// «2.5 m²» con punto es el mismo error de los m² de Cortes.
+func Decimal(v float64, max int) string {
+	e, d := redondearDecimal(v, max)
+	d = strings.TrimRight(d, "0")
+	signo := ""
+	if math.Signbit(v) && (strings.Trim(e, "0") != "" || d != "") {
+		signo = "-"
+	}
+	t := Miles(e)
+	if d != "" {
+		t += "," + d
+	}
+	return signo + t
+}

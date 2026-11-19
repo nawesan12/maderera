@@ -60,6 +60,20 @@ var textoDelEstado = map[string]string{
 	"entregado":  "entregado",
 }
 
+// nombreDelEstado es el estado como se lee en el aviso de un 409.
+func nombreDelEstado(e string) string {
+	switch e {
+	case "pendiente":
+		return "pendiente"
+	case "cancelado":
+		return "cancelado"
+	}
+	if t := textoDelEstado[e]; t != "" {
+		return t
+	}
+	return e
+}
+
 func (s *Servicio) enTransaccion(ctx context.Context, f func(pgx.Tx) error) error {
 	return plataforma.EnTransaccion(ctx, s.pool, f)
 }
@@ -98,7 +112,13 @@ func bloquearPedido(ctx context.Context, tx pgx.Tx, id string) (*filaDePedido, e
 // «Avanzar» es el camino normal del tablero para los pedidos de la tienda, y
 // porque la regla del depósito es que **cada salida tiene su remito**: así
 // la tiene, y se puede anular como cualquier otro.
-func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*Resultado, error) {
+//
+// desde es el estado que vio quien tocó el botón (vacío: no se controla). Si
+// el pedido ya cambió —otro depositero, el tablero abierto hace un minuto—,
+// se avanzaría un paso que nadie pidió: de «preparando» a «entregado» con
+// remito, baja del físico y un WhatsApp al cliente. Con la fila bloqueada se
+// compara y, si no coincide, 409.
+func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde string) (*Resultado, error) {
 	var p *filaDePedido
 	var siguiente string
 	var remito *entregas.EntregaCreada
@@ -111,6 +131,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id string) (*R
 		var err error
 		if p, err = bloquearPedido(ctx, tx, id); err != nil {
 			return err
+		}
+		if desde != "" && desde != p.estado {
+			return yaCambio(p.numero+" ya estaba "+nombreDelEstado(p.estado)+": se actualizó la lista.")
 		}
 		switch p.estado {
 		case "entregado":

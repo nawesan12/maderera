@@ -144,3 +144,24 @@ const METROS = new Intl.NumberFormat("es-AR", {
 export function formatearLargo(largoMm: number): string {
   return `${METROS.format(largoMm / 1000)} m`;
 }
+
+/**
+ * Un decimal como se escribe acá: «4,32», no «4.32».
+ *
+ * Dos modos. En el texto corrido se recortan los ceros («2,5 m de
+ * tapacanto»); en las cifras de tablas y tarjetas (`fijo`) van siempre los
+ * mismos decimales, porque «4,3» abajo de «4,32» no alinea. Lo que redondea a
+ * cero sale «0»: un «-0» en la columna de m² parece un error.
+ */
+export function formatearDecimal(
+  valor: number,
+  decimales = 2,
+  { fijo = false }: { fijo?: boolean } = {},
+): string {
+  const texto = new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: fijo ? decimales : 0,
+    maximumFractionDigits: decimales,
+  }).format(valor);
+  // Intl conserva el signo del cero («-0», «-0,00»): se lo saca.
+  return /^-0(,0*)?$/.test(texto) ? texto.slice(1) : texto;
+}

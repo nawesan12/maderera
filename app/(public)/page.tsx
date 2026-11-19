@@ -28,9 +28,12 @@ import { escalasDePagoPublicas } from "@/lib/dal/descuentos-pago";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { SliderDePromos } from "@/components/home/slider-promos";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
+import { bannerDelProfesional } from "@/lib/profesionales/beneficios";
+import { LetraChica } from "@/components/home/letra-chica";
 import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
 import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de-pago";
 import { metadatosDePagina } from "@/lib/seo";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /**
  * La portada dice primero qué es y dónde: «maderera en Mar del Plata» es lo
@@ -103,7 +106,6 @@ export default async function HomePage() {
         banners={avisos}
         hero={
           <Hero
-            productos={portada.totalProductos}
             sucursales={sucursales.length}
             anios={numeros.anios}
           />
@@ -129,7 +131,7 @@ export default async function HomePage() {
 
       <ResenasDelNegocio resenas={resenas} resumen={resumenResenas} />
 
-      <BannerProfesionales />
+      <BannerProfesionales tiendaActiva={laTienda.activa} />
 
       <Historia anios={numeros.anios} />
 
@@ -465,7 +467,6 @@ function MediosDePago({
               return (
               <article
                 key={p.id}
-                title={p.detalle ?? undefined}
                 className="flex min-w-0 flex-col rounded-2xl superficie px-4 py-4 sm:px-5 sm:py-[18px]"
               >
                 {/* El logo del banco, si lo cargaron. Se reconoce antes que
@@ -495,11 +496,11 @@ function MediosDePago({
                 <h3 className="mt-1.5 text-[17px] font-bold leading-snug tracking-[-0.01em]">
                   {p.titulo}
                 </h3>
-                {p.detalle && (
-                  <p className="mt-2 line-clamp-2 text-[13.5px] leading-relaxed text-texto-2">
-                    {p.detalle}
-                  </p>
-                )}
+                {/* Se cortaba a dos renglones justo en la condición («…con
+                    tope de reintegro de»), que es lo que hay que leer
+                    (hallazgo 47). Va entera si entra; si no, tres renglones
+                    y «Ver más», medido de verdad en `LetraChica`. */}
+                {p.detalle && <LetraChica texto={p.detalle} />}
                 <p className="mt-auto pt-3 text-[12.5px] font-medium text-texto-2">
                   {p.dias}
                   {p.dias && p.vigenciaHasta && " · "}
@@ -584,7 +585,8 @@ function LogoDeMarca({
  * Si algún día existe de verdad, se anuncia con los números de la base y no
  * con ejemplos escritos acá.
  */
-function BannerProfesionales() {
+function BannerProfesionales({ tiendaActiva }: { tiendaActiva: boolean }) {
+  const { titulo, bajada } = bannerDelProfesional(tiendaActiva);
   return (
     <section className="bg-sitio-fondo py-[48px]">
       <div className="contenedor">
@@ -609,10 +611,10 @@ function BannerProfesionales() {
                 Portal profesionales
               </span>
               <h3 className="mt-3.5 text-[26px] font-bold tracking-[-0.025em]">
-                Tu propia lista de precios
+                {titulo}
               </h3>
               <p className="mt-2 text-[15.5px] leading-relaxed text-texto-2">
-                Precios de gremio y cuenta corriente.
+                {bajada}
               </p>
 
               <Link
@@ -779,10 +781,9 @@ function Sucursales({
                       />
                     }
                     variant="outline"
-                    size="sm"
-                    className="rounded-full"
+                    className="h-11 rounded-[10px] px-4 text-[15px]"
                   >
-                    <MapPin className="mr-1.5 h-3.5 w-3.5" />
+                    <MapPin className="mr-1.5 h-4 w-4" />
                     Cómo llegar
                   </Button>
                   {/* El número sale de la sucursal de la tarjeta: estaba fijo
@@ -794,28 +795,16 @@ function Sucursales({
                         <a href={`tel:${s.telefono.replace(/[^\d+]/g, "")}`} />
                       }
                       variant="outline"
-                      size="sm"
-                      className="rounded-full"
+                      className="h-11 rounded-[10px] px-4 text-[15px]"
                     >
-                      <Phone className="mr-1.5 h-3.5 w-3.5" />
+                      <Phone className="mr-1.5 h-4 w-4" />
                       Llamar
                     </Button>
                   )}
                   {s.whatsapp && (
-                    <Button
-                      render={
-                        <a
-                          href={`https://wa.me/${s.whatsapp.replace(/\D/g, "")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        />
-                      }
-                      size="sm"
-                      className="rounded-full bg-verde-whatsapp text-white hover:bg-brand-green/90"
-                    >
-                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                    <BotonWhatsapp enlace={`https://wa.me/${s.whatsapp.replace(/\D/g, "")}`} className="px-4">
                       WhatsApp
-                    </Button>
+                    </BotonWhatsapp>
                   )}
                 </div>
               </CardContent>

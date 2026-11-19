@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { ImageOff } from "lucide-react";
+import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
 
 /**
  * Galería de la ficha pública.
@@ -10,25 +10,34 @@ import { ImageOff } from "lucide-react";
  * Para comprar madera hace falta ver el material: la veta, el color real, la
  * terminación. Una sola foto chica no alcanza, y en una maderera es lo que más
  * define si alguien se decide o llama para preguntar.
+ *
+ * Sin «Destacado» sobre la foto (hallazgo 26): salió de la tarjeta porque lo
+ * tenía un tercio del catálogo, y en la ficha quedaba una marca que la grilla
+ * ya no mostraba. `featured` solo ordena.
  */
 export function GaleriaProducto({
   imagenes,
   nombre,
-  destacado = false,
+  rubro,
+  categoria,
+  marca,
 }: {
   imagenes: string[];
   nombre: string;
-  destacado?: boolean;
+  /** Para la placa, cuando no hay foto: lo que se estampa y el tono. */
+  rubro: string;
+  categoria: string;
+  marca?: string | null;
 }) {
   const [activa, setActiva] = useState(0);
 
+  // Sin foto, la placa del rubro (hallazgo 25): «Sin foto todavía» con un
+  // ícono de imagen rota era lo primero que se veía de la ficha. Es una
+  // imagen para el lector de pantalla, con el nombre del producto.
   if (imagenes.length === 0) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-brand-wood-light/30">
-        <span className="flex flex-col items-center gap-2 text-muted-foreground">
-          <ImageOff className="h-8 w-8" />
-          <span className="text-sm">Sin foto todavía</span>
-        </span>
+      <div role="img" aria-label={nombre} className="relative aspect-[4/3] overflow-hidden rounded-2xl shadow-sm">
+        <PlacaDeProducto rubro={rubro} categoria={categoria} marca={marca} tamano="ficha" />
       </div>
     );
   }
@@ -50,11 +59,6 @@ export function GaleriaProducto({
           className="object-cover"
           sizes="(max-width: 1024px) 100vw, 50vw"
         />
-        {destacado && (
-          <span className="absolute left-4 top-4 rounded-full bg-accion px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
-            Destacado
-          </span>
-        )}
       </div>
 
       {imagenes.length > 1 && (

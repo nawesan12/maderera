@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"mjbj/internal/asistente"
+	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/push"
 )
@@ -59,8 +61,12 @@ type VarianteBot struct {
 
 // FichaBot es lo que el bot necesita para presupuestar un producto.
 type FichaBot struct {
-	Nombre    string
-	Unidad    string
+	Nombre string
+	Unidad string
+	// PorM2: una placa que se vende por metro cuadrado (forma_de_venta
+	// metro_cuadrado). Su precio de lista ya es por m² y la línea se guarda
+	// en m² (ventas.SeVendePorM2 y unidadDeLinea de lib/ventas).
+	PorM2     bool
 	Variantes []VarianteBot
 }
 
@@ -87,7 +93,11 @@ type Presupuestar struct {
 	Slug     string           `json:"slug"`
 	Medida   asistente.Medida `json:"medida"`
 	Cantidad float64          `json:"cantidad"`
-	Texto    string           `json:"texto"`
+	// Unidad es la que dijo el cliente: "m2", "m", "u" (dijo unidades:
+	// «10 placas», «5 tirantes») o vacío (no dijo cuánto, va una). Un
+	// pendiente guardado antes de que existiera se lee vacío, como antes.
+	Unidad string `json:"unidad,omitempty"`
+	Texto  string `json:"texto"`
 }
 
 // EstadoBot es lo que el bot recuerda de una conversación.
@@ -129,6 +139,9 @@ type RespuestaBot struct {
 	// Cortar: escribieron un despiece; atenderTurno intenta guardarlo como
 	// consulta de corte. Texto ya trae el link al cortador por si no se puede.
 	Cortar *asistente.Despiece
+	// Motivo: por qué se derivó, si no es obvio («pidió 12 m y se vende
+	// por placa»). Va en el aviso a la persona.
+	Motivo string
 	// NoEntendio: el «no lo encontré» de la primera vez. En una ráfaga con
 	// algo que sí se entendió, se descarta.
 	NoEntendio bool
@@ -160,8 +173,8 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 		if m := medidaSuelta(texto); m.EspesorMm != 0 || m.LargoMm != 0 {
 			q := *p
 			q.Medida = m
-			if c := cantidadPedida(texto, asistente.Entender(texto)); c != 1 {
-				q.Cantidad = c
+			if c, u := cantidadPedida(texto, asistente.Entender(texto)); c != 1 || u != "" {
+				q.Cantidad, q.Unidad = c, u
 			}
 			return RespuestaBot{Entendio: asistente.Precio, Presupuestar: &q, Estado: EstadoBot{Consulta: est.Consulta}}
 		}
@@ -250,7 +263,8 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 		if preguntaPrecio(texto) {
 			if len(ps) == 1 {
 				// Un producto: se arma el presupuesto y lo revisa una persona.
-				r.Presupuestar = &Presupuestar{Slug: ps[0].Slug, Medida: e.Medida, Cantidad: cantidadPedida(texto, e), Texto: texto}
+				cant, unidad := cantidadPedida(texto, e)
+				r.Presupuestar = &Presupuestar{Slug: ps[0].Slug, Medida: e.Medida, Cantidad: cant, Unidad: unidad, Texto: texto}
 				return r
 			}
 			r.Texto = listarProductos(ps, sitio, d.StockVisible) + "\n\n¿De cuál te paso el presupuesto? Decime el nombre y la medida."
@@ -264,9 +278,11 @@ func Responder(texto string, est EstadoBot, d DatosBot, conBusqueda bool) Respue
 
 var rePrecio = regexp.MustCompile(`\b(precio|precios|cuanto sale|cuanto salen|cuanto vale|cuanto valen|cuanto cuesta|cuanto cuestan|cuanto esta|cuanto estan|presupuesto|cotizacion|cotizame|pasame (?:el )?precio|pasame (?:un )?presupuesto)\b`)
 
-// reCantidad es «10 placas», «5 u», «3 tirantes»: un número chico seguido de
-// una unidad. No lee el «18» de un espesor ni el «600» de una medida.
-var reCantidad = regexp.MustCompile(`\b(\d{1,3})\s*(?:u|un|unid|unidades|placas?|tirantes?|tablas?|piezas?|rollos?|bolsas?|chapas?|barras?|listones?|varillas?|cajas?|latas?)\b`)
+// reCantidad es «10 placas», «5 u», «3 tirantes», «1.000 placas»: un número
+// seguido de una unidad. No lee el «18» de un espesor ni el «600» de una
+// medida. El prefijo evita empezar en medio de un número: con «\b», en
+// «1.000 placas» se leía el «000».
+var reCantidad = regexp.MustCompile(`(?:^|[^\d.,])(\d{1,3}(?:\.\d{3})+|\d{1,4})\s*(?:u|un|unid|unidades|placas?|tirantes?|tablas?|piezas?|rollos?|bolsas?|chapas?|barras?|listones?|varillas?|cajas?|latas?)\b`)
 
 // nombraAlgo: el texto trae un producto o un rubro, no solo una medida. Con
 // un presupuesto esperando la medida, «de 18» la completa y «mejor pasame
@@ -276,7 +292,9 @@ func nombraAlgo(texto string) bool {
 	return e.Rubro != "" || strings.TrimSpace(reConectoresBot.ReplaceAllString(e.Consulta, "")) != ""
 }
 
-var reConectoresBot = regexp.MustCompile(`\b(la|el|y|en|de|con|esa|ese|medida|espesor|grosor|mm)\b`)
+// Los m² y los metros también: «de 18, 6 m2» completa la medida con la
+// cantidad, no pide otra cosa.
+var reConectoresBot = regexp.MustCompile(`\b(la|el|y|en|de|con|esa|ese|medida|espesor|grosor|mm|m2|m|metros?|cuadrados?)\b`)
 
 // esAcuse: lo que se dice en la charla de un pedido o un pago y no es una
 // consulta: «dale», «listo», «ya transferí», «te mando el comprobante».
@@ -316,20 +334,128 @@ func medidaSuelta(texto string) asistente.Medida {
 	return asistente.Entender(t).Medida
 }
 
-// cantidadPedida es cuánto piden: los metros si los dijeron, si no las
-// unidades, y si no una.
-func cantidadPedida(texto string, e asistente.Entendido) float64 {
+// cantidadPedida es cuánto piden y en qué: los metros o los m² si los
+// dijeron («m» o «m2»), si no las unidades («u»), y si no una (sin unidad).
+// Las unidades dichas se separan del uno por defecto porque «10 tirantes» de
+// algo que se vende por metro no son 10 metros. Las medidas se borran antes:
+// el «1.830» de «1.830x2.600» no es una cantidad.
+func cantidadPedida(texto string, e asistente.Entendido) (float64, string) {
 	if e.Cantidad != nil && e.Cantidad.Valor > 0 {
-		return e.Cantidad.Valor
+		return e.Cantidad.Valor, e.Cantidad.Unidad
 	}
-	if g := reCantidad.FindStringSubmatch(asistente.Normalizar(texto)); g != nil {
-		var n float64
-		fmt.Sscan(g[1], &n)
-		if n > 0 {
-			return n
+	if g := reCantidad.FindStringSubmatch(asistente.SinMedidas(asistente.Normalizar(texto))); g != nil {
+		if n := asistente.Numero(g[1]); n > 0 {
+			return n, "u"
 		}
 	}
-	return 1
+	return 1, ""
+}
+
+// Los topes de lo que el bot presupuesta solo. Ningún pedido real por
+// WhatsApp pasa de esto, y si alguno pasa lo tiene que ver una persona: un
+// tipeo («2000 placas» por «20») no puede salir como presupuesto.
+const (
+	topeUnidadesBot = 200
+	topeMetrosBot   = 2000
+)
+
+// cantidadCotizada es lo que va al presupuesto, en la unidad de venta.
+type cantidadCotizada struct {
+	Cantidad float64
+	// Unidad es la de la línea: la del producto, o metro_cuadrado para la
+	// placa que se vende por m².
+	Unidad string
+	// Convertida: pidieron m² y se vende por placa. Pedido es lo que dijeron
+	// («6 m²») y Cubre los m² de las placas enteras: lo que se paga.
+	Convertida bool
+	// PlacasAM2: pidieron placas de una que se vende por m²; Pedido es
+	// «10 placas» y Cantidad, los m² que suman.
+	PlacasAM2 bool
+	Pedido    string
+	Cubre     float64
+}
+
+// porQueNoSeCotiza es la razón tipada de cantidadEnUnidadDeVenta: el aviso
+// de la derivación dice lo que pasó, no lo que suele pasar. Con un solo
+// false, «1.000 m² de melamina» (211 placas, pasa el tope) salía como
+// «la placa no tiene medida cargada» y quien atendía buscaba un error en una
+// ficha que estaba bien.
+type porQueNoSeCotiza int
+
+const (
+	seCotiza porQueNoSeCotiza = iota
+	sinMedidaCargada
+	unidadQueNoSePasa
+	pasaElTope
+)
+
+// unidadDeLineaBot es unidadDeLinea (lib/ventas/forma-de-venta.ts).
+func unidadDeLineaBot(f FichaBot) string {
+	if f.PorM2 && f.Unidad == "placa" {
+		return "metro_cuadrado"
+	}
+	return f.Unidad
+}
+
+// cantidadEnUnidadDeVenta pasa lo que pidieron a la unidad en que se vende el
+// producto. Los m² de un producto por m² y los metros de uno por metro van
+// igual; los m² de una placa se cuentan en placas enteras (es una cantidad de
+// placas, no plata: se redondea para arriba) y las placas de una placa por
+// m² se pasan a m² con su área. Cualquier otra combinación —metros de una
+// placa, m² de algo que se vende por unidad, una placa sin medida, piezas de
+// algo que se vende por metro— no se cotiza y lo resuelve una persona:
+// cotizar «12 metros de melamina» como 12 placas, o «10 tirantes» como 10
+// metros, es lo que pasaba antes. Con un tope pasado, la cantidad igual
+// vuelve, para que el aviso diga cuánto era.
+func cantidadEnUnidadDeVenta(cant float64, unidadDicha string, f FichaBot, v VarianteBot) (cantidadCotizada, porQueNoSeCotiza) {
+	linea := unidadDeLineaBot(f)
+	c := cantidadCotizada{Unidad: linea}
+	if cant <= 0 {
+		return c, unidadQueNoSePasa
+	}
+	area := 0.0
+	if v.LargoMm > 0 && v.AnchoMm > 0 {
+		area = float64(v.LargoMm) * float64(v.AnchoMm) / 1e6
+	}
+	porMetro := linea == "metro_cuadrado" || linea == "metro_lineal"
+	switch {
+	case unidadDicha == "":
+		// No dijo cuánto (o un pendiente de antes): una, en la unidad de venta.
+		c.Cantidad = cant
+	case unidadDicha == "u" && linea == "metro_cuadrado" && f.Unidad == "placa":
+		if area == 0 {
+			return c, sinMedidaCargada
+		}
+		// Los m² a dos decimales: es lo que se imprime en el presupuesto.
+		c.Cantidad = jsmath.Round(float64(cant*area)*100) / 100
+		c.PlacasAM2 = true
+		c.Pedido = formato.Decimal(cant, 2) + " " + plural(int(cant), "placa", "placas")
+	case unidadDicha == "u" && porMetro:
+		return c, unidadQueNoSePasa
+	case unidadDicha == "u":
+		c.Cantidad = cant
+	case unidadDicha == "m2" && linea == "metro_cuadrado", unidadDicha == "m" && linea == "metro_lineal":
+		c.Cantidad = cant
+	case unidadDicha == "m2" && linea == "placa":
+		if area == 0 {
+			return c, sinMedidaCargada
+		}
+		// El épsilon: que 9,516 m² pedidos en placas de 4,758 no den 3.
+		c.Cantidad = math.Ceil(cant/area - 1e-9)
+		c.Convertida = true
+		c.Pedido = formato.Decimal(cant, 2) + " m²"
+		c.Cubre = c.Cantidad * area
+	default:
+		return c, unidadQueNoSePasa
+	}
+	tope := float64(topeUnidadesBot)
+	if porMetro {
+		tope = topeMetrosBot
+	}
+	if c.Cantidad > tope {
+		return c, pasaElTope
+	}
+	return c, seCotiza
 }
 
 func preguntaPrecio(texto string) bool { return rePrecio.MatchString(asistente.Normalizar(texto)) }
@@ -732,7 +858,7 @@ func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, entranteID,
 		}
 	}
 	if r.Presupuestar != nil {
-		texto, consulta, aviso, err := s.presupuestar(ctx, convID, waJid, entranteID, *r.Presupuestar)
+		texto, consulta, aviso, motivo, err := s.presupuestar(ctx, convID, waJid, entranteID, *r.Presupuestar)
 		if err != nil {
 			return p, err
 		}
@@ -743,8 +869,10 @@ func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, entranteID,
 			// Falta la medida: queda pendiente hasta la respuesta.
 			r.Texto, r.Estado.Consulta, r.Estado.Pendiente = texto, consulta, r.Presupuestar
 		default:
-			// Sin precio cargado o sin ficha: lo resuelve una persona.
+			// Sin precio cargado, sin ficha o una cantidad que no se puede
+			// pasar a la unidad de venta: lo resuelve una persona.
 			r = derivar(r, d, r.Presupuestar.Texto)
+			r.Motivo = motivo
 		}
 	}
 	p.r = r
@@ -803,19 +931,19 @@ func (s *Servicio) anotarCreado(ctx context.Context, q interface {
 //     mismo mensaje, en un turno que no llegó a contestar);
 //   - solo el texto (y la consulta para seguir) si falta saber la medida;
 //   - nada, si no se puede: sin ficha o sin precio, lo ve una persona.
-func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID string, p Presupuestar) (string, string, *push.Aviso, error) {
+func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID string, p Presupuestar) (texto, consulta string, aviso *push.Aviso, motivo string, err error) {
 	if s.ficha == nil {
-		return "", "", nil, nil
+		return "", "", nil, "", nil
 	}
 	if hecho, err := s.yaCreado(ctx, entranteID, "botPresupuesto"); err != nil || hecho != nil {
 		if err != nil {
-			return "", "", nil, err
+			return "", "", nil, "", err
 		}
-		return hecho.Texto, "", hecho.Aviso, nil
+		return hecho.Texto, "", hecho.Aviso, "", nil
 	}
 	f, err := s.ficha(ctx, p.Slug)
 	if err != nil || f == nil {
-		return "", "", nil, err
+		return "", "", nil, "", err
 	}
 	vs := elegirVariantes(f.Variantes, p.Medida)
 	if len(vs) == 0 {
@@ -823,7 +951,7 @@ func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID s
 		// cotiza otra sin avisar.
 		vs = f.Variantes
 		if len(vs) == 1 && (p.Medida.EspesorMm != 0 || p.Medida.LargoMm != 0) {
-			return fmt.Sprintf("El *%s* lo tenemos en %s. ¿Te sirve?", f.Nombre, vs[0].Label), asistente.ConsultaLimpia(f.Nombre), nil, nil
+			return fmt.Sprintf("El *%s* lo tenemos en %s. ¿Te sirve?", f.Nombre, vs[0].Label), asistente.ConsultaLimpia(f.Nombre), nil, "", nil
 		}
 	}
 	if len(vs) > 1 {
@@ -834,19 +962,28 @@ func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID s
 			}
 			ms = append(ms, "• "+v.Label)
 		}
-		return fmt.Sprintf("¿En qué medida querés el *%s*?\n%s", f.Nombre, strings.Join(ms, "\n")), asistente.ConsultaLimpia(f.Nombre), nil, nil
+		return fmt.Sprintf("¿En qué medida querés el *%s*?\n%s", f.Nombre, strings.Join(ms, "\n")), asistente.ConsultaLimpia(f.Nombre), nil, "", nil
 	}
-	if len(vs) == 0 || vs[0].Precio == "" {
-		return "", "", nil, nil
+	if len(vs) == 0 {
+		return "", "", nil, "", nil
+	}
+	if vs[0].Precio == "" {
+		return "", "", nil, "Sin precio cargado: " + strings.TrimSpace(f.Nombre+" "+vs[0].Label) + ".", nil
 	}
 	v := vs[0]
+	cc, razon := cantidadEnUnidadDeVenta(p.Cantidad, p.Unidad, *f, v)
+	if razon != seCotiza {
+		// No se cotiza algo mal: lo resuelve una persona, que ve en el aviso
+		// qué pidió y por qué no salió solo.
+		return "", "", nil, motivoSinCotizar(p, razon, cc, v), nil
+	}
 
 	var nombre, telefono string
 	var clienteID, sucursalID *string
 	if err := s.pool.QueryRow(ctx, `
 		select coalesce(cu.nombre, c.display_name, 'Cliente de WhatsApp'), c.customer_id, c.branch_id
 		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id where c.id = $1`, convID).Scan(&nombre, &clienteID, &sucursalID); err != nil {
-		return "", "", nil, err
+		return "", "", nil, "", err
 	}
 	// El teléfono, solo si el remitente vino con número: con BSUID no lo hay.
 	var tel *string
@@ -863,40 +1000,142 @@ func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID s
 	var id, numero string
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if numero, err = numeracion.Presupuesto(ctx, tx, ahora.In(argentina)); err != nil {
-		return "", "", nil, err
+		return "", "", nil, "", err
 	}
 	if err := tx.QueryRow(ctx, `
 		insert into quotes (numero, customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen,
 		                    subtotal, total, notas, asesor, valido_hasta)
 		values ($1, $2, $3, $4, $5, 'revision', 'whatsapp', round($6::numeric * $7::numeric, 2), round($6::numeric * $7::numeric, 2),
 		        $8, 'Bot de WhatsApp', $9)
-		returning id`, numero, clienteID, nombre, tel, sucursalID, v.Precio, p.Cantidad,
-		"Pedido por WhatsApp: «"+cortarJS(trimJS(p.Texto), 300)+"»", ahora.UTC().AddDate(0, 0, 7)).Scan(&id); err != nil {
-		return "", "", nil, err
+		returning id`, numero, clienteID, nombre, tel, sucursalID, v.Precio, cc.Cantidad,
+		notaDelBot(p, cc), ahora.UTC().AddDate(0, 0, 7)).Scan(&id); err != nil {
+		return "", "", nil, "", err
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden)
 		values ($1, $2, $3, $4, $5::numeric, $6::numeric, round($5::numeric * $6::numeric, 2), 0)`,
-		id, variante, descripcion, f.Unidad, p.Cantidad, v.Precio); err != nil {
-		return "", "", nil, err
+		id, variante, descripcion, cc.Unidad, cc.Cantidad, v.Precio); err != nil {
+		return "", "", nil, "", err
 	}
-	cant := strconv.FormatFloat(p.Cantidad, 'f', -1, 64)
-	texto := fmt.Sprintf("Listo: te armo el presupuesto de *%s × %s*. Una persona lo revisa y te lo manda por acá en un rato.", cant, descripcion)
-	aviso := &push.Aviso{Titulo: "Presupuesto " + numero + " por WhatsApp", Cuerpo: nombre + ": " + cant + " × " + descripcion + ". Revisalo y mandalo.",
+	// En metros o m², con la unidad: «1 × Machimbre» de un producto por metro
+	// se lee como una pieza.
+	cant := formato.Decimal(cc.Cantidad, 2) + sufijoDeUnidad(cc.Unidad)
+	texto = fmt.Sprintf("Listo: te armo el presupuesto de *%s × %s*.%s Una persona lo revisa y te lo manda por acá en un rato.", cant, descripcion, aclaracionDeLaConversion(cc))
+	cuerpo := nombre + ": " + cant + " × " + descripcion + ". Revisalo y mandalo."
+	if cc.Convertida || cc.PlacasAM2 {
+		cuerpo = nombre + ": pidió " + cc.Pedido + ", van " + cant + " × " + descripcion + ". Revisalo y mandalo."
+	}
+	aviso = &push.Aviso{Titulo: "Presupuesto " + numero + " por WhatsApp", Cuerpo: cuerpo,
 		URL: "/admin/presupuestos/" + id, Etiqueta: "presupuesto-" + id, Pantalla: "/admin/presupuestos"}
 	// En la misma transacción: o queda el presupuesto y la anotación, o
 	// ninguno de los dos.
 	if err := s.anotarCreado(ctx, tx, entranteID, "botPresupuesto", creadoPorElBot{Texto: texto, Aviso: aviso}); err != nil {
-		return "", "", nil, err
+		return "", "", nil, "", err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return "", "", nil, err
+		return "", "", nil, "", err
 	}
-	return texto, "", aviso, nil
+	return texto, "", aviso, "", nil
+}
+
+// motivoSinCotizar es lo que lee quien atiende en el aviso de la derivación,
+// sin abrir la charla: qué pidió y por qué el bot no lo cotizó.
+func motivoSinCotizar(p Presupuestar, razon porQueNoSeCotiza, c cantidadCotizada, v VarianteBot) string {
+	pedido := formato.Decimal(p.Cantidad, 2)
+	switch p.Unidad {
+	case "m2":
+		pedido += " m²"
+	case "m":
+		pedido += " m"
+	case "u":
+		pedido += " " + plural(int(p.Cantidad), "unidad", "unidades")
+	}
+	que := strings.TrimSpace(v.Label)
+	switch razon {
+	case sinMedidaCargada:
+		return "Pidió " + pedido + " y la placa " + que + " no tiene medida cargada: no se cotizó."
+	case pasaElTope:
+		// Lo que hubiera salido, si es otra cosa que lo pedido: «1.000 m²
+		// (211 placas)».
+		if c.Convertida || c.PlacasAM2 || p.Unidad == "" {
+			pedido += " (" + formato.Decimal(c.Cantidad, 2) + sufijoDeUnidad(c.Unidad)
+			if sufijoDeUnidad(c.Unidad) == "" {
+				pedido += " " + plural(int(c.Cantidad), nombreDeUnidad(c.Unidad), pluralDeUnidad(nombreDeUnidad(c.Unidad)))
+			}
+			pedido += ")"
+		}
+		return "Pidió " + pedido + ": pasa el tope del bot, revisalo."
+	}
+	return "Pidió " + pedido + " y se vende por " + nombreDeUnidad(c.Unidad) + ": no se cotizó."
+}
+
+// pluralDeUnidad: «placas», «unidades», «kilos».
+func pluralDeUnidad(n string) string {
+	if strings.HasSuffix(n, "d") {
+		return n + "es"
+	}
+	return n + "s"
+}
+
+// sufijoDeUnidad es la unidad corta detrás de una cantidad en metros: «6 m²».
+// Las unidades y las placas van sin nada, como siempre.
+func sufijoDeUnidad(u string) string {
+	switch u {
+	case "metro_cuadrado":
+		return " m²"
+	case "metro_lineal":
+		return " m"
+	}
+	return ""
+}
+
+// nombreDeUnidad es formatearUnidadLarga (lib/unidades.ts).
+func nombreDeUnidad(u string) string {
+	switch u {
+	case "", "unidad":
+		return "unidad"
+	case "metro_lineal":
+		return "metro"
+	case "metro_cuadrado":
+		return "metro cuadrado"
+	case "kg":
+		return "kilo"
+	}
+	return strings.ReplaceAll(u, "_", " ")
+}
+
+// aclaracionDeLaConversion le dice al cliente qué cubren las placas enteras:
+// pidió 6 m² y dos placas de 1,83 × 2,60 son 9,52 m². Decir «2 placas
+// (6 m²)» le haría creer que paga lo que pidió, y la discusión es en el
+// mostrador con cola.
+func aclaracionDeLaConversion(c cantidadCotizada) string {
+	if c.PlacasAM2 {
+		return fmt.Sprintf(" Pediste %s: son %s m².", c.Pedido, formato.Decimal(c.Cantidad, 2))
+	}
+	if !c.Convertida {
+		return ""
+	}
+	return fmt.Sprintf(" Pediste %s: %s %s %s m².", c.Pedido, formato.Decimal(c.Cantidad, 2),
+		plural(int(c.Cantidad), "placa entera cubre", "placas enteras cubren"), formato.Decimal(c.Cubre, 2))
+}
+
+// notaDelBot es la nota del presupuesto: lo que escribió el cliente y, si se
+// pasó de m² a placas, la diferencia, para que quien lo revisa la vea antes
+// de mandarlo.
+func notaDelBot(p Presupuestar, c cantidadCotizada) string {
+	nota := "Pedido por WhatsApp: «" + cortarJS(trimJS(p.Texto), 300) + "»"
+	if c.Convertida {
+		nota += fmt.Sprintf("\nPidió %s; se cotizan %s placas enteras, que cubren %s m².", c.Pedido,
+			formato.Decimal(c.Cantidad, 2), formato.Decimal(c.Cubre, 2))
+	}
+	if c.PlacasAM2 {
+		nota += fmt.Sprintf("\nPidió %s; se vende por m² y se cotizan %s m².", c.Pedido, formato.Decimal(c.Cantidad, 2))
+	}
+	return nota
 }
 
 // elegirVariantes deja las medidas que coinciden con lo que dijeron.

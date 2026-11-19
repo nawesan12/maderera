@@ -1,5 +1,6 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { fechaCorta } from "@/lib/formato";
+import { formatearDecimal } from "@/lib/unidades";
 import type { PlanoDeCorte, PlacaDelPlano } from "@/lib/cortes/tipos";
 import { formatearSierra } from "@/lib/cortes/sierra";
 
@@ -470,9 +471,9 @@ function TablaDeSobrantes({ plano, sierra }: { plano: PlanoDeCorte; sierra: numb
                       {r.ancho} × {r.alto} mm
                     </td>
                     <td className="num">
-                      {((r.ancho * r.alto) / 1_000_000)
-                        .toFixed(2)
-                        .replace(".", ",")}
+                      {formatearDecimal((r.ancho * r.alto) / 1_000_000, 2, {
+                        fijo: true,
+                      })}
                     </td>
                     <td>
                       {placa.seVendeEntera

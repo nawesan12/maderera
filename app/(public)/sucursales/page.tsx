@@ -8,7 +8,6 @@ import {
   Clock,
   Mail,
   MapPin,
-  MessageCircle,
   Navigation,
   Phone,
 } from "lucide-react";
@@ -17,6 +16,7 @@ import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { metadatosDePagina, migasJsonLd, sucursalJsonLd } from "@/lib/seo";
 import { REDES } from "@/lib/empresa";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /**
  * Las sucursales, contra la base.
@@ -151,16 +151,22 @@ export default async function SucursalesPage() {
                   <div className="relative p-6 lg:p-8">
                     {/* La tinta cambia con la sucursal porque el color de fondo
                         cambia: sobre el naranja de Casa Central el blanco da
-                        3.08:1 y el texto oscuro 5.07:1; sobre el azul del
-                        Aserradero es al revés. Así la píldora conserva el color
-                        real de cada una en vez de inventarle otro. */}
+                        3.08:1 y el texto oscuro 5.07:1; sobre la madera del
+                        Aserradero es al revés.
+
+                        El Aserradero era azul (`--sucursal-aserradero`): es el
+                        color del gráfico de ventas del panel, elegido para que
+                        se distinga del naranja en visión protán, y en el sitio
+                        era el único azul de toda la paleta (hallazgo 48). Acá
+                        va el marrón madera de la marca (`--color-brand-wood`,
+                        5,8:1 con el blanco); el gráfico sigue con su azul. */}
                     <Link
                       href={`/sucursales/${sucursal.slug}`}
                       className="inline-block rounded-full px-4 py-2 text-lg font-bold tracking-[-0.01em] hover:underline"
                       style={{
                         backgroundColor:
                           sucursal.slug === "aserradero"
-                            ? "var(--sucursal-aserradero)"
+                            ? "var(--color-brand-wood)"
                             : "var(--sucursal-central)",
                         color:
                           sucursal.slug === "aserradero" ? "#fff" : "#26231f",
@@ -251,7 +257,7 @@ export default async function SucursalesPage() {
                         href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
                         className={buttonVariants({
                           className:
-                            "h-[46px] rounded-[9px] bg-accion px-[18px] text-[15px] font-semibold text-white hover:bg-accion-hover",
+                            "h-11 rounded-[10px] bg-accion px-5 text-[15px] font-semibold text-white hover:bg-accion-hover",
                         })}
                       >
                         <Phone className="mr-2 h-4 w-4" />
@@ -263,22 +269,16 @@ export default async function SucursalesPage() {
                       href={comoLlegar}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={buttonVariants({ variant: "outline" })}
+                      className={buttonVariants({ variant: "outline", className: "h-11 rounded-[10px] px-5 text-[15px]" })}
                     >
                       <Navigation className="mr-2 h-4 w-4" />
                       Cómo llegar
                     </a>
 
                     {sucursal.whatsapp && (
-                      <a
-                        href={`https://wa.me/${sucursal.whatsapp.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={buttonVariants()}
-                      >
-                        <MessageCircle className="mr-2 h-4 w-4" />
+                      <BotonWhatsapp enlace={`https://wa.me/${sucursal.whatsapp.replace(/\D/g, "")}`}>
                         Escribir por WhatsApp
-                      </a>
+                      </BotonWhatsapp>
                     )}
                   </div>
                 </div>

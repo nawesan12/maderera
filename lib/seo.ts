@@ -494,9 +494,13 @@ export function productoJsonLd(producto: ProductoSeo, hoy: Date = new Date()): J
     category: producto.categoryName,
     url,
     ...(producto.brand ? { brand: { "@type": "Brand", name: producto.brand } } : {}),
-    ...(producto.imagenes.length
-      ? { image: producto.imagenes.map((i) => urlAbsoluta(i)) }
-      : {}),
+    // Sin foto propia, la placa del rubro que dibuja /og/producto (corrección
+    // de T5): desde la 00150 casi ningún producto tiene foto y Google pide
+    // `image` para el resultado de producto. Es la misma imagen que se ve al
+    // compartir la ficha, y no promete nada que no sea cierto.
+    image: producto.imagenes.length
+      ? producto.imagenes.map((i) => urlAbsoluta(i))
+      : [urlAbsoluta(`/og/producto/${producto.slug}`)],
     ...(producto.resenas && producto.resenas.cantidad > 0
       ? {
           aggregateRating: {

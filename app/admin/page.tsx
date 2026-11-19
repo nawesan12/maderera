@@ -16,6 +16,11 @@ import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
 import { trabajoPendiente } from "@/lib/dal/admin/pendientes";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
+import { CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO, partirPendientes } from "@/lib/inicio";
+import {
+  InicioDelDeposito,
+  InicioDelDepositoCargando,
+} from "@/components/admin/inicio-deposito";
 
 /**
  * La primera pantalla del panel.
@@ -26,8 +31,9 @@ import { puedeEntrar } from "@/lib/roles";
  * hasta que la última terminaba. Para hacer cualquier cosa había que ir igual
  * al menú lateral a buscarla, que es lo que un resumen existe para evitar.
  *
- * Son dos franjas y los números: lo que está esperando y lo que se puede
- * empezar. El panel entero en botones («Ir a») se sacó el 10/11: repetía el
+ * Son las franjas y los números: lo urgente («Para hoy»), lo que se puede
+ * empezar y lo que espera sin apuro («Pendientes», más quieto: cinco medidas
+ * sin foto no pesan lo mismo que un cheque que vence mañana). El panel entero en botones («Ir a») se sacó el 10/11: repetía el
  * menú lateral y el buscador, y eran treinta cajas sueltas. **Los botones no
  * consultan nada**: lo único que pregunta a la base es el trabajo pendiente,
  * y los números llegan después, adentro de un `<Suspense>`.
@@ -86,28 +92,34 @@ export default async function ResumenPage({
    * vendedor y el depósito los veían al abrir el panel.
    */
   const veLosNumeros = staffRole === "admin";
+  const { paraHoy, pendientes: sinApuro } = partirPendientes(
+    pendientes,
+    staffRole === "deposito" ? CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO : [],
+  );
 
   return (
     <div className="space-y-8">
       <h1 className="sr-only">Panel</h1>
 
-      {pendientes.length > 0 && (
+      {paraHoy.length > 0 && (
         <section>
           <Encabezado titulo="Para hoy" />
-          {/* Una hoja con los números en columnas, no una caja por número: lo
-              urgente se distingue por el color de la cifra. */}
+          {/* Una hoja con los números en columnas, no una caja por número.
+              Todo lo de acá es de hoy; el rojo queda para lo vencido (Go lo
+              marca), así sigue diciendo algo: con «3 pedidos por preparar»
+              también en rojo, la hoja era una alarma todas las mañanas. */}
           <div className="tarjeta grid divide-y divide-linea-suave sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 [&>*]:sm:border-l [&>*]:sm:border-linea-suave [&>*:first-child]:sm:border-l-0">
-            {pendientes.map((p) => (
+            {paraHoy.map((p) => (
               <Link
                 key={p.clave}
                 href={p.href}
                 className={`group flex flex-col gap-2 px-6 py-5 transition-colors hover:bg-hundida/60 ${
-                  p.urgente ? "estado-problema" : ""
+                  p.vencido ? "estado-problema" : ""
                 }`}
               >
                 <span
                   className={`tabular text-[44px] font-extrabold leading-none tracking-[-0.04em] ${
-                    p.urgente ? "text-[var(--estado-tinta)]" : ""
+                    p.vencido ? "text-[var(--estado-tinta)]" : ""
                   }`}
                 >
                   {p.cantidad}
@@ -119,6 +131,12 @@ export default async function ResumenPage({
             ))}
           </div>
         </section>
+      )}
+
+      {staffRole === "deposito" && (
+        <Suspense fallback={<InicioDelDepositoCargando />}>
+          <InicioDelDeposito />
+        </Suspense>
       )}
 
       {acciones.length > 0 && (
@@ -138,6 +156,28 @@ export default async function ResumenPage({
               </Link>
             ))}
           </div>
+        </section>
+      )}
+
+      {sinApuro.length > 0 && (
+        <section>
+          <Encabezado titulo="Pendientes" />
+          {/* Pastillas quietas, el mismo idioma que «Empezar algo» sin el
+              fondo: se toca cada una con el dedo, y un renglón con «·»
+              se cortaba en cualquier lado en el teléfono. */}
+          <ul className="flex flex-wrap gap-2.5">
+            {sinApuro.map((p) => (
+              <li key={p.clave}>
+                <Link
+                  href={p.href}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-linea-suave px-4 text-[15px] text-texto-2 transition-colors hover:bg-hundida/60 hover:text-foreground"
+                >
+                  <span className="tabular font-bold text-foreground">{p.cantidad}</span>
+                  {p.texto}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

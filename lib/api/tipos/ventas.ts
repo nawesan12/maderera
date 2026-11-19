@@ -49,6 +49,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Con `desde`, el estado que vio quien toca: si el pedido ya cambió, 409 y no se avanza un paso de más (que en un retiro emite el remito). */
         post: operations["AvanzarPedido"];
         delete?: never;
         options?: never;
@@ -492,7 +493,9 @@ export interface operations {
     };
     AvanzarPedido: {
         parameters: {
-            query?: never;
+            query?: {
+                desde?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -505,6 +508,7 @@ export interface operations {
             401: components["responses"]["Problema"];
             403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+            409: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
         };
     };

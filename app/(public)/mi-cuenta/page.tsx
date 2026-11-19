@@ -17,6 +17,7 @@ import {
 } from "@/lib/dal/cuenta";
 import { diasHasta, fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { RespuestaPresupuesto } from "./presupuestos/respuesta";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 
 export default async function ResumenCuentaPage() {
   const [cliente, resumen, pedidos, presupuestos] = await Promise.all([
@@ -280,7 +281,7 @@ function AccesosRapidos() {
       href: "/corte",
       icono: Scissors,
       titulo: "Pedir un corte a medida",
-      texto: "Mandanos el despiece y lo cortamos en el aserradero",
+      texto: `Mandanos el despiece y lo cortamos ${DONDE_SE_CORTA.frase}`,
     },
     {
       href: "/mi-cuenta/presupuestos",

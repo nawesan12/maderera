@@ -20,6 +20,7 @@ import {
 } from "@/lib/cortes/placa";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { moneda } from "@/lib/formato";
+import { formatearDecimal } from "@/lib/unidades";
 import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
 import { presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
@@ -560,7 +561,7 @@ export function CorteAMedida({
             </div>
             <div>
               <dt className="inline text-muted-foreground">Canto </dt>
-              <dd className="inline font-semibold">{metrosCanto.toFixed(2).replace(".", ",")} m</dd>
+              <dd className="inline font-semibold">{formatearDecimal(metrosCanto)} m</dd>
             </div>
             {validas.length > 0 && plano.noEntran.length === 0 && (
               <div title={[

@@ -9,7 +9,6 @@ import { sucursalPublicada } from "@/lib/sucursales";
 import {
   ArrowRight,
   Check,
-  MessageCircle,
   Store,
   Truck,
   UserRound,
@@ -21,6 +20,7 @@ import { pedidoParaSeguimiento } from "@/lib/dal/seguimiento";
 import { cobroDelPedido, datosParaTransferir } from "@/lib/dal/pagos";
 import { BloquePago } from "@/components/pagos/bloque-pago";
 import { formatearPrecio } from "@/lib/formato";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 /*
  * El título se resuelve consultando, y no como constante, porque esta ruta cae
@@ -269,16 +269,7 @@ async function Seguimiento({
         )}
 
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <a
-            href={`${whatsapp}?text=${mensaje}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Button className="bg-verde-whatsapp text-white hover:bg-brand-green/90">
-              <MessageCircle className="h-4 w-4" />
-              Escribirnos por WhatsApp
-            </Button>
-          </a>
+          <BotonWhatsapp enlace={`${whatsapp}?text=${mensaje}`}>Escribirnos por WhatsApp</BotonWhatsapp>
           <Button render={<Link href="/catalogo" />} variant="outline">
             Seguir comprando
           </Button>

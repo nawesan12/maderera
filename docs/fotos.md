@@ -122,6 +122,9 @@ scp salida/biblioteca/*.webp mjbj@179.197.224.61:<carpeta del despliegue>/entrad
 
 # 2. En la VPS, en la carpeta del despliegue
 alias dc='docker compose --env-file .env.produccion -f docker-compose.prod.yml'
+# La imagen de la API lleva el commit desplegado: sin GIT_SHA, `dc run` usa
+# (o construye) `mjbj-go:local`, que es código viejo y no conoce `fotos`.
+export GIT_SHA=$(docker inspect -f '{{.Config.Image}}' mjbj-api-1 | cut -d: -f2)
 ls entrada-fotos | wc -l                 # 16
 chmod -R a+rX entrada-fotos              # la imagen corre como nonroot (65532)
 

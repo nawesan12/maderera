@@ -22,6 +22,11 @@ type Renglon struct {
 	Pedido      float64 `json:"pedido"`
 	Entregado   float64 `json:"entregado"`
 	Pendiente   float64 `json:"pendiente"`
+	// Enteros: el producto no se fracciona (una bisagra, un tornillo). Sale de
+	// la unidad del producto y no de la del renglón, que en una línea cargada
+	// a mano es texto libre («m» de tapacanto, «flete»). Sin producto, no se
+	// controla: no hay stock que dejar en 619,99.
+	Enteros bool `json:"enteros,omitempty"`
 }
 
 // maxCero es Math.max(x, 0) (NaN sigue siendo NaN).
@@ -113,6 +118,53 @@ func ValidarEntrega(pendientes []Renglon, pedidas []LineaAEntregar) ControlDeEnt
 		}
 	}
 	return ControlDeEntrega{Lineas: lineas, Completo: completo}
+}
+
+// RevisarEnteros es el control que ValidarEntrega no hace, y va aparte para
+// que esa siga idéntica al golden del TS: **lo que no se fracciona sale
+// entero**, y sin el centavo de tolerancia (T4, hallazgo 21).
+//
+// El agujero era real: se entregó 0,01 de una bisagra y el stock quedó en
+// 619,99. La tolerancia de 0,01 de ValidarEntrega está pensada para los
+// metros y los kilos, que se redondean; aplicada a una unidad dejaba sacar
+// una de más por un centésimo, y aceptaba la fracción.
+//
+// La única fracción que pasa es **exactamente lo pendiente**: es la salida
+// para los saldos fraccionarios que ya existen (los 619,99 de antes), que de
+// otro modo no se podrían entregar nunca. Se compara a tres decimales, la
+// precisión de la columna, y no con `==` sobre lo que restó la base.
+// Devuelve el mensaje del primer problema, o "".
+func RevisarEnteros(pendientes []Renglon, lineas []LineaAEntregar) string {
+	porItem := map[string]Renglon{}
+	for _, p := range pendientes {
+		porItem[p.OrderItemID] = p
+	}
+	acumulado := map[string]float64{}
+	var orden []string
+	for _, l := range lineas {
+		if _, visto := acumulado[l.OrderItemID]; !visto {
+			orden = append(orden, l.OrderItemID)
+		}
+		acumulado[l.OrderItemID] += l.Cantidad
+	}
+	for _, id := range orden {
+		r, ok := porItem[id]
+		if !ok || !r.Enteros {
+			continue
+		}
+		cantidad := acumulado[id]
+		exacto := jsmath.ToFixed(cantidad, 3) == jsmath.ToFixed(r.Pendiente, 3)
+		if exacto {
+			continue
+		}
+		if cantidad > r.Pendiente {
+			return `De "` + r.Descripcion + `" quedan ` + jsmath.Texto(r.Pendiente) + " y estás entregando " + jsmath.Texto(cantidad) + "."
+		}
+		if cantidad != math.Trunc(cantidad) {
+			return `"` + r.Descripcion + `" se entrega en cantidades enteras.`
+		}
+	}
+	return ""
 }
 
 // LineasDeConstancia son las del remito de constancia: todo lo pendiente.

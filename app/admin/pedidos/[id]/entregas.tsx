@@ -191,7 +191,28 @@ export function Entregas({
                     <input
                       id={`cantidad-${p.orderItemId}`}
                       name={`cantidad-${p.orderItemId}`}
-                      inputMode="decimal"
+                      /* Lo que no se fracciona va entero y la coma se frena en
+                         el campo: `inputMode` solo cambia el teclado del
+                         teléfono, y en la computadora se escribía igual (T4,
+                         hallazgo 21). Qué se fracciona lo dice Go por la
+                         unidad del producto (`enteros`). Lo pendiente
+                         precargado puede traer decimales de antes; Go acepta
+                         exactamente eso. */
+                      inputMode={p.enteros ? "numeric" : "decimal"}
+                      onKeyDown={
+                        !p.enteros
+                          ? undefined
+                          : (e) => {
+                              if (e.key === "," || e.key === ".") e.preventDefault();
+                            }
+                      }
+                      onPaste={
+                        !p.enteros
+                          ? undefined
+                          : (e) => {
+                              if (/[.,]/.test(e.clipboardData.getData("text"))) e.preventDefault();
+                            }
+                      }
                       defaultValue={p.pendiente}
                       className="tabular h-10 w-28 rounded-lg border bg-background px-3 text-right text-base"
                     />

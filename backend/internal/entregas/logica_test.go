@@ -229,3 +229,39 @@ func TestZonaFueraDeRango(t *testing.T) {
 		}
 	}
 }
+
+// Lo que no se fracciona sale entero (T4, hallazgo 21): se entregó 0,01 de
+// una bisagra y el stock quedó en 619,99.
+func TestLoQueNoSeFraccionaSaleEntero(t *testing.T) {
+	bisagra := Renglon{OrderItemID: "b", Descripcion: "Bisagra cazoleta", Unidad: "unidad", Pendiente: 620, Enteros: true}
+	saldo := func(pendiente float64) Renglon {
+		return Renglon{OrderItemID: "b", Descripcion: "Bisagra", Unidad: "unidad", Pendiente: pendiente, Enteros: true}
+	}
+	restado := NuevoRenglon("b", "Bisagra", "unidad", "620", "0.01")
+	restado.Enteros = true
+	casos := []struct {
+		nombre     string
+		pendientes []Renglon
+		lineas     []LineaAEntregar
+		error      string
+	}{
+		{"un centésimo de bisagra", []Renglon{bisagra}, []LineaAEntregar{{"b", 0.01}}, `"Bisagra cazoleta" se entrega en cantidades enteras.`},
+		{"dos mitades que suman una fracción", []Renglon{bisagra}, []LineaAEntregar{{"b", 1.5}, {"b", 1}}, `"Bisagra cazoleta" se entrega en cantidades enteras.`},
+		// La tolerancia de un centavo es para los metros: no deja sacar de más.
+		{"un centésimo de más", []Renglon{bisagra}, []LineaAEntregar{{"b", 620.005}}, `De "Bisagra cazoleta" quedan 620 y estás entregando 620.005.`},
+		{"entera", []Renglon{bisagra}, []LineaAEntregar{{"b", 20}}, ""},
+		// El saldo fraccionario que ya existe se puede entregar entero.
+		{"exactamente lo pendiente", []Renglon{saldo(619.99)}, []LineaAEntregar{{"b", 619.99}}, ""},
+		{"lo pendiente, restado en coma flotante", []Renglon{restado}, []LineaAEntregar{{"b", 619.99}}, ""},
+		{"menos que lo pendiente fraccionario", []Renglon{saldo(619.99)}, []LineaAEntregar{{"b", 600.5}}, `"Bisagra" se entrega en cantidades enteras.`},
+		{"media placa", []Renglon{{OrderItemID: "p", Descripcion: "MDF 18", Unidad: "placa", Pendiente: 3}}, []LineaAEntregar{{"p", 0.5}}, ""},
+		{"metros con decimales", []Renglon{{OrderItemID: "m", Descripcion: "Zócalo", Unidad: "metro_lineal", Pendiente: 28.8}}, []LineaAEntregar{{"m", 12.4}}, ""},
+		// Una línea cargada a mano no tiene producto: su unidad es texto libre.
+		{"tapacanto cargado a mano", []Renglon{{OrderItemID: "t", Descripcion: "Tapacanto pegado", Unidad: "m", Pendiente: 3.6}}, []LineaAEntregar{{"t", 1.2}}, ""},
+	}
+	for _, c := range casos {
+		if got := RevisarEnteros(c.pendientes, c.lineas); got != c.error {
+			t.Errorf("%s: %q, quería %q", c.nombre, got, c.error)
+		}
+	}
+}

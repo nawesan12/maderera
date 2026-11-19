@@ -341,8 +341,14 @@ func TestRetiroCompletoCierraElPedido(t *testing.T) {
 	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	pedido, r1, r2 := e.pedido(t, "PED-1002", "listo", nil)
 	u := e.srv.URL + "/api/v1/admin/remitos"
+	// Los tirantes van por unidad: el centavo de tolerancia que cerraba el
+	// pedido con 3,995 era el agujero de la bisagra en 619,99 (T4).
+	if c, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "envio", "transportista": "Expreso Sur",
+		"cantidades": cantidades(r1, "10", r2, "3,995")}); c != 422 || !strings.Contains(b, "cantidades enteras") {
+		t.Fatalf("3,995 tirantes: %d %s", c, b)
+	}
 	c, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "envio", "transportista": " Expreso Sur ",
-		"numeroSeguimiento": "AB123", "cantidades": cantidades(r1, "10", r2, "3,995")})
+		"numeroSeguimiento": "AB123", "cantidades": cantidades(r1, "10", r2, "4")})
 	if c != 200 || !strings.Contains(b, "Con esto el pedido queda entregado.") {
 		t.Fatalf("envío: %d %s", c, b)
 	}

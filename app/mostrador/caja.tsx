@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatearMonto } from "@/lib/formato";
-import { nombreDeLaDiferencia, TOLERANCIA_ARQUEO } from "@/lib/mostrador/arqueo";
+import { importeDeCaja, nombreDeLaDiferencia, TOLERANCIA_ARQUEO } from "@/lib/mostrador/arqueo";
 import { encolarMovimiento } from "@/lib/mostrador/offline/cola";
 import type { RenglonDelCierre } from "@/lib/mostrador/tipos";
 import { abrirCaja, cerrarCaja, registrarMovimientoDeCaja } from "./actions";
@@ -53,13 +53,16 @@ export function PanelDeCaja({
   const [motivo, setMotivo] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
 
+  const efectivoContado = importeDeCaja(contado);
   const diferencia =
-    turno && contado !== "" ? Number(contado) - turno.esperado : null;
+    turno && efectivoContado !== null ? efectivoContado - turno.esperado : null;
+  const importeDelMovimiento = importeDeCaja(monto);
 
   function abrir() {
-    if (trabajando || fondo === "" || !enLinea) return;
+    const importe = importeDeCaja(fondo);
+    if (trabajando || importe === null || !enLinea) return;
     empezar(async () => {
-      const r = await abrirCaja(sucursal.id, Number(fondo));
+      const r = await abrirCaja(sucursal.id, importe);
       setAviso(r.error ?? r.ok ?? null);
       if (!r.error) {
         setFondo("");
@@ -121,9 +124,8 @@ export function PanelDeCaja({
                   Fondo inicial
                 </span>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   // Se abre para cargar el fondo: el cursor arranca acá.
                   autoFocus
                   value={fondo}
@@ -139,7 +141,7 @@ export function PanelDeCaja({
                 />
               </label>
               <button
-                disabled={trabajando || fondo === "" || !enLinea}
+                disabled={trabajando || importeDeCaja(fondo) === null || !enLinea}
                 onClick={abrir}
                 className="mt-4 inline-flex h-14 w-full items-center justify-center rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
               >
@@ -221,9 +223,8 @@ export function PanelDeCaja({
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={monto}
                     onChange={(e) => setMonto(e.target.value)}
                     placeholder="Monto"
@@ -238,9 +239,10 @@ export function PanelDeCaja({
                   {(["ingreso", "retiro"] as const).map((t) => (
                     <button
                       key={t}
-                      disabled={trabajando || monto === "" || !motivo.trim()}
+                      disabled={trabajando || !(importeDelMovimiento !== null && importeDelMovimiento > 0) || !motivo.trim()}
                       onClick={() =>
                         empezar(async () => {
+                          if (importeDelMovimiento === null) return;
                           /*
                            * Sin conexión el movimiento se encola en vez de
                            * perderse. La plata sale del cajón en el momento,
@@ -260,7 +262,7 @@ export function PanelDeCaja({
                           if (
                             t === "retiro" &&
                             turno.fondoBase > 0 &&
-                            turno.esperado - Number(monto) < turno.fondoBase
+                            turno.esperado - importeDelMovimiento < turno.fondoBase
                           ) {
                             const disponible = Math.max(
                               0,
@@ -279,7 +281,7 @@ export function PanelDeCaja({
                               clave: crypto.randomUUID(),
                               branchId: sucursal.id,
                               tipo: t,
-                              monto: Number(monto),
+                              monto: importeDelMovimiento,
                               motivo: motivo.trim(),
                               hechoAt: new Date().toISOString(),
                             });
@@ -295,7 +297,7 @@ export function PanelDeCaja({
                           const r = await registrarMovimientoDeCaja(
                             turno.id,
                             t,
-                            Number(monto),
+                            importeDelMovimiento,
                             motivo,
                           );
                           setAviso(r.error ?? r.ok ?? null);
@@ -323,9 +325,8 @@ export function PanelDeCaja({
                     Contá el efectivo y poné cuánto hay
                   </span>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={contado}
                     onChange={(e) => setContado(e.target.value)}
                     className="tabular mt-1.5 h-14 w-full rounded-xl border border-linea bg-background px-3.5 text-right text-2xl font-semibold"
@@ -370,7 +371,8 @@ export function PanelDeCaja({
 
                 {turno.fondoBase > 0 &&
                   contado !== "" &&
-                  Number(contado) < turno.fondoBase && (
+                  efectivoContado !== null &&
+                  efectivoContado < turno.fondoBase && (
                     <p className="mt-1 text-sm text-muted-foreground">
                       Quedan menos de {formatearMonto(turno.fondoBase)}: mañana
                       el mostrador arranca sin cambio.
@@ -390,10 +392,11 @@ export function PanelDeCaja({
                 />
 
                 <button
-                  disabled={trabajando || contado === "" || !enLinea}
+                  disabled={trabajando || efectivoContado === null || !enLinea}
                   onClick={() =>
                     empezar(async () => {
-                      const r = await cerrarCaja(turno.id, Number(contado), notas);
+                      if (efectivoContado === null) return;
+                      const r = await cerrarCaja(turno.id, efectivoContado, notas);
                       setAviso(r.error ?? r.ok ?? null);
                       if (!r.error) {
                         setContado("");

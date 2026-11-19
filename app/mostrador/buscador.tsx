@@ -315,8 +315,8 @@ export function Buscador({
                 <span className="flex shrink-0 items-stretch border-l border-linea">
                   {(
                     [
-                      ["media_largo", "½ al largo", "Mayús"],
-                      ["media_ancho", "½ al ancho", "Alt"],
+                      ["media_largo", "Media a lo largo", "Mayús"],
+                      ["media_ancho", "Media al ancho", "Alt"],
                     ] as const
                   ).map(([valor, texto, tecla]) => (
                     <button

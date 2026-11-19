@@ -646,3 +646,31 @@ func TestAnuladaConDevolucionParcialNoSumaDosVeces(t *testing.T) {
 		t.Errorf("devuelto por las anuladas: %v, quería 400", n.Anuladas.Devuelto)
 	}
 }
+
+// Con más de la mitad de lo vendido sin costo, la ganancia no es una cifra
+// (comité final, M5): el Panel y el Cierre muestran «Sin costos cargados».
+// Justo en la mitad todavía se muestra.
+func TestSinCostosCargados(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 1.0, 1210.0, 600.0}, [4]any{tirante, 1.0, 1210.0, nil})
+	leer := func() (Resultado, Resultado) {
+		_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+		var n NumerosDelDueno
+		_ = json.Unmarshal([]byte(cuerpo), &n)
+		_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+		var r ResumenDelMes
+		_ = json.Unmarshal([]byte(cuerpo), &r)
+		return n.Ganancia.Actual, r.Resultado.Actual
+	}
+	if g, c := leer(); g.SinCostosCargados || c.SinCostosCargados {
+		t.Errorf("la mitad sin costo todavía es una cifra: %+v %+v", g, c)
+	}
+	e.pedido(t, "V-2", e.central, "entregado", "mostrador", time.Date(2026, 10, 6, 12, 0, 0, 0, Argentina), nil,
+		[4]any{tirante, 1.0, 121.0, 0.0})
+	if g, c := leer(); !g.SinCostosCargados || !c.SinCostosCargados {
+		t.Errorf("más de la mitad sin costo: %+v %+v", g, c)
+	}
+}

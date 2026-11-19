@@ -145,10 +145,14 @@ export async function NumerosDelNegocio({
         />
         <Tarjeta
           titulo="Ganancia del mes"
-          valor={g.resultado}
+          // Con más de la mitad de lo vendido sin costo, la cifra no es la
+          // ganancia: un «$ 0» en grande se leía como un mes perdido. Va
+          // el motivo en grande y la cifra queda de dato.
+          valor={g.sinCostosCargados ? "Sin costos cargados" : g.resultado}
           href="/admin/cierre"
-          variacion={ganancia.variacion}
+          variacion={g.sinCostosCargados ? null : ganancia.variacion}
           renglones={[
+            g.sinCostosCargados && `Resultado ${moneda.format(g.resultado)}`,
             // La fórmula en renglones: en uno solo se cortaba. Con la regla
             // del descuento la venta no es la de Reportes, y se llama
             // distinto.
@@ -300,7 +304,8 @@ function Tarjeta({
   variacion,
 }: {
   titulo: string;
-  valor: number;
+  // Un texto en vez de un monto: lo que falta para que haya cifra.
+  valor: number | string;
   href: string;
   renglones: Renglon[];
   variacion?: number | null;
@@ -323,10 +328,16 @@ function Tarjeta({
         // Un cero se apaga: el ojo tiene que caer en lo que se movió, no en
         // «$ 0» al mismo tamaño que «$ 484.000».
         className={`tabular font-bold leading-none tracking-[-0.03em] ${
-          valor === 0 ? "text-[24px] text-texto-3" : valor < 0 ? "text-[34px] text-saldo-debe" : "text-[34px] text-foreground"
+          typeof valor === "string"
+            ? "estado-problema text-[24px]"
+            : valor === 0
+              ? "text-[24px] text-texto-3"
+              : valor < 0
+                ? "text-[34px] text-saldo-debe"
+                : "text-[34px] text-foreground"
         }`}
       >
-        {moneda.format(valor)}
+        {typeof valor === "string" ? valor : moneda.format(valor)}
       </p>
       {variacion != null && (
         <p className="flex items-center gap-1 text-base text-texto-2">

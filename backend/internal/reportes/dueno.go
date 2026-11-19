@@ -117,7 +117,17 @@ type Resultado struct {
 	// ConDescuento: la regla del negocio resta el descuento del pedido de
 	// las ventas, y VentasNetas ya no es el «Vendido sin IVA» de Reportes.
 	ConDescuento bool `json:"conDescuento"`
+	// SinCostosCargados: más de la mitad de lo vendido no tiene costo, y el
+	// resultado no dice cuánto se ganó sino cuánto falta cargar. La pantalla
+	// muestra «Sin costos cargados» y deja la cifra de dato al lado: un
+	// «$0» en grande se leía como un mes sin ganancia.
+	SinCostosCargados bool `json:"sinCostosCargados"`
 }
+
+// UmbralSinCostos es la parte de lo vendido sin costo a partir de la cual la
+// ganancia deja de mostrarse como cifra (decisión 8 del comité final: la
+// propuesta es 50 %, a confirmar con Nahuel).
+const UmbralSinCostos = 0.5
 
 // ResultadoComparado es el del lapso y el del anterior.
 type ResultadoComparado struct {
@@ -514,6 +524,7 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	r.VentasNetas, r.VentasSinCosto = jsmath.Redondear2(neto.F()), jsmath.Redondear2(sinCosto.F())
 	r.Costo, r.Gastos = jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
 	r.Resultado = jsmath.Redondear2(float64(float64(r.VentasNetas-r.VentasSinCosto)-r.Costo) - r.Gastos)
+	r.SinCostosCargados = r.VentasNetas > 0 && r.VentasSinCosto > float64(r.VentasNetas*UmbralSinCostos)
 	return r, nil
 }
 

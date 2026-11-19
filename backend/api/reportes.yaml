@@ -479,7 +479,7 @@ components:
         cantidad: { type: integer }
     Resultado:
       type: object
-      required: [ventasNetas, ventasSinCosto, costo, gastos, resultado, lineasSinCosto, conDescuento]
+      required: [ventasNetas, ventasSinCosto, costo, gastos, resultado, lineasSinCosto, conDescuento, sinCostosCargados]
       properties:
         ventasNetas: { type: number, format: double, description: Sin IVA }
         ventasSinCosto: { type: number, format: double, description: La parte de ventasNetas sin costo cargado; queda afuera del resultado }
@@ -488,6 +488,7 @@ components:
         gastos: { type: number, format: double }
         resultado: { type: number, format: double }
         lineasSinCosto: { type: integer, description: Renglones vendidos sin costo cargado o con costo en cero }
+        sinCostosCargados: { type: boolean, description: Más de la mitad de ventasNetas no tiene costo; el resultado no es la ganancia }
     ResultadoComparado:
       type: object
       required: [actual, anterior, variacion]

@@ -4,22 +4,28 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	cuits "mjbj/internal/cuit"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/sqlc"
 )
 
-// El padrón de ARBA se importa del archivo mensual y se queda con los CUIT de
-// los clientes (revisión del comité, T6).
+// El padrón de ARBA se importa del archivo mensual, entero (revisión del
+// comité, T6): el que se da de alta después de importarlo también figura.
 func TestImportarElPadronDeArba(t *testing.T) {
 	e := armar(t, false)
 	ctx := context.Background()
 	e.exec(t, `INSERT INTO customers (nombre, cuit, condicion_iva) VALUES ('Gómez SRL', '30-71234567-1', 'responsable_inscripto')`)
 	archivo := strings.Join([]string{
 		"P;25102026;01112026;30112026;30712345671;C;N;N;2,50;00;",
-		// No es cliente: no se guarda.
+		// Todavía no es cliente: se guarda igual.
 		"P;25102026;01112026;30112026;30589445259;C;N;N;1,00;00;",
 		// De retención: no se mira.
 		"R;25102026;01112026;30112026;30712345671;C;N;N;9,00;00;",
@@ -39,6 +45,7 @@ func TestImportarElPadronDeArba(t *testing.T) {
 	w, _ := z.Create("PadronRGSPer112026.txt")
 	_, _ = w.Write([]byte("P;25102026;01112026;30112026;30712345671;C;N;S;3,00;00;\n"))
 	_ = z.Close()
+	entero := append([]byte(nil), zipeado.Bytes()...)
 	if _, err := e.s.ImportarPadron(ctx, "", &zipeado); err != nil {
 		t.Fatal(err)
 	}
@@ -51,6 +58,113 @@ func TestImportarElPadronDeArba(t *testing.T) {
 	}
 	if _, err := e.s.ImportarPadron(ctx, "", strings.NewReader("hola\nchau\n")); err == nil || !strings.Contains(Mensaje(err), "no es el padrón") {
 		t.Errorf("un archivo cualquiera: %v", err)
+	}
+	var otro int
+	e.uno(t, `SELECT count(*) FROM padron_iibb WHERE cuit = '30589445259'`, &otro)
+	if otro != 0 {
+		// El .zip de la vigencia de noviembre reemplazó a la del .txt.
+		t.Errorf("el que no está en el último archivo quedó: %d", otro)
+	}
+	// Un .zip cortado (la subida se interrumpió) no se importa.
+	if _, err := e.s.ImportarPadron(ctx, "", bytes.NewReader(entero[:len(entero)-10])); err == nil {
+		t.Errorf("un .zip cortado se importó")
+	}
+}
+
+// El cliente que se da de alta después de importar el padrón figura: antes
+// quedaba «sin padrón» hasta el mes siguiente.
+func TestElClienteNuevoFiguraEnElPadron(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	hoy := time.Now().In(fiscal.Argentina)
+	desde, hasta := hoy.AddDate(0, 0, -1).Format("02012006"), hoy.AddDate(0, 0, 20).Format("02012006")
+	archivo := "P;01012026;" + desde + ";" + hasta + ";30589445259;C;N;N;3,00;00;\n"
+	if _, err := e.s.ImportarPadron(ctx, "", strings.NewReader(archivo)); err != nil {
+		t.Fatal(err)
+	}
+	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true, cuit = $1, condicion_iva = 'responsable_inscripto'`, cuitEmisor)
+	e.exec(t, `INSERT INTO customers (nombre, cuit, condicion_iva) VALUES ('Nueva SA', '30-58944525-9', 'responsable_inscripto')`)
+	cuit := "30589445259"
+	id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "Nueva SA", ReceptorCuit: &cuit, ReceptorCondicionIva: "responsable_inscripto",
+		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 12100}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tributos string
+	e.uno(t, `SELECT tributos::text FROM invoices WHERE id = $1`, &tributos, id)
+	if tributos != "300.00" {
+		t.Errorf("al cliente nuevo: %s, quería 300,00 (3 %% de 10.000)", tributos)
+	}
+}
+
+// Con el padrón vencido no figura nadie: no se aplica la alícuota de quien
+// no figura (antes se le percibía a todos), y cambiar un dato del emisor con
+// la percepción encendida no falla.
+func TestConElPadronVencido(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	admin := e.staff(t, "vencido@mjbj.test", sqlc.StaffRoleAdmin)
+	e.exec(t, `INSERT INTO padron_iibb_importaciones (vigencia_desde, vigencia_hasta, renglones) VALUES (current_date - 40, current_date - 10, 1)`)
+	e.exec(t, `INSERT INTO padron_iibb (cuit, alicuota, vigencia_desde, vigencia_hasta) VALUES ('30712345671', 0.5, current_date - 40, current_date - 10)`)
+	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true, alicuota_iibb_sin_padron = 5, cuit = $1, condicion_iva = 'responsable_inscripto'`, cuitEmisor)
+	ri := "30712345671"
+	id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "Cliente", ReceptorCuit: &ri, ReceptorCondicionIva: "responsable_inscripto",
+		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 12100}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tributos string
+	e.uno(t, `SELECT tributos::text FROM invoices WHERE id = $1`, &tributos, id)
+	if tributos != "0.00" {
+		t.Errorf("con el padrón vencido: %s, quería 0 (no la alícuota de «no figura»)", tributos)
+	}
+	emisor := map[string]string{"razonSocial": "Maderera", "cuit": cuitEmisor, "condicionIva": "responsable_inscripto", "percibeIibb": "on",
+		"alicuotaIibbSinPadron": "5", "telefono": "223 555-0000"}
+	if st, b := pedir(t, admin, "PUT", e.srv.URL+"/api/v1/admin/facturacion/emisor", emisor); st != 200 {
+		t.Errorf("guardar el emisor con la percepción ya encendida: %d %s", st, b)
+	}
+}
+
+// El padrón sube entero por la ruta de verdad, con un cuerpo de más de
+// 10 MB (lo que cortaba el proxy de Next), y lo que pasa del tope es un
+// error y no un corte callado.
+func TestElPadronGrandeLlegaEntero(t *testing.T) {
+	e := armar(t, false)
+	admin := e.staff(t, "grande@mjbj.test", sqlc.StaffRoleAdmin)
+	var b strings.Builder
+	n := 0
+	for b.Len() < 11<<20 {
+		// CUIT con dígito verificador válido: 20-NNNNNNNN-d.
+		base := fmt.Sprintf("20%08d", n)
+		for d := 0; d <= 9; d++ {
+			if c := base + fmt.Sprint(d); cuits.Valido(c) {
+				b.WriteString("P;25102026;01112026;30112026;" + c + ";C;N;N;1,00;00;\n")
+				break
+			}
+		}
+		n++
+	}
+	lineas := strings.Count(b.String(), "\n")
+	req, _ := http.NewRequest("POST", e.srv.URL+"/api/v1/admin/facturacion/padron-iibb", strings.NewReader(b.String()))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp, err := admin.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var r ResultadoDelPadron
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil || resp.StatusCode != 200 {
+		t.Fatalf("%d %v", resp.StatusCode, err)
+	}
+	var filas int
+	e.uno(t, `SELECT count(*) FROM padron_iibb`, &filas)
+	if r.Leidos != lineas || filas != lineas {
+		t.Errorf("leídos %d, guardados %d, quería %d", r.Leidos, filas, lineas)
+	}
+	// El tope corta con un error.
+	c := &conTope{r: strings.NewReader("12345"), queda: 3}
+	if _, err := io.ReadAll(c); err == nil || !strings.Contains(Mensaje(err), "400 MB") {
+		t.Errorf("pasarse del tope: %v", err)
 	}
 }
 
@@ -66,6 +180,7 @@ func TestLaPercepcionSaleDelPadron(t *testing.T) {
 		t.Fatalf("encender sin padrón: %d %s", st, b)
 	}
 	e.exec(t, `INSERT INTO padron_iibb (cuit, alicuota, vigencia_desde, vigencia_hasta) VALUES ('30712345671', 2.5, current_date - 1, current_date + 30)`)
+	e.exec(t, `INSERT INTO padron_iibb_importaciones (vigencia_desde, vigencia_hasta, renglones) VALUES (current_date - 1, current_date + 30, 1)`)
 	if st, b := pedir(t, admin, "PUT", e.srv.URL+"/api/v1/admin/facturacion/emisor", emisor); st != 200 {
 		t.Fatalf("encender con padrón: %d %s", st, b)
 	}

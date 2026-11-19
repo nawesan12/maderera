@@ -180,3 +180,16 @@ func IPDelCliente(r *http.Request) string {
 	}
 	return host
 }
+
+// ConMasTiempoParaLeer le da a una ruta de subida más tiempo para leer el
+// cuerpo que el ReadTimeout del servidor (2 minutos): el padrón de ARBA son
+// unos 200 MB, que por una conexión lenta no entran. Solo esa ruta: el
+// resto sigue con el tope de siempre contra el que manda un cuerpo eterno.
+func ConMasTiempoParaLeer(h http.Handler, metodo, ruta string, d time.Duration) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == metodo && r.URL.Path == ruta {
+			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(d))
+		}
+		h.ServeHTTP(w, r)
+	})
+}

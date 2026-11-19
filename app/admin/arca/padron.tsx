@@ -12,10 +12,13 @@ function dia(d: string): string {
 }
 
 /**
- * El padrón de ARBA de los clientes: se sube el archivo del mes tal como lo
- * baja ARBA (el .txt o el .zip) y queda la alícuota de cada CUIT que es
- * cliente. La subida va por app/admin/arca/padron (un stream, no una server
- * action: el archivo es grande).
+ * El padrón de ARBA: se sube el archivo del mes tal como lo baja ARBA (el
+ * .txt o el .zip) y se guarda entero; la lista muestra a los clientes.
+ *
+ * La subida va directo a Go (/api/v1, mismo origen y misma cookie): el
+ * archivo anda por los 200 MB, una server action corta en 1 MB y el proxy de
+ * Next guardaba solo los primeros 10 MB y se los pasaba a Go cortados, sin
+ * error. Go mira que quien sube sea admin.
  */
 export function PadronIibb({ filas }: { filas: FilaDelPadron[] }) {
   const router = useRouter();
@@ -28,10 +31,20 @@ export function PadronIibb({ filas }: { filas: FilaDelPadron[] }) {
     setSubiendo(true);
     setEstado({});
     try {
-      const r = await fetch("/admin/arca/padron", { method: "POST", body: archivo });
-      const d = await r.json().catch(() => ({ error: "No se pudo cargar el padrón." }));
+      const r = await fetch("/api/v1/admin/facturacion/padron-iibb", {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: archivo,
+      });
+      const d = await r.json().catch(() => null);
       if (!r.ok) {
-        setEstado({ error: d.error ?? "No se pudo cargar el padrón." });
+        const errores = d?.errores as Record<string, string> | undefined;
+        setEstado({
+          error:
+            (errores && Object.values(errores)[0]) ??
+            (r.status === 413 ? "El archivo es demasiado grande." : null) ??
+            "No se pudo cargar el padrón.",
+        });
         return;
       }
       setEstado({ ok: `${d.cargados} de tus clientes · del ${dia(d.desde)} al ${dia(d.hasta)}` });

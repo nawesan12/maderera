@@ -154,6 +154,20 @@ autoconfig.{$CORREO_DOMINIO} {
 	# La API de Go (servicio `api`). /api/vivo es el tiempo real del panel:
 	# la dirección que ya usan las pantallas, ahora servida por Go. Sin buffer
 	# (flush_interval -1) para que los eventos lleguen al instante.
+	# El padrón mensual de ARBA (unos 200 MB) sube directo a Go, con su
+	# propio tope: con el de 25 MB de abajo Caddy lo rechazaba, y pasando por
+	# Next el proxy le daba a Go solo los primeros 10 MB, sin error.
+	@padron path /api/v1/admin/facturacion/padron-iibb
+	handle @padron {
+		request_body {
+			max_size 450MB
+		}
+		reverse_proxy api:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
 	@go path /api/v1/* /api/vivo
 	handle @go {
 		request_body {

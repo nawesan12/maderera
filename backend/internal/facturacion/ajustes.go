@@ -112,8 +112,10 @@ func (s *Servicio) GuardarEmisor(ctx context.Context, ses *auth.Sesion, c map[st
 	}
 	// La percepción sale del padrón de ARBA: encenderla sin padrón vigente
 	// es un interruptor que miente (no percibe a nadie, y el agente responde
-	// con su plata por lo que no percibió).
-	if d.percibe {
+	// con su plata por lo que no percibió). Solo al encenderla: con el padrón
+	// vencido y la percepción ya encendida, cambiar el teléfono del emisor
+	// fallaba (el vencido lo avisa el cierre).
+	if d.percibe && !emisor.PercibeIibb {
 		hay, err := hayPadronVigente(ctx, s.pool, s.ahora())
 		if err != nil {
 			return "", err

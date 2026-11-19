@@ -153,8 +153,16 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 		if err != nil {
 			return "", err
 		}
+		// La alícuota de quien no figura vale solo si hay un padrón vigente
+		// en el que no figura. Con el padrón vencido no figura nadie: a cada
+		// inscripto se le percibía la de «no figura», aunque estuviera en el
+		// padrón con 0,5 % o exento, y eso solo se corrige con notas.
+		vigente, err := hayPadronVigente(ctx, tx, s.ahora())
+		if err != nil {
+			return "", err
+		}
 		var sinPadron *float64
-		if config.AlicuotaIibbSinPadron != nil {
+		if config.AlicuotaIibbSinPadron != nil && vigente {
 			x := jsmath.Numero(*config.AlicuotaIibbSinPadron)
 			sinPadron = &x
 		}

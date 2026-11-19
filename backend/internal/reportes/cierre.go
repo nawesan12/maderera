@@ -309,12 +309,13 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 			"Emitidos y sin autorizar: no entran al libro IVA hasta que ARCA los autorice.", sinCAE, "/admin/facturacion"})
 	}
 	// La percepción de IIBB sale del padrón de ARBA, que es mensual. Con la
-	// percepción encendida y el padrón vencido no se le percibe a nadie; y la
+	// percepción encendida y el padrón vencido no se le percibe a nadie (la
+	// alícuota de «no figura» tampoco: sin padrón no figura nadie); y la
 	// que estaba encendida con la alícuota única de antes se apagó con la
 	// migración (00133) hasta que se cargue el padrón.
 	var percibe, apagada, vigente bool
 	if err := s.pool.QueryRow(ctx, `SELECT coalesce(bool_or(percibe_iibb), false), coalesce(bool_or(NOT percibe_iibb AND alicuota_percepcion_iibb > 0), false),
-		EXISTS (SELECT 1 FROM padron_iibb WHERE vigencia_desde <= $1::date AND vigencia_hasta >= $1::date)
+		EXISTS (SELECT 1 FROM padron_iibb_importaciones WHERE vigencia_desde <= $1::date AND vigencia_hasta >= $1::date)
 		FROM configuracion_fiscal`, s.ahora().In(Argentina).Format("2006-01-02")).Scan(&percibe, &apagada, &vigente); err != nil {
 		return nil, err
 	}

@@ -608,7 +608,12 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 				// Sin precio profesional propio, la medida sigue el porcentaje
 				// de la lista sobre la general. Guardar un 0 le ganaba al
 				// porcentaje y el profesional veía la medida a $0.
-				if lp.lista == ls.profesional && jsmath.Numero(lp.precio) <= 0 {
+				//
+				// Y sin precio general, la medida queda sin precio en vez de a
+				// $0: con la lista en 0, vender a $0 no se medía como bajo la
+				// lista (comité final, M11 y decisión 4; la tabla de Precios ya
+				// lo rechaza, la ficha guardaba el «0» del campo vacío).
+				if jsmath.Numero(lp.precio) <= 0 {
 					if err := q.QuitarPrecio(ctx, sqlc.QuitarPrecioParams{PriceListID: *lp.lista, VariantID: vid}); err != nil {
 						return err
 					}

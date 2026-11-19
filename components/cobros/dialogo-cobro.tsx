@@ -19,6 +19,7 @@ import {
   type EstadoCobro,
 } from "@/app/admin/cobros-actions";
 import { abrirCaja } from "@/app/mostrador/actions";
+import { claveAlAbrir } from "@/lib/cobros/clave";
 
 /**
  * «Registrar cobro»: lo que pagó un cliente, con su recibo.
@@ -78,13 +79,21 @@ export function DialogoCobro({
   const [abriendo, empezarAApertura] = useTransition();
   const formulario = useRef<HTMLFormElement>(null);
 
-  function cambiar(a: boolean) {
-    if (a) {
-      setClave(crypto.randomUUID());
+  // Cada vez que se abre, de su botón o de afuera («Cobrar y entregar»),
+  // nace una clave nueva y se olvida la caja del cobro anterior.
+  const [abiertoAntes, setAbiertoAntes] = useState(abierto);
+  if (abierto !== abiertoAntes) {
+    setAbiertoAntes(abierto);
+    const siguiente = claveAlAbrir(abiertoAntes, abierto, clave, () => crypto.randomUUID());
+    if (siguiente !== clave) {
+      setClave(siguiente);
       setSucursal(null);
       setAbierta(null);
       setFondo("");
     }
+  }
+
+  function cambiar(a: boolean) {
     setAbiertoAdentro(a);
     alCambiarAbierto?.(a);
   }

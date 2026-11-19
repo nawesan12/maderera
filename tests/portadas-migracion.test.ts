@@ -65,4 +65,9 @@ describe("las tarjetas de los rubros", () => {
     expect(portada).not.toMatch(/slug === "molduras"\)\??\.image/);
     expect(barra).not.toContain("imagenDe");
   });
+  it("Moldava lleva la misma placa en la portada y en la barra", () => {
+    const tonoBarra = barra.match(/slug: "moldava"[\s\S]*?tonoDe: "(\w+)"/)?.[1];
+    expect(tonoBarra).toBe("molduras");
+    expect(portada).toMatch(new RegExp(`<FondoDeRubro rubro="${tonoBarra}"`));
+  });
 });

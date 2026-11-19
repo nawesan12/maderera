@@ -232,7 +232,11 @@ function Categorias({
           >
             {/* Sin la foto de Molduras: repetida en la tarjeta de al lado,
                 Moldava parecía el mismo rubro dos veces (comité final, M18).
-                Va sobre el oscuro de la marca, como la línea propia que es. */}
+                Pero el oscuro liso dejaba la tarjeta más grande como la más
+                pobre de la grilla: lleva la placa del pino, la misma que la
+                barra (`tonoDe: "molduras"`), para que la marca se vea igual
+                en los dos lugares. */}
+            <FondoDeRubro rubro="molduras" className="transition-transform duration-500 group-hover:scale-105" />
             <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.92)_0%,rgb(28_25_22_/_0.35)_60%,transparent_100%)]" />
             <div className="absolute inset-x-6 bottom-6">
               <span className="rounded-full bg-accion px-3 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-white">

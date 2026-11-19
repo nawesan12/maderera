@@ -2169,6 +2169,15 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   no aparece, el subtítulo sale de la sucursal elegida y los servicios de
   cada local leen de `DONDE_SE_CORTA` (`lib/sucursales.ts`). Si la respuesta
   es otra, se cambia `SUCURSALES_QUE_CORTAN` y nada más.
+- **Sucursales en la barra de arriba (revisión del comité)** — lo confirma
+  la clienta. Medido con Chromium, la barra del sitio se pasaba del ancho a
+  1024 px (47 px), a 1280 (27) y desde 1536 (114), y cortaba «Ingresar».
+  Default aplicado: «Sucursales» sube a la barra oscura de arriba, junto a
+  Contacto y WhatsApp; en el teléfono sigue en el cajón. Los enlaces de la
+  barra pasan a 9 px de aire y el asistente dice «Ayuda» en todos los anchos.
+  Queda margen de 22 px a 1024, 58 a 1280 y 28 desde 1536. Con la tienda
+  prendida el ícono del carrito (52 px) no entra a 1024: si se prende, hay
+  que volver a medir. Si la clienta quiere Sucursales abajo, sale otro.
 
 ### Pendiente
 

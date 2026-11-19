@@ -332,8 +332,8 @@ function VistaDeCorte({
   }
 
   /*
-   * «¿Están en mm?» antes de mandar, si todas las piezas miden menos de 10 cm
-   * de cada lado (T4, hallazgo 22). Una sola vez por armado: contestado que
+   * «¿Están en mm?» antes de mandar, si el lado más largo del despiece mide
+   * menos de 300 (T4, hallazgo 22; la regla en `medidasSospechosas`). Una sola vez por armado: contestado que
    * sí, no se vuelve a preguntar. Las tiras no cuentan: su largo es el de la
    * placa.
    */

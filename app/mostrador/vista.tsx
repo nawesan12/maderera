@@ -228,11 +228,16 @@ export function VistaMostrador({
    * la ficha del corte, para que el precio del mostrador y el del panel no
    * puedan discrepar.
    */
+  // Los mismos candidatos y la misma lista que Go (`tarifaDelCorte` en
+  // mostrador/controles.go): Go rechaza el corte cuyo cobro no cierra con su
+  // plano, y una tarifa que Go encuentra y la pantalla no dejaba el corte sin
+  // el renglón de las pasadas, imposible de cobrar (comité final, A2). La
+  // lista general no tiene tarifa propia.
   const tarifaDeLaPlaca = cortando
     ? tarifaDeCorte(
         tarifasDeCorte,
-        [cortando.categoria ?? "", `${cortando.producto} ${cortando.medida}`],
-        cliente?.priceListId ?? null,
+        [cortando.categoria ?? "", `${cortando.producto} ${cortando.medida}`, cortando.producto],
+        cliente?.priceListId && cliente.priceListId !== listaGeneral ? cliente.priceListId : null,
       )
     : null;
 

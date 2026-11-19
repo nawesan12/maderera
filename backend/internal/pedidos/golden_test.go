@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"mjbj/internal/jsmath"
 	"mjbj/internal/reservas"
 )
 
@@ -54,6 +55,16 @@ func TestGoldenMargen(t *testing.T) {
 	}
 	leerGolden(t, "margen.json", &casos)
 	for i, c := range casos {
+		// El TS tomaba un costo en $0 como costo (100 % de margen); desde el
+		// comité final es «sin costo», como en Reportes
+		// (TestMargenConCostoCero). Esos casos ya no son del golden.
+		conCero := false
+		for _, it := range c.Items {
+			conCero = conCero || (it.CostoUnitario != nil && jsmath.Numero(*it.CostoUnitario) <= 0)
+		}
+		if conCero {
+			continue
+		}
 		items := make([]LineaConCosto, len(c.Items))
 		for j, it := range c.Items {
 			items[j] = LineaConCosto{it.Subtotal, it.Cantidad, it.AlicuotaIva, it.CostoUnitario}
@@ -62,6 +73,17 @@ func TestGoldenMargen(t *testing.T) {
 		if !reflect.DeepEqual(got, c.Margen) {
 			t.Errorf("caso %d: %+v, el TS %+v", i, got, c.Margen)
 		}
+	}
+}
+
+func TestMargenConCostoCero(t *testing.T) {
+	cero, diez := "0", "10"
+	m := MargenDelPedido([]LineaConCosto{{"1210", "1", nil, &cero}, {"121", "1", nil, &diez}})
+	if m == nil || m.SinCosto != 1 || m.Neto != 100 || m.Costo != 10 {
+		t.Errorf("un costo en $0 es un renglón sin costo: %+v", m)
+	}
+	if m := MargenDelPedido([]LineaConCosto{{"1210", "1", nil, &cero}}); m != nil {
+		t.Errorf("todo en $0 es no saber el margen, no 100 %%: %+v", m)
 	}
 }
 

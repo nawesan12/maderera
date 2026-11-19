@@ -50,9 +50,13 @@ type MargenDeLaLinea struct {
 }
 
 // MargenDeLinea compara el neto de lo vendido con el costo congelado.
+//
+// Un costo en $0 (o menos) es un costo sin cargar, como en Reportes
+// (costo_unitario > 0): tomarlo como costo daba 100 % de margen en la ficha
+// del pedido mientras Reportes decía «sin costo» del mismo renglón.
 func MargenDeLinea(subtotal, cantidad, alicuota float64, costo *float64) MargenDeLaLinea {
 	neto := redondear4(subtotal / float64(1+alicuota/100))
-	if costo == nil || math.IsNaN(*costo) || math.IsInf(*costo, 0) {
+	if costo == nil || math.IsNaN(*costo) || math.IsInf(*costo, 0) || *costo <= 0 {
 		return MargenDeLaLinea{NetoVenta: neto}
 	}
 	c := redondear4(float64(*costo * cantidad))

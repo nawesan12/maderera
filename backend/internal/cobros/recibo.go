@@ -221,9 +221,15 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 		if err := q.AtarMovimientoAlRecibo(ctx, sqlc.AtarMovimientoAlReciboParams{ID: id, AccountMovementID: &mov}); err != nil {
 			return ReciboEmitido{}, err
 		}
-		// El reparto entre los circuitos se fija ahora y no se recalcula
-		// (reparto.go). Sin cliente lo fija quien ata el recibo a la factura
-		// que cobra, que es de donde sale la cuenta.
+	}
+	// El reparto entre los circuitos se fija ahora y no se recalcula
+	// (reparto.go): con cliente, o con el pedido que cobra (también el de
+	// contado, que no toca la cuenta, y el que no tiene cliente: la cuenta es
+	// la del pedido). Antes solo se fijaba con movimiento en la cuenta, y el
+	// cobro de un pedido sin cliente iba entero al B. Sin cliente ni pedido
+	// lo fija quien ata el recibo a la factura que cobra, que es de donde
+	// sale la cuenta.
+	if c.CustomerID != nil || c.OrderID != nil {
 		if _, err := FijarReparto(ctx, tx, id); err != nil {
 			return ReciboEmitido{}, err
 		}

@@ -38,8 +38,12 @@
 const P = "PLACAS/";
 const F = "FERRETERIA/";
 
-// Fotos de estudio de 7952 × 5304 (3:2) llevadas a 4:3: solo se recortan los
-// costados, el canto de abajo queda.
+// Fotos de estudio de 7952 × 5304 (3:2) llevadas a 4:3. Para la tarjeta, el
+// canto es lo que dice qué placa es y de qué espesor: en la foto entera
+// ocupaba el 8–10 % de abajo y la tarjeta se leía como una muestra de color
+// (revisión del 19/11). Se recorta la mitad de abajo, anclada al borde y el
+// doble de cerca: el canto queda en el 20–30 % de abajo. A 3536 px de ancho
+// de recorte sigue siendo una reducción.
 const producto = (origen, destino, extra = {}) => ({
   origen,
   destino,
@@ -47,14 +51,20 @@ const producto = (origen, destino, extra = {}) => ({
   alto: 1440,
   calidad: 85,
   tipo: "producto",
-  foco: [0.5, 0.5],
-  zoom: 1,
+  foco: [0.5, 1],
+  zoom: 2,
   ...extra,
 });
+// La foto entera, como viene: las de esquina (melamina) o las de ferretería y
+// sin código, que no tienen un canto abajo.
+const entera = { foco: [0.5, 0.5], zoom: 1 };
 
 // El detalle: un recorte en píxeles originales, sin achicar (hallazgo 5 del
 // comité): en la tarjeta Guatambú, Paraíso y Peteribí se separan apenas por el
-// tono; de cerca, por el dibujo de la veta.
+// tono; de cerca, por el dibujo de la veta. Va sobre el canto (revisión del
+// 19/11: centrado en la veta repetía la primera foto): arriba la chapa a
+// tamaño real y abajo las capas del aglomerado, que es lo que no se ve en la
+// foto entera.
 const detalle = (origen, destino, [x, y]) => ({
   origen,
   destino,
@@ -68,31 +78,44 @@ const detalle = (origen, destino, [x, y]) => ({
 export const SELECCION = [
   /* ------------------------------ el sitio ------------------------------ */
 
-  // Portada: el galpón propio, vertical como viene. No es una foto de estudio
-  // (celular, angular, P3): va detrás de la capa oscura en el teléfono y al
-  // costado en la computadora. Se recorta un poco de los bordes, que es donde
-  // el angular curva los tubos.
+  // Portada: el galpón propio, la mitad de abajo (revisión del 19/11): arriba
+  // se leían en grande las cajas «LP Mult-Plac» de un proveedor, lo mismo por
+  // lo que quedó afuera `STOCK PLACAS`. Desde el 47 % de la altura para abajo
+  // quedan el tablero de eucalipto, las pilas de pino y el piso, sin marcas.
+  // Sale a 1500×2000 para no agrandar el recorte (1590×2120 de la foto).
   {
     origen: P + "IMG_20220910_103737.jpg",
     destino: "estatico/galpon.webp",
-    ancho: 1800,
-    alto: 2400,
+    ancho: 1500,
+    alto: 2000,
     calidad: 82,
-    foco: [0.5, 0.55],
+    foco: [0.5, 1],
+    zoom: 4000 / 2120,
+    ajuste: "galpon",
+  },
+  // La otra toma del galpón: el pasillo hacia el fondo, con el entrepiso y los
+  // racks. Sin marcas legibles. Portada (bloque de la historia) y, en banda,
+  // el encabezado de /nosotros: en una franja de 1440×300 se lee como galpón
+  // (la mesa de la toma de antes se veía como madera borrosa).
+  {
+    origen: P + "IMG_20220910_103645.jpg",
+    destino: "estatico/galpon-pasillo.webp",
+    ancho: 1600,
+    alto: 1400,
+    calidad: 82,
+    foco: [0.5, 0.4],
     zoom: 1.1,
     ajuste: "galpon",
   },
-  // /nosotros: la otra toma del galpón, en banda. La de la portada y esta son
-  // casi la misma: una por página.
   {
-    origen: P + "IMG_20220910_103813.jpg",
+    origen: P + "IMG_20220910_103645.jpg",
     destino: "estatico/galpon-banda.webp",
     ancho: 1920,
     alto: 800,
-    calidad: 85,
+    calidad: 82,
     tipo: "banda",
-    foco: [0.5, 0.52],
-    zoom: 1.1,
+    foco: [0.5, 0.17],
+    zoom: 1,
     ajuste: "galpon",
   },
   // Corte a medida: las cabezas de los listones cortados.
@@ -150,17 +173,17 @@ export const SELECCION = [
     foco: [0.68, 0.45],
     zoom: 1.7,
   },
-  // /moldava, el bloque del proceso: las puntas de las molduras, la foto de la
-  // página 26 del catálogo 2026. En blanco y negro, como en el catálogo.
+  // /moldava, el bloque del proceso: los perfiles de punta, de cerca, en la
+  // misma estantería en color (la foto de la página 26 del catálogo era un
+  // escaneo en blanco y negro con la trama de imprenta: revisión del 19/11).
   {
-    origen: { pdf: "MOLDURAS MOLDAVA/CATÁLOGO MOLDAVA 2024/CATALOGO MOLDAVA 2026.pdf", pagina: 26 },
+    origen: "MOLDURAS MOLDAVA/👆ESTANTERIA MOLDURAS.jpg",
     destino: "estatico/moldava-puntas.webp",
     ancho: 1920,
     alto: 1400,
-    calidad: 78,
-    foco: [0.5, 0.5],
-    zoom: 1,
-    ajuste: "bn",
+    calidad: 82,
+    foco: [0.84, 0.25],
+    zoom: 3.5,
   },
 
   /* ---------------- portadas de rubro (las nombra la base) ---------------- */
@@ -196,27 +219,43 @@ export const SELECCION = [
     foco: [0.5, 0.62],
     zoom: 1.1,
   },
+  // Molduras: un zócalo Moldava de punta, sobre blanco. No la estantería: la
+  // tarjeta grande de Moldava ya la muestra al lado, y dos veces la misma
+  // estantería era el «mismo rubro dos veces» (comité, M18). La foto es de
+  // 640 px: para la biblioteca no alcanza, para una tarjeta de 25vw sí.
+  {
+    origen: "MOLDURAS MOLDAVA/ZOCALO PINO FINGUER 9076.jpg",
+    destino: "sitio/molduras-v1.webp",
+    ancho: 600,
+    alto: 450,
+    calidad: 85,
+    foco: [0.52, 0.5],
+    zoom: 1,
+  },
 
   /* ------------------- biblioteca: fotos con código MJBJ ------------------ */
 
   producto(P + "CHAPADUR MARRON 3MM (392).jpg", "biblioteca/392.webp"),
   producto(P + "CHAPADUR PERFORADO BLANCO 3MM (391).jpg", "biblioteca/391.webp"),
   producto(P + "ENCHAPADO AGLOMERADO EN GUATAMBU (4145).jpg", "biblioteca/4145.webp"),
-  detalle(P + "ENCHAPADO AGLOMERADO EN GUATAMBU (4145).jpg", "biblioteca/4145-veta.webp", [3200, 1400]),
+  detalle(P + "ENCHAPADO AGLOMERADO EN GUATAMBU (4145).jpg", "biblioteca/4145-canto.webp", [3976, 4400]),
   producto(P + "ENCHAPADO AGLOMERADO EN PARAISO (4159).jpg", "biblioteca/4159.webp"),
-  detalle(P + "ENCHAPADO AGLOMERADO EN PARAISO (4159).jpg", "biblioteca/4159-veta.webp", [3200, 1400]),
+  detalle(P + "ENCHAPADO AGLOMERADO EN PARAISO (4159).jpg", "biblioteca/4159-canto.webp", [3976, 4650]),
   producto(P + "ENCHAPADO AGLOMERADO EN PETERIBY (4147).jpg", "biblioteca/4147.webp"),
-  detalle(P + "ENCHAPADO AGLOMERADO EN PETERIBY (4147).jpg", "biblioteca/4147-veta.webp", [3200, 1400]),
+  detalle(P + "ENCHAPADO AGLOMERADO EN PETERIBY (4147).jpg", "biblioteca/4147-canto.webp", [3976, 4580]),
   producto(P + "FENOLICO UNA CARA LIJADA CON NUDOS (5743).jpg", "biblioteca/5743.webp"),
-  producto(P + "MELAMINA BLANCA AGLO. 18MM (12724).jpg", "biblioteca/12724.webp"),
-  producto(P + "👆MELAMINA BLANCA MDF 18MM (4696).jpg", "biblioteca/4696.webp"),
-  producto(P + "RANURADO BLANCO 18MM (4172).jpg", "biblioteca/4172.webp"),
+  producto(P + "MELAMINA BLANCA AGLO. 18MM (12724).jpg", "biblioteca/12724.webp", entera),
+  producto(P + "👆MELAMINA BLANCA MDF 18MM (4696).jpg", "biblioteca/4696.webp", entera),
+  // El ranurado se entiende por las ranuras que corren hacia el fondo: de cerca
+  // quedaba un cuarto de fondo negro abajo.
+  producto(P + "RANURADO BLANCO 18MM (4172).jpg", "biblioteca/4172.webp", entera),
   // Las cuatro texturas de eucalipto se parecen: una con el canto a la vista
   // (12848, anclada abajo) y la otra centrada en la textura (12850-12851).
   producto(P + "TABLERO EUCALIPTUS 20MM (12848).jpg", "biblioteca/12848.webp", { foco: [0.5, 0.75], zoom: 1.15 }),
   producto(P + "TABLERO EUCALIPTUS (12850 y 12851).jpg", "biblioteca/12850-12851.webp", { foco: [0.5, 0.45], zoom: 1.3 }),
   producto(P + "TABLERO PINO CON NUDOS 30MM (12801).jpg", "biblioteca/12801.webp"),
-  producto(P + "TERCIADO PINO 3MM (9035).jpg", "biblioteca/9035.webp"),
+  // 3 mm: más cerca, el canto es una línea y el fondo negro crece.
+  producto(P + "TERCIADO PINO 3MM (9035).jpg", "biblioteca/9035.webp", { zoom: 1.35 }),
 
   /* ------------- sin código: esperan la planilla de la clienta ------------- */
 

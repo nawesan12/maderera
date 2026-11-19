@@ -34,6 +34,9 @@ export const PORTADA: Record<string, string> = {
   ferreteria: "/sitio/ferreteria-v1.webp",
   // OSB con el canto.
   "construccion-en-seco": "/sitio/seco-v1.webp",
+  // Un zócalo Moldava de punta, sobre blanco: no la estantería, que ya está
+  // en la tarjeta grande de Moldava, al lado.
+  molduras: "/sitio/molduras-v1.webp",
   pisos: "/fotos/photo-1573869908170-64b53a60d8da.jpg",
   // Gris y de intemperie, para no confundirse con el piso interior de arriba.
   "decks-y-escaleras": "/fotos/photo-1585597985125-9ad0229ae71d.jpg",
@@ -41,9 +44,8 @@ export const PORTADA: Record<string, string> = {
 
 /**
  * Las portadas de banco que tuvo cada rubro (las que la 00150 borra de los
- * productos). Placas y construcción en seco pasaron a fotos propias en la
- * 00185; molduras quedó sin portada, porque la tarjeta de Moldava ya muestra
- * la estantería.
+ * productos). Placas, construcción en seco y molduras pasaron a fotos propias
+ * en la 00185.
  */
 export const PORTADAS_DE_BANCO: Record<string, string> = {
   techos: "/fotos/photo-1776624383828-e1bf5d141aa7.jpg",

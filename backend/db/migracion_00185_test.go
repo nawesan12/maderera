@@ -10,9 +10,10 @@ import (
 	"mjbj/internal/pruebas"
 )
 
-// La 00185 pone las portadas propias donde había una de banco o ninguna, no
-// toca la que subió la clienta, deja Molduras sin foto, avisa a Next solo si
-// cambió algo, y el Down devuelve las de antes.
+// La 00185 pone las portadas propias donde había una de banco (y en
+// ferretería vacía, como la dejó la 00180), no toca la que subió la clienta
+// ni la que sacó a propósito, no le avisa a Next (lo consumía la versión
+// anterior) y el Down devuelve las de antes.
 func TestMigracion00185(t *testing.T) {
 	pool := pruebas.Base(t)
 	ctx := context.Background()
@@ -48,12 +49,8 @@ func TestMigracion00185(t *testing.T) {
 		return *i
 	}
 
-	// Una base vacía no queda con un aviso de más.
 	antes := avisos()
 	correr(up)
-	if avisos() != antes {
-		t.Error("sin categorías encoló un aviso")
-	}
 
 	if _, err := pool.Exec(ctx, `insert into categories (slug, name, image) values
 		('placas', 'Placas', '/fotos/photo-1700973408133-b45276ec8feb.jpg'),
@@ -63,22 +60,26 @@ func TestMigracion00185(t *testing.T) {
 		('techos', 'Techos', '/fotos/photo-1776624383828-e1bf5d141aa7.jpg')`); err != nil {
 		t.Fatal(err)
 	}
-	antes = avisos()
 	correr(up)
 	if imagen("placas") != "/sitio/placas-v1.webp" || imagen("ferreteria") != "/sitio/ferreteria-v1.webp" ||
-		imagen("construccion-en-seco") != "/subidas/seco-del-deposito.jpg" || imagen("molduras") != "" ||
+		imagen("construccion-en-seco") != "/subidas/seco-del-deposito.jpg" || imagen("molduras") != "/sitio/molduras-v1.webp" ||
 		imagen("techos") != "/fotos/photo-1776624383828-e1bf5d141aa7.jpg" {
 		t.Errorf("después del Up: %q %q %q %q %q", imagen("placas"), imagen("ferreteria"),
 			imagen("construccion-en-seco"), imagen("molduras"), imagen("techos"))
 	}
-	if avisos() != antes+1 {
-		t.Error("no quedó el aviso para Next")
-	}
-	// Repetida, no cambia nada ni avisa.
-	antes = avisos()
-	correr(up)
 	if avisos() != antes {
-		t.Error("la segunda corrida avisó sin cambiar nada")
+		t.Error("encoló un aviso para Next: lo consume la versión anterior, que no tiene las fotos")
+	}
+	// Una portada vacía que no es la de ferretería es una que la clienta sacó.
+	if _, err := pool.Exec(ctx, `update categories set image = null where slug = 'placas'`); err != nil {
+		t.Fatal(err)
+	}
+	correr(up)
+	if imagen("placas") != "" {
+		t.Errorf("pisó una portada que la clienta sacó: %q", imagen("placas"))
+	}
+	if _, err := pool.Exec(ctx, `update categories set image = '/sitio/placas-v1.webp' where slug = 'placas'`); err != nil {
+		t.Fatal(err)
 	}
 
 	correr(down)

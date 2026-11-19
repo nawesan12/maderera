@@ -18,8 +18,8 @@ import galpon from "@/lib/sitio/galpon.webp";
  * que hubiera detrás. Partida en dos, cada mitad hace una sola cosa.
  *
  * La foto es el galpón propio (Drive de la clienta, docs/fotos.md), no una de
- * banco: la del depósito de placas mostraba en grande las marcas de los
- * proveedores, y la primera foto del sitio no es una publicidad de nadie.
+ * banco, y recortada por debajo de las cajas «LP Mult-Plac» de un proveedor:
+ * la primera foto del sitio no es una publicidad de nadie.
  */
 export function Hero({
   sucursales,
@@ -54,8 +54,9 @@ export function Hero({
           className="object-cover object-center"
           preload
           fetchPriority="high"
-          // En el teléfono va atenuada al 80 %: no hace falta la de ancho completo.
-          sizes="(min-width: 1024px) 46vw, 60vw"
+          // En el teléfono cubre todo el ancho: con 60vw un teléfono de 390 px
+          // a 3× pedía la de 828 y la primera foto del sitio salía blanda.
+          sizes="(min-width: 1024px) 46vw, 100vw"
         />
         {/* El degradado solo funde el borde contra el fondo del texto. Antes
             cubría el 38% del panel y se comía las cabezas de las tablas, que

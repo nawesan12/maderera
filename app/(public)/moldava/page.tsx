@@ -131,7 +131,7 @@ export default async function MoldavaPage() {
           <div className="relative h-[300px] overflow-hidden rounded-2xl sm:h-[420px]">
             <Image
               src={moldavaPuntas}
-              alt="Molduras Moldava apiladas, vistas de punta"
+              alt="Perfiles Moldava de punta, en la estantería del depósito"
               fill
               placeholder="blur"
               className="object-cover"

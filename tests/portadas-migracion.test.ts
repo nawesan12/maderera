@@ -65,10 +65,14 @@ describe("las tarjetas de los rubros", () => {
     expect(portada).not.toMatch(/slug === "molduras"\)\??\.image/);
     expect(barra).not.toContain("imagenDe");
   });
-  it("Moldava lleva la misma placa en la portada y en la barra", () => {
-    const tonoBarra = barra.match(/slug: "moldava"[\s\S]*?tonoDe: "(\w+)"/)?.[1];
-    expect(tonoBarra).toBe("molduras");
-    expect(portada).toMatch(new RegExp(`<FondoDeRubro rubro="${tonoBarra}"`));
+  it("Moldava lleva la estantería y Molduras otra foto (revisión del 19/11)", () => {
+    // La tarjeta más grande de la grilla era un degradado liso.
+    const tarjeta = portada.slice(portada.indexOf('href="/moldava"'), portada.indexOf("{categorias.map"));
+    expect(tarjeta).toContain("src={moldavaCasilleros}");
+    expect(tarjeta).not.toContain("<FondoDeRubro");
+    // Y Molduras, al lado, no repite la estantería.
+    expect(PORTADA.molduras).toBeDefined();
+    expect(PORTADA.molduras).not.toMatch(/moldava|estanteria|casilleros/);
   });
 });
 
@@ -91,8 +95,12 @@ describe("migración 00185 y la tabla de Go", () => {
     for (const [rubro, url] of propias) expect(up, rubro).toContain(`('${rubro}', '${url}')`);
   });
 
-  it("solo pisa portadas de banco o vacías", () => {
-    expect(up).toContain("c.image IS NULL OR c.image LIKE '/fotos/%'");
+  it("solo pisa portadas de banco, y la de ferretería vacía (la 00180)", () => {
+    expect(up).toContain("c.image LIKE '/fotos/%' OR (c.image IS NULL AND c.slug = 'ferreteria')");
+  });
+
+  it("no le avisa a Next: lo consumiría la versión anterior, sin las fotos", () => {
+    expect(up).not.toContain("trabajos");
   });
 
   it("las fotos propias llevan versión en el nombre", () => {

@@ -39,6 +39,7 @@ import { BotonWhatsapp } from "@/components/whatsapp/boton";
 // pone hash y caché permanente, y el desenfoque mientras cargan.
 import corteCantos from "@/lib/sitio/corte-cantos.webp";
 import fenolico from "@/lib/sitio/fenolico.webp";
+import galponPasillo from "@/lib/sitio/galpon-pasillo.webp";
 import moldavaCasilleros from "@/lib/sitio/moldava-casilleros.webp";
 
 /**
@@ -235,13 +236,18 @@ function Categorias({
             href="/moldava"
             className="group relative col-span-2 row-span-2 overflow-hidden rounded-[14px] bg-oscuro-marca"
           >
-            {/* Sin la foto de Molduras: repetida en la tarjeta de al lado,
-                Moldava parecía el mismo rubro dos veces (comité final, M18).
-                Pero el oscuro liso dejaba la tarjeta más grande como la más
-                pobre de la grilla: lleva la placa del pino, la misma que la
-                barra (`tonoDe: "molduras"`), para que la marca se vea igual
-                en los dos lugares. */}
-            <FondoDeRubro rubro="molduras" className="transition-transform duration-500 group-hover:scale-105" />
+            {/* La estantería de Moldava, de cerca: la tarjeta más grande de
+                la grilla era un degradado liso (revisión del 19/11). Molduras,
+                al lado, lleva un zócalo sobre blanco, así no se leen como el
+                mismo rubro dos veces (comité final, M18). */}
+            <Image
+              src={moldavaCasilleros}
+              alt=""
+              fill
+              placeholder="blur"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
             <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.92)_0%,rgb(28_25_22_/_0.35)_60%,transparent_100%)]" />
             <div className="absolute inset-x-6 bottom-6">
               <span className="rounded-full bg-accion px-3 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-white">
@@ -713,8 +719,8 @@ function Historia({ anios }: { anios: number }) {
           <div className="relative">
             <div className="relative h-[360px] overflow-hidden rounded-3xl lg:h-[480px]">
               <Image
-                src={moldavaCasilleros}
-                alt="La estantería de molduras Moldava en el depósito"
+                src={galponPasillo}
+                alt="El pasillo del galpón, entre los tableros y los racks"
                 fill
                 placeholder="blur"
                 className="object-cover"

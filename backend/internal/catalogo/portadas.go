@@ -11,6 +11,7 @@ var portadas = map[string]string{
 	"placas":               "/sitio/placas-v1.webp",
 	"ferreteria":           "/sitio/ferreteria-v1.webp",
 	"construccion-en-seco": "/sitio/seco-v1.webp",
+	"molduras":             "/sitio/molduras-v1.webp",
 	"pisos":                "/fotos/photo-1573869908170-64b53a60d8da.jpg",
 	"decks-y-escaleras":    "/fotos/photo-1585597985125-9ad0229ae71d.jpg",
 }

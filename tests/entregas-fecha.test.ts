@@ -10,10 +10,14 @@ describe("la fecha de la firma del remito", () => {
     expect(fechaHoraDeFirma.format(new Date("2026-10-30T01:30:00Z"))).toBe("29/10, 22:30");
   });
 
-  it("el formateador de antes dependía de la zona del servidor", () => {
-    // Con TZ=UTC (como Next en producción) daba la hora corrida.
-    if (new Date().getTimezoneOffset() !== 0) return;
-    expect(fechaHora.format(new Date("2026-10-30T03:05:00Z"))).toBe("30/10, 03:05");
+  it("fechaHora de lib/formato tampoco depende de la zona del servidor", () => {
+    // Antes no fijaba la zona y con TZ=UTC (como Next en producción) daba
+    // las 03:05. Ahora la fija: da lo mismo que la de la firma en cualquier
+    // máquina. La prueba vieja afirmaba la hora corrida y solo corría en UTC,
+    // así que pasaba en la Mac y fallaba en la CI.
+    const instante = new Date("2026-10-30T03:05:00Z");
+    expect(fechaHora.format(instante)).toBe("30/10, 00:05");
+    expect(fechaHora.format(instante)).toBe(fechaHoraDeFirma.format(instante));
   });
 
   it("la fecha del remito impreso es la de Argentina, como en el PDF", () => {

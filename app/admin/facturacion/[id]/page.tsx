@@ -112,11 +112,16 @@ export default async function FichaComprobantePage({
   const anulada = comprobante.estado === "anulada";
   // La serie solo importa sin CAE: el reintento y la baja.
   const serie = comprobante.cae ? null : await serieDelComprobante(id);
-  // La factura de una venta, ya autorizada, se corrige con una devolución.
-  const devolucion =
+  // La factura de una venta, ya autorizada, se corrige con una devolución, y
+  // no se anula sola: se anula la venta, que devuelve el stock y la plata.
+  // Con la venta anulada queda solo anular la factura.
+  const deLaVenta =
     comprobante.orderId && comprobante.cae && comprobante.tipo.startsWith("factura") && comprobante.estado !== "anulada"
       ? await datosDeDevolucion(id)
       : null;
+  const devolucion = deLaVenta && !deLaVenta.ventaAnulada ? deLaVenta : null;
+  // Devuelta entera, ya no hay venta que anular: falta cerrar la factura.
+  const devueltaEntera = devolucion?.renglones.every((r) => r.queda <= 0) ?? false;
 
   return (
     <div className="space-y-6">
@@ -186,7 +191,7 @@ export default async function FichaComprobantePage({
         <section className="tarjeta-atencion flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5">
           <ShieldAlert className="h-5 w-5 shrink-0 text-brand-orange" />
           <p className="text-base">
-            Homologación · <span className="tabular">CAE {comprobante.cae}</span>
+            De prueba · <span className="tabular">CAE {comprobante.cae}</span>
           </p>
         </section>
       ) : comprobante.cae ? (
@@ -507,28 +512,32 @@ export default async function FichaComprobantePage({
               {/* Las notas van antes que anular a propósito: acreditar dos
                   placas falladas es lo frecuente y anular la factura entera es
                   la excepción. El orden empuja hacia la corrección más chica. */}
-              <section className="tarjeta p-5">
-                <NotasSobreElComprobante
-                  invoiceId={comprobante.id}
-                  items={comprobante.items.map((i) => ({
-                    id: i.id,
-                    descripcion: i.descripcion,
-                    cantidad: Number(i.cantidad),
-                    subtotal: Number(i.subtotal),
-                  }))}
-                  total={Number(comprobante.total)}
-                  acreditado={Number(comprobante.acreditado)}
-                  revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
-                  devolucion={devolucion}
-                />
-              </section>
+              {!deLaVenta?.ventaAnulada && (
+                <section className="tarjeta p-5">
+                  <NotasSobreElComprobante
+                    invoiceId={comprobante.id}
+                    items={comprobante.items.map((i) => ({
+                      id: i.id,
+                      descripcion: i.descripcion,
+                      cantidad: Number(i.cantidad),
+                      subtotal: Number(i.subtotal),
+                    }))}
+                    total={Number(comprobante.total)}
+                    acreditado={Number(comprobante.acreditado)}
+                    revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                    devolucion={devolucion}
+                  />
+                </section>
+              )}
 
-              <section className="tarjeta p-5">
-                <AnularComprobante
-                  id={comprobante.id}
-                  revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
-                />
-              </section>
+              {(!devolucion || devueltaEntera) && (
+                <section className="tarjeta p-5">
+                  <AnularComprobante
+                    id={comprobante.id}
+                    revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                  />
+                </section>
+              )}
             </>
           )}
         </div>

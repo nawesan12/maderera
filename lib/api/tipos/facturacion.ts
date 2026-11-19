@@ -630,6 +630,7 @@ export interface components {
             cuenta: number;
             /** Format: double */
             afuera: number;
+            ventaAnulada: boolean;
             conCliente: boolean;
             sucursal: string | null;
             sucursales: {

@@ -643,7 +643,7 @@ components:
           delAcopio: { type: number, format: double, nullable: true }
     DatosDeDevolucion:
       type: object
-      required: [pedido, renglones, caja, cuenta, afuera, conCliente, sucursal, sucursales]
+      required: [pedido, renglones, caja, cuenta, afuera, conCliente, sucursal, sucursales, ventaAnulada]
       properties:
         pedido: { type: string }
         renglones:
@@ -663,6 +663,7 @@ components:
         caja: { type: number, format: double }
         cuenta: { type: number, format: double }
         afuera: { type: number, format: double }
+        ventaAnulada: { type: boolean }
         conCliente: { type: boolean }
         sucursal: { type: string, nullable: true }
         sucursales:

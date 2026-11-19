@@ -171,7 +171,9 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		if c.Cae == "" {
 			h.MarcaDeAgua("Sin valor fiscal")
 		} else if c.Homologacion {
-			h.MarcaDeAgua("Homologación")
+			// Lo que le importa al que lo recibe; «homologación» no lo
+			// entiende nadie del otro lado del mostrador.
+			h.MarcaDeAgua("Sin valor fiscal")
 		}
 		if c.Estado == "anulada" {
 			h.MarcaDeAgua("Anulada")

@@ -146,6 +146,8 @@ type DatosDeDevolucion struct {
 	ConCliente bool                   `json:"conCliente"`
 	Sucursal   *string                `json:"sucursal"`
 	Sucursales []SucursalDeDevolucion `json:"sucursales"`
+	// VentaAnulada: ya no hay nada que devolver; la factura se anula.
+	VentaAnulada bool `json:"ventaAnulada"`
 }
 
 // topesDeLaVenta es cuánto de la venta entró por cada camino de vuelta.
@@ -254,8 +256,8 @@ func (s *Servicio) ParaDevolver(ctx context.Context, invoiceID string) (*DatosDe
 	var d DatosDeDevolucion
 	var medio, cliente, sucursal *string
 	var total float64
-	if err := s.pool.QueryRow(ctx, `SELECT numero, medio_pago::text, customer_id, branch_id, total::float8 FROM orders WHERE id = $1`, *pedido).
-		Scan(&d.Pedido, &medio, &cliente, &sucursal, &total); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT numero, medio_pago::text, customer_id, branch_id, total::float8, estado = 'cancelado'
+		FROM orders WHERE id = $1`, *pedido).Scan(&d.Pedido, &medio, &cliente, &sucursal, &total, &d.VentaAnulada); err != nil {
 		return nil, err
 	}
 	d.ConCliente, d.Sucursal = cliente != nil, sucursal
@@ -571,9 +573,10 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		delAcopio := math.Min(r.Cantidad, enAcopio)
 		if r.DelAcopio != nil {
 			delAcopio = *r.DelAcopio
-		} else if enAcopio > 1e-9 && enAcopio < queda-1e-9 && r.Cantidad > enAcopio+1e-9 {
-			// Parte en acopio y parte entregada, y lo devuelto no entra en
-			// lo apartado: no se puede adivinar qué trae el cliente.
+		} else if enAcopio > 1e-9 && enAcopio < queda-1e-9 {
+			// Parte en acopio y parte entregada: no se puede adivinar qué
+			// trae el cliente, y suponer que sale del acopio era quitarle lo
+			// que le queda por retirar.
 			return Devolucion{}, errEmision(`De "` + x.descripcion + `", decí cuánto sale del acopio.`)
 		}
 		if delAcopio > enAcopio+1e-9 {

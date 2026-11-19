@@ -243,20 +243,24 @@ export async function acreditarParcial(
   redirect(`/admin/facturacion/${r.data.invoiceId}`);
 }
 
+type RenglonADevolver = { itemId: string; cantidad: number; alStock: boolean; delAcopio: number | null };
+
 /**
  * Devolución de una venta: la nota, el stock y la plata en una operación de
  * Go. La clave la genera la pantalla al abrir el formulario: un doble clic o
- * un reintento devuelven la misma devolución.
+ * un reintento devuelven la misma devolución. El importe es el que la
+ * persona confirmó (calcularDevolucion): si en Go dio otro, no se hace.
  */
 export async function devolver(
   invoiceId: string,
   pedido: {
     clave: string;
-    destino: "caja" | "cuenta";
+    destino: "caja" | "cuenta" | "afuera";
     motivo: string;
     sinStock: "rota" | "otro" | null;
     sucursalId: string | null;
-    renglones: { itemId: string; cantidad: number; alStock: boolean }[];
+    importe: number;
+    renglones: RenglonADevolver[];
   },
 ): Promise<EstadoFactura> {
   if (!UUID.test(invoiceId)) return { error: "No encontramos el comprobante." };
@@ -269,7 +273,25 @@ export async function devolver(
   refrescar(invoiceId);
   revalidatePath("/admin/caja");
   revalidatePath("/admin/stock");
-  redirect(`/admin/facturacion/${r.data.notaId}`);
+  // Sin nota (un CAE de prueba con ARCA en producción) se queda en la factura.
+  redirect(`/admin/facturacion/${r.data.notaId || invoiceId}`);
+}
+
+/**
+ * Lo que saldría con esos renglones, calculado por Go igual que la
+ * devolución: con la percepción y el resto exacto del renglón que se cierra.
+ */
+export async function calcularDevolucion(
+  invoiceId: string,
+  renglones: RenglonADevolver[],
+): Promise<{ importe?: number; error?: string }> {
+  if (!UUID.test(invoiceId)) return { error: "No encontramos el comprobante." };
+  const r = await (await api()).POST("/api/v1/admin/facturacion/comprobantes/{id}/devolucion/calculo", {
+    params: { path: { id: invoiceId } },
+    body: { renglones },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  return { importe: r.data.importe };
 }
 
 /**

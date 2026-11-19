@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -134,6 +135,9 @@ func escanear(r io.Reader, cada func(string) error) error {
 // lectura (el cuerpo no llega a su largo, el .zip no tiene índice) y no
 // se importa nada: va todo en una transacción.
 func (s *Servicio) ImportarPadron(ctx context.Context, userID string, archivo io.Reader) (ResultadoDelPadron, error) {
+	if archivo == nil {
+		return ResultadoDelPadron{}, errEmision("Elegí el archivo del padrón.")
+	}
 	var r ResultadoDelPadron
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `CREATE TEMP TABLE padron_nuevo (cuit text, alicuota numeric(6, 3), desde date, hasta date) ON COMMIT DROP`); err != nil {
@@ -147,6 +151,13 @@ func (s *Servicio) ImportarPadron(ctx context.Context, userID string, archivo io
 		errLectura := make(chan error, 1)
 		go func() {
 			defer close(filas)
+			// Un pánico acá no lo ataja el servidor (es otra gorrutina):
+			// tiraría la API entera.
+			defer func() {
+				if p := recover(); p != nil {
+					errLectura <- fmt.Errorf("leyendo el padrón: %v", p)
+				}
+			}()
 			errLectura <- lineasDelArchivo(archivo, func(texto string) error {
 				l, ok := fiscal.LeerLineaDelPadron(texto)
 				if !ok {

@@ -732,6 +732,7 @@ func TestEmisorYPuntosDeVenta(t *testing.T) {
 	// La percepción sale del padrón de ARBA (fiscal.PercepcionIibb): sin
 	// padrón vigente no se enciende, y la alícuota es la del que no figura.
 	e.exec(t, `INSERT INTO padron_iibb (cuit, alicuota, vigencia_desde, vigencia_hasta) VALUES ('30712345671', 2, current_date - 1, current_date + 30)`)
+	e.exec(t, `INSERT INTO padron_iibb_importaciones (vigencia_desde, vigencia_hasta, renglones) VALUES (current_date - 1, current_date + 30, 1)`)
 	campos := map[string]string{"razonSocial": "Maderera Juan B. Justo S.R.L.", "cuit": "30-58944525-9", "condicionIva": "responsable_inscripto",
 		"alicuotaIibbSinPadron": "3,5", "percibeIibb": "on", "inicioActividades": "1981-03-01", "localidad": ""}
 	if st, _ := pedir(t, vendedor, "PUT", e.srv.URL+"/api/v1/admin/facturacion/emisor", campos); st != 403 {

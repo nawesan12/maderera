@@ -599,3 +599,50 @@ func TestCierreAnuladaConFacturaViva(t *testing.T) {
 		t.Errorf("acreditada entera ya no es viva: %s · %d · %s", pend, resumen, lista)
 	}
 }
+
+// La venta del mostrador con conexión no guarda cobrada_at (solo la de la
+// cola sin conexión): lo que cobró por transferencia o tarjeta tiene que
+// estar en «Plata hoy» igual (comité final, A1). La de ayer no.
+func TestPlataHoyConLaVentaDeTodosLosDias(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	hoy := e.pedido(t, "M-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 15, 10, 0, 0, 0, Argentina), nil)
+	e.exec(t, `insert into order_payments (order_id, medio, importe) values ($1, 'transferencia', 1111.05), ($1, 'debito', 40), ($1, 'mercado_pago', 9)`, hoy)
+	ayer := e.pedido(t, "M-2", e.central, "entregado", "mostrador", time.Date(2026, 10, 14, 10, 0, 0, 0, Argentina), nil)
+	e.exec(t, `insert into order_payments (order_id, medio, importe) values ($1, 'transferencia', 500)`, ayer)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if p := n.PlataHoy; p.Banco != 1111.05 || p.Tarjetas != 40 || p.MercadoPago != 9 {
+		t.Errorf("plata hoy: %+v", p)
+	}
+}
+
+// La devolución parcial por caja de una venta que después se anula: su
+// efectivo ya está en «Devoluciones del mes»; en «Devuelto» de las anuladas
+// va solo lo que devolvió la anulación.
+func TestAnuladaConDevolucionParcialNoSumaDosVeces(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	turno := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, '2026-10-15T11:00:00Z') returning id`, e.central, usuario)
+	cuando := time.Date(2026, 10, 15, 11, 0, 0, 0, Argentina)
+	venta := e.pedido(t, "M-1", e.central, "cancelado", "mostrador", cuando.Add(-2*time.Hour), nil)
+	e.exec(t, `update orders set total = 500 where id = $1`, venta)
+	e.exec(t, `insert into order_status_history (order_id, estado, nota, created_by_user_id, created_at) values ($1, 'cancelado', 'Anulada', $2, $3)`, venta, usuario, cuando)
+	parcial := e.id(t, `insert into cash_movements (session_id, tipo, monto, order_id, created_at) values ($1, 'devolucion', -100, $2, $3) returning id`, turno, venta, cuando.Add(-time.Hour))
+	factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id)
+		values ('factura_b', 3, 1, 'X', 413.22, 86.78, 0, 0, 0, 500, 'autorizada', '2026-10-15T12:00:00Z', $1) returning id`, venta)
+	e.exec(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, cash_movement_id, created_by_user_id) values ('d1', $1, $4, 100, 'caja', 'rota', $2, $3)`, venta, parcial, usuario, factura)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, order_id, created_at) values ($1, 'devolucion', -400, $2, $3)`, turno, venta, cuando)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if n.Anuladas.Devuelto != 400 {
+		t.Errorf("devuelto por las anuladas: %v, quería 400", n.Anuladas.Devuelto)
+	}
+}

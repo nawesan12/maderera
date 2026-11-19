@@ -270,7 +270,9 @@ func (s *Servicio) MeDeben(ctx context.Context, ahora time.Time) (MeDeben, error
 const anuladaEn = `(SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado')`
 
 // AnuladasDeLaSemana cuenta las ventas del mostrador anuladas desde el
-// inicio del día de hace seis días.
+// inicio del día de hace seis días. Devuelto es lo que sacó de la caja la
+// anulación: el efectivo de una devolución parcial anterior ya está en
+// «Devoluciones del mes», y sumarlo acá lo mostraba dos veces.
 func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anuladas, error) {
 	var a Anuladas
 	var total, devuelto jsmath.Num
@@ -281,7 +283,8 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND `+fragmentos.FacturaViva+`),
 		  (SELECT coalesce(-sum(m.monto), 0) FROM cash_movements m
 		   JOIN orders d ON d.id = m.order_id AND d.origen = 'mostrador' AND d.estado = 'cancelado'
-		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2)
+		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2
+		     AND NOT EXISTS (SELECT 1 FROM devoluciones dv WHERE dv.cash_movement_id = m.id))
 		FROM orders o
 		WHERE o.origen = 'mostrador' AND o.estado = 'cancelado' AND `+anuladaEn+` >= $1 AND `+anuladaEn+` < $2`, desde, hasta).
 		Scan(&a.Cantidad, &total, &a.ConFacturaViva, &devuelto)
@@ -398,6 +401,11 @@ func (s *Servicio) ChequesDeLaSemana(ctx context.Context, ahora time.Time) (Cheq
 // emitidos hoy (cuenta corriente, mostrador, portal), los pagos de las
 // ventas del mostrador cobradas hoy (no emiten recibo) y los cobros en línea
 // acreditados hoy que ningún recibo nombra (el pedido pagado en el sitio).
+// La venta del mostrador se cobra al crearse: cobrada_at solo lo lleva la
+// que llegó de la cola sin conexión (la hora en que se cobró de verdad), así
+// que la de todos los días se mide por created_at, como la caja y Cobros.
+// Con cobrada_at solo, lo cobrado con tarjeta o transferencia en el mostrador
+// no aparecía nunca en «Plata hoy».
 // El efectivo de los recibos y de las ventas ya está en el «esperado» de su
 // caja, así que no se suma otra vez.
 func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, error) {
@@ -435,7 +443,7 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		              WHEN op.medio = 'mercado_pago' THEN 'mp'
 		              WHEN op.medio IN ('debito', 'credito') THEN 'tarjeta' END, op.importe
 		  FROM order_payments op JOIN orders o ON o.id = op.order_id
-		  WHERE o.estado <> 'cancelado' AND o.cobrada_at >= $1 AND o.cobrada_at < $2
+		  WHERE o.estado <> 'cancelado' AND coalesce(o.cobrada_at, o.created_at) >= $1 AND coalesce(o.cobrada_at, o.created_at) < $2
 		  UNION ALL
 		  SELECT CASE WHEN p.proveedor = 'transferencia' THEN 'banco' WHEN p.proveedor = 'mercado_pago' THEN 'mp' END, p.monto
 		  FROM payments p

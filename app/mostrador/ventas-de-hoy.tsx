@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { Printer, Undo2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, hora } from "@/lib/formato";
 import { anularVenta } from "./actions";
+import { NOMBRE_DEL_MEDIO } from "./medios";
 import type { VentaDeHoy } from "./tipos";
 
 /**
@@ -71,11 +72,10 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
                   {v.numero} · {v.cliente}
                 </span>
                 <span className="block text-sm text-muted-foreground">
-                  {new Date(v.createdAt).toLocaleTimeString("es-AR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                  {v.medioPago ? ` · ${v.medioPago.replace("_", " ")}` : ""}
+                  {/* En 24 h y con el nombre del medio, no su clave
+                      («12:16 a. m. · cuenta corriente»): comité final. */}
+                  {hora.format(new Date(v.createdAt))}
+                  {v.medioPago ? ` · ${NOMBRE_DEL_MEDIO[v.medioPago] ?? v.medioPago}` : ""}
                 </span>
               </span>
 

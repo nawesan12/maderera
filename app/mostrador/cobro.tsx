@@ -607,11 +607,9 @@ export function Cobro({
             onClick={() => alCobrar()}
             disabled={faltaCaja ? enviando : !puedeCobrar}
             data-foco="cobrar"
-            className={`inline-flex h-16 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl text-xl font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              faltaCaja
-                ? "estado-problema border-2 border-[var(--estado-acento)] bg-[var(--estado-fondo)] text-[var(--estado-tinta)] hover:brightness-95"
-                : "bg-accion text-white hover:bg-accion-hover"
-            }`}
+            // Sin caja es la acción primaria, como cobrar, y no una alarma:
+            // abrirla es el primer paso de cada mañana (comité de T4).
+            className="inline-flex h-16 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl bg-accion text-xl font-bold text-white transition-colors hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {enviando ? (
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -619,7 +617,7 @@ export function Cobro({
               <>
                 <Banknote className="h-6 w-6" />
                 Abrir la caja
-                <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">
+                <kbd className="rounded border border-white/40 px-1.5 py-0.5 text-xs font-medium">
                   Ctrl + Enter
                 </kbd>
               </>

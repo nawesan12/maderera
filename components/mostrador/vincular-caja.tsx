@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Monitor } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Monitor, MonitorOff } from "lucide-react";
 import type { CajaVinculada } from "@/lib/mostrador/offline/use-caja";
 
 interface CajaDisponible {
@@ -27,18 +28,28 @@ interface CajaDisponible {
  * Antes era una franja con dos frases arriba de la venta (T4, hallazgo 19).
  * Ahora es un selector del mismo alto que la píldora del turno y en segundo
  * plano: sin la palabra «caja», porque al lado está «Abrir caja», que es otra
- * cosa (el turno), y la misma palabra para dos cosas confunde. Sin cajas
- * dadas de alta o sin conexión no aparece: el que atiende no tiene nada que
- * hacer ahí, y un cartel que no se puede resolver es ruido.
+ * cosa (el turno), y la misma palabra para dos cosas confunde.
+ *
+ * Sin vincular nunca desaparece del todo (comité de T4): el problema se ve el
+ * día que se corta internet, que es justo cuando no se puede vincular, y no
+ * mostrar nada no daba ninguna pista de por qué no cobra. Ahí queda un ícono
+ * quieto de terminal tachada. Y si la sucursal no tiene terminales dadas de
+ * alta, quien puede darlas de alta ve el camino; el resto, el mismo ícono.
+ *
+ * Vinculada muestra el código y no el nombre: es lo que sale en el número
+ * provisorio del papel (`CAJA1-017`), y con eso se lo busca después.
  */
 export function VincularCaja({
   branchId,
   enLinea,
   vinculada,
   onVincular,
+  administra = false,
 }: {
   branchId: string;
   enLinea: boolean;
+  /** Si quien atiende puede dar de alta terminales (/admin/caja). */
+  administra?: boolean;
   /** El código de la caja de esta máquina, si ya está vinculada. */
   vinculada: string | null;
   onVincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
@@ -101,9 +112,34 @@ export function VincularCaja({
     );
   }
 
+  const sinVincular = (
+    <span
+      role="img"
+      aria-label="Esta PC no está vinculada a una terminal: sin conexión no puede cobrar"
+      title="Esta PC no está vinculada a una terminal: sin conexión no puede cobrar"
+      className="estado-espera inline-flex h-9 items-center px-1"
+    >
+      <MonitorOff className="h-4 w-4" />
+    </span>
+  );
+
+  if (!enLinea) return sinVincular;
   // Mientras carga no se muestra nada: un círculo que gira en la barra, en
   // cada arranque, es más ruido que lo que informa.
-  if (!enLinea || !cajas || cajas.length === 0) return null;
+  if (!cajas) return null;
+  if (cajas.length === 0) {
+    return administra ? (
+      <Link
+        href="/admin/caja"
+        className="estado-espera inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--estado-acento)] px-2.5 text-sm font-medium"
+      >
+        <MonitorOff className="h-4 w-4" />
+        Dar de alta terminales
+      </Link>
+    ) : (
+      sinVincular
+    );
+  }
 
   return (
     <span className="inline-flex items-center gap-2">

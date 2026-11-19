@@ -266,3 +266,28 @@ describe("desarmaAlPerderFoco", () => {
     expect(desarmaAlPerderFoco(grupo, { id: "buscador" })).toBe(true);
   });
 });
+
+/**
+ * Abrir la caja es el primer paso del día, no un error (comité de T4): ni el
+ * botón grande ni la barra van en el rojo de los problemas. Y la barra sigue a
+ * lo que la pantalla ya sabe del turno, no solo al que mandó el servidor.
+ */
+describe("la caja sin abrir", () => {
+  it("no se pinta como un problema, y la barra lee la caja abierta de la pantalla", async () => {
+    const { readFileSync } = await import("node:fs");
+    const leer = (r: string) => readFileSync(new URL(r, import.meta.url), "utf8");
+    const cobro = leer("../app/mostrador/cobro.tsx");
+    const boton = cobro.slice(cobro.indexOf('data-foco="cobrar"'), cobro.indexOf("Abrir la caja"));
+    expect(boton).not.toMatch(/estado-problema/);
+    const barra = leer("../app/mostrador/barra-superior.tsx");
+    const caja = barra.slice(barra.indexOf("onClick={onCaja}"), barra.indexOf("Abrir caja"));
+    expect(caja).not.toMatch(/estado-problema/);
+    expect(leer("../app/mostrador/vista.tsx")).toMatch(/cajaAbierta=\{hayTurno\}/);
+  });
+
+  it("sin vincular y sin conexión, la terminal deja una pista", async () => {
+    const { readFileSync } = await import("node:fs");
+    const fuente = readFileSync(new URL("../components/mostrador/vincular-caja.tsx", import.meta.url), "utf8");
+    expect(fuente).toMatch(/if \(!enLinea\) return sinVincular;/);
+  });
+});

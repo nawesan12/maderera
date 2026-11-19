@@ -15,6 +15,7 @@ export function BarraSuperior({
   sucursales,
   sucursal,
   turno,
+  cajaAbierta,
   onCaja,
   terminal,
 }: {
@@ -24,6 +25,12 @@ export function BarraSuperior({
   sucursales: Sucursal[];
   sucursal: Sucursal;
   turno: Turno | null;
+  /**
+   * Si la caja está abierta, aunque el turno todavía no haya llegado del
+   * servidor: recién abierta desde el cobro, el botón ya decía «Cobrar» y
+   * esto seguía en «Abrir caja» hasta el refresh (comité de T4).
+   */
+  cajaAbierta: boolean;
   onCaja: () => void;
   /** La terminal de esta máquina: el código, o el selector para vincularla. */
   terminal?: ReactNode;
@@ -87,18 +94,20 @@ export function BarraSuperior({
 
       {/* Abierta, dice cuánto hay; cerrada, dice lo que hay que hacer y se ve
           como botón —borde y flecha—: «Caja cerrada» se leía como un estado y
-          nadie la tocaba (T4, hallazgo 19). */}
+          nadie la tocaba (T4, hallazgo 19). Sin el rojo de los problemas:
+          abrir la caja es el primer paso del día, no un error, y el rojo
+          queda para lo que salió mal (comité de T4). */}
       <button
         onClick={onCaja}
         className={`inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
-          turno
+          cajaAbierta
             ? "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
-            : "estado-problema border border-[var(--estado-acento)] bg-[var(--estado-fondo)] text-[var(--estado-tinta)] hover:brightness-95"
+            : "border border-linea bg-card text-foreground hover:bg-hundida"
         }`}
       >
         <Banknote className="h-4 w-4" />
-        {turno ? (
-          `Caja ${formatearMonto(turno.esperado)}`
+        {cajaAbierta ? (
+          turno ? `Caja ${formatearMonto(turno.esperado)}` : "Caja abierta"
         ) : (
           <>
             Abrir caja

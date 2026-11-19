@@ -87,7 +87,11 @@ export default async function MostradorPage({
 
   return (
     <VistaMostrador
-      usuario={{ nombre: usuario.name, userId: usuario.userId }}
+      usuario={{
+        nombre: usuario.name,
+        userId: usuario.userId,
+        administraCaja: puedeEntrar("/admin/caja", usuario.staffRole),
+      }}
       listaGeneral={listaGeneral}
       sucursales={sucursales.map((s) => ({
         id: s.id,

@@ -93,7 +93,8 @@ export function VistaMostrador({
   promos,
   escalasDePago,
 }: {
-  usuario: { nombre: string; userId: string };
+  /** `administraCaja`: si puede dar de alta terminales (/admin/caja). */
+  usuario: { nombre: string; userId: string; administraCaja?: boolean };
   /** La lista de precios general. Lo que no sea esta es precio diferenciado. */
   listaGeneral: string | null;
   sucursales: Sucursal[];
@@ -860,6 +861,7 @@ export function VistaMostrador({
         sucursales={sucursales}
         sucursal={sucursal}
         turno={hayTurno ? turno : null}
+        cajaAbierta={hayTurno}
         onCaja={() => {
           setCajaParaCobrar(false);
           setCaja(true);
@@ -873,6 +875,7 @@ export function VistaMostrador({
             enLinea={conexion.enLinea}
             vinculada={cajaFisica?.codigo ?? null}
             onVincular={vincularCaja}
+            administra={usuario.administraCaja}
           />
         }
       />

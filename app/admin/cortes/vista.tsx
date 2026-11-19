@@ -65,10 +65,11 @@ export function TableroDeCortes({
               titulo={columna.titulo}
               cantidad={enColumna.length}
               // Con la misma función que las tarjetas: si el encabezado
-              // dice 4 y las tarjetas suman 4,32, parece que falta algo.
+              // dice 4 y las tarjetas suman 4,32, parece que falta algo. Sin
+              // decimales fijos: es una sola cifra, no una columna que alinear.
               detalle={
                 enColumna.length > 0
-                  ? `${formatearDecimal(metros, 2, { fijo: true })} m²`
+                  ? `${formatearDecimal(metros)} m²`
                   : undefined
               }
               estado={columna.estado}

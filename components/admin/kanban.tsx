@@ -14,17 +14,22 @@ import { claseDeFamilia } from "@/components/admin/etiqueta-estado";
  */
 export function Tablero({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-[18px] pb-1.5 pt-0.5">
+    <div className="@container mt-[18px] pb-1.5 pt-0.5">
       {/*
-        Una sola fila, de izquierda a derecha como avanza el trabajo: la
-        columna con tarjetas se lleva el ancho y la vacía se angosta (el peso
-        lo pone cada columna). Repartido en partes iguales, las vacías ocupaban
-        lo mismo que la llena y los títulos se cortaban; bajando de fila,
-        «Listo» caía abajo en una tablet y el orden se rompía. Si en una
-        pantalla angosta no entran, la fila se corre de costado antes que
-        partirse. En el teléfono, una abajo de la otra.
+        Con lugar (1024 px de tablero, lo que pide el peor caso: cuatro
+        columnas con trabajo de 240 px), una sola fila de izquierda a derecha
+        como avanza el trabajo: la columna con tarjetas se lleva el ancho y la
+        vacía se angosta (el peso lo pone cada columna). Repartido en partes
+        iguales, las vacías ocupaban lo mismo que la llena.
+
+        Sin ese lugar, dos por fila en orden (la tercera abajo de la primera),
+        y en el teléfono una abajo de la otra. **Nunca de costado**: la regla
+        del 18/11 vale también adentro de un bloque, y una tablet o una
+        notebook con el menú abierto dejaban «Listos» detrás de un scroll sin
+        ninguna señal. Se mide el tablero (`@container`) y no la pantalla,
+        porque el menú lateral se come 244 px.
       */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:overflow-x-auto">
+      <div className="grid items-start gap-3 @xl:grid-cols-2 @5xl:flex">
         {children}
       </div>
     </div>
@@ -69,8 +74,8 @@ export function ColumnaTablero({
     <section
       className={`tarjeta-hundida flex min-w-0 flex-col overflow-hidden rounded-xl ${
         cantidad > 0
-          ? "sm:min-w-[240px] sm:flex-[3_1_0%]"
-          : "sm:min-w-[132px] sm:flex-[1_1_0%]"
+          ? "@5xl:min-w-[240px] @5xl:flex-[3_1_0%]"
+          : "@5xl:min-w-[132px] @5xl:flex-[1_1_0%]"
       }`}
     >
       <header className="sticky top-0 z-[2] px-3.5 pb-2 pt-3">
@@ -80,7 +85,9 @@ export function ColumnaTablero({
           }`}
           aria-hidden="true"
         />
-        <div className="flex items-baseline gap-2.5">
+        {/* El título nunca se parte: si no entra al lado del número (la
+            columna vacía y angosta), baja entero abajo del 0. */}
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span
             className={`tabular text-[28px] font-bold leading-none tracking-[-0.03em] ${
               cantidad > 0 ? "text-foreground" : "text-texto-3"
@@ -88,15 +95,17 @@ export function ColumnaTablero({
           >
             {cantidad}
           </span>
-          <h2 className={`text-[15px] font-semibold tracking-[-0.01em] ${cantidad > 0 ? "" : "text-texto-2"}`}>
+          <h2 className={`whitespace-nowrap text-[15px] font-semibold tracking-[-0.01em] ${cantidad > 0 ? "" : "text-texto-2"}`}>
             {titulo}
           </h2>
-          {detalle && (
-            <span className="tabular ml-auto text-[13px] text-texto-2">
-              {detalle}
-            </span>
-          )}
         </div>
+        {/* En su renglón: al lado del título, «$ 1.234.567» no entraba y bajaba
+            desordenado. */}
+        {detalle && (
+          <p className="tabular mt-1 whitespace-nowrap text-[13px] text-texto-2">
+            {detalle}
+          </p>
+        )}
       </header>
 
       {/*

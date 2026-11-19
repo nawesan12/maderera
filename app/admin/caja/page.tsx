@@ -278,7 +278,7 @@ export default async function CajaPage({
         El número provisorio va al lado del definitivo porque es el que trae el
         cliente escrito en el ticket cuando la venta se cobró sin internet.
       */}
-      <section className="tarjeta overflow-hidden">
+      <section className="tarjeta @container overflow-hidden">
         <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4">
           <h2 className="text-base font-semibold">
             Emitido en el mostrador
@@ -292,11 +292,13 @@ export default async function CajaPage({
           />
         ) : (
           <>
-          {/* La tabla, de `md` para arriba; en el teléfono, dos renglones por
-              venta. Apilada era «Cuándo:», «Venta:», «Total:» uno abajo del
-              otro, y el número del pedido se partía en «PED-» / «1086». */}
-          <div className="hidden overflow-x-auto md:block">
-            <table data-tabla="fija" className="w-full min-w-[820px] text-base">
+          {/* La tabla, donde entra entera (el ancho de la sección, no el de
+              la pantalla: el menú lateral se come 244 px); si no, dos
+              renglones por venta. Apilada era «Cuándo:», «Venta:», «Total:»
+              uno abajo del otro, y con un ancho mínimo se corría de costado
+              en una tablet, que no pasa en ningún ancho. */}
+          <div className="hidden @4xl:block">
+            <table className="w-full text-base">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Cuándo</th>
@@ -356,17 +358,24 @@ export default async function CajaPage({
             </table>
           </div>
 
-          <ul className="divide-y divide-linea md:hidden">
+          <ul className="divide-y divide-linea @4xl:hidden">
             {emitido.map((v) => (
               <li key={v.orderId} className="px-4 py-3">
-                <p className="flex items-baseline justify-between gap-3">
+                <p className="flex items-baseline gap-3">
                   <Link
                     href={`/admin/pedidos/${v.orderId}`}
                     className="tabular whitespace-nowrap font-medium hover:text-brand-orange hover:underline"
                   >
                     {v.numero}
                   </Link>
-                  <span className="tabular whitespace-nowrap font-semibold">
+                  {/* El número que trae escrito el cliente cuando la venta
+                      se cobró sin internet: es lo que se busca con cola. */}
+                  {v.numeroProvisorio && (
+                    <span className="tabular min-w-0 truncate text-sm text-muted-foreground">
+                      ticket {v.numeroProvisorio}
+                    </span>
+                  )}
+                  <span className="tabular ml-auto whitespace-nowrap font-semibold">
                     {formatearMonto(Number(v.total))}
                   </span>
                 </p>
@@ -374,7 +383,14 @@ export default async function CajaPage({
                     lo primero que se mira para que no falte plata. */}
                 <p className="mt-0.5 flex items-baseline gap-3 text-sm text-muted-foreground">
                   <span className="min-w-0 flex-1 truncate">
+                    {/* Con el día: la lista es del mes entero, y la hora sola
+                        no ubica una venta del 3 frente a una del 17. */}
                     <span className="tabular">
+                      {v.createdAt.toLocaleDateString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        timeZone: ZONA,
+                      })}{" "}
                       {v.createdAt.toLocaleTimeString("es-AR", {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -384,6 +400,7 @@ export default async function CajaPage({
                     {" · "}
                     {v.cliente}
                     {v.operadora && ` · ${v.operadora}`}
+                    {v.sucursal && ` · ${v.sucursal}`}
                   </span>
                   {v.medioPago && (
                     <span className="shrink-0 whitespace-nowrap">

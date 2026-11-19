@@ -240,10 +240,12 @@ export default async function PreciosPage({
  *
  * En el teléfono la tabla apilada era una tarjeta de 260 px por medida, con
  * «Código:», «Lista:», «Cambió:» uno abajo del otro: 13.000 px de página.
- * Abajo de `md` va una lista propia de dos renglones por medida, sin foto ni
- * «Cambió», que en el teléfono no se miran. La tabla lleva `data-tabla="fija"`
- * para que no se apile en una tablet: si no entra, se corre adentro de su
- * tarjeta.
+ * Donde la tabla no entra entera va una lista propia de dos renglones por
+ * medida, sin foto ni «Cambió», que en el teléfono no se miran. Lo decide el
+ * ancho del bloque (`@container`, 896 px: lo que piden las columnas fijas más
+ * el nombre) y no el de la pantalla, porque el menú lateral se come 244 px:
+ * con `md` y un ancho mínimo, una tablet o una notebook con el menú abierto
+ * corrían la tabla de costado, y eso no pasa en ningún ancho.
  */
 function Grilla({
   filas,
@@ -256,10 +258,10 @@ function Grilla({
 }) {
   if (filas.length === 0) return null;
   return (
-    <>
-      <div className="tarjeta hidden overflow-x-auto md:block">
+    <div className="@container">
+      <div className="tarjeta hidden overflow-hidden @4xl:block">
         {/* Anchos fijos: las tablas de los tres grupos quedan alineadas. */}
-        <table data-tabla="fija" className="w-full min-w-[720px] table-fixed text-base">
+        <table className="w-full table-fixed text-base">
           <thead>
             <tr className="border-b text-left text-sm text-muted-foreground">
               <th className="w-14 px-3 py-2.5" />
@@ -278,7 +280,7 @@ function Grilla({
         </table>
       </div>
 
-      <div className="tarjeta overflow-hidden md:hidden">
+      <div className="tarjeta overflow-hidden @4xl:hidden">
         {/* Un solo encabezado arriba y no un rótulo por renglón: los dos
             precios quedan en la misma columna en toda la lista. */}
         <div
@@ -295,7 +297,7 @@ function Grilla({
           ))}
         </ul>
       </div>
-    </>
+    </div>
   );
 }
 

@@ -21,6 +21,7 @@ import {
 } from "../entregas-actions";
 import { fechaHora } from "@/components/admin/formato";
 import type { RenglonPendiente } from "@/lib/entregas";
+import { llevaDecimales } from "@/lib/unidades";
 import type { RemitoListado } from "@/lib/dal/admin/entregas";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
@@ -61,6 +62,8 @@ export function Entregas({
     inicial,
   );
   const [abierto, setAbierto] = useState(false);
+  /** Los renglones que van enteros y tienen una coma tipeada. */
+  const [conDecimales, setConDecimales] = useState<Set<string>>(() => new Set());
 
   const conSaldo = pendientes.filter((p) => p.pendiente > 0.01);
   const hayAcopio = conSaldo.length > 0;
@@ -191,31 +194,37 @@ export function Entregas({
                     <input
                       id={`cantidad-${p.orderItemId}`}
                       name={`cantidad-${p.orderItemId}`}
-                      /* Lo que no se fracciona va entero y la coma se frena en
-                         el campo: `inputMode` solo cambia el teclado del
-                         teléfono, y en la computadora se escribía igual (T4,
-                         hallazgo 21). Qué se fracciona lo dice Go por la
-                         unidad del producto (`enteros`). Lo pendiente
-                         precargado puede traer decimales de antes; Go acepta
-                         exactamente eso. */
+                      /* Lo que no se fracciona va entero (T4, hallazgo 21).
+                         Qué se fracciona lo dice Go por la unidad del producto
+                         (`enteros`). La coma ya no se frena en silencio: «1,5»
+                         quedaba «15» sin que nadie lo viera (comité final).
+                         Se deja escribir, se marca y no se prepara el remito
+                         hasta corregirla. Lo pendiente precargado puede traer
+                         decimales de antes; Go acepta exactamente eso. */
                       inputMode={p.enteros ? "numeric" : "decimal"}
-                      onKeyDown={
+                      onChange={
                         !p.enteros
                           ? undefined
                           : (e) => {
-                              if (e.key === "," || e.key === ".") e.preventDefault();
+                              const mal = llevaDecimales(e.target.value) && e.target.value !== String(p.pendiente);
+                              setConDecimales((antes) => {
+                                const nuevo = new Set(antes);
+                                if (mal) nuevo.add(p.orderItemId);
+                                else nuevo.delete(p.orderItemId);
+                                return nuevo;
+                              });
                             }
                       }
-                      onPaste={
-                        !p.enteros
-                          ? undefined
-                          : (e) => {
-                              if (/[.,]/.test(e.clipboardData.getData("text"))) e.preventDefault();
-                            }
-                      }
+                      aria-invalid={conDecimales.has(p.orderItemId) || undefined}
+                      aria-describedby={conDecimales.has(p.orderItemId) ? `entero-${p.orderItemId}` : undefined}
                       defaultValue={p.pendiente}
-                      className="tabular h-10 w-28 rounded-lg border bg-background px-3 text-right text-base"
+                      className="tabular h-10 w-28 rounded-lg border bg-background px-3 text-right text-base aria-[invalid]:border-destructive"
                     />
+                    {conDecimales.has(p.orderItemId) && (
+                      <span id={`entero-${p.orderItemId}`} className="estado-problema text-sm font-semibold">
+                        Va sin decimales
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -259,7 +268,7 @@ export function Entregas({
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="submit"
-                  disabled={preparando}
+                  disabled={preparando || conDecimales.size > 0}
                   className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
                 >
                   {preparando && <Loader2 className="h-4 w-4 animate-spin" />}

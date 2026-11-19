@@ -8,6 +8,7 @@ import {
   metrosDePiezas,
   pasoDeCantidad,
   piezasDeMetros,
+  llevaDecimales,
 } from "@/lib/unidades";
 import { unitOfSale } from "@/lib/db/schema/catalog";
 import { UNIDADES_DE_PRODUCTO } from "@/lib/validation/product";
@@ -93,5 +94,18 @@ describe("formatearDecimal", () => {
     expect(formatearDecimal(-0.004)).toBe("0");
     expect(formatearDecimal(-0.004, 2, { fijo: true })).toBe("0,00");
     expect(formatearDecimal(-2.5)).toBe("-2,5");
+  });
+});
+
+/**
+ * En el remito, la coma de lo que va entero se frenaba en silencio: «1,5»
+ * quedaba «15» (comité final). Ahora se deja escribir y se marca.
+ */
+describe("lo tipeado con decimales", () => {
+  it("ve la coma y el punto", () => {
+    expect(llevaDecimales("1,5")).toBe(true);
+    expect(llevaDecimales("2.")).toBe(true);
+    expect(llevaDecimales("15")).toBe(false);
+    expect(llevaDecimales("")).toBe(false);
   });
 });

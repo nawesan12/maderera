@@ -28,6 +28,11 @@ export function admiteDecimales(unidad: string | null | undefined): boolean {
   return unidad ? FRACCIONABLES.has(unidad) : false;
 }
 
+/** Si lo tipeado trae coma o punto decimal: «1,5», «2.25». */
+export function llevaDecimales(texto: string): boolean {
+  return /[.,]/.test(texto);
+}
+
 /**
  * Redondea una cantidad de stock a la precisión de la columna (tres
  * decimales).

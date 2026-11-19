@@ -289,13 +289,16 @@ func PartesPorCircuito(partes []ParteDeRecibo, rep cobros.Reparto) (blanco, b []
 		asignado[i] = redondear(x)
 		falta = redondear(falta - asignado[i])
 	}
-	// Retenciones, después lo bancarizado, después el efectivo, y los
-	// cheques del B solo si lo blanco no se completó de otra forma.
+	// Retenciones, después lo bancarizado, después el efectivo. Un cheque del
+	// B nunca completa lo blanco (comité final, M8): es plata del otro
+	// circuito, y su depósito, su endoso o su rechazo van al archivo B. El
+	// reparto nunca pide de lo blanco más que lo que no es cheque B
+	// (cobros.RepartoDeRecibo); si un reparto viejo lo pidiera, el asiento
+	// sale «NO CIERRA» en vez de esconderlo.
 	for _, orden := range []func(ParteDeRecibo) bool{
 		func(p ParteDeRecibo) bool { return p.Medio == "retencion" },
 		func(p ParteDeRecibo) bool { return p.Bancarizado() },
 		func(p ParteDeRecibo) bool { return p.Medio == "efectivo" && !p.Negro },
-		func(p ParteDeRecibo) bool { return p.Negro },
 	} {
 		for i, p := range partes {
 			if orden(p) && asignado[i] == 0 {

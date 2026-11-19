@@ -286,6 +286,11 @@ func TestPartesPorCircuito(t *testing.T) {
 	if len(bl) != 1 || bl[0].Medio != "efectivo" || len(b) != 1 || !b[0].Negro || b[0].Importe != 40000 {
 		t.Fatalf("el cheque del B: %+v %+v", bl, b)
 	}
+	// Un cheque del B nunca completa lo blanco, aunque el reparto lo pida.
+	if bl, b := PartesPorCircuito([]ParteDeRecibo{{Medio: "efectivo", Importe: 50}, {Medio: "cheque", Importe: 100, Negro: true}},
+		cobros.Reparto{Deudores: 150}); suma(bl) != 50 || len(b) != 1 || !b[0].Negro || b[0].Importe != 100 {
+		t.Fatalf("el cheque del B completó lo blanco: %+v %+v", bl, b)
+	}
 	// Todo por transferencia y una parte B: lo bancarizado que queda en el B
 	// se marca.
 	if x := BancarizadoEnB([]ParteDeRecibo{{Medio: "transferencia", Importe: 1000}}, cobros.Reparto{Deudores: 700, B: 300}); x != 300 {

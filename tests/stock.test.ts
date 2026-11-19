@@ -80,3 +80,26 @@ describe("costo de envío", () => {
     expect(calcularEnvio({ ...zona, aCotizar: true }, 100000)).toBe(0);
   });
 });
+
+describe("el ajuste rápido (comité de T4)", () => {
+  it("Mayús+Enter no suma: hasta T4 era restar, y por costumbre dejaba un ingreso", async () => {
+    const { teclaDelAjuste } = await import("@/lib/stock-ajuste");
+    expect(teclaDelAjuste({ key: "Enter", shiftKey: false }, "mover")).toBe("ingreso");
+    expect(teclaDelAjuste({ key: "Enter", shiftKey: true }, "mover")).toBe("nada");
+    expect(teclaDelAjuste({ key: "Enter", shiftKey: true }, "contar")).toBe("nada");
+    expect(teclaDelAjuste({ key: "Enter", shiftKey: false }, "contar")).toBe("contar");
+    expect(teclaDelAjuste({ key: "a", shiftKey: false }, "mover")).toBeNull();
+  });
+
+  it("la devolución está para los dos lados", async () => {
+    const { MOTIVOS_QUE_RESTAN, MOTIVOS_QUE_SUMAN } = await import("@/lib/stock-ajuste");
+    expect(MOTIVOS_QUE_SUMAN.map((m) => m.valor)).toContain("devolucion");
+    expect(MOTIVOS_QUE_RESTAN.map((m) => m.valor)).toContain("devolucion");
+  });
+
+  it("el aviso dice de qué producto es", async () => {
+    const { avisoDelAjuste } = await import("@/lib/stock-ajuste");
+    expect(avisoDelAjuste("MDF 18 mm", "Central: 12 → 11,5")).toBe("MDF 18 mm · Central: 12 → 11,5");
+    expect(avisoDelAjuste("  ", "Central: 1 → 2")).toBe("Central: 1 → 2");
+  });
+});

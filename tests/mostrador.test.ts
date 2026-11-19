@@ -231,3 +231,63 @@ describe("la cantidad tipeada en el buscador", () => {
     });
   });
 });
+
+/**
+ * El renglón del corte se muestra por su importe (T4): su cantidad es de
+ * pasadas y su nombre, de piezas, y el que «corregía» el 14 a 6 cobraba menos
+ * de la mitad. La marca es la misma que mira Go (`esPasada`).
+ */
+describe("esLineaDelCorte", () => {
+  it("es el renglón sin variante en «pasada», y nada más", async () => {
+    const { esLineaDelCorte } = await import("@/lib/mostrador/importes");
+    expect(esLineaDelCorte({ variantId: null, unidad: "pasada" })).toBe(true);
+    expect(esLineaDelCorte({ unidad: "pasada" })).toBe(true);
+    expect(esLineaDelCorte({ variantId: "v1", unidad: "pasada" })).toBe(false);
+    expect(esLineaDelCorte({ variantId: null, unidad: "m" })).toBe(false);
+    expect(esLineaDelCorte({ variantId: null, unidad: "unidad" })).toBe(false);
+  });
+});
+
+/**
+ * «Vaciar» en Safari (T4): el blur de «No» llega sin destino cuando se toca
+ * el botón rojo, y desarmar ahí lo hacía desaparecer antes del clic.
+ */
+describe("desarmaAlPerderFoco", () => {
+  const dentro = { id: "vaciar" };
+  const grupo = { contains: (n: unknown) => n === dentro };
+  it("no desarma cuando el foco no se fue a ningún lado", async () => {
+    const { desarmaAlPerderFoco } = await import("@/app/mostrador/lineas");
+    expect(desarmaAlPerderFoco(grupo, null)).toBe(false);
+    expect(desarmaAlPerderFoco(grupo, undefined)).toBe(false);
+  });
+  it("no desarma entre sus dos botones, y sí al irse a otro elemento", async () => {
+    const { desarmaAlPerderFoco } = await import("@/app/mostrador/lineas");
+    expect(desarmaAlPerderFoco(grupo, dentro)).toBe(false);
+    expect(desarmaAlPerderFoco(grupo, { id: "buscador" })).toBe(true);
+  });
+});
+
+/**
+ * Abrir la caja es el primer paso del día, no un error (comité de T4): ni el
+ * botón grande ni la barra van en el rojo de los problemas. Y la barra sigue a
+ * lo que la pantalla ya sabe del turno, no solo al que mandó el servidor.
+ */
+describe("la caja sin abrir", () => {
+  it("no se pinta como un problema, y la barra lee la caja abierta de la pantalla", async () => {
+    const { readFileSync } = await import("node:fs");
+    const leer = (r: string) => readFileSync(new URL(r, import.meta.url), "utf8");
+    const cobro = leer("../app/mostrador/cobro.tsx");
+    const boton = cobro.slice(cobro.indexOf('data-foco="cobrar"'), cobro.indexOf("Abrir la caja"));
+    expect(boton).not.toMatch(/estado-problema/);
+    const barra = leer("../app/mostrador/barra-superior.tsx");
+    const caja = barra.slice(barra.indexOf("onClick={onCaja}"), barra.indexOf("Abrir caja"));
+    expect(caja).not.toMatch(/estado-problema/);
+    expect(leer("../app/mostrador/vista.tsx")).toMatch(/cajaAbierta=\{hayTurno\}/);
+  });
+
+  it("sin vincular y sin conexión, la terminal deja una pista", async () => {
+    const { readFileSync } = await import("node:fs");
+    const fuente = readFileSync(new URL("../components/mostrador/vincular-caja.tsx", import.meta.url), "utf8");
+    expect(fuente).toMatch(/if \(!enLinea\) return sinVincular;/);
+  });
+});

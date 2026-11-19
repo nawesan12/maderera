@@ -64,6 +64,10 @@ export function DialogoImportar() {
         sku: f.sku,
         generalNuevo: f.generalNuevo,
         profesionalNuevo: f.profesionalNuevo,
+        // Lo que se vio: si alguien lo cambió mientras tanto, Go rechaza la
+        // fila en vez de pisarlo. "" es «no tenía precio».
+        generalActual: f.generalActual ?? "",
+        profesionalActual: f.profesionalActual ?? "",
       }));
 
     const datos = new FormData();
@@ -75,7 +79,11 @@ export function DialogoImportar() {
         toast.error(resultado.error);
         return;
       }
-      toast.success(resultado.ok ?? "Precios actualizados.");
+      // Con filas rechazadas el mensaje dice cuántas y por qué: en amarillo,
+      // y un rato más, que se lea.
+      const ok = resultado.ok ?? "Precios actualizados.";
+      if (ok.includes("Se rechazaron")) toast.warning(ok, { duration: 15_000 });
+      else toast.success(ok);
       cerrar();
       router.refresh();
     });

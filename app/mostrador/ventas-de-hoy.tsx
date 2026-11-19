@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Printer, Undo2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 import { formatearMonto } from "@/lib/formato";
 import { anularVenta } from "./actions";
 import type { VentaDeHoy } from "./tipos";
@@ -22,6 +23,31 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
   const [anulando, setAnulando] = useState<VentaDeHoy | null>(null);
   const [motivo, setMotivo] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
+  /*
+   * ¿Volvió la mercadería? Preguntado siempre y con «Volvió» marcado: es lo
+   * normal, y Enter confirma. «Se la llevó» no devuelve el stock y pide el
+   * PIN de un admin (es mercadería que sale sin plata).
+   */
+  const [volvio, setVolvio] = useState(true);
+  const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
+
+  function anular(pin?: string) {
+    if (!anulando || !motivo.trim()) return;
+    const venta = anulando;
+    empezar(async () => {
+      const r = await anularVenta(venta.id, motivo, { volvioLaMercaderia: volvio, pin });
+      if (r.autorizacion) {
+        setPidePin(r.autorizacion);
+        return;
+      }
+      setPidePin(null);
+      setAviso(r.error ?? [r.ok, r.avisoFiscal].filter(Boolean).join(" "));
+      if (!r.error) {
+        setAnulando(null);
+        router.refresh();
+      }
+    });
+  }
 
   if (ventas.length === 0) return null;
 
@@ -73,6 +99,8 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
                   onClick={() => {
                     setAnulando(v);
                     setMotivo("");
+                    setVolvio(true);
+                    setPidePin(null);
                   }}
                   aria-label={`Anular ${v.numero}`}
                   className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
@@ -94,13 +122,21 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
               </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-3.5">
-              <p className="text-base leading-relaxed text-muted-foreground">
-                {/* Nada se borra: queda todo asentado al revés. */}
-                Vuelve el stock, sale la plata de la caja y se cancela la deuda si
-                la había.
-              </p>
-
+            <div
+              className="space-y-3.5"
+              onKeyDown={(e) => {
+                // Alt + V y Alt + L eligen sin pasar al mouse.
+                if (!e.altKey) return;
+                if (e.code === "KeyV") {
+                  e.preventDefault();
+                  setVolvio(true);
+                }
+                if (e.code === "KeyL") {
+                  e.preventDefault();
+                  setVolvio(false);
+                }
+              }}
+            >
               <label className="block">
                 <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Por qué
@@ -109,30 +145,58 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
                   autoFocus
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !pidePin) {
+                      e.preventDefault();
+                      anular();
+                    }
+                  }}
                   placeholder="Se cargó la medida equivocada"
                   className="mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
                 />
               </label>
 
-              <button
-                disabled={trabajando || !motivo.trim()}
-                onClick={() =>
-                  empezar(async () => {
-                    const r = await anularVenta(anulando.id, motivo);
-                    setAviso(
-                      r.error ?? [r.ok, r.avisoFiscal].filter(Boolean).join(" "),
-                    );
-                    if (!r.error) {
-                      setAnulando(null);
-                      router.refresh();
-                    }
-                  })
-                }
-                className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
-              >
-                <Undo2 className="h-5 w-5" />
-                Anular la venta
-              </button>
+              <div role="radiogroup" aria-label="La mercadería" className="grid grid-cols-2 gap-2">
+                {[
+                  { valor: true, texto: "Volvió", tecla: "Alt + V" },
+                  { valor: false, texto: "Se la llevó", tecla: "Alt + L" },
+                ].map((o) => (
+                  <button
+                    key={o.texto}
+                    type="button"
+                    role="radio"
+                    aria-checked={volvio === o.valor}
+                    onClick={() => {
+                      setVolvio(o.valor);
+                      setPidePin(null);
+                    }}
+                    className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl border text-base font-semibold transition-colors ${
+                      volvio === o.valor ? "border-accion bg-accion text-white" : "border-linea hover:bg-hundida"
+                    }`}
+                  >
+                    {o.texto}
+                    <kbd className="rounded border border-current/40 px-1 text-xs font-medium opacity-70">{o.tecla}</kbd>
+                  </button>
+                ))}
+              </div>
+
+              {pidePin ? (
+                <CampoPin
+                  autorizacion={pidePin}
+                  enviando={trabajando}
+                  onEnviar={(pin) => anular(pin)}
+                  onCancelar={() => setPidePin(null)}
+                />
+              ) : (
+                <button
+                  disabled={trabajando || !motivo.trim()}
+                  onClick={() => anular()}
+                  className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
+                >
+                  <Undo2 className="h-5 w-5" />
+                  Anular la venta
+                </button>
+              )}
             </div>
           </DialogContent>
         </Dialog>

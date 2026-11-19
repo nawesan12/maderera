@@ -129,6 +129,17 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/CajaEmitido" } }
+  /api/v1/admin/caja/anulaciones:
+    get:
+      operationId: AnulacionesPorPersona
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso; hora argentina), schema: { type: string } }
+      responses:
+        "200":
+          description: Las ventas del mostrador anuladas en el mes (por la fecha de la anulación, sin tope), por quien las anuló
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaAnulaciones" } }
 components:
   responses:
     CajaHecho:
@@ -148,6 +159,14 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problema" }
   schemas:
+    CajaAnulaciones:
+      type: object
+      required: [quien, cantidad, total, devuelto]
+      properties:
+        quien: { type: string }
+        cantidad: { type: integer }
+        total: { type: number, format: double }
+        devuelto: { type: number, format: double, description: Efectivo que salió del cajón por esas anulaciones }
     Problema:
       type: object
       required: [title, status]
@@ -177,7 +196,7 @@ components:
         quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
     TurnoCerrado:
       type: object
-      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, cierre]
+      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, tardiosMonto, bajoLista, bajoListaMonto, creditoSinAutorizar, creditoSinAutorizarMonto, cierre]
       properties:
         id: { type: string }
         sucursal: { type: string }
@@ -186,8 +205,13 @@ components:
         contado: { type: number, format: double, nullable: true }
         notas: { type: string, nullable: true }
         abiertaPor: { type: string }
-        esperado: { type: number, format: double }
+        esperado: { type: number, format: double, description: Lo que entró hasta el arqueo }
         tardios: { type: integer, description: Movimientos que entraron después del arqueo }
+        tardiosMonto: { type: number, format: double, description: Su suma; no cambia la diferencia del cierre }
+        bajoLista: { type: integer, description: Ventas sin conexión del turno que pasaron lo libre sin PIN }
+        bajoListaMonto: { type: number, format: double, description: Lo que dejaron de cobrar }
+        creditoSinAutorizar: { type: integer, description: Ventas sin conexión del turno que cargaron a cuenta corriente pasado el límite sin PIN }
+        creditoSinAutorizarMonto: { type: number, format: double, description: Lo que cargaron a cuenta }
         cierre: { type: array, items: { $ref: "#/components/schemas/CajaRenglonDelCierre" } }
     CajaFisica:
       type: object
@@ -226,7 +250,7 @@ components:
         etiqueta: { type: string }
     CajaEmitido:
       type: object
-      required: [orderId, numero, numeroProvisorio, cliente, total, medioPago, createdAt, sucursal, operadora, invoiceId, invoicePuntoVenta, invoiceNumero, invoiceTipo]
+      required: [orderId, numero, numeroProvisorio, cliente, total, medioPago, createdAt, sucursal, operadora, invoiceId, invoicePuntoVenta, invoiceNumero, invoiceTipo, anulada, anuladaPor, anuladaAt, motivo, facturaViva]
       properties:
         orderId: { type: string }
         numero: { type: string }
@@ -241,3 +265,8 @@ components:
         invoicePuntoVenta: { type: integer, nullable: true }
         invoiceNumero: { type: integer, format: int64, nullable: true }
         invoiceTipo: { type: string, nullable: true }
+        anulada: { type: boolean }
+        anuladaPor: { type: string, nullable: true }
+        anuladaAt: { type: string, format: date-time, nullable: true }
+        motivo: { type: string, nullable: true, description: El de la anulación }
+        facturaViva: { type: boolean, description: Anulada con la factura autorizada y sin nota de crédito }

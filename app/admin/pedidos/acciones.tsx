@@ -3,15 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Ban, Check, Loader2 } from "lucide-react";
-import { avanzarPedido, cancelarPedido, marcarPagado } from "@/app/admin/ventas-actions";
+import { ArrowRight, Ban, Loader2 } from "lucide-react";
+import { avanzarPedido, cancelarPedido } from "@/app/admin/ventas-actions";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { MEDIOS_DEL_PEDIDO, Opciones } from "@/components/admin/opciones";
 import { moneda } from "@/components/admin/formato";
-
-type Medio = (typeof MEDIOS_DEL_PEDIDO)[number]["valor"];
 
 const SIGUIENTE: Record<string, string> = {
   pendiente: "Preparar",
@@ -26,8 +23,8 @@ export function AccionesPedido({
   estadoPago,
   tipoEntrega,
   compacto = false,
-  cobroACuenta,
   cobro,
+  sinCobrar,
 }: {
   id: string;
   estado: string;
@@ -36,20 +33,27 @@ export function AccionesPedido({
   /** En una tarjeta de tablero los botones ocupan el ancho disponible. */
   compacto?: boolean;
   /**
-   * Si el pedido es a cuenta corriente de un cliente, «Cobrar» abre el cobro
-   * con recibo: hay que decir con qué pagó, y ese pago baja la deuda. Marcarlo
-   * pagado a secas bajaba la deuda sin saber con qué se pagó.
+   * Para cobrar: con recibo, tenga o no cliente, y el efectivo a la caja de su
+   * sucursal (cobros.CobrarPedido). Antes «Cobrar» marcaba el pedido pagado
+   * sin recibo ni caja. Sin esto (el depósito, que no mueve plata), el botón
+   * no aparece.
    */
-  cobroACuenta?: { customerId: string; nombre: string; numero: string; total: number } | null;
+  cobro?: { numero: string; aCobrar: number; customerId: string | null; nombre: string } | null;
   /**
-   * Para cobrar el resto: con qué pagó. Marcarlo pagado sin preguntar dejaba
-   * el pedido cobrado sin saber cómo entró la plata. Sin esto (quien no
-   * cobra), el botón no aparece.
+   * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` del
+   * pedido, la misma regla que «Me deben»). Con algo, «Marcar entregado»
+   * pregunta antes, en el tablero y en el reparto por igual: lo fuerte es
+   * «Cobrar y entregar» (el pago contra entrega es lo normal), y entregar sin
+   * cobrar queda al lado, sin bloquearse. El servidor deja la firma en el
+   * historial igual.
    */
-  cobro?: { numero: string; total: number; medioPago: string | null } | null;
+  sinCobrar?: { numero: string; monto: number } | null;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
+  const [confirmando, setConfirmando] = useState(false);
+  // «Cobrar y entregar» abre el cobro y, cobrado, entrega.
+  const [cobrandoParaEntregar, setCobrandoParaEntregar] = useState(false);
 
   // Un pedido de retiro no se despacha: el cliente lo busca.
   const etiqueta =
@@ -61,38 +65,34 @@ export function AccionesPedido({
     startTransition(async () => {
       const resultado = await fn();
       if (resultado.error) toast.error(resultado.error);
-      else toast.success(resultado.ok ?? "Listo.");
+      else {
+        setConfirmando(false);
+        toast.success(resultado.ok ?? "Listo.");
+      }
       // También con error: si fue un 409 («ya estaba en la máquina»), la
       // pantalla tiene que mostrar el estado de verdad.
       router.refresh();
     });
   }
 
+  const preguntar = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
+
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
-      {estadoPago !== "pagado" && estado !== "cancelado" && cobroACuenta && (
+      {estadoPago !== "pagado" && estado !== "cancelado" && cobro && cobro.aCobrar > 0 && (
         <DialogoCobro
-          customerId={cobroACuenta.customerId}
-          nombre={cobroACuenta.nombre}
-          aCobrar={cobroACuenta.total}
-          orderId={id}
-          numeroPedido={cobroACuenta.numero}
+          customerId={cobro.customerId}
+          nombre={cobro.nombre}
+          aCobrar={cobro.aCobrar}
+          pedido={{ id, numero: cobro.numero }}
           etiqueta="Cobrar"
           claseBoton={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         />
       )}
 
-      {estadoPago !== "pagado" && estado !== "cancelado" && !cobroACuenta && cobro && (
-        <CobrarPedido
-          id={id}
-          {...cobro}
-          clase={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
-        />
-      )}
-
       {etiqueta && (
         <button
-          onClick={() => accion(() => avanzarPedido(id, estado))}
+          onClick={() => (preguntar ? setConfirmando(true) : accion(() => avanzarPedido(id, estado)))}
           disabled={pendiente}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
@@ -104,78 +104,59 @@ export function AccionesPedido({
           {etiqueta}
         </button>
       )}
+
+      {preguntar && sinCobrar && (
+        <Dialog open={confirmando} onOpenChange={(abierto) => !pendiente && setConfirmando(abierto)}>
+          <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>
+                {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={pendiente}
+                onClick={() => accion(() => avanzarPedido(id, estado))}
+                className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
+              >
+                Entregar sin cobrar
+              </button>
+              {/* Cobrar ahí mismo, con recibo: antes había que cerrar, buscar
+                  «Cobrar» en la tarjeta y volver a entregar. Quien no cobra no
+                  ve el cobro. */}
+              {cobro && (
+                <button
+                  type="button"
+                  autoFocus
+                  disabled={pendiente}
+                  onClick={() => {
+                    setConfirmando(false);
+                    setCobrandoParaEntregar(true);
+                  }}
+                  className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+                >
+                  Cobrar <span className="tabular">{moneda.format(sinCobrar.monto)}</span> y entregar
+                </button>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {preguntar && sinCobrar && cobro && (
+        <DialogoCobro
+          sinBoton
+          abierto={cobrandoParaEntregar}
+          alCambiarAbierto={setCobrandoParaEntregar}
+          customerId={cobro.customerId}
+          nombre={cobro.nombre}
+          aCobrar={sinCobrar.monto}
+          pedido={{ id, numero: cobro.numero }}
+          alCobrar={() => accion(() => avanzarPedido(id, estado))}
+        />
+      )}
     </div>
-  );
-}
-
-/** Cobrar un pedido que no es a cuenta corriente: con qué pagó, y listo. */
-function CobrarPedido({
-  id,
-  numero,
-  total,
-  medioPago,
-  clase,
-}: {
-  id: string;
-  numero: string;
-  total: number;
-  medioPago: string | null;
-  clase: string;
-}) {
-  const router = useRouter();
-  const [abierto, setAbierto] = useState(false);
-  const [pendiente, startTransition] = useTransition();
-  const propuesto = MEDIOS_DEL_PEDIDO.find((m) => m.valor === medioPago)?.valor ?? null;
-  const [medio, setMedio] = useState<Medio | null>(propuesto);
-
-  function cobrar() {
-    if (!medio) return;
-    startTransition(async () => {
-      const r = await marcarPagado(id, medio);
-      if (r.error) toast.error(r.error);
-      else {
-        toast.success(r.ok ?? "Cobrado.");
-        setAbierto(false);
-        router.refresh();
-      }
-    });
-  }
-
-  return (
-    <>
-      <button type="button" onClick={() => setAbierto(true)} className={clase}>
-        <Check className="h-5 w-5" />
-        Cobrar
-      </button>
-      <Dialog open={abierto} onOpenChange={setAbierto}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Cobrar {numero} · <span className="tabular">{moneda.format(total)}</span>
-            </DialogTitle>
-          </DialogHeader>
-          <Opciones etiqueta="Con qué pagó" valor={medio} alCambiar={setMedio} opciones={[...MEDIOS_DEL_PEDIDO]} />
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setAbierto(false)}
-              className="h-11 rounded-lg px-4 text-base font-medium hover:bg-hundida"
-            >
-              Mejor no
-            </button>
-            <button
-              type="button"
-              disabled={!medio || pendiente}
-              onClick={cobrar}
-              className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
-            >
-              {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-              Cobrado
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }
 

@@ -314,8 +314,43 @@ export interface components {
              * @description null si ningún renglón tiene costo
              */
             costo: number | null;
+            /**
+             * Format: double
+             * @description Renglones sin costo o con costo en cero
+             */
+            lineasSinCosto: number;
+            /**
+             * Format: double
+             * @description Sin IVA
+             */
+            netoCosteado: number;
+        };
+        ReporteDeVentas: {
+            filas: components["schemas"]["ReporteFila"][];
+            totales: components["schemas"]["ReporteTotales"];
+        };
+        /** @description El período entero con los mismos filtros, sin el tope de filas del corte */
+        ReporteTotales: {
+            /**
+             * Format: double
+             * @description Con IVA; subtotales de renglones o total de los pedidos
+             */
+            total: number;
+            /**
+             * Format: double
+             * @description Unidades o operaciones
+             */
+            cantidad: number;
+            /** Format: double */
+            netoVenta: number;
+            /** Format: double */
+            netoCosteado: number;
+            /** Format: double */
+            costo: number | null;
             /** Format: double */
             lineasSinCosto: number;
+            /** @description Cuántas filas tiene el corte entero */
+            filas: number;
         };
         ReporteMes: {
             clave: string;
@@ -398,8 +433,17 @@ export interface components {
             total: number;
             cantidad: number;
         };
+        /** @description facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado */
+        CierreVendido: {
+            /** Format: double */
+            total: number;
+            facturado: components["schemas"]["CierreTotales"];
+            interno: components["schemas"]["CierreTotales"];
+            sinFactura: components["schemas"]["CierreTotales"];
+        };
         CierreResumen: {
             ventas: components["schemas"]["CierreTotalesConIva"];
+            vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
             retencionesPracticadas: components["schemas"]["CierreTotales"];
@@ -510,13 +554,20 @@ export interface components {
              * @description Sin IVA
              */
             ventasNetas: number;
+            /**
+             * Format: double
+             * @description La parte de ventasNetas sin costo cargado; queda afuera del resultado
+             */
+            ventasSinCosto: number;
+            /** @description ventasNetas lleva restado el descuento del pedido (regla del negocio) */
+            conDescuento: boolean;
             /** Format: double */
             costo: number;
             /** Format: double */
             gastos: number;
             /** Format: double */
             resultado: number;
-            /** @description Renglones vendidos sin costo cargado */
+            /** @description Renglones vendidos sin costo cargado o con costo en cero */
             lineasSinCosto: number;
         };
         ResultadoComparado: {
@@ -532,13 +583,59 @@ export interface components {
                 total: number;
                 cantidad: number;
             };
+            /** @description Los controles sobre la plata del personal, de los últimos siete días */
+            controles: {
+                /** @description ningún admin cargó su PIN de autorización */
+                sinPin: boolean;
+                personas: {
+                    nombre: string;
+                    /**
+                     * Format: double
+                     * @description bajo la lista más los descuentos tipeados
+                     */
+                    dejadoDeCobrar: number;
+                    /**
+                     * Format: double
+                     * @description la parte que firmó un admin
+                     */
+                    autorizado: number;
+                    sinConexion: components["schemas"]["Monto"];
+                    creditoSinAutorizar: components["schemas"]["Monto"];
+                    anuladas: components["schemas"]["Monto"];
+                    anuladasSinFirma: components["schemas"]["Monto"];
+                    firmo: components["schemas"]["Monto"];
+                    /** @description anuladas en que la mercadería no volvió */
+                    sinDevolver: number;
+                    retiros: components["schemas"]["Monto"];
+                }[];
+            };
             meDeben: {
-                /** Format: double */
+                /**
+                 * Format: double
+                 * @description La cuenta corriente más los pedidos entregados sin cobrar
+                 */
                 total: number;
-                /** Format: double */
+                /**
+                 * Format: double
+                 * @description Solo de la cuenta corriente
+                 */
                 vencido: number;
                 clientes: number;
                 clientesConVencido: number;
+                pedidosSinCobrar: components["schemas"]["Monto"];
+            };
+            /** @description Las ventas del mostrador anuladas en los últimos siete días */
+            anuladas: {
+                cantidad: number;
+                /** Format: double */
+                total: number;
+                /**
+                 * Format: double
+                 * @description El efectivo que salió de la caja por esas anulaciones
+                 */
+                devuelto: number;
+                /** @description Las que siguen con factura autorizada y sin nota de crédito */
+                conFacturaViva: number;
             };
             /** @description El libro de cada proveedor (supplier_movements), como Pagos a proveedores, con los inactivos que deben. Lo vencido y lo de esta semana salen de las facturas, sin pasar el libro de cada uno. */
             debo: {
@@ -665,13 +762,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Las filas del corte pedido, sin las canceladas */
+            /** @description Las filas del corte pedido (hasta 50 en producto, rubro y cliente), sin las canceladas, y los totales del período entero */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReporteFila"][];
+                    "application/json": components["schemas"]["ReporteDeVentas"];
                 };
             };
         };

@@ -160,6 +160,14 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/ayuda": ["admin", "vendedor", "deposito", "aserradero"],
 };
 
+/**
+ * Quién mueve plata desde la ficha de un pedido: cobrarlo, emitirle el recibo,
+ * facturarlo (T3, 18/11/2026). Pedidos lo abre también el depósito, que
+ * prepara y entrega, y hasta ahora podía marcar un pedido como cobrado sin
+ * recibo ni caja. La ficha se le sigue mostrando; los botones de plata, no.
+ */
+export const MANEJAN_PLATA: readonly RolStaff[] = ["admin", "vendedor"];
+
 /** Los roles que pueden entrar a una ruta, o `null` si la ve todo el personal. */
 export function quienEntra(ruta: string): readonly RolStaff[] | null {
   return ACCESO[ruta] ?? null;

@@ -50,6 +50,9 @@ func (o respuestaPanel) VisitDarDeBajaCajaFisicaResponse(w http.ResponseWriter) 
 func (o respuestaPanel) VisitEmitidoPorCajaResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
+func (o respuestaPanel) VisitAnulacionesPorPersonaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuestaPanel) VisitSucursalesConCajaResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -190,5 +193,18 @@ func (a *PanelAPI) EmitidoPorCaja(ctx context.Context, r cajaapi.EmitidoPorCajaR
 	}
 	desde, hasta := MesArgentino(periodo, a.ahora())
 	v, err := a.p.EmitidoPorCaja(ctx, desde, hasta)
+	return okPanel(v), err
+}
+
+func (a *PanelAPI) AnulacionesPorPersona(ctx context.Context, r cajaapi.AnulacionesPorPersonaRequestObject) (cajaapi.AnulacionesPorPersonaResponseObject, error) {
+	if _, err := pantallaDeCaja(ctx); err != nil {
+		return nil, err
+	}
+	periodo := ""
+	if r.Params.Periodo != nil {
+		periodo = *r.Params.Periodo
+	}
+	desde, hasta := MesArgentino(periodo, a.ahora())
+	v, err := a.p.AnulacionesPorPersona(ctx, desde, hasta)
 	return okPanel(v), err
 }

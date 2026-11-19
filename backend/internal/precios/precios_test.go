@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -254,8 +255,18 @@ func TestImportacion(t *testing.T) {
 	if v.Filas[2].Estado != "sin-sku" || v.Filas[3].Estado != "error" {
 		t.Errorf("problemas: %s", b)
 	}
-	cambios := map[string]any{"cambios": []map[string]string{{"sku": "FEN18", "profesionalNuevo": "72000"}, {"sku": "FEN12", "generalNuevo": "61500"}, {"sku": "NOEXISTE", "generalNuevo": "1"}}}
-	if c, b := pedir(t, adm, "POST", u, cambios); c != 200 || !strings.Contains(b, "Se aplicaron 2 cambios de precio.") {
+	// Lo que manda la pantalla: lo nuevo y lo que vio la vista previa.
+	visto := func(f FilaPrevia) map[string]string {
+		m := map[string]string{"sku": f.SKU}
+		for k, p := range map[string]*string{"generalNuevo": f.GeneralNuevo, "profesionalNuevo": f.ProfesionalNuevo, "generalActual": f.GeneralActual, "profesionalActual": f.ProfesionalActual} {
+			if p != nil {
+				m[k] = *p
+			}
+		}
+		return m
+	}
+	cambios := map[string]any{"cambios": []map[string]string{visto(v.Filas[0]), visto(v.Filas[1]), {"sku": "NOEXISTE", "generalNuevo": "1"}}}
+	if c, b := pedir(t, adm, "POST", u, cambios); c != 200 || !strings.Contains(b, `"Se aplicaron 2 cambios de precio."`) {
 		t.Fatalf("confirmar: %d %s", c, b)
 	}
 	if p := e.precio(t, e.fen12, e.general); p != "61500.00" {
@@ -268,6 +279,61 @@ func TestImportacion(t *testing.T) {
 	}
 	if c, _ := pedir(t, adm, "POST", u, map[string]any{"cambios": []any{}}); c != 422 {
 		t.Errorf("sin cambios: %d", c)
+	}
+
+	// T3, hallazgo 15. Un SKU repetido es error en las dos filas; un precio
+	// en 0, negativo o con más de dos decimales, también.
+	_, b = subir("FEN18;90000;\nFEN18;91000;\nFEN12;0;\nMEL18;;-5")
+	v = VistaPrevia{}
+	_ = json.Unmarshal([]byte(b), &v)
+	if v.Cambian != 0 || v.Problemas != 4 {
+		t.Fatalf("vista previa con problemas: %s", b)
+	}
+	detalle := func(i int) string {
+		if v.Filas[i].Estado != "error" || v.Filas[i].Detalle == nil {
+			return v.Filas[i].Estado
+		}
+		return *v.Filas[i].Detalle
+	}
+	l1, l2 := strconv.Itoa(v.Filas[0].Linea), strconv.Itoa(v.Filas[1].Linea)
+	if detalle(0) != "Repetido en la línea "+l2+"." || detalle(1) != "Repetido en la línea "+l1+"." {
+		t.Errorf("repetido: %q %q", detalle(0), detalle(1))
+	}
+	for i := 2; i < 4; i++ {
+		if detalle(i) != "El precio tiene que ser mayor a cero y con hasta dos decimales." {
+			t.Errorf("precio inválido (%d): %q", i, detalle(i))
+		}
+	}
+	if !precioImportable(ptr("84500.55")) || precioImportable(ptr("84500.555")) || precioImportable(ptr("0")) || precioImportable(ptr("NaN")) {
+		t.Error("precioImportable")
+	}
+
+	// Confirmar no confía en el navegador: un 0, un SKU dos veces o un precio
+	// que alguien tocó después de la vista previa se rechazan, y se dice.
+	_, b = subir("FEN18;95000;\nFEN12;62000;")
+	v = VistaPrevia{}
+	_ = json.Unmarshal([]byte(b), &v)
+	if v.Cambian != 2 {
+		t.Fatalf("vista previa: %s", b)
+	}
+	if c, b := pedir(t, adm, "POST", e.srv.URL+"/api/v1/admin/precios/editar", map[string]string{"variantId": e.fen12, "priceListId": e.general, "precio": "63000"}); c != 204 {
+		t.Fatalf("precio a mano en el medio: %d %s", c, b)
+	}
+	cero := visto(v.Filas[0])
+	cero["generalNuevo"] = "0"
+	cambios = map[string]any{"cambios": []map[string]string{visto(v.Filas[0]), visto(v.Filas[1]), cero}}
+	if c, b := pedir(t, adm, "POST", u, cambios); c != 200 || !strings.Contains(b, "Se aplicaron 0 cambios de precio. Se rechazaron 3 filas: 1 cambiaron de precio después de la vista previa, 2 tienen el código repetido.") {
+		t.Fatalf("confirmar lo rechazado: %d %s", c, b)
+	}
+	if p := e.precio(t, e.fen12, e.general); p != "63000.00" {
+		t.Errorf("el precio tocado a mano no se pisa: %s", p)
+	}
+	cambios = map[string]any{"cambios": []map[string]string{visto(v.Filas[0]), {"sku": "FEN12", "generalNuevo": "-1", "generalActual": "63000"}}}
+	if c, b := pedir(t, adm, "POST", u, cambios); c != 200 || !strings.Contains(b, "Se aplicaron 1 cambio de precio. Se rechazaron 1 fila: 1 con un precio que no vale.") {
+		t.Fatalf("confirmar con un negativo: %d %s", c, b)
+	}
+	if p := e.precio(t, e.fen18, e.general); p != "95000.00" {
+		t.Errorf("FEN18: %s", p)
 	}
 }
 

@@ -202,14 +202,6 @@ export function FormularioCorte({
    * común y **se avisa en pantalla**: un plano hecho sobre una medida supuesta
    * no sirve para cobrar. Ver `lib/cortes/placa.ts`.
    */
-  const medidaPlaca = medidaDePlaca({
-    propiaLargo: Number(largoPlaca) || null,
-    propiaAncho: Number(anchoPlaca) || null,
-    varianteLargo: placa?.largoMm,
-    varianteAncho: placa?.anchoMm,
-    mitad,
-  });
-
   const claveDeLasPiezas = JSON.stringify(validas);
   const paraElPlano = useMemo(
     () =>
@@ -235,6 +227,16 @@ export function FormularioCorte({
     String(anchoSierraGeneral).replace(".", ","),
   );
   const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
+
+  const medidaPlaca = medidaDePlaca({
+    propiaLargo: Number(largoPlaca) || null,
+    propiaAncho: Number(anchoPlaca) || null,
+    varianteLargo: placa?.largoMm,
+    varianteAncho: placa?.anchoMm,
+    mitad,
+    // La media placa sale de partirla con este disco.
+    sierra: anchoSierra,
+  });
 
   /*
    * El plano se pide acá y no adentro del dibujo porque el formulario lo

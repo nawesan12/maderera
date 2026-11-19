@@ -2052,3 +2052,97 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   proporción. La venta del mostrador ya no autoriza lo atrasado: la serie se
   autoriza desde Facturación (`AutorizarConFechas`), con bitácora y aviso de
   cada comprobante.
+
+## T3 (18/11): controles sobre la plata del personal
+
+- **La segunda firma es un PIN de admin** (`internal/autorizacion`, migración
+  00141): 6 a 8 dígitos, scrypt como la clave, cargado desde el menú del admin
+  con su contraseña (`PUT /api/v1/sesion/pin`). Dos admins pueden tener el
+  mismo (rechazarlo delataba el del otro). Cuentan **solo los errores**: 5
+  cada 15 min por sucursal y 10 en el día; al tercero seguido, push a los
+  admins. Si la base falla, no pasa (al revés que `limites`). Los errores se
+  cuentan con el pool, no con la transacción de quien pide. Un PIN correcto
+  da una ficha HMAC de dos minutos atada a la operación y al monto.
+- **El precio de lista lo pone Go** (`precios.PreciosDeLista`; la lista del
+  cliente se mudó de `mostrador` a `precios`). Lo dejado de cobrar es
+  `ventas.DesvioDeLaVenta`: bajo la lista por renglón sin compensar, más el
+  descuento tipeado; la escala por medio de pago no cuenta. Pasado
+  `descuento_sin_autorizacion_pct` (0/5/10, regla de `/admin/reglas`), PIN.
+  La misma regla para el presupuesto vencido que se respeta. `lib/mostrador/
+  importes.ts` la repite para avisar antes de cobrar (prueba en
+  `tests/desvio-venta.test.ts`): si se cambia una, se cambia la otra.
+- **El corte se cobra con `cortes.ACobrar`**: el plano libre, salvo que el
+  acomodo a mano gaste más placas.
+- **La clave de la venta y del recibo van con su huella**: la misma clave
+  con otro contenido da 409. La venta se busca por clave antes del crédito.
+- La venta sin conexión no se rechaza por precio ni por crédito: se marca
+  (`bajo_lista_sin_autorizar`) y sale en rojo en el inicio y en el cierre.
+- **Lo que llega de la cola con el turno cerrado entra con la hora de
+  llegada** (y `declarado_at`): el esperado del cierre suma hasta
+  `cerrada_at` y lo tardío va aparte.
+- Sale `POST /admin/pedidos/{id}/cobrado`; entra `/cobro` por
+  `cobros.EmitirRecibo`. `roles.ManejanPlata` (admin y vendedor) en el cobro y
+  la facturación desde la ficha del pedido.
+- El aserradero lee `PedidoParaElTaller` (sin plata); la ficha completa es de
+  quien entra a Pedidos.
+- **La revisión de T3 (migración 00142)** cerró los atajos que quedaban:
+  - El presupuesto mide lo dejado de cobrar al pasar a pedido, vigente o
+    vencido: contra `quote_items.precio_lista` (la lista del día en que se
+    emitió) o, sin ella, la de hoy. Uno emitido por un admin ya está firmado.
+  - El PIN cuenta el intento antes del scrypt (atómico) y lo descuenta si
+    acierta; los avisos salen una vez por ventana; cada firma con PIN avisa a
+    los admins; «Destrabar el PIN» (con la clave) borra los topes. Una cuenta
+    sin contraseña no carga PIN.
+  - La ficha lleva las dos cifras (precio y crédito, v2): la del precio sola
+    no destraba un pase del límite. El campo del PIN muestra las dos.
+  - Sin conexión se marca también el crédito (`orders.credito_sin_autorizar`)
+    y se avisa por push en el momento. No se puede saber si «sin conexión» es
+    un wifi apagado a propósito: por eso se ve, no se rechaza.
+  - Anular sin PIN: solo propia, de hoy, del turno, de menos de 5 minutos y
+    sin efectivo ni cuenta corriente.
+  - Las pasadas y el canto del corte tienen precio de lista (la tarifa de
+    `cutting_rates`), y lo que falta se valúa a la tarifa.
+  - Un pedido con recibo vivo no se cancela. Falta la pantalla para anular un
+    recibo y devolver la plata (`anularReciboDesdeElPanel` existe sin botón).
+  - El ingreso tardío con hora dentro del turno suma al esperado; el retiro
+    tardío no.
+  - Pendiente, con decisión de Nahuel: que el depósito rinda lo que cobra
+    contra entrega (hoy solo puede «entregar sin cobrar»).
+- Ojo con `TestGananciaSegunLasReglas` (reportes): falla entre las 21 y las
+  24 de Argentina, porque el gasto se carga con `current_date` de la base (en
+  UTC) y el lapso se arma en hora local. No es de T3.
+
+## T4 (18/11): el mostrador sin sustos
+
+- La media placa descuenta el disco (`floor((entera − sierra) / 2)`,
+  `ResolverMedida` y `medidaDePlaca`) **solo desde `motor_plano` 3**
+  (`cortes.MotorMediaConSierra`). El plano de un trabajo guardado se arma de
+  nuevo en cada lectura: si la mitad cambiara para todos, uno en la máquina
+  abriría con otro plano, uno cortado con una hoja que no fue, y uno vendido
+  con N medias podría pedir N+1 (dos de 303 entraban en 610 y en 608 no). Las
+  tres altas (panel, mostrador, sitio) guardan el 3 a mano, sin tocar el
+  default de la columna; cambiar el disco lo sube. Lo que no se guarda
+  (consulta, sitio, el corte del mostrador antes de cobrar) usa la regla
+  nueva. No hay paso manual antes de desplegar.
+- Las teclas: `accionDeLaTecla` (`lib/mostrador/atajos.ts`) ignora la tecla
+  que un campo ya usó (`defaultPrevented`). Sirve **porque `useAtajos`
+  escucha en burbuja**; en captura vuelve el error de Ctrl+Enter que cobraba
+  sin la línea (hay una prueba que lee el `addEventListener`). Ctrl+Enter con
+  un resultado en el buscador agrega y cobra en el render siguiente, con la
+  línea adentro (`useEffectEvent`); con texto sin resultado no cobra.
+- Sin caja, el botón grande dice «Abrir la caja» y la tecla hace lo mismo;
+  abierta desde ahí, el cursor vuelve a «con cuánto paga» y el cobro espera
+  400 ms. Si Go rechaza el efectivo porque otra terminal cerró el turno, la
+  pantalla lo cree en el acto (se reconoce por el texto de `venta.go`).
+- Stock: el motivo fija la dirección en `AjustarCon` (ingreso suma; rotura y
+  faltante restan; devolución, corrección y otro, los dos lados; lo contado
+  solo con «conteo»). Motivos nuevos en el contrato: `faltante` y
+  `correccion` (el «Deshacer», que asienta el inverso y no borra nada).
+- Entregas: `RevisarEnteros` va aparte de `ValidarEntrega` para no tocar el
+  golden. Lo que no se fracciona sale entero y sin el centavo de tolerancia,
+  salvo exactamente lo pendiente. Qué se fracciona sale de la unidad **del
+  producto**, no del renglón (que en una línea a mano es texto libre: «m» de
+  tapacanto); el acopio lo manda como `enteros`.
+- Quedó sin tocar, esperando a Nahuel: el campo «Sierra» del corte del
+  mostrador (pedido suyo del 30/9). La revisión propone sacarlo y corregir el
+  disco desde `/admin/cortes`.

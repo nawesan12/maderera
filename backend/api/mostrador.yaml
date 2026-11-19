@@ -79,18 +79,22 @@ paths:
               additionalProperties: false
               properties:
                 motivo: { type: string }
+                volvioLaMercaderia: { type: boolean, default: true, description: "false: el cliente se la llevó y el stock no vuelve (pide el PIN)" }
+                pin: { type: string, maxLength: 20 }
+                ficha: { type: string, maxLength: 400 }
       responses:
         "200":
-          description: Anulada; si tenía factura, cuál espera su nota de crédito
+          description: Anulada (y si tenía factura, cuál espera su nota de crédito), o el PIN que falta
           content:
             application/json:
               schema:
                 type: object
-                required: [ok]
                 properties:
                   ok: { type: string }
                   facturaPendiente: { type: string }
                   facturaSinCae: { type: boolean }
+                  error: { type: string }
+                  autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/buscar:
     get:
@@ -204,6 +208,7 @@ paths:
               properties:
                 branchId: { type: string }
                 partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+                clave: { type: string, maxLength: 64, description: "la del intento: un reintento devuelve el mismo recibo" }
       responses:
         "200":
           description: El recibo
@@ -327,6 +332,7 @@ components:
         cantidad: { type: number, format: double }
         precioUnitario: { type: number, format: double }
         presentacion: { type: string, nullable: true }
+        precioLista: { type: number, format: double, nullable: true, description: el de la lista del cliente, que pone el servidor }
     MostradorResultadoVenta:
       type: object
       required: [ok, total, nueva]
@@ -338,7 +344,19 @@ components:
         nueva: { type: boolean }
         lineas: { type: array, items: { $ref: "#/components/schemas/MostradorLinea" } }
         error: { type: string }
-        requiereAutorizacion: { type: boolean }
+        autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
+        ficha: { type: string, description: "un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha" }
+    MostradorAutorizacion:
+      type: object
+      description: Hace falta el PIN de un administrador (internal/autorizacion)
+      required: [motivo, monto]
+      properties:
+        motivo: { type: string, enum: [precio, credito, anular, presupuesto] }
+        monto: { type: number, format: double, description: lo que se autoriza (lo dejado de cobrar, lo que pasa el límite, la venta que se anula) }
+        credito: { type: number, format: double, description: con motivo precio, lo que además pasa el límite de cuenta corriente (el mismo PIN firma las dos cosas) }
+        pinIncorrecto: { type: boolean }
+        bloqueadoHasta: { type: string, format: date-time }
+        sinAdmins: { type: boolean, description: ningún admin cargó su PIN }
     MostradorFiscalPendiente:
       type: object
       description: Lo que Next necesita para emitir el comprobante (facturación sigue en TS)
@@ -476,7 +494,7 @@ components:
         quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
     MostradorPantalla:
       type: object
-      required: [turno, movimientos, cierre, ventas, listaGeneral, fondoBase]
+      required: [turno, movimientos, cierre, ventas, listaGeneral, fondoBase, descuentoLibrePct]
       properties:
         turno:
           nullable: true
@@ -486,3 +504,4 @@ components:
         ventas: { type: array, items: { $ref: "#/components/schemas/MostradorVentaDeHoy" } }
         listaGeneral: { type: string, nullable: true }
         fondoBase: { type: number, format: double }
+        descuentoLibrePct: { type: number, format: double, description: "lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)" }

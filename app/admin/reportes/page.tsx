@@ -49,29 +49,43 @@ export default async function ReportesPage({
   // Cortar agrupa; filtrar se queda con una parte. Ver `FiltrosDelReporte`.
   const filtros = { rubro: params.rubro, sucursal: params.sucursal };
 
-  const [filas, meses, sucursales] = await Promise.all([
+  const [reporte, meses, sucursales] = await Promise.all([
     reporteDeVentas(corte, periodo, filtros),
     ventasPorMes(periodo, filtros),
     listarSucursalesPublicas(),
   ]);
+  const { filas, totales } = reporte;
 
-  const total = filas.reduce((suma, f) => suma + f.total, 0);
-  const operaciones = filas.reduce((suma, f) => suma + f.cantidad, 0);
+  // Del período entero, no de las filas: por producto llegan las 50 que más
+  // vendieron, y sumarlas daba otro total según el corte.
+  const total = totales.total;
+  const operaciones = totales.cantidad;
 
   /*
-   * El margen del período, y cuántos renglones no lo tienen.
+   * Lo vendido, el costo y el margen del período.
    *
-   * **La serie de margen arranca el día que arrancó el módulo de compras.** No
+   * **Un solo «Vendido sin IVA».** Lo calcula Go sobre el período entero
+   * (`totales`), con la misma regla que el Cierre y la Ganancia del mes del
+   * Resumen, en cualquier corte. Antes sumaba las filas que se veían: por
+   * producto, las 50 primeras. Lo que no tiene costo se dice debajo, en el
+   * color de problema: el margen se ve sano y nadie carga los costos si eso
+   * no está a la vista.
+   *
+   * **El margen se mide contra lo que tiene costo** (`netoCosteado`, ver
+   * backend/internal/reportes/ventas.go): restarle el costo de una parte a la
+   * venta del todo lo inflaba. Un costo en $0 cuenta como sin costo.
+   *
+   * La serie de margen arranca el día que arrancó el módulo de compras. No
    * hay relleno hacia atrás: el único costo posible sería el de hoy, y eso
-   * pintaría de margen inventado seis meses de ventas. Los renglones sin costo
-   * se cuentan aparte y se dicen, para que nadie tome una decisión sobre un
-   * número que mezcla lo costeado con lo que no.
+   * pintaría de margen inventado seis meses de ventas.
    */
-  const costeado = filas.filter((f) => f.costo !== null);
-  const hayMargen = costeado.length > 0;
-  const netoTotal = costeado.reduce((s, f) => s + f.netoVenta, 0);
-  const costoTotal = costeado.reduce((s, f) => s + (f.costo ?? 0), 0);
-  const sinCosto = filas.reduce((s, f) => s + f.lineasSinCosto, 0);
+  const hayMargen = totales.costo !== null;
+  const vendido = totales.netoVenta;
+  const conCosto = totales.netoCosteado;
+  const costoTotal = totales.costo ?? 0;
+  const margenTotal = conCosto - costoTotal;
+  const vendidoSinCosto = vendido - conCosto;
+  const sinCosto = totales.lineasSinCosto;
 
   const etiquetaCorte =
     CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Por producto";
@@ -143,51 +157,46 @@ export default async function ReportesPage({
         </section>
       )}
 
-      {hayMargen && (
+      {filas.length > 0 && (
         <section className="grid gap-3 sm:grid-cols-3">
           <article className="tarjeta p-4">
             <p className="text-sm text-muted-foreground">Vendido sin IVA</p>
-            <p className="tabular mt-0.5 text-2xl font-bold">
-              {formatearMonto(netoTotal)}
-            </p>
+            <p className="tabular mt-0.5 text-2xl font-bold">{formatearMonto(vendido)}</p>
+            {sinCosto > 0 && vendidoSinCosto >= 0.5 && (
+              <a href="#ventas" className="estado-problema mt-1 block text-base font-semibold [font-variant-numeric:tabular-nums]">
+                {formatearMonto(vendidoSinCosto)} sin costo
+              </a>
+            )}
           </article>
-          <article className="tarjeta p-4">
-            <p className="text-sm text-muted-foreground">Costo de lo vendido</p>
-            <p className="tabular mt-0.5 text-2xl font-bold">
-              {formatearMonto(costoTotal)}
-            </p>
-          </article>
-          <article className="tarjeta p-4">
-            <p className="text-sm text-muted-foreground">Margen</p>
-            <p
-              className={`tabular mt-0.5 text-2xl font-bold ${
-                netoTotal - costoTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"
-              }`}
-            >
-              {formatearMonto(netoTotal - costoTotal)}
-              {netoTotal > 0 && (
-                <span className="ml-2 text-base font-semibold text-muted-foreground">
-                  {(((netoTotal - costoTotal) / netoTotal) * 100).toFixed(1)}%
-                </span>
-              )}
-            </p>
-          </article>
+          {hayMargen && (
+            <>
+              <article className="tarjeta p-4">
+                <p className="text-sm text-muted-foreground">Costo de lo vendido</p>
+                <p className="tabular mt-0.5 text-2xl font-bold">{formatearMonto(costoTotal)}</p>
+              </article>
+              <article className="tarjeta p-4">
+                <p className="text-sm text-muted-foreground">Margen</p>
+                <p
+                  className={`tabular mt-0.5 text-2xl font-bold ${
+                    margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"
+                  }`}
+                >
+                  {formatearMonto(margenTotal)}
+                  {conCosto > 0 && (
+                    <span className="ml-2 text-base font-semibold text-muted-foreground">
+                      {((margenTotal / conCosto) * 100).toFixed(1)}%
+                    </span>
+                  )}
+                </p>
+                {vendidoSinCosto >= 0.5 && (
+                  <p className="mt-1 text-base text-muted-foreground [font-variant-numeric:tabular-nums]">
+                    sobre {formatearMonto(conCosto)}
+                  </p>
+                )}
+              </article>
+            </>
+          )}
         </section>
-      )}
-
-      {sinCosto > 0 && (
-        /*
-         * No es una advertencia decorativa: sin esto, un margen calculado sobre
-         * la mitad de los renglones se lee como el margen del negocio. La serie
-         * arranca el día que arrancó el módulo de compras y no se rellena hacia
-         * atrás, porque el único costo posible sería el de hoy.
-         */
-        <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
-          {sinCosto} renglon{sinCosto > 1 ? "es" : ""} sin costo conocido
-          {hayMargen
-            ? ": quedan fuera del margen de arriba."
-            : ". El margen aparece cuando haya recepciones de compra cargadas."}
-        </p>
       )}
 
       {filas.length === 0 ? (
@@ -195,7 +204,7 @@ export default async function ReportesPage({
           <p className="text-base font-medium">No hay ventas en este período</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border">
+        <div id="ventas" className="scroll-mt-24 overflow-x-auto rounded-xl border">
           <table className="w-full min-w-[560px] text-base">
             <thead className="bg-muted/50 text-left">
               <tr>
@@ -248,18 +257,19 @@ export default async function ReportesPage({
                         </td>
                         <td className="px-5 py-3 text-right">
                           {f.costo === null ? (
-                            <span className="text-sm text-muted-foreground">
+                            <span className="estado-problema text-sm font-medium">
                               sin costo
                             </span>
                           ) : (
                             (() => {
-                              /* Neto contra neto: el total lleva IVA adentro y
-                                 el costo no. Compararlos directo inflaría el
-                                 margen un 21 % sistemático. */
-                              const margen = f.netoVenta - f.costo;
+                              /* Neto contra neto, y solo de lo que tiene
+                                 costo: el total lleva IVA adentro y el costo
+                                 no, y la venta de los renglones sin costo no
+                                 tiene contra qué medirse. */
+                              const margen = f.netoCosteado - f.costo;
                               const pct =
-                                f.netoVenta > 0
-                                  ? (margen / f.netoVenta) * 100
+                                f.netoCosteado > 0
+                                  ? (margen / f.netoCosteado) * 100
                                   : null;
                               return (
                                 <>
@@ -278,7 +288,7 @@ export default async function ReportesPage({
                                     </span>
                                   )}
                                   {f.lineasSinCosto > 0 && (
-                                    <span className="block text-sm text-muted-foreground">
+                                    <span className="estado-problema block text-sm font-medium">
                                       {f.lineasSinCosto} sin costo
                                     </span>
                                   )}
@@ -308,6 +318,33 @@ export default async function ReportesPage({
                 );
               })}
             </tbody>
+            {/* El período entero: con el tope de filas, la suma de lo que se
+                ve no es el total, y se dice cuántas faltan. */}
+            <tfoot className="border-t-2 bg-muted/30 font-semibold">
+              <tr>
+                <td className="px-5 py-3">
+                  Total
+                  {totales.filas > filas.length && (
+                    <span className="tabular ml-2 text-sm font-normal text-muted-foreground">
+                      {filas.length} de {totales.filas}
+                    </span>
+                  )}
+                </td>
+                <td className="tabular px-5 py-3 text-right">{totales.cantidad.toLocaleString("es-AR")}</td>
+                <td className="tabular px-5 py-3 text-right">{formatearMonto(totales.total)}</td>
+                {hayMargen && (
+                  <>
+                    <td className="tabular px-5 py-3 text-right">{formatearMonto(costoTotal)}</td>
+                    <td
+                      className={`tabular px-5 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}
+                    >
+                      {formatearMonto(margenTotal)}
+                    </td>
+                  </>
+                )}
+                <td />
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

@@ -66,6 +66,12 @@ var Acceso = map[string][]sqlc.StaffRole{
 	"/admin/ayuda":                  {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito, sqlc.StaffRoleAserradero},
 }
 
+// ManejanPlata es MANEJAN_PLATA de lib/roles.ts: quién cobra, emite recibos
+// y factura desde la ficha de un pedido. Pedidos lo abre también el depósito,
+// que prepara y entrega pero no mueve plata (hasta T3 marcaba un pedido como
+// cobrado sin recibo ni caja).
+var ManejanPlata = []sqlc.StaffRole{sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor}
+
 // QuienEntra son los roles de exactamente esa ruta, o nil si no está
 // declarada (quienEntra del TS).
 func QuienEntra(ruta string) []sqlc.StaffRole { return Acceso[ruta] }

@@ -53,7 +53,19 @@ export async function turnosParaAsignar(branchId: string) {
  * levantarlo desde otro equipo: por caja y por persona, con el número
  * provisorio que trae el cliente en el ticket.
  */
+/**
+ * Las anulaciones del mostrador del mes por quien las hizo, contadas en Go
+ * por la fecha de la anulación y sin el tope de lo emitido.
+ */
+export async function anulacionesPorPersona(periodo: string) {
+  return datos(await (await api()).GET("/api/v1/admin/caja/anulaciones", { params: { query: { periodo } } }));
+}
+
 export async function emitidoPorCaja(periodo: string) {
   const filas = datos(await (await api()).GET("/api/v1/admin/caja/emitido", { params: { query: { periodo } } }));
-  return filas.map((v) => ({ ...v, createdAt: new Date(v.createdAt) }));
+  return filas.map((v) => ({
+    ...v,
+    createdAt: new Date(v.createdAt),
+    anuladaAt: v.anuladaAt ? new Date(v.anuladaAt) : null,
+  }));
 }

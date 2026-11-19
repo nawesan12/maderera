@@ -48,10 +48,11 @@ func TestMargenesSoloDelPeriodo(t *testing.T) {
 	if r.VentasNetas != 1000 || r.Costo != 500 || r.LineasSinCosto != 0 {
 		t.Errorf("resultado: %+v", r)
 	}
-	filas, err := s.ReporteDeVentas(ctx, "canal", Periodo{Desde: &desde, Hasta: &hasta}, Filtros{})
+	rep, err := s.ReporteDeVentas(ctx, "canal", Periodo{Desde: &desde, Hasta: &hasta}, Filtros{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	filas := rep.Filas
 	if len(filas) != 1 || filas[0].Cantidad != 2 || filas[0].Total != 1510 || filas[0].NetoVenta != 1000 ||
 		filas[0].Costo == nil || *filas[0].Costo != 500 || filas[0].LineasSinCosto != 0 {
 		t.Errorf("por canal: %+v", filas)

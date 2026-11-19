@@ -70,7 +70,7 @@ func (e *entorno) vendidaYFacturada(t *testing.T, correo string, v VentaPedida) 
 	if v.ContactoNombre == "" {
 		v.ContactoNombre = "CF"
 	}
-	r, err := e.svc.RegistrarVenta(ctx, v, ses.UserID)
+	r, err := e.svc.RegistrarVenta(ctx, v, comoAdmin(ses.UserID), ses.UserID)
 	if err != nil || !r.Ok {
 		t.Fatalf("venta: %v %+v", err, r)
 	}
@@ -267,7 +267,7 @@ func TestDevolucionYDespuesAnular(t *testing.T) {
 	if _, err := c.devolver(2, facturacion.DevolverPorCaja); err != nil {
 		t.Fatal(err)
 	}
-	an, err := e.svc.Anular(context.Background(), c.pedido, "se arrepintió del resto", c.usuario)
+	an, err := e.svc.Anular(context.Background(), comoAdmin(c.usuario), c.pedido, PedidoDeAnulacion{Motivo: "se arrepintió del resto", VolvioLaMercaderia: true})
 	if err != nil || !an.Ok || an.FacturaPendiente == nil {
 		t.Fatalf("anular: %v %+v", err, an)
 	}
@@ -299,7 +299,7 @@ func TestDevolucionPorOtraSucursal(t *testing.T) {
 	if enOtra() != 2 {
 		t.Errorf("en la otra sucursal hay %v", enOtra())
 	}
-	if an, err := e.svc.Anular(context.Background(), c.pedido, "error", c.usuario); err != nil || !an.Ok {
+	if an, err := e.svc.Anular(context.Background(), comoAdmin(c.usuario), c.pedido, PedidoDeAnulacion{Motivo: "error", VolvioLaMercaderia: true}); err != nil || !an.Ok {
 		t.Fatalf("anular: %v %+v", err, an)
 	}
 	if q, _ := e.fisicoYReservado(t); q != 98 || enOtra() != 2 {
@@ -323,7 +323,7 @@ func TestDevolucionDeUnaVentaMixta(t *testing.T) {
 		t.Fatal("dejó sacar de la caja más de lo que entró en efectivo")
 	}
 	inicial := c.caja(t)
-	if an, err := e.svc.Anular(context.Background(), c.pedido, "error", c.usuario); err != nil || !an.Ok {
+	if an, err := e.svc.Anular(context.Background(), comoAdmin(c.usuario), c.pedido, PedidoDeAnulacion{Motivo: "error", VolvioLaMercaderia: true}); err != nil || !an.Ok {
 		t.Fatalf("anular: %v %+v", err, an)
 	}
 	if got := c.caja(t); got != inicial {
@@ -434,7 +434,7 @@ func TestDevolucionRotaYDespuesAnular(t *testing.T) {
 	if q, _ := e.fisicoYReservado(t); q != 90 {
 		t.Fatalf("físico %v después de la devolución rota, quería 90", q)
 	}
-	if an, err := e.svc.Anular(context.Background(), c.pedido, "se arrepintió", c.usuario); err != nil || !an.Ok {
+	if an, err := e.svc.Anular(context.Background(), comoAdmin(c.usuario), c.pedido, PedidoDeAnulacion{Motivo: "se arrepintió", VolvioLaMercaderia: true}); err != nil || !an.Ok {
 		t.Fatalf("anular: %v %+v", err, an)
 	}
 	if q, _ := e.fisicoYReservado(t); q != 98 {
@@ -611,7 +611,7 @@ func TestDevolucionDeUnCaeDePruebaEnProduccion(t *testing.T) {
 	if _, err := c.devolver(3, facturacion.DevolverPorCaja); err == nil {
 		t.Fatal("devolvió 11 de 10")
 	}
-	an, err := e.svc.Anular(ctx, c.pedido, "error", c.usuario)
+	an, err := e.svc.Anular(ctx, comoAdmin(c.usuario), c.pedido, PedidoDeAnulacion{Motivo: "error", VolvioLaMercaderia: true})
 	if err != nil || !an.Ok || an.FacturaPendiente == nil {
 		t.Fatalf("anular: %v %+v", err, an)
 	}

@@ -71,11 +71,28 @@ func condiciones(p Periodo, f Filtros) (string, []any) {
 // Las columnas de margen, por renglón (los cortes por producto, rubro y
 // elaboración) o por pedido ya agregado (cliente, vendedor, sucursal y canal:
 // sumar renglones sin agregar antes multiplicaría cada pedido).
+//
+// **Un costo es conocido solo si es mayor a 0.** La Bisagra Cierre Suave
+// salía con margen del 100 %: una recepción cargada a $0 dejó su costo en
+// cero, y cada venta sumaba venta sin costo. Ahora el renglón a $0 cuenta
+// como «sin costo», igual que el que no tiene. Va en el SQL y no al congelar
+// el costo de la venta, así también corrige lo que ya se vendió.
+//
+// neto es la venta sin IVA de todos los renglones (el «Vendido sin IVA» de
+// Reportes, el del cierre y el de la Ganancia del mes: el mismo número);
+// neto_costeado, la de los renglones con costo, que es contra lo que se
+// mide el margen. Restar el costo de una parte al neto del todo inflaba el
+// margen de cada fila que mezclaba renglones con y sin costo. bruto es la
+// suma de los subtotales con IVA, para prorratear el total del pedido.
 const (
-	margenPorRenglon = `sum(oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)),
-		sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE oi.costo_unitario IS NOT NULL),
-		count(*) FILTER (WHERE oi.costo_unitario IS NULL)::int`
-	margenPorPedido = `sum(coalesce(margenes.neto, 0)), sum(margenes.costo), coalesce(sum(margenes.sin_costo), 0)::int`
+	costoConocido    = `oi.costo_unitario > 0`
+	netoDelRenglon   = `oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)`
+	margenPorRenglon = `sum(` + netoDelRenglon + `),
+		sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `),
+		count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int,
+		coalesce(sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `), 0)`
+	margenPorPedido = `sum(coalesce(margenes.neto, 0)), sum(margenes.costo), coalesce(sum(margenes.sin_costo), 0)::int,
+		coalesce(sum(margenes.neto_costeado), 0)`
 )
 
 // margenesDe es el neto sin IVA y el costo de cada pedido, para unirlo a
@@ -90,9 +107,11 @@ const (
 func margenesDe(where string) string {
 	return `LEFT JOIN (
 		SELECT oi.order_id,
-		       sum(oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)) AS neto,
-		       sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE oi.costo_unitario IS NOT NULL) AS costo,
-		       count(*) FILTER (WHERE oi.costo_unitario IS NULL)::int AS sin_costo
+		       sum(` + netoDelRenglon + `) AS neto,
+		       sum(oi.subtotal) AS bruto,
+		       sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `) AS costo,
+		       count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int AS sin_costo,
+		       sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `) AS neto_costeado
 		FROM order_items oi
 		WHERE oi.order_id IN (SELECT o.id FROM orders o WHERE ` + where + `)
 		GROUP BY oi.order_id) margenes ON margenes.order_id = o.id`
@@ -110,10 +129,12 @@ func (s *Servicio) filas(ctx context.Context, sql string, args []any, detalleEnP
 		var clave, etiqueta *string
 		var cantidad, total jsmath.Num
 		var neto, costo *jsmath.Num
+		var costeado jsmath.Num
 		var sinCosto int
-		if err := rs.Scan(&clave, &etiqueta, &f.Detalle, &cantidad, &total, &neto, &costo, &sinCosto); err != nil {
+		if err := rs.Scan(&clave, &etiqueta, &f.Detalle, &cantidad, &total, &neto, &costo, &sinCosto, &costeado); err != nil {
 			return nil, err
 		}
+		f.NetoCosteado = costeado.F()
 		f.Clave, f.Etiqueta = deTexto(clave, "sin-origen"), deTexto(etiqueta, "sin origen")
 		f.Cantidad, f.Total, f.LineasSinCosto = cantidad.F(), total.F(), float64(sinCosto)
 		if neto != nil {
@@ -144,11 +165,112 @@ func deTexto(p *string, defecto string) string {
 	return *p
 }
 
+// ReporteDeVentas es el corte pedido con los totales del período.
+type ReporteDeVentas struct {
+	Filas   []FilaDeReporte   `json:"filas"`
+	Totales TotalesDelReporte `json:"totales"`
+}
+
+// TotalesDelReporte son los del período entero, con los mismos filtros y
+// sin el tope de filas de los cortes: la tarjeta «Vendido sin IVA», el
+// costo, el margen y el total del CSV y del PDF salen de acá.
+//
+// Sumaban las filas que se veían: por producto (el corte que se abre
+// primero) eran los 50 que más vendieron, y el mismo mes daba otro «Vendido
+// sin IVA» por sucursal. Ahora es el mismo número que ResultadoEntre en
+// todos los cortes.
+//
+// Total y Cantidad dependen del corte, como en sus filas: los cortes por
+// renglón (producto, rubro, elaboración) suman subtotales y unidades; los
+// cortes por pedido, el total del pedido (con envío y descuento) y las
+// operaciones. Costo es nil si ningún renglón tiene costo.
+type TotalesDelReporte struct {
+	Total          float64  `json:"total"`
+	Cantidad       float64  `json:"cantidad"`
+	NetoVenta      float64  `json:"netoVenta"`
+	NetoCosteado   float64  `json:"netoCosteado"`
+	Costo          *float64 `json:"costo"`
+	LineasSinCosto float64  `json:"lineasSinCosto"`
+	// Filas es cuántas tiene el corte entero; la lista trae hasta 50.
+	Filas int `json:"filas"`
+}
+
+// MargenDelTotal es NetoCosteado − Costo; nil si nada tiene costo.
+func (t TotalesDelReporte) MargenDelTotal() *float64 {
+	if t.Costo == nil {
+		return nil
+	}
+	m := t.NetoCosteado - *t.Costo
+	return &m
+}
+
+// porRenglon dice si el corte agrupa renglones (y no pedidos).
+func porRenglon(corte string) bool {
+	return corte == "producto" || corte == "rubro" || corte == "elaboracion"
+}
+
+// totalesDelReporte suma el período sin cortar. filas es cuántas tiene el
+// corte (las listas con tope cuentan las suyas aparte).
+func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, args []any) (TotalesDelReporte, error) {
+	var t TotalesDelReporte
+	var total, cantidad, neto, costeado jsmath.Num
+	var costo *jsmath.Num
+	var sinCosto int
+	grupo := map[string]string{
+		"producto": "coalesce(p.id::text, oi.descripcion)",
+		"rubro":    "coalesce(c.id::text, 'sin-categoria')",
+	}[corte]
+	filas := "0"
+	if grupo != "" {
+		filas = "(SELECT count(DISTINCT " + grupo + `) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+			LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products p ON p.id = v.product_id
+			LEFT JOIN categories c ON c.id = p.category_id WHERE ` + where + ")"
+	} else if corte == "cliente" {
+		filas = "(SELECT count(DISTINCT coalesce(o.customer_id::text, o.contacto_nombre)) FROM orders o WHERE " + where + ")"
+	}
+	unidades := "(SELECT coalesce(sum(oi.cantidad), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE " + where + ")"
+	montoRenglones := "(SELECT coalesce(sum(oi.subtotal), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE " + where + ")"
+	montos, cuantos := "coalesce(sum(o.total), 0)", "count(*)"
+	if porRenglon(corte) {
+		montos, cuantos = montoRenglones, unidades
+	}
+	err := s.pool.QueryRow(ctx, `
+		SELECT `+montos+`, `+cuantos+`, coalesce(sum(margenes.neto), 0), sum(margenes.costo),
+		       coalesce(sum(margenes.sin_costo), 0)::int, coalesce(sum(margenes.neto_costeado), 0), `+filas+`::int
+		FROM orders o `+margenesDe(where)+` WHERE `+where, args...).
+		Scan(&total, &cantidad, &neto, &costo, &sinCosto, &costeado, &t.Filas)
+	if err != nil {
+		return t, err
+	}
+	t.Total, t.Cantidad, t.NetoVenta, t.NetoCosteado, t.LineasSinCosto = total.F(), cantidad.F(), neto.F(), costeado.F(), float64(sinCosto)
+	if costo != nil {
+		c := costo.F()
+		t.Costo = &c
+	}
+	return t, nil
+}
+
 // ReporteDeVentas es reporteDeVentas: el corte pedido (lo raro es por
-// producto), sin las canceladas.
-func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo, f Filtros) ([]FilaDeReporte, error) {
+// producto), sin las canceladas, con los totales del período.
+func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo, f Filtros) (ReporteDeVentas, error) {
+	corte = LeerCorte(corte)
 	where, args := condiciones(p, f)
-	switch LeerCorte(corte) {
+	filas, err := s.filasDelCorte(ctx, corte, where, args)
+	if err != nil {
+		return ReporteDeVentas{}, err
+	}
+	t, err := s.totalesDelReporte(ctx, corte, where, args)
+	if err != nil {
+		return ReporteDeVentas{}, err
+	}
+	if t.Filas < len(filas) {
+		t.Filas = len(filas)
+	}
+	return ReporteDeVentas{Filas: filas, Totales: t}, nil
+}
+
+func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args []any) ([]FilaDeReporte, error) {
+	switch corte {
 	case "rubro":
 		return s.filas(ctx, `
 			SELECT coalesce(c.id::text, 'sin-categoria'), coalesce(c.name, 'Sin categoría'), count(DISTINCT p.id)::text,
@@ -164,8 +286,8 @@ func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo,
 			       CASE WHEN coalesce(p.recargo_elaboracion_pct, 0) > 0 THEN 'Se maquina en planta' ELSE 'Se vende como viene' END,
 			       count(DISTINCT p.id)::text, sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
 			FROM order_items oi JOIN orders o ON o.id = oi.order_id
-			JOIN product_variants v ON v.id = oi.variant_id
-			JOIN products p ON p.id = v.product_id
+			LEFT JOIN product_variants v ON v.id = oi.variant_id
+			LEFT JOIN products p ON p.id = v.product_id
 			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(oi.subtotal) DESC`, args, true)
 	case "cliente":
 		return s.filas(ctx, `
@@ -176,14 +298,14 @@ func (s *Servicio) ReporteDeVentas(ctx context.Context, corte string, p Periodo,
 			WHERE `+where+` GROUP BY 1, 2, cu.cuit ORDER BY sum(o.total) DESC LIMIT 50`, args, false)
 	case "vendedor":
 		return s.filas(ctx, `
-			SELECT coalesce(se.id::text, u.id), coalesce(se.nombre, u.name),
-			       CASE WHEN se.id IS NULL THEN 'Cargó la venta' ELSE NULL END,
+			SELECT coalesce(se.id::text, u.id, 'sin-vendedor'), coalesce(se.nombre, u.name, 'Sin vendedor'),
+			       CASE WHEN se.id IS NULL AND u.id IS NOT NULL THEN 'Cargó la venta' ELSE NULL END,
 			       count(*), sum(o.total), `+margenPorPedido+`
 			FROM orders o `+margenesDe(where)+`
 			LEFT JOIN sellers se ON se.id = o.seller_id
 			LEFT JOIN "user" u ON u.id = o.created_by_user_id
-			WHERE `+where+` AND (se.id IS NOT NULL OR u.id IS NOT NULL)
-			GROUP BY 1, 2, se.id ORDER BY sum(o.total) DESC`, args, false)
+			WHERE `+where+`
+			GROUP BY 1, 2, 3 ORDER BY sum(o.total) DESC`, args, false)
 	case "sucursal":
 		return s.filas(ctx, `
 			SELECT coalesce(b.id::text, 'sin-sucursal'), coalesce(b.name, 'Sin sucursal'), NULL::text,

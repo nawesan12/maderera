@@ -6,7 +6,7 @@
  *   npx tsx scripts/golden/roles.ts
  */
 import { writeFileSync } from "node:fs";
-import { ACCESO, inicioDelRol, puedeEntrar, quienEntra, type RolStaff } from "../../lib/roles";
+import { ACCESO, MANEJAN_PLATA, inicioDelRol, puedeEntrar, quienEntra, type RolStaff } from "../../lib/roles";
 
 const roles: (RolStaff | null)[] = ["admin", "vendedor", "deposito", "aserradero", null];
 const rutas = new Set<string>(Object.keys(ACCESO));
@@ -19,6 +19,7 @@ for (const extra of ["/", "/admin/nada", "/adminx", "/mostradorx", "/admin/corte
 const matriz = [...rutas].sort().flatMap((ruta) => roles.map((rol) => ({ ruta, rol, puede: puedeEntrar(ruta, rol) })));
 const salida = {
   acceso: ACCESO,
+  manejanPlata: MANEJAN_PLATA,
   quienEntra: Object.fromEntries([...rutas].sort().map((r) => [r, quienEntra(r)])),
   inicio: Object.fromEntries(roles.map((r) => [String(r), inicioDelRol(r)])),
   matriz,

@@ -75,14 +75,12 @@ func TestPresupuestoAPedidoConEnvioYACuenta(t *testing.T) {
 		t.Fatalf("sin cuerpo: %s", tipo)
 	}
 
-	// Cobrar diciendo con qué: queda el medio.
-	if c, b := pedir(t, ven, "POST", u+"pedidos/"+retiro.ID+"/cobrado", map[string]any{"medioPago": "cuenta_corriente"}); c != 422 {
-		t.Fatalf("cobrar a cuenta: %d %s", c, b)
-	}
-	if c, b := pedir(t, ven, "POST", u+"pedidos/"+retiro.ID+"/cobrado", map[string]any{"medioPago": "transferencia"}); c != 200 {
+	// Cobrarlo con recibo: queda pagado por la suma de lo cobrado.
+	total = e.texto(t, `select total::text from orders where id = $1`, retiro.ID)
+	if c, b := pedir(t, ven, "POST", u+"pedidos/"+retiro.ID+"/cobro", map[string]any{"partes": `[{"medio":"transferencia","importe":"` + total + `"}]`}); c != 200 {
 		t.Fatalf("cobrar: %d %s", c, b)
 	}
-	if m := e.texto(t, `select medio_pago::text || '/' || estado_pago::text from orders where id = $1`, retiro.ID); m != "transferencia/pagado" {
+	if m := e.texto(t, `select estado_pago::text from orders where id = $1`, retiro.ID); m != "pagado" {
 		t.Fatalf("cobrado: %s", m)
 	}
 }

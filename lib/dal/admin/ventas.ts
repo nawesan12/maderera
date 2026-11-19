@@ -92,8 +92,9 @@ export async function consultarPresupuesto(id: string): Promise<PresupuestoCompl
 /* Pedidos                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export interface PedidoListado extends Omit<Esquemas["PedidoListado"], "createdAt"> {
+export interface PedidoListado extends Omit<Esquemas["PedidoListado"], "createdAt" | "entregadoAt"> {
   createdAt: Date;
+  entregadoAt: Date | null;
 }
 
 export async function listarPedidos(
@@ -108,7 +109,11 @@ export async function listarPedidos(
   } = {},
 ): Promise<PedidoListado[]> {
   const r = await (await api()).GET("/api/v1/admin/pedidos", { params: { query: filtros } });
-  return datos(r).map((p) => ({ ...p, createdAt: fecha(p.createdAt) }));
+  return datos(r).map((p) => ({
+    ...p,
+    createdAt: fecha(p.createdAt),
+    entregadoAt: p.entregadoAt ? fecha(p.entregadoAt) : null,
+  }));
 }
 
 export interface PedidoCompleto extends Omit<Esquemas["FichaDePedido"], "createdAt" | "historial"> {
@@ -129,6 +134,18 @@ export async function obtenerPedido(id: string): Promise<PedidoCompleto | null> 
     createdAt: fecha(p.createdAt),
     historial: p.historial.map((h) => ({ ...h, createdAt: fecha(h.createdAt) })),
   };
+}
+
+export type PedidoParaElTaller = Esquemas["PedidoParaElTaller"];
+
+/**
+ * El pedido sin plata ni datos de contacto: lo que necesita quien carga el
+ * corte de un pedido (también el aserradero, que no ve la ficha completa).
+ */
+export async function pedidoParaElTaller(id: string): Promise<PedidoParaElTaller | null> {
+  const r = await (await api()).GET("/api/v1/admin/pedidos/{id}/taller", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  return datos(r);
 }
 
 /*

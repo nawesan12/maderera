@@ -1075,6 +1075,8 @@ export interface operations {
                     concepto?: string;
                     /** @description el JSON de las partes, como lo arma el formulario */
                     partes: string;
+                    /** @description la del intento, generada al abrir el cobro: un reintento devuelve el mismo recibo */
+                    clave?: string;
                 };
             };
         };

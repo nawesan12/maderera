@@ -13,6 +13,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
@@ -48,6 +49,9 @@ type LineaDeVenta struct {
 	Cantidad       float64 `json:"cantidad"`
 	PrecioUnitario float64 `json:"precioUnitario"`
 	Presentacion   *string `json:"presentacion,omitempty"`
+	// PrecioLista es el de la lista del cliente, que pone el servidor (T3):
+	// nil en un renglón sin variante o sin precio cargado.
+	PrecioLista *float64 `json:"precioLista,omitempty"`
 }
 
 // PagoDeVenta es un renglón de cómo se pagó.
@@ -163,6 +167,26 @@ func RevisarChequeDePago(c *ChequeDePago) string {
 	}
 	if !reFecha.MatchString(c.FechaPago) {
 		return "Poné la fecha de pago del cheque."
+	}
+	if _, ok := cobros.LeerFechaDeCheque(c.FechaPago); !ok {
+		return "La fecha de pago del cheque no existe."
+	}
+	return ""
+}
+
+// RevisarFechasDeCheques es el rango de cobros.RevisarFechaDeCheque para los
+// cheques de una venta. Va aparte de RevisarPagos (el revisarPagos del TS,
+// con su golden) porque depende de hoy.
+func RevisarFechasDeCheques(pagos []PagoDeVenta, ahora time.Time) string {
+	for _, p := range pagos {
+		if p.Medio != Cheque || p.Cheque == nil {
+			continue
+		}
+		if f, ok := cobros.LeerFechaDeCheque(p.Cheque.FechaPago); ok {
+			if m := cobros.RevisarFechaDeCheque(f, ahora); m != "" {
+				return m
+			}
+		}
 	}
 	return ""
 }

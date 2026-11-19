@@ -11,6 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/precios"
+	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -231,6 +234,10 @@ type FichaDePresupuesto struct {
 	Items               []ItemDePresupuesto `json:"items"`
 	PedidoID            *string             `json:"pedidoId"`
 	NumeroPedido        *string             `json:"numeroPedido"`
+	// Vencido: pasó su validez y no se convirtió. Para pasarlo a pedido hay
+	// que elegir entre los precios de hoy (TotalDeHoy) y los suyos.
+	Vencido    bool    `json:"vencido"`
+	TotalDeHoy *string `json:"totalDeHoy"`
 }
 
 // Presupuesto es la ficha, o nil si no existe.
@@ -276,7 +283,67 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 		}
 		p.Items = append(p.Items, it)
 	}
-	return &p, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	filas.Close()
+	p.Vencido = p.PedidoID == nil && PresupuestoVencido(p.Estado, p.ValidoHasta, s.ahora())
+	if p.Vencido {
+		total, err := s.totalDeHoy(ctx, id, p.CustomerID, jsmath.Numero(p.Total)-jsmath.Numero(p.Subtotal))
+		if err != nil {
+			return nil, err
+		}
+		p.TotalDeHoy = &total
+	}
+	return &p, nil
+}
+
+// totalDeHoy es el total del presupuesto con los precios de lista de hoy
+// (la misma cuenta que «actualizar» al pasarlo a pedido).
+func (s *Servicio) totalDeHoy(ctx context.Context, id string, cliente *string, extra float64) (string, error) {
+	filas, err := s.pool.Query(ctx, `SELECT variant_id, presentacion, cantidad::float8, subtotal::float8 FROM quote_items WHERE quote_id = $1 ORDER BY orden, id`, id)
+	if err != nil {
+		return "", err
+	}
+	type renglon struct {
+		r        precios.RenglonConVariante
+		cantidad float64
+		subtotal float64
+	}
+	var rs []renglon
+	for filas.Next() {
+		var r renglon
+		if err := filas.Scan(&r.r.VariantID, &r.r.Presentacion, &r.cantidad, &r.subtotal); err != nil {
+			filas.Close()
+			return "", err
+		}
+		rs = append(rs, r)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return "", err
+	}
+	lista, err := precios.ListaDelCliente(ctx, s.pool, cliente)
+	if err != nil {
+		return "", err
+	}
+	conVariante := make([]precios.RenglonConVariante, len(rs))
+	for i, r := range rs {
+		conVariante[i] = r.r
+	}
+	listas, err := precios.PreciosDeLista(ctx, s.pool, conVariante, lista)
+	if err != nil {
+		return "", err
+	}
+	total := 0.0
+	for i, r := range rs {
+		if listas[i] != nil {
+			total += ventas.ACentavos(float64(r.cantidad * *listas[i]))
+		} else {
+			total += r.subtotal
+		}
+	}
+	return jsmath.Fijo2(ventas.ACentavos(total + extra)), nil
 }
 
 /* -------------------------------- pedidos -------------------------------- */
@@ -299,7 +366,24 @@ type PedidoListado struct {
 	Items            int       `json:"items"`
 	CustomerID       *string   `json:"customerId"`
 	CreatedAt        time.Time `json:"createdAt"`
+	// SinCobrar es lo que falta cobrar fuera de la cuenta corriente
+	// (fragmentos.SinCobrarDelPedido): la confirmación al entregar y el
+	// «Cobrar $X» del reparto lo leen de acá, con la misma regla que «Me
+	// deben».
+	SinCobrar *float64 `json:"sinCobrar"`
+	// PagoEnRevision: el cliente informó una transferencia que nadie
+	// verificó (fragmentos.PagoEnRevision). No es «sin cobrar»: el reparto
+	// no tiene que pedirle la plata otra vez.
+	PagoEnRevision bool `json:"pagoEnRevision"`
+	// EntregadoAt es el último paso a «entregado» del historial; nil si no
+	// se entregó. «Sin cobrar» cuenta los días desde ahí.
+	EntregadoAt *time.Time `json:"entregadoAt"`
 }
+
+// EstadoSinCobrar es el filtro del historial que lleva el renglón «N
+// pedidos sin cobrar» de «Me deben»: los entregados a los que les falta
+// cobrar, el más viejo primero (el primero a reclamar).
+const EstadoSinCobrar = "sin-cobrar"
 
 // VistaDePedidos acota el listado: el tablero no necesita el historial
 // entero (lo traía todo, desde el primer pedido), y el historial va por
@@ -323,12 +407,17 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	var a argumentos
 	var cond []string
 	pie := ""
+	orden := "o.created_at DESC"
 	switch v.Vista {
 	case "tablero":
 		cond = append(cond, "(o.estado NOT IN ('entregado', 'cancelado') OR o.updated_at >= now() - interval '7 days')")
 	case "historial":
 		if f.Estado == "" || f.Estado == "todos" {
 			cond = append(cond, "o.estado IN ('entregado', 'cancelado')")
+		}
+		if f.Estado == EstadoSinCobrar {
+			cond = append(cond, "o.estado = 'entregado'", fragmentos.SinCobrarDelPedido+" > 0.009")
+			orden = "o.created_at ASC"
 		}
 		if v.Desde != "" {
 			cond = append(cond, "o.created_at >= ("+a.poner(v.Desde)+"::date AT TIME ZONE 'America/Argentina/Buenos_Aires')")
@@ -342,7 +431,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		}
 		pie = fmt.Sprintf(" LIMIT %d OFFSET %d", PorPaginaDeHistorial+1, (pagina-1)*PorPaginaDeHistorial)
 	}
-	if f.Estado != "" && f.Estado != "todos" {
+	if f.Estado != "" && f.Estado != "todos" && f.Estado != EstadoSinCobrar {
 		cond = append(cond, "o.estado::text = "+a.poner(f.Estado))
 	}
 	if f.Sucursal != "" && f.Sucursal != "todas" {
@@ -356,13 +445,16 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.contacto_nombre, c.razon_social, b.name, b.slug, o.estado::text, o.tipo_entrega::text,
 		       o.direccion_entrega, o.medio_pago::text, o.estado_pago::text, o.total::text, o.created_at,
-		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio
+		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio, `+fragmentos.SinCobrarDelPedido+`::float8,
+		       `+fragmentos.PagoEnRevision+`,
+		       CASE WHEN o.estado = 'entregado' THEN (SELECT max(h.created_at) FROM order_status_history h
+		                                             WHERE h.order_id = o.id AND h.estado = 'entregado') END
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
 		LEFT JOIN (SELECT order_id, count(*)::int AS items FROM order_items GROUP BY order_id) conteo ON conteo.order_id = o.id`+
 		donde(cond)+`
-		ORDER BY o.created_at DESC`+pie, a...)
+		ORDER BY `+orden+pie, a...)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +464,8 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		var p PedidoListado
 		var total string
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.Sucursal, &p.SucursalSlug, &p.Estado, &p.TipoEntrega,
-			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio); err != nil {
+			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio, &p.SinCobrar,
+			&p.PagoEnRevision, &p.EntregadoAt); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)
@@ -457,6 +550,8 @@ type FichaDePedido struct {
 	SaldoCliente *float64 `json:"saldoCliente"`
 	// EntregarEl es el día comprometido (AAAA-MM-DD).
 	EntregarEl *string `json:"entregarEl"`
+	// SinCobrar: como en PedidoListado.
+	SinCobrar *float64 `json:"sinCobrar"`
 }
 
 // Pedido es la ficha, o nil si no existe. Con `conMargen`, el margen de la
@@ -470,7 +565,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		       o.medio_pago::text, o.estado_pago::text, o.notas, o.created_at, o.quote_id, q.numero,
 		       CASE WHEN o.customer_id IS NULL THEN NULL
 		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END,
-		       to_char(o.entregar_el, 'YYYY-MM-DD')
+		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -478,7 +573,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		WHERE o.id = $1`, id).Scan(&p.ID, &p.Numero, &p.NumeroProvisorio, &p.Cliente, &p.Email, &p.Telefono, &p.Empresa,
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
-		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl)
+		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -562,4 +657,65 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		p.Margen = MargenDelPedido(lineas)
 	}
 	return &p, nil
+}
+
+// PedidoParaElTaller es la ficha del aserradero (T3, hallazgo 40): lo que se
+// corta y para quién. La ficha completa le mostraba los precios, el saldo de
+// la cuenta, el mail y el teléfono del cliente.
+type PedidoParaElTaller struct {
+	ID          string          `json:"id"`
+	Numero      string          `json:"numero"`
+	Cliente     string          `json:"cliente"`
+	Empresa     *string         `json:"empresa"`
+	CustomerID  *string         `json:"customerId"`
+	BranchID    *string         `json:"branchId"`
+	Sucursal    *string         `json:"sucursal"`
+	Estado      string          `json:"estado"`
+	TipoEntrega string          `json:"tipoEntrega"`
+	EntregarEl  *string         `json:"entregarEl"`
+	Notas       *string         `json:"notas"`
+	Items       []ItemDelTaller `json:"items"`
+}
+
+// ItemDelTaller es un renglón sin precio.
+type ItemDelTaller struct {
+	VariantID    *string `json:"variantId"`
+	Descripcion  string  `json:"descripcion"`
+	Unidad       string  `json:"unidad"`
+	Cantidad     string  `json:"cantidad"`
+	Presentacion *string `json:"presentacion"`
+}
+
+// ParaElTaller lee esa ficha, o nil si el pedido no existe.
+func (s *Servicio) ParaElTaller(ctx context.Context, id string) (*PedidoParaElTaller, error) {
+	var p PedidoParaElTaller
+	err := s.pool.QueryRow(ctx, `
+		SELECT o.id, o.numero, o.contacto_nombre, c.razon_social, o.customer_id, o.branch_id, b.name, o.estado::text,
+		       o.tipo_entrega::text, to_char(o.entregar_el, 'YYYY-MM-DD'), o.notas
+		FROM orders o
+		LEFT JOIN customers c ON c.id = o.customer_id
+		LEFT JOIN branches b ON b.id = o.branch_id
+		WHERE o.id = $1`, id).Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.CustomerID, &p.BranchID, &p.Sucursal,
+		&p.Estado, &p.TipoEntrega, &p.EntregarEl, &p.Notas)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT variant_id, descripcion, unidad, cantidad::text, presentacion
+		FROM order_items WHERE order_id = $1 ORDER BY orden, id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Items, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (ItemDelTaller, error) {
+		var it ItemDelTaller
+		err := r.Scan(&it.VariantID, &it.Descripcion, &it.Unidad, &it.Cantidad, &it.Presentacion)
+		return it, err
+	})
+	if p.Items == nil {
+		p.Items = []ItemDelTaller{}
+	}
+	return &p, err
 }

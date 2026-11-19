@@ -150,7 +150,9 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	}
 
 	// Cobrar con un cheque y una transferencia.
-	partes := `[{"medio":"cheque","importe":"200.000","cheque":{"numero":"00123456","banco":"Nación","fechaPago":"2026-11-15"}},{"medio":"transferencia","importe":"100000"}]`
+	// La fecha del cheque, cerca de hoy: entra en el rango que acepta el cobro.
+	partes := `[{"medio":"cheque","importe":"200.000","cheque":{"numero":"00123456","banco":"Nación","fechaPago":"` +
+		time.Now().AddDate(0, 0, 10).Format("2006-01-02") + `"}},{"medio":"transferencia","importe":"100000"}]`
 	c, b := pedir(t, ven, "POST", u+"clientes/"+id+"/cobros", map[string]string{"partes": partes})
 	if c != 200 || !strings.Contains(b, "REC-0001") {
 		t.Fatalf("cobro: %d %s", c, b)

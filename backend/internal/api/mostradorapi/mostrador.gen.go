@@ -23,6 +23,30 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for MostradorAutorizacionMotivo.
+const (
+	Anular      MostradorAutorizacionMotivo = "anular"
+	Credito     MostradorAutorizacionMotivo = "credito"
+	Precio      MostradorAutorizacionMotivo = "precio"
+	Presupuesto MostradorAutorizacionMotivo = "presupuesto"
+)
+
+// Valid indicates whether the value is a known member of the MostradorAutorizacionMotivo enum.
+func (e MostradorAutorizacionMotivo) Valid() bool {
+	switch e {
+	case Anular:
+		return true
+	case Credito:
+		return true
+	case Precio:
+		return true
+	case Presupuesto:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MostradorResultadoDeColaEstado.
 const (
 	Rechazada    MostradorResultadoDeColaEstado = "rechazada"
@@ -103,6 +127,25 @@ type MostradorAltaRapida struct {
 	Ok bool `json:"ok"`
 }
 
+// MostradorAutorizacion Hace falta el PIN de un administrador (internal/autorizacion)
+type MostradorAutorizacion struct {
+	BloqueadoHasta *time.Time `json:"bloqueadoHasta,omitempty"`
+
+	// Credito con motivo precio
+	Credito *float64 `json:"credito,omitempty"`
+
+	// Monto lo que se autoriza (lo dejado de cobrar
+	Monto         float64                     `json:"monto"`
+	Motivo        MostradorAutorizacionMotivo `json:"motivo"`
+	PinIncorrecto *bool                       `json:"pinIncorrecto,omitempty"`
+
+	// SinAdmins ningún admin cargó su PIN
+	SinAdmins *bool `json:"sinAdmins,omitempty"`
+}
+
+// MostradorAutorizacionMotivo defines model for MostradorAutorizacion.Motivo.
+type MostradorAutorizacionMotivo string
+
 // MostradorCliente defines model for MostradorCliente.
 type MostradorCliente struct {
 	CondicionIva  string   `json:"condicionIva"`
@@ -140,12 +183,15 @@ type MostradorFiscalPendiente struct {
 
 // MostradorLinea defines model for MostradorLinea.
 type MostradorLinea struct {
-	Cantidad       float64 `json:"cantidad"`
-	Descripcion    string  `json:"descripcion"`
-	PrecioUnitario float64 `json:"precioUnitario"`
-	Presentacion   *string `json:"presentacion,omitempty"`
-	Unidad         string  `json:"unidad"`
-	VariantId      *string `json:"variantId"`
+	Cantidad    float64 `json:"cantidad"`
+	Descripcion string  `json:"descripcion"`
+
+	// PrecioLista el de la lista del cliente
+	PrecioLista    *float64 `json:"precioLista,omitempty"`
+	PrecioUnitario float64  `json:"precioUnitario"`
+	Presentacion   *string  `json:"presentacion,omitempty"`
+	Unidad         string   `json:"unidad"`
+	VariantId      *string  `json:"variantId"`
 }
 
 // MostradorMovimiento defines model for MostradorMovimiento.
@@ -161,12 +207,15 @@ type MostradorMovimiento struct {
 
 // MostradorPantalla defines model for MostradorPantalla.
 type MostradorPantalla struct {
-	Cierre       []MostradorRenglonDelCierre `json:"cierre"`
-	FondoBase    float64                     `json:"fondoBase"`
-	ListaGeneral *string                     `json:"listaGeneral"`
-	Movimientos  []MostradorMovimiento       `json:"movimientos"`
-	Turno        *MostradorTurno             `json:"turno"`
-	Ventas       []MostradorVentaDeHoy       `json:"ventas"`
+	Cierre []MostradorRenglonDelCierre `json:"cierre"`
+
+	// DescuentoLibrePct lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)
+	DescuentoLibrePct float64               `json:"descuentoLibrePct"`
+	FondoBase         float64               `json:"fondoBase"`
+	ListaGeneral      *string               `json:"listaGeneral"`
+	Movimientos       []MostradorMovimiento `json:"movimientos"`
+	Turno             *MostradorTurno       `json:"turno"`
+	Ventas            []MostradorVentaDeHoy `json:"ventas"`
 }
 
 // MostradorRenglonDelCierre defines model for MostradorRenglonDelCierre.
@@ -202,14 +251,18 @@ type MostradorResultadoDeColaEstado string
 
 // MostradorResultadoVenta defines model for MostradorResultadoVenta.
 type MostradorResultadoVenta struct {
-	Error                *string           `json:"error,omitempty"`
-	Lineas               *[]MostradorLinea `json:"lineas,omitempty"`
-	Nueva                bool              `json:"nueva"`
-	Numero               *string           `json:"numero,omitempty"`
-	Ok                   bool              `json:"ok"`
-	OrderId              *string           `json:"orderId,omitempty"`
-	RequiereAutorizacion *bool             `json:"requiereAutorizacion,omitempty"`
-	Total                float64           `json:"total"`
+	// Autorizacion Hace falta el PIN de un administrador (internal/autorizacion)
+	Autorizacion *MostradorAutorizacion `json:"autorizacion,omitempty"`
+	Error        *string                `json:"error,omitempty"`
+
+	// Ficha un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha
+	Ficha   *string           `json:"ficha,omitempty"`
+	Lineas  *[]MostradorLinea `json:"lineas,omitempty"`
+	Nueva   bool              `json:"nueva"`
+	Numero  *string           `json:"numero,omitempty"`
+	Ok      bool              `json:"ok"`
+	OrderId *string           `json:"orderId,omitempty"`
+	Total   float64           `json:"total"`
 }
 
 // MostradorTurno defines model for MostradorTurno.
@@ -320,6 +373,9 @@ type ClientesRecientesParams struct {
 type CobrarCuentaEnMostradorJSONBody struct {
 	BranchId string `json:"branchId"`
 
+	// Clave la del intento: un reintento devuelve el mismo recibo
+	Clave *string `json:"clave,omitempty"`
+
 	// Partes el JSON de las partes, como lo arma el formulario
 	Partes string `json:"partes"`
 }
@@ -349,7 +405,12 @@ type CobrarVentaJSONBody map[string]interface{}
 
 // AnularVentaDeMostradorJSONBody defines parameters for AnularVentaDeMostrador.
 type AnularVentaDeMostradorJSONBody struct {
-	Motivo string `json:"motivo"`
+	Ficha  *string `json:"ficha,omitempty"`
+	Motivo string  `json:"motivo"`
+	Pin    *string `json:"pin,omitempty"`
+
+	// VolvioLaMercaderia false: el cliente se la llevó y el stock no vuelve (pide el PIN)
+	VolvioLaMercaderia *bool `json:"volvioLaMercaderia,omitempty"`
 }
 
 // AbrirCajaJSONRequestBody defines body for AbrirCaja for application/json ContentType.
@@ -1424,9 +1485,12 @@ type AnularVentaDeMostradorResponseObject interface {
 }
 
 type AnularVentaDeMostrador200JSONResponse struct {
-	FacturaPendiente *string `json:"facturaPendiente,omitempty"`
-	FacturaSinCae    *bool   `json:"facturaSinCae,omitempty"`
-	Ok               string  `json:"ok"`
+	// Autorizacion Hace falta el PIN de un administrador (internal/autorizacion)
+	Autorizacion     *MostradorAutorizacion `json:"autorizacion,omitempty"`
+	Error            *string                `json:"error,omitempty"`
+	FacturaPendiente *string                `json:"facturaPendiente,omitempty"`
+	FacturaSinCae    *bool                  `json:"facturaSinCae,omitempty"`
+	Ok               *string                `json:"ok,omitempty"`
 }
 
 func (response AnularVentaDeMostrador200JSONResponse) VisitAnularVentaDeMostradorResponse(w http.ResponseWriter) error {
@@ -2023,57 +2087,65 @@ func (sh *strictHandler) AnularVentaDeMostrador(w http.ResponseWriter, r *http.R
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"ktqrq/8OAA==",
+	"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",
+	"PZu/uvrfAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

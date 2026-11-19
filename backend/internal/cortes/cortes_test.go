@@ -172,6 +172,27 @@ func TestAltaColaYFicha(t *testing.T) {
 	var id string
 	_ = e.pool.QueryRow(context.Background(), `select id::text from cutting_orders where numero = 'CRT-1'`).Scan(&id)
 
+	// La media placa con el disco vale para lo que nace con el motor 3. Un
+	// trabajo de antes (motor 2) sigue con la mitad con que se vendió: su
+	// plano se arma de nuevo en cada lectura y no puede cambiar en la máquina.
+	var motorAlta int32
+	_ = e.pool.QueryRow(context.Background(), `select motor_plano from cutting_orders where id = $1`, id).Scan(&motorAlta)
+	if motorAlta != MotorMediaConSierra {
+		t.Errorf("motor del alta: %d", motorAlta)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set mitad = 'largo' where id = $1`, id)
+	for _, caso := range []struct {
+		motor int32
+		ancho float64
+	}{{2, 915}, {1, 915}, {MotorMediaConSierra, 912}} {
+		_, _ = e.pool.Exec(context.Background(), `update cutting_orders set motor_plano = $2 where id = $1`, id, caso.motor)
+		c, err := Nuevo(e.pool, silencio).Obtener(context.Background(), id)
+		if err != nil || c.Medida.Ancho != caso.ancho {
+			t.Errorf("motor %d: media de %v (quería %v), %v", caso.motor, c.Medida.Ancho, caso.ancho, err)
+		}
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set mitad = null where id = $1`, id)
+
 	_, b = pedir(t, ven, "GET", u+"?busqueda=gomez&estado=en-cola", nil)
 	var cola []CorteListado
 	_ = json.Unmarshal([]byte(b), &cola)
@@ -249,7 +270,7 @@ func TestAltaColaYFicha(t *testing.T) {
 	var motor int
 	var sierra float64
 	_ = e.pool.QueryRow(context.Background(), `select motor_plano, ancho_sierra_mm::float8 from cutting_orders where id = $1`, id).Scan(&motor, &sierra)
-	if motor != 2 || sierra != 3.2 {
+	if motor != MotorMediaConSierra || sierra != 3.2 {
 		t.Errorf("motor %d, sierra %v", motor, sierra)
 	}
 	// El acomodo a mano: se guarda y vuelve al automático con la lista vacía.
@@ -481,7 +502,9 @@ func TestArmadorPublicoYCarrito(t *testing.T) {
 	code, b = cot(map[string]any{"variantId": e.melamina, "mitad": "largo", "cantoDescripcion": " Blanco ", "piezas": []any{map[string]any{"largoMm": "900", "anchoMm": 600, "cantidad": 3, "respetaVeta": 0, "cantoLargo": 1, "cantoAncho": 0, "etiqueta": nil}}})
 	var c CorteCotizado
 	_ = json.Unmarshal([]byte(b), &c)
-	if code != 200 || c.PlacaAnchoMm != 915 || c.Placas != 1 || c.CantoDescripcion == nil || *c.CantoDescripcion != "Blanco" {
+	// La media de 1830 descuenta el disco de la configuración (5 mm): 912, no
+	// 915 (T4, hallazgo 23).
+	if code != 200 || c.PlacaAnchoMm != 912 || c.Placas != 1 || c.CantoDescripcion == nil || *c.CantoDescripcion != "Blanco" {
 		t.Fatalf("cotizar: %d %s", code, b)
 	}
 
@@ -509,4 +532,32 @@ func TestArmadorPublicoYCarrito(t *testing.T) {
 
 func jsonTotal(c CorteResuelto) string {
 	return fmt.Sprintf("%.2f", c.Cuenta.Total)
+}
+
+// La media placa descuenta el disco que la parte (T4, hallazgo 23): los
+// mismos números que tests/placa-corte.test.ts, para que TS y Go redondeen
+// igual.
+func TestMediaPlacaDescuentaLaSierra(t *testing.T) {
+	num := func(x float64) *float64 { return &x }
+	largo, ancho := "largo", "ancho"
+	casos := []struct {
+		l, a   float64
+		mitad  *string
+		sierra float64
+		quiere [2]float64
+	}{
+		{2750, 1830, &largo, 5, [2]float64{2750, 912}},
+		{2440, 1220, &largo, 3.2, [2]float64{2440, 608}},
+		{2750, 1830, &largo, 3.2, [2]float64{2750, 913}},
+		{2750, 1830, &ancho, 3.2, [2]float64{1373, 1830}},
+		{2750, 1830, nil, 3.2, [2]float64{2750, 1830}},
+		{2440, 1220, &largo, 0, [2]float64{2440, 610}},
+		{2440, 1220, &largo, -3, [2]float64{2440, 610}},
+	}
+	for i, c := range casos {
+		m := ResolverMedida(nil, nil, num(c.l), num(c.a), c.mitad, c.sierra)
+		if m.Largo != c.quiere[0] || m.Ancho != c.quiere[1] {
+			t.Errorf("caso %d: %v × %v, quería %v", i, m.Largo, m.Ancho, c.quiere)
+		}
+	}
 }

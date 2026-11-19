@@ -17,6 +17,28 @@ export interface EstadoCobro {
   receiptId?: string;
   /** Algo que hay que decir aunque el cobro salió bien: la caja cerrada. */
   aviso?: string;
+  /** El efectivo no entró porque la sucursal no tiene caja abierta: cuál. */
+  sinCaja?: string;
+  /** El fondo de cambio de esa sucursal, para abrir la caja con él. */
+  fondoBase?: number;
+  /** Un pedido sin sucursal: en qué caja puede entrar el efectivo. */
+  sucursales?: SucursalParaCobrar[];
+}
+
+export interface SucursalParaCobrar {
+  id: string;
+  nombre: string;
+  abierta: boolean;
+  fondo: number;
+}
+
+function leerSucursales(texto: string | undefined): SucursalParaCobrar[] | undefined {
+  if (!texto) return undefined;
+  try {
+    return JSON.parse(texto) as SucursalParaCobrar[];
+  } catch {
+    return undefined;
+  }
 }
 
 const campo = (formData: FormData, nombre: string) => (formData.get(nombre) as string | null) || undefined;
@@ -35,11 +57,46 @@ export async function registrarCobroDeCliente(_previo: EstadoCobro, formData: Fo
       partes: (formData.get("partes") as string | null) ?? "",
       orderId: campo(formData, "orderId"),
       concepto: campo(formData, "concepto"),
+      clave: campo(formData, "clave"),
     },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   revalidatePath("/admin/clientes");
   revalidatePath("/admin/pedidos");
+  revalidatePath("/admin/cheques");
+  return { ok: r.data.ok, aviso: r.data.aviso, receiptId: r.data.receiptId };
+}
+
+/**
+ * Cobra un pedido con su recibo, tenga o no cliente (POST
+ * /admin/pedidos/{id}/cobro). El efectivo entra al turno de la sucursal del
+ * pedido; sin caja abierta Go lo rechaza y dice cuál abrir.
+ */
+export async function cobrarPedido(_previo: EstadoCobro, formData: FormData): Promise<EstadoCobro> {
+  const id = campo(formData, "pedidoId");
+  if (!id) return { error: "Falta el pedido." };
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cobro", {
+    params: { path: { id } },
+    body: {
+      partes: (formData.get("partes") as string | null) ?? "",
+      clave: campo(formData, "clave"),
+      branchId: campo(formData, "branchId"),
+    },
+  });
+  if (!r.data) {
+    const p = r.error as Problema | undefined;
+    const fondo = Number(p?.errores?.fondoBase);
+    return {
+      error: mensajeDe(p),
+      sinCaja: p?.errores?.sinCaja,
+      fondoBase: Number.isFinite(fondo) ? fondo : undefined,
+      sucursales: leerSucursales(p?.errores?.sucursales),
+    };
+  }
+  revalidatePath("/admin");
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/admin/reparto");
+  revalidatePath("/admin/caja");
   revalidatePath("/admin/cheques");
   return { ok: r.data.ok, aviso: r.data.aviso, receiptId: r.data.receiptId };
 }

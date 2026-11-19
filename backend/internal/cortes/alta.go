@@ -276,12 +276,13 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO cutting_orders (numero, customer_id, order_id, contacto_nombre, branch_id, variant_id,
 				material_descripcion, placa_largo_mm, placa_ancho_mm, mitad, placas, canto_descripcion,
-				acomodo_manual, ancho_sierra_mm, estado, urgente, notas, created_by_user_id, contacto_telefono, retira_el)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12, $13, $14, 'en-cola', $15, $16, $17, $18, $19)
+				acomodo_manual, ancho_sierra_mm, estado, urgente, notas, created_by_user_id, contacto_telefono, retira_el,
+				motor_plano)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12, $13, $14, 'en-cola', $15, $16, $17, $18, $19, $20)
 			RETURNING id::text`,
 			numero, opcional(f.CustomerID), opcional(f.OrderID), contacto, branch, opcional(f.VariantID), material,
 			largo, ancho, opcional(f.Mitad), int32(placasN), canto, opcional(f.AcomodoManual), jsmath.Num(*sierra),
-			urgente, notas, ses.UserID, telefono, retiraEl).Scan(&id); err != nil {
+			urgente, notas, ses.UserID, telefono, retiraEl, int32(MotorMediaConSierra)).Scan(&id); err != nil {
 			return err
 		}
 		for orden, p := range piezas {

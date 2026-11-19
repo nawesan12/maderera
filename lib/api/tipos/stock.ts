@@ -326,7 +326,7 @@ export interface operations {
                      */
                     contado?: number;
                     /** @enum {string} */
-                    motivo?: "ingreso" | "rotura" | "conteo" | "devolucion" | "otro";
+                    motivo?: "ingreso" | "rotura" | "conteo" | "devolucion" | "faltante" | "correccion" | "otro";
                 };
             };
         };

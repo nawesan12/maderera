@@ -8,6 +8,7 @@ import (
 
 	"mjbj/internal/api/ventasapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/cobros"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -53,12 +54,11 @@ func (o respuesta) VisitListarPedidosResponse(w http.ResponseWriter) error { ret
 func (o respuesta) VisitCambiarEntregaDelPedidoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
-func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
-func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
-func (o respuesta) VisitMarcarPedidoCobradoResponse(w http.ResponseWriter) error {
-	return o.escribir(w)
-}
+func (o respuesta) VisitFichaDePedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitPedidoParaElTallerResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitCobrarPedidoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error { return o.escribir(w) }
@@ -108,15 +108,32 @@ func (a *API) ListarPedidos(ctx context.Context, r ventasapi.ListarPedidosReques
 	return ok(v), err
 }
 
-// FichaDePedido la lee todo el personal, como obtenerPedido: además del
-// tablero la piden el ticket impreso y el alta de un corte (que también ve
-// el aserradero).
+// FichaDePedido la lee quien entra a Pedidos (el tablero y el ticket
+// impreso). El aserradero la leía para cargar el corte de un pedido, y con
+// ella los precios, el saldo, el mail y el teléfono del cliente: ahora usa
+// PedidoParaElTaller (T3, hallazgo 40).
 func (a *API) FichaDePedido(ctx context.Context, r ventasapi.FichaDePedidoRequestObject) (ventasapi.FichaDePedidoResponseObject, error) {
-	ses, err := auth.ExigirStaff(ctx)
+	ses, err := pedidos(ctx)
 	if err != nil {
 		return nil, err
 	}
 	p, err := a.s.Pedido(ctx, r.Id.String(), ses.Tiene(sqlc.StaffRoleAdmin))
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, noEsta("No se encontró el pedido.")
+	}
+	return ok(p), nil
+}
+
+// PedidoParaElTaller: todo el personal (el aserradero carga el corte de un
+// pedido desde /admin/cortes/nuevo). Sin plata ni datos de contacto.
+func (a *API) PedidoParaElTaller(ctx context.Context, r ventasapi.PedidoParaElTallerRequestObject) (ventasapi.PedidoParaElTallerResponseObject, error) {
+	if _, err := auth.ExigirStaff(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.ParaElTaller(ctx, r.Id.String())
 	if err != nil {
 		return nil, err
 	}
@@ -158,17 +175,14 @@ func (a *API) CancelarPedido(ctx context.Context, r ventasapi.CancelarPedidoRequ
 	return ok(v), nil
 }
 
-func (a *API) MarcarPedidoCobrado(ctx context.Context, r ventasapi.MarcarPedidoCobradoRequestObject) (ventasapi.MarcarPedidoCobradoResponseObject, error) {
-	ses, err := pedidos(ctx)
+// CobrarPedido: quien mueve plata (roles.ManejanPlata). El depósito abre
+// la ficha pero no cobra. Reemplaza a «marcar cobrado» (T3, hallazgo 5).
+func (a *API) CobrarPedido(ctx context.Context, r ventasapi.CobrarPedidoRequestObject) (ventasapi.CobrarPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
 	if err != nil {
 		return nil, err
 	}
-	var medio *string
-	if r.Body != nil && r.Body.MedioPago != nil {
-		m := string(*r.Body.MedioPago)
-		medio = &m
-	}
-	v, err := a.s.MarcarPagado(ctx, ses, r.Id.String(), medio)
+	v, err := cobros.Nuevo(a.s.pool, a.s.log).CobrarPedido(ctx, ses, r.Id.String(), r.Body.Partes, texto(r.Body.Clave), texto(r.Body.BranchId))
 	if err != nil {
 		return nil, err
 	}
@@ -254,6 +268,10 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 			ent.MedioPago = &m
 		}
 		ent.EntregarEl = texto(b.EntregarEl)
+		if b.Precios != nil {
+			ent.Precios = string(*b.Precios)
+		}
+		ent.PIN, ent.Ficha = texto(b.Pin), texto(b.Ficha)
 	}
 	v, err := a.s.ConvertirConEntrega(ctx, ses, r.Id.String(), ent)
 	if err != nil {

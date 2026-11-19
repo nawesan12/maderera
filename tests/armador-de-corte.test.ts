@@ -4,6 +4,7 @@ import {
   filasDelEnlace,
   leerBorrador,
   medidasDelBorrador,
+  medidasSospechosas,
   nombreDelTapacanto,
   textoDelPedido,
   type PiezaDelPedido,
@@ -157,5 +158,64 @@ describe("el mensaje de WhatsApp", () => {
         "https://mjbj.test/corte/c/abc",
       ].join("\n"),
     );
+  });
+});
+
+describe("¿están en mm?", () => {
+  // T4, hallazgo 22: el carpintero dice «60 por 40» y se tipea 60 × 40.
+  it("todas las piezas de menos de 10 cm por lado: se pregunta", () => {
+    expect(medidasSospechosas([{ largo: "60", ancho: "40" }, { largo: "99", ancho: "99" }])).toBe(true);
+  });
+
+  it("con una pieza grande ya no hay duda", () => {
+    expect(medidasSospechosas([{ largo: "60", ancho: "40" }, { largo: "600", ancho: "400" }])).toBe(false);
+  });
+
+  it("un mueble en cm, aunque tenga piezas de más de un metro: se pregunta", () => {
+    // Placard dictado en cm (comité de T4): con el 180 la regla vieja callaba.
+    expect(
+      medidasSospechosas([
+        { largo: "180", ancho: "45" },
+        { largo: "80", ancho: "45" },
+        { largo: "120", ancho: "45" },
+      ]),
+    ).toBe(true);
+    expect(medidasSospechosas([{ largo: "244", ancho: "60" }])).toBe(true);
+    expect(medidasSospechosas([{ largo: "180", ancho: "55" }, { largo: "76", ancho: "50" }])).toBe(true);
+  });
+
+  it("el borde: con un lado de 300 mm ya no es sospechoso", () => {
+    expect(medidasSospechosas([{ largo: "300", ancho: "50" }, { largo: "60", ancho: "40" }])).toBe(false);
+    expect(medidasSospechosas([{ largo: "50", ancho: "300" }])).toBe(false);
+    expect(medidasSospechosas([{ largo: "299", ancho: "50" }])).toBe(true);
+  });
+
+  it("sin piezas cargadas no se pregunta nada", () => {
+    expect(medidasSospechosas([])).toBe(false);
+    expect(medidasSospechosas([{ largo: "", ancho: "" }])).toBe(false);
+    // Una medida a medias no cuenta, ni para un lado ni para el otro.
+    expect(medidasSospechosas([{ largo: "60", ancho: "" }])).toBe(false);
+  });
+
+  it("la coma es decimal: 60,5 son sesenta milímetros y medio, no 605", () => {
+    expect(medidasSospechosas([{ largo: "60,5", ancho: "40" }])).toBe(true);
+    expect(medidasSospechosas([{ largo: "60.5", ancho: "40" }])).toBe(true);
+  });
+
+  it("lo que no es número no cuenta", () => {
+    expect(medidasSospechosas([{ largo: "abc", ancho: "40" }, { largo: "600", ancho: "40" }])).toBe(false);
+  });
+});
+
+describe("el selector de canto", () => {
+  // Comité de T4: «Ninguno» adentro de una pieza con los cuatro lados y
+  // «4 lados» en cada renglón vacío se leían como el estado. El cuerpo no
+  // lleva texto, y en la planilla con el dedo no se toca.
+  it("el cuerpo de la pieza no dice la acción, y con el dedo cada lado mide 24 px", async () => {
+    const { readFileSync } = await import("node:fs");
+    const fuente = readFileSync(new URL("../components/cortes/selector-canto.tsx", import.meta.url), "utf8");
+    expect(fuente).not.toMatch(/"Ninguno"|"4 lados"|"2 lados"/);
+    expect(fuente).toMatch(/pointer-coarse:pointer-events-none/);
+    expect(fuente.match(/pointer-coarse:(h|w)-6/g)).toHaveLength(4);
   });
 });

@@ -416,8 +416,11 @@ func (a *API) LibroIvaDigital(ctx context.Context, r facturacionapi.LibroIvaDigi
 	return respuesta{datos: zip, tipo: "application/zip", disposicion: `attachment; filename="` + nombre + `"`}, nil
 }
 
+// PedidoParaFacturar y FacturarPedido: quien mueve plata
+// (roles.ManejanPlata), no todo el que entra a Pedidos (el depósito
+// facturaba).
 func (a *API) PedidoParaFacturar(ctx context.Context, r facturacionapi.PedidoParaFacturarRequestObject) (facturacionapi.PedidoParaFacturarResponseObject, error) {
-	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/pedidos")...); err != nil {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
 		return nil, err
 	}
 	p, err := a.s.PedidoParaFacturar(ctx, r.Id.String())
@@ -430,7 +433,7 @@ func (a *API) PedidoParaFacturar(ctx context.Context, r facturacionapi.PedidoPar
 /* ----------------------------- las acciones ---------------------------- */
 
 func (a *API) FacturarPedido(ctx context.Context, r facturacionapi.FacturarPedidoRequestObject) (facturacionapi.FacturarPedidoResponseObject, error) {
-	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/pedidos")...)
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
 	if err != nil {
 		return nil, err
 	}

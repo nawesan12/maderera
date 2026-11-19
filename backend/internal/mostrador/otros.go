@@ -60,12 +60,23 @@ func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p Presupue
 			asesor, vendedor, valido, ses.UserID).Scan(&id); err != nil {
 			return err
 		}
+		// El precio del navegador se guarda como lo que se presupuestó, pero
+		// al lado queda el de la lista: pasar el presupuesto a pedido mide
+		// contra él lo que se deja de cobrar y, pasado lo libre, pide el PIN.
+		// Sin eso, «Presupuesto» en vez de «Cobrar» esquivaba el control.
+		lista, err := ListaDelCliente(ctx, tx, p.CustomerID)
+		if err != nil {
+			return err
+		}
+		if err := conPrecioDeLista(ctx, tx, p.Lineas, lista); err != nil {
+			return err
+		}
 		for i, l := range p.Lineas {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, presentacion, orden)
-				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9)`,
+				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, presentacion, orden, precio_lista)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9, $10::numeric)`,
 				id, l.VariantID, l.Descripcion, l.Unidad, jsmath.Fijo2(l.Cantidad), jsmath.Fijo2(l.PrecioUnitario),
-				jsmath.Fijo2(jsmath.Round(float64(float64(l.Cantidad*l.PrecioUnitario)*100))/100), l.Presentacion, i); err != nil {
+				jsmath.Fijo2(jsmath.Round(float64(float64(l.Cantidad*l.PrecioUnitario)*100))/100), l.Presentacion, i, fijo2ONulo(l.PrecioLista)); err != nil {
 				return err
 			}
 		}
@@ -177,7 +188,8 @@ type CobroDeCuenta struct {
 // CobrarCuenta cobra la cuenta corriente de un cliente en el mostrador con
 // cobros.EmitirRecibo (la única forma de registrar un pago): el efectivo
 // entra al turno abierto de la sucursal; sin turno, no se cobra efectivo.
-func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, sucursal, partesCrudas string) (CobroDeCuenta, error) {
+// La clave del intento hace repetible el cobro (cobros.Cobro.Clave).
+func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, sucursal, partesCrudas, clave string) (CobroDeCuenta, error) {
 	if !plataforma.UUIDValido(cliente) || !plataforma.UUIDValido(sucursal) {
 		return CobroDeCuenta{}, rechazo("Falta el cliente.")
 	}
@@ -210,9 +222,12 @@ func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, 
 		concepto := "Pago de cuenta corriente"
 		if r, err = cobros.EmitirRecibo(ctx, tx, cobros.Cobro{
 			CustomerID: &cliente, BranchID: &sucursal, Origen: "mostrador", Concepto: &concepto,
-			Partes: partes, Caja: c, UsuarioID: &ses.UserID,
+			Partes: partes, Caja: c, UsuarioID: &ses.UserID, Clave: clave,
 		}); err != nil {
 			return err
+		}
+		if r.Repetido {
+			return nil
 		}
 		_, err = cola.Encolar(ctx, sqlc.New(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})
 		return err
@@ -224,8 +239,10 @@ func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, 
 	if err != nil {
 		return CobroDeCuenta{}, err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCobrar, "cliente", cliente,
-		"Cobró la cuenta en el mostrador con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+	if !r.Repetido {
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCobrar, "cliente", cliente,
+			"Cobró la cuenta en el mostrador con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+	}
 	return CobroDeCuenta{Ok: "Recibo " + r.Numero + " por " + formato.MonedaEntera(r.Total) + ".", ReceiptID: r.ReceiptID, Numero: r.Numero}, nil
 }
 

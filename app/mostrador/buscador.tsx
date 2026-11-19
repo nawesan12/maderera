@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, PenLine, Search, Scissors } from "lucide-react";
 import { formatearPrecio } from "@/lib/formato";
+import { enterDelBuscador } from "@/lib/mostrador/atajos";
 import { leerTipeo, type LineaDeVenta } from "@/lib/mostrador/importes";
 import type { CopiaLista } from "@/lib/mostrador/offline/use-copia-local";
 import type { ResultadoDeMostrador } from "@/lib/mostrador/tipos";
@@ -34,7 +35,8 @@ export function Buscador({
   customerId: string | null;
   /** La lista de precios del cliente elegido, para buscar sin servidor. */
   listaDelCliente: string | null;
-  onElegir: (l: LineaDeVenta) => void;
+  /** Agrega la línea; con `yCobrar`, cobra apenas la línea está en la venta. */
+  onElegir: (l: LineaDeVenta, yCobrar?: boolean) => void;
   /** Abre el alta a mano con el texto que ya se tipeó. */
   onSuelta: (descripcion: string) => void;
   /** Abre el corte a medida sobre esa placa. */
@@ -135,7 +137,7 @@ export function Buscador({
    * vende entero, `Mayús + Enter` agrega la placa entera en vez de inventar
    * una presentación que el servidor después descartaría.
    */
-  function elegir(r: (typeof resultados)[number], presentacion: Presentacion = null) {
+  function elegir(r: (typeof resultados)[number], presentacion: Presentacion = null, yCobrar = false) {
     const producto = comoSeVende(r);
     const pres = presentacion && admiteMedia(producto) ? presentacion : null;
     onElegir({
@@ -144,8 +146,9 @@ export function Buscador({
       unidad: unidadDeLinea(producto),
       cantidad,
       precioUnitario: precioDeLinea(r.precio, producto, pres),
+      precioLista: precioDeLinea(r.precio, producto, pres),
       presentacion: pres,
-    });
+    }, yCobrar);
     setTexto("");
     setResultados([]);
     setMarcado(0);
@@ -179,26 +182,33 @@ export function Buscador({
             }
 
             if (e.key === "Enter") {
+              const r = visibles[elegido];
+              // La regla entera, con sus pruebas, está en `enterDelBuscador`.
+              const accion = enterDelBuscador({
+                ctrl: e.ctrlKey || e.metaKey,
+                shift: e.shiftKey,
+                alt: e.altKey,
+                texto,
+                hayResultado: Boolean(r),
+                seCorta: Boolean(r && sePuedeCortar && r.largoMm && r.anchoMm),
+                resuelto,
+              });
+              // Vacío, la tecla sigue hasta los atajos de la pantalla (cobrar).
+              if (accion.que === "soltar") return;
+              // Con algo escrito es del buscador, haga lo que haga.
               e.preventDefault();
 
-              /*
-               * Ctrl+Enter sobre una placa abre el corte a medida. Es el mismo
-               * botón «Cortar» de la lista, que hasta ahora era el único paso
-               * de la venta que obligaba al mouse.
-               */
-              const r = visibles[elegido];
-              if ((e.ctrlKey || e.metaKey) && r && sePuedeCortar && r.largoMm && r.anchoMm) {
+              if (accion.que === "cortar" && r) {
+                /*
+                 * Ctrl+Enter sobre una placa abre el corte a medida. Es el
+                 * mismo botón «Cortar» de la lista, que hasta ahora era el
+                 * único paso de la venta que obligaba al mouse.
+                 */
                 onCortar(r as ResultadoDeMostrador);
                 setTexto("");
-                return;
-              }
-
-              if (r) {
-                elegir(
-                  r,
-                  e.shiftKey ? "media_largo" : e.altKey ? "media_ancho" : null,
-                );
-              } else if (resuelto) {
+              } else if (accion.que === "agregar" && r) {
+                elegir(r, accion.media, accion.yCobrar);
+              } else if (accion.que === "aMano") {
                 /*
                  * Enter sobre algo que no está en el catálogo abre la carga a
                  * mano con ese texto. En el mostrador se tipea "corte a
@@ -209,6 +219,7 @@ export function Buscador({
                 onSuelta(consulta);
                 setTexto("");
               }
+              return;
             }
             if (e.key === "Escape") setTexto("");
           }}

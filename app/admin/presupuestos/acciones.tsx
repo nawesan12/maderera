@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { moneda } from "@/components/admin/formato";
+import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 
 export interface ZonaParaPedido {
   nombre: string;
@@ -32,8 +33,11 @@ export function AccionesPresupuesto({
   zonas,
   conCliente,
   direccion,
+  vencido = null,
   abrirPasar = false,
 }: {
+  /** Pasó su validez: al pasarlo a pedido se eligen los precios. */
+  vencido?: { totalDeHoy: number } | null;
   /** Recién guardado con «Guardar y pasar a pedido»: el paso ya abierto. */
   abrirPasar?: boolean;
   id: string;
@@ -123,11 +127,12 @@ export function AccionesPresupuesto({
         </>
       )}
 
-      {(estado === "aceptado" || decidible) && (
+      {(estado === "aceptado" || decidible || estado === "vencido") && (
         <PasarAPedido
           id={id}
           numero={numero}
           total={total}
+          vencido={vencido}
           zonas={zonas}
           conCliente={conCliente}
           direccion={direccion ?? ""}
@@ -154,12 +159,14 @@ function PasarAPedido({
   conCliente,
   direccion: direccionDelCliente,
   destacado,
+  vencido,
   abierto: abiertoDeEntrada = false,
 }: {
   abierto?: boolean;
   id: string;
   numero: string;
   total: number;
+  vencido: { totalDeHoy: number } | null;
   zonas: ZonaParaPedido[];
   conCliente: boolean;
   direccion: string;
@@ -174,6 +181,15 @@ function PasarAPedido({
   const [costo, setCosto] = useState("");
   const [medio, setMedio] = useState<Medio | null>(null);
   const [entregarEl, setEntregarEl] = useState("");
+  /*
+   * Vencido: «Actualizar» (los precios de hoy) es lo de siempre y va
+   * marcado; «Respetar» muestra lo que se deja de cobrar y, pasado lo
+   * libre, pide el PIN de un admin.
+   */
+  const [precios, setPrecios] = useState<"actualizar" | "respetar">("actualizar");
+  const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
+  const entrega = useRef<HTMLDivElement>(null);
+  const totalBase = vencido && precios === "actualizar" ? vencido.totalDeHoy : total;
 
   const medios: { valor: Medio; texto: string }[] = [
     ...MEDIOS_DEL_PEDIDO,
@@ -191,14 +207,20 @@ function PasarAPedido({
     if (z && !z.aCotizar) setCosto(String(z.costo));
   }
 
-  function pasar() {
+  function pasar(pin?: string) {
     startTransition(async () => {
       const r = await convertirEnPedido(id, {
         tipoEntrega: tipo,
         ...(tipo === "envio" ? { direccion, zona: zona || undefined, costoEnvio } : {}),
         medioPago: medio ?? undefined,
         entregarEl: entregarEl || undefined,
+        ...(vencido ? { precios } : {}),
+        ...(pin ? { pin } : {}),
       });
+      if (r.autorizacion) {
+        setPidePin(r.autorizacion);
+        return;
+      }
       if (r.error) {
         toast.error(r.error);
         return;
@@ -229,7 +251,53 @@ function PasarAPedido({
           </DialogHeader>
 
           <div className="space-y-5">
-            <div className="space-y-2">
+            {vencido && (
+              <div className="space-y-2">
+                <p className="text-base font-medium">Venció: los precios</p>
+                <div role="radiogroup" aria-label="Los precios" className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    { valor: "actualizar" as const, texto: "Actualizar", cifra: moneda.format(vencido.totalDeHoy) },
+                    {
+                      valor: "respetar" as const,
+                      texto: "Respetar",
+                      cifra: `${total - vencido.totalDeHoy < 0 ? "−" : "+"}${moneda.format(Math.abs(total - vencido.totalDeHoy))}`,
+                    },
+                  ].map((o) => (
+                    <button
+                      key={o.valor}
+                      type="button"
+                      role="radio"
+                      aria-checked={precios === o.valor}
+                      autoFocus={o.valor === "actualizar"}
+                      onClick={() => {
+                        setPrecios(o.valor);
+                        setPidePin(null);
+                      }}
+                      // Enter elige y sigue a la entrega; no crea el pedido:
+                      // con el foco puesto acá, un Enter de reflejo lo pasaba
+                      // como retiro, sin medio ni fecha, y salteaba lo que
+                      // deshabilita «Crear el pedido».
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setPrecios(o.valor);
+                          setPidePin(null);
+                          entrega.current?.querySelector<HTMLElement>("button, [role=radio]")?.focus();
+                        }
+                      }}
+                      className={`flex h-14 items-center justify-between rounded-xl border px-4 text-base font-semibold transition-colors ${
+                        precios === o.valor ? "border-accion bg-accion text-white" : "border-linea hover:bg-hundida"
+                      }`}
+                    >
+                      {o.texto}
+                      <span className="tabular">{o.cifra}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div ref={entrega} className="space-y-2">
               <p className="text-base font-medium">Entrega</p>
               <Opciones
                 etiqueta="Entrega"
@@ -305,8 +373,17 @@ function PasarAPedido({
 
             <div className="flex items-baseline justify-between border-t pt-4">
               <span className="text-base text-muted-foreground">Total del pedido</span>
-              <span className="tabular text-xl font-semibold">{moneda.format(total + costoEnvio)}</span>
+              <span className="tabular text-xl font-semibold">{moneda.format(totalBase + costoEnvio)}</span>
             </div>
+
+            {pidePin && (
+              <CampoPin
+                autorizacion={pidePin}
+                enviando={pendiente}
+                onEnviar={(pin) => pasar(pin)}
+                onCancelar={() => setPidePin(null)}
+              />
+            )}
 
             <div className="flex justify-end gap-2">
               <button
@@ -319,7 +396,7 @@ function PasarAPedido({
               <button
                 type="button"
                 disabled={pendiente || costoMal || (tipo === "envio" && !direccion.trim())}
-                onClick={pasar}
+                onClick={() => pasar()}
                 className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
               >
                 {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}

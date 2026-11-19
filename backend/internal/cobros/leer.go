@@ -102,9 +102,9 @@ func LeerPartes(crudo string) ([]Parte, string) {
 				return nil, "Poné la fecha de pago del cheque."
 			}
 			// new Date(`${v}T12:00:00`): el mediodía de ese día, acá.
-			fecha, err := time.ParseInLocation("2006-01-02T15:04:05", f+"T12:00:00", argentina)
-			if err != nil {
-				return nil, "Poné la fecha de pago del cheque."
+			fecha, ok := LeerFechaDeCheque(f)
+			if !ok {
+				return nil, "La fecha de pago del cheque no existe."
 			}
 			x.Cheque = &ChequeNuevo{Numero: numero, Banco: banco, Librador: librador, FechaPago: fecha}
 		}

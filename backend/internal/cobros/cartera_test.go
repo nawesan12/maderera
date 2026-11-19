@@ -53,13 +53,13 @@ func TestRechazarSoloDebitaElChequeQueBajoLaDeuda(t *testing.T) {
 	}
 
 	// El alta manual con cliente no se acepta; sin cliente, sí.
-	err := s.CargarCheque(ctx, ses, FormCheque{Sentido: "recibido", Numero: "55556666", Banco: "Nación", FechaPago: "2026-12-01",
+	err := s.CargarCheque(ctx, ses, FormCheque{Sentido: "recibido", Numero: "55556666", Banco: "Nación", FechaPago: time.Now().AddDate(0, 0, 10).Format("2006-01-02"),
 		Importe: "100", CustomerID: b.cliente})
 	var p *plataforma.Problema
 	if !errors.As(err, &p) || !strings.Contains(p.Errores["customerId"], "cobrándole") {
 		t.Errorf("alta con cliente: %v", err)
 	}
-	if err := s.CargarCheque(ctx, ses, FormCheque{Sentido: "recibido", Numero: "55556666", Banco: "Nación", FechaPago: "2026-12-01", Importe: "100"}); err != nil {
+	if err := s.CargarCheque(ctx, ses, FormCheque{Sentido: "recibido", Numero: "55556666", Banco: "Nación", FechaPago: time.Now().AddDate(0, 0, 10).Format("2006-01-02"), Importe: "100"}); err != nil {
 		t.Errorf("alta sin cliente: %v", err)
 	}
 }

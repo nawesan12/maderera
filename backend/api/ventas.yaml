@@ -23,7 +23,10 @@ paths:
       operationId: ListarPedidos
       parameters:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
-        - { name: estado, in: query, schema: { type: string } }
+        - name: estado
+          in: query
+          description: Un estado del pedido, o sin-cobrar en el historial (los entregados sin cobrar, el más viejo primero)
+          schema: { type: string }
         - { name: sucursal, in: query, schema: { type: string } }
         - name: vista
           in: query
@@ -52,6 +55,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FichaDePedido" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/taller:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: PedidoParaElTaller
+      summary: Lo que necesita el aserradero para cargar el corte de un pedido, sin importes ni datos de contacto
+      responses:
+        "200":
+          description: El pedido, sin plata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoParaElTaller" }
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
@@ -110,24 +127,39 @@ paths:
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
-  /api/v1/admin/pedidos/{id}/cobrado:
+  /api/v1/admin/pedidos/{id}/cobro:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
-      operationId: MarcarPedidoCobrado
+      operationId: CobrarPedido
+      summary: Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [partes]
               additionalProperties: false
               properties:
-                medioPago: { $ref: "#/components/schemas/MedioPago" }
+                partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+                clave: { type: string, maxLength: 64, description: "la del intento: un reintento devuelve el mismo recibo" }
+                branchId: { type: string, maxLength: 64, description: "un pedido sin sucursal: en qué caja entra el efectivo" }
       responses:
-        "200": { $ref: "#/components/responses/Hecho" }
+        "200":
+          description: El recibo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: string }
+                  receiptId: { type: string }
+                  aviso: { type: string }
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/presupuestos:
     get:
@@ -227,6 +259,9 @@ paths:
                 costoEnvio: { type: number, format: double, minimum: 0 }
                 medioPago: { $ref: "#/components/schemas/MedioPago" }
                 entregarEl: { type: string, description: AAAA-MM-DD }
+                precios: { type: string, enum: [actualizar, respetar], description: "para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)" }
+                pin: { type: string, maxLength: 20 }
+                ficha: { type: string, maxLength: 400 }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -329,8 +364,10 @@ components:
       type: object
       required: [id, numero, cliente, email, telefono, empresa, customerId, clienteCodigo, clienteCuit, clienteCondicionIva,
         clienteDireccion, sucursal, sucursalSlug, vendedor, estado, origen, subtotal, total, notas, asesor, validoHasta, createdAt, items,
-        pedidoId, numeroPedido]
+        pedidoId, numeroPedido, vencido, totalDeHoy]
       properties:
+        vencido: { type: boolean, description: "pasó su validez: para pasarlo a pedido hay que elegir los precios" }
+        totalDeHoy: { type: string, nullable: true, description: "el total con los precios de lista de hoy, si venció" }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
@@ -359,7 +396,7 @@ components:
     PedidoListado:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
-        total, items, customerId, createdAt, zonaEnvio]
+        total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -377,6 +414,16 @@ components:
         items: { type: integer }
         customerId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+        sinCobrar: { $ref: "#/components/schemas/SinCobrar" }
+        pagoEnRevision: { type: boolean, description: Una transferencia informada que nadie verificó todavía }
+        entregadoAt: { type: string, format: date-time, nullable: true, description: El último paso a entregado del historial }
+    SinCobrar:
+      type: number
+      format: double
+      nullable: true
+      description: >-
+        Lo que falta cobrar sin pasar por la cuenta corriente (el total menos lo cobrado en línea); null si no falta
+        nada o si la deuda está en la cuenta del cliente. La misma regla que «Me deben».
     ItemDePedido:
       type: object
       required: [id, orderId, variantId, descripcion, unidad, cantidad, precioUnitario, subtotal, presentacion, stockPorUnidad,
@@ -424,11 +471,41 @@ components:
         costo: { type: number, format: double }
         ganancia: { type: number, format: double }
         sinCosto: { type: integer }
+    PedidoParaElTaller:
+      type: object
+      description: |
+        La ficha para quien corta (el aserradero): qué y para quién, sin
+        importes, mail, teléfono, saldo, pagos ni margen. Un tipo aparte y no
+        la ficha con los importes en cero: un $0 en el papel se lee «gratis».
+      required: [id, numero, cliente, empresa, customerId, branchId, sucursal, estado, tipoEntrega, entregarEl, notas, items]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        cliente: { type: string }
+        empresa: { type: string, nullable: true }
+        customerId: { type: string, nullable: true }
+        branchId: { type: string, nullable: true }
+        sucursal: { type: string, nullable: true }
+        estado: { type: string }
+        tipoEntrega: { type: string }
+        entregarEl: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            required: [variantId, descripcion, unidad, cantidad, presentacion]
+            properties:
+              variantId: { type: string, nullable: true }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: string }
+              presentacion: { type: string, nullable: true }
     FichaDePedido:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
-        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl]
+        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -465,3 +542,4 @@ components:
         numeroPresupuesto: { type: string, nullable: true }
         saldoCliente: { type: number, format: double, nullable: true, description: Positivo, debe }
         entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }
+        sinCobrar: { $ref: "#/components/schemas/SinCobrar" }

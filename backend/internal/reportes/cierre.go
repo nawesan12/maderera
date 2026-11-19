@@ -9,7 +9,9 @@ import (
 	"mjbj/internal/cobros"
 	"mjbj/internal/compras"
 	"mjbj/internal/formato"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // El cierre del mes (lib/dal/admin/cierre-mensual.ts): los asientos del
@@ -268,17 +270,19 @@ type PendienteDelCierre struct {
 }
 
 // PendientesDelCierre es pendientesDelCierre: recepciones en borrador,
-// turnos de caja sin cerrar y recepciones sin factura de compra.
+// turnos de caja sin cerrar, recepciones sin factura de compra y ventas
+// anuladas que siguen con su factura viva.
 func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
-	var borradores, cajas, sinFactura int
+	var borradores, cajas, sinFactura, facturasVivas int
 	_, ihasta := instantes(desde, hasta)
 	err := s.lectura.QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*)::int FROM goods_receipts WHERE estado = 'borrador' AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
 		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2
-		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL))`, desde, hasta, ihasta).
-		Scan(&borradores, &cajas, &sinFactura)
+		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)),
+		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND `+fragmentos.FacturaViva+`)`, desde, hasta, ihasta).
+		Scan(&borradores, &cajas, &sinFactura, &facturasVivas)
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +298,13 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	if sinFactura > 0 {
 		out = append(out, PendienteDelCierre{"facturas", "Recepciones sin factura de compra",
 			"Entró la mercadería pero falta el papel: ese IVA todavía no se computa como crédito.", sinFactura, "/admin/compras/facturas"})
+	}
+	// Una venta anulada con CAE y sin nota de crédito sigue en el libro IVA
+	// ventas: su débito se debe aunque la venta ya no exista
+	// (mostrador.Anular no toca el comprobante, lo avisa).
+	if facturasVivas > 0 {
+		out = append(out, PendienteDelCierre{"facturas-vivas", "Ventas anuladas con factura viva",
+			"Falta la nota de crédito: su IVA sigue como débito.", facturasVivas, "/admin/facturacion?estado=" + facturacion.EstadoAnuladaViva})
 	}
 	// Los emitidos hasta el fin del mes (argentino) que ARCA todavía no
 	// autorizó: no están en el libro ni en el CSV, y si se autorizan el mes
@@ -539,7 +550,11 @@ type TotalesConIva struct {
 
 // ResumenDelMes es lo que devuelve resumenDelMes.
 type ResumenDelMes struct {
-	Ventas                 TotalesConIva `json:"ventas"`
+	Ventas TotalesConIva `json:"ventas"`
+	// Vendido: lo vendido en el mes repartido según su factura (ver
+	// vendidoDelMes). Solo para la pantalla: no va a los asientos ni a
+	// ningún archivo del contador.
+	Vendido                VendidoDelMes `json:"vendido"`
 	Compras                TotalesConIva `json:"compras"`
 	Gastos                 Totales       `json:"gastos"`
 	RetencionesPracticadas Totales       `json:"retencionesPracticadas"`
@@ -602,5 +617,59 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	r.Gastos.Total, r.RetencionesPracticadas.Total, r.RetencionesSufridas.Total = numero(g), numero(rp), numero(rs)
 	r.PosicionIva = r.Ventas.Iva - r.Compras.Iva
 	r.Iva, err = s.PosicionDeIvaDelMes(ctx, desde, hasta)
+	if err != nil {
+		return r, err
+	}
+	inicio := time.Date(desde.Year(), desde.Month(), 1, 0, 0, 0, 0, Argentina)
+	r.Vendido, err = s.vendidoDelMes(ctx, inicio, inicio.AddDate(0, 1, 0))
 	return r, err
+}
+
+// VendidoDelMes es el «Vendido sin IVA» del resultado del Cierre partido en
+// tres, que suman exacto:
+//
+//   - Facturado: los pedidos con alguna factura con CAE que no es nota de
+//     crédito, sea del mes que sea (el de octubre facturado en noviembre no
+//     es «sin factura»).
+//   - Interno: las ventas del mostrador sin ningún comprobante, el ticket
+//     interno que se elige a propósito.
+//   - SinFactura: el resto, lo que tendría que estar facturado y no lo
+//     está (los pedidos web y de presupuesto, y los del mostrador cuyo
+//     comprobante no llegó a tener CAE).
+//
+// **La misma base que el resultado.** Antes «sin factura» salía de la
+// cabecera del pedido (con envío y descuento) y «Vendido sin IVA» de los
+// renglones: en la misma pantalla, vendido $9M, facturado $6,5M y sin
+// factura $2,7M no cerraban, y el sin factura mezclaba el ticket interno
+// con lo que se olvidó facturar. Ahora las tres partes salen de los mismos
+// renglones (ventasNetas, con la misma regla del descuento) y SinFactura es
+// la resta, así el redondeo no deja un centavo suelto. «Facturado neto», la
+// tarjeta de los comprobantes, sigue siendo lo fiscal: se corta por la
+// fecha de la factura y lleva el envío.
+type VendidoDelMes struct {
+	Total      float64 `json:"total"`
+	Facturado  Totales `json:"facturado"`
+	Interno    Totales `json:"interno"`
+	SinFactura Totales `json:"sinFactura"`
+}
+
+func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) (VendidoDelMes, error) {
+	var v VendidoDelMes
+	var total, facturado, interno jsmath.Num
+	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
+	err := s.lectura.QueryRow(ctx, `
+		SELECT `+ventasNetas(conDescuento, "margenes.neto")+`,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'facturado'")+`, (count(*) FILTER (WHERE o.papel = 'facturado'))::int,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'interno'")+`, (count(*) FILTER (WHERE o.papel = 'interno'))::int,
+		  (count(*) FILTER (WHERE o.papel = 'sin-factura'))::int
+		FROM (SELECT o.id, o.total, o.subtotal, o.costo_envio,
+		        CASE WHEN EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.`+conCae+` AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'facturado'
+		             WHEN o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id) THEN 'interno'
+		             ELSE 'sin-factura' END AS papel
+		      FROM orders o WHERE o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2"),
+		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
+	v.Total = jsmath.Redondear2(total.F())
+	v.Facturado.Total, v.Interno.Total = jsmath.Redondear2(facturado.F()), jsmath.Redondear2(interno.F())
+	v.SinFactura.Total = jsmath.Redondear2(float64(v.Total-v.Facturado.Total) - v.Interno.Total)
+	return v, err
 }

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LogOut } from "lucide-react";
+import { KeyRound, LockOpen, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,18 +11,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cerrarSesion as salirDeLaApi } from "@/lib/api/salir";
+import { DialogoDestrabar } from "./dialogo-destrabar";
+import { DialogoPin } from "./dialogo-pin";
 
 export function MenuUsuario({
   nombre,
   iniciales,
   rol,
+  esAdmin = false,
 }: {
   nombre: string;
   iniciales: string;
   rol: string;
+  /** El admin carga acá el PIN con que autoriza en el mostrador. */
+  esAdmin?: boolean;
 }) {
   const router = useRouter();
   const [saliendo, setSaliendo] = useState(false);
+  const [pin, setPin] = useState(false);
+  const [destrabar, setDestrabar] = useState(false);
 
   async function cerrarSesion() {
     setSaliendo(true);
@@ -32,29 +39,45 @@ export function MenuUsuario({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-          {iniciales}
-        </span>
-        <span className="hidden text-left sm:block">
-          <span className="block text-sm font-medium leading-tight">{nombre}</span>
-          <span className="block text-sm leading-tight text-muted-foreground">
-            {rol}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+            {iniciales}
           </span>
-        </span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
-        <div className="px-2 py-1.5">
-          <p className="text-base font-medium">{nombre}</p>
-          <p className="text-sm text-muted-foreground">{rol}</p>
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={cerrarSesion} disabled={saliendo}>
-          <LogOut className="h-5 w-5" />
-          {saliendo ? "Cerrando…" : "Cerrar sesión"}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <span className="hidden text-left sm:block">
+            <span className="block text-sm font-medium leading-tight">{nombre}</span>
+            <span className="block text-sm leading-tight text-muted-foreground">
+              {rol}
+            </span>
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <div className="px-2 py-1.5">
+            <p className="text-base font-medium">{nombre}</p>
+            <p className="text-sm text-muted-foreground">{rol}</p>
+          </div>
+          <DropdownMenuSeparator />
+          {esAdmin && (
+            <DropdownMenuItem onClick={() => setPin(true)}>
+              <KeyRound className="h-5 w-5" />
+              PIN de autorización
+            </DropdownMenuItem>
+          )}
+          {esAdmin && (
+            <DropdownMenuItem onClick={() => setDestrabar(true)}>
+              <LockOpen className="h-5 w-5" />
+              Destrabar el PIN
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={cerrarSesion} disabled={saliendo}>
+            <LogOut className="h-5 w-5" />
+            {saliendo ? "Cerrando…" : "Cerrar sesión"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {esAdmin && <DialogoPin abierto={pin} alCerrar={() => setPin(false)} />}
+      {esAdmin && <DialogoDestrabar abierto={destrabar} alCerrar={() => setDestrabar(false)} />}
+    </>
   );
 }

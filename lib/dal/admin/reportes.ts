@@ -15,6 +15,7 @@ import type { CorteDelReporte } from "@/lib/reportes-cortes";
  */
 
 export type FilaDeReporte = Esquemas["ReporteFila"];
+export type ReporteDeVentas = Esquemas["ReporteDeVentas"];
 export type MesDelReporte = Esquemas["ReporteMes"];
 
 /**
@@ -40,12 +41,16 @@ function consulta(periodo: Periodo, filtros: FiltrosDeReporte) {
  */
 export { CORTES, leerCorte, type CorteDelReporte } from "@/lib/reportes-cortes";
 
-/** El reporte pedido, sin que la pantalla tenga que saber cuál es cuál. */
+/**
+ * El reporte pedido, sin que la pantalla tenga que saber cuál es cuál: las
+ * filas del corte (hasta 50 en producto, rubro y cliente) y los totales del
+ * período entero, que son los que se muestran arriba.
+ */
 export async function reporteDeVentas(
   corte: CorteDelReporte,
   periodo: Periodo,
   filtros: FiltrosDeReporte = {},
-): Promise<FilaDeReporte[]> {
+): Promise<ReporteDeVentas> {
   return datos(
     await (await api()).GET("/api/v1/admin/reportes/ventas", {
       params: { query: { corte, ...consulta(periodo, filtros) } },

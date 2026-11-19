@@ -16,7 +16,7 @@ export interface EstadoAjuste {
   ok?: string;
 }
 
-export type MotivoDeAjuste = "ingreso" | "rotura" | "conteo" | "devolucion" | "otro";
+export type MotivoDeAjuste = "ingreso" | "rotura" | "conteo" | "devolucion" | "faltante" | "correccion" | "otro";
 
 /**
  * Suma o resta `cantidad`. Con `contado`, deja el stock en ese número: la

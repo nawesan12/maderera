@@ -35,6 +35,7 @@ import (
 	"mjbj/internal/cola"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/productos"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -92,8 +93,12 @@ const consultaSaldo = `
 	    SELECT sum(di.cantidad) FROM delivery_items di
 	    JOIN deliveries d ON d.id = di.delivery_id
 	    WHERE di.order_item_id = oi.id AND d.estado <> 'anulada' %[1]s
-	  ), 0)::text
-	FROM order_items oi WHERE oi.order_id = $1 ORDER BY oi.orden`
+	  ), 0)::text,
+	  coalesce(p.unit::text, '')
+	FROM order_items oi
+	LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+	LEFT JOIN products p ON p.id = pv.product_id
+	WHERE oi.order_id = $1 ORDER BY oi.orden`
 
 func leerSaldo(ctx context.Context, db consultor, consulta string, args ...any) ([]Renglon, error) {
 	filas, err := db.Query(ctx, consulta, args...)
@@ -103,11 +108,13 @@ func leerSaldo(ctx context.Context, db consultor, consulta string, args ...any) 
 	defer filas.Close()
 	out := []Renglon{}
 	for filas.Next() {
-		var id, desc, unidad, pedido, entregado string
-		if err := filas.Scan(&id, &desc, &unidad, &pedido, &entregado); err != nil {
+		var id, desc, unidad, pedido, entregado, delProducto string
+		if err := filas.Scan(&id, &desc, &unidad, &pedido, &entregado, &delProducto); err != nil {
 			return nil, err
 		}
-		out = append(out, NuevoRenglon(id, desc, unidad, pedido, entregado))
+		r := NuevoRenglon(id, desc, unidad, pedido, entregado)
+		r.Enteros = delProducto != "" && !productos.AdmiteDecimales(delProducto)
+		out = append(out, r)
 	}
 	return out, filas.Err()
 }
@@ -257,6 +264,9 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 		control := ValidarEntrega(pendientes, f.Lineas)
 		if control.Error != "" {
 			return ErrorDeEntrega(control.Error)
+		}
+		if msj := RevisarEnteros(pendientes, control.Lineas); msj != "" {
+			return ErrorDeEntrega(msj)
 		}
 		pedido, err := pedidoBloqueado(ctx, tx, f.OrderID)
 		if err != nil {

@@ -20,7 +20,8 @@ import { saldoDeAcopio } from "@/lib/entregas";
 import { remitosDelPedido } from "@/lib/dal/admin/entregas";
 import { cortesDelPedido } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
-import { puedeEntrar } from "@/lib/roles";
+import { cobroDelPedido } from "../cobro";
+import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoManual, avisosManuales } from "@/lib/whatsapp/aviso-manual-datos";
 import type { EventoManual } from "@/lib/whatsapp/aviso-manual";
@@ -165,12 +166,8 @@ export default async function FichaPedidoPage({
               estado={pedido.estado}
               estadoPago={pedido.estadoPago}
               tipoEntrega={pedido.tipoEntrega}
-              cobroACuenta={
-                pedido.medioPago === "cuenta_corriente" && pedido.customerId
-                  ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
-                  : null
-              }
-              cobro={{ numero: pedido.numero, total: Number(pedido.total), medioPago: pedido.medioPago }}
+              cobro={usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole) ? cobroDelPedido(pedido) : null}
+              sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
             />
           </>
         }

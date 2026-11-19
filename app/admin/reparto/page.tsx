@@ -6,6 +6,8 @@ import { moneda, plural } from "@/components/admin/formato";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
 import { requireStaff } from "@/lib/dal/session";
 import { AccionesPedido } from "../pedidos/acciones";
+import { cobroDelPedido } from "../pedidos/cobro";
+import { MANEJAN_PLATA } from "@/lib/roles";
 
 export const metadata = { title: "Reparto" };
 
@@ -18,7 +20,9 @@ export const metadata = { title: "Reparto" };
  * prepara (para saber qué falta antes de salir) y lo que ya está en la calle.
  */
 export default async function RepartoPage() {
-  await requireStaff();
+  const { staffRole } = await requireStaff();
+  // El depósito reparte pero no cobra (MANEJAN_PLATA).
+  const cobra = staffRole != null && MANEJAN_PLATA.includes(staffRole);
   const pedidos = (await listarPedidos({ vista: "tablero" })).filter(
     (p) => p.tipoEntrega === "envio" && !["entregado", "cancelado"].includes(p.estado),
   );
@@ -78,15 +82,37 @@ export default async function RepartoPage() {
                     </div>
                     <span className="tabular text-base text-muted-foreground">{p.numero}</span>
                     <EtiquetaEstado estado={p.estado} contexto="pedido" />
-                    {p.estadoPago !== "pagado" && (
-                      <EtiquetaEstado estado={p.estadoPago} contexto="pago" />
+                    {/* Un solo importe por fila: lo que hay que traer de vuelta
+                        si falta cobrar, y si no, el total. En el color del
+                        texto: el pago contra entrega es lo normal en el
+                        reparto, y el rojo en todas las filas dejaba de avisar.
+                        Una transferencia informada no se reclama otra vez. */}
+                    {p.pagoEnRevision ? (
+                      <EtiquetaEstado estado="en_revision" contexto="pago" />
+                    ) : (
+                      p.sinCobrar == null &&
+                      p.estadoPago !== "pagado" && <EtiquetaEstado estado={p.estadoPago} contexto="pago" />
                     )}
-                    <span className="tabular w-28 text-right text-base font-medium">{moneda.format(p.total)}</span>
+                    <span className="tabular w-36 text-right text-base font-medium">
+                      {p.sinCobrar != null ? (
+                        <>
+                          <span className="text-sm font-normal text-muted-foreground">A cobrar </span>
+                          {moneda.format(p.sinCobrar)}
+                        </>
+                      ) : (
+                        moneda.format(p.total)
+                      )}
+                    </span>
+                    {/* Con `cobro`, el botón «Cobrar» de verdad y el diálogo de
+                        la entrega con «Cobrar y entregar»: el chofer vuelve con
+                        la plata y se anota acá. Sin eso «Me deben» crecía solo. */}
                     <AccionesPedido
                       id={p.id}
                       estado={p.estado}
                       estadoPago={p.estadoPago}
                       tipoEntrega={p.tipoEntrega}
+                      cobro={cobra && p.sinCobrar != null ? cobroDelPedido(p) : null}
+                      sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
                     />
                   </li>
                 ))}

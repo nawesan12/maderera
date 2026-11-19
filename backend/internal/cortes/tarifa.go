@@ -151,9 +151,32 @@ type MedidaDePlaca struct {
 
 func verdadero(p *float64) bool { return p != nil && *p != 0 && !math.IsNaN(*p) }
 
+// MotorMediaConSierra es el motor desde el que la media placa descuenta el
+// disco. Un trabajo guardado se arma de nuevo cada vez que se lee: si la
+// mitad cambiara para todos, uno en la máquina abriría con otro plano, uno
+// cortado mostraría una hoja que no fue, y uno vendido con N medias placas
+// podría pedir N+1. Así que la cuenta nueva vale para lo que nace con ella
+// (las tres altas guardan este motor) y lo de antes queda como nació, igual
+// que el motor de búsqueda (motor 2).
+const MotorMediaConSierra = 3
+
+// SierraDeLaMitad es el disco que se le descuenta a la media placa de un
+// trabajo guardado: el suyo desde el motor 3, ninguno antes.
+func SierraDeLaMitad(motor int32, sierra float64) float64 {
+	if motor < MotorMediaConSierra {
+		return 0
+	}
+	return sierra
+}
+
 // ResolverMedida es medidaDePlaca: lo cargado a mano, la variante o la de
 // plaza, y encima la mitad.
-func ResolverMedida(propiaLargo, propiaAncho, varianteLargo, varianteAncho *float64, mitad *string) MedidaDePlaca {
+//
+// Partir la placa es una pasada, y el disco se come su ancho: la mitad es
+// floor((entera − sierra) / 2). De una de 1220 con 3,2 mm salen dos de 608,
+// no de 610 (T4, hallazgo 23). Con sierra 0 la cuenta es la de antes, que es
+// lo que congela el golden del TS.
+func ResolverMedida(propiaLargo, propiaAncho, varianteLargo, varianteAncho *float64, mitad *string, sierra float64) MedidaDePlaca {
 	propia := verdadero(propiaLargo) && verdadero(propiaAncho)
 	variante := verdadero(varianteLargo) && verdadero(varianteAncho)
 	largo, ancho := float64(PlacaPorDefectoLargo), float64(PlacaPorDefectoAncho)
@@ -162,11 +185,14 @@ func ResolverMedida(propiaLargo, propiaAncho, varianteLargo, varianteAncho *floa
 	} else if variante {
 		largo, ancho = *varianteLargo, *varianteAncho
 	}
+	if math.IsNaN(sierra) || math.IsInf(sierra, 0) || sierra < 0 {
+		sierra = 0
+	}
 	if mitad != nil && *mitad == "ancho" {
-		largo = math.Floor(largo / 2)
+		largo = math.Floor((largo - sierra) / 2)
 	}
 	if mitad != nil && *mitad == "largo" {
-		ancho = math.Floor(ancho / 2)
+		ancho = math.Floor((ancho - sierra) / 2)
 	}
 	return MedidaDePlaca{largo, ancho, !propia && !variante, mitad}
 }

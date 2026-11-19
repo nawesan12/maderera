@@ -16,13 +16,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
-	"mjbj/internal/catalogo"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cortes"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -35,64 +37,77 @@ type Servicio struct {
 	ahora func() time.Time
 	// claveCola firma las ventas encoladas sin conexión (firma.go).
 	claveCola []byte
+	// aut es la segunda firma: el PIN de un admin (internal/autorizacion).
+	aut *autorizacion.Servicio
 }
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, log: log, ahora: time.Now}
+	return &Servicio{pool: pool, log: log, ahora: time.Now, aut: autorizacion.Nuevo(pool, log, "")}
+}
+
+// ConAutorizacion le da el servicio del PIN (con la clave de las fichas y
+// los avisos a los admins).
+func (s *Servicio) ConAutorizacion(a *autorizacion.Servicio) *Servicio {
+	s.aut = a
+	return s
 }
 
 // ResultadoVenta es lo que devuelve RegistrarVenta: la venta hecha (o la que
 // ya estaba con esa clave) o el motivo por el que no se hizo.
 type ResultadoVenta struct {
-	Ok                   bool                  `json:"ok"`
-	OrderID              string                `json:"orderId,omitempty"`
-	Numero               string                `json:"numero,omitempty"`
-	Total                float64               `json:"total"`
-	Nueva                bool                  `json:"nueva"`
-	Lineas               []ventas.LineaDeVenta `json:"lineas,omitempty"`
-	Error                string                `json:"error,omitempty"`
-	RequiereAutorizacion bool                  `json:"requiereAutorizacion,omitempty"`
+	Ok      bool                  `json:"ok"`
+	OrderID string                `json:"orderId,omitempty"`
+	Numero  string                `json:"numero,omitempty"`
+	Total   float64               `json:"total"`
+	Nueva   bool                  `json:"nueva"`
+	Lineas  []ventas.LineaDeVenta `json:"lineas,omitempty"`
+	Error   string                `json:"error,omitempty"`
+	// Autorizacion: lo que falta para cobrar, si falta el PIN de un admin.
+	Autorizacion *Autorizacion `json:"autorizacion,omitempty"`
+	// Ficha: un PIN que ya se tecleó para esta venta. Si la venta falló
+	// después por otra cosa, se reenvía con la ficha y no con el PIN.
+	Ficha string `json:"ficha,omitempty"`
+	// ClaveUsada: la misma clave llegó con otra venta adentro.
+	ClaveUsada bool `json:"-"`
+	// Lo que queda escrito con la venta.
+	DejadoDeCobrar float64 `json:"-"`
+	AutorizadoPor  string  `json:"-"`
+	BajoLista      bool    `json:"-"`
+	// CreditoSinAutorizar: lo que una venta sin conexión cargó a cuenta
+	// pasado el límite, sin PIN.
+	CreditoSinAutorizar float64 `json:"-"`
+}
+
+// Autorizacion es lo que la pantalla necesita para pedir el PIN: el motivo,
+// la cifra que se autoriza y cómo salió el último intento.
+type Autorizacion struct {
+	Motivo string  `json:"motivo"`
+	Monto  float64 `json:"monto"`
+	// Credito: lo que además pasa el límite de cuenta corriente, cuando el
+	// mismo PIN firma el precio y el crédito. El admin ve las dos cifras.
+	Credito        float64    `json:"credito,omitempty"`
+	PinIncorrecto  bool       `json:"pinIncorrecto,omitempty"`
+	BloqueadoHasta *time.Time `json:"bloqueadoHasta,omitempty"`
+	SinAdmins      bool       `json:"sinAdmins,omitempty"`
+}
+
+// faltaDeAutorizacion pasa la falta del PIN a lo que contesta la venta.
+func faltaDeAutorizacion(f *autorizacion.Falta) ResultadoVenta {
+	return ResultadoVenta{Error: f.Mensaje(), Autorizacion: &Autorizacion{
+		Motivo: string(f.Motivo), Monto: f.Monto, Credito: f.Credito, PinIncorrecto: f.PinIncorrecto, BloqueadoHasta: f.BloqueadoHasta, SinAdmins: f.SinAdmins,
+	}}
 }
 
 func fallo(m string) ResultadoVenta { return ResultadoVenta{Error: m} }
 
-// Lista es la lista de precios que le toca a un cliente (listaDelCliente).
-type Lista struct {
-	ID             *string `json:"id"`
-	GeneralID      *string `json:"generalId"`
-	FactorDerivado float64 `json:"factorDerivado"`
-}
+// Lista es la lista de precios que le toca a un cliente: vive en
+// internal/precios desde T3 (la usan también los pedidos).
+type Lista = precios.Lista
 
 // ListaDelCliente: sin cliente, la general; con cliente, la suya si tiene.
-func ListaDelCliente(ctx context.Context, c caja.Consultador, cliente *string) (Lista, error) {
-	var general *string
-	err := c.QueryRow(ctx, `SELECT id FROM price_lists WHERE is_default = true AND active = true LIMIT 1`).Scan(&general)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return Lista{}, err
-	}
-	if cliente == nil {
-		return Lista{ID: general, GeneralID: general, FactorDerivado: 1}, nil
-	}
-	var propia *string
-	var pct *jsmath.Num
-	err = c.QueryRow(ctx, `
-		SELECT c.price_list_id, l.porcentaje_sobre_general
-		FROM customers c LEFT JOIN price_lists l ON l.id = c.price_list_id
-		WHERE c.id = $1 LIMIT 1`, *cliente).Scan(&propia, &pct)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return Lista{}, err
-	}
-	l := Lista{ID: general, GeneralID: general, FactorDerivado: 1}
-	if propia != nil {
-		l.ID = propia
-		l.FactorDerivado = catalogo.FactorDeLista(pct)
-	}
-	return l, nil
-}
-
-func (l Lista) diferenciada() bool {
-	return l.ID != nil && (l.GeneralID == nil || *l.ID != *l.GeneralID)
+func ListaDelCliente(ctx context.Context, c precios.Consultador, cliente *string) (Lista, error) {
+	return precios.ListaDelCliente(ctx, c, cliente)
 }
 
 // escalas son las escalas de descuento por medio de pago activas.
@@ -117,32 +132,45 @@ func escalas(ctx context.Context, q *sqlc.Queries) ([]ventas.EscalaDePago, error
 //  2. Efectivo exige turno de caja abierto (salvo la venta diferida, que cae
 //     en el turno que la contenía, o en ninguno y se asigna a mano).
 //  3. Cuenta corriente no es un cobro: va al libro del cliente.
+//  4. Lo que queda por debajo de la lista más allá del porcentaje libre, y
+//     lo que pasa el límite de cuenta corriente, pide el PIN de un admin (T3).
+//     Una venta sin conexión ya ocurrió: no se rechaza, se marca.
 //
-// `usuario` es quien vendió.
-func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario string) (ResultadoVenta, error) {
+// `usuario` es quien vendió; `ses`, quien la manda (el PIN se pide por ella).
+func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.Sesion, usuario string) (ResultadoVenta, error) {
 	if p := ventas.RevisarVenta(v.Lineas, v.MedioPago, v.CustomerID); p != "" {
 		return fallo(p), nil
 	}
 	q := sqlc.New(s.pool)
 	ahora := s.ahora()
+	sinConexion := v.NumeroProvisorio != nil
+	huella := huellaDeVenta(v)
+
+	// Primero si ya está hecha (T3, hallazgo 39): un reintento después de
+	// llegar al límite de cuenta corriente daba «no se puede cargar» sobre una
+	// venta que ya estaba, y la factura no salía.
+	if hecha, err := ventaYaHecha(ctx, s.pool, v, huella); err != nil || hecha != nil {
+		if hecha == nil {
+			return ResultadoVenta{}, err
+		}
+		return *hecha, err
+	}
 
 	// El precio de profesional es de contado: cada medio tiene que estar
 	// permitido.
-	if v.CustomerID != nil {
-		lista, err := ListaDelCliente(ctx, s.pool, v.CustomerID)
-		if err != nil {
-			return ResultadoVenta{}, err
+	lista, err := ListaDelCliente(ctx, s.pool, v.CustomerID)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	if v.CustomerID != nil && lista.Diferenciada() {
+		medios := []string{v.MedioPago}
+		for _, p := range v.Pagos {
+			medios = append(medios, p.Medio)
 		}
-		if lista.diferenciada() {
-			medios := []string{v.MedioPago}
-			for _, p := range v.Pagos {
-				medios = append(medios, p.Medio)
-			}
-			for _, m := range medios {
-				if !ventas.MedioPermitido(m, true) {
-					return fallo("Este cliente tiene precio de profesional, que es de contado. Cobrá por " +
-						"transferencia, débito o efectivo, o pasá la venta a consumidor final."), nil
-				}
+		for _, m := range medios {
+			if !ventas.MedioPermitido(m, true) {
+				return fallo("Este cliente tiene precio de profesional, que es de contado. Cobrá por " +
+					"transferencia, débito o efectivo, o pasá la venta a consumidor final."), nil
 			}
 		}
 	}
@@ -155,6 +183,18 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 			return fallo(p), nil
 		}
 	}
+
+	// El precio de lista de cada renglón lo pone el servidor: el del
+	// navegador no se cree.
+	if err := conPrecioDeLista(ctx, s.pool, v.Lineas, lista); err != nil {
+		return ResultadoVenta{}, err
+	}
+	// Y el de las pasadas y el canto del corte, la tarifa de su placa.
+	tarifa, err := tarifaDelCorte(ctx, s.pool, v.Corte, lista)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	conTarifaDelCorte(v.Lineas, tarifa)
 
 	subtotal := ventas.TotalDeLaVenta(v.Lineas)
 
@@ -198,28 +238,98 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 	if p := ventas.RevisarPagos(pagos, total, v.CustomerID); p != "" {
 		return fallo(p), nil
 	}
+	// Contra la fecha de la venta: una de la cola con un cheque se cobró
+	// cuando se cobró.
+	momento := ahora
+	if v.CobradaAt != nil {
+		momento = ventas.FechaAcotada(*v.CobradaAt, ahora)
+	}
+	if p := ventas.RevisarFechasDeCheques(pagos, momento); p != "" {
+		return fallo(p), nil
+	}
 	medioPago := ventas.MedioPrincipal(pagos)
 	parteEfectivo := ventas.ImportePorMedio(pagos, ventas.Efectivo)
 	parteCuenta := ventas.ImportePorMedio(pagos, ventas.CuentaCorriente)
 
-	// Cuenta corriente: límite y mora, con la válvula de quien atiende.
-	// revisarLimite: si pasó sin autorización, el límite se vuelve a mirar
-	// adentro de la transacción (con el candado del cliente); si quien
-	// atiende la autorizó, no.
+	// Lo que se deja de cobrar: bajo la lista, el descuento tipeado y lo que
+	// el corte no trae. La escala automática no cuenta.
+	faltaCorte, err := s.faltaDelCorte(ctx, v, lista, tarifa)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	manual := 0.0
+	if pedido > 0 {
+		manual = descuento
+	}
+	desvio := ventas.DesvioDeLaVenta(v.Lineas, manual, faltaCorte)
+	libre, err := PorcentajeLibre(ctx, s.pool)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	pidePrecio := !desvio.DentroDeLoLibre(libre)
+
+	// Cuenta corriente: límite y mora. Pasarse lo autoriza un admin con su
+	// PIN (antes era un booleano que mandaba la pantalla). Si pasó sin
+	// autorización, el límite se vuelve a mirar adentro de la transacción
+	// (con el candado del cliente); si se autorizó, no.
 	revisarLimite := false
+	pideCredito := false
+	pasaElLimite := false
 	if parteCuenta > 0 && v.CustomerID != nil {
 		cr, err := cobros.Credito(ctx, q, *v.CustomerID, parteCuenta, ahora)
 		if err != nil {
 			return ResultadoVenta{}, err
 		}
-		if !cr.Puede && !(v.Autorizado && cr.Autorizable) {
-			m := "No se puede cargar a cuenta corriente."
-			if cr.Motivo != nil {
-				m = *cr.Motivo
+		pasaElLimite = !cr.Puede
+		// Una de la cola entra igual: ya sucedió (y queda marcada abajo).
+		if !cr.Puede && !sinConexion {
+			if !cr.Autorizable {
+				m := "No se puede cargar a cuenta corriente."
+				if cr.Motivo != nil {
+					m = *cr.Motivo
+				}
+				return fallo(m), nil
 			}
-			return ResultadoVenta{Error: m, RequiereAutorizacion: cr.Autorizable}, nil
+			pideCredito = true
 		}
 		revisarLimite = cr.Puede
+	}
+
+	// Un solo PIN autoriza la venta entera, pero con las dos cifras a la
+	// vista y en la ficha: lo que deja de cobrar y lo que pasa el límite.
+	// Antes se mostraba solo lo primero, y el admin que firmaba un redondeo
+	// de $3.000 aprobaba sin verlo un millón de deuda de un moroso.
+	//
+	// Sin conexión no se pide: se marca, las dos cosas, y se avisa en el
+	// momento (Descargar). Quien corta el wifi para no llamar al admin no
+	// se ahorra que el admin se entere.
+	var firma *autorizacion.Firma
+	bajoListaSinAutorizar := false
+	creditoSinAutorizar := 0.0
+	if sinConexion {
+		bajoListaSinAutorizar = pidePrecio
+		if pasaElLimite {
+			creditoSinAutorizar = parteCuenta
+		}
+	} else if pidePrecio || pideCredito {
+		pedidoDePIN := autorizacion.Pedido{Motivo: autorizacion.Precio, Monto: desvio.Total, Clave: v.Clave, Sucursal: v.BranchID, PIN: v.PIN, Ficha: v.Ficha}
+		switch {
+		case !pidePrecio:
+			pedidoDePIN.Motivo, pedidoDePIN.Monto = autorizacion.Credito, parteCuenta
+		case pideCredito:
+			pedidoDePIN.Credito = parteCuenta
+		}
+		firma, err = s.aut.Exigir(ctx, ses, pedidoDePIN)
+		var falta *autorizacion.Falta
+		if errors.As(err, &falta) {
+			return faltaDeAutorizacion(falta), nil
+		}
+		if err != nil {
+			return ResultadoVenta{}, err
+		}
+		if pideCredito {
+			revisarLimite = false
+		}
 	}
 
 	// El vendedor asignado a la ficha.
@@ -231,29 +341,47 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 		}
 	}
 
+	calc := ventaCalculada{
+		subtotal: subtotal, descuento: descuento, motivoAutomatico: motivoAutomatico, lineas: lineas, total: total,
+		pagos: pagos, medioPago: medioPago, parteEfectivo: parteEfectivo, parteCuenta: parteCuenta, vendedor: vendedor, ahora: ahora,
+		revisarLimite: revisarLimite, huella: huella, dejado: desvio.Total, bajoLista: bajoListaSinAutorizar,
+		creditoSinAutorizar: creditoSinAutorizar,
+	}
+	if firma != nil {
+		calc.autorizadoPor = &firma.UserID
+	}
 	var r ResultadoVenta
 	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		r, err = s.ventaEnTransaccion(ctx, tx, v, usuario, ventaCalculada{
-			subtotal: subtotal, descuento: descuento, motivoAutomatico: motivoAutomatico, lineas: lineas, total: total,
-			pagos: pagos, medioPago: medioPago, parteEfectivo: parteEfectivo, parteCuenta: parteCuenta, vendedor: vendedor, ahora: ahora,
-			revisarLimite: revisarLimite,
-		})
+		r, err = s.ventaEnTransaccion(ctx, tx, v, usuario, calc)
 		if err == nil && !r.Ok {
 			return errSinEscribir
 		}
 		return err
 	})
+	// La ficha vuelve aunque la venta se haya rechazado por otra cosa: se
+	// corrige y se reenvía sin volver a llamar al admin.
+	ficha := ""
+	if firma != nil {
+		ficha = firma.Ficha
+	}
 	if errors.Is(err, errSinEscribir) {
+		r.Ficha = ficha
 		return r, nil
 	}
 	var cobro *cobros.ErrorDeCobro
 	if errors.As(err, &cobro) {
 		// Un cheque repetido: la transacción ya volvió atrás entera.
-		return fallo(cobro.Mensaje), nil
+		r := fallo(cobro.Mensaje)
+		r.Ficha = ficha
+		return r, nil
 	}
 	if err != nil {
 		return ResultadoVenta{}, err
+	}
+	r.DejadoDeCobrar, r.BajoLista, r.CreditoSinAutorizar = desvio.Total, bajoListaSinAutorizar, creditoSinAutorizar
+	if firma != nil && (pidePrecio || pideCredito) {
+		r.AutorizadoPor = firma.Nombre
 	}
 	return r, nil
 }
@@ -273,6 +401,13 @@ type ventaCalculada struct {
 	// revisarLimite: el límite se vuelve a mirar acá adentro, con el candado
 	// del cliente (si quien atiende no autorizó pasarse).
 	revisarLimite bool
+	// Lo de T3: la huella de la venta, lo dejado de cobrar, quién lo
+	// autorizó y si es una venta sin conexión bajo la lista sin autorizar.
+	huella              string
+	dejado              float64
+	autorizadoPor       *string
+	bajoLista           bool
+	creditoSinAutorizar float64
 }
 
 func texto(s string) *string { return &s }
@@ -282,17 +417,14 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1::text))`, v.Clave); err != nil {
 		return ResultadoVenta{}, err
 	}
-	var hecha struct {
-		id, numero string
-		total      jsmath.Num
-	}
-	err := tx.QueryRow(ctx, `SELECT id, numero, total FROM orders WHERE clave_mostrador = $1 LIMIT 1`, v.Clave).
-		Scan(&hecha.id, &hecha.numero, &hecha.total)
-	if err == nil {
-		return ResultadoVenta{Ok: true, OrderID: hecha.id, Numero: hecha.numero, Total: hecha.total.F(), Nueva: false, Lineas: c.lineas}, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return ResultadoVenta{}, err
+	if hecha, err := ventaYaHecha(ctx, tx, v, c.huella); err != nil || hecha != nil {
+		if hecha == nil {
+			return ResultadoVenta{}, err
+		}
+		if hecha.Ok {
+			hecha.Lineas = c.lineas
+		}
+		return *hecha, err
 	}
 
 	// Después del «ya hecha»: una venta reenviada no se vuelve a frenar por
@@ -303,7 +435,8 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 			return ResultadoVenta{}, err
 		}
 		if motivo != "" {
-			return ResultadoVenta{Error: motivo, RequiereAutorizacion: true}, nil
+			// Se llegó al límite entre la consulta y la transacción: el PIN.
+			return ResultadoVenta{Error: motivo, Autorizacion: &Autorizacion{Motivo: string(autorizacion.Credito), Monto: c.parteCuenta}}, nil
 		}
 	}
 
@@ -316,6 +449,7 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	diferida := v.CobradaAt != nil
 
 	var sesion *string
+	turnoCerrado := false
 	if c.parteEfectivo > 0 {
 		momento := c.ahora
 		if cobrada != nil {
@@ -328,16 +462,20 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		if !hay && !diferida {
 			return fallo("No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo."), nil
 		}
-		if hay && !diferida {
+		if hay {
 			// El candado compartido frena el cierre hasta que esta venta
 			// confirme: si no, el arqueo podía hacerse sin su efectivo.
 			var estado string
 			if err := tx.QueryRow(ctx, `SELECT estado FROM cash_sessions WHERE id = $1 FOR SHARE`, turno).Scan(&estado); err != nil {
 				return ResultadoVenta{}, err
 			}
-			if estado != "abierta" {
+			if estado != "abierta" && !diferida {
 				return fallo("La caja se acaba de cerrar. Abrila antes de cobrar en efectivo."), nil
 			}
+			// Una venta de la cola que llega con su turno ya arqueado entra
+			// como tardía (con la hora de llegada): con la de la venta
+			// cambiaba la diferencia de un cierre ya contado (T3, hallazgo 9).
+			turnoCerrado = estado != "abierta"
 		}
 		if hay {
 			sesion = &turno
@@ -374,14 +512,15 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	err = tx.QueryRow(ctx, `
 		INSERT INTO orders (numero, clave_mostrador, numero_provisorio, cobrada_at, sincronizada_at, created_at,
 		                    customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen, tipo_entrega,
-		                    subtotal, descuento, descuento_motivo, total, medio_pago, estado_pago, seller_id, notas, created_by_user_id)
+		                    subtotal, descuento, descuento_motivo, total, medio_pago, estado_pago, seller_id, notas, created_by_user_id,
+		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar)
 		VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), $7, $8, $9, $10, $11, 'mostrador', 'retiro',
-		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20)
+		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric)
 		RETURNING id`,
 		numero, v.Clave, v.NumeroProvisorio, v.CobradaAt, sincronizada, cobrada,
 		v.CustomerID, v.ContactoNombre, v.ContactoTelefono, v.BranchID, estado,
 		jsmath.Fijo2(c.subtotal), jsmath.Fijo2(c.descuento), motivo, jsmath.Fijo2(c.total), c.medioPago, estadoPago,
-		c.vendedor, v.Notas, usuario).Scan(&pedido)
+		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar)).Scan(&pedido)
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
@@ -461,11 +600,11 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
-			                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden)
-			VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12)`,
+			                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista)
+			VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $13::numeric)`,
 			pedido, l.VariantID, l.Descripcion, l.Unidad, jsmath.Fijo2(l.Cantidad), jsmath.Fijo2(l.PrecioUnitario),
 			jsmath.Fijo2(ventas.ACentavos(float64(l.Cantidad*l.PrecioUnitario))), factores[i].Presentacion,
-			jsmath.Texto(factores[i].StockPorUnidad), costo, alicuota, i); err != nil {
+			jsmath.Texto(factores[i].StockPorUnidad), costo, alicuota, i, fijo2ONulo(l.PrecioLista)); err != nil {
 			return ResultadoVenta{}, err
 		}
 	}
@@ -481,10 +620,14 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 
 	if sesion != nil && c.parteEfectivo > 0 {
 		// Al cajón entra solo la parte en efectivo, con la fecha de la venta.
+		creado, declarado := cobrada, (*time.Time)(nil)
+		if turnoCerrado {
+			creado, declarado = nil, cobrada
+		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO cash_movements (session_id, tipo, monto, motivo, order_id, creado_por, created_at)
-			VALUES ($1, 'venta', $2::numeric, $3, $4, $5, coalesce($6, now()))`,
-			*sesion, jsmath.Fijo2(c.parteEfectivo), numero, pedido, usuario, cobrada); err != nil {
+			INSERT INTO cash_movements (session_id, tipo, monto, motivo, order_id, creado_por, created_at, declarado_at)
+			VALUES ($1, 'venta', $2::numeric, $3, $4, $5, coalesce($6, now()), $7)`,
+			*sesion, jsmath.Fijo2(c.parteEfectivo), numero, pedido, usuario, creado, declarado); err != nil {
 			return ResultadoVenta{}, err
 		}
 	}
@@ -602,12 +745,12 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, pedido, usuari
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO cutting_orders (numero, customer_id, order_id, contacto_nombre, branch_id, variant_id, material_descripcion,
 		                            placa_largo_mm, placa_ancho_mm, mitad, placas, pasadas, canto_descripcion, acomodo_manual,
-		                            ancho_sierra_mm, estado, created_by_user_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::numeric, 'en-cola', $16)
+		                            ancho_sierra_mm, estado, created_by_user_id, motor_plano)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::numeric, 'en-cola', $16, $17)
 		RETURNING id`,
 		numero, v.CustomerID, pedido, v.ContactoNombre, v.BranchID, k.VariantID, k.MaterialDescripcion,
 		k.PlacaLargoMm, k.PlacaAnchoMm, k.Mitad, k.Placas, k.Pasadas, k.CantoDescripcion, k.AcomodoManual,
-		jsmath.Texto(sierra), usuario).Scan(&corte); err != nil {
+		jsmath.Texto(sierra), usuario, int32(cortes.MotorMediaConSierra)).Scan(&corte); err != nil {
 		return err
 	}
 	for i, p := range k.Piezas {

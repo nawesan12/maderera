@@ -14,6 +14,7 @@ import {
   metrosDePiezas,
 } from "@/lib/unidades";
 import { formatearUnidad } from "@/lib/formato";
+import { avisoDelAjuste, MOTIVOS_QUE_RESTAN, MOTIVOS_QUE_SUMAN, teclaDelAjuste } from "@/lib/stock-ajuste";
 import { ajustarStock, type MotivoDeAjuste } from "./ajuste-actions";
 
 /**
@@ -32,6 +33,7 @@ import { ajustarStock, type MotivoDeAjuste } from "./ajuste-actions";
  */
 export function AjusteRapido({
   variantId,
+  producto,
   branchSlug,
   sucursal,
   unidad,
@@ -39,6 +41,8 @@ export function AjusteRapido({
   actual,
 }: {
   variantId: string;
+  /** El nombre de la fila, para el aviso: con dos ajustes seguidos se deshacía el que no era. */
+  producto: string;
   branchSlug: string;
   sucursal: string;
   unidad: string;
@@ -58,10 +62,56 @@ export function AjusteRapido({
       const resultado = await ajustarStock(variantId, branchSlug, cantidad, extra);
       if (resultado.error) toast.error(resultado.error);
       else {
-        if (resultado.ok) toast.success(resultado.ok);
+        if (resultado.ok) avisarConDeshacer(resultado.ok, cantidad, extra);
         alTerminar?.();
         router.refresh();
       }
+    });
+  }
+
+  /*
+   * Cada ajuste se puede deshacer desde el aviso (T4, hallazgo 21).
+   *
+   * Deshacer **no borra** el movimiento: asienta el inverso con motivo
+   * «Corrección», y el libro dice las dos cosas, que es lo que pasó. Diez
+   * segundos y no los seis de siempre: el que ajusta suele estar atendiendo a
+   * alguien. Sirve una sola vez —un doble toque no asienta dos inversos— y,
+   * si en el medio se vendió y el inverso dejaría el stock en negativo, lo
+   * que vuelve es el error de Go, a la vista.
+   *
+   * Un conteo no se deshace: su inverso sería «volver a contar lo de antes»,
+   * y si en el medio se vendió algo, eso pisaría la venta con un número viejo
+   * de la pantalla. Se cuenta de nuevo.
+   */
+  function avisarConDeshacer(
+    mensaje: string,
+    cantidad: number,
+    extra?: { contado?: number; motivo?: MotivoDeAjuste },
+  ) {
+    const titulo = avisoDelAjuste(producto, mensaje);
+    if (extra?.contado !== undefined || cantidad === 0) {
+      toast.success(titulo);
+      return;
+    }
+    let usado = false;
+    toast.success(titulo, {
+      duration: 10_000,
+      classNames: { title: "text-base", actionButton: "!h-10 !px-4 !text-base !font-semibold" },
+      action: {
+        label: "Deshacer",
+        onClick: () => {
+          if (usado) return;
+          usado = true;
+          startTransition(async () => {
+            const r = await ajustarStock(variantId, branchSlug, -cantidad, { motivo: "correccion" });
+            if (r.error) toast.error(r.error, { duration: 10_000 });
+            else {
+              if (r.ok) toast.success(avisoDelAjuste(producto, r.ok));
+              router.refresh();
+            }
+          });
+        },
+      },
     });
   }
 
@@ -69,21 +119,22 @@ export function AjusteRapido({
   const paso = unidad === "placa" ? 0.5 : 1;
   const nombrePaso = paso === 1 ? "uno" : "media";
 
+  // De 44 px y separados: de 36 y pegados, el + caía en el − con el dedo.
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-2">
       <button
         onClick={() => ajustar(-paso)}
         disabled={pendiente}
-        className="flex h-9 min-w-9 items-center justify-center rounded-md border px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+        className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
         aria-label={`Restar ${nombrePaso} en ${sucursal}`}
       >
         <Minus className="h-4 w-4" />
-        {paso !== 1 && <span className="tabular text-sm">½</span>}
+        {paso !== 1 && <span className="text-sm">media</span>}
       </button>
       <button
         onClick={() => ajustar(paso)}
         disabled={pendiente}
-        className="flex h-9 min-w-9 items-center justify-center rounded-md border px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+        className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
         aria-label={`Sumar ${nombrePaso} en ${sucursal}`}
       >
         {pendiente ? (
@@ -91,7 +142,7 @@ export function AjusteRapido({
         ) : (
           <Plus className="h-4 w-4" />
         )}
-        {paso !== 1 && <span className="tabular text-sm">½</span>}
+        {paso !== 1 && <span className="text-sm">media</span>}
       </button>
 
       <CargaPorMedida
@@ -113,13 +164,6 @@ export function AjusteRapido({
  * que se contó, y la cuenta a metros la hace el sistema a la vista. Se puede
  * pasar a metros sueltos para un recorte que no es una pieza entera.
  */
-const MOTIVOS: { valor: MotivoDeAjuste; texto: string }[] = [
-  { valor: "ingreso", texto: "Ingreso" },
-  { valor: "rotura", texto: "Rotura" },
-  { valor: "devolucion", texto: "Devolución" },
-  { valor: "otro", texto: "Otro" },
-];
-
 function CargaPorMedida({
   unidad,
   largoMm,
@@ -144,7 +188,6 @@ function CargaPorMedida({
   const [texto, setTexto] = useState("");
   // Sumar y restar, o contar: dejar el número que hay en el estante.
   const [modo, setModo] = useState<"mover" | "contar">("mover");
-  const [motivo, setMotivo] = useState<MotivoDeAjuste>("ingreso");
   const enteros = !admiteDecimales(unidad);
 
   const valor = leerCantidad(texto);
@@ -164,9 +207,11 @@ function CargaPorMedida({
     setAbierto(false);
   };
 
-  function cargar(signo: 1 | -1) {
-    if (cantidad <= 0 || decimalMal) return;
-    onCargar(signo * cantidad, listo, { motivo: signo === 1 && motivo === "rotura" ? "otro" : motivo });
+  const sePuedeMover = !pendiente && cantidad > 0 && !decimalMal;
+
+  function cargar(signo: 1 | -1, motivo: MotivoDeAjuste) {
+    if (!sePuedeMover) return;
+    onCargar(signo * cantidad, listo, { motivo });
   }
 
   function contar() {
@@ -183,7 +228,7 @@ function CargaPorMedida({
         <Ruler className="h-4 w-4" />
         Cargar
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 gap-3 p-4">
+      <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] gap-3 p-4">
         <p className="text-base font-medium">
           {sucursal} · hay <span className="tabular">{formatearCantidad(actual)}</span>
         </p>
@@ -244,11 +289,12 @@ function CargaPorMedida({
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (modo === "contar") contar();
-                else cargar(e.shiftKey ? -1 : 1);
-              }
+              // La regla, con su prueba, en `teclaDelAjuste`.
+              const accion = teclaDelAjuste(e, modo);
+              if (accion === null) return;
+              e.preventDefault();
+              if (accion === "contar") contar();
+              else if (accion === "ingreso") cargar(1, "ingreso");
             }}
             className="tabular mt-1 block h-11 w-full rounded-md border bg-background px-3 text-lg text-foreground"
             placeholder={porPiezas && largoMm ? "12" : enteros ? "200" : "3,5"}
@@ -284,41 +330,12 @@ function CargaPorMedida({
 
         {modo === "mover" ? (
           <>
-            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Por qué">
-              {MOTIVOS.map((m) => (
-                <button
-                  key={m.valor}
-                  type="button"
-                  role="radio"
-                  aria-checked={motivo === m.valor}
-                  onClick={() => setMotivo(m.valor)}
-                  className={`h-8 rounded-full px-3 text-sm ${
-                    motivo === m.valor ? "bg-foreground text-background" : "bg-hundida text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {m.texto}
-                </button>
-              ))}
+            {/* Sin cantidad los chips están apagados: tocar «Rotura» antes de
+                poner el número no puede descontar nada. */}
+            <div className="space-y-2">
+              <FilaDeMotivos signo={1} motivos={MOTIVOS_QUE_SUMAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
+              <FilaDeMotivos signo={-1} motivos={MOTIVOS_QUE_RESTAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => cargar(-1)}
-                disabled={pendiente || cantidad <= 0 || decimalMal}
-                className="h-10 rounded-md border text-base transition-colors hover:bg-muted disabled:opacity-50"
-              >
-                Restar
-              </button>
-              <button
-                type="button"
-                onClick={() => cargar(1)}
-                disabled={pendiente || cantidad <= 0 || decimalMal}
-                className="h-10 rounded-md bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
-              >
-                {pendiente ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Sumar"}
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground">Enter suma · Mayús + Enter resta</p>
           </>
         ) : (
           <button
@@ -332,5 +349,45 @@ function CargaPorMedida({
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Una fila de motivos: el signo adelante y un chip por motivo, que ejecuta. */
+function FilaDeMotivos({
+  signo,
+  motivos,
+  habilitado,
+  pendiente,
+  onElegir,
+}: {
+  signo: 1 | -1;
+  motivos: { valor: MotivoDeAjuste; texto: string }[];
+  habilitado: boolean;
+  pendiente: boolean;
+  onElegir: (signo: 1 | -1, motivo: MotivoDeAjuste) => void;
+}) {
+  const Signo = signo === 1 ? Plus : Minus;
+  return (
+    <div className="flex items-center gap-2" role="group" aria-label={signo === 1 ? "Suma" : "Resta"}>
+      <Signo className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      {motivos.map((m, i) => (
+        <button
+          key={m.valor}
+          type="button"
+          onClick={() => onElegir(signo, m.valor)}
+          disabled={!habilitado}
+          className={`inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md text-base font-medium transition-colors disabled:opacity-40 ${
+            signo === 1 && i === 0
+              ? "bg-accion text-white hover:bg-brand-orange-dark"
+              : "border hover:bg-muted"
+          }`}
+        >
+          {pendiente && signo === 1 && i === 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : m.texto}
+          {signo === 1 && i === 0 && !pendiente && (
+            <kbd className="rounded border border-current px-1 text-[11px] font-medium opacity-70">Enter</kbd>
+          )}
+        </button>
+      ))}
+    </div>
   );
 }

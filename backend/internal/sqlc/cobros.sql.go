@@ -486,8 +486,8 @@ func (q *Queries) CrearParteDeRecibo(ctx context.Context, arg CrearParteDeRecibo
 }
 
 const crearRecibo = `-- name: CrearRecibo :one
-INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id)
-VALUES ($1, $2, $3, $4, $8::text::numeric, $5, $6, $7)
+INSERT INTO receipts (numero, customer_id, recibido_de, branch_id, total, origen, concepto, created_by_user_id, order_id, clave, huella)
+VALUES ($1, $2, $3, $4, $11::text::numeric, $5, $6, $7, $8, $9, $10)
 RETURNING id
 `
 
@@ -499,6 +499,9 @@ type CrearReciboParams struct {
 	Origen          OrigenRecibo `json:"origen"`
 	Concepto        *string      `json:"concepto"`
 	CreatedByUserID *string      `json:"createdByUserId"`
+	OrderID         *string      `json:"orderId"`
+	Clave           *string      `json:"clave"`
+	Huella          *string      `json:"huella"`
 	Total           string       `json:"total"`
 }
 
@@ -511,6 +514,9 @@ func (q *Queries) CrearRecibo(ctx context.Context, arg CrearReciboParams) (strin
 		arg.Origen,
 		arg.Concepto,
 		arg.CreatedByUserID,
+		arg.OrderID,
+		arg.Clave,
+		arg.Huella,
 		arg.Total,
 	)
 	var id string
@@ -809,16 +815,43 @@ func (q *Queries) PedidoParaCobrar(ctx context.Context, id string) (PedidoParaCo
 	return i, err
 }
 
+const reciboPorClave = `-- name: ReciboPorClave :one
+SELECT id, numero, total::float8 AS total, coalesce(huella, '') AS huella, account_movement_id
+FROM receipts WHERE clave = $1
+`
+
+type ReciboPorClaveRow struct {
+	ID                string  `json:"id"`
+	Numero            string  `json:"numero"`
+	Total             float64 `json:"total"`
+	Huella            string  `json:"huella"`
+	AccountMovementID *string `json:"accountMovementId"`
+}
+
+func (q *Queries) ReciboPorClave(ctx context.Context, clave *string) (ReciboPorClaveRow, error) {
+	row := q.db.QueryRow(ctx, reciboPorClave, clave)
+	var i ReciboPorClaveRow
+	err := row.Scan(
+		&i.ID,
+		&i.Numero,
+		&i.Total,
+		&i.Huella,
+		&i.AccountMovementID,
+	)
+	return i, err
+}
+
 const reciboPorID = `-- name: ReciboPorID :one
-SELECT id, numero, customer_id, total, estado FROM receipts WHERE id = $1
+SELECT id, numero, customer_id, total, estado, account_movement_id FROM receipts WHERE id = $1
 `
 
 type ReciboPorIDRow struct {
-	ID         string       `json:"id"`
-	Numero     string       `json:"numero"`
-	CustomerID *string      `json:"customerId"`
-	Total      jsmath.Num   `json:"total"`
-	Estado     EstadoRecibo `json:"estado"`
+	ID                string       `json:"id"`
+	Numero            string       `json:"numero"`
+	CustomerID        *string      `json:"customerId"`
+	Total             jsmath.Num   `json:"total"`
+	Estado            EstadoRecibo `json:"estado"`
+	AccountMovementID *string      `json:"accountMovementId"`
 }
 
 func (q *Queries) ReciboPorID(ctx context.Context, id string) (ReciboPorIDRow, error) {
@@ -830,6 +863,7 @@ func (q *Queries) ReciboPorID(ctx context.Context, id string) (ReciboPorIDRow, e
 		&i.CustomerID,
 		&i.Total,
 		&i.Estado,
+		&i.AccountMovementID,
 	)
 	return i, err
 }

@@ -4,12 +4,13 @@ import { Banknote, Store } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { sucursalesConCaja, turnosCerrados } from "@/lib/dal/admin/caja";
 import {
+  anulacionesPorPersona,
   emitidoPorCaja,
   listarCajasFisicas,
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
-import { formatearMonto, haceCuanto } from "@/lib/formato";
+import { formatearMonto, haceCuanto, plural } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
@@ -39,6 +40,9 @@ export const metadata: Metadata = { title: "Caja" };
  */
 const ZONA = "America/Argentina/Buenos_Aires";
 
+/** El día argentino de un instante, para comparar dos. */
+const diaArgentino = (d: Date) => d.toLocaleDateString("es-AR", { timeZone: ZONA });
+
 /** Cómo se lee cada medio en el cierre. */
 const MEDIOS: Record<string, string> = {
   efectivo: "Efectivo",
@@ -61,12 +65,17 @@ export default async function CajaPage({
   const periodo = leerPeriodoMensual(crudo, new Date());
   const pagina = leerPagina(paginaCruda);
 
-  const [sucursales, turnosDelMes, cajas, sueltas, emitido] = await Promise.all([
+  // Las anulaciones del mes por quien las hizo, la que más anuló primero.
+  // Las cuenta Go por la fecha de la anulación: sumarlas acá sobre lo
+  // emitido, que llega cortado en 200 y por la fecha de la venta, perdía las
+  // de la primera quincena.
+  const [sucursales, turnosDelMes, cajas, sueltas, emitido, anulaciones] = await Promise.all([
     sucursalesConCaja(),
     turnosCerrados(periodo.clave, pagina, POR_PAGINA),
     listarCajasFisicas(),
     ventasSinCaja(),
     emitidoPorCaja(periodo.clave),
+    anulacionesPorPersona(periodo.clave),
   ]);
 
   /*
@@ -214,13 +223,29 @@ export default async function CajaPage({
                         >
                           {diferencia === null ? "—" : formatearMonto(diferencia)}
                         </span>
-                        {/* El esperado cambió después del arqueo: entró una
-                            venta hecha sin conexión que pertenecía a este
-                            turno. La diferencia de esa noche se calculó contra
-                            otro número, y eso hay que poder verlo. */}
+                        {/* Lo que llegó de la cola después del arqueo —una
+                            venta o un retiro sin conexión de este turno— va
+                            aparte y no cambia la diferencia de esa noche. Un
+                            retiro tardío se lee en rojo: es plata que salió
+                            de una caja ya contada. */}
                         {t.tardios > 0 && (
-                          <span className="mt-0.5 block text-sm text-muted-foreground">
-                            +{t.tardios} después del cierre
+                          <span
+                            className={`tabular mt-0.5 block text-sm ${t.tardiosMonto < 0 ? "text-saldo-debe" : "text-muted-foreground"}`}
+                          >
+                            {t.tardios} tarde · {formatearMonto(t.tardiosMonto)}
+                          </span>
+                        )}
+                        {/* Las ventas sin conexión del turno que pasaron lo
+                            libre o el límite de cuenta corriente sin PIN: ya
+                            pasaron, se ven en rojo. */}
+                        {t.bajoLista > 0 && (
+                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
+                            {t.bajoLista} sin conexión bajo la lista · {formatearMonto(t.bajoListaMonto)}
+                          </span>
+                        )}
+                        {t.creditoSinAutorizar > 0 && (
+                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
+                            {t.creditoSinAutorizar} sin conexión a cuenta pasado el límite · {formatearMonto(t.creditoSinAutorizarMonto)}
                           </span>
                         )}
                       </td>
@@ -284,6 +309,20 @@ export default async function CajaPage({
           <h2 className="text-base font-semibold">
             Emitido en el mostrador
           </h2>
+          {/* Quién anuló y cuánto, sin contar a ojo: cinco anulaciones por
+              semana de la misma persona se ven acá antes que en la bitácora. */}
+          {anulaciones.length > 0 && (
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-base text-muted-foreground [font-variant-numeric:tabular-nums]">
+              {anulaciones.map((a) => (
+                <li key={a.quien}>
+                  {a.quien} · {plural(a.cantidad, "anulada")} · {formatearMonto(a.total)}
+                  {a.devuelto > 0 && (
+                    <span className="estado-problema font-medium"> · {formatearMonto(a.devuelto)} del cajón</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {emitido.length === 0 ? (
@@ -313,7 +352,10 @@ export default async function CajaPage({
               </thead>
               <tbody className="divide-y divide-linea">
                 {emitido.map((v) => (
-                  <tr key={v.orderId}>
+                  // La anulada se apaga y se tacha, y no se confunde con una
+                  // venta válida; el rojo queda para la palabra «Anulada» y la
+                  // factura que sigue viva.
+                  <tr key={v.orderId} className={v.anulada ? "bg-hundida/60 text-muted-foreground" : ""}>
                     <td className="tabular px-5 py-3 text-muted-foreground">
                       {v.createdAt.toLocaleDateString("es-AR", { timeZone: ZONA })}
                       <span className="block text-sm">
@@ -342,11 +384,40 @@ export default async function CajaPage({
                       {v.operadora ?? "—"}
                       <span className="block text-sm">{v.sucursal ?? ""}</span>
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
-                      {formatearMonto(Number(v.total))}
-                      {v.medioPago && (
-                        <span className="block text-sm font-normal text-muted-foreground">
+                    <td className="px-5 py-3 text-right">
+                      <span className={`tabular font-semibold ${v.anulada ? "line-through decoration-2" : ""}`}>
+                        {formatearMonto(Number(v.total))}
+                      </span>
+                      {v.medioPago && !v.anulada && (
+                        <span className="block text-sm text-muted-foreground">
                           {MEDIOS[v.medioPago] ?? v.medioPago}
+                        </span>
+                      )}
+                      {v.anulada && (
+                        <span className="block text-sm">
+                          <span className="estado-problema font-semibold">Anulada</span>
+                          {[
+                            v.anuladaPor,
+                            // Con fecha si no es del día de la venta: una del
+                            // lunes anulada el sábado parecía anulada en el acto.
+                            v.anuladaAt &&
+                              (diaArgentino(v.anuladaAt) === diaArgentino(v.createdAt)
+                                ? v.anuladaAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: ZONA })
+                                : v.anuladaAt.toLocaleString("es-AR", {
+                                    day: "numeric",
+                                    month: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    timeZone: ZONA,
+                                  })),
+                            v.motivo,
+                          ]
+                            .filter(Boolean)
+                            .map((t) => ` · ${t}`)
+                            .join("")}
+                          {v.facturaViva && (
+                            <span className="estado-problema block font-semibold">factura sin nota de crédito</span>
+                          )}
                         </span>
                       )}
                     </td>

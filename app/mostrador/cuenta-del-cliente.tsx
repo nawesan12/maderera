@@ -97,6 +97,9 @@ export function CobroDeCuenta({
   debe: number;
   onCerrar: () => void;
 }) {
+  // Una por cobro (el diálogo nace al abrirse): si se pierde la respuesta y
+  // se aprieta otra vez, Go devuelve el mismo recibo.
+  const [clave] = useState(() => crypto.randomUUID());
   const [estado, accion, pendiente] = useActionState(
     async (previo: EstadoCobroDeCuenta, formData: FormData) => {
       const r = await cobrarCuentaEnMostrador(previo, formData);
@@ -141,6 +144,7 @@ export function CobroDeCuenta({
         >
           <input type="hidden" name="customerId" value={cliente.id} />
           <input type="hidden" name="branchId" value={branchId} />
+          <input type="hidden" name="clave" value={clave} />
           <CobroMultimedio aCobrar={debe} />
           {estado.error && (
             <p role="alert" className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base">

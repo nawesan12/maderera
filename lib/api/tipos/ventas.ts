@@ -38,6 +38,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pedidos/{id}/taller": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Lo que necesita el aserradero para cargar el corte de un pedido, sin importes ni datos de contacto */
+        get: operations["PedidoParaElTaller"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pedidos/{id}/avanzar": {
         parameters: {
             query?: never;
@@ -94,7 +113,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/pedidos/{id}/cobrado": {
+    "/api/v1/admin/pedidos/{id}/cobro": {
         parameters: {
             query?: never;
             header?: never;
@@ -105,7 +124,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["MarcarPedidoCobrado"];
+        /** Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal */
+        post: operations["CobrarPedido"];
         delete?: never;
         options?: never;
         head?: never;
@@ -274,6 +294,10 @@ export interface components {
             alicuotaIva: string | null;
         };
         FichaDePresupuesto: {
+            /** @description pasó su validez: para pasarlo a pedido hay que elegir los precios */
+            vencido: boolean;
+            /** @description el total con los precios de lista de hoy, si venció */
+            totalDeHoy: string | null;
             id: string;
             numero: string;
             cliente: string;
@@ -322,7 +346,20 @@ export interface components {
             customerId: string | null;
             /** Format: date-time */
             createdAt: string;
+            sinCobrar: components["schemas"]["SinCobrar"];
+            /** @description Una transferencia informada que nadie verificó todavía */
+            pagoEnRevision: boolean;
+            /**
+             * Format: date-time
+             * @description El último paso a entregado del historial
+             */
+            entregadoAt: string | null;
         };
+        /**
+         * Format: double
+         * @description Lo que falta cobrar sin pasar por la cuenta corriente (el total menos lo cobrado en línea); null si no falta nada o si la deuda está en la cuenta del cliente. La misma regla que «Me deben».
+         */
+        SinCobrar: number | null;
         ItemDePedido: {
             id: string;
             orderId: string;
@@ -366,6 +403,31 @@ export interface components {
             ganancia: number;
             sinCosto: number;
         };
+        /**
+         * @description La ficha para quien corta (el aserradero): qué y para quién, sin
+         *     importes, mail, teléfono, saldo, pagos ni margen. Un tipo aparte y no
+         *     la ficha con los importes en cero: un $0 en el papel se lee «gratis».
+         */
+        PedidoParaElTaller: {
+            id: string;
+            numero: string;
+            cliente: string;
+            empresa: string | null;
+            customerId: string | null;
+            branchId: string | null;
+            sucursal: string | null;
+            estado: string;
+            tipoEntrega: string;
+            entregarEl: string | null;
+            notas: string | null;
+            items: {
+                variantId: string | null;
+                descripcion: string;
+                unidad: string;
+                cantidad: string;
+                presentacion: string | null;
+            }[];
+        };
         FichaDePedido: {
             id: string;
             numero: string;
@@ -406,6 +468,7 @@ export interface components {
             saldoCliente: number | null;
             /** @description AAAA-MM-DD */
             entregarEl: string | null;
+            sinCobrar: components["schemas"]["SinCobrar"];
         };
     };
     responses: {
@@ -439,6 +502,7 @@ export interface operations {
         parameters: {
             query?: {
                 busqueda?: string;
+                /** @description Un estado del pedido, o sin-cobrar en el historial (los entregados sin cobrar, el más viejo primero) */
                 estado?: string;
                 sucursal?: string;
                 /** @description tablero: lo que está en curso más lo entregado o cancelado en la última semana. historial: lo cerrado, de a 50 (pagina), con desde y hasta. Sin vista, todo (como antes). */
@@ -484,6 +548,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FichaDePedido"];
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+        };
+    };
+    PedidoParaElTaller: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pedido, sin plata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PedidoParaElTaller"];
                 };
             };
             401: components["responses"]["Problema"];
@@ -560,7 +649,7 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
-    MarcarPedidoCobrado: {
+    CobrarPedido: {
         parameters: {
             query?: never;
             header?: never;
@@ -569,18 +658,36 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": {
-                    medioPago?: components["schemas"]["MedioPago"];
+                    /** @description el JSON de las partes, como lo arma el formulario */
+                    partes: string;
+                    /** @description la del intento: un reintento devuelve el mismo recibo */
+                    clave?: string;
+                    /** @description un pedido sin sucursal: en qué caja entra el efectivo */
+                    branchId?: string;
                 };
             };
         };
         responses: {
-            200: components["responses"]["Hecho"];
+            /** @description El recibo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                        receiptId?: string;
+                        aviso?: string;
+                    };
+                };
+            };
             401: components["responses"]["Problema"];
             403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+            409: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
         };
     };
@@ -716,6 +823,13 @@ export interface operations {
                     medioPago?: components["schemas"]["MedioPago"];
                     /** @description AAAA-MM-DD */
                     entregarEl?: string;
+                    /**
+                     * @description para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)
+                     * @enum {string}
+                     */
+                    precios?: "actualizar" | "respetar";
+                    pin?: string;
+                    ficha?: string;
                 };
             };
         };

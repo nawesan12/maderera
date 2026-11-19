@@ -317,6 +317,10 @@ export function FormularioRecepcion({
                     l.costoActual > 0 &&
                     nuevo > 0 &&
                     (nuevo / l.costoActual > 2 || nuevo / l.costoActual < 0.5);
+                  // A $0 se puede (una bonificación del proveedor), pero se ve
+                  // mientras se tipea: un cero deja el costo promedio en cero
+                  // y la venta sale con margen del 100 %.
+                  const enCero = l.costoUnitario !== "" && nuevo === 0;
 
                   return (
                     <tr key={l.variantId}>
@@ -354,7 +358,10 @@ export function FormularioRecepcion({
                           onChange={(e) =>
                             cambiar(i, "costoUnitario", e.target.value)
                           }
-                          className="tabular h-10 w-32 rounded-lg border border-linea bg-background px-2 text-right text-base"
+                          aria-label={`Costo de ${l.descripcion}`}
+                          className={`tabular h-10 w-32 rounded-lg border bg-background px-2 text-right text-base ${
+                            enCero ? "estado-problema border-[var(--estado-acento)] font-semibold" : "border-linea"
+                          }`}
                         />
                       </td>
                       <td className="px-4 py-2.5 text-right">

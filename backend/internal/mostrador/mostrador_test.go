@@ -239,7 +239,10 @@ func TestVentaEnLineaYAnulacion(t *testing.T) {
 		VALUES ('factura_b', 3, 1, 'emitida', 'Consumidor final', 81000.9, $1)`, pedido); err != nil {
 		t.Fatal(err)
 	}
-	st, m, _ = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "Se equivocó de medida"})
+	// Una venta en efectivo pide el PIN aunque sea propia y recién hecha: la
+	// devolución sale del cajón (revisión de T3).
+	e.conPIN(t)
+	st, m, _ = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "Se equivocó de medida", "pin": pinDeLaDuena})
 	if st != 200 || m["ok"] != "Venta anulada." || m["facturaPendiente"] == nil || m["facturaSinCae"] != true {
 		t.Fatalf("anular: %d %v", st, m)
 	}
@@ -305,7 +308,13 @@ func TestVentaPartidaACuentaYMedia(t *testing.T) {
 		t.Fatalf("profesional: %v", m)
 	}
 	// Anular la venta a cuenta: la deuda se cancela con una nota de crédito.
-	if st, m, _ := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 {
+	// Sin caja abierta la venta no es del turno: el vendedor necesita el PIN
+	// (T3) y la anula un admin.
+	if st, m, _ := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 || m["autorizacion"] == nil {
+		t.Fatalf("anular sin turno: %d %v", st, m)
+	}
+	adm := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
+	if st, m, _ := pedir(t, adm, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 || m["ok"] != "Venta anulada." {
 		t.Fatalf("anular: %d %v", st, m)
 	}
 	if d := e.num(t, `select sum(monto)::float8 from account_movements where customer_id = $1`, e.cliente); d != 0 {
@@ -590,6 +599,11 @@ func TestPresupuestoYCobroDeCuenta(t *testing.T) {
 	}
 	if s := e.txt(t, `select total::text || ' ' || origen || ' ' || estado from quotes where id = $1`, m["quoteId"]); s != "135001.50 mostrador enviado" {
 		t.Fatalf("presupuesto: %q", s)
+	}
+	// Al lado del precio presupuestado queda el de la lista: al pasarlo a
+	// pedido se mide contra él lo dejado de cobrar.
+	if s := e.txt(t, `select precio_lista::text from quote_items where quote_id = $1`, m["quoteId"]); s != "45000.50" {
+		t.Errorf("precio de lista del presupuesto: %q", s)
 	}
 	// Nace enviado: deja el aviso del presupuesto armado en la cola.
 	if n := e.num(t, `select count(*)::float8 from trabajos where tipo = 'presupuesto.enviado' and carga->>'quoteId' = $1`, m["quoteId"]); n != 1 {

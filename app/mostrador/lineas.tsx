@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import { formatearMonto, formatearUnidad } from "@/lib/formato";
-import type { LineaDeVenta } from "@/lib/mostrador/importes";
+import { esLineaDelCorte, type LineaDeVenta } from "@/lib/mostrador/importes";
 import { enfocar } from "./atajos";
 
 /** Agrega una línea, o suma la cantidad si esa medida ya está en la venta. */
@@ -22,10 +23,13 @@ export function Lineas({
   lineas,
   onCambiar,
   onLimpiar,
+  onNoVaciar,
 }: {
   lineas: LineaDeVenta[];
   onCambiar: (l: LineaDeVenta[]) => void;
   onLimpiar: () => void;
+  /** Se arrepintió de vaciar: el cursor vuelve al buscador. */
+  onNoVaciar: () => void;
 }) {
   if (lineas.length === 0) {
     return (
@@ -47,81 +51,243 @@ export function Lineas({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-linea bg-card">
-      <div className="flex items-center justify-between border-b border-linea px-4 py-2.5">
+      <div className="flex min-h-14 items-center justify-between border-b border-linea px-4 py-2">
         <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           {lineas.length} {lineas.length === 1 ? "producto" : "productos"}
         </span>
-        <button
-          onClick={onLimpiar}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-          Vaciar
-        </button>
+        <Vaciar onVaciar={onLimpiar} onNoVaciar={onNoVaciar} />
+      </div>
+
+      {/* Los rótulos de las dos cajas, a la vista: eran iguales y sin
+          nombre, y un Tab de más dejaba la placa a $3. */}
+      <div className="flex items-center gap-3 px-4 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="flex-1" />
+        <span className="w-24 text-right">Cant.</span>
+        <span className="w-3" />
+        <span className="w-32 text-right">Precio</span>
+        <span className="w-32" />
+        <span className="w-8" />
       </div>
 
       <ul className="min-h-0 flex-1 divide-y divide-linea overflow-y-auto">
-        {lineas.map((l, i) => (
-          <li key={`${l.variantId ?? "suelta"}-${i}`} className="flex items-center gap-3 px-4 py-3">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-base font-medium">{l.descripcion}</span>
-              <span className="block text-sm text-muted-foreground">
-                {l.presentacion ? "cada media placa" : `por ${formatearUnidad(l.unidad)}`}
+        {lineas.map((l, i) => {
+          // Cambiado a mano respecto de la lista: en naranja, con la lista
+          // tachada al lado. Quien mira la pantalla ve qué se tocó.
+          const tocado = l.precioLista != null && Math.abs(l.precioLista - l.precioUnitario) > 0.005;
+          // El corte se lee por su importe: la cantidad es de pasadas y el
+          // nombre, de piezas (ver esLineaDelCorte). Se corrige reabriéndolo.
+          const delCorte = esLineaDelCorte(l);
+          return (
+            <li key={`${l.variantId ?? "suelta"}-${i}`} className="flex items-center gap-3 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-base font-medium">{l.descripcion}</span>
+                <span className="block text-sm text-muted-foreground">
+                  {delCorte
+                    ? "del plano"
+                    : l.presentacion
+                      ? "cada media placa"
+                      : `por ${formatearUnidad(l.unidad)}`}
+                </span>
               </span>
-            </span>
 
-            <label className="shrink-0">
-              <span className="sr-only">Cantidad de {l.descripcion}</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={l.cantidad}
-                onChange={(e) => cambiar(i, "cantidad", Number(e.target.value))}
-                /* F2 cae en la cantidad de la última línea cargada, que es la
-                   que se acaba de equivocar. Las de más arriba se corrigen con
-                   el mouse o con Tab. */
-                data-foco={i === lineas.length - 1 ? "cantidad" : undefined}
-                onKeyDown={(e) => {
-                  // Corregida la cantidad, el foco vuelve solo al buscador:
-                  // lo que sigue es cargar el próximo producto.
-                  if (e.key === "Enter" || e.key === "Escape") {
-                    e.preventDefault();
-                    enfocar("buscador");
-                  }
-                }}
-                className="tabular h-11 w-24 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
-              />
-            </label>
+              {delCorte ? (
+                <span aria-hidden className="w-[16.25rem] shrink-0" />
+              ) : (
+                <>
+                  <label className="shrink-0">
+                    <span className="sr-only">Cantidad de {l.descripcion}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={l.cantidad}
+                      onChange={(e) => cambiar(i, "cantidad", Number(e.target.value))}
+                      // La ruedita del mouse cambiaba el número sin que nadie lo
+                      // notara: se suelta el foco y la página sigue scrolleando.
+                      onWheel={(e) => e.currentTarget.blur()}
+                      /* F2 cae en la cantidad de la última línea cargada, que es la
+                         que se acaba de equivocar. Las de más arriba se corrigen con
+                         el mouse o con Tab. */
+                      data-foco={i === lineas.length - 1 ? "cantidad" : undefined}
+                      onKeyDown={(e) => {
+                        // Corregida la cantidad, el foco vuelve solo al buscador:
+                        // lo que sigue es cargar el próximo producto.
+                        if (e.key === "Enter" || e.key === "Escape") {
+                          // Ctrl+Enter no se cancela: sigue hasta la pantalla y
+                          // cobra, con la cantidad ya corregida (se guardó al
+                          // tipearla). Cancelada, el atajo la ignoraba.
+                          if (!(e.key === "Enter" && (e.ctrlKey || e.metaKey))) e.preventDefault();
+                          enfocar("buscador");
+                        }
+                      }}
+                      className="tabular h-11 w-24 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+                    />
+                  </label>
 
-            <span className="text-muted-foreground">×</span>
+                  <span className="w-3 text-center text-muted-foreground">×</span>
 
-            <label className="shrink-0">
-              <span className="sr-only">Precio de {l.descripcion}</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={l.precioUnitario}
-                onChange={(e) => cambiar(i, "precioUnitario", Number(e.target.value))}
-                className="tabular h-11 w-32 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
-              />
-            </label>
+                  <label className="relative shrink-0">
+                    <span className="sr-only">Precio de {l.descripcion}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={l.precioUnitario}
+                      onChange={(e) => cambiar(i, "precioUnitario", Number(e.target.value))}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      aria-describedby={tocado ? `lista-${i}` : undefined}
+                      className={`tabular h-11 w-32 rounded-lg border bg-background px-2.5 text-right text-base ${
+                        tocado ? "border-brand-orange font-semibold text-brand-orange" : "border-linea"
+                      }`}
+                    />
+                    {tocado && (
+                      <span
+                        id={`lista-${i}`}
+                        className="tabular absolute -bottom-4 right-1 text-xs text-muted-foreground line-through"
+                      >
+                        {formatearMonto(l.precioLista!)}
+                      </span>
+                    )}
+                  </label>
+                </>
+              )}
 
-            <span className="tabular w-32 shrink-0 text-right text-lg font-semibold">
-              {formatearMonto(l.cantidad * l.precioUnitario)}
-            </span>
+              <span className="tabular w-32 shrink-0 text-right text-lg font-semibold">
+                {formatearMonto(l.cantidad * l.precioUnitario)}
+              </span>
 
-            <button
-              onClick={() => onCambiar(lineas.filter((_, j) => j !== i))}
-              aria-label={`Quitar ${l.descripcion}`}
-              className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </li>
-        ))}
+              <button
+                onClick={() => onCambiar(lineas.filter((_, j) => j !== i))}
+                aria-label={`Quitar ${l.descripcion}`}
+                className="w-8 shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          );
+        })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Si «Vaciar» se desarma porque el foco se fue. Solo cuando se fue a otro
+ * elemento: Safari (Mac y iPad) no le da foco a un botón al tocarlo, y el
+ * blur de «No» llega sin destino justo cuando se aprieta el «Vaciar» rojo.
+ * Desarmar ahí lo hacía desaparecer antes del clic, y la venta no se vaciaba
+ * nunca. Un toque afuera lo desarma por su lado (pointerdown en el documento).
+ */
+export function desarmaAlPerderFoco(
+  grupo: { contains(n: unknown): boolean },
+  destino: unknown,
+): boolean {
+  return destino != null && !grupo.contains(destino);
+}
+
+/** Lo que el «Vaciar» de la pregunta no cuenta: el segundo toque de un toque repetido. */
+export const GUARDA_DE_VACIAR_MS = 700;
+
+/**
+ * «Vaciar», en dos pasos y en el mismo lugar.
+ *
+ * Un toque tiraba la venta entera (T4, hallazgo 20). El primero pregunta, ahí
+ * mismo, con dos botones del tamaño de los demás; el segundo vacía. Sin
+ * temporizador: una pregunta que se va sola es mala con el teclado, y con la
+ * cola enfrente nadie la lee a tiempo. Se desarma con Esc, con «No», al irse
+ * el foco a otro elemento y con un toque afuera: un Enter que caiga después
+ * en el botón no puede vaciar.
+ *
+ * «No» queda donde estaba «Vaciar» y el rojo a su izquierda: el que toca, no
+ * ve reacción y vuelve a tocar en el mismo lugar cae en lo seguro. Y el rojo
+ * no cuenta durante GUARDA_DE_VACIAR_MS, por el doble toque que igual lo
+ * alcance.
+ *
+ * Los dos botones no toman el foco con el mouse (preventDefault en el
+ * mousedown): el foco se queda en «No» y el blur no desarma en pleno clic.
+ *
+ * Se eligió esto antes que un «Deshacer»: deshacer obliga a guardar y
+ * devolver los dieciséis estados de la venta, y es fácil devolver la mitad.
+ */
+function Vaciar({ onVaciar, onNoVaciar }: { onVaciar: () => void; onNoVaciar: () => void }) {
+  const [armado, setArmado] = useState(false);
+  const desde = useRef(0);
+  const grupo = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!armado) return;
+    function afuera(e: PointerEvent) {
+      if (grupo.current && !grupo.current.contains(e.target as Node)) setArmado(false);
+    }
+    document.addEventListener("pointerdown", afuera);
+    return () => document.removeEventListener("pointerdown", afuera);
+  }, [armado]);
+
+  function armar() {
+    desde.current = Date.now();
+    setArmado(true);
+  }
+
+  function no() {
+    setArmado(false);
+    onNoVaciar();
+  }
+
+  if (!armado) {
+    return (
+      <button
+        type="button"
+        onClick={armar}
+        className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
+      >
+        <X className="h-3.5 w-3.5" />
+        Vaciar
+      </button>
+    );
+  }
+
+  return (
+    <div
+      ref={grupo}
+      role="group"
+      aria-label="¿Vaciar la venta?"
+      className="flex items-center gap-2"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          no();
+        }
+      }}
+      onBlur={(e) => {
+        if (desarmaAlPerderFoco(e.currentTarget, e.relatedTarget)) setArmado(false);
+      }}
+    >
+      <span className="text-base font-semibold">¿Vaciar?</span>
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => {
+          if (Date.now() - desde.current < GUARDA_DE_VACIAR_MS) return;
+          setArmado(false);
+          onVaciar();
+        }}
+        className="h-10 rounded-lg bg-destructive px-4 text-base font-semibold text-white transition-colors hover:bg-destructive/90"
+      >
+        Vaciar
+      </button>
+      <button
+        type="button"
+        // El foco cae en «No»: un Enter de más deja la venta como estaba.
+        autoFocus
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={no}
+        className="h-10 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+      >
+        No
+      </button>
     </div>
   );
 }

@@ -209,3 +209,38 @@ export function textoDelPedido(grupos: GrupoDelMensaje[], enlace: string): strin
   );
   return ["Hola! Quería pedir este corte:", bloques.join("\n\n"), enlace].join("\n");
 }
+
+/** Una medida tipeada: «605», «60,5» o «60.5». Lo que no es número da 0. */
+function medidaTipeada(v: string | number): number {
+  const n = typeof v === "number" ? v : Number(String(v).trim().replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * Abajo de esto, el lado más largo de todo el despiece parece en centímetros.
+ * En cm ningún número pasa de lo que mide la placa (275 de una 2750, 244 de
+ * una 2440); en mm, casi todo despiece tiene algo de 30 cm o más.
+ */
+export const SOSPECHA_DE_CM = 300;
+
+/**
+ * Si el despiece parece cargado en centímetros.
+ *
+ * Pasa en el sitio y en el mostrador: el carpintero dice «60 por 40» y se
+ * tipea 60 × 40, que en milímetros es un taco (T4, hallazgo 22). Se mira el
+ * despiece entero: si **su lado más largo** mide menos de 300, se pregunta
+ * antes de mandar.
+ *
+ * La primera regla —todas las piezas de menos de 10 cm por lado— dejaba
+ * pasar el error más común: un placard en cm tiene laterales de 180 y con
+ * uno solo de un metro ya no se preguntaba nada (comité de T4). Un falso
+ * aviso, en un despiece real en mm todo chico, cuesta un toque, y se pregunta
+ * una sola vez por armado. Pedir decimales, como proponía otra revisión, no
+ * sirve: en cm el caso típico es 60 × 40, sin decimales.
+ */
+export function medidasSospechosas(piezas: { largo: string | number; ancho: string | number }[]): boolean {
+  const cargadas = piezas
+    .map((p) => ({ largo: medidaTipeada(p.largo), ancho: medidaTipeada(p.ancho) }))
+    .filter((p) => p.largo > 0 && p.ancho > 0);
+  return cargadas.length > 0 && Math.max(...cargadas.map((p) => Math.max(p.largo, p.ancho))) < SOSPECHA_DE_CM;
+}

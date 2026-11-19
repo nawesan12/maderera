@@ -228,27 +228,81 @@ type ResultadoDiferido struct {
 
 // MovimientoDiferido es el ingreso o retiro que esperó en la cola: cae en el
 // turno que estaba abierto cuando pasó, y la clave lo hace repetible.
+//
+// **Con el turno ya cerrado no cambia su arqueo** (T3, hallazgo 9). Entraba
+// con la hora declarada, antes del cierre, así que no contaba como tardío y
+// achicaba el faltante de una caja ya contada: un retiro con fecha vieja
+// borraba la plata que faltaba. Ahora entra con la hora en que llegó (y se
+// ve como tardío, aparte de la diferencia del cierre) y la hora declarada
+// queda en declarado_at.
+//
+// Con el turno abierto, un retiro que deja el cajón por debajo de la base no
+// se rechaza —la plata ya salió, sin conexión no se pudo frenar— pero queda
+// marcado (bajo_la_base). Los dos casos van a la bitácora.
 func (s *Servicio) MovimientoDiferido(ctx context.Context, ses *auth.Sesion, m MovimientoDiferido) (map[string]any, error) {
-	momento := ventas.FechaAcotada(m.HechoAt, s.ahora())
-	turno, hay, err := caja.TurnoQueContiene(ctx, s.pool, m.BranchID, momento)
-	if err != nil {
-		return nil, err
-	}
-	if !hay {
-		return map[string]any{"error": "sin_turno", "detalle": "No había ninguna caja abierta en ese momento."}, nil
-	}
+	ahora := s.ahora()
+	momento := ventas.FechaAcotada(m.HechoAt, ahora)
 	monto := m.Monto
 	if m.Tipo == "retiro" {
 		monto = -m.Monto
 	}
-	tag, err := s.pool.Exec(ctx, `
-		INSERT INTO cash_movements (session_id, tipo, monto, motivo, clave, creado_por, created_at)
-		VALUES ($1, $2, $3::numeric, $4, $5, $6, $7)
-		ON CONFLICT (clave) DO NOTHING`, turno, m.Tipo, f2(monto), zodjs.TrimJS(m.Motivo), m.Clave, ses.UserID, momento)
+	var turno string
+	var nuevo, cerrado, bajoLaBase bool
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var hay bool
+		var err error
+		turno, hay, err = caja.TurnoQueContiene(ctx, tx, m.BranchID, momento)
+		if err != nil || !hay {
+			return err
+		}
+		// El turno bloqueado: un cierre a la vez con este movimiento.
+		var estado string
+		var base jsmath.Num
+		if err := tx.QueryRow(ctx, `
+			SELECT s.estado, b.fondo_base FROM cash_sessions s JOIN branches b ON b.id = s.branch_id
+			WHERE s.id = $1 FOR UPDATE OF s`, turno).Scan(&estado, &base); err != nil {
+			return err
+		}
+		cerrado = estado != "abierta"
+		creado, declarado := momento, (*time.Time)(nil)
+		if cerrado {
+			creado, declarado = ahora, &momento
+		} else if m.Tipo == "retiro" && base.F() > 0 {
+			var enCaja jsmath.Num
+			if err := tx.QueryRow(ctx, `SELECT coalesce(sum(monto), 0) FROM cash_movements WHERE session_id = $1`, turno).Scan(&enCaja); err != nil {
+				return err
+			}
+			bajoLaBase = enCaja.F()-m.Monto < base.F()
+		}
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO cash_movements (session_id, tipo, monto, motivo, clave, creado_por, created_at, declarado_at, bajo_la_base)
+			VALUES ($1, $2, $3::numeric, $4, $5, $6, $7, $8, $9)
+			ON CONFLICT (clave) DO NOTHING`, turno, m.Tipo, f2(monto), zodjs.TrimJS(m.Motivo), m.Clave, ses.UserID, creado, declarado, bajoLaBase)
+		nuevo = err == nil && tag.RowsAffected() > 0
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"ok": true, "nuevo": tag.RowsAffected() > 0, "sessionId": turno}, nil
+	if turno == "" {
+		return map[string]any{"error": "sin_turno", "detalle": "No había ninguna caja abierta en ese momento."}, nil
+	}
+	if nuevo && (cerrado || bajoLaBase) {
+		verbo := "Ingreso"
+		if m.Tipo == "retiro" {
+			verbo = "Retiro"
+		}
+		hora := momento.In(caja.Argentina).Format("02/01 15:04")
+		desc := verbo + " sin conexión de $" + f2(m.Monto) + " (" + hora + ")"
+		if cerrado {
+			desc += " llegó con la caja ya cerrada: queda como tardío y no cambia el arqueo"
+		} else {
+			desc += " dejó el cajón por debajo de la base de cambio"
+		}
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "caja", turno, desc+": "+zodjs.TrimJS(m.Motivo),
+			map[string]any{"declaradoAt": momento, "tardio": cerrado, "bajoLaBase": bajoLaBase})
+	}
+	return map[string]any{"ok": true, "nuevo": nuevo, "sessionId": turno}, nil
 }
 
 var _ = time.Now

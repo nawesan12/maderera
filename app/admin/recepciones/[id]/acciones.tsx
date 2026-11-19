@@ -15,13 +15,19 @@ import {
  * Confirmar pide un segundo clic porque mueve el costo promedio y eso no se
  * puede deshacer: anular después saca el stock y **deja el costo como quedó**.
  * Un botón que hace algo irreversible tiene que costar más que un botón que no.
+ *
+ * `enCero`: los renglones a $0. El servidor no los rechaza (una bonificación
+ * del proveedor puede venir a cero), pero el segundo clic los repite en el
+ * color de problema: un cero deja el costo promedio en cero para siempre.
  */
 export function AccionesDeRecepcion({
   id,
   estado,
+  enCero = 0,
 }: {
   id: string;
   estado: string;
+  enCero?: number;
 }) {
   const router = useRouter();
   const [resultado, setResultado] = useState<EstadoRecepcion>({});
@@ -47,6 +53,11 @@ export function AccionesDeRecepcion({
             <p className="min-w-0 flex-1 text-base">
               Entra el stock, se mezcla el costo promedio y sube la deuda.{" "}
               <strong>El costo no se puede revertir.</strong>
+              {enCero > 0 && (
+                <strong className="estado-problema mt-1 block">
+                  {enCero === 1 ? "1 renglón a $0" : `${enCero} renglones a $0`}
+                </strong>
+              )}
             </p>
             <button
               type="button"

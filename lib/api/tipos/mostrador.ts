@@ -273,6 +273,11 @@ export interface components {
             /** Format: double */
             precioUnitario: number;
             presentacion?: string | null;
+            /**
+             * Format: double
+             * @description el de la lista del cliente
+             */
+            precioLista?: number | null;
         };
         MostradorResultadoVenta: {
             ok: boolean;
@@ -283,7 +288,29 @@ export interface components {
             nueva: boolean;
             lineas?: components["schemas"]["MostradorLinea"][];
             error?: string;
-            requiereAutorizacion?: boolean;
+            autorizacion?: components["schemas"]["MostradorAutorizacion"];
+            /** @description un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha */
+            ficha?: string;
+        };
+        /** @description Hace falta el PIN de un administrador (internal/autorizacion) */
+        MostradorAutorizacion: {
+            /** @enum {string} */
+            motivo: "precio" | "credito" | "anular" | "presupuesto";
+            /**
+             * Format: double
+             * @description lo que se autoriza (lo dejado de cobrar
+             */
+            monto: number;
+            /**
+             * Format: double
+             * @description con motivo precio
+             */
+            credito?: number;
+            pinIncorrecto?: boolean;
+            /** Format: date-time */
+            bloqueadoHasta?: string;
+            /** @description ningún admin cargó su PIN */
+            sinAdmins?: boolean;
         };
         /** @description Lo que Next necesita para emitir el comprobante (facturación sigue en TS) */
         MostradorFiscalPendiente: {
@@ -425,6 +452,11 @@ export interface components {
             listaGeneral: string | null;
             /** Format: double */
             fondoBase: number;
+            /**
+             * Format: double
+             * @description lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)
+             */
+            descuentoLibrePct: number;
         };
     };
     responses: {
@@ -554,20 +586,29 @@ export interface operations {
             content: {
                 "application/json": {
                     motivo: string;
+                    /**
+                     * @description false: el cliente se la llevó y el stock no vuelve (pide el PIN)
+                     * @default true
+                     */
+                    volvioLaMercaderia?: boolean;
+                    pin?: string;
+                    ficha?: string;
                 };
             };
         };
         responses: {
-            /** @description Anulada; si tenía factura, cuál espera su nota de crédito */
+            /** @description Anulada (y si tenía factura, cuál espera su nota de crédito), o el PIN que falta */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        ok: string;
+                        ok?: string;
                         facturaPendiente?: string;
                         facturaSinCae?: boolean;
+                        error?: string;
+                        autorizacion?: components["schemas"]["MostradorAutorizacion"];
                     };
                 };
             };
@@ -759,6 +800,8 @@ export interface operations {
                     branchId: string;
                     /** @description el JSON de las partes, como lo arma el formulario */
                     partes: string;
+                    /** @description la del intento: un reintento devuelve el mismo recibo */
+                    clave?: string;
                 };
             };
         };

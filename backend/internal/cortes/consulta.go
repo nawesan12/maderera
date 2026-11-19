@@ -158,7 +158,7 @@ func (s *Servicio) GuardarConsulta(ctx context.Context, m map[string]any, ip str
 		if unidades > MaximoDePiezas {
 			return "", error422(fmt.Sprintf("Son demasiadas piezas para calcular acá (el máximo es %d). Pedinos el despiece por WhatsApp y lo armamos nosotros.", MaximoDePiezas))
 		}
-		medida := ResolverMedida(nil, nil, &placa.LargoMm, &placa.AnchoMm, mitad)
+		medida := ResolverMedida(nil, nil, &placa.LargoMm, &placa.AnchoMm, mitad, sierra)
 		plano := CalcularPlano(DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra})
 		if n := len(plano.NoEntran); n == 1 {
 			return "", cual(i, "Hay una pieza que no entra en la placa. Revisá esa medida.")

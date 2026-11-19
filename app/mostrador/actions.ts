@@ -8,6 +8,7 @@ import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
 import type { CorteDeMostrador, ResultadoDeMostrador } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta, MedioDeMostrador, PagoDeVenta } from "@/lib/mostrador/importes";
+import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 
 /*
  * Las acciones del mostrador. La venta, la anulación, la caja, el buscador,
@@ -31,10 +32,16 @@ export interface EstadoMostrador {
    */
   avisoFiscal?: string;
   /**
-   * La venta se frenó por cuenta corriente, pero se puede confirmar igual.
-   * La pantalla reenvía la misma venta con `autorizado`.
+   * Falta el PIN de un admin: lo que se deja de cobrar pasa lo libre, la
+   * cuenta corriente pasa el límite, o la anulación no es del vendedor. La
+   * pantalla muestra el campo del PIN y reenvía lo mismo.
    */
-  requiereAutorizacion?: boolean;
+  autorizacion?: Autorizacion;
+  /**
+   * Un PIN ya tecleado para esta venta: si después falló por otra cosa, se
+   * reenvía con la ficha y no hace falta volver a llamar al admin.
+   */
+  ficha?: string;
 }
 
 /** Lo que manda la pantalla para cobrar (lo valida Go con el esquema de siempre). */
@@ -53,8 +60,10 @@ export interface VentaDelMostrador {
   descuento?: number;
   descuentoMotivo?: string | null;
   notas?: string | null;
-  autorizado?: boolean;
   corte?: CorteDeMostrador;
+  /** El PIN de un admin, o la ficha de un PIN anterior para esta venta. */
+  pin?: string;
+  ficha?: string;
 }
 
 function refrescar() {
@@ -107,21 +116,28 @@ export async function cobrarVenta(venta: VentaDelMostrador): Promise<EstadoMostr
   if (!r.data) return error(r);
   const resultado = r.data;
   if (!resultado.ok) {
-    return { error: resultado.error, requiereAutorizacion: resultado.requiereAutorizacion };
+    return {
+      error: resultado.error,
+      autorizacion: resultado.autorizacion as Autorizacion | undefined,
+      ficha: resultado.ficha,
+    };
   }
   // El seguimiento de este número tiene que existir aunque alguien lo haya
   // pedido antes (ver `avisarPedidoNuevo`).
   if (resultado.nueva) avisarPedidoNuevo(resultado.numero!);
 
   /*
-   * El comprobante va acá, fuera de la transacción de la venta y solo si la
-   * venta es nueva. La plata ya está en la caja: si ARCA no contesta, queda una
-   * venta sin comprobante —que se resuelve después desde Facturación— y no una
-   * venta deshecha, que no se resuelve nunca.
+   * El comprobante va acá, fuera de la transacción de la venta. También si la
+   * venta ya estaba (un reintento después de un corte: la respuesta se
+   * perdió entre la venta y la factura, y la factura no salía nunca). Emitir
+   * es idempotente: una venta, un comprobante; el «ya tiene» no es un aviso.
+   * La plata ya está en la caja: si ARCA no contesta, queda una venta sin
+   * comprobante —que se resuelve después desde Facturación— y no una venta
+   * deshecha, que no se resuelve nunca.
    */
   let avisoFiscal: string | undefined;
   let invoiceId: string | undefined;
-  if (venta.comprobante === "fiscal" && resultado.nueva) {
+  if (venta.comprobante === "fiscal") {
     const fiscal = await emitirParaLaVenta({
       orderId: resultado.orderId!,
       customerId: venta.customerId,
@@ -131,7 +147,8 @@ export async function cobrarVenta(venta: VentaDelMostrador): Promise<EstadoMostr
       lineas: (resultado.lineas ?? []) as LineaDeVenta[],
       usuarioId: usuario.userId,
     });
-    avisoFiscal = fiscal.autorizado ? undefined : fiscal.aviso;
+    const yaEstaba = !resultado.nueva && fiscal.aviso?.startsWith("Esa venta ya tiene el comprobante");
+    avisoFiscal = fiscal.autorizado || yaEstaba ? undefined : fiscal.aviso;
     invoiceId = fiscal.invoiceId;
   }
 
@@ -260,14 +277,23 @@ export async function emitirPresupuestoDeMostrador(presupuesto: {
 /**
  * Anula una venta del mostrador. Si la venta tenía factura, esto **no** emite
  * la nota de crédito: avisa que hace falta. Sin CAE no hay nota posible (Go
- * la rechaza): esa factura se da de baja, o la serie la mandaría a ARCA.
+ * la rechaza): esa factura se da de baja, o la serie la mandaría a ARCA. Una
+ * venta ajena, de otro turno, ya cobrada o cuya mercadería no vuelve pide el
+ * PIN de un admin.
  */
-export async function anularVenta(orderId: string, motivo: string): Promise<EstadoMostrador> {
+export async function anularVenta(
+  orderId: string,
+  motivo: string,
+  opciones: { volvioLaMercaderia: boolean; pin?: string },
+): Promise<EstadoMostrador> {
   const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/anular", {
     params: { path: { id: orderId } },
-    body: { motivo },
+    body: { motivo, volvioLaMercaderia: opciones.volvioLaMercaderia, ...(opciones.pin ? { pin: opciones.pin } : {}) },
   });
   if (!r.data) return error(r);
+  if (r.data.autorizacion) {
+    return { error: r.data.error, autorizacion: r.data.autorizacion as Autorizacion };
+  }
   refrescar();
   return {
     ok: r.data.ok,
@@ -305,7 +331,11 @@ export async function cobrarCuentaEnMostrador(
   const branchId = (formData.get("branchId") as string | null) ?? "";
   const r = await (await api()).POST("/api/v1/mostrador/clientes/{id}/cobro", {
     params: { path: { id: customerId || "-" } },
-    body: { branchId, partes: (formData.get("partes") as string | null) ?? "" },
+    body: {
+      branchId,
+      partes: (formData.get("partes") as string | null) ?? "",
+      clave: (formData.get("clave") as string | null) || undefined,
+    },
   });
   if (!r.data) return error(r);
   revalidatePath("/admin/clientes");

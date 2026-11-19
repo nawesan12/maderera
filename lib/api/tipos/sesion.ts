@@ -75,6 +75,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sesion/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** El PIN con que un administrador autoriza en el mostrador (pide la clave de la cuenta) */
+        put: operations["CargarPin"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sesion/pin/destrabar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Borra los topes de errores del PIN de autorización (pide la clave de la cuenta) */
+        post: operations["DestrabarPin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/registro": {
         parameters: {
             query?: never;
@@ -324,6 +358,63 @@ export interface operations {
             };
             401: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
+        };
+    };
+    CargarPin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    pin: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Guardado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+            429: components["responses"]["Problema"];
+        };
+    };
+    DestrabarPin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Destrabado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+            429: components["responses"]["Problema"];
         };
     };
     Registrarse: {

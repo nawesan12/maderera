@@ -11,6 +11,13 @@
  * elige quien carga el trabajo —depende de la placa que haya en el depósito y
  * de cómo corre el dibujo cuando es de color— y no lo adivina el sistema.
  *
+ * Partirla es una pasada de sierra, y el disco se come su ancho: de una placa
+ * de 1220 con un disco de 3,2 mm salen dos de 608, no de 610. Hasta la T4
+ * (hallazgo 23) se partía sin descontarlo, y una pieza de 610 «entraba» en
+ * pantalla y no en el depósito. La sierra la pasa cada llamada —es la del
+ * trabajo, o la de la configuración—; sin sierra, la cuenta es la de antes
+ * (es lo que congela el golden).
+ *
  * Es lógica pura: la usa el panel, el mostrador, la hoja impresa y el sitio.
  */
 
@@ -35,6 +42,7 @@ export function medidaDePlaca({
   varianteLargo,
   varianteAncho,
   mitad = null,
+  sierra = 0,
 }: {
   /** Lo cargado a mano en el trabajo. */
   propiaLargo?: number | null;
@@ -43,6 +51,8 @@ export function medidaDePlaca({
   varianteLargo?: number | null;
   varianteAncho?: number | null;
   mitad?: Mitad;
+  /** El ancho del disco, en mm: lo que se pierde al partirla. */
+  sierra?: number;
 }): MedidaDePlaca {
   const porDefecto = MEDIDAS_DE_PLACA[0]!;
 
@@ -53,12 +63,15 @@ export function medidaDePlaca({
 
   const largoEntero = propia ? propiaLargo! : variante ? varianteLargo! : porDefecto.largo;
   const anchoEntero = propia ? propiaAncho! : variante ? varianteAncho! : porDefecto.ancho;
+  const disco = Number.isFinite(sierra) && sierra > 0 ? sierra : 0;
 
   return {
     // Partir a lo largo deja la veta entera y angosta la placa; al ancho la
     // corta y la acorta.
-    largo: mitad === "ancho" ? Math.floor(largoEntero / 2) : largoEntero,
-    ancho: mitad === "largo" ? Math.floor(anchoEntero / 2) : anchoEntero,
+    // Hacia abajo: prometer el milímetro que no está es lo que hace que la
+    // última pieza no entre. Igual que `ResolverMedida` en Go.
+    largo: mitad === "ancho" ? Math.floor((largoEntero - disco) / 2) : largoEntero,
+    ancho: mitad === "largo" ? Math.floor((anchoEntero - disco) / 2) : anchoEntero,
     supuesta: !propia && !variante,
     mitad,
   };

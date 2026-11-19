@@ -1525,6 +1525,10 @@ export interface operations {
                 content: {
                     "application/json": {
                         plano: components["schemas"]["Plano"];
+                        /** @description Las placas enteras que se cobran: con piezas acomodadas a mano, las del plano libre salvo que el manual gaste más */
+                        placasACobrar: number;
+                        /** @description Las pasadas del plano que se cobra */
+                        pasadasACobrar: number;
                         cuenta?: components["schemas"]["Presupuesto"];
                         hoja?: components["schemas"]["HojaDeCorte"];
                         superficies?: number[];

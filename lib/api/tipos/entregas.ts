@@ -261,6 +261,8 @@ export interface components {
             entregado: number;
             /** Format: double */
             pendiente: number;
+            /** @description El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso */
+            enteros?: boolean;
         };
         RemitoDelPedido: {
             id: string;

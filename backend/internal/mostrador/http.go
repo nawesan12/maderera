@@ -9,6 +9,7 @@ import (
 
 	"mjbj/internal/api/mostradorapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -133,14 +134,34 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	if err != nil {
 		return nil, err
 	}
-	res, err := a.s.Anular(ctx, r.Id, r.Body.Motivo, ses.UserID)
+	b := r.Body
+	pedido := PedidoDeAnulacion{Motivo: b.Motivo, VolvioLaMercaderia: b.VolvioLaMercaderia == nil || *b.VolvioLaMercaderia}
+	if b.Pin != nil {
+		pedido.PIN = *b.Pin
+	}
+	if b.Ficha != nil {
+		pedido.Ficha = *b.Ficha
+	}
+	res, err := a.s.Anular(ctx, ses, r.Id, pedido)
 	if err != nil {
 		return nil, err
+	}
+	if res.Autorizacion != nil {
+		// Falta el PIN: no es un error del formulario, la pantalla lo pide.
+		return ok(map[string]any{"error": res.Error, "autorizacion": res.Autorizacion}), nil
 	}
 	if !res.Ok {
 		return nil, plataforma.Invalido(map[string]string{"error": res.Error})
 	}
-	a.s.anotar(ctx, ses, sqlc.AccionAuditoriaAnular, "pedido", r.Id, "Anuló una venta de mostrador: "+zodjs.TrimJS(r.Body.Motivo), nil)
+	desc := "Anuló la venta " + res.Numero + " ($" + f2(res.Total) + "): " + zodjs.TrimJS(b.Motivo)
+	if !pedido.VolvioLaMercaderia {
+		desc += ". La mercadería no volvió"
+	}
+	var detalle any
+	if res.AutorizadoPor != "" || !pedido.VolvioLaMercaderia {
+		detalle = map[string]any{"autorizadoPor": res.AutorizadoPor, "volvioLaMercaderia": pedido.VolvioLaMercaderia, "total": res.Total}
+	}
+	a.s.anotar(ctx, ses, sqlc.AccionAuditoriaAnular, "pedido", r.Id, desc, detalle)
 	out := map[string]any{"ok": "Venta anulada."}
 	if res.FacturaPendiente != nil {
 		out["facturaPendiente"] = *res.FacturaPendiente
@@ -225,7 +246,11 @@ func (a *API) CobrarCuentaEnMostrador(ctx context.Context, r mostradorapi.Cobrar
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.CobrarCuenta(ctx, ses, r.Id, r.Body.BranchId, r.Body.Partes)
+	clave := ""
+	if r.Body.Clave != nil {
+		clave = *r.Body.Clave
+	}
+	v, err := a.s.CobrarCuenta(ctx, ses, r.Id, r.Body.BranchId, r.Body.Partes, clave)
 	if err != nil {
 		return nil, comoProblema(err)
 	}
@@ -301,6 +326,9 @@ type Pantalla struct {
 	Ventas       []caja.VentaDeHoy       `json:"ventas"`
 	ListaGeneral *string                 `json:"listaGeneral"`
 	FondoBase    float64                 `json:"fondoBase"`
+	// DescuentoLibrePct: la pantalla avisa apenas una venta lo pasa, antes
+	// de cobrar, para llamar al admin mientras se termina de cargar.
+	DescuentoLibrePct float64 `json:"descuentoLibrePct"`
 }
 
 // Pantalla junta el turno, sus movimientos, el cierre Z, las ventas de hoy,
@@ -325,6 +353,9 @@ func (s *Servicio) Pantalla(ctx context.Context, sucursal string) (Pantalla, err
 	if p.FondoBase, err = caja.FondoBase(ctx, s.pool, sucursal); err != nil {
 		return p, err
 	}
+	if p.DescuentoLibrePct, err = PorcentajeLibre(ctx, s.pool); err != nil {
+		return p, err
+	}
 	if p.Turno != nil {
 		if p.Movimientos, err = caja.MovimientosDelTurno(ctx, s.pool, p.Turno.ID); err != nil {
 			return p, err
@@ -339,14 +370,40 @@ func (s *Servicio) Pantalla(ctx context.Context, sucursal string) (Pantalla, err
 // Cobrar es cobrarVenta: la venta en línea, con su bitácora si es nueva. El
 // comprobante fiscal lo emite Next después (facturación sigue en TS).
 func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, v VentaPedida) (ResultadoVenta, error) {
-	r, err := s.RegistrarVenta(ctx, v, ses.UserID)
-	if err != nil || !r.Ok {
+	r, err := s.RegistrarVenta(ctx, v, ses, ses.UserID)
+	if err != nil {
 		return r, err
 	}
+	if r.ClaveUsada {
+		// La misma clave con otra venta adentro: no es la venta que se pide.
+		return r, plataforma.NuevoProblema(http.StatusConflict, r.Error)
+	}
+	if !r.Ok {
+		return r, nil
+	}
 	if r.Nueva {
-		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", "", "Venta de mostrador "+r.Numero+" por $"+f2(r.Total), nil)
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por $"+f2(r.Total), controlDeLaVenta(r))
 	}
 	return r, nil
+}
+
+// controlDeLaVenta es el detalle de la bitácora: lo dejado de cobrar y quién
+// lo autorizó (también va en columnas de orders, para sumarlo).
+func controlDeLaVenta(r ResultadoVenta) any {
+	if r.DejadoDeCobrar <= 0 && r.AutorizadoPor == "" && !r.BajoLista && r.CreditoSinAutorizar <= 0 {
+		return nil
+	}
+	d := map[string]any{"dejadoDeCobrar": r.DejadoDeCobrar}
+	if r.AutorizadoPor != "" {
+		d["autorizadoPor"] = r.AutorizadoPor
+	}
+	if r.BajoLista {
+		d["bajoListaSinAutorizar"] = true
+	}
+	if r.CreditoSinAutorizar > 0 {
+		d["creditoSinAutorizar"] = r.CreditoSinAutorizar
+	}
+	return d
 }
 
 // FiscalPendiente es lo que Next necesita para emitir el comprobante de una
@@ -406,7 +463,7 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 			}
 		}
 		v.Autorizado = true
-		r, err := s.RegistrarVenta(ctx, v, usuario)
+		r, err := s.RegistrarVenta(ctx, v, ses, usuario)
 		if err != nil {
 			s.log.Error("mostrador.drenaje", "clave", v.Clave, "error", err)
 			out.Resultados = append(out.Resultados, ResultadoDeCola{Clave: v.Clave, Estado: "reintentar", Motivo: "No se pudo guardar en este momento."})
@@ -421,11 +478,34 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 			prov = *v.NumeroProvisorio
 		}
 		if r.Nueva {
-			s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta sin conexión "+prov+" → "+r.Numero+", subida por "+ses.Nombre, nil)
+			desc := "Venta sin conexión " + prov + " → " + r.Numero + ", subida por " + ses.Nombre
+			if r.BajoLista {
+				// Ya pasó y no se rechaza, pero queda marcada: va en rojo en el
+				// inicio del panel.
+				desc += ": bajo lista sin autorizar ($" + f2(r.DejadoDeCobrar) + ")"
+			}
+			if r.CreditoSinAutorizar > 0 {
+				desc += ": a cuenta pasado el límite sin autorizar ($" + f2(r.CreditoSinAutorizar) + ")"
+			}
+			s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, desc, controlDeLaVenta(r))
+			// Y se avisa en el momento, no a fin de semana: el número
+			// provisorio lo pone el puesto, así que «sin conexión» puede ser
+			// un wifi apagado a propósito para no llamar al admin.
+			if r.BajoLista || r.CreditoSinAutorizar > 0 {
+				motivo, monto, credito := autorizacion.Precio, r.DejadoDeCobrar, r.CreditoSinAutorizar
+				if !r.BajoLista {
+					motivo, monto, credito = autorizacion.Credito, r.CreditoSinAutorizar, 0
+				}
+				s.aut.Avisar(ctx, "Venta sin conexión sin PIN", r.Numero+" de "+nombreDe(ctx, s, usuario, ses)+": "+
+					autorizacion.QueSeAutoriza(motivo, monto, credito)+".")
+			}
 		}
 		nueva := r.Nueva
 		res := ResultadoDeCola{Clave: v.Clave, Estado: "sincronizada", Numero: r.Numero, OrderID: r.OrderID, Nueva: &nueva}
-		if v.Comprobante == "fiscal" && r.Nueva {
+		// También si ya estaba: un reintento después de un corte puede haber
+		// dejado la venta sin su comprobante. Emitir es idempotente (una
+		// venta, un comprobante).
+		if v.Comprobante == "fiscal" {
 			// Con las líneas de la venta, ya con el descuento repartido (el TS
 			// mandaba las de entrada: ver progreso.md, tanda 5).
 			res.Fiscal = &FiscalPendiente{CustomerID: v.CustomerID, ReceptorNombre: v.ContactoNombre, Cuit: v.Cuit, Lineas: r.Lineas}
@@ -434,4 +514,16 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 	}
 	out.ServidorAt = FechaJS(s.ahora())
 	return out
+}
+
+// nombreDe es el nombre de quien vendió (el de la sesión, si es quien sube).
+func nombreDe(ctx context.Context, s *Servicio, usuario string, ses *auth.Sesion) string {
+	if usuario == ses.UserID {
+		return ses.Nombre
+	}
+	var n string
+	if err := s.pool.QueryRow(ctx, `SELECT name FROM "user" WHERE id = $1`, usuario).Scan(&n); err != nil {
+		return ses.Nombre
+	}
+	return n
 }

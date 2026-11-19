@@ -16,6 +16,7 @@ import {
   leerBorrador,
   leerListaPegada,
   medidasDelBorrador,
+  medidasSospechosas,
   nombreDelTapacanto,
   textoDelPedido,
   type Borrador,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/cortes/armador";
 import type { PresupuestoDeCorte } from "@/lib/cortes/tipos";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
+import { PreguntaMm } from "@/components/cortes/pregunta-mm";
 import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto";
 import { formatearMonto } from "@/lib/formato";
 import { agregarCorteAlCarrito, guardarConsultaDeCorte } from "./actions";
@@ -201,7 +203,7 @@ function VistaDeCorte({
     const placa = placas.find((p) => p.variantId === grupo.variantId) ?? placas[0];
     // La mitad vale solo sobre una placa que se vende partida.
     const mitad = placa?.admiteMedia ? grupo.mitad : null;
-    const medida = medidaDePlaca({ varianteLargo: placa?.largoMm, varianteAncho: placa?.anchoMm, mitad });
+    const medida = medidaDePlaca({ varianteLargo: placa?.largoMm, varianteAncho: placa?.anchoMm, mitad, sierra: anchoSierra });
     return { grupo, placa, mitad, medida, piezas: piezasDelGrupo(grupo, medida.largo) };
   });
 
@@ -329,6 +331,37 @@ function VistaDeCorte({
     });
   }
 
+  /*
+   * «¿Están en mm?» antes de mandar, si el lado más largo del despiece mide
+   * menos de 300 (T4, hallazgo 22; la regla en `medidasSospechosas`). Una sola vez por armado: contestado que
+   * sí, no se vuelve a preguntar. Las tiras no cuentan: su largo es el de la
+   * placa.
+   */
+  const [mmConfirmado, setMmConfirmado] = useState(false);
+  const [preguntaMm, setPreguntaMm] = useState<"whatsapp" | "carrito" | null>(null);
+  const sospechosas = medidasSospechosas(grupos.filter((g) => g.modo === "piezas").flatMap((g) => g.filas));
+  function antesPreguntar(que: "whatsapp" | "carrito") {
+    if (!mmConfirmado && sospechosas) {
+      setPreguntaMm(que);
+      return;
+    }
+    if (que === "whatsapp") pedirPorWhatsapp();
+    else comprar();
+  }
+  function contestarSi() {
+    const que = preguntaMm;
+    setMmConfirmado(true);
+    setPreguntaMm(null);
+    // Dentro del mismo toque: el WhatsApp abre su ventana en el clic.
+    if (que === "whatsapp") pedirPorWhatsapp();
+    else if (que === "carrito") comprar();
+  }
+  function corregir() {
+    setPreguntaMm(null);
+    setEnMovil("piezas");
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>("[data-largo]")?.focus());
+  }
+
   const totales = resueltos.reduce(
     (t, _, i) => ({
       placas: t.placas + planos[i]!.placas.length,
@@ -363,7 +396,7 @@ function VistaDeCorte({
   const botonWhatsapp = (
     <button
       type="button"
-      onClick={pedirPorWhatsapp}
+      onClick={() => antesPreguntar("whatsapp")}
       disabled={!sePuede || guardando || !destino?.whatsapp}
       // Un <button> y no `BotonWhatsapp`: antes de abrir WhatsApp guarda el
       // corte. Se ve igual que todos (hallazgo 27): el mismo verde y el alto
@@ -403,20 +436,24 @@ function VistaDeCorte({
           </div>
         )}
 
-        <div className="hidden gap-2 lg:flex">
-          {activa && (
-            <button
-              type="button"
-              onClick={comprar}
-              disabled={!sePuede || guardando}
-              aria-label="Agregarlo al carrito"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] bg-accion px-4 text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
-            >
-              <ShoppingCart className="h-4 w-4" />
-            </button>
-          )}
-          {botonWhatsapp}
-        </div>
+        {preguntaMm ? (
+          <PreguntaMm className="hidden lg:flex" onSi={contestarSi} onCorregir={corregir} />
+        ) : (
+          <div className="hidden gap-2 lg:flex">
+            {activa && (
+              <button
+                type="button"
+                onClick={() => antesPreguntar("carrito")}
+                disabled={!sePuede || guardando}
+                aria-label="Agregarlo al carrito"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-[10px] bg-accion px-4 text-base font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
+              >
+                <ShoppingCart className="h-4 w-4" />
+              </button>
+            )}
+            {botonWhatsapp}
+          </div>
+        )}
       </header>
 
       {aviso && (
@@ -545,20 +582,26 @@ function VistaDeCorte({
             ? formatearMonto(totales.total)
             : `${totales.pasadas} ${totales.pasadas === 1 ? "pasada" : "pasadas"}`}
         </p>
-        {/* Con la tienda encendida, el carrito también acá: arriba vive en
-            la barra de pantalla ancha y en el teléfono desaparecía. */}
-        {activa && (
-          <button
-            type="button"
-            onClick={comprar}
-            disabled={!sePuede || guardando}
-            aria-label="Agregarlo al carrito"
-            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] bg-accion text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
-          >
-            <ShoppingCart className="h-5 w-5" />
-          </button>
+        {preguntaMm ? (
+          <PreguntaMm onSi={contestarSi} onCorregir={corregir} />
+        ) : (
+          <>
+            {/* Con la tienda encendida, el carrito también acá: arriba vive en
+                la barra de pantalla ancha y en el teléfono desaparecía. */}
+            {activa && (
+              <button
+                type="button"
+                onClick={() => antesPreguntar("carrito")}
+                disabled={!sePuede || guardando}
+                aria-label="Agregarlo al carrito"
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] bg-accion text-white transition-colors hover:bg-accion-hover disabled:opacity-50"
+              >
+                <ShoppingCart className="h-5 w-5" />
+              </button>
+            )}
+            {botonWhatsapp}
+          </>
         )}
-        {botonWhatsapp}
       </div>
     </div>
   );
@@ -672,8 +715,8 @@ function EditorDeGrupo({
         <div ref={lista} className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4">
           <div className={`sticky top-0 z-10 hidden bg-card py-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-texto-3 ${columnas}`}>
             <span>Pieza</span>
-            <span>Largo</span>
-            <span>Ancho</span>
+            <span>Largo (mm)</span>
+            <span>Ancho (mm)</span>
             <span>Cant.</span>
             <span className="text-center">Canto</span>
             <span className="text-center">Veta</span>
@@ -705,13 +748,14 @@ function EditorDeGrupo({
                   />
                 </label>
                 <div className="grid w-full grid-cols-[1fr_1fr_72px] gap-2 @2xl:contents">
-                  <Numero etiqueta="Largo" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} placeholder="1200" marca="largo" />
-                  <Numero etiqueta="Ancho" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} placeholder="400" />
+                  <Numero etiqueta="Largo (mm)" valor={f.largo} alCambiar={(v) => actualizar(i, "largo", v)} placeholder="1200" marca="largo" />
+                  <Numero etiqueta="Ancho (mm)" valor={f.ancho} alCambiar={(v) => actualizar(i, "ancho", v)} placeholder="400" />
                   <Numero etiqueta="Cant." valor={f.cantidad} alCambiar={(v) => actualizar(i, "cantidad", v)} />
                 </div>
                 <div className="flex justify-center">
                   <SelectorDeCanto
                     chico
+                    rotulo
                     largo={Number(f.largo) || 0}
                     ancho={Number(f.ancho) || 0}
                     lados={f.lados}

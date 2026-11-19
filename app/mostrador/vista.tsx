@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { tarifaDeCorte, type TarifaDeCorte } from "@/lib/cortes/tarifa";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { formatearMonto } from "@/lib/formato";
+import { borradorVale, duenoDelBorrador, type DuenoDelBorrador } from "@/lib/mostrador/borrador-del-corte";
+import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 import {
+  aAutorizar,
+  desvioDeLaVenta,
   revisarChequeDePago,
   montoDelDescuento,
   totalDeLaVenta,
@@ -34,12 +38,13 @@ import {
   preciosDelCliente,
 } from "./actions";
 import { AltaAMano } from "./alta-a-mano";
-import { enfocar, useAtajos, AyudaDeAtajos, type Campo } from "./atajos";
+import { campoEnPantalla, enfocar, useAtajos, AyudaDeAtajos, type Campo } from "./atajos";
+import { focoDespuesDe, type DespuesDe } from "@/lib/mostrador/foco";
 import { BarraSuperior } from "./barra-superior";
 import { Buscador } from "./buscador";
 import { PanelDeCaja } from "./caja";
 import { Cobro } from "./cobro";
-import { CorteAMedida } from "./corte-a-medida";
+import { CorteAMedida, hayAlgoCargado, type EstadoDelCorte } from "./corte-a-medida";
 import { sumar, Lineas } from "./lineas";
 import { cobrarSinConexion as guardarSinConexion, useColaDelMostrador } from "./sin-conexion";
 import { faltaIdentificarComprador } from "@/lib/fiscal/umbral";
@@ -85,10 +90,12 @@ export function VistaMostrador({
   tarifasDeCorte,
   anchoSierra,
   fondoBase,
+  descuentoLibrePct,
   promos,
   escalasDePago,
 }: {
-  usuario: { nombre: string; userId: string };
+  /** `administraCaja`: si puede dar de alta terminales (/admin/caja). */
+  usuario: { nombre: string; userId: string; administraCaja?: boolean };
   /** La lista de precios general. Lo que no sea esta es precio diferenciado. */
   listaGeneral: string | null;
   sucursales: Sucursal[];
@@ -103,6 +110,8 @@ export function VistaMostrador({
   anchoSierra: number;
   /** El cambio que tiene que quedar en el cajón de esta sucursal. */
   fondoBase: number;
+  /** Lo que se puede dejar de cobrar sin el PIN de un admin (/admin/reglas). */
+  descuentoLibrePct: number;
   /** Las promociones vigentes. Se cuentan, no se descuentan. */
   promos: PromoVigente[];
   /** El descuento por forma de pago: lo aplica el servidor, acá se muestra. */
@@ -148,6 +157,41 @@ export function VistaMostrador({
   const [letra, setLetra] = useState<string | null>(null);
   const [ultima, setUltima] = useState<UltimaVenta | null>(null);
   const [caja, setCaja] = useState(false);
+  /*
+   * Si el panel de la caja se abrió desde el cobro. Abierto el turno, el panel
+   * se cierra solo y el cursor vuelve al cobro que estaba en curso: con el
+   * cliente esperando, volver a buscar «Cobrar» es el clic de más.
+   */
+  const [cajaParaCobrar, setCajaParaCobrar] = useState(false);
+  /*
+   * Lo que se sabe del turno antes de que llegue el `router.refresh()`.
+   *
+   * Recién abierto desde acá, ya está abierto en la base: no hay que esperar a
+   * que vuelva la página para cobrar. Y si Go rechaza un efectivo porque otra
+   * terminal cerró el turno, la pantalla deja de creer que está abierto en el
+   * acto. Vale hasta que cambia el turno que manda el servidor.
+   */
+  const [turnoLocal, setTurnoLocal] = useState<"abierto" | "cerrado" | null>(null);
+  const [turnoVisto, setTurnoVisto] = useState(turno);
+  if (turnoVisto !== turno) {
+    setTurnoVisto(turno);
+    setTurnoLocal(null);
+  }
+  const hayTurno = turnoLocal === "abierto" ? true : turnoLocal === "cerrado" ? false : Boolean(turno);
+  /*
+   * Unos 400 ms sin cobrar después de abrir la caja desde el cobro: el botón
+   * pasa de «Abrir la caja» a «Cobrar» debajo del dedo, y el segundo toque de
+   * un doble clic no puede terminar la venta.
+   */
+  const [enPausa, setEnPausa] = useState(false);
+  /*
+   * El PIN de un admin, cuando Go lo pide para esta venta (T3). El campo
+   * aparece en el lugar del botón de cobrar; la ficha es un PIN ya tecleado:
+   * si la venta falló después por otra cosa, se reenvía con ella y el admin
+   * no tiene que volver.
+   */
+  const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
+  const [ficha, setFicha] = useState<string | null>(null);
   const [suelta, setSuelta] = useState<string | null>(null);
   /*
    * El corte que se está vendiendo, si se vende uno.
@@ -162,6 +206,17 @@ export function VistaMostrador({
   const [renglonesDelCorte, setRenglonesDelCorte] = useState<string[]>([]);
   /** La placa elegida para cortar, mientras el diálogo está abierto. */
   const [cortando, setCortando] = useState<ResultadoDeMostrador | null>(null);
+  /*
+   * Lo que se cargó en el último corte que se cerró sin agregarlo.
+   *
+   * Un clic de más, un Esc o la X tiraban veinte medidas tipeadas con el
+   * cliente enfrente (T4, hallazgo 20). Ahora cerrar no pierde nada: volver a
+   * abrir la misma placa, en la misma venta, arranca donde quedó. Por eso
+   * cerrar no pregunta —preguntar es un paso más, y el criterio del mostrador
+   * es ahorrarlos—. Vive en memoria: es de esta venta, no de mañana.
+   */
+  // De qué venta es, en `borradorVale` (lib/mostrador/borrador-del-corte.ts).
+  const [borradorDelCorte, setBorradorDelCorte] = useState<(EstadoDelCorte & DuenoDelBorrador) | null>(null);
 
   /*
    * La tarifa de corte que corresponde a la placa elegida y a la lista de quien
@@ -205,6 +260,21 @@ export function VistaMostrador({
   const [partes, setPartes] = useState<ParteDePago[] | null>(null);
 
   /*
+   * El PIN pedido y la ficha valen para la venta como estaba cuando Go los
+   * pidió. Si cambian los renglones, el cliente, el medio, el pago partido o
+   * el descuento, se van: vuelve el botón de cobrar con el total recalculado
+   * y el admin no firma una cifra vieja. (Se ajusta al renderizar, como
+   * CampoPin, y no en un efecto.)
+   */
+  const queSeCobra = JSON.stringify([lineas, cliente?.id ?? null, medio, partes, tipoDesc, valorDesc]);
+  const [cobroVisto, setCobroVisto] = useState(queSeCobra);
+  if (cobroVisto !== queSeCobra) {
+    setCobroVisto(queSeCobra);
+    if (pidePin) setPidePin(null);
+    if (ficha) setFicha(null);
+  }
+
+  /*
    * Lo fijo del ticket. Sale de lo que la pantalla ya tiene, así que el papel
    * se puede armar sin preguntarle nada a nadie.
    */
@@ -246,6 +316,17 @@ export function VistaMostrador({
   const motivoDelDescuento =
     descuentoManual > 0 ? motivoDesc : (escalaDePago?.etiqueta ?? "");
   const total = useMemo(() => subtotal - descuento, [subtotal, descuento]);
+  /*
+   * Lo que va a pedir el PIN, avisado mientras se carga y no al cobrar: con la
+   * misma regla que Go (ventas.DesvioDeLaVenta), el total se pone naranja y
+   * dice cuánto queda abajo del precio. Así se llama al admin mientras se
+   * termina de cargar, no con el cliente esperando. La escala automática no
+   * cuenta.
+   */
+  const porAutorizar = useMemo(
+    () => aAutorizar(desvioDeLaVenta(lineas, descuentoManual), descuentoLibrePct),
+    [lineas, descuentoManual, descuentoLibrePct],
+  );
   // Sin nada tipeado no hay vuelto que mostrar: `Number("")` es 0, y un vuelto
   // de $0 en pantalla antes de que el cliente saque la plata se lee como si ya
   // hubiera pagado justo.
@@ -265,12 +346,22 @@ export function VistaMostrador({
   }, [partes, total]);
 
   /*
+   * Hay efectivo en este cobro y no hay turno: Go lo rechaza
+   * (`parteEfectivo > 0` en RegistrarVenta), sea el pago entero o una parte
+   * del partido. Antes solo se miraba el medio elegido, y un partido con una
+   * parte en efectivo llegaba hasta el servidor para enterarse.
+   */
+  const conEfectivo = partes
+    ? partes.some((p) => p.medio === "efectivo" && Number(p.importe) > 0)
+    : medio === "efectivo";
+  const faltaCaja = conEfectivo && !hayTurno;
+
+  /*
    * Si se puede cobrar ahora.
    *
    * Lo decide la pantalla y no el botón: la misma condición gobierna el botón
    * y `Ctrl + Enter`, y escrita en dos lados un día dicen cosas distintas.
-   * Los carteles que explican *por qué* no se puede —falta caja, falta
-   * cliente— los arma el panel de cobro, que es donde se leen.
+   * Sin caja no se explica: el botón pasa a «Abrir la caja» (ver `Cobro`).
    */
   // Una B desde el monto que fija ARCA lleva el documento del comprador: se
   // pide acá, antes de cobrar, y no al emitir con el cliente pagando.
@@ -282,7 +373,8 @@ export function VistaMostrador({
     lineas.length > 0 &&
     !faltaDocumento &&
     !enviando &&
-    !(medio === "efectivo" && !turno) &&
+    !enPausa &&
+    !faltaCaja &&
     !(medio === "cuenta_corriente" && !cliente) &&
     !(partes !== null && Math.abs(restanteDePartes) > 0.01) &&
     // El cheque se cobra con sus datos: sin número no se lo encuentra en el banco.
@@ -386,6 +478,7 @@ export function VistaMostrador({
   }
 
   function limpiar() {
+    setBorradorDelCorte(null);
     setLineas([]);
     setCliente(null);
     setMedio("efectivo");
@@ -402,6 +495,8 @@ export function VistaMostrador({
     setPartes(null);
     setCorte(null);
     setRenglonesDelCorte([]);
+    setPidePin(null);
+    setFicha(null);
     // Terminada la venta, el foco vuelve al buscador: lo que sigue siempre es
     // el primer producto del que viene atrás en la fila.
     enfocar("buscador");
@@ -487,6 +582,8 @@ export function VistaMostrador({
    */
   async function alElegirCliente(nuevo: Cliente | null) {
     setCliente(nuevo);
+    // El corte a medio cargar era para el otro: con otro cliente no vuelve.
+    if ((nuevo?.id ?? null) !== (cliente?.id ?? null)) setBorradorDelCorte(null);
     setOtrosPrecios(null);
 
     /*
@@ -506,6 +603,15 @@ export function VistaMostrador({
     if (ids.length === 0) return;
 
     const precios = await preciosDelCliente(ids, nuevo?.id ?? null);
+    // La lista contra la que se marca lo tocado a mano pasa a ser la de este
+    // cliente. La media placa no: el precio que vuelve es el de la entera.
+    setLineas((prev) =>
+      prev.map((l) =>
+        l.variantId && !l.presentacion && precios[l.variantId] > 0
+          ? { ...l, precioLista: precios[l.variantId] }
+          : l,
+      ),
+    );
     const distintos = lineas.some(
       (l) =>
         l.variantId &&
@@ -519,15 +625,17 @@ export function VistaMostrador({
     if (!otrosPrecios) return;
     setLineas((prev) =>
       prev.map((l) =>
-        l.variantId && otrosPrecios[l.variantId] > 0
-          ? { ...l, precioUnitario: otrosPrecios[l.variantId] }
+        // La media placa se deja: el precio que vuelve es el de la placa
+        // entera, y ponérselo la cobraba el doble.
+        l.variantId && !l.presentacion && otrosPrecios[l.variantId] > 0
+          ? { ...l, precioUnitario: otrosPrecios[l.variantId], precioLista: otrosPrecios[l.variantId] }
           : l,
       ),
     );
     setOtrosPrecios(null);
   }
 
-  function cobrar(autorizado = false) {
+  function cobrar(pin?: string) {
     setAviso(null);
 
     // Con el pago partido, la suma tiene que dar el total antes de cobrar.
@@ -549,7 +657,7 @@ export function VistaMostrador({
      * mercadería sale por la puerta, así que negarse a registrar la venta no la
      * evita —solo la deja sin anotar—. El cliente se lleva un ticket con el
      * número de la caja y el sistema se encarga del resto cuando vuelva la
-     * conexión.
+     * conexión. (Si pasa lo libre, Go la marca en rojo para el dueño.)
      */
     if (!conexion.enLinea) {
       void cobrarSinConexion();
@@ -574,17 +682,31 @@ export function VistaMostrador({
         cuit: cuit || null,
         descuento: descuentoManual,
         descuentoMotivo: motivoDesc || null,
-        autorizado,
+        ...(pin ? { pin } : ficha ? { ficha } : {}),
       });
 
+      if (r.ficha) setFicha(r.ficha);
+      if (r.autorizacion) {
+        // Falta el PIN, o el que se tecleó no era: el campo aparece (o
+        // tiembla) en el lugar del botón.
+        setPidePin(r.autorizacion);
+        return;
+      }
+      setPidePin(null);
       if (r.error) {
-        setAviso({
-          tipo: "error",
-          texto: r.error,
-          // Cuenta corriente frenada pero salvable: el vendedor decide. Sin
-          // esto el mostrador quedaría trabado con un cliente enfrente.
-          autorizar: r.requiereAutorizacion ? () => cobrar(true) : undefined,
-        });
+        /*
+         * Otra terminal cerró el turno mientras se cargaba esta venta. El
+         * botón vuelve a decir «Abrir la caja» en el acto, que es lo que hay
+         * que hacer, en vez de un error para leer. El texto es el de Go
+         * (`venta.go`): no hay código de error para esto y no se cambia el
+         * contrato por un cartel.
+         */
+        if (r.error.startsWith("No hay caja abierta")) {
+          setTurnoLocal("cerrado");
+          router.refresh();
+          return;
+        }
+        setAviso({ tipo: "error", texto: r.error });
         return;
       }
 
@@ -654,6 +776,54 @@ export function VistaMostrador({
     });
   }
 
+  /** El cursor, de vuelta donde corresponde (ver `lib/mostrador/foco.ts`). */
+  function volverDe(que: DespuesDe) {
+    const campo = focoDespuesDe(que, { medio, partido: partes !== null });
+    requestAnimationFrame(() => enfocar(campo));
+  }
+
+  /** El elemento al que el diálogo que se cierra le devuelve el foco. */
+  function focoAlCerrar(que: DespuesDe) {
+    return () =>
+      campoEnPantalla(focoDespuesDe(que, { medio, partido: partes !== null })) ??
+      campoEnPantalla("buscador");
+  }
+
+  function abrirCajaParaCobrar() {
+    setCajaParaCobrar(true);
+    setCaja(true);
+  }
+
+  /** Abierto el turno desde el panel. */
+  function alAbrirLaCaja(mensaje: string) {
+    setTurnoLocal("abierto");
+    if (!cajaParaCobrar) return;
+    setCajaParaCobrar(false);
+    setCaja(false);
+    setAviso({ tipo: "ok", texto: mensaje });
+    setEnPausa(true);
+    setTimeout(() => setEnPausa(false), 400);
+    volverDe("caja-para-cobrar");
+  }
+
+  /** Lo que hace Ctrl+Enter, y lo mismo el botón grande. */
+  const alCobrar = faltaCaja ? abrirCajaParaCobrar : puedeCobrar ? () => void cobrar() : undefined;
+
+  /*
+   * Ctrl+Enter en el buscador agrega la línea y cobra, **con la línea ya en la
+   * venta**. El cobro no puede salir en el mismo evento: `lineas` todavía es
+   * la de antes y se cobraría el carrito sin el producto (T4, hallazgo 18).
+   * Se marca, se agrega, y el efecto cobra en el render siguiente, con todo
+   * recalculado —total, descuento por medio, PIN—.
+   */
+  const cobrarAlAgregar = useRef(false);
+  const cobrarLoAgregado = useEffectEvent(() => alCobrar?.());
+  useEffect(() => {
+    if (!cobrarAlAgregar.current) return;
+    cobrarAlAgregar.current = false;
+    cobrarLoAgregado();
+  }, [lineas]);
+
   /*
    * Los atajos.
    *
@@ -662,7 +832,7 @@ export function VistaMostrador({
    * que no hace nada es igual de molesto que un botón muerto.
    */
   useAtajos({
-    cobrar: puedeCobrar ? () => void cobrar() : undefined,
+    cobrar: alCobrar,
     buscador: () => enfocar("buscador"),
     cliente: () => enfocar("cliente"),
     // Abre el cobro de la cuenta, si el cliente elegido debe algo.
@@ -684,7 +854,10 @@ export function VistaMostrador({
     imprimir: ultima
       ? () => window.open(papelDeLaVenta(ultima), "_blank")
       : undefined,
-    caja: () => setCaja((abierta) => !abierta),
+    caja: () => {
+      setCajaParaCobrar(false);
+      setCaja((abierta) => !abierta);
+    },
   });
 
   return (
@@ -695,22 +868,25 @@ export function VistaMostrador({
         usuario={usuario}
         sucursales={sucursales}
         sucursal={sucursal}
-        turno={turno}
-        onCaja={() => setCaja(true)}
-      />
-
-      {/* Sin caja vinculada el mostrador vende igual mientras haya internet; lo
-          que no puede es cobrar cuando se corte. El cartel está arriba de todo
-          porque el momento de resolverlo es ahora, no cuando se caiga la red. */}
-      {!cajaFisica && (
-        <div className="px-4 pt-3">
+        turno={hayTurno ? turno : null}
+        cajaAbierta={hayTurno}
+        onCaja={() => {
+          setCajaParaCobrar(false);
+          setCaja(true);
+        }}
+        // Sin caja vinculada el mostrador vende igual mientras haya internet;
+        // lo que no puede es cobrar cuando se corte. Por eso el selector está
+        // arriba, a mano, y no escondido en la configuración.
+        terminal={
           <VincularCaja
             branchId={sucursal.id}
             enLinea={conexion.enLinea}
+            vinculada={cajaFisica?.codigo ?? null}
             onVincular={vincularCaja}
+            administra={usuario.administraCaja}
           />
-        </div>
-      )}
+        }
+      />
 
       <div className="flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-1 flex-col gap-3 p-4">
@@ -719,7 +895,10 @@ export function VistaMostrador({
             branchId={sucursal.id}
             customerId={cliente?.id ?? null}
             listaDelCliente={cliente?.priceListId ?? null}
-            onElegir={(l) => setLineas((prev) => sumar(prev, l))}
+            onElegir={(l, yCobrar) => {
+              cobrarAlAgregar.current = Boolean(yCobrar);
+              setLineas((prev) => sumar(prev, l));
+            }}
             onSuelta={setSuelta}
             onCortar={setCortando}
             sePuedeCortar={conexion.enLinea}
@@ -728,6 +907,7 @@ export function VistaMostrador({
             lineas={lineas}
             onCambiar={setLineas}
             onLimpiar={limpiar}
+            onNoVaciar={() => volverDe("no-vaciar")}
           />
 
           <div className="flex justify-end">
@@ -772,11 +952,19 @@ export function VistaMostrador({
             recibido={recibido}
             onRecibido={setRecibido}
             cambio={cambio}
-            hayCaja={Boolean(turno)}
+            faltaCaja={faltaCaja}
+            onAbrirCaja={abrirCajaParaCobrar}
             enviando={enviando}
             puede={lineas.length > 0}
             puedeCobrar={puedeCobrar}
             onCobrar={() => cobrar()}
+            porAutorizar={porAutorizar}
+            pidePin={pidePin}
+            onPin={(pin) => cobrar(pin)}
+            onCancelarPin={() => {
+              setPidePin(null);
+              enfocar("buscador");
+            }}
             aviso={aviso}
             ultima={ultima}
             acopio={acopio}
@@ -811,15 +999,48 @@ export function VistaMostrador({
             precioMediaPct: cortando.precioMediaPct,
           }}
           anchoSierra={anchoSierra}
+          inicial={
+            borradorDelCorte &&
+            borradorVale(borradorDelCorte, {
+              clave,
+              variantId: cortando.variantId,
+              clienteId: cliente?.id ?? null,
+              ahora: Date.now(),
+            })
+              ? borradorDelCorte
+              : undefined
+          }
+          focoAlCerrar={focoAlCerrar("corte")}
           cliente={cliente?.nombre ?? null}
           precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
           precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
-          onCerrar={() => setCortando(null)}
+          onCerrar={(estado) => {
+            setBorradorDelCorte(
+              hayAlgoCargado(estado)
+                ? {
+                    ...estado,
+                    ...duenoDelBorrador({
+                      clave,
+                      variantId: cortando.variantId,
+                      clienteId: cliente?.id ?? null,
+                      ventaVacia: lineas.length === 0,
+                      ahora: Date.now(),
+                    }),
+                  }
+                : null,
+            );
+            setCortando(null);
+            // El diálogo se desmonta en vez de cerrarse, así que su `finalFocus`
+            // no llega a correr: el cursor se devuelve acá.
+            volverDe("corte");
+          }}
           onAgregar={(nuevas, elCorte) => {
             setLineas((prev) => [...prev, ...nuevas]);
             setCorte(elCorte);
             setRenglonesDelCorte(nuevas.map((l) => l.descripcion));
+            setBorradorDelCorte(null);
             setCortando(null);
+            volverDe("corte-agregado");
           }}
         />
       )}
@@ -827,10 +1048,15 @@ export function VistaMostrador({
       {suelta !== null && (
         <AltaAMano
           descripcionInicial={suelta}
-          onCerrar={() => setSuelta(null)}
+          focoAlCerrar={focoAlCerrar("a-mano")}
+          onCerrar={() => {
+            setSuelta(null);
+            volverDe("a-mano");
+          }}
           onAgregar={(l) => {
             setLineas((prev) => [...prev, l]);
             setSuelta(null);
+            volverDe("a-mano");
           }}
         />
       )}
@@ -845,7 +1071,13 @@ export function VistaMostrador({
           ventas={ventas}
           enLinea={conexion.enLinea}
           onEncolado={() => void cola.refrescar()}
-          onCerrar={() => setCaja(false)}
+          onAbierta={alAbrirLaCaja}
+          focoAlCerrar={focoAlCerrar(cajaParaCobrar ? "caja-para-cobrar" : "caja")}
+          onCerrar={() => {
+            volverDe(cajaParaCobrar ? "caja-para-cobrar" : "caja");
+            setCajaParaCobrar(false);
+            setCaja(false);
+          }}
         />
       )}
     </div>

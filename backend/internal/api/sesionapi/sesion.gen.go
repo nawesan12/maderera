@@ -155,6 +155,17 @@ type PedirEnlaceJSONBody struct {
 	Correo string `json:"correo"`
 }
 
+// CargarPinJSONBody defines parameters for CargarPin.
+type CargarPinJSONBody struct {
+	Clave string `json:"clave"`
+	Pin   string `json:"pin"`
+}
+
+// DestrabarPinJSONBody defines parameters for DestrabarPin.
+type DestrabarPinJSONBody struct {
+	Clave string `json:"clave"`
+}
+
 // RegistrarseJSONRequestBody defines body for Registrarse for application/json ContentType.
 type RegistrarseJSONRequestBody = Registro
 
@@ -169,6 +180,12 @@ type EntrarConEnlaceJSONRequestBody EntrarConEnlaceJSONBody
 
 // PedirEnlaceJSONRequestBody defines body for PedirEnlace for application/json ContentType.
 type PedirEnlaceJSONRequestBody PedirEnlaceJSONBody
+
+// CargarPinJSONRequestBody defines body for CargarPin for application/json ContentType.
+type CargarPinJSONRequestBody CargarPinJSONBody
+
+// DestrabarPinJSONRequestBody defines body for DestrabarPin for application/json ContentType.
+type DestrabarPinJSONRequestBody DestrabarPinJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -196,6 +213,12 @@ type ServerInterface interface {
 	// PedirEnlace Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no)
 	// (POST /api/v1/sesion/enlace/pedir)
 	PedirEnlace(w http.ResponseWriter, r *http.Request)
+	// CargarPin El PIN con que un administrador autoriza en el mostrador (pide la clave de la cuenta)
+	// (PUT /api/v1/sesion/pin)
+	CargarPin(w http.ResponseWriter, r *http.Request)
+	// DestrabarPin Borra los topes de errores del PIN de autorización (pide la clave de la cuenta)
+	// (POST /api/v1/sesion/pin/destrabar)
+	DestrabarPin(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -310,6 +333,34 @@ func (siw *ServerInterfaceWrapper) PedirEnlace(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PedirEnlace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CargarPin operation middleware
+func (siw *ServerInterfaceWrapper) CargarPin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CargarPin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DestrabarPin operation middleware
+func (siw *ServerInterfaceWrapper) DestrabarPin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DestrabarPin(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -446,6 +497,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/enlace/pedir", wrapper.PedirEnlace)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/sesion/clave", wrapper.EstadoDeClave)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/sesion/clave", wrapper.CambiarClave)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/sesion/pin", wrapper.CargarPin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sesion/pin/destrabar", wrapper.DestrabarPin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/registro", wrapper.Registrarse)
 
 	return m
@@ -793,6 +846,154 @@ func (response PedirEnlace429ApplicationProblemPlusJSONResponse) VisitPedirEnlac
 	return err
 }
 
+type CargarPinRequestObject struct {
+	Body *CargarPinJSONRequestBody
+}
+
+type CargarPinResponseObject interface {
+	VisitCargarPinResponse(w http.ResponseWriter) error
+}
+
+type CargarPin204Response struct {
+}
+
+func (response CargarPin204Response) VisitCargarPinResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type CargarPin401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response CargarPin401ApplicationProblemPlusJSONResponse) VisitCargarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CargarPin403ApplicationProblemPlusJSONResponse Problema
+
+func (response CargarPin403ApplicationProblemPlusJSONResponse) VisitCargarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CargarPin422ApplicationProblemPlusJSONResponse Problema
+
+func (response CargarPin422ApplicationProblemPlusJSONResponse) VisitCargarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CargarPin429ApplicationProblemPlusJSONResponse Problema
+
+func (response CargarPin429ApplicationProblemPlusJSONResponse) VisitCargarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DestrabarPinRequestObject struct {
+	Body *DestrabarPinJSONRequestBody
+}
+
+type DestrabarPinResponseObject interface {
+	VisitDestrabarPinResponse(w http.ResponseWriter) error
+}
+
+type DestrabarPin204Response struct {
+}
+
+func (response DestrabarPin204Response) VisitDestrabarPinResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DestrabarPin401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DestrabarPin401ApplicationProblemPlusJSONResponse) VisitDestrabarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DestrabarPin403ApplicationProblemPlusJSONResponse Problema
+
+func (response DestrabarPin403ApplicationProblemPlusJSONResponse) VisitDestrabarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DestrabarPin422ApplicationProblemPlusJSONResponse Problema
+
+func (response DestrabarPin422ApplicationProblemPlusJSONResponse) VisitDestrabarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DestrabarPin429ApplicationProblemPlusJSONResponse Problema
+
+func (response DestrabarPin429ApplicationProblemPlusJSONResponse) VisitDestrabarPinResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Registrarse Crear una cuenta de cliente y entrar
@@ -819,6 +1020,12 @@ type StrictServerInterface interface {
 	// PedirEnlace Manda un link de ingreso al correo, si tiene cuenta (contesta igual si no)
 	// (POST /api/v1/sesion/enlace/pedir)
 	PedirEnlace(ctx context.Context, request PedirEnlaceRequestObject) (PedirEnlaceResponseObject, error)
+	// CargarPin El PIN con que un administrador autoriza en el mostrador (pide la clave de la cuenta)
+	// (PUT /api/v1/sesion/pin)
+	CargarPin(ctx context.Context, request CargarPinRequestObject) (CargarPinResponseObject, error)
+	// DestrabarPin Borra los topes de errores del PIN de autorización (pide la clave de la cuenta)
+	// (POST /api/v1/sesion/pin/destrabar)
+	DestrabarPin(ctx context.Context, request DestrabarPinRequestObject) (DestrabarPinResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1087,33 +1294,98 @@ func (sh *strictHandler) PedirEnlace(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CargarPin operation middleware
+func (sh *strictHandler) CargarPin(w http.ResponseWriter, r *http.Request) {
+	var request CargarPinRequestObject
+
+	var body CargarPinJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CargarPin(ctx, request.(CargarPinRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CargarPin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CargarPinResponseObject); ok {
+		if err := validResponse.VisitCargarPinResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DestrabarPin operation middleware
+func (sh *strictHandler) DestrabarPin(w http.ResponseWriter, r *http.Request) {
+	var request DestrabarPinRequestObject
+
+	var body DestrabarPinJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DestrabarPin(ctx, request.(DestrabarPinRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DestrabarPin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DestrabarPinResponseObject); ok {
+		if err := validResponse.VisitDestrabarPinResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"1LSiWp5ejzv4tVj8MwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

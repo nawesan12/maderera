@@ -2,6 +2,7 @@ package cobros
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Servicio son las acciones de cobro y de cheques del panel.
@@ -44,6 +46,21 @@ const (
 // comoProblema pasa un ErrorDeCobro a un 422 con su mensaje.
 func comoProblema(err error) error {
 	var e *ErrorDeCobro
+	var sinCaja *ErrSinCaja
+	switch {
+	case errors.Is(err, ErrClaveDeOtroCobro):
+		return plataforma.NuevoProblema(409, ErrClaveDeOtroCobro.Mensaje)
+	case errors.As(err, &sinCaja):
+		// La sucursal va aparte: la pantalla abre la caja ahí mismo, con el
+		// fondo de cambio; sin sucursal, las opciones para elegir (en JSON:
+		// los errores son texto).
+		e := map[string]string{"cobro": sinCaja.Error(), "sinCaja": sinCaja.Sucursal, "fondoBase": jsmath.Fijo2(sinCaja.FondoBase)}
+		if len(sinCaja.Sucursales) > 0 {
+			b, _ := json.Marshal(sinCaja.Sucursales)
+			e["sucursales"] = string(b)
+		}
+		return plataforma.Invalido(e)
+	}
 	if errors.As(err, &e) {
 		return plataforma.Invalido(map[string]string{"cobro": e.Mensaje})
 	}
@@ -59,7 +76,10 @@ type ResultadoDeCobro struct {
 
 // CobrarACliente es registrarCobroDeCliente: un cobro desde la ficha, a
 // cuenta o de un pedido (que queda pagado si el recibo lo cubre).
-func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas string) (ResultadoDeCobro, error) {
+//
+// `clave` la genera la pantalla al abrir el diálogo: un reintento devuelve
+// el mismo recibo (EmitirRecibo) y no vuelve a avisar ni a marcar el pedido.
+func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(cliente) || (pedido != "" && !plataforma.UUIDValido(pedido)) || plataforma.LargoJS(strings.TrimSpace(concepto)) > 200 {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"customerId": "Falta el cliente."})
 	}
@@ -85,7 +105,7 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			}
 			p = &fila
 		}
-		c := Cobro{CustomerID: &cliente, Origen: "panel", Partes: partes, Caja: &Caja{Buscar: true}, UsuarioID: &ses.UserID}
+		c := Cobro{CustomerID: &cliente, Origen: "panel", Partes: partes, Caja: &Caja{Buscar: true}, UsuarioID: &ses.UserID, Clave: clave}
 		texto := "Pago a cuenta"
 		if t := strings.TrimSpace(concepto); t != "" {
 			texto = t
@@ -94,15 +114,37 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			c.BranchID = p.BranchID
 			texto = "Cobro del pedido " + p.Numero
 			numeroPedido = p.Numero
+			c.OrderID = &p.ID
+			// La deuda de un pedido de contado no está en la cuenta: el pago
+			// tampoco (ver Cobro.FueraDeLaCuenta).
+			if err := tx.QueryRow(ctx, `SELECT o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
+				AND NOT EXISTS (SELECT 1 FROM account_movements am
+				                WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+				FROM orders o WHERE o.id = $1`, p.ID).Scan(&c.FueraDeLaCuenta); err != nil {
+				return err
+			}
 		}
 		c.Concepto = &texto
 		var err error
 		if r, err = EmitirRecibo(ctx, tx, c); err != nil {
 			return err
 		}
-		if p != nil && r.Total+0.005 >= p.Total {
-			if err := q.PedidoPagado(ctx, p.ID); err != nil {
+		if r.Repetido {
+			return nil
+		}
+		// Pagado cuando lo cobrado cubre el total: este recibo, los
+		// anteriores del mismo pedido y lo cobrado en línea. Mirar solo este
+		// recibo contra el total empujaba a cobrar otra vez la seña.
+		if p != nil {
+			var pagado bool
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= o.total FROM orders o WHERE o.id = $1`, p.ID).
+				Scan(&pagado); err != nil {
 				return err
+			}
+			if pagado {
+				if err := q.PedidoPagado(ctx, p.ID); err != nil {
+					return err
+				}
 			}
 		}
 		_, err = cola.Encolar(ctx, q, TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})
@@ -110,6 +152,9 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	})
 	if err != nil {
 		return ResultadoDeCobro{}, comoProblema(err)
+	}
+	if r.Repetido {
+		return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", ReceiptID: &r.ReceiptID}, nil
 	}
 	desc := "Emitió el recibo " + r.Numero + " por " + jsmath.Fijo2(r.Total)
 	if numeroPedido != "" {
@@ -209,9 +254,12 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 	if f.Tipo == "echeq" && f.Circuito == "negro" {
 		return mal("circuito", "Un e-Cheq no puede ir por el circuito B: queda registrado en el banco a nombre de la empresa.")
 	}
-	fecha, err := time.ParseInLocation("2006-01-02T15:04:05", f.FechaPago+"T12:00:00", argentina)
-	if err != nil {
-		return mal("fechaPago", "Poné la fecha de pago: es lo que ordena la cartera.")
+	fecha, ok := LeerFechaDeCheque(f.FechaPago)
+	if !ok {
+		return mal("fechaPago", "Esa fecha no existe.")
+	}
+	if m := RevisarFechaDeCheque(fecha, time.Now()); m != "" {
+		return mal("fechaPago", m)
 	}
 	if f.Sentido == "recibido" {
 		if _, err := s.q.ChequeRepetido(ctx, sqlc.ChequeRepetidoParams{Numero: numero, Banco: banco}); err == nil {

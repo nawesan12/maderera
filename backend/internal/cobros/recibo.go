@@ -2,6 +2,8 @@ package cobros
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"math"
 	"strings"
@@ -42,6 +44,19 @@ type Cobro struct {
 	Circuito   string // blanco | negro
 	Caja       *Caja
 	UsuarioID  *string
+	// OrderID: el pedido que cobra el recibo, si cobra uno (lo resta
+	// fragmentos.SinCobrarDelPedido).
+	OrderID *string
+	// Clave hace repetible el cobro (T3, hallazgo 14): la pantalla la genera
+	// al abrir el diálogo, y un reintento —la respuesta se perdió, doble
+	// clic— devuelve el mismo recibo en vez de dos recibos y dos entradas de
+	// efectivo. Vacía, sin clave (los cobros que nacen de otra operación).
+	Clave string
+	// FueraDeLaCuenta: el recibo cobra un pedido cuya deuda no está en la
+	// cuenta corriente (de contado, sin su «compra» asentada). Su pago
+	// tampoco va a la cuenta: dejaba al cliente con saldo a favor, que «Me
+	// deben» no suma, mientras el pedido seguía reclamando el total.
+	FueraDeLaCuenta bool
 }
 
 // ReciboEmitido es lo que devuelve EmitirRecibo.
@@ -52,6 +67,39 @@ type ReciboEmitido struct {
 	AccountMovementID *string `json:"accountMovementId"`
 	// Algo que hay que decirle a quien cobró, aunque salió bien.
 	Aviso *string `json:"aviso"`
+	// Repetido: la clave ya tenía su recibo y se devolvió ese. Quien llama
+	// no encola otra vez el aviso ni vuelve a marcar el pedido.
+	Repetido bool `json:"-"`
+}
+
+// ErrClaveDeOtroCobro: la misma clave llegó con otro cobro adentro (otro
+// monto, otro cliente, otro pedido). Devolver el recibo viejo como si nada
+// haría creer que se cobró lo nuevo.
+var ErrClaveDeOtroCobro = &ErrorDeCobro{"Ese cobro ya se registró con otros datos. Cerrá el cobro y volvé a abrirlo."}
+
+// huella resume lo que cobra el recibo, para comparar un reintento.
+func huella(c Cobro) string {
+	h := sha256.New()
+	escribir := func(s ...string) {
+		for _, x := range s {
+			h.Write([]byte(x))
+			h.Write([]byte{0})
+		}
+	}
+	opt := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	escribir(opt(c.CustomerID), opt(c.OrderID), c.Origen, c.Circuito)
+	for _, p := range c.Partes {
+		escribir(string(p.Medio), jsmath.Fijo2(ACentavos(p.Importe)), opt(p.ChequeID), opt(p.PaymentID))
+		if p.Cheque != nil {
+			escribir(p.Cheque.Numero, p.Cheque.Banco, p.Cheque.FechaPago.Format("2006-01-02"))
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // EmitirRecibo registra un cobro y emite su recibo. **Es la única forma de
@@ -67,7 +115,35 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 	if p := Revisar(c.Partes, c.Circuito); p != "" {
 		return ReciboEmitido{}, errCobro(p)
 	}
+	// Aparte de Revisar, que es el revisarPartes del TS con su golden: la
+	// fecha depende de hoy.
+	if p := RevisarFechasDeCheques(c.Partes, time.Now()); p != "" {
+		return ReciboEmitido{}, errCobro(p)
+	}
 	total := TotalDePartes(importes(c.Partes))
+
+	var marca *string
+	if c.Clave != "" {
+		// El candado serializa los reintentos antes de numerar: el que llega
+		// segundo espera, encuentra el recibo y no gasta un número de la
+		// serie (que no tiene huecos). El índice único de receipts.clave es
+		// la red por si alguien llama sin el candado.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1::text))`, "recibo:"+c.Clave); err != nil {
+			return ReciboEmitido{}, err
+		}
+		hecho, err := q.ReciboPorClave(ctx, &c.Clave)
+		if err == nil {
+			if hecho.Huella != huella(c) {
+				return ReciboEmitido{}, ErrClaveDeOtroCobro
+			}
+			return ReciboEmitido{ReceiptID: hecho.ID, Numero: hecho.Numero, Total: hecho.Total, AccountMovementID: hecho.AccountMovementID, Repetido: true}, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return ReciboEmitido{}, err
+		}
+		h := huella(c)
+		marca = &h
+	}
 
 	recibidoDe := strings.TrimSpace(c.RecibidoDe)
 	if c.CustomerID != nil && recibidoDe == "" {
@@ -94,6 +170,7 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 	id, err := q.CrearRecibo(ctx, sqlc.CrearReciboParams{
 		Numero: numero, CustomerID: c.CustomerID, RecibidoDe: recibidoDe, BranchID: c.BranchID,
 		Total: jsmath.Fijo2(total), Origen: sqlc.OrigenRecibo(c.Origen), Concepto: c.Concepto, CreatedByUserID: c.UsuarioID,
+		OrderID: c.OrderID, Clave: nuloSiVacio(c.Clave), Huella: marca,
 	})
 	if err != nil {
 		return ReciboEmitido{}, err
@@ -128,7 +205,7 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 	// Un solo movimiento por recibo, por el total: el detalle de con qué pagó
 	// está en el recibo.
 	r := ReciboEmitido{ReceiptID: id, Numero: numero, Total: total}
-	if c.CustomerID != nil {
+	if c.CustomerID != nil && !c.FueraDeLaCuenta {
 		detalle := "Recibo " + numero
 		if c.Concepto != nil && *c.Concepto != "" {
 			detalle = *c.Concepto + " — recibo " + numero
@@ -319,7 +396,9 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 		}
 	}
 	var anulacion *string
-	if r.CustomerID != nil {
+	// Solo se revierte en la cuenta lo que pasó por la cuenta: el recibo de
+	// un pedido de contado no la tocó (Cobro.FueraDeLaCuenta).
+	if r.CustomerID != nil && r.AccountMovementID != nil {
 		// Lo que ya volvió a la cuenta por reintegros parciales de Mercado
 		// Pago de este recibo no se devuelve otra vez: la deuda vuelve por el
 		// total menos esos tramos.
@@ -349,4 +428,11 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 		return "", nil, err
 	}
 	return r.Numero, r.CustomerID, nil
+}
+
+func nuloSiVacio(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

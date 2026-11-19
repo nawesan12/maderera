@@ -15,6 +15,7 @@ package pedidos
 
 import (
 	"log/slog"
+	"mjbj/internal/autorizacion"
 	"net/http"
 	"time"
 
@@ -30,11 +31,20 @@ type Servicio struct {
 	q     *sqlc.Queries
 	log   *slog.Logger
 	ahora func() time.Time
+	// aut es el PIN de los admins: respetar los precios de un presupuesto
+	// vencido más allá de lo libre lo autoriza uno (T3).
+	aut *autorizacion.Servicio
 }
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, q: sqlc.New(pool), log: log, ahora: time.Now}
+	return &Servicio{pool: pool, q: sqlc.New(pool), log: log, ahora: time.Now, aut: autorizacion.Nuevo(pool, log, "")}
+}
+
+// ConAutorizacion le da el servicio del PIN compartido con el mostrador.
+func (s *Servicio) ConAutorizacion(a *autorizacion.Servicio) *Servicio {
+	s.aut = a
+	return s
 }
 
 var argentina = func() *time.Location {

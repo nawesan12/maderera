@@ -5029,6 +5029,8 @@ type CashMovement struct {
 	Clave             *string            `json:"clave"`
 	ExpenseID         *string            `json:"expenseId"`
 	SupplierPaymentID *string            `json:"supplierPaymentId"`
+	DeclaradoAt       pgtype.Timestamptz `json:"declaradoAt"`
+	BajoLaBase        bool               `json:"bajoLaBase"`
 }
 
 type CashSession struct {
@@ -5656,37 +5658,44 @@ type NotificationsLog struct {
 }
 
 type Order struct {
-	ID               string       `json:"id"`
-	Numero           string       `json:"numero"`
-	CustomerID       *string      `json:"customerId"`
-	QuoteID          *string      `json:"quoteId"`
-	ContactoNombre   string       `json:"contactoNombre"`
-	ContactoEmail    *string      `json:"contactoEmail"`
-	ContactoTelefono *string      `json:"contactoTelefono"`
-	BranchID         *string      `json:"branchId"`
-	Estado           EstadoPedido `json:"estado"`
-	Origen           OrigenPedido `json:"origen"`
-	TipoEntrega      TipoEntrega  `json:"tipoEntrega"`
-	DireccionEntrega *string      `json:"direccionEntrega"`
-	ZonaEnvio        *string      `json:"zonaEnvio"`
-	CostoEnvio       jsmath.Num   `json:"costoEnvio"`
-	Subtotal         jsmath.Num   `json:"subtotal"`
-	Total            jsmath.Num   `json:"total"`
-	MedioPago        *MedioPago   `json:"medioPago"`
-	EstadoPago       EstadoPago   `json:"estadoPago"`
-	Notas            *string      `json:"notas"`
-	CreatedByUserID  *string      `json:"createdByUserId"`
-	CreatedAt        time.Time    `json:"createdAt"`
-	UpdatedAt        time.Time    `json:"updatedAt"`
-	PublicToken      string       `json:"publicToken"`
-	ClaveMostrador   *string      `json:"claveMostrador"`
-	Descuento        jsmath.Num   `json:"descuento"`
-	DescuentoMotivo  *string      `json:"descuentoMotivo"`
-	NumeroProvisorio *string      `json:"numeroProvisorio"`
-	CobradaAt        *time.Time   `json:"cobradaAt"`
-	SincronizadaAt   *time.Time   `json:"sincronizadaAt"`
-	SellerID         *string      `json:"sellerId"`
-	EntregarEl       pgtype.Date  `json:"entregarEl"`
+	ID                     string       `json:"id"`
+	Numero                 string       `json:"numero"`
+	CustomerID             *string      `json:"customerId"`
+	QuoteID                *string      `json:"quoteId"`
+	ContactoNombre         string       `json:"contactoNombre"`
+	ContactoEmail          *string      `json:"contactoEmail"`
+	ContactoTelefono       *string      `json:"contactoTelefono"`
+	BranchID               *string      `json:"branchId"`
+	Estado                 EstadoPedido `json:"estado"`
+	Origen                 OrigenPedido `json:"origen"`
+	TipoEntrega            TipoEntrega  `json:"tipoEntrega"`
+	DireccionEntrega       *string      `json:"direccionEntrega"`
+	ZonaEnvio              *string      `json:"zonaEnvio"`
+	CostoEnvio             jsmath.Num   `json:"costoEnvio"`
+	Subtotal               jsmath.Num   `json:"subtotal"`
+	Total                  jsmath.Num   `json:"total"`
+	MedioPago              *MedioPago   `json:"medioPago"`
+	EstadoPago             EstadoPago   `json:"estadoPago"`
+	Notas                  *string      `json:"notas"`
+	CreatedByUserID        *string      `json:"createdByUserId"`
+	CreatedAt              time.Time    `json:"createdAt"`
+	UpdatedAt              time.Time    `json:"updatedAt"`
+	PublicToken            string       `json:"publicToken"`
+	ClaveMostrador         *string      `json:"claveMostrador"`
+	Descuento              jsmath.Num   `json:"descuento"`
+	DescuentoMotivo        *string      `json:"descuentoMotivo"`
+	NumeroProvisorio       *string      `json:"numeroProvisorio"`
+	CobradaAt              *time.Time   `json:"cobradaAt"`
+	SincronizadaAt         *time.Time   `json:"sincronizadaAt"`
+	SellerID               *string      `json:"sellerId"`
+	EntregarEl             pgtype.Date  `json:"entregarEl"`
+	AutorizadoPor          *string      `json:"autorizadoPor"`
+	DejadoDeCobrar         jsmath.Num   `json:"dejadoDeCobrar"`
+	BajoListaSinAutorizar  bool         `json:"bajoListaSinAutorizar"`
+	HuellaMostrador        *string      `json:"huellaMostrador"`
+	AnulacionAutorizadaPor *string      `json:"anulacionAutorizadaPor"`
+	MercaderiaNoVolvio     bool         `json:"mercaderiaNoVolvio"`
+	CreditoSinAutorizar    jsmath.Num   `json:"creditoSinAutorizar"`
 }
 
 type OrderItem struct {
@@ -5703,6 +5712,7 @@ type OrderItem struct {
 	AlicuotaIva    *jsmath.Num `json:"alicuotaIva"`
 	Presentacion   *string     `json:"presentacion"`
 	StockPorUnidad jsmath.Num  `json:"stockPorUnidad"`
+	PrecioLista    *jsmath.Num `json:"precioLista"`
 }
 
 type OrderPayment struct {
@@ -6061,17 +6071,18 @@ type Quote struct {
 }
 
 type QuoteItem struct {
-	ID             string     `json:"id"`
-	QuoteID        string     `json:"quoteId"`
-	VariantID      *string    `json:"variantId"`
-	Descripcion    string     `json:"descripcion"`
-	Unidad         string     `json:"unidad"`
-	Cantidad       jsmath.Num `json:"cantidad"`
-	PrecioUnitario jsmath.Num `json:"precioUnitario"`
-	Subtotal       jsmath.Num `json:"subtotal"`
-	Notas          *string    `json:"notas"`
-	Orden          int32      `json:"orden"`
-	Presentacion   *string    `json:"presentacion"`
+	ID             string      `json:"id"`
+	QuoteID        string      `json:"quoteId"`
+	VariantID      *string     `json:"variantId"`
+	Descripcion    string      `json:"descripcion"`
+	Unidad         string      `json:"unidad"`
+	Cantidad       jsmath.Num  `json:"cantidad"`
+	PrecioUnitario jsmath.Num  `json:"precioUnitario"`
+	Subtotal       jsmath.Num  `json:"subtotal"`
+	Notas          *string     `json:"notas"`
+	Orden          int32       `json:"orden"`
+	Presentacion   *string     `json:"presentacion"`
+	PrecioLista    *jsmath.Num `json:"precioLista"`
 }
 
 type RateLimit struct {
@@ -6100,6 +6111,9 @@ type Receipt struct {
 	RepartoDeudores     *jsmath.Num  `json:"repartoDeudores"`
 	RepartoAnticipo     *jsmath.Num  `json:"repartoAnticipo"`
 	RepartoB            *jsmath.Num  `json:"repartoB"`
+	OrderID             *string      `json:"orderId"`
+	Clave               *string      `json:"clave"`
+	Huella              *string      `json:"huella"`
 }
 
 type ReceiptPart struct {
@@ -6401,13 +6415,14 @@ type Trabajo struct {
 }
 
 type User struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Email         string    `json:"email"`
-	EmailVerified bool      `json:"emailVerified"`
-	Image         *string   `json:"image"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Email           string    `json:"email"`
+	EmailVerified   bool      `json:"emailVerified"`
+	Image           *string   `json:"image"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+	PinAutorizacion *string   `json:"pinAutorizacion"`
 }
 
 type VariantCost struct {

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 
 /**
  * Pedidos y presupuestos del panel. Lo hace la API de Go
@@ -96,36 +97,40 @@ export interface EntregaDelPedido {
   medioPago?: MedioDelPedido;
   /** AAAA-MM-DD: el día que se compromete la entrega. */
   entregarEl?: string;
+  /** Un presupuesto vencido: los precios de hoy o los suyos (con PIN). */
+  precios?: "actualizar" | "respetar";
+  pin?: string;
 }
 
-export async function convertirEnPedido(quoteId: string, entrega?: EntregaDelPedido): Promise<EstadoVenta & { id?: string }> {
+export async function convertirEnPedido(
+  quoteId: string,
+  entrega?: EntregaDelPedido,
+): Promise<EstadoVenta & { id?: string; autorizacion?: Autorizacion }> {
   const r = await (await api()).POST("/api/v1/admin/presupuestos/{id}/pedido", {
     params: { path: { id: quoteId } },
     body: entrega,
   });
-  if (!r.data) return fallo(r);
+  if (!r.data) {
+    // Respetar los precios vencidos pasado lo libre: Go pide el PIN con lo
+    // que se deja de cobrar (pedidos.faltaDePIN).
+    const e = (r.error as Problema | undefined)?.errores;
+    if (e?.pin) {
+      return {
+        error: e.pin,
+        autorizacion: {
+          motivo: "presupuesto",
+          monto: Number(e.pinMonto ?? 0),
+          pinIncorrecto: e.pinIncorrecto === "si",
+          bloqueadoHasta: e.pinHasta,
+        },
+      };
+    }
+    return fallo(r);
+  }
   refrescar();
   revalidatePath("/admin/stock");
   if (r.data.numero) avisarPedidoNuevo(r.data.numero);
   return { ok: r.data.ok, id: r.data.id };
-}
-
-/* -------------------------------------------------------------------------- */
-/* Cobro                                                                       */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Marca un pedido como cobrado: lo que ya se cobró por otro lado. Un pedido a
- * cuenta corriente no pasa por acá (su cobro va con recibo).
- */
-export async function marcarPagado(id: string, medioPago?: Exclude<MedioDelPedido, "cuenta_corriente">): Promise<EstadoVenta> {
-  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cobrado", {
-    params: { path: { id } },
-    body: medioPago ? { medioPago } : {},
-  });
-  if (!r.data) return fallo(r);
-  refrescar();
-  return { ok: r.data.ok };
 }
 
 /* -------------------------------------------------------------------------- */

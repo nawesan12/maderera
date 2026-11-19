@@ -1,7 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { Banknote, WifiOff } from "lucide-react";
+import { ArrowRight, Banknote, WifiOff } from "lucide-react";
 import { formatearMonto } from "@/lib/formato";
 import type { EstadoCola } from "@/lib/mostrador/offline/use-cola";
 import type { EstadoConexion } from "@/lib/mostrador/offline/use-conexion";
@@ -14,7 +15,9 @@ export function BarraSuperior({
   sucursales,
   sucursal,
   turno,
+  cajaAbierta,
   onCaja,
+  terminal,
 }: {
   conexion: EstadoConexion;
   cola: EstadoCola;
@@ -22,7 +25,15 @@ export function BarraSuperior({
   sucursales: Sucursal[];
   sucursal: Sucursal;
   turno: Turno | null;
+  /**
+   * Si la caja está abierta, aunque el turno todavía no haya llegado del
+   * servidor: recién abierta desde el cobro, el botón ya decía «Cobrar» y
+   * esto seguía en «Abrir caja» hasta el refresh (comité de T4).
+   */
+  cajaAbierta: boolean;
   onCaja: () => void;
+  /** La terminal de esta máquina: el código, o el selector para vincularla. */
+  terminal?: ReactNode;
 }) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-linea px-4">
@@ -78,16 +89,31 @@ export function BarraSuperior({
         </span>
       )}
 
+      <span className="ml-auto" />
+      {terminal}
+
+      {/* Abierta, dice cuánto hay; cerrada, dice lo que hay que hacer y se ve
+          como botón —borde y flecha—: «Caja cerrada» se leía como un estado y
+          nadie la tocaba (T4, hallazgo 19). Sin el rojo de los problemas:
+          abrir la caja es el primer paso del día, no un error, y el rojo
+          queda para lo que salió mal (comité de T4). */}
       <button
         onClick={onCaja}
-        className={`ml-auto inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
-          turno
+        className={`inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
+          cajaAbierta
             ? "estado-ok bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
-            : "estado-problema bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
+            : "border border-linea bg-card text-foreground hover:bg-hundida"
         }`}
       >
         <Banknote className="h-4 w-4" />
-        {turno ? `Caja ${formatearMonto(turno.esperado)}` : "Caja cerrada"}
+        {cajaAbierta ? (
+          turno ? `Caja ${formatearMonto(turno.esperado)}` : "Caja abierta"
+        ) : (
+          <>
+            Abrir caja
+            <ArrowRight className="h-4 w-4" />
+          </>
+        )}
       </button>
 
       <span className="text-sm text-muted-foreground">{usuario.nombre}</span>

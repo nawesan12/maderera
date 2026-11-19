@@ -15,10 +15,13 @@ package main
 //   - "interno": solo el servidor de Next, con el secreto.
 //   - "admin": solo el admin, aunque la pantalla deje entrar a más (una
 //     acción puntual dentro de ella: bloquear una cuenta, anular un recibo).
+//   - "plata": quien mueve plata desde la ficha de un pedido (cobrar,
+//     facturar): roles.ManejanPlata. El depósito abre Pedidos pero no cobra.
 //   - "personal": todo el personal, a propósito. Hoy: el push (cada uno
 //     activa el suyo), el buscador del encabezado (filtra adentro según el
-//     rol), los datos del emisor (van en todo lo que se imprime) y la ficha
-//     del pedido (la abre también el aserradero desde /admin/cortes/nuevo).
+//     rol), los datos del emisor (van en todo lo que se imprime) y el pedido
+//     para el taller (sin plata: lo abre el aserradero desde
+//     /admin/cortes/nuevo).
 //
 // Cuando una ruta la usan varias pantallas, va la más amplia de ellas.
 var pantallaDeCadaRuta = map[string]string{
@@ -34,6 +37,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"ListarCajasFisicas":             "/admin/caja",                   // GET /api/v1/admin/caja/cajas-fisicas
 	"CrearCajaFisica":                "/admin/caja",                   // POST /api/v1/admin/caja/cajas-fisicas
 	"EmitidoPorCaja":                 "/admin/caja",                   // GET /api/v1/admin/caja/emitido
+	"AnulacionesPorPersona":          "/admin/caja",                   // GET /api/v1/admin/caja/anulaciones
 	"GuardarFondoBase":               "/admin/caja",                   // PUT /api/v1/admin/caja/sucursales/{id}/fondo-base
 	"SucursalesConCaja":              "/admin/caja",                   // GET /api/v1/admin/caja/sucursales
 	"TurnosCerrados":                 "/admin/caja",                   // GET /api/v1/admin/caja/turnos-cerrados
@@ -68,7 +72,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"PendientesDelCierre":            "/admin/cierre",                 // GET /api/v1/admin/cierre/pendientes
 	"ResumenDelMes":                  "/admin/cierre",                 // GET /api/v1/admin/cierre/resumen
 	"BloquearCuenta":                 "admin",                         // PUT /api/v1/admin/clientes/{id}/bloqueo
-	"CobrarACliente":                 "/admin/pedidos",                // POST /api/v1/admin/clientes/{id}/cobros
+	"CobrarACliente":                 "plata",                         // POST /api/v1/admin/clientes/{id}/cobros
 	"CreditoDeCliente":               "/admin/clientes",               // GET /api/v1/admin/clientes/{id}/credito
 	"VincularCuentaWeb":              "/admin/clientes",               // POST /api/v1/admin/clientes/{id}/cuenta-web
 	"HistorialDeCliente":             "/admin/clientes",               // GET /api/v1/admin/clientes/{id}/historial
@@ -182,8 +186,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"LibroIvaVentasCsv":              "/admin/facturacion",            // GET /api/v1/admin/facturacion/libro-iva/csv
 	"LibroIvaVentas":                 "/admin/facturacion",            // GET /api/v1/admin/facturacion/libro-iva
 	"LibroIvaDigital":                "/admin/arca",                   // GET /api/v1/admin/facturacion/libro-iva/digital
-	"FacturarPedido":                 "/admin/pedidos",                // POST /api/v1/admin/facturacion/pedidos/{id}/facturar
-	"PedidoParaFacturar":             "/admin/pedidos",                // GET /api/v1/admin/facturacion/pedidos/{id}
+	"FacturarPedido":                 "plata",                         // POST /api/v1/admin/facturacion/pedidos/{id}/facturar
+	"PedidoParaFacturar":             "plata",                         // GET /api/v1/admin/facturacion/pedidos/{id}
 	"ListarPuntosDeVenta":            "/admin/facturacion",            // GET /api/v1/admin/facturacion/puntos-de-venta
 	"GuardarPuntoDeVenta":            "/admin/facturacion",            // POST /api/v1/admin/facturacion/puntos-de-venta
 	"ResumenDeFacturacion":           "/admin/facturacion",            // GET /api/v1/admin/facturacion/resumen
@@ -211,11 +215,12 @@ var pantallaDeCadaRuta = map[string]string{
 	"SaldoDeAcopio":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/acopio
 	"AvanzarPedido":                  "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/avanzar
 	"CancelarPedido":                 "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/cancelar
-	"MarcarPedidoCobrado":            "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/cobrado
+	"CobrarPedido":                   "plata",                         // POST /api/v1/admin/pedidos/{id}/cobro
 	"CambiarEntregaDelPedido":        "/admin/presupuestos",           // PUT /api/v1/admin/pedidos/{id}/entrega
 	"CortesDelPedido":                "/admin/cortes",                 // GET /api/v1/admin/pedidos/{id}/cortes
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos
-	"FichaDePedido":                  "personal",                      // GET /api/v1/admin/pedidos/{id}
+	"FichaDePedido":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}
+	"PedidoParaElTaller":             "personal",                      // GET /api/v1/admin/pedidos/{id}/taller
 	"ListarPedidos":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos
 	"ChequesTerminados":              "/admin/cheques",                // GET /api/v1/admin/cheques/terminados
 	"CobranzasDelPeriodo":            "/admin/pagos",                  // GET /api/v1/admin/cobranzas
@@ -470,6 +475,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"RemitoParaAvisar":               "interno",                       // GET /api/v1/remitos/{id}/aviso
 	"RemitoPdf":                      "publico",                       // GET /api/v1/remitos/{id}/pdf
 	"RemitoCompleto":                 "/admin/pedidos",                // GET /api/v1/remitos/{id}
+	"CargarPin":                      "admin",                         // PUT /api/v1/sesion/pin
+	"DestrabarPin":                   "admin",                         // POST /api/v1/sesion/pin/destrabar
 	"CambiarClave":                   "sesion",                        // PUT /api/v1/sesion/clave
 	"EstadoDeClave":                  "sesion",                        // GET /api/v1/sesion/clave
 	"Salir":                          "publico",                       // DELETE /api/v1/sesion

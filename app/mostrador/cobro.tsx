@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ClipboardList, Loader2, Plus, FileText, Printer } from "lucide-react";
+import { Banknote, ClipboardList, Loader2, Plus, FileText, Printer } from "lucide-react";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { formatearMonto } from "@/lib/formato";
 import type { TipoDescuento, MedioDeMostrador } from "@/lib/mostrador/importes";
@@ -18,6 +18,7 @@ import {
 import { CamposDeCheque, DatosDeTarjeta, PagoPartido } from "./medios-de-pago";
 import { PromosDelBanco } from "./promos";
 import { type Cliente, type UltimaVenta, papelDeLaVenta } from "./tipos";
+import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 
 export function Cobro({
   cheque,
@@ -50,11 +51,16 @@ export function Cobro({
   recibido,
   onRecibido,
   cambio,
-  hayCaja,
+  faltaCaja,
+  onAbrirCaja,
   enviando,
   puede,
   puedeCobrar,
   onCobrar,
+  porAutorizar,
+  pidePin,
+  onPin,
+  onCancelarPin,
   aviso,
   ultima,
   acopio,
@@ -99,14 +105,26 @@ export function Cobro({
   recibido: string;
   onRecibido: (v: string) => void;
   cambio: number | null;
-  hayCaja: boolean;
+  /**
+   * Hay efectivo en el cobro (solo o en una parte del pago partido) y la
+   * sucursal no tiene turno abierto: Go lo rechazaría.
+   */
+  faltaCaja: boolean;
+  /** Abre el panel de la caja para abrir el turno y volver a este cobro. */
+  onAbrirCaja: () => void;
   enviando: boolean;
   /** Hay algo cargado: alcanza para un presupuesto. */
   puede: boolean;
   /** Además, están los datos que la venta necesita para cobrarse. */
   puedeCobrar: boolean;
   onCobrar: () => void;
-  aviso: { tipo: "ok" | "error"; texto: string; autorizar?: () => void } | null;
+  /** Lo que la venta deja de cobrar pasado lo libre: va a pedir el PIN. */
+  porAutorizar: number;
+  /** Go pidió el PIN de un admin: el campo va en el lugar del botón. */
+  pidePin: Autorizacion | null;
+  onPin: (pin: string) => void;
+  onCancelarPin: () => void;
+  aviso: { tipo: "ok" | "error"; texto: string } | null;
   ultima: UltimaVenta | null;
   acopio: boolean;
   /** Elegir contado, cuenta corriente o acopio: acomoda el medio de pago. */
@@ -134,7 +152,12 @@ export function Cobro({
   onRemito: () => void;
   onPresupuesto: () => void;
 }) {
-  const faltaCaja = medio === "efectivo" && !hayCaja;
+  /*
+   * Sin caja, el botón grande abre la caja: la tecla y el botón hacen lo que
+   * el botón dice. Antes había tres avisos de «no hay caja» —la barra, un
+   * párrafo rojo acá y el botón apagado— y ninguno la abría (T4, hallazgo 19).
+   */
+  const alCobrar = faltaCaja ? onAbrirCaja : onCobrar;
 
   /*
    * El precio de profesional es de contado.
@@ -301,7 +324,8 @@ export function Cobro({
                     // Es el último dato de la venta en efectivo: Enter cobra.
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      if (puedeCobrar) onCobrar();
+                      if (faltaCaja) onAbrirCaja();
+                      else if (puedeCobrar) onCobrar();
                     }
                   }}
                   placeholder="0"
@@ -318,12 +342,6 @@ export function Cobro({
               </label>
             )}
 
-            {faltaCaja && (
-              <p className="estado-problema mt-3 rounded-xl bg-[var(--estado-fondo)] p-3.5 text-base text-[var(--estado-tinta)]">
-                No hay caja abierta en esta sucursal. Abrila para poder cobrar en
-                efectivo.
-              </p>
-            )}
           </div>
 
           <div className="min-w-0">
@@ -473,16 +491,6 @@ export function Cobro({
           } bg-[var(--estado-fondo)] text-[var(--estado-tinta)]`}
         >
           <p>{aviso.texto}</p>
-          {aviso.autorizar && (
-            <button
-              type="button"
-              onClick={aviso.autorizar}
-              disabled={enviando}
-              className="mt-2.5 h-11 rounded-lg border border-current px-4 text-base font-semibold"
-            >
-              Cobrar igual, bajo mi responsabilidad
-            </button>
-          )}
         </div>
       )}
 
@@ -574,22 +582,51 @@ export function Cobro({
 
         <div className="flex items-baseline justify-between">
           <span className="text-lg font-semibold">Total</span>
-          <span className="tabular text-[34px] font-bold leading-none tracking-tight">
-            {formatearMonto(total)}
+          {/* Pasado lo libre, el total se pone naranja y dice cuánto queda
+              abajo del precio: se llama al admin mientras se termina de cargar. */}
+          <span className="text-right">
+            <span
+              className={`tabular block text-[34px] font-bold leading-none tracking-tight ${porAutorizar > 0 ? "text-brand-orange" : ""}`}
+            >
+              {formatearMonto(total)}
+            </span>
+            {porAutorizar > 0 && !pidePin && (
+              <span className="tabular mt-1 block text-sm font-semibold text-brand-orange">
+                {formatearMonto(porAutorizar)} abajo del precio · PIN admin
+              </span>
+            )}
           </span>
         </div>
 
-        {/* Cobrar y el presupuesto en la misma fila: el presupuesto es de cada
+        {/* El PIN de un admin en el lugar del botón: la venta no se corta, no
+            abre otra pantalla. Enter reenvía la misma venta y Esc vuelve. */}
+        {pidePin ? (
+          <div className="mt-3.5">
+            <CampoPin autorizacion={pidePin} enviando={enviando} onEnviar={onPin} onCancelar={onCancelarPin} grande />
+          </div>
+        ) : (
+        /* Cobrar y el presupuesto en la misma fila: el presupuesto es de cada
             tantas ventas y no necesita el ancho entero, y esos 55 px de alto
-            son los que hacían falta arriba. */}
+            son los que hacían falta arriba. */
         <div className="mt-3.5 flex gap-2">
           <button
-            onClick={() => onCobrar()}
-            disabled={!puedeCobrar}
+            onClick={() => alCobrar()}
+            disabled={faltaCaja ? enviando : !puedeCobrar}
+            data-foco="cobrar"
+            // Sin caja es la acción primaria, como cobrar, y no una alarma:
+            // abrirla es el primer paso de cada mañana (comité de T4).
             className="inline-flex h-16 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl bg-accion text-xl font-bold text-white transition-colors hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {enviando ? (
               <Loader2 className="h-6 w-6 animate-spin" />
+            ) : faltaCaja ? (
+              <>
+                <Banknote className="h-6 w-6" />
+                Abrir la caja
+                <kbd className="rounded border border-white/40 px-1.5 py-0.5 text-xs font-medium">
+                  Ctrl + Enter
+                </kbd>
+              </>
             ) : (
               <>
                 {acopio ? "Cobrar y dejar en acopio" : "Cobrar"}
@@ -617,6 +654,7 @@ export function Cobro({
             Presupuesto
           </button>
         </div>
+        )}
       </div>
     </div>
   );

@@ -36,6 +36,7 @@ export default async function FacturacionPage({
     cobro?: string;
     buscar?: string;
     pagina?: string;
+    estado?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -73,13 +74,21 @@ export default async function FacturacionPage({
    * el filtro entero: antes se pedían 200 (o 500) y se sumaba lo que había
    * llegado, sin avisar que había más.
    */
-  const [lista, rechazados, sinAutorizar, resumen, arca, bajas] = await Promise.all([
+  /*
+   * Las facturas de ventas anuladas que siguen con su débito: a donde llevan
+   * el Resumen y el Cierre. Son de cualquier fecha, como el aviso, y cada
+   * una abre su comprobante con la nota de crédito a mano. Antes el enlace
+   * caía en la lista general y había que adivinar cuáles eran.
+   */
+  const anuladasVivas = params.estado === "anulada-viva";
+  const [lista, rechazados, sinAutorizar, resumen, arca, bajas, vivas] = await Promise.all([
     listarComprobantesPagina(filtros, pagina, POR_PAGINA),
     listarComprobantesPagina({ estado: "rechazada" }, 1, 100),
     listarComprobantesPagina({ estado: "emitida" }, 1, 100),
     resumenFacturacion(periodo),
     estadoArca(),
     dadosDeBaja(),
+    anuladasVivas ? listarComprobantesPagina({ estado: "anulada-viva" }, 1, 100) : null,
   ]);
   // Una baja borra un comprobante de este listado: que se vea cuántas hubo
   // en el mes, al lado de los otros accesos.
@@ -149,6 +158,15 @@ export default async function FacturacionPage({
             Qué falta
           </Link>
         </section>
+      )}
+
+      {vivas && vivas.total > 0 && (
+        <Grupo
+          titulo="Ventas anuladas con factura viva"
+          cantidad={vivas.total}
+          comprobantes={vivas.filas}
+          atencion
+        />
       )}
 
       {rechazados.total > 0 && (

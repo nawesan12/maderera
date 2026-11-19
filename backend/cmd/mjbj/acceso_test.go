@@ -255,6 +255,10 @@ func TestAccesoPorPantalla(t *testing.T) {
 			}
 		case "admin":
 			quiero[string(sqlc.StaffRoleAdmin)] = true
+		case "plata":
+			for _, r := range roles.ManejanPlata {
+				quiero[string(r)] = true
+			}
 		default:
 			rs := roles.QuienEntra(pantalla)
 			if len(rs) == 0 {

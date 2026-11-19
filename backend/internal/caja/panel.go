@@ -21,6 +21,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -95,10 +96,28 @@ type TurnoCerrado struct {
 	Notas      *string    `json:"notas"`
 	AbiertaPor string     `json:"abiertaPor"`
 	Esperado   float64    `json:"esperado"`
-	// Tardios son los movimientos que entraron después del arqueo (ventas
-	// sin conexión que llegaron tarde): se marcan, no se esconden.
-	Tardios int                `json:"tardios"`
-	Cierre  []RenglonDelCierre `json:"cierre"`
+	// Esperado es lo que tendría que haber habido al arquear: lo que entró
+	// hasta cerrada_at. Tardios son los movimientos que llegaron después
+	// (ventas y retiros sin conexión): van aparte, con su monto (T3,
+	// hallazgo 9). El que sacó plata no cambia la diferencia de una caja ya
+	// contada: un retiro con fecha vieja borraba un faltante. El que entró con
+	// una hora declarada dentro del turno sí suma al esperado: la plata
+	// estaba en el cajón cuando se contó, y dejarla afuera dejaba un
+	// sobrante falso para siempre (que además tapaba un faltante del mismo
+	// monto). Sumar plata al esperado no puede esconder nada: solo agranda
+	// un faltante.
+	Tardios      int     `json:"tardios"`
+	TardiosMonto float64 `json:"tardiosMonto"`
+	// BajoLista son las ventas sin conexión del turno que pasaron lo libre
+	// sin PIN (T3): ya pasaron y no se rechazan, pero se ven en rojo en el
+	// cierre, con lo que dejaron de cobrar.
+	BajoLista      int     `json:"bajoLista"`
+	BajoListaMonto float64 `json:"bajoListaMonto"`
+	// CreditoSinAutorizar: las del turno que cargaron a cuenta corriente
+	// pasado el límite o con mora, sin PIN (revisión de T3).
+	CreditoSinAutorizar      int                `json:"creditoSinAutorizar"`
+	CreditoSinAutorizarMonto float64            `json:"creditoSinAutorizarMonto"`
+	Cierre                   []RenglonDelCierre `json:"cierre"`
 }
 
 // TurnosCerrados son los turnos cerrados entre `desde` y `hasta` (el mes
@@ -114,8 +133,18 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 	}
 	filas, err := p.pool.Query(ctx, `
 		SELECT s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name,
-		       coalesce(sum(m.monto), 0),
-		       count(*) FILTER (WHERE m.created_at > s.cerrada_at)::int
+		       coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at
+		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at)), 0),
+		       count(m.id) FILTER (WHERE m.created_at > s.cerrada_at)::int,
+		       coalesce(sum(m.monto) FILTER (WHERE m.created_at > s.cerrada_at), 0),
+		       (SELECT count(*)::int FROM orders o WHERE o.bajo_lista_sin_autorizar AND o.branch_id = s.branch_id
+		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at),
+		       (SELECT coalesce(sum(o.dejado_de_cobrar), 0) FROM orders o WHERE o.bajo_lista_sin_autorizar AND o.branch_id = s.branch_id
+		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at),
+		       (SELECT count(*)::int FROM orders o WHERE o.credito_sin_autorizar > 0 AND o.branch_id = s.branch_id
+		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at),
+		       (SELECT coalesce(sum(o.credito_sin_autorizar), 0) FROM orders o WHERE o.credito_sin_autorizar > 0 AND o.branch_id = s.branch_id
+		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at)
 		FROM cash_sessions s
 		JOIN branches b ON b.id = s.branch_id
 		JOIN "user" u ON u.id = s.abierta_por
@@ -133,11 +162,12 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 	for filas.Next() {
 		var t TurnoCerrado
 		var contado *jsmath.Num
-		var esperado jsmath.Num
-		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios); err != nil {
+		var esperado, tardios, bajoLista, credito jsmath.Num
+		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios, &tardios,
+			&t.BajoLista, &bajoLista, &t.CreditoSinAutorizar, &credito); err != nil {
 			return nil, 0, err
 		}
-		t.Esperado = esperado.F()
+		t.Esperado, t.TardiosMonto, t.BajoListaMonto, t.CreditoSinAutorizarMonto = esperado.F(), tardios.F(), bajoLista.F(), credito.F()
 		if contado != nil {
 			c := contado.F()
 			t.Contado = &c
@@ -433,18 +463,41 @@ type Emitido struct {
 	InvoicePuntoVenta *int32    `json:"invoicePuntoVenta"`
 	InvoiceNumero     *int64    `json:"invoiceNumero"`
 	InvoiceTipo       *string   `json:"invoiceTipo"`
+	// La anulación, si la hubo: quién, cuándo y por qué, del último paso a
+	// «cancelado» del historial (mostrador.Anular). La Caja mostraba la venta
+	// anulada como si fuera válida.
+	Anulada    bool       `json:"anulada"`
+	AnuladaPor *string    `json:"anuladaPor"`
+	AnuladaAt  *time.Time `json:"anuladaAt"`
+	Motivo     *string    `json:"motivo"`
+	// FacturaViva: anulada y con la factura autorizada sin su nota de
+	// crédito (fragmentos.FacturaViva).
+	FacturaViva bool `json:"facturaViva"`
 }
+
+// notaDeAnulacion es el prefijo con que mostrador.Anular deja el motivo en
+// el historial.
+const notaDeAnulacion = "Anulada en el mostrador: "
 
 // EmitidoPorCaja es emitidoPorCaja: lo emitido en el mostrador entre
 // `desde` y `hasta` (incluido), lo más nuevo primero, hasta 200.
 func (p *Panel) EmitidoPorCaja(ctx context.Context, desde, hasta time.Time) ([]Emitido, error) {
 	filas, err := p.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.numero_provisorio, o.contacto_nombre, o.total, o.medio_pago::text, o.created_at,
-		       b.name, u.name, i.id, i.punto_venta, i.numero::bigint, i.tipo::text
+		       b.name, u.name, i.id, i.punto_venta, i.numero::bigint, i.tipo::text,
+		       o.estado = 'cancelado', anulacion.quien, anulacion.created_at, anulacion.nota,
+		       o.estado = 'cancelado' AND `+fragmentos.FacturaViva+`
 		FROM orders o
 		LEFT JOIN branches b ON b.id = o.branch_id
 		LEFT JOIN "user" u ON u.id = o.created_by_user_id
-		LEFT JOIN invoices i ON i.order_id = o.id
+		-- La factura y no su nota de crédito: con las dos, la venta salía
+		-- dos veces.
+		LEFT JOIN LATERAL (SELECT f.id, f.punto_venta, f.numero, f.tipo FROM invoices f
+		                   WHERE f.order_id = o.id ORDER BY f.tipo::text LIKE 'nota_credito%', f.created_at LIMIT 1) i ON true
+		LEFT JOIN LATERAL (SELECT h.created_at, h.nota, hu.name AS quien FROM order_status_history h
+		                   LEFT JOIN "user" hu ON hu.id = h.created_by_user_id
+		                   WHERE h.order_id = o.id AND h.estado = 'cancelado'
+		                   ORDER BY h.created_at DESC LIMIT 1) anulacion ON o.estado = 'cancelado'
 		WHERE o.origen = 'mostrador' AND o.created_at >= $1 AND o.created_at <= $2
 		ORDER BY o.created_at DESC
 		LIMIT 200`, desde, hasta)
@@ -457,11 +510,69 @@ func (p *Panel) EmitidoPorCaja(ctx context.Context, desde, hasta time.Time) ([]E
 		var e Emitido
 		var total jsmath.Num
 		if err := filas.Scan(&e.OrderID, &e.Numero, &e.NumeroProvisorio, &e.Cliente, &total, &e.MedioPago, &e.CreatedAt,
-			&e.Sucursal, &e.Operadora, &e.InvoiceID, &e.InvoicePuntoVenta, &e.InvoiceNumero, &e.InvoiceTipo); err != nil {
+			&e.Sucursal, &e.Operadora, &e.InvoiceID, &e.InvoicePuntoVenta, &e.InvoiceNumero, &e.InvoiceTipo,
+			&e.Anulada, &e.AnuladaPor, &e.AnuladaAt, &e.Motivo, &e.FacturaViva); err != nil {
 			return nil, err
 		}
 		e.Total = total.F()
+		if e.Motivo != nil {
+			m := strings.TrimSpace(strings.TrimPrefix(*e.Motivo, notaDeAnulacion))
+			e.Motivo = &m
+			if m == "" {
+				e.Motivo = nil
+			}
+		}
 		out = append(out, e)
+	}
+	return out, filas.Err()
+}
+
+// AnulacionesDeUnaPersona son las ventas del mostrador que anuló alguien
+// en el mes.
+type AnulacionesDeUnaPersona struct {
+	Quien    string  `json:"quien"`
+	Cantidad int     `json:"cantidad"`
+	Total    float64 `json:"total"`
+	// Devuelto es el efectivo que salió del cajón por esas anulaciones (los
+	// movimientos «devolucion»): lo que importa para el control. La parte
+	// con tarjeta o a cuenta nunca entró al cajón.
+	Devuelto float64 `json:"devuelto"`
+}
+
+// AnulacionesPorPersona cuenta las anulaciones del mostrador entre `desde` y
+// `hasta` (incluido) por quien las hizo, la que más anuló primero.
+//
+// Va por la fecha de la anulación (el último paso a «cancelado» del
+// historial, la misma regla que AnuladasDeLaSemana del Resumen) y sin tope.
+// La pantalla las sumaba sobre lo emitido, que corta en las 200 ventas más
+// nuevas y por la fecha de la venta: en un mes de más de 200 ventas las
+// anulaciones de la primera quincena no contaban, y la venta del 30
+// anulada el 2 no aparecía en ningún mes. Es el control para que no falte
+// plata: no puede informar de menos sin avisar.
+func (p *Panel) AnulacionesPorPersona(ctx context.Context, desde, hasta time.Time) ([]AnulacionesDeUnaPersona, error) {
+	filas, err := p.pool.Query(ctx, `
+		SELECT coalesce(a.quien, 'Sin nombre'), count(*)::int, coalesce(sum(o.total), 0),
+		       coalesce(sum((SELECT -sum(m.monto) FROM cash_movements m WHERE m.order_id = o.id AND m.tipo = 'devolucion')), 0)
+		FROM orders o
+		JOIN LATERAL (SELECT h.created_at, hu.name AS quien FROM order_status_history h
+		              LEFT JOIN "user" hu ON hu.id = h.created_by_user_id
+		              WHERE h.order_id = o.id AND h.estado = 'cancelado'
+		              ORDER BY h.created_at DESC LIMIT 1) a ON true
+		WHERE o.origen = 'mostrador' AND o.estado = 'cancelado' AND a.created_at >= $1 AND a.created_at <= $2
+		GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1`, desde, hasta)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	out := []AnulacionesDeUnaPersona{}
+	for filas.Next() {
+		var a AnulacionesDeUnaPersona
+		var total, devuelto jsmath.Num
+		if err := filas.Scan(&a.Quien, &a.Cantidad, &total, &devuelto); err != nil {
+			return nil, err
+		}
+		a.Total, a.Devuelto = total.F(), devuelto.F()
+		out = append(out, a)
 	}
 	return out, filas.Err()
 }

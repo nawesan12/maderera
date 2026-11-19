@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Scissors, Truck } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { obtenerPedido } from "@/lib/dal/admin/ventas";
+import { pedidoParaElTaller } from "@/lib/dal/admin/ventas";
 import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
@@ -36,7 +36,8 @@ export default async function NuevoCortePage({
   const { pedido: pedidoId, consulta: token, grupo: grupoPedido, cliente: clienteId } = await searchParams;
   const [sucursales, pedido, sierra, consulta, placas, cliente] = await Promise.all([
     listarSucursalesPublicas(),
-    pedidoId ? obtenerPedido(pedidoId) : Promise.resolve(null),
+    // Sin plata: el aserradero también carga cortes de un pedido.
+    pedidoId ? pedidoParaElTaller(pedidoId) : Promise.resolve(null),
     anchoDeSierra(),
     token ? consultaDeCorte(token) : Promise.resolve(null),
     token ? placasCortablesPublicas() : Promise.resolve([]),

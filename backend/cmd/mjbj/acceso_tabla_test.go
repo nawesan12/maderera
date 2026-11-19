@@ -467,6 +467,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"RemitoPdf":                      "publico",                       // GET /api/v1/remitos/{id}/pdf
 	"RemitoCompleto":                 "/admin/pedidos",                // GET /api/v1/remitos/{id}
 	"CargarPin":                      "admin",                         // PUT /api/v1/sesion/pin
+	"DestrabarPin":                   "admin",                         // POST /api/v1/sesion/pin/destrabar
 	"CambiarClave":                   "sesion",                        // PUT /api/v1/sesion/clave
 	"EstadoDeClave":                  "sesion",                        // GET /api/v1/sesion/clave
 	"Salir":                          "publico",                       // DELETE /api/v1/sesion

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,7 +27,9 @@ type entorno struct {
 	sucursal string
 	ahora    time.Time
 	avisos   []string
-	adminID  string
+	// firmas son los avisos de cada PIN que firmó.
+	firmas  []string
+	adminID string
 }
 
 func armar(t *testing.T) *entorno {
@@ -36,7 +39,13 @@ func armar(t *testing.T) *entorno {
 	e := &entorno{pool: pool, ahora: time.Date(2026, 11, 18, 15, 10, 0, 0, argentina)}
 	e.ses = auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-de-la-autorizacion-32", URL: "http://localhost"}, pool)
 	e.svc = Nuevo(pool, silencio, "secreto").ConReloj(func() time.Time { return e.ahora }).
-		ConAvisos(func(_ context.Context, _, cuerpo string) { e.avisos = append(e.avisos, cuerpo) })
+		ConAvisos(func(_ context.Context, titulo, cuerpo string) {
+			if titulo == "Autorización con PIN" {
+				e.firmas = append(e.firmas, cuerpo)
+				return
+			}
+			e.avisos = append(e.avisos, cuerpo)
+		})
 	id := alta(t, e, "duena@prueba.test", "Marta", sqlc.StaffRoleAdmin)
 	e.adminID = id
 	rolA, rolV := sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor
@@ -116,6 +125,11 @@ func TestPIN(t *testing.T) {
 	f, err = e.svc.Exigir(ctx, e.vendedor, e.pedido("482915"))
 	if err != nil || f.UserID != e.adminID || f.Nombre != "Marta" || f.Ficha == "" {
 		t.Fatalf("PIN correcto: %+v %v", f, err)
+	}
+	// Cada firma con PIN se avisa: un PIN aprendido salta en la primera que
+	// el admin no hizo.
+	if len(e.firmas) != 1 || e.firmas[0] != "Juan usó el PIN de Marta: $\u00a012.300 abajo del precio." {
+		t.Fatalf("aviso de la firma: %q", e.firmas)
 	}
 
 	// La ficha sirve para la misma operación, por hasta ese monto, dos minutos.
@@ -203,7 +217,7 @@ func TestPIN(t *testing.T) {
 	if fa := falta(t, err); fa.BloqueadoHasta == nil || fa.Mensaje() != "Bloqueado hasta las 00:00." {
 		t.Fatalf("tope del día: %+v %q", fa, fa.Mensaje())
 	}
-	if ultimo := e.avisos[len(e.avisos)-1]; ultimo != "10 errores de PIN hoy: las autorizaciones quedan bloqueadas hasta mañana. El último lo tecleó Juan." {
+	if ultimo := e.avisos[len(e.avisos)-1]; ultimo != "10 errores de PIN hoy: las autorizaciones quedan bloqueadas hasta mañana o hasta que un admin las destrabe. El último lo tecleó Juan." {
 		t.Fatalf("aviso del día: %v", e.avisos)
 	}
 	// El admin igual puede: no usa PIN.
@@ -251,5 +265,111 @@ func TestPINConLaBaseCaida(t *testing.T) {
 	var f *Falta
 	if err == nil || errors.As(err, &f) {
 		t.Fatalf("con la base caída tiene que fallar, vino %v", err)
+	}
+}
+
+// Con pedidos a la vez, el tope no se pasa: el intento se cuenta antes de
+// probar el PIN, así que de cuarenta errores simultáneos se prueban cinco.
+// Y el aviso del tercero sale una sola vez.
+func TestPINEnRafaga(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	if err := e.ses.CargarPIN(ctx, e.admin, "una clave larga", "482915"); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	incorrectos := 0
+	var wg sync.WaitGroup
+	for i := 0; i < 40; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := e.svc.Exigir(ctx, e.vendedor, e.pedido("000000"))
+			var f *Falta
+			if errors.As(err, &f) && f.PinIncorrecto {
+				mu.Lock()
+				incorrectos++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if incorrectos > maxPorSucursal {
+		t.Fatalf("se probaron %d PIN con un tope de %d", incorrectos, maxPorSucursal)
+	}
+	if len(e.avisos) != 1 {
+		t.Fatalf("el aviso salió %d veces: %v", len(e.avisos), e.avisos)
+	}
+	var delDia int
+	_ = e.pool.QueryRow(ctx, `select coalesce(max(cuenta), 0)::int from rate_limits where clave = 'pin:todos'`).Scan(&delDia)
+	if delDia > maxPorSucursal {
+		t.Fatalf("los bloqueados por la sucursal contaron en el día: %d", delDia)
+	}
+}
+
+// La ficha cubre las dos cifras: la del precio sola no destraba un crédito
+// que aparece después.
+func TestFichaConCredito(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	if err := e.ses.CargarPIN(ctx, e.admin, "una clave larga", "482915"); err != nil {
+		t.Fatal(err)
+	}
+	f, err := e.svc.Exigir(ctx, e.vendedor, e.pedido("482915"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conCredito := e.pedido("")
+	conCredito.Ficha, conCredito.Credito = f.Ficha, 1_000_000
+	_, err = e.svc.Exigir(ctx, e.vendedor, conCredito)
+	if fa := falta(t, err); fa.Credito != 1_000_000 || fa.PinIncorrecto {
+		t.Fatalf("la ficha del precio cubrió el crédito: %+v", fa)
+	}
+	conCredito.PIN, conCredito.Ficha = "482915", ""
+	g, err := e.svc.Exigir(ctx, e.vendedor, conCredito)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conCredito.PIN, conCredito.Ficha = "", g.Ficha
+	if _, err := e.svc.Exigir(ctx, e.vendedor, conCredito); err != nil {
+		t.Fatalf("la ficha de las dos cifras: %v", err)
+	}
+	if ultimo := e.firmas[len(e.firmas)-1]; ultimo != "Juan usó el PIN de Marta: $\u00a012.300 abajo del precio · $\u00a01.000.000 a cuenta, pasado el límite." {
+		t.Fatalf("aviso de las dos cifras: %q", ultimo)
+	}
+}
+
+// Diez errores trababan todo hasta la medianoche; el admin destraba con su
+// contraseña. Y una cuenta sin contraseña no carga PIN.
+func TestDestrabarYCuentaSinClave(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	if err := e.ses.CargarPIN(ctx, e.admin, "una clave larga", "482915"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into rate_limits (clave, ventana, cuenta) values ('pin:todos', $1, 10)`, func() time.Time {
+		i, _ := ventanaDelDia(e.ahora)
+		return i
+	}()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Exigir(ctx, e.vendedor, e.pedido("482915")); falta(t, err).BloqueadoHasta == nil {
+		t.Fatal("tendría que estar bloqueado")
+	}
+	if err := e.ses.DestrabarPIN(ctx, e.admin, "otra"); !errors.Is(err, auth.ErrCredenciales) {
+		t.Fatalf("destrabar con otra clave: %v", err)
+	}
+	if err := e.ses.DestrabarPIN(ctx, e.admin, "una clave larga"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Exigir(ctx, e.vendedor, e.pedido("482915")); err != nil {
+		t.Fatalf("destrabado: %v", err)
+	}
+	// Sin contraseña (entra por link), no hay con qué probar que es él.
+	if _, err := e.pool.Exec(ctx, `update account set password = null where user_id = $1`, e.adminID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.ses.CargarPIN(ctx, e.admin, "", "111222"); !errors.Is(err, auth.ErrSinClave) {
+		t.Fatalf("cuenta sin clave: %v", err)
 	}
 }

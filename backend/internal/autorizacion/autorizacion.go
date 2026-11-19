@@ -18,10 +18,17 @@
 //     un limitador caído acá abriría la caja.
 //   - Los errores se cuentan con el pool y no con la transacción de quien
 //     pide: la venta rechazada vuelve atrás y el intento tiene que quedar.
+//   - **El intento se cuenta antes de probar el PIN**, y se descuenta si era
+//     el correcto. Contado después, quinientos pedidos a la vez leían todos
+//     «cero errores» mientras el scrypt tardaba, y se probaban quinientos
+//     PIN antes de que el tope se enterara.
 //   - Un PIN correcto devuelve una ficha de un solo motivo, atada a la clave
-//     de la operación y al monto, que vale dos minutos: si la venta falla
+//     de la operación y a los montos, que vale dos minutos: si la venta falla
 //     después por otra cosa (la caja se cerró, faltó un dato), el vendedor
 //     la corrige y reenvía sin volver a llamar al admin, que ya se fue.
+//   - Cada PIN que firma le avisa a los administradores: el día que un
+//     vendedor aprende el PIN, la primera firma que el admin no hizo salta en
+//     el momento, y no recién en el inventario.
 package autorizacion
 
 import (
@@ -41,6 +48,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
 )
@@ -70,6 +78,10 @@ const (
 	claveGlobal      = "pin:todos"
 	prefijoSucursal  = "pin:sucursal:"
 	prefijoDeUsuario = "pin:usuario:"
+	// prefijoAviso marca que el aviso de una ventana ya salió: con pedidos a
+	// la vez, «avisar cuando la cuenta llega a tres» se salteaba si dos
+	// errores sumaban juntos.
+	prefijoAviso = "pin:aviso:"
 )
 
 // Pedido es una autorización que hace falta.
@@ -78,6 +90,11 @@ type Pedido struct {
 	// Monto es lo que se autoriza (lo dejado de cobrar, lo que se pasa del
 	// límite, la venta que se anula).
 	Monto float64
+	// Credito es lo que va a cuenta corriente pasado el límite cuando la
+	// misma venta además deja de cobrar (Motivo Precio): un solo PIN firma
+	// las dos cosas, pero el admin ve las dos cifras y la ficha cubre las
+	// dos. Antes la ficha del precio destrababa cualquier crédito.
+	Credito float64
 	// Clave ata la ficha a la operación: la clave de la venta, el id del
 	// pedido o del presupuesto.
 	Clave string
@@ -102,6 +119,7 @@ type Firma struct {
 type Falta struct {
 	Motivo         Motivo
 	Monto          float64
+	Credito        float64
 	PinIncorrecto  bool
 	BloqueadoHasta *time.Time
 	// SinAdmins: ningún administrador cargó su PIN todavía.
@@ -162,6 +180,14 @@ func (s *Servicio) ConAvisos(f func(ctx context.Context, titulo, cuerpo string))
 	return s
 }
 
+// Avisar le manda un aviso a los administradores por el mismo canal que el
+// de los errores (lo usa el drenaje de la cola sin conexión).
+func (s *Servicio) Avisar(ctx context.Context, titulo, cuerpo string) {
+	if s.avisar != nil {
+		s.avisar(context.WithoutCancel(ctx), titulo, cuerpo)
+	}
+}
+
 // ConReloj es para las pruebas.
 func (s *Servicio) ConReloj(f func() time.Time) *Servicio {
 	s.ahora = f
@@ -174,7 +200,7 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 	if ses.Tiene(sqlc.StaffRoleAdmin) {
 		return &Firma{UserID: ses.UserID, Nombre: ses.Nombre}, nil
 	}
-	falta := &Falta{Motivo: p.Motivo, Monto: p.Monto}
+	falta := &Falta{Motivo: p.Motivo, Monto: p.Monto, Credito: p.Credito}
 	if p.Ficha != "" {
 		if f, ok, err := s.leerFicha(ctx, p); err != nil {
 			return nil, err
@@ -202,20 +228,13 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 	}
 	vSuc, finSuc := ventanaFija(ahora, ventanaSucursal)
 	vDia, finDia := ventanaDelDia(ahora)
-	errores, err := s.cuenta(ctx, sujeto, vSuc)
-	if err != nil {
-		return nil, err
-	}
+	// El tope del día se lee primero: si ya está, no se cuenta nada más.
 	delDia, err := s.cuenta(ctx, claveGlobal, vDia)
 	if err != nil {
 		return nil, err
 	}
 	if delDia >= maxEnElDia {
 		falta.BloqueadoHasta = &finDia
-		return nil, falta
-	}
-	if errores >= maxPorSucursal {
-		falta.BloqueadoHasta = &finSuc
 		return nil, falta
 	}
 
@@ -227,6 +246,25 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 		falta.SinAdmins = true
 		return nil, falta
 	}
+
+	// El intento cuenta antes de verificar (INSERT … ON CONFLICT … RETURNING,
+	// atómico): el que llega pasado el tope se rechaza sin probar el PIN.
+	errores, err := s.sumar(ctx, sujeto, vSuc)
+	if err != nil {
+		return nil, err
+	}
+	if errores > maxPorSucursal {
+		falta.BloqueadoHasta = &finSuc
+		return nil, falta
+	}
+	if delDia, err = s.sumar(ctx, claveGlobal, vDia); err != nil {
+		return nil, err
+	}
+	if delDia > maxEnElDia {
+		falta.BloqueadoHasta = &finDia
+		return nil, falta
+	}
+
 	var ids, nombres []string
 	if auth.PINValido(p.PIN) {
 		for _, a := range admins {
@@ -242,14 +280,11 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 		}
 	}
 	if len(ids) == 0 {
-		errores, err = s.sumar(ctx, sujeto, vSuc)
-		if err != nil {
-			return nil, err
-		}
-		if delDia, err = s.sumar(ctx, claveGlobal, vDia); err != nil {
-			return nil, err
-		}
-		if errores == avisoAlError || delDia == maxEnElDia {
+		// Con >= y una marca por ventana, no con == : dos errores que suman
+		// juntos pueden saltear el número exacto.
+		if delDia >= maxEnElDia && s.primeraVez(ctx, prefijoAviso+"dia", vDia) {
+			s.avisarErrores(ctx, ses, errores, delDia)
+		} else if errores >= avisoAlError && s.primeraVez(ctx, prefijoAviso+sujeto, vSuc) {
 			s.avisarErrores(ctx, ses, errores, delDia)
 		}
 		falta.PinIncorrecto = true
@@ -261,14 +296,62 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 		}
 		return nil, falta
 	}
-	// Acertó: los errores seguidos de la sucursal vuelven a cero (los del día
-	// no: son el techo para todo el negocio).
-	if _, err := s.pool.Exec(ctx, `DELETE FROM rate_limits WHERE clave = $1 AND ventana = $2`, sujeto, vSuc); err != nil {
+	// Acertó: el intento no era un error. Los seguidos de la sucursal vuelven
+	// a cero (y su aviso, a poder salir); el del día se descuenta, porque es
+	// el techo de errores para todo el negocio.
+	if _, err := s.pool.Exec(ctx, `DELETE FROM rate_limits WHERE clave = ANY($1) AND ventana = $2`,
+		[]string{sujeto, prefijoAviso + sujeto}, vSuc); err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE rate_limits SET cuenta = cuenta - 1 WHERE clave = $1 AND ventana = $2 AND cuenta > 0`,
+		claveGlobal, vDia); err != nil {
 		return nil, err
 	}
 	f := &Firma{UserID: ids[0], Nombre: strings.Join(nombres, " y ")}
 	f.Ficha = s.ficha(p, f.UserID, ahora.Add(vigenciaDeFicha))
+	s.avisarFirma(ctx, ses, p, f.Nombre)
 	return f, nil
+}
+
+// primeraVez dice si es la primera vez que se marca esa clave en la ventana:
+// el aviso sale una sola vez aunque los errores lleguen juntos.
+func (s *Servicio) primeraVez(ctx context.Context, clave string, ventana time.Time) bool {
+	n, err := s.sumar(ctx, clave, ventana)
+	if err != nil {
+		s.log.Warn("autorizacion: marca del aviso", "error", err)
+		return true
+	}
+	return n == 1
+}
+
+// QueSeAutoriza es la cifra en el idioma del mostrador, la misma que muestra
+// el campo del PIN (components/autorizacion/campo-pin.tsx).
+func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
+	m := formato.MonedaEntera(monto)
+	var t string
+	switch motivo {
+	case Credito:
+		t = m + " a cuenta, pasado el límite"
+	case Anular:
+		t = "anular " + m
+	default:
+		t = m + " abajo del precio"
+	}
+	if credito > 0 {
+		t += " · " + formato.MonedaEntera(credito) + " a cuenta, pasado el límite"
+	}
+	return t
+}
+
+// avisarFirma le cuenta a los administradores cada PIN que firmó: quién lo
+// pidió, qué y a nombre de quién. Un PIN aprendido no se detecta por los
+// errores, se detecta cuando firma algo que su dueño no firmó.
+func (s *Servicio) avisarFirma(ctx context.Context, ses *auth.Sesion, p Pedido, admin string) {
+	cuerpo := fmt.Sprintf("%s usó el PIN de %s: %s.", ses.Nombre, admin, QueSeAutoriza(p.Motivo, p.Monto, p.Credito))
+	s.log.Info("autorizacion: firmó con PIN", "usuario", ses.UserID, "motivo", p.Motivo, "monto", p.Monto, "clave", p.Clave)
+	if s.avisar != nil {
+		s.avisar(context.WithoutCancel(ctx), "Autorización con PIN", cuerpo)
+	}
 }
 
 type admin struct{ id, nombre, hash string }
@@ -322,7 +405,7 @@ func (s *Servicio) sumar(ctx context.Context, clave string, ventana time.Time) (
 func (s *Servicio) avisarErrores(ctx context.Context, ses *auth.Sesion, seguidos, delDia int) {
 	cuerpo := fmt.Sprintf("%s erró el PIN %d veces seguidas.", ses.Nombre, seguidos)
 	if delDia >= maxEnElDia {
-		cuerpo = fmt.Sprintf("%d errores de PIN hoy: las autorizaciones quedan bloqueadas hasta mañana. El último lo tecleó %s.", delDia, ses.Nombre)
+		cuerpo = fmt.Sprintf("%d errores de PIN hoy: las autorizaciones quedan bloqueadas hasta mañana o hasta que un admin las destrabe. El último lo tecleó %s.", delDia, ses.Nombre)
 	}
 	s.log.Warn("autorizacion: errores de PIN", "usuario", ses.UserID, "seguidos", seguidos, "delDia", delDia)
 	if s.avisar != nil {
@@ -349,36 +432,40 @@ func ventanaDelDia(t time.Time) (inicio, fin time.Time) {
 // centavos del monto: la ficha cubre hasta ese monto.
 func centavos(m float64) int64 { return int64(jsmath.Round(m * 100)) }
 
-func (s *Servicio) mac(motivo Motivo, clave string, monto int64, vence int64, usuario string) string {
+func (s *Servicio) mac(motivo Motivo, clave string, monto, credito int64, vence int64, usuario string) string {
 	m := hmac.New(sha256.New, s.clave)
-	m.Write([]byte("v1|" + string(motivo) + "|" + clave + "|" + strconv.FormatInt(monto, 10) + "|" + strconv.FormatInt(vence, 10) + "|" + usuario))
+	m.Write([]byte("v2|" + string(motivo) + "|" + clave + "|" + strconv.FormatInt(monto, 10) + "|" + strconv.FormatInt(credito, 10) +
+		"|" + strconv.FormatInt(vence, 10) + "|" + usuario))
 	return base64.RawURLEncoding.EncodeToString(m.Sum(nil))
 }
 
-// ficha es «v1.<monto en centavos>.<vence>.<usuario en base64>.<mac>».
+// ficha es «v2.<monto en centavos>.<crédito en centavos>.<vence>.<usuario en
+// base64>.<mac>». La v1 no llevaba el crédito: una ficha del precio cubría
+// cualquier pase del límite que apareciera después.
 func (s *Servicio) ficha(p Pedido, usuario string, vence time.Time) string {
-	monto, v := centavos(p.Monto), vence.Unix()
-	return strings.Join([]string{"v1", strconv.FormatInt(monto, 10), strconv.FormatInt(v, 10),
-		base64.RawURLEncoding.EncodeToString([]byte(usuario)), s.mac(p.Motivo, p.Clave, monto, v, usuario)}, ".")
+	monto, credito, v := centavos(p.Monto), centavos(p.Credito), vence.Unix()
+	return strings.Join([]string{"v2", strconv.FormatInt(monto, 10), strconv.FormatInt(credito, 10), strconv.FormatInt(v, 10),
+		base64.RawURLEncoding.EncodeToString([]byte(usuario)), s.mac(p.Motivo, p.Clave, monto, credito, v, usuario)}, ".")
 }
 
-// leerFicha: del mismo motivo, la misma operación, vigente y por un monto que
-// cubra el que se pide. El administrador tiene que seguir siéndolo.
+// leerFicha: del mismo motivo, la misma operación, vigente y por montos que
+// cubran los que se piden. El administrador tiene que seguir siéndolo.
 func (s *Servicio) leerFicha(ctx context.Context, p Pedido) (*Firma, bool, error) {
 	partes := strings.Split(p.Ficha, ".")
-	if len(partes) != 5 || partes[0] != "v1" {
+	if len(partes) != 6 || partes[0] != "v2" {
 		return nil, false, nil
 	}
 	monto, err1 := strconv.ParseInt(partes[1], 10, 64)
-	vence, err2 := strconv.ParseInt(partes[2], 10, 64)
-	usuario, err3 := base64.RawURLEncoding.DecodeString(partes[3])
-	if err1 != nil || err2 != nil || err3 != nil {
+	credito, err2 := strconv.ParseInt(partes[2], 10, 64)
+	vence, err3 := strconv.ParseInt(partes[3], 10, 64)
+	usuario, err4 := base64.RawURLEncoding.DecodeString(partes[4])
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 		return nil, false, nil
 	}
-	if !hmac.Equal([]byte(partes[4]), []byte(s.mac(p.Motivo, p.Clave, monto, vence, string(usuario)))) {
+	if !hmac.Equal([]byte(partes[5]), []byte(s.mac(p.Motivo, p.Clave, monto, credito, vence, string(usuario)))) {
 		return nil, false, nil
 	}
-	if s.ahora().Unix() > vence || centavos(p.Monto) > monto {
+	if s.ahora().Unix() > vence || centavos(p.Monto) > monto || centavos(p.Credito) > credito {
 		return nil, false, nil
 	}
 	var nombre string

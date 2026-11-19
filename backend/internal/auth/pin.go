@@ -27,6 +27,10 @@ func PINValido(pin string) bool { return rePIN.MatchString(pin) }
 // ErrPINInvalido es un PIN sin la forma.
 var ErrPINInvalido = errors.New("el PIN son de 6 a 8 números")
 
+// ErrSinClave es una cuenta que entra solo por link: no tiene con qué probar
+// que quien carga el PIN es su dueño.
+var ErrSinClave = errors.New("la cuenta no tiene contraseña")
+
 // HashearPIN es el hash del PIN, igual que el de la clave (scrypt).
 func HashearPIN(pin string) (string, error) { return hashearClave(pin) }
 
@@ -40,23 +44,49 @@ func (s *Servicio) CargarPIN(ctx context.Context, ses *Sesion, clave, pin string
 	if !PINValido(pin) {
 		return ErrPINInvalido
 	}
-	fila, err := s.q.CuentaConClave(ctx, ses.Correo)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err := s.probarClave(ctx, ses, clave); err != nil {
 		return err
-	}
-	if err == nil && fila.Password != nil {
-		ok, err := verificarClave(*fila.Password, clave)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return ErrCredenciales
-		}
 	}
 	hash, err := HashearPIN(pin)
 	if err != nil {
 		return err
 	}
 	_, err = s.pool.Exec(ctx, `UPDATE "user" SET pin_autorizacion = $2, updated_at = (now() at time zone 'utc') WHERE id = $1`, ses.UserID, hash)
+	return err
+}
+
+// probarClave verifica la contraseña de la cuenta de la sesión. Sin
+// contraseña no hay prueba: antes se salteaba la verificación, y quien
+// encontraba abierta la sesión de un admin que entra por link le ponía un
+// PIN propio y se autorizaba solo desde su cuenta, mucho después de cerrada
+// la del admin.
+func (s *Servicio) probarClave(ctx context.Context, ses *Sesion, clave string) error {
+	fila, err := s.q.CuentaConClave(ctx, ses.Correo)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && fila.Password == nil) {
+		return ErrSinClave
+	}
+	if err != nil {
+		return err
+	}
+	ok, err := verificarClave(*fila.Password, clave)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrCredenciales
+	}
+	return nil
+}
+
+// DestrabarPIN borra los topes de errores del PIN (los de cada sucursal y el
+// del día, internal/autorizacion): diez errores de cualquiera, por bronca o
+// por dedos torpes, trababan todas las autorizaciones del negocio hasta la
+// medianoche, y el admin no tenía cómo destrabarlas sin atender él con su
+// sesión. Pide la contraseña, como cargar el PIN.
+func (s *Servicio) DestrabarPIN(ctx context.Context, ses *Sesion, clave string) error {
+	if err := s.probarClave(ctx, ses, clave); err != nil {
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `DELETE FROM rate_limits WHERE clave LIKE 'pin:%'`)
 	return err
 }

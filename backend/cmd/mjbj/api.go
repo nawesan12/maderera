@@ -377,6 +377,9 @@ func correrAPI() error {
 	aut := autorizacion.Nuevo(pool, log, cfg.Auth.Secreto).ConAvisos(func(ctx context.Context, titulo, cuerpo string) {
 		go avisosDePIN.Avisar(ctx, push.Aviso{Titulo: titulo, Cuerpo: cuerpo, URL: "/admin/bitacora", Etiqueta: "pin", Pantalla: "/admin/bitacora"})
 	})
+	apiDeSesion.ConAvisoDePIN(func(ctx context.Context, titulo, cuerpo string) {
+		go avisosDePIN.Avisar(ctx, push.Aviso{Titulo: titulo, Cuerpo: cuerpo, URL: "/admin/bitacora", Etiqueta: "pin", Pantalla: "/admin/bitacora"})
+	})
 	servicioMostrador := mostrador.Nuevo(pool, log).ConClaveDeCola(cfg.Auth.Secreto).ConAutorizacion(aut)
 	servicioMostrador.Rutas(m)
 	mostradorapi.HandlerWithOptions(

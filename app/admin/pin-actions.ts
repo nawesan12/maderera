@@ -15,3 +15,13 @@ export async function cargarPin(clave: string, pin: string): Promise<{ ok?: stri
   revalidatePath("/admin");
   return { ok: "PIN guardado." };
 }
+
+/**
+ * Destraba las autorizaciones: borra los topes de errores del PIN (POST
+ * /api/v1/sesion/pin/destrabar). Pide la clave de la cuenta, como cargarlo.
+ */
+export async function destrabarPin(clave: string): Promise<{ ok?: string; error?: string }> {
+  const r = await (await api()).POST("/api/v1/sesion/pin/destrabar", { body: { clave } });
+  if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo destrabar.") };
+  return { ok: "Autorizaciones destrabadas." };
+}

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { KeyRound, LogOut } from "lucide-react";
+import { KeyRound, LockOpen, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cerrarSesion as salirDeLaApi } from "@/lib/api/salir";
+import { DialogoDestrabar } from "./dialogo-destrabar";
 import { DialogoPin } from "./dialogo-pin";
 
 export function MenuUsuario({
@@ -28,6 +29,7 @@ export function MenuUsuario({
   const router = useRouter();
   const [saliendo, setSaliendo] = useState(false);
   const [pin, setPin] = useState(false);
+  const [destrabar, setDestrabar] = useState(false);
 
   async function cerrarSesion() {
     setSaliendo(true);
@@ -62,6 +64,12 @@ export function MenuUsuario({
               PIN de autorización
             </DropdownMenuItem>
           )}
+          {esAdmin && (
+            <DropdownMenuItem onClick={() => setDestrabar(true)}>
+              <LockOpen className="h-5 w-5" />
+              Destrabar el PIN
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={cerrarSesion} disabled={saliendo}>
             <LogOut className="h-5 w-5" />
             {saliendo ? "Cerrando…" : "Cerrar sesión"}
@@ -69,6 +77,7 @@ export function MenuUsuario({
         </DropdownMenuContent>
       </DropdownMenu>
       {esAdmin && <DialogoPin abierto={pin} alCerrar={() => setPin(false)} />}
+      {esAdmin && <DialogoDestrabar abierto={destrabar} alCerrar={() => setDestrabar(false)} />}
     </>
   );
 }

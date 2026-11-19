@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { PORTADA, PORTADAS_RETIRADAS } from "@/lib/db/portadas-datos";
+import { PORTADA, PORTADAS_DE_BANCO, PORTADAS_RETIRADAS } from "@/lib/db/portadas-datos";
 
 /*
  * La 00150 borra de los productos las fotos de banco. Si alguien cambia una
@@ -15,7 +15,7 @@ const up = sql.slice(sql.indexOf("-- +goose Up"), sql.indexOf("-- +goose Down"))
 
 describe("migración 00150", () => {
   it("borra las ocho portadas de los rubros", () => {
-    const todas = { ...PORTADA, ...PORTADAS_RETIRADAS };
+    const todas = { ...PORTADAS_DE_BANCO, ...PORTADAS_RETIRADAS };
     expect(Object.keys(todas)).toHaveLength(8);
     for (const [rubro, url] of Object.entries(todas)) expect(up, rubro).toContain(`'${url}'`);
   });
@@ -48,8 +48,8 @@ describe("migración 00180", () => {
     for (const url of Object.values(PORTADA)) expect(up).not.toContain(url);
   });
 
-  it("ningún rubro con portada la tiene retirada", () => {
-    for (const rubro of Object.keys(PORTADAS_RETIRADAS)) expect(PORTADA[rubro]).toBeUndefined();
+  it("ningún rubro tiene de portada una foto de banco retirada", () => {
+    for (const [rubro, url] of Object.entries(PORTADAS_RETIRADAS)) expect(PORTADA[rubro]).not.toBe(url);
   });
 });
 
@@ -69,5 +69,40 @@ describe("las tarjetas de los rubros", () => {
     const tonoBarra = barra.match(/slug: "moldava"[\s\S]*?tonoDe: "(\w+)"/)?.[1];
     expect(tonoBarra).toBe("molduras");
     expect(portada).toMatch(new RegExp(`<FondoDeRubro rubro="${tonoBarra}"`));
+  });
+});
+
+const sql185 = readFileSync(
+  new URL("../backend/db/migraciones/00185_portadas_propias.sql", import.meta.url),
+  "utf8",
+);
+const portadasGo = readFileSync(
+  new URL("../backend/internal/catalogo/portadas.go", import.meta.url),
+  "utf8",
+);
+
+/** Las portadas propias del Drive de la clienta (19/11/2026, docs/fotos.md). */
+describe("migración 00185 y la tabla de Go", () => {
+  const up = sql185.slice(sql185.indexOf("-- +goose Up"), sql185.indexOf("-- +goose Down"));
+  const propias = Object.entries(PORTADA).filter(([, url]) => url.startsWith("/sitio/"));
+
+  it("pone cada portada propia de portadas-datos.ts", () => {
+    expect(propias.length).toBeGreaterThan(0);
+    for (const [rubro, url] of propias) expect(up, rubro).toContain(`('${rubro}', '${url}')`);
+  });
+
+  it("solo pisa portadas de banco o vacías", () => {
+    expect(up).toContain("c.image IS NULL OR c.image LIKE '/fotos/%'");
+  });
+
+  it("las fotos propias llevan versión en el nombre", () => {
+    for (const [, url] of propias) expect(url).toMatch(/-v\d+\.webp$/);
+  });
+
+  it("Go dice lo mismo que portadas-datos.ts", () => {
+    const go = Object.fromEntries(
+      [...portadasGo.matchAll(/^\s*"([\w-]+)":\s*"([^"]+)",/gm)].map((m) => [m[1], m[2]]),
+    );
+    expect(go).toEqual(PORTADA);
   });
 });

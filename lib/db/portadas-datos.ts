@@ -17,20 +17,40 @@
  *
  * Si se cambia alguna, **mirarla** después de comprobar que carga.
  *
- * Siguen siendo provisorias: una foto del depósito o del aserradero le dice más
- * a un cliente de Mar del Plata que cualquier banco de imágenes, porque muestra
- * el stock que hay de verdad.
+ * Las de banco que quedan son provisorias: una foto del depósito le dice más a
+ * un cliente de Mar del Plata que cualquier banco de imágenes. La misma tabla
+ * vive en Go (backend/internal/catalogo/portadas.go) para los rubros que crea
+ * el importador; tests/portadas-migracion.test.ts vigila que digan lo mismo.
  */
 export const PORTADA: Record<string, string> = {
   // Machimbre y tirantes a la vista, que es lo que se vende para un techo.
   techos: "/fotos/photo-1776624383828-e1bf5d141aa7.jpg",
-  // Placas apiladas y de canto: las chapas del fenólico se ven una por una.
+  // Fotos propias (Drive de la clienta, 19/11/2026; docs/fotos.md y la
+  // migración 00185). Llevan versión en el nombre: la caché de imágenes de
+  // Next dura 30 días, así que un recorte nuevo va con otro nombre.
+  // Tablero de pino en dos espesores, con los cantos a la vista.
+  placas: "/sitio/placas-v1.webp",
+  // Los accesorios de cortinería que la clienta marcó con 👆.
+  ferreteria: "/sitio/ferreteria-v1.webp",
+  // OSB con el canto.
+  "construccion-en-seco": "/sitio/seco-v1.webp",
+  pisos: "/fotos/photo-1573869908170-64b53a60d8da.jpg",
+  // Gris y de intemperie, para no confundirse con el piso interior de arriba.
+  "decks-y-escaleras": "/fotos/photo-1585597985125-9ad0229ae71d.jpg",
+};
+
+/**
+ * Las portadas de banco que tuvo cada rubro (las que la 00150 borra de los
+ * productos). Placas y construcción en seco pasaron a fotos propias en la
+ * 00185; molduras quedó sin portada, porque la tarjeta de Moldava ya muestra
+ * la estantería.
+ */
+export const PORTADAS_DE_BANCO: Record<string, string> = {
+  techos: "/fotos/photo-1776624383828-e1bf5d141aa7.jpg",
   placas: "/fotos/photo-1700973408133-b45276ec8feb.jpg",
   pisos: "/fotos/photo-1573869908170-64b53a60d8da.jpg",
   molduras: "/fotos/photo-1764283824453-02cd00e49143.jpg",
-  // Gris y de intemperie, para no confundirse con el piso interior de arriba.
   "decks-y-escaleras": "/fotos/photo-1585597985125-9ad0229ae71d.jpg",
-  // Perfiles metálicos, placa y aislante: las tres cosas que dice el rubro.
   "construccion-en-seco": "/fotos/photo-1768321903269-8a1f17a45c25.jpg",
 };
 
@@ -41,6 +61,7 @@ export const PORTADA: Record<string, string> = {
  * (components/catalogo/fondo-de-rubro.tsx), la misma regla que los productos
  * sin foto. Quedan anotadas porque la 00150 las borra de los productos y la
  * 00180 de las categorías: tests/portadas-migracion.test.ts lo vigila.
+ * Ferretería volvió a tener portada en la 00185, esta vez propia.
  */
 export const PORTADAS_RETIRADAS: Record<string, string> = {
   ferreteria: "/fotos/photo-1558618666-fcd25c85cd64.jpg",

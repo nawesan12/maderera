@@ -11,19 +11,28 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/fotos"
 	"mjbj/internal/sqlc"
 )
 
 // Servicio son las corridas de migración contra la base.
 type Servicio struct {
-	pool *pgxpool.Pool
-	q    *sqlc.Queries
-	log  *slog.Logger
+	pool  *pgxpool.Pool
+	q     *sqlc.Queries
+	log   *slog.Logger
+	fotos *fotos.Biblioteca
 }
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
 	return &Servicio{pool: pool, q: sqlc.New(pool), log: log}
+}
+
+// ConFotos le da la biblioteca de fotos por código: las medidas nuevas de un
+// lote de productos se llevan su foto.
+func (s *Servicio) ConFotos(b *fotos.Biblioteca) *Servicio {
+	s.fotos = b
+	return s
 }
 
 // Corrida es una corrida del historial.
@@ -122,7 +131,7 @@ func (s *Servicio) Lote(ctx context.Context, ses *auth.Sesion, corrida string, e
 	if len(Faltantes(e, m)) > 0 {
 		return LoteAplicado{Error: "Faltan emparejar columnas. Fijate las que están marcadas con *."}, nil
 	}
-	res, err := AplicarLote(ctx, s.pool, e.Clave, NormalizarFilas(e, m, filas), Opciones{LoteID: corrida, UserID: ses.UserID})
+	res, err := AplicarLote(ctx, s.pool, e.Clave, NormalizarFilas(e, m, filas), Opciones{LoteID: corrida, UserID: ses.UserID, Fotos: s.fotos})
 	if err != nil {
 		if ctx.Err() != nil {
 			return LoteAplicado{}, err

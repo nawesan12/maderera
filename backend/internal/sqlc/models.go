@@ -5879,21 +5879,23 @@ type Product struct {
 }
 
 type ProductImage struct {
-	ID        string    `json:"id"`
-	ProductID string    `json:"productId"`
-	Url       string    `json:"url"`
-	Alt       *string   `json:"alt"`
-	SortOrder int32     `json:"sortOrder"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	ProductID        string    `json:"productId"`
+	Url              string    `json:"url"`
+	Alt              *string   `json:"alt"`
+	SortOrder        int32     `json:"sortOrder"`
+	CreatedAt        time.Time `json:"createdAt"`
+	OrigenBiblioteca *string   `json:"origenBiblioteca"`
 }
 
 type ProductImagesRubro00150 struct {
-	ID        string    `json:"id"`
-	ProductID string    `json:"productId"`
-	Url       string    `json:"url"`
-	Alt       *string   `json:"alt"`
-	SortOrder int32     `json:"sortOrder"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	ProductID        string    `json:"productId"`
+	Url              string    `json:"url"`
+	Alt              *string   `json:"alt"`
+	SortOrder        int32     `json:"sortOrder"`
+	CreatedAt        time.Time `json:"createdAt"`
+	OrigenBiblioteca *string   `json:"origenBiblioteca"`
 }
 
 type ProductReview struct {

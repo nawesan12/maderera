@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/formato"
+	"mjbj/internal/fotos"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
@@ -25,6 +26,7 @@ import (
 
 // Servicio es la gestión de productos.
 type Servicio struct {
+	fotos *fotos.Biblioteca
 	pool  *pgxpool.Pool
 	q     *sqlc.Queries
 	disco *subidas.Disco
@@ -34,6 +36,13 @@ type Servicio struct {
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, disco *subidas.Disco, log *slog.Logger) *Servicio {
 	return &Servicio{pool: pool, q: sqlc.New(pool), disco: disco, log: log}
+}
+
+// ConFotos le da la biblioteca de fotos por código: una medida nueva con un
+// código de la biblioteca se lleva su foto.
+func (s *Servicio) ConFotos(b *fotos.Biblioteca) *Servicio {
+	s.fotos = b
+	return s
 }
 
 // --- el listado ---
@@ -503,7 +512,9 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 		recargo = &r
 	}
 	id := p.ID
+	var nuevas []fotos.Medida
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		nuevas = nil
 		q := s.q.WithTx(tx)
 		ls, err := s.listasYSucursales(ctx, q)
 		if err != nil {
@@ -571,6 +582,9 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 					EspesorMm: mm(v.EspesorMm), Material: nulo(v.Material), Color: nulo(v.Color),
 					Terminacion: nulo(v.Terminacion), Calidad: nulo(v.Calidad), SortOrder: int32(orden),
 				})
+				if err == nil {
+					nuevas = append(nuevas, fotos.Medida{ProductoID: id, Codigo: v.SKU})
+				}
 			}
 			if err != nil {
 				// El código ya es de una medida de otro producto: se dice de
@@ -666,6 +680,13 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormProducto
 	})
 	if err != nil {
 		return "", err
+	}
+	// Las fotos de la biblioteca de las medidas nuevas: después del commit y
+	// antes de contestar (la ficha que se vuelve a armar ya las muestra).
+	// Solo al crear la medida: guardar de nuevo no devuelve una foto que la
+	// clienta borró.
+	for _, m := range nuevas {
+		s.fotos.Adjuntar(ctx, s.pool, m)
 	}
 	accion, verbo, entidad := sqlc.AccionAuditoriaCrear, "Cargó", ""
 	if p.ID != "" {

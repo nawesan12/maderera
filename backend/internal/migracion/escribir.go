@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/text/unicode/norm"
 
+	"mjbj/internal/catalogo"
+	"mjbj/internal/fotos"
 	"mjbj/internal/productos"
 	"mjbj/internal/sqlc"
 )
@@ -29,6 +31,13 @@ type Resultado struct {
 	Omitidos     int       `json:"omitidos"`
 	ConError     int       `json:"conError"`
 	Rechazos     []Rechazo `json:"rechazos"`
+	// Fotos son las fotos de la biblioteca que se engancharon a las medidas
+	// nuevas del lote.
+	Fotos int `json:"fotos"`
+
+	// medidasNuevas son las que creó el lote: después del commit buscan su
+	// foto en la biblioteca.
+	medidasNuevas []fotos.Medida
 }
 
 func (r *Resultado) rechazar(linea int, identificador, motivo string) {
@@ -119,6 +128,8 @@ func nulo(s string) *string {
 type Opciones struct {
 	LoteID string
 	UserID string
+	// Fotos es la biblioteca de fotos por código; nil, sin fotos.
+	Fotos *fotos.Biblioteca
 }
 
 // AplicarLote escribe un lote en su transacción. Las filas con error de
@@ -159,6 +170,12 @@ func AplicarLote(ctx context.Context, pool *pgxpool.Pool, entidad string, filas 
 	if err != nil {
 		// Lo que se haya contado de este lote no quedó escrito.
 		return Resultado{}, err
+	}
+	// Las fotos, después del commit (si el lote se deshacía no quedan
+	// archivos sueltos) y antes de contestar: la página que Next vuelve a
+	// armar al terminar el lote ya las tiene.
+	for _, m := range res.medidasNuevas {
+		res.Fotos += op.Fotos.Adjuntar(ctx, pool, m)
 	}
 	return res, nil
 }
@@ -278,7 +295,9 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 			return err
 		}
 		if categoria == "" {
-			if err := tx.QueryRow(ctx, `INSERT INTO categories (slug, name) VALUES ($1, $2) RETURNING id`, slugCategoria, d["categoria"]).Scan(&categoria); err != nil {
+			// Con su portada, si el rubro tiene una (la misma tabla que la base nueva).
+			if err := tx.QueryRow(ctx, `INSERT INTO categories (slug, name, image) VALUES ($1, $2, $3) RETURNING id`,
+				slugCategoria, d["categoria"], catalogo.PortadaDe(slugCategoria)).Scan(&categoria); err != nil {
 				return err
 			}
 		}
@@ -348,6 +367,7 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 				return err
 			}
 			res.Creados++
+			res.medidasNuevas = append(res.medidasNuevas, fotos.Medida{ProductoID: producto, Codigo: d["sku"]})
 		}
 
 		// El costo de partida. Si la medida ya tiene compras promediadas, no

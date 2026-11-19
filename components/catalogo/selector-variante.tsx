@@ -192,7 +192,7 @@ export function SelectorVariante({
                         : "superficie hover:border-accion/40"
                   }`}
                 >
-                  <span className="tabular flex items-center gap-1.5 text-[14.5px]">
+                  <span className="flex items-center gap-1.5 text-[14.5px] tabular-nums">
                     {activa && <Check className="h-3.5 w-3.5" />}
                     {v.label}
                   </span>
@@ -280,7 +280,7 @@ export function SelectorVariante({
             {/* Por m², la cuenta que el cliente hace de cabeza: cuánto es una
                 placa. Sin esto «$9.800 el m²» no dice cuánto sale la placa. */}
             {porM2 && area && (
-              <p className="tabular mt-1 text-[14.5px] text-texto-2">
+              <p className="mt-1 text-[14.5px] text-texto-2 tabular-nums">
                 Placa de {formatearCantidad((elegida.largoMm ?? 0) / 1000)} ×{" "}
                 {formatearCantidad((elegida.anchoMm ?? 0) / 1000)} m ={" "}
                 {formatearCantidad(Math.round(area * 100) / 100)} m² ·{" "}
@@ -488,13 +488,15 @@ function ConsultaDeLaMedida({
   return (
     <>
       <div className="rounded-[14px] superficie px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
-        <p className="tabular text-2xl font-bold leading-tight tracking-[-0.02em]">{medida.label}</p>
+        {/* Medidas en la sans con cifras tabulares (comité final, M21): la mono
+            es para importes y códigos. */}
+        <p className="text-2xl font-bold leading-tight tracking-[-0.02em] tabular-nums">{medida.label}</p>
         <p className="mt-1.5 text-[14.5px] text-texto-2">
           {como ?? `Se vende por ${formatearUnidadLarga(unidad)}`}
           {detalles.map((d) => ` · ${d}`)}
         </p>
         {area && (
-          <p className="tabular mt-1 text-[14.5px] text-texto-2">
+          <p className="mt-1 text-[14.5px] text-texto-2 tabular-nums">
             Placa de {formatearCantidad((medida.largoMm ?? 0) / 1000)} ×{" "}
             {formatearCantidad((medida.anchoMm ?? 0) / 1000)} m ={" "}
             {formatearCantidad(Math.round(area * 100) / 100)} m²

@@ -120,7 +120,10 @@ function MedidaDeTarjeta({ product }: { product: ProductoListado }) {
   if (!medida) return null;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="tabular flex flex-wrap gap-x-1.5 text-[17px] font-semibold leading-tight tracking-[-0.01em] text-foreground sm:text-[19px]">
+      {/* La sans con cifras tabulares y no la mono (comité final, M21): la
+          medida a veces es una frase —«A medida — consultar», «Rojo teja»— y
+          en mono parecía un código. La mono queda para importes y códigos. */}
+      <span className="flex flex-wrap gap-x-1.5 text-[17px] font-semibold tabular-nums leading-tight tracking-[-0.01em] text-foreground sm:text-[19px]">
         {medida.partes.map((parte, i) => (
           <span key={i} className="whitespace-nowrap">
             {i > 0 && <span className="mr-1.5 text-texto-3">—</span>}

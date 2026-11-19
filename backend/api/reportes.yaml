@@ -354,7 +354,7 @@ components:
         iva:
           type: object
           description: La posición de IVA con percepciones, retenciones y los saldos técnico y de libre disponibilidad que se arrastran
-          required: [debito, credito, saldoTecnicoAnterior, percepciones, retenciones, saldoLibreAnterior, aDepositar, saldoTecnico, saldoLibre]
+          required: [debito, credito, saldoTecnicoAnterior, percepciones, retenciones, saldoLibreAnterior, aDepositar, saldoTecnico, saldoLibre, sinArranque]
           properties:
             debito: { type: number, format: double }
             credito: { type: number, format: double }
@@ -365,6 +365,7 @@ components:
             aDepositar: { type: number, format: double }
             saldoTecnico: { type: number, format: double }
             saldoLibre: { type: number, format: double }
+            sinArranque: { type: boolean, description: Sin el mes y los saldos de la última DDJJ presentada }
         resultado: { $ref: "#/components/schemas/ResultadoComparado" }
     InicioMetricas:
       type: object

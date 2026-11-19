@@ -684,7 +684,7 @@ components:
         errores: { type: object, additionalProperties: { type: string } }
     EmisorFiscal:
       type: object
-      required: [id, razonSocial, nombreFantasia, cuit, condicionIva, domicilio, localidad, codigoPostal, telefono, email, ingresosBrutos, regimenIibb, alicuotaPercepcionIibb, alicuotaIibbSinPadron, percibeIibb, inicioActividades, leyenda, updatedAt]
+      required: [id, razonSocial, nombreFantasia, cuit, condicionIva, domicilio, localidad, codigoPostal, telefono, email, ingresosBrutos, regimenIibb, alicuotaPercepcionIibb, alicuotaIibbSinPadron, percibeIibb, inicioActividades, leyenda, updatedAt, ivaDesde, ivaSaldoTecnico, ivaSaldoLibre]
       properties:
         id: { type: string }
         razonSocial: { type: string }
@@ -704,6 +704,9 @@ components:
         inicioActividades: { type: string, format: date-time, nullable: true }
         leyenda: { type: string, nullable: true }
         updatedAt: { type: string, format: date-time }
+        ivaDesde: { type: string, nullable: true, description: "El primer mes de la posición de IVA (AAAA-MM): el que sigue a la última DDJJ presentada" }
+        ivaSaldoTecnico: { type: string, description: El saldo técnico con que arranca }
+        ivaSaldoLibre: { type: string, description: El saldo de libre disponibilidad con que arranca }
     CondicionIva: { type: string, enum: [responsable_inscripto, monotributista, exento, consumidor_final, no_categorizado] }
     TipoComprobante: { type: string, enum: [factura_a, factura_b, factura_c, nota_credito_a, nota_credito_b, nota_credito_c, nota_debito_a, nota_debito_b, nota_debito_c] }
     EstadoComprobante: { type: string, enum: [borrador, emitida, autorizada, anulada, rechazada] }

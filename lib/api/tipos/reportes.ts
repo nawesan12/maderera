@@ -429,6 +429,8 @@ export interface components {
                 saldoTecnico: number;
                 /** Format: double */
                 saldoLibre: number;
+                /** @description Sin el mes y los saldos de la última DDJJ presentada */
+                sinArranque: boolean;
             };
             resultado: components["schemas"]["ResultadoComparado"];
         };

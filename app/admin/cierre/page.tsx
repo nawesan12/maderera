@@ -217,20 +217,33 @@ export default async function CierrePage({
             chico, de dónde sale. */}
         <article className="tarjeta p-5">
           <h2 className="text-lg font-semibold">IVA</h2>
-          <p
-            className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
-              resumen.iva.aDepositar > 0 ? "text-saldo-debe" : "text-saldo-favor"
-            }`}
-          >
-            {formatearMonto(
-              resumen.iva.aDepositar > 0
-                ? resumen.iva.aDepositar
-                : resumen.iva.saldoTecnico + resumen.iva.saldoLibre,
-            )}
-          </p>
-          <p className="mt-2 text-base text-muted-foreground">
-            {resumen.iva.aDepositar > 0 ? "A depositar" : "Saldo a favor"}
-          </p>
+          {/* Sin los saldos de la última DDJJ el número no parte de lo
+              presentado: no se muestra uno inventado. */}
+          {resumen.iva.sinArranque ? (
+            <Link
+              href="/admin/arca/configuracion"
+              className="mt-2 inline-block text-base font-medium text-acento-texto hover:underline"
+            >
+              Falta la última DDJJ
+            </Link>
+          ) : (
+            <>
+              <p
+                className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
+                  resumen.iva.aDepositar > 0 ? "text-saldo-debe" : "text-saldo-favor"
+                }`}
+              >
+                {formatearMonto(
+                  resumen.iva.aDepositar > 0
+                    ? resumen.iva.aDepositar
+                    : resumen.iva.saldoTecnico + resumen.iva.saldoLibre,
+                )}
+              </p>
+              <p className="mt-2 text-base text-muted-foreground">
+                {resumen.iva.aDepositar > 0 ? "A depositar" : "Saldo a favor"}
+              </p>
+            </>
+          )}
           <dl className="tabular mt-4 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm text-muted-foreground">
             {(
               [

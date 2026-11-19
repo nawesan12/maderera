@@ -670,6 +670,12 @@ export interface components {
             leyenda: string | null;
             /** Format: date-time */
             updatedAt: string;
+            /** @description El primer mes de la posición de IVA (AAAA-MM): el que sigue a la última DDJJ presentada */
+            ivaDesde: string | null;
+            /** @description El saldo técnico con que arranca */
+            ivaSaldoTecnico: string;
+            /** @description El saldo de libre disponibilidad con que arranca */
+            ivaSaldoLibre: string;
         };
         /** @enum {string} */
         CondicionIva: "responsable_inscripto" | "monotributista" | "exento" | "consumidor_final" | "no_categorizado";

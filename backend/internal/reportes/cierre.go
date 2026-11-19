@@ -313,11 +313,18 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	// alícuota de «no figura» tampoco: sin padrón no figura nadie); y la
 	// que estaba encendida con la alícuota única de antes se apagó con la
 	// migración (00133) hasta que se cargue el padrón.
-	var percibe, apagada, vigente bool
+	var percibe, apagada, vigente, sinArranque bool
 	if err := s.pool.QueryRow(ctx, `SELECT coalesce(bool_or(percibe_iibb), false), coalesce(bool_or(NOT percibe_iibb AND alicuota_percepcion_iibb > 0), false),
-		EXISTS (SELECT 1 FROM padron_iibb_importaciones WHERE vigencia_desde <= $1::date AND vigencia_hasta >= $1::date)
-		FROM configuracion_fiscal`, s.ahora().In(Argentina).Format("2006-01-02")).Scan(&percibe, &apagada, &vigente); err != nil {
+		EXISTS (SELECT 1 FROM padron_iibb_importaciones WHERE vigencia_desde <= $1::date AND vigencia_hasta >= $1::date),
+		NOT coalesce(bool_or(iva_desde IS NOT NULL AND iva_desde < $2::date), false)
+		FROM configuracion_fiscal`, s.ahora().In(Argentina).Format("2006-01-02"), hasta.UTC().Format("2006-01-02")).Scan(&percibe, &apagada, &vigente, &sinArranque); err != nil {
 		return nil, err
+	}
+	// La posición de IVA sin el arranque de la última DDJJ es una cuenta que
+	// no coincide con nada presentado (PosicionDeIvaDelMes).
+	if sinArranque {
+		out = append(out, PendienteDelCierre{"iva-arranque", "Saldos de IVA de arranque",
+			"Falta el mes y los saldos de la última DDJJ presentada: el «A depositar» no parte de lo declarado.", 1, "/admin/arca/configuracion"})
 	}
 	if percibe && !vigente {
 		out = append(out, PendienteDelCierre{"padron-iibb", "Padrón IIBB vencido",

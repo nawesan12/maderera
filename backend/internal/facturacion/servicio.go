@@ -92,16 +92,22 @@ type Emisor struct {
 	InicioActividades     *time.Time `json:"inicioActividades"`
 	Leyenda               *string    `json:"leyenda"`
 	UpdatedAt             time.Time  `json:"updatedAt"`
+	// IvaDesde ("2006-01") y los dos saldos son el arranque de la posición
+	// de IVA: el mes que sigue a la última DDJJ presentada y los saldos a
+	// favor que dejó (reportes.PosicionDeIvaDelMes). Los carga el contador.
+	IvaDesde        *string `json:"ivaDesde"`
+	IvaSaldoTecnico string  `json:"ivaSaldoTecnico"`
+	IvaSaldoLibre   string  `json:"ivaSaldoLibre"`
 }
 
 const columnasEmisor = `id, razon_social, nombre_fantasia, cuit, condicion_iva::text, domicilio, localidad, codigo_postal, telefono,
 	email, ingresos_brutos, regimen_iibb::text, alicuota_percepcion_iibb::text, alicuota_iibb_sin_padron::text, percibe_iibb, inicio_actividades,
-	leyenda, updated_at`
+	leyenda, updated_at, to_char(iva_desde, 'YYYY-MM'), iva_saldo_tecnico::text, iva_saldo_libre::text`
 
 func (e *Emisor) campos() []any {
 	return []any{&e.ID, &e.RazonSocial, &e.NombreFantasia, &e.Cuit, &e.CondicionIva, &e.Domicilio, &e.Localidad, &e.CodigoPostal,
 		&e.Telefono, &e.Email, &e.IngresosBrutos, &e.RegimenIibb, &e.AlicuotaPercepcionIibb, &e.AlicuotaIibbSinPadron, &e.PercibeIibb, &e.InicioActividades,
-		&e.Leyenda, &e.UpdatedAt}
+		&e.Leyenda, &e.UpdatedAt, &e.IvaDesde, &e.IvaSaldoTecnico, &e.IvaSaldoLibre}
 }
 
 // emisorEn lee el emisor dentro de una transacción (creándolo si falta): la

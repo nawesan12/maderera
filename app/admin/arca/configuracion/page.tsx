@@ -132,6 +132,9 @@ export default async function ConfiguracionArcaPage() {
                 ? emisor.inicioActividades.toISOString().slice(0, 10)
                 : "",
               leyenda: emisor.leyenda ?? "",
+              ivaDesde: emisor.ivaDesde ?? "",
+              ivaSaldoTecnico: emisor.ivaDesde ? String(Number(emisor.ivaSaldoTecnico)) : "",
+              ivaSaldoLibre: emisor.ivaDesde ? String(Number(emisor.ivaSaldoLibre)) : "",
             }}
           />
         </div>

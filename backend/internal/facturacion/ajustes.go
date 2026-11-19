@@ -38,6 +38,10 @@ type datosEmisor struct {
 	// sinPadron es la alícuota para quien no figura en el padrón (nil: no
 	// se le percibe).
 	sinPadron *float64
+	// El arranque de la posición de IVA: el primer día del mes (nil: no
+	// cargado) y los dos saldos a favor de la última DDJJ.
+	ivaDesde             *time.Time
+	ivaTecnico, ivaLibre float64
 }
 
 // validarEmisor es el esquema de guardarDatosEmisor.
@@ -76,6 +80,22 @@ func validarEmisor(c map[string]string) (datosEmisor, error) {
 			return d, plataforma.Invalido(map[string]string{"alicuotaIibbSinPadron": "La alícuota va en porcentaje, de 0 a 100."})
 		}
 		d.sinPadron = &x
+	}
+	if t := strings.TrimSpace(c["ivaDesde"]); t != "" {
+		m, err := time.Parse("2006-01", t)
+		if err != nil {
+			return d, plataforma.Invalido(map[string]string{"ivaDesde": "Elegí el mes."})
+		}
+		d.ivaDesde = &m
+	}
+	for campo, destino := range map[string]*float64{"ivaSaldoTecnico": &d.ivaTecnico, "ivaSaldoLibre": &d.ivaLibre} {
+		if t := strings.TrimSpace(c[campo]); t != "" {
+			x := precios.ParsearImporte(t)
+			if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 {
+				return d, plataforma.Invalido(map[string]string{campo: "Revisá el saldo."})
+			}
+			*destino = jsmath.Redondear2(x)
+		}
 	}
 	if !hayAlic {
 		alicTexto = "0"
@@ -134,9 +154,12 @@ func (s *Servicio) GuardarEmisor(ctx context.Context, ses *auth.Sesion, c map[st
 	if _, err := s.pool.Exec(ctx, `UPDATE configuracion_fiscal SET razon_social = $2, nombre_fantasia = $3, cuit = $4,
 		condicion_iva = $5::condicion_iva, domicilio = $6, localidad = $7, codigo_postal = $8, telefono = $9, email = $10,
 		ingresos_brutos = $11, regimen_iibb = $12::regimen_iibb, alicuota_percepcion_iibb = 0, percibe_iibb = $13,
-		inicio_actividades = $14, leyenda = $15, alicuota_iibb_sin_padron = $16::numeric, updated_at = now() WHERE id = $1`,
+		inicio_actividades = $14, leyenda = $15, alicuota_iibb_sin_padron = $16::numeric,
+		iva_anclado_at = CASE WHEN iva_desde IS DISTINCT FROM $17::date OR iva_saldo_tecnico <> $18::numeric OR iva_saldo_libre <> $19::numeric
+		  THEN now() ELSE iva_anclado_at END,
+		iva_desde = $17::date, iva_saldo_tecnico = $18::numeric, iva_saldo_libre = $19::numeric, updated_at = now() WHERE id = $1`,
 		emisor.ID, d.razon, d.fantasia, d.cuit, d.condicion, d.domicilio, d.localidad, d.cp, d.tel, d.email, d.iibb, d.regimen,
-		d.percibe, d.inicio, d.ley, sinPadron); err != nil {
+		d.percibe, d.inicio, d.ley, sinPadron, d.ivaDesde, jsmath.Fijo2(d.ivaTecnico), jsmath.Fijo2(d.ivaLibre)); err != nil {
 		return "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "configuracion", "", "Cambió los datos fiscales del emisor", nil)

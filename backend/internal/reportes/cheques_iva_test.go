@@ -166,6 +166,63 @@ func TestElSaldoDeIvaPasaAlMesSiguiente(t *testing.T) {
 	}
 }
 
+// La posición arranca de la última DDJJ: lo de antes del arranque (las
+// compras de la puesta en marcha) no se arrastra, el saldo de arranque sí, y
+// la factura de compra de un mes ya presentado que se carga después cuenta
+// en el mes en que se cargó. Sin arranque, la posición lo dice y el cierre
+// lo pide.
+func TestLaPosicionDeIvaArrancaDeLaDDJJ(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	prov := e.id(t, `insert into suppliers (nombre) values ('Faplac') returning id`)
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, total)
+		values ($1, 'factura_a', 1, 1, '2026-08-10', 10000, 2100, 12100)`, prov)
+	e.facturaConCae(t, nil, 2, 8642.86, "2026-10-15T15:00:00Z", nil)
+	p := PeriodoDelCierre("2026-10", ahoraDePrueba)
+	r, err := e.s.ResumenDelMes(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Iva.SinArranque {
+		t.Errorf("sin arranque cargado: %+v", r.Iva)
+	}
+	pend, err := e.s.PendientesDelCierre(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hay := false
+	for _, x := range pend {
+		hay = hay || x.Clave == "iva-arranque"
+	}
+	if !hay {
+		t.Errorf("el cierre no pide el arranque: %+v", pend)
+	}
+	// La DDJJ de septiembre dejó 200 de saldo técnico y 50 de libre
+	// disponibilidad.
+	e.exec(t, `insert into configuracion_fiscal (razon_social) select 'Maderera' where not exists (select 1 from configuracion_fiscal)`)
+	e.exec(t, `update configuracion_fiscal set iva_desde = '2026-10-01', iva_saldo_tecnico = 200, iva_saldo_libre = 50,
+		iva_anclado_at = '2026-10-05T12:00:00Z'`)
+	r, err = e.s.ResumenDelMes(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1500 de débito − 200 de técnico − 50 de libre = 1250; el crédito de
+	// agosto no se arrastra.
+	if r.Iva.SinArranque || r.Iva.SaldoTecnicoAnterior != 200 || r.Iva.ADepositar < 1249.99 || r.Iva.ADepositar > 1250.01 {
+		t.Errorf("con arranque: %+v", r.Iva)
+	}
+	// Una factura de septiembre cargada el 20/10: cuenta en octubre.
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, total, created_at)
+		values ($1, 'factura_a', 1, 3, '2026-09-20', 1000, 210, 1210, '2026-10-20T12:00:00Z')`, prov)
+	r, err = e.s.ResumenDelMes(ctx, p.Desde, p.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Iva.Credito != 210 || r.Iva.ADepositar < 1039.99 || r.Iva.ADepositar > 1040.01 {
+		t.Errorf("la cargada tarde: %+v", r.Iva)
+	}
+}
+
 // La retención que nos practicó el cliente va a la cuenta de su impuesto.
 func TestRetencionSufridaPorImpuesto(t *testing.T) {
 	e := armar(t)

@@ -2,8 +2,11 @@ package reportes
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
 )
@@ -19,6 +22,19 @@ import (
 //     sobran después de cubrir el impuesto. Pasa al mes siguiente también.
 //
 // A depositar nunca es negativo: lo que sobra queda en uno de los dos saldos.
+//
+// **La cuenta arranca de lo presentado** (revisión del comité, T6): el
+// contador carga el mes que sigue a la última DDJJ y los dos saldos que dejó
+// (configuracion_fiscal.iva_desde y los saldos), y los vuelve a cargar cuando
+// presenta. Antes se recorría desde el primer registro de la base: un saldo a
+// favor del sistema anterior no estaba, las compras de la puesta en marcha
+// (con las ventas en homologación, sin débito) se acumulaban como saldo
+// técnico, y el saldo de libre disponibilidad compensado con otro impuesto
+// crecía para siempre. Lo que se carga después de anclar con fecha de un mes
+// ya presentado (la factura de compra que llegó tarde) cuenta en el mes en
+// que se cargó, que es donde el estudio la va a computar. Sin arranque, la
+// posición se calcula igual pero dice que no tiene de dónde partir y el
+// cierre lo pide.
 
 // PosicionDeIva es la cuenta del mes, con lo que viene del anterior y lo que
 // pasa al siguiente.
@@ -33,6 +49,9 @@ type PosicionDeIva struct {
 	// SaldoTecnico y SaldoLibre son los saldos a favor que quedan.
 	SaldoTecnico float64 `json:"saldoTecnico"`
 	SaldoLibre   float64 `json:"saldoLibre"`
+	// SinArranque: no hay saldo de arranque cargado para este mes; los
+	// saldos anteriores son los de la base y no los de la última DDJJ.
+	SinArranque bool `json:"sinArranque"`
 }
 
 // CalcularPosicionDeIva hace la cuenta de un mes: el impuesto determinado
@@ -61,6 +80,22 @@ type ivaDelMes struct{ debito, credito, percepciones, retenciones float64 }
 // mes del cierre (en UTC, como PeriodoDelCierre).
 func (s *Servicio) PosicionDeIvaDelMes(ctx context.Context, desde, hasta time.Time) (PosicionDeIva, error) {
 	_, ihasta := instantes(desde, hasta)
+	// El arranque: "" si no está cargado.
+	var arranque string
+	var tecnico, libre float64
+	var anclado *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT coalesce(to_char(iva_desde, 'YYYY-MM'), ''), iva_saldo_tecnico::float8, iva_saldo_libre::float8, iva_anclado_at
+		FROM configuracion_fiscal LIMIT 1`).Scan(&arranque, &tecnico, &libre, &anclado)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return PosicionDeIva{}, err
+	}
+	// El mes de lo que se cargó después de anclar con fecha de un mes ya
+	// presentado: el de la carga (argentino), y nunca antes del arranque.
+	tarde := func(fecha string) string {
+		return `CASE WHEN $2::text <> '' AND ` + fecha + ` < to_date(nullif($2, ''), 'YYYY-MM') AND created_at > $3
+			THEN greatest($2, to_char(created_at AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM'))
+			ELSE to_char(` + fecha + ` AT TIME ZONE 'UTC', 'YYYY-MM') END`
+	}
 	meses := map[string]*ivaDelMes{}
 	mes := func(m string) *ivaDelMes {
 		if meses[m] == nil {
@@ -92,11 +127,11 @@ func (s *Servicio) PosicionDeIvaDelMes(ctx context.Context, desde, hasta time.Ti
 		return PosicionDeIva{}, err
 	}
 	rs, err = s.pool.Query(ctx, `
-		SELECT to_char(fecha_emision AT TIME ZONE 'UTC', 'YYYY-MM'),
+		SELECT `+tarde("fecha_emision")+`,
 		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * (iva21 + iva105 + iva27))
 		    FILTER (WHERE tipo::text IN ('factura_a','factura_m','nota_credito_a','nota_debito_a')), 0)::float8,
 		  coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * coalesce(percepcion_iva, 0)), 0)::float8
-		FROM purchase_invoices WHERE fecha_emision <= $1 AND anulada_at IS NULL GROUP BY 1`, hasta)
+		FROM purchase_invoices WHERE fecha_emision <= $1 AND anulada_at IS NULL GROUP BY 1`, hasta, arranque, anclado)
 	if err != nil {
 		return PosicionDeIva{}, err
 	}
@@ -107,15 +142,17 @@ func (s *Servicio) PosicionDeIvaDelMes(ctx context.Context, desde, hasta time.Ti
 			rs.Close()
 			return PosicionDeIva{}, err
 		}
-		mes(m).credito, mes(m).percepciones = c, p
+		// Dos grupos pueden caer en el mismo mes (el del mes y lo cargado
+		// tarde): se suman.
+		mes(m).credito, mes(m).percepciones = mes(m).credito+c, mes(m).percepciones+p
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
 		return PosicionDeIva{}, err
 	}
 	rs, err = s.pool.Query(ctx, `
-		SELECT to_char(fecha AT TIME ZONE 'UTC', 'YYYY-MM'), coalesce(sum(importe), 0)::float8
-		FROM retenciones_sufridas WHERE impuesto = 'iva' AND anulada_at IS NULL AND fecha <= $1 GROUP BY 1`, hasta)
+		SELECT `+tarde("fecha")+`, coalesce(sum(importe), 0)::float8
+		FROM retenciones_sufridas WHERE impuesto = 'iva' AND anulada_at IS NULL AND fecha <= $1 GROUP BY 1`, hasta, arranque, anclado)
 	if err != nil {
 		return PosicionDeIva{}, err
 	}
@@ -126,7 +163,7 @@ func (s *Servicio) PosicionDeIvaDelMes(ctx context.Context, desde, hasta time.Ti
 			rs.Close()
 			return PosicionDeIva{}, err
 		}
-		mes(m).retenciones = v
+		mes(m).retenciones += v
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
@@ -134,9 +171,10 @@ func (s *Servicio) PosicionDeIvaDelMes(ctx context.Context, desde, hasta time.Ti
 	}
 
 	objetivo := desde.UTC().Format("2006-01")
+	anclada := arranque != "" && arranque <= objetivo
 	orden := make([]string, 0, len(meses)+1)
 	for m := range meses {
-		if m <= objetivo {
+		if m <= objetivo && (!anclada || m >= arranque) {
 			orden = append(orden, m)
 		}
 	}
@@ -148,9 +186,13 @@ func (s *Servicio) PosicionDeIvaDelMes(ctx context.Context, desde, hasta time.Ti
 	// Los meses sin nada en el medio no cambian los saldos: alcanza con
 	// recorrer los que tienen algo.
 	var p PosicionDeIva
+	if anclada {
+		p.SaldoTecnico, p.SaldoLibre = tecnico, libre
+	}
 	for _, m := range orden {
 		x := meses[m]
 		p = CalcularPosicionDeIva(x.debito, x.credito, p.SaldoTecnico, x.percepciones, x.retenciones, p.SaldoLibre)
 	}
+	p.SinArranque = !anclada
 	return p, nil
 }

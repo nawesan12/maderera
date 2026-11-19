@@ -43,6 +43,10 @@ export interface DatosEmisor {
   percibeIibb: boolean;
   inicioActividades: string;
   leyenda: string;
+  /** El arranque de la posición de IVA: el mes que sigue a la última DDJJ y sus saldos. */
+  ivaDesde: string;
+  ivaSaldoTecnico: string;
+  ivaSaldoLibre: string;
 }
 
 const CONDICIONES = [
@@ -177,6 +181,14 @@ export function FormularioEmisor({ emisor }: { emisor: DatosEmisor }) {
               defecto={emisor.percibeIibb}
             />
           </div>
+        </Seccion>
+
+        {/* La posición de IVA del cierre parte de acá: el contador lo vuelve a
+            cargar cada vez que presenta. */}
+        <Seccion titulo="Última DDJJ de IVA" icono={Receipt}>
+          <Campo id="ivaDesde" etiqueta="Desde" type="month" defaultValue={emisor.ivaDesde} tabular />
+          <Campo id="ivaSaldoTecnico" etiqueta="Saldo técnico" defaultValue={emisor.ivaSaldoTecnico} tabular />
+          <Campo id="ivaSaldoLibre" etiqueta="Libre disponibilidad" defaultValue={emisor.ivaSaldoLibre} tabular />
         </Seccion>
 
         <Seccion titulo="Leyenda" icono={ScrollText} columnas={1}>

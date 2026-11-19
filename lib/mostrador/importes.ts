@@ -43,6 +43,44 @@ export interface LineaDeVenta {
    * producto (`factoresDeStock`).
    */
   presentacion?: "media_largo" | "media_ancho" | null;
+  /**
+   * El precio de lista al cargar el renglón (el del buscador, la media placa
+   * o la placa del corte). Sirve para marcar en pantalla lo que se cambió a
+   * mano y avisar antes de cobrar: el que vale es el que vuelve a buscar Go,
+   * que no le cree a este.
+   */
+  precioLista?: number | null;
+}
+
+/**
+ * Lo que la venta deja de cobrar contra la lista, con la regla de Go
+ * (ventas.DesvioDeLaVenta): por renglón lo que quedó por debajo de su lista
+ * (uno por encima no compensa), más el descuento tipeado sobre el total. La
+ * escala automática por medio de pago no cuenta. `base` es el total a precio
+ * de lista.
+ */
+export function desvioDeLaVenta(
+  lineas: LineaDeVenta[],
+  descuentoManual: number,
+): { total: number; base: number } {
+  let base = 0;
+  let bajo = 0;
+  for (const l of lineas) {
+    if (l.precioLista != null) {
+      base += aCentavos(l.cantidad * l.precioLista);
+      const dif = l.precioLista - l.precioUnitario;
+      if (dif > 0.005) bajo += aCentavos(dif * l.cantidad);
+    } else {
+      base += aCentavos(l.cantidad * l.precioUnitario);
+    }
+  }
+  return { total: aCentavos(aCentavos(bajo) + aCentavos(descuentoManual)), base: aCentavos(base) };
+}
+
+/** Lo que pasa el porcentaje libre hay que autorizarlo (0 si no hace falta). */
+export function aAutorizar(desvio: { total: number; base: number }, porcentajeLibre: number): number {
+  if (desvio.total <= 0.005) return 0;
+  return desvio.total <= Math.round(desvio.base * porcentajeLibre) / 100 + 0.005 ? 0 : desvio.total;
 }
 
 /** Redondeo a centavos, para que la suma de líneas cierre con el total. */

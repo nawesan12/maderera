@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/reservas"
+	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
 	"mjbj/internal/zodjs"
 )
@@ -20,7 +24,25 @@ type ResultadoAnulacion struct {
 	Error            string
 	FacturaPendiente *string
 	Numero           string
+	// Autorizacion: hace falta el PIN de un admin.
+	Autorizacion *Autorizacion
+	// AutorizadoPor: el admin que la autorizó (con su PIN o su sesión).
+	AutorizadoPor string
+	Total         float64
 }
+
+// PedidoDeAnulacion es lo que llega para anular.
+type PedidoDeAnulacion struct {
+	Motivo string
+	// VolvioLaMercaderia: false si el cliente se la llevó. El stock no vuelve
+	// (antes volvía siempre, y el faltante aparecía recién en el inventario).
+	VolvioLaMercaderia bool
+	PIN, Ficha         string
+}
+
+// minutosParaCorregir: una venta propia recién hecha se anula sin PIN aunque
+// esté cobrada (se cargó mal y el cliente sigue ahí).
+const minutosParaCorregir = 5 * time.Minute
 
 // Anular es anularVentaDeMostrador: **nada se borra, todo se revierte.** El
 // pedido queda cancelado, el stock vuelve con un movimiento de devolución
@@ -28,16 +50,35 @@ type ResultadoAnulacion struct {
 // la deuda se cancela con otro asiento, los cheques en cartera se anulan y el
 // corte que no se cortó se cae. El comprobante fiscal no se toca: se avisa.
 //
+// **Quién anula sin PIN** (T3, hallazgo 8). Antes cualquier vendedor anulaba
+// cualquier venta, de cualquier día y de cualquier vendedor: cobrar en
+// efectivo, anular, guardarse la plata y «volvió la mercadería» era el robo
+// clásico, y el faltante aparecía recién en el inventario. Ahora:
+//
+//   - Un admin anula siempre (su sesión es la firma).
+//   - Un vendedor, sin PIN, solo una venta suya, del turno abierto de su
+//     sucursal, y que no esté cobrada o sea de hace menos de cinco minutos.
+//   - «Se la llevó» (la mercadería no vuelve) pide el PIN siempre.
+//   - Todo lo demás pide el PIN de un admin.
+//
 // Todo lo que puede rechazar va antes de la primera escritura.
-func (s *Servicio) Anular(ctx context.Context, pedido, motivo, usuario string) (ResultadoAnulacion, error) {
-	motivo = zodjs.TrimJS(motivo)
+func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, pedido string, a PedidoDeAnulacion) (ResultadoAnulacion, error) {
+	motivo := zodjs.TrimJS(a.Motivo)
 	if motivo == "" {
 		return ResultadoAnulacion{Error: "Poné el motivo: una anulación sin explicación no se puede revisar después."}, nil
 	}
+	firma, falta, err := s.firmaParaAnular(ctx, ses, pedido, a)
+	if err != nil || falta != nil {
+		return ResultadoAnulacion{Autorizacion: falta, Error: mensajeDeFalta(falta)}, err
+	}
+	var autorizadoPor *string
+	if firma != nil {
+		autorizadoPor = &firma.UserID
+	}
 	var r ResultadoAnulacion
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		r, err = anularEnTransaccion(ctx, tx, pedido, motivo, usuario)
+		r, err = anularEnTransaccion(ctx, tx, pedido, motivo, ses.UserID, a.VolvioLaMercaderia, autorizadoPor)
 		if err == nil && !r.Ok {
 			return errSinEscribir
 		}
@@ -46,10 +87,66 @@ func (s *Servicio) Anular(ctx context.Context, pedido, motivo, usuario string) (
 	if errors.Is(err, errSinEscribir) {
 		return r, nil
 	}
+	if firma != nil {
+		r.AutorizadoPor = firma.Nombre
+	}
 	return r, err
 }
 
-func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario string) (ResultadoAnulacion, error) {
+func mensajeDeFalta(a *Autorizacion) string {
+	if a == nil {
+		return ""
+	}
+	f := autorizacion.Falta{PinIncorrecto: a.PinIncorrecto, BloqueadoHasta: a.BloqueadoHasta, SinAdmins: a.SinAdmins}
+	return f.Mensaje()
+}
+
+// firmaParaAnular decide si la anulación pide PIN y, si lo pide, lo prueba.
+// Devuelve la firma (nil si no hizo falta) o lo que falta.
+func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido string, a PedidoDeAnulacion) (*autorizacion.Firma, *Autorizacion, error) {
+	var p struct {
+		total            jsmath.Num
+		sucursal, vendio *string
+		creada           time.Time
+		cobrada          bool
+		enElTurno        bool
+	}
+	err := s.pool.QueryRow(ctx, `
+		SELECT o.total, o.branch_id, o.created_by_user_id, o.created_at,
+		       coalesce((SELECT sum(importe) FROM order_payments WHERE order_id = o.id AND medio <> 'cuenta_corriente'), 0) > 0
+		         OR (NOT EXISTS (SELECT 1 FROM order_payments WHERE order_id = o.id) AND o.medio_pago IS DISTINCT FROM 'cuenta_corriente'),
+		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = o.branch_id AND cs.estado = 'abierta' AND cs.abierta_at <= o.created_at)
+		FROM orders o WHERE o.id::text = $1`, pedido).
+		Scan(&p.total, &p.sucursal, &p.vendio, &p.creada, &p.cobrada, &p.enElTurno)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// El «no encontramos la venta» lo dice la transacción.
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if ses.Tiene(sqlc.StaffRoleAdmin) {
+		return &autorizacion.Firma{UserID: ses.UserID, Nombre: ses.Nombre}, nil, nil
+	}
+	propia := p.vendio != nil && *p.vendio == ses.UserID
+	reciente := s.ahora().Sub(p.creada) < minutosParaCorregir
+	if a.VolvioLaMercaderia && propia && p.enElTurno && (!p.cobrada || reciente) {
+		return nil, nil, nil
+	}
+	sucursal := ""
+	if p.sucursal != nil {
+		sucursal = *p.sucursal
+	}
+	firma, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: p.total.F(), Clave: pedido,
+		Sucursal: sucursal, PIN: a.PIN, Ficha: a.Ficha})
+	var falta *autorizacion.Falta
+	if errors.As(err, &falta) {
+		return nil, faltaDeAutorizacion(falta).Autorizacion, nil
+	}
+	return firma, nil, err
+}
+
+func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario string, volvio bool, autorizadoPor *string) (ResultadoAnulacion, error) {
 	// El candado es por pedido: dos toques no revierten dos veces.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1::text))`, id); err != nil {
 		return ResultadoAnulacion{}, err
@@ -170,8 +267,9 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 
 	// 1. El stock: vuelve lo que de verdad salió del físico y se libera lo
 	// que sigue reservado. Las dos cosas pueden pasar en la misma venta (un
-	// acopio con un remito anulado) o ninguna.
-	if err := devolverLoQueSalio(ctx, tx, id, p.numero, usuario); err != nil {
+	// acopio con un remito anulado) o ninguna. Si el cliente se la llevó, el
+	// físico no vuelve: solo se liberan las reservas.
+	if err := devolverLoQueSalio(ctx, tx, id, p.numero, usuario, volvio); err != nil {
 		return ResultadoAnulacion{}, err
 	}
 
@@ -214,8 +312,12 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		notas = append(notas, *p.notas)
 	}
 	notas = append(notas, "Anulada: "+motivo)
-	if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'cancelado', estado_pago = 'reintegrado', notas = $2, updated_at = now() WHERE id = $1`,
-		id, strings.Join(notas, "\n")); err != nil {
+	if !volvio {
+		notas = append(notas, "La mercadería no volvió.")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'cancelado', estado_pago = 'reintegrado', notas = $2, updated_at = now(),
+		anulacion_autorizada_por = $3, mercaderia_no_volvio = $4 WHERE id = $1`,
+		id, strings.Join(notas, "\n"), autorizadoPor, !volvio); err != nil {
 		return ResultadoAnulacion{}, err
 	}
 	// El momento de la anulación queda en el historial: el cierre Z muestra
@@ -236,7 +338,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		estado string
 	}
 	err = tx.QueryRow(ctx, `SELECT id, estado::text FROM invoices WHERE order_id = $1 LIMIT 1`, id).Scan(&factura.id, &factura.estado)
-	r := ResultadoAnulacion{Ok: true, Numero: p.numero}
+	r := ResultadoAnulacion{Ok: true, Numero: p.numero, Total: total}
 	if err == nil && factura.estado != "anulada" {
 		r.FacturaPendiente = &factura.id
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -254,7 +356,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 // otra vez: el físico subía de la nada. Ahora se suman los movimientos de la
 // venta («Mostrador V-…») y de sus remitos («Remito REM-…» y su anulación),
 // por variante y sucursal: vuelve lo que dé negativo, adonde salió.
-func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario string) error {
+func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario string, devolverFisico bool) error {
 	filas, err := tx.Query(ctx, `
 		SELECT variant_id, branch_id, (-sum(qty))::text FROM inventory_movements
 		WHERE variant_id IN (SELECT variant_id FROM order_items WHERE order_id = $1 AND variant_id IS NOT NULL)
@@ -275,7 +377,7 @@ func devolverLoQueSalio(ctx context.Context, tx pgx.Tx, pedido, numero, usuario 
 			filas.Close()
 			return err
 		}
-		if l.Cantidad = ventas.CantidadDeStock(jsmath.Numero(cantidad)); l.Cantidad > 0 {
+		if l.Cantidad = ventas.CantidadDeStock(jsmath.Numero(cantidad)); l.Cantidad > 0 && devolverFisico {
 			vueltas = append(vueltas, l)
 			stocks = append(stocks, reservas.Stock{Variante: l.VariantID, Sucursal: l.BranchID})
 		}

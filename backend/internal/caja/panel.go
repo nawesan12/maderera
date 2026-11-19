@@ -102,7 +102,7 @@ type TurnoCerrado struct {
 	// la diferencia de una caja ya contada (T3, hallazgo 9).
 	Tardios      int                `json:"tardios"`
 	TardiosMonto float64            `json:"tardiosMonto"`
-	Cierre  []RenglonDelCierre `json:"cierre"`
+	Cierre       []RenglonDelCierre `json:"cierre"`
 }
 
 // TurnosCerrados son los turnos cerrados entre `desde` y `hasta` (el mes

@@ -80,6 +80,4 @@ export function papelDeLaVenta(u: UltimaVenta) {
 export interface Aviso {
   tipo: "ok" | "error";
   texto: string;
-  /** Presente cuando el bloqueo se puede saltear con la decisión del vendedor. */
-  autorizar?: () => void;
 }

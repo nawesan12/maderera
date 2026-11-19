@@ -18,6 +18,7 @@ import {
 import { CamposDeCheque, DatosDeTarjeta, PagoPartido } from "./medios-de-pago";
 import { PromosDelBanco } from "./promos";
 import { type Cliente, type UltimaVenta, papelDeLaVenta } from "./tipos";
+import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 
 export function Cobro({
   cheque,
@@ -54,6 +55,10 @@ export function Cobro({
   puede,
   puedeCobrar,
   onCobrar,
+  porAutorizar,
+  pidePin,
+  onPin,
+  onCancelarPin,
   aviso,
   ultima,
   acopio,
@@ -103,7 +108,13 @@ export function Cobro({
   /** Además, están los datos que la venta necesita para cobrarse. */
   puedeCobrar: boolean;
   onCobrar: () => void;
-  aviso: { tipo: "ok" | "error"; texto: string; autorizar?: () => void } | null;
+  /** Lo que la venta deja de cobrar pasado lo libre: va a pedir el PIN. */
+  porAutorizar: number;
+  /** Go pidió el PIN de un admin: el campo va en el lugar del botón. */
+  pidePin: Autorizacion | null;
+  onPin: (pin: string) => void;
+  onCancelarPin: () => void;
+  aviso: { tipo: "ok" | "error"; texto: string } | null;
   ultima: UltimaVenta | null;
   acopio: boolean;
   /** Elegir contado, cuenta corriente o acopio: acomoda el medio de pago. */
@@ -467,16 +478,6 @@ export function Cobro({
           } bg-[var(--estado-fondo)] text-[var(--estado-tinta)]`}
         >
           <p>{aviso.texto}</p>
-          {aviso.autorizar && (
-            <button
-              type="button"
-              onClick={aviso.autorizar}
-              disabled={enviando}
-              className="mt-2.5 h-11 rounded-lg border border-current px-4 text-base font-semibold"
-            >
-              Cobrar igual, bajo mi responsabilidad
-            </button>
-          )}
         </div>
       )}
 
@@ -568,14 +569,32 @@ export function Cobro({
 
         <div className="flex items-baseline justify-between">
           <span className="text-lg font-semibold">Total</span>
-          <span className="tabular text-[34px] font-bold leading-none tracking-tight">
-            {formatearMonto(total)}
+          {/* Pasado lo libre, el total se pone naranja y dice cuánto queda
+              abajo del precio: se llama al admin mientras se termina de cargar. */}
+          <span className="text-right">
+            <span
+              className={`tabular block text-[34px] font-bold leading-none tracking-tight ${porAutorizar > 0 ? "text-brand-orange" : ""}`}
+            >
+              {formatearMonto(total)}
+            </span>
+            {porAutorizar > 0 && !pidePin && (
+              <span className="tabular mt-1 block text-sm font-semibold text-brand-orange">
+                {formatearMonto(porAutorizar)} abajo del precio · PIN admin
+              </span>
+            )}
           </span>
         </div>
 
-        {/* Cobrar y el presupuesto en la misma fila: el presupuesto es de cada
+        {/* El PIN de un admin en el lugar del botón: la venta no se corta, no
+            abre otra pantalla. Enter reenvía la misma venta y Esc vuelve. */}
+        {pidePin ? (
+          <div className="mt-3.5">
+            <CampoPin autorizacion={pidePin} enviando={enviando} onEnviar={onPin} onCancelar={onCancelarPin} grande />
+          </div>
+        ) : (
+        /* Cobrar y el presupuesto en la misma fila: el presupuesto es de cada
             tantas ventas y no necesita el ancho entero, y esos 55 px de alto
-            son los que hacían falta arriba. */}
+            son los que hacían falta arriba. */
         <div className="mt-3.5 flex gap-2">
           <button
             onClick={() => onCobrar()}
@@ -611,6 +630,7 @@ export function Cobro({
             Presupuesto
           </button>
         </div>
+        )}
       </div>
     </div>
   );

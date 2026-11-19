@@ -144,6 +144,7 @@ export function Buscador({
       unidad: unidadDeLinea(producto),
       cantidad,
       precioUnitario: precioDeLinea(r.precio, producto, pres),
+      precioLista: precioDeLinea(r.precio, producto, pres),
       presentacion: pres,
     });
     setTexto("");

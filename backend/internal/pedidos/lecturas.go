@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/precios"
+	"mjbj/internal/ventas"
 	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
@@ -181,6 +183,10 @@ type FichaDePresupuesto struct {
 	Items               []ItemDePresupuesto `json:"items"`
 	PedidoID            *string             `json:"pedidoId"`
 	NumeroPedido        *string             `json:"numeroPedido"`
+	// Vencido: pasó su validez y no se convirtió. Para pasarlo a pedido hay
+	// que elegir entre los precios de hoy (TotalDeHoy) y los suyos.
+	Vencido    bool    `json:"vencido"`
+	TotalDeHoy *string `json:"totalDeHoy"`
 }
 
 // Presupuesto es la ficha, o nil si no existe.
@@ -226,7 +232,67 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 		}
 		p.Items = append(p.Items, it)
 	}
-	return &p, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	filas.Close()
+	p.Vencido = p.PedidoID == nil && PresupuestoVencido(p.Estado, p.ValidoHasta, s.ahora())
+	if p.Vencido {
+		total, err := s.totalDeHoy(ctx, id, p.CustomerID, jsmath.Numero(p.Total)-jsmath.Numero(p.Subtotal))
+		if err != nil {
+			return nil, err
+		}
+		p.TotalDeHoy = &total
+	}
+	return &p, nil
+}
+
+// totalDeHoy es el total del presupuesto con los precios de lista de hoy
+// (la misma cuenta que «actualizar» al pasarlo a pedido).
+func (s *Servicio) totalDeHoy(ctx context.Context, id string, cliente *string, extra float64) (string, error) {
+	filas, err := s.pool.Query(ctx, `SELECT variant_id, presentacion, cantidad::float8, subtotal::float8 FROM quote_items WHERE quote_id = $1 ORDER BY orden, id`, id)
+	if err != nil {
+		return "", err
+	}
+	type renglon struct {
+		r        precios.RenglonConVariante
+		cantidad float64
+		subtotal float64
+	}
+	var rs []renglon
+	for filas.Next() {
+		var r renglon
+		if err := filas.Scan(&r.r.VariantID, &r.r.Presentacion, &r.cantidad, &r.subtotal); err != nil {
+			filas.Close()
+			return "", err
+		}
+		rs = append(rs, r)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return "", err
+	}
+	lista, err := precios.ListaDelCliente(ctx, s.pool, cliente)
+	if err != nil {
+		return "", err
+	}
+	conVariante := make([]precios.RenglonConVariante, len(rs))
+	for i, r := range rs {
+		conVariante[i] = r.r
+	}
+	listas, err := precios.PreciosDeLista(ctx, s.pool, conVariante, lista)
+	if err != nil {
+		return "", err
+	}
+	total := 0.0
+	for i, r := range rs {
+		if listas[i] != nil {
+			total += ventas.ACentavos(float64(r.cantidad * *listas[i]))
+		} else {
+			total += r.subtotal
+		}
+	}
+	return jsmath.Fijo2(ventas.ACentavos(total + extra)), nil
 }
 
 /* -------------------------------- pedidos -------------------------------- */

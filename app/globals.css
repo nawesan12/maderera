@@ -1901,3 +1901,22 @@ body:has([data-sin-flotantes]) .flotante-whatsapp {
   color: var(--texto-2, var(--muted-foreground));
   white-space: nowrap;
 }
+
+/* El PIN equivocado tiembla (components/autorizacion/campo-pin.tsx): se ve
+   de reojo, sin leer, que hay que teclearlo otra vez. */
+@keyframes temblar {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+
+.animate-temblar {
+  animation: temblar 0.4s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-temblar {
+    animation: none;
+  }
+}

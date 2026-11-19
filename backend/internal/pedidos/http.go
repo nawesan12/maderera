@@ -256,6 +256,10 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 			ent.MedioPago = &m
 		}
 		ent.EntregarEl = texto(b.EntregarEl)
+		if b.Precios != nil {
+			ent.Precios = string(*b.Precios)
+		}
+		ent.PIN, ent.Ficha = texto(b.Pin), texto(b.Ficha)
 	}
 	v, err := a.s.ConvertirConEntrega(ctx, ses, r.Id.String(), ent)
 	if err != nil {

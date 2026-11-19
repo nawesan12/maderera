@@ -83,7 +83,7 @@ export default async function MostradorPage({
     // el que va a registrar el servidor.
     escalasDePago(),
   ]);
-  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre } = pantalla;
+  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct } = pantalla;
 
   return (
     <VistaMostrador
@@ -101,6 +101,7 @@ export default async function MostradorPage({
       tarifasDeCorte={tarifas}
       anchoSierra={sierra}
       fondoBase={fondoBase}
+      descuentoLibrePct={descuentoLibrePct}
       promos={promos}
       escalasDePago={escalas}
       ventas={ventas}

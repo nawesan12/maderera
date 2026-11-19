@@ -300,7 +300,13 @@ func TestVentaPartidaACuentaYMedia(t *testing.T) {
 		t.Fatalf("profesional: %v", m)
 	}
 	// Anular la venta a cuenta: la deuda se cancela con una nota de crédito.
-	if st, m, _ := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 {
+	// Sin caja abierta la venta no es del turno: el vendedor necesita el PIN
+	// (T3) y la anula un admin.
+	if st, m, _ := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 || m["autorizacion"] == nil {
+		t.Fatalf("anular sin turno: %d %v", st, m)
+	}
+	adm := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
+	if st, m, _ := pedir(t, adm, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 || m["ok"] != "Venta anulada." {
 		t.Fatalf("anular: %d %v", st, m)
 	}
 	if d := e.num(t, `select sum(monto)::float8 from account_movements where customer_id = $1`, e.cliente); d != 0 {

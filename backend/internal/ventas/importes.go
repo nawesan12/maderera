@@ -49,6 +49,9 @@ type LineaDeVenta struct {
 	Cantidad       float64 `json:"cantidad"`
 	PrecioUnitario float64 `json:"precioUnitario"`
 	Presentacion   *string `json:"presentacion,omitempty"`
+	// PrecioLista es el de la lista del cliente, que pone el servidor (T3):
+	// nil en un renglón sin variante o sin precio cargado.
+	PrecioLista *float64 `json:"precioLista,omitempty"`
 }
 
 // PagoDeVenta es un renglón de cómo se pagó.

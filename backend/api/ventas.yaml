@@ -244,6 +244,9 @@ paths:
                 costoEnvio: { type: number, format: double, minimum: 0 }
                 medioPago: { $ref: "#/components/schemas/MedioPago" }
                 entregarEl: { type: string, description: AAAA-MM-DD }
+                precios: { type: string, enum: [actualizar, respetar], description: "para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)" }
+                pin: { type: string, maxLength: 20 }
+                ficha: { type: string, maxLength: 400 }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -346,8 +349,10 @@ components:
       type: object
       required: [id, numero, cliente, email, telefono, empresa, customerId, clienteCodigo, clienteCuit, clienteCondicionIva,
         clienteDireccion, sucursal, sucursalSlug, vendedor, estado, origen, subtotal, total, notas, asesor, validoHasta, createdAt, items,
-        pedidoId, numeroPedido]
+        pedidoId, numeroPedido, vencido, totalDeHoy]
       properties:
+        vencido: { type: boolean, description: "pasó su validez: para pasarlo a pedido hay que elegir los precios" }
+        totalDeHoy: { type: string, nullable: true, description: "el total con los precios de lista de hoy, si venció" }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }

@@ -13,7 +13,6 @@ import { PlanoEditable } from "@/components/cortes/plano-editable";
 import type { PiezaFijada } from "@/lib/cortes/tipos";
 import { usePlano } from "@/lib/cortes/en-vivo";
 import {
-  fraccionDePlaca,
   medidaDePlaca,
   nombreDeLaMitad,
   type Mitad,
@@ -22,7 +21,7 @@ import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { moneda } from "@/lib/formato";
 import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
-import { presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
+import { precioDeLinea, presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 
 /**
@@ -140,7 +139,7 @@ export function CorteAMedida({
   );
 
   // El plano lo calcula Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
-  const { plano, calculando } = usePlano({
+  const { plano, placasACobrar, pasadasACobrar, calculando } = usePlano({
     piezas: validas,
     placaLargo,
     placaAncho,
@@ -155,11 +154,18 @@ export function CorteAMedida({
   // De media placa se cobra media placa: el plano ya trabaja sobre la medida
   // partida, así que lo único que cambia es el precio del material.
   const pctMedia = placa.precioMediaPct ?? 50;
-  const subtotalPlacas = plano.placasEnteras * placa.precio * fraccionDePlaca(mitad, pctMedia);
+  const productoDeLaPlaca = {
+    unit: placa.unidad,
+    formaDeVenta: placa.formaDeVenta ?? "entera",
+    precioMediaPct: pctMedia,
+  } as const;
+  // Lo que se cobra (placasACobrar) y no lo que se dibuja: acomodar a mano
+  // para que ninguna placa pase la mitad no saca el material.
+  const subtotalPlacas = placasACobrar * precioDeLinea(placa.precio, productoDeLaPlaca, presentacionDeMitad(mitad));
   // Solo se ofrece partir lo que se vende partido: un fenólico que se vende
   // entero no tiene media placa en ningún lado (nota de la clienta, 30/9/2026).
   const sePuedePartir = placa.formaDeVenta === "entera_o_media";
-  const subtotalCorte = plano.pasadasCobrables * precioPorPasada;
+  const subtotalCorte = pasadasACobrar * precioPorPasada;
   const subtotalCanto = Math.round(metrosCanto * precioPorMetroCanto * 100) / 100;
   const total = subtotalPlacas + subtotalCorte + subtotalCanto;
 
@@ -198,7 +204,7 @@ export function CorteAMedida({
      * catálogo y tienen que descontar stock del estante. El corte y el
      * tapacanto van sin variante, que es lo que hace que no descuenten nada.
      */
-    if (plano.placasEnteras > 0) {
+    if (placasACobrar > 0) {
       /*
        * Media placa se cobra al precio de la media y descuenta **media placa**
        * del estante: la otra mitad queda en el depósito y se puede vender
@@ -212,19 +218,22 @@ export function CorteAMedida({
           ? `${placa.descripcion} — ${nombreDeLaMitad(mitad).toLowerCase()}`
           : placa.descripcion,
         unidad: placa.unidad,
-        cantidad: plano.placasEnteras,
-        precioUnitario: placa.precio * fraccionDePlaca(mitad, pctMedia),
+        cantidad: placasACobrar,
+        // El de la media al peso, como el buscador y Go (precioDeLinea): la
+        // fracción a secas daba centavos de diferencia con la lista.
+        precioUnitario: precioDeLinea(placa.precio, productoDeLaPlaca, presentacionDeMitad(mitad)),
+        precioLista: precioDeLinea(placa.precio, productoDeLaPlaca, presentacionDeMitad(mitad)),
       });
     }
 
-    if (plano.pasadasCobrables > 0 && precioPorPasada > 0) {
+    if (pasadasACobrar > 0 && precioPorPasada > 0) {
       lineas.push({
         variantId: null,
-        descripcion: `Corte a medida — ${plano.pasadasCobrables} ${
-          plano.pasadasCobrables === 1 ? "pasada" : "pasadas"
+        descripcion: `Corte a medida — ${pasadasACobrar} ${
+          pasadasACobrar === 1 ? "pasada" : "pasadas"
         }`,
         unidad: "pasada",
-        cantidad: plano.pasadasCobrables,
+        cantidad: pasadasACobrar,
         precioUnitario: precioPorPasada,
       });
     }
@@ -247,7 +256,7 @@ export function CorteAMedida({
       placaAnchoMm: placa.anchoMm,
       mitad,
       placas: plano.placas.length,
-      pasadas: plano.pasadasCobrables,
+      pasadas: pasadasACobrar,
       acomodoManual: fijadas.length > 0 ? JSON.stringify(fijadas) : null,
       anchoSierraMm: anchoSierra,
       piezas: validas.map((p) => ({
@@ -538,7 +547,7 @@ export function CorteAMedida({
               </p>
             )}
 
-            {plano.pasadasCobrables > 0 && precioPorPasada === 0 && (
+            {pasadasACobrar > 0 && precioPorPasada === 0 && (
               <p className="estado-espera mt-3 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base">
                 Esta placa no tiene tarifa de corte: las pasadas no se cobran (Cortes → Tarifas).
               </p>
@@ -554,9 +563,19 @@ export function CorteAMedida({
               <dt className="inline text-muted-foreground">Placas </dt>
               <dd className="inline font-semibold">{plano.placas.length}</dd>
             </div>
+            {/* Acomodado a mano, lo que se cobra puede no ser lo que se dibuja:
+                se dice acá, antes de cobrar, y no como un PIN sorpresa. */}
+            {placasACobrar !== plano.placasEnteras && (
+              <div className="text-brand-orange">
+                <dt className="inline">Se cobran </dt>
+                <dd className="inline font-semibold">
+                  {placasACobrar} {placasACobrar === 1 ? "placa" : "placas"}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="inline text-muted-foreground">Pasadas </dt>
-              <dd className="inline font-semibold">{plano.pasadasCobrables}</dd>
+              <dd className="inline font-semibold">{pasadasACobrar}</dd>
             </div>
             <div>
               <dt className="inline text-muted-foreground">Canto </dt>
@@ -564,7 +583,7 @@ export function CorteAMedida({
             </div>
             {validas.length > 0 && plano.noEntran.length === 0 && (
               <div title={[
-                plano.placasEnteras > 0 ? `Placas: ${moneda.format(subtotalPlacas)}` : "",
+                placasACobrar > 0 ? `Placas: ${moneda.format(subtotalPlacas)}` : "",
                 subtotalCorte > 0 ? `Corte: ${moneda.format(subtotalCorte)}` : "",
                 subtotalCanto > 0 ? `Tapacanto: ${moneda.format(subtotalCanto)}` : "",
               ].filter(Boolean).join(" · ")}>

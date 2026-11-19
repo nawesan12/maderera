@@ -259,6 +259,9 @@ var reglas = map[string][]string{
 	"ganancia_gastos":         {"con_iva", "sin_iva"},
 	"ganancia_descuento":      {"si", "no"},
 	"anular_compra_con_pagos": {"a_cuenta", "bloquear"},
+	// Lo que el mostrador deja de cobrar sin el PIN de un admin (T3,
+	// migración 00141): mostrador.PorcentajeLibre lee estos tres.
+	"descuento_sin_autorizacion_pct": {"0", "5", "10"},
 }
 
 // numericos son los ajustes que son una cantidad y tienen su pantalla: el

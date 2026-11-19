@@ -59,6 +59,10 @@ type VentaPedida struct {
 	Notas            *string
 	Autorizado       bool
 	Corte            *CorteDeMostrador
+	// PIN de un admin, o la Ficha que devolvió un PIN anterior para esta
+	// misma venta (internal/autorizacion).
+	PIN   string
+	Ficha string
 
 	NumeroProvisorio *string
 	CobradaAt        *time.Time
@@ -210,6 +214,12 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	v.Autorizado = booleano(l.Booleano("autorizado", true))
 	if c := l.Objeto("corte", true, false); c != nil {
 		v.Corte = leerCorte(c)
+	}
+	if p := l.Cadena("pin", zodjs.Texto{Opcional: true, Nulo: true, Max: 20}); p != nil {
+		v.PIN = *p
+	}
+	if f := l.Cadena("ficha", zodjs.Texto{Opcional: true, Nulo: true, Max: 400}); f != nil {
+		v.Ficha = *f
 	}
 	return v, l
 }

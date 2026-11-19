@@ -27,11 +27,11 @@ import (
 
 func (e *entorno) sesionDe(t *testing.T, correo string) *auth.Sesion {
 	t.Helper()
-	id, err := e.ses.AltaDeStaff(context.Background(), correo, "una clave larga", "Depósito", sqlc.StaffRoleAdmin)
-	if err != nil {
+	if _, err := e.ses.AltaDeStaff(context.Background(), correo, "una clave larga", "Depósito", sqlc.StaffRoleAdmin); err != nil {
 		t.Fatal(err)
 	}
-	return &auth.Sesion{UserID: id, Nombre: "Depósito"}
+	// AltaDeStaff devuelve qué hizo, no el id.
+	return &auth.Sesion{UserID: e.txt(t, `select id from "user" where email = $1`, correo), Nombre: "Depósito"}
 }
 
 // fisicoYReservado es la placa en Casa Central.
@@ -47,6 +47,13 @@ func (e *entorno) fisicoYReservado(t *testing.T) (float64, float64) {
 
 var clavesDeStock int64 = 700000
 
+// comoAdmin es la sesión de un admin: estas pruebas venden a precios de
+// prueba, por debajo de la lista, y lo que miran es el stock.
+func comoAdmin(usuario string) *auth.Sesion {
+	rol := sqlc.StaffRoleAdmin
+	return &auth.Sesion{UserID: usuario, Nombre: "Admin", Rol: sqlc.UserRoleStaff, RolStaff: &rol}
+}
+
 func claveDeStock() string {
 	return fmt.Sprintf("8f2b5c1e-1d2a-4c3b-9a8e-%012d", atomic.AddInt64(&clavesDeStock, 1))
 }
@@ -56,7 +63,7 @@ func (e *entorno) ventaEnAcopio(t *testing.T, usuario string, placas float64) st
 	p := e.placa
 	r, err := e.svc.RegistrarVenta(context.Background(), VentaPedida{Clave: claveDeStock(), BranchID: e.central, ContactoNombre: "CF",
 		MedioPago: ventas.Transferencia, Acopio: true,
-		Lineas: []ventas.LineaDeVenta{{VariantID: &p, Descripcion: "Fenólico", Unidad: "placa", Cantidad: placas, PrecioUnitario: 100}}}, usuario)
+		Lineas: []ventas.LineaDeVenta{{VariantID: &p, Descripcion: "Fenólico", Unidad: "placa", Cantidad: placas, PrecioUnitario: 100}}}, comoAdmin(usuario), usuario)
 	if err != nil || !r.Ok {
 		t.Fatalf("venta en acopio: %v %+v", err, r)
 	}
@@ -99,7 +106,7 @@ func TestAnularElRemitoDeUnAcopioVuelveAReservar(t *testing.T) {
 		t.Errorf("después de anular el remito: físico %v, reservado %v, reservas %v, estado %s (quería %v, 10, 10, listo)",
 			q, r, e.reservasActivas(t, pedido), estado, inicial)
 	}
-	an, err := e.svc.Anular(ctx, pedido, "se arrepintió", ses.UserID)
+	an, err := e.svc.Anular(ctx, comoAdmin(ses.UserID), pedido, PedidoDeAnulacion{Motivo: "se arrepintió", VolvioLaMercaderia: true})
 	if err != nil || !an.Ok {
 		t.Fatalf("anular la venta: %v %+v", err, an)
 	}
@@ -116,14 +123,14 @@ func TestAnularUnaVentaSinAcopioDevuelveLoQueSalio(t *testing.T) {
 	p := e.placa
 	r, err := e.svc.RegistrarVenta(context.Background(), VentaPedida{Clave: claveDeStock(), BranchID: e.central, ContactoNombre: "CF",
 		MedioPago: ventas.Transferencia,
-		Lineas:    []ventas.LineaDeVenta{{VariantID: &p, Descripcion: "Fenólico", Unidad: "placa", Cantidad: 4, PrecioUnitario: 100}}}, ses.UserID)
+		Lineas:    []ventas.LineaDeVenta{{VariantID: &p, Descripcion: "Fenólico", Unidad: "placa", Cantidad: 4, PrecioUnitario: 100}}}, comoAdmin(ses.UserID), ses.UserID)
 	if err != nil || !r.Ok {
 		t.Fatalf("venta: %v %+v", err, r)
 	}
 	if q, _ := e.fisicoYReservado(t); q != 96 {
 		t.Fatalf("después de la venta: %v", q)
 	}
-	an, err := e.svc.Anular(context.Background(), r.OrderID, "error de carga", ses.UserID)
+	an, err := e.svc.Anular(context.Background(), comoAdmin(ses.UserID), r.OrderID, PedidoDeAnulacion{Motivo: "error de carga", VolvioLaMercaderia: true})
 	if err != nil || !an.Ok {
 		t.Fatalf("anular: %v %+v", err, an)
 	}
@@ -248,7 +255,7 @@ func (e *entorno) ventaDeDos(usuario, menor, mayor string) error {
 	_, err := e.svc.RegistrarVenta(context.Background(), VentaPedida{Clave: claveDeStock(), BranchID: e.central, ContactoNombre: "CF",
 		MedioPago: ventas.Transferencia,
 		Lineas: []ventas.LineaDeVenta{{VariantID: &a, Descripcion: "a", Unidad: "unidad", Cantidad: 1, PrecioUnitario: 1},
-			{VariantID: &b, Descripcion: "b", Unidad: "unidad", Cantidad: 1, PrecioUnitario: 1}}}, usuario)
+			{VariantID: &b, Descripcion: "b", Unidad: "unidad", Cantidad: 1, PrecioUnitario: 1}}}, comoAdmin(usuario), usuario)
 	return err
 }
 
@@ -368,7 +375,7 @@ func TestElRemitoDeUnaVentaYaEntregadaNoDescuentaDosVeces(t *testing.T) {
 	p := e.placa
 	r, err := e.svc.RegistrarVenta(ctx, VentaPedida{Clave: claveDeStock(), BranchID: e.central, ContactoNombre: "CF",
 		MedioPago: ventas.Transferencia,
-		Lineas:    []ventas.LineaDeVenta{{VariantID: &p, Descripcion: "Fenólico", Unidad: "placa", Cantidad: 4, PrecioUnitario: 100}}}, ses.UserID)
+		Lineas:    []ventas.LineaDeVenta{{VariantID: &p, Descripcion: "Fenólico", Unidad: "placa", Cantidad: 4, PrecioUnitario: 100}}}, comoAdmin(ses.UserID), ses.UserID)
 	if err != nil || !r.Ok {
 		t.Fatalf("venta: %v %+v", err, r)
 	}

@@ -43,6 +43,7 @@ import (
 	"mjbj/internal/api/stockapi"
 	"mjbj/internal/api/whatsappapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/avisos"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/buscador"
@@ -368,7 +369,15 @@ func correrAPI() error {
 	// El mostrador (tanda 5): las acciones de app/mostrador por el contrato, y
 	// las rutas de siempre de la copia local (/api/mostrador/latido, catalogo,
 	// clientes, caja/movimientos, caja/vincular) con su forma de siempre.
-	servicioMostrador := mostrador.Nuevo(pool, log).ConClaveDeCola(cfg.Auth.Secreto)
+	// El PIN de los admins (T3): una sola instancia para el mostrador y los
+	// pedidos, con la clave de las fichas derivada del secreto de las
+	// sesiones y el aviso al tercer error por push a quien entra a la
+	// bitácora (el admin).
+	avisosDePIN := push.Nuevo(cfg.Push, q, log)
+	aut := autorizacion.Nuevo(pool, log, cfg.Auth.Secreto).ConAvisos(func(ctx context.Context, titulo, cuerpo string) {
+		go avisosDePIN.Avisar(ctx, push.Aviso{Titulo: titulo, Cuerpo: cuerpo, URL: "/admin/bitacora", Etiqueta: "pin", Pantalla: "/admin/bitacora"})
+	})
+	servicioMostrador := mostrador.Nuevo(pool, log).ConClaveDeCola(cfg.Auth.Secreto).ConAutorizacion(aut)
 	servicioMostrador.Rutas(m)
 	mostradorapi.HandlerWithOptions(
 		mostradorapi.NewStrictHandlerWithOptions(mostrador.NuevaAPI(servicioMostrador),
@@ -382,7 +391,7 @@ func correrAPI() error {
 
 	// Pedidos y presupuestos del panel (tanda 5, parte B).
 	ventasapi.HandlerWithOptions(
-		ventasapi.NewStrictHandlerWithOptions(pedidos.NuevaAPI(pedidos.Nuevo(pool, log), cfg.Interna),
+		ventasapi.NewStrictHandlerWithOptions(pedidos.NuevaAPI(pedidos.Nuevo(pool, log).ConAutorizacion(aut), cfg.Interna),
 			[]ventasapi.StrictMiddlewareFunc{plataforma.ConPedido[ventasapi.StrictHandlerFunc]},
 			ventasapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

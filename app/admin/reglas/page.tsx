@@ -13,10 +13,11 @@ export const metadata = { title: "Reglas del negocio" };
  */
 export default async function ReglasPage() {
   await requireStaffRole("admin");
-  const [gastos, descuento, anular] = await Promise.all([
+  const [gastos, descuento, anular, libre] = await Promise.all([
     ajuste("ganancia_gastos", "con_iva"),
     ajuste("ganancia_descuento", "no"),
     ajuste("anular_compra_con_pagos", "a_cuenta"),
+    ajuste("descuento_sin_autorizacion_pct", "5"),
   ]);
 
   return (
@@ -44,6 +45,26 @@ export default async function ReglasPage() {
             opciones={[
               { valor: "si", texto: "Sí, se resta" },
               { valor: "no", texto: "No" },
+            ]}
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Mostrador
+        </h2>
+        <div className="tarjeta">
+          {/* Pasado este porcentaje, lo que una venta queda por debajo de la
+              lista (más el descuento tipeado) pide el PIN de un admin. */}
+          <Regla
+            clave="descuento_sin_autorizacion_pct"
+            pregunta="Descuento sin autorización"
+            valor={libre}
+            opciones={[
+              { valor: "0", texto: "Ninguno" },
+              { valor: "5", texto: "Hasta 5 %" },
+              { valor: "10", texto: "Hasta 10 %" },
             ]}
           />
         </div>

@@ -6,7 +6,10 @@ import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { tarifaDeCorte, type TarifaDeCorte } from "@/lib/cortes/tarifa";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { formatearMonto } from "@/lib/formato";
+import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 import {
+  aAutorizar,
+  desvioDeLaVenta,
   revisarChequeDePago,
   montoDelDescuento,
   totalDeLaVenta,
@@ -84,6 +87,7 @@ export function VistaMostrador({
   tarifasDeCorte,
   anchoSierra,
   fondoBase,
+  descuentoLibrePct,
   promos,
   escalasDePago,
 }: {
@@ -102,6 +106,8 @@ export function VistaMostrador({
   anchoSierra: number;
   /** El cambio que tiene que quedar en el cajón de esta sucursal. */
   fondoBase: number;
+  /** Lo que se puede dejar de cobrar sin el PIN de un admin (/admin/reglas). */
+  descuentoLibrePct: number;
   /** Las promociones vigentes. Se cuentan, no se descuentan. */
   promos: PromoVigente[];
   /** El descuento por forma de pago: lo aplica el servidor, acá se muestra. */
@@ -147,6 +153,14 @@ export function VistaMostrador({
   const [letra, setLetra] = useState<string | null>(null);
   const [ultima, setUltima] = useState<UltimaVenta | null>(null);
   const [caja, setCaja] = useState(false);
+  /*
+   * El PIN de un admin, cuando Go lo pide para esta venta (T3). El campo
+   * aparece en el lugar del botón de cobrar; la ficha es un PIN ya tecleado:
+   * si la venta falló después por otra cosa, se reenvía con ella y el admin
+   * no tiene que volver.
+   */
+  const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
+  const [ficha, setFicha] = useState<string | null>(null);
   const [suelta, setSuelta] = useState<string | null>(null);
   /*
    * El corte que se está vendiendo, si se vende uno.
@@ -245,6 +259,17 @@ export function VistaMostrador({
   const motivoDelDescuento =
     descuentoManual > 0 ? motivoDesc : (escalaDePago?.etiqueta ?? "");
   const total = useMemo(() => subtotal - descuento, [subtotal, descuento]);
+  /*
+   * Lo que va a pedir el PIN, avisado mientras se carga y no al cobrar: con la
+   * misma regla que Go (ventas.DesvioDeLaVenta), el total se pone naranja y
+   * dice cuánto queda abajo del precio. Así se llama al admin mientras se
+   * termina de cargar, no con el cliente esperando. La escala automática no
+   * cuenta.
+   */
+  const porAutorizar = useMemo(
+    () => aAutorizar(desvioDeLaVenta(lineas, descuentoManual), descuentoLibrePct),
+    [lineas, descuentoManual, descuentoLibrePct],
+  );
   // Sin nada tipeado no hay vuelto que mostrar: `Number("")` es 0, y un vuelto
   // de $0 en pantalla antes de que el cliente saque la plata se lee como si ya
   // hubiera pagado justo.
@@ -394,6 +419,8 @@ export function VistaMostrador({
     setPartes(null);
     setCorte(null);
     setRenglonesDelCorte([]);
+    setPidePin(null);
+    setFicha(null);
     // Terminada la venta, el foco vuelve al buscador: lo que sigue siempre es
     // el primer producto del que viene atrás en la fila.
     enfocar("buscador");
@@ -498,6 +525,15 @@ export function VistaMostrador({
     if (ids.length === 0) return;
 
     const precios = await preciosDelCliente(ids, nuevo?.id ?? null);
+    // La lista contra la que se marca lo tocado a mano pasa a ser la de este
+    // cliente. La media placa no: el precio que vuelve es el de la entera.
+    setLineas((prev) =>
+      prev.map((l) =>
+        l.variantId && !l.presentacion && precios[l.variantId] > 0
+          ? { ...l, precioLista: precios[l.variantId] }
+          : l,
+      ),
+    );
     const distintos = lineas.some(
       (l) =>
         l.variantId &&
@@ -511,15 +547,17 @@ export function VistaMostrador({
     if (!otrosPrecios) return;
     setLineas((prev) =>
       prev.map((l) =>
-        l.variantId && otrosPrecios[l.variantId] > 0
-          ? { ...l, precioUnitario: otrosPrecios[l.variantId] }
+        // La media placa se deja: el precio que vuelve es el de la placa
+        // entera, y ponérselo la cobraba el doble.
+        l.variantId && !l.presentacion && otrosPrecios[l.variantId] > 0
+          ? { ...l, precioUnitario: otrosPrecios[l.variantId], precioLista: otrosPrecios[l.variantId] }
           : l,
       ),
     );
     setOtrosPrecios(null);
   }
 
-  function cobrar(autorizado = false) {
+  function cobrar(pin?: string) {
     setAviso(null);
 
     // Con el pago partido, la suma tiene que dar el total antes de cobrar.
@@ -541,7 +579,7 @@ export function VistaMostrador({
      * mercadería sale por la puerta, así que negarse a registrar la venta no la
      * evita —solo la deja sin anotar—. El cliente se lleva un ticket con el
      * número de la caja y el sistema se encarga del resto cuando vuelva la
-     * conexión.
+     * conexión. (Si pasa lo libre, Go la marca en rojo para el dueño.)
      */
     if (!conexion.enLinea) {
       void cobrarSinConexion();
@@ -566,17 +604,19 @@ export function VistaMostrador({
         cuit: cuit || null,
         descuento: descuentoManual,
         descuentoMotivo: motivoDesc || null,
-        autorizado,
+        ...(pin ? { pin } : ficha ? { ficha } : {}),
       });
 
+      if (r.ficha) setFicha(r.ficha);
+      if (r.autorizacion) {
+        // Falta el PIN, o el que se tecleó no era: el campo aparece (o
+        // tiembla) en el lugar del botón.
+        setPidePin(r.autorizacion);
+        return;
+      }
+      setPidePin(null);
       if (r.error) {
-        setAviso({
-          tipo: "error",
-          texto: r.error,
-          // Cuenta corriente frenada pero salvable: el vendedor decide. Sin
-          // esto el mostrador quedaría trabado con un cliente enfrente.
-          autorizar: r.requiereAutorizacion ? () => cobrar(true) : undefined,
-        });
+        setAviso({ tipo: "error", texto: r.error });
         return;
       }
 
@@ -768,6 +808,13 @@ export function VistaMostrador({
             puede={lineas.length > 0}
             puedeCobrar={puedeCobrar}
             onCobrar={() => cobrar()}
+            porAutorizar={porAutorizar}
+            pidePin={pidePin}
+            onPin={(pin) => cobrar(pin)}
+            onCancelarPin={() => {
+              setPidePin(null);
+              enfocar("buscador");
+            }}
             aviso={aviso}
             ultima={ultima}
             acopio={acopio}

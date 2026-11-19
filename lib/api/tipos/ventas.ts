@@ -293,6 +293,10 @@ export interface components {
             alicuotaIva: string | null;
         };
         FichaDePresupuesto: {
+            /** @description pasó su validez: para pasarlo a pedido hay que elegir los precios */
+            vencido: boolean;
+            /** @description el total con los precios de lista de hoy, si venció */
+            totalDeHoy: string | null;
             id: string;
             numero: string;
             cliente: string;
@@ -802,6 +806,13 @@ export interface operations {
                     medioPago?: components["schemas"]["MedioPago"];
                     /** @description AAAA-MM-DD */
                     entregarEl?: string;
+                    /**
+                     * @description para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)
+                     * @enum {string}
+                     */
+                    precios?: "actualizar" | "respetar";
+                    pin?: string;
+                    ficha?: string;
                 };
             };
         };

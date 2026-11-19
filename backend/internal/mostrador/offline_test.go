@@ -304,10 +304,13 @@ func TestDescargaDeLaCola(t *testing.T) {
 	if n := e.num(t, `select count(*)::float8 from cash_movements m join cash_sessions s on s.id = m.session_id where s.estado = 'cerrada' and m.order_id = $1`, pedido); n != 1 {
 		t.Fatalf("la venta diferida no cayó en su turno: %v", n)
 	}
-	// Reenviar el mismo lote: la misma venta, sin comprobante pendiente.
+	// Reenviar el mismo lote: la misma venta. El comprobante vuelve a pedirse
+	// (T3, hallazgo 39): si el corte fue entre la venta y la factura, la
+	// factura no salía nunca. Emitirla es idempotente (una venta, un
+	// comprobante).
 	_, m, _ = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/descarga", lote)
 	r0 = m["resultados"].([]any)[0].(map[string]any)
-	if r0["orderId"] != pedido || r0["nueva"] != false || r0["fiscal"] != nil {
+	if r0["orderId"] != pedido || r0["nueva"] != false || r0["fiscal"] == nil {
 		t.Fatalf("reenvío: %v", r0)
 	}
 	if n := e.num(t, `select count(*)::float8 from orders`); n != 1 {

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
@@ -17,6 +18,8 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
+	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -350,11 +353,19 @@ type Entrega struct {
 	// EntregarEl es el día comprometido (AAAA-MM-DD). Vacío: el «para
 	// cuándo» del presupuesto, si lo tenía.
 	EntregarEl string
+	// Precios, para un presupuesto vencido: «actualizar» (los de lista de
+	// hoy) o «respetar» (los del presupuesto; pasado lo libre, con el PIN de
+	// un admin). Vacío en uno vigente.
+	Precios    string
+	PIN, Ficha string
 }
 
 func (e Entrega) revisar() error {
 	if e.MedioPago != nil && !medioValido(*e.MedioPago) {
 		return fallo("Ese medio de pago no existe.")
+	}
+	if e.Precios != "" && e.Precios != "actualizar" && e.Precios != "respetar" {
+		return fallo("Elegí si se actualizan los precios o se respetan.")
 	}
 	if !e.Envio {
 		return nil
@@ -401,17 +412,20 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		}
 		entregarEl = &d
 	}
-	var numero, pedidoID, numeroPresupuesto string
+	var numero, pedidoID, numeroPresupuesto, quienAutorizo string
+	var autorizadoPor *string
+	var dejado float64
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		var q struct {
 			customerID, email, telefono, branchID, notas, sellerID *string
-			nombre, subtotal, total                                string
+			nombre, subtotal, total, estado                        string
+			validoHasta                                            *time.Time
 		}
 		err := tx.QueryRow(ctx, `
 			SELECT numero, customer_id, contacto_nombre, contacto_email, contacto_telefono, branch_id, subtotal::text, total::text,
-			       notas, seller_id
+			       notas, seller_id, estado::text, valido_hasta
 			FROM quotes WHERE id = $1 FOR UPDATE`, quoteID).Scan(&numeroPresupuesto, &q.customerID, &q.nombre, &q.email, &q.telefono,
-			&q.branchID, &q.subtotal, &q.total, &q.notas, &q.sellerID)
+			&q.branchID, &q.subtotal, &q.total, &q.notas, &q.sellerID, &q.estado, &q.validoHasta)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return noEsta("No se encontró el presupuesto.")
 		}
@@ -454,6 +468,78 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		if len(lineas) == 0 {
 			return fallo("El presupuesto está vacío: no tiene ningún producto.")
 		}
+		if q.estado == "rechazado" {
+			return fallo("El presupuesto está rechazado: no se pasa a pedido.")
+		}
+
+		// Los precios de lista de hoy, para cada renglón con variante (T3,
+		// hallazgo 12). Un presupuesto «enviado» en marzo se convertía en
+		// noviembre con los precios de marzo, con un clic.
+		renglones := make([]ventas.LineaDeVenta, len(lineas))
+		conVariante := make([]precios.RenglonConVariante, len(lineas))
+		for i, l := range lineas {
+			renglones[i] = ventas.LineaDeVenta{VariantID: l.variantID, Cantidad: jsmath.Numero(l.cantidad), PrecioUnitario: jsmath.Numero(l.precio), Presentacion: l.presentacion}
+			conVariante[i] = precios.RenglonConVariante{VariantID: l.variantID, Presentacion: l.presentacion}
+		}
+		lista, err := precios.ListaDelCliente(ctx, tx, q.customerID)
+		if err != nil {
+			return err
+		}
+		listas, err := precios.PreciosDeLista(ctx, tx, conVariante, lista)
+		if err != nil {
+			return err
+		}
+		for i := range renglones {
+			renglones[i].PrecioLista = listas[i]
+		}
+		if PresupuestoVencido(q.estado, q.validoHasta, s.ahora()) {
+			switch ent.Precios {
+			case "actualizar":
+				// Cada renglón con lista vuelve al precio de hoy; el subtotal y
+				// el total se rehacen (lo que había entre los dos, el envío del
+				// presupuesto, se conserva).
+				nuevo := 0.0
+				for i := range lineas {
+					if listas[i] != nil {
+						renglones[i].PrecioUnitario = *listas[i]
+						lineas[i].precio = jsmath.Fijo2(*listas[i])
+						lineas[i].subt = jsmath.Fijo2(ventas.ACentavos(float64(renglones[i].Cantidad * *listas[i])))
+					}
+					nuevo += jsmath.Numero(lineas[i].subt)
+				}
+				extra := jsmath.Numero(q.total) - jsmath.Numero(q.subtotal)
+				q.subtotal = jsmath.Fijo2(ventas.ACentavos(nuevo))
+				q.total = jsmath.Fijo2(ventas.ACentavos(nuevo + extra))
+			case "respetar":
+				d := ventas.DesvioDeLaVenta(renglones, 0, 0)
+				libre, err := precios.PorcentajeLibre(ctx, tx)
+				if err != nil {
+					return err
+				}
+				if !d.DentroDeLoLibre(libre) {
+					// La misma regla y el mismo umbral que el mostrador: una
+					// diferencia de diez pesos no llama al admin.
+					sucursal := ""
+					if q.branchID != nil {
+						sucursal = *q.branchID
+					}
+					firma, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Presupuesto, Monto: d.Total,
+						Clave: quoteID, Sucursal: sucursal, PIN: ent.PIN, Ficha: ent.Ficha})
+					var falta *autorizacion.Falta
+					if errors.As(err, &falta) {
+						return faltaDePIN(falta)
+					}
+					if err != nil {
+						return err
+					}
+					autorizadoPor = &firma.UserID
+					quienAutorizo = firma.Nombre
+				}
+			default:
+				return plataforma.Invalido(map[string]string{"precios": "El presupuesto venció: elegí si se actualizan los precios o se respetan."})
+			}
+		}
+		dejado = ventas.DesvioDeLaVenta(renglones, 0, 0).Total
 
 		aCuenta := ent.MedioPago != nil && *ent.MedioPago == "cuenta_corriente"
 		totalPedido := jsmath.Numero(q.total) + jsmath.Numero(costo)
@@ -476,12 +562,14 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
-			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el)
+			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
+			                    dejado_de_cobrar, autorizado_por)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
-			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)))
+			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
+			        $19::numeric, $20)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor).Scan(&pedidoID); err != nil {
 			return err
 		}
 
@@ -517,10 +605,10 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			f := factores[i]
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
-				                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden)
-				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12)`,
+				                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $13::numeric)`,
 				pedidoID, l.variantID, l.descripcion, l.unidad, l.cantidad, l.precio, l.subt, f.Presentacion,
-				jsmath.Texto(f.StockPorUnidad), reservas.CostoPorUnidadDeVenta(costo, f.StockPorUnidad), alicuota, l.orden); err != nil {
+				jsmath.Texto(f.StockPorUnidad), reservas.CostoPorUnidadDeVenta(costo, f.StockPorUnidad), alicuota, l.orden, fijo2ONulo(listas[i])); err != nil {
 				return err
 			}
 		}
@@ -548,8 +636,18 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 	if err != nil {
 		return nil, err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", quoteID,
-		"Convirtió el presupuesto "+numeroPresupuesto+" en el pedido "+numero, nil)
+	var detalle any
+	desc := "Convirtió el presupuesto " + numeroPresupuesto + " en el pedido " + numero
+	switch ent.Precios {
+	case "actualizar":
+		desc += ", con los precios de hoy"
+	case "respetar":
+		desc += ", respetando los precios vencidos"
+	}
+	if quienAutorizo != "" || dejado > 0 {
+		detalle = map[string]any{"dejadoDeCobrar": dejado, "autorizadoPor": quienAutorizo, "precios": ent.Precios}
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", quoteID, desc, detalle)
 	return &Resultado{Ok: "Se creó el pedido " + numero + ".", ID: pedidoID, Numero: numero}, nil
 }
 
@@ -578,4 +676,40 @@ func (s *Servicio) CambiarEntrega(ctx context.Context, ses *auth.Sesion, id stri
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaEditar, "pedido", id, texto, nil)
 	return &Resultado{Ok: "Día de entrega guardado."}, nil
+}
+
+// PresupuestoVencido: «vencido» o con la validez pasada (en el día
+// argentino). Uno aceptado o ya convertido no vence.
+func PresupuestoVencido(estado string, validoHasta *time.Time, ahora time.Time) bool {
+	if estado == "vencido" {
+		return true
+	}
+	if validoHasta == nil || estado == "aceptado" {
+		return false
+	}
+	a := ahora.In(argentina)
+	hoy := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, argentina)
+	return validoHasta.Before(hoy)
+}
+
+// faltaDePIN es el 422 con lo que la pantalla necesita para pedir el PIN.
+func faltaDePIN(f *autorizacion.Falta) error {
+	// Todas las claves empiezan con «pin»: el mensaje va primero, que es el
+	// que muestra quien no sabe de PIN (mensajeDe toma el primero).
+	e := map[string]string{"pin": f.Mensaje(), "pinMonto": jsmath.Fijo2(f.Monto)}
+	if f.PinIncorrecto {
+		e["pinIncorrecto"] = "si"
+	}
+	if f.BloqueadoHasta != nil {
+		e["pinHasta"] = f.BloqueadoHasta.UTC().Format(time.RFC3339)
+	}
+	return plataforma.Invalido(e)
+}
+
+func fijo2ONulo(p *float64) *string {
+	if p == nil {
+		return nil
+	}
+	s := jsmath.Fijo2(*p)
+	return &s
 }

@@ -708,3 +708,33 @@ func sembrarFijadas(
 	}
 	return placas, descartadas, devueltas
 }
+
+// Cobro es lo que se cobra de un corte: placas enteras de material y
+// pasadas de sierra.
+type Cobro struct {
+	Placas  int `json:"placasACobrar"`
+	Pasadas int `json:"pasadasACobrar"`
+	// Manual: se cobra el acomodo a mano (cobra más placas que el libre).
+	Manual bool `json:"-"`
+}
+
+// ACobrar es lo que se cobra de un despiece (T3, hallazgo 11). La regla de la
+// media placa —una placa que sale más de la mitad se vende entera y su corte
+// no se cobra— se esquivaba arrastrando piezas a otra placa: cada una quedaba
+// por debajo del 50 % y no se cobraba material. Ahora se calcula el plano
+// libre y el del acomodo a mano, y se cobra el libre, salvo que el acomodo a
+// mano cobre más placas (alguien eligió gastar más material): las pasadas
+// son las del plano que se cobra.
+func ACobrar(d DatosDelPlano) Cobro {
+	manual := CalcularPlano(d)
+	if len(d.Fijadas) == 0 {
+		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables}
+	}
+	sinFijar := d
+	sinFijar.Fijadas = nil
+	libre := CalcularPlano(sinFijar)
+	if manual.PlacasEnteras > libre.PlacasEnteras {
+		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Manual: true}
+	}
+	return Cobro{Placas: libre.PlacasEnteras, Pasadas: libre.PasadasCobrables}
+}

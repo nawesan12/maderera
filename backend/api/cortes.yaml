@@ -371,9 +371,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [plano]
+                required: [plano, placasACobrar, pasadasACobrar]
                 properties:
                   plano: { $ref: "#/components/schemas/Plano" }
+                  placasACobrar: { type: integer, description: "Las placas enteras que se cobran: con piezas acomodadas a mano, las del plano libre salvo que el manual gaste más" }
+                  pasadasACobrar: { type: integer, description: Las pasadas del plano que se cobra }
                   cuenta: { $ref: "#/components/schemas/Presupuesto" }
                   hoja: { $ref: "#/components/schemas/HojaDeCorte" }
                   superficies: { type: array, items: { type: number, format: double } }

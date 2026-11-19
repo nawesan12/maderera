@@ -91,19 +91,38 @@ export function useDeGo<T>(ruta: string, cuerpo: unknown | null): { datos: T | n
 export function usePlano(pedido: PedidoDePlano): {
   plano: PlanoDeCorte;
   cuenta: PresupuestoDeCorte | null;
+  /**
+   * Lo que se cobra, que con piezas acomodadas a mano puede no ser lo que se
+   * dibuja: Go cobra el plano libre salvo que el manual gaste más placas
+   * (cortes.ACobrar). Es lo que vuelve a calcular al cobrar.
+   */
+  placasACobrar: number;
+  pasadasACobrar: number;
   calculando: boolean;
   error: string | null;
 } {
   // Con presupuesto se pide aunque no haya piezas: lo que falta para que el
   // precio sea firme («cargá el despiece») lo dice Go.
   const conPiezas = pedido.piezas.length > 0 || pedido.presupuesto !== undefined;
-  const { datos, calculando, error } = useDeGo<{ plano: PlanoDeCorte; cuenta?: PresupuestoDeCorte }>(
-    "/api/v1/cortes/plano",
-    conPiezas ? pedido : null,
-  );
+  const { datos, calculando, error } = useDeGo<{
+    plano: PlanoDeCorte;
+    cuenta?: PresupuestoDeCorte;
+    placasACobrar?: number;
+    pasadasACobrar?: number;
+  }>("/api/v1/cortes/plano", conPiezas ? pedido : null);
   const vacio = planoVacio(pedido.placaLargo, pedido.placaAncho, pedido.anchoSierra ?? 5);
-  if (!conPiezas) return { plano: vacio, cuenta: null, calculando: false, error: null };
-  return { plano: datos?.plano ?? vacio, cuenta: datos?.cuenta ?? null, calculando, error };
+  if (!conPiezas) {
+    return { plano: vacio, cuenta: null, placasACobrar: 0, pasadasACobrar: 0, calculando: false, error: null };
+  }
+  const plano = datos?.plano ?? vacio;
+  return {
+    plano,
+    cuenta: datos?.cuenta ?? null,
+    placasACobrar: datos?.placasACobrar ?? plano.placasEnteras,
+    pasadasACobrar: datos?.pasadasACobrar ?? plano.pasadasCobrables,
+    calculando,
+    error,
+  };
 }
 
 type Calculado = { plano: PlanoDeCorte; cuenta?: PresupuestoDeCorte } | { error: string };

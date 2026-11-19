@@ -473,8 +473,27 @@ components:
         variacion: { type: number, format: double, nullable: true }
     NumerosDelDueno:
       type: object
-      required: [meDeben, debo, cheques, plataHoy, ganancia, anuladas]
+      required: [meDeben, debo, cheques, plataHoy, ganancia, anuladas, controles]
       properties:
+        controles:
+          type: object
+          description: Los controles sobre la plata del personal, de los últimos siete días
+          required: [sinPin, personas]
+          properties:
+            sinPin: { type: boolean, description: ningún admin cargó su PIN de autorización }
+            personas:
+              type: array
+              items:
+                type: object
+                required: [nombre, dejadoDeCobrar, autorizado, sinConexion, anuladas, sinDevolver, retiros]
+                properties:
+                  nombre: { type: string }
+                  dejadoDeCobrar: { type: number, format: double, description: bajo la lista más los descuentos tipeados }
+                  autorizado: { type: number, format: double, description: la parte que firmó un admin }
+                  sinConexion: { $ref: "#/components/schemas/Monto" }
+                  anuladas: { $ref: "#/components/schemas/Monto" }
+                  sinDevolver: { type: integer, description: anuladas en que la mercadería no volvió }
+                  retiros: { $ref: "#/components/schemas/Monto" }
         meDeben:
           type: object
           required: [total, vencido, clientes, clientesConVencido, pedidosSinCobrar]

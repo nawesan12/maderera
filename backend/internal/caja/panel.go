@@ -100,9 +100,14 @@ type TurnoCerrado struct {
 	// hasta cerrada_at. Tardios son los movimientos que llegaron después
 	// (ventas y retiros sin conexión): van aparte, con su monto, y no cambian
 	// la diferencia de una caja ya contada (T3, hallazgo 9).
-	Tardios      int                `json:"tardios"`
-	TardiosMonto float64            `json:"tardiosMonto"`
-	Cierre       []RenglonDelCierre `json:"cierre"`
+	Tardios      int     `json:"tardios"`
+	TardiosMonto float64 `json:"tardiosMonto"`
+	// BajoLista son las ventas sin conexión del turno que pasaron lo libre
+	// sin PIN (T3): ya pasaron y no se rechazan, pero se ven en rojo en el
+	// cierre, con lo que dejaron de cobrar.
+	BajoLista      int                `json:"bajoLista"`
+	BajoListaMonto float64            `json:"bajoListaMonto"`
+	Cierre         []RenglonDelCierre `json:"cierre"`
 }
 
 // TurnosCerrados son los turnos cerrados entre `desde` y `hasta` (el mes
@@ -120,7 +125,11 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 		SELECT s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name,
 		       coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at), 0),
 		       count(m.id) FILTER (WHERE m.created_at > s.cerrada_at)::int,
-		       coalesce(sum(m.monto) FILTER (WHERE m.created_at > s.cerrada_at), 0)
+		       coalesce(sum(m.monto) FILTER (WHERE m.created_at > s.cerrada_at), 0),
+		       (SELECT count(*)::int FROM orders o WHERE o.bajo_lista_sin_autorizar AND o.branch_id = s.branch_id
+		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at),
+		       (SELECT coalesce(sum(o.dejado_de_cobrar), 0) FROM orders o WHERE o.bajo_lista_sin_autorizar AND o.branch_id = s.branch_id
+		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at)
 		FROM cash_sessions s
 		JOIN branches b ON b.id = s.branch_id
 		JOIN "user" u ON u.id = s.abierta_por
@@ -138,11 +147,12 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 	for filas.Next() {
 		var t TurnoCerrado
 		var contado *jsmath.Num
-		var esperado, tardios jsmath.Num
-		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios, &tardios); err != nil {
+		var esperado, tardios, bajoLista jsmath.Num
+		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios, &tardios,
+			&t.BajoLista, &bajoLista); err != nil {
 			return nil, 0, err
 		}
-		t.Esperado, t.TardiosMonto = esperado.F(), tardios.F()
+		t.Esperado, t.TardiosMonto, t.BajoListaMonto = esperado.F(), tardios.F(), bajoLista.F()
 		if contado != nil {
 			c := contado.F()
 			t.Contado = &c

@@ -241,6 +241,13 @@ export interface components {
              * @description Su suma; no cambia la diferencia del cierre
              */
             tardiosMonto: number;
+            /** @description Ventas sin conexión del turno que pasaron lo libre sin PIN */
+            bajoLista: number;
+            /**
+             * Format: double
+             * @description Lo que dejaron de cobrar
+             */
+            bajoListaMonto: number;
             cierre: components["schemas"]["CajaRenglonDelCierre"][];
         };
         CajaFisica: {

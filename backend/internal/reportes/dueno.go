@@ -148,6 +148,8 @@ type NumerosDelDueno struct {
 	PlataHoy PlataHoy           `json:"plataHoy"`
 	Ganancia ResultadoComparado `json:"ganancia"`
 	Anuladas Anuladas           `json:"anuladas"`
+	// Controles sobre la plata del personal (T3).
+	Controles Controles `json:"controles"`
 }
 
 // NumerosDelDueno arma los cinco bloques.
@@ -170,7 +172,10 @@ func (s *Servicio) NumerosDelDueno(ctx context.Context) (NumerosDelDueno, error)
 	if n.Ganancia, err = s.GananciaDelMes(ctx, ahora); err != nil {
 		return n, err
 	}
-	n.Anuladas, err = s.AnuladasDeLaSemana(ctx, ahora)
+	if n.Anuladas, err = s.AnuladasDeLaSemana(ctx, ahora); err != nil {
+		return n, err
+	}
+	n.Controles, err = s.ControlesDelPersonal(ctx, ahora)
 	return n, err
 }
 

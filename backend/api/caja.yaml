@@ -195,7 +195,7 @@ components:
         devolucion: { type: boolean, description: Ventas anuladas durante el turno (la venta queda en el Z de su turno) }
     TurnoCerrado:
       type: object
-      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, tardiosMonto, cierre]
+      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, tardiosMonto, bajoLista, bajoListaMonto, cierre]
       properties:
         id: { type: string }
         sucursal: { type: string }
@@ -207,6 +207,8 @@ components:
         esperado: { type: number, format: double, description: Lo que entró hasta el arqueo }
         tardios: { type: integer, description: Movimientos que entraron después del arqueo }
         tardiosMonto: { type: number, format: double, description: Su suma; no cambia la diferencia del cierre }
+        bajoLista: { type: integer, description: Ventas sin conexión del turno que pasaron lo libre sin PIN }
+        bajoListaMonto: { type: number, format: double, description: Lo que dejaron de cobrar }
         cierre: { type: array, items: { $ref: "#/components/schemas/CajaRenglonDelCierre" } }
     CajaFisica:
       type: object

@@ -53,6 +53,16 @@ func TestRetiroTardioNoCambiaElArqueo(t *testing.T) {
 	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like 'Retiro sin conexión de $500.00 % llegó con la caja ya cerrada%'`); n != 1 {
 		t.Errorf("bitácora: %v", n)
 	}
+
+	// Una venta sin conexión de ese turno que pasó lo libre sin PIN se ve en
+	// el cierre, con lo que dejó de cobrar.
+	if _, err := e.pool.Exec(ctx, `insert into orders (numero, contacto_nombre, origen, branch_id, total, dejado_de_cobrar, bajo_lista_sin_autorizar, cobrada_at)
+		values ('PED-9', 'CF', 'mostrador', $1, 30000, 15000.5, true, now() - interval '22 hours')`, e.central); err != nil {
+		t.Fatal(err)
+	}
+	if c := cerrados(); c.BajoLista != 1 || c.BajoListaMonto != 15000.5 {
+		t.Fatalf("bajo la lista en el cierre: %+v", c)
+	}
 }
 
 // Con el turno abierto, un retiro que deja el cajón sin el cambio de la base

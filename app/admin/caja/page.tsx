@@ -235,6 +235,13 @@ export default async function CajaPage({
                             {t.tardios} tarde · {formatearMonto(t.tardiosMonto)}
                           </span>
                         )}
+                        {/* Las ventas sin conexión del turno que pasaron lo
+                            libre sin PIN: ya pasaron, se ven en rojo. */}
+                        {t.bajoLista > 0 && (
+                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
+                            {t.bajoLista} sin conexión bajo la lista · {formatearMonto(t.bajoListaMonto)}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ),

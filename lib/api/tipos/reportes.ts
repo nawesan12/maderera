@@ -548,6 +548,29 @@ export interface components {
             variacion: number | null;
         };
         NumerosDelDueno: {
+            /** @description Los controles sobre la plata del personal, de los últimos siete días */
+            controles: {
+                /** @description ningún admin cargó su PIN de autorización */
+                sinPin: boolean;
+                personas: {
+                    nombre: string;
+                    /**
+                     * Format: double
+                     * @description bajo la lista más los descuentos tipeados
+                     */
+                    dejadoDeCobrar: number;
+                    /**
+                     * Format: double
+                     * @description la parte que firmó un admin
+                     */
+                    autorizado: number;
+                    sinConexion: components["schemas"]["Monto"];
+                    anuladas: components["schemas"]["Monto"];
+                    /** @description anuladas en que la mercadería no volvió */
+                    sinDevolver: number;
+                    retiros: components["schemas"]["Monto"];
+                }[];
+            };
             meDeben: {
                 /**
                  * Format: double

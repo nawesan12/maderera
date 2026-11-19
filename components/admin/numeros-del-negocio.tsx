@@ -8,6 +8,7 @@ import {
   ventasPorSucursal,
 } from "@/lib/dal/admin/resumen";
 import type { resolverPeriodo } from "@/lib/periodos";
+import { AvisoSinPin } from "./aviso-sin-pin";
 
 /**
  * Los números del negocio: lo que el dueño de una maderera pregunta cuando
@@ -36,12 +37,13 @@ export async function NumerosDelNegocio({
     ventasPorSucursal(),
   ]);
 
-  const { meDeben, debo, cheques, plataHoy: plata, ganancia, anuladas } = n;
+  const { meDeben, debo, cheques, plataHoy: plata, ganancia, anuladas, controles } = n;
   const sinCobrar = meDeben.pedidosSinCobrar;
   const g = ganancia.actual;
 
   return (
     <div className="space-y-4">
+      {controles.sinPin && <AvisoSinPin />}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Tarjeta
           titulo="Me deben"
@@ -167,11 +169,72 @@ export async function NumerosDelNegocio({
         />
       </div>
 
+      {controles.personas.length > 0 && <ElPersonal personas={controles.personas} />}
+
       <section className="tarjeta p-5">
         <h2 className="mb-4 text-lg font-semibold">Ventas por sucursal</h2>
         <GraficoVentas datos={ventas} />
       </section>
     </div>
+  );
+}
+
+type Persona = Awaited<ReturnType<typeof numerosDelDueno>>["controles"]["personas"][number];
+
+/**
+ * La plata del personal en los últimos siete días (T3): lo que cada uno dejó
+ * de cobrar —y cuánto de eso firmó un admin—, sus ventas sin conexión bajo la
+ * lista, lo que anuló y sus retiros tardíos o bajo la base. Estaba solo en la
+ * bitácora, que el dueño no lee. En rojo lo que no firmó nadie; cada nombre
+ * lleva a su bitácora.
+ */
+function ElPersonal({ personas }: { personas: Persona[] }) {
+  return (
+    <section className="tarjeta p-5">
+      <h2 className="mb-3 text-lg font-semibold">El personal · 7 días</h2>
+      <ul className="divide-y divide-linea-suave">
+        {personas.map((p) => {
+          const renglones: Renglon[] = [
+            p.dejadoDeCobrar > 0 &&
+              (p.autorizado > 0
+                ? `Dejó de cobrar ${moneda.format(p.dejadoDeCobrar)} · ${moneda.format(p.autorizado)} con PIN`
+                : `Dejó de cobrar ${moneda.format(p.dejadoDeCobrar)}`),
+            p.sinConexion.cantidad > 0 && {
+              texto: `${plural(p.sinConexion.cantidad, "venta sin conexión", "ventas sin conexión")} bajo la lista · ${moneda.format(p.sinConexion.total)}`,
+              problema: true,
+            },
+            p.anuladas.cantidad > 0 && {
+              texto:
+                `Anuló ${plural(p.anuladas.cantidad, "venta")} · ${moneda.format(p.anuladas.total)}` +
+                (p.sinDevolver > 0 ? ` · ${p.sinDevolver} sin devolver la mercadería` : ""),
+              problema: p.sinDevolver > 0,
+            },
+            p.retiros.cantidad > 0 && {
+              texto: `${plural(p.retiros.cantidad, "retiro")} tarde o bajo la base · ${moneda.format(p.retiros.total)}`,
+              problema: true,
+            },
+          ];
+          const visibles = renglones.flatMap((r) => (!r ? [] : typeof r === "string" ? [{ texto: r }] : [r]));
+          return (
+            <li key={p.nombre} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-baseline sm:gap-6">
+              <Link
+                href={`/admin/bitacora?q=${encodeURIComponent(p.nombre)}`}
+                className="w-40 shrink-0 text-base font-semibold hover:underline"
+              >
+                {p.nombre}
+              </Link>
+              <ul className="flex flex-wrap gap-x-5 gap-y-1 text-base text-texto-2 [font-variant-numeric:tabular-nums]">
+                {visibles.map((r) => (
+                  <li key={r.texto} className={r.problema ? "estado-problema font-semibold" : ""}>
+                    {r.texto}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

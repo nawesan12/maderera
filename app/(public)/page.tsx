@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { FondoDeRubro } from "@/components/catalogo/fondo-de-rubro";
 import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import {
@@ -229,15 +230,9 @@ function Categorias({
             href="/moldava"
             className="group relative col-span-2 row-span-2 overflow-hidden rounded-[14px] bg-oscuro-marca"
           >
-            {categorias.find((c) => c.slug === "molduras")?.image && (
-              <Image
-                src={categorias.find((c) => c.slug === "molduras")!.image!}
-                alt=""
-                fill
-                className="object-cover opacity-80 transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-              />
-            )}
+            {/* Sin la foto de Molduras: repetida en la tarjeta de al lado,
+                Moldava parecía el mismo rubro dos veces (comité final, M18).
+                Va sobre el oscuro de la marca, como la línea propia que es. */}
             <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.92)_0%,rgb(28_25_22_/_0.35)_60%,transparent_100%)]" />
             <div className="absolute inset-x-6 bottom-6">
               <span className="rounded-full bg-accion px-3 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-white">
@@ -253,7 +248,7 @@ function Categorias({
               href={`/catalogo?cat=${cat.slug}`}
               className="group relative overflow-hidden rounded-[14px]"
             >
-              {cat.image && (
+              {cat.image ? (
                 <Image
                   src={cat.image}
                   alt=""
@@ -261,6 +256,8 @@ function Categorias({
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                   sizes="(max-width: 1024px) 50vw, 25vw"
                 />
+              ) : (
+                <FondoDeRubro rubro={cat.slug} />
               )}
               <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.88)_0%,rgb(28_25_22_/_0.28)_52%,transparent_100%)]" />
               <div className="absolute inset-x-4 bottom-3.5">

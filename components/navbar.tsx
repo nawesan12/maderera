@@ -4,6 +4,7 @@ import { Suspense, useState, useSyncExternalStore, type ComponentProps } from "r
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { FondoDeRubro } from "@/components/catalogo/fondo-de-rubro";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Menu,
@@ -43,8 +44,8 @@ const productLinks: {
   desc: string;
   /** Para lo que no es una categoría del catálogo: Moldava. */
   href?: string;
-  /** De qué rubro toma la foto. */
-  imagenDe?: string;
+  /** De qué rubro toma el tono de la placa, cuando no es una categoría. */
+  tonoDe?: string;
   propia?: boolean;
 }[] = [
   { name: "Techos", slug: "techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
@@ -53,12 +54,13 @@ const productLinks: {
   { name: "Molduras", slug: "molduras", icon: Minus, desc: "Finger Joint y otras marcas" },
   {
     // La línea propia, como un rubro más (notas del 9/11/2026). No es una
-    // categoría de la base sino una marca: lleva a su página, con la foto de
-    // las molduras.
+    // categoría de la base sino una marca: lleva a su página. Sin la foto de
+    // las molduras, que repetida al lado parecía el mismo rubro dos veces
+    // (comité final, M18): va con la placa del pino.
     name: "Moldava",
     slug: "moldava",
     href: "/moldava",
-    imagenDe: "molduras",
+    tonoDe: "molduras",
     icon: Minus,
     desc: "Molduras de fabricación propia",
     propia: true,
@@ -321,7 +323,7 @@ export function Navbar({
                     </div>
                     <div className="entra-en-orden grid grid-cols-3 gap-2">
                       {productLinks.map((link, i) => {
-                        const rubro = rubros[link.imagenDe ?? link.slug];
+                        const rubro = rubros[link.slug];
                         return (
                           <Link
                             key={link.slug}
@@ -329,7 +331,7 @@ export function Navbar({
                             style={{ "--i": i } as React.CSSProperties}
                             className="group/item relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-xl bg-oscuro-marca text-white"
                           >
-                            {rubro?.imagen && (
+                            {rubro?.imagen ? (
                               <Image
                                 src={rubro.imagen}
                                 alt=""
@@ -337,6 +339,8 @@ export function Navbar({
                                 sizes="160px"
                                 className="object-cover transition-transform duration-300 group-hover/item:scale-[1.07]"
                               />
+                            ) : (
+                              <FondoDeRubro rubro={link.tonoDe ?? link.slug} />
                             )}
                             {/* El velo: sin él, un nombre blanco sobre una foto
                                 clara no se lee. Se oscurece al pasar, que es lo
@@ -602,7 +606,7 @@ export function Navbar({
                       tarjeta: una grilla de tarjetas en 320 px deja los nombres
                       ilegibles, y acá lo que se busca es leer rápido. */}
                   {productLinks.map((link) => {
-                    const rubro = rubros[link.imagenDe ?? link.slug];
+                    const rubro = rubros[link.slug];
                     return (
                       <Link
                         key={link.slug}

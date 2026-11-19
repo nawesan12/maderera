@@ -556,7 +556,9 @@ async function main() {
         name: cat.name,
         description: cat.description,
         icon: cat.icon,
-        image: PORTADA[cat.slug] ?? cat.image,
+        // Sin portada, la placa del rubro: la foto del catálogo de
+        // ejemplo (`cat.image`) es de banco.
+        image: PORTADA[cat.slug] ?? null,
         sortOrder: i,
       })
       .returning();

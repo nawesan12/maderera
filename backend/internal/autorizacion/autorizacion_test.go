@@ -166,6 +166,20 @@ func TestPIN(t *testing.T) {
 	if fa := falta(t, err); fa.BloqueadoHasta == nil {
 		t.Fatalf("sexto intento: %+v", fa)
 	}
+	// Cambiar la sucursal por una que no existe no abre otra ventana: cuenta
+	// por la persona, y el tope del día sigue.
+	trucho := e.pedido("000000")
+	trucho.Sucursal = "00000000-0000-4000-8000-00000000abcd"
+	if _, err := e.svc.Exigir(ctx, e.vendedor, trucho); !falta(t, err).PinIncorrecto {
+		t.Fatal("una sucursal inventada no tiene que dar otra ventana limpia")
+	}
+	if n := func() int {
+		var n int
+		_ = e.pool.QueryRow(ctx, `select coalesce(sum(cuenta), 0)::int from rate_limits where clave like 'pin:sucursal:0000%'`).Scan(&n)
+		return n
+	}(); n != 0 {
+		t.Fatalf("contó en la sucursal inventada: %d", n)
+	}
 	// Otro vendedor en la misma sucursal tampoco: el tope es del mostrador.
 	rolV := sqlc.StaffRoleVendedor
 	otro := &auth.Sesion{UserID: e.vendedor.UserID + "x", Nombre: "Pedro", Rol: sqlc.UserRoleStaff, RolStaff: &rolV}

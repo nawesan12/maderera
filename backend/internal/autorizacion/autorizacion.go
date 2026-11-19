@@ -187,9 +187,18 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 	}
 
 	ahora := s.ahora()
+	// La sucursal la dice quien pide: una que no existe contaría en una
+	// ventana propia, y cambiándola se esquivaría el tope. Sin una sucursal
+	// de verdad, cuenta por la persona.
 	sujeto := prefijoDeUsuario + ses.UserID
 	if p.Sucursal != "" {
-		sujeto = prefijoSucursal + p.Sucursal
+		var existe bool
+		if err := s.pool.QueryRow(ctx, `SELECT exists(SELECT 1 FROM branches WHERE id::text = $1)`, p.Sucursal).Scan(&existe); err != nil {
+			return nil, err
+		}
+		if existe {
+			sujeto = prefijoSucursal + p.Sucursal
+		}
 	}
 	vSuc, finSuc := ventanaFija(ahora, ventanaSucursal)
 	vDia, finDia := ventanaDelDia(ahora)

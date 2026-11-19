@@ -64,7 +64,12 @@ export default async function TallerPage({
           </span>
         )}
 
-        <span className="tabular ml-auto hidden text-base text-texto-2 sm:block">
+        {/* El que empuja las acciones a la derecha: si lo llevaba el m², que
+            se esconde en el teléfono, el menú y «Volver al panel» quedaban
+            pegados a la marca (revisión del comité). */}
+        <span aria-hidden className="ml-auto" />
+
+        <span className="tabular hidden text-base text-texto-2 sm:block">
           {Math.round(superficie)} m² de placa por cortar
         </span>
 

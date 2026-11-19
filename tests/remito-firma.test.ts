@@ -29,4 +29,10 @@ describe("el encabezado del taller", () => {
     expect(pagina).toContain("<MenuDelTaller />");
     expect(pagina.match(/className="hidden h-11[^"]*md:inline-flex/g)).toHaveLength(2);
   });
+  it("las acciones van a la derecha también en el teléfono", () => {
+    // El que lleva ml-auto tiene que verse siempre: nada de hidden.
+    const conMlAuto = [...pagina.matchAll(/className="([^"]*\bml-auto\b[^"]*)"/g)].map((m) => m[1]);
+    expect(conMlAuto).toContain("ml-auto");
+    for (const clases of conMlAuto) expect(clases).not.toMatch(/\bhidden\b/);
+  });
 });

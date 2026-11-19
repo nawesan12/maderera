@@ -144,9 +144,16 @@ func CalcularTotales(lineas []LineaEntrada) Totales {
 		}
 		totalLinea := Redondear(float64(l.PrecioFinalUnitario * l.Cantidad))
 		partes := Desagregar(totalLinea, alicuota)
-		// El neto decidido vale solo si está a un par de centavos del
-		// desagregado: es el redondeo de las notas anteriores, no otro importe.
-		if l.Neto != nil && !sinAlicuota(alicuota) && math.Abs(*l.Neto-partes.Neto) <= 0.02+1e-9 {
+		// El neto decidido es el redondeo acumulado de las notas anteriores,
+		// no otro importe: vale si queda dentro del renglón y cerca del
+		// desagregado. «Cerca» no es un par de centavos fijo: cada nota
+		// parcial puede correrlo medio centavo, y con cinco o seis notas sobre
+		// el mismo renglón se pasaba y volvía el centavo de diferencia contra
+		// el original (revisión del carril E). El medio por ciento del
+		// renglón cubre cualquier cantidad razonable de notas y sigue dejando
+		// afuera un neto que no tiene nada que ver.
+		if l.Neto != nil && !sinAlicuota(alicuota) && *l.Neto >= 0 && *l.Neto <= totalLinea &&
+			math.Abs(*l.Neto-partes.Neto) <= math.Max(0.02, 0.005*math.Abs(totalLinea))+1e-9 {
 			partes.Neto = Redondear(*l.Neto)
 			partes.Iva = Redondear(totalLinea - partes.Neto)
 		}

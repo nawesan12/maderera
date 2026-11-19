@@ -44,3 +44,28 @@ func entradasDe(lineas []LineaDeNota) []LineaEntrada {
 	}
 	return out
 }
+
+// Con muchas notas parciales sobre el mismo renglón el redondeo acumulado
+// pasa los dos centavos (revisión del carril E): la última nota sigue
+// llevando el neto que queda, y todas suman el neto y el IVA del original.
+// Un renglón de 20 unidades por $33,33 al 21 % se acredita de a una.
+func TestMuchasNotasParcialesSumanElOriginal(t *testing.T) {
+	total := Redondear(20 * 33.33)
+	orig := Desagregar(total, 21)
+	item := ItemOriginal{ID: "a", Descripcion: "Bisagra", Unidad: "u", Cantidad: 20, Subtotal: total, AlicuotaIva: 21, Neto: orig.Neto}
+	var neto, iva float64
+	for k := 0; k < 20; k++ {
+		lineas, err := LineasDeLaNota([]ItemOriginal{item}, []CantidadAAcreditar{{ItemID: "a", Cantidad: 1}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tt := CalcularTotales(entradasDe(lineas))
+		neto, iva = Redondear(neto+tt.Neto), Redondear(iva+tt.Iva)
+		item.Acreditado++
+		item.AcreditadoImporte = Redondear(item.AcreditadoImporte + tt.Total)
+		item.AcreditadoNeto = Redondear(item.AcreditadoNeto + tt.Neto)
+	}
+	if neto != orig.Neto || iva != orig.Iva {
+		t.Errorf("las 20 notas: neto %v, IVA %v; el original %v y %v", neto, iva, orig.Neto, orig.Iva)
+	}
+}

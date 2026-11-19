@@ -55,3 +55,26 @@ func TestEntregarSinCobrarDejaFirma(t *testing.T) {
 		t.Errorf("el cobrado no debe nada: %+v %v", ficha.SinCobrar, err)
 	}
 }
+
+// El filtro «sin-cobrar» lista lo mismo que cuenta «Me deben» (revisión del
+// carril E): también el pedido que salió en parte con un remito y no se
+// cobró, y no el del remito anulado.
+func TestSinCobrarListaLosRemitosParciales(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	conRemito := e.pedido(t, ses, 2)
+	anulado := e.pedido(t, ses, 2)
+	e.exec(t, `update orders set medio_pago = 'efectivo', estado = 'listo'`)
+	for _, x := range [][2]string{{conRemito, "entregada"}, {anulado, "anulada"}} {
+		remito := e.texto(t, `insert into deliveries (numero, order_id, estado) values ('R-' || $1::text, $1::uuid, $2) returning id::text`, x[0], x[1])
+		e.exec(t, `insert into delivery_items (delivery_id, order_item_id, cantidad) select $1, id, 1 from order_items where order_id = $2`, remito, x[0])
+	}
+	lista, err := e.s.ListarPedidosEn(ctx, Filtros{Estado: EstadoSinCobrar}, VistaDePedidos{Vista: "historial"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lista) != 1 || lista[0].ID != conRemito {
+		t.Fatalf("sin cobrar: %+v", lista)
+	}
+}

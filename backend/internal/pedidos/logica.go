@@ -70,6 +70,9 @@ type LineaConCosto struct {
 	Cantidad      string
 	AlicuotaIva   *string
 	CostoUnitario *string
+	// Lo que las devoluciones parciales se llevaron del renglón (cantidad e
+	// importe con IVA): no es vendido, como en Reportes.
+	DevueltoCantidad, DevueltoImporte float64
 }
 
 // Margen es el de la ficha del pedido (calcularMargen de la página).
@@ -96,7 +99,11 @@ func MargenDelPedido(items []LineaConCosto) *Margen {
 			x := jsmath.Numero(*it.CostoUnitario)
 			c = &x
 		}
-		r := MargenDeLinea(jsmath.Numero(it.Subtotal), jsmath.Numero(it.Cantidad), alicuota, c)
+		// Lo devuelto se resta (revisión del carril E): la ficha mostraba el
+		// neto, el costo y la ganancia del pedido entero, y Reportes y el
+		// Resultado el pedido sin lo devuelto. El mismo pedido daba dos
+		// cifras.
+		r := MargenDeLinea(float64(jsmath.Numero(it.Subtotal)-it.DevueltoImporte), float64(jsmath.Numero(it.Cantidad)-it.DevueltoCantidad), alicuota, c)
 		if r.CostoTotal == nil {
 			sin++
 			continue

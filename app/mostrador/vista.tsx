@@ -905,7 +905,9 @@ export function VistaMostrador({
             }}
             onSuelta={setSuelta}
             onCortar={setCortando}
+            onSinPrecio={(nombre) => setAviso({ tipo: "error", texto: `${nombre} no tiene precio.` })}
             sePuedeCortar={conexion.enLinea}
+            sinConexion={!conexion.enLinea}
           />
           <Lineas
             lineas={lineas}

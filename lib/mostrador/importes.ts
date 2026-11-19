@@ -1,4 +1,5 @@
 import { revisarNumeroDeCheque } from "@/lib/cheques/numero";
+import { admiteDecimales } from "@/lib/unidades";
 
 /**
  * Las reglas de una venta de mostrador, sin base de datos.
@@ -57,6 +58,19 @@ export interface LineaDeVenta {
    */
   corteId?: string;
   corte?: number;
+}
+
+/**
+ * La cantidad que admite el renglón: lo que se vende por unidad va entero
+ * (comité final, M10). Media bisagra se cobraba y se descontaba del stock;
+ * Go la rechaza, y acá se redondea al tipearla para que no llegue a cobrarse.
+ * Un renglón a mano (sin variante) lleva la unidad que se tipeó y no se toca.
+ */
+export function cantidadDelRenglon(l: Pick<LineaDeVenta, "variantId" | "unidad">, cantidad: number): number {
+  if (!l.variantId || admiteDecimales(l.unidad) || !Number.isFinite(cantidad) || Number.isInteger(cantidad)) {
+    return cantidad;
+  }
+  return cantidad > 0 ? Math.max(1, Math.round(cantidad)) : cantidad;
 }
 
 /**

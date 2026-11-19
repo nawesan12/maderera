@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Scissors, Trash2, X } from "lucide-react";
 import { formatearMonto, formatearUnidad } from "@/lib/formato";
-import { formatearCantidad } from "@/lib/unidades";
-import { esLineaDelCorte, type LineaDeVenta } from "@/lib/mostrador/importes";
+import { admiteDecimales, formatearCantidad, pasoDeCantidad } from "@/lib/unidades";
+import { cantidadDelRenglon, esLineaDelCorte, type LineaDeVenta } from "@/lib/mostrador/importes";
 import { enfocar } from "./atajos";
 
 /**
@@ -129,11 +129,11 @@ export function Lineas({
                     <span className="sr-only">Cantidad de {l.descripcion}</span>
                     <input
                       type="number"
-                      inputMode="decimal"
+                      inputMode={l.variantId && !admiteDecimales(l.unidad) ? "numeric" : "decimal"}
                       min="0"
-                      step="0.01"
+                      step={l.variantId ? pasoDeCantidad(l.unidad) : 0.01}
                       value={l.cantidad}
-                      onChange={(e) => cambiar(i, "cantidad", Number(e.target.value))}
+                      onChange={(e) => cambiar(i, "cantidad", cantidadDelRenglon(l, Number(e.target.value)))}
                       // La ruedita del mouse cambiaba el número sin que nadie lo
                       // notara: se suelta el foco y la página sigue scrolleando.
                       onWheel={(e) => e.currentTarget.blur()}

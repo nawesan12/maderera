@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/productos"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -138,12 +140,25 @@ func escalas(ctx context.Context, q *sqlc.Queries) ([]ventas.EscalaDePago, error
 //
 // `usuario` es quien vendió; `ses`, quien la manda (el PIN se pide por ella).
 func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.Sesion, usuario string) (ResultadoVenta, error) {
+	sinConexion := v.NumeroProvisorio != nil
+	// En línea, ni renglones a $0 ni fracciones de lo que se vende por
+	// unidad. Va antes que RevisarVenta para que el $0 diga qué falta y no
+	// «el total tiene que ser mayor a cero». Sin conexión la venta ya pasó:
+	// la pantalla no deja armarla así, y rechazarla acá la sacaría de la
+	// caja sin que nadie la vea.
+	if !sinConexion {
+		if p, err := revisarRenglones(ctx, s.pool, v.Lineas); err != nil || p != "" {
+			if err != nil {
+				return ResultadoVenta{}, err
+			}
+			return fallo(p), nil
+		}
+	}
 	if p := ventas.RevisarVenta(v.Lineas, v.MedioPago, v.CustomerID); p != "" {
 		return fallo(p), nil
 	}
 	q := sqlc.New(s.pool)
 	ahora := s.ahora()
-	sinConexion := v.NumeroProvisorio != nil
 	huella := huellaDeVenta(v)
 
 	// Primero si ya está hecha (T3, hallazgo 39): un reintento después de
@@ -250,6 +265,12 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	lineas, descuento := ventas.AplicarDescuento(v.Lineas, aDescontar)
 	total := ventas.TotalDeLaVenta(lineas)
 	if total <= 0 {
+		// Sin descuento, un total en cero es un precio que falta (comité
+		// final, M14): «el descuento no puede llevarse toda la venta» sobre
+		// un producto a $0 mandaba a buscar un descuento que nadie puso.
+		if aDescontar <= 0 {
+			return fallo("Falta poner el precio."), nil
+		}
 		return fallo("El descuento no puede llevarse toda la venta."), nil
 	}
 
@@ -732,6 +753,60 @@ func descontarStock(ctx context.Context, tx pgx.Tx, sucursal, numero, usuario st
 		}
 	}
 	return nil
+}
+
+// revisarRenglones es lo que la venta en línea no deja pasar renglón por
+// renglón:
+//
+//   - Un precio en $0 (comité final, M14 y decisión 4): no hay productos
+//     que se regalen, y el $0 es un precio que falta cargar. Ctrl+Enter sobre
+//     un producto sin precio lo cobraba igual.
+//   - Una fracción de lo que se vende por unidad (M10): media bisagra se
+//     cobraba y descontaba del stock, que no la admite (stock.go hace la
+//     misma cuenta con productos.AdmiteDecimales). La unidad es la del
+//     producto, no la del renglón, que la manda el navegador.
+func revisarRenglones(ctx context.Context, c precios.Consultador, lineas []ventas.LineaDeVenta) (string, error) {
+	var ids []string
+	for _, l := range lineas {
+		if l.PrecioUnitario == 0 {
+			return `Falta poner el precio de "` + l.Descripcion + `".`, nil
+		}
+		if l.VariantID != nil {
+			ids = append(ids, *l.VariantID)
+		}
+	}
+	if len(ids) == 0 {
+		return "", nil
+	}
+	filas, err := c.Query(ctx, `
+		SELECT pv.id::text, p.unit FROM product_variants pv JOIN products p ON p.id = pv.product_id
+		WHERE pv.id::text = ANY($1::text[])`, ids)
+	if err != nil {
+		return "", err
+	}
+	unidades := map[string]string{}
+	for filas.Next() {
+		var id, unidad string
+		if err := filas.Scan(&id, &unidad); err != nil {
+			filas.Close()
+			return "", err
+		}
+		unidades[id] = unidad
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return "", err
+	}
+	for _, l := range lineas {
+		if l.VariantID == nil {
+			continue
+		}
+		u, ok := unidades[*l.VariantID]
+		if ok && !productos.AdmiteDecimales(u) && l.Cantidad != math.Trunc(l.Cantidad) {
+			return `"` + l.Descripcion + `" se vende por unidad: la cantidad va sin decimales.`, nil
+		}
+	}
+	return "", nil
 }
 
 // revisarCorte: cada pieza tiene medidas y el despiece entra en lo que el

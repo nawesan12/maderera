@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, PenLine, Search, Scissors } from "lucide-react";
 import { formatearPrecio } from "@/lib/formato";
 import { enterDelBuscador } from "@/lib/mostrador/atajos";
-import { leerTipeo, type LineaDeVenta } from "@/lib/mostrador/importes";
+import { cantidadDelRenglon, leerTipeo, type LineaDeVenta } from "@/lib/mostrador/importes";
 import type { CopiaLista } from "@/lib/mostrador/offline/use-copia-local";
 import type { ResultadoDeMostrador } from "@/lib/mostrador/tipos";
 import { formatearCantidad } from "@/lib/unidades";
@@ -28,7 +28,9 @@ export function Buscador({
   onElegir,
   onSuelta,
   onCortar,
+  onSinPrecio,
   sePuedeCortar,
+  sinConexion,
 }: {
   copia: CopiaLista;
   branchId: string;
@@ -41,6 +43,10 @@ export function Buscador({
   onSuelta: (descripcion: string) => void;
   /** Abre el corte a medida sobre esa placa. */
   onCortar: (placa: ResultadoDeMostrador) => void;
+  /** Se quiso agregar algo sin precio: no entra. */
+  onSinPrecio: (nombre: string) => void;
+  /** Sin conexión, Ctrl+Enter sobre una placa no cobra. */
+  sinConexion: boolean;
   /**
    * Si se puede cortar ahora.
    *
@@ -140,11 +146,13 @@ export function Buscador({
   function elegir(r: (typeof resultados)[number], presentacion: Presentacion = null, yCobrar = false) {
     const producto = comoSeVende(r);
     const pres = presentacion && admiteMedia(producto) ? presentacion : null;
+    const unidad = unidadDeLinea(producto);
     onElegir({
       variantId: r.variantId,
       descripcion: descripcionConPresentacion(`${r.producto} — ${r.medida}`, pres),
-      unidad: unidadDeLinea(producto),
-      cantidad,
+      unidad,
+      // «2,5*bisagra» son tres bisagras: lo que se vende por unidad va entero.
+      cantidad: cantidadDelRenglon({ variantId: r.variantId, unidad }, cantidad),
       precioUnitario: precioDeLinea(r.precio, producto, pres),
       precioLista: precioDeLinea(r.precio, producto, pres),
       presentacion: pres,
@@ -192,6 +200,9 @@ export function Buscador({
                 hayResultado: Boolean(r),
                 seCorta: Boolean(r && sePuedeCortar && r.largoMm && r.anchoMm),
                 resuelto,
+                sinPrecio: Boolean(r && !(r.precio > 0)),
+                esPlaca: r?.unidad === "placa",
+                sinConexion,
               });
               // Vacío, la tecla sigue hasta los atajos de la pantalla (cobrar).
               if (accion.que === "soltar") return;
@@ -206,6 +217,8 @@ export function Buscador({
                  */
                 onCortar(r as ResultadoDeMostrador);
                 setTexto("");
+              } else if (accion.que === "sinPrecio" && r) {
+                onSinPrecio(`${r.producto} — ${r.medida}`);
               } else if (accion.que === "agregar" && r) {
                 elegir(r, accion.media, accion.yCobrar);
               } else if (accion.que === "aMano") {
@@ -265,8 +278,12 @@ export function Buscador({
               className={`flex items-stretch ${i === elegido ? "bg-hundida" : ""}`}
             >
               <button
-                onClick={() => elegir(r)}
-                className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hundida"
+                // Sin precio no se agrega (decisión 4): no hay productos a $0.
+                onClick={() => (r.precio > 0 ? elegir(r) : onSinPrecio(`${r.producto} — ${r.medida}`))}
+                aria-disabled={!(r.precio > 0)}
+                className={`flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hundida ${
+                  r.precio > 0 ? "" : "text-muted-foreground"
+                }`}
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-medium">
@@ -277,7 +294,7 @@ export function Buscador({
                   </span>
                 </span>
                 <span className="tabular shrink-0 text-right text-lg font-semibold">
-                  {r.precio > 0 ? formatearPrecio(r.precio) : "a definir"}
+                  {r.precio > 0 ? formatearPrecio(r.precio) : "sin precio"}
                   {seVendePorM2(comoSeVende(r)) && (
                     <span className="block text-sm font-normal text-muted-foreground">
                       el m²

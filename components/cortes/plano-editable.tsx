@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RotateCcw, RotateCw } from "lucide-react";
 import type {
   PiezaColocada,
@@ -8,6 +8,32 @@ import type {
   PlacaDelPlano,
   PlanoDeCorte,
 } from "@/lib/cortes/tipos";
+
+/**
+ * Qué hace un pointerup sobre el dibujo de una placa.
+ *
+ * - Con una pieza agarrada: si se soltó en su placa es un toque y la marca;
+ *   en otra, la manda ahí.
+ * - Sin agarrada y con una marcada: tocar el dibujo de otra placa la manda
+ *   ahí, y tocar un hueco de la suya la desmarca.
+ *
+ * Mandada, la pieza se desmarca. Antes quedaba marcada para siempre, y
+ * cualquier toque posterior en otra placa —su título, un hueco, el borde al
+ * apuntar— la mudaba y la dejaba fijada a mano sin que nadie lo pidiera
+ * (comité de T4). Por eso, además, el título de la placa ya no recibe el
+ * toque: solo el dibujo.
+ */
+export function alSoltarEnPlaca(e: {
+  numero: number;
+  /** La placa de donde salió la pieza agarrada, si hay una. */
+  agarradaEn: number | null;
+  /** La placa de la pieza marcada, si hay una. */
+  elegidaEn: number | null;
+}): "marcar" | "mandarAgarrada" | "mandarElegida" | "desmarcar" | "nada" {
+  if (e.agarradaEn !== null) return e.agarradaEn === e.numero ? "marcar" : "mandarAgarrada";
+  if (e.elegidaEn !== null) return e.elegidaEn === e.numero ? "desmarcar" : "mandarElegida";
+  return "nada";
+}
 
 /**
  * El plano, con el mouse.
@@ -106,26 +132,55 @@ export function PlanoEditable({
   }
 
   /*
-   * Soltar sobre una placa. Soltada en la misma placa de donde salió no es una
+   * Soltar sobre el dibujo de una placa (la regla, con su prueba, en
+   * `alSoltarEnPlaca`). Soltada en la misma placa de donde salió no es una
    * mudanza: es un toque, y marca la pieza. Antes cada clic la «movía» a su
-   * propia placa y la dejaba fijada a mano sin que nadie lo pidiera. Con una
-   * pieza marcada, tocar otra placa la manda ahí: es la forma de hacerlo sin
-   * arrastrar.
+   * propia placa y la dejaba fijada a mano sin que nadie lo pidiera.
    */
   function soltarEn(numero: number) {
-    if (agarrada) {
-      const origen = dondeEsta(clave(agarrada));
-      if (origen?.placa === numero) setElegida(clave(agarrada));
-      else mandarA(agarrada, numero);
-    } else if (elegida) {
-      const origen = dondeEsta(elegida);
-      if (origen && origen.placa !== numero) mandarA(origen.pieza, numero);
-    }
+    const origen = agarrada ? dondeEsta(clave(agarrada)) : null;
+    const marcada = !agarrada && elegida ? dondeEsta(elegida) : null;
+    const que = alSoltarEnPlaca({
+      numero,
+      agarradaEn: agarrada ? (origen?.placa ?? -1) : null,
+      elegidaEn: marcada?.placa ?? null,
+    });
+    if (que === "marcar" && agarrada) setElegida(clave(agarrada));
+    else if (que === "mandarAgarrada" && agarrada) {
+      mandarA(agarrada, numero);
+      setElegida(null);
+    } else if (que === "mandarElegida" && marcada) {
+      mandarA(marcada.pieza, numero);
+      setElegida(null);
+    } else if (que === "desmarcar") setElegida(null);
     setAgarrada(null);
   }
 
+  // Un toque fuera del plano desmarca la pieza: marcada para siempre, el
+  // próximo toque en otra placa la mudaba.
+  const raiz = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!elegida) return;
+    function afuera(e: PointerEvent) {
+      if (raiz.current && !raiz.current.contains(e.target as Node)) setElegida(null);
+    }
+    document.addEventListener("pointerdown", afuera);
+    return () => document.removeEventListener("pointerdown", afuera);
+  }, [elegida]);
+
   return (
-    <div className="space-y-3">
+    <div
+      ref={raiz}
+      className="space-y-3"
+      onKeyDown={(e) => {
+        // Esc desmarca, y no cierra el diálogo del corte con la pieza marcada.
+        if (e.key === "Escape" && elegida) {
+          e.preventDefault();
+          e.stopPropagation();
+          setElegida(null);
+        }
+      }}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         {!sencillo && (
           <p className="text-base text-muted-foreground">
@@ -160,10 +215,6 @@ export function PlanoEditable({
             className="m-0 space-y-1.5"
             onPointerEnter={() => agarrada && setEncima(placa.numero)}
             onPointerLeave={() => setEncima(null)}
-            onPointerUp={() => {
-              setEncima(null);
-              soltarEn(placa.numero);
-            }}
           >
             <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="text-base font-medium">
@@ -203,6 +254,10 @@ export function PlanoEditable({
               onElegir={(p) => setElegida(clave(p))}
               onGirar={(p) => girar(p, placa.numero)}
               onSoltarUna={soltarUna}
+              onSoltarAca={() => {
+                setEncima(null);
+                soltarEn(placa.numero);
+              }}
             />
           </figure>
         ))}
@@ -224,6 +279,7 @@ function Dibujo({
   onElegir,
   onGirar,
   onSoltarUna,
+  onSoltarAca,
 }: {
   placa: PlacaDelPlano;
   plano: PlanoDeCorte;
@@ -237,6 +293,8 @@ function Dibujo({
   onElegir: (p: PiezaColocada) => void;
   onGirar: (p: PiezaColocada) => void;
   onSoltarUna: (p: PiezaColocada) => void;
+  /** Un pointerup sobre el dibujo (no sobre el título de la placa). */
+  onSoltarAca: () => void;
 }) {
   const { placaLargo, placaAncho } = plano;
   // El viewBox arranca en −4 y suma 8: de milímetros de placa a porcentaje
@@ -246,7 +304,7 @@ function Dibujo({
   const marcada = placa.piezas.find((p) => claveDe(p) === elegida);
 
   return (
-    <div className="relative">
+    <div className="relative" onPointerUp={onSoltarAca}>
     <svg
       viewBox={`-4 -4 ${placaLargo + 8} ${placaAncho + 8}`}
       /* `select-none`: sin esto, arrastrar una pieza va seleccionando los
@@ -390,6 +448,9 @@ function Dibujo({
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
+          // Ni el pointerup: llegaría al dibujo como «tocar un hueco» y
+          // desmarcaría la pieza antes del clic.
+          onPointerUp={(e) => e.stopPropagation()}
           onClick={() => onGirar(marcada)}
           aria-label="Girar la pieza"
           style={{ left: pctX(marcada.x + marcada.ancho), top: pctY(marcada.y) }}

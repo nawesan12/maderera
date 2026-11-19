@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { editarPrecio } from "./actions";
+import { precioTipeado, textoParaEditar } from "@/lib/precios/editar";
 
 /**
  * Precio editable en la propia tabla.
@@ -32,7 +33,7 @@ export function PrecioEditable({
 }) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
-  const [texto, setTexto] = useState(valor);
+  const [texto, setTexto] = useState(() => textoParaEditar(valor));
   const [guardando, startTransition] = useTransition();
 
   const formateado = new Intl.NumberFormat("es-AR", {
@@ -42,16 +43,16 @@ export function PrecioEditable({
   }).format(Number(valor));
 
   function guardar() {
-    const limpio = texto.replace(/\./g, "").replace(",", ".");
+    const nuevo = precioTipeado(texto, valor);
 
-    if (Number(limpio) === Number(valor)) {
+    if (nuevo === null) {
       setEditando(false);
       return;
     }
 
-    if (!Number.isFinite(Number(limpio)) || Number(limpio) < 0) {
+    if (Number.isNaN(nuevo)) {
       toast.error("Ese precio no es válido.");
-      setTexto(valor);
+      setTexto(textoParaEditar(valor));
       setEditando(false);
       return;
     }
@@ -60,13 +61,13 @@ export function PrecioEditable({
       const datos = new FormData();
       datos.set("variantId", variantId);
       datos.set("priceListId", priceListId);
-      datos.set("precio", limpio);
+      datos.set("precio", String(nuevo));
 
       const resultado = await editarPrecio({}, datos);
 
       if (resultado.error) {
         toast.error(resultado.error);
-        setTexto(valor);
+        setTexto(textoParaEditar(valor));
       } else {
         toast.success(resultado.ok ?? "Precio actualizado.");
         router.refresh();
@@ -82,7 +83,7 @@ export function PrecioEditable({
     return (
       <button
         onClick={() => {
-          setTexto(valor);
+          setTexto(textoParaEditar(valor));
           setEditando(true);
         }}
         className={`tabular w-full whitespace-nowrap rounded-md px-2 ${alto} text-right text-base transition-colors hover:bg-muted`}
@@ -103,7 +104,7 @@ export function PrecioEditable({
       onKeyDown={(e) => {
         if (e.key === "Enter") guardar();
         if (e.key === "Escape") {
-          setTexto(valor);
+          setTexto(textoParaEditar(valor));
           setEditando(false);
         }
       }}

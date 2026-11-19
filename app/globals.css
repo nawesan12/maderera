@@ -1618,6 +1618,15 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
   display: none;
 }
 
+/* En el teléfono, mientras se escribe en un campo, el flotante se va: con el
+   teclado abierto quedaba encima del campo o del botón de mandar (comité
+   final, a 390 px). Vuelve apenas se sale del campo. */
+@media (max-width: 639px) {
+  body:has(:is(input:not([type="checkbox"], [type="radio"]), textarea, select):focus) .flotante-whatsapp {
+    display: none;
+  }
+}
+
 /* --- El panel en el teléfono (18/11/2026) ---------------------------------
    «Está horrible la UI en celular de todo el admin.» Tres reglas para todas
    las pantallas a la vez, en lugar de arreglar cuarenta por separado. */

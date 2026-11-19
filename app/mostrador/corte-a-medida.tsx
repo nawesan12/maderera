@@ -61,6 +61,8 @@ export interface EstadoDelCorte {
   mitad: Mitad;
   canto: string;
   fijadas: PiezaFijada[];
+  /** El disco tipeado para este trabajo: se perdía al cerrar. */
+  sierra?: string;
 }
 
 /** Si hay algo que valga la pena guardar: una medida, un canto, una pieza movida. */
@@ -142,7 +144,7 @@ export function CorteAMedida({
 
   /** Cerrar nunca pierde lo cargado: vuelve como borrador. */
   function cerrar() {
-    onCerrar({ piezas, mitad, canto, fijadas });
+    onCerrar({ piezas, mitad, canto, fijadas, sierra: sierraTexto });
   }
 
   /*
@@ -150,7 +152,9 @@ export function CorteAMedida({
    * cambiar acá (nota del 30/9/2026): el plano, el precio y la hoja del taller
    * salen con este número, y el trabajo lo guarda.
    */
-  const [sierraTexto, setSierraTexto] = useState(String(anchoSierraGeneral).replace(".", ","));
+  const [sierraTexto, setSierraTexto] = useState(
+    () => inicial?.sierra ?? String(anchoSierraGeneral).replace(".", ","),
+  );
   const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
 
   const medida = medidaDePlaca({

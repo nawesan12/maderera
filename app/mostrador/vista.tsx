@@ -6,6 +6,7 @@ import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { tarifaDeCorte, type TarifaDeCorte } from "@/lib/cortes/tarifa";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { formatearMonto } from "@/lib/formato";
+import { borradorVale, duenoDelBorrador, type DuenoDelBorrador } from "@/lib/mostrador/borrador-del-corte";
 import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 import {
   aAutorizar,
@@ -208,13 +209,12 @@ export function VistaMostrador({
    *
    * Un clic de más, un Esc o la X tiraban veinte medidas tipeadas con el
    * cliente enfrente (T4, hallazgo 20). Ahora cerrar no pierde nada: volver a
-   * abrir la misma placa, para el mismo cliente, arranca donde quedó. Por eso
+   * abrir la misma placa, en la misma venta, arranca donde quedó. Por eso
    * cerrar no pregunta —preguntar es un paso más, y el criterio del mostrador
    * es ahorrarlos—. Vive en memoria: es de esta venta, no de mañana.
    */
-  const [borradorDelCorte, setBorradorDelCorte] = useState<
-    (EstadoDelCorte & { variantId: string; clienteId: string | null }) | null
-  >(null);
+  // De qué venta es, en `borradorVale` (lib/mostrador/borrador-del-corte.ts).
+  const [borradorDelCorte, setBorradorDelCorte] = useState<(EstadoDelCorte & DuenoDelBorrador) | null>(null);
 
   /*
    * La tarifa de corte que corresponde a la placa elegida y a la lista de quien
@@ -989,8 +989,12 @@ export function VistaMostrador({
           anchoSierra={anchoSierra}
           inicial={
             borradorDelCorte &&
-            borradorDelCorte.variantId === cortando.variantId &&
-            borradorDelCorte.clienteId === (cliente?.id ?? null)
+            borradorVale(borradorDelCorte, {
+              clave,
+              variantId: cortando.variantId,
+              clienteId: cliente?.id ?? null,
+              ahora: Date.now(),
+            })
               ? borradorDelCorte
               : undefined
           }
@@ -1001,7 +1005,16 @@ export function VistaMostrador({
           onCerrar={(estado) => {
             setBorradorDelCorte(
               hayAlgoCargado(estado)
-                ? { ...estado, variantId: cortando.variantId, clienteId: cliente?.id ?? null }
+                ? {
+                    ...estado,
+                    ...duenoDelBorrador({
+                      clave,
+                      variantId: cortando.variantId,
+                      clienteId: cliente?.id ?? null,
+                      ventaVacia: lineas.length === 0,
+                      ahora: Date.now(),
+                    }),
+                  }
                 : null,
             );
             setCortando(null);

@@ -57,6 +57,12 @@ export function VincularCaja({
   const [cajas, setCajas] = useState<CajaDisponible[] | null>(null);
   const [enCurso, setEnCurso] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * La terminal elegida, antes de vincularla. Elegirla en el selector la
+   * vinculaba en el acto, y no hay cómo desvincular desde acá: un toque de
+   * más dejaba esta PC numerando como otra (comité final). Ahora se confirma.
+   */
+  const [elegida, setElegida] = useState<CajaDisponible | null>(null);
 
   useEffect(() => {
     if (!enLinea || vinculada) return;
@@ -141,6 +147,32 @@ export function VincularCaja({
     );
   }
 
+  if (elegida) {
+    return (
+      <span role="group" aria-label="Vincular esta PC" className="inline-flex items-center gap-2 text-sm">
+        <span className="font-semibold">¿Esta PC es {elegida.codigo}?</span>
+        <button
+          type="button"
+          disabled={enCurso}
+          onClick={() => void vincular(elegida.id).then(() => setElegida(null))}
+          className="boton-accion inline-flex h-9 items-center gap-1.5 rounded-lg px-3 font-semibold disabled:opacity-50"
+        >
+          {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+          Sí
+        </button>
+        <button
+          type="button"
+          autoFocus
+          disabled={enCurso}
+          onClick={() => setElegida(null)}
+          className="h-9 rounded-lg border border-linea px-3 font-medium hover:bg-hundida"
+        >
+          No
+        </button>
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-2">
       <label className="estado-espera inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--estado-acento)] pl-2.5 text-sm font-medium">
@@ -154,7 +186,8 @@ export function VincularCaja({
           disabled={enCurso}
           aria-invalid={error ? true : undefined}
           onChange={(e) => {
-            if (e.target.value) void vincular(e.target.value);
+            const caja = cajas.find((c) => c.id === e.target.value);
+            if (caja) setElegida(caja);
           }}
           className="h-full rounded-r-lg bg-transparent pr-2 text-sm font-medium outline-none"
         >

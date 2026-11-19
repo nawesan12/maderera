@@ -235,6 +235,8 @@ paths:
                       sku: { type: string }
                       generalNuevo: { type: string }
                       profesionalNuevo: { type: string }
+                      generalActual: { type: string, description: "el precio que mostró la vista previa; si cambió desde entonces, la fila se rechaza" }
+                      profesionalActual: { type: string }
       responses:
         "200":
           description: Cuántos se aplicaron

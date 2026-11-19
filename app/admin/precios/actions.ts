@@ -115,7 +115,13 @@ export async function previsualizarImportacion(formData: FormData): Promise<Vist
 export async function confirmarImportacion(_previo: EstadoPrecios, formData: FormData): Promise<EstadoPrecios> {
   const crudo = formData.get("cambios");
   if (typeof crudo !== "string" || crudo.length === 0) return { error: "No hay cambios para aplicar." };
-  let cambios: { sku: string; generalNuevo?: string; profesionalNuevo?: string }[];
+  let cambios: {
+    sku: string;
+    generalNuevo?: string;
+    profesionalNuevo?: string;
+    generalActual?: string;
+    profesionalActual?: string;
+  }[];
   try {
     cambios = JSON.parse(crudo);
   } catch {

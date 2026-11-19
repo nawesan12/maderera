@@ -632,6 +632,9 @@ export interface operations {
                         sku: string;
                         generalNuevo?: string;
                         profesionalNuevo?: string;
+                        /** @description el precio que mostró la vista previa; si cambió desde entonces, la fila se rechaza */
+                        generalActual?: string;
+                        profesionalActual?: string;
                     }[];
                 };
             };

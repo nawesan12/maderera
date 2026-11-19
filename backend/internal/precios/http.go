@@ -265,7 +265,8 @@ func (a *API) ConfirmarImportacion(ctx context.Context, r preciosapi.ConfirmarIm
 	}
 	cambios := make([]CambioImportado, len(r.Body.Cambios))
 	for i, c := range r.Body.Cambios {
-		cambios[i] = CambioImportado{SKU: c.Sku, GeneralNuevo: c.GeneralNuevo, ProfesionalNuevo: c.ProfesionalNuevo}
+		cambios[i] = CambioImportado{SKU: c.Sku, GeneralNuevo: c.GeneralNuevo, ProfesionalNuevo: c.ProfesionalNuevo,
+			GeneralActual: c.GeneralActual, ProfesionalActual: c.ProfesionalActual}
 	}
 	m, err := a.s.Confirmar(ctx, ses, cambios)
 	if err != nil {

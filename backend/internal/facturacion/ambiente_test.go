@@ -48,7 +48,7 @@ func TestCaeDeHomologacion(t *testing.T) {
 
 	// En producción no se le hace nota.
 	unidad := []fiscal.CantidadAAcreditar{{ItemID: primerItem(t, e, id), Cantidad: 1}}
-	if _, err := prod.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err == nil || !strings.Contains(Mensaje(err), "homologación") {
+	if _, err := prod.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err == nil || !strings.Contains(Mensaje(err), "de prueba") {
 		t.Fatalf("nota de producción sobre un CAE de prueba: %v", err)
 	}
 	// En homologación, sí (es todo de prueba).
@@ -58,7 +58,7 @@ func TestCaeDeHomologacion(t *testing.T) {
 
 	// Al revés: un CAE de producción no lleva notas de prueba.
 	e.exec(t, `UPDATE invoices SET cae_ambiente = 'produccion' WHERE id = $1`, id)
-	if _, err := homo.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err == nil || !strings.Contains(Mensaje(err), "producción") {
+	if _, err := homo.NotaDeCredito(ctx, id, "Devolución", nil, unidad, false); err == nil || !strings.Contains(Mensaje(err), "valor fiscal") {
 		t.Fatalf("nota de prueba sobre un CAE real: %v", err)
 	}
 }

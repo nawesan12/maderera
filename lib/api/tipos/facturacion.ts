@@ -320,8 +320,27 @@ export interface paths {
         /** @description Lo que se puede devolver de la factura de una venta (renglones, tope por caja y por cuenta, sucursales). 404 si no es de una venta. Solo el admin. */
         get: operations["DatosDeDevolucion"];
         put?: never;
-        /** @description Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja o cuenta). La clave hace que el reintento devuelva la misma. Solo el admin. */
+        /** @description Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta o afuera). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin. */
         post: operations["DevolucionParcial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/comprobantes/{id}/devolucion/calculo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description El importe que saldría con esos renglones (con los tributos y el resto exacto del renglón que se cierra), sin hacer nada. Solo el admin. */
+        post: operations["CalcularDevolucion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -581,6 +600,14 @@ export interface components {
             createdAt: string;
             renumerados: components["schemas"]["Corrimiento"][];
         };
+        RenglonesADevolver: {
+            itemId: string;
+            /** Format: double */
+            cantidad: number;
+            alStock: boolean;
+            /** Format: double */
+            delAcopio?: number | null;
+        }[];
         DatosDeDevolucion: {
             pedido: string;
             renglones: {
@@ -594,11 +621,15 @@ export interface components {
                 /** Format: double */
                 unitario: number;
                 alStock: boolean;
+                /** Format: double */
+                enAcopio: number;
             }[];
             /** Format: double */
             caja: number;
             /** Format: double */
             cuenta: number;
+            /** Format: double */
+            afuera: number;
             conCliente: boolean;
             sucursal: string | null;
             sucursales: {
@@ -1478,17 +1509,14 @@ export interface operations {
                 "application/json": {
                     clave: string;
                     /** @enum {string} */
-                    destino: "caja" | "cuenta";
+                    destino: "caja" | "cuenta" | "afuera";
                     motivo: string;
                     /** @enum {string|null} */
                     sinStock?: "rota" | "otro" | null;
                     sucursalId?: string | null;
-                    renglones: {
-                        itemId: string;
-                        /** Format: double */
-                        cantidad: number;
-                        alStock: boolean;
-                    }[];
+                    /** Format: double */
+                    importe?: number | null;
+                    renglones: components["schemas"]["RenglonesADevolver"];
                 };
             };
         };
@@ -1505,6 +1533,38 @@ export interface operations {
                         /** Format: double */
                         importe: number;
                         repetida: boolean;
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    CalcularDevolucion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: components["schemas"]["RenglonesADevolver"];
+                };
+            };
+        };
+        responses: {
+            /** @description El importe */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: double */
+                        importe: number;
                     };
                 };
             };

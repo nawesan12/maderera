@@ -25,11 +25,20 @@ type original struct {
 }
 
 func bloquearOriginal(ctx context.Context, tx pgx.Tx, id string) (*original, error) {
+	return leerOriginal(ctx, tx, id, true)
+}
+
+// leerOriginal lee el original; bloquear toma su fila (FOR UPDATE).
+func leerOriginal(ctx context.Context, c consultor, id string, bloquear bool) (*original, error) {
 	var o original
-	err := tx.QueryRow(ctx, `SELECT id, tipo::text, estado::text, receptor_nombre, receptor_condicion_iva::text, punto_venta, numero,
+	sql := `SELECT id, tipo::text, estado::text, receptor_nombre, receptor_condicion_iva::text, punto_venta, numero,
 		customer_id, order_id, receptor_cuit, receptor_domicilio, punto_venta_id, neto::float8, iva21::float8, iva105::float8,
 		iva27::float8, exento::float8, total::float8, acreditado::float8, debitado::float8, cae, cae_ambiente
-		FROM invoices WHERE id = $1 FOR UPDATE`, id).Scan(&o.id, &o.tipo, &o.estado, &o.receptorNombre, &o.condicion, &o.puntoVenta,
+		FROM invoices WHERE id = $1`
+	if bloquear {
+		sql += ` FOR UPDATE`
+	}
+	err := c.QueryRow(ctx, sql, id).Scan(&o.id, &o.tipo, &o.estado, &o.receptorNombre, &o.condicion, &o.puntoVenta,
 		&o.numero, &o.customerID, &o.orderID, &o.receptorCuit, &o.receptorDomicilio, &o.puntoVentaID, &o.neto, &o.iva21, &o.iva105,
 		&o.iva27, &o.exento, &o.total, &o.acreditado, &o.debitado, &o.cae, &o.caeAmbiente)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -107,6 +116,14 @@ func (s *Servicio) NotaDeCredito(ctx context.Context, invoiceID, motivo string, 
 // sobre uno real no corrige nada. Sin ambiente guardado (los de antes, las
 // pruebas) no se mira.
 func (s *Servicio) puedeLlevarNota(o *original) error {
+	if err := s.estadoParaNota(o); err != nil {
+		return err
+	}
+	return s.ambienteParaNota(o)
+}
+
+// estadoParaNota es lo que frena una nota por el estado del original.
+func (s *Servicio) estadoParaNota(o *original) error {
 	switch {
 	case o == nil:
 		return errEmision("No encontramos el comprobante.")
@@ -117,12 +134,28 @@ func (s *Servicio) puedeLlevarNota(o *original) error {
 	case o.cae == nil:
 		return errEmision(sinCAE)
 	}
+	return nil
+}
+
+// caeDePruebaEnProduccion: el original se autorizó en homologación y ARCA
+// ya está en producción. No lleva nota (no hay nada que corregir ante el
+// fisco), pero la venta se puede devolver y anular igual.
+func (s *Servicio) caeDePruebaEnProduccion(o *original) bool {
+	if o == nil || o.caeAmbiente == nil || *o.caeAmbiente != "homologacion" || s.env == nil {
+		return false
+	}
+	cfg := s.env.Leer()
+	return cfg != nil && cfg.Ambiente == "produccion"
+}
+
+// ambienteParaNota es lo que frena una nota por el ambiente de ARCA.
+func (s *Servicio) ambienteParaNota(o *original) error {
 	if o.caeAmbiente != nil && s.env != nil {
 		if cfg := s.env.Leer(); cfg != nil && cfg.Ambiente != "" && cfg.Ambiente != *o.caeAmbiente {
 			if *o.caeAmbiente == "homologacion" {
-				return errEmision("Ese CAE es de homologación: no tiene valor fiscal y no lleva nota en producción.")
+				return errEmision("Ese comprobante es de prueba: no tiene valor fiscal y no lleva nota.")
 			}
-			return errEmision("Ese CAE es de producción y ARCA está en homologación: la nota no tendría valor.")
+			return errEmision("Ese comprobante tiene valor fiscal y ARCA está en modo de prueba: la nota no tendría valor.")
 		}
 	}
 	return nil
@@ -134,16 +167,28 @@ func (s *Servicio) puedeLlevarNota(o *original) error {
 // caja) lo decide quien llama.
 func (s *Servicio) notaEnTransaccion(ctx context.Context, tx pgx.Tx, o *original, motivo string, userID *string,
 	parciales []fiscal.CantidadAAcreditar, anular bool) (string, float64, error) {
-	items, err := itemsOriginales(ctx, tx, o.id)
+	calc, err := calcularNota(ctx, tx, o, parciales)
 	if err != nil {
 		return "", 0, err
+	}
+	nueva, err := s.emitirNota(ctx, tx, o, motivo, userID, calc, anular)
+	return nueva, calc.Total, err
+}
+
+// calcularNota es la nota que saldría con esos parciales (nil: lo que
+// falta), sin emitir nada: la devolución muestra este importe antes de
+// confirmar.
+func calcularNota(ctx context.Context, tx consultor, o *original, parciales []fiscal.CantidadAAcreditar) (fiscal.CalculoDeNota, error) {
+	items, err := itemsOriginales(ctx, tx, o.id)
+	if err != nil {
+		return fiscal.CalculoDeNota{}, err
 	}
 	// Lo que ya devolvieron otras notas: el tope de cada renglón es lo
 	// que queda (el original está bloqueado, así que dos notas a la vez
 	// se ven una a la otra).
 	acreditadas, err := yaAcreditado(ctx, tx, o.id)
 	if err != nil {
-		return "", 0, err
+		return fiscal.CalculoDeNota{}, err
 	}
 	for k := range items {
 		a := acreditadas[items[k].ID]
@@ -151,17 +196,24 @@ func (s *Servicio) notaEnTransaccion(ctx context.Context, tx pgx.Tx, o *original
 	}
 	tributos, err := tributosDe(ctx, tx, o.id)
 	if err != nil {
-		return "", 0, err
+		return fiscal.CalculoDeNota{}, err
 	}
 	devueltos, err := tributosDevueltos(ctx, tx, o.id)
 	if err != nil {
-		return "", 0, err
+		return fiscal.CalculoDeNota{}, err
 	}
 	calc := fiscal.CalcularNota(fiscal.Original{Neto: o.neto, Iva21: o.iva21, Iva105: o.iva105, Iva27: o.iva27, Exento: o.exento,
 		Total: o.total, Acreditado: o.acreditado, TributosDevueltos: devueltos}, items, parciales, tributos)
 	if calc.Problema != "" {
-		return "", 0, errEmision(calc.Problema)
+		return fiscal.CalculoDeNota{}, errEmision(calc.Problema)
 	}
+	return calc, nil
+}
+
+// emitirNota emite la nota ya calculada (el reverso del original) y le suma
+// lo acreditado al original.
+func (s *Servicio) emitirNota(ctx context.Context, tx pgx.Tx, o *original, motivo string, userID *string, calc fiscal.CalculoDeNota,
+	anular bool) (string, error) {
 	lineas := make([]Linea, len(calc.Lineas))
 	for i, l := range calc.Lineas {
 		unidad, alic, origen := l.Unidad, l.Alicuota, l.ItemOrigenID
@@ -177,7 +229,7 @@ func (s *Servicio) notaEnTransaccion(ctx context.Context, tx pgx.Tx, o *original
 		ComprobanteOrigenID: &o.id, Observaciones: &motivo, CreatedByUserID: userID, TributosDados: dados, Lineas: lineas},
 		fiscal.Reverso(o.tipo))
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 	estado := ""
 	if anular {
@@ -185,9 +237,9 @@ func (s *Servicio) notaEnTransaccion(ctx context.Context, tx pgx.Tx, o *original
 	}
 	if _, err := tx.Exec(ctx, `UPDATE invoices SET acreditado = $2::numeric, estado = coalesce(nullif($3, '')::estado_comprobante, estado),
 		updated_at = now() WHERE id = $1`, o.id, jsmath.Fijo2(fiscal.Redondear(o.acreditado+calc.Total)), estado); err != nil {
-		return "", 0, err
+		return "", err
 	}
-	return nueva, calc.Total, nil
+	return nueva, nil
 }
 
 // tributosDevueltos son, por código, los tributos de las notas vivas que
@@ -219,13 +271,19 @@ type acreditadoDeRenglon struct{ cantidad, importe float64 }
 
 // yaAcreditado es cuánto de cada renglón del original ya revirtieron sus
 // notas vivas (las que tienen el renglón de origen: la nota de crédito de una
-// factura o la de débito que revierte una nota de crédito).
+// factura o la de débito que revierte una nota de crédito), más lo que
+// devolvieron las devoluciones sin nota (un CAE de prueba con ARCA en
+// producción): si no, se podría devolver dos veces.
 func yaAcreditado(ctx context.Context, c consultor, invoiceID string) (map[string]acreditadoDeRenglon, error) {
 	filas, err := c.Query(ctx, `SELECT i.invoice_item_origen_id, sum(i.cantidad)::text, sum(i.subtotal)::text FROM invoice_items i
 		JOIN invoices f ON f.id = i.invoice_id JOIN invoices o ON o.id = f.comprobante_origen_id
 		WHERE f.comprobante_origen_id = $1 AND f.estado <> 'anulada' AND i.invoice_item_origen_id IS NOT NULL
 		AND (f.tipo::text LIKE 'nota_credito%') <> (o.tipo::text LIKE 'nota_credito%')
-		GROUP BY i.invoice_item_origen_id`, invoiceID)
+		GROUP BY i.invoice_item_origen_id
+		UNION ALL
+		SELECT di.invoice_item_id, sum(di.cantidad)::text, sum(di.importe)::text FROM devolucion_items di
+		JOIN devoluciones d ON d.id = di.devolucion_id WHERE d.invoice_id = $1 AND d.nota_id IS NULL
+		GROUP BY di.invoice_item_id`, invoiceID)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +294,8 @@ func yaAcreditado(ctx context.Context, c consultor, invoiceID string) (map[strin
 		if err := filas.Scan(&origen, &cantidad, &importe); err != nil {
 			return nil, err
 		}
-		acreditadas[origen] = acreditadoDeRenglon{jsmath.Numero(cantidad), jsmath.Numero(importe)}
+		a := acreditadas[origen]
+		acreditadas[origen] = acreditadoDeRenglon{float64(a.cantidad + jsmath.Numero(cantidad)), fiscal.Redondear(a.importe + jsmath.Numero(importe))}
 	}
 	return acreditadas, filas.Err()
 }
@@ -280,8 +339,16 @@ func tributosDe(ctx context.Context, c consultor, id string) ([]fiscal.Tributo, 
 // Anular es anularConNotaDeCredito: una nota por lo que falte acreditar, que
 // además anula el original. Si notas parciales ya acreditaron todo, solo
 // cambia el estado (y devuelve el id del original).
+//
+// La factura de una venta viva no se anula acá: la nota bajaba el IVA entero
+// y la venta, la caja, la cuenta y el depósito quedaban como si nada. Se
+// anula la venta (mostrador.Anular, Pedidos), que devuelve el stock y la
+// plata, y después su factura. Y la de una venta facturada en homologación,
+// con ARCA ya en producción, se cierra sin nota: no hay nada que corregir
+// ante el fisco.
 func (s *Servicio) Anular(ctx context.Context, invoiceID, motivo string, userID *string) (string, error) {
 	var restante []fiscal.CantidadAAcreditar
+	cerrar := false
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// El atajo de abajo cambia el estado sin pasar por NotaDeCredito:
 		// el CAE se mira acá también.
@@ -301,32 +368,53 @@ func (s *Servicio) Anular(ctx context.Context, invoiceID, motivo string, userID 
 		if err != nil {
 			return err
 		}
-		if len(acreditadas) == 0 {
-			return nil
-		}
-		items, err := itemsOriginales(ctx, tx, invoiceID)
-		if err != nil {
-			return err
-		}
-		restante = []fiscal.CantidadAAcreditar{}
-		for _, i := range items {
-			if c := i.Cantidad - acreditadas[i.ID].cantidad; c > 0 {
-				restante = append(restante, fiscal.CantidadAAcreditar{ItemID: i.ID, Cantidad: c})
+		if len(acreditadas) > 0 {
+			items, err := itemsOriginales(ctx, tx, invoiceID)
+			if err != nil {
+				return err
+			}
+			restante = []fiscal.CantidadAAcreditar{}
+			for _, i := range items {
+				if c := i.Cantidad - acreditadas[i.ID].cantidad; c > 0 {
+					restante = append(restante, fiscal.CantidadAAcreditar{ItemID: i.ID, Cantidad: c})
+				}
 			}
 		}
+		quedaAlgo := restante == nil || len(restante) > 0
+		if o.orderID != nil && fiscal.EsFactura(o.tipo) && quedaAlgo {
+			vigente, err := ventaVigente(ctx, tx, *o.orderID)
+			if err != nil {
+				return err
+			}
+			if vigente {
+				return errEmision("Es de una venta: anulá la venta, que devuelve el stock y la plata.")
+			}
+		}
+		cerrar = s.caeDePruebaEnProduccion(o)
 		return nil
 	})
 	if err != nil {
 		return "", s.comoEmision(err, "fiscal.anular", "No se pudo anular el comprobante.")
 	}
-	if restante != nil && len(restante) == 0 {
-		// Ya acreditada entera: el papel está corregido, falta el estado.
+	if cerrar || restante != nil && len(restante) == 0 {
+		// Ya acreditada entera (el papel está corregido) o de prueba (no hay
+		// papel que corregir): falta el estado.
 		if _, err := s.pool.Exec(ctx, `UPDATE invoices SET estado = 'anulada', updated_at = now() WHERE id = $1 AND cae IS NOT NULL`, invoiceID); err != nil {
 			return "", err
 		}
 		return invoiceID, nil
 	}
 	return s.NotaDeCredito(ctx, invoiceID, motivo, userID, restante, true)
+}
+
+// ventaVigente: el pedido no está cancelado.
+func ventaVigente(ctx context.Context, c consultor, pedido string) (bool, error) {
+	var vigente bool
+	err := c.QueryRow(ctx, `SELECT estado <> 'cancelado' FROM orders WHERE id = $1`, pedido).Scan(&vigente)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return vigente, err
 }
 
 // NotaDeDebito le carga algo más al cliente sobre un comprobante emitido (un

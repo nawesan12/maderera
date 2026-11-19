@@ -94,6 +94,9 @@ func (o respuesta) VisitDatosDeDevolucionResponse(w http.ResponseWriter) error {
 func (o respuesta) VisitDevolucionParcialResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
+func (o respuesta) VisitCalcularDevolucionResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitGuardarEmisorFiscalResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -653,17 +656,15 @@ func (a *API) DevolucionParcial(ctx context.Context, r facturacionapi.Devolucion
 		return nil, err
 	}
 	b := r.Body
-	p := PedidoDeDevolucion{InvoiceID: r.Id.String(), Clave: b.Clave, Destino: string(b.Destino), Motivo: b.Motivo,
-		Renglones: make([]RenglonADevolver, len(b.Renglones))}
+	p := PedidoDeDevolucion{InvoiceID: r.Id.String(), Clave: b.Clave, Destino: string(b.Destino), Motivo: b.Motivo}
 	if b.SinStock != nil {
 		p.SinStock = string(*b.SinStock)
 	}
 	if b.SucursalId != nil {
 		p.BranchID = *b.SucursalId
 	}
-	for i, x := range b.Renglones {
-		p.Renglones[i] = RenglonADevolver{ItemID: x.ItemId, Cantidad: x.Cantidad, AlStock: x.AlStock}
-	}
+	p.Renglones = renglonesADevolver(b.Renglones)
+	p.Importe = b.Importe
 	d, err := a.s.DevolucionParcial(ctx, ses.UserID, p)
 	if err != nil {
 		return nil, comoProblema(err)
@@ -674,6 +675,25 @@ func (a *API) DevolucionParcial(ctx context.Context, r facturacionapi.Devolucion
 			map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID, "sinStock": p.SinStock, "sucursalId": p.BranchID})
 	}
 	return ok(d), nil
+}
+
+func renglonesADevolver(rs facturacionapi.RenglonesADevolver) []RenglonADevolver {
+	out := make([]RenglonADevolver, len(rs))
+	for i, x := range rs {
+		out[i] = RenglonADevolver{ItemID: x.ItemId, Cantidad: x.Cantidad, AlStock: x.AlStock, DelAcopio: x.DelAcopio}
+	}
+	return out
+}
+
+func (a *API) CalcularDevolucion(ctx context.Context, r facturacionapi.CalcularDevolucionRequestObject) (facturacionapi.CalcularDevolucionResponseObject, error) {
+	if _, err := admin(ctx); err != nil {
+		return nil, err
+	}
+	total, err := a.s.CalcularDevolucion(ctx, r.Id.String(), renglonesADevolver(r.Body.Renglones))
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	return ok(map[string]float64{"importe": total}), nil
 }
 
 func (a *API) NotaDeDebito(ctx context.Context, r facturacionapi.NotaDeDebitoRequestObject) (facturacionapi.NotaDeDebitoResponseObject, error) {

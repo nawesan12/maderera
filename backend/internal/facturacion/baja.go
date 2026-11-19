@@ -35,6 +35,7 @@ import (
 //   - que tenga CAE, o que sea un borrador;
 //   - que un posterior de la serie tenga CAE (ARCA ya pasó ese número);
 //   - que tenga notas encima (se dan de baja primero);
+//   - que sea la nota de una devolución (la plata y el stock ya se movieron);
 //   - que tenga cobros: con recibo vivo se anula el recibo primero, a la
 //     vista, y sin recibo con un medio de plata serían el único rastro de
 //     esa plata, que se iría con el borrado. El pase a cuenta corriente no
@@ -118,6 +119,19 @@ func bloqueoDeBaja(ctx context.Context, c consultor, x *aBajar) (string, error) 
 	}
 	if x.estado == "borrador" {
 		return "Un borrador no tiene número que liberar.", nil
+	}
+	// La nota de una devolución no se da de baja: la plata ya salió y el
+	// stock ya entró en la misma operación, y sin la nota quedaban sin
+	// respaldo (y los renglones, libres para devolverse otra vez). Deshacer
+	// la devolución tampoco: la plata está en la mano del cliente. Lo que
+	// queda es reintentarla; el receptor es el de la factura, que ARCA ya
+	// aceptó.
+	var deDevolucion bool
+	if err := c.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM devoluciones WHERE nota_id = $1)`, x.id).Scan(&deDevolucion); err != nil {
+		return "", err
+	}
+	if deDevolucion {
+		return "Es la nota de una devolución: la plata y el stock ya se movieron. Reintentala.", nil
 	}
 	var posterior *int64
 	if err := c.QueryRow(ctx, `SELECT min(numero)::bigint FROM invoices WHERE punto_venta = $1 AND tipo = $2::tipo_comprobante

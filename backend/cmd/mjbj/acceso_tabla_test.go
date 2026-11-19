@@ -175,6 +175,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"ImportarPadronIibb":             "admin",                         // POST /api/v1/admin/facturacion/padron-iibb
 	"DatosDeDevolucion":              "/admin/facturacion",            // GET /api/v1/admin/facturacion/comprobantes/{id}/devolucion
 	"DevolucionParcial":              "/admin/facturacion",            // POST /api/v1/admin/facturacion/comprobantes/{id}/devolucion
+	"CalcularDevolucion":             "/admin/facturacion",            // POST /api/v1/admin/facturacion/comprobantes/{id}/devolucion/calculo
 	"ListarComprobantes":             "/admin/facturacion",            // GET /api/v1/admin/facturacion/comprobantes
 	"EmitirComprobanteManual":        "/admin/facturacion",            // POST /api/v1/admin/facturacion/comprobantes
 	"GuardarEmisorFiscal":            "/admin/facturacion",            // PUT /api/v1/admin/facturacion/emisor

@@ -245,11 +245,15 @@ func LiberarReservas(ctx context.Context, tx Tx, pedido string) error {
 // sigue en acopio no vuelve al galpón porque nunca salió. Devuelve cuánto
 // bajó; lo que falte salió de verdad y vuelve al físico. El que llama ya
 // tomó los candados de esos stocks (BloquearEnOrden).
-func ReducirReserva(ctx context.Context, tx Tx, orderItemID string, cantidad float64) (float64, error) {
+//
+// Devuelve también cuánto bajó de cada sucursal: lo que no vuelve al stock
+// (la placa que se rompió en el galpón) se da de baja del físico de la
+// sucursal donde estaba apartada.
+func ReducirReserva(ctx context.Context, tx Tx, orderItemID string, cantidad float64) (float64, []Bajada, error) {
 	filas, err := tx.Query(ctx, `SELECT id, variant_id, branch_id, cantidad FROM stock_reservations
 		WHERE order_item_id = $1 AND estado = 'activa' ORDER BY created_at FOR UPDATE`, orderItemID)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	type reserva struct {
 		id, variante, sucursal string
@@ -260,15 +264,16 @@ func ReducirReserva(ctx context.Context, tx Tx, orderItemID string, cantidad flo
 		var r reserva
 		if err := filas.Scan(&r.id, &r.variante, &r.sucursal, &r.cantidad); err != nil {
 			filas.Close()
-			return 0, err
+			return 0, nil, err
 		}
 		activas = append(activas, r)
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	bajo := 0.0
+	var bajadas []Bajada
 	for _, r := range activas {
 		falta := ventas.CantidadDeStock(cantidad - bajo)
 		if falta <= 0 {
@@ -281,14 +286,21 @@ func ReducirReserva(ctx context.Context, tx Tx, orderItemID string, cantidad flo
 			_, err = tx.Exec(ctx, `UPDATE stock_reservations SET cantidad = cantidad - $2::numeric WHERE id = $1`, r.id, num(quita))
 		}
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		if err := moverReservado(ctx, tx, r.variante, r.sucursal, -quita); err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		bajo = ventas.CantidadDeStock(bajo + quita)
+		bajadas = append(bajadas, Bajada{Stock: Stock{Variante: r.variante, Sucursal: r.sucursal}, Cantidad: quita})
 	}
-	return bajo, nil
+	return bajo, bajadas, nil
+}
+
+// Bajada es cuánto bajó la reserva de un stock.
+type Bajada struct {
+	Stock
+	Cantidad float64
 }
 
 // ReservasDelRenglon son los stocks (variante y sucursal) de las reservas

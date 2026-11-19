@@ -333,7 +333,7 @@ paths:
         "404": { $ref: "#/components/responses/Problema" }
     post:
       operationId: DevolucionParcial
-      description: Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja o cuenta). La clave hace que el reintento devuelva la misma. Solo el admin.
+      description: Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta o afuera). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin.
       requestBody:
         required: true
         content:
@@ -344,20 +344,12 @@ paths:
               additionalProperties: false
               properties:
                 clave: { type: string }
-                destino: { type: string, enum: [caja, cuenta] }
+                destino: { type: string, enum: [caja, cuenta, afuera] }
                 motivo: { type: string }
                 sinStock: { type: string, enum: [rota, otro], nullable: true }
                 sucursalId: { type: string, nullable: true }
-                renglones:
-                  type: array
-                  items:
-                    type: object
-                    required: [itemId, cantidad, alStock]
-                    additionalProperties: false
-                    properties:
-                      itemId: { type: string }
-                      cantidad: { type: number, format: double }
-                      alStock: { type: boolean }
+                importe: { type: number, format: double, nullable: true }
+                renglones: { $ref: "#/components/schemas/RenglonesADevolver" }
       responses:
         "200":
           description: La devolución hecha (o la misma, si la clave ya se usó)
@@ -371,6 +363,33 @@ paths:
                   notaId: { type: string }
                   importe: { type: number, format: double }
                   repetida: { type: boolean }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/comprobantes/{id}/devolucion/calculo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: CalcularDevolucion
+      description: El importe que saldría con esos renglones (con los tributos y el resto exacto del renglón que se cierra), sin hacer nada. Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [renglones]
+              additionalProperties: false
+              properties:
+                renglones: { $ref: "#/components/schemas/RenglonesADevolver" }
+      responses:
+        "200":
+          description: El importe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [importe]
+                properties:
+                  importe: { type: number, format: double }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/facturacion/comprobantes/{id}/nota-de-debito:
     parameters:
@@ -611,16 +630,27 @@ components:
         usuarioNombre: { type: string }
         createdAt: { type: string, format: date-time }
         renumerados: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+    RenglonesADevolver:
+      type: array
+      items:
+        type: object
+        required: [itemId, cantidad, alStock]
+        additionalProperties: false
+        properties:
+          itemId: { type: string }
+          cantidad: { type: number, format: double }
+          alStock: { type: boolean }
+          delAcopio: { type: number, format: double, nullable: true }
     DatosDeDevolucion:
       type: object
-      required: [pedido, renglones, caja, cuenta, conCliente, sucursal, sucursales]
+      required: [pedido, renglones, caja, cuenta, afuera, conCliente, sucursal, sucursales]
       properties:
         pedido: { type: string }
         renglones:
           type: array
           items:
             type: object
-            required: [itemId, descripcion, unidad, cantidad, queda, unitario, alStock]
+            required: [itemId, descripcion, unidad, cantidad, queda, unitario, alStock, enAcopio]
             properties:
               itemId: { type: string }
               descripcion: { type: string }
@@ -629,8 +659,10 @@ components:
               queda: { type: number, format: double }
               unitario: { type: number, format: double }
               alStock: { type: boolean }
+              enAcopio: { type: number, format: double }
         caja: { type: number, format: double }
         cuenta: { type: number, format: double }
+        afuera: { type: number, format: double }
         conCliente: { type: boolean }
         sucursal: { type: string, nullable: true }
         sucursales:

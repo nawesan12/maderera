@@ -5088,24 +5088,28 @@ type ChequeEstado struct {
 }
 
 type ConfiguracionFiscal struct {
-	ID                     string       `json:"id"`
-	RazonSocial            string       `json:"razonSocial"`
-	NombreFantasia         *string      `json:"nombreFantasia"`
-	Cuit                   *string      `json:"cuit"`
-	CondicionIva           CondicionIva `json:"condicionIva"`
-	Domicilio              *string      `json:"domicilio"`
-	Localidad              string       `json:"localidad"`
-	CodigoPostal           *string      `json:"codigoPostal"`
-	Telefono               *string      `json:"telefono"`
-	Email                  *string      `json:"email"`
-	IngresosBrutos         *string      `json:"ingresosBrutos"`
-	RegimenIibb            RegimenIibb  `json:"regimenIibb"`
-	AlicuotaPercepcionIibb jsmath.Num   `json:"alicuotaPercepcionIibb"`
-	PercibeIibb            bool         `json:"percibeIibb"`
-	InicioActividades      *time.Time   `json:"inicioActividades"`
-	Leyenda                *string      `json:"leyenda"`
-	UpdatedAt              time.Time    `json:"updatedAt"`
-	AlicuotaIibbSinPadron  *jsmath.Num  `json:"alicuotaIibbSinPadron"`
+	ID                     string             `json:"id"`
+	RazonSocial            string             `json:"razonSocial"`
+	NombreFantasia         *string            `json:"nombreFantasia"`
+	Cuit                   *string            `json:"cuit"`
+	CondicionIva           CondicionIva       `json:"condicionIva"`
+	Domicilio              *string            `json:"domicilio"`
+	Localidad              string             `json:"localidad"`
+	CodigoPostal           *string            `json:"codigoPostal"`
+	Telefono               *string            `json:"telefono"`
+	Email                  *string            `json:"email"`
+	IngresosBrutos         *string            `json:"ingresosBrutos"`
+	RegimenIibb            RegimenIibb        `json:"regimenIibb"`
+	AlicuotaPercepcionIibb jsmath.Num         `json:"alicuotaPercepcionIibb"`
+	PercibeIibb            bool               `json:"percibeIibb"`
+	InicioActividades      *time.Time         `json:"inicioActividades"`
+	Leyenda                *string            `json:"leyenda"`
+	UpdatedAt              time.Time          `json:"updatedAt"`
+	AlicuotaIibbSinPadron  *jsmath.Num        `json:"alicuotaIibbSinPadron"`
+	IvaDesde               pgtype.Date        `json:"ivaDesde"`
+	IvaSaldoTecnico        jsmath.Num         `json:"ivaSaldoTecnico"`
+	IvaSaldoLibre          jsmath.Num         `json:"ivaSaldoLibre"`
+	IvaAncladoAt           pgtype.Timestamptz `json:"ivaAncladoAt"`
 }
 
 type ConsultasCorte struct {
@@ -5349,12 +5353,23 @@ type DeliveryItem struct {
 	Orden       int32      `json:"orden"`
 }
 
+type DevolucionItem struct {
+	ID            string     `json:"id"`
+	DevolucionID  string     `json:"devolucionId"`
+	InvoiceItemID string     `json:"invoiceItemId"`
+	OrderItemID   *string    `json:"orderItemId"`
+	Cantidad      jsmath.Num `json:"cantidad"`
+	DelAcopio     jsmath.Num `json:"delAcopio"`
+	AlStock       bool       `json:"alStock"`
+	Importe       jsmath.Num `json:"importe"`
+}
+
 type Devolucione struct {
 	ID                string             `json:"id"`
 	Clave             string             `json:"clave"`
 	OrderID           string             `json:"orderId"`
 	InvoiceID         string             `json:"invoiceId"`
-	NotaID            string             `json:"notaId"`
+	NotaID            *string            `json:"notaId"`
 	Importe           jsmath.Num         `json:"importe"`
 	Destino           string             `json:"destino"`
 	BranchID          *string            `json:"branchId"`
@@ -5712,11 +5727,17 @@ type OrderStatusHistory struct {
 }
 
 type PadronIibb struct {
+	Cuit          string      `json:"cuit"`
+	Alicuota      jsmath.Num  `json:"alicuota"`
+	VigenciaDesde pgtype.Date `json:"vigenciaDesde"`
+	VigenciaHasta pgtype.Date `json:"vigenciaHasta"`
+}
+
+type PadronIibbImportacione struct {
 	ID            string             `json:"id"`
-	Cuit          string             `json:"cuit"`
-	Alicuota      jsmath.Num         `json:"alicuota"`
 	VigenciaDesde pgtype.Date        `json:"vigenciaDesde"`
 	VigenciaHasta pgtype.Date        `json:"vigenciaHasta"`
+	Renglones     int32              `json:"renglones"`
 	CargadoPor    *string            `json:"cargadoPor"`
 	CargadoAt     pgtype.Timestamptz `json:"cargadoAt"`
 }

@@ -78,14 +78,15 @@ var ErrNoEsta = errors.New("no está")
 /* ------------------------------ saldos ------------------------------ */
 
 // Lo pedido es lo que queda después de las devoluciones parciales: lo que
-// se devolvió mientras estaba en acopio ya no se entrega (la devolución bajó
-// su reserva).
+// se devolvió del acopio ya no se entrega (la devolución bajó su reserva).
+// Lo que el cliente trajo de lo que ya se había llevado no cambia lo que le
+// queda por retirar: antes se restaba todo lo devuelto, y el que traía 2
+// placas perdía 2 de las que tenía apartadas.
 const consultaSaldo = `
 	SELECT oi.id, oi.descripcion, oi.unidad, greatest(oi.cantidad - coalesce((
-	    SELECT sum(ni.cantidad) FROM invoice_items ni
-	    JOIN invoice_items fi ON fi.id = ni.invoice_item_origen_id
-	    JOIN devoluciones dv ON dv.nota_id = ni.invoice_id
-	    WHERE fi.order_item_id = oi.id %[2]s
+	    SELECT sum(di.del_acopio) FROM devolucion_items di
+	    JOIN devoluciones dv ON dv.id = di.devolucion_id
+	    WHERE di.order_item_id = oi.id %[2]s
 	  ), 0), 0)::text,
 	  coalesce((
 	    SELECT sum(di.cantidad) FROM delivery_items di

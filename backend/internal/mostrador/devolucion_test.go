@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"mjbj/internal/auth"
 	"mjbj/internal/entregas"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/reportes"
@@ -217,8 +218,8 @@ func TestDevolucionEnAcopio(t *testing.T) {
 	}
 }
 
-// Un renglón sin variante (un flete): vuelve la plata, no el stock, y pide
-// el motivo de la lista.
+// Un renglón sin variante (un flete): vuelve la plata, no el stock, y no
+// pide motivo: no hay stock que justificar.
 func TestDevolucionDeUnRenglonSinVariante(t *testing.T) {
 	e := armar(t)
 	c := e.vendidaYFacturada(t, "flete@prueba.test", VentaPedida{MedioPago: ventas.Efectivo,
@@ -227,11 +228,8 @@ func TestDevolucionDeUnRenglonSinVariante(t *testing.T) {
 		t.Fatalf("al stock: %v", err)
 	}
 	sinStock := func(p *facturacion.PedidoDeDevolucion) { p.Renglones[0].AlStock = false }
-	if _, err := c.devolver(1, facturacion.DevolverPorCaja, sinStock); err == nil || !strings.Contains(facturacion.Mensaje(err), "por qué") {
-		t.Fatalf("sin motivo: %v", err)
-	}
 	antes := c.caja(t)
-	if _, err := c.devolver(1, facturacion.DevolverPorCaja, sinStock, func(p *facturacion.PedidoDeDevolucion) { p.SinStock = "otro" }); err != nil {
+	if _, err := c.devolver(1, facturacion.DevolverPorCaja, sinStock); err != nil {
 		t.Fatal(err)
 	}
 	if got := c.caja(t); got != antes-500 {
@@ -420,5 +418,261 @@ func TestDevolucionConDecimales(t *testing.T) {
 	}
 	if _, err := c.devolver(0.01, facturacion.DevolverPorCaja); err == nil || !strings.Contains(facturacion.Mensaje(err), "demasiado poco") {
 		t.Fatalf("lo que da cero en el stock: %v", err)
+	}
+}
+
+// Dos placas rotas que trae el cliente: vuelve la plata, el físico no sube,
+// y si después se anula la venta solo vuelven las 8 que faltaban. Antes la
+// anulación devolvía 10 al físico: las rotas reaparecían en el stock.
+func TestDevolucionRotaYDespuesAnular(t *testing.T) {
+	e := armar(t)
+	c := e.vendidaYFacturada(t, "rota@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 10, 100)})
+	rota := func(p *facturacion.PedidoDeDevolucion) { p.Renglones[0].AlStock, p.SinStock = false, "rota" }
+	if _, err := c.devolver(2, facturacion.DevolverPorCaja, rota); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := e.fisicoYReservado(t); q != 90 {
+		t.Fatalf("físico %v después de la devolución rota, quería 90", q)
+	}
+	if an, err := e.svc.Anular(context.Background(), c.pedido, "se arrepintió", c.usuario); err != nil || !an.Ok {
+		t.Fatalf("anular: %v %+v", err, an)
+	}
+	if q, _ := e.fisicoYReservado(t); q != 98 {
+		t.Errorf("físico %v después de anular, quería 98 (las 2 rotas no vuelven)", q)
+	}
+}
+
+// Acopio de 10 con 5 retiradas: el cliente trae 2 de las que se llevó.
+// Vuelven al físico y le siguen quedando 5 por retirar. Antes se bajaba la
+// reserva a 3 y el galpón tenía 2 placas que el sistema no veía.
+func TestDevolucionDeLoRetiradoDeUnAcopio(t *testing.T) {
+	e := armar(t)
+	cliente := e.cliente
+	c := e.vendidaYFacturada(t, "retirado@prueba.test", VentaPedida{MedioPago: ventas.CuentaCorriente, CustomerID: &cliente, Acopio: true,
+		Lineas: placas(e, 10, 100)})
+	ses := e.sesionDe(t, "remito-dev@prueba.test")
+	if _, err := entregas.Nuevo(e.pool, silencio).CrearEntrega(context.Background(), ses, entregas.FormRemito{OrderID: c.pedido, Tipo: "retiro",
+		Lineas: []entregas.LineaAEntregar{{OrderItemID: e.primerRenglon(t, c.pedido), Cantidad: 5}}}); err != nil {
+		t.Fatal(err)
+	}
+	if q, r := e.fisicoYReservado(t); q != 95 || r != 5 {
+		t.Fatalf("después del remito: físico %v, reservado %v", q, r)
+	}
+	datos, err := c.fac.ParaDevolver(context.Background(), c.factura)
+	if err != nil || datos.Renglones[0].EnAcopio != 5 {
+		t.Fatalf("en acopio %+v %v, quería 5", datos, err)
+	}
+	// Con parte retirada y parte en acopio, hay que decir de dónde sale.
+	if _, err := c.devolver(7, facturacion.DevolverPorCuenta); err == nil || !strings.Contains(facturacion.Mensaje(err), "acopio") {
+		t.Fatalf("sin decir de dónde: %v", err)
+	}
+	cero := 0.0
+	traidas := func(p *facturacion.PedidoDeDevolucion) { p.Renglones[0].DelAcopio = &cero }
+	if _, err := c.devolver(6, facturacion.DevolverPorCuenta, traidas); err == nil || !strings.Contains(facturacion.Mensaje(err), "se llevó 5") {
+		t.Fatalf("trae más de lo que se llevó: %v", err)
+	}
+	if _, err := c.devolver(2, facturacion.DevolverPorCuenta, traidas); err != nil {
+		t.Fatal(err)
+	}
+	if q, r := e.fisicoYReservado(t); q != 97 || r != 5 {
+		t.Errorf("físico %v, reservado %v (quería 97 y 5)", q, r)
+	}
+	saldo, err := entregas.SaldoDeAcopio(context.Background(), e.pool, c.pedido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saldo) != 1 || saldo[0].Pendiente != 5 {
+		t.Errorf("pendiente de entregar %+v, quería 5", saldo)
+	}
+	// Y una rota en el galpón: baja la reserva y el físico.
+	uno := 1.0
+	if _, err := c.devolver(1, facturacion.DevolverPorCuenta, func(p *facturacion.PedidoDeDevolucion) {
+		p.Renglones[0].DelAcopio, p.Renglones[0].AlStock, p.SinStock = &uno, false, "rota"
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if q, r := e.fisicoYReservado(t); q != 96 || r != 4 {
+		t.Errorf("con la rota en el galpón: físico %v, reservado %v (quería 96 y 4)", q, r)
+	}
+}
+
+// Lo cobrado con tarjeta vuelve por afuera: nota y stock, y la caja no se
+// toca. Antes no quedaba ningún camino: ni caja, ni cuenta, ni nota parcial.
+func TestDevolucionPorAfuera(t *testing.T) {
+	e := armar(t)
+	c := e.vendidaYFacturada(t, "afuera@prueba.test", VentaPedida{MedioPago: ventas.Debito, Lineas: placas(e, 10, 100)})
+	antes := c.caja(t)
+	d, err := c.devolver(2, facturacion.DevolverPorAfuera)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Importe != 200 || d.NotaID == "" {
+		t.Fatalf("devolución %+v", d)
+	}
+	if got := c.caja(t); got != antes {
+		t.Errorf("la caja cambió: %v → %v", antes, got)
+	}
+	if q, _ := e.fisicoYReservado(t); q != 92 {
+		t.Errorf("físico %v, quería 92", q)
+	}
+	// La mixta: lo que entró con débito vuelve por afuera, hasta lo que
+	// entró con débito.
+	m := e.vendidaYFacturada(t, "afuera-mixta@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 10, 10),
+		Pagos: []ventas.PagoDeVenta{{Medio: ventas.Debito, Importe: 60}, {Medio: ventas.Efectivo, Importe: 40}}})
+	if _, err := m.devolver(7, facturacion.DevolverPorAfuera); err == nil || !strings.Contains(facturacion.Mensaje(err), "hasta") {
+		t.Fatalf("más de lo que entró con débito: %v", err)
+	}
+	if _, err := m.devolver(5, facturacion.DevolverPorAfuera); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Lo que se confirma es lo que sale: el cálculo es el de la devolución, y si
+// cambió en el medio, no se hace.
+func TestDevolucionConElImporteConfirmado(t *testing.T) {
+	e := armar(t)
+	c := e.vendidaYFacturada(t, "importe@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 3, 100)})
+	ctx := context.Background()
+	// Un renglón de 3 por 100 que se cierra en dos devoluciones: la segunda
+	// se lleva lo que queda.
+	total, err := c.fac.CalcularDevolucion(ctx, c.factura, []facturacion.RenglonADevolver{{ItemID: c.renglon, Cantidad: 2, AlStock: true}})
+	if err != nil || total != 200 {
+		t.Fatalf("cálculo %v %v", total, err)
+	}
+	otro := 150.0
+	if _, err := c.devolver(2, facturacion.DevolverPorCaja, func(p *facturacion.PedidoDeDevolucion) { p.Importe = &otro }); err == nil ||
+		!strings.Contains(facturacion.Mensaje(err), "cambió") {
+		t.Fatalf("con otro importe: %v", err)
+	}
+	d, err := c.devolver(2, facturacion.DevolverPorCaja, func(p *facturacion.PedidoDeDevolucion) { p.Importe = &total })
+	if err != nil || d.Importe != total {
+		t.Fatalf("con el importe calculado: %+v %v", d, err)
+	}
+}
+
+// La nota de una devolución no se da de baja: la plata y el stock ya se
+// movieron. Antes chocaba con la clave foránea y daba un error genérico.
+func TestLaNotaDeUnaDevolucionNoSeDaDeBaja(t *testing.T) {
+	e := armar(t)
+	c := e.vendidaYFacturada(t, "baja-dev@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 10, 100)})
+	d, err := c.devolver(2, facturacion.DevolverPorCaja)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ses := &auth.Sesion{UserID: c.usuario, Nombre: "Admin"}
+	if _, err := c.fac.DarDeBaja(context.Background(), ses, d.NotaID, "ARCA la rechazó", nil); err == nil ||
+		!strings.Contains(facturacion.Mensaje(err), "devolución") {
+		t.Fatalf("baja de la nota: %v", err)
+	}
+	if n := e.num(t, `select count(*)::float8 from invoices where id = $1`, d.NotaID); n != 1 {
+		t.Errorf("la nota se borró")
+	}
+}
+
+// La factura de una venta viva no se anula desde facturación: bajaba el IVA
+// entero y la venta, la caja y el depósito quedaban como si nada.
+func TestLaFacturaDeUnaVentaVivaNoSeAnulaSola(t *testing.T) {
+	e := armar(t)
+	c := e.vendidaYFacturada(t, "anular-fac@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 10, 100)})
+	if _, err := c.fac.Anular(context.Background(), c.factura, "error", &c.usuario); err == nil ||
+		!strings.Contains(facturacion.Mensaje(err), "anulá la venta") {
+		t.Fatalf("anular la factura de una venta viva: %v", err)
+	}
+	if n := e.num(t, `select count(*)::float8 from invoices where comprobante_origen_id = $1`, c.factura); n != 0 {
+		t.Errorf("salió una nota")
+	}
+}
+
+// Una venta facturada con un CAE de prueba, con ARCA ya en producción: se
+// devuelve sin nota (el original nunca valió ante el fisco) y no se puede
+// devolver dos veces lo mismo; anular la venta cierra la factura sin nota.
+func TestDevolucionDeUnCaeDePruebaEnProduccion(t *testing.T) {
+	e := armar(t)
+	c := e.vendidaYFacturada(t, "prueba-prod@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 10, 100)})
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, `UPDATE invoices SET cae_ambiente = 'homologacion' WHERE id = $1`, c.factura); err != nil {
+		t.Fatal(err)
+	}
+	pem := "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----"
+	c.fac = c.fac.ConEntorno(func(k string) string {
+		return map[string]string{"ARCA_CUIT": "30589445259", "ARCA_CERTIFICADO": pem, "ARCA_CLAVE_PRIVADA": pem,
+			"ARCA_AMBIENTE": "produccion", "ARCA_PROVEEDOR": "interno"}[k]
+	})
+	d, err := c.devolver(8, facturacion.DevolverPorCaja)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.NotaID != "" || d.Importe != 800 {
+		t.Fatalf("devolución %+v: no tenía que llevar nota", d)
+	}
+	if q, _ := e.fisicoYReservado(t); q != 98 {
+		t.Errorf("físico %v, quería 98", q)
+	}
+	if _, err := c.devolver(3, facturacion.DevolverPorCaja); err == nil {
+		t.Fatal("devolvió 11 de 10")
+	}
+	an, err := e.svc.Anular(ctx, c.pedido, "error", c.usuario)
+	if err != nil || !an.Ok || an.FacturaPendiente == nil {
+		t.Fatalf("anular: %v %+v", err, an)
+	}
+	if _, err := c.fac.Anular(ctx, *an.FacturaPendiente, "Anulación de la venta", &c.usuario); err != nil {
+		t.Fatal(err)
+	}
+	if estado := e.txt(t, `select estado::text from invoices where id = $1`, c.factura); estado != "anulada" {
+		t.Errorf("la factura quedó %s", estado)
+	}
+	if n := e.num(t, `select count(*)::float8 from invoices where comprobante_origen_id = $1`, c.factura); n != 0 {
+		t.Errorf("salieron %v notas sobre un CAE de prueba", n)
+	}
+}
+
+// El remito que se arma mientras se devuelve lo del acopio espera a la
+// devolución: antes leía el saldo viejo y entregaba lo que ya se había
+// devuelto en plata.
+func TestDevolucionYRemitoALaVez(t *testing.T) {
+	e := armar(t)
+	cliente := e.cliente
+	c := e.vendidaYFacturada(t, "carrera-remito@prueba.test", VentaPedida{MedioPago: ventas.CuentaCorriente, CustomerID: &cliente, Acopio: true,
+		Lineas: placas(e, 4, 100)})
+	ses := e.sesionDe(t, "carrera-remito-enc@prueba.test")
+	ctx := context.Background()
+	renglon := e.primerRenglon(t, c.pedido)
+	// El pedido bloqueado por otro: la devolución queda esperando el pedido,
+	// y el remito llega después. Sin el candado de la serie en la devolución,
+	// el remito leía el saldo entero, la devolución lo bajaba y el remito
+	// entregaba igual las 4.
+	traba, err := e.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := traba.Exec(ctx, `SELECT 1 FROM orders WHERE id = $1 FOR UPDATE`, c.pedido); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	var errDev, errRem error
+	wg.Add(2)
+	go func() { defer wg.Done(); _, errDev = c.devolver(2, facturacion.DevolverPorCuenta) }()
+	time.Sleep(300 * time.Millisecond)
+	go func() {
+		defer wg.Done()
+		_, errRem = entregas.Nuevo(e.pool, silencio).CrearEntrega(ctx, ses, entregas.FormRemito{OrderID: c.pedido, Tipo: "retiro",
+			Lineas: []entregas.LineaAEntregar{{OrderItemID: renglon, Cantidad: 4}}})
+	}()
+	time.Sleep(300 * time.Millisecond)
+	_ = traba.Rollback(ctx)
+	wg.Wait()
+	// Una va primero y la otra ve lo que dejó. Si la devolución fue primero,
+	// el acopio quedó en 2 y el remito por 4 no entra. Si el remito fue
+	// primero, las 2 son de las que se llevó y vuelven al físico. Lo que no
+	// puede pasar es que las dos lean el acopio entero: el remito saca 4 y
+	// la devolución, además, devuelve 2 en plata del acopio.
+	q, r := e.fisicoYReservado(t)
+	switch {
+	case errDev != nil:
+		t.Fatalf("devolución: %v", errDev)
+	case errRem != nil && (q != 100 || r != 2):
+		t.Errorf("devolución primero: físico %v, reservado %v (quería 100 y 2)", q, r)
+	case errRem == nil && (q != 98 || r != 0):
+		t.Errorf("remito primero: físico %v, reservado %v (quería 98 y 0)", q, r)
 	}
 }

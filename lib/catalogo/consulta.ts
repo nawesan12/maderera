@@ -47,11 +47,16 @@ export function leerCantidadDeConsulta(tipeado: string): number {
 export function cantidadDeConsulta(tipeado: string, unidad: string): number | null {
   const n = leerCantidadDeConsulta(tipeado);
   if (!Number.isFinite(n) || n <= 0) return null;
-  const entera = !admiteDecimales(unidad) || unidad === "placa";
+  const entera = seCuentaEntera(unidad);
   if (entera && !Number.isInteger(n)) return null;
   const redondeada = entera ? n : Math.round(n * 100) / 100;
   if (redondeada <= 0 || redondeada > TOPE_DE_CANTIDAD) return null;
   return redondeada;
+}
+
+/** Placas, tablas, unidades: lo que se cuenta y no se mide. */
+function seCuentaEntera(unidad: string): boolean {
+  return !admiteDecimales(unidad) || unidad === "placa";
 }
 
 /**
@@ -64,6 +69,9 @@ export function problemaDeCantidad(tipeado: string, unidad: string): string | nu
   const n = leerCantidadDeConsulta(tipeado);
   if (!Number.isFinite(n) || n <= 0) return "Poné un número.";
   if (n > TOPE_DE_CANTIDAD) return `Hasta ${formatearCantidad(TOPE_DE_CANTIDAD)}.`;
+  // Lo que se mide admite decimales: si llegó acá es porque redondeado a
+  // centésimos da 0 («0,001 m²»), y «Sin decimales.» sería mentira.
+  if (!seCuentaEntera(unidad)) return `Mínimo ${formatearCantidad(0.01)}.`;
   return "Sin decimales.";
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, use, useState, type ComponentProps } from "react";
-import { Check, Loader2, Plus, Scissors } from "lucide-react";
+import { Check, Loader2, Plus, Scissors, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DisponibilidadPorSucursal } from "@/components/catalogo/disponibilidad";
@@ -515,7 +515,9 @@ function ConsultaDeLaMedida({
       <div className="flex items-stretch gap-2.5">
         <label
           className={`flex h-[50px] w-[124px] flex-none items-center rounded-[10px] border bg-card pr-3 ${
-            invalida ? "border-acento-texto" : "border-linea focus-within:border-accion"
+            // El error con el rojo y el aro de los campos inválidos del resto
+            // (components/ui/input.tsx): el naranja era casi el del foco.
+            invalida ? "border-destructive ring-3 ring-destructive/20" : "border-linea focus-within:border-accion"
           }`}
         >
           <input
@@ -543,7 +545,8 @@ function ConsultaDeLaMedida({
         </BotonWhatsapp>
       </div>
       {problema && (
-        <p id="problema-de-cantidad" role="alert" className="-mt-1 text-[14.5px] text-acento-texto">
+        <p id="problema-de-cantidad" role="alert" className="-mt-1 flex items-center gap-1.5 text-[14.5px] text-destructive">
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
           {problema}
         </p>
       )}

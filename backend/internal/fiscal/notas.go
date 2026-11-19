@@ -21,6 +21,11 @@ type ItemOriginal struct {
 	// suma de los subtotales de esas notas): el renglón que se cierra se
 	// lleva lo que queda y no un unitario redondeado por la cantidad.
 	AcreditadoImporte float64 `json:"acreditadoImporte"`
+	// Neto es el neto del renglón del original, y AcreditadoNeto el que ya
+	// se llevaron las notas: el renglón que se cierra se lleva el neto que
+	// queda (0: no se sabe, se desagrega como siempre).
+	Neto           float64 `json:"neto,omitempty"`
+	AcreditadoNeto float64 `json:"acreditadoNeto,omitempty"`
 }
 
 // CantidadAAcreditar es cuánto de un renglón.
@@ -37,6 +42,9 @@ type LineaDeNota struct {
 	PrecioFinalUnitario float64 `json:"precioFinalUnitario"`
 	Alicuota            float64 `json:"alicuota"`
 	ItemOrigenID        string  `json:"itemOrigenId"`
+	// Neto: el del renglón que cierra el del original (lo que le queda de
+	// neto). nil, se desagrega.
+	Neto *float64 `json:"neto,omitempty"`
 }
 
 // ErrorDeNota es el `throw new Error(...)` de lineasDeLaNota: un motivo que
@@ -66,6 +74,18 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 		}
 		return resto / cantidad
 	}
+	// netoDelResto es el neto que le queda al renglón que se cierra: el del
+	// original menos el de las notas anteriores y lo que esta ya tomó. Con
+	// el neto desagregado otra vez, dos notas de un mismo renglón sumaban
+	// un centavo más o menos que el original, y el libro IVA no cerraba
+	// (decisión 6 del contador: el resto exacto).
+	netoDelResto := func(i ItemOriginal, netoTomado float64) *float64 {
+		if i.Neto == 0 {
+			return nil
+		}
+		n := Redondear(i.Neto - i.AcreditadoNeto - netoTomado)
+		return &n
+	}
 	if parciales == nil {
 		// Por el total: lo que queda de cada renglón.
 		out := make([]LineaDeNota, 0, len(items))
@@ -76,7 +96,7 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 					continue
 				}
 			}
-			out = append(out, LineaDeNota{i.Descripcion, i.Unidad, cantidad, precioDelResto(i, cantidad, 0), i.AlicuotaIva, i.ID})
+			out = append(out, LineaDeNota{i.Descripcion, i.Unidad, cantidad, precioDelResto(i, cantidad, 0), i.AlicuotaIva, i.ID, netoDelResto(i, 0)})
 		}
 		return out, nil
 	}
@@ -88,6 +108,7 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 	// con el renglón dos veces también.
 	tomado := map[string]float64{}
 	tomadoImporte := map[string]float64{}
+	tomadoNeto := map[string]float64{}
 	for _, p := range parciales {
 		var item *ItemOriginal
 		for k := range items {
@@ -111,12 +132,16 @@ func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]Lin
 				` de ` + jsmath.Texto(item.Cantidad) + `: quedan ` + jsmath.Texto(Redondear(math.Max(0, queda))) + `.`}
 		}
 		precio := unitario(*item)
+		var neto *float64
 		if queda-p.Cantidad <= toleranciaCantidad {
 			precio = precioDelResto(*item, p.Cantidad, tomadoImporte[item.ID])
+			neto = netoDelResto(*item, tomadoNeto[item.ID])
 		}
 		tomado[item.ID] += p.Cantidad
-		tomadoImporte[item.ID] += Redondear(float64(p.Cantidad * precio))
-		out = append(out, LineaDeNota{item.Descripcion, item.Unidad, p.Cantidad, precio, item.AlicuotaIva, item.ID})
+		importe := Redondear(float64(p.Cantidad * precio))
+		tomadoImporte[item.ID] += importe
+		tomadoNeto[item.ID] += Desagregar(importe, item.AlicuotaIva).Neto
+		out = append(out, LineaDeNota{item.Descripcion, item.Unidad, p.Cantidad, precio, item.AlicuotaIva, item.ID, neto})
 	}
 	return out, nil
 }
@@ -243,7 +268,7 @@ func CalcularNota(o Original, items []ItemOriginal, parciales []CantidadAAcredit
 		entradas := make([]LineaEntrada, len(lineas))
 		for k, l := range lineas {
 			alic := l.Alicuota
-			entradas[k] = LineaEntrada{Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioFinalUnitario, Alicuota: &alic}
+			entradas[k] = LineaEntrada{Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioFinalUnitario, Alicuota: &alic, Neto: l.Neto}
 		}
 		proporcion = jsMin(1, CalcularTotales(entradas).Neto/o.Neto)
 	} else if base := o.Iva21 + o.Iva105 + o.Iva27 + o.Exento; base > 0 {

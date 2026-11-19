@@ -289,13 +289,16 @@ func PartesPorCircuito(partes []ParteDeRecibo, rep cobros.Reparto) (blanco, b []
 		asignado[i] = redondear(x)
 		falta = redondear(falta - asignado[i])
 	}
-	// Retenciones, después lo bancarizado, después el efectivo, y los
-	// cheques del B solo si lo blanco no se completó de otra forma.
+	// Retenciones, después lo bancarizado, después el efectivo. Un cheque del
+	// B nunca completa lo blanco (comité final, M8): es plata del otro
+	// circuito, y su depósito, su endoso o su rechazo van al archivo B. El
+	// reparto nunca pide de lo blanco más que lo que no es cheque B
+	// (cobros.RepartoDeRecibo); si un reparto viejo lo pidiera, el asiento
+	// sale «NO CIERRA» en vez de esconderlo.
 	for _, orden := range []func(ParteDeRecibo) bool{
 		func(p ParteDeRecibo) bool { return p.Medio == "retencion" },
 		func(p ParteDeRecibo) bool { return p.Bancarizado() },
 		func(p ParteDeRecibo) bool { return p.Medio == "efectivo" && !p.Negro },
-		func(p ParteDeRecibo) bool { return p.Negro },
 	} {
 		for i, p := range partes {
 			if orden(p) && asignado[i] == 0 {
@@ -542,6 +545,44 @@ func AsientoDePagoAProveedor(p PagoAAsentar) Asiento {
 	return asiento(p.Fecha, concepto, r)
 }
 
+// AsientosDePagoAProveedor son los del pago en su circuito. El pago del
+// circuito B con retenciones se parte (comité final, M9): la retención emite
+// un certificado con el CUIT de la empresa y es una deuda con el fisco que
+// se declara y se deposita, así que va siempre al archivo del estudio
+// (Proveedores contra Retenciones a depositar); lo que salió de verdad, al
+// del B. Entero en el B, el estudio no veía el pasivo que tenía que
+// depositar.
+func AsientosDePagoAProveedor(p PagoAAsentar, circuito string) []Asiento {
+	if circuito != CircuitoNegro {
+		return []Asiento{AsientoDePagoAProveedor(p)}
+	}
+	if !(p.Retenido > toleranciaAsiento) {
+		a := AsientoDePagoAProveedor(p)
+		a.Circuito = CircuitoNegro
+		return []Asiento{a}
+	}
+	salio := p
+	salio.Total, salio.Retenido, salio.RetenidoPorImpuesto = redondear(p.Total-p.Retenido), 0, nil
+	b := AsientoDePagoAProveedor(salio)
+	b.Circuito = CircuitoNegro
+	r := []RenglonDeAsiento{renglon(Cuentas.Proveedores, p.Retenido, 0)}
+	resto := p.Retenido
+	for _, imp := range []string{"ganancias", "iva", "iibb", "suss"} {
+		if x := p.RetenidoPorImpuesto[imp]; x > 0 {
+			r = append(r, renglon(CuentaDeRetencionADepositar(imp), 0, x))
+			resto = redondear(resto - x)
+		}
+	}
+	if resto > toleranciaAsiento {
+		r = append(r, renglon(Cuentas.RetencionesAPagar, 0, resto))
+	}
+	blanco := asiento(p.Fecha, "Retención del pago a "+p.Proveedor, r)
+	if p.Referencia != nil && *p.Referencia != "" {
+		blanco.Concepto += " · " + *p.Referencia
+	}
+	return []Asiento{b, blanco}
+}
+
 // ChequeAAsentar es un cambio de estado de un cheque (cheque_estados).
 type ChequeAAsentar struct {
 	Fecha                 time.Time
@@ -696,6 +737,19 @@ func CsvAsientos(todos []Asiento, circuito string) string {
 	}
 	return csvexcel.ArmarCsv([]string{"Asiento", "Fecha", "Concepto", "Cuenta", "Nombre de cuenta", "Debe", "Haber", "Observación"},
 		filas, []string{csvexcel.Texto("Totales"), "", "", "", "", csvexcel.NumeroCsv(totalDebe, 2), csvexcel.NumeroCsv(totalHaber, 2), csvexcel.Texto(cierra)})
+}
+
+// SaldoDeCuenta es debe menos haber de la cuenta en los asientos.
+func SaldoDeCuenta(asientos []Asiento, cuenta string) float64 {
+	neto := 0.0
+	for _, a := range asientos {
+		for _, r := range a.Renglones {
+			if r.Cuenta == cuenta {
+				neto = float64(neto + float64(r.Debe-r.Haber))
+			}
+		}
+	}
+	return redondear(neto)
 }
 
 // DelCircuito son los asientos de un circuito ("" es el blanco).

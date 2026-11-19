@@ -295,7 +295,9 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 	var sesion *string
 	if parteEfectivo > 0 && p.sucursal != nil {
 		var turno string
-		err := tx.QueryRow(ctx, `SELECT id FROM cash_sessions WHERE branch_id = $1 AND estado = 'abierta' LIMIT 1`, *p.sucursal).Scan(&turno)
+		// FOR SHARE: el cierre del turno espera a que la devolución confirme
+		// (y si cerró primero, el turno ya no está abierto y no se elige).
+		err := tx.QueryRow(ctx, `SELECT id FROM cash_sessions WHERE branch_id = $1 AND estado = 'abierta' LIMIT 1 FOR SHARE`, *p.sucursal).Scan(&turno)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return no("La venta fue en efectivo y no hay caja abierta. Abrí la caja para poder devolver la plata.")
 		}

@@ -381,8 +381,11 @@ type PedidoListado struct {
 }
 
 // EstadoSinCobrar es el filtro del historial que lleva el renglón «N
-// pedidos sin cobrar» de «Me deben»: los entregados a los que les falta
-// cobrar, el más viejo primero (el primero a reclamar).
+// pedidos sin cobrar» de «Me deben»: los que tienen mercadería afuera sin
+// cobrar (entregados o con remitos parciales, con la misma regla que la
+// tarjeta: fragmentos.SinCobrarDeLoQueSalio), el más viejo primero (el
+// primero a reclamar). Solo con los entregados, la tarjeta contaba la obra
+// con un remito parcial y la lista no la mostraba.
 const EstadoSinCobrar = "sin-cobrar"
 
 // VistaDePedidos acota el listado: el tablero no necesita el historial
@@ -416,7 +419,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 			cond = append(cond, "o.estado IN ('entregado', 'cancelado')")
 		}
 		if f.Estado == EstadoSinCobrar {
-			cond = append(cond, "o.estado = 'entregado'", fragmentos.SinCobrarDelPedido+" > 0.009")
+			cond = append(cond, fragmentos.SalioMercaderia, fragmentos.SinCobrarDeLoQueSalio+" > 0.009")
 			orden = "o.created_at ASC"
 		}
 		if v.Desde != "" {
@@ -650,9 +653,33 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	}
 
 	if conMargen {
+		type devuelto struct{ cantidad, importe float64 }
+		devueltos := map[string]devuelto{}
+		filas, err = s.pool.Query(ctx, `
+			SELECT di.order_item_id::text, sum(di.cantidad)::float8, sum(di.importe)::float8
+			FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+			WHERE d.order_id = $1 AND di.order_item_id IS NOT NULL GROUP BY di.order_item_id`, id)
+		if err != nil {
+			return nil, err
+		}
+		for filas.Next() {
+			var item string
+			var x devuelto
+			if err := filas.Scan(&item, &x.cantidad, &x.importe); err != nil {
+				filas.Close()
+				return nil, err
+			}
+			devueltos[item] = x
+		}
+		filas.Close()
+		if err := filas.Err(); err != nil {
+			return nil, err
+		}
 		lineas := make([]LineaConCosto, len(p.Items))
 		for i, it := range p.Items {
-			lineas[i] = LineaConCosto{Subtotal: it.Subtotal, Cantidad: it.Cantidad, AlicuotaIva: it.AlicuotaIva, CostoUnitario: it.CostoUnitario}
+			d := devueltos[it.ID]
+			lineas[i] = LineaConCosto{Subtotal: it.Subtotal, Cantidad: it.Cantidad, AlicuotaIva: it.AlicuotaIva, CostoUnitario: it.CostoUnitario,
+				DevueltoCantidad: d.cantidad, DevueltoImporte: d.importe}
 		}
 		p.Margen = MargenDelPedido(lineas)
 	}

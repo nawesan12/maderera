@@ -46,6 +46,11 @@ RETURNING id;
 -- name: CajasAbiertas :many
 SELECT id, branch_id FROM cash_sessions WHERE estado = 'abierta';
 
+-- name: TurnoParaElEfectivo :one
+-- El candado compartido frena el cierre del turno hasta que el cobro
+-- confirme, y el estado se lee después de esperarlo.
+SELECT estado::text FROM cash_sessions WHERE id = $1 FOR SHARE;
+
 -- name: EfectivoACaja :exec
 INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por)
 VALUES ($1, 'ingreso', sqlc.arg(monto)::text::numeric, $2, $3);

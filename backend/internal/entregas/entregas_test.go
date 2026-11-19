@@ -355,7 +355,10 @@ func TestRetiroCompletoCierraElPedido(t *testing.T) {
 	var estado, nota, transportista string
 	_ = e.pool.QueryRow(context.Background(), `select o.estado::text, h.nota from orders o join order_status_history h on h.order_id = o.id where o.id = $1`, pedido).Scan(&estado, &nota)
 	_ = e.pool.QueryRow(context.Background(), `select transportista from shipments`).Scan(&transportista)
-	if estado != "entregado" || nota != "Remito REM-0001: se retiró todo lo que quedaba" || transportista != "Expreso Sur" {
+	// El pedido no se cobró: la nota lo dice como «Avanzar» (comité final,
+	// M4).
+	if estado != "entregado" || !strings.HasPrefix(nota, "Entregado sin cobrar · $") ||
+		!strings.HasSuffix(nota, " · Remito REM-0001: se retiró todo lo que quedaba") || transportista != "Expreso Sur" {
 		t.Errorf("pedido %q, nota %q, transportista %q", estado, nota, transportista)
 	}
 	// Ya no queda nada.

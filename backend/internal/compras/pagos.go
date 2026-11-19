@@ -649,8 +649,9 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 	var chequeID *string
 	if parte.ChequeID != nil && *parte.ChequeID != "" {
 		var importe jsmath.Num
-		var tipo string
-		err := tx.QueryRow(ctx, `SELECT importe, tipo::text FROM cheques WHERE id = $1 AND estado = 'cartera' FOR UPDATE`, *parte.ChequeID).Scan(&importe, &tipo)
+		var tipo, delCheque string
+		err := tx.QueryRow(ctx, `SELECT importe, tipo::text, circuito::text FROM cheques WHERE id = $1 AND estado = 'cartera' FOR UPDATE`,
+			*parte.ChequeID).Scan(&importe, &tipo, &delCheque)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fallo("Uno de los cheques elegidos ya no está en cartera.")
 		}
@@ -659,6 +660,20 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 		}
 		if circuito == "negro" && tipo == "echeq" {
 			return fallo("Ese es un e-Cheq y el pago va por el circuito B: quedaría registrado en el banco. Endosá un cheque físico.")
+		}
+		// Un cheque se endosa en un pago de su mismo circuito (comité final,
+		// M8): el del B endosado en un pago blanco salía de Valores a
+		// depositar del estudio, donde nunca entró; el blanco en un pago B
+		// dejaba ese valor en el estudio para siempre.
+		pago := circuito
+		if pago == "" {
+			pago = "blanco"
+		}
+		if delCheque != pago {
+			if delCheque == "negro" {
+				return fallo("Ese cheque es del circuito B y el pago no: endosalo en un pago del circuito B.")
+			}
+			return fallo("Ese cheque es del circuito blanco y el pago va por el B: endosalo en un pago blanco.")
 		}
 		if diferencia := float64(importe) - parte.Importe; diferencia > 0.01 || diferencia < -0.01 {
 			return fallo("El importe del renglón no coincide con el del cheque endosado.")

@@ -2146,3 +2146,130 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - Quedó sin tocar, esperando a Nahuel: el campo «Sierra» del corte del
   mostrador (pedido suyo del 30/9). La revisión propone sacarlo y corregir el
   disco desde `/admin/cortes`.
+
+## Comité final, carril E (19/11): plata y contabilidad (rama `carril-e`)
+
+Arreglados A1, A3, A4, M2–M9 y cuatro bajos (la devolución parcial contada
+dos veces en las anuladas, el `FOR SHARE` del turno en recibo, anulación y
+devolución, la nota de crédito a un centavo y la clave de «Cobrar y
+entregar»). Migración nueva: 00170 (`receipt_refunds` y el destino «deuda»
+de las devoluciones). Lo aprendido:
+
+- **La cuenta de una factura sin cliente es su pedido** (`p:<pedido>`,
+  `cobros.claveDeFactura`). El recibo de `CobrarPedido` sin cliente caía en
+  una cuenta propia y todo su cobro iba al B. Con la cuenta del pedido, la
+  seña cobrada antes de facturar se aplica cuando sale la factura.
+- **Lo que una devolución le devuelve a un recibo queda en
+  `receipt_refunds`**. El cierre lo asienta entero contra Deudores del blanco
+  si lo devuelto salió de una factura con CAE (`cobros.ReintegroDeLoFacturado`:
+  la nota de crédito ya lo acreditó ahí), y si no, con el reparto del recibo.
+  Un recibo con plata devuelta no se anula; cancelar el pedido lo dice.
+- **Los topes de una devolución son lo cobrado de verdad**: order_payments
+  en el mostrador; si no, las partes de los recibos vivos del pedido y los
+  cobros en línea. **Los recibos del pedido incluyen los que cobraron su
+  factura desde Facturación** (`fragmentos.RecibosDelPedido`: no llevan el
+  pedido, solo `invoice_payments`); lo mismo vale para `CobradoDelPedido`.
+  Lo que no se cobró vuelve con el destino «deuda» (no sale plata),
+  `fragmentos.ACobrarDelPedido` lo resta, y si con eso queda saldado el
+  pedido pasa a pagado. Lo que está en revisión no es deuda.
+- **«Por afuera» vuelve primero lo cobrado en línea** (lo reintegra Mercado
+  Pago, que avisa con `payment_refunds`) y el resto desde los recibos, por
+  el banco. Lo ya devuelto en línea es lo mayor entre el aviso y lo que le
+  cargaron las devoluciones: sumarlos lo contaba dos veces. Si los recibos
+  no alcanzan, la devolución no sale. Los recibos del pedido se bloquean
+  antes de medir los topes.
+- **Lo devuelto no es vendido, y se resta en el mes en que se devolvió**:
+  los reportes no leen orders y order_items sino `hechosDeVenta` y
+  `renglonesVendidos` (`reportes/ventas.go`): cada venta en su fecha y cada
+  devolución en la suya, en negativo. Así un mes cerrado no cambia y el mes
+  de la devolución concilia con la nota de crédito del libro IVA. Lo usan
+  todos los «Vendido» (cortes, Ventas por mes, el gráfico por sucursal, el
+  Panel, el Resultado y el Cierre). La ficha del pedido también lo resta.
+  Lo devuelto sin renglón del pedido (un flete, un corte) no se puede
+  atribuir y queda.
+- **El listado de deudores del contador es el mayor de 1.1.03** (sale de
+  `MovimientosDeDeudores` del reparto) y el cierre avisa si no coincide con
+  los asientos («deudores-mayor»). El reparto cuenta el cheque del blanco
+  rechazado que le devuelve la deuda al cliente, como el asiento. Los saldos
+  iniciales que se migren de ISIS como asiento los separarían: la migración
+  tiene que entrar como facturas o como eventos del reparto.
+- **«Sin cobrar» de Pedidos y «Me deben» son la misma regla**
+  (`fragmentos.SinCobrarDeLoQueSalio` y `SalioMercaderia`): también los
+  pedidos con remitos parciales.
+- **Cancelar frena con una transferencia en revisión**: primero se resuelve
+  el pago.
+- El pago B con retención se parte en dos asientos
+  (`AsientosDePagoAProveedor`): la retención al estudio, el resto al B.
+
+Quedó sin hacer, a propósito:
+
+- La devolución «por afuera» de una venta del mostrador (tarjeta,
+  transferencia en order_payments) sigue sin asiento de reintegro: no tiene
+  un cobro con recibo al que atarlo y su cobro se asienta por `payments`.
+  Lo cobrado en línea lo reintegra Mercado Pago con su aviso.
+- La pantalla de pagos a proveedores sigue listando los cheques de los dos
+  circuitos; Go rechaza el endoso cruzado con el motivo.
+- El informe de reposición (`reportes/reposicion.go`) todavía no resta lo
+  devuelto.
+- La devolución por caja de una venta del mostrador con `order_payments` en
+  efectivo pero sin fila en `payments` da «no alcanzan» (antes pasaba sin
+  asiento). En la base local no hay ninguna (0 de 63 ventas con
+  order_payments); el mostrador siempre escribe las dos. Si la migración de
+  ISIS trae ventas así, hay que darles su `payments` o una salida explícita.
+- «Deudores-mayor» rehace todo el reparto en cada vista del cierre: con el
+  volumen de ISIS puede ponerse lento.
+
+**Paso del despliegue: correr `mjbj repartos` (FijarRepartosDeAntes) antes
+de desplegar esta rama.** Los recibos de pedidos sin cliente no tenían el
+reparto fijado (antes `FijarReparto` corría solo con cliente) y el cierre lo
+recalcula con la clave nueva `p:<pedido>`: un mes ya exportado podía pasar a
+tener en el blanco lo que antes estaba en el B. Fijándolos antes, con la
+regla vieja, no cambian. Hoy la base está vacía y el efecto es chico, pero
+el orden es ese.
+
+### Decisiones a confirmar
+
+Se aplicó el default prudente de cada una; si Nahuel o el contador deciden
+otra cosa, se cambia en el lugar que se indica.
+
+- **Cancelar un pedido ya pagado (dueño, 5; M2).** Con un pago en línea
+  aprobado sin reintegro completo no se cancela («primero devolvé el
+  pago»), y un pedido con pago en línea, aun reintegrado, lo cancelan solo
+  admin y vendedor (`roles.ManejanPlata`). `pedidos.Cancelar`.
+- **«Ganancia del mes» sin costos (dueño, 8; M5).** Con más del 50 % de lo
+  vendido sin costo, el Panel y el Cierre dicen «Sin costos cargados» y la
+  cifra queda de dato. `reportes.UmbralSinCostos`.
+- **Cobro sin cliente de un pedido facturado (contador, 4; A4).** Con
+  factura con CAE va contra la factura (Deudores); sin factura, como
+  anticipo del pedido si está abierto. Un pedido ya entregado sin factura
+  sigue la regla de siempre: B. `cobros.claveDeRecibo`.
+- **Devolución de un pedido cobrado con recibo (contador, 5; A3).** Si lo
+  devuelto salió de una factura con CAE, el reintegro va entero a Deudores
+  del blanco, contra la nota de crédito; solo lo que no se facturó con CAE
+  se prorratea con el reparto del recibo. Ejemplo para el contador: un
+  recibo de $1000 cancela $600 de factura y $400 de deuda B; se devuelven
+  $200 de lo facturado con nota de crédito. Con el prorrateo, Deudores
+  quedaba en −80 en el blanco y +80 en el B, sin venta B que lo respalde;
+  ahora queda en 0 en los dos. Lo que no vuelve en efectivo sale de Banco,
+  aunque se haya cobrado con cheque. `cobros.ReintegroDeLoFacturado` y
+  `reportes.asientosDeCobro`, sección 3b.
+- **Devolución «por afuera» con cobro en línea y con recibo (A3).** Vuelve
+  primero lo cobrado en línea (Mercado Pago lo reintegra y avisa) y lo que
+  pasa de ahí, desde los recibos por el banco. La otra opción es preguntar
+  en la pantalla por cuál medio vuelve. `facturacion.devolverEnTransaccion`.
+- **Cancelar con una transferencia en revisión (dueño, 5).** No se cancela
+  hasta aprobarla o rechazarla, y el depósito no la cancela.
+  `pedidos.Cancelar`.
+- **Cheque endosado entre circuitos (contador, 2; M8).** Prohibido: el
+  cheque se endosa solo en un pago de su circuito, y un cheque B nunca
+  completa la parte blanca de un recibo. `compras.registrarParte`.
+- **Retenciones en un pago B (contador, 1; M9).** No se bloquean: la
+  retención va siempre al archivo del estudio (se parte el asiento) y el
+  cierre lo avisa («retenciones-b»).
+- **CSV de Deudores (contador, 3; M7).** Coincide con el mayor de 1.1.03
+  del archivo blanco, sin la deuda del B; la venta sin factura a cuenta
+  corriente ya no figura.
+- **Notas de crédito parciales (contador, 6).** La que cierra un renglón
+  lleva el neto que le queda (resto exacto) y el IVA es el resto del total.
+  `fiscal.LineasDeLaNota`. El neto se toma si está dentro del medio por
+  ciento del renglón (cubre muchas notas parciales). `fiscal.CalcularTotales`.

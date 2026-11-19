@@ -6127,6 +6127,15 @@ type ReceiptPart struct {
 	Orden      int32        `json:"orden"`
 }
 
+type ReceiptRefund struct {
+	ID           string             `json:"id"`
+	ReceiptID    string             `json:"receiptId"`
+	DevolucionID string             `json:"devolucionId"`
+	Medio        MedioDeCobro       `json:"medio"`
+	Importe      jsmath.Num         `json:"importe"`
+	CreatedAt    pgtype.Timestamptz `json:"createdAt"`
+}
+
 type RegimenesRetencion struct {
 	ID                  string           `json:"id"`
 	Codigo              string           `json:"codigo"`

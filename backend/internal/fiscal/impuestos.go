@@ -75,6 +75,11 @@ type LineaEntrada struct {
 	Cantidad            float64  `json:"cantidad"`
 	PrecioFinalUnitario float64  `json:"precioFinalUnitario"`
 	Alicuota            *float64 `json:"alicuota,omitempty"`
+	// Neto, si viene, es el neto del renglón ya decidido: el renglón de una
+	// nota de crédito que cierra el del original lleva el neto que le queda
+	// (fiscal.LineasDeLaNota), y el IVA es el resto del total. Desagregarlo
+	// otra vez dejaba la suma de las notas a un centavo del original.
+	Neto *float64 `json:"-"`
 }
 
 // LineaCalculada es el renglón con sus importes.
@@ -139,6 +144,19 @@ func CalcularTotales(lineas []LineaEntrada) Totales {
 		}
 		totalLinea := Redondear(float64(l.PrecioFinalUnitario * l.Cantidad))
 		partes := Desagregar(totalLinea, alicuota)
+		// El neto decidido es el redondeo acumulado de las notas anteriores,
+		// no otro importe: vale si queda dentro del renglón y cerca del
+		// desagregado. «Cerca» no es un par de centavos fijo: cada nota
+		// parcial puede correrlo medio centavo, y con cinco o seis notas sobre
+		// el mismo renglón se pasaba y volvía el centavo de diferencia contra
+		// el original (revisión del carril E). El medio por ciento del
+		// renglón cubre cualquier cantidad razonable de notas y sigue dejando
+		// afuera un neto que no tiene nada que ver.
+		if l.Neto != nil && !sinAlicuota(alicuota) && *l.Neto >= 0 && *l.Neto <= totalLinea &&
+			math.Abs(*l.Neto-partes.Neto) <= math.Max(0.02, 0.005*math.Abs(totalLinea))+1e-9 {
+			partes.Neto = Redondear(*l.Neto)
+			partes.Iva = Redondear(totalLinea - partes.Neto)
+		}
 		unitario := 0.0
 		if l.Cantidad > 0 {
 			unitario = jsmath.Round(float64((partes.Neto/l.Cantidad)*10000)) / 10000

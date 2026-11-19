@@ -599,3 +599,208 @@ func TestCierreAnuladaConFacturaViva(t *testing.T) {
 		t.Errorf("acreditada entera ya no es viva: %s · %d · %s", pend, resumen, lista)
 	}
 }
+
+// La venta del mostrador con conexión no guarda cobrada_at (solo la de la
+// cola sin conexión): lo que cobró por transferencia o tarjeta tiene que
+// estar en «Plata hoy» igual (comité final, A1). La de ayer no.
+func TestPlataHoyConLaVentaDeTodosLosDias(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	hoy := e.pedido(t, "M-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 15, 10, 0, 0, 0, Argentina), nil)
+	e.exec(t, `insert into order_payments (order_id, medio, importe) values ($1, 'transferencia', 1111.05), ($1, 'debito', 40), ($1, 'mercado_pago', 9)`, hoy)
+	ayer := e.pedido(t, "M-2", e.central, "entregado", "mostrador", time.Date(2026, 10, 14, 10, 0, 0, 0, Argentina), nil)
+	e.exec(t, `insert into order_payments (order_id, medio, importe) values ($1, 'transferencia', 500)`, ayer)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if p := n.PlataHoy; p.Banco != 1111.05 || p.Tarjetas != 40 || p.MercadoPago != 9 {
+		t.Errorf("plata hoy: %+v", p)
+	}
+}
+
+// La devolución parcial por caja de una venta que después se anula: su
+// efectivo ya está en «Devoluciones del mes»; en «Devuelto» de las anuladas
+// va solo lo que devolvió la anulación.
+func TestAnuladaConDevolucionParcialNoSumaDosVeces(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	turno := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, '2026-10-15T11:00:00Z') returning id`, e.central, usuario)
+	cuando := time.Date(2026, 10, 15, 11, 0, 0, 0, Argentina)
+	venta := e.pedido(t, "M-1", e.central, "cancelado", "mostrador", cuando.Add(-2*time.Hour), nil)
+	e.exec(t, `update orders set total = 500 where id = $1`, venta)
+	e.exec(t, `insert into order_status_history (order_id, estado, nota, created_by_user_id, created_at) values ($1, 'cancelado', 'Anulada', $2, $3)`, venta, usuario, cuando)
+	parcial := e.id(t, `insert into cash_movements (session_id, tipo, monto, order_id, created_at) values ($1, 'devolucion', -100, $2, $3) returning id`, turno, venta, cuando.Add(-time.Hour))
+	factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id)
+		values ('factura_b', 3, 1, 'X', 413.22, 86.78, 0, 0, 0, 500, 'autorizada', '2026-10-15T12:00:00Z', $1) returning id`, venta)
+	e.exec(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, cash_movement_id, created_by_user_id) values ('d1', $1, $4, 100, 'caja', 'rota', $2, $3)`, venta, parcial, usuario, factura)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, order_id, created_at) values ($1, 'devolucion', -400, $2, $3)`, turno, venta, cuando)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if n.Anuladas.Devuelto != 400 {
+		t.Errorf("devuelto por las anuladas: %v, quería 400", n.Anuladas.Devuelto)
+	}
+}
+
+// Con más de la mitad de lo vendido sin costo, la ganancia no es una cifra
+// (comité final, M5): el Panel y el Cierre muestran «Sin costos cargados».
+// Justo en la mitad todavía se muestra.
+func TestSinCostosCargados(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 1.0, 1210.0, 600.0}, [4]any{tirante, 1.0, 1210.0, nil})
+	leer := func() (Resultado, Resultado) {
+		_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+		var n NumerosDelDueno
+		_ = json.Unmarshal([]byte(cuerpo), &n)
+		_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+		var r ResumenDelMes
+		_ = json.Unmarshal([]byte(cuerpo), &r)
+		return n.Ganancia.Actual, r.Resultado.Actual
+	}
+	if g, c := leer(); g.SinCostosCargados || c.SinCostosCargados {
+		t.Errorf("la mitad sin costo todavía es una cifra: %+v %+v", g, c)
+	}
+	e.pedido(t, "V-2", e.central, "entregado", "mostrador", time.Date(2026, 10, 6, 12, 0, 0, 0, Argentina), nil,
+		[4]any{tirante, 1.0, 121.0, 0.0})
+	if g, c := leer(); !g.SinCostosCargados || !c.SinCostosCargados {
+		t.Errorf("más de la mitad sin costo: %+v %+v", g, c)
+	}
+}
+
+// Lo devuelto en una devolución parcial deja de ser vendido (comité final,
+// M3): el Resumen, el Cierre y Reportes dan la misma venta sin IVA y el
+// mismo costo, sin la placa que volvió.
+func TestLaDevolucionParcialBajaLoVendido(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	placa, _ := e.catalogo(t)
+	venta := e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 2.0, 2420.0, 600.0})
+	renglon := e.id(t, `select id from order_items where order_id = $1`, venta)
+	factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 1, 'X', 2000, 420, 0, 0, 0, 2420, 'autorizada', '2026-10-05T15:00:00Z', '7612', $1) returning id`, venta)
+	item := e.id(t, `insert into invoice_items (invoice_id, descripcion, cantidad, precio_unitario, neto, iva, subtotal, order_item_id)
+		values ($1, 'Fenólico', 2, 1210, 2000, 420, 2420, $2) returning id`, factura, renglon)
+	dev := e.id(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, created_by_user_id, created_at)
+		values ('d1', $1, $2, 1210, 'afuera', 'sobró', $3, '2026-10-06T15:00:00Z') returning id`, venta, factura, usuario)
+	e.exec(t, `insert into devolucion_items (devolucion_id, invoice_item_id, order_item_id, cantidad, al_stock, importe) values ($1, $2, $3, 1, true, 1210)`, dev, item, renglon)
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	_ = json.Unmarshal([]byte(cuerpo), &n)
+	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	var r ResumenDelMes
+	_ = json.Unmarshal([]byte(cuerpo), &r)
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
+	var rep ReporteDeVentas
+	_ = json.Unmarshal([]byte(cuerpo), &rep)
+	quiere := Resultado{VentasNetas: 1000, Costo: 600, Resultado: 400}
+	if g := n.Ganancia.Actual; g != quiere {
+		t.Errorf("ganancia del Resumen: %+v, quería %+v", g, quiere)
+	}
+	if r.Resultado.Actual != quiere || r.Vendido.Total != 1000 || r.Vendido.Facturado.Total != 1000 {
+		t.Errorf("cierre: %+v, vendido %+v", r.Resultado.Actual, r.Vendido)
+	}
+	if rep.Totales.NetoVenta != 1000 || rep.Totales.Costo == nil || *rep.Totales.Costo != 600 || rep.Totales.Cantidad != 1 {
+		t.Errorf("reportes: %+v", rep.Totales)
+	}
+}
+
+// La devolución resta en su mes, no en el de la venta (revisión del carril
+// E): la venta del 28/9 devuelta en parte el 5/10 no cambia septiembre, que
+// ya se le mandó al contador, y octubre muestra lo devuelto en negativo,
+// como la nota de crédito en su libro IVA. Los cortes por pedido restan el
+// monto pero no cuentan otra operación.
+func TestLaDevolucionRestaEnSuMes(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	placa, _ := e.catalogo(t)
+	venta := e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 9, 28, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 2.0, 2420.0, 600.0})
+	renglon := e.id(t, `select id from order_items where order_id = $1`, venta)
+	factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 1, 'X', 2000, 420, 0, 0, 0, 2420, 'autorizada', '2026-09-28T15:00:00Z', '7612', $1) returning id`, venta)
+	item := e.id(t, `insert into invoice_items (invoice_id, descripcion, cantidad, precio_unitario, neto, iva, subtotal, order_item_id)
+		values ($1, 'Fenólico', 2, 1210, 2000, 420, 2420, $2) returning id`, factura, renglon)
+	dev := e.id(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, created_by_user_id, created_at)
+		values ('d1', $1, $2, 1210, 'afuera', 'sobró', $3, '2026-10-05T15:00:00Z') returning id`, venta, factura, usuario)
+	e.exec(t, `insert into devolucion_items (devolucion_id, invoice_item_id, order_item_id, cantidad, al_stock, importe) values ($1, $2, $3, 1, true, 1210)`, dev, item, renglon)
+
+	var sep, oct ResumenDelMes
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-09")
+	_ = json.Unmarshal([]byte(cuerpo), &sep)
+	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	_ = json.Unmarshal([]byte(cuerpo), &oct)
+	if q := (Resultado{VentasNetas: 2000, Costo: 1200, Resultado: 800}); sep.Resultado.Actual != q || sep.Vendido.Facturado.Total != 2000 || sep.Vendido.Facturado.Cantidad != 1 {
+		t.Errorf("septiembre: %+v, vendido %+v", sep.Resultado.Actual, sep.Vendido)
+	}
+	if q := (Resultado{VentasNetas: -1000, Costo: -600, Resultado: -400}); oct.Resultado.Actual != q || oct.Vendido.Facturado.Total != -1000 || oct.Vendido.Facturado.Cantidad != 0 {
+		t.Errorf("octubre: %+v, vendido %+v", oct.Resultado.Actual, oct.Vendido)
+	}
+	var cli, prod ReporteDeVentas
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=cliente&periodo=mes")
+	_ = json.Unmarshal([]byte(cuerpo), &cli)
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
+	_ = json.Unmarshal([]byte(cuerpo), &prod)
+	if cli.Totales.Total != -1210 || cli.Totales.Cantidad != 0 || cli.Totales.NetoVenta != -1000 || len(cli.Filas) != 1 || cli.Filas[0].Total != -1210 {
+		t.Errorf("por cliente: %+v %+v", cli.Totales, cli.Filas)
+	}
+	if prod.Totales.Total != -1210 || prod.Totales.Cantidad != -1 || prod.Totales.LineasSinCosto != 0 {
+		t.Errorf("por producto: %+v", prod.Totales)
+	}
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=cliente&periodo=mes-pasado")
+	_ = json.Unmarshal([]byte(cuerpo), &cli)
+	if cli.Totales.Total != 2420 || cli.Totales.Cantidad != 1 || cli.Totales.NetoVenta != 2000 {
+		t.Errorf("por cliente, septiembre: %+v", cli.Totales)
+	}
+
+	// «Devoluciones del mes» es la plata que salió: la que solo bajó la
+	// deuda no suma.
+	e.exec(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, created_by_user_id, created_at)
+		values ('d2', $1, $2, 100, 'deuda', 'sobró', $3, '2026-10-06T15:00:00Z')`, venta, factura, usuario)
+	_, cuerpo, _ = pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	_ = json.Unmarshal([]byte(cuerpo), &n)
+	if n.Devoluciones.Total != 1210 || n.Devoluciones.Cantidad != 1 {
+		t.Errorf("devoluciones del mes: %+v", n.Devoluciones)
+	}
+}
+
+// La mercadería que salió con un remito parcial y no se cobró está en «Me
+// deben» (comité final, M4): lo remitido menos lo cobrado. Si lo cobrado
+// cubre lo remitido, no; y el remito anulado no cuenta.
+func TestMeDebenConRemitosParciales(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	cuando := time.Date(2026, 10, 12, 10, 0, 0, 0, Argentina)
+	conRemito := func(numero string, estadoRemito string) string {
+		id := e.pedido(t, numero, e.central, "listo", "presupuesto", cuando, nil, [4]any{placa, 1.0, 600.0, nil}, [4]any{tirante, 1.0, 400.0, nil})
+		e.exec(t, `update orders set estado_pago = 'pendiente', medio_pago = 'efectivo' where id = $1`, id)
+		remito := e.id(t, `insert into deliveries (numero, order_id, estado) values ($1, $2, $3) returning id`, "R-"+numero, id, estadoRemito)
+		e.exec(t, `insert into delivery_items (delivery_id, order_item_id, cantidad) select $1, id, 1 from order_items where order_id = $2 and variant_id = $3`, remito, id, placa)
+		return id
+	}
+	conRemito("P-1", "entregada")
+	cobrado := conRemito("P-2", "entregada")
+	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, acreditado_at) values ($1, 'pedido', 'transferencia', 'transferencia', 700, 'aprobado', now())`, cobrado)
+	conRemito("P-3", "anulada")
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	if q := (Monto{Total: 600, Cantidad: 1}); n.MeDeben.PedidosSinCobrar != q {
+		t.Errorf("sin cobrar: %+v, quería %+v", n.MeDeben.PedidosSinCobrar, q)
+	}
+}

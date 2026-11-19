@@ -676,3 +676,55 @@ func TestDevolucionYRemitoALaVez(t *testing.T) {
 		t.Errorf("remito primero: físico %v, reservado %v (quería 98 y 0)", q, r)
 	}
 }
+
+// La devolución y la anulación que sacan efectivo mientras se cierra el
+// turno esperan al cierre y no sacan plata de un turno ya contado (comité
+// final, bajo): sin el FOR SHARE elegían el turno abierto y escribían la
+// salida en él después del arqueo.
+func TestLaPlataNoSaleDeUnTurnoQueSeCierra(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	c := e.vendidaYFacturada(t, "efectivo@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 10, 100)})
+	cerrarMientras := func(hacer func() error) error {
+		t.Helper()
+		cierre, err := e.pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := cierre.Exec(ctx, `select estado from cash_sessions where id = $1 for update`, c.turno); err != nil {
+			t.Fatal(err)
+		}
+		listo := make(chan error, 1)
+		go func() { listo <- hacer() }()
+		time.Sleep(300 * time.Millisecond)
+		if _, err := cierre.Exec(ctx, `update cash_sessions set estado = 'cerrada', cerrada_at = now() where id = $1`, c.turno); err != nil {
+			t.Fatal(err)
+		}
+		if err := cierre.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return <-listo
+	}
+	antes := c.caja(t)
+	err := cerrarMientras(func() error { _, err := c.devolver(2, facturacion.DevolverPorCaja); return err })
+	if err == nil || !strings.Contains(facturacion.Mensaje(err), "No hay caja abierta") {
+		t.Errorf("la devolución sobre un turno que se cerró: %v", err)
+	}
+	if got := c.caja(t); got != antes {
+		t.Errorf("salió plata del turno cerrado: %v, quería %v", got, antes)
+	}
+	// La anulación, con otro turno abierto que se cierra igual.
+	c.turno = e.abrirCaja(t, e.central)
+	var an ResultadoAnulacion
+	err = cerrarMientras(func() error {
+		var err error
+		an, err = e.svc.Anular(ctx, comoAdmin(c.usuario), c.pedido, PedidoDeAnulacion{Motivo: "se arrepintió", VolvioLaMercaderia: true})
+		return err
+	})
+	if err != nil || an.Ok || !strings.Contains(an.Error, "no hay caja abierta") {
+		t.Errorf("la anulación sobre un turno que se cerró: %v %+v", err, an)
+	}
+	if got := c.caja(t); got != 0 {
+		t.Errorf("salió plata del turno cerrado en la anulación: %v", got)
+	}
+}

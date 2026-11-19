@@ -221,9 +221,15 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 		if err := q.AtarMovimientoAlRecibo(ctx, sqlc.AtarMovimientoAlReciboParams{ID: id, AccountMovementID: &mov}); err != nil {
 			return ReciboEmitido{}, err
 		}
-		// El reparto entre los circuitos se fija ahora y no se recalcula
-		// (reparto.go). Sin cliente lo fija quien ata el recibo a la factura
-		// que cobra, que es de donde sale la cuenta.
+	}
+	// El reparto entre los circuitos se fija ahora y no se recalcula
+	// (reparto.go): con cliente, o con el pedido que cobra (también el de
+	// contado, que no toca la cuenta, y el que no tiene cliente: la cuenta es
+	// la del pedido). Antes solo se fijaba con movimiento en la cuenta, y el
+	// cobro de un pedido sin cliente iba entero al B. Sin cliente ni pedido
+	// lo fija quien ata el recibo a la factura que cobra, que es de donde
+	// sale la cuenta.
+	if c.CustomerID != nil || c.OrderID != nil {
 		if _, err := FijarReparto(ctx, tx, id); err != nil {
 			return ReciboEmitido{}, err
 		}
@@ -354,6 +360,16 @@ func efectivoALaCaja(ctx context.Context, q *sqlc.Queries, c Caja, sucursal *str
 			return &aviso, nil
 		}
 	}
+	// Con el turno compartido, como la venta del mostrador: un cierre que
+	// arrancaba mientras el recibo confirmaba hacía el arqueo sin este
+	// efectivo, y el movimiento entraba a un turno ya contado.
+	estado, err := q.TurnoParaElEfectivo(ctx, turno)
+	if err != nil {
+		return nil, err
+	}
+	if estado != "abierta" {
+		return nil, errCobro("La caja se acaba de cerrar. Abrila para cobrar en efectivo.")
+	}
 	return nil, q.EfectivoACaja(ctx, sqlc.EfectivoACajaParams{SessionID: turno, Monto: jsmath.Fijo2(monto), Motivo: &motivo, CreadoPor: usuario})
 }
 
@@ -375,6 +391,16 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 	}
 	if r.Estado == sqlc.EstadoReciboAnulado {
 		return "", nil, errCobro("Ese recibo ya estaba anulado.")
+	}
+	// Una devolución ya le reintegró plata (receipt_refunds): anularlo
+	// devolvería la deuda entera y el cierre revertiría el cobro entero, con
+	// lo devuelto contado dos veces.
+	var reintegrado bool
+	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM receipt_refunds WHERE receipt_id = $1)`, recibo).Scan(&reintegrado); err != nil {
+		return "", nil, err
+	}
+	if reintegrado {
+		return "", nil, errCobro("De este recibo ya se devolvió plata con una devolución de la venta: no se anula.")
 	}
 	cheques, err := q.ChequesDelRecibo(ctx, recibo)
 	if err != nil {

@@ -192,7 +192,7 @@ func calcularNota(ctx context.Context, tx consultor, o *original, parciales []fi
 	}
 	for k := range items {
 		a := acreditadas[items[k].ID]
-		items[k].Acreditado, items[k].AcreditadoImporte = a.cantidad, a.importe
+		items[k].Acreditado, items[k].AcreditadoImporte, items[k].AcreditadoNeto = a.cantidad, a.importe, a.neto
 	}
 	tributos, err := tributosDe(ctx, tx, o.id)
 	if err != nil {
@@ -218,7 +218,7 @@ func (s *Servicio) emitirNota(ctx context.Context, tx pgx.Tx, o *original, motiv
 	for i, l := range calc.Lineas {
 		unidad, alic, origen := l.Unidad, l.Alicuota, l.ItemOrigenID
 		lineas[i] = Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: l.Descripcion, Unidad: &unidad, Cantidad: l.Cantidad,
-			PrecioFinalUnitario: l.PrecioFinalUnitario, Alicuota: &alic}, ItemOrigenID: &origen}
+			PrecioFinalUnitario: l.PrecioFinalUnitario, Alicuota: &alic, Neto: l.Neto}, ItemOrigenID: &origen}
 	}
 	dados := calc.TributosDados
 	if dados == nil {
@@ -267,7 +267,7 @@ func tributosDevueltos(ctx context.Context, c consultor, invoiceID string) (map[
 
 // acreditadoDeRenglon es cuánto de un renglón del original ya revirtieron
 // sus notas: la cantidad y la plata (la suma de sus subtotales).
-type acreditadoDeRenglon struct{ cantidad, importe float64 }
+type acreditadoDeRenglon struct{ cantidad, importe, neto float64 }
 
 // yaAcreditado es cuánto de cada renglón del original ya revirtieron sus
 // notas vivas (las que tienen el renglón de origen: la nota de crédito de una
@@ -275,14 +275,16 @@ type acreditadoDeRenglon struct{ cantidad, importe float64 }
 // devolvieron las devoluciones sin nota (un CAE de prueba con ARCA en
 // producción): si no, se podría devolver dos veces.
 func yaAcreditado(ctx context.Context, c consultor, invoiceID string) (map[string]acreditadoDeRenglon, error) {
-	filas, err := c.Query(ctx, `SELECT i.invoice_item_origen_id, sum(i.cantidad)::text, sum(i.subtotal)::text FROM invoice_items i
+	filas, err := c.Query(ctx, `SELECT i.invoice_item_origen_id, sum(i.cantidad)::text, sum(i.subtotal)::text, sum(i.neto)::text FROM invoice_items i
 		JOIN invoices f ON f.id = i.invoice_id JOIN invoices o ON o.id = f.comprobante_origen_id
 		WHERE f.comprobante_origen_id = $1 AND f.estado <> 'anulada' AND i.invoice_item_origen_id IS NOT NULL
 		AND (f.tipo::text LIKE 'nota_credito%') <> (o.tipo::text LIKE 'nota_credito%')
 		GROUP BY i.invoice_item_origen_id
 		UNION ALL
-		SELECT di.invoice_item_id, sum(di.cantidad)::text, sum(di.importe)::text FROM devolucion_items di
-		JOIN devoluciones d ON d.id = di.devolucion_id WHERE d.invoice_id = $1 AND d.nota_id IS NULL
+		SELECT di.invoice_item_id, sum(di.cantidad)::text, sum(di.importe)::text,
+		  sum(round(di.importe / (1 + ii.alicuota_iva / 100), 2))::text FROM devolucion_items di
+		JOIN devoluciones d ON d.id = di.devolucion_id JOIN invoice_items ii ON ii.id = di.invoice_item_id
+		WHERE d.invoice_id = $1 AND d.nota_id IS NULL
 		GROUP BY di.invoice_item_id`, invoiceID)
 	if err != nil {
 		return nil, err
@@ -290,18 +292,19 @@ func yaAcreditado(ctx context.Context, c consultor, invoiceID string) (map[strin
 	defer filas.Close()
 	acreditadas := map[string]acreditadoDeRenglon{}
 	for filas.Next() {
-		var origen, cantidad, importe string
-		if err := filas.Scan(&origen, &cantidad, &importe); err != nil {
+		var origen, cantidad, importe, neto string
+		if err := filas.Scan(&origen, &cantidad, &importe, &neto); err != nil {
 			return nil, err
 		}
 		a := acreditadas[origen]
-		acreditadas[origen] = acreditadoDeRenglon{float64(a.cantidad + jsmath.Numero(cantidad)), fiscal.Redondear(a.importe + jsmath.Numero(importe))}
+		acreditadas[origen] = acreditadoDeRenglon{float64(a.cantidad + jsmath.Numero(cantidad)), fiscal.Redondear(a.importe + jsmath.Numero(importe)),
+			fiscal.Redondear(a.neto + jsmath.Numero(neto))}
 	}
 	return acreditadas, filas.Err()
 }
 
 func itemsOriginales(ctx context.Context, c consultor, id string) ([]fiscal.ItemOriginal, error) {
-	filas, err := c.Query(ctx, `SELECT id, descripcion, unidad, cantidad::float8, subtotal::float8, alicuota_iva::float8
+	filas, err := c.Query(ctx, `SELECT id, descripcion, unidad, cantidad::float8, subtotal::float8, alicuota_iva::float8, neto::float8
 		FROM invoice_items WHERE invoice_id = $1 ORDER BY orden`, id)
 	if err != nil {
 		return nil, err
@@ -310,7 +313,7 @@ func itemsOriginales(ctx context.Context, c consultor, id string) ([]fiscal.Item
 	out := []fiscal.ItemOriginal{}
 	for filas.Next() {
 		var i fiscal.ItemOriginal
-		if err := filas.Scan(&i.ID, &i.Descripcion, &i.Unidad, &i.Cantidad, &i.Subtotal, &i.AlicuotaIva); err != nil {
+		if err := filas.Scan(&i.ID, &i.Descripcion, &i.Unidad, &i.Cantidad, &i.Subtotal, &i.AlicuotaIva, &i.Neto); err != nil {
 			return nil, err
 		}
 		out = append(out, i)

@@ -17,56 +17,73 @@ import (
 // Los dos listados que pide el contador al cierre y que no salían de ningún
 // lado: quién debe y desde cuándo, y a quién se le debe y cuándo vence.
 
-// CsvDeudores es la deuda de cada cliente por antigüedad, con la misma
+// CsvDeudores es la deuda de cada cuenta por antigüedad, con la misma
 // cuenta que la cobranza (los pagos cancelan lo más viejo primero). El que
 // debe más y hace más tiempo va arriba. Van también los clientes dados de
-// baja: la baja no cancela la deuda, y el contador la necesita igual (ya
-// quedan afuera los que no deben, por el saldo).
+// baja: la baja no cancela la deuda.
 //
-// **No lleva los pedidos entregados sin cobrar**, que «Me deben» del
-// Resumen sí suma (fragmentos.SinCobrarDelPedido): este archivo es el mayor
-// de la cuenta corriente, lo que el contador concilia contra deudores por
-// ventas, y esos pedidos no tienen asiento de deuda ni cliente obligado (son
-// de contado que no se cobró). Por eso los dos totales difieren
-// en ese renglón, que el Resumen muestra aparte.
+// **Es el mayor de Deudores por ventas (1.1.03) del CSV del estudio, cuenta
+// por cuenta** (comité final, M7): sale del reparto de los cobros
+// (cobros.RepartirCobros), no de la cuenta corriente. La cuenta corriente
+// mezcla la deuda del circuito B —la venta sin factura a cuenta—, y el
+// listado no se podía conciliar con el mayor que el contador tiene en el
+// otro archivo. Una venta de un pedido sin cliente que se facturó y no se
+// cobró figura con el contacto del pedido: su factura está en Deudores
+// igual. El cierre avisa si el total no da el saldo de 1.1.03
+// (PendientesDelCierre).
 func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, error) {
-	rs, err := s.lectura.Query(ctx, `
-		SELECT c.id, coalesce(c.codigo_legacy, ''), c.nombre, coalesce(c.cuit, ''), coalesce(c.telefono, ''), m.monto, m.created_at
-		FROM customers c JOIN account_movements m ON m.customer_id = c.id
-		ORDER BY c.id, m.created_at`)
+	reparto, err := s.repartoHasta(ctx, ahora)
 	if err != nil {
 		return "", err
 	}
-	type cliente struct {
+	type cuenta struct {
 		codigo, nombre, cuit, telefono string
-		movs                           []cobros.Movimiento
 	}
-	por := map[string]*cliente{}
-	var orden []string
-	var id, codigo, nombre, cuit, telefono string
-	var monto jsmath.Num
-	var fecha time.Time
-	if _, err := pgx.ForEachRow(rs, []any{&id, &codigo, &nombre, &cuit, &telefono, &monto, &fecha}, func() error {
-		c, ok := por[id]
-		if !ok {
-			c = &cliente{codigo: codigo, nombre: nombre, cuit: cuit, telefono: telefono}
-			por[id] = c
-			orden = append(orden, id)
+	claves := make([]string, 0, len(reparto.MovimientosDeDeudores))
+	for k := range reparto.MovimientosDeDeudores {
+		claves = append(claves, k)
+	}
+	sort.Strings(claves)
+	ids := map[string][]string{}
+	for _, k := range claves {
+		ids[k[:2]] = append(ids[k[:2]], k[2:])
+	}
+	datos := map[string]cuenta{}
+	leer := func(prefijo, sql string) error {
+		if len(ids[prefijo]) == 0 {
+			return nil
 		}
-		c.movs = append(c.movs, cobros.Movimiento{Monto: monto.F(), Fecha: fecha})
-		return nil
-	}); err != nil {
+		rs, err := s.lectura.Query(ctx, sql, ids[prefijo])
+		if err != nil {
+			return err
+		}
+		var id string
+		var c cuenta
+		_, err = pgx.ForEachRow(rs, []any{&id, &c.codigo, &c.nombre, &c.cuit, &c.telefono}, func() error {
+			datos[prefijo+id] = c
+			return nil
+		})
+		return err
+	}
+	if err := leer("c:", `SELECT id::text, coalesce(codigo_legacy, ''), nombre, coalesce(cuit, ''),
+		coalesce(telefono, '') FROM customers WHERE id::text = ANY($1)`); err != nil {
+		return "", err
+	}
+	if err := leer("p:", `SELECT id::text, numero, contacto_nombre, '', coalesce(contacto_telefono, '') FROM orders WHERE id::text = ANY($1)`); err != nil {
+		return "", err
+	}
+	if err := leer("f:", `SELECT id::text, '', receptor_nombre, coalesce(receptor_cuit, ''), '' FROM invoices WHERE id::text = ANY($1)`); err != nil {
 		return "", err
 	}
 	type fila struct {
-		c     *cliente
+		c     cuenta
 		aging cobros.Aging
 	}
 	var filas []fila
-	for _, k := range orden {
-		a := cobros.CalcularAging(por[k].movs, ahora)
+	for _, k := range claves {
+		a := cobros.CalcularAging(reparto.MovimientosDeDeudores[k], ahora)
 		if a.Total > 0.005 {
-			filas = append(filas, fila{por[k], a})
+			filas = append(filas, fila{datos[k], a})
 		}
 	}
 	sort.SliceStable(filas, func(i, j int) bool {

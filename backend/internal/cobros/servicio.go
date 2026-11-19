@@ -137,7 +137,7 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 		// recibo contra el total empujaba a cobrar otra vez la seña.
 		if p != nil {
 			var pagado bool
-			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= o.total FROM orders o WHERE o.id = $1`, p.ID).
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarDelPedido+` FROM orders o WHERE o.id = $1`, p.ID).
 				Scan(&pagado); err != nil {
 				return err
 			}

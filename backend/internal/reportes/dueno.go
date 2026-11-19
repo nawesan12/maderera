@@ -117,7 +117,17 @@ type Resultado struct {
 	// ConDescuento: la regla del negocio resta el descuento del pedido de
 	// las ventas, y VentasNetas ya no es el «Vendido sin IVA» de Reportes.
 	ConDescuento bool `json:"conDescuento"`
+	// SinCostosCargados: más de la mitad de lo vendido no tiene costo, y el
+	// resultado no dice cuánto se ganó sino cuánto falta cargar. La pantalla
+	// muestra «Sin costos cargados» y deja la cifra de dato al lado: un
+	// «$0» en grande se leía como un mes sin ganancia.
+	SinCostosCargados bool `json:"sinCostosCargados"`
 }
+
+// UmbralSinCostos es la parte de lo vendido sin costo a partir de la cual la
+// ganancia deja de mostrarse como cifra (decisión 8 del comité final: la
+// propuesta es 50 %, a confirmar con Nahuel).
+const UmbralSinCostos = 0.5
 
 // ResultadoComparado es el del lapso y el del anterior.
 type ResultadoComparado struct {
@@ -157,8 +167,8 @@ type NumerosDelDueno struct {
 	Ganancia ResultadoComparado `json:"ganancia"`
 	// Devoluciones del mes (argentino): la plata que salió por devoluciones
 	// parciales. El control de las devoluciones es que el dueño las vea.
-	Devoluciones Totales `json:"devoluciones"`
-	Anuladas Anuladas           `json:"anuladas"`
+	Devoluciones Totales  `json:"devoluciones"`
+	Anuladas     Anuladas `json:"anuladas"`
 	// Controles sobre la plata del personal (T3).
 	Controles Controles `json:"controles"`
 }
@@ -191,7 +201,10 @@ func (s *Servicio) NumerosDelDueno(ctx context.Context) (NumerosDelDueno, error)
 	}
 	a := ahora.In(Argentina)
 	inicio := time.Date(a.Year(), a.Month(), 1, 0, 0, 0, 0, Argentina)
-	err = s.lectura.QueryRow(ctx, `SELECT coalesce(sum(importe), 0)::float8, count(*)::int FROM devoluciones WHERE created_at >= $1`, inicio).
+	// Solo las que sacaron plata: la que baja la deuda (destino «deuda») no
+	// devolvió nada, y el renglón es para controlar la plata que sale.
+	err = s.lectura.QueryRow(ctx, `SELECT coalesce(sum(importe), 0)::float8, count(*)::int FROM devoluciones
+		WHERE created_at >= $1 AND destino <> 'deuda'`, inicio).
 		Scan(&n.Devoluciones.Total, &n.Devoluciones.Cantidad)
 	return n, err
 }
@@ -255,7 +268,7 @@ func (s *Servicio) MeDeben(ctx context.Context, ahora time.Time) (MeDeben, error
 	var sinCobrar jsmath.Num
 	if err := s.pool.QueryRow(ctx, `
 		SELECT coalesce(sum(saldo), 0), count(*)::int
-		FROM (SELECT `+fragmentos.SinCobrarDelPedido+` AS saldo FROM orders o WHERE o.estado = 'entregado') x
+		FROM (SELECT `+fragmentos.SinCobrarDeLoQueSalio+` AS saldo FROM orders o WHERE `+fragmentos.SalioMercaderia+`) x
 		WHERE saldo > 0.009`).Scan(&sinCobrar, &m.PedidosSinCobrar.Cantidad); err != nil {
 		return m, err
 	}
@@ -270,7 +283,9 @@ func (s *Servicio) MeDeben(ctx context.Context, ahora time.Time) (MeDeben, error
 const anuladaEn = `(SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado')`
 
 // AnuladasDeLaSemana cuenta las ventas del mostrador anuladas desde el
-// inicio del día de hace seis días.
+// inicio del día de hace seis días. Devuelto es lo que sacó de la caja la
+// anulación: el efectivo de una devolución parcial anterior ya está en
+// «Devoluciones del mes», y sumarlo acá lo mostraba dos veces.
 func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anuladas, error) {
 	var a Anuladas
 	var total, devuelto jsmath.Num
@@ -281,7 +296,8 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND `+fragmentos.FacturaViva+`),
 		  (SELECT coalesce(-sum(m.monto), 0) FROM cash_movements m
 		   JOIN orders d ON d.id = m.order_id AND d.origen = 'mostrador' AND d.estado = 'cancelado'
-		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2)
+		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2
+		     AND NOT EXISTS (SELECT 1 FROM devoluciones dv WHERE dv.cash_movement_id = m.id))
 		FROM orders o
 		WHERE o.origen = 'mostrador' AND o.estado = 'cancelado' AND `+anuladaEn+` >= $1 AND `+anuladaEn+` < $2`, desde, hasta).
 		Scan(&a.Cantidad, &total, &a.ConFacturaViva, &devuelto)
@@ -398,6 +414,11 @@ func (s *Servicio) ChequesDeLaSemana(ctx context.Context, ahora time.Time) (Cheq
 // emitidos hoy (cuenta corriente, mostrador, portal), los pagos de las
 // ventas del mostrador cobradas hoy (no emiten recibo) y los cobros en línea
 // acreditados hoy que ningún recibo nombra (el pedido pagado en el sitio).
+// La venta del mostrador se cobra al crearse: cobrada_at solo lo lleva la
+// que llegó de la cola sin conexión (la hora en que se cobró de verdad), así
+// que la de todos los días se mide por created_at, como la caja y Cobros.
+// Con cobrada_at solo, lo cobrado con tarjeta o transferencia en el mostrador
+// no aparecía nunca en «Plata hoy».
 // El efectivo de los recibos y de las ventas ya está en el «esperado» de su
 // caja, así que no se suma otra vez.
 func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, error) {
@@ -435,7 +456,7 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		              WHEN op.medio = 'mercado_pago' THEN 'mp'
 		              WHEN op.medio IN ('debito', 'credito') THEN 'tarjeta' END, op.importe
 		  FROM order_payments op JOIN orders o ON o.id = op.order_id
-		  WHERE o.estado <> 'cancelado' AND o.cobrada_at >= $1 AND o.cobrada_at < $2
+		  WHERE o.estado <> 'cancelado' AND coalesce(o.cobrada_at, o.created_at) >= $1 AND coalesce(o.cobrada_at, o.created_at) < $2
 		  UNION ALL
 		  SELECT CASE WHEN p.proveedor = 'transferencia' THEN 'banco' WHEN p.proveedor = 'mercado_pago' THEN 'mp' END, p.monto
 		  FROM payments p
@@ -490,14 +511,14 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	if sinIva {
 		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
 	}
-	const delPeriodo = `o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2`
+	const delPeriodo = `o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2`
 	err := s.pool.QueryRow(ctx, `
 		SELECT `+ventasNetas(r.ConDescuento, "margenes.neto")+`,
 		  `+ventasNetas(r.ConDescuento, "(margenes.neto - coalesce(margenes.neto_costeado, 0))")+`,
 		  coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
 		  (SELECT coalesce(sum(`+gasto+`), 0) FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
 		   WHERE e.fecha >= $3 AND e.fecha < $4)
-		FROM orders o `+margenesDe(delPeriodo)+`
+		FROM `+hechosDeVenta+` o `+margenesDe(delPeriodo)+`
 		WHERE `+delPeriodo, idesde, ihasta, ddesde, dhasta).
 		Scan(&neto, &sinCosto, &costo, &r.LineasSinCosto, &gastos)
 	if err != nil {
@@ -506,6 +527,7 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	r.VentasNetas, r.VentasSinCosto = jsmath.Redondear2(neto.F()), jsmath.Redondear2(sinCosto.F())
 	r.Costo, r.Gastos = jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
 	r.Resultado = jsmath.Redondear2(float64(float64(r.VentasNetas-r.VentasSinCosto)-r.Costo) - r.Gastos)
+	r.SinCostosCargados = r.VentasNetas > 0 && r.VentasSinCosto > float64(r.VentasNetas*UmbralSinCostos)
 	return r, nil
 }
 

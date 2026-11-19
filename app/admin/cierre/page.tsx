@@ -180,7 +180,7 @@ export default async function CierrePage({
         <article className="tarjeta p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <h2 className="text-lg font-semibold">Resultado del mes</h2>
-            {resultado.variacion !== null && (
+            {resultado.variacion !== null && !resultado.actual.sinCostosCargados && (
               <span
                 className={`tabular text-base font-semibold ${
                   resultado.variacion >= 0 ? "text-saldo-favor" : "text-saldo-debe"
@@ -191,13 +191,21 @@ export default async function CierrePage({
               </span>
             )}
           </div>
-          <p
-            className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
-              resultado.actual.resultado < 0 ? "text-saldo-debe" : ""
-            }`}
-          >
-            {formatearMonto(resultado.actual.resultado)}
-          </p>
+          {/* Con más de la mitad de lo vendido sin costo, la cifra no es el
+              resultado del mes: va el motivo en grande y la cifra abajo. */}
+          {resultado.actual.sinCostosCargados ? (
+            <p className="estado-problema mt-2 text-[24px] font-bold leading-none tracking-[-0.03em]">
+              Sin costos cargados
+            </p>
+          ) : (
+            <p
+              className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
+                resultado.actual.resultado < 0 ? "text-saldo-debe" : ""
+              }`}
+            >
+              {formatearMonto(resultado.actual.resultado)}
+            </p>
+          )}
           <dl className="mt-4 space-y-1.5 text-base">
             <Linea
               titulo={resultado.actual.conDescuento ? "Vendido sin IVA ni descuentos" : "Vendido sin IVA"}
@@ -231,6 +239,9 @@ export default async function CierrePage({
             )}
             <Linea titulo="Costo de lo vendido" valor={-resultado.actual.costo} />
             <Linea titulo="Gastos" valor={-resultado.actual.gastos} />
+            {resultado.actual.sinCostosCargados && (
+              <Linea titulo="Resultado" valor={resultado.actual.resultado} />
+            )}
             <Linea
               titulo={`Resultado de ${etiquetaAnterior}`}
               valor={resultado.anterior.resultado}

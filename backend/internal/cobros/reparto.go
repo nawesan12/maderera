@@ -65,8 +65,29 @@ const (
 	EventoAnulacion
 	// EventoTramo es un tramo de un reintegro parcial de un pago con recibo
 	// (el ID es el del recibo): vuelve en la misma proporción que el recibo.
+	// También lo que una devolución de la venta le devuelve al recibo
+	// (receipt_refunds) cuando lo devuelto no se había facturado con CAE.
 	EventoTramo
+	// EventoReintegroFacturado es lo que una devolución de mercadería
+	// facturada con CAE le devuelve a un recibo: vuelve entero a Deudores del
+	// blanco, contra la nota de crédito que lo acreditó ahí
+	// (ReintegroDeLoFacturado).
+	EventoReintegroFacturado
 )
+
+// ReintegroDeLoFacturado dice, sobre la fila `t` de receipt_refunds, si la
+// devolución que lo hizo devolvió mercadería de una factura con CAE.
+//
+// Entonces el reintegro va entero al blanco, y no en la proporción del
+// recibo (revisión del carril E): un recibo de $1000 que canceló $600 de
+// factura y $400 de deuda B, con una devolución de $200 de lo facturado,
+// asentaba Deudores 120 en el blanco y 80 en el B. La nota de crédito ya
+// había acreditado los 200 en el blanco: Deudores quedaba en −80 en el
+// blanco y en +80 en el B, sin ninguna venta B que lo respaldara. Lo que no
+// salió de una factura con CAE sigue con el reparto del recibo (decisión a
+// confirmar con el contador).
+const ReintegroDeLoFacturado = `EXISTS (SELECT 1 FROM devoluciones dvf JOIN invoices fdv ON fdv.id = dvf.invoice_id
+	WHERE dvf.id = t.devolucion_id AND fdv.cae IS NOT NULL AND fdv.cae_ambiente IS DISTINCT FROM 'homologacion')`
 
 // Reparto es en qué se reparte un recibo.
 type Reparto struct {
@@ -78,8 +99,9 @@ type Reparto struct {
 // Blanco es lo del recibo que va al CSV del estudio.
 func (r Reparto) Blanco() float64 { return jsmath.Redondear2(r.Deudores + r.Anticipo) }
 
-// EventoDeCuenta es un hecho de la cuenta de un cliente (o de una factura
-// sin cliente: la clave es «c:<cliente>» o «f:<factura>»).
+// EventoDeCuenta es un hecho de la cuenta de un cliente (o, sin cliente, de
+// un pedido o de una factura suelta: la clave es «c:<cliente>»,
+// «p:<pedido>» o «f:<factura>»).
 type EventoDeCuenta struct {
 	Clave string
 	Fecha time.Time
@@ -160,6 +182,10 @@ type ResultadoDelReparto struct {
 	Aplicaciones []Aplicacion
 	// Lo que queda en Deudores y en Anticipos de cada clave al final.
 	Deudores, Anticipos map[string]float64
+	// MovimientosDeDeudores son los cambios de Deudores de cada clave, en
+	// orden y con su fecha: el mayor de 1.1.03 por cuenta, sin el circuito B.
+	// De acá sale el listado de deudores del contador (CsvDeudores).
+	MovimientosDeDeudores map[string][]Movimiento
 	// Los anticipos que quedan sin aplicar al final, en orden.
 	Bolsas []Bolsa
 }
@@ -214,7 +240,8 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 		}
 		return a.ID < b.ID
 	})
-	res := ResultadoDelReparto{Recibos: map[string]Reparto{}, Deudores: map[string]float64{}, Anticipos: map[string]float64{}}
+	res := ResultadoDelReparto{Recibos: map[string]Reparto{}, Deudores: map[string]float64{}, Anticipos: map[string]float64{},
+		MovimientosDeDeudores: map[string][]Movimiento{}}
 	r2 := jsmath.Redondear2
 	bolsas := map[string][]*Bolsa{}
 	deRecibo := map[string]*Bolsa{}
@@ -262,6 +289,8 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 				bolsas[e.Clave] = append(bolsas[e.Clave], b)
 				deRecibo[e.ID] = b
 			}
+		case EventoReintegroFacturado:
+			deudores = r2(deudores + e.Monto)
 		case EventoTramo:
 			if rep, ok := res.Recibos[e.ID]; ok {
 				t := TramoPorCircuito(rep, e.Monto)
@@ -287,6 +316,9 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 				b.Monto, b.Aplicado = 0, 0
 			}
 		}
+		if d := r2(deudores - res.Deudores[e.Clave]); d > 0.005 || d < -0.005 {
+			res.MovimientosDeDeudores[e.Clave] = append(res.MovimientosDeDeudores[e.Clave], Movimiento{Monto: d, Fecha: e.Fecha})
+		}
 		res.Deudores[e.Clave], res.Anticipos[e.Clave] = deudores, anticipo
 	}
 	for _, e := range ev {
@@ -297,10 +329,27 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 	return res
 }
 
-// claveDeRecibo: el cliente, o la factura que cobra si no tiene cliente.
+// claveDeFactura es la cuenta de la factura `i`: su cliente, o, sin
+// cliente, su pedido (todas las facturas y notas de un pedido sin cliente
+// son la misma cuenta), o ella sola.
+const claveDeFactura = `coalesce('c:' || i.customer_id::text, 'p:' || i.order_id::text, 'f:' || i.id::text)`
+
+// claveDeRecibo: el cliente; sin cliente, la factura que cobra; y si cobra
+// un pedido (cobros.CobrarPedido), la cuenta de la factura de ese pedido o,
+// sin factura todavía, el pedido mismo.
+//
+// El recibo de un pedido sin cliente caía en «r:<recibo>» (comité final,
+// A4): una cuenta sin facturas ni pedidos, así que todo su cobro iba al B
+// —aunque fuera una transferencia— y la factura con CAE quedaba abierta en
+// Deudores para siempre. Con «p:<pedido>» el recibo ve su factura (va a
+// Deudores) o, antes de facturar, el pedido abierto (va como anticipo y se
+// aplica cuando sale la factura, que está en la misma cuenta).
 const claveDeRecibo = `coalesce('c:' || r.customer_id::text,
-	(SELECT coalesce('c:' || i.customer_id::text, 'f:' || i.id::text) FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
+	(SELECT ` + claveDeFactura + ` FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
 	 WHERE ip.receipt_id = r.id ORDER BY ip.created_at LIMIT 1),
+	(SELECT ` + claveDeFactura + ` FROM invoices i WHERE i.order_id = r.order_id AND i.tipo::text LIKE 'factura%' AND i.estado <> 'borrador'
+	 ORDER BY i.created_at LIMIT 1),
+	'p:' || r.order_id::text,
 	'r:' || r.id::text)`
 
 // caeA es cuándo llegó el CAE de la factura i: la última llamada a ARCA que
@@ -321,18 +370,19 @@ const abiertoA = `CASE WHEN EXISTS (SELECT 1 FROM order_status_history h WHERE h
 // pendientesDelRecibo son lo que el cliente tenía por facturar al emitirse
 // el recibo, con su importe: las facturas que ese día esperaban el CAE y los
 // pedidos abiertos ese día sin factura emitida. Sin cliente, la factura que
-// cobra si ese día no tenía CAE.
+// cobra si ese día no tenía CAE, o el pedido que cobra y sus facturas.
 const pendientesDelRecibo = `
 SELECT coalesce(array_agg(d.destino ORDER BY d.destino), '{}'::text[]) AS destinos, coalesce(sum(d.monto), 0)::float8 AS por_facturar
 FROM (
   SELECT 'i:' || i.id::text AS destino, i.total AS monto FROM invoices i
   WHERE i.tipo::text NOT LIKE 'nota_credito%' AND i.estado <> 'borrador' AND i.created_at <= r.created_at
     AND i.id IN (SELECT x.id FROM invoices x WHERE x.customer_id = r.customer_id
-                 UNION ALL SELECT ip.invoice_id FROM invoice_payments ip WHERE r.customer_id IS NULL AND ip.receipt_id = r.id)
+                 UNION ALL SELECT ip.invoice_id FROM invoice_payments ip WHERE r.customer_id IS NULL AND ip.receipt_id = r.id
+                 UNION ALL SELECT x.id FROM invoices x WHERE r.customer_id IS NULL AND x.order_id = r.order_id)
     AND CASE WHEN i.cae IS NULL THEN i.estado IN ('emitida', 'rechazada') ELSE ` + caeA + ` > r.created_at END
   UNION ALL
   SELECT 'o:' || o.id::text, o.total FROM orders o
-  WHERE o.customer_id = r.customer_id AND o.created_at <= r.created_at AND ` + abiertoA + `
+  WHERE (o.customer_id = r.customer_id OR (r.customer_id IS NULL AND o.id = r.order_id)) AND o.created_at <= r.created_at AND ` + abiertoA + `
     AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.tipo::text LIKE 'factura%' AND i.created_at <= r.created_at
       AND (i.cae IS NOT NULL OR i.estado IN ('emitida', 'rechazada')))
 ) d`
@@ -352,27 +402,28 @@ FROM (
 // candado de recibos tomado.
 const eventosSQL = `
 SELECT * FROM (
-  SELECT coalesce('c:' || i.customer_id::text, 'f:' || i.id::text) AS clave, i.fecha_emision AS fecha, 0 AS tipo, i.id::text AS id,
+  SELECT ` + claveDeFactura + ` AS clave, i.fecha_emision AS fecha, 0 AS tipo, i.id::text AS id,
     (CASE WHEN i.tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * i.total)::float8 AS monto, 0::float8 AS retencion,
     0::float8 AS negro, false AS pendiente, NULL::float8 AS rd, NULL::float8 AS ra, NULL::float8 AS rb,
     i.tipo::text AS tipo_cbte, i.punto_venta::bigint AS pv, i.numero::bigint AS nro, i.receptor_nombre AS cliente,
     '{}'::text[] AS destinos, 0::float8 AS por_facturar, coalesce(i.order_id::text, '') AS pedido
   FROM invoices i WHERE i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion' AND i.estado <> 'borrador' AND i.fecha_emision <= $1 AND {I}
   UNION ALL
-  SELECT coalesce('c:' || i.customer_id::text, 'f:' || i.id::text), p.fecha, 1, p.id::text, p.monto::float8, 0, 0, false, NULL, NULL, NULL,
+  SELECT ` + claveDeFactura + `, p.fecha, 1, p.id::text, p.monto::float8, 0, 0, false, NULL, NULL, NULL,
     '', 0, 0, '', '{}', 0, ''
   FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id
   WHERE p.receipt_id IS NULL AND p.medio <> 'cuenta_corriente' AND p.fecha <= $1 AND {I}
   UNION ALL
   SELECT x.clave, x.fecha, 1, x.id, x.monto, 0, 0, false, NULL, NULL, NULL, '', 0, 0, '', '{}', 0, '' FROM (
-    SELECT CASE WHEN p.tipo = 'deuda' THEN 'c:' || p.customer_id::text ELSE coalesce('c:' || f.customer_id::text, 'f:' || f.id::text) END AS clave,
+    SELECT CASE WHEN p.tipo = 'deuda' THEN 'c:' || p.customer_id::text
+                ELSE coalesce('c:' || f.customer_id::text, 'p:' || f.order_id::text, 'f:' || f.id::text) END AS clave,
       p.id::text AS id, p.monto::float8 AS monto, p.estado::text AS estado, p.updated_at, f.fecha_emision AS factura,
       greatest(coalesce(p.acreditado_at, CASE WHEN p.proveedor = 'mostrador' THEN coalesce(o.cobrada_at, o.created_at) END,
                p.conciliado_at, p.created_at), coalesce(f.fecha_emision, '-infinity')) AS fecha
     FROM payments p
     LEFT JOIN orders o ON o.id = p.order_id
     LEFT JOIN LATERAL (
-      SELECT i.id, i.customer_id, i.fecha_emision FROM invoices i
+      SELECT i.id, i.customer_id, i.order_id, i.fecha_emision FROM invoices i
       WHERE i.order_id = p.order_id AND i.tipo::text LIKE 'factura%' AND i.estado <> 'borrador' AND i.cae IS NOT NULL
         AND i.cae_ambiente IS DISTINCT FROM 'homologacion'
       ORDER BY (i.estado = 'anulada'), i.fecha_emision LIMIT 1) f ON true
@@ -396,6 +447,25 @@ SELECT * FROM (
   FROM payment_refunds t JOIN receipt_parts x ON x.payment_id = t.payment_id JOIN receipts r ON r.id = x.receipt_id
   WHERE t.account_movement_id IS NOT NULL AND t.created_at <= $1 AND {R}
   UNION ALL
+  SELECT ` + claveDeRecibo + `, t.created_at, CASE WHEN ` + ReintegroDeLoFacturado + ` THEN 5 ELSE 4 END, r.id::text, t.importe::float8,
+    0, 0, false, NULL, NULL, NULL, '', 0, 0, '', '{}', 0, ''
+  FROM receipt_refunds t JOIN receipts r ON r.id = t.receipt_id
+  WHERE t.created_at <= $1 AND {R}
+  UNION ALL
+  -- El cheque de un cliente que rebota y le devuelve la deuda (la nota de
+  -- débito del cheque): el cierre lo asienta contra Deudores del blanco si
+  -- el cheque es del blanco (AsientoDeCheque), así que acá también. Sin esto
+  -- el listado de deudores, que sale de este reparto, dejaba afuera al
+  -- cliente que debe un cheque rechazado, y el control contra el mayor de
+  -- 1.1.03 quedaba encendido para siempre.
+  SELECT 'c:' || m.customer_id::text, e.at, 1, 'cheque:' || c.id::text, (-c.importe)::float8, 0, 0, false, NULL, NULL, NULL,
+    '', 0, 0, '', '{}', 0, ''
+  FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
+  CROSS JOIN LATERAL (SELECT am.customer_id FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito'
+                      ORDER BY am.created_at LIMIT 1) m
+  WHERE c.sentido = 'recibido' AND c.circuito <> 'negro' AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado', 'entregado')
+    AND e.at <= $1 AND {M}
+  UNION ALL
   SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text, r.total::float8,
     coalesce((SELECT sum(importe) FROM receipt_parts WHERE receipt_id = r.id AND medio = 'retencion'), 0)::float8,
     coalesce((SELECT sum(x.importe) FROM receipt_parts x JOIN cheques ch ON ch.id = x.cheque_id
@@ -412,20 +482,22 @@ SELECT * FROM (
 ) e`
 
 // eventosDeTodas y eventosDeUnaClave son eventosSQL sin filtro y con el de
-// una clave: $2 la clave, $3 el cliente, $4 la factura y $5 el recibo (los
-// que no correspondan, nulos). Los filtros de las ramas traen de más (todo
+// una clave: $2 la clave, $3 el cliente, $4 la factura, $5 el recibo y $6 el
+// pedido (los que no correspondan, nulos). Los filtros de las ramas traen de más (todo
 // lo del cliente o de la factura, con índice) y el de afuera deja la clave
 // exacta.
 var (
-	eventosDeTodas = strings.NewReplacer("{I}", "true", "{P}", "true", "{R}", "true").Replace(eventosSQL)
+	eventosDeTodas = strings.NewReplacer("{I}", "true", "{P}", "true", "{R}", "true", "{M}", "true").Replace(eventosSQL)
 
 	eventosDeUnaClave = strings.NewReplacer(
-		"{I}", `(i.customer_id = $3::uuid OR i.id = $4::uuid)`,
-		"{P}", `(p.customer_id = $3::uuid OR p.order_id IN (SELECT i.order_id FROM invoices i
+		"{M}", `m.customer_id = $3::uuid`,
+		"{I}", `(i.customer_id = $3::uuid OR i.id = $4::uuid OR i.order_id = $6::uuid)`,
+		"{P}", `(p.customer_id = $3::uuid OR p.order_id = $6::uuid OR p.order_id IN (SELECT i.order_id FROM invoices i
 			WHERE (i.customer_id = $3::uuid OR i.id = $4::uuid) AND i.order_id IS NOT NULL))`,
-		"{R}", `(r.customer_id = $3::uuid OR r.id = $5::uuid OR (r.customer_id IS NULL AND r.id IN (SELECT ip.receipt_id
+		"{R}", `(r.customer_id = $3::uuid OR r.id = $5::uuid OR r.order_id = $6::uuid OR (r.customer_id IS NULL AND (r.id IN (SELECT ip.receipt_id
 			FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
-			WHERE ip.receipt_id IS NOT NULL AND (i.customer_id = $3::uuid OR i.id = $4::uuid))))`,
+			WHERE ip.receipt_id IS NOT NULL AND (i.customer_id = $3::uuid OR i.id = $4::uuid OR i.order_id = $6::uuid))
+			OR r.order_id IN (SELECT i.order_id FROM invoices i WHERE i.customer_id = $3::uuid AND i.order_id IS NOT NULL))))`,
 	).Replace(eventosSQL) + ` WHERE e.clave = $2`
 )
 
@@ -439,17 +511,19 @@ func CargarEventos(ctx context.Context, db interface {
 	if clave == "" {
 		rs, err = db.Query(ctx, eventosDeTodas, hasta)
 	} else {
-		var cliente, factura, recibo *string
+		var cliente, factura, recibo, pedido *string
 		id := clave[2:]
 		switch clave[:2] {
 		case "c:":
 			cliente = &id
 		case "f:":
 			factura = &id
+		case "p:":
+			pedido = &id
 		default:
 			recibo = &id
 		}
-		rs, err = db.Query(ctx, eventosDeUnaClave, hasta, clave, cliente, factura, recibo)
+		rs, err = db.Query(ctx, eventosDeUnaClave, hasta, clave, cliente, factura, recibo, pedido)
 	}
 	if err != nil {
 		return nil, err

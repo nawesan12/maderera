@@ -286,9 +286,90 @@ func TestPartesPorCircuito(t *testing.T) {
 	if len(bl) != 1 || bl[0].Medio != "efectivo" || len(b) != 1 || !b[0].Negro || b[0].Importe != 40000 {
 		t.Fatalf("el cheque del B: %+v %+v", bl, b)
 	}
+	// Un cheque del B nunca completa lo blanco, aunque el reparto lo pida.
+	if bl, b := PartesPorCircuito([]ParteDeRecibo{{Medio: "efectivo", Importe: 50}, {Medio: "cheque", Importe: 100, Negro: true}},
+		cobros.Reparto{Deudores: 150}); suma(bl) != 50 || len(b) != 1 || !b[0].Negro || b[0].Importe != 100 {
+		t.Fatalf("el cheque del B completó lo blanco: %+v %+v", bl, b)
+	}
 	// Todo por transferencia y una parte B: lo bancarizado que queda en el B
 	// se marca.
 	if x := BancarizadoEnB([]ParteDeRecibo{{Medio: "transferencia", Importe: 1000}}, cobros.Reparto{Deudores: 700, B: 300}); x != 300 {
 		t.Fatalf("bancarizado en B: %v", x)
+	}
+}
+
+// El listado de deudores del contador sale del reparto y el mayor de 1.1.03
+// de los asientos (comité final, M7): si no coinciden, el cierre lo dice.
+// Con las facturas y los recibos de siempre coinciden. El cheque rechazado
+// que le devuelve la deuda al cliente mueve 1.1.03, y el reparto también lo
+// cuenta (revisión del carril E): el cliente figura en el listado con lo que
+// debe y los dos siguen coincidiendo. Antes el listado lo dejaba afuera y el
+// aviso quedaba encendido todos los meses.
+func TestElListadoDeDeudoresContraElMayor(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cli := e.id(t, `insert into customers (nombre) values ('Gómez') returning id`)
+	e.facturaConCae(t, &cli, 40, 1000, "2026-10-05T15:00:00Z", nil)
+	e.recibir(t, &cli, "R-1", "2026-10-06T15:00:00Z", [2]any{"transferencia", 400.0})
+	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if strings.Contains(pend, `"clave":"deudores-mayor"`) {
+		t.Errorf("coinciden y se avisa: %s", pend)
+	}
+	cheque := e.id(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, customer_id) values ('recibido', '77', 'Nación', '2026-10-10', 200, 'cartera', $1) returning id`, cli)
+	e.exec(t, `update cheques set estado = 'rechazado' where id = $1`, cheque)
+	e.exec(t, `update cheque_estados set at = '2026-10-11T15:00:00Z' where cheque_id = $1`, cheque)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, cheque_id, created_at) values ($1, 'nota_debito', 200, $2, '2026-10-11T15:00:00Z')`, cli, cheque)
+	_, pend, _ = pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if strings.Contains(pend, `"clave":"deudores-mayor"`) {
+		t.Errorf("el cheque rechazado separa el listado del mayor: %s", pend)
+	}
+	d, err := e.s.CsvDeudores(context.Background(), time.Date(2026, 10, 31, 12, 0, 0, 0, Argentina))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(d, "Gómez") || !strings.Contains(d, "800,00") {
+		t.Errorf("el cliente con el cheque rechazado no está en el listado:\n%s", d)
+	}
+}
+
+// La retención de un pago del circuito B va al archivo del estudio (comité
+// final, M9): emite un certificado con el CUIT de la empresa y se deposita.
+// El pago se parte: lo que salió, al B; la retención, al blanco. Y el cierre
+// lo avisa.
+func TestLaRetencionDeUnPagoBVaAlBlanco(t *testing.T) {
+	ref := "en mano"
+	as := AsientosDePagoAProveedor(PagoAAsentar{Fecha: time.Date(2026, 10, 9, 15, 0, 0, 0, time.UTC), Proveedor: "Maderas", Referencia: &ref,
+		Total: 1000, Retenido: 20, Medio: "efectivo", Salidas: []SalidaDePago{{Cuenta: Cuentas.Caja, Importe: 980}},
+		RetenidoPorImpuesto: map[string]float64{"iibb": 15}}, CircuitoNegro)
+	if len(as) != 2 {
+		t.Fatalf("asientos: %+v", as)
+	}
+	b, blanco := as[0], as[1]
+	if b.Circuito != CircuitoNegro || !b.Balancea || SaldoDeCuenta([]Asiento{b}, Cuentas.Proveedores) != 980 || SaldoDeCuenta([]Asiento{b}, Cuentas.Caja) != -980 {
+		t.Errorf("lo que salió, en el B: %+v", b)
+	}
+	if blanco.circuito() != "blanco" || !blanco.Balancea || SaldoDeCuenta([]Asiento{blanco}, Cuentas.Proveedores) != 20 ||
+		SaldoDeCuenta([]Asiento{blanco}, Cuentas.RetADepositarIibb) != -15 || SaldoDeCuenta([]Asiento{blanco}, Cuentas.RetencionesAPagar) != -5 {
+		t.Errorf("la retención, en el blanco: %+v", blanco)
+	}
+	if as := AsientosDePagoAProveedor(PagoAAsentar{Total: 100, Medio: "efectivo"}, CircuitoNegro); len(as) != 1 || as[0].Circuito != CircuitoNegro {
+		t.Errorf("sin retención, entero en el B: %+v", as)
+	}
+
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
+	e.exec(t, `insert into supplier_payments (supplier_id, total, neto, medio, referencia, fecha, circuito) values
+		($1, 1000, 980, 'efectivo', 'en mano', '2026-10-09T15:00:00Z', 'negro')`, prov)
+	octubre := e.asientosDe(t, "2026-10")
+	if r := SaldoDeCuenta(DelCircuito(octubre, "blanco"), Cuentas.RetencionesAPagar); r != -20 {
+		t.Errorf("la retención en el archivo del estudio: %v", r)
+	}
+	if c := SaldoDeCuenta(DelCircuito(octubre, CircuitoNegro), Cuentas.Caja); c != -980 {
+		t.Errorf("el efectivo en el B: %v", c)
+	}
+	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if !strings.Contains(pend, `"clave":"retenciones-b"`) {
+		t.Errorf("pendientes: %s", pend)
 	}
 }

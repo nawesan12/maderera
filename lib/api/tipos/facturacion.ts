@@ -320,7 +320,7 @@ export interface paths {
         /** @description Lo que se puede devolver de la factura de una venta (renglones, tope por caja y por cuenta, sucursales). 404 si no es de una venta. Solo el admin. */
         get: operations["DatosDeDevolucion"];
         put?: never;
-        /** @description Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta o afuera). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin. */
+        /** @description Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta, afuera o bajando la deuda). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin. */
         post: operations["DevolucionParcial"];
         delete?: never;
         options?: never;
@@ -630,6 +630,11 @@ export interface components {
             cuenta: number;
             /** Format: double */
             afuera: number;
+            /**
+             * Format: double
+             * @description Lo que falta cobrar del pedido; se devuelve sin que salga plata
+             */
+            deuda: number;
             ventaAnulada: boolean;
             conCliente: boolean;
             sucursal: string | null;
@@ -1515,8 +1520,11 @@ export interface operations {
             content: {
                 "application/json": {
                     clave: string;
-                    /** @enum {string} */
-                    destino: "caja" | "cuenta" | "afuera";
+                    /**
+                     * @description deuda: lo devuelto no se había cobrado; no sale plata y baja lo que se debe
+                     * @enum {string}
+                     */
+                    destino: "caja" | "cuenta" | "afuera" | "deuda";
                     motivo: string;
                     /** @enum {string|null} */
                     sinStock?: "rota" | "otro" | null;

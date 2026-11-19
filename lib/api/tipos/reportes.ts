@@ -569,6 +569,8 @@ export interface components {
             resultado: number;
             /** @description Renglones vendidos sin costo cargado o con costo en cero */
             lineasSinCosto: number;
+            /** @description Más de la mitad de ventasNetas no tiene costo; el resultado no es la ganancia */
+            sinCostosCargados: boolean;
         };
         ResultadoComparado: {
             actual: components["schemas"]["Resultado"];

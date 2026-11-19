@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"mjbj/internal/jsmath"
 	"mjbj/internal/reservas"
 )
 
@@ -54,14 +55,46 @@ func TestGoldenMargen(t *testing.T) {
 	}
 	leerGolden(t, "margen.json", &casos)
 	for i, c := range casos {
+		// El TS tomaba un costo en $0 como costo (100 % de margen); desde el
+		// comité final es «sin costo», como en Reportes
+		// (TestMargenConCostoCero). Esos casos ya no son del golden.
+		conCero := false
+		for _, it := range c.Items {
+			conCero = conCero || (it.CostoUnitario != nil && jsmath.Numero(*it.CostoUnitario) <= 0)
+		}
+		if conCero {
+			continue
+		}
 		items := make([]LineaConCosto, len(c.Items))
 		for j, it := range c.Items {
-			items[j] = LineaConCosto{it.Subtotal, it.Cantidad, it.AlicuotaIva, it.CostoUnitario}
+			items[j] = LineaConCosto{Subtotal: it.Subtotal, Cantidad: it.Cantidad, AlicuotaIva: it.AlicuotaIva, CostoUnitario: it.CostoUnitario}
 		}
 		got := MargenDelPedido(items)
 		if !reflect.DeepEqual(got, c.Margen) {
 			t.Errorf("caso %d: %+v, el TS %+v", i, got, c.Margen)
 		}
+	}
+}
+
+func TestMargenConCostoCero(t *testing.T) {
+	cero, diez := "0", "10"
+	m := MargenDelPedido([]LineaConCosto{{Subtotal: "1210", Cantidad: "1", CostoUnitario: &cero}, {Subtotal: "121", Cantidad: "1", CostoUnitario: &diez}})
+	if m == nil || m.SinCosto != 1 || m.Neto != 100 || m.Costo != 10 {
+		t.Errorf("un costo en $0 es un renglón sin costo: %+v", m)
+	}
+	if m := MargenDelPedido([]LineaConCosto{{Subtotal: "1210", Cantidad: "1", CostoUnitario: &cero}}); m != nil {
+		t.Errorf("todo en $0 es no saber el margen, no 100 %%: %+v", m)
+	}
+}
+
+// La ficha del pedido resta lo devuelto, como Reportes (revisión del carril
+// E): dos placas de 1210 con costo 600, devuelta una, son 1000 de neto y 600
+// de costo.
+func TestMargenSinLoDevuelto(t *testing.T) {
+	costo := "600"
+	m := MargenDelPedido([]LineaConCosto{{Subtotal: "2420", Cantidad: "2", CostoUnitario: &costo, DevueltoCantidad: 1, DevueltoImporte: 1210}})
+	if m == nil || m.Neto != 1000 || m.Costo != 600 || m.Ganancia != 400 {
+		t.Errorf("margen con una devuelta: %+v", m)
 	}
 }
 

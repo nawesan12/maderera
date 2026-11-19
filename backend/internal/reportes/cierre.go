@@ -8,8 +8,8 @@ import (
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/compras"
-	"mjbj/internal/formato"
 	"mjbj/internal/facturacion"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -167,24 +167,23 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 			diferido := x.FechaCheque != nil && ChequeDiferido(*x.FechaCheque, fecha)
 			salidas = append(salidas, SalidaDePago{Cuenta: CuentaDeSalida(x.Medio, x.Sentido, diferido), Importe: x.Importe})
 		}
-		pago := AsientoDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
-			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio, Salidas: salidas, RetenidoPorImpuesto: porImpuesto})
 		// El pago marcado «en negro» no es de este CUIT: va al CSV del
-		// circuito B, no al del estudio.
-		if circuito == CircuitoNegro {
-			pago.Circuito = CircuitoNegro
-		}
-		pago.Instante = true
-		// Como el recibo anulado: el pago queda en su mes y la anulación va
-		// con su contraasiento en la fecha en que se anuló, así un mes ya
-		// cerrado no cambia.
-		if entre(fecha, idesde, ihasta) {
-			asientos = append(asientos, pago)
-		}
-		if anulado != nil && entre(*anulado, idesde, ihasta) {
-			anulacion := asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones))
-			anulacion.Circuito, anulacion.Instante = pago.Circuito, true
-			asientos = append(asientos, anulacion)
+		// circuito B, no al del estudio; su retención, sí (AsientosDePagoAProveedor).
+		pagos := AsientosDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
+			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio, Salidas: salidas, RetenidoPorImpuesto: porImpuesto}, circuito)
+		for _, pago := range pagos {
+			pago.Instante = true
+			// Como el recibo anulado: el pago queda en su mes y la anulación va
+			// con su contraasiento en la fecha en que se anuló, así un mes ya
+			// cerrado no cambia.
+			if entre(fecha, idesde, ihasta) {
+				asientos = append(asientos, pago)
+			}
+			if anulado != nil && entre(*anulado, idesde, ihasta) {
+				anulacion := asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones))
+				anulacion.Circuito, anulacion.Instante = pago.Circuito, true
+				asientos = append(asientos, anulacion)
+			}
 		}
 	}
 	rs.Close()
@@ -365,17 +364,24 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 //     a favor (una nota de crédito sobre algo ya cobrado, una retención sin
 //     factura detrás). El saldo de Deudores tiene que ser el de la cuenta
 //     corriente facturada.
+//   - **Pagos del circuito B con retención**: la retención se asienta en el
+//     archivo del estudio y el resto del pago en el del B (M9); el
+//     contador decide cómo cierra Proveedores de ese proveedor.
+//   - **El listado de deudores no da el mayor**: la suma de las cuentas del
+//     reparto contra el saldo de 1.1.03 del archivo.
 func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
 	idesde, ihasta := instantes(desde, hasta)
-	var fueraDeMes, pagosB int
+	var fueraDeMes, pagosB, retencionesB int
 	if err := s.pool.QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*)::int FROM invoices WHERE `+conCae+` AND fecha_emision >= $1 AND fecha_emision <= $2
 		     AND fecha_emision_original < $1),
 		  (SELECT count(*)::int FROM supplier_payments p WHERE p.circuito = 'negro' AND p.anulado_at IS NULL
 		     AND p.fecha >= $1 AND p.fecha <= $2
-		     AND EXISTS (SELECT 1 FROM supplier_payment_allocations a WHERE a.payment_id = p.id))`, idesde, ihasta).
-		Scan(&fueraDeMes, &pagosB); err != nil {
+		     AND EXISTS (SELECT 1 FROM supplier_payment_allocations a WHERE a.payment_id = p.id)),
+		  (SELECT count(*)::int FROM supplier_payments p WHERE p.circuito = 'negro' AND p.anulado_at IS NULL
+		     AND p.fecha >= $1 AND p.fecha <= $2 AND p.total - p.neto > 0.005)`, idesde, ihasta).
+		Scan(&fueraDeMes, &pagosB, &retencionesB); err != nil {
 		return nil, err
 	}
 	reparto, err := s.repartoHasta(ctx, ihasta)
@@ -397,9 +403,32 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 		out = append(out, PendienteDelCierre{"pagos-b", "Pagos en negro de facturas en blanco",
 			"No van al archivo del estudio y la factura de compra queda abierta en Proveedores.", pagosB, "/admin/compras/pagos"})
 	}
+	if retencionesB > 0 {
+		out = append(out, PendienteDelCierre{"retenciones-b", "Pagos del circuito B con retención",
+			"La retención va al archivo del estudio y el pago al del circuito B: Proveedores queda partido.", retencionesB, "/admin/compras/pagos"})
+	}
 	if negativos > 0 {
 		out = append(out, PendienteDelCierre{"deudores", "Clientes con Deudores en negativo",
 			"Cobros o notas de crédito sin factura con CAE detrás.", negativos, "/admin/clientes"})
+	}
+	// El listado de deudores del contador sale del reparto, cuenta por
+	// cuenta (CsvDeudores); el saldo de 1.1.03, de los asientos del CSV
+	// desde el principio. Lo que el reparto no ve y el CSV sí (el cheque
+	// rechazado que le devuelve la deuda al cliente, un asiento cargado de
+	// otra forma) los separa: el contador concilia uno con otro y la
+	// diferencia tiene que estar dicha (comité final, M7).
+	listado := 0.0
+	for _, d := range reparto.Deudores {
+		listado = float64(listado + d)
+	}
+	todos, err := s.AsientosDelPeriodo(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), hasta)
+	if err != nil {
+		return nil, err
+	}
+	if dif := redondear(SaldoDeCuenta(DelCircuito(todos, "blanco"), Cuentas.Deudores) - listado); dif > 0.01 || dif < -0.01 {
+		out = append(out, PendienteDelCierre{"deudores-mayor", "El listado de deudores no da el mayor",
+			"El saldo de Deudores por ventas del archivo difiere en " + formato.Moneda(dif) + " de lo que suman las cuentas.", 1,
+			"/admin/cierre"})
 	}
 	mas, err := s.pendientesDeAnticiposYBanco(ctx, idesde, ihasta, reparto)
 	if err != nil {
@@ -659,14 +688,14 @@ func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) 
 	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	err := s.lectura.QueryRow(ctx, `
 		SELECT `+ventasNetas(conDescuento, "margenes.neto")+`,
-		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'facturado'")+`, (count(*) FILTER (WHERE o.papel = 'facturado'))::int,
-		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'interno'")+`, (count(*) FILTER (WHERE o.papel = 'interno'))::int,
-		  (count(*) FILTER (WHERE o.papel = 'sin-factura'))::int
-		FROM (SELECT o.id, o.total, o.subtotal, o.costo_envio,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'facturado'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'facturado'), 0)::int,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'interno'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'interno'), 0)::int,
+		  coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'sin-factura'), 0)::int
+		FROM (SELECT o.id, o.hecho, o.operaciones, o.total, o.subtotal, o.costo_envio,
 		        CASE WHEN EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.`+conCae+` AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'facturado'
 		             WHEN o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id) THEN 'interno'
 		             ELSE 'sin-factura' END AS papel
-		      FROM orders o WHERE o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2"),
+		      FROM `+hechosDeVenta+` o WHERE o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2"),
 		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
 	v.Total = jsmath.Redondear2(total.F())
 	v.Facturado.Total, v.Interno.Total = jsmath.Redondear2(facturado.F()), jsmath.Redondear2(interno.F())

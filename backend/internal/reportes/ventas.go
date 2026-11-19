@@ -53,10 +53,10 @@ func condiciones(p Periodo, f Filtros) (string, []any) {
 		c = append(c, fmt.Sprintf(sql, len(args)))
 	}
 	if p.Desde != nil {
-		agregar("o.created_at >= $%d", *p.Desde)
+		agregar("o.fecha >= $%d", *p.Desde)
 	}
 	if p.Hasta != nil {
-		agregar("o.created_at < $%d", *p.Hasta)
+		agregar("o.fecha < $%d", *p.Hasta)
 	}
 	if f.Rubro != "" && f.Rubro != "todos" {
 		agregar("o.customer_id IN (SELECT id FROM customers WHERE rubro = $%d)", f.Rubro)
@@ -84,21 +84,57 @@ func condiciones(p Periodo, f Filtros) (string, []any) {
 // mide el margen. Restar el costo de una parte al neto del todo inflaba el
 // margen de cada fila que mezclaba renglones con y sin costo. bruto es la
 // suma de los subtotales con IVA, para prorratear el total del pedido.
+//
+// **Lo devuelto no es vendido** (comité final, M3). La devolución parcial
+// no toca order_items: las placas que volvieron contaban como vendidas y
+// como disponibles a la vez, la ganancia seguía con su margen, y «Con
+// factura» dejaba de coincidir con lo facturado neto de notas de crédito.
+//
+// **Y se resta en el mes en que se devolvió, no en el de la venta.** Restar
+// lo devuelto del pedido cambiaba un mes ya cerrado: la venta del 28/10
+// devuelta en parte el 5/11 le bajaba a octubre la ganancia que el contador
+// ya tenía, y la nota de crédito iba al libro IVA de noviembre, así que ni
+// octubre ni noviembre conciliaban. Por eso los reportes no leen orders y
+// order_items directo sino sus hechos: cada venta en su fecha y cada
+// devolución en la suya, en negativo (hechosDeVenta y renglonesVendidos).
+// Los filtros (sucursal, rubro del cliente, vendedor) siguen siendo los del
+// pedido; la fecha es la del hecho (o.fecha). Lo devuelto sin renglón del
+// pedido (un flete, un corte) no se puede atribuir y queda vendido.
 const (
+	// hechosDeVenta tiene las columnas de orders más hecho (el pedido o la
+	// devolución), fecha, monto (con IVA, en negativo lo devuelto) y
+	// operaciones (1 la venta, 0 la devolución: no es otra operación).
+	hechosDeVenta = `(SELECT o.*, o.id AS hecho, o.created_at AS fecha, o.total AS monto, 1 AS operaciones FROM orders o
+		UNION ALL
+		SELECT o.*, dv.id, dv.created_at, -dv.importe, 0 FROM devoluciones dv JOIN orders o ON o.id = dv.order_id)`
+	// renglonesVendidos son los renglones de cada hecho: los de la venta y,
+	// en negativo, lo que se llevó cada devolución, con el costo congelado
+	// del renglón que vuelve.
+	renglonesVendidos = `(SELECT oi.order_id AS hecho, oi.order_id, oi.variant_id, oi.descripcion, oi.cantidad, oi.subtotal,
+		       oi.costo_unitario, oi.alicuota_iva, false AS devuelto FROM order_items oi
+		UNION ALL
+		SELECT di.devolucion_id, oi.order_id, oi.variant_id, oi.descripcion, -di.cantidad, -di.importe,
+		       oi.costo_unitario, oi.alicuota_iva, true
+		FROM devolucion_items di JOIN order_items oi ON oi.id = di.order_item_id)`
 	costoConocido    = `oi.costo_unitario > 0`
 	netoDelRenglon   = `oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)`
+	costoDelRenglon  = `oi.cantidad * oi.costo_unitario`
+	renglonSinCosto  = `NOT oi.devuelto AND (oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)`
 	margenPorRenglon = `sum(` + netoDelRenglon + `),
-		sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `),
-		count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int,
+		sum(` + costoDelRenglon + `) FILTER (WHERE ` + costoConocido + `),
+		count(*) FILTER (WHERE ` + renglonSinCosto + `)::int,
 		coalesce(sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `), 0)`
 	margenPorPedido = `sum(coalesce(margenes.neto, 0)), sum(margenes.costo), coalesce(sum(margenes.sin_costo), 0)::int,
 		coalesce(sum(margenes.neto_costeado), 0)`
+	// deLosRenglones es el FROM de los cortes por renglón.
+	deLosRenglones = renglonesVendidos + ` oi JOIN ` + hechosDeVenta + ` o ON o.hecho = oi.hecho`
 )
 
-// margenesDe es el neto sin IVA y el costo de cada pedido, para unirlo a
-// orders o. Agrupa los renglones **solo de los pedidos que entran en el
-// reporte** (los del mismo `where`, que usa el alias o): antes agrupaba
-// order_items entero en cada reporte, aunque se pidiera un mes.
+// margenesDe es el neto sin IVA y el costo de cada hecho (la venta o la
+// devolución), para unirlo a hechosDeVenta o. Agrupa los renglones **solo
+// de los hechos que entran en el reporte** (los del mismo `where`, que usa
+// el alias o): antes agrupaba order_items entero en cada reporte, aunque se
+// pidiera un mes.
 //
 // Medido con 60.000 pedidos y 180.000 renglones (T8): un mes pasó de 272 a
 // 55 ms y un año de 318 a 189; todo el historial queda igual (≈500 ms). Un
@@ -106,15 +142,15 @@ const (
 // pedidos, buscar los renglones de a uno pierde contra agruparlos de una vez.
 func margenesDe(where string) string {
 	return `LEFT JOIN (
-		SELECT oi.order_id,
+		SELECT oi.hecho,
 		       sum(` + netoDelRenglon + `) AS neto,
 		       sum(oi.subtotal) AS bruto,
-		       sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `) AS costo,
-		       count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int AS sin_costo,
+		       sum(` + costoDelRenglon + `) FILTER (WHERE ` + costoConocido + `) AS costo,
+		       count(*) FILTER (WHERE ` + renglonSinCosto + `)::int AS sin_costo,
 		       sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `) AS neto_costeado
-		FROM order_items oi
-		WHERE oi.order_id IN (SELECT o.id FROM orders o WHERE ` + where + `)
-		GROUP BY oi.order_id) margenes ON margenes.order_id = o.id`
+		FROM ` + renglonesVendidos + ` oi
+		WHERE oi.hecho IN (SELECT o.hecho FROM ` + hechosDeVenta + ` o WHERE ` + where + `)
+		GROUP BY oi.hecho) margenes ON margenes.hecho = o.hecho`
 }
 
 func (s *Servicio) filas(ctx context.Context, sql string, args []any, detalleEnProductos bool) ([]FilaDeReporte, error) {
@@ -222,22 +258,22 @@ func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, a
 	}[corte]
 	filas := "0"
 	if grupo != "" {
-		filas = "(SELECT count(DISTINCT " + grupo + `) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+		filas = "(SELECT count(DISTINCT " + grupo + `) FROM ` + deLosRenglones + `
 			LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products p ON p.id = v.product_id
 			LEFT JOIN categories c ON c.id = p.category_id WHERE ` + where + ")"
 	} else if corte == "cliente" {
-		filas = "(SELECT count(DISTINCT coalesce(o.customer_id::text, o.contacto_nombre)) FROM orders o WHERE " + where + ")"
+		filas = "(SELECT count(DISTINCT coalesce(o.customer_id::text, o.contacto_nombre)) FROM " + hechosDeVenta + " o WHERE " + where + ")"
 	}
-	unidades := "(SELECT coalesce(sum(oi.cantidad), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE " + where + ")"
-	montoRenglones := "(SELECT coalesce(sum(oi.subtotal), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE " + where + ")"
-	montos, cuantos := "coalesce(sum(o.total), 0)", "count(*)"
+	unidades := "(SELECT coalesce(sum(oi.cantidad), 0) FROM " + deLosRenglones + " WHERE " + where + ")"
+	montoRenglones := "(SELECT coalesce(sum(oi.subtotal), 0) FROM " + deLosRenglones + " WHERE " + where + ")"
+	montos, cuantos := "coalesce(sum(o.monto), 0)", "coalesce(sum(o.operaciones), 0)"
 	if porRenglon(corte) {
 		montos, cuantos = montoRenglones, unidades
 	}
 	err := s.pool.QueryRow(ctx, `
 		SELECT `+montos+`, `+cuantos+`, coalesce(sum(margenes.neto), 0), sum(margenes.costo),
 		       coalesce(sum(margenes.sin_costo), 0)::int, coalesce(sum(margenes.neto_costeado), 0), `+filas+`::int
-		FROM orders o `+margenesDe(where)+` WHERE `+where, args...).
+		FROM `+hechosDeVenta+` o `+margenesDe(where)+` WHERE `+where, args...).
 		Scan(&total, &cantidad, &neto, &costo, &sinCosto, &costeado, &t.Filas)
 	if err != nil {
 		return t, err
@@ -275,7 +311,7 @@ func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args 
 		return s.filas(ctx, `
 			SELECT coalesce(c.id::text, 'sin-categoria'), coalesce(c.name, 'Sin categoría'), count(DISTINCT p.id)::text,
 			       sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
-			FROM order_items oi JOIN orders o ON o.id = oi.order_id
+			FROM `+deLosRenglones+`
 			LEFT JOIN product_variants v ON v.id = oi.variant_id
 			LEFT JOIN products p ON p.id = v.product_id
 			LEFT JOIN categories c ON c.id = p.category_id
@@ -285,44 +321,44 @@ func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args 
 			SELECT CASE WHEN coalesce(p.recargo_elaboracion_pct, 0) > 0 THEN 'elaborado' ELSE 'bruto' END,
 			       CASE WHEN coalesce(p.recargo_elaboracion_pct, 0) > 0 THEN 'Se maquina en planta' ELSE 'Se vende como viene' END,
 			       count(DISTINCT p.id)::text, sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
-			FROM order_items oi JOIN orders o ON o.id = oi.order_id
+			FROM `+deLosRenglones+`
 			LEFT JOIN product_variants v ON v.id = oi.variant_id
 			LEFT JOIN products p ON p.id = v.product_id
 			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(oi.subtotal) DESC`, args, true)
 	case "cliente":
 		return s.filas(ctx, `
 			SELECT coalesce(cu.id::text, o.contacto_nombre), coalesce(cu.razon_social, cu.nombre, o.contacto_nombre), cu.cuit,
-			       count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenesDe(where)+`
+			       sum(o.operaciones), sum(o.monto), `+margenPorPedido+`
+			FROM `+hechosDeVenta+` o `+margenesDe(where)+`
 			LEFT JOIN customers cu ON cu.id = o.customer_id
-			WHERE `+where+` GROUP BY 1, 2, cu.cuit ORDER BY sum(o.total) DESC LIMIT 50`, args, false)
+			WHERE `+where+` GROUP BY 1, 2, cu.cuit ORDER BY sum(o.monto) DESC LIMIT 50`, args, false)
 	case "vendedor":
 		return s.filas(ctx, `
 			SELECT coalesce(se.id::text, u.id, 'sin-vendedor'), coalesce(se.nombre, u.name, 'Sin vendedor'),
 			       CASE WHEN se.id IS NULL AND u.id IS NOT NULL THEN 'Cargó la venta' ELSE NULL END,
-			       count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenesDe(where)+`
+			       sum(o.operaciones), sum(o.monto), `+margenPorPedido+`
+			FROM `+hechosDeVenta+` o `+margenesDe(where)+`
 			LEFT JOIN sellers se ON se.id = o.seller_id
 			LEFT JOIN "user" u ON u.id = o.created_by_user_id
 			WHERE `+where+`
-			GROUP BY 1, 2, 3 ORDER BY sum(o.total) DESC`, args, false)
+			GROUP BY 1, 2, 3 ORDER BY sum(o.monto) DESC`, args, false)
 	case "sucursal":
 		return s.filas(ctx, `
 			SELECT coalesce(b.id::text, 'sin-sucursal'), coalesce(b.name, 'Sin sucursal'), NULL::text,
-			       count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenesDe(where)+`
+			       sum(o.operaciones), sum(o.monto), `+margenPorPedido+`
+			FROM `+hechosDeVenta+` o `+margenesDe(where)+`
 			LEFT JOIN branches b ON b.id = o.branch_id
-			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(o.total) DESC`, args, false)
+			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(o.monto) DESC`, args, false)
 	case "canal":
 		return s.filas(ctx, `
-			SELECT o.origen::text, o.origen::text, NULL::text, count(*), sum(o.total), `+margenPorPedido+`
-			FROM orders o `+margenesDe(where)+`
-			WHERE `+where+` GROUP BY o.origen ORDER BY sum(o.total) DESC`, args, false)
+			SELECT o.origen::text, o.origen::text, NULL::text, sum(o.operaciones), sum(o.monto), `+margenPorPedido+`
+			FROM `+hechosDeVenta+` o `+margenesDe(where)+`
+			WHERE `+where+` GROUP BY o.origen ORDER BY sum(o.monto) DESC`, args, false)
 	}
 	return s.filas(ctx, `
 		SELECT coalesce(p.id::text, oi.descripcion), coalesce(p.name, oi.descripcion), max(v.label),
 		       sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
-		FROM order_items oi JOIN orders o ON o.id = oi.order_id
+		FROM `+deLosRenglones+`
 		LEFT JOIN product_variants v ON v.id = oi.variant_id
 		LEFT JOIN products p ON p.id = v.product_id
 		WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(oi.subtotal) DESC LIMIT 50`, args, false)
@@ -333,8 +369,8 @@ func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args 
 func (s *Servicio) VentasPorMes(ctx context.Context, p Periodo, f Filtros, meses int) ([]MesDelReporte, error) {
 	where, args := condiciones(p, f)
 	rs, err := s.lectura.Query(ctx, `
-		SELECT to_char(date_trunc('month', o.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires'), 'YYYY-MM'), sum(o.total)
-		FROM orders o WHERE `+where+` GROUP BY 1`, args...)
+		SELECT to_char(date_trunc('month', o.fecha AT TIME ZONE 'America/Argentina/Buenos_Aires'), 'YYYY-MM'), sum(o.monto)
+		FROM `+hechosDeVenta+` o WHERE `+where+` GROUP BY 1`, args...)
 	if err != nil {
 		return nil, err
 	}

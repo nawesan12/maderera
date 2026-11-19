@@ -333,7 +333,7 @@ paths:
         "404": { $ref: "#/components/responses/Problema" }
     post:
       operationId: DevolucionParcial
-      description: Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta o afuera). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin.
+      description: Devolución parcial de una venta en una sola operación (nota de crédito, stock y plata por caja, cuenta, afuera o bajando la deuda). La clave hace que el reintento devuelva la misma; con importe, si el total cambió no se hace. Solo el admin.
       requestBody:
         required: true
         content:
@@ -344,7 +344,7 @@ paths:
               additionalProperties: false
               properties:
                 clave: { type: string }
-                destino: { type: string, enum: [caja, cuenta, afuera] }
+                destino: { type: string, enum: [caja, cuenta, afuera, deuda], description: "deuda: lo devuelto no se había cobrado; no sale plata y baja lo que se debe" }
                 motivo: { type: string }
                 sinStock: { type: string, enum: [rota, otro], nullable: true }
                 sucursalId: { type: string, nullable: true }
@@ -643,7 +643,7 @@ components:
           delAcopio: { type: number, format: double, nullable: true }
     DatosDeDevolucion:
       type: object
-      required: [pedido, renglones, caja, cuenta, afuera, conCliente, sucursal, sucursales, ventaAnulada]
+      required: [pedido, renglones, caja, cuenta, afuera, deuda, conCliente, sucursal, sucursales, ventaAnulada]
       properties:
         pedido: { type: string }
         renglones:
@@ -663,6 +663,7 @@ components:
         caja: { type: number, format: double }
         cuenta: { type: number, format: double }
         afuera: { type: number, format: double }
+        deuda: { type: number, format: double, description: Lo que falta cobrar del pedido; se devuelve sin que salga plata }
         ventaAnulada: { type: boolean }
         conCliente: { type: boolean }
         sucursal: { type: string, nullable: true }

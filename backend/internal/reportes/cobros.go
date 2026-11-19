@@ -263,6 +263,48 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		return nil, err
 	}
 
+	// 3b. Lo que una devolución de la venta le devolvió a un recibo
+	// (receipt_refunds): por caja o por el banco, con el reparto del recibo,
+	// como el tramo de arriba. Sin esto la nota de crédito acreditaba
+	// Deudores, la caja tenía la salida y el CSV no tenía el reintegro.
+	rs, err = s.lectura.Query(ctx, `
+		SELECT t.created_at, t.importe, r.numero, r.recibido_de, t.medio::text, r.id, `+cobros.ReintegroDeLoFacturado+`
+		FROM receipt_refunds t JOIN receipts r ON r.id = t.receipt_id
+		WHERE t.created_at >= $1 AND t.created_at <= $2
+		ORDER BY t.created_at, t.id`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	for rs.Next() {
+		var fecha time.Time
+		var importe jsmath.Num
+		var numero, cliente, medio, recibo string
+		var facturado bool
+		if err := rs.Scan(&fecha, &importe, &numero, &cliente, &medio, &recibo, &facturado); err != nil {
+			rs.Close()
+			return nil, err
+		}
+		// Lo que no vuelve en efectivo vuelve por el banco, aunque se haya
+		// cobrado con un cheque: ese cheque ya no está en Valores a depositar.
+		if medio != "efectivo" {
+			medio = "transferencia"
+		}
+		c := CobroAAsentar{Fecha: fecha, Comprobante: "por devolución del recibo " + numero, Cliente: cliente, Importe: importe.F(), Medio: medio}
+		// Lo devuelto de una factura con CAE vuelve entero al blanco, contra
+		// la nota de crédito (cobros.ReintegroDeLoFacturado); lo demás, con el
+		// reparto del recibo.
+		rep, ok := reparto.Recibos[recibo]
+		if facturado || !ok {
+			asientos = append(asientos, AsientoDeReintegro(c))
+			continue
+		}
+		asientos = append(asientos, AsientosDeTramo(c, cobros.TramoPorCircuito(rep, importe.F()))...)
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, err
+	}
+
 	// 4. Los pagos sin recibo: la venta del mostrador y el pedido en línea
 	// facturados, y la deuda pagada antes de los recibos. Qué cae en el
 	// período (el cobro, el reintegro o un tramo) se decide en Go, con la

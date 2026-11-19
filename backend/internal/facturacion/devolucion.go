@@ -674,7 +674,9 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		if sucursal == "" {
 			return Devolucion{}, errEmision("Elegí la sucursal de la caja.")
 		}
-		err := tx.QueryRow(ctx, `SELECT id FROM cash_sessions WHERE branch_id = $1 AND estado = 'abierta' LIMIT 1`, sucursal).Scan(&turno)
+		// FOR SHARE: el cierre del turno espera a que la devolución confirme
+		// (y si cerró primero, el turno ya no está abierto y no se elige).
+		err := tx.QueryRow(ctx, `SELECT id FROM cash_sessions WHERE branch_id = $1 AND estado = 'abierta' LIMIT 1 FOR SHARE`, sucursal).Scan(&turno)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Devolucion{}, errEmision("No hay caja abierta en " + nombreSucursal + ".")
 		}

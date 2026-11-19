@@ -276,3 +276,48 @@ func TestNumeracionConcurrente(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// El efectivo de un recibo que confirma mientras se cierra el turno no entra
+// a un turno ya contado (comité final, bajo): el cierre tiene el turno
+// bloqueado, el recibo espera, y al seguir ve la caja cerrada y no cobra.
+func TestElReciboNoEntraAUnTurnoQueSeCierra(t *testing.T) {
+	b := armarBase(t)
+	ctx := context.Background()
+	if _, err := b.pool.Exec(ctx, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('u', 'U', 'u@prueba.test', true, now(), now())`); err != nil {
+		t.Fatal(err)
+	}
+	var turno string
+	if err := b.pool.QueryRow(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, 'u', now()) returning id`, b.sucursal).Scan(&turno); err != nil {
+		t.Fatal(err)
+	}
+	cierre, err := b.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cierre.Exec(ctx, `select estado from cash_sessions where id = $1 for update`, turno); err != nil {
+		t.Fatal(err)
+	}
+	listo := make(chan error, 1)
+	go func() {
+		_, err := emitir(t, b, Cobro{CustomerID: &b.cliente, BranchID: &b.sucursal, Origen: "panel",
+			Partes: []Parte{{Medio: "efectivo", Importe: 500}}, Caja: &Caja{TurnoID: turno}})
+		listo <- err
+	}()
+	time.Sleep(300 * time.Millisecond)
+	if _, err := cierre.Exec(ctx, `update cash_sessions set estado = 'cerrada', cerrada_at = now() where id = $1`, turno); err != nil {
+		t.Fatal(err)
+	}
+	if err := cierre.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	err = <-listo
+	var ec *ErrorDeCobro
+	if !errors.As(err, &ec) || !strings.Contains(ec.Mensaje, "se acaba de cerrar") {
+		t.Errorf("el recibo sobre un turno que se cerró: %v", err)
+	}
+	var n int
+	_ = b.pool.QueryRow(ctx, `select count(*) from cash_movements where session_id = $1`, turno).Scan(&n)
+	if n != 0 {
+		t.Errorf("entró efectivo a un turno cerrado: %d movimientos", n)
+	}
+}

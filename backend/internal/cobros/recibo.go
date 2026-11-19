@@ -360,6 +360,16 @@ func efectivoALaCaja(ctx context.Context, q *sqlc.Queries, c Caja, sucursal *str
 			return &aviso, nil
 		}
 	}
+	// Con el turno compartido, como la venta del mostrador: un cierre que
+	// arrancaba mientras el recibo confirmaba hacía el arqueo sin este
+	// efectivo, y el movimiento entraba a un turno ya contado.
+	estado, err := q.TurnoParaElEfectivo(ctx, turno)
+	if err != nil {
+		return nil, err
+	}
+	if estado != "abierta" {
+		return nil, errCobro("La caja se acaba de cerrar. Abrila para cobrar en efectivo.")
+	}
 	return nil, q.EfectivoACaja(ctx, sqlc.EfectivoACajaParams{SessionID: turno, Monto: jsmath.Fijo2(monto), Motivo: &motivo, CreadoPor: usuario})
 }
 

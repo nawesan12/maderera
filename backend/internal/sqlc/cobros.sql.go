@@ -878,3 +878,16 @@ func (q *Queries) SaldoDeCliente(ctx context.Context, customerID string) (float6
 	err := row.Scan(&column_1)
 	return column_1, err
 }
+
+const turnoParaElEfectivo = `-- name: TurnoParaElEfectivo :one
+SELECT estado::text FROM cash_sessions WHERE id = $1 FOR SHARE
+`
+
+// El candado compartido frena el cierre del turno hasta que el cobro
+// confirme, y el estado se lee después de esperarlo.
+func (q *Queries) TurnoParaElEfectivo(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, turnoParaElEfectivo, id)
+	var estado string
+	err := row.Scan(&estado)
+	return estado, err
+}

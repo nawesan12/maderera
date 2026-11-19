@@ -35,7 +35,9 @@ type Metricas struct {
 // más viejo de los dos): antes la consulta recorría orders entera en cada
 // carga del inicio. Sin período («todo») no hay principio y se recorre,
 // que es lo que se pidió. least() ignora el NULL: sin período anterior,
-// manda el actual. Los pendientes son pocos y salen del índice parcial
+// manda el actual. Lo vendido sale de hechosDeVenta, como Reportes: la
+// devolución resta en su fecha (comité final, M3), y el «Vendido con IVA»
+// del Panel da lo mismo que el reporte al que lleva. Los pendientes son pocos y salen del índice parcial
 // orders_abiertos_idx (00168), que tiene justo esas filas.
 const consultaDeMetricas = `
 		SELECT
@@ -46,7 +48,7 @@ const consultaDeMetricas = `
 		  (SELECT count(*)::int FROM orders WHERE estado NOT IN ('entregado', 'cancelado')),
 		  (SELECT count(DISTINCT customer_id)::int FROM orders
 		    WHERE estado NOT IN ('entregado', 'cancelado') AND customer_id IS NOT NULL)
-		FROM orders
+		FROM (SELECT o.estado, o.fecha AS created_at, o.monto AS total FROM `+hechosDeVenta+` o) hechos
 		WHERE estado <> 'cancelado' AND ($1::timestamptz IS NULL OR created_at >= least($1::timestamptz, $3::timestamptz))`
 
 // MetricasDelResumen es metricasDelResumen: las ventas del período (hora
@@ -93,9 +95,9 @@ type VentasDelMes struct {
 func (s *Servicio) VentasPorSucursal(ctx context.Context) ([]VentasDelMes, error) {
 	ahora := s.ahora()
 	rs, err := s.pool.Query(ctx, `
-		SELECT to_char(o.created_at AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM'), b.slug, sum(o.total)
-		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
-		WHERE o.created_at >= $1 AND o.estado <> 'cancelado'
+		SELECT to_char(o.fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM'), b.slug, sum(o.monto)
+		FROM `+hechosDeVenta+` o LEFT JOIN branches b ON b.id = o.branch_id
+		WHERE o.fecha >= $1 AND o.estado <> 'cancelado'
 		GROUP BY 1, 2`, InicioDeMes(ahora, 5))
 	if err != nil {
 		return nil, err

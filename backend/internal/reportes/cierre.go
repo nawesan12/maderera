@@ -688,14 +688,14 @@ func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) 
 	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	err := s.lectura.QueryRow(ctx, `
 		SELECT `+ventasNetas(conDescuento, "margenes.neto")+`,
-		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'facturado'")+`, (count(*) FILTER (WHERE o.papel = 'facturado'))::int,
-		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'interno'")+`, (count(*) FILTER (WHERE o.papel = 'interno'))::int,
-		  (count(*) FILTER (WHERE o.papel = 'sin-factura'))::int
-		FROM (SELECT o.id, o.total, o.subtotal, o.costo_envio,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'facturado'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'facturado'), 0)::int,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'interno'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'interno'), 0)::int,
+		  coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'sin-factura'), 0)::int
+		FROM (SELECT o.id, o.hecho, o.operaciones, o.total, o.subtotal, o.costo_envio,
 		        CASE WHEN EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.`+conCae+` AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'facturado'
 		             WHEN o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id) THEN 'interno'
 		             ELSE 'sin-factura' END AS papel
-		      FROM orders o WHERE o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2"),
+		      FROM `+hechosDeVenta+` o WHERE o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2"),
 		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
 	v.Total = jsmath.Redondear2(total.F())
 	v.Facturado.Total, v.Interno.Total = jsmath.Redondear2(facturado.F()), jsmath.Redondear2(interno.F())

@@ -715,6 +715,56 @@ func TestLaDevolucionParcialBajaLoVendido(t *testing.T) {
 	}
 }
 
+// La devolución resta en su mes, no en el de la venta (revisión del carril
+// E): la venta del 28/9 devuelta en parte el 5/10 no cambia septiembre, que
+// ya se le mandó al contador, y octubre muestra lo devuelto en negativo,
+// como la nota de crédito en su libro IVA. Los cortes por pedido restan el
+// monto pero no cuentan otra operación.
+func TestLaDevolucionRestaEnSuMes(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	placa, _ := e.catalogo(t)
+	venta := e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 9, 28, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 2.0, 2420.0, 600.0})
+	renglon := e.id(t, `select id from order_items where order_id = $1`, venta)
+	factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 1, 'X', 2000, 420, 0, 0, 0, 2420, 'autorizada', '2026-09-28T15:00:00Z', '7612', $1) returning id`, venta)
+	item := e.id(t, `insert into invoice_items (invoice_id, descripcion, cantidad, precio_unitario, neto, iva, subtotal, order_item_id)
+		values ($1, 'Fenólico', 2, 1210, 2000, 420, 2420, $2) returning id`, factura, renglon)
+	dev := e.id(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, created_by_user_id, created_at)
+		values ('d1', $1, $2, 1210, 'afuera', 'sobró', $3, '2026-10-05T15:00:00Z') returning id`, venta, factura, usuario)
+	e.exec(t, `insert into devolucion_items (devolucion_id, invoice_item_id, order_item_id, cantidad, al_stock, importe) values ($1, $2, $3, 1, true, 1210)`, dev, item, renglon)
+
+	var sep, oct ResumenDelMes
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-09")
+	_ = json.Unmarshal([]byte(cuerpo), &sep)
+	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	_ = json.Unmarshal([]byte(cuerpo), &oct)
+	if q := (Resultado{VentasNetas: 2000, Costo: 1200, Resultado: 800}); sep.Resultado.Actual != q || sep.Vendido.Facturado.Total != 2000 || sep.Vendido.Facturado.Cantidad != 1 {
+		t.Errorf("septiembre: %+v, vendido %+v", sep.Resultado.Actual, sep.Vendido)
+	}
+	if q := (Resultado{VentasNetas: -1000, Costo: -600, Resultado: -400}); oct.Resultado.Actual != q || oct.Vendido.Facturado.Total != -1000 || oct.Vendido.Facturado.Cantidad != 0 {
+		t.Errorf("octubre: %+v, vendido %+v", oct.Resultado.Actual, oct.Vendido)
+	}
+	var cli, prod ReporteDeVentas
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=cliente&periodo=mes")
+	_ = json.Unmarshal([]byte(cuerpo), &cli)
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
+	_ = json.Unmarshal([]byte(cuerpo), &prod)
+	if cli.Totales.Total != -1210 || cli.Totales.Cantidad != 0 || cli.Totales.NetoVenta != -1000 || len(cli.Filas) != 1 || cli.Filas[0].Total != -1210 {
+		t.Errorf("por cliente: %+v %+v", cli.Totales, cli.Filas)
+	}
+	if prod.Totales.Total != -1210 || prod.Totales.Cantidad != -1 || prod.Totales.LineasSinCosto != 0 {
+		t.Errorf("por producto: %+v", prod.Totales)
+	}
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=cliente&periodo=mes-pasado")
+	_ = json.Unmarshal([]byte(cuerpo), &cli)
+	if cli.Totales.Total != 2420 || cli.Totales.Cantidad != 1 || cli.Totales.NetoVenta != 2000 {
+		t.Errorf("por cliente, septiembre: %+v", cli.Totales)
+	}
+}
+
 // La mercadería que salió con un remito parcial y no se cobró está en «Me
 // deben» (comité final, M4): lo remitido menos lo cobrado. Si lo cobrado
 // cubre lo remitido, no; y el remito anulado no cuenta.

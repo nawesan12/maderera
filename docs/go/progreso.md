@@ -1989,3 +1989,37 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - Ojo con `TestGananciaSegunLasReglas` (reportes): falla entre las 21 y las
   24 de Argentina, porque el gasto se carga con `current_date` de la base (en
   UTC) y el lapso se arma en hora local. No es de T3.
+
+## T4 (18/11): el mostrador sin sustos
+
+- **Antes de desplegar, obligatorio:** correr
+  `scripts/sql/t4-media-placa-en-cola.sql` (solo lee) contra producción y
+  anotar acá el resultado. La media placa pasa a descontar el disco
+  (`floor((entera − sierra) / 2)`, `ResolverMedida` y `medidaDePlaca`) y el
+  plano de un trabajo se recalcula al leerlo: un trabajo en cola de media
+  placa con una pieza justo de la mitad vieja aparece como «no entra». Si la
+  consulta devuelve filas, se decide con cada uno antes del despliegue (otro
+  disco desde la ficha, placa entera, o hablar con el cliente: en el depósito
+  esa pieza tampoco entraba). Resultado en producción: _pendiente_.
+- Las teclas: `accionDeLaTecla` (`lib/mostrador/atajos.ts`) ignora la tecla
+  que un campo ya usó (`defaultPrevented`). Sirve **porque `useAtajos`
+  escucha en burbuja**; en captura vuelve el error de Ctrl+Enter que cobraba
+  sin la línea (hay una prueba que lee el `addEventListener`). Ctrl+Enter con
+  un resultado en el buscador agrega y cobra en el render siguiente, con la
+  línea adentro (`useEffectEvent`); con texto sin resultado no cobra.
+- Sin caja, el botón grande dice «Abrir la caja» y la tecla hace lo mismo;
+  abierta desde ahí, el cursor vuelve a «con cuánto paga» y el cobro espera
+  400 ms. Si Go rechaza el efectivo porque otra terminal cerró el turno, la
+  pantalla lo cree en el acto (se reconoce por el texto de `venta.go`).
+- Stock: el motivo fija la dirección en `AjustarCon` (ingreso suma; rotura y
+  faltante restan; devolución, corrección y otro, los dos lados; lo contado
+  solo con «conteo»). Motivos nuevos en el contrato: `faltante` y
+  `correccion` (el «Deshacer», que asienta el inverso y no borra nada).
+- Entregas: `RevisarEnteros` va aparte de `ValidarEntrega` para no tocar el
+  golden. Lo que no se fracciona sale entero y sin el centavo de tolerancia,
+  salvo exactamente lo pendiente. Qué se fracciona sale de la unidad **del
+  producto**, no del renglón (que en una línea a mano es texto libre: «m» de
+  tapacanto); el acopio lo manda como `enteros`.
+- Quedó sin tocar, esperando a Nahuel: el campo «Sierra» del corte del
+  mostrador (pedido suyo del 30/9). La revisión propone sacarlo y corregir el
+  disco desde `/admin/cortes`.

@@ -122,7 +122,9 @@ export function DialogoAjuste({
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
-      <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
+      {/* La acción principal de Precios, en naranja: con los siete botones
+          del mismo peso no se veía qué se hace acá (comité final). */}
+      <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-accion px-3.5 text-base font-semibold text-white transition-colors hover:bg-accion-hover">
         <Percent className="h-5 w-5" />
         Ajustar precios
       </DialogTrigger>

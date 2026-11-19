@@ -615,7 +615,9 @@ func TestLoQueVenceEn48HorasEsDeHoy(t *testing.T) {
 	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
 	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
 		values ($1, 'factura_a', 1, 1, 100, 0, 0, 0, 0, 100, now(), now() + interval '30 hours'),
-		       ($1, 'factura_a', 1, 2, 100, 0, 0, 0, 0, 100, now(), now() + interval '6 days')`, prov)
+		       ($1, 'factura_a', 1, 2, 100, 0, 0, 0, 0, 100, now(), now() + interval '6 days'),
+		       ($1, 'factura_a', 1, 3, 100, 0, 0, 0, 0, 100, now() - interval '20 days', now() - interval '2 days'),
+		       ($1, 'factura_a', 1, 4, 100, 0, 0, 0, 0, 100, now() - interval '20 days', now() - interval '3 days')`, prov)
 	ps, err := e.s.PendientesDelRol(context.Background(), "admin")
 	if err != nil {
 		t.Fatal(err)
@@ -637,6 +639,17 @@ func TestLoQueVenceEn48HorasEsDeHoy(t *testing.T) {
 	}
 	if len(vistos) != len(quiere) {
 		t.Errorf("faltan pendientes: %v", vistos)
+	}
+	// Las tres cuentas de las compras salen de una sola pasada: las
+	// vencidas no se mezclan con las que vencen pronto.
+	vencidas := 0
+	for _, p := range ps {
+		if p.Clave == "compras-vencidas" {
+			vencidas = p.Cantidad
+		}
+	}
+	if vencidas != 2 {
+		t.Errorf("compras vencidas: %d, quería 2", vencidas)
 	}
 	// El depósito no ve cheques ni compras.
 	ps, err = e.s.PendientesDelRol(context.Background(), "deposito")

@@ -1,9 +1,14 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   TOPE_DE_CANTIDAD,
   cantidadConUnidad,
   cantidadDeConsulta,
   cantidadInvalida,
+  problemaDeCantidad,
   enlaceDeConsulta,
   textoDeConsulta,
 } from "@/lib/catalogo/consulta";
@@ -40,8 +45,27 @@ describe("cantidad de la consulta", () => {
     expect(cantidadDeConsulta("20 m²", "metro_cuadrado")).toBe(20);
   });
 
-  it("topea en 9999", () => {
-    expect(cantidadDeConsulta("150000", "placa")).toBe(TOPE_DE_CANTIDAD);
+  it("arriba de 9999 no hay cantidad, y el campo lo dice", () => {
+    expect(cantidadDeConsulta(String(TOPE_DE_CANTIDAD), "placa")).toBe(TOPE_DE_CANTIDAD);
+    expect(cantidadDeConsulta("150000", "placa")).toBeNull();
+    expect(cantidadInvalida("150000", "placa")).toBe(true);
+    expect(problemaDeCantidad("150000", "placa")).toBe("Hasta 9.999.");
+  });
+
+  it("dice qué tiene de malo lo tipeado", () => {
+    expect(problemaDeCantidad("", "placa")).toBeNull();
+    expect(problemaDeCantidad("12", "placa")).toBeNull();
+    expect(problemaDeCantidad("doce", "placa")).toBe("Poné un número.");
+    expect(problemaDeCantidad("0", "placa")).toBe("Poné un número.");
+    expect(problemaDeCantidad("2,5", "placa")).toBe("Sin decimales.");
+  });
+
+  it("a lo que se mide no le dice «Sin decimales»", () => {
+    // 0,004 m² redondeado a centésimos da 0: no sirve, pero no por los decimales.
+    expect(cantidadDeConsulta("0,004", "metro_cuadrado")).toBeNull();
+    expect(problemaDeCantidad("0,004", "metro_cuadrado")).toBe("Mínimo 0,01.");
+    expect(problemaDeCantidad("0,001", "metro_lineal")).toBe("Mínimo 0,01.");
+    expect(problemaDeCantidad("2,5", "metro_cuadrado")).toBeNull();
   });
 
   it("singular y plural, con la unidad dicha en una oración", () => {
@@ -87,5 +111,33 @@ describe("enlace de wa.me", () => {
     expect(crudo).toContain("%C2%B2"); // ²
     expect(crudo).toContain("%26"); // &
     expect(decodeURIComponent(crudo)).toBe(texto);
+  });
+});
+
+describe("el campo de la cantidad en la ficha", () => {
+  const ficha = readFileSync(new URL("../components/catalogo/selector-variante.tsx", import.meta.url), "utf8");
+  it("con una cantidad que no sirve no manda el mensaje y dice por qué", () => {
+    expect(ficha).toContain("deshabilitado={invalida}");
+    expect(ficha).toMatch(/role="alert"[^>]*>\s*<TriangleAlert[^>]*\/>\s*\{problema\}/);
+  });
+  it("el error no se confunde con el foco", () => {
+    // El foco es naranja (border-accion): el error va en el rojo de los campos inválidos.
+    expect(ficha).toMatch(/invalida \? "border-destructive/);
+    expect(ficha).not.toMatch(/invalida \? "border-acento-texto/);
+  });
+});
+
+describe("el botón de WhatsApp deshabilitado", () => {
+  const html = (deshabilitado: boolean) =>
+    renderToStaticMarkup(createElement(BotonWhatsapp, { enlace: "https://wa.me/1", deshabilitado }, "Consultar precio"));
+  it("es un enlace deshabilitado, sin href", () => {
+    const h = html(true);
+    expect(h).toMatch(/^<span role="link" aria-disabled="true"/);
+    expect(h).not.toContain("href");
+    expect(h).toContain("Consultar precio");
+  });
+  it("habilitado abre wa.me", () => {
+    expect(html(false)).toMatch(/^<a href="https:\/\/wa\.me\/1" target="_blank"/);
+    expect(html(false)).not.toContain("aria-disabled");
   });
 });

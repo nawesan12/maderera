@@ -4,6 +4,7 @@ import { Suspense, useState, useSyncExternalStore, type ComponentProps } from "r
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { FondoDeRubro } from "@/components/catalogo/fondo-de-rubro";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Menu,
@@ -43,8 +44,8 @@ const productLinks: {
   desc: string;
   /** Para lo que no es una categoría del catálogo: Moldava. */
   href?: string;
-  /** De qué rubro toma la foto. */
-  imagenDe?: string;
+  /** De qué rubro toma el tono de la placa, cuando no es una categoría. */
+  tonoDe?: string;
   propia?: boolean;
 }[] = [
   { name: "Techos", slug: "techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
@@ -53,12 +54,13 @@ const productLinks: {
   { name: "Molduras", slug: "molduras", icon: Minus, desc: "Finger Joint y otras marcas" },
   {
     // La línea propia, como un rubro más (notas del 9/11/2026). No es una
-    // categoría de la base sino una marca: lleva a su página, con la foto de
-    // las molduras.
+    // categoría de la base sino una marca: lleva a su página. Sin la foto de
+    // las molduras, que repetida al lado parecía el mismo rubro dos veces
+    // (comité final, M18): va con la placa del pino.
     name: "Moldava",
     slug: "moldava",
     href: "/moldava",
-    imagenDe: "molduras",
+    tonoDe: "molduras",
     icon: Minus,
     desc: "Molduras de fabricación propia",
     propia: true,
@@ -115,8 +117,15 @@ const enlacesDirectos = [
   // barra superior, que en el teléfono ni existe, y la clienta pidió que la
   // cuenta profesional se encuentre sin buscarla.
   { name: "Profesionales", href: "/profesionales" },
-  { name: "Sucursales", href: "/sucursales" },
 ];
+
+/*
+ * Sucursales va en la barra de arriba, con el teléfono y el horario: es dónde
+ * encontrarnos, lo mismo que esa barra. En la de abajo no entraba: medida
+ * (revisión del comité), a 1024, 1280 y desde 1536 px la barra se pasaba del
+ * ancho y «Ingresar» quedaba cortado. En el teléfono sigue en el cajón.
+ */
+const enlaceSucursales = { name: "Sucursales", href: "/sucursales" };
 
 /*
  * "Catálogo" no está en esta lista y no es un olvido.
@@ -217,6 +226,13 @@ export function Navbar({
           */}
           <div className="ml-auto flex items-center gap-3.5">
             <Link
+              href={enlaceSucursales.href}
+              className="uppercase tracking-[0.07em] transition-colors hover:text-white"
+            >
+              {enlaceSucursales.name}
+            </Link>
+            <span className="text-white/20">|</span>
+            <Link
               href="/contacto"
               className="uppercase tracking-[0.07em] transition-colors hover:text-white"
             >
@@ -241,7 +257,7 @@ export function Navbar({
 
       {/* Barra principal */}
       <nav className="sticky top-0 z-50 border-b border-linea-suave bg-[var(--chrome-fondo)] backdrop-blur-[12px]">
-        <div className="contenedor flex h-[72px] items-center gap-6">
+        <div className="contenedor flex h-[72px] items-center gap-5 xl:gap-6">
           {/* El logo, más grande y con el nombre siempre a la vista: la
               clienta pidió que tenga más presencia y que nunca se pierda. */}
           <Link href="/" className="shrink-0">
@@ -282,13 +298,13 @@ export function Navbar({
               <EnlaceDeSeccion
                 href="/catalogo"
                 clase={(activa) =>
-                  `relative flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                  `relative flex h-10 items-center gap-1.5 rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                     productsOpen || activa
                       ? "bg-sitio-alt text-acento-texto"
                       : "text-foreground"
                   } ${
                     activa
-                      ? "after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      ? "after:absolute after:inset-x-[9px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : ""
                   }`
                 }
@@ -321,7 +337,7 @@ export function Navbar({
                     </div>
                     <div className="entra-en-orden grid grid-cols-3 gap-2">
                       {productLinks.map((link, i) => {
-                        const rubro = rubros[link.imagenDe ?? link.slug];
+                        const rubro = rubros[link.slug];
                         return (
                           <Link
                             key={link.slug}
@@ -329,7 +345,7 @@ export function Navbar({
                             style={{ "--i": i } as React.CSSProperties}
                             className="group/item relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-xl bg-oscuro-marca text-white"
                           >
-                            {rubro?.imagen && (
+                            {rubro?.imagen ? (
                               <Image
                                 src={rubro.imagen}
                                 alt=""
@@ -337,6 +353,8 @@ export function Navbar({
                                 sizes="160px"
                                 className="object-cover transition-transform duration-300 group-hover/item:scale-[1.07]"
                               />
+                            ) : (
+                              <FondoDeRubro rubro={link.tonoDe ?? link.slug} />
                             )}
                             {/* El velo: sin él, un nombre blanco sobre una foto
                                 clara no se lee. Se oscurece al pasar, que es lo
@@ -459,9 +477,9 @@ export function Navbar({
                 key={link.href}
                 href={link.href}
                 clase={(activa) =>
-                  `relative flex h-10 items-center whitespace-nowrap rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
+                  `relative flex h-10 items-center whitespace-nowrap rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
                     activa
-                      ? "text-acento-texto after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      ? "text-acento-texto after:absolute after:inset-x-[9px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : "text-foreground"
                   }`
                 }
@@ -488,7 +506,7 @@ export function Navbar({
               onMouseLeave={() => setMasOpen(false)}
             >
               <button
-                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                   masOpen ? "bg-sitio-alt text-acento-texto" : "text-texto-2"
                 }`}
                 aria-expanded={masOpen}
@@ -525,21 +543,21 @@ export function Navbar({
                 sin el flotante, en una computadora solo se abría desde el
                 catálogo y el 404, y quien estaba en la portada, una ficha o
                 el corte no tenía cómo llamarlo ni retomar la charla. En el
-                celular vive en el menú. Entre lg y 2xl la barra no da para la
-                etiqueta: queda el personaje, con su nombre en aria-label. */}
+                celular vive en el menú. El personaje solo no decía qué era
+                (comité final), y la etiqueta entera no entra: medida, desde
+                2xl dejaba la barra justa al píxel. Va «Ayuda» en todos los
+                anchos, y sin aria-label: el nombre es el texto que se ve, así
+                quien dice «clic en Ayuda» por voz lo encuentra. */}
             <button
               type="button"
               aria-haspopup="dialog"
-              aria-label={ETIQUETA_ASISTENTE}
               onClick={abrirAsistente}
               className="hidden h-10 items-center gap-2 rounded-[11px] px-2 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto lg:flex"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-naranja-claro">
                 <PersonajeAsistente className="h-4 w-4 text-acento-sobre-claro" />
               </span>
-              <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] 2xl:inline">
-                {ETIQUETA_ASISTENTE}
-              </span>
+              <span className="whitespace-nowrap text-[13px] font-bold uppercase tracking-[0.045em]">Ayuda</span>
             </button>
 
             <ThemeToggle />
@@ -602,7 +620,7 @@ export function Navbar({
                       tarjeta: una grilla de tarjetas en 320 px deja los nombres
                       ilegibles, y acá lo que se busca es leer rápido. */}
                   {productLinks.map((link) => {
-                    const rubro = rubros[link.imagenDe ?? link.slug];
+                    const rubro = rubros[link.slug];
                     return (
                       <Link
                         key={link.slug}
@@ -687,7 +705,7 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Navegación
                   </p>
-                  {[...enlacesDirectos, ...enlacesMas].map((link) => (
+                  {[...enlacesDirectos, enlaceSucursales, ...enlacesMas].map((link) => (
                     <EnlaceDeSeccion
                       key={link.href}
                       href={link.href}

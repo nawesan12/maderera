@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, use, useState, type ComponentProps } from "react";
-import { Check, Loader2, Plus, Scissors } from "lucide-react";
+import { Check, Loader2, Plus, Scissors, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DisponibilidadPorSucursal } from "@/components/catalogo/disponibilidad";
@@ -10,7 +10,7 @@ import { useTienda } from "@/lib/tienda-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
-import { cantidadDeConsulta, cantidadInvalida, enlaceDeConsulta, textoDeConsulta } from "@/lib/catalogo/consulta";
+import { cantidadDeConsulta, enlaceDeConsulta, problemaDeCantidad, textoDeConsulta } from "@/lib/catalogo/consulta";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
@@ -192,7 +192,7 @@ export function SelectorVariante({
                         : "superficie hover:border-accion/40"
                   }`}
                 >
-                  <span className="tabular flex items-center gap-1.5 text-[14.5px]">
+                  <span className="flex items-center gap-1.5 text-[14.5px] tabular-nums">
                     {activa && <Check className="h-3.5 w-3.5" />}
                     {v.label}
                   </span>
@@ -280,7 +280,7 @@ export function SelectorVariante({
             {/* Por m², la cuenta que el cliente hace de cabeza: cuánto es una
                 placa. Sin esto «$9.800 el m²» no dice cuánto sale la placa. */}
             {porM2 && area && (
-              <p className="tabular mt-1 text-[14.5px] text-texto-2">
+              <p className="mt-1 text-[14.5px] text-texto-2 tabular-nums">
                 Placa de {formatearCantidad((elegida.largoMm ?? 0) / 1000)} ×{" "}
                 {formatearCantidad((elegida.anchoMm ?? 0) / 1000)} m ={" "}
                 {formatearCantidad(Math.round(area * 100) / 100)} m² ·{" "}
@@ -480,18 +480,23 @@ function ConsultaDeLaMedida({
   // Con media placa se cuentan medias: el sufijo lo dice, para que «12» no
   // se lea como doce placas enteras.
   const sufijo = presentacion ? "medias" : formatearUnidad(unidad);
-  const invalida = cantidadInvalida(cantidadTexto, unidad);
+  // Lo inválido se marca y no se manda (comité final, M19): antes «15000»
+  // salía como 9999 y «2,5» placas salía sin cantidad, sin que nadie lo viera.
+  const problema = problemaDeCantidad(cantidadTexto, unidad);
+  const invalida = problema !== null;
 
   return (
     <>
       <div className="rounded-[14px] superficie px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
-        <p className="tabular text-2xl font-bold leading-tight tracking-[-0.02em]">{medida.label}</p>
+        {/* Medidas en la sans con cifras tabulares (comité final, M21): la mono
+            es para importes y códigos. */}
+        <p className="text-2xl font-bold leading-tight tracking-[-0.02em] tabular-nums">{medida.label}</p>
         <p className="mt-1.5 text-[14.5px] text-texto-2">
           {como ?? `Se vende por ${formatearUnidadLarga(unidad)}`}
           {detalles.map((d) => ` · ${d}`)}
         </p>
         {area && (
-          <p className="tabular mt-1 text-[14.5px] text-texto-2">
+          <p className="mt-1 text-[14.5px] text-texto-2 tabular-nums">
             Placa de {formatearCantidad((medida.largoMm ?? 0) / 1000)} ×{" "}
             {formatearCantidad((medida.anchoMm ?? 0) / 1000)} m ={" "}
             {formatearCantidad(Math.round(area * 100) / 100)} m²
@@ -510,7 +515,9 @@ function ConsultaDeLaMedida({
       <div className="flex items-stretch gap-2.5">
         <label
           className={`flex h-[50px] w-[124px] flex-none items-center rounded-[10px] border bg-card pr-3 ${
-            invalida ? "border-acento-texto" : "border-linea focus-within:border-accion"
+            // El error con el rojo y el aro de los campos inválidos del resto
+            // (components/ui/input.tsx): el naranja era casi el del foco.
+            invalida ? "border-destructive ring-3 ring-destructive/20" : "border-linea focus-within:border-accion"
           }`}
         >
           <input
@@ -521,16 +528,28 @@ function ConsultaDeLaMedida({
             placeholder="Cant."
             aria-label={`Cantidad, en ${presentacion ? "medias placas" : formatearUnidadPlural(unidad)}`}
             aria-invalid={invalida || undefined}
+            aria-describedby={invalida ? "problema-de-cantidad" : undefined}
             className="tabular h-full w-full min-w-0 bg-transparent pl-3.5 text-[17px] font-semibold outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-texto-3"
           />
           <span aria-hidden className="text-[14.5px] text-texto-2">
             {sufijo}
           </span>
         </label>
-        <BotonWhatsapp enlace={enlace(texto)} tamano="grande" className="min-w-0 flex-1 px-3">
+        <BotonWhatsapp
+          enlace={enlace(texto)}
+          tamano="grande"
+          deshabilitado={invalida}
+          className="min-w-0 flex-1 px-3"
+        >
           <span className="truncate">Consultar precio</span>
         </BotonWhatsapp>
       </div>
+      {problema && (
+        <p id="problema-de-cantidad" role="alert" className="-mt-1 flex items-center gap-1.5 text-[14.5px] text-destructive">
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+          {problema}
+        </p>
+      )}
     </>
   );
 }

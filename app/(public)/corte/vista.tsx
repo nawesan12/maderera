@@ -32,7 +32,7 @@ import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto
 import { formatearMonto } from "@/lib/formato";
 import { agregarCorteAlCarrito, guardarConsultaDeCorte } from "./actions";
 import { useTienda } from "@/lib/tienda-context";
-import { DONDE_SE_CORTA, HORARIO_CORTES, dondeSeCortaAlEmpezar } from "@/lib/sucursales";
+import { DONDE_SE_CORTA, HORARIO_CORTES, cortaPlacas, dondeSeCortaEn } from "@/lib/sucursales";
 
 /**
  * El despiece a medio cargar queda en el navegador: en la obra se corta la
@@ -192,9 +192,15 @@ function VistaDeCorte({
       delEnlace.piezas.length > 0 ? filasDelEnlace(delEnlace.piezas) : undefined,
     ),
   ]);
+  // Solo las sucursales que cortan (DONDE_SE_CORTA): hasta que la clienta
+  // confirme, Casa Central no se ofrece y el chip no aparece (decisión 7 del
+  // comité final). Si ninguna de las que llegan corta, van todas: mejor
+  // mandar el pedido a una sucursal que no dejar mandarlo.
+  const queCortan = sucursales.filter((s) => cortaPlacas(s.slug));
+  const ofrecidas = queCortan.length > 0 ? queCortan : sucursales;
   // El aserradero es donde está la seccionadora: es la que arranca elegida.
   const [sucursal, setSucursal] = useState(
-    sucursales.find((s) => s.slug === DONDE_SE_CORTA.sucursal)?.slug ?? sucursales[0]?.slug ?? "",
+    ofrecidas.find((s) => s.slug === DONDE_SE_CORTA.sucursal)?.slug ?? ofrecidas[0]?.slug ?? "",
   );
   const [aviso, setAviso] = useState<string | null>(null);
   const [guardando, empezar] = useTransition();
@@ -237,7 +243,7 @@ function VistaDeCorte({
   // que tiene piezas.
   const listos = resueltos.map((r, i) => ({ ...r, i })).filter((r) => r.placa && r.piezas.length > 0);
   const sePuede = listos.length > 0 && listos.every((r) => planos[r.i]!.noEntran.length === 0) && !calculando;
-  const destino = sucursales.find((s) => s.slug === sucursal);
+  const destino = ofrecidas.find((s) => s.slug === sucursal);
   const varios = grupos.length > 1;
 
   function cambiarGrupo(i: number, cambio: Partial<GrupoDelArmador>) {
@@ -416,7 +422,7 @@ function VistaDeCorte({
       <header className="superficie flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl px-5 py-3.5">
         <div className="mr-auto">
           <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em]">Corte de placas a medida</h1>
-          <p className="text-sm text-texto-2">{dondeSeCortaAlEmpezar()} · {HORARIO_CORTES}</p>
+          <p className="text-sm text-texto-2">{dondeSeCortaEn(sucursal)} · {HORARIO_CORTES}</p>
         </div>
 
         <dl className="hidden items-center gap-6 sm:flex">
@@ -426,9 +432,9 @@ function VistaDeCorte({
           {activa && totales.total > 0 && <Cifra valor={formatearMonto(totales.total)} nombre="total" />}
         </dl>
 
-        {sucursales.length > 1 && (
+        {ofrecidas.length > 1 && (
           <div className="flex gap-1.5" role="group" aria-label="Sucursal">
-            {sucursales.map((s) => (
+            {ofrecidas.map((s) => (
               <Chip key={s.slug} activo={sucursal === s.slug} onClick={() => setSucursal(s.slug)}>
                 {s.nombre}
               </Chip>
@@ -555,7 +561,7 @@ function VistaDeCorte({
             <PlanoSimple plano={planoActual} unaColumna />
           ) : (
             <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl bg-hundida">
-              <span className="tabular text-texto-3">
+              <span className="tabular-nums text-texto-3">
                 {actual.medida.largo} × {actual.medida.ancho} mm
               </span>
             </div>
@@ -705,7 +711,7 @@ function EditorDeGrupo({
           <div className="min-w-[220px] flex-1">
             <ElegirTapacanto key={grupo.clave} grupo={grupo} tapacantos={tapacantos} alCambiar={alCambiar} />
           </div>
-          <span className="tabular pb-3 text-sm text-texto-3">
+          <span className="pb-3 text-sm tabular-nums text-texto-3">
             {nombreDeLaMitad(mitad)} · {medida.largo} × {medida.ancho} mm
           </span>
         </div>
@@ -756,6 +762,7 @@ function EditorDeGrupo({
                   <SelectorDeCanto
                     chico
                     rotulo
+                    conEstado
                     largo={Number(f.largo) || 0}
                     ancho={Number(f.ancho) || 0}
                     lados={f.lados}
@@ -810,11 +817,12 @@ function EditorDeGrupo({
             largo={medida.largo}
             ancho={Number(tiras.ancho) || 80}
             soloLargos
+            conEstado
             lados={{ ...tiras.lados, izquierda: false, derecha: false }}
             alCambiar={(lados) => alCambiar({ tiras: { ...tiras, lados: { ...lados, izquierda: false, derecha: false } } })}
           />
           {piezas[0] && (
-            <p className="tabular w-full text-sm text-texto-2">
+            <p className="w-full text-sm tabular-nums text-texto-2">
               {piezas[0].cantidad} tiras de {piezas[0].largoMm} × {piezas[0].anchoMm} mm
             </p>
           )}
@@ -846,7 +854,9 @@ function ElegirTapacanto({
     <input
       value={grupo.canto}
       onChange={(e) => alCambiar({ canto: e.target.value, cantoId: null })}
-      placeholder="Tapacanto"
+      // El ejemplo vuelve (comité final): «Tapacanto» solo no decía qué
+      // escribir, y el color es lo que pregunta quien atiende.
+      placeholder="Tapacanto: blanco, o el de la placa"
       aria-label={tapacantos.length > 0 ? "Otro tapacanto" : undefined}
       className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
     />

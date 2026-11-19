@@ -279,7 +279,17 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		chequesEn48, comprasEn48                                       int
 	}
 	ahora := s.ahora()
+	// Las facturas de compra impagas se recorren una sola vez (comité
+	// final): antes eran tres subconsultas, cada una con su suma de
+	// imputaciones por factura. Sin permiso ($4 falso) el CTE no lee nada.
 	err := s.pool.QueryRow(ctx, `
+		WITH compras AS (
+		  SELECT count(*) FILTER (WHERE fecha_vencimiento < now())::int AS vencidas,
+		         count(*) FILTER (WHERE fecha_vencimiento >= now() + interval '48 hours' AND fecha_vencimiento < now() + interval '7 days')::int AS por_vencer,
+		         count(*) FILTER (WHERE fecha_vencimiento >= now() AND fecha_vencimiento < now() + interval '48 hours')::int AS en48
+		  FROM purchase_invoices f
+		  WHERE $4 AND fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
+		    AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01)
 		SELECT
 		  CASE WHEN $1 THEN (SELECT count(*) FILTER (WHERE estado IN ('pendiente', 'preparando'))::int FROM orders) ELSE 0 END,
 		  CASE WHEN $1 THEN (SELECT count(*) FILTER (WHERE estado IN ('listo', 'en-camino'))::int FROM orders) ELSE 0 END,
@@ -288,12 +298,8 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*) FILTER (WHERE fecha_pago >= now() + interval '48 hours' AND fecha_pago < now() + interval '7 days')::int FROM cheques
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
-		  CASE WHEN $4 THEN (SELECT count(*) FILTER (WHERE fecha_vencimiento < now())::int FROM purchase_invoices f
-		                     WHERE fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
-		                       AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01) ELSE 0 END,
-		  CASE WHEN $4 THEN (SELECT count(*) FILTER (WHERE fecha_vencimiento >= now() + interval '48 hours' AND fecha_vencimiento < now() + interval '7 days')::int FROM purchase_invoices f
-		                     WHERE fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
-		                       AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01) ELSE 0 END,
+		  (SELECT vencidas FROM compras),
+		  (SELECT por_vencer FROM compras),
 		  CASE WHEN $5 THEN (SELECT count(*)::int FROM professional_applications WHERE estado = 'pendiente') ELSE 0 END,
 		  CASE WHEN $6 THEN (SELECT count(*)::int FROM product_reviews WHERE estado = 'pendiente') ELSE 0 END,
 		  CASE WHEN $7 THEN (SELECT count(*)::int FROM inventory i JOIN product_variants v ON v.id = i.variant_id
@@ -305,9 +311,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		                     AND valido_hasta >= now() AND valido_hasta < now() + interval '3 days') ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*) FILTER (WHERE fecha_pago >= now() AND fecha_pago < now() + interval '48 hours')::int FROM cheques
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
-		  CASE WHEN $4 THEN (SELECT count(*) FILTER (WHERE fecha_vencimiento >= now() AND fecha_vencimiento < now() + interval '48 hours')::int FROM purchase_invoices f
-		                     WHERE fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
-		                       AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01) ELSE 0 END`,
+		  (SELECT en48 FROM compras)`,
 		ve("/admin/pedidos"), ve("/admin/cortes"), ve("/admin/cheques"), ve("/admin/compras/facturas"),
 		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), ahora).
 		Scan(&c.porPreparar, &c.listos, &c.cortes, &c.chequesVencidos, &c.chequesPorVencer, &c.comprasVencidas, &c.comprasPorVencer,

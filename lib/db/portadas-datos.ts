@@ -28,10 +28,21 @@ export const PORTADA: Record<string, string> = {
   placas: "/fotos/photo-1700973408133-b45276ec8feb.jpg",
   pisos: "/fotos/photo-1573869908170-64b53a60d8da.jpg",
   molduras: "/fotos/photo-1764283824453-02cd00e49143.jpg",
-  ferreteria: "/fotos/photo-1558618666-fcd25c85cd64.jpg",
   // Gris y de intemperie, para no confundirse con el piso interior de arriba.
   "decks-y-escaleras": "/fotos/photo-1585597985125-9ad0229ae71d.jpg",
   // Perfiles metálicos, placa y aislante: las tres cosas que dice el rubro.
   "construccion-en-seco": "/fotos/photo-1768321903269-8a1f17a45c25.jpg",
+};
+
+/**
+ * Las portadas de banco que salieron (comité final, M18): la de Ferretería era
+ * un taller cualquiera y la de Cubiertas un techo de tejas, que no se vende.
+ * Sin portada, la tarjeta del rubro va con la placa de su tono de madera
+ * (components/catalogo/fondo-de-rubro.tsx), la misma regla que los productos
+ * sin foto. Quedan anotadas porque la 00150 las borra de los productos y la
+ * 00180 de las categorías: tests/portadas-migracion.test.ts lo vigila.
+ */
+export const PORTADAS_RETIRADAS: Record<string, string> = {
+  ferreteria: "/fotos/photo-1558618666-fcd25c85cd64.jpg",
   cubiertas: "/fotos/photo-1632759145351-1d592919f522.jpg",
 };

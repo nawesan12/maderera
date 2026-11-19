@@ -56,23 +56,89 @@ export function TablasApilables() {
         }
       }
     };
-    rotular();
-    let pendiente = 0;
-    const observador = new MutationObserver(() => {
-      cancelAnimationFrame(pendiente);
-      pendiente = requestAnimationFrame(rotular);
-    });
+    const { programar, cancelar } = rotularAgrupado(window, rotular);
+    programar();
+    const observador = new MutationObserver(programar);
     observador.observe(document.body, { childList: true, subtree: true });
-    const alCambiarElTamano = () => {
-      cancelAnimationFrame(pendiente);
-      pendiente = requestAnimationFrame(rotular);
-    };
-    window.addEventListener("resize", alCambiarElTamano);
+    window.addEventListener("resize", programar);
     return () => {
-      window.removeEventListener("resize", alCambiarElTamano);
+      window.removeEventListener("resize", programar);
       observador.disconnect();
-      cancelAnimationFrame(pendiente);
+      cancelar();
     };
   }, []);
   return null;
+}
+
+/**
+ * Junta los pedidos de rotular en una sola espera.
+ *
+ * Si ya hay una en marcha, el pedido nuevo no la reinicia: la espera que
+ * está corre igual y rotula lo que haya en ese momento. Antes cada cambio
+ * cancelaba y arrancaba otra, y en una pantalla que se refresca en vivo (el
+ * tablero) o con un buscador que redibuja en cada tecla el plazo volvía a
+ * cero sin parar: la tabla apilada en el celular quedaba sin nombres en las
+ * celdas (revisión del comité).
+ */
+export function rotularAgrupado(ventana: VentanaQuieta, fn: () => void): { programar: () => void; cancelar: () => void } {
+  let cancelarEspera: (() => void) | null = null;
+  return {
+    programar() {
+      if (cancelarEspera) return;
+      cancelarEspera = cuandoEsteQuieto(ventana, () => {
+        cancelarEspera = null;
+        fn();
+      });
+    },
+    cancelar() {
+      cancelarEspera?.();
+      cancelarEspera = null;
+    },
+  };
+}
+
+/** Lo que `cuandoEsteQuieto` usa de `window`: así se prueba sin navegador. */
+export interface VentanaQuieta {
+  document: { readyState: string };
+  addEventListener(tipo: "load", fn: () => void, opciones?: { once?: boolean }): void;
+  removeEventListener(tipo: "load", fn: () => void): void;
+  requestIdleCallback?: (fn: () => void, opciones?: { timeout?: number }) => number;
+  cancelIdleCallback?: (id: number) => void;
+  setTimeout(fn: () => void, ms: number): number;
+  clearTimeout(id: number): void;
+}
+
+/**
+ * Corre `fn` cuando la página terminó de cargar y React no tiene nada
+ * pendiente, y devuelve con qué cancelarlo.
+ *
+ * Por qué no enseguida (comité final): el efecto de este componente corre
+ * apenas él se hidrata, pero las partes de la página que llegan después
+ * —cada Suspense que se transmite— todavía no. Escribir `data-label` sobre
+ * ese HTML antes de que React lo hidrate es una diferencia entre el servidor
+ * y el cliente, y salían los avisos de hidratación en ocho pantallas. El
+ * MutationObserver lo empeoraba: se dispara justo cuando llega el HTML
+ * nuevo, antes de hidratarlo. `requestIdleCallback` espera a que el hilo
+ * esté libre, y la hidratación son tareas que lo ocupan.
+ */
+export function cuandoEsteQuieto(ventana: VentanaQuieta, fn: () => void): () => void {
+  let id: number | null = null;
+  let cancelado = false;
+  const enReposo = () => {
+    if (cancelado) return;
+    if (ventana.requestIdleCallback) {
+      id = ventana.requestIdleCallback(fn, { timeout: 1000 });
+    } else {
+      id = ventana.setTimeout(fn, 150);
+    }
+  };
+  if (ventana.document.readyState === "complete") enReposo();
+  else ventana.addEventListener("load", enReposo, { once: true });
+  return () => {
+    cancelado = true;
+    ventana.removeEventListener("load", enReposo);
+    if (id === null) return;
+    if (ventana.requestIdleCallback && ventana.cancelIdleCallback) ventana.cancelIdleCallback(id);
+    else ventana.clearTimeout(id);
+  };
 }

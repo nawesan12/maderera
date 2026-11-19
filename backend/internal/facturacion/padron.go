@@ -140,6 +140,16 @@ func (s *Servicio) ImportarPadron(ctx context.Context, userID string, archivo io
 	}
 	var r ResultadoDelPadron
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// El padrón es la excepción a los 30 s del pool principal (cmd/mjbj:
+		// topesDeLaAPI): la copia dura lo que tarda en subir un archivo de
+		// unos 200 MB, y el INSERT … DISTINCT ON recorre millones de
+		// renglones. Con el tope de todos los días moría a la mitad, y el
+		// 57014 salía como «otra operación en curso», que invita a
+		// reintentar sin fin. SET LOCAL vale solo para esta transacción: la
+		// conexión vuelve al pool con su tope de siempre.
+		if _, err := tx.Exec(ctx, `SET LOCAL statement_timeout = '20min'`); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `CREATE TEMP TABLE padron_nuevo (cuit text, alicuota numeric(6, 3), desde date, hasta date) ON COMMIT DROP`); err != nil {
 			return err
 		}
@@ -240,11 +250,18 @@ func (d *desdeCanal) Err() error             { return nil }
 // Padron son las filas de los clientes vigentes hoy o después, por CUIT.
 func (s *Servicio) Padron(ctx context.Context) ([]FilaDelPadron, error) {
 	hoy := s.ahora().In(fiscal.Argentina).Format("2006-01-02")
-	filas, err := s.pool.Query(ctx, `SELECT p.cuit, (SELECT coalesce(nullif(c.razon_social, ''), c.nombre) FROM customers c
-		WHERE regexp_replace(c.cuit, '\D', '', 'g') = p.cuit ORDER BY c.created_at LIMIT 1),
+	// Los CUIT de los clientes se limpian una sola vez, en el CTE, y se
+	// cruzan con el padrón por igualdad: Postgres arma un hash join. Antes
+	// el regexp corría por cada cliente y por cada renglón del padrón, que
+	// crece con los clientes que trae ISIS y se acercaba al tope del pool.
+	filas, err := s.pool.Query(ctx, `WITH clientes AS (
+			SELECT DISTINCT ON (regexp_replace(cuit, '\D', '', 'g')) regexp_replace(cuit, '\D', '', 'g') AS cuit,
+				coalesce(nullif(razon_social, ''), nombre) AS nombre
+			FROM customers WHERE cuit IS NOT NULL
+			ORDER BY regexp_replace(cuit, '\D', '', 'g'), created_at)
+		SELECT p.cuit, c.nombre,
 		p.alicuota::float8, to_char(p.vigencia_desde, 'YYYY-MM-DD'), to_char(p.vigencia_hasta, 'YYYY-MM-DD')
-		FROM padron_iibb p WHERE p.vigencia_hasta >= $1::date
-		AND p.cuit IN (SELECT regexp_replace(cuit, '\D', '', 'g') FROM customers WHERE cuit IS NOT NULL)
+		FROM padron_iibb p JOIN clientes c ON c.cuit = p.cuit WHERE p.vigencia_hasta >= $1::date
 		ORDER BY p.vigencia_desde DESC, p.cuit`, hoy)
 	if err != nil {
 		return nil, err

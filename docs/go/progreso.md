@@ -2371,3 +2371,43 @@ Se aplicó el default prudente; lo valida Nahuel (o el contador donde se dice).
       diálogo tiene que impedirlo.
 - [ ] **El producto sin precio general**: la ficha lo deja sin precio en vez
       de a $0 (como ya hacía con el profesional).
+
+## Comité final, carril G (19/11): rendimiento, taller, remitos y sitio público
+
+- El padrón de ARBA abre su transacción con `SET LOCAL statement_timeout =
+  '20min'`: con los 30 s del pool principal (T8) moría a la mitad de la
+  subida. El 57014 ya no dice «otra operación en curso» (sigue siendo 503).
+  Cualquier operación nueva que lea un archivo grande dentro de una
+  transacción necesita lo mismo.
+- Migraciones del carril: 00180 (Ferretería y Cubiertas sin foto de banco) y
+  00181 (fuera la nota «Cuenta creada con cliente:create.»). Las dos son
+  datos y no esperan nada antes del despliegue.
+- Las tablas apilables rotulan con `requestIdleCallback` después de la carga:
+  escribir `data-label` antes de que React hidratara daba los avisos de
+  hidratación.
+
+### Decisiones a confirmar
+
+- **Dónde se corta (decisión 7 del dueño, hallazgo 46)** — lo confirma la
+  clienta. Default aplicado: se corta en el aserradero y nada del sitio
+  ofrece cortar en Casa Central. El chip de Casa Central del armador público
+  no aparece, el subtítulo sale de la sucursal elegida y los servicios de
+  cada local leen de `DONDE_SE_CORTA` (`lib/sucursales.ts`). Si la respuesta
+  es otra, se cambia `SUCURSALES_QUE_CORTAN` y nada más.
+- **Sucursales en la barra de arriba (revisión del comité)** — lo confirma
+  la clienta. Medido con Chromium, la barra del sitio se pasaba del ancho a
+  1024 px (47 px), a 1280 (27) y desde 1536 (114), y cortaba «Ingresar».
+  Default aplicado: «Sucursales» sube a la barra oscura de arriba, junto a
+  Contacto y WhatsApp; en el teléfono sigue en el cajón. Los enlaces de la
+  barra pasan a 9 px de aire y el asistente dice «Ayuda» en todos los anchos.
+  Queda margen de 22 px a 1024, 58 a 1280 y 28 desde 1536. Con la tienda
+  prendida el ícono del carrito (52 px) no entra a 1024: si se prende, hay
+  que volver a medir. Si la clienta quiere Sucursales abajo, sale otro.
+
+### Pendiente
+
+- **«Sucursales como lista» (hallazgo 35)**: no se hizo. La página de
+  sucursales sigue con una tarjeta grande por local; falta pasarla a lista.
+- Las tarjetas de categoría que dicen «3 productos»: la cuenta está bien
+  (los productos activos, la misma condición del listado). Es la base local
+  la que tiene tres por rubro.

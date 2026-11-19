@@ -53,9 +53,9 @@ func ErrorDePedido(w http.ResponseWriter, _ *http.Request, err error) {
 // (es un error esperado: datos inválidos, sin permiso), cualquier otra cosa
 // como 500 y al registro.
 //
-// Un candado que no se consiguió a tiempo, o una consulta que pasó su tope,
-// no es un error del programa: es otra operación en curso sobre lo mismo
-// (ver ocupado.go). Sale como 503, que la cola del mostrador ya reintenta
+// Un candado que no se consiguió a tiempo no es un error del programa: es
+// otra operación en curso sobre lo mismo (ver ocupado.go). Una consulta que
+// pasó su tope tampoco, pero no es un choque y se dice distinto. Sale como 503, que la cola del mostrador ya reintenta
 // sola, con un mensaje que dice qué pasó, y al registro como aviso.
 func ErrorDeRespuesta(log *slog.Logger) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
@@ -67,10 +67,20 @@ func ErrorDeRespuesta(log *slog.Logger) func(http.ResponseWriter, *http.Request,
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		if Ocupado(err) || sentenciaLarga(err) {
+		if Ocupado(err) {
 			log.Warn("operación ocupada", "id", IDDelPedido(r.Context()), "ruta", r.URL.Path, "error", err)
 			EscribirProblema(w, NuevoProblema(http.StatusServiceUnavailable,
 				"Hay otra operación en curso sobre lo mismo. Probá de nuevo en unos segundos."))
+			return
+		}
+		// Una consulta que pasó su tope no chocó con nadie: decir «otra
+		// operación en curso» invitaba a reintentar lo mismo sin fin (el
+		// padrón de ARBA, comité final A5). Sigue siendo 503 —la cola del
+		// mostrador la reintenta sola—, pero dice lo que pasó.
+		if sentenciaLarga(err) {
+			log.Warn("consulta cortada por su tope", "id", IDDelPedido(r.Context()), "ruta", r.URL.Path, "error", err)
+			EscribirProblema(w, NuevoProblema(http.StatusServiceUnavailable,
+				"La operación tardó demasiado y se cortó. Probá de nuevo en un rato."))
 			return
 		}
 		log.Error("error en la API", "id", IDDelPedido(r.Context()), "ruta", r.URL.Path, "error", err)

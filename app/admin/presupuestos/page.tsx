@@ -280,33 +280,43 @@ function Tarjeta({
             <p className="text-base text-muted-foreground">{p.empresa}</p>
           )}
 
+          {/* Cada dato con su «·» pegado: sueltos, a 390 px el punto
+              quedaba solo al principio o al final del renglón (comité
+              final). */}
           <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base text-muted-foreground">
-            <Link
-              href={`/admin/presupuestos/${p.id}`}
-              className="tabular font-medium text-foreground hover:text-brand-orange"
-            >
-              {p.numero}
-            </Link>
-            <span aria-hidden="true">·</span>
-            <span>{plural(p.items, "producto")}</span>
-            <span aria-hidden="true">·</span>
-            <span>{ORIGEN[p.origen] ?? p.origen}</span>
-            {/* De qué sucursal salió: la central y Canosa presupuestan las
-                dos, y la clienta pidió que se distingan. */}
-            {p.sucursal && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="font-medium text-foreground">{p.sucursal}</span>
-              </>
-            )}
-            <span aria-hidden="true">·</span>
-            <span>{haceCuanto(p.createdAt)}</span>
-            {p.validoHasta && !p.vencido && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>vale hasta {fechaCorta.format(p.validoHasta)}</span>
-              </>
-            )}
+            {[
+              <Link
+                key="numero"
+                href={`/admin/presupuestos/${p.id}`}
+                className="tabular font-medium text-foreground hover:text-brand-orange"
+              >
+                {p.numero}
+              </Link>,
+              <span key="items">{plural(p.items, "producto")}</span>,
+              <span key="origen">{ORIGEN[p.origen] ?? p.origen}</span>,
+              // De qué sucursal salió: la central y Canosa presupuestan las
+              // dos, y la clienta pidió que se distingan.
+              p.sucursal ? (
+                <span key="sucursal" className="font-medium text-foreground">
+                  {p.sucursal}
+                </span>
+              ) : null,
+              <span key="hace">{haceCuanto(p.createdAt)}</span>,
+              p.validoHasta && !p.vencido ? (
+                <span key="vale">vale hasta {fechaCorta.format(p.validoHasta)}</span>
+              ) : null,
+            ]
+              .filter((dato) => dato !== null)
+              .map((dato, i, datos) => (
+                <span key={i} className="whitespace-nowrap">
+                  {dato}
+                  {i < datos.length - 1 && (
+                    <span aria-hidden="true" className="ml-2">
+                      ·
+                    </span>
+                  )}
+                </span>
+              ))}
           </p>
         </div>
 

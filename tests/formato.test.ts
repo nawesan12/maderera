@@ -107,3 +107,12 @@ describe("formatearUnidad cubre todas las unidades de venta", () => {
     expect(formatearUnidad(null)).toBe("u.");
   });
 });
+
+describe("formatearPorcentaje", () => {
+  it("va con coma decimal y un decimal", async () => {
+    const { formatearPorcentaje } = await import("@/lib/formato");
+    expect(formatearPorcentaje(12.54)).toBe("12,5%");
+    expect(formatearPorcentaje(100)).toBe("100,0%");
+    expect(formatearPorcentaje(-3.25)).toMatch(/^-3,[23]%$/);
+  });
+});

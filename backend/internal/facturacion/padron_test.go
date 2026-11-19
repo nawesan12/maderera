@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	cuits "mjbj/internal/cuit"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/sqlc"
@@ -204,5 +206,84 @@ func TestLaPercepcionSaleDelPadron(t *testing.T) {
 	}
 	if tr := emitir(&ri, "consumidor_final"); tr != "0.00" {
 		t.Errorf("al consumidor final: %s", tr)
+	}
+}
+
+// lectorLento entrega el archivo de a un renglón, con una pausa antes de
+// cada uno: una subida lenta que la copia va esperando.
+type lectorLento struct {
+	renglones []string
+	pausa     time.Duration
+}
+
+func (l *lectorLento) Read(p []byte) (int, error) {
+	if len(l.renglones) == 0 {
+		return 0, io.EOF
+	}
+	time.Sleep(l.pausa)
+	n := copy(p, l.renglones[0])
+	l.renglones[0] = l.renglones[0][n:]
+	if l.renglones[0] == "" {
+		l.renglones = l.renglones[1:]
+	}
+	return n, nil
+}
+
+// La importación del padrón no muere por el tope de sentencia del pool
+// principal (comité final, A5): la copia dura lo que dure la subida. Acá el
+// pool tiene 300 ms de tope y la subida tarda más de un segundo.
+func TestElPadronNoMuerePorElTopeDelPool(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	cfg := e.pool.Config().Copy()
+	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "300"
+	conTope, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conTope.Close()
+	s := Nuevo(conTope, silencio)
+	lento := &lectorLento{pausa: 400 * time.Millisecond, renglones: []string{
+		"P;25102026;01112026;30112026;30712345671;C;N;N;2,50;00;\n",
+		"P;25102026;01112026;30112026;30589445259;C;N;N;1,00;00;\n",
+		"P;25102026;01112026;30112026;20123456786;C;N;N;1,50;00;\n",
+	}}
+	r, err := s.ImportarPadron(ctx, "", lento)
+	if err != nil {
+		t.Fatalf("la subida lenta se cortó: %v", err)
+	}
+	if r.Leidos != 3 {
+		t.Errorf("leídos %d, quería 3", r.Leidos)
+	}
+	// La conexión vuelve al pool con su tope: el SET LOCAL no se escapa.
+	var tope string
+	if err := conTope.QueryRow(ctx, `SHOW statement_timeout`).Scan(&tope); err != nil || tope != "300ms" {
+		t.Errorf("el tope quedó en %q (%v)", tope, err)
+	}
+}
+
+// El listado del padrón cruza los CUIT limpios una sola vez (comité final):
+// el cliente con el CUIT con guiones figura con el nombre del más viejo, y
+// el renglón de quien no es cliente no figura.
+func TestElListadoDelPadron(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	hoy := time.Now().In(fiscal.Argentina)
+	desde, hasta := hoy.AddDate(0, 0, -1).Format("02012006"), hoy.AddDate(0, 0, 20).Format("02012006")
+	archivo := "P;01012026;" + desde + ";" + hasta + ";30712345671;C;N;N;2,50;00;\n" +
+		"P;01012026;" + desde + ";" + hasta + ";30589445259;C;N;N;1,00;00;\n"
+	if _, err := e.s.ImportarPadron(ctx, "", strings.NewReader(archivo)); err != nil {
+		t.Fatal(err)
+	}
+	e.exec(t, `INSERT INTO customers (nombre, razon_social, cuit, condicion_iva, created_at) VALUES
+		('Gómez', 'Gómez SRL', '30-71234567-1', 'responsable_inscripto', now() - interval '1 day'),
+		('Gómez repetido', '', '30712345671', 'responsable_inscripto', now()),
+		('Sin padrón', '', '20-12345678-6', 'responsable_inscripto', now())`)
+	filas, err := e.s.Padron(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filas) != 1 || filas[0].Cuit != "30712345671" || filas[0].Cliente == nil || *filas[0].Cliente != "Gómez SRL" || filas[0].Alicuota != 2.5 {
+		t.Fatalf("%+v", filas)
 	}
 }

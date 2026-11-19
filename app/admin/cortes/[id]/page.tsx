@@ -324,7 +324,9 @@ export default async function FichaCortePage({
         <section className="tarjeta overflow-hidden">
           <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
             <h2 className="text-base font-medium">Despiece</h2>
-            <div className="flex items-center gap-4">
+            {/* Con flex-wrap: el resumen y los dos botones en un renglón no
+                entraban a 390 px y quedaban apretados (comité final). */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <p className="text-base text-muted-foreground">
                 {plural(corte.piezas.length, "medida")} · {totalPiezas} piezas
               </p>
@@ -412,7 +414,9 @@ export default async function FichaCortePage({
                 <td className="tabular px-4 py-4 text-right text-base font-medium">
                   {totalPiezas}
                 </td>
-                <td className="tabular px-4 py-4 text-right text-base font-medium">
+                {/* Como su encabezado: escondida en el teléfono, o el total
+                    quedaba debajo de otra columna. */}
+                <td className="tabular hidden px-4 py-4 text-right text-base font-medium sm:table-cell">
                   {formatearDecimal(superficie, 2, { fijo: true })} m²
                 </td>
                 <td />

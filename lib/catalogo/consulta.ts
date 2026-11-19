@@ -40,21 +40,44 @@ export function leerCantidadDeConsulta(tipeado: string): number {
  * que ser entero: «2,5» placas **no se redondea** a 3 en silencio, sale sin
  * cantidad y el campo se marca (`cantidadInvalida`). La media placa se elige
  * aparte («Cómo la querés»), y entonces lo que se cuenta son medias. Lo que
- * se mide (metros, m²) admite decimales. Arriba de 9999 se topea.
+ * se mide (metros, m²) admite decimales. Arriba de 9999 tampoco hay
+ * cantidad: antes se topeaba callado y «15000» salía como 9999 (comité
+ * final, M19).
  */
 export function cantidadDeConsulta(tipeado: string, unidad: string): number | null {
   const n = leerCantidadDeConsulta(tipeado);
   if (!Number.isFinite(n) || n <= 0) return null;
-  const entera = !admiteDecimales(unidad) || unidad === "placa";
+  const entera = seCuentaEntera(unidad);
   if (entera && !Number.isInteger(n)) return null;
   const redondeada = entera ? n : Math.round(n * 100) / 100;
-  if (redondeada <= 0) return null;
-  return Math.min(redondeada, TOPE_DE_CANTIDAD);
+  if (redondeada <= 0 || redondeada > TOPE_DE_CANTIDAD) return null;
+  return redondeada;
+}
+
+/** Placas, tablas, unidades: lo que se cuenta y no se mide. */
+function seCuentaEntera(unidad: string): boolean {
+  return !admiteDecimales(unidad) || unidad === "placa";
+}
+
+/**
+ * Qué tiene de malo lo tipeado, en pocas palabras para debajo del campo, o
+ * `null` si está vacío o sirve. Con esto el campo se marca y el botón no
+ * manda el mensaje: la cantidad inválida ya no se descarta en silencio.
+ */
+export function problemaDeCantidad(tipeado: string, unidad: string): string | null {
+  if (tipeado.trim() === "" || cantidadDeConsulta(tipeado, unidad) !== null) return null;
+  const n = leerCantidadDeConsulta(tipeado);
+  if (!Number.isFinite(n) || n <= 0) return "Poné un número.";
+  if (n > TOPE_DE_CANTIDAD) return `Hasta ${formatearCantidad(TOPE_DE_CANTIDAD)}.`;
+  // Lo que se mide admite decimales: si llegó acá es porque redondeado a
+  // centésimos da 0 («0,001 m²»), y «Sin decimales.» sería mentira.
+  if (!seCuentaEntera(unidad)) return `Mínimo ${formatearCantidad(0.01)}.`;
+  return "Sin decimales.";
 }
 
 /** Si lo tipeado no sirve y hay que marcar el campo: escribió algo y no hay cantidad. */
 export function cantidadInvalida(tipeado: string, unidad: string): boolean {
-  return tipeado.trim() !== "" && cantidadDeConsulta(tipeado, unidad) === null;
+  return problemaDeCantidad(tipeado, unidad) !== null;
 }
 
 /** «12 placas», «1 placa», «2,5 metros cuadrados». */

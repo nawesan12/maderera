@@ -341,6 +341,54 @@ func (e PaginaDeProductosParamsOrden) Valid() bool {
 	}
 }
 
+// Defines values for ResumenDeProductosParamsStock.
+const (
+	ResumenDeProductosParamsStockAserradero  ResumenDeProductosParamsStock = "aserradero"
+	ResumenDeProductosParamsStockCasaCentral ResumenDeProductosParamsStock = "casa-central"
+	ResumenDeProductosParamsStockEnStock     ResumenDeProductosParamsStock = "en-stock"
+	ResumenDeProductosParamsStockTodos       ResumenDeProductosParamsStock = "todos"
+)
+
+// Valid indicates whether the value is a known member of the ResumenDeProductosParamsStock enum.
+func (e ResumenDeProductosParamsStock) Valid() bool {
+	switch e {
+	case ResumenDeProductosParamsStockAserradero:
+		return true
+	case ResumenDeProductosParamsStockCasaCentral:
+		return true
+	case ResumenDeProductosParamsStockEnStock:
+		return true
+	case ResumenDeProductosParamsStockTodos:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ResumenDeProductosParamsOrden.
+const (
+	ResumenDeProductosParamsOrdenNombre     ResumenDeProductosParamsOrden = "nombre"
+	ResumenDeProductosParamsOrdenPrecioAsc  ResumenDeProductosParamsOrden = "precio-asc"
+	ResumenDeProductosParamsOrdenPrecioDesc ResumenDeProductosParamsOrden = "precio-desc"
+	ResumenDeProductosParamsOrdenRelevancia ResumenDeProductosParamsOrden = "relevancia"
+)
+
+// Valid indicates whether the value is a known member of the ResumenDeProductosParamsOrden enum.
+func (e ResumenDeProductosParamsOrden) Valid() bool {
+	switch e {
+	case ResumenDeProductosParamsOrdenNombre:
+		return true
+	case ResumenDeProductosParamsOrdenPrecioAsc:
+		return true
+	case ResumenDeProductosParamsOrdenPrecioDesc:
+		return true
+	case ResumenDeProductosParamsOrdenRelevancia:
+		return true
+	default:
+		return false
+	}
+}
+
 // Categoria defines model for Categoria.
 type Categoria struct {
 	Description  string  `json:"description"`
@@ -519,6 +567,17 @@ type ProductoListado struct {
 // ProductoListadoFormaDeVenta defines model for ProductoListado.FormaDeVenta.
 type ProductoListadoFormaDeVenta string
 
+// ResumenDeCatalogo defines model for ResumenDeCatalogo.
+type ResumenDeCatalogo struct {
+	Cantidad int `json:"cantidad"`
+
+	// Desde el menor precio positivo; null con la tienda apagada o sin precios
+	Desde *float64 `json:"desde"`
+
+	// Imagen la primera foto en el orden del listado
+	Imagen *string `json:"imagen"`
+}
+
 // Rubro defines model for Rubro.
 type Rubro struct {
 	Name         string `json:"name"`
@@ -627,6 +686,12 @@ type ProductosParams struct {
 	// `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
 	// los guarda en su caché por lista); si no, 403.
 	Lista *FiltroLista `form:"lista,omitempty" json:"lista,omitempty"`
+
+	// Limite Los primeros N del listado ya ordenado (sin esto, todos). Quien muestra seis no arma dos mil tarjetas.
+	Limite *int `form:"limite,omitempty" json:"limite,omitempty"`
+
+	// SinFotos Sin foto ni descripción (las claves de Go), para quien solo cuenta o muestra disponibilidad.
+	SinFotos *bool `form:"sinFotos,omitempty" json:"sinFotos,omitempty"`
 }
 
 // ProductosParamsStock defines parameters for Productos.
@@ -663,6 +728,34 @@ type PaginaDeProductosParamsStock string
 
 // PaginaDeProductosParamsOrden defines parameters for PaginaDeProductos.
 type PaginaDeProductosParamsOrden string
+
+// ResumenDeProductosParams defines parameters for ResumenDeProductos.
+type ResumenDeProductosParams struct {
+	Categoria    *FiltroCategoria               `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Subcategoria *FiltroSubcategoria            `form:"subcategoria,omitempty" json:"subcategoria,omitempty"`
+	Busqueda     *FiltroBusqueda                `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+	Stock        *ResumenDeProductosParamsStock `form:"stock,omitempty" json:"stock,omitempty"`
+	Orden        *ResumenDeProductosParamsOrden `form:"orden,omitempty" json:"orden,omitempty"`
+	SoloOfertas  *FiltroSoloOfertas             `form:"soloOfertas,omitempty" json:"soloOfertas,omitempty"`
+	Marca        *FiltroMarca                   `form:"marca,omitempty" json:"marca,omitempty"`
+
+	// Ids Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno».
+	Ids *FiltroIds `form:"ids,omitempty" json:"ids,omitempty"`
+
+	// Publico Precios de la lista general, sin mirar la sesión (lo que se cachea para todos)
+	Publico *FiltroPublico `form:"publico,omitempty" json:"publico,omitempty"`
+
+	// Lista Los precios de esta lista, sin mirar la sesión. Solo con
+	// `Authorization: Bearer <API_SECRETO_INTERNO>` (el servidor de Next, que
+	// los guarda en su caché por lista); si no, 403.
+	Lista *FiltroLista `form:"lista,omitempty" json:"lista,omitempty"`
+}
+
+// ResumenDeProductosParamsStock defines parameters for ResumenDeProductos.
+type ResumenDeProductosParamsStock string
+
+// ResumenDeProductosParamsOrden defines parameters for ResumenDeProductos.
+type ResumenDeProductosParamsOrden string
 
 // SugeridosParams defines parameters for Sugeridos.
 type SugeridosParams struct {
@@ -728,6 +821,9 @@ type ServerInterface interface {
 	// PaginaDeProductos Una página del listado (24 por página, hasta 5 acumuladas)
 	// (GET /api/v1/catalogo/productos/pagina)
 	PaginaDeProductos(w http.ResponseWriter, r *http.Request, params PaginaDeProductosParams)
+	// ResumenDeProductos Cuántos son, desde cuánto y una foto, sin armar el listado (el metadata de una categoría, su imagen para compartir y el contador de ofertas)
+	// (GET /api/v1/catalogo/productos/resumen)
+	ResumenDeProductos(w http.ResponseWriter, r *http.Request, params ResumenDeProductosParams)
 	// Sugeridos Complementarios y similares de una ficha, a precio de público
 	// (GET /api/v1/catalogo/productos/{id}/sugeridos)
 	Sugeridos(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params SugeridosParams)
@@ -1051,6 +1147,32 @@ func (siw *ServerInterfaceWrapper) Productos(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// ------------- Optional query parameter "limite" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limite", r.URL.Query(), &params.Limite, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limite"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limite", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sinFotos" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sinFotos", r.URL.Query(), &params.SinFotos, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sinFotos"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sinFotos", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Productos(w, r, params)
 	}))
@@ -1216,6 +1338,156 @@ func (siw *ServerInterfaceWrapper) PaginaDeProductos(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PaginaDeProductos(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumenDeProductos operation middleware
+func (siw *ServerInterfaceWrapper) ResumenDeProductos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResumenDeProductosParams
+
+	// ------------- Optional query parameter "categoria" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "categoria", r.URL.Query(), &params.Categoria, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "categoria"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoria", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "subcategoria" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subcategoria", r.URL.Query(), &params.Subcategoria, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subcategoria"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subcategoria", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "busqueda" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "busqueda", r.URL.Query(), &params.Busqueda, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "busqueda"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "busqueda", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "stock" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "stock", r.URL.Query(), &params.Stock, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "stock"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stock", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "orden" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "orden", r.URL.Query(), &params.Orden, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "orden"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orden", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "soloOfertas" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "soloOfertas", r.URL.Query(), &params.SoloOfertas, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "soloOfertas"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "soloOfertas", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "marca" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "marca", r.URL.Query(), &params.Marca, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "marca"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "marca", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "ids" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "ids", r.URL.Query(), &params.Ids, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ids"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ids", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "publico" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "publico", r.URL.Query(), &params.Publico, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "publico"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "publico", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "lista" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lista", r.URL.Query(), &params.Lista, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lista"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lista", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumenDeProductos(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1507,6 +1779,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/rubros", wrapper.Rubros)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/productos", wrapper.Productos)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/productos/pagina", wrapper.PaginaDeProductos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/productos/resumen", wrapper.ResumenDeProductos)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/productos/{slug}", wrapper.Producto)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/productos/{id}/sugeridos", wrapper.Sugeridos)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/catalogo/precios-por-variante", wrapper.PreciosPorVariante)
@@ -1775,6 +2048,22 @@ func (response Productos200JSONResponse) VisitProductosResponse(w http.ResponseW
 	return err
 }
 
+type Productos429ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response Productos429ApplicationProblemPlusJSONResponse) VisitProductosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PaginaDeProductosRequestObject struct {
 	Params PaginaDeProductosParams
 }
@@ -1793,6 +2082,60 @@ func (response PaginaDeProductos200JSONResponse) VisitPaginaDeProductosResponse(
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PaginaDeProductos429ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response PaginaDeProductos429ApplicationProblemPlusJSONResponse) VisitPaginaDeProductosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumenDeProductosRequestObject struct {
+	Params ResumenDeProductosParams
+}
+
+type ResumenDeProductosResponseObject interface {
+	VisitResumenDeProductosResponse(w http.ResponseWriter) error
+}
+
+type ResumenDeProductos200JSONResponse ResumenDeCatalogo
+
+func (response ResumenDeProductos200JSONResponse) VisitResumenDeProductosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumenDeProductos429ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response ResumenDeProductos429ApplicationProblemPlusJSONResponse) VisitResumenDeProductosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1916,6 +2259,9 @@ type StrictServerInterface interface {
 	// PaginaDeProductos Una página del listado (24 por página, hasta 5 acumuladas)
 	// (GET /api/v1/catalogo/productos/pagina)
 	PaginaDeProductos(ctx context.Context, request PaginaDeProductosRequestObject) (PaginaDeProductosResponseObject, error)
+	// ResumenDeProductos Cuántos son, desde cuánto y una foto, sin armar el listado (el metadata de una categoría, su imagen para compartir y el contador de ofertas)
+	// (GET /api/v1/catalogo/productos/resumen)
+	ResumenDeProductos(ctx context.Context, request ResumenDeProductosRequestObject) (ResumenDeProductosResponseObject, error)
 	// Sugeridos Complementarios y similares de una ficha, a precio de público
 	// (GET /api/v1/catalogo/productos/{id}/sugeridos)
 	Sugeridos(ctx context.Context, request SugeridosRequestObject) (SugeridosResponseObject, error)
@@ -2252,6 +2598,32 @@ func (sh *strictHandler) PaginaDeProductos(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ResumenDeProductos operation middleware
+func (sh *strictHandler) ResumenDeProductos(w http.ResponseWriter, r *http.Request, params ResumenDeProductosParams) {
+	var request ResumenDeProductosRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumenDeProductos(ctx, request.(ResumenDeProductosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumenDeProductos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumenDeProductosResponseObject); ok {
+		if err := validResponse.VisitResumenDeProductosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Sugeridos operation middleware
 func (sh *strictHandler) Sugeridos(w http.ResponseWriter, r *http.Request, id openapi_types.UUID, params SugeridosParams) {
 	var request SugeridosRequestObject
@@ -2337,63 +2709,69 @@ func (sh *strictHandler) Rubros(w http.ResponseWriter, r *http.Request, params R
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"/19c/O8A",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -99,6 +99,10 @@ type Filtros struct {
 	Marca        string
 	// IDs: nil es «sin filtro»; un slice vacío es «ninguno».
 	IDs []string
+	// Limite corta el listado ya ordenado (cero es «todos»): las fotos y la
+	// descripción se buscan solo para lo que queda (ver Claves). El bot pide
+	// seis; por la API llega como `limite`, para el asistente del sitio.
+	Limite int
 	// Con la tienda apagada o el stock oculto, el orden no puede delatar lo
 	// que no se muestra (revisión del 10/11/2026): ordenar por precio
 	// devolvía el orden de los precios ocultos, y la relevancia subía las
@@ -217,10 +221,18 @@ func (s *Servicio) variantesConStockYPrecio(ctx context.Context, ids []string, l
 	return orden, filas.Err()
 }
 
-// consultarProductos es la del TS: filtra en la base lo que se puede, y en Go
-// lo que depende del precio y del stock ya armados (disponibilidad, ofertas,
-// marca), y ordena.
-func (s *Servicio) consultarProductos(ctx context.Context, f Filtros, l listaParaConsulta) ([]ProductoListado, error) {
+// claves es la primera fase de consultarProductos (la del TS): filtra en la
+// base lo que se puede, y en Go lo que depende del precio y del stock ya
+// armados (disponibilidad, ofertas, marca), y ordena. Trae todo lo que el
+// filtro y el orden necesitan —variantes, precio, oferta y stock— y nada
+// más: ni las fotos ni la descripción, que son lo que pesa y solo hacen
+// falta para las tarjetas que se muestran (hidratar).
+//
+// Por qué no un LIMIT en la base: el orden por relevancia o por precio y los
+// filtros de stock, ofertas y marca salen del precio y el stock que se arman
+// acá, con jsmath y el colador de español. Pasarlos a SQL cambiaría el orden
+// respecto del que se comparó con el TS.
+func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) ([]ProductoListado, error) {
 	var condiciones []string
 	var args []any
 	arg := func(v any) string {
@@ -256,14 +268,14 @@ func (s *Servicio) consultarProductos(ctx context.Context, f Filtros, l listaPar
 		condiciones = append(condiciones, "("+strings.Join(porTermino, " AND ")+")")
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT p.id, p.slug, p.name, p.description, p.subcategory, p.brand, p.unit::text,
+		SELECT p.id, p.slug, p.name, p.subcategory, p.brand, p.unit::text,
 		       p.alicuota_iva::text, p.a_pedido, p.forma_de_venta::text, p.precio_media_pct,
 		       p.featured, c.slug, c.name, s.slug, s.name
 		FROM products p
 		JOIN categories c ON c.id = p.category_id
 		LEFT JOIN subcategories s ON s.id = p.subcategory_id
 		WHERE `+strings.Join(condiciones, " AND ")+`
-		ORDER BY c.sort_order, p.name`, args...)
+		ORDER BY c.sort_order, p.name, p.id`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +283,7 @@ func (s *Servicio) consultarProductos(ctx context.Context, f Filtros, l listaPar
 	for filas.Next() {
 		var p ProductoListado
 		var media jsmath.Num
-		if err := filas.Scan(&p.ID, &p.Slug, &p.Name, &p.Description, &p.Subcategory, &p.Brand, &p.Unit,
+		if err := filas.Scan(&p.ID, &p.Slug, &p.Name, &p.Subcategory, &p.Brand, &p.Unit,
 			&p.AlicuotaIva, &p.APedido, &p.FormaDeVenta, &media, &p.Featured,
 			&p.CategorySlug, &p.CategoryName, &p.SubcategorySlug, &p.SubcategoryName); err != nil {
 			filas.Close()
@@ -291,14 +303,8 @@ func (s *Servicio) consultarProductos(ctx context.Context, f Filtros, l listaPar
 	for i, p := range listado {
 		ids[i] = p.ID
 	}
-	// Las imágenes y las variantes no dependen una de otra: van a la vez, por
-	// dos conexiones del pool.
-	var imagenes map[string]string
-	var variantes []*varianteListado
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() (err error) { imagenes, err = s.primerasImagenes(gctx, ids); return })
-	g.Go(func() (err error) { variantes, err = s.variantesConStockYPrecio(gctx, ids, l); return })
-	if err := g.Wait(); err != nil {
+	variantes, err := s.variantesConStockYPrecio(ctx, ids, l)
+	if err != nil {
 		return nil, err
 	}
 	porProducto := map[string][]*varianteListado{}
@@ -307,9 +313,6 @@ func (s *Servicio) consultarProductos(ctx context.Context, f Filtros, l listaPar
 	}
 	for i := range listado {
 		p := &listado[i]
-		if img, ok := imagenes[p.ID]; ok {
-			p.Image = &img
-		}
 		propias := porProducto[p.ID]
 		// El «desde» es la variante más barata, y la oferta que se muestra es
 		// la de esa misma variante.
@@ -452,6 +455,44 @@ func ordenar(ps []ProductoListado, f Filtros) {
 	}
 }
 
+// hidratar es la segunda fase: la primera foto y la descripción de las
+// tarjetas que se van a mostrar. Van a la vez, por dos conexiones del pool.
+func (s *Servicio) hidratar(ctx context.Context, ps []ProductoListado) error {
+	if len(ps) == 0 {
+		return nil
+	}
+	ids := make([]string, len(ps))
+	for i, p := range ps {
+		ids[i] = p.ID
+	}
+	var imagenes, descripciones map[string]string
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() (err error) { imagenes, err = s.primerasImagenes(gctx, ids); return })
+	g.Go(func() (err error) { descripciones, err = s.descripciones(gctx, ids); return })
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	for i := range ps {
+		p := &ps[i]
+		if img, ok := imagenes[p.ID]; ok {
+			p.Image = &img
+		}
+		p.Description = descripciones[p.ID]
+	}
+	return nil
+}
+
+func (s *Servicio) descripciones(ctx context.Context, ids []string) (map[string]string, error) {
+	filas, err := s.pool.Query(ctx, `SELECT id::text, description FROM products WHERE id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	var id, d string
+	_, err = pgx.ForEachRow(filas, []any{&id, &d}, func() error { out[id] = d; return nil })
+	return out, err
+}
+
 func (s *Servicio) primerasImagenes(ctx context.Context, ids []string) (map[string]string, error) {
 	filas, err := s.pool.Query(ctx, `SELECT product_id, url FROM product_images WHERE product_id = ANY($1::uuid[]) ORDER BY sort_order`, ids)
 	if err != nil {
@@ -472,12 +513,76 @@ func (s *Servicio) primerasImagenes(ctx context.Context, ids []string) (map[stri
 }
 
 // Productos es listarProductos (con la lista de quien mira) o
-// listarProductosPublicos (con la general), según la lista que se pase.
+// listarProductosPublicos (con la general), según la lista que se pase:
+// filtrados, ordenados, cortados en f.Limite y con sus fotos.
 func (s *Servicio) Productos(ctx context.Context, f Filtros, l Lista) ([]ProductoListado, error) {
+	ps, err := s.Claves(ctx, f, l)
+	if err != nil {
+		return nil, err
+	}
+	return ps, s.hidratar(ctx, ps)
+}
+
+// Claves es Productos sin la segunda fase: las tarjetas sin foto ni
+// descripción, para quien primero filtra, cuenta o recorta (la página, el
+// resumen, la portada) y después hidrata solo lo que va a mostrar.
+func (s *Servicio) Claves(ctx context.Context, f Filtros, l Lista) ([]ProductoListado, error) {
 	if f.Busqueda != "" {
 		f.Busqueda = NormalizarBusqueda(f.Busqueda)
 	}
-	return s.consultarProductos(ctx, f, l.paraConsulta())
+	ps, err := s.claves(ctx, f, l.paraConsulta())
+	if err != nil {
+		return nil, err
+	}
+	if f.Limite > 0 && len(ps) > f.Limite {
+		ps = ps[:f.Limite]
+	}
+	return ps, nil
+}
+
+// Hidratar completa las fotos y la descripción de unas tarjetas de Claves.
+func (s *Servicio) Hidratar(ctx context.Context, ps []ProductoListado) error {
+	return s.hidratar(ctx, ps)
+}
+
+// Resumen es lo que dicen de un listado el metadata de la categoría, su
+// imagen para compartir y el contador de ofertas: cuántos son, desde cuánto
+// y una foto. Sale de las claves, sin armar ninguna tarjeta.
+type Resumen struct {
+	Cantidad int      `json:"cantidad"`
+	Desde    *float64 `json:"desde"`
+	Imagen   *string  `json:"imagen"`
+}
+
+// ResumenDe resume unas claves ya filtradas: el «desde» es el menor precio
+// positivo (como el Math.min del metadata), y la foto, la primera que haya
+// en el orden del listado.
+func (s *Servicio) ResumenDe(ctx context.Context, ps []ProductoListado) (Resumen, error) {
+	r := Resumen{Cantidad: len(ps)}
+	ids := make([]string, len(ps))
+	for i, p := range ps {
+		ids[i] = p.ID
+		if p.PrecioDesde == nil {
+			continue
+		}
+		if n := numero(*p.PrecioDesde); n > 0 && (r.Desde == nil || n < *r.Desde) {
+			r.Desde = &n
+		}
+	}
+	if len(ids) == 0 {
+		return r, nil
+	}
+	imagenes, err := s.primerasImagenes(ctx, ids)
+	if err != nil {
+		return r, err
+	}
+	for _, id := range ids {
+		if img, ok := imagenes[id]; ok {
+			r.Imagen = &img
+			break
+		}
+	}
+	return r, nil
 }
 
 // Cuántos entran en una página y cuántas páginas se acumulan como máximo

@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 )
 
 // El pedido de CAE (autorizarComprobante). Va **fuera** de la transacción
@@ -112,6 +113,11 @@ func (s *Servicio) Autorizar(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	defer conn.Release()
+	restaurar, err := plataforma.SinTopes(ctx, conn)
+	if err != nil {
+		return "", err
+	}
+	defer restaurar()
 	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, CandadoCAE); err != nil {
 		return "", err
 	}
@@ -483,6 +489,11 @@ func (s *Servicio) ticket(ctx context.Context, cfg *fiscal.Config) (fiscal.Ticke
 		return t, err
 	}
 	defer conn.Release()
+	restaurar, err := plataforma.SinTopes(ctx, conn)
+	if err != nil {
+		return t, err
+	}
+	defer restaurar()
 	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, CandadoTicket); err != nil {
 		return t, err
 	}

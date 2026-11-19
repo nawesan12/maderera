@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   Building2,
   ClipboardList,
@@ -13,6 +14,7 @@ import { enlaceDeWhatsapp } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { GrupoListado } from "@/components/admin/grupo";
+import { leerPagina, Paginador } from "@/components/admin/paginador";
 import {
   formatearCuit,
   haceCuanto,
@@ -26,10 +28,15 @@ import {
 } from "@/lib/dal/admin/clientes";
 import { vendedoresActivos } from "@/lib/dal/admin/vendedores";
 import { etiquetaDeRubro } from "@/lib/rubros-cliente";
-import { deudaPorCliente, type DeudaDeCliente } from "@/lib/dal/admin/cobranza";
-import { ETIQUETA_URGENCIA } from "@/lib/cuenta-corriente/prioridad";
+import {
+  ETIQUETA_URGENCIA,
+  type Prioridad,
+} from "@/lib/cuenta-corriente/prioridad";
 import { BuscadorClientes } from "./buscador";
 import { DialogoCliente } from "./dialogo-cliente";
+
+/** Cuántos trae cada página de cada grupo (los de Go: DeudoresPorPagina y AlDiaPorPagina). */
+const POR_PAGINA = 30;
 
 export default async function ClientesPage({
   searchParams,
@@ -39,53 +46,75 @@ export default async function ClientesPage({
     rubro?: string;
     vendedor?: string;
     nuevo?: string;
+    pagina?: string;
+    cobrar?: string;
   }>;
 }) {
   const params = await searchParams;
+  const pagina = leerPagina(params.pagina);
+  const paginaDeudores = leerPagina(params.cobrar);
+  const filtros = {
+    buscar: params.buscar,
+    rubro: params.rubro,
+    vendedor: params.vendedor,
+  };
 
-  const [clientes, listas, vendedores] = await Promise.all([
+  /*
+   * Quien debe plata va primero, **y entre ellos manda el atraso**: lo ordena
+   * Go (backend/internal/clientes/lecturas.go). Antes esta lista salía por
+   * nombre: arriba quedaba el que más compra —que suele ser el que mejor
+   * paga— y la deuda chica de hace cuatro meses quedaba enterrada. La clienta
+   * lo pidió así: «que el sistema indique a quién darle prioridad».
+   *
+   * Con el padrón de ISIS son miles: los dos grupos van de a páginas, cada
+   * uno con su parámetro, así pasar de página en uno no mueve el otro. Los
+   * números del encabezado son siempre de todos.
+   */
+  const [cartera, listas, vendedores] = await Promise.all([
     listarClientes({
       busqueda: params.buscar,
       rubro: params.rubro,
       vendedor: params.vendedor,
+      pagina,
+      paginaDeudores,
     }),
     listarListasParaClientes(),
     vendedoresActivos(),
   ]);
 
-  /*
-   * Quien debe plata va primero, **y entre ellos manda el atraso**.
-   *
-   * Antes esta lista salía por nombre: arriba quedaba el que más compra —que
-   * suele ser el que mejor paga— y la deuda chica de hace cuatro meses quedaba
-   * enterrada. La clienta lo pidió así: «que el sistema indique a quién darle
-   * prioridad». Ver `lib/cuenta-corriente/prioridad.ts`.
-   */
-  const conDeuda = clientes.filter((c) => c.saldo > 0);
-  const alDia = clientes.filter((c) => c.saldo <= 0);
-  const deudaTotal = conDeuda.reduce((s, c) => s + c.saldo, 0);
+  // Una página que se pasó del final (un enlace viejo, un filtro que achicó
+  // la lista) lleva a la última que existe, en cada grupo.
+  const paginas = Math.ceil(cartera.totalAlDia / POR_PAGINA);
+  const paginasDeudores = Math.ceil(cartera.cantidadDeudores / POR_PAGINA);
+  const alDiaDeMas = cartera.alDia.length === 0 && pagina > 1 && paginas > 0;
+  const deudoresDeMas =
+    cartera.porCobrar.length === 0 && paginaDeudores > 1 && paginasDeudores > 0;
+  if (alDiaDeMas || deudoresDeMas) {
+    const q = new URLSearchParams(
+      Object.entries(filtros).filter((e): e is [string, string] => Boolean(e[1])),
+    );
+    const p = alDiaDeMas ? paginas : pagina;
+    const c = deudoresDeMas ? paginasDeudores : paginaDeudores;
+    if (c > 1) q.set("cobrar", String(c));
+    if (p > 1) q.set("pagina", String(p));
+    redirect(`/admin/clientes${q.size > 0 ? `?${q}` : ""}`);
+  }
 
-  const deudas = deudaPorCliente(conDeuda);
-
-  const aCobrar = [...conDeuda].sort(
-    (a, b) =>
-      (deudas.get(b.id)?.prioridad.puntaje ?? 0) -
-      (deudas.get(a.id)?.prioridad.puntaje ?? 0),
-  );
-
-  const vencidoTotal = [...deudas.values()].reduce(
-    (total, d) => total + d.vencido,
-    0,
-  );
+  const total = cartera.cantidadDeudores + cartera.totalAlDia;
+  const enlaceDePaginas = {
+    ...filtros,
+    pagina: pagina > 1 ? String(pagina) : undefined,
+    cobrar: paginaDeudores > 1 ? String(paginaDeudores) : undefined,
+  };
 
   return (
     <div>
       <EncabezadoPanel
         titulo="Clientes"
         resumen={
-          conDeuda.length > 0
-            ? `${plural(clientes.length, "cliente")} · ${moneda.format(deudaTotal)} por cobrar`
-            : plural(clientes.length, "cliente")
+          cartera.cantidadDeudores > 0
+            ? `${plural(total, "cliente")} · ${moneda.format(cartera.deudaTotal)} por cobrar`
+            : plural(total, "cliente")
         }
       >
         <Link
@@ -113,7 +142,7 @@ export default async function ClientesPage({
         rubroActual={params.rubro ?? "todos"}
       />
 
-      {clientes.length === 0 ? (
+      {total === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
           <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-base font-medium">Ningún cliente coincide</p>
@@ -122,30 +151,33 @@ export default async function ClientesPage({
         <>
           <GrupoListado
             titulo="Por cobrar, del más atrasado al menos"
-            cantidad={conDeuda.length}
+            cantidad={cartera.cantidadDeudores}
             detalle={
-              conDeuda.length > 0
-                ? vencidoTotal > 0
-                  ? `${moneda.format(deudaTotal)} · ${moneda.format(vencidoTotal)} vencido`
-                  : moneda.format(deudaTotal)
+              cartera.cantidadDeudores > 0
+                ? cartera.vencidoTotal > 0
+                  ? `${moneda.format(cartera.deudaTotal)} · ${moneda.format(cartera.vencidoTotal)} vencido`
+                  : moneda.format(cartera.deudaTotal)
                 : undefined
             }
             destacado
           >
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {aCobrar.map((c) => (
-                <TarjetaCliente
-                  key={c.id}
-                  cliente={c}
-                  deuda={deudas.get(c.id) ?? null}
-                />
+              {cartera.porCobrar.map((c) => (
+                <TarjetaCliente key={c.id} cliente={c} />
               ))}
             </div>
+            <Paginador
+              pagina={paginaDeudores}
+              total={cartera.cantidadDeudores}
+              porPagina={POR_PAGINA}
+              params={enlaceDePaginas}
+              nombre="cobrar"
+            />
           </GrupoListado>
 
           <GrupoListado
             titulo="Al día"
-            cantidad={alDia.length}
+            cantidad={cartera.totalAlDia}
             vacio={
               <p className="px-1 text-base text-texto-2">
                 Ninguno sin deuda.
@@ -153,10 +185,16 @@ export default async function ClientesPage({
             }
           >
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {alDia.map((c) => (
+              {cartera.alDia.map((c) => (
                 <TarjetaCliente key={c.id} cliente={c} />
               ))}
             </div>
+            <Paginador
+              pagina={pagina}
+              total={cartera.totalAlDia}
+              porPagina={POR_PAGINA}
+              params={enlaceDePaginas}
+            />
           </GrupoListado>
         </>
       )}
@@ -175,14 +213,11 @@ function iniciales(nombre: string) {
     .join("");
 }
 
-function TarjetaCliente({
-  cliente,
-  deuda = null,
-}: {
-  cliente: ClienteListado;
+function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
   /** Cuánto está vencido y desde cuándo. Solo en los que deben. */
-  deuda?: DeudaDeCliente | null;
-}) {
+  const deuda = cliente.deuda
+    ? { ...cliente.deuda, prioridad: cliente.deuda.prioridad as Prioridad }
+    : null;
   const excedido =
     cliente.limiteCredito > 0 && cliente.saldo > cliente.limiteCredito;
   const usoLimite =

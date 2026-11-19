@@ -91,9 +91,12 @@ export default async function StockPage({
  *
  * De paso deja de pesar que el resumen y la tabla pidan el catálogo por
  * separado: sin filtros, las dos llamadas caen en la misma entrada de caché.
+ * Y sin fotos ni descripción, que esta pantalla no muestra: el aviso del
+ * stock (migración 00169) rearma esta entrada cada vez que se vende algo,
+ * y armar las dos mil tarjetas enteras para contarlas era lo caro.
  */
 async function Resumen() {
-  const productos = await listarProductosPublicos();
+  const productos = await listarProductosPublicos({ sinFotos: true });
 
   const enAmbas = productos.filter(
     (p) => p.stockCentral !== "sin-stock" && p.stockAserradero !== "sin-stock",
@@ -141,6 +144,7 @@ async function Tabla({ params }: { params: Params }) {
   const productos = await listarProductosPublicos({
     categoria: params.cat,
     busqueda: params.buscar,
+    sinFotos: true,
   });
 
   if (productos.length === 0) {

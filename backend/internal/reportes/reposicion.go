@@ -52,7 +52,7 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 		args = append(args, o.Rubro)
 		cond = append(cond, fmt.Sprintf("sc.slug = $%d", len(args)))
 	}
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT v.id, p.id, p.name, v.label, v.sku, p.unit, c.name, c.slug, sc.name,
 		       coalesce(sum(CASE WHEN b.slug = 'casa-central' THEN i.qty - coalesce(i.reservado, 0) END), 0),
 		       coalesce(sum(CASE WHEN b.slug = 'aserradero' THEN i.qty - coalesce(i.reservado, 0) END), 0)
@@ -97,7 +97,7 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 		ventaArgs = append(ventaArgs, o.Sucursal)
 		sucursal = " AND o.branch_id = (SELECT id FROM branches WHERE slug = $3)"
 	}
-	rs, err = s.pool.Query(ctx, `
+	rs, err = s.lectura.Query(ctx, `
 		SELECT oi.variant_id::text, coalesce(sum(oi.cantidad), 0)
 		FROM order_items oi JOIN orders o ON o.id = oi.order_id
 		WHERE o.created_at >= $1 AND o.estado <> 'cancelado' AND oi.variant_id = ANY($2::uuid[])`+sucursal+`

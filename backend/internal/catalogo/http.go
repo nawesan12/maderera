@@ -7,6 +7,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"mjbj/internal/limites"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"mjbj/internal/api/catalogoapi"
@@ -47,6 +48,7 @@ func (o ok) VisitMarcasResponse(w http.ResponseWriter) error             { retur
 func (o ok) VisitRubrosResponse(w http.ResponseWriter) error             { return o.escribir(w) }
 func (o ok) VisitProductosResponse(w http.ResponseWriter) error          { return o.escribir(w) }
 func (o ok) VisitPaginaDeProductosResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o ok) VisitResumenDeProductosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o ok) VisitProductoResponse(w http.ResponseWriter) error           { return o.escribir(w) }
 func (o ok) VisitSugeridosResponse(w http.ResponseWriter) error          { return o.escribir(w) }
 func (o ok) VisitPreciosPorVarianteResponse(w http.ResponseWriter) error { return o.escribir(w) }
@@ -175,17 +177,31 @@ func (a *API) Productos(ctx context.Context, r catalogoapi.ProductosRequestObjec
 	}
 	f := filtros(parametrosDeFiltro{p.Categoria, p.Subcategoria, p.Busqueda, p.Marca, p.Ids,
 		enumTexto(p.Stock), enumTexto(p.Orden), p.SoloOfertas})
+	if err := a.frenarBusqueda(ctx, f); err != nil {
+		return nil, err
+	}
 	if err := a.ocultarDelPublico(ctx, &f); err != nil {
 		return nil, err
 	}
-	ps, err := a.s.Productos(ctx, f, l)
+	if p.Limite != nil {
+		f.Limite = *p.Limite
+	}
+	ps, err := a.s.Claves(ctx, f, l)
 	if err != nil {
 		return nil, err
+	}
+	if p.SinFotos == nil || !*p.SinFotos {
+		if err := a.s.Hidratar(ctx, ps); err != nil {
+			return nil, err
+		}
 	}
 	ps, err = a.listado(ctx, ps, f.SoloOfertas)
 	return ok{ps}, err
 }
 
+// PaginaDeProductos filtra y ordena con las claves, recorta, y recién ahí
+// busca las fotos: de las 24 a 120 tarjetas de la página, no de las dos mil
+// del catálogo.
 func (a *API) PaginaDeProductos(ctx context.Context, r catalogoapi.PaginaDeProductosRequestObject) (catalogoapi.PaginaDeProductosResponseObject, error) {
 	p := r.Params
 	l, err := a.lista(ctx, p.Publico, p.Lista)
@@ -194,10 +210,13 @@ func (a *API) PaginaDeProductos(ctx context.Context, r catalogoapi.PaginaDeProdu
 	}
 	f := filtros(parametrosDeFiltro{p.Categoria, p.Subcategoria, p.Busqueda, p.Marca, p.Ids,
 		enumTexto(p.Stock), enumTexto(p.Orden), p.SoloOfertas})
+	if err := a.frenarBusqueda(ctx, f); err != nil {
+		return nil, err
+	}
 	if err := a.ocultarDelPublico(ctx, &f); err != nil {
 		return nil, err
 	}
-	ps, err := a.s.Productos(ctx, f, l)
+	ps, err := a.s.Claves(ctx, f, l)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +227,59 @@ func (a *API) PaginaDeProductos(ctx context.Context, r catalogoapi.PaginaDeProdu
 	if p.Pagina != nil {
 		pagina = *p.Pagina
 	}
-	return ok{Recortar(ps, pagina)}, nil
+	recortada := Recortar(ps, pagina)
+	return ok{recortada}, a.s.Hidratar(ctx, recortada.Productos)
+}
+
+// ResumenDeProductos es cuántos son, desde cuánto y una foto, con los mismos
+// filtros y la misma lista que el listado. Con la tienda apagada no hay
+// «desde»: es un precio.
+func (a *API) ResumenDeProductos(ctx context.Context, r catalogoapi.ResumenDeProductosRequestObject) (catalogoapi.ResumenDeProductosResponseObject, error) {
+	p := r.Params
+	l, err := a.lista(ctx, p.Publico, p.Lista)
+	if err != nil {
+		return nil, err
+	}
+	f := filtros(parametrosDeFiltro{p.Categoria, p.Subcategoria, p.Busqueda, p.Marca, p.Ids,
+		enumTexto(p.Stock), enumTexto(p.Orden), p.SoloOfertas})
+	if err := a.frenarBusqueda(ctx, f); err != nil {
+		return nil, err
+	}
+	if err := a.ocultarDelPublico(ctx, &f); err != nil {
+		return nil, err
+	}
+	ps, err := a.s.Claves(ctx, f, l)
+	if err != nil {
+		return nil, err
+	}
+	if ps, err = a.listado(ctx, ps, f.SoloOfertas); err != nil {
+		return nil, err
+	}
+	res, err := a.s.ResumenDe(ctx, ps)
+	return ok{res}, err
+}
+
+// frenarBusqueda pone tope por IP a la búsqueda libre de afuera: desde la
+// tanda T8 Next ya no la guarda en su caché, y cada texto distinto llega a la
+// base. El sitio (con el secreto interno) y el personal no tienen tope. Sin
+// la IP de quien busca —un pedido que no pasó por Caddy— tampoco: si no,
+// todas las visitas compartirían un solo cupo.
+func (a *API) frenarBusqueda(ctx context.Context, f Filtros) error {
+	if strings.TrimSpace(f.Busqueda) == "" || auth.DeContexto(ctx).EsStaff() {
+		return nil
+	}
+	pedido := plataforma.PedidoDe(ctx)
+	if pedido == nil || a.interna.EsInterno(pedido) {
+		return nil
+	}
+	ip := plataforma.IPDelCliente(pedido)
+	if dir, err := netip.ParseAddr(ip); err != nil || dir.IsPrivate() || dir.IsLoopback() {
+		return nil
+	}
+	if v := a.lim.Permitido(ctx, limites.Busqueda, "ip:"+ip); !v.Permitido {
+		return plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
+	}
+	return nil
 }
 
 func (a *API) Producto(ctx context.Context, r catalogoapi.ProductoRequestObject) (catalogoapi.ProductoResponseObject, error) {

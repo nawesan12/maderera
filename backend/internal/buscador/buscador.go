@@ -66,10 +66,7 @@ func coincideONumero(texto string, args *[]any, numericas []string, columnas ...
 		}
 		return "(" + strings.Join(col, " OR ") + ")"
 	}
-	t := strings.Fields(texto)
-	if len(t) > 6 {
-		t = t[:6]
-	}
+	t := terminos(texto)
 	var por []string
 	for _, termino := range t {
 		*args = append(*args, "%"+termino+"%")
@@ -84,6 +81,33 @@ func coincideONumero(texto string, args *[]any, numericas []string, columnas ...
 		return "true"
 	}
 	return "(" + strings.Join(por, " AND ") + ")"
+}
+
+// minimoDeLetras es lo más corto que se busca. Con dos letras los trigramas
+// no tienen de dónde agarrarse y el índice se recorre entero, o la tabla:
+// «de», «la» o «12» tocaban cada pedido de la historia en cada tecla.
+const minimoDeLetras = 3
+
+// terminos son las palabras de la búsqueda (hasta seis, como
+// coincideBusqueda) sin las de menos de tres letras: «Juan de la Cruz»
+// busca «juan» y «cruz».
+func terminos(texto string) []string {
+	var t []string
+	for _, p := range strings.Fields(texto) {
+		if len([]rune(p)) >= minimoDeLetras {
+			t = append(t, p)
+		}
+	}
+	if len(t) > 6 {
+		t = t[:6]
+	}
+	return t
+}
+
+// Consultor es lo que el buscador le pide a la base (un pool, o en las
+// pruebas uno que anota las consultas para mirar su plan).
+type Consultor interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 func juntar(partes ...*string) string {
@@ -110,10 +134,10 @@ func nombreComprobante(tipo string) string {
 }
 
 // Buscar es buscarEnElPanel.
-func Buscar(ctx context.Context, pool *pgxpool.Pool, rol *sqlc.StaffRole, texto string) ([]Resultado, error) {
+func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto string) ([]Resultado, error) {
 	texto = strings.TrimSpace(texto)
 	out := []Resultado{}
-	if len([]rune(texto)) < 2 {
+	if _, esNumero := busqueda.Numero(texto); !esNumero && len(terminos(texto)) == 0 {
 		return out, nil
 	}
 	puede := func(ruta string) bool { return roles.PuedeEntrar(ruta, rol) }

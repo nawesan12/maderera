@@ -52,6 +52,11 @@ func ErrorDePedido(w http.ResponseWriter, _ *http.Request, err error) {
 // ErrorDeRespuesta escribe lo que devolvió un handler: un *Problema tal cual
 // (es un error esperado: datos inválidos, sin permiso), cualquier otra cosa
 // como 500 y al registro.
+//
+// Un candado que no se consiguió a tiempo, o una consulta que pasó su tope,
+// no es un error del programa: es otra operación en curso sobre lo mismo
+// (ver ocupado.go). Sale como 503, que la cola del mostrador ya reintenta
+// sola, con un mensaje que dice qué pasó, y al registro como aviso.
 func ErrorDeRespuesta(log *slog.Logger) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		var p *Problema
@@ -60,6 +65,12 @@ func ErrorDeRespuesta(log *slog.Logger) func(http.ResponseWriter, *http.Request,
 			return
 		}
 		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if Ocupado(err) || sentenciaLarga(err) {
+			log.Warn("operación ocupada", "id", IDDelPedido(r.Context()), "ruta", r.URL.Path, "error", err)
+			EscribirProblema(w, NuevoProblema(http.StatusServiceUnavailable,
+				"Hay otra operación en curso sobre lo mismo. Probá de nuevo en unos segundos."))
 			return
 		}
 		log.Error("error en la API", "id", IDDelPedido(r.Context()), "ruta", r.URL.Path, "error", err)

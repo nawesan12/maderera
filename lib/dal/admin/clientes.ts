@@ -16,17 +16,45 @@ export interface ClienteListado extends Omit<Crudo, "ultimaCompra"> {
   ultimaCompra: Date | null;
 }
 
+export interface CarteraDeClientes
+  extends Omit<Esquemas["CarteraDeClientes"], "porCobrar" | "alDia"> {
+  /** Una página de los que deben, del más urgente al menos. */
+  porCobrar: ClienteListado[];
+  /** Una página de los que no deben, por nombre. */
+  alDia: ClienteListado[];
+}
+
+/**
+ * La cartera en sus dos grupos. Las cantidades y los totales son de todos los
+ * que pasan el filtro; lo que viaja son las filas que se muestran.
+ */
 export async function listarClientes(
-  filtros: { busqueda?: string; tipo?: string; rubro?: string; vendedor?: string } = {},
-): Promise<ClienteListado[]> {
+  filtros: {
+    busqueda?: string;
+    tipo?: string;
+    rubro?: string;
+    vendedor?: string;
+    pagina?: number;
+    /** La página de «Por cobrar». */
+    paginaDeudores?: number;
+  } = {},
+): Promise<CarteraDeClientes> {
   const query = {
     ...(filtros.busqueda ? { busqueda: filtros.busqueda.slice(0, 200) } : {}),
     ...(filtros.tipo ? { tipo: filtros.tipo } : {}),
     ...(filtros.rubro ? { rubro: filtros.rubro } : {}),
     ...(filtros.vendedor ? { vendedor: filtros.vendedor } : {}),
+    ...(filtros.pagina && filtros.pagina > 1 ? { pagina: Math.min(filtros.pagina, 100_000) } : {}),
+    ...(filtros.paginaDeudores && filtros.paginaDeudores > 1
+      ? { cobrar: Math.min(filtros.paginaDeudores, 100_000) }
+      : {}),
   };
-  const filas = datos(await (await api()).GET("/api/v1/admin/clientes", { params: { query } }));
-  return filas.map((f) => ({ ...f, ultimaCompra: f.ultimaCompra ? new Date(f.ultimaCompra) : null }));
+  const c = datos(await (await api()).GET("/api/v1/admin/clientes", { params: { query } }));
+  const conFecha = (f: Crudo): ClienteListado => ({
+    ...f,
+    ultimaCompra: f.ultimaCompra ? new Date(f.ultimaCompra) : null,
+  });
+  return { ...c, porCobrar: c.porCobrar.map(conFecha), alDia: c.alDia.map(conFecha) };
 }
 
 type FichaCruda = Esquemas["FichaDeCliente"];

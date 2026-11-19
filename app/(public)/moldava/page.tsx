@@ -70,17 +70,15 @@ const PROCESO = [
  * tarjeta. Ver `components/product-card.tsx`.
  */
 export default async function MoldavaPage() {
-  const [todas, whatsapp, numero] = await Promise.all([
-    listarProductosPublicos({ marca: "Moldava", orden: "relevancia" }),
+  // La grilla es una muestra, no el catálogo: debajo está el enlace a la lista
+  // completa filtrada por la marca. Go corta antes de armar las tarjetas.
+  const [productos, whatsapp, numero] = await Promise.all([
+    listarProductosPublicos({ marca: "Moldava", orden: "relevancia", limite: POR_PAGINA }),
     enlaceWhatsapp(
       "Hola! Quería consultar por la línea Moldava y precios mayoristas.",
     ),
     numeroWhatsapp(),
   ]);
-
-  // La grilla es una muestra, no el catálogo: debajo está el enlace a la lista
-  // completa filtrada por la marca.
-  const productos = todas.slice(0, POR_PAGINA);
 
   return (
     <div className="min-h-screen">

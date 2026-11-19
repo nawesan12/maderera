@@ -22,12 +22,14 @@ paths:
         - { name: tipo, in: query, schema: { type: string } }
         - { name: rubro, in: query, schema: { type: string } }
         - { name: vendedor, in: query, schema: { type: string } }
+        - { name: pagina, in: query, description: la de «Al día», desde 1, schema: { type: integer, minimum: 1, maximum: 100000 } }
+        - { name: cobrar, in: query, description: la de «Por cobrar», desde 1 (de a 30, del más urgente al menos), schema: { type: integer, minimum: 1, maximum: 100000 } }
       responses:
         "200":
-          description: Los activos, por nombre
+          description: Los activos en dos grupos, con los totales de todos los que pasan el filtro
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/ClienteListado" } }
+              schema: { $ref: "#/components/schemas/CarteraDeClientes" }
     post:
       operationId: GuardarCliente
       requestBody:
@@ -575,6 +577,22 @@ components:
         urgencia: { type: string }
         puntaje: { type: number, format: double }
         diasVencida: { type: integer }
+    CarteraDeClientes:
+      type: object
+      required: [porCobrar, alDia, totalAlDia, cantidadDeudores, deudaTotal, vencidoTotal]
+      properties:
+        porCobrar:
+          description: los que deben, del más urgente al menos
+          type: array
+          items: { $ref: "#/components/schemas/ClienteListado" }
+        alDia:
+          description: una página de los que no deben, por nombre
+          type: array
+          items: { $ref: "#/components/schemas/ClienteListado" }
+        totalAlDia: { type: integer }
+        cantidadDeudores: { type: integer }
+        deudaTotal: { type: number, format: double }
+        vencidoTotal: { type: number, format: double }
     ClienteListado:
       type: object
       required: [id, nombre, razonSocial, cuit, rubro, tipo, estado, asesor, telefono, email, saldo, limiteCredito, diasCredito,

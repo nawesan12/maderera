@@ -25,13 +25,16 @@ import { Input } from "@/components/ui/input";
  *   la que se comparte es la corta.
  * - **La página vuelve a 1 con cada cambio.** El "ver más" acumula páginas en
  *   el URL, y sin esto cambiar de filtro arrastraba el número: ya pasó una vez
- *   en el catálogo público.
+ *   en el catálogo público. Lo mismo el `ver=todo` de un grupo recortado:
+ *   quedaba pegado y cada búsqueda volvía a pedir el grupo entero. Una
+ *   pantalla con dos listados paginados nombra el segundo en `paginas`.
  */
 export function useFiltrosDeLista({
   ruta,
   busquedaActual = "",
   claveBusqueda = "buscar",
   neutros = ["todos", "todas"],
+  paginas = ["pagina"],
 }: {
   ruta: string;
   busquedaActual?: string;
@@ -39,6 +42,8 @@ export function useFiltrosDeLista({
   claveBusqueda?: string;
   /** Valores que significan "sin filtro" y por eso no se escriben en el URL. */
   neutros?: string[];
+  /** Los parámetros de página que se borran con cada cambio de filtro. */
+  paginas?: string[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -51,7 +56,10 @@ export function useFiltrosDeLista({
       if (!valor || neutros.includes(valor)) params.delete(clave);
       else params.set(clave, valor);
     }
-    params.delete("pagina");
+    for (const p of paginas) params.delete(p);
+    // Solo el «ver todo»: Pedidos usa `ver=historial` como vista, y esa sí
+    // tiene que sobrevivir a una búsqueda.
+    if (params.get("ver") === "todo") params.delete("ver");
 
     startTransition(() =>
       router.replace(params.size > 0 ? `${ruta}?${params}` : ruta, {

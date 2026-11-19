@@ -51,8 +51,9 @@ export async function buscarConElAsistente(
   const consulta = z.string().trim().min(2).max(80).safeParse(texto);
   if (!consulta.success) return [];
 
-  const encontrados = await listarProductos({ busqueda: consulta.data });
-  return encontrados.slice(0, TOPE).map(aProducto);
+  // El tope lo aplica Go antes de buscar las fotos: «pino» son cientos.
+  const encontrados = await listarProductos({ busqueda: consulta.data, limite: TOPE });
+  return encontrados.map(aProducto);
 }
 
 export async function productosDelRubro(
@@ -61,8 +62,8 @@ export async function productosDelRubro(
   const categoria = z.string().trim().max(80).safeParse(slug);
   if (!categoria.success) return [];
 
-  const encontrados = await listarProductos({ categoria: categoria.data });
-  return encontrados.slice(0, TOPE).map(aProducto);
+  const encontrados = await listarProductos({ categoria: categoria.data, limite: TOPE });
+  return encontrados.map(aProducto);
 }
 
 export interface RubroDelAsistente {

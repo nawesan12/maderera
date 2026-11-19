@@ -52,21 +52,34 @@ import { unstable_cache } from "next/cache";
  */
 const RED_DE_SEGURIDAD = 86_400;
 
-export const ETIQUETAS = {
-  ajustes: "ajustes-del-sitio",
-  sucursales: "sucursales",
-  catalogo: "catalogo",
-  contenido: "contenido",
-  eventos: "eventos",
-} as const;
+export {
+  ETIQUETAS,
+  esEtiquetaValida,
+  etiquetaDeListado,
+  etiquetaDeProducto,
+} from "@/lib/etiquetas-de-cache";
 
+/**
+ * `etiquetas` puede ser fija o salir de los argumentos (la categoría del
+ * listado, el slug de la ficha). En el segundo caso la función cacheada se
+ * arma en cada llamada: `unstable_cache` fija las etiquetas al crearla, y la
+ * entrada sigue siendo la misma porque la clave sale de la clave y los
+ * argumentos, no de la función.
+ */
 export function cachearPublico<A extends unknown[], R>(
   fn: (...args: A) => Promise<R>,
   clave: string[],
-  etiqueta: string,
+  etiquetas: string | string[] | ((...args: A) => string[]),
 ): (...args: A) => Promise<R> {
+  if (typeof etiquetas === "function") {
+    return (...args: A) =>
+      unstable_cache(fn, clave, {
+        tags: etiquetas(...args),
+        revalidate: RED_DE_SEGURIDAD,
+      })(...args);
+  }
   return unstable_cache(fn, clave, {
-    tags: [etiqueta],
+    tags: typeof etiquetas === "string" ? [etiquetas] : etiquetas,
     revalidate: RED_DE_SEGURIDAD,
   });
 }

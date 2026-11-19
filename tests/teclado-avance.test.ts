@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avanzaConEnter, siguienteCampo } from "@/lib/teclado/avance";
+import { avanzaConEnter, enterEnBuscador, siguienteCampo } from "@/lib/teclado/avance";
 
 /**
  * Se prueba la regla y no el enganche con el navegador porque es donde está el
@@ -50,5 +50,21 @@ describe("cuál es el campo siguiente", () => {
 
   it("ignora un campo que ya no está en la lista", () => {
     expect(siguienteCampo(["a", "b"], "z")).toBeNull();
+  });
+});
+
+describe("Enter en el buscador de cliente", () => {
+  it("elige el marcado", () => {
+    expect(enterEnBuscador({ texto: "gomez", buscando: false, hayMarcado: true })).toBe("elegir");
+  });
+  it("si todavía busca, elige el primero cuando lleguen", () => {
+    expect(enterEnBuscador({ texto: "gomez", buscando: true, hayMarcado: false })).toBe("al-llegar");
+  });
+  it("con texto y nada que elegir, el foco no se va", () => {
+    expect(enterEnBuscador({ texto: "gomez", buscando: false, hayMarcado: false })).toBe("quedarse");
+    expect(enterEnBuscador({ texto: "g", buscando: false, hayMarcado: false })).toBe("quedarse");
+  });
+  it("vacío, avanza como cualquier campo", () => {
+    expect(enterEnBuscador({ texto: "  ", buscando: false, hayMarcado: false })).toBe("seguir");
   });
 });

@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/cortes"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -231,7 +232,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, usuario st
 	}
 
 	var r ResultadoVenta
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		r, err = s.ventaEnTransaccion(ctx, tx, v, usuario, ventaCalculada{
 			subtotal: subtotal, descuento: descuento, motivoAutomatico: motivoAutomatico, lineas: lineas, total: total,

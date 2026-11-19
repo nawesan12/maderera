@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/reservas"
 	"mjbj/internal/ventas"
 	"mjbj/internal/zodjs"
@@ -35,7 +36,7 @@ func (s *Servicio) Anular(ctx context.Context, pedido, motivo, usuario string) (
 		return ResultadoAnulacion{Error: "Poné el motivo: una anulación sin explicación no se puede revisar después."}, nil
 	}
 	var r ResultadoAnulacion
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		r, err = anularEnTransaccion(ctx, tx, pedido, motivo, usuario)
 		if err == nil && !r.Ok {

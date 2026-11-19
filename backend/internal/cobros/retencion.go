@@ -101,7 +101,7 @@ func (s *Servicio) CargarRetencionSufrida(ctx context.Context, ses *auth.Sesion,
 	}
 
 	var r ReciboEmitido
-	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var retencion string
 		if err := tx.QueryRow(ctx, `INSERT INTO retenciones_sufridas
 			(customer_id, numero, impuesto, codigo_regimen, base, alicuota, importe, fecha, referencia, created_by_user_id)

@@ -152,7 +152,9 @@ func (e *ERP) proponer(ctx context.Context, renglones []Renglon, lista catalogo.
 	for i := range renglones {
 		palabras := strings.Fields(renglones[i].Buscado)
 		for n := len(palabras); n > 0; n-- {
-			productos, err := cat.Productos(ctx, catalogo.Filtros{Busqueda: strings.Join(palabras[:n], " ")}, lista)
+			// Se usan el primero y tres alternativas: sin tope, «pino» armaba
+			// cientos de tarjetas con sus fotos para cada renglón.
+			productos, err := cat.Productos(ctx, catalogo.Filtros{Busqueda: strings.Join(palabras[:n], " "), Limite: 4}, lista)
 			if err != nil {
 				return err
 			}

@@ -88,6 +88,34 @@ type configAPI struct {
 	Pagos    pagos.Config
 }
 
+// Los topes de los pools de la API (tanda T8). Sin ellos, una consulta que se
+// colgaba retenía su conexión para siempre, y un reporte pesado podía dejar
+// al mostrador sin ninguna.
+//
+// Entre los tres y el worker (DATABASE_POOL_MAX, 20) son 46 conexiones, con
+// lugar en las 100 de Postgres: Next ya no se conecta a la base.
+var (
+	// El principal: 30 s por consulta alcanzan de sobra para lo de todos los
+	// días (una venta, un cierre de caja, un PDF son milisegundos). Un
+	// candado se espera 10 s como mucho, en vez de quedar colgados. Lo que
+	// pasa después lo decide plataforma.EnTransaccion: la venta, los cobros,
+	// la caja y los pedidos vuelven a correr la transacción dos veces más; si
+	// tampoco, o en cualquier otra escritura, la respuesta es un 503 «hay
+	// otra operación en curso» (ErrorDeRespuesta) que la cola del mostrador
+	// reintenta sola. Los candados de
+	// sesión que duran una llamada a ARCA o un turno del bot se esperan sin
+	// tope (plataforma.SinTopes): ahí manda el contexto del pedido.
+	topesDeLaAPI = plataforma.Topes{Sentencia: 30 * time.Second, Candado: 10 * time.Second, Ociosa: time.Minute}
+	// Los reportes pesados: cuatro conexiones, un minuto por consulta y solo
+	// lectura (ver reportes.Servicio).
+	topesDeReportes = plataforma.Topes{Maximo: 4, Sentencia: time.Minute, Ociosa: time.Minute, SoloLectura: true}
+	// La migración de ISIS corre en la API y escribe miles de filas por
+	// tanda: diez minutos por consulta, con tope y no infinito, para que una
+	// colgada no retenga candados sobre clientes y cuentas mientras el
+	// mostrador cobra. Dos conexiones: no compite por las del mostrador.
+	topesDeLaMigracion = plataforma.Topes{Maximo: 2, Sentencia: 10 * time.Minute, Candado: 10 * time.Second, Ociosa: time.Minute}
+)
+
 func correrAPI() error {
 	log := plataforma.Registro("api")
 	cfg, err := plataforma.Cargar[configAPI]()
@@ -96,11 +124,21 @@ func correrAPI() error {
 	}
 	ctx, parar := context.WithCancel(context.Background())
 	defer parar()
-	pool, err := cfg.Base.Pool(ctx)
+	pool, err := cfg.Base.PoolCon(ctx, topesDeLaAPI)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
+	poolReportes, err := cfg.Base.PoolCon(ctx, topesDeReportes)
+	if err != nil {
+		return err
+	}
+	defer poolReportes.Close()
+	poolMigracion, err := cfg.Base.PoolCon(ctx, topesDeLaMigracion)
+	if err != nil {
+		return err
+	}
+	defer poolMigracion.Close()
 
 	q := sqlc.New(pool)
 	sesiones := auth.Nuevo(cfg.Auth, pool)
@@ -414,7 +452,7 @@ func correrAPI() error {
 		cajaapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 	reportesapi.HandlerWithOptions(
-		reportesapi.NewStrictHandlerWithOptions(reportes.NuevaAPI(reportes.Nuevo(pool, log), cfg.Interna),
+		reportesapi.NewStrictHandlerWithOptions(reportes.NuevaAPI(reportes.Nuevo(pool, log).ConLectura(poolReportes), cfg.Interna),
 			[]reportesapi.StrictMiddlewareFunc{plataforma.ConPedido[reportesapi.StrictHandlerFunc]},
 			reportesapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -449,7 +487,7 @@ func correrAPI() error {
 
 	// La migración de ISIS (tanda 13).
 	migracionapi.HandlerWithOptions(
-		migracionapi.NewStrictHandlerWithOptions(migracion.NuevaAPI(migracion.Nuevo(pool, log)),
+		migracionapi.NewStrictHandlerWithOptions(migracion.NuevaAPI(migracion.Nuevo(poolMigracion, log)),
 			[]migracionapi.StrictMiddlewareFunc{plataforma.ConPedido[migracionapi.StrictHandlerFunc]},
 			migracionapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

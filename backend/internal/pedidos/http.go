@@ -177,7 +177,15 @@ func (a *API) ListarPresupuestos(ctx context.Context, r ventasapi.ListarPresupue
 	if _, err := presupuestos(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.ListarPresupuestos(ctx, Filtros{texto(r.Params.Busqueda), texto(r.Params.Estado), texto(r.Params.Sucursal)})
+	p := r.Params
+	limite, desplazamiento := 0, 0
+	if p.Limite != nil {
+		limite = *p.Limite
+	}
+	if p.Desplazamiento != nil {
+		desplazamiento = *p.Desplazamiento
+	}
+	v, err := a.s.ListarPresupuestos(ctx, Filtros{texto(p.Busqueda), texto(p.Estado), texto(p.Sucursal)}, limite, desplazamiento)
 	return ok(v), err
 }
 

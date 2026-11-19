@@ -359,6 +359,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"Portada":                        "publico",                       // GET /api/v1/catalogo/portada
 	"PreciosPorVariante":             "publico",                       // GET /api/v1/catalogo/precios-por-variante
 	"PaginaDeProductos":              "publico",                       // GET /api/v1/catalogo/productos/pagina
+	"ResumenDeProductos":             "publico",                       // GET /api/v1/catalogo/productos/resumen
 	"Sugeridos":                      "publico",                       // GET /api/v1/catalogo/productos/{id}/sugeridos
 	"Producto":                       "publico",                       // GET /api/v1/catalogo/productos/{slug}
 	"Productos":                      "publico",                       // GET /api/v1/catalogo/productos

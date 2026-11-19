@@ -5,7 +5,6 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Vacio } from "@/components/admin/vacio";
 import { requireStaff } from "@/lib/dal/session";
 import { listarGestiones } from "@/lib/dal/admin/seguimiento";
-import { listarClientes } from "@/lib/dal/admin/clientes";
 import { TableroDeSeguimiento } from "./vista";
 
 export const metadata: Metadata = { title: "Seguimiento" };
@@ -28,10 +27,10 @@ export const metadata: Metadata = { title: "Seguimiento" };
 export default async function SeguimientoPage() {
   await requireStaff();
 
-  const [gestiones, clientes] = await Promise.all([
-    listarGestiones({ incluirCerradas: true }),
-    listarClientes({}),
-  ]);
+  // El cliente de una gestión nueva se busca escribiendo
+  // (components/admin/elegir-cliente.tsx): antes esta pantalla se bajaba la
+  // cartera entera para filtrarla en el navegador.
+  const gestiones = await listarGestiones({ incluirCerradas: true });
 
   const abiertas = gestiones.filter((g) => g.etapa !== "cerrado");
   const vencidas = abiertas.filter((g) => g.vencida).length;
@@ -66,13 +65,7 @@ export default async function SeguimientoPage() {
         </section>
       ) : null}
 
-      <TableroDeSeguimiento
-        gestiones={gestiones}
-        clientes={clientes.map((c) => ({
-          id: c.id,
-          nombre: c.razonSocial ?? c.nombre,
-        }))}
-      />
+      <TableroDeSeguimiento gestiones={gestiones} />
     </div>
   );
 }

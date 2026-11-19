@@ -7,7 +7,6 @@ import {
   creditoPorRetenciones,
   listarRetencionesSufridas,
 } from "@/lib/dal/admin/retenciones-sufridas";
-import { listarClientes } from "@/lib/dal/admin/clientes";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { formatearMonto } from "@/lib/formato";
 import { todosLosRegimenes } from "@/lib/dal/admin/pagos-proveedor";
@@ -41,10 +40,9 @@ export default async function RetencionesSufridasPage({
   const { periodo: crudo } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
 
-  const [sufridas, credito, clientes, regimenes] = await Promise.all([
+  const [sufridas, credito, regimenes] = await Promise.all([
     listarRetencionesSufridas(),
     creditoPorRetenciones(periodo.desde, periodo.hasta),
-    listarClientes({}),
     // Con qué se retiene. Va en esta misma pantalla porque es la única que
     // habla de retenciones, y hasta ahora las alícuotas solo se podían cambiar
     // entrando a la base.
@@ -115,13 +113,7 @@ export default async function RetencionesSufridasPage({
         }))}
       />
 
-      <CargarSufrida
-        clientes={clientes.map((c) => ({
-          id: c.id,
-          nombre: c.razonSocial ?? c.nombre,
-          cuit: c.cuit,
-        }))}
-      />
+      <CargarSufrida />
 
       <section className="tarjeta overflow-hidden">
         {sufridas.length === 0 ? (

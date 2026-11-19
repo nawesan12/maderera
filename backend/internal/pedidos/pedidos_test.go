@@ -219,7 +219,7 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 		t.Fatalf("ficha: %d %s", c, b)
 	}
 	c, b = pedir(t, ven, "GET", u+"presupuestos?estado=abiertos&busqueda=juan%20perez", nil)
-	lista := leer[[]PresupuestoListado](t, b)
+	lista := leer[PaginaDePresupuestos](t, b).Filas
 	if c != 200 || len(lista) != 1 || lista[0].Total != 265500.5 || lista[0].Items != 2 || lista[0].Vencido {
 		t.Fatalf("listado: %d %s", c, b)
 	}
@@ -324,8 +324,13 @@ func jsTexto(n int) string { b, _ := json.Marshal(n); return string(b) }
 func TestListasVacias(t *testing.T) {
 	e := armar(t)
 	adm, _ := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
-	for _, ruta := range []string{"pedidos", "presupuestos", "presupuestos?estado=abiertos", "pedidos?estado=inexistente"} {
+	for _, ruta := range []string{"pedidos", "pedidos?estado=inexistente"} {
 		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/"+ruta, nil); c != 200 || strings.TrimSpace(b) != "[]" {
+			t.Errorf("%s: %d %s", ruta, c, b)
+		}
+	}
+	for _, ruta := range []string{"presupuestos", "presupuestos?estado=abiertos", "presupuestos?estado=cerrados"} {
+		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/"+ruta, nil); c != 200 || strings.TrimSpace(b) != `{"filas":[],"total":0,"monto":0}` {
 			t.Errorf("%s: %d %s", ruta, c, b)
 		}
 	}

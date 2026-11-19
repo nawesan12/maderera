@@ -509,6 +509,18 @@ export interface components {
             puntaje: number;
             diasVencida: number;
         };
+        CarteraDeClientes: {
+            /** @description los que deben, del más urgente al menos */
+            porCobrar: components["schemas"]["ClienteListado"][];
+            /** @description una página de los que no deben, por nombre */
+            alDia: components["schemas"]["ClienteListado"][];
+            totalAlDia: number;
+            cantidadDeudores: number;
+            /** Format: double */
+            deudaTotal: number;
+            /** Format: double */
+            vencidoTotal: number;
+        };
         ClienteListado: {
             id: string;
             nombre: string;
@@ -823,6 +835,10 @@ export interface operations {
                 tipo?: string;
                 rubro?: string;
                 vendedor?: string;
+                /** @description la de «Al día» */
+                pagina?: number;
+                /** @description la de «Por cobrar» */
+                cobrar?: number;
             };
             header?: never;
             path?: never;
@@ -830,13 +846,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Los activos, por nombre */
+            /** @description Los activos en dos grupos, con los totales de todos los que pasan el filtro */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClienteListado"][];
+                    "application/json": components["schemas"]["CarteraDeClientes"];
                 };
             };
         };

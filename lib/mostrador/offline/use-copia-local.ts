@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { buscarVariantes, buscarClientesLocal } from "./busqueda-local";
 import type { ClienteLocal, VarianteLocal } from "./busqueda-local";
 import { precioLocal, type PreciosLocales } from "./precio-local";
-import { cargarIndices, sincronizarCatalogo, CADA_CUANTO_MS } from "./sincronizar";
+import {
+  cargarIndices,
+  sincronizarCatalogo,
+  CADA_CUANTO_MS,
+  retardoDeAviso,
+} from "./sincronizar";
 import { hayAlmacenLocal, pedirPersistencia } from "./db";
 import { useEnVivo } from "@/lib/vivo/use-en-vivo";
 
@@ -146,11 +151,28 @@ export function useCopiaLocal(branchId: string): CopiaLista {
   }, [recargar, sincronizar]);
 
   /*
-   * Un precio que cambia en el panel llega acá al instante (ver `lib/vivo`):
+   * Un precio que cambia en el panel llega acá enseguida (ver `lib/vivo`):
    * antes el mostrador podía cobrar hasta diez minutos con el precio viejo.
-   * La sincronización periódica sigue: es la red cuando no hay tiempo real.
+   * La espera es de menos de un segundo y medio (`retardoDeAviso`): junta la
+   * ráfaga de un cambio masivo sin dejar a la caja cobrando con el precio
+   * viejo. La sincronización periódica sigue: es la red cuando no hay tiempo
+   * real.
    */
-  useEnVivo(["precios"], () => void sincronizar());
+  const pendiente = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEnVivo(["precios"], () => {
+    // Una sola espera a la vez: dos avisos seguidos no son dos pedidos.
+    if (pendiente.current) return;
+    pendiente.current = setTimeout(() => {
+      pendiente.current = null;
+      void sincronizar();
+    }, retardoDeAviso());
+  });
+  useEffect(
+    () => () => {
+      if (pendiente.current) clearTimeout(pendiente.current);
+    },
+    [],
+  );
 
   const buscar = useCallback(
     (texto: string, _customerId: string | null, listaDelCliente: string | null) => {

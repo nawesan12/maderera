@@ -28,20 +28,34 @@ type Metricas struct {
 	ClientesConPedido      int      `json:"clientesConPedido"`
 }
 
+// consultaDeMetricas son las ventas del período y del anterior, y los
+// pedidos sin entregar.
+//
+// Las ventas se suman solo desde el principio del período anterior (el
+// más viejo de los dos): antes la consulta recorría orders entera en cada
+// carga del inicio. Sin período («todo») no hay principio y se recorre,
+// que es lo que se pidió. least() ignora el NULL: sin período anterior,
+// manda el actual. Los pendientes son pocos y salen del índice parcial
+// orders_abiertos_idx (00168), que tiene justo esas filas.
+const consultaDeMetricas = `
+		SELECT
+		  coalesce(sum(total) FILTER (WHERE ($1::timestamptz IS NULL OR created_at >= $1)
+		                                AND ($2::timestamptz IS NULL OR created_at < $2)), 0),
+		  coalesce(sum(total) FILTER (WHERE $3::timestamptz IS NOT NULL
+		                                AND created_at >= $3 AND created_at < $4), 0),
+		  (SELECT count(*)::int FROM orders WHERE estado NOT IN ('entregado', 'cancelado')),
+		  (SELECT count(DISTINCT customer_id)::int FROM orders
+		    WHERE estado NOT IN ('entregado', 'cancelado') AND customer_id IS NOT NULL)
+		FROM orders
+		WHERE estado <> 'cancelado' AND ($1::timestamptz IS NULL OR created_at >= least($1::timestamptz, $3::timestamptz))`
+
 // MetricasDelResumen es metricasDelResumen: las ventas del período (hora
 // argentina) contra el mismo lapso anterior, y los conteos del momento.
 func (s *Servicio) MetricasDelResumen(ctx context.Context, p Periodo) (Metricas, error) {
 	var m Metricas
 	var actual, previo jsmath.Num
-	err := s.pool.QueryRow(ctx, `
-		SELECT
-		  coalesce(sum(total) FILTER (WHERE estado <> 'cancelado' AND ($1::timestamptz IS NULL OR created_at >= $1)
-		                                AND ($2::timestamptz IS NULL OR created_at < $2)), 0),
-		  coalesce(sum(total) FILTER (WHERE $3::timestamptz IS NOT NULL AND estado <> 'cancelado'
-		                                AND created_at >= $3 AND created_at < $4), 0),
-		  (count(*) FILTER (WHERE estado NOT IN ('entregado', 'cancelado')))::int,
-		  (count(DISTINCT customer_id) FILTER (WHERE estado NOT IN ('entregado', 'cancelado') AND customer_id IS NOT NULL))::int
-		FROM orders`, p.Desde, p.Hasta, p.AnteriorDesde, p.AnteriorHasta).
+	err := s.pool.QueryRow(ctx, consultaDeMetricas,
+		p.Desde, p.Hasta, p.AnteriorDesde, p.AnteriorHasta).
 		Scan(&actual, &previo, &m.PedidosSinEntregar, &m.ClientesConPedido)
 	if err != nil {
 		return m, err

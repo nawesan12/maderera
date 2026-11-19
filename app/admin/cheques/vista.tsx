@@ -2,7 +2,6 @@
 
 import {
   useActionState,
-  useEffect,
   useId,
   useState,
   useTransition,
@@ -11,9 +10,6 @@ import {
   AlertTriangle,
   Loader2,
   Plus,
-  Search,
-  UserRound,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -25,7 +21,10 @@ import {
 } from "@/components/ui/dialog";
 import { Confirmar } from "@/components/admin/confirmar";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
-import { buscarClientes } from "@/app/mostrador/actions";
+import {
+  ElegirCliente,
+  type ClienteElegido,
+} from "@/components/admin/elegir-cliente";
 import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import {
   cambiarEstadoDeCheque,
@@ -293,7 +292,7 @@ export function AltaDeCheque() {
   const [sentido, setSentido] = useState("recibido");
   const [tipo, setTipo] = useState("fisico");
   const [circuito, setCircuito] = useState("blanco");
-  const [cliente, setCliente] = useState<ClienteBuscado | null>(null);
+  const [cliente, setCliente] = useState<ClienteElegido | null>(null);
   const id = useId();
 
   return (
@@ -323,7 +322,7 @@ export function AltaDeCheque() {
         </label>
 
         {sentido === "recibido" && (
-          <BuscadorDeCliente elegido={cliente} onElegir={setCliente} />
+          <ElegirCliente elegido={cliente} onElegir={setCliente} />
         )}
 
         {cliente && sentido === "recibido" ? (
@@ -456,129 +455,3 @@ export function AltaDeCheque() {
   );
 }
 
-interface ClienteBuscado {
-  id: string;
-  nombre: string;
-  razonSocial: string | null;
-  cuit: string | null;
-}
-
-/**
- * El cliente que trajo el cheque, buscado y no elegido de un desplegable con
- * toda la cartera. Los resultados se guardan con la consulta que los trajo,
- * como en el buscador de facturación: si la consulta cambió, no se muestran.
- */
-function BuscadorDeCliente({
-  elegido,
-  onElegir,
-}: {
-  elegido: ClienteBuscado | null;
-  onElegir: (c: ClienteBuscado | null) => void;
-}) {
-  const [texto, setTexto] = useState("");
-  const [traidos, setTraidos] = useState<{
-    clave: string;
-    items: ClienteBuscado[];
-  }>({
-    clave: "",
-    items: [],
-  });
-  const consulta = texto.trim();
-  const resultados = traidos.clave === consulta ? traidos.items : [];
-  const buscando = consulta.length >= 2 && traidos.clave !== consulta;
-  const idCampo = useId();
-
-  useEffect(() => {
-    if (consulta.length < 2) return;
-    let vigente = true;
-    const espera = setTimeout(async () => {
-      const encontrados = await buscarClientes(consulta);
-      if (vigente) setTraidos({ clave: consulta, items: encontrados });
-    }, 250);
-    return () => {
-      vigente = false;
-      clearTimeout(espera);
-    };
-  }, [consulta]);
-
-  if (elegido) {
-    return (
-      <div className="tarjeta-hundida flex items-center gap-3 px-4 py-3">
-        <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 text-base font-medium">
-          {elegido.razonSocial || elegido.nombre}
-          {elegido.cuit && (
-            <span className="tabular ml-2 font-normal text-muted-foreground">
-              {elegido.cuit}
-            </span>
-          )}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            onElegir(null);
-            setTexto("");
-          }}
-          className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors hover:bg-background"
-        >
-          <X className="h-4 w-4" />
-          Quitar
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <label htmlFor={idCampo} className="mb-1 block text-base font-medium">
-        Cliente
-      </label>
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          id={idCampo}
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          placeholder="Nombre, razón social o CUIT"
-          data-enter="enviar"
-          className="h-11 w-full rounded-lg border bg-background pl-9 pr-3 text-base"
-        />
-      </div>
-      {consulta.length >= 2 && (
-        <ul className="tarjeta mt-1.5 overflow-hidden">
-          {buscando && resultados.length === 0 && (
-            <li className="px-3.5 py-2.5 text-base text-muted-foreground">
-              Buscando…
-            </li>
-          )}
-          {!buscando && resultados.length === 0 && (
-            <li className="px-3.5 py-2.5 text-base text-muted-foreground">
-              Ninguno con ese nombre.
-            </li>
-          )}
-          {resultados.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onElegir(c);
-                  setTexto("");
-                }}
-                className="flex w-full flex-col items-start px-3.5 py-2.5 text-left transition-colors hover:bg-hundida"
-              >
-                <span className="text-base font-medium">
-                  {c.razonSocial || c.nombre}
-                </span>
-                {c.cuit && (
-                  <span className="tabular text-base text-muted-foreground">
-                    {c.cuit}
-                  </span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}

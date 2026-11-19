@@ -17,9 +17,9 @@ import {
 } from "@/components/catalogo/filtros";
 import {
   listarCategorias,
-  listarProductosPublicos,
+  resumenPublico,
   marcasDelCatalogo,
-  productosEnOferta,
+  cantidadDeOfertas,
   paginaDeProductosPublica,
   rubrosDeCategoria,
   type OrdenCatalogo,
@@ -114,22 +114,18 @@ export async function generateMetadata({
 
   if (resuelto.categoria) {
     const { categoria, rubro } = resuelto;
-    const productos = await listarProductosPublicos({
+    // Cuántos y desde cuánto, sin bajarse la categoría entera para contarla.
+    const { cantidad: total, desde } = await resumenPublico({
       categoria: categoria.slug,
       subcategoria: rubro?.slug,
     });
-    const precios = productos
-      .map((p) => Number(p.precioDesde))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    const desde = precios.length ? Math.min(...precios) : null;
     const texto = TEXTOS_DE_CATEGORIA[categoria.slug];
 
     const nombre = rubro ? rubro.name : (texto?.titulo ?? categoria.name);
-    const cantidad =
-      productos.length === 1 ? "1 producto" : `${productos.length} productos`;
+    const cantidad = total === 1 ? "1 producto" : `${total} productos`;
     const descripcion = [
       `${nombre} en Mar del Plata.`,
-      productos.length > 0
+      total > 0
         ? `${cantidad}${desde ? ` desde ${precioEnTexto(desde)}` : ""}, ${alDia} en Casa Central y el Aserradero.`
         : null,
       rubro ? null : (categoria.description ?? null),
@@ -455,7 +451,7 @@ async function SobreLaCategoria({
 async function armarPanel(params: Params) {
   const [categorias, ofertas, rubros] = await Promise.all([
     listarCategorias(),
-    productosEnOferta(),
+    cantidadDeOfertas(),
     // Los rubros son de adentro de una categoría: sin una elegida no hay qué
     // listar, y mostrar los de todas mezclados no ayuda a nadie.
     params.cat && params.cat !== "todos"
@@ -475,7 +471,7 @@ async function armarPanel(params: Params) {
       categoriaActual={params.cat ?? "todos"}
       stockActual={params.stock ?? "todos"}
       soloOfertas={params.ofertas === "1"}
-      cantidadOfertas={ofertas.length}
+      cantidadOfertas={ofertas}
       hayBusqueda={Boolean(params.buscar)}
     />
   );

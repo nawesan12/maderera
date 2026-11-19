@@ -36,6 +36,7 @@ import {
   beneficiosDelProfesional,
   type Beneficio,
 } from "@/lib/profesionales/beneficios";
+import fenolicoBanda from "@/lib/sitio/fenolico-banda.webp";
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
@@ -113,7 +114,7 @@ export default async function ProfesionalesPage() {
   return (
     <div className="min-h-screen">
       <EncabezadoPublico
-        foto="/fotos/photo-1687422810663-c316494f725a.jpg"
+        foto={fenolicoBanda}
         ruta="/profesionales"
         titulo="Cuenta profesional"
         bajada={

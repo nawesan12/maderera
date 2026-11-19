@@ -117,9 +117,16 @@ func (q *Queries) BloquearStock(ctx context.Context, arg BloquearStockParams) er
 }
 
 const borrarImagenDeProducto = `-- name: BorrarImagenDeProducto :exec
-DELETE FROM product_images WHERE id = $1
+WITH borrada AS (
+  DELETE FROM product_images WHERE id = $1 RETURNING product_id, origen_biblioteca
+)
+INSERT INTO fotos_biblioteca_descartadas (product_id, origen)
+SELECT product_id, origen_biblioteca FROM borrada WHERE origen_biblioteca IS NOT NULL
+ON CONFLICT DO NOTHING
 `
 
+// Si era de la biblioteca de fotos, queda anotada como descartada: no vuelve
+// al crear la medida otra vez ni con `mjbj fotos adjuntar` (migración 00186).
 func (q *Queries) BorrarImagenDeProducto(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, borrarImagenDeProducto, id)
 	return err

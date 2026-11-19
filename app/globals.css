@@ -47,6 +47,11 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   /* Brand colors - warmer, richer orange palette */
+  /* Los dos colores de la guía de marca (estudio Ranina): la «m» y el nombre.
+     Los mismos que `NARANJA_MARCA` y `GRIS_MARCA` de lib/marca/logotipo.ts,
+     que usa el generador de imágenes (no lee el CSS). */
+  --color-marca-naranja: #ec7d38;
+  --color-marca-gris: #505052;
   --color-brand-orange: oklch(0.68 0.19 48);
   --color-brand-orange-light: oklch(0.78 0.14 50);
   --color-brand-orange-dark: oklch(0.52 0.18 40);
@@ -693,7 +698,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   background-image: var(--textura-superficie);
   background-size: 180px 180px;
   border-radius: 0.5rem;
-  box-shadow: 0 0 0 1.5px rgb(240 115 22 / 0.45);
+  box-shadow: 0 0 0 1.5px rgb(236 125 56 / 0.45);
 }
 
 .tarjeta-activa:hover {

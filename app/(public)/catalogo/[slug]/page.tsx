@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
+import { MedidaElegida } from "@/components/catalogo/medida-elegida";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
@@ -266,9 +267,11 @@ export default async function ProductoPage({
         {/* El WhatsApp flotante tapaba «Consultar precio por WhatsApp», que
             acá ya está con la medida escrita (hallazgo 27): se va mientras
             esto se ve y vuelve al bajar a la ficha técnica. */}
+        <MedidaElegida>
         <ZonaSinFlotante className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
           <GaleriaProducto
             imagenes={producto.imagenes}
+            fotoDeMedida={producto.fotoDeMedida}
             nombre={producto.name}
             rubro={producto.subcategory ?? producto.categoryName}
             categoria={producto.categorySlug}
@@ -350,6 +353,7 @@ export default async function ProductoPage({
             )}
           </div>
         </ZonaSinFlotante>
+        </MedidaElegida>
 
         <FichaTecnica producto={producto} medidas={conMedidas} />
 

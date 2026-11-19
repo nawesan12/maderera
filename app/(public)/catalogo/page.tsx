@@ -304,7 +304,7 @@ function Encabezado({
   return (
     <div className="relative overflow-hidden bg-oscuro-marca pb-11 pt-10 text-white">
       <div
-        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
+        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.07)_0_12px,transparent_12px_24px)]"
         aria-hidden="true"
       />
       <div className="contenedor relative">
@@ -673,6 +673,7 @@ async function Resultados({ params }: { params: Params }) {
             key={producto.id}
             product={producto}
             whatsapp={whatsapp}
+            filtro={{ cat: params.cat, rubro: params.rubro }}
           />
         ))}
       </div>

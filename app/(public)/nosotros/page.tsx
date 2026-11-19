@@ -13,6 +13,8 @@ import { ALCANCE_MOLDAVA, masDeAnios } from "@/lib/empresa";
 import { DONDE_SE_CORTA } from "@/lib/sucursales";
 import { tienda } from "@/lib/dal/contenido";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import galponBanda from "@/lib/sitio/galpon-banda.webp";
+import moldavaCasilleros from "@/lib/sitio/moldava-casilleros.webp";
 
 /**
  * Quiénes somos (notas del 9/11/2026: «hacer más enriquecida la página»).
@@ -83,7 +85,7 @@ export default async function NosotrosPage() {
       />
 
       <EncabezadoPublico
-        foto="/fotos/photo-1634672652995-ee7525bce595.jpg" titulo="Nosotros" bajada={`Empresa familiar de Mar del Plata desde ${ANIO_FUNDACION}.`} />
+        foto={galponBanda} titulo="Nosotros" bajada={`Empresa familiar de Mar del Plata desde ${ANIO_FUNDACION}.`} />
 
       <section className="border-b border-linea bg-card">
         <dl className="contenedor grid grid-cols-2 divide-linea py-10 md:grid-cols-4 md:divide-x">
@@ -192,9 +194,10 @@ export default async function NosotrosPage() {
           </div>
           <div className="relative h-72 overflow-hidden rounded-2xl lg:h-80">
             <Image
-              src="/fotos/photo-1764283824453-02cd00e49143.jpg"
-              alt="Molduras Moldava"
+              src={moldavaCasilleros}
+              alt="La estantería de molduras Moldava"
               fill
+              placeholder="blur"
               sizes="(min-width: 1024px) 40vw, 100vw"
               className="object-cover"
             />

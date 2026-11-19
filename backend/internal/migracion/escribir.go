@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/text/unicode/norm"
 
+	"mjbj/internal/catalogo"
+	"mjbj/internal/fotos"
 	"mjbj/internal/productos"
 	"mjbj/internal/sqlc"
 )
@@ -29,6 +31,13 @@ type Resultado struct {
 	Omitidos     int       `json:"omitidos"`
 	ConError     int       `json:"conError"`
 	Rechazos     []Rechazo `json:"rechazos"`
+	// Fotos son las fotos de la biblioteca que se engancharon a las medidas
+	// nuevas del lote.
+	Fotos int `json:"fotos"`
+
+	// medidasNuevas son las que creó el lote: después del commit buscan su
+	// foto en la biblioteca.
+	medidasNuevas []fotos.Medida
 }
 
 func (r *Resultado) rechazar(linea int, identificador, motivo string) {
@@ -119,6 +128,8 @@ func nulo(s string) *string {
 type Opciones struct {
 	LoteID string
 	UserID string
+	// Fotos es la biblioteca de fotos por código; nil, sin fotos.
+	Fotos *fotos.Biblioteca
 }
 
 // AplicarLote escribe un lote en su transacción. Las filas con error de
@@ -159,6 +170,12 @@ func AplicarLote(ctx context.Context, pool *pgxpool.Pool, entidad string, filas 
 	if err != nil {
 		// Lo que se haya contado de este lote no quedó escrito.
 		return Resultado{}, err
+	}
+	// Las fotos, después del commit (si el lote se deshacía no quedan
+	// archivos sueltos) y antes de contestar: la página que Next vuelve a
+	// armar al terminar el lote ya las tiene.
+	for _, m := range res.medidasNuevas {
+		res.Fotos += op.Fotos.Adjuntar(ctx, pool, m)
 	}
 	return res, nil
 }
@@ -278,7 +295,9 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 			return err
 		}
 		if categoria == "" {
-			if err := tx.QueryRow(ctx, `INSERT INTO categories (slug, name) VALUES ($1, $2) RETURNING id`, slugCategoria, d["categoria"]).Scan(&categoria); err != nil {
+			// Con su portada, si el rubro tiene una (la misma tabla que la base nueva).
+			if err := tx.QueryRow(ctx, `INSERT INTO categories (slug, name, image) VALUES ($1, $2, $3) RETURNING id`,
+				slugCategoria, d["categoria"], catalogo.PortadaDe(slugCategoria)).Scan(&categoria); err != nil {
 				return err
 			}
 		}
@@ -334,13 +353,20 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 		medida := []any{producto, d["sku"], etiqueta, enteroONulo(d["largoMm"]), enteroONulo(d["anchoMm"]), enteroONulo(d["espesorMm"]),
 			nulo(d["color"]), nulo(d["material"]), nulo(d["terminacion"]), nulo(d["calidad"]), nulo(d["codigoBarras"])}
 		if variante != "" {
-			if _, err := tx.Exec(ctx, `UPDATE product_variants SET product_id = $1, sku = $2, label = $3, largo_mm = $4::integer,
+			// El producto de antes: si en ISIS la medida pasó a otro producto,
+			// el nuevo no tiene su foto (la del viejo se queda donde está).
+			var antes string
+			if err := tx.QueryRow(ctx, `WITH antes AS (SELECT product_id FROM product_variants WHERE id = $12)
+				UPDATE product_variants SET product_id = $1, sku = $2, label = $3, largo_mm = $4::integer,
 				ancho_mm = $5::integer, espesor_mm = $6::integer, color = coalesce($7, color), material = coalesce($8, material),
 				terminacion = coalesce($9, terminacion), calidad = coalesce($10, calidad), codigo_barras = coalesce($11, codigo_barras),
-				updated_at = now() WHERE id = $12`, append(medida, variante)...); err != nil {
+				updated_at = now() WHERE id = $12 RETURNING (SELECT product_id::text FROM antes)`, append(medida, variante)...).Scan(&antes); err != nil {
 				return err
 			}
 			res.Actualizados++
+			if antes != producto {
+				res.medidasNuevas = append(res.medidasNuevas, fotos.Medida{ProductoID: producto, Codigo: d["sku"]})
+			}
 		} else {
 			if err := tx.QueryRow(ctx, `INSERT INTO product_variants (product_id, sku, label, largo_mm, ancho_mm, espesor_mm,
 				color, material, terminacion, calidad, codigo_barras, updated_at)
@@ -348,6 +374,7 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 				return err
 			}
 			res.Creados++
+			res.medidasNuevas = append(res.medidasNuevas, fotos.Medida{ProductoID: producto, Codigo: d["sku"]})
 		}
 
 		// El costo de partida. Si la medida ya tiene compras promediadas, no

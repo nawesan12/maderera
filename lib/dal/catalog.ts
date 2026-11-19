@@ -130,6 +130,8 @@ export interface ProductoDetalle {
   categorySlug: string;
   categoryName: string;
   imagenes: string[];
+  /** Por id de medida, la posición de su foto en `imagenes` (migración 00186). */
+  fotoDeMedida?: Record<string, number>;
   variantes: VarianteDetalle[];
   /** Para qué sirve y cómo se cuida, con el formato de `lib/markdown.ts`. */
   usos: string | null;

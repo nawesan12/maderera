@@ -5444,6 +5444,12 @@ type Expense struct {
 	Circuito          Circuito       `json:"circuito"`
 }
 
+type FotosBibliotecaDescartada struct {
+	ProductID string             `json:"productId"`
+	Origen    string             `json:"origen"`
+	CreatedAt pgtype.Timestamptz `json:"createdAt"`
+}
+
 type GoodsReceipt struct {
 	ID              string          `json:"id"`
 	SupplierID      string          `json:"supplierId"`
@@ -5879,21 +5885,25 @@ type Product struct {
 }
 
 type ProductImage struct {
-	ID        string    `json:"id"`
-	ProductID string    `json:"productId"`
-	Url       string    `json:"url"`
-	Alt       *string   `json:"alt"`
-	SortOrder int32     `json:"sortOrder"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	ProductID        string    `json:"productId"`
+	Url              string    `json:"url"`
+	Alt              *string   `json:"alt"`
+	SortOrder        int32     `json:"sortOrder"`
+	CreatedAt        time.Time `json:"createdAt"`
+	OrigenBiblioteca *string   `json:"origenBiblioteca"`
+	VariantID        *string   `json:"variantId"`
 }
 
 type ProductImagesRubro00150 struct {
-	ID        string    `json:"id"`
-	ProductID string    `json:"productId"`
-	Url       string    `json:"url"`
-	Alt       *string   `json:"alt"`
-	SortOrder int32     `json:"sortOrder"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	ProductID        string    `json:"productId"`
+	Url              string    `json:"url"`
+	Alt              *string   `json:"alt"`
+	SortOrder        int32     `json:"sortOrder"`
+	CreatedAt        time.Time `json:"createdAt"`
+	OrigenBiblioteca *string   `json:"origenBiblioteca"`
+	VariantID        *string   `json:"variantId"`
 }
 
 type ProductReview struct {

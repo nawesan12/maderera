@@ -174,7 +174,7 @@ func (s *Servicio) variantesConStockYPrecio(ctx context.Context, ids []string, l
 		LEFT JOIN inventory i ON i.variant_id = v.id
 		LEFT JOIN branches b ON b.id = i.branch_id
 		WHERE v.product_id = ANY($4::uuid[]) AND v.active
-		ORDER BY v.sort_order`,
+		ORDER BY v.sort_order, v.sku, v.id`,
 		l.id, l.generalID, jsmath.Num(l.factor), ids)
 	if err != nil {
 		return nil, err
@@ -634,26 +634,30 @@ type VarianteDetalle struct {
 
 // ProductoDetalle es la ficha.
 type ProductoDetalle struct {
-	ID              string            `json:"id"`
-	Slug            string            `json:"slug"`
-	Name            string            `json:"name"`
-	Description     string            `json:"description"`
-	Subcategory     *string           `json:"subcategory"`
-	SubcategorySlug *string           `json:"subcategorySlug"`
-	SubcategoryName *string           `json:"subcategoryName"`
-	Brand           *string           `json:"brand"`
-	Unit            string            `json:"unit"`
-	AlicuotaIva     string            `json:"alicuotaIva"`
-	APedido         bool              `json:"aPedido"`
-	FormaDeVenta    string            `json:"formaDeVenta"`
-	PrecioMediaPct  float64           `json:"precioMediaPct"`
-	Featured        bool              `json:"featured"`
-	CategorySlug    string            `json:"categorySlug"`
-	CategoryName    string            `json:"categoryName"`
-	Imagenes        []string          `json:"imagenes"`
-	Variantes       []VarianteDetalle `json:"variantes"`
-	Usos            *string           `json:"usos"`
-	Cuidados        *string           `json:"cuidados"`
+	ID              string   `json:"id"`
+	Slug            string   `json:"slug"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description"`
+	Subcategory     *string  `json:"subcategory"`
+	SubcategorySlug *string  `json:"subcategorySlug"`
+	SubcategoryName *string  `json:"subcategoryName"`
+	Brand           *string  `json:"brand"`
+	Unit            string   `json:"unit"`
+	AlicuotaIva     string   `json:"alicuotaIva"`
+	APedido         bool     `json:"aPedido"`
+	FormaDeVenta    string   `json:"formaDeVenta"`
+	PrecioMediaPct  float64  `json:"precioMediaPct"`
+	Featured        bool     `json:"featured"`
+	CategorySlug    string   `json:"categorySlug"`
+	CategoryName    string   `json:"categoryName"`
+	Imagenes        []string `json:"imagenes"`
+	// FotoDeMedida es, por id de medida, la posición en Imagenes de su foto
+	// (las de la biblioteca van atadas a su medida, migración 00186): la
+	// galería cambia de foto cuando se elige otra medida.
+	FotoDeMedida map[string]int    `json:"fotoDeMedida"`
+	Variantes    []VarianteDetalle `json:"variantes"`
+	Usos         *string           `json:"usos"`
+	Cuidados     *string           `json:"cuidados"`
 	// Documentos son los técnicos atados al producto o a su categoría
 	// (migración 00095). **Solo los públicos**: la ficha se guarda en la
 	// caché compartida de Next, y un documento reservado ahí quedaría a la
@@ -704,19 +708,29 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		return nil, err
 	}
 	p.Imagenes = []string{}
-	img, err := s.pool.Query(ctx, `SELECT url FROM product_images WHERE product_id = $1 ORDER BY sort_order`, p.ID)
+	p.FotoDeMedida = map[string]int{}
+	img, err := s.pool.Query(ctx, `SELECT url, variant_id::text FROM product_images WHERE product_id = $1 ORDER BY sort_order, id`, p.ID)
 	if err != nil {
 		return nil, err
 	}
 	for img.Next() {
 		var u string
-		if err := img.Scan(&u); err != nil {
+		var medida *string
+		if err := img.Scan(&u, &medida); err != nil {
 			img.Close()
 			return nil, err
+		}
+		if medida != nil {
+			if _, ya := p.FotoDeMedida[*medida]; !ya {
+				p.FotoDeMedida[*medida] = len(p.Imagenes)
+			}
 		}
 		p.Imagenes = append(p.Imagenes, u)
 	}
 	img.Close()
+	if err := img.Err(); err != nil {
+		return nil, err
+	}
 
 	filas, err := s.pool.Query(ctx, `
 		SELECT v.id, v.sku, v.label, v.material, v.color, v.terminacion, v.calidad,
@@ -729,7 +743,7 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		LEFT JOIN inventory i ON i.variant_id = v.id
 		LEFT JOIN branches b ON b.id = i.branch_id
 		WHERE v.product_id = $4 AND v.active
-		ORDER BY v.sort_order`, l.id, l.generalID, jsmath.Num(l.factor), p.ID)
+		ORDER BY v.sort_order, v.sku, v.id`, l.id, l.generalID, jsmath.Num(l.factor), p.ID)
 	if err != nil {
 		return nil, err
 	}

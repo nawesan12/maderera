@@ -264,6 +264,20 @@ autoconfig.{$CORREO_DOMINIO} {
 		request_body {
 			max_size 25MB
 		}
+		# Las server actions llegan a Next con hasta 20 MB (next.config.ts),
+		# pero solo tres lugares mandan archivos: el panel (/admin) y el
+		# comprobante de la transferencia (/pedido/… y /mi-cuenta/…, hasta
+		# 16 MB). Las demás —contacto, carrito, asistente, corte, baja— son
+		# de cualquiera sin sesión, y Next guarda el cuerpo en memoria: veinte
+		# POST anónimos de 20 MB a la vez eran 400 MB en la VPS. Para esas, el
+		# tope de antes, 1 MB.
+		@accionSinArchivos {
+			header Next-Action *
+			not path /admin /admin/* /pedido/* /mi-cuenta/*
+		}
+		request_body @accionSinArchivos {
+			max_size 1MB
+		}
 
 		reverse_proxy app:3000 {
 			# **La IP del cliente, sin que el cliente la pueda inventar.** Caddy

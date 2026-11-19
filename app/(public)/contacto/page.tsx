@@ -86,7 +86,6 @@ export default async function ContactoPage() {
       />
 
       <EncabezadoPublico
-        foto="/fotos/photo-1422246654994-34520d5a0340.jpg"
         titulo="Contacto"
         bajada="Escribinos, llamanos o pasá por el local. Te contestamos el mismo día hábil."
       />

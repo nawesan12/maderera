@@ -60,6 +60,7 @@ import (
 	"mjbj/internal/email"
 	"mjbj/internal/existencia"
 	"mjbj/internal/facturacion"
+	"mjbj/internal/fotos"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/portal"
@@ -79,6 +80,7 @@ type configAPI struct {
 	Base     plataforma.ConfigBase
 	Auth     auth.Config
 	Subidas  subidas.Config
+	Fotos    fotos.Config
 	Google   contenido.ConfigGoogle
 	Contacto contenido.ConfigContacto
 	Email    email.Config
@@ -230,7 +232,7 @@ func correrAPI() error {
 	)
 
 	productosapi.HandlerWithOptions(
-		productosapi.NewStrictHandlerWithOptions(productos.NuevaAPI(productos.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log)),
+		productosapi.NewStrictHandlerWithOptions(productos.NuevaAPI(productos.Nuevo(pool, subidas.Nuevo(cfg.Subidas), log).ConFotos(fotos.Nueva(cfg.Fotos, subidas.Nuevo(cfg.Subidas), log))),
 			[]productosapi.StrictMiddlewareFunc{plataforma.ConPedido[productosapi.StrictHandlerFunc]},
 			productosapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -504,7 +506,7 @@ func correrAPI() error {
 
 	// La migración de ISIS (tanda 13).
 	migracionapi.HandlerWithOptions(
-		migracionapi.NewStrictHandlerWithOptions(migracion.NuevaAPI(migracion.Nuevo(poolMigracion, log)),
+		migracionapi.NewStrictHandlerWithOptions(migracion.NuevaAPI(migracion.Nuevo(poolMigracion, log).ConFotos(fotos.Nueva(cfg.Fotos, subidas.Nuevo(cfg.Subidas), log))),
 			[]migracionapi.StrictMiddlewareFunc{plataforma.ConPedido[migracionapi.StrictHandlerFunc]},
 			migracionapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

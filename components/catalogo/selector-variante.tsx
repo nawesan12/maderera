@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, use, useState, type ComponentProps } from "react";
+import { useMedidaElegida } from "@/components/catalogo/medida-elegida";
 import { Check, Loader2, Plus, Scissors, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -132,7 +133,12 @@ export function SelectorVariante({
     propios[v.id] ? { ...v, precio: propios[v.id] } : v;
 
   const elegida = medida ? conPrecioPropio(medida) : medida;
-  const setElegida = setMedida;
+  // La galería de la ficha pasa a la foto de la medida elegida.
+  const medidaDeLaFicha = useMedidaElegida();
+  const setElegida = (v: VarianteDetalle) => {
+    setMedida(v);
+    medidaDeLaFicha?.elegir(v.id);
+  };
 
   // El precio de lo que se está eligiendo: la media placa vale su porcentaje.
   const precioElegido = precioDeLinea(

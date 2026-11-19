@@ -49,8 +49,11 @@ export function TarjetaDeProducto({
   whatsapp,
   etiqueta,
   precio,
+  filtro,
 }: {
   product: ProductoListado;
+  /** La categoría (y el rubro) por los que está filtrada la grilla, si hay. */
+  filtro?: { cat?: string; rubro?: string };
   /** Número del negocio, en dígitos. Baja del servidor porque el dato es
    *  editable desde el panel y esto es un componente de cliente. */
   whatsapp: string;
@@ -72,6 +75,17 @@ export function TarjetaDeProducto({
   const variasMedidas = product.labels.length > 1;
 
   const rubro = product.subcategory || product.categoryName;
+  /*
+   * La línea del rubro va en todas las tarjetas, desde `sm`: con la línea
+   * solo en las que tienen foto, el nombre y el precio quedaban a distinta
+   * altura en la misma fila (revisión del 19/11). Se lee solo con foto —sin
+   * foto la placa ya lo dice— y cuando no repite el filtro de la grilla
+   * («PLACAS» dentro de Placas). Si no, queda el renglón vacío.
+   */
+  const rubroRedundante =
+    filtro?.cat === product.categorySlug &&
+    (!product.subcategory || (!!filtro.rubro && filtro.rubro === product.subcategorySlug));
+  const rubroVisible = Boolean(product.image) && !rubroRedundante;
   // Con una sola medida, el mensaje ya la lleva: quien atiende contesta sin
   // preguntar cuál. Con varias, la elige en la ficha.
   const consulta = enlaceDeConsulta(
@@ -111,12 +125,14 @@ export function TarjetaDeProducto({
           product.image ? "aspect-square" : "aspect-[5/2]"
         }`}
       >
+        {/* El acercamiento crece desde abajo: en las placas el canto va
+            abajo de la foto y es lo que muestra qué es. */}
         {product.image ? (
           <Image
             src={product.image}
             alt={product.name}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transform-none"
+            className="origin-bottom object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transform-none"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           />
         ) : (
@@ -134,14 +150,17 @@ export function TarjetaDeProducto({
         }`}
       >
         <div className="flex flex-col gap-[3px]">
-          {product.image && (
-            <p className="text-[10.5px] font-bold uppercase tracking-[0.11em] text-acento-texto">
-              {rubro}
-            </p>
-          )}
+          <p
+            className={`text-[10.5px] font-bold uppercase tracking-[0.11em] text-acento-texto ${
+              rubroVisible ? "" : "invisible max-sm:hidden"
+            }`}
+            aria-hidden={rubroVisible ? undefined : true}
+          >
+            {rubro}
+          </p>
           <Link
             href={`/catalogo/${product.slug}`}
-                className="line-clamp-2 text-[15.5px] font-semibold leading-[1.32] tracking-[-0.01em] transition-colors hover:text-acento-texto"
+            className="line-clamp-2 text-[15.5px] font-semibold leading-[1.32] tracking-[-0.01em] transition-colors hover:text-acento-texto"
           >
             {product.name}
           </Link>

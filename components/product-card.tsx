@@ -26,15 +26,19 @@ export function ProductCard({
   product,
   whatsapp,
   vista = "final",
+  filtro,
 }: {
   product: ProductoListado;
   whatsapp: string;
   vista?: VistaDePrecio;
+  /** La categoría y el rubro de la grilla: la tarjeta no repite el rubro. */
+  filtro?: { cat?: string; rubro?: string };
 }) {
   return (
     <TarjetaDeProducto
       product={product}
       whatsapp={whatsapp}
+      filtro={filtro}
       etiqueta={
         <Suspense fallback={<EtiquetaDeTarjeta product={product} propio={null} />}>
           <EtiquetaDeQuienMira product={product} />

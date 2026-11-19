@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatedCounter } from "@/components/animated-counter";
+import galpon from "@/lib/sitio/galpon.webp";
 
 /**
  * Portada.
@@ -15,6 +16,10 @@ import { AnimatedCounter } from "@/components/animated-counter";
  * sangre completa había que taparla con un degradado para que el título se
  * leyera, y eso dejaba la foto oscurecida y el texto igual peleando contra lo
  * que hubiera detrás. Partida en dos, cada mitad hace una sola cosa.
+ *
+ * La foto es el galpón propio (Drive de la clienta, docs/fotos.md), no una de
+ * banco, y recortada por debajo de las cajas «LP Mult-Plac» de un proveedor:
+ * la primera foto del sitio no es una publicidad de nadie.
  */
 export function Hero({
   sucursales,
@@ -34,7 +39,7 @@ export function Hero({
   return (
     <section className="relative overflow-hidden bg-oscuro-marca text-white">
       <div
-        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.05)_0_12px,transparent_12px_24px)]"
+        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.05)_0_12px,transparent_12px_24px)]"
         aria-hidden="true"
       />
 
@@ -42,14 +47,16 @@ export function Hero({
           se veía era texto sobre rayas. */}
       <div className="absolute inset-0 lg:left-auto lg:w-[46%]">
         <Image
-          src="/fotos/photo-1422246654994-34520d5a0340.jpg"
-          alt="Pilas de tablas en el depósito"
+          src={galpon}
+          alt="El depósito de la maderera, con un tablero de eucalipto en primer plano"
           fill
+          placeholder="blur"
           className="object-cover object-center"
           preload
           fetchPriority="high"
-          // En el teléfono va atenuada al 80 %: no hace falta la de ancho completo.
-          sizes="(min-width: 1024px) 46vw, 60vw"
+          // En el teléfono cubre todo el ancho: con 60vw un teléfono de 390 px
+          // a 3× pedía la de 828 y la primera foto del sitio salía blanda.
+          sizes="(min-width: 1024px) 46vw, 100vw"
         />
         {/* El degradado solo funde el borde contra el fondo del texto. Antes
             cubría el 38% del panel y se comía las cabezas de las tablas, que

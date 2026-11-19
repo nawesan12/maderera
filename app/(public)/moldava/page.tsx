@@ -10,6 +10,8 @@ import { listarProductosPublicos, POR_PAGINA } from "@/lib/dal/catalog";
 import { enlaceWhatsapp, numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { ALCANCE_MOLDAVA } from "@/lib/empresa";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import moldavaEstanteria from "@/lib/sitio/moldava-estanteria.webp";
+import moldavaPuntas from "@/lib/sitio/moldava-puntas.webp";
 
 /**
  * Moldava, la línea propia.
@@ -91,7 +93,7 @@ export default async function MoldavaPage() {
       />
 
       <EncabezadoPublico
-        foto="/fotos/photo-1571062618385-7cf10f16a2f4.jpg"
+        foto={moldavaEstanteria}
         titulo="Moldava"
         bajada="Nuestra línea propia de molduras y listonería en pino finger joint."
       />
@@ -128,9 +130,10 @@ export default async function MoldavaPage() {
         <section className="grid items-center gap-8 lg:grid-cols-[1.2fr_1fr]">
           <div className="relative h-[300px] overflow-hidden rounded-2xl sm:h-[420px]">
             <Image
-              src="/fotos/photo-1764283824453-02cd00e49143.jpg"
-              alt="Moldura de pino colocada en el encuentro de pared y techo"
+              src={moldavaPuntas}
+              alt="Perfiles Moldava de punta, en la estantería del depósito"
               fill
+              placeholder="blur"
               className="object-cover"
               sizes="(max-width: 1024px) 100vw, 55vw"
             />

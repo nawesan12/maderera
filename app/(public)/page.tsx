@@ -35,6 +35,12 @@ import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
 import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de-pago";
 import { metadatosDePagina } from "@/lib/seo";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+// Fotos propias del Drive de la clienta (docs/fotos.md), importadas: Next les
+// pone hash y caché permanente, y el desenfoque mientras cargan.
+import corteCantos from "@/lib/sitio/corte-cantos.webp";
+import fenolico from "@/lib/sitio/fenolico.webp";
+import galponPasillo from "@/lib/sitio/galpon-pasillo.webp";
+import moldavaCasilleros from "@/lib/sitio/moldava-casilleros.webp";
 
 /**
  * La portada dice primero qué es y dónde: «maderera en Mar del Plata» es lo
@@ -230,13 +236,18 @@ function Categorias({
             href="/moldava"
             className="group relative col-span-2 row-span-2 overflow-hidden rounded-[14px] bg-oscuro-marca"
           >
-            {/* Sin la foto de Molduras: repetida en la tarjeta de al lado,
-                Moldava parecía el mismo rubro dos veces (comité final, M18).
-                Pero el oscuro liso dejaba la tarjeta más grande como la más
-                pobre de la grilla: lleva la placa del pino, la misma que la
-                barra (`tonoDe: "molduras"`), para que la marca se vea igual
-                en los dos lugares. */}
-            <FondoDeRubro rubro="molduras" className="transition-transform duration-500 group-hover:scale-105" />
+            {/* La estantería de Moldava, de cerca: la tarjeta más grande de
+                la grilla era un degradado liso (revisión del 19/11). Molduras,
+                al lado, lleva un zócalo sobre blanco, así no se leen como el
+                mismo rubro dos veces (comité final, M18). */}
+            <Image
+              src={moldavaCasilleros}
+              alt=""
+              fill
+              placeholder="blur"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
             <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(28_25_22_/_0.92)_0%,rgb(28_25_22_/_0.35)_60%,transparent_100%)]" />
             <div className="absolute inset-x-6 bottom-6">
               <span className="rounded-full bg-accion px-3 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-white">
@@ -331,7 +342,7 @@ function BannerCorte() {
       <div className="contenedor">
         <div className="relative overflow-hidden rounded-2xl bg-oscuro-marca text-white">
           <div
-            className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.08)_0_11px,transparent_11px_22px)]"
+            className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.08)_0_11px,transparent_11px_22px)]"
             aria-hidden="true"
           />
           <div className="relative grid items-stretch md:grid-cols-[1.35fr_1fr]">
@@ -360,9 +371,10 @@ function BannerCorte() {
             </div>
             <div className="relative order-first min-h-[200px] md:order-none md:min-h-[260px]" aria-hidden="true">
               <Image
-                src="/fotos/photo-1631396328075-9c65a7406f09.jpg"
+                src={corteCantos}
                 alt=""
                 fill
+                placeholder="blur"
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 40vw"
               />
@@ -593,15 +605,16 @@ function BannerProfesionales({ tiendaActiva }: { tiendaActiva: boolean }) {
       <div className="contenedor">
         <div>
           <article className="superficie grid overflow-hidden rounded-2xl md:grid-cols-2">
-            {/* La foto arriba: son carpinteros trabajando con la madera que
-                vende la casa, que es exactamente a quién le habla el bloque.
+            {/* La foto arriba: fenólico con film apilado, con los cantos a la
+                vista, que es lo que compra el gremio.
                 `priority` no: está abajo del hero y cargarla antes le saca
                 ancho de banda a lo primero que se ve. */}
             <div className="relative h-[220px] md:h-auto md:min-h-[320px]">
               <Image
-                src="/fotos/photo-1773430272778-28c224216811.jpg"
+                src={fenolico}
                 alt=""
                 fill
+                placeholder="blur"
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
@@ -706,9 +719,10 @@ function Historia({ anios }: { anios: number }) {
           <div className="relative">
             <div className="relative h-[360px] overflow-hidden rounded-3xl lg:h-[480px]">
               <Image
-                src="/fotos/photo-1634672652995-ee7525bce595.jpg"
-                alt="Tablas apiladas en el depósito"
+                src={galponPasillo}
+                alt="El pasillo del galpón, entre los tableros y los racks"
                 fill
+                placeholder="blur"
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />

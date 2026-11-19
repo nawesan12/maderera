@@ -65,6 +65,7 @@ export default async function FichaPresupuestoPage({
               zonas={zonas}
               conCliente={!!p.customerId}
               direccion={p.clienteDireccion}
+              vencido={p.vencido ? { totalDeHoy: Number(p.totalDeHoy ?? p.total) } : null}
               abrirPasar={pasar === "1"}
             />
           </>

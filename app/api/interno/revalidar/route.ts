@@ -37,7 +37,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Etiquetas desconocidas: ${desconocidas.join(", ")}` }, { status: 400 });
   }
 
-  for (const e of etiquetas) revalidateTag(e, { expire: 0 });
+  // Las finas las manda el stock, con cada venta: se marcan viejas y se
+  // rearman en segundo plano (stale-while-revalidate), así la espera del
+  // rearmado no la paga el primer visitante. Las gruesas son un cambio del
+  // panel —un precio, una foto, un banner— y esas vencen ya: lo que se
+  // corrigió no puede mostrarse viejo ni una vez.
+  for (const e of etiquetas) {
+    revalidateTag(e, /^(catalogo|producto):/.test(e) ? "max" : { expire: 0 });
+  }
   for (const r of rutas) revalidatePath(r);
   return NextResponse.json({ etiquetas: etiquetas.length, rutas: rutas.length });
 }

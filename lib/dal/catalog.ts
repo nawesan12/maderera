@@ -85,6 +85,10 @@ export interface FiltrosCatalogo {
   marca?: string;
   /** Un conjunto puntual de productos, por id (los sugeridos). */
   ids?: string[];
+  /** Los primeros N del listado ya ordenado: quien muestra seis no pide dos mil. */
+  limite?: number;
+  /** Sin foto ni descripción: para quien solo cuenta o muestra disponibilidad. */
+  sinFotos?: boolean;
 }
 
 export interface VarianteDetalle {
@@ -178,6 +182,8 @@ function consulta(filtros: FiltrosCatalogo) {
     soloOfertas: filtros.soloOfertas,
     marca: filtros.marca,
     ids: filtros.ids?.join(","),
+    limite: filtros.limite,
+    sinFotos: filtros.sinFotos,
   };
 }
 

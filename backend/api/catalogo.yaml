@@ -69,6 +69,14 @@ paths:
         - $ref: "#/components/parameters/filtro_ids"
         - $ref: "#/components/parameters/filtro_publico"
         - $ref: "#/components/parameters/filtro_lista"
+        - name: limite
+          in: query
+          description: Los primeros N del listado ya ordenado (sin esto, todos). Quien muestra seis no arma dos mil tarjetas.
+          schema: { type: integer, minimum: 1, maximum: 200 }
+        - name: sinFotos
+          in: query
+          description: Sin foto ni descripción (las claves de Go), para quien solo cuenta o muestra disponibilidad.
+          schema: { type: boolean }
       responses:
         "200":
           description: Los productos

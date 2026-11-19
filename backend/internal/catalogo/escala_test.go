@@ -237,3 +237,56 @@ func deref64(p *float64) any {
 	}
 	return *p
 }
+
+// Por HTTP, el listado con `limite` son los primeros del listado entero, ya
+// con sus fotos; con `sinFotos`, el listado entero sin foto ni descripción
+// (lo que pide /stock para contar). El asistente y la muestra de Moldava
+// pedían todo para quedarse con seis o veinticuatro.
+func TestListadoConLimiteYSinFotos(t *testing.T) {
+	e := armar(t)
+	e.sembrarMuchos(t)
+	u := e.srv.URL + "/api/v1/catalogo/productos?publico=true&busqueda=producto"
+	leer := func(q string) []ProductoListado {
+		t.Helper()
+		code, b := pedir(t, &http.Client{}, u+q)
+		if code != 200 {
+			t.Fatalf("%s: %d %s", q, code, b)
+		}
+		var ps []ProductoListado
+		if err := json.Unmarshal([]byte(b), &ps); err != nil {
+			t.Fatal(err)
+		}
+		return ps
+	}
+	todos := leer("")
+	seis := leer("&limite=6")
+	if len(todos) <= 6 || len(seis) != 6 {
+		t.Fatalf("%d y %d", len(todos), len(seis))
+	}
+	if !reflect.DeepEqual(seis, todos[:6]) {
+		t.Error("los seis no son los seis primeros del listado, con sus fotos")
+	}
+	livianos := leer("&sinFotos=true")
+	if len(livianos) != len(todos) {
+		t.Fatalf("sin fotos: %d de %d", len(livianos), len(todos))
+	}
+	conFoto := 0
+	for i, p := range livianos {
+		if p.Image != nil || p.Description != "" {
+			t.Fatalf("%s vino con foto o descripción", p.Name)
+		}
+		if todos[i].Image != nil {
+			conFoto++
+		}
+		p.Image, p.Description = todos[i].Image, todos[i].Description
+		if !reflect.DeepEqual(p, todos[i]) {
+			t.Errorf("%s: distinto del listado, además de la foto", p.Name)
+		}
+	}
+	if conFoto == 0 {
+		t.Fatal("hacen falta productos con foto para que la prueba diga algo")
+	}
+	if c, _ := pedir(t, &http.Client{}, u+"&limite=201"); c != 400 {
+		t.Errorf("limite=201: %d", c)
+	}
+}

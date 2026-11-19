@@ -100,8 +100,8 @@ type Filtros struct {
 	// IDs: nil es «sin filtro»; un slice vacío es «ninguno».
 	IDs []string
 	// Limite corta el listado ya ordenado (cero es «todos»): las fotos y la
-	// descripción se buscan solo para lo que queda (ver Claves). Es de Go
-	// —el bot pide seis—; la API pública no lo recibe.
+	// descripción se buscan solo para lo que queda (ver Claves). El bot pide
+	// seis; por la API llega como `limite`, para el asistente del sitio.
 	Limite int
 	// Con la tienda apagada o el stock oculto, el orden no puede delatar lo
 	// que no se muestra (revisión del 10/11/2026): ordenar por precio

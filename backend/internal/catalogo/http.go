@@ -183,9 +183,17 @@ func (a *API) Productos(ctx context.Context, r catalogoapi.ProductosRequestObjec
 	if err := a.ocultarDelPublico(ctx, &f); err != nil {
 		return nil, err
 	}
-	ps, err := a.s.Productos(ctx, f, l)
+	if p.Limite != nil {
+		f.Limite = *p.Limite
+	}
+	ps, err := a.s.Claves(ctx, f, l)
 	if err != nil {
 		return nil, err
+	}
+	if p.SinFotos == nil || !*p.SinFotos {
+		if err := a.s.Hidratar(ctx, ps); err != nil {
+			return nil, err
+		}
 	}
 	ps, err = a.listado(ctx, ps, f.SoloOfertas)
 	return ok{ps}, err

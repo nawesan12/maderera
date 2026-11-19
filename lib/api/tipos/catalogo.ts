@@ -589,6 +589,10 @@ export interface operations {
                  *     los guarda en su caché por lista); si no, 403.
                  */
                 lista?: components["parameters"]["filtro_lista"];
+                /** @description Los primeros N del listado ya ordenado (sin esto, todos). Quien muestra seis no arma dos mil tarjetas. */
+                limite?: number;
+                /** @description Sin foto ni descripción (las claves de Go), para quien solo cuenta o muestra disponibilidad. */
+                sinFotos?: boolean;
             };
             header?: never;
             path?: never;

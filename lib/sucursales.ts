@@ -109,6 +109,11 @@ export function dondeSeCortaEn(slug: string): string {
   return frase.charAt(0).toUpperCase() + frase.slice(1);
 }
 
+/** La frase con mayúscula, para cuando empieza el renglón. */
+export function dondeSeCortaAlEmpezar(): string {
+  return dondeSeCortaEn(DONDE_SE_CORTA.sucursal);
+}
+
 /** Los servicios del corte, en la ficha de la sucursal que corta. */
 function serviciosDeCorte(slug: string): string[] {
   return cortaPlacas(slug) ? ["Servicio de corte de placas a medida", "Pegado de tapacantos"] : [];

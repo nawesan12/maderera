@@ -24,6 +24,10 @@ export interface ProveedorListado {
   /** Positivo: le debemos. */
   saldo: number;
   ultimoMovimiento: Date | null;
+  condicionIva: string;
+  /** Frente a Ganancias; null es «no se sabe». */
+  condicionGanancias: "inscripto" | "no_inscripto" | "exento" | null;
+  exentoGananciasHasta: string | null;
 }
 
 export async function listarProveedores(

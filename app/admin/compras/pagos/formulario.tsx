@@ -39,6 +39,25 @@ interface Proveedor {
   id: string;
   nombre: string;
   saldo: number;
+  condicionIva: string;
+  condicionGanancias: string | null;
+  exentoGananciasHasta: string | null;
+}
+
+/**
+ * Si el régimen le corresponde al proveedor: la misma regla que Go
+ * (compras.SujetoARetencion), para no ofrecer lo que después se rechaza.
+ * Ganancias sin condición cargada se ofrece igual: el rechazo dice qué
+ * cargar.
+ */
+function leCorresponde(r: Regimen, p: Proveedor | undefined, hoy: string): boolean {
+  if (!p) return true;
+  if (r.impuesto === "iva") return p.condicionIva === "responsable_inscripto";
+  if (r.impuesto === "ganancias") {
+    if (p.condicionIva === "monotributista") return false;
+    if (p.condicionGanancias === "exento" && p.exentoGananciasHasta && hoy <= p.exentoGananciasHasta) return false;
+  }
+  return true;
 }
 
 interface Regimen {
@@ -247,7 +266,10 @@ export function FormularioPago({
   const conFacturas = tildadas.length > 0;
   const baseDe = (r: Regimen) =>
     conFacturas ? baseDeLasFacturas : Number(basesAMano[r.id]) || 0;
-  const retenciones = regimenes
+  const proveedor = proveedores.find((p) => p.id === supplierId);
+  const hoy = hoyEnArgentina();
+  const regimenesDelProveedor = regimenes.filter((r) => leCorresponde(r, proveedor, hoy));
+  const retenciones = regimenesDelProveedor
     .filter((r) => retener[r.id])
     .map((r) => ({ regimenId: r.id, base: baseDe(r) }))
     .filter((r) => r.base > 0);
@@ -641,10 +663,10 @@ export function FormularioPago({
           </Seccion>
         )}
 
-        {supplierId && regimenes.length > 0 && (
+        {supplierId && regimenesDelProveedor.length > 0 && (
           <Seccion titulo="Retenciones" icono={Landmark} columnas={1}>
             <div className="grid gap-4 md:grid-cols-2">
-              {regimenes.map((r) => {
+              {regimenesDelProveedor.map((r) => {
                 const mes = acumulado[r.codigo];
                 return (
                   <div key={r.id} className="space-y-2">

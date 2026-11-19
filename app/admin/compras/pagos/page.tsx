@@ -100,6 +100,9 @@ export default async function PagosPage({
           id: p.id,
           nombre: p.estado === "inactivo" ? `${p.nombre} · inactivo` : p.nombre,
           saldo: p.saldo,
+          condicionIva: p.condicionIva,
+          condicionGanancias: p.condicionGanancias,
+          exentoGananciasHasta: p.exentoGananciasHasta,
         }))}
         regimenes={regimenes.map((r) => ({
           id: r.id,

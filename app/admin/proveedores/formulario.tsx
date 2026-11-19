@@ -31,6 +31,10 @@ export interface FichaProveedor {
   aliasCbu: string | null;
   diasPago: number;
   notas: string | null;
+  /** Frente a Ganancias; null es «no se sabe» y el pago con retención se frena. */
+  condicionGanancias?: "inscripto" | "no_inscripto" | "exento" | null;
+  /** Último día del certificado de exclusión (YYYY-MM-DD). */
+  exentoGananciasHasta?: string | null;
 }
 
 const VACIA: FichaProveedor = {
@@ -49,6 +53,8 @@ const VACIA: FichaProveedor = {
   aliasCbu: null,
   diasPago: 0,
   notas: null,
+  condicionGanancias: null,
+  exentoGananciasHasta: null,
 };
 
 const CONDICIONES = {
@@ -123,6 +129,11 @@ export function FormularioProveedor({
         cbu: datos.cbu ?? undefined,
         aliasCbu: datos.aliasCbu ?? undefined,
         notas: datos.notas ?? undefined,
+        // Al monotributista no se le retiene Ganancias: lo que tenga
+        // guardado no se toca, pero tampoco se manda.
+        condicionGanancias: datos.condicionIva === "monotributista" ? undefined : (datos.condicionGanancias ?? undefined),
+        exentoGananciasHasta:
+          datos.condicionGanancias === "exento" ? (datos.exentoGananciasHasta ?? undefined) : undefined,
       });
       setEstado(resultado);
       if (resultado.id && onListo) onListo(resultado.id);
@@ -166,6 +177,34 @@ export function FormularioProveedor({
               columnas={3}
             />
           </div>
+          {datos.condicionIva !== "monotributista" && (
+            <label className="block">
+              <span className="text-sm font-medium">Ganancias</span>
+              <select
+                value={datos.condicionGanancias ?? ""}
+                onChange={(e) =>
+                  campo("condicionGanancias", (e.target.value || null) as FichaProveedor["condicionGanancias"])
+                }
+                className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              >
+                <option value="">Sin cargar</option>
+                <option value="inscripto">Inscripto</option>
+                <option value="no_inscripto">No inscripto</option>
+                <option value="exento">Exento</option>
+              </select>
+            </label>
+          )}
+          {datos.condicionIva !== "monotributista" && datos.condicionGanancias === "exento" && (
+            <label className="block">
+              <span className="text-sm font-medium">Exento hasta</span>
+              <input
+                type="date"
+                value={datos.exentoGananciasHasta ?? ""}
+                onChange={(e) => campo("exentoGananciasHasta", e.target.value || null)}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+          )}
         </Seccion>
 
         <Seccion titulo="Contacto" icono={Phone}>

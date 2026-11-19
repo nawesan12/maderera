@@ -29,6 +29,10 @@ type FichaProveedor struct {
 	AliasCbu     *string `json:"aliasCbu"`
 	DiasPago     float64 `json:"diasPago"`
 	Notas        *string `json:"notas"`
+	// La condición frente a Ganancias (nil: no se sabe) y hasta cuándo vale
+	// la exención. Opcionales: el formulario viejo no los mandaba.
+	CondicionGanancias   *string `json:"condicionGanancias,omitempty"`
+	ExentoGananciasHasta *string `json:"exentoGananciasHasta,omitempty"`
 }
 
 func leerFicha(m map[string]any) (FichaProveedor, error) {
@@ -48,6 +52,24 @@ func leerFicha(m map[string]any) (FichaProveedor, error) {
 	f.AliasCbu = l.opcionalONulo("aliasCbu", 200)
 	f.DiasPago = l.numero("diasPago", nil, entero(), minimo(0), maximo(365))
 	f.Notas = l.opcionalONulo("notas", 2000)
+	if g := l.opcionalONulo("condicionGanancias", 20); g != nil {
+		if *g != GananciasInscripto && *g != GananciasNoInscripto && *g != GananciasExento {
+			l.mal("condicionGanancias", "Elegí la condición de Ganancias.")
+		}
+		f.CondicionGanancias = g
+	}
+	if h := l.opcionalONulo("exentoGananciasHasta", 10); h != nil {
+		if _, err := time.Parse("2006-01-02", *h); err != nil {
+			l.mal("exentoGananciasHasta", "Revisá la fecha.")
+		}
+		f.ExentoGananciasHasta = h
+	}
+	if f.CondicionGanancias != nil && *f.CondicionGanancias == GananciasExento && f.ExentoGananciasHasta == nil {
+		l.mal("exentoGananciasHasta", "Poné hasta cuándo vale el certificado de exclusión.")
+	}
+	if f.CondicionGanancias == nil || *f.CondicionGanancias != GananciasExento {
+		f.ExentoGananciasHasta = nil
+	}
 	return f, l.Problema()
 }
 

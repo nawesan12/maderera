@@ -631,7 +631,7 @@ func TestAcumuladoSumaLosPagosQueNoRetuvieron(t *testing.T) {
 	if _, err := e.pool.Exec(ctx, `update regimenes_retencion set minimo_no_imponible = 224000, minimo_retencion = 0 where id = $1`, gan); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.pool.Exec(ctx, `update suppliers set cuit = '30712345679' where id = $1`, e.proveedor); err != nil {
+	if _, err := e.pool.Exec(ctx, `update suppliers set cuit = '30712345679', condicion_ganancias = 'inscripto' where id = $1`, e.proveedor); err != nil {
 		t.Fatal(err)
 	}
 	pago := func() map[string]any {

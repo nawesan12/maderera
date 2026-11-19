@@ -450,8 +450,9 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			return err
 		}
 		var nombre string
-		var cuit *string
-		err := tx.QueryRow(ctx, `SELECT nombre, cuit FROM suppliers WHERE id = $1`, d.SupplierID).Scan(&nombre, &cuit)
+		var prov ProveedorParaRetener
+		err := tx.QueryRow(ctx, `SELECT nombre, cuit, condicion_iva::text, condicion_ganancias, to_char(exento_ganancias_hasta, 'YYYY-MM-DD')
+			FROM suppliers WHERE id = $1`, d.SupplierID).Scan(&nombre, &prov.Cuit, &prov.CondicionIva, &prov.CondicionGanancias, &prov.ExentoHasta)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fallo("Ese proveedor no existe.")
 		}
@@ -479,6 +480,12 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 				return err
 			}
 			reg.Alicuota, reg.AlicuotaNoInscripto, reg.MinimoNoImponible, reg.MinimoRetencion = float64(a), float64(ani), float64(mni), float64(mr)
+			// Antes de anotar la base: si no corresponde, el pago entero se
+			// frena y no queda ni base ni certificado.
+			aplica, inscripto, porque := SujetoARetencion(reg.Impuesto, prov, diaArgentino(fecha))
+			if !aplica {
+				return fallo(reg.Nombre + ": " + porque)
+			}
 			// El acumulado del mes, que es lo que mira ARCA.
 			// La base sale de todos los pagos del mes, hayan retenido o no
 			// (bases_de_retencion); lo retenido, de los certificados que no
@@ -498,8 +505,7 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 				VALUES ($1, $2, $3, $4::numeric, $5)`, pagoID, d.SupplierID, reg.Codigo, jsmath.Fijo2(pedida.Base), fecha); err != nil {
 				return err
 			}
-			// Inscripto es quien tiene CUIT cargado (todavía no se consulta el padrón).
-			r := CalcularRetencion(pedida.Base, float64(base), float64(ret), reg, cuit != nil && *cuit != "")
+			r := CalcularRetencion(pedida.Base, float64(base), float64(ret), reg, inscripto)
 			if r.Retencion <= 0 {
 				continue
 			}

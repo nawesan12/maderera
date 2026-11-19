@@ -31,6 +31,8 @@ export interface DatosProveedor {
   aliasCbu?: string;
   diasPago: number | string;
   notas?: string;
+  condicionGanancias?: "inscripto" | "no_inscripto" | "exento";
+  exentoGananciasHasta?: string;
 }
 
 function refrescar(id?: string) {

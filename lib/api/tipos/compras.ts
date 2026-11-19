@@ -775,6 +775,10 @@ export interface components {
             };
         };
         ProveedorListado: {
+            condicionIva: string;
+            /** @enum {string|null} */
+            condicionGanancias: "inscripto" | "no_inscripto" | "exento" | null;
+            exentoGananciasHasta: string | null;
             id: string;
             nombre: string;
             razonSocial: string | null;
@@ -815,6 +819,10 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             convenios: string | null;
+            /** @enum {string|null} */
+            condicionGanancias: "inscripto" | "no_inscripto" | "exento" | null;
+            /** @description Último día de la exención (YYYY-MM-DD) */
+            exentoGananciasHasta: string | null;
             /** Format: double */
             saldo: number;
             movimientos: {
@@ -1567,6 +1575,10 @@ export interface operations {
                         cuit: string | null;
                         condicionIva: string;
                         diasPago: number;
+                        /** @enum {string|null} */
+                        condicionGanancias: "inscripto" | "no_inscripto" | "exento" | null;
+                        /** @description Último día de la exención (YYYY-MM-DD) */
+                        exentoGananciasHasta: string | null;
                     }[];
                 };
             };

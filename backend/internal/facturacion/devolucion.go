@@ -157,8 +157,14 @@ type DatosDeDevolucion struct {
 
 // topesDeLaVenta es cuánto de la venta entró por cada camino de vuelta, y
 // cuánto se debe todavía (deuda: lo que se puede devolver sin que salga
-// plata).
-type topesDeLaVenta struct{ caja, cuenta, afuera, deuda float64 }
+// plata). conRecibos dice que la venta se cobró con recibos (no es del
+// mostrador ni de la cuenta corriente), y enLinea es lo cobrado en línea que
+// todavía no volvió: lo primero que se le devuelve «por afuera».
+type topesDeLaVenta struct {
+	caja, cuenta, afuera, deuda float64
+	conRecibos                  bool
+	enLinea                     float64
+}
 
 // partesDeLaVenta es cuánto entró en efectivo, a cuenta corriente y por los
 // demás medios, menos lo que ya devolvieron las devoluciones por cada
@@ -169,12 +175,19 @@ type topesDeLaVenta struct{ caja, cuenta, afuera, deuda float64 }
 // A3): antes se tomaba su total como cobrado por el medio del pedido, y del
 // pedido de presupuesto «en efectivo» sin cobrar salía efectivo de la caja
 // por plata que nunca entró. Ahora es lo cobrado de verdad: las partes de
-// los recibos vivos del pedido y los cobros en línea aprobados que ningún
-// recibo nombra, menos lo que ya se les reintegró. Lo que no se cobró es la
-// deuda: devolver eso no saca plata, baja lo que se debe. Una retención no
-// vuelve por ningún lado (es un crédito fiscal con su certificado).
+// los recibos vivos del pedido —también los que cobraron su factura desde
+// Facturación, que no llevan el pedido (fragmentos.RecibosDelPedido)— y los
+// cobros en línea aprobados. Lo que no se cobró es la deuda: devolver eso no
+// saca plata, baja lo que se debe; lo que está en revisión no es deuda (el
+// cliente dice que lo pagó). Una retención no vuelve por ningún lado (es un
+// crédito fiscal con su certificado).
+//
+// Lo cobrado en línea ya devuelto es lo mayor entre lo que avisó Mercado
+// Pago (payment_refunds) y lo que las devoluciones «por afuera» le cargaron
+// (lo que no fue a un recibo): el aviso de Mercado Pago llega por una
+// devolución ya anotada, y sumar los dos la contaba dos veces.
 func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *string, total float64) (topesDeLaVenta, error) {
-	var efectivo, aCuenta, resto, deuda float64
+	var efectivo, aCuenta, resto float64
 	var renglones int
 	if err := c.QueryRow(ctx, `SELECT count(*)::int,
 		coalesce(sum(importe) FILTER (WHERE medio::text = $2), 0)::float8,
@@ -182,30 +195,6 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 		coalesce(sum(importe) FILTER (WHERE medio::text NOT IN ($2, $3)), 0)::float8
 		FROM order_payments WHERE order_id = $1`, pedido, ventas.Efectivo, ventas.CuentaCorriente).Scan(&renglones, &efectivo, &aCuenta, &resto); err != nil {
 		return topesDeLaVenta{}, err
-	}
-	if renglones == 0 {
-		if medio != nil && *medio == ventas.CuentaCorriente {
-			// La deuda del pedido está en la cuenta corriente: vuelve ahí.
-			aCuenta = total
-		} else {
-			if err := c.QueryRow(ctx, `
-				SELECT coalesce(sum(x.importe) FILTER (WHERE x.medio = 'efectivo'), 0)::float8,
-				       coalesce(sum(x.importe) FILTER (WHERE x.medio <> 'efectivo'), 0)::float8,
-				       (SELECT greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`, 0) FROM orders o WHERE o.id = $1)::float8
-				FROM (
-				  SELECT rp.medio::text AS medio, rp.importe FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id
-				  WHERE r.order_id = $1 AND r.estado = 'emitido' AND rp.medio <> 'retencion'
-				  UNION ALL
-				  SELECT CASE WHEN p.medio = 'efectivo' THEN 'efectivo' ELSE 'otro' END,
-				         p.monto - coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)
-				  FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'
-				    AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)
-				) x`, pedido).Scan(&efectivo, &resto, &deuda); err != nil {
-				return topesDeLaVenta{}, err
-			}
-			// Lo que ya volvió de los recibos por una devolución anterior
-			// está en devoluciones (abajo): no se resta dos veces.
-		}
 	}
 	var porCaja, porCuenta, porAfuera float64
 	if err := c.QueryRow(ctx, `SELECT coalesce(sum(importe) FILTER (WHERE destino = 'caja'), 0)::float8,
@@ -215,9 +204,42 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 		return topesDeLaVenta{}, err
 	}
 	r := jsmath.Redondear2
+	if renglones > 0 || (medio != nil && *medio == ventas.CuentaCorriente) {
+		if renglones == 0 {
+			// La deuda del pedido está en la cuenta corriente: vuelve ahí.
+			aCuenta = total
+		}
+		return topesDeLaVenta{caja: r(math.Max(0, efectivo-porCaja)), cuenta: r(math.Max(0, aCuenta-porCuenta)),
+			afuera: r(math.Max(0, resto-porAfuera))}, nil
+	}
+	var banco, enLinea, reintegradoEnLinea, alBanco, deuda float64
+	if err := c.QueryRow(ctx, `
+		WITH recibos AS (SELECT id FROM receipts WHERE estado = 'emitido' AND id IN `+fragmentos.RecibosDelPedido("$1::uuid")+`),
+		cobros AS (
+		  SELECT CASE WHEN rp.medio = 'efectivo' THEN 'efectivo' WHEN rp.payment_id IS NULL THEN 'banco' ELSE 'linea' END AS tipo,
+		         rp.importe, rp.payment_id
+		  FROM receipt_parts rp WHERE rp.receipt_id IN (SELECT id FROM recibos) AND rp.medio <> 'retencion'
+		  UNION ALL
+		  SELECT CASE WHEN p.medio = 'efectivo' THEN 'efectivo' ELSE 'linea' END, p.monto, p.id
+		  FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'
+		    AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id))
+		SELECT coalesce(sum(importe) FILTER (WHERE tipo = 'efectivo'), 0)::float8,
+		       coalesce(sum(importe) FILTER (WHERE tipo = 'banco'), 0)::float8,
+		       coalesce(sum(importe) FILTER (WHERE tipo = 'linea'), 0)::float8,
+		       coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id IN (SELECT payment_id FROM cobros WHERE tipo = 'linea')), 0)::float8,
+		       coalesce((SELECT sum(t.importe) FROM receipt_refunds t WHERE t.receipt_id IN (SELECT id FROM recibos) AND t.medio <> 'efectivo'), 0)::float8,
+		       (SELECT greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`
+		          - coalesce((SELECT sum(pr.monto) FROM payments pr WHERE pr.order_id = o.id AND pr.estado = 'en_revision'), 0), 0)
+		        FROM orders o WHERE o.id = $1)::float8
+		FROM cobros`, pedido).Scan(&efectivo, &banco, &enLinea, &reintegradoEnLinea, &alBanco, &deuda); err != nil {
+		return topesDeLaVenta{}, err
+	}
+	// Lo de las devoluciones «por afuera» que no fue a un recibo volvió por
+	// lo cobrado en línea.
+	libre := r(math.Max(0, enLinea-math.Max(reintegradoEnLinea, porAfuera-alBanco)))
 	// La deuda ya viene neta de las devoluciones «deuda» (ACobrarDelPedido).
-	return topesDeLaVenta{r(math.Max(0, efectivo-porCaja)), r(math.Max(0, aCuenta-porCuenta)), r(math.Max(0, resto-porAfuera)),
-		r(math.Max(0, deuda))}, nil
+	return topesDeLaVenta{caja: r(math.Max(0, efectivo-porCaja)), afuera: r(math.Max(0, banco-alBanco) + libre),
+		deuda: r(math.Max(0, deuda)), conRecibos: true, enLinea: libre}, nil
 }
 
 // DevueltoDeLaVenta es lo que las devoluciones ya sacaron de cada medio: la
@@ -657,7 +679,13 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 	}
 
 	// La plata: por donde entró y hasta lo que entró. Antes de emitir: un
-	// rechazo acá no puede costar un número de la serie.
+	// rechazo acá no puede costar un número de la serie. Con los recibos del
+	// pedido bloqueados antes de medir: un recibo que se anula entre los
+	// topes y el reintegro dejaba la devolución «por afuera» sin recibo al
+	// que cargarse y sin asiento.
+	if err := bloquearRecibosDelPedido(ctx, tx, pedido); err != nil {
+		return Devolucion{}, err
+	}
 	topes, err := partesDeLaVenta(ctx, tx, pedido, venta.medio, venta.total)
 	if err != nil {
 		return Devolucion{}, err
@@ -836,12 +864,22 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 			return Devolucion{}, err
 		}
 	case DevolverPorAfuera:
-		// Lo que vuelve por el banco de lo cobrado con recibo: el cierre lo
-		// asienta con el reparto del recibo. Lo de la venta del mostrador y lo
-		// cobrado en línea lo reintegra el posnet o Mercado Pago, que avisa
-		// por su lado.
-		if _, err := reintegrarDeLosRecibos(ctx, tx, pedido, id, total, false); err != nil {
-			return Devolucion{}, err
+		// Lo de la venta del mostrador lo reintegra el posnet, y lo cobrado en
+		// línea, Mercado Pago, que avisa por su lado (payment_refunds): va
+		// primero, porque es lo que vuelve solo. Lo que pasa de ahí vuelve por
+		// el banco desde los recibos, y el cierre lo asienta con su reparto.
+		// Antes se cargaba primero a los recibos: con una transferencia y un
+		// pago de Mercado Pago, el reintegro que después avisaba Mercado Pago
+		// quedaba en el CSV dos veces.
+		if topes.conRecibos {
+			aRecibos := jsmath.Redondear2(math.Max(0, total-topes.enLinea))
+			falta, err := reintegrarDeLosRecibos(ctx, tx, pedido, id, aRecibos, false)
+			if err != nil {
+				return Devolucion{}, err
+			}
+			if falta > 0.005 {
+				return Devolucion{}, errEmision("Los cobros de esta venta no alcanzan para devolver " + formato.Moneda(total) + ": revisalos en Cobros.")
+			}
 		}
 	case DevolverPorCuenta:
 		et := venta.numero
@@ -855,6 +893,17 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 			return Devolucion{}, err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE devoluciones SET account_movement_id = $2 WHERE id = $1`, id, mov); err != nil {
+			return Devolucion{}, err
+		}
+	case DevolverLaDeuda:
+		// Si con lo devuelto lo cobrado ya cubre lo que queda, el pedido
+		// queda pagado, como cuando lo cierra un recibo (cobros.CobrarPedido):
+		// sin esto seguía «pendiente» y el portal del cliente lo mostraba
+		// impago aunque no debiera nada. Sin nada cobrado no es un pago: es
+		// una venta devuelta entera.
+		if _, err := tx.Exec(ctx, `UPDATE orders o SET estado_pago = 'pagado', updated_at = now()
+			WHERE o.id = $1 AND o.estado_pago IN ('pendiente', 'rechazado')
+			  AND `+fragmentos.CobradoDelPedido+` > 0.005 AND `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarDelPedido, pedido); err != nil {
 			return Devolucion{}, err
 		}
 	}
@@ -932,17 +981,15 @@ func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido, devolucion string
 // la vez que se le devuelve dejaría la plata devuelta dos veces. Devuelve lo
 // que no alcanzó.
 func reintegrarDeLosRecibos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, enEfectivo bool) (float64, error) {
-	// El candado de cada recibo es el de cobros.AnularRecibo (BloquearRecibo),
-	// en orden, y las partes se leen recién con los candados tomados.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext(id::text)) FROM (SELECT id FROM receipts
-		WHERE order_id = $1 AND estado = 'emitido' ORDER BY id) x`, pedido); err != nil {
-		return 0, err
+	if importe <= 0.005 {
+		return 0, nil
 	}
+	// Los candados ya están (bloquearRecibosDelPedido, antes de los topes).
 	filas, err := tx.Query(ctx, `
 		SELECT rp.receipt_id, rp.medio::text, sum(rp.importe)::float8
 		  - coalesce((SELECT sum(t.importe) FROM receipt_refunds t WHERE t.receipt_id = rp.receipt_id AND t.medio = rp.medio), 0)::float8
 		FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id
-		WHERE r.order_id = $1 AND r.estado = 'emitido' AND rp.payment_id IS NULL
+		WHERE r.id IN `+fragmentos.RecibosDelPedido("$1::uuid")+` AND r.estado = 'emitido' AND rp.payment_id IS NULL
 		  AND CASE WHEN $2 THEN rp.medio = 'efectivo' ELSE rp.medio NOT IN ('efectivo', 'retencion') END
 		GROUP BY rp.receipt_id, rp.medio, r.created_at ORDER BY r.created_at, rp.receipt_id, rp.medio`, pedido, enEfectivo)
 	if err != nil {
@@ -981,4 +1028,15 @@ func reintegrarDeLosRecibos(ctx context.Context, tx pgx.Tx, pedido, devolucion s
 		falta = jsmath.Redondear2(falta - tramo)
 	}
 	return falta, nil
+}
+
+// bloquearRecibosDelPedido toma, en orden, el candado de cada recibo del
+// pedido: el mismo de cobros.AnularRecibo (BloquearRecibo). Las partes y los
+// topes se leen recién con los candados tomados: anular un recibo a la vez
+// que se le devuelve dejaría la plata devuelta dos veces, o devuelta sin
+// asiento.
+func bloquearRecibosDelPedido(ctx context.Context, tx pgx.Tx, pedido string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext(id::text)) FROM (SELECT id FROM receipts
+		WHERE id IN `+fragmentos.RecibosDelPedido("$1::uuid")+` AND estado = 'emitido' ORDER BY id) x`, pedido)
+	return err
 }

@@ -55,11 +55,48 @@ const NotaEntregadoSinCobrar = "Entregado sin cobrar"
 const ACobrarDelPedido = `(o.total - coalesce((SELECT sum(dv.importe) FROM devoluciones dv WHERE dv.order_id = o.id AND dv.destino = 'deuda'), 0))`
 
 // CobradoDelPedido es, sobre la fila `o`, lo cobrado fuera de la caja del
-// mostrador: los cobros en línea aprobados y los recibos vivos atados al
-// pedido. Es lo que SinCobrarDelPedido descuenta y lo que decide si un
-// recibo deja el pedido pagado (cobros.CobrarACliente).
+// mostrador: los cobros en línea aprobados y los recibos vivos del pedido
+// (recibosDelPedido). Es lo que SinCobrarDelPedido descuenta y lo que decide
+// si un recibo deja el pedido pagado (cobros.CobrarACliente).
 const CobradoDelPedido = `(coalesce((SELECT sum(pg.monto) FROM payments pg WHERE pg.order_id = o.id AND pg.estado = 'aprobado'), 0)
-	+ coalesce((SELECT sum(rc.total) FROM receipts rc WHERE rc.order_id = o.id AND rc.estado = 'emitido'), 0))`
+	+ coalesce((SELECT sum(rc.total) FROM receipts rc WHERE rc.estado = 'emitido' AND rc.id IN ` + recibosDelPedido + `), 0))`
+
+// recibosDelPedido son los ids de los recibos del pedido `o`: los que lo
+// cobran (receipts.order_id, el cobro desde la ficha) y los que cobran una
+// de sus facturas desde Facturación, que no llevan el pedido y quedan atados
+// solo por invoice_payments (revisión del carril E: la factura cobrada así
+// no figuraba como cobrada, y la devolución ofrecía bajar la deuda por el
+// total de algo que ya se había pagado).
+const recibosDelPedido = `(SELECT rp1.id FROM receipts rp1 WHERE rp1.order_id = o.id
+	UNION SELECT ip1.receipt_id FROM invoice_payments ip1 JOIN invoices if1 ON if1.id = ip1.invoice_id
+	      WHERE if1.order_id = o.id AND ip1.receipt_id IS NOT NULL)`
+
+// RecibosDelPedido es recibosDelPedido para otro pedido que la fila `o`:
+// un parámetro ($1::uuid) o una columna.
+func RecibosDelPedido(pedido string) string {
+	return strings.ReplaceAll(recibosDelPedido, "o.id", pedido)
+}
+
+// SinCobrarDeLoQueSalio es, sobre la fila `o`, lo que se debe de la
+// mercadería que ya salió: del pedido entregado, todo lo que falta cobrar;
+// del que salió en parte con remitos, lo remitido (a su precio, en la
+// proporción del total del pedido) menos lo cobrado, sin pasar lo que falta.
+// Con solo los entregados, la obra que se lleva la mitad con un remito y no
+// pagó nada no aparecía en «Me deben» hasta el último remito (comité final,
+// M4). Es la cifra de «Me deben» y la del filtro «Sin cobrar» de Pedidos, al
+// que lleva la tarjeta: tienen que dar lo mismo.
+const SinCobrarDeLoQueSalio = `(CASE WHEN o.estado = 'entregado' THEN ` + SinCobrarDelPedido + `
+	WHEN ` + SinCobrarDelPedido + ` IS NULL THEN NULL
+	ELSE least(` + SinCobrarDelPedido + `, greatest(o.total * coalesce((
+	  SELECT sum(di.cantidad * oi.subtotal / nullif(oi.cantidad, 0)) FROM delivery_items di
+	  JOIN deliveries d ON d.id = di.delivery_id AND d.estado <> 'anulada' JOIN order_items oi ON oi.id = di.order_item_id
+	  WHERE d.order_id = o.id) / nullif((SELECT sum(oi.subtotal) FROM order_items oi WHERE oi.order_id = o.id), 0), 0)
+	  - ` + CobradoDelPedido + `, 0)) END)`
+
+// SalioMercaderia: el pedido `o` está entregado, o no está cancelado y tiene
+// algún remito vivo. Son los pedidos en los que SinCobrarDeLoQueSalio mira.
+const SalioMercaderia = `(o.estado = 'entregado'
+	OR (o.estado <> 'cancelado' AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')))`
 
 // PagoEnRevision: el pedido `o` tiene una transferencia informada que nadie
 // verificó todavía.

@@ -763,6 +763,17 @@ func TestLaDevolucionRestaEnSuMes(t *testing.T) {
 	if cli.Totales.Total != 2420 || cli.Totales.Cantidad != 1 || cli.Totales.NetoVenta != 2000 {
 		t.Errorf("por cliente, septiembre: %+v", cli.Totales)
 	}
+
+	// «Devoluciones del mes» es la plata que salió: la que solo bajó la
+	// deuda no suma.
+	e.exec(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, created_by_user_id, created_at)
+		values ('d2', $1, $2, 100, 'deuda', 'sobró', $3, '2026-10-06T15:00:00Z')`, venta, factura, usuario)
+	_, cuerpo, _ = pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	_ = json.Unmarshal([]byte(cuerpo), &n)
+	if n.Devoluciones.Total != 1210 || n.Devoluciones.Cantidad != 1 {
+		t.Errorf("devoluciones del mes: %+v", n.Devoluciones)
+	}
 }
 
 // La mercadería que salió con un remito parcial y no se cobró está en «Me

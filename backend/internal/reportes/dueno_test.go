@@ -674,3 +674,43 @@ func TestSinCostosCargados(t *testing.T) {
 		t.Errorf("más de la mitad sin costo: %+v %+v", g, c)
 	}
 }
+
+// Lo devuelto en una devolución parcial deja de ser vendido (comité final,
+// M3): el Resumen, el Cierre y Reportes dan la misma venta sin IVA y el
+// mismo costo, sin la placa que volvió.
+func TestLaDevolucionParcialBajaLoVendido(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	placa, _ := e.catalogo(t)
+	venta := e.pedido(t, "V-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 2.0, 2420.0, 600.0})
+	renglon := e.id(t, `select id from order_items where order_id = $1`, venta)
+	factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+		values ('factura_b', 3, 1, 'X', 2000, 420, 0, 0, 0, 2420, 'autorizada', '2026-10-05T15:00:00Z', '7612', $1) returning id`, venta)
+	item := e.id(t, `insert into invoice_items (invoice_id, descripcion, cantidad, precio_unitario, neto, iva, subtotal, order_item_id)
+		values ($1, 'Fenólico', 2, 1210, 2000, 420, 2420, $2) returning id`, factura, renglon)
+	dev := e.id(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, created_by_user_id, created_at)
+		values ('d1', $1, $2, 1210, 'afuera', 'sobró', $3, '2026-10-06T15:00:00Z') returning id`, venta, factura, usuario)
+	e.exec(t, `insert into devolucion_items (devolucion_id, invoice_item_id, order_item_id, cantidad, al_stock, importe) values ($1, $2, $3, 1, true, 1210)`, dev, item, renglon)
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	_ = json.Unmarshal([]byte(cuerpo), &n)
+	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	var r ResumenDelMes
+	_ = json.Unmarshal([]byte(cuerpo), &r)
+	_, cuerpo, _ = pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
+	var rep ReporteDeVentas
+	_ = json.Unmarshal([]byte(cuerpo), &rep)
+	quiere := Resultado{VentasNetas: 1000, Costo: 600, Resultado: 400}
+	if g := n.Ganancia.Actual; g != quiere {
+		t.Errorf("ganancia del Resumen: %+v, quería %+v", g, quiere)
+	}
+	if r.Resultado.Actual != quiere || r.Vendido.Total != 1000 || r.Vendido.Facturado.Total != 1000 {
+		t.Errorf("cierre: %+v, vendido %+v", r.Resultado.Actual, r.Vendido)
+	}
+	if rep.Totales.NetoVenta != 1000 || rep.Totales.Costo == nil || *rep.Totales.Costo != 600 || rep.Totales.Cantidad != 1 {
+		t.Errorf("reportes: %+v", rep.Totales)
+	}
+}

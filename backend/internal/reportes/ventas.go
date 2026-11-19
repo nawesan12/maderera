@@ -84,11 +84,27 @@ func condiciones(p Periodo, f Filtros) (string, []any) {
 // mide el margen. Restar el costo de una parte al neto del todo inflaba el
 // margen de cada fila que mezclaba renglones con y sin costo. bruto es la
 // suma de los subtotales con IVA, para prorratear el total del pedido.
+//
+// **Lo devuelto no es vendido** (comité final, M3). La devolución parcial
+// no toca order_items: las placas que volvieron contaban como vendidas y
+// como disponibles a la vez, la ganancia seguía con su margen, y «Con
+// factura» dejaba de coincidir con lo facturado neto de notas de crédito.
+// Cada renglón resta lo que sus devoluciones se llevaron (devolucion_items,
+// por order_item_id): la cantidad, el importe y el costo de esa cantidad.
+// Lo devuelto sin renglón del pedido (un flete, un corte) no se puede
+// atribuir y queda vendido.
 const (
-	costoConocido    = `oi.costo_unitario > 0`
-	netoDelRenglon   = `oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)`
+	costoConocido = `oi.costo_unitario > 0`
+	// devueltoDelRenglon se une a order_items oi: lo devuelto de cada
+	// renglón (dvr). La tabla es chica y se agrupa una vez.
+	devueltoDelRenglon = `LEFT JOIN (SELECT order_item_id, sum(cantidad) AS cantidad, sum(importe) AS importe FROM devolucion_items
+		WHERE order_item_id IS NOT NULL GROUP BY order_item_id) dvr ON dvr.order_item_id = oi.id`
+	cantidadVendida  = `(oi.cantidad - coalesce(dvr.cantidad, 0))`
+	subtotalVendido  = `(oi.subtotal - coalesce(dvr.importe, 0))`
+	netoDelRenglon   = subtotalVendido + ` / (1 + coalesce(oi.alicuota_iva, 21) / 100)`
+	costoDelRenglon  = cantidadVendida + ` * oi.costo_unitario`
 	margenPorRenglon = `sum(` + netoDelRenglon + `),
-		sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `),
+		sum(` + costoDelRenglon + `) FILTER (WHERE ` + costoConocido + `),
 		count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int,
 		coalesce(sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `), 0)`
 	margenPorPedido = `sum(coalesce(margenes.neto, 0)), sum(margenes.costo), coalesce(sum(margenes.sin_costo), 0)::int,
@@ -108,11 +124,11 @@ func margenesDe(where string) string {
 	return `LEFT JOIN (
 		SELECT oi.order_id,
 		       sum(` + netoDelRenglon + `) AS neto,
-		       sum(oi.subtotal) AS bruto,
-		       sum(oi.cantidad * oi.costo_unitario) FILTER (WHERE ` + costoConocido + `) AS costo,
+		       sum(` + subtotalVendido + `) AS bruto,
+		       sum(` + costoDelRenglon + `) FILTER (WHERE ` + costoConocido + `) AS costo,
 		       count(*) FILTER (WHERE oi.costo_unitario IS NULL OR oi.costo_unitario <= 0)::int AS sin_costo,
 		       sum(` + netoDelRenglon + `) FILTER (WHERE ` + costoConocido + `) AS neto_costeado
-		FROM order_items oi
+		FROM order_items oi ` + devueltoDelRenglon + `
 		WHERE oi.order_id IN (SELECT o.id FROM orders o WHERE ` + where + `)
 		GROUP BY oi.order_id) margenes ON margenes.order_id = o.id`
 }
@@ -222,14 +238,16 @@ func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, a
 	}[corte]
 	filas := "0"
 	if grupo != "" {
-		filas = "(SELECT count(DISTINCT " + grupo + `) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+		filas = "(SELECT count(DISTINCT " + grupo + `) FROM order_items oi JOIN orders o ON o.id = oi.order_id `+devueltoDelRenglon+`
 			LEFT JOIN product_variants v ON v.id = oi.variant_id LEFT JOIN products p ON p.id = v.product_id
 			LEFT JOIN categories c ON c.id = p.category_id WHERE ` + where + ")"
 	} else if corte == "cliente" {
 		filas = "(SELECT count(DISTINCT coalesce(o.customer_id::text, o.contacto_nombre)) FROM orders o WHERE " + where + ")"
 	}
-	unidades := "(SELECT coalesce(sum(oi.cantidad), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE " + where + ")"
-	montoRenglones := "(SELECT coalesce(sum(oi.subtotal), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE " + where + ")"
+	unidades := "(SELECT coalesce(sum(" + cantidadVendida + "), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id " + devueltoDelRenglon +
+		" WHERE " + where + ")"
+	montoRenglones := "(SELECT coalesce(sum(" + subtotalVendido + "), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id " + devueltoDelRenglon +
+		" WHERE " + where + ")"
 	montos, cuantos := "coalesce(sum(o.total), 0)", "count(*)"
 	if porRenglon(corte) {
 		montos, cuantos = montoRenglones, unidades
@@ -274,21 +292,21 @@ func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args 
 	case "rubro":
 		return s.filas(ctx, `
 			SELECT coalesce(c.id::text, 'sin-categoria'), coalesce(c.name, 'Sin categoría'), count(DISTINCT p.id)::text,
-			       sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
-			FROM order_items oi JOIN orders o ON o.id = oi.order_id
+			       sum(`+cantidadVendida+`), sum(`+subtotalVendido+`), `+margenPorRenglon+`
+			FROM order_items oi JOIN orders o ON o.id = oi.order_id `+devueltoDelRenglon+`
 			LEFT JOIN product_variants v ON v.id = oi.variant_id
 			LEFT JOIN products p ON p.id = v.product_id
 			LEFT JOIN categories c ON c.id = p.category_id
-			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(oi.subtotal) DESC LIMIT 50`, args, true)
+			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(`+subtotalVendido+`) DESC LIMIT 50`, args, true)
 	case "elaboracion":
 		return s.filas(ctx, `
 			SELECT CASE WHEN coalesce(p.recargo_elaboracion_pct, 0) > 0 THEN 'elaborado' ELSE 'bruto' END,
 			       CASE WHEN coalesce(p.recargo_elaboracion_pct, 0) > 0 THEN 'Se maquina en planta' ELSE 'Se vende como viene' END,
-			       count(DISTINCT p.id)::text, sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
-			FROM order_items oi JOIN orders o ON o.id = oi.order_id
+			       count(DISTINCT p.id)::text, sum(`+cantidadVendida+`), sum(`+subtotalVendido+`), `+margenPorRenglon+`
+			FROM order_items oi JOIN orders o ON o.id = oi.order_id `+devueltoDelRenglon+`
 			LEFT JOIN product_variants v ON v.id = oi.variant_id
 			LEFT JOIN products p ON p.id = v.product_id
-			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(oi.subtotal) DESC`, args, true)
+			WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(`+subtotalVendido+`) DESC`, args, true)
 	case "cliente":
 		return s.filas(ctx, `
 			SELECT coalesce(cu.id::text, o.contacto_nombre), coalesce(cu.razon_social, cu.nombre, o.contacto_nombre), cu.cuit,
@@ -321,11 +339,11 @@ func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args 
 	}
 	return s.filas(ctx, `
 		SELECT coalesce(p.id::text, oi.descripcion), coalesce(p.name, oi.descripcion), max(v.label),
-		       sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
-		FROM order_items oi JOIN orders o ON o.id = oi.order_id
+		       sum(`+cantidadVendida+`), sum(`+subtotalVendido+`), `+margenPorRenglon+`
+		FROM order_items oi JOIN orders o ON o.id = oi.order_id `+devueltoDelRenglon+`
 		LEFT JOIN product_variants v ON v.id = oi.variant_id
 		LEFT JOIN products p ON p.id = v.product_id
-		WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(oi.subtotal) DESC LIMIT 50`, args, false)
+		WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(`+subtotalVendido+`) DESC LIMIT 50`, args, false)
 }
 
 // VentasPorMes es ventasPorMes: lo vendido mes a mes (meses argentinos) con

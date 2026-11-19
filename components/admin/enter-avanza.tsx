@@ -8,6 +8,37 @@ const FOCUSABLES =
   "input:not([type=hidden]), select, textarea, button:not([type=button])";
 
 /**
+ * Los campos del formulario por los que avanza Enter, en orden. `actual`
+ * cuenta aunque no se vea (es donde está el foco).
+ */
+export function camposDelFormulario(
+  formulario: HTMLFormElement,
+  actual?: HTMLElement,
+): HTMLElement[] {
+  return Array.from(formulario.querySelectorAll<HTMLElement>(FOCUSABLES)).filter(
+    (el) =>
+      !(el as HTMLInputElement).disabled &&
+      el.getAttribute("aria-hidden") !== "true" &&
+      // `offsetParent` en nulo es la forma barata de saber que no se ve.
+      (el.offsetParent !== null || el === actual),
+  );
+}
+
+/** Pone el foco en un campo y deja su valor seleccionado. */
+export function enfocarCampo(siguiente: HTMLElement) {
+  siguiente.focus();
+  // Dejar el valor seleccionado convierte "corregir" en "escribir encima",
+  // que es como se carga cuando se va rápido.
+  if (
+    siguiente instanceof HTMLInputElement &&
+    siguiente.type !== "checkbox" &&
+    siguiente.type !== "radio"
+  ) {
+    siguiente.select?.();
+  }
+}
+
+/**
  * Enter pasa al campo siguiente, en todo el panel.
  *
  * **Va una sola vez, en el layout**, y no formulario por formulario. Son más de
@@ -57,34 +88,14 @@ export function EnterAvanza() {
       const formulario = campo.closest("form");
       if (!formulario) return;
 
-      const campos = Array.from(
-        formulario.querySelectorAll<HTMLElement>(FOCUSABLES),
-      ).filter(
-        (el) =>
-          !(el as HTMLInputElement).disabled &&
-          el.getAttribute("aria-hidden") !== "true" &&
-          // `offsetParent` en nulo es la forma barata de saber que no se ve.
-          (el.offsetParent !== null || el === campo),
-      );
-
-      const siguiente = siguienteCampo(campos, campo);
+      const siguiente = siguienteCampo(camposDelFormulario(formulario, campo), campo);
 
       // En el último no se hace nada: Enter envía, que es lo que se espera
       // después de cargar el último dato.
       if (!siguiente) return;
 
       evento.preventDefault();
-      siguiente.focus();
-
-      // Dejar el valor seleccionado convierte "corregir" en "escribir encima",
-      // que es como se carga cuando se va rápido.
-      if (
-        siguiente instanceof HTMLInputElement &&
-        siguiente.type !== "checkbox" &&
-        siguiente.type !== "radio"
-      ) {
-        siguiente.select?.();
-      }
+      enfocarCampo(siguiente);
     }
 
     window.addEventListener("keydown", alTeclear);

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { buscarClientes } from "@/app/mostrador/actions";
+import { camposDelFormulario, enfocarCampo } from "@/components/admin/enter-avanza";
+import { enterEnBuscador } from "@/lib/teclado/avance";
 
 export interface ClienteElegido {
   id: string;
@@ -23,7 +25,10 @@ export interface ClienteElegido {
  * Los resultados se guardan con la consulta que los trajo: si la consulta
  * cambió mientras se esperaba, no se muestran los de la anterior.
  *
- * Teclado: flechas para moverse, Enter para elegir, Escape para borrar.
+ * Teclado: flechas para moverse, Enter para elegir, Escape para borrar. Un
+ * Enter que llega antes que los resultados elige el primero cuando lleguen
+ * (ver `enterEnBuscador`), y después de elegir el foco pasa al campo
+ * siguiente del formulario: la cadena «Enter, el siguiente» no se corta acá.
  * Con `nombre`, el id elegido va en un campo oculto para los formularios que
  * se mandan con FormData.
  */
@@ -55,6 +60,13 @@ export function ElegirCliente({
   const fallo = vigentes && traidos.fallo;
   const buscando = consulta.length >= 2 && !vigentes;
   const id = useId();
+  const contenedor = useRef<HTMLDivElement>(null);
+  const campo = useRef<HTMLInputElement>(null);
+  const cambiar = useRef<HTMLButtonElement>(null);
+  // La consulta en la que se apretó Enter antes de tener resultados.
+  const alLlegar = useRef<string | null>(null);
+  // A dónde va el foco después de elegir o de apretar «Cambiar».
+  const foco = useRef<"siguiente" | "buscador" | null>(null);
   const claseEtiqueta = chico
     ? "mb-1 block text-sm font-medium"
     : "mb-1 block text-base font-medium";
@@ -69,21 +81,54 @@ export function ElegirCliente({
         if (vigente) {
           setTraidos({ clave: consulta, items: encontrados, fallo: false });
           setActivo(0);
+          if (alLlegar.current === consulta) {
+            alLlegar.current = null;
+            if (encontrados[0]) elegir(encontrados[0]);
+          }
         }
       } catch {
         if (vigente) setTraidos({ clave: consulta, items: [], fallo: true });
+        if (alLlegar.current === consulta) alLlegar.current = null;
       }
     }, 250);
     return () => {
       vigente = false;
       clearTimeout(espera);
     };
+    // `elegir` cambia en cada render y no cambia lo que se busca.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consulta, reintento]);
 
-  const elegir = (c: ClienteElegido | null) => {
+  function elegir(c: ClienteElegido | null) {
+    foco.current = c ? "siguiente" : "buscador";
     onElegir(c);
     setTexto("");
-  };
+  }
+
+  // Al elegir, el buscador se desmonta y el foco quedaba en la nada: el
+  // Enter siguiente no hacía nada y había que ir al mouse. Va al campo que
+  // sigue en el formulario o, si no hay, a «Cambiar». Al apretar «Cambiar»,
+  // vuelve al buscador.
+  useEffect(() => {
+    const destino = foco.current;
+    foco.current = null;
+    if (destino === "buscador" && !elegido) {
+      campo.current?.focus();
+      return;
+    }
+    if (destino !== "siguiente" || !elegido || !contenedor.current) return;
+    const propio = contenedor.current;
+    const formulario = propio.closest("form");
+    const siguiente = formulario
+      ? camposDelFormulario(formulario).find(
+          (el) =>
+            !propio.contains(el) &&
+            Boolean(propio.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING),
+        )
+      : undefined;
+    if (siguiente) enfocarCampo(siguiente);
+    else cambiar.current?.focus();
+  }, [elegido]);
 
   const oculto = nombre ? (
     <input type="hidden" name={nombre} value={elegido?.id ?? ""} />
@@ -91,7 +136,7 @@ export function ElegirCliente({
 
   if (elegido) {
     return (
-      <div>
+      <div ref={contenedor}>
         <span className={claseEtiqueta}>{etiqueta}</span>
         {oculto}
         <div className={`tarjeta-hundida flex ${alto} items-center gap-3 px-4 py-1.5`}>
@@ -105,6 +150,7 @@ export function ElegirCliente({
             )}
           </span>
           <button
+            ref={cambiar}
             type="button"
             onClick={() => elegir(null)}
             className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors hover:bg-background"
@@ -122,7 +168,7 @@ export function ElegirCliente({
   const opcion = (i: number) => `${id}-opcion-${i}`;
 
   return (
-    <div>
+    <div ref={contenedor}>
       <label htmlFor={id} className={claseEtiqueta}>
         {etiqueta}
       </label>
@@ -134,6 +180,7 @@ export function ElegirCliente({
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         )}
         <input
+          ref={campo}
           id={id}
           role="combobox"
           aria-expanded={abierto && resultados.length > 0}
@@ -151,9 +198,17 @@ export function ElegirCliente({
             } else if (e.key === "ArrowUp" && resultados.length > 0) {
               e.preventDefault();
               setActivo((a) => (a - 1 + resultados.length) % resultados.length);
-            } else if (e.key === "Enter" && resultados[activo]) {
-              e.preventDefault();
-              elegir(resultados[activo]);
+            } else if (e.key === "Enter") {
+              const accion = enterEnBuscador({
+                texto,
+                buscando,
+                hayMarcado: Boolean(resultados[activo]),
+              });
+              // Lo que no sea «seguir» se queda acá: sin el preventDefault,
+              // el avance del panel (EnterAvanza) se llevaba el foco.
+              if (accion !== "seguir") e.preventDefault();
+              if (accion === "elegir") elegir(resultados[activo]);
+              if (accion === "al-llegar") alLlegar.current = consulta;
             } else if (e.key === "Escape" && texto) {
               e.preventDefault();
               setTexto("");

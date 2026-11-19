@@ -190,7 +190,8 @@ func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista preci
 		l, a := float64(*k.PlacaLargoMm), float64(*k.PlacaAnchoMm)
 		largo, ancho = &l, &a
 	}
-	medida := cortes.ResolverMedida(nil, nil, largo, ancho, k.Mitad)
+	// La sierra va antes que la medida: la media placa sale de partirla con
+	// ese disco (T4, hallazgo 23).
 	sierra := float64(cortes.AnchoDeSierraMm)
 	_ = s.pool.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra)
 	if k.AnchoSierraMm != nil {
@@ -198,6 +199,7 @@ func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista preci
 			sierra = *a
 		}
 	}
+	medida := cortes.ResolverMedida(nil, nil, largo, ancho, k.Mitad, sierra)
 	piezas := make([]cortes.PiezaAcortar, len(k.Piezas))
 	conCanto := make([]cortes.PiezaConCanto, len(k.Piezas))
 	for i, p := range k.Piezas {

@@ -312,7 +312,7 @@ func TestGoldenSueltos(t *testing.T) {
 		if m, ok := c.Args["mitad"].(string); ok {
 			mitad = &m
 		}
-		igualJSON(t, fmt.Sprintf("placa %d", i), ResolverMedida(num("propiaLargo"), num("propiaAncho"), num("varianteLargo"), num("varianteAncho"), mitad), c.Medida)
+		igualJSON(t, fmt.Sprintf("placa %d", i), ResolverMedida(num("propiaLargo"), num("propiaAncho"), num("varianteLargo"), num("varianteAncho"), mitad, 0), c.Medida)
 		if got := NombreDeLaMitad(mitad); got != c.Nombre {
 			t.Errorf("mitad %d: %q", i, got)
 		}

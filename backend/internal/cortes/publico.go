@@ -245,8 +245,8 @@ func (s *Servicio) cotizar(ctx context.Context, l catalogo.Lista, placa *PlacaCo
 	if err != nil {
 		return MedidaDePlaca{}, Plano{}, PresupuestoDeCorte{}, err
 	}
-	medida := ResolverMedida(nil, nil, &placa.LargoMm, &placa.AnchoMm, mitad)
 	sierra := params.AnchoSierraMm
+	medida := ResolverMedida(nil, nil, &placa.LargoMm, &placa.AnchoMm, mitad, sierra)
 	plano := CalcularPlano(DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra})
 	pres := make([]PiezaPresupuestada, len(piezas))
 	for i, p := range piezas {

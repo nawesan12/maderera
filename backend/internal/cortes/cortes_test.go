@@ -467,7 +467,9 @@ func TestArmadorPublicoYCarrito(t *testing.T) {
 	code, b = cot(map[string]any{"variantId": e.melamina, "mitad": "largo", "cantoDescripcion": " Blanco ", "piezas": []any{map[string]any{"largoMm": "900", "anchoMm": 600, "cantidad": 3, "respetaVeta": 0, "cantoLargo": 1, "cantoAncho": 0, "etiqueta": nil}}})
 	var c CorteCotizado
 	_ = json.Unmarshal([]byte(b), &c)
-	if code != 200 || c.PlacaAnchoMm != 915 || c.Placas != 1 || c.CantoDescripcion == nil || *c.CantoDescripcion != "Blanco" {
+	// La media de 1830 descuenta el disco de la configuración (5 mm): 912, no
+	// 915 (T4, hallazgo 23).
+	if code != 200 || c.PlacaAnchoMm != 912 || c.Placas != 1 || c.CantoDescripcion == nil || *c.CantoDescripcion != "Blanco" {
 		t.Fatalf("cotizar: %d %s", code, b)
 	}
 
@@ -495,4 +497,32 @@ func TestArmadorPublicoYCarrito(t *testing.T) {
 
 func jsonTotal(c CorteResuelto) string {
 	return fmt.Sprintf("%.2f", c.Cuenta.Total)
+}
+
+// La media placa descuenta el disco que la parte (T4, hallazgo 23): los
+// mismos números que tests/placa-corte.test.ts, para que TS y Go redondeen
+// igual.
+func TestMediaPlacaDescuentaLaSierra(t *testing.T) {
+	num := func(x float64) *float64 { return &x }
+	largo, ancho := "largo", "ancho"
+	casos := []struct {
+		l, a   float64
+		mitad  *string
+		sierra float64
+		quiere [2]float64
+	}{
+		{2750, 1830, &largo, 5, [2]float64{2750, 912}},
+		{2440, 1220, &largo, 3.2, [2]float64{2440, 608}},
+		{2750, 1830, &largo, 3.2, [2]float64{2750, 913}},
+		{2750, 1830, &ancho, 3.2, [2]float64{1373, 1830}},
+		{2750, 1830, nil, 3.2, [2]float64{2750, 1830}},
+		{2440, 1220, &largo, 0, [2]float64{2440, 610}},
+		{2440, 1220, &largo, -3, [2]float64{2440, 610}},
+	}
+	for i, c := range casos {
+		m := ResolverMedida(nil, nil, num(c.l), num(c.a), c.mitad, c.sierra)
+		if m.Largo != c.quiere[0] || m.Ancho != c.quiere[1] {
+			t.Errorf("caso %d: %v × %v, quería %v", i, m.Largo, m.Ancho, c.quiere)
+		}
+	}
 }

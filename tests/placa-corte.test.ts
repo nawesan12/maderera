@@ -75,6 +75,43 @@ describe("medida de la placa", () => {
   });
 });
 
+describe("la media placa descuenta la sierra", () => {
+  // Partirla es una pasada y el disco se come su ancho (T4, hallazgo 23).
+  // Los mismos números que `TestMediaPlacaDescuentaLaSierra` en Go: si TS y Go
+  // redondean distinto, la pantalla y el taller dan medidas distintas.
+  it("de 1830 con 5 mm salen dos de 912", () => {
+    expect(medidaDePlaca({ varianteLargo: 2750, varianteAncho: 1830, mitad: "largo", sierra: 5 }).ancho).toBe(912);
+  });
+
+  it("de 1220 con 3,2 mm salen dos de 608", () => {
+    expect(medidaDePlaca({ varianteLargo: 2440, varianteAncho: 1220, mitad: "largo", sierra: 3.2 }).ancho).toBe(608);
+  });
+
+  it("de 1830 con 3,2 mm, 913: hacia abajo y no al más cercano", () => {
+    expect(medidaDePlaca({ varianteLargo: 2750, varianteAncho: 1830, mitad: "largo", sierra: 3.2 }).ancho).toBe(913);
+  });
+
+  it("al ancho descuenta del largo", () => {
+    expect(medidaDePlaca({ varianteLargo: 2750, varianteAncho: 1830, mitad: "ancho", sierra: 3.2 })).toMatchObject({
+      largo: 1373,
+      ancho: 1830,
+    });
+  });
+
+  it("la placa entera no cambia", () => {
+    expect(medidaDePlaca({ varianteLargo: 2750, varianteAncho: 1830, sierra: 3.2 })).toMatchObject({
+      largo: 2750,
+      ancho: 1830,
+    });
+  });
+
+  it("sin sierra, o con una que no es número, la cuenta es la de antes", () => {
+    expect(medidaDePlaca({ varianteLargo: 2440, varianteAncho: 1220, mitad: "largo" }).ancho).toBe(610);
+    expect(medidaDePlaca({ varianteLargo: 2440, varianteAncho: 1220, mitad: "largo", sierra: NaN }).ancho).toBe(610);
+    expect(medidaDePlaca({ varianteLargo: 2440, varianteAncho: 1220, mitad: "largo", sierra: -3 }).ancho).toBe(610);
+  });
+});
+
 describe("media placa se cobra media", () => {
   it("cobra la mitad cuando el trabajo sale de media placa", () => {
     expect(fraccionDePlaca("largo")).toBe(0.5);

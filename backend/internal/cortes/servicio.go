@@ -297,7 +297,8 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		}
 		c.PrecioPlaca = precio
 	}
-	c.Medida = ResolverMedida(c.PropiaLargoMm, c.PropiaAnchoMm, c.VarianteLargoMm, c.VarianteAnchoMm, c.Mitad)
+	// Con la sierra del trabajo: la media placa sale de partirla con ese disco.
+	c.Medida = ResolverMedida(c.PropiaLargoMm, c.PropiaAnchoMm, c.VarianteLargoMm, c.VarianteAnchoMm, c.Mitad, c.AnchoSierraMm)
 	return &c, nil
 }
 
@@ -595,6 +596,8 @@ func (s *Servicio) CambiarSierra(ctx context.Context, ses *auth.Sesion, id, valo
 	}
 	anterior := c.AnchoSierraMm
 	c.AnchoSierraMm, c.MotorPlano = *ancho, 2
+	// La media placa depende del disco: con otro ancho, otra mitad.
+	c.Medida = ResolverMedida(c.PropiaLargoMm, c.PropiaAnchoMm, c.VarianteLargoMm, c.VarianteAnchoMm, c.Mitad, c.AnchoSierraMm)
 	if UnidadesDelCorte(c) > TopeDeUnidades {
 		return "", error422(msgDemasiadasPiezas)
 	}

@@ -2226,7 +2226,8 @@ Se aplicó el default prudente; lo valida Nahuel (o el contador donde se dice).
 - [ ] **El campo «Sierra» del corte del mostrador** (pedido de Nahuel del
       30/9): salió, como proponían la revisión y el comité (hallazgo 44); el
       disco es el de `/admin/calculadoras`. Volverlo es devolver el campo en
-      `corte-a-medida.tsx`: Go sigue leyendo `anchoSierraMm`.
+      `corte-a-medida.tsx` y que Go vuelva a leer `anchoSierraMm`, que desde
+      la revisión del carril F ignora (`sierraConfigurada`).
 - [ ] **Desvincular una terminal**: «Esta PC…» ahora confirma, pero sigue sin
       haber cómo desvincular desde el mostrador; hace falta una ruta en Go
       (y decidir quién puede).

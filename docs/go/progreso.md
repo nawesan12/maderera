@@ -2146,3 +2146,60 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - Quedó sin tocar, esperando a Nahuel: el campo «Sierra» del corte del
   mostrador (pedido suyo del 30/9). La revisión propone sacarlo y corregir el
   disco desde `/admin/cortes`.
+
+## Comité final, carril F (19/11): mostrador y venta
+
+- **A2, varios cortes por venta.** La venta manda `cortes` (lista) y cada
+  renglón del corte su índice en `corte`; el `corte` único de antes se sigue
+  leyendo (`atarRenglonesAlCorte` ata sus renglones como se reconocían).
+  `revisarCobroDelCorte` rechaza el corte que no cobra lo de su plano, ni de
+  menos ni de más: antes lo de menos pedía el PIN (`faltaDelCorte`) y lo de
+  más pasaba. Las pasadas y el canto se exigen solo si hay tarifa o si la
+  venta los trae. En la pantalla, `lib/mostrador/cortes-de-la-venta.ts`:
+  «Corregir» reabre el corte y reemplaza sus renglones en el mismo lugar, y
+  quitar un renglón del corte saca el corte entero. `TestVariosCortesEnUnaVenta`.
+- **M1**: la cola sin conexión rechaza la cuenta bloqueada (lo no
+  autorizable); pasarse del límite sigue entrando marcado.
+  `TestColaConCuentaBloqueada`.
+- **M10, M14**: `revisarRenglones` (en línea) rechaza un renglón a $0 y la
+  fracción de lo que el producto vende por unidad (la unidad del producto, no
+  la del renglón). Sin conexión no se rechaza: la pantalla redondea y no deja
+  agregar sin precio. Un total en cero sin descuento dice «Falta poner el
+  precio.».
+- **M11**: Precios exige precio mayor que cero (Go y la tabla).
+- **M12**: «El personal · 7 días» suma los renglones a mano de cada uno
+  (`aMano`; sin variante, sin contar pasadas ni tapacanto).
+- **M13**: la caja lee los importes con `parsearImporte` (`importeDeCaja`).
+- **M15**: abajo de `lg` el mostrador se apila con el total fijo al pie;
+  abajo de `sm`, «Usalo en la computadora o la tablet.».
+- Bajos: horas en 24 h y medios con nombre (ventas de hoy, caja del panel);
+  sin campo «Sierra» en el corte del mostrador; «Media a lo largo / al
+  ancho»; «Esta PC…» pregunta antes de vincular; la coma de lo que va entero
+  en el remito se marca; el − rápido del stock pide el motivo.
+
+### Decisiones a confirmar
+
+Se aplicó el default prudente; lo valida Nahuel (o el contador donde se dice).
+
+- [ ] **Varios cortes en una venta (decisión 6)**: se admiten, cada uno con
+      sus renglones; reabrir uno lo edita y reemplaza sus renglones. Go
+      rechaza el cobro de un corte que no cierra con su plano, de menos o de
+      más (antes lo de menos se autorizaba con PIN).
+- [ ] **Productos a $0 (decisión 4)**: no hay legítimos. Precios no guarda
+      $0, el buscador del mostrador no los agrega y Go rechaza el renglón en
+      $0. Lo que no tiene precio se vende «a mano».
+- [ ] **Renglones a mano (decisión 3)**: se ven por vendedor en los
+      controles del personal, sin PIN ni tope. Si hace falta un tope con PIN,
+      falta decidir el monto.
+- [ ] **Ctrl+Enter (decisión 1)**: sigue agregando y cobrando, salvo sin
+      conexión sobre una placa (agrega y no cobra) y sobre un producto sin
+      precio (no agrega).
+- [ ] **El teléfono (decisión 2)**: el mostrador no se usa en el teléfono
+      (aviso); la tablet vertical sí.
+- [ ] **El campo «Sierra» del corte del mostrador** (pedido de Nahuel del
+      30/9): salió, como proponían la revisión y el comité (hallazgo 44); el
+      disco es el de `/admin/calculadoras`. Volverlo es devolver el campo en
+      `corte-a-medida.tsx`: Go sigue leyendo `anchoSierraMm`.
+- [ ] **Desvincular una terminal**: «Esta PC…» ahora confirma, pero sigue sin
+      haber cómo desvincular desde el mostrador; hace falta una ruta en Go
+      (y decidir quién puede).

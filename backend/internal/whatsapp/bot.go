@@ -16,6 +16,7 @@ import (
 
 	"mjbj/internal/asistente"
 	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/push"
 )
@@ -60,8 +61,12 @@ type VarianteBot struct {
 
 // FichaBot es lo que el bot necesita para presupuestar un producto.
 type FichaBot struct {
-	Nombre    string
-	Unidad    string
+	Nombre string
+	Unidad string
+	// PorM2: una placa que se vende por metro cuadrado (forma_de_venta
+	// metro_cuadrado). Su precio de lista ya es por m² y la línea se guarda
+	// en m² (ventas.SeVendePorM2 y unidadDeLinea de lib/ventas).
+	PorM2     bool
 	Variantes []VarianteBot
 }
 
@@ -88,7 +93,8 @@ type Presupuestar struct {
 	Slug     string           `json:"slug"`
 	Medida   asistente.Medida `json:"medida"`
 	Cantidad float64          `json:"cantidad"`
-	// Unidad es la que dijo el cliente: "m2", "m" o vacío (unidades). Un
+	// Unidad es la que dijo el cliente: "m2", "m", "u" (dijo unidades:
+	// «10 placas», «5 tirantes») o vacío (no dijo cuánto, va una). Un
 	// pendiente guardado antes de que existiera se lee vacío, como antes.
 	Unidad string `json:"unidad,omitempty"`
 	Texto  string `json:"texto"`
@@ -329,15 +335,17 @@ func medidaSuelta(texto string) asistente.Medida {
 }
 
 // cantidadPedida es cuánto piden y en qué: los metros o los m² si los
-// dijeron («m» o «m2»), si no las unidades (sin unidad), y si no una. Las
-// medidas se borran antes: el «1.830» de «1.830x2.600» no es una cantidad.
+// dijeron («m» o «m2»), si no las unidades («u»), y si no una (sin unidad).
+// Las unidades dichas se separan del uno por defecto porque «10 tirantes» de
+// algo que se vende por metro no son 10 metros. Las medidas se borran antes:
+// el «1.830» de «1.830x2.600» no es una cantidad.
 func cantidadPedida(texto string, e asistente.Entendido) (float64, string) {
 	if e.Cantidad != nil && e.Cantidad.Valor > 0 {
 		return e.Cantidad.Valor, e.Cantidad.Unidad
 	}
 	if g := reCantidad.FindStringSubmatch(asistente.SinMedidas(asistente.Normalizar(texto))); g != nil {
 		if n := asistente.Numero(g[1]); n > 0 {
-			return n, ""
+			return n, "u"
 		}
 	}
 	return 1, ""
@@ -354,48 +362,100 @@ const (
 // cantidadCotizada es lo que va al presupuesto, en la unidad de venta.
 type cantidadCotizada struct {
 	Cantidad float64
+	// Unidad es la de la línea: la del producto, o metro_cuadrado para la
+	// placa que se vende por m².
+	Unidad string
 	// Convertida: pidieron m² y se vende por placa. Pedido es lo que dijeron
 	// («6 m²») y Cubre los m² de las placas enteras: lo que se paga.
 	Convertida bool
-	Pedido     string
-	Cubre      float64
+	// PlacasAM2: pidieron placas de una que se vende por m²; Pedido es
+	// «10 placas» y Cantidad, los m² que suman.
+	PlacasAM2 bool
+	Pedido    string
+	Cubre     float64
+}
+
+// porQueNoSeCotiza es la razón tipada de cantidadEnUnidadDeVenta: el aviso
+// de la derivación dice lo que pasó, no lo que suele pasar. Con un solo
+// false, «1.000 m² de melamina» (211 placas, pasa el tope) salía como
+// «la placa no tiene medida cargada» y quien atendía buscaba un error en una
+// ficha que estaba bien.
+type porQueNoSeCotiza int
+
+const (
+	seCotiza porQueNoSeCotiza = iota
+	sinMedidaCargada
+	unidadQueNoSePasa
+	pasaElTope
+)
+
+// unidadDeLineaBot es unidadDeLinea (lib/ventas/forma-de-venta.ts).
+func unidadDeLineaBot(f FichaBot) string {
+	if f.PorM2 && f.Unidad == "placa" {
+		return "metro_cuadrado"
+	}
+	return f.Unidad
 }
 
 // cantidadEnUnidadDeVenta pasa lo que pidieron a la unidad en que se vende el
 // producto. Los m² de un producto por m² y los metros de uno por metro van
 // igual; los m² de una placa se cuentan en placas enteras (es una cantidad de
-// placas, no plata: se redondea para arriba). Cualquier otra combinación
-// —metros de una placa, m² de algo que se vende por unidad, una placa sin
-// medida— da false y lo resuelve una persona: cotizar «12 metros de
-// melamina» como 12 placas es lo que pasaba antes.
-func cantidadEnUnidadDeVenta(cant float64, unidadDicha, unidadVenta string, v VarianteBot) (cantidadCotizada, bool) {
+// placas, no plata: se redondea para arriba) y las placas de una placa por
+// m² se pasan a m² con su área. Cualquier otra combinación —metros de una
+// placa, m² de algo que se vende por unidad, una placa sin medida, piezas de
+// algo que se vende por metro— no se cotiza y lo resuelve una persona:
+// cotizar «12 metros de melamina» como 12 placas, o «10 tirantes» como 10
+// metros, es lo que pasaba antes. Con un tope pasado, la cantidad igual
+// vuelve, para que el aviso diga cuánto era.
+func cantidadEnUnidadDeVenta(cant float64, unidadDicha string, f FichaBot, v VarianteBot) (cantidadCotizada, porQueNoSeCotiza) {
+	linea := unidadDeLineaBot(f)
+	c := cantidadCotizada{Unidad: linea}
 	if cant <= 0 {
-		return cantidadCotizada{}, false
+		return c, unidadQueNoSePasa
 	}
-	var c cantidadCotizada
+	area := 0.0
+	if v.LargoMm > 0 && v.AnchoMm > 0 {
+		area = float64(v.LargoMm) * float64(v.AnchoMm) / 1e6
+	}
+	porMetro := linea == "metro_cuadrado" || linea == "metro_lineal"
 	switch {
 	case unidadDicha == "":
+		// No dijo cuánto (o un pendiente de antes): una, en la unidad de venta.
 		c.Cantidad = cant
-	case unidadDicha == "m2" && unidadVenta == "metro_cuadrado", unidadDicha == "m" && unidadVenta == "metro_lineal":
+	case unidadDicha == "u" && linea == "metro_cuadrado" && f.Unidad == "placa":
+		if area == 0 {
+			return c, sinMedidaCargada
+		}
+		// Los m² a dos decimales: es lo que se imprime en el presupuesto.
+		c.Cantidad = jsmath.Round(float64(cant*area)*100) / 100
+		c.PlacasAM2 = true
+		c.Pedido = formato.Decimal(cant, 2) + " " + plural(int(cant), "placa", "placas")
+	case unidadDicha == "u" && porMetro:
+		return c, unidadQueNoSePasa
+	case unidadDicha == "u":
 		c.Cantidad = cant
-	case unidadDicha == "m2" && unidadVenta == "placa" && v.LargoMm > 0 && v.AnchoMm > 0:
-		area := float64(v.LargoMm) * float64(v.AnchoMm) / 1e6
+	case unidadDicha == "m2" && linea == "metro_cuadrado", unidadDicha == "m" && linea == "metro_lineal":
+		c.Cantidad = cant
+	case unidadDicha == "m2" && linea == "placa":
+		if area == 0 {
+			return c, sinMedidaCargada
+		}
 		// El épsilon: que 9,516 m² pedidos en placas de 4,758 no den 3.
 		c.Cantidad = math.Ceil(cant/area - 1e-9)
 		c.Convertida = true
 		c.Pedido = formato.Decimal(cant, 2) + " m²"
 		c.Cubre = c.Cantidad * area
 	default:
-		return cantidadCotizada{}, false
+		return c, unidadQueNoSePasa
 	}
 	tope := float64(topeUnidadesBot)
-	if unidadVenta == "metro_cuadrado" || unidadVenta == "metro_lineal" {
+	if porMetro {
 		tope = topeMetrosBot
 	}
 	if c.Cantidad > tope {
-		return cantidadCotizada{}, false
+		return c, pasaElTope
 	}
-	return c, true
+	return c, seCotiza
 }
 
 func preguntaPrecio(texto string) bool { return rePrecio.MatchString(asistente.Normalizar(texto)) }
@@ -911,11 +971,11 @@ func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID s
 		return "", "", nil, "Sin precio cargado: " + strings.TrimSpace(f.Nombre+" "+vs[0].Label) + ".", nil
 	}
 	v := vs[0]
-	cc, ok := cantidadEnUnidadDeVenta(p.Cantidad, p.Unidad, f.Unidad, v)
-	if !ok {
+	cc, razon := cantidadEnUnidadDeVenta(p.Cantidad, p.Unidad, *f, v)
+	if razon != seCotiza {
 		// No se cotiza algo mal: lo resuelve una persona, que ve en el aviso
 		// qué pidió y por qué no salió solo.
-		return "", "", nil, motivoSinCotizar(p, f.Unidad, v), nil
+		return "", "", nil, motivoSinCotizar(p, razon, cc, v), nil
 	}
 
 	var nombre, telefono string
@@ -958,13 +1018,15 @@ func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID s
 	if _, err := tx.Exec(ctx, `
 		insert into quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden)
 		values ($1, $2, $3, $4, $5::numeric, $6::numeric, round($5::numeric * $6::numeric, 2), 0)`,
-		id, variante, descripcion, f.Unidad, cc.Cantidad, v.Precio); err != nil {
+		id, variante, descripcion, cc.Unidad, cc.Cantidad, v.Precio); err != nil {
 		return "", "", nil, "", err
 	}
-	cant := formato.Decimal(cc.Cantidad, 2)
+	// En metros o m², con la unidad: «1 × Machimbre» de un producto por metro
+	// se lee como una pieza.
+	cant := formato.Decimal(cc.Cantidad, 2) + sufijoDeUnidad(cc.Unidad)
 	texto = fmt.Sprintf("Listo: te armo el presupuesto de *%s × %s*.%s Una persona lo revisa y te lo manda por acá en un rato.", cant, descripcion, aclaracionDeLaConversion(cc))
 	cuerpo := nombre + ": " + cant + " × " + descripcion + ". Revisalo y mandalo."
-	if cc.Convertida {
+	if cc.Convertida || cc.PlacasAM2 {
 		cuerpo = nombre + ": pidió " + cc.Pedido + ", van " + cant + " × " + descripcion + ". Revisalo y mandalo."
 	}
 	aviso = &push.Aviso{Titulo: "Presupuesto " + numero + " por WhatsApp", Cuerpo: cuerpo,
@@ -982,22 +1044,53 @@ func (s *Servicio) presupuestar(ctx context.Context, convID, waJid, entranteID s
 
 // motivoSinCotizar es lo que lee quien atiende en el aviso de la derivación,
 // sin abrir la charla: qué pidió y por qué el bot no lo cotizó.
-func motivoSinCotizar(p Presupuestar, unidadVenta string, v VarianteBot) string {
+func motivoSinCotizar(p Presupuestar, razon porQueNoSeCotiza, c cantidadCotizada, v VarianteBot) string {
 	pedido := formato.Decimal(p.Cantidad, 2)
 	switch p.Unidad {
 	case "m2":
 		pedido += " m²"
 	case "m":
 		pedido += " m"
+	case "u":
+		pedido += " " + plural(int(p.Cantidad), "unidad", "unidades")
 	}
 	que := strings.TrimSpace(v.Label)
-	switch {
-	case p.Unidad == "m2" && unidadVenta == "placa":
+	switch razon {
+	case sinMedidaCargada:
 		return "Pidió " + pedido + " y la placa " + que + " no tiene medida cargada: no se cotizó."
-	case p.Unidad != "" && unidadVenta != "metro_cuadrado" && unidadVenta != "metro_lineal" || p.Unidad == "m" && unidadVenta == "metro_cuadrado" || p.Unidad == "m2" && unidadVenta == "metro_lineal":
-		return "Pidió " + pedido + " y se vende por " + nombreDeUnidad(unidadVenta) + ": no se cotizó."
+	case pasaElTope:
+		// Lo que hubiera salido, si es otra cosa que lo pedido: «1.000 m²
+		// (211 placas)».
+		if c.Convertida || c.PlacasAM2 || p.Unidad == "" {
+			pedido += " (" + formato.Decimal(c.Cantidad, 2) + sufijoDeUnidad(c.Unidad)
+			if sufijoDeUnidad(c.Unidad) == "" {
+				pedido += " " + plural(int(c.Cantidad), nombreDeUnidad(c.Unidad), pluralDeUnidad(nombreDeUnidad(c.Unidad)))
+			}
+			pedido += ")"
+		}
+		return "Pidió " + pedido + ": pasa el tope del bot, revisalo."
 	}
-	return "Pidió " + pedido + ": pasa el tope del bot, revisalo."
+	return "Pidió " + pedido + " y se vende por " + nombreDeUnidad(c.Unidad) + ": no se cotizó."
+}
+
+// pluralDeUnidad: «placas», «unidades», «kilos».
+func pluralDeUnidad(n string) string {
+	if strings.HasSuffix(n, "d") {
+		return n + "es"
+	}
+	return n + "s"
+}
+
+// sufijoDeUnidad es la unidad corta detrás de una cantidad en metros: «6 m²».
+// Las unidades y las placas van sin nada, como siempre.
+func sufijoDeUnidad(u string) string {
+	switch u {
+	case "metro_cuadrado":
+		return " m²"
+	case "metro_lineal":
+		return " m"
+	}
+	return ""
 }
 
 // nombreDeUnidad es formatearUnidadLarga (lib/unidades.ts).
@@ -1020,6 +1113,9 @@ func nombreDeUnidad(u string) string {
 // (6 m²)» le haría creer que paga lo que pidió, y la discusión es en el
 // mostrador con cola.
 func aclaracionDeLaConversion(c cantidadCotizada) string {
+	if c.PlacasAM2 {
+		return fmt.Sprintf(" Pediste %s: son %s m².", c.Pedido, formato.Decimal(c.Cantidad, 2))
+	}
 	if !c.Convertida {
 		return ""
 	}
@@ -1035,6 +1131,9 @@ func notaDelBot(p Presupuestar, c cantidadCotizada) string {
 	if c.Convertida {
 		nota += fmt.Sprintf("\nPidió %s; se cotizan %s placas enteras, que cubren %s m².", c.Pedido,
 			formato.Decimal(c.Cantidad, 2), formato.Decimal(c.Cubre, 2))
+	}
+	if c.PlacasAM2 {
+		nota += fmt.Sprintf("\nPidió %s; se vende por m² y se cotizan %s m².", c.Pedido, formato.Decimal(c.Cantidad, 2))
 	}
 	return nota
 }

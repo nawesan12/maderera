@@ -14,6 +14,7 @@ import (
 	"mjbj/internal/catalogo"
 	"mjbj/internal/cortes"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/ventas"
 	"mjbj/internal/whatsapp"
 )
 
@@ -66,7 +67,10 @@ func fichaDelBot(pool *pgxpool.Pool) whatsapp.Ficheador {
 		if err != nil || p == nil {
 			return nil, err
 		}
-		f := &whatsapp.FichaBot{Nombre: p.Name, Unidad: p.Unit}
+		// La forma de venta viaja: una placa por m² tiene el precio por m², y
+		// sin esto el bot multiplicaba ese precio por la cantidad de placas.
+		f := &whatsapp.FichaBot{Nombre: p.Name, Unidad: p.Unit,
+			PorM2: ventas.SeVendePorM2(ventas.ProductoQueSeVende{Unit: p.Unit, FormaDeVenta: p.FormaDeVenta})}
 		for _, v := range p.Variantes {
 			vb := whatsapp.VarianteBot{ID: v.ID, Label: v.Label}
 			if v.EspesorMm != nil {

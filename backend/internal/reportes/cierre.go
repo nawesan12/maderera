@@ -167,24 +167,23 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 			diferido := x.FechaCheque != nil && ChequeDiferido(*x.FechaCheque, fecha)
 			salidas = append(salidas, SalidaDePago{Cuenta: CuentaDeSalida(x.Medio, x.Sentido, diferido), Importe: x.Importe})
 		}
-		pago := AsientoDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
-			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio, Salidas: salidas, RetenidoPorImpuesto: porImpuesto})
 		// El pago marcado «en negro» no es de este CUIT: va al CSV del
-		// circuito B, no al del estudio.
-		if circuito == CircuitoNegro {
-			pago.Circuito = CircuitoNegro
-		}
-		pago.Instante = true
-		// Como el recibo anulado: el pago queda en su mes y la anulación va
-		// con su contraasiento en la fecha en que se anuló, así un mes ya
-		// cerrado no cambia.
-		if entre(fecha, idesde, ihasta) {
-			asientos = append(asientos, pago)
-		}
-		if anulado != nil && entre(*anulado, idesde, ihasta) {
-			anulacion := asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones))
-			anulacion.Circuito, anulacion.Instante = pago.Circuito, true
-			asientos = append(asientos, anulacion)
+		// circuito B, no al del estudio; su retención, sí (AsientosDePagoAProveedor).
+		pagos := AsientosDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
+			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio, Salidas: salidas, RetenidoPorImpuesto: porImpuesto}, circuito)
+		for _, pago := range pagos {
+			pago.Instante = true
+			// Como el recibo anulado: el pago queda en su mes y la anulación va
+			// con su contraasiento en la fecha en que se anuló, así un mes ya
+			// cerrado no cambia.
+			if entre(fecha, idesde, ihasta) {
+				asientos = append(asientos, pago)
+			}
+			if anulado != nil && entre(*anulado, idesde, ihasta) {
+				anulacion := asiento(*anulado, "Anulación · "+pago.Concepto, invertir(pago.Renglones))
+				anulacion.Circuito, anulacion.Instante = pago.Circuito, true
+				asientos = append(asientos, anulacion)
+			}
 		}
 	}
 	rs.Close()
@@ -365,19 +364,24 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 //     a favor (una nota de crédito sobre algo ya cobrado, una retención sin
 //     factura detrás). El saldo de Deudores tiene que ser el de la cuenta
 //     corriente facturada.
+//   - **Pagos del circuito B con retención**: la retención se asienta en el
+//     archivo del estudio y el resto del pago en el del B (M9); el
+//     contador decide cómo cierra Proveedores de ese proveedor.
 //   - **El listado de deudores no da el mayor**: la suma de las cuentas del
 //     reparto contra el saldo de 1.1.03 del archivo.
 func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
 	idesde, ihasta := instantes(desde, hasta)
-	var fueraDeMes, pagosB int
+	var fueraDeMes, pagosB, retencionesB int
 	if err := s.pool.QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*)::int FROM invoices WHERE `+conCae+` AND fecha_emision >= $1 AND fecha_emision <= $2
 		     AND fecha_emision_original < $1),
 		  (SELECT count(*)::int FROM supplier_payments p WHERE p.circuito = 'negro' AND p.anulado_at IS NULL
 		     AND p.fecha >= $1 AND p.fecha <= $2
-		     AND EXISTS (SELECT 1 FROM supplier_payment_allocations a WHERE a.payment_id = p.id))`, idesde, ihasta).
-		Scan(&fueraDeMes, &pagosB); err != nil {
+		     AND EXISTS (SELECT 1 FROM supplier_payment_allocations a WHERE a.payment_id = p.id)),
+		  (SELECT count(*)::int FROM supplier_payments p WHERE p.circuito = 'negro' AND p.anulado_at IS NULL
+		     AND p.fecha >= $1 AND p.fecha <= $2 AND p.total - p.neto > 0.005)`, idesde, ihasta).
+		Scan(&fueraDeMes, &pagosB, &retencionesB); err != nil {
 		return nil, err
 	}
 	reparto, err := s.repartoHasta(ctx, ihasta)
@@ -398,6 +402,10 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 	if pagosB > 0 {
 		out = append(out, PendienteDelCierre{"pagos-b", "Pagos en negro de facturas en blanco",
 			"No van al archivo del estudio y la factura de compra queda abierta en Proveedores.", pagosB, "/admin/compras/pagos"})
+	}
+	if retencionesB > 0 {
+		out = append(out, PendienteDelCierre{"retenciones-b", "Pagos del circuito B con retención",
+			"La retención va al archivo del estudio y el pago al del circuito B: Proveedores queda partido.", retencionesB, "/admin/compras/pagos"})
 	}
 	if negativos > 0 {
 		out = append(out, PendienteDelCierre{"deudores", "Clientes con Deudores en negativo",

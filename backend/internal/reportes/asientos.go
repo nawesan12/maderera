@@ -545,6 +545,44 @@ func AsientoDePagoAProveedor(p PagoAAsentar) Asiento {
 	return asiento(p.Fecha, concepto, r)
 }
 
+// AsientosDePagoAProveedor son los del pago en su circuito. El pago del
+// circuito B con retenciones se parte (comité final, M9): la retención emite
+// un certificado con el CUIT de la empresa y es una deuda con el fisco que
+// se declara y se deposita, así que va siempre al archivo del estudio
+// (Proveedores contra Retenciones a depositar); lo que salió de verdad, al
+// del B. Entero en el B, el estudio no veía el pasivo que tenía que
+// depositar.
+func AsientosDePagoAProveedor(p PagoAAsentar, circuito string) []Asiento {
+	if circuito != CircuitoNegro {
+		return []Asiento{AsientoDePagoAProveedor(p)}
+	}
+	if !(p.Retenido > toleranciaAsiento) {
+		a := AsientoDePagoAProveedor(p)
+		a.Circuito = CircuitoNegro
+		return []Asiento{a}
+	}
+	salio := p
+	salio.Total, salio.Retenido, salio.RetenidoPorImpuesto = redondear(p.Total-p.Retenido), 0, nil
+	b := AsientoDePagoAProveedor(salio)
+	b.Circuito = CircuitoNegro
+	r := []RenglonDeAsiento{renglon(Cuentas.Proveedores, p.Retenido, 0)}
+	resto := p.Retenido
+	for _, imp := range []string{"ganancias", "iva", "iibb", "suss"} {
+		if x := p.RetenidoPorImpuesto[imp]; x > 0 {
+			r = append(r, renglon(CuentaDeRetencionADepositar(imp), 0, x))
+			resto = redondear(resto - x)
+		}
+	}
+	if resto > toleranciaAsiento {
+		r = append(r, renglon(Cuentas.RetencionesAPagar, 0, resto))
+	}
+	blanco := asiento(p.Fecha, "Retención del pago a "+p.Proveedor, r)
+	if p.Referencia != nil && *p.Referencia != "" {
+		blanco.Concepto += " · " + *p.Referencia
+	}
+	return []Asiento{b, blanco}
+}
+
 // ChequeAAsentar es un cambio de estado de un cheque (cheque_estados).
 type ChequeAAsentar struct {
 	Fecha                 time.Time

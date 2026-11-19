@@ -321,3 +321,45 @@ func TestElListadoDeDeudoresContraElMayor(t *testing.T) {
 		t.Errorf("el cheque rechazado separa el listado del mayor: %s", pend)
 	}
 }
+
+// La retención de un pago del circuito B va al archivo del estudio (comité
+// final, M9): emite un certificado con el CUIT de la empresa y se deposita.
+// El pago se parte: lo que salió, al B; la retención, al blanco. Y el cierre
+// lo avisa.
+func TestLaRetencionDeUnPagoBVaAlBlanco(t *testing.T) {
+	ref := "en mano"
+	as := AsientosDePagoAProveedor(PagoAAsentar{Fecha: time.Date(2026, 10, 9, 15, 0, 0, 0, time.UTC), Proveedor: "Maderas", Referencia: &ref,
+		Total: 1000, Retenido: 20, Medio: "efectivo", Salidas: []SalidaDePago{{Cuenta: Cuentas.Caja, Importe: 980}},
+		RetenidoPorImpuesto: map[string]float64{"iibb": 15}}, CircuitoNegro)
+	if len(as) != 2 {
+		t.Fatalf("asientos: %+v", as)
+	}
+	b, blanco := as[0], as[1]
+	if b.Circuito != CircuitoNegro || !b.Balancea || SaldoDeCuenta([]Asiento{b}, Cuentas.Proveedores) != 980 || SaldoDeCuenta([]Asiento{b}, Cuentas.Caja) != -980 {
+		t.Errorf("lo que salió, en el B: %+v", b)
+	}
+	if blanco.circuito() != "blanco" || !blanco.Balancea || SaldoDeCuenta([]Asiento{blanco}, Cuentas.Proveedores) != 20 ||
+		SaldoDeCuenta([]Asiento{blanco}, Cuentas.RetADepositarIibb) != -15 || SaldoDeCuenta([]Asiento{blanco}, Cuentas.RetencionesAPagar) != -5 {
+		t.Errorf("la retención, en el blanco: %+v", blanco)
+	}
+	if as := AsientosDePagoAProveedor(PagoAAsentar{Total: 100, Medio: "efectivo"}, CircuitoNegro); len(as) != 1 || as[0].Circuito != CircuitoNegro {
+		t.Errorf("sin retención, entero en el B: %+v", as)
+	}
+
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
+	e.exec(t, `insert into supplier_payments (supplier_id, total, neto, medio, referencia, fecha, circuito) values
+		($1, 1000, 980, 'efectivo', 'en mano', '2026-10-09T15:00:00Z', 'negro')`, prov)
+	octubre := e.asientosDe(t, "2026-10")
+	if r := SaldoDeCuenta(DelCircuito(octubre, "blanco"), Cuentas.RetencionesAPagar); r != -20 {
+		t.Errorf("la retención en el archivo del estudio: %v", r)
+	}
+	if c := SaldoDeCuenta(DelCircuito(octubre, CircuitoNegro), Cuentas.Caja); c != -980 {
+		t.Errorf("el efectivo en el B: %v", c)
+	}
+	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if !strings.Contains(pend, `"clave":"retenciones-b"`) {
+		t.Errorf("pendientes: %s", pend)
+	}
+}

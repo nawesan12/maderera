@@ -278,6 +278,8 @@ export interface components {
              * @description el de la lista del cliente
              */
             precioLista?: number | null;
+            /** @description el despiece de la venta del que salió el renglón (su índice en cortes) */
+            corte?: number;
         };
         MostradorResultadoVenta: {
             ok: boolean;

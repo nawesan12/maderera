@@ -25,6 +25,10 @@ type EstadoDeCredito struct {
 	Motivo           *string `json:"motivo"`
 	Autorizable      bool    `json:"autorizable"`
 	SoloSaldoAFavor  bool    `json:"soloSaldoAFavor,omitempty"`
+	// Bloqueada es la cuenta corriente bloqueada a mano. No va al JSON:
+	// la cola sin conexión rechaza solo esto (mostrador/venta.go), y
+	// Autorizable también es falso sin cuenta habilitada.
+	Bloqueada bool `json:"-"`
 }
 
 // DiasParaVencer es el plazo si la ficha no tiene uno propio.
@@ -66,13 +70,14 @@ func Credito(ctx context.Context, q *sqlc.Queries, cliente string, monto float64
 			}
 			return e, nil
 		}
-		return EstadoDeCredito{Saldo: saldo, Motivo: texto("Este cliente no tiene cuenta corriente habilitada.")}, nil
+		return EstadoDeCredito{Saldo: saldo, Motivo: texto("Este cliente no tiene cuenta corriente habilitada."), Bloqueada: c.CuentaBloqueada}, nil
 	}
 	dias := CalcularAging(movs, ahora).DiasDeLaMasVieja
 	e := EstadoDeCredito{Saldo: saldo, LimiteCredito: c.LimiteCredito, Disponible: math.Max(c.LimiteCredito-saldo, 0),
 		DiasDeLaMasVieja: dias, Autorizable: true}
 	if c.CuentaBloqueada {
 		e.Autorizable = false
+		e.Bloqueada = true
 		e.Motivo = texto("La cuenta corriente está bloqueada.")
 		if c.MotivoBloqueo != nil && *c.MotivoBloqueo != "" {
 			e.Motivo = texto("Cuenta corriente bloqueada: " + *c.MotivoBloqueo)

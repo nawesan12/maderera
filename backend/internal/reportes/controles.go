@@ -36,6 +36,12 @@ type ControlDePersona struct {
 	SinDevolver      int   `json:"sinDevolver"`
 	// Retiros que llegaron con la caja cerrada o dejaron el cajón bajo la base.
 	Retiros Monto `json:"retiros"`
+	// AMano: los renglones de sus ventas del mostrador cargados a mano, sin
+	// producto del catálogo (ni pasadas ni tapacanto de un corte). Entran a
+	// su propio precio y no tienen lista contra la cual medirse: es el
+	// camino para esquivar el control de precio (comité final, M12). Por
+	// ahora se muestran; un tope con PIN lo decide el dueño.
+	AMano Monto `json:"aMano"`
 	// Firmo: lo que este admin autorizó con su PIN o su sesión (lo dejado de
 	// cobrar de las ventas y lo anulado). Un PIN aprendido firma a nombre del
 	// dueño: acá se ve cuántas firmas lleva, para poder decir «esas no fui
@@ -95,6 +101,33 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 		p.DejadoDeCobrar, p.Autorizado = dejado.F(), autorizado.F()
 		p.SinConexion = Monto{Total: sinConexion.F(), Cantidad: n}
 		p.CreditoSinAutorizar = Monto{Total: credito.F(), Cantidad: nc}
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return c, err
+	}
+	// Los renglones a mano: de quien vendió. Los del corte se marcan al
+	// venderse (del_corte, migración 00175), no por su unidad: «Cargar a
+	// mano» deja escribir «pasada».
+	filas, err = s.pool.Query(ctx, `
+		SELECT o.created_by_user_id, coalesce(u.name, 'Sin nombre'), count(*)::int, coalesce(sum(oi.subtotal), 0)
+		FROM order_items oi JOIN orders o ON o.id = oi.order_id LEFT JOIN "user" u ON u.id = o.created_by_user_id
+		WHERE o.origen = 'mostrador' AND o.estado <> 'cancelado' AND o.created_at >= $1 AND o.created_at < $2
+		  AND o.created_by_user_id IS NOT NULL AND oi.variant_id IS NULL
+		  AND NOT oi.del_corte
+		GROUP BY 1, 2`, desde, hasta)
+	if err != nil {
+		return c, err
+	}
+	for filas.Next() {
+		var id, nombre string
+		var n int
+		var total jsmath.Num
+		if err := filas.Scan(&id, &nombre, &n, &total); err != nil {
+			filas.Close()
+			return c, err
+		}
+		de(id, nombre).AMano = Monto{Total: total.F(), Cantidad: n}
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {

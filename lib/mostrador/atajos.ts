@@ -147,6 +147,7 @@ export function accionDeLaTecla(
 export type EnterDelBuscador =
   | { que: "agregar"; media: "media_largo" | "media_ancho" | null; yCobrar: boolean }
   | { que: "cortar" }
+  | { que: "sinPrecio" }
   | { que: "aMano" }
   | { que: "esperar" }
   | { que: "soltar" };
@@ -176,6 +177,11 @@ export type EnterDelBuscador =
  *   tipea y aprieta Enter en el mismo instante, agregaba el de antes.
  * - Con el buscador vacío la tecla sigue de largo y cobra: es el caso de
  *   todos los días, porque terminada cada línea el foco vuelve acá.
+ * - Un resultado sin precio no se agrega, con ninguna tecla (comité final,
+ *   M14 y decisión 4): no hay productos a $0, y Ctrl+Enter lo cobraba.
+ * - Sin conexión, Ctrl+Enter sobre una placa la agrega y no cobra: sin
+ *   catálogo no se puede cortar, y la placa entera salía cobrada en el acto
+ *   cuando lo que se pedía era un corte (comité final, M14).
  */
 export function enterDelBuscador(t: {
   ctrl: boolean;
@@ -192,13 +198,21 @@ export function enterDelBuscador(t: {
    * ella, cuando volvió la búsqueda de este mismo texto.
    */
   resuelto: boolean;
+  /** Si el resultado marcado no tiene precio (o es $0). */
+  sinPrecio?: boolean;
+  /** Si el resultado marcado es una placa. */
+  esPlaca?: boolean;
+  /** Si el mostrador está sin conexión. */
+  sinConexion?: boolean;
 }): EnterDelBuscador {
   if (t.texto.trim() === "") return { que: "soltar" };
   if (!t.resuelto) return { que: "esperar" };
   if (t.hayResultado) {
+    if (t.sinPrecio) return { que: "sinPrecio" };
     if (t.ctrl && !t.shift && !t.alt && t.seCorta) return { que: "cortar" };
     const media = t.shift ? "media_largo" : t.alt ? "media_ancho" : null;
-    return { que: "agregar", media, yCobrar: t.ctrl && !t.shift && !t.alt };
+    const placaSinConexion = Boolean(t.esPlaca && t.sinConexion);
+    return { que: "agregar", media, yCobrar: t.ctrl && !t.shift && !t.alt && !placaSinConexion };
   }
   return { que: "aMano" };
 }

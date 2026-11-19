@@ -24,5 +24,6 @@ export function precioTipeado(texto: string, valor: string): number | null {
   if (texto === textoParaEditar(valor) || texto === valor) return null;
   const n = parsearImporte(texto);
   if (n === Number(valor)) return null;
-  return Number.isFinite(n) && n >= 0 ? n : NaN;
+  // Mayor que cero, como Go: no hay productos a $0 (comité final, M11).
+  return Number.isFinite(n) && n > 0 ? n : NaN;
 }

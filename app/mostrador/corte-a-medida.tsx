@@ -25,7 +25,6 @@ import { formatearDecimal } from "@/lib/unidades";
 import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
 import { precioDeLinea, presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
-import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
 
 /**
  * Vender un corte desde el mostrador.
@@ -62,8 +61,6 @@ export interface EstadoDelCorte {
   mitad: Mitad;
   canto: string;
   fijadas: PiezaFijada[];
-  /** El disco tipeado para este trabajo: se perdía al cerrar. */
-  sierra?: string;
 }
 
 /** Si hay algo que valga la pena guardar: una medida, un canto, una pieza movida. */
@@ -95,6 +92,7 @@ export function CorteAMedida({
   focoAlCerrar,
   onCerrar,
   onAgregar,
+  corrigiendo = false,
 }: {
   /** La placa elegida del catálogo, con su medida y su precio para este cliente. */
   placa: {
@@ -122,7 +120,10 @@ export function CorteAMedida({
   focoAlCerrar?: () => HTMLElement | null;
   /** Se cerró sin agregar, con lo que había cargado (se guarda como borrador). */
   onCerrar: (estado: EstadoDelCorte) => void;
-  onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador) => void;
+  /** Con lo cargado, para poder reabrirlo y corregirlo tal cual. */
+  onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador, estado: EstadoDelCorte) => void;
+  /** Si se está corrigiendo un corte que ya está en la venta. */
+  corrigiendo?: boolean;
 }) {
   const [piezas, setPiezas] = useState<PiezaCargada[]>(() => inicial?.piezas ?? [vacia()]);
   const [canto, setCanto] = useState(inicial?.canto ?? "");
@@ -145,18 +146,16 @@ export function CorteAMedida({
 
   /** Cerrar nunca pierde lo cargado: vuelve como borrador. */
   function cerrar() {
-    onCerrar({ piezas, mitad, canto, fijadas, sierra: sierraTexto });
+    onCerrar({ piezas, mitad, canto, fijadas });
   }
 
   /*
-   * El disco de este trabajo. Arranca con el de la configuración y se puede
-   * cambiar acá (nota del 30/9/2026): el plano, el precio y la hoja del taller
-   * salen con este número, y el trabajo lo guarda.
+   * El disco es el de la configuración (/admin/calculadoras). Hasta el comité
+   * final se podía cambiar acá, pero el disco lo conoce el taller y no quien
+   * vende (hallazgo 44): el plano, el precio y la hoja del taller salen con
+   * este número, y el trabajo lo guarda.
    */
-  const [sierraTexto, setSierraTexto] = useState(
-    () => inicial?.sierra ?? String(anchoSierraGeneral).replace(".", ","),
-  );
-  const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
+  const anchoSierra = anchoSierraGeneral;
 
   const medida = medidaDePlaca({
     varianteLargo: placa.largoMm,
@@ -313,7 +312,7 @@ export function CorteAMedida({
       });
     }
 
-    onAgregar(lineas, {
+    const corte: CorteDeMostrador = {
       variantId: placa.variantId,
       materialDescripcion: placa.descripcion,
       cantoDescripcion: canto.trim() || null,
@@ -334,7 +333,8 @@ export function CorteAMedida({
         etiqueta: p.etiqueta,
         aclaracion: null,
       })),
-    });
+    };
+    onAgregar(lineas, corte, { piezas, mitad, canto, fijadas });
   }
 
   /*
@@ -430,25 +430,6 @@ export function CorteAMedida({
               </div>
             )}
 
-            {/* Los milímetros del disco, dichos y editables: el plano, el
-                precio y la hoja del taller salen con este número. */}
-            <label className="flex items-center gap-2 text-base">
-              <span className="text-muted-foreground">Sierra</span>
-              <input
-                value={sierraTexto}
-                onChange={(e) => setSierraTexto(e.target.value)}
-                inputMode="decimal"
-                aria-label="Ancho de la sierra, en milímetros"
-                aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
-                className="tabular h-10 w-16 rounded-lg border border-linea bg-background px-2 text-right text-base"
-              />
-              <span className="text-muted-foreground">mm</span>
-            </label>
-            {leerAnchoDeSierra(sierraTexto) === null && (
-              <span className="estado-espera text-sm font-medium">
-                Entre 0,5 y 10 mm: se usa {formatearSierra(anchoSierraGeneral)}.
-              </span>
-            )}
           </div>
           {mitad && placa.color && (
             <p className="tarjeta-atencion mt-2 px-4 py-2 text-base">
@@ -729,7 +710,7 @@ export function CorteAMedida({
               onClick={() => aceptar()}
               className="inline-flex h-12 items-center gap-2 rounded-lg boton-accion px-5 text-base font-semibold disabled:opacity-50"
             >
-              Agregar a la venta
+              {corrigiendo ? "Guardar el corte" : "Agregar a la venta"}
               <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">Ctrl + Enter</kbd>
             </button>
           )}

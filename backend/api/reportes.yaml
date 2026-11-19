@@ -517,7 +517,7 @@ components:
               type: array
               items:
                 type: object
-                required: [nombre, dejadoDeCobrar, autorizado, sinConexion, creditoSinAutorizar, anuladas, anuladasSinFirma, sinDevolver, retiros, firmo]
+                required: [nombre, dejadoDeCobrar, autorizado, sinConexion, creditoSinAutorizar, anuladas, anuladasSinFirma, sinDevolver, retiros, firmo, aMano]
                 properties:
                   nombre: { type: string }
                   dejadoDeCobrar: { type: number, format: double, description: bajo la lista más los descuentos tipeados }
@@ -529,6 +529,7 @@ components:
                   firmo: { $ref: "#/components/schemas/Monto" }
                   sinDevolver: { type: integer, description: anuladas en que la mercadería no volvió }
                   retiros: { $ref: "#/components/schemas/Monto" }
+                  aMano: { $ref: "#/components/schemas/Monto", description: "renglones de sus ventas cargados a mano, sin producto del catálogo" }
         meDeben:
           type: object
           required: [total, vencido, clientes, clientesConVencido, pedidosSinCobrar]

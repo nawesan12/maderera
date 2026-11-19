@@ -27,5 +27,8 @@ describe("editar un precio en la tabla", () => {
   it("lo que no es un precio no se guarda", () => {
     expect(precioTipeado("abc", "80000.00")).toBeNaN();
     expect(precioTipeado("-5", "80000.00")).toBeNaN();
+    // No hay productos a $0 (comité final, M11).
+    expect(precioTipeado("0", "80000.00")).toBeNaN();
+    expect(precioTipeado("0,00", "80000.00")).toBeNaN();
   });
 });

@@ -50,6 +50,9 @@ export interface Cliente {
   estado: string;
   /** La lista de precios asignada, para resolver precios sin servidor. */
   priceListId: string | null;
+  /** Para no anotarle a cuenta sin conexión (lib/mostrador/cuenta-sin-conexion.ts). */
+  limiteCredito?: number;
+  cuentaBloqueada?: boolean;
 }
 
 /** La venta recién cobrada, para el papel que sale después. */

@@ -1,4 +1,5 @@
 import { revisarNumeroDeCheque } from "@/lib/cheques/numero";
+import { admiteDecimales } from "@/lib/unidades";
 
 /**
  * Las reglas de una venta de mostrador, sin base de datos.
@@ -50,6 +51,35 @@ export interface LineaDeVenta {
    * que no le cree a este.
    */
   precioLista?: number | null;
+  /**
+   * El corte de la venta del que salió el renglón, en la pantalla (ver
+   * `lib/mostrador/cortes-de-la-venta.ts`). A Go viaja como `corte`, el
+   * índice del despiece en la venta.
+   */
+  corteId?: string;
+  corte?: number;
+}
+
+/**
+ * La cantidad que admite el renglón: lo que se vende por unidad va entero
+ * (comité final, M10). Media bisagra se cobraba y se descontaba del stock;
+ * Go la rechaza, y acá se redondea al tipearla para que no llegue a cobrarse.
+ * Un renglón a mano (sin variante) lleva la unidad que se tipeó y no se toca.
+ */
+export function cantidadDelRenglon(l: Pick<LineaDeVenta, "variantId" | "unidad">, cantidad: number): number {
+  if (!l.variantId || admiteDecimales(l.unidad) || !Number.isFinite(cantidad) || Number.isInteger(cantidad)) {
+    return cantidad;
+  }
+  return cantidad > 0 ? Math.max(1, Math.round(cantidad)) : cantidad;
+}
+
+/**
+ * Si la cantidad no entra en lo que se vende por unidad: «2,5*bisagra» desde
+ * el buscador. Ahí no se redondea —cobraba tres bisagras, y 0,4 cobraba una,
+ * sin decir nada—: no se agrega y se avisa (revisión del carril F).
+ */
+export function vaSinDecimales(l: Pick<LineaDeVenta, "variantId" | "unidad">, cantidad: number): boolean {
+  return cantidadDelRenglon(l, cantidad) !== cantidad;
 }
 
 /**

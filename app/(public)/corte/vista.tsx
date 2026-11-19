@@ -678,7 +678,7 @@ function EditorDeGrupo({
           <div className="flex gap-1.5" role="group" aria-label="Placa entera o media">
             {([null, "largo", "ancho"] as const).map((m) => (
               <Chip key={m ?? "entera"} activo={mitad === m} onClick={() => alCambiar({ mitad: m })}>
-                {m === null ? "Entera" : m === "largo" ? "½ largo" : "½ ancho"}
+                {m === null ? "Entera" : m === "largo" ? "Media a lo largo" : "Media al ancho"}
               </Chip>
             ))}
           </div>

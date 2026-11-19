@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 
@@ -49,9 +50,23 @@ func huellaDeVenta(v VentaPedida) string {
 	}
 	for _, l := range v.Lineas {
 		escribir(opt(l.VariantID), l.Descripcion, num(l.Cantidad), num(l.PrecioUnitario), opt(l.Presentacion))
+		// De qué corte sale el renglón, y abajo cada despiece: un reintento
+		// con la misma clave y otro despiece se tomaba como la misma venta,
+		// y el despiece nuevo no llegaba al taller (revisión del carril F).
+		// Solo si hay: la huella de una venta sin cortes queda como antes.
+		if l.Corte != nil {
+			escribir("corte", strconv.Itoa(*l.Corte))
+		}
 	}
 	for _, p := range v.Pagos {
 		escribir(p.Medio, num(p.Importe))
+	}
+	for _, k := range v.Cortes {
+		escribir("despiece", opt(k.VariantID), opt(k.Mitad), opt(k.AcomodoManual))
+		for _, p := range k.Piezas {
+			escribir(strconv.Itoa(p.LargoMm), strconv.Itoa(p.AnchoMm), strconv.Itoa(p.Cantidad),
+				strconv.Itoa(p.RespetaVeta), strconv.Itoa(p.CantoLargo), strconv.Itoa(p.CantoAncho))
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -148,15 +163,44 @@ func esCanto(l ventas.LineaDeVenta) bool {
 	return l.VariantID == nil && l.Unidad == "m" && strings.HasPrefix(l.Descripcion, "Tapacanto")
 }
 
-// conTarifaDelCorte les da precio de lista a las pasadas y al tapacanto del
-// corte: la tarifa que cargó el admin (revisión de T3). Sin eso, el renglón
-// sin variante entraba a su propio precio, y poner la pasada a $1 dejaba
-// de cobrar el servicio entero sin PIN.
-func conTarifaDelCorte(lineas []ventas.LineaDeVenta, t *cortes.TarifaDeCorte) {
-	if t == nil {
+// atarRenglonesAlCorte deja cada renglón del corte atado a su despiece. La
+// pantalla de antes mandaba un solo «corte» y los renglones sueltos: se
+// atan los que son de él (su placa con la presentación del corte, las
+// pasadas y el tapacanto), que era lo que se miraba antes de A2. Si algún
+// renglón ya viene atado, no se adivina nada.
+func atarRenglonesAlCorte(v *VentaPedida) {
+	if !v.CorteSuelto || len(v.Cortes) != 1 {
 		return
 	}
+	for _, l := range v.Lineas {
+		if l.Corte != nil {
+			return
+		}
+	}
+	k := v.Cortes[0]
+	presentacion := presentacionDeMitad(k.Mitad)
+	cero := 0
+	for i, l := range v.Lineas {
+		if esPasada(l) || esCanto(l) ||
+			(k.VariantID != nil && l.VariantID != nil && *l.VariantID == *k.VariantID && mismaPresentacion(l.Presentacion, presentacion)) {
+			v.Lineas[i].Corte = &cero
+		}
+	}
+}
+
+// conTarifaDelCorte les da precio de lista a las pasadas y al tapacanto de
+// cada corte: la tarifa que cargó el admin para su placa (revisión de T3).
+// Sin eso, el renglón sin variante entraba a su propio precio, y poner la
+// pasada a $1 dejaba de cobrar el servicio entero sin PIN.
+func conTarifaDelCorte(lineas []ventas.LineaDeVenta, tarifas []*cortes.TarifaDeCorte) {
 	for i := range lineas {
+		if lineas[i].Corte == nil || *lineas[i].Corte >= len(tarifas) {
+			continue
+		}
+		t := tarifas[*lineas[i].Corte]
+		if t == nil {
+			continue
+		}
 		switch {
 		case esPasada(lineas[i]) && t.PrecioPorPasada > 0:
 			p := t.PrecioPorPasada
@@ -168,23 +212,76 @@ func conTarifaDelCorte(lineas []ventas.LineaDeVenta, t *cortes.TarifaDeCorte) {
 	}
 }
 
-// faltaDelCorte vuelve a calcular lo que se cobra del corte (cortes.ACobrar)
-// y devuelve, en plata de lista, lo que los renglones de la venta no traen:
-// placas de material de menos, pasadas de menos o metros de tapacanto de
-// menos. Acomodar a mano las piezas para que cada placa quede por debajo de
-// la mitad ya no deja de cobrar el material (T3, hallazgo 11).
+// revisarCobroDelCorte vuelve a calcular lo que se cobra del corte i
+// (cortes.ACobrar) y lo compara con sus renglones: las placas, las pasadas y
+// los metros de tapacanto tienen que ser los del plano, **ni de menos ni de
+// más**. Devuelve el rechazo, o "" si cierra.
 //
-// El material son los renglones de la variante de la placa con la
-// presentación del corte (media o entera); las pasadas, los renglones sin
-// variante en «pasada»; el canto, los de «Tapacanto» en metros. Lo que falta
-// se valúa con la tarifa del corte, no con el precio que se tipeó (que podía
-// ser $1, o nada si se borró el renglón). Sin tarifa, la pasada que falta va
-// al precio de la pasada de la venta.
-func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista precios.Lista, tarifa *cortes.TarifaDeCorte) (float64, error) {
-	k := v.Corte
-	if k == nil || len(k.Piezas) == 0 {
-		return 0, nil
+// De menos era acomodar a mano las piezas para que cada placa quedara por
+// debajo de la mitad (T3, hallazgo 11), o borrar el renglón de las pasadas.
+// De más era reabrir el corte para corregirlo: los renglones nuevos se
+// sumaban a los viejos y se cobraban dos placas, dos cortes y dos
+// tapacantos sin PIN (comité final, A2). Antes lo de menos pedía el PIN;
+// ahora no hay nada que autorizar: un corte que no cierra con su plano es
+// un error de la pantalla, y la venta se rechaza para que se rearme.
+//
+// Las pasadas y el canto se exigen solo si el corte los cobra: con tarifa
+// (la pantalla sin tarifa no agrega el renglón) o si la venta los trae.
+func (s *Servicio) revisarCobroDelCorte(ctx context.Context, v VentaPedida, i int, tarifa *cortes.TarifaDeCorte) (string, error) {
+	k := v.Cortes[i]
+	cobro, metrosDelPlano := s.planoDelCorte(ctx, k)
+
+	presentacion := presentacionDeMitad(k.Mitad)
+	placas, pasadas, metros := 0.0, 0.0, 0.0
+	hayPasadas, hayCanto := false, false
+	noCierra := "El corte de " + k.MaterialDescripcion + " no cierra con su plano. Tocá «Corregir» en el corte y guardalo."
+	// La pantalla carga las tarifas al abrirse: si el admin creó o activó
+	// una después, Go pide las pasadas o el canto que la pantalla no puso, y
+	// «Corregir» con las tarifas viejas no lo arreglaba nunca. Este texto lo
+	// reconoce la pantalla (vista.tsx) para traer las nuevas.
+	tarifasNuevas := "Las tarifas de corte cambiaron. Tocá «Corregir» en el corte de " + k.MaterialDescripcion + " y guardalo."
+	for _, l := range v.Lineas {
+		if l.Corte == nil || *l.Corte != i {
+			continue
+		}
+		switch {
+		case k.VariantID != nil && l.VariantID != nil && *l.VariantID == *k.VariantID && mismaPresentacion(l.Presentacion, presentacion):
+			placas += l.Cantidad
+		case esPasada(l):
+			pasadas += l.Cantidad
+			hayPasadas = true
+		case esCanto(l):
+			metros += l.Cantidad
+			hayCanto = true
+		default:
+			// Otro producto atado al corte: no es del plano.
+			return noCierra, nil
+		}
 	}
+	if k.VariantID != nil && math.Abs(placas-float64(cobro.Placas)) > 1e-6 {
+		return noCierra, nil
+	}
+	if (hayPasadas || (tarifa != nil && tarifa.PrecioPorPasada > 0)) && math.Abs(pasadas-float64(cobro.Pasadas)) > 1e-6 {
+		if !hayPasadas {
+			return tarifasNuevas, nil
+		}
+		return noCierra, nil
+	}
+	// El canto se mide en metros con dos decimales (MetrosDeTapacanto): una
+	// diferencia de redondeo no es canto de más ni de menos.
+	if (hayCanto || (tarifa != nil && tarifa.PrecioPorMetroCanto > 0)) && math.Abs(metrosDelPlano-metros) > 0.005 {
+		if !hayCanto {
+			return tarifasNuevas, nil
+		}
+		return noCierra, nil
+	}
+	return "", nil
+}
+
+// planoDelCorte es lo que cobra el plano del corte (las placas y las
+// pasadas, cortes.ACobrar) y sus metros de tapacanto: la misma cuenta que
+// el plano que se dibuja en la pantalla y la ficha del corte.
+func (s *Servicio) planoDelCorte(ctx context.Context, k CorteDeMostrador) (cortes.Cobro, float64) {
 	var largo, ancho *float64
 	if k.PlacaLargoMm != nil && k.PlacaAnchoMm != nil {
 		l, a := float64(*k.PlacaLargoMm), float64(*k.PlacaAnchoMm)
@@ -192,63 +289,32 @@ func (s *Servicio) faltaDelCorte(ctx context.Context, v VentaPedida, lista preci
 	}
 	// La sierra va antes que la medida: la media placa sale de partirla con
 	// ese disco (T4, hallazgo 23).
-	sierra := float64(cortes.AnchoDeSierraMm)
-	_ = s.pool.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra)
-	if k.AnchoSierraMm != nil {
-		if a := cortes.LeerAnchoDeSierra(jsmath.Texto(*k.AnchoSierraMm)); a != nil {
-			sierra = *a
-		}
-	}
+	sierra := sierraConfigurada(ctx, s.pool)
 	medida := cortes.ResolverMedida(nil, nil, largo, ancho, k.Mitad, sierra)
 	piezas := make([]cortes.PiezaAcortar, len(k.Piezas))
 	conCanto := make([]cortes.PiezaConCanto, len(k.Piezas))
-	for i, p := range k.Piezas {
-		piezas[i] = cortes.PiezaAcortar{LargoMm: float64(p.LargoMm), AnchoMm: float64(p.AnchoMm), Cantidad: float64(p.Cantidad),
+	for j, p := range k.Piezas {
+		piezas[j] = cortes.PiezaAcortar{LargoMm: float64(p.LargoMm), AnchoMm: float64(p.AnchoMm), Cantidad: float64(p.Cantidad),
 			RespetaVeta: float64(p.RespetaVeta), Etiqueta: p.Etiqueta, CantoLargo: float64(p.CantoLargo), CantoAncho: float64(p.CantoAncho)}
-		conCanto[i] = cortes.PiezaConCanto{LargoMm: float64(p.LargoMm), AnchoMm: float64(p.AnchoMm), Cantidad: float64(p.Cantidad),
+		conCanto[j] = cortes.PiezaConCanto{LargoMm: float64(p.LargoMm), AnchoMm: float64(p.AnchoMm), Cantidad: float64(p.Cantidad),
 			CantoLargo: float64(p.CantoLargo), CantoAncho: float64(p.CantoAncho)}
 	}
 	d := cortes.DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra}
 	if k.AcomodoManual != nil {
 		d.Fijadas = cortes.LeerAcomodoManual(*k.AcomodoManual)
 	}
-	cobro := cortes.ACobrar(d)
+	return cortes.ACobrar(d), cortes.MetrosDeTapacanto(conCanto)
+}
 
-	presentacion := presentacionDeMitad(k.Mitad)
-	placas, pasadas, metros, precioPasada := 0.0, 0.0, 0.0, 0.0
-	for _, l := range v.Lineas {
-		switch {
-		case k.VariantID != nil && l.VariantID != nil && *l.VariantID == *k.VariantID && mismaPresentacion(l.Presentacion, presentacion):
-			placas += l.Cantidad
-		case esPasada(l):
-			pasadas += l.Cantidad
-			precioPasada = l.PrecioUnitario
-		case esCanto(l):
-			metros += l.Cantidad
-		}
-	}
-	if tarifa != nil && tarifa.PrecioPorPasada > 0 {
-		precioPasada = tarifa.PrecioPorPasada
-	}
-	falta := 0.0
-	if f := float64(cobro.Placas) - placas; f > 0 && k.VariantID != nil {
-		listas, err := precios.PreciosDeLista(ctx, s.pool, []precios.RenglonConVariante{{VariantID: k.VariantID, Presentacion: presentacion}}, lista)
-		if err != nil {
-			return 0, err
-		}
-		if listas[0] != nil {
-			falta += float64(f * *listas[0])
-		}
-	}
-	if f := float64(cobro.Pasadas) - pasadas; f > 0 {
-		falta += float64(f * precioPasada)
-	}
-	// El canto se mide en metros con dos decimales (MetrosDeTapacanto): una
-	// diferencia de redondeo no es canto que falta.
-	if f := cortes.MetrosDeTapacanto(conCanto) - metros; f > 0.005 && tarifa != nil {
-		falta += float64(f * tarifa.PrecioPorMetroCanto)
-	}
-	return ventas.ACentavos(falta), nil
+// sierraConfigurada es el disco de /admin/calculadora. El que manda el
+// navegador (`anchoSierraMm`) no se cree: la pantalla ya no tiene el campo,
+// y mandar 0,5 en vez de 4 acomodaba más piezas por placa, cobraba menos
+// placas o pasadas sin PIN y le daba al taller un disco irreal (revisión
+// del carril F). Lo usan el cobro del corte y el trabajo del taller.
+func sierraConfigurada(ctx context.Context, c precios.Consultador) float64 {
+	sierra := float64(cortes.AnchoDeSierraMm)
+	_ = c.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra)
+	return sierra
 }
 
 // presentacionDeMitad es la presentación de la media placa de la que sale el

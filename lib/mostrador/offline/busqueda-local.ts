@@ -109,6 +109,9 @@ export interface ClienteLocal {
   priceListId: string | null;
   /** Viene en la copia desde siempre; opcional para las copias viejas. */
   estado?: string;
+  limiteCredito?: number;
+  /** Desde la revisión del carril F; las copias viejas no lo traen. */
+  cuentaBloqueada?: boolean;
   busqueda: string;
 }
 

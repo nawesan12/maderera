@@ -21,7 +21,6 @@ import {
 } from "@/lib/mostrador/importes";
 import { useCopiaLocal } from "@/lib/mostrador/offline/use-copia-local";
 import type {
-  CorteDeMostrador,
   ResultadoDeMostrador,
   RenglonDelCierre,
 } from "@/lib/mostrador/tipos";
@@ -45,6 +44,8 @@ import { Buscador } from "./buscador";
 import { PanelDeCaja } from "./caja";
 import { Cobro } from "./cobro";
 import { CorteAMedida, hayAlgoCargado, type EstadoDelCorte } from "./corte-a-medida";
+import { cuentaSinConexion } from "@/lib/mostrador/cuenta-sin-conexion";
+import { conElCorte, cortesSinRenglones, paraCobrar, sinElCorte, type CorteEnLaVenta } from "@/lib/mostrador/cortes-de-la-venta";
 import { sumar, Lineas } from "./lineas";
 import { cobrarSinConexion as guardarSinConexion, useColaDelMostrador } from "./sin-conexion";
 import { faltaIdentificarComprador } from "@/lib/fiscal/umbral";
@@ -198,14 +199,18 @@ export function VistaMostrador({
    *
    * Viaja con la venta y el trabajo nace recién cuando se cobra: armar el
    * despiece y cancelar la venta no puede dejar un trabajo fantasma en la cola
-   * del taller. Ver `CorteDeMostrador` en `lib/mostrador/venta.ts`.
+   * del taller. Ver `CorteDeMostrador` en `lib/mostrador/tipos.ts`.
    */
-  const [corte, setCorte] = useState<CorteDeMostrador | null>(null);
-  // Los renglones que agregó el corte, por descripción: cambiarles la
-  // cantidad no los cambia, y sacarlos todos saca el corte.
-  const [renglonesDelCorte, setRenglonesDelCorte] = useState<string[]>([]);
+  /*
+   * Los cortes de la venta: puede llevar varios, y cada renglón que sale de
+   * uno lleva su `corteId` (comité final, A2). Ver
+   * `lib/mostrador/cortes-de-la-venta.ts`.
+   */
+  const [cortes, setCortes] = useState<CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador>[]>([]);
   /** La placa elegida para cortar, mientras el diálogo está abierto. */
   const [cortando, setCortando] = useState<ResultadoDeMostrador | null>(null);
+  /** El corte de la venta que se está corrigiendo, si se reabrió uno. */
+  const [corrigiendo, setCorrigiendo] = useState<CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador> | null>(null);
   /*
    * Lo que se cargó en el último corte que se cerró sin agregarlo.
    *
@@ -224,11 +229,16 @@ export function VistaMostrador({
    * la ficha del corte, para que el precio del mostrador y el del panel no
    * puedan discrepar.
    */
+  // Los mismos candidatos y la misma lista que Go (`tarifaDelCorte` en
+  // mostrador/controles.go): Go rechaza el corte cuyo cobro no cierra con su
+  // plano, y una tarifa que Go encuentra y la pantalla no dejaba el corte sin
+  // el renglón de las pasadas, imposible de cobrar (comité final, A2). La
+  // lista general no tiene tarifa propia.
   const tarifaDeLaPlaca = cortando
     ? tarifaDeCorte(
         tarifasDeCorte,
-        [cortando.categoria ?? "", `${cortando.producto} ${cortando.medida}`],
-        cliente?.priceListId ?? null,
+        [cortando.categoria ?? "", `${cortando.producto} ${cortando.medida}`, cortando.producto],
+        cliente?.priceListId && cliente.priceListId !== listaGeneral ? cliente.priceListId : null,
       )
     : null;
 
@@ -376,6 +386,8 @@ export function VistaMostrador({
     !enPausa &&
     !faltaCaja &&
     !(medio === "cuenta_corriente" && !cliente) &&
+    // Sin conexión, ni la cuenta bloqueada ni el que no tiene cuenta.
+    !(medio === "cuenta_corriente" && !conexion.enLinea && cuentaSinConexion(cliente) !== null) &&
     !(partes !== null && Math.abs(restanteDePartes) > 0.01) &&
     // El cheque se cobra con sus datos: sin número no se lo encuentra en el banco.
     !(partes === null && medio === "cheque" && revisarChequeDePago(aChequeDePago(cheque)) !== null) &&
@@ -459,6 +471,7 @@ export function VistaMostrador({
         branchId: sucursal.id,
         usuarioId: usuario.userId,
         lineas,
+        cortes,
         cliente,
         medio,
         pagosDeLaVenta,
@@ -493,8 +506,8 @@ export function VistaMostrador({
     setTarjeta({ nroLote: "", nroCupon: "", marca: "", cuotas: 1 });
     setCheque(CHEQUE_VACIO);
     setPartes(null);
-    setCorte(null);
-    setRenglonesDelCorte([]);
+    setCortes([]);
+    setCorrigiendo(null);
     setPidePin(null);
     setFicha(null);
     // Terminada la venta, el foco vuelve al buscador: lo que sigue siempre es
@@ -621,6 +634,28 @@ export function VistaMostrador({
     if (distintos) setOtrosPrecios(precios);
   }
 
+  /**
+   * Reabre un corte de la venta para corregirlo, con el precio de la placa
+   * para el cliente de ahora: si se eligió otro cliente después de agregarlo,
+   * el renglón volvía a armarse con el precio del anterior y podía pedir un
+   * PIN sin motivo (revisión del carril F).
+   */
+  async function corregirCorte(id: string) {
+    const c = cortes.find((x) => x.id === id);
+    if (!c) return;
+    let placa = c.placa;
+    try {
+      const precios = await preciosDelCliente([c.placa.variantId], cliente?.id ?? null);
+      const precio = precios[c.placa.variantId];
+      if (precio > 0) placa = { ...c.placa, precio };
+    } catch {
+      // Sin respuesta queda el precio con el que se agregó: Go igual pone el
+      // de lista y, si hace falta, pide el PIN.
+    }
+    setCorrigiendo({ ...c, placa });
+    setCortando(placa);
+  }
+
   function aplicarPrecios() {
     if (!otrosPrecios) return;
     setLineas((prev) =>
@@ -664,20 +699,20 @@ export function VistaMostrador({
       return;
     }
 
+    // Cada renglón del corte viaja atado a su despiece, y Go controla que
+    // cada corte cobre lo de su plano.
+    const conLosCortes = paraCobrar(lineas, cortes);
     empezar(async () => {
       const r = await cobrarVenta({
         clave,
         branchId: sucursal.id,
-        lineas,
+        lineas: conLosCortes.lineas,
         customerId: cliente?.id ?? null,
         contactoNombre: cliente?.nombre ?? "Consumidor final",
         medioPago: medio,
         pagos: pagosDeLaVenta(),
         acopio,
-        // El corte viaja mientras sigan en la venta los renglones que lo
-        // trajeron (la placa, las pasadas, el canto): si se sacaron todos,
-        // el taller cortaría algo que no se cobró.
-        ...(corte && lineas.some((l) => renglonesDelCorte.includes(l.descripcion)) ? { corte } : {}),
+        ...(conLosCortes.cortes.length > 0 ? { cortes: conLosCortes.cortes } : {}),
         comprobante,
         cuit: cuit || null,
         descuento: descuentoManual,
@@ -706,6 +741,10 @@ export function VistaMostrador({
           router.refresh();
           return;
         }
+        // Las tarifas de corte se cargaron al abrir la pantalla: si el admin
+        // cambió una, se traen las nuevas para que «Corregir» arme el corte
+        // con ellas (texto de revisarCobroDelCorte, mostrador/controles.go).
+        if (r.error.startsWith("Las tarifas de corte cambiaron")) router.refresh();
         setAviso({ tipo: "error", texto: r.error });
         return;
       }
@@ -861,225 +900,264 @@ export function VistaMostrador({
   });
 
   return (
-    <div className="panel textura flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <BarraSuperior
-        conexion={conexion}
-        cola={cola}
-        usuario={usuario}
-        sucursales={sucursales}
-        sucursal={sucursal}
-        turno={hayTurno ? turno : null}
-        cajaAbierta={hayTurno}
-        onCaja={() => {
-          setCajaParaCobrar(false);
-          setCaja(true);
-        }}
-        // Sin caja vinculada el mostrador vende igual mientras haya internet;
-        // lo que no puede es cobrar cuando se corte. Por eso el selector está
-        // arriba, a mano, y no escondido en la configuración.
-        terminal={
-          <VincularCaja
-            branchId={sucursal.id}
-            enLinea={conexion.enLinea}
-            vinculada={cajaFisica?.codigo ?? null}
-            onVincular={vincularCaja}
-            administra={usuario.administraCaja}
-          />
-        }
-      />
-
-      <div className="flex min-h-0 flex-1">
-        <section className="flex min-w-0 flex-1 flex-col gap-3 p-4">
-          <Buscador
-            copia={copia}
-            branchId={sucursal.id}
-            customerId={cliente?.id ?? null}
-            listaDelCliente={cliente?.priceListId ?? null}
-            onElegir={(l, yCobrar) => {
-              cobrarAlAgregar.current = Boolean(yCobrar);
-              setLineas((prev) => sumar(prev, l));
-            }}
-            onSuelta={setSuelta}
-            onCortar={setCortando}
-            sePuedeCortar={conexion.enLinea}
-          />
-          <Lineas
-            lineas={lineas}
-            onCambiar={setLineas}
-            onLimpiar={limpiar}
-            onNoVaciar={() => volverDe("no-vaciar")}
-          />
-
-          <div className="flex justify-end">
-            <AyudaDeAtajos />
-          </div>
-        </section>
-
-        {/* El panel donde se opera la venta.
-            Ancho de verdad: acá adentro entran el cliente, los medios, el tipo
-            de operación, el descuento, el papel y el vuelto, y todo eso tiene
-            que verse junto y sin scrollear. La lista de productos de la
-            izquierda necesita unos 620 px para sus columnas, así que a 1366 —el
-            monitor de mostrador— el panel se lleva 560 y siguen entrando las
-            dos cosas. */}
-        <aside className="flex w-[420px] shrink-0 flex-col border-l border-linea bg-card xl:w-[560px] 2xl:w-[620px]">
-          <Cobro
-            branchId={sucursal.id}
-            buscarClienteLocal={buscarClienteLocal}
-            listaGeneral={listaGeneral}
-            subtotal={subtotal}
-            descuento={descuento}
-            etiquetaDelDescuento={motivoDelDescuento}
-            tipoDesc={tipoDesc}
-            onTipoDesc={setTipoDesc}
-            valorDesc={valorDesc}
-            onValorDesc={setValorDesc}
-            motivoDesc={motivoDesc}
-            onMotivoDesc={setMotivoDesc}
-            total={total}
-            cliente={cliente}
-            onCliente={alElegirCliente}
-            otrosPrecios={Boolean(otrosPrecios)}
-            onAplicarPrecios={aplicarPrecios}
-            comprobante={comprobante}
-            onComprobante={setComprobante}
-            cuit={cuit}
-            onCuit={setCuit}
-            pideDocumento={pideDocumento}
-            letra={letraVisible}
-            medio={medio}
-            onMedio={elegirMedio}
-            recibido={recibido}
-            onRecibido={setRecibido}
-            cambio={cambio}
-            faltaCaja={faltaCaja}
-            onAbrirCaja={abrirCajaParaCobrar}
-            enviando={enviando}
-            puede={lineas.length > 0}
-            puedeCobrar={puedeCobrar}
-            onCobrar={() => cobrar()}
-            porAutorizar={porAutorizar}
-            pidePin={pidePin}
-            onPin={(pin) => cobrar(pin)}
-            onCancelarPin={() => {
-              setPidePin(null);
-              enfocar("buscador");
-            }}
-            aviso={aviso}
-            ultima={ultima}
-            acopio={acopio}
-            onTipo={elegirTipo}
-            onPartir={partirElPago}
-            tarjeta={tarjeta}
-            onTarjeta={setTarjeta}
-            cheque={cheque}
-            onCheque={setCheque}
-            partes={partes}
-            onPartes={setPartes}
-            restante={restanteDePartes}
-            enLinea={conexion.enLinea}
-            onRemito={emitirRemito}
-            onPresupuesto={emitirPresupuesto}
-            promos={promos}
-          />
-        </aside>
+    <>
+      {/* En el teléfono no se vende (decisión 2 del comité final): no entran el
+          buscador, la venta y el cobro, y armar otra pantalla para eso no vale
+          lo que cuesta. La tablet vertical sí: abajo de `lg` se apila. */}
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground sm:hidden">
+        <p className="text-xl font-semibold">Usalo en la computadora o la tablet.</p>
       </div>
-
-      {cortando && (
-        <CorteAMedida
-          placa={{
-            variantId: cortando.variantId,
-            descripcion: `${cortando.producto} — ${cortando.medida}`,
-            unidad: cortando.unidad,
-            precio: cortando.precio,
-            largoMm: cortando.largoMm ?? null,
-            anchoMm: cortando.anchoMm ?? null,
-            color: cortando.color ?? null,
-            formaDeVenta: cortando.formaDeVenta,
-            precioMediaPct: cortando.precioMediaPct,
+      {/* Abajo de `lg` (la tablet vertical) la venta y el cobro van uno abajo
+          del otro, la página scrollea y el total con «Cobrar» queda fijo abajo
+          (comité final, M15): a 768 px el panel de 420 dejaba el total en «$» y
+          cortaba los medios. El `pb-80` es el lugar de esa barra, con el aviso
+          y el papel de la venta que van con ella. */}
+      <div className="panel textura hidden min-h-screen flex-col bg-background pb-80 text-foreground sm:flex lg:h-screen lg:overflow-hidden lg:pb-0">
+        <BarraSuperior
+          conexion={conexion}
+          cola={cola}
+          usuario={usuario}
+          sucursales={sucursales}
+          sucursal={sucursal}
+          turno={hayTurno ? turno : null}
+          cajaAbierta={hayTurno}
+          onCaja={() => {
+            setCajaParaCobrar(false);
+            setCaja(true);
           }}
-          anchoSierra={anchoSierra}
-          inicial={
-            borradorDelCorte &&
-            borradorVale(borradorDelCorte, {
-              clave,
-              variantId: cortando.variantId,
-              clienteId: cliente?.id ?? null,
-              ahora: Date.now(),
-            })
-              ? borradorDelCorte
-              : undefined
+          // Sin caja vinculada el mostrador vende igual mientras haya internet;
+          // lo que no puede es cobrar cuando se corte. Por eso el selector está
+          // arriba, a mano, y no escondido en la configuración.
+          terminal={
+            <VincularCaja
+              branchId={sucursal.id}
+              enLinea={conexion.enLinea}
+              vinculada={cajaFisica?.codigo ?? null}
+              onVincular={vincularCaja}
+              administra={usuario.administraCaja}
+            />
           }
-          focoAlCerrar={focoAlCerrar("corte")}
-          cliente={cliente?.nombre ?? null}
-          precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
-          precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
-          onCerrar={(estado) => {
-            setBorradorDelCorte(
-              hayAlgoCargado(estado)
-                ? {
-                    ...estado,
-                    ...duenoDelBorrador({
+        />
+
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <section className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+            <Buscador
+              copia={copia}
+              branchId={sucursal.id}
+              customerId={cliente?.id ?? null}
+              listaDelCliente={cliente?.priceListId ?? null}
+              onElegir={(l, yCobrar) => {
+                cobrarAlAgregar.current = Boolean(yCobrar);
+                setLineas((prev) => sumar(prev, l));
+              }}
+              onSuelta={setSuelta}
+              onCortar={setCortando}
+              onNoEntra={(texto) => setAviso({ tipo: "error", texto })}
+              sePuedeCortar={conexion.enLinea}
+              sinConexion={!conexion.enLinea}
+            />
+            <Lineas
+              lineas={lineas}
+              sinCargo={cortesSinRenglones(lineas, cortes).map((c) => ({ id: c.id, descripcion: c.corte.materialDescripcion }))}
+              onCambiar={setLineas}
+              onEditarCorte={(id) => void corregirCorte(id)}
+              onQuitarCorte={(id) => {
+                const r = sinElCorte(lineas, cortes, id);
+                setLineas(r.lineas);
+                setCortes(r.cortes);
+              }}
+              onLimpiar={limpiar}
+              onNoVaciar={() => volverDe("no-vaciar")}
+            />
+
+            <div className="flex justify-end">
+              <AyudaDeAtajos />
+            </div>
+          </section>
+
+          {/* El panel donde se opera la venta.
+              Ancho de verdad: acá adentro entran el cliente, los medios, el tipo
+              de operación, el descuento, el papel y el vuelto, y todo eso tiene
+              que verse junto y sin scrollear. La lista de productos de la
+              izquierda necesita unos 620 px para sus columnas, así que a 1366 —el
+              monitor de mostrador— el panel se lleva 560 y siguen entrando las
+              dos cosas. */}
+          <aside className="flex w-full flex-col border-t border-linea bg-card lg:w-[420px] lg:shrink-0 lg:border-l lg:border-t-0 xl:w-[560px] 2xl:w-[620px]">
+            <Cobro
+              branchId={sucursal.id}
+              buscarClienteLocal={buscarClienteLocal}
+              listaGeneral={listaGeneral}
+              subtotal={subtotal}
+              descuento={descuento}
+              etiquetaDelDescuento={motivoDelDescuento}
+              tipoDesc={tipoDesc}
+              onTipoDesc={setTipoDesc}
+              valorDesc={valorDesc}
+              onValorDesc={setValorDesc}
+              motivoDesc={motivoDesc}
+              onMotivoDesc={setMotivoDesc}
+              total={total}
+              cliente={cliente}
+              onCliente={alElegirCliente}
+              otrosPrecios={Boolean(otrosPrecios)}
+              onAplicarPrecios={aplicarPrecios}
+              comprobante={comprobante}
+              onComprobante={setComprobante}
+              cuit={cuit}
+              onCuit={setCuit}
+              pideDocumento={pideDocumento}
+              letra={letraVisible}
+              medio={medio}
+              onMedio={elegirMedio}
+              recibido={recibido}
+              onRecibido={setRecibido}
+              cambio={cambio}
+              faltaCaja={faltaCaja}
+              onAbrirCaja={abrirCajaParaCobrar}
+              enviando={enviando}
+              puede={lineas.length > 0}
+              puedeCobrar={puedeCobrar}
+              onCobrar={() => cobrar()}
+              porAutorizar={porAutorizar}
+              pidePin={pidePin}
+              onPin={(pin) => cobrar(pin)}
+              onCancelarPin={() => {
+                setPidePin(null);
+                enfocar("buscador");
+              }}
+              aviso={aviso}
+              ultima={ultima}
+              acopio={acopio}
+              onTipo={elegirTipo}
+              onPartir={partirElPago}
+              tarjeta={tarjeta}
+              onTarjeta={setTarjeta}
+              cheque={cheque}
+              onCheque={setCheque}
+              partes={partes}
+              onPartes={setPartes}
+              restante={restanteDePartes}
+              enLinea={conexion.enLinea}
+              onRemito={emitirRemito}
+              onPresupuesto={emitirPresupuesto}
+              promos={promos}
+            />
+          </aside>
+        </div>
+
+        {cortando && (
+          <CorteAMedida
+            placa={{
+              variantId: cortando.variantId,
+              descripcion: `${cortando.producto} — ${cortando.medida}`,
+              unidad: cortando.unidad,
+              precio: cortando.precio,
+              largoMm: cortando.largoMm ?? null,
+              anchoMm: cortando.anchoMm ?? null,
+              color: cortando.color ?? null,
+              formaDeVenta: cortando.formaDeVenta,
+              precioMediaPct: cortando.precioMediaPct,
+            }}
+            anchoSierra={anchoSierra}
+            corrigiendo={corrigiendo !== null}
+            inicial={
+              corrigiendo
+                ? corrigiendo.estado
+                : borradorDelCorte &&
+                    borradorVale(borradorDelCorte, {
                       clave,
                       variantId: cortando.variantId,
                       clienteId: cliente?.id ?? null,
-                      ventaVacia: lineas.length === 0,
                       ahora: Date.now(),
-                    }),
-                  }
-                : null,
-            );
-            setCortando(null);
-            // El diálogo se desmonta en vez de cerrarse, así que su `finalFocus`
-            // no llega a correr: el cursor se devuelve acá.
-            volverDe("corte");
-          }}
-          onAgregar={(nuevas, elCorte) => {
-            setLineas((prev) => [...prev, ...nuevas]);
-            setCorte(elCorte);
-            setRenglonesDelCorte(nuevas.map((l) => l.descripcion));
-            setBorradorDelCorte(null);
-            setCortando(null);
-            volverDe("corte-agregado");
-          }}
-        />
-      )}
+                    })
+                  ? borradorDelCorte
+                  : undefined
+            }
+            focoAlCerrar={focoAlCerrar("corte")}
+            cliente={cliente?.nombre ?? null}
+            precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
+            precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
+            onCerrar={(estado) => {
+              // Cerrar la corrección deja el corte como estaba en la venta.
+              if (corrigiendo) {
+                setCorrigiendo(null);
+                setCortando(null);
+                volverDe("corte");
+                return;
+              }
+              setBorradorDelCorte(
+                hayAlgoCargado(estado)
+                  ? {
+                      ...estado,
+                      ...duenoDelBorrador({
+                        clave,
+                        variantId: cortando.variantId,
+                        clienteId: cliente?.id ?? null,
+                        ventaVacia: lineas.length === 0,
+                        ahora: Date.now(),
+                      }),
+                    }
+                  : null,
+              );
+              setCortando(null);
+              // El diálogo se desmonta en vez de cerrarse, así que su `finalFocus`
+              // no llega a correr: el cursor se devuelve acá.
+              volverDe("corte");
+            }}
+            onAgregar={(nuevas, elCorte, estado) => {
+              // Reabierto, el corte se reemplaza: sus renglones viejos salen.
+              const r = conElCorte(lineas, cortes, {
+                id: corrigiendo?.id ?? crypto.randomUUID(),
+                placa: cortando,
+                corte: elCorte,
+                estado,
+              }, nuevas);
+              setLineas(r.lineas);
+              setCortes(r.cortes);
+              setCorrigiendo(null);
+              setBorradorDelCorte(null);
+              setCortando(null);
+              volverDe("corte-agregado");
+            }}
+          />
+        )}
 
-      {suelta !== null && (
-        <AltaAMano
-          descripcionInicial={suelta}
-          focoAlCerrar={focoAlCerrar("a-mano")}
-          onCerrar={() => {
-            setSuelta(null);
-            volverDe("a-mano");
-          }}
-          onAgregar={(l) => {
-            setLineas((prev) => [...prev, l]);
-            setSuelta(null);
-            volverDe("a-mano");
-          }}
-        />
-      )}
+        {suelta !== null && (
+          <AltaAMano
+            descripcionInicial={suelta}
+            focoAlCerrar={focoAlCerrar("a-mano")}
+            onCerrar={() => {
+              setSuelta(null);
+              volverDe("a-mano");
+            }}
+            onAgregar={(l) => {
+              setLineas((prev) => [...prev, l]);
+              setSuelta(null);
+              volverDe("a-mano");
+            }}
+          />
+        )}
 
-      {caja && (
-        <PanelDeCaja
-          sucursal={sucursal}
-          turno={turno}
-          fondoBase={fondoBase}
-          cierre={cierre}
-          movimientos={movimientos}
-          ventas={ventas}
-          enLinea={conexion.enLinea}
-          onEncolado={() => void cola.refrescar()}
-          onAbierta={alAbrirLaCaja}
-          focoAlCerrar={focoAlCerrar(cajaParaCobrar ? "caja-para-cobrar" : "caja")}
-          onCerrar={() => {
-            volverDe(cajaParaCobrar ? "caja-para-cobrar" : "caja");
-            setCajaParaCobrar(false);
-            setCaja(false);
-          }}
-        />
-      )}
-    </div>
+        {caja && (
+          <PanelDeCaja
+            sucursal={sucursal}
+            turno={turno}
+            fondoBase={fondoBase}
+            cierre={cierre}
+            movimientos={movimientos}
+            ventas={ventas}
+            enLinea={conexion.enLinea}
+            onEncolado={() => void cola.refrescar()}
+            onAbierta={alAbrirLaCaja}
+            focoAlCerrar={focoAlCerrar(cajaParaCobrar ? "caja-para-cobrar" : "caja")}
+            onCerrar={() => {
+              volverDe(cajaParaCobrar ? "caja-para-cobrar" : "caja");
+              setCajaParaCobrar(false);
+              setCaja(false);
+            }}
+          />
+        )}
+      </div>
+    </>
   );
 }

@@ -2273,3 +2273,101 @@ otra cosa, se cambia en el lugar que se indica.
   lleva el neto que le queda (resto exacto) y el IVA es el resto del total.
   `fiscal.LineasDeLaNota`. El neto se toma si está dentro del medio por
   ciento del renglón (cubre muchas notas parciales). `fiscal.CalcularTotales`.
+
+## Comité final, carril F (19/11): mostrador y venta
+
+- **A2, varios cortes por venta.** La venta manda `cortes` (lista) y cada
+  renglón del corte su índice en `corte`; el `corte` único de antes se sigue
+  leyendo (`atarRenglonesAlCorte` ata sus renglones como se reconocían).
+  `revisarCobroDelCorte` rechaza el corte que no cobra lo de su plano, ni de
+  menos ni de más: antes lo de menos pedía el PIN (`faltaDelCorte`) y lo de
+  más pasaba. Las pasadas y el canto se exigen solo si hay tarifa o si la
+  venta los trae. En la pantalla, `lib/mostrador/cortes-de-la-venta.ts`:
+  «Corregir» reabre el corte y reemplaza sus renglones en el mismo lugar, y
+  quitar un renglón del corte saca el corte entero. `TestVariosCortesEnUnaVenta`.
+- **M1**: la cola sin conexión rechaza la cuenta bloqueada (lo no
+  autorizable); pasarse del límite sigue entrando marcado.
+  `TestColaConCuentaBloqueada`.
+- **M10, M14**: `revisarRenglones` (en línea) rechaza un renglón a $0 y la
+  fracción de lo que el producto vende por unidad (la unidad del producto, no
+  la del renglón). Sin conexión no se rechaza: la pantalla redondea y no deja
+  agregar sin precio. Un total en cero sin descuento dice «Falta poner el
+  precio.».
+- **M11**: Precios exige precio mayor que cero (Go y la tabla).
+- **M12**: «El personal · 7 días» suma los renglones a mano de cada uno
+  (`aMano`; sin variante y fuera de un corte, ver la revisión abajo).
+- **M13**: la caja lee los importes con `parsearImporte` (`importeDeCaja`).
+- **M15**: abajo de `lg` el mostrador se apila con el total fijo al pie;
+  abajo de `sm`, «Usalo en la computadora o la tablet.».
+- Bajos: horas en 24 h y medios con nombre (ventas de hoy, caja del panel);
+  sin campo «Sierra» en el corte del mostrador; «Media a lo largo / al
+  ancho»; «Esta PC…» pregunta antes de vincular; la coma de lo que va entero
+  en el remito se marca; el − rápido del stock pide el motivo.
+- **Revisión del carril F** (sobre lo de arriba):
+  - La cola rechaza **solo la cuenta bloqueada** (`EstadoDeCredito.Bloqueada`):
+    sin cuenta habilitada o sin saldo a favor que alcance entra marcada como
+    crédito sin autorizar, porque la mercadería ya salió. El padrón trae
+    `cuentaBloqueada`, y sin conexión la pantalla no deja anotarle a cuenta
+    a la bloqueada ni al que no tiene límite (`cuenta-sin-conexion.ts`).
+  - La cola **marca** (bajo lista sin autorizar) lo que en línea se rechaza:
+    fracciones de lo que va entero, renglones a $0 y el corte que no cierra
+    con su plano. Lee `cortes`: el corte armado en línea y cobrado sin
+    conexión llega al taller.
+  - El disco es siempre el de `calculator_settings` (`sierraConfigurada`):
+    el `anchoSierraMm` del navegador se ignora, en el cobro y en el taller.
+  - `huellaDeVenta` incluye los cortes y el índice de cada renglón.
+  - El corte sin renglones (sin tarifa, debajo de media placa) viaja igual y
+    se ve como «Corte de X · sin cargo». Por eso `atarRenglonesAlCorte` solo
+    corre con el formato viejo (`CorteSuelto`).
+  - El rechazo nombra «Corregir»; si faltan las pasadas o el canto que pide
+    la tarifa, dice «Las tarifas de corte cambiaron…» y la pantalla las
+    vuelve a traer (`router.refresh`).
+  - `order_items.del_corte` (00175): M12 cuenta como a mano todo lo que no
+    sale de un corte, aunque se cargue en «pasada».
+  - La ficha del producto con el precio general vacío deja la medida sin
+    precio, no a $0.
+  - Pantalla: el aviso y el papel van en la barra fija de la tablet; el plano
+    está «calculando» desde que cambia lo cargado; «Corregir» trae el precio
+    del cliente de ahora; «2,5*bisagra» no se redondea, avisa; el − rápido
+    dice «Restar uno / media» y la devolución que resta es «Al proveedor».
+
+### Decisiones a confirmar
+
+Se aplicó el default prudente; lo valida Nahuel (o el contador donde se dice).
+
+- [ ] **Varios cortes en una venta (decisión 6)**: se admiten, cada uno con
+      sus renglones; reabrir uno lo edita y reemplaza sus renglones. Go
+      rechaza el cobro de un corte que no cierra con su plano, de menos o de
+      más (antes lo de menos se autorizaba con PIN).
+- [ ] **Productos a $0 (decisión 4)**: no hay legítimos. Precios no guarda
+      $0, el buscador del mostrador no los agrega y Go rechaza el renglón en
+      $0. Lo que no tiene precio se vende «a mano».
+- [ ] **Renglones a mano (decisión 3)**: se ven por vendedor en los
+      controles del personal, sin PIN ni tope. Si hace falta un tope con PIN,
+      falta decidir el monto.
+- [ ] **Ctrl+Enter (decisión 1)**: sigue agregando y cobrando, salvo sin
+      conexión sobre una placa (agrega y no cobra) y sobre un producto sin
+      precio (no agrega).
+- [ ] **El teléfono (decisión 2)**: el mostrador no se usa en el teléfono
+      (aviso); la tablet vertical sí.
+- [ ] **El campo «Sierra» del corte del mostrador** (pedido de Nahuel del
+      30/9): salió, como proponían la revisión y el comité (hallazgo 44); el
+      disco es el de `/admin/calculadoras`. Volverlo es devolver el campo en
+      `corte-a-medida.tsx` y que Go vuelva a leer `anchoSierraMm`, que desde
+      la revisión del carril F ignora (`sierraConfigurada`).
+- [ ] **Desvincular una terminal**: «Esta PC…» ahora confirma, pero sigue sin
+      haber cómo desvincular desde el mostrador; hace falta una ruta en Go
+      (y decidir quién puede).
+- [ ] **Cuenta corriente desde la cola**: solo se rechaza la cuenta
+      bloqueada. El cliente sin cuenta habilitada (o sin saldo a favor que
+      alcance) cobrado sin conexión entra con la deuda cargada y marcado como
+      crédito sin autorizar, para que el dueño lo vea; la pantalla sin
+      conexión ya no deja elegirlo. ¿O se aparta la venta, como antes de T3?
+- [ ] **Lo que en línea se rechaza y llega por la cola** (fracción de lo que
+      va entero, renglón a $0, corte que no cierra con su plano): entra
+      marcado como bajo lista sin autorizar, no se rechaza.
+- [ ] **El corte que no cobra nada** (sin tarifa y por debajo de media
+      placa): se admite y va al taller sin cargo. Si no se corta gratis, el
+      diálogo tiene que impedirlo.
+- [ ] **El producto sin precio general**: la ficha lo deja sin precio en vez
+      de a $0 (como ya hacía con el profesional).

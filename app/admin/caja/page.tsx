@@ -10,7 +10,7 @@ import {
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
-import { formatearMonto, haceCuanto, plural } from "@/lib/formato";
+import { fechaHora, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
@@ -359,11 +359,9 @@ export default async function CajaPage({
                     <td className="tabular px-5 py-3 text-muted-foreground">
                       {v.createdAt.toLocaleDateString("es-AR", { timeZone: ZONA })}
                       <span className="block text-sm">
-                        {v.createdAt.toLocaleTimeString("es-AR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          timeZone: ZONA,
-                        })}
+                        {/* En 24 h, como todo el panel (lib/formato): el
+                            `toLocaleTimeString` de antes decía «12:16 a. m.». */}
+                        {hora.format(v.createdAt)}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -402,14 +400,8 @@ export default async function CajaPage({
                             // lunes anulada el sábado parecía anulada en el acto.
                             v.anuladaAt &&
                               (diaArgentino(v.anuladaAt) === diaArgentino(v.createdAt)
-                                ? v.anuladaAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: ZONA })
-                                : v.anuladaAt.toLocaleString("es-AR", {
-                                    day: "numeric",
-                                    month: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    timeZone: ZONA,
-                                  })),
+                                ? hora.format(v.anuladaAt)
+                                : fechaHora.format(v.anuladaAt)),
                             v.motivo,
                           ]
                             .filter(Boolean)
@@ -463,11 +455,7 @@ export default async function CajaPage({
                         month: "2-digit",
                         timeZone: ZONA,
                       })}{" "}
-                      {v.createdAt.toLocaleTimeString("es-AR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: ZONA,
-                      })}
+                      {hora.format(v.createdAt)}
                     </span>
                     {" · "}
                     {v.cliente}

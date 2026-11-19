@@ -349,7 +349,10 @@ func (s *Servicio) Editar(ctx context.Context, ses *auth.Sesion, variante, lista
 	if !plataforma.UUIDValido(variante) || !plataforma.UUIDValido(lista) {
 		return plataforma.Invalido(map[string]string{"precio": "Invalid UUID"})
 	}
-	if !(n >= 0) || n != n || n > 1e300 {
+	// Mayor que cero, como la importación (comité final, M11 y decisión 4):
+	// no hay productos a $0, y con la lista en 0 vender a $0 no se medía
+	// como bajo la lista ni pedía el PIN.
+	if !(n > 0) || n != n || n > 1e300 {
 		return plataforma.Invalido(map[string]string{"precio": "El precio tiene que ser un número positivo."})
 	}
 	valor := jsmath.Fijo2(n)

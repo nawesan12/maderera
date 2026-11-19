@@ -19,10 +19,12 @@ export const MOTIVOS_QUE_SUMAN: { valor: MotivoDeAjuste; texto: string }[] = [
   { valor: "ingreso", texto: "Ingreso" },
   { valor: "devolucion", texto: "Devolución" },
 ];
+// Restando, la devolución es la que sale al proveedor: «Devolución» a secas
+// se leía como la del cliente, que suma (revisión del carril F).
 export const MOTIVOS_QUE_RESTAN: { valor: MotivoDeAjuste; texto: string }[] = [
   { valor: "rotura", texto: "Rotura" },
   { valor: "faltante", texto: "Faltante" },
-  { valor: "devolucion", texto: "Devolución" },
+  { valor: "devolucion", texto: "Al proveedor" },
 ];
 
 /**

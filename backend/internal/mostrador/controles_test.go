@@ -194,8 +194,10 @@ func TestCorteQueEsquivaLaMediaPlaca(t *testing.T) {
 	// pantalla con el acomodo a mano.
 	v := e.venta("transferencia", map[string]any{"variantId": nil, "descripcion": "Corte a medida — 4 pasadas", "unidad": "pasada", "cantidad": 4, "precioUnitario": 800})
 	v["corte"] = corte(&separadas)
+	// Sin el material, el corte no cierra con su plano: se rechaza (comité
+	// final, A2; antes pedía el PIN por la placa que faltaba).
 	_, m, _ := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
-	if a := autorizacionDe(t, m); a["motivo"] != "precio" || a["monto"] != 45000.5 {
+	if m["ok"] != false || m["autorizacion"] != nil || m["error"] != "El corte de Fenólico 18 mm no cierra con su plano. Tocá «Corregir» en el corte y guardalo." {
 		t.Fatalf("acomodo que esquiva la media placa: %v", m)
 	}
 	// Con la placa entera cobrada, pasa.
@@ -410,14 +412,17 @@ func TestPasadasDelCorteConTarifa(t *testing.T) {
 	if a := autorizacionDe(t, m); a["motivo"] != "precio" || a["monto"] != float64(7*2499) {
 		t.Fatalf("pasada a $1: %s", b)
 	}
-	// Sin el renglón de las pasadas: lo que falta se valúa a la tarifa, no a $0.
+	// Sin el renglón de las pasadas, o sin el canto, el corte no cierra con
+	// su plano: se rechaza, no se autoriza (comité final, A2). Es lo que
+	// manda la pantalla abierta antes de que el admin cargara la tarifa, y
+	// el texto lo dice para que traiga las nuevas (revisión del carril F).
+	tarifasNuevas := "Las tarifas de corte cambiaron. Tocá «Corregir» en el corte de Fenólico 18 mm y guardalo."
 	_, m, b = vender(e.lineaPlaca(2), canto)
-	if a := autorizacionDe(t, m); a["monto"] != float64(7*2500) {
+	if m["error"] != tarifasNuevas || m["autorizacion"] != nil {
 		t.Fatalf("sin pasadas: %s", b)
 	}
-	// Sin el canto, lo mismo.
 	_, m, b = vender(e.lineaPlaca(2), pasadas(2500))
-	if a := autorizacionDe(t, m); a["monto"] != float64(18*900) {
+	if m["error"] != tarifasNuevas || m["autorizacion"] != nil {
 		t.Fatalf("sin canto: %s", b)
 	}
 	// Todo a tarifa: pasa, con la tarifa como precio de lista de los renglones.

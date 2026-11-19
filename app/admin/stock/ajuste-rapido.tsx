@@ -122,15 +122,13 @@ export function AjusteRapido({
   // De 44 px y separados: de 36 y pegados, el + caía en el − con el dedo.
   return (
     <div className="flex items-center gap-2">
-      <button
-        onClick={() => ajustar(-paso)}
-        disabled={pendiente}
-        className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-        aria-label={`Restar ${nombrePaso} en ${sucursal}`}
-      >
-        <Minus className="h-4 w-4" />
-        {paso !== 1 && <span className="text-sm">media</span>}
-      </button>
+      <RestaRapida
+        paso={paso}
+        nombrePaso={nombrePaso}
+        sucursal={sucursal}
+        pendiente={pendiente}
+        onRestar={(motivo, cerrar) => ajustar(-paso, cerrar, { motivo })}
+      />
       <button
         onClick={() => ajustar(paso)}
         disabled={pendiente}
@@ -347,6 +345,53 @@ function CargaPorMedida({
             {pendiente ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Dejar este número"}
           </button>
         )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * El − de la fila, con su motivo.
+ *
+ * Restaba en el acto y el libro decía «Ajuste»: la placa rota no quedaba como
+ * rotura (comité final). Ahora el − pregunta por qué, con los mismos motivos
+ * de la carga por número, y el motivo elegido resta.
+ */
+function RestaRapida({
+  paso,
+  nombrePaso,
+  sucursal,
+  pendiente,
+  onRestar,
+}: {
+  paso: number;
+  nombrePaso: string;
+  sucursal: string;
+  pendiente: boolean;
+  onRestar: (motivo: MotivoDeAjuste, cerrar: () => void) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <Popover open={abierto} onOpenChange={setAbierto}>
+      <PopoverTrigger
+        disabled={pendiente}
+        className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+        aria-label={`Restar ${nombrePaso} en ${sucursal}`}
+      >
+        <Minus className="h-4 w-4" />
+        {paso !== 1 && <span className="text-sm">media</span>}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-3">
+        {/* Cuánto resta, a la vista: el − de la placa que se vende partida
+            resta media. */}
+        <p className="mb-2 text-sm font-semibold">Restar {nombrePaso}</p>
+        <FilaDeMotivos
+          signo={-1}
+          motivos={MOTIVOS_QUE_RESTAN}
+          habilitado={!pendiente}
+          pendiente={pendiente}
+          onElegir={(_, motivo) => onRestar(motivo, () => setAbierto(false))}
+        />
       </PopoverContent>
     </Popover>
   );

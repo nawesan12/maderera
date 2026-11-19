@@ -14,6 +14,9 @@ import {
   type PagoDeVenta,
 } from "@/lib/mostrador/importes";
 import { encolarVenta } from "@/lib/mostrador/offline/cola";
+import { cuentaSinConexion } from "@/lib/mostrador/cuenta-sin-conexion";
+import { paraCobrar } from "@/lib/mostrador/cortes-de-la-venta";
+import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
 import { numeroProvisorio } from "@/lib/mostrador/offline/numero-provisorio";
 import { useCaja } from "@/lib/mostrador/offline/use-caja";
 import { useCola } from "@/lib/mostrador/offline/use-cola";
@@ -76,6 +79,8 @@ export interface VentaSinConexion {
   branchId: string;
   usuarioId: string;
   lineas: LineaDeVenta[];
+  /** Los cortes armados con conexión: viajan para que el trabajo llegue al taller. */
+  cortes: { id: string; corte: CorteDeMostrador }[];
   cliente: Cliente | null;
   medio: MedioDeMostrador;
   /** Se arma recién al encolar, igual que con conexión. */
@@ -114,6 +119,7 @@ export async function cobrarSinConexion(
     branchId,
     usuarioId,
     lineas,
+    cortes,
     cliente,
     medio,
     pagosDeLaVenta,
@@ -137,6 +143,15 @@ export async function cobrarSinConexion(
     return;
   }
 
+  const pagosPedidos = pagosDeLaVenta();
+  if (medio === "cuenta_corriente" || pagosPedidos?.some((p) => p.medio === "cuenta_corriente")) {
+    const sinCuenta = cuentaSinConexion(cliente);
+    if (sinCuenta) {
+      setAviso({ tipo: "error", texto: sinCuenta });
+      return;
+    }
+  }
+
   if (!cajaFisica) {
     setAviso({
       tipo: "error",
@@ -158,6 +173,8 @@ export async function cobrarSinConexion(
     const cobradaAt = new Date().toISOString();
 
     const pagos = pagosDeLaVenta();
+    // Cada renglón del corte atado a su despiece, como con conexión.
+    const conLosCortes = paraCobrar(lineas, cortes);
 
     const ticket = documentoDeVenta(
       {
@@ -180,7 +197,7 @@ export async function cobrarSinConexion(
         clave,
         numeroProvisorio: numero,
         branchId,
-        lineas,
+        ...conLosCortes,
         customerId: cliente?.id ?? null,
         contactoNombre: cliente?.nombre ?? "Consumidor final",
         medioPago: medio,

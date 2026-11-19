@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/productos"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -138,12 +140,28 @@ func escalas(ctx context.Context, q *sqlc.Queries) ([]ventas.EscalaDePago, error
 //
 // `usuario` es quien vendió; `ses`, quien la manda (el PIN se pide por ella).
 func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.Sesion, usuario string) (ResultadoVenta, error) {
+	sinConexion := v.NumeroProvisorio != nil
+	// En línea, ni renglones a $0 ni fracciones de lo que se vende por
+	// unidad. Va antes que RevisarVenta para que el $0 diga qué falta y no
+	// «el total tiene que ser mayor a cero». Sin conexión la venta ya pasó:
+	// la pantalla no deja armarla así, y rechazarla acá la sacaría de la
+	// caja sin que nadie la vea. Pero «numeroProvisorio» lo pone el
+	// navegador: la de la cola que lo trae entra marcada para el dueño, como
+	// la que pasa lo libre (revisión del carril F).
+	renglonRaro := false
+	if p, err := revisarRenglones(ctx, s.pool, v.Lineas); err != nil {
+		return ResultadoVenta{}, err
+	} else if p != "" {
+		if !sinConexion {
+			return fallo(p), nil
+		}
+		renglonRaro = true
+	}
 	if p := ventas.RevisarVenta(v.Lineas, v.MedioPago, v.CustomerID); p != "" {
 		return fallo(p), nil
 	}
 	q := sqlc.New(s.pool)
 	ahora := s.ahora()
-	sinConexion := v.NumeroProvisorio != nil
 	huella := huellaDeVenta(v)
 
 	// Primero si ya está hecha (T3, hallazgo 39): un reintento después de
@@ -175,12 +193,19 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 		}
 	}
 
-	// El corte viaja aparte de los renglones: el despiece tiene que entrar en
-	// lo que el plano acomoda. (Su placa puede no estar entre las líneas: por
-	// debajo de media placa se cobra solo el corte.)
-	if v.Corte != nil && len(v.Corte.Piezas) > 0 {
-		if p := revisarCorte(*v.Corte); p != "" {
+	// Cada corte viaja aparte de los renglones: el despiece tiene que entrar
+	// en lo que el plano acomoda. (Su placa puede no estar entre las líneas:
+	// por debajo de media placa se cobra solo el corte.) El esquema ya exige
+	// al menos una pieza por despiece.
+	atarRenglonesAlCorte(&v)
+	for _, k := range v.Cortes {
+		if p := revisarCorte(k); p != "" {
 			return fallo(p), nil
+		}
+	}
+	for _, l := range v.Lineas {
+		if l.Corte != nil && *l.Corte >= len(v.Cortes) {
+			return fallo(`"` + l.Descripcion + `" es de un corte que no está en la venta. Sacalo y volvé a armar el corte.`), nil
 		}
 	}
 
@@ -189,12 +214,30 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	if err := conPrecioDeLista(ctx, s.pool, v.Lineas, lista); err != nil {
 		return ResultadoVenta{}, err
 	}
-	// Y el de las pasadas y el canto del corte, la tarifa de su placa.
-	tarifa, err := tarifaDelCorte(ctx, s.pool, v.Corte, lista)
-	if err != nil {
-		return ResultadoVenta{}, err
+	// Y el de las pasadas y el canto de cada corte, la tarifa de su placa.
+	tarifas := make([]*cortes.TarifaDeCorte, len(v.Cortes))
+	for i := range v.Cortes {
+		if tarifas[i], err = tarifaDelCorte(ctx, s.pool, &v.Cortes[i], lista); err != nil {
+			return ResultadoVenta{}, err
+		}
 	}
-	conTarifaDelCorte(v.Lineas, tarifa)
+	conTarifaDelCorte(v.Lineas, tarifas)
+	// Lo cobrado de cada corte tiene que ser lo de su plano.
+	// Sin conexión el corte ya se cobró y el cliente espera las piezas: si no
+	// cierra (la tarifa cambió mientras tanto), entra marcado y el trabajo
+	// llega igual al taller.
+	for i := range v.Cortes {
+		p, err := s.revisarCobroDelCorte(ctx, v, i, tarifas[i])
+		if err != nil {
+			return ResultadoVenta{}, err
+		}
+		if p != "" {
+			if !sinConexion {
+				return fallo(p), nil
+			}
+			renglonRaro = true
+		}
+	}
 
 	subtotal := ventas.TotalDeLaVenta(v.Lineas)
 
@@ -231,6 +274,12 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	lineas, descuento := ventas.AplicarDescuento(v.Lineas, aDescontar)
 	total := ventas.TotalDeLaVenta(lineas)
 	if total <= 0 {
+		// Sin descuento, un total en cero es un precio que falta (comité
+		// final, M14): «el descuento no puede llevarse toda la venta» sobre
+		// un producto a $0 mandaba a buscar un descuento que nadie puso.
+		if aDescontar <= 0 {
+			return fallo("Falta poner el precio."), nil
+		}
 		return fallo("El descuento no puede llevarse toda la venta."), nil
 	}
 
@@ -251,17 +300,14 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	parteEfectivo := ventas.ImportePorMedio(pagos, ventas.Efectivo)
 	parteCuenta := ventas.ImportePorMedio(pagos, ventas.CuentaCorriente)
 
-	// Lo que se deja de cobrar: bajo la lista, el descuento tipeado y lo que
-	// el corte no trae. La escala automática no cuenta.
-	faltaCorte, err := s.faltaDelCorte(ctx, v, lista, tarifa)
-	if err != nil {
-		return ResultadoVenta{}, err
-	}
+	// Lo que se deja de cobrar: bajo la lista y el descuento tipeado. La
+	// escala automática no cuenta, y lo que el corte no trae ya se rechazó
+	// arriba (revisarCobroDelCorte).
 	manual := 0.0
 	if pedido > 0 {
 		manual = descuento
 	}
-	desvio := ventas.DesvioDeLaVenta(v.Lineas, manual, faltaCorte)
+	desvio := ventas.DesvioDeLaVenta(v.Lineas, manual, 0)
 	libre, err := PorcentajeLibre(ctx, s.pool)
 	if err != nil {
 		return ResultadoVenta{}, err
@@ -281,8 +327,16 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 			return ResultadoVenta{}, err
 		}
 		pasaElLimite = !cr.Puede
-		// Una de la cola entra igual: ya sucedió (y queda marcada abajo).
-		if !cr.Puede && !sinConexion {
+		// Una de la cola entra igual y queda marcada abajo: ya sucedió, y la
+		// mercadería salió. La cuenta bloqueada no: se rechaza también sin
+		// conexión, porque «numeroProvisorio» lo manda el navegador y
+		// alcanzaba con ponerlo para cargarle deuda a un cliente bloqueado
+		// (comité final, M1). Solo la bloqueada: el cliente sin cuenta
+		// habilitada o sin saldo a favor que alcance también es «no
+		// autorizable», y rechazarlo dejaba apartada, sin deuda y sin stock,
+		// una venta que ya se entregó (revisión del carril F). La pantalla
+		// sin conexión no deja elegir cuenta corriente para esos dos.
+		if !cr.Puede && (!sinConexion || cr.Bloqueada) {
 			if !cr.Autorizable {
 				m := "No se puede cargar a cuenta corriente."
 				if cr.Motivo != nil {
@@ -307,7 +361,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	bajoListaSinAutorizar := false
 	creditoSinAutorizar := 0.0
 	if sinConexion {
-		bajoListaSinAutorizar = pidePrecio
+		bajoListaSinAutorizar = pidePrecio || renglonRaro
 		if pasaElLimite {
 			creditoSinAutorizar = parteCuenta
 		}
@@ -525,9 +579,10 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		return ResultadoVenta{}, err
 	}
 
-	// El corte, si la venta lleva uno: nace en la cola del taller, atado al pedido.
-	if v.Corte != nil && len(v.Corte.Piezas) > 0 {
-		if err := insertarCorte(ctx, tx, v, pedido, usuario); err != nil {
+	// Los cortes de la venta: cada uno nace en la cola del taller, atado al
+	// pedido, con su despiece.
+	for i := range v.Cortes {
+		if err := insertarCorte(ctx, tx, v, &v.Cortes[i], pedido, usuario); err != nil {
 			return ResultadoVenta{}, err
 		}
 	}
@@ -600,11 +655,13 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
-			                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista)
-			VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $13::numeric)`,
+			                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista, del_corte)
+			VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $13::numeric, $14)`,
 			pedido, l.VariantID, l.Descripcion, l.Unidad, jsmath.Fijo2(l.Cantidad), jsmath.Fijo2(l.PrecioUnitario),
 			jsmath.Fijo2(ventas.ACentavos(float64(l.Cantidad*l.PrecioUnitario))), factores[i].Presentacion,
-			jsmath.Texto(factores[i].StockPorUnidad), costo, alicuota, i, fijo2ONulo(l.PrecioLista)); err != nil {
+			// Atado a un despiece de la venta (migración 00175): lo que
+			// «El personal» no cuenta como cargado a mano.
+			jsmath.Texto(factores[i].StockPorUnidad), costo, alicuota, i, fijo2ONulo(l.PrecioLista), l.Corte != nil); err != nil {
 			return ResultadoVenta{}, err
 		}
 	}
@@ -712,6 +769,60 @@ func descontarStock(ctx context.Context, tx pgx.Tx, sucursal, numero, usuario st
 	return nil
 }
 
+// revisarRenglones es lo que la venta en línea no deja pasar renglón por
+// renglón:
+//
+//   - Un precio en $0 (comité final, M14 y decisión 4): no hay productos
+//     que se regalen, y el $0 es un precio que falta cargar. Ctrl+Enter sobre
+//     un producto sin precio lo cobraba igual.
+//   - Una fracción de lo que se vende por unidad (M10): media bisagra se
+//     cobraba y descontaba del stock, que no la admite (stock.go hace la
+//     misma cuenta con productos.AdmiteDecimales). La unidad es la del
+//     producto, no la del renglón, que la manda el navegador.
+func revisarRenglones(ctx context.Context, c precios.Consultador, lineas []ventas.LineaDeVenta) (string, error) {
+	var ids []string
+	for _, l := range lineas {
+		if l.PrecioUnitario == 0 {
+			return `Falta poner el precio de "` + l.Descripcion + `".`, nil
+		}
+		if l.VariantID != nil {
+			ids = append(ids, *l.VariantID)
+		}
+	}
+	if len(ids) == 0 {
+		return "", nil
+	}
+	filas, err := c.Query(ctx, `
+		SELECT pv.id::text, p.unit FROM product_variants pv JOIN products p ON p.id = pv.product_id
+		WHERE pv.id::text = ANY($1::text[])`, ids)
+	if err != nil {
+		return "", err
+	}
+	unidades := map[string]string{}
+	for filas.Next() {
+		var id, unidad string
+		if err := filas.Scan(&id, &unidad); err != nil {
+			filas.Close()
+			return "", err
+		}
+		unidades[id] = unidad
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return "", err
+	}
+	for _, l := range lineas {
+		if l.VariantID == nil {
+			continue
+		}
+		u, ok := unidades[*l.VariantID]
+		if ok && !productos.AdmiteDecimales(u) && l.Cantidad != math.Trunc(l.Cantidad) {
+			return `"` + l.Descripcion + `" se vende por unidad: la cantidad va sin decimales.`, nil
+		}
+	}
+	return "", nil
+}
+
 // revisarCorte: cada pieza tiene medidas y el despiece entra en lo que el
 // plano puede acomodar.
 func revisarCorte(k CorteDeMostrador) string {
@@ -728,19 +839,12 @@ func revisarCorte(k CorteDeMostrador) string {
 	return ""
 }
 
-func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, pedido, usuario string) error {
+func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMostrador, pedido, usuario string) error {
 	numero, err := numeracion.Corte(ctx, tx)
 	if err != nil {
 		return err
 	}
-	k := v.Corte
-	sierra := float64(cortes.AnchoDeSierraMm)
-	_ = tx.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra) // el configurado, como el alta
-	if k.AnchoSierraMm != nil {
-		if a := cortes.LeerAnchoDeSierra(jsmath.Texto(*k.AnchoSierraMm)); a != nil {
-			sierra = *a
-		}
-	}
+	sierra := sierraConfigurada(ctx, tx) // el configurado, como el alta
 	var corte string
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO cutting_orders (numero, customer_id, order_id, contacto_nombre, branch_id, variant_id, material_descripcion,

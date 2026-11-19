@@ -40,14 +40,28 @@ export function planoVacio(placaLargo: number, placaAncho: number, anchoSierra: 
 }
 
 /**
+ * Si lo que se ve todavía no es la respuesta de lo cargado: desde que cambia
+ * el cuerpo, no desde que sale el pedido. Durante la espera el plano dibujado
+ * era el anterior y `calculando` decía que no, así que un Ctrl+Enter rápido
+ * en el corte —o reabrirlo con «Corregir», con el plano todavía vacío—
+ * agregaba renglones de otro plano, y Go rechazaba la venta (revisión del
+ * carril F).
+ */
+export function estaCalculando(clave: string | null, respondida: string | null): boolean {
+  return clave !== null && clave !== respondida;
+}
+
+/**
  * Un POST a la API de Go que se repite cuando cambia el cuerpo, con espera y
  * cancelación. `null` no pide nada.
  */
 export function useDeGo<T>(ruta: string, cuerpo: unknown | null): { datos: T | null; calculando: boolean; error: string | null } {
   const [datos, setDatos] = useState<T | null>(null);
-  const [calculando, setCalculando] = useState(false);
+  // El cuerpo de la última respuesta (o error) que llegó.
+  const [respondida, setRespondida] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const clave = cuerpo === null ? null : JSON.stringify(cuerpo);
+  const calculando = estaCalculando(clave, respondida);
   const ultimo = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -56,7 +70,6 @@ export function useDeGo<T>(ruta: string, cuerpo: unknown | null): { datos: T | n
     ultimo.current?.abort();
     ultimo.current = control;
     const reloj = setTimeout(async () => {
-      setCalculando(true);
       try {
         const r = await fetch(ruta, {
           method: "POST",
@@ -75,7 +88,7 @@ export function useDeGo<T>(ruta: string, cuerpo: unknown | null): { datos: T | n
       } catch (e) {
         if ((e as Error).name !== "AbortError") setError("No se pudo calcular: revisá la conexión.");
       } finally {
-        if (!control.signal.aborted) setCalculando(false);
+        if (!control.signal.aborted) setRespondida(clave);
       }
     }, ESPERA_MS);
     return () => {

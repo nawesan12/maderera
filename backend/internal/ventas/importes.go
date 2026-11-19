@@ -52,6 +52,11 @@ type LineaDeVenta struct {
 	// PrecioLista es el de la lista del cliente, que pone el servidor (T3):
 	// nil en un renglón sin variante o sin precio cargado.
 	PrecioLista *float64 `json:"precioLista,omitempty"`
+	// Corte es el despiece de la venta del que salió el renglón (su índice
+	// en VentaPedida.Cortes): la placa, las pasadas y el tapacanto de cada
+	// corte se controlan contra su propio plano (comité final, A2). Nil en
+	// todo lo que no viene de un corte.
+	Corte *int `json:"corte,omitempty"`
 }
 
 // PagoDeVenta es un renglón de cómo se pagó.

@@ -5713,6 +5713,7 @@ type OrderItem struct {
 	Presentacion   *string     `json:"presentacion"`
 	StockPorUnidad jsmath.Num  `json:"stockPorUnidad"`
 	PrecioLista    *jsmath.Num `json:"precioLista"`
+	DelCorte       bool        `json:"delCorte"`
 }
 
 type OrderPayment struct {

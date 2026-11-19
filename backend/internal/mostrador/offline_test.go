@@ -241,7 +241,7 @@ func TestCopiaLocalYDelta(t *testing.T) {
 	}
 	ana := cs[0].(map[string]any)
 	if ana["nombre"] != "Ana Gómez" || ana["busqueda"] != "ana gomez 20123456786" || ana["limiteCredito"] != 1000000.0 ||
-		claves(ana) != "busqueda,condicionIva,cuit,estado,id,limiteCredito,nombre,priceListId,razonSocial" {
+		claves(ana) != "busqueda,condicionIva,cuentaBloqueada,cuit,estado,id,limiteCredito,nombre,priceListId,razonSocial" {
 		t.Fatalf("cliente: %v", ana)
 	}
 }

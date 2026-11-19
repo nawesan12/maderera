@@ -100,9 +100,9 @@ func asientoDe(e entradaAsiento) Asiento {
 	case "cobro":
 		return AsientoDeCobro(CobroAAsentar{e.Fecha, e.Comprobante, e.Cliente, e.Medio, e.Importe})
 	case "compra":
-		return AsientoDeCompra(CompraAAsentar{e.Fecha, e.Comprobante, e.Proveedor, e.Neto, e.Iva, e.Percepciones, e.Total, e.DaCreditoFiscal, e.EsNotaDeCredito, 0})
+		return AsientoDeCompra(CompraAAsentar{e.Fecha, e.Comprobante, e.Proveedor, e.Neto, e.Iva, e.Percepciones, e.Total, e.DaCreditoFiscal, e.EsNotaDeCredito, 0, 0, 0})
 	case "pago":
-		return AsientoDePagoAProveedor(PagoAAsentar{e.Fecha, e.Proveedor, e.Medio, e.Referencia, e.Total, e.Retenido})
+		return AsientoDePagoAProveedor(PagoAAsentar{e.Fecha, e.Proveedor, e.Medio, e.Referencia, e.Total, e.Retenido, nil, nil})
 	}
 	return AsientoDeGasto(GastoAAsentar{e.Fecha, e.Descripcion, e.Categoria, e.Medio, e.Importe})
 }

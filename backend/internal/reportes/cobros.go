@@ -2,6 +2,7 @@ package reportes
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"mjbj/internal/cobros"
@@ -35,6 +36,74 @@ import (
 //
 // Los reintegros (el pago reintegrado, la venta del mostrador anulada, los
 // tramos de un reintegro parcial en payment_refunds) son el cobro al revés.
+
+// reciboAAsentar es un recibo del período con sus partes.
+type reciboAAsentar struct {
+	id, numero, cliente string
+	emitido             time.Time
+	anulado             *time.Time
+	partes              []ParteDeRecibo
+}
+
+func recibos2partes(rs []*reciboAAsentar) map[string]*[]ParteDeRecibo {
+	out := make(map[string]*[]ParteDeRecibo, len(rs))
+	for _, r := range rs {
+		out[r.id] = &r.partes
+	}
+	return out
+}
+
+// retencionesPorImpuesto parte la «retencion» de cada recibo en las de cada
+// impuesto (retenciones_sufridas del recibo), así cada una va a la cuenta de
+// su impuesto. Si no suman lo mismo que la parte (un recibo viejo, una carga
+// a mano), la parte queda entera y va a Retenciones sufridas.
+func (s *Servicio) retencionesPorImpuesto(ctx context.Context, partes map[string]*[]ParteDeRecibo) error {
+	if len(partes) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(partes))
+	for id := range partes {
+		ids = append(ids, id)
+	}
+	rs, err := s.pool.Query(ctx, `SELECT receipt_id::text, impuesto::text, sum(importe)::float8 FROM retenciones_sufridas
+		WHERE receipt_id = ANY($1::uuid[]) GROUP BY receipt_id, impuesto ORDER BY receipt_id, impuesto`, ids)
+	if err != nil {
+		return err
+	}
+	defer rs.Close()
+	porRecibo := map[string][]ParteDeRecibo{}
+	for rs.Next() {
+		var id, impuesto string
+		var importe float64
+		if err := rs.Scan(&id, &impuesto, &importe); err != nil {
+			return err
+		}
+		porRecibo[id] = append(porRecibo[id], ParteDeRecibo{Medio: "retencion", Importe: importe, Impuesto: impuesto})
+	}
+	if err := rs.Err(); err != nil {
+		return err
+	}
+	for id, sufridas := range porRecibo {
+		ps := partes[id]
+		var enParte, enSufridas float64
+		var resto []ParteDeRecibo
+		for _, p := range *ps {
+			if p.Medio == "retencion" {
+				enParte = float64(enParte + p.Importe)
+			} else {
+				resto = append(resto, p)
+			}
+		}
+		for _, p := range sufridas {
+			enSufridas = float64(enSufridas + p.Importe)
+		}
+		if math.Abs(enParte-enSufridas) > toleranciaAsiento {
+			continue
+		}
+		*ps = append(sufridas, resto...)
+	}
+	return nil
+}
 
 func mayorFecha(a time.Time, b *time.Time) time.Time {
 	if b != nil && b.After(a) {
@@ -117,14 +186,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	if err != nil {
 		return nil, err
 	}
-	type recibo struct {
-		id, numero, cliente string
-		emitido             time.Time
-		anulado             *time.Time
-		partes              []ParteDeRecibo
-	}
-	var recibos []*recibo
-	porID := map[string]*recibo{}
+	var recibos []*reciboAAsentar
+	porID := map[string]*reciboAAsentar{}
 	for rs.Next() {
 		var id, numero, cliente, medio string
 		var emitido time.Time
@@ -137,7 +200,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		}
 		r, ok := porID[id]
 		if !ok {
-			r = &recibo{id: id, numero: numero, cliente: cliente, emitido: emitido, anulado: anulado}
+			r = &reciboAAsentar{id: id, numero: numero, cliente: cliente, emitido: emitido, anulado: anulado}
 			porID[id] = r
 			recibos = append(recibos, r)
 		}
@@ -145,6 +208,9 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.retencionesPorImpuesto(ctx, recibos2partes(recibos)); err != nil {
 		return nil, err
 	}
 	for _, r := range recibos {

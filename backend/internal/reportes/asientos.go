@@ -17,6 +17,13 @@ import (
 // debe igual a haber.
 
 // Cuentas es CUENTAS, el plan mínimo (los códigos son una sugerencia).
+//
+// Las retenciones y percepciones van cada una a la cuenta de su impuesto
+// (revisión del comité, T6): todas juntas en 1.1.06 no se podían conciliar
+// con lo que se compensa en cada declaración. Los códigos son nuevos y no
+// reusan los de antes: 1.1.06 y 2.1.05 quedan solo para lo que no dice de qué
+// impuesto es (las de antes de saberlo), así lo que el estudio ya importó con
+// esos códigos no cambia de sentido.
 var Cuentas = struct {
 	Caja, Banco, Deudores, IvaCredito, RetencionesSufridas, Mercaderias         string
 	Proveedores, IvaDebito, PercepcionesIibb, RetencionesAPagar, Ventas, Gastos string
@@ -25,8 +32,51 @@ var Cuentas = struct {
 	AnticiposDeClientes string
 	// VentasSinFactura: solo en el CSV del circuito B, contra lo que cobra.
 	VentasSinFactura string
+	// Lo que nos retuvieron o percibieron, por impuesto (créditos).
+	RetSufridaIva, RetSufridaGanancias, RetSufridaIibb, RetSufridaSuss string
+	PercSufridaIva, PercSufridaIibb                                    string
+	// ChequesDiferidos: el cheque propio con fecha posterior al pago, hasta
+	// que el banco lo debita.
+	ChequesDiferidos string
+	// Lo que retuvimos como agentes, por impuesto (deudas con el fisco).
+	RetADepositarIva, RetADepositarGanancias, RetADepositarIibb, RetADepositarSuss string
 }{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
-	"2.1.06", "4.1.02"}
+	"2.1.06", "4.1.02",
+	"1.1.07", "1.1.08", "1.1.09", "1.1.10", "1.1.11", "1.1.12",
+	"2.1.07",
+	"2.1.08", "2.1.09", "2.1.10", "2.1.11"}
+
+// CuentaDeRetencionSufrida es la cuenta del crédito por una retención que
+// nos practicaron, según el impuesto ("" o desconocido: 1.1.06).
+func CuentaDeRetencionSufrida(impuesto string) string {
+	switch impuesto {
+	case "iva":
+		return Cuentas.RetSufridaIva
+	case "ganancias":
+		return Cuentas.RetSufridaGanancias
+	case "iibb":
+		return Cuentas.RetSufridaIibb
+	case "suss":
+		return Cuentas.RetSufridaSuss
+	}
+	return Cuentas.RetencionesSufridas
+}
+
+// CuentaDeRetencionADepositar es la de lo que retuvimos, según el impuesto
+// ("" o desconocido: 2.1.05).
+func CuentaDeRetencionADepositar(impuesto string) string {
+	switch impuesto {
+	case "iva":
+		return Cuentas.RetADepositarIva
+	case "ganancias":
+		return Cuentas.RetADepositarGanancias
+	case "iibb":
+		return Cuentas.RetADepositarIibb
+	case "suss":
+		return Cuentas.RetADepositarSuss
+	}
+	return Cuentas.RetencionesAPagar
+}
 
 // CuentaPorCategoria es CUENTA_POR_CATEGORIA.
 var CuentaPorCategoria = map[string]string{
@@ -39,6 +89,10 @@ var nombresDeCuenta = map[string]string{
 	"1.1.06": "Retenciones sufridas", "1.2.01": "Mercaderías", "2.1.01": "Proveedores", "2.1.03": "IVA débito fiscal",
 	"2.1.04": "Percepciones IIBB a depositar", "2.1.05": "Retenciones a depositar", "2.1.06": "Anticipos de clientes", "4.1.01": "Ventas",
 	"4.1.02": "Ventas sin factura",
+	"1.1.07": "Retenciones sufridas IVA", "1.1.08": "Retenciones sufridas Ganancias", "1.1.09": "Retenciones sufridas IIBB",
+	"1.1.10": "Retenciones sufridas SUSS", "1.1.11": "Percepciones sufridas IVA", "1.1.12": "Percepciones sufridas IIBB",
+	"2.1.07": "Cheques diferidos a pagar", "2.1.08": "Retenciones IVA a depositar", "2.1.09": "Retenciones Ganancias a depositar",
+	"2.1.10": "Retenciones IIBB a depositar", "2.1.11": "Retenciones SUSS a depositar",
 	"5.1.01": "Gastos varios", "5.1.02": "Fletes", "5.1.03": "Combustible", "5.1.04": "Servicios", "5.1.05": "Alquileres",
 	"5.1.06": "Sueldos y cargas", "5.1.07": "Mantenimiento", "5.1.08": "Impuestos y tasas", "5.1.09": "Librería y oficina",
 	"5.1.10": "Publicidad",
@@ -188,6 +242,17 @@ type ParteDeRecibo struct {
 	Importe float64
 	// Negro: un cheque marcado del circuito B. Va entero al B.
 	Negro bool
+	// Impuesto de una parte «retencion» (retenciones_sufridas del recibo):
+	// va a la cuenta de ese impuesto. Vacío: a Retenciones sufridas.
+	Impuesto string
+}
+
+// cuentaDeParte es cuentaDeCobro con el impuesto de la retención.
+func cuentaDeParte(p ParteDeRecibo) string {
+	if p.Medio == "retencion" && p.Impuesto != "" {
+		return CuentaDeRetencionSufrida(p.Impuesto)
+	}
+	return cuentaDeCobro(p.Medio)
 }
 
 // Bancarizado dice si el medio deja rastro en un banco o en ARCA: la
@@ -240,10 +305,10 @@ func PartesPorCircuito(partes []ParteDeRecibo, rep cobros.Reparto) (blanco, b []
 	}
 	for i, p := range partes {
 		if bl := asignado[i]; bl > toleranciaAsiento {
-			blanco = append(blanco, ParteDeRecibo{Medio: p.Medio, Importe: bl, Negro: p.Negro})
+			blanco = append(blanco, ParteDeRecibo{Medio: p.Medio, Importe: bl, Negro: p.Negro, Impuesto: p.Impuesto})
 		}
 		if resto := redondear(p.Importe - asignado[i]); resto > toleranciaAsiento {
-			b = append(b, ParteDeRecibo{Medio: p.Medio, Importe: resto, Negro: p.Negro})
+			b = append(b, ParteDeRecibo{Medio: p.Medio, Importe: resto, Negro: p.Negro, Impuesto: p.Impuesto})
 		}
 	}
 	return blanco, b
@@ -278,7 +343,7 @@ func AsientosDeRecibo(r ReciboAAsentar) []Asiento {
 	if rep.Blanco() > toleranciaAsiento {
 		renglones := []RenglonDeAsiento{}
 		for _, p := range blanco {
-			renglones = append(renglones, renglon(cuentaDeCobro(p.Medio), p.Importe, 0))
+			renglones = append(renglones, renglon(cuentaDeParte(p), p.Importe, 0))
 		}
 		if rep.Deudores > toleranciaAsiento {
 			renglones = append(renglones, renglon(Cuentas.Deudores, 0, rep.Deudores))
@@ -294,7 +359,7 @@ func AsientosDeRecibo(r ReciboAAsentar) []Asiento {
 	if rep.B > toleranciaAsiento {
 		renglones := []RenglonDeAsiento{}
 		for _, p := range b {
-			renglones = append(renglones, renglon(cuentaDeCobro(p.Medio), p.Importe, 0))
+			renglones = append(renglones, renglon(cuentaDeParte(p), p.Importe, 0))
 		}
 		renglones = append(renglones, renglon(Cuentas.VentasSinFactura, 0, rep.B))
 		if r.Anulacion {
@@ -350,7 +415,7 @@ func AsientoDeRecibo(r ReciboAAsentar) Asiento {
 	renglones := []RenglonDeAsiento{}
 	total := 0.0
 	for _, p := range r.Partes {
-		renglones = append(renglones, renglon(cuentaDeCobro(p.Medio), p.Importe, 0))
+		renglones = append(renglones, renglon(cuentaDeParte(p), p.Importe, 0))
 		total = float64(total + p.Importe)
 	}
 	renglones = append(renglones, renglon(Cuentas.Deudores, 0, total))
@@ -371,6 +436,9 @@ type CompraAAsentar struct {
 	// Exento: lo exento y no gravado de la factura, al costo sin IVA. Antes
 	// no se asentaba y el asiento no cerraba (Proveedores lleva el total).
 	Exento float64
+	// PercepcionIva y PercepcionIibb son la parte de Percepciones de cada
+	// impuesto; lo que quede sin impuesto va a Retenciones sufridas.
+	PercepcionIva, PercepcionIibb float64
 }
 
 // AsientoDeCompra es asientoDeCompra.
@@ -385,7 +453,16 @@ func AsientoDeCompra(c CompraAAsentar) Asiento {
 		r = append(r, renglon(Cuentas.Mercaderias, float64(c.Neto+c.Iva)+c.Exento, 0))
 	}
 	if c.Percepciones != 0 {
-		r = append(r, renglon(Cuentas.RetencionesSufridas, c.Percepciones, 0))
+		otras := redondear(float64(c.Percepciones-c.PercepcionIva) - c.PercepcionIibb)
+		if c.PercepcionIva != 0 {
+			r = append(r, renglon(Cuentas.PercSufridaIva, c.PercepcionIva, 0))
+		}
+		if c.PercepcionIibb != 0 {
+			r = append(r, renglon(Cuentas.PercSufridaIibb, c.PercepcionIibb, 0))
+		}
+		if otras != 0 {
+			r = append(r, renglon(Cuentas.RetencionesSufridas, otras, 0))
+		}
 	}
 	r = append(r, renglon(Cuentas.Proveedores, 0, c.Total))
 	if c.EsNotaDeCredito {
@@ -400,19 +477,134 @@ type PagoAAsentar struct {
 	Proveedor, Medio string
 	Referencia       *string
 	Total, Retenido  float64
+	// Salidas son con qué salió la plata, parte por parte (cada una con su
+	// cuenta: SalidaDePago). Sin partes, todo por el medio del pago.
+	Salidas []SalidaDePago
+	// RetenidoPorImpuesto es lo retenido de cada impuesto; lo que falte
+	// para Retenido va a Retenciones a depositar.
+	RetenidoPorImpuesto map[string]float64
+}
+
+// SalidaDePago es una parte de un pago a un proveedor con su cuenta.
+type SalidaDePago struct {
+	Cuenta  string
+	Importe float64
+}
+
+// CuentaDeSalida es adónde va una parte del pago: el efectivo a Caja, el
+// cheque de la cartera que se endosa a Valores a depositar (sale de ahí, no
+// del banco), el cheque propio con fecha posterior al pago a Cheques
+// diferidos (el banco lo debita después) y lo demás a Banco.
+func CuentaDeSalida(medio string, sentidoCheque *string, diferido bool) string {
+	switch {
+	case medio == "efectivo":
+		return Cuentas.Caja
+	case sentidoCheque != nil && *sentidoCheque == "recibido":
+		return Cuentas.ValoresADepositar
+	case sentidoCheque != nil && *sentidoCheque == "entregado" && diferido:
+		return Cuentas.ChequesDiferidos
+	}
+	return Cuentas.Banco
+}
+
+// ChequeDiferido dice si el cheque propio vence después del día del pago,
+// los dos en fecha argentina: el del mismo día es como una transferencia.
+func ChequeDiferido(fechaDelCheque, fechaDelPago time.Time) bool {
+	return fechaDelCheque.In(Argentina).Format("2006-01-02") > fechaDelPago.In(Argentina).Format("2006-01-02")
 }
 
 // AsientoDePagoAProveedor es asientoDePagoAProveedor.
 func AsientoDePagoAProveedor(p PagoAAsentar) Asiento {
-	r := []RenglonDeAsiento{renglon(Cuentas.Proveedores, p.Total, 0), renglon(cuentaDeMedio(p.Medio), 0, p.Total-p.Retenido)}
+	r := []RenglonDeAsiento{renglon(Cuentas.Proveedores, p.Total, 0)}
+	if len(p.Salidas) > 0 {
+		for _, x := range p.Salidas {
+			r = append(r, renglon(x.Cuenta, 0, x.Importe))
+		}
+	} else {
+		r = append(r, renglon(cuentaDeMedio(p.Medio), 0, p.Total-p.Retenido))
+	}
 	if p.Retenido > 0 {
-		r = append(r, renglon(Cuentas.RetencionesAPagar, 0, p.Retenido))
+		resto := p.Retenido
+		for _, imp := range []string{"ganancias", "iva", "iibb", "suss"} {
+			if x := p.RetenidoPorImpuesto[imp]; x > 0 {
+				r = append(r, renglon(CuentaDeRetencionADepositar(imp), 0, x))
+				resto = redondear(resto - x)
+			}
+		}
+		if resto > toleranciaAsiento {
+			r = append(r, renglon(Cuentas.RetencionesAPagar, 0, resto))
+		}
 	}
 	concepto := "Pago a " + p.Proveedor
 	if p.Referencia != nil && *p.Referencia != "" {
 		concepto += " · " + *p.Referencia
 	}
 	return asiento(p.Fecha, concepto, r)
+}
+
+// ChequeAAsentar es un cambio de estado de un cheque (cheque_estados).
+type ChequeAAsentar struct {
+	Fecha                 time.Time
+	Numero, Banco         string
+	Sentido, Desde, Hacia string
+	Importe               float64
+	// Diferido: el cheque propio se asentó en Cheques diferidos al pagar.
+	Diferido bool
+	// ADeudores: el rechazo le devolvió la deuda al cliente (la nota de
+	// débito del cheque), así que vuelve a Deudores.
+	ADeudores bool
+	Circuito  string
+}
+
+// AsientoDeCheque es el asiento de un cambio de estado de un cheque, cada uno
+// en su circuito, y false si ese cambio no mueve cuentas:
+//
+//   - recibido y acreditado: del depósito al banco (Banco / Valores a
+//     depositar);
+//   - recibido y rechazado: vuelve a Deudores, si la deuda volvió a la
+//     cuenta, contra Valores a depositar o, si estaba endosado, contra
+//     Proveedores (le volvemos a deber: la deuda se reabre en su libro);
+//   - propio y acreditado: si estaba diferido, el banco lo debita (Cheques
+//     diferidos / Banco);
+//   - propio y rechazado: le volvemos a deber al proveedor, contra donde se
+//     asentó al pagar (Cheques diferidos o Banco).
+//
+// Lo anulado no se asienta: la anulación del recibo, de la venta o del pago
+// ya revierte su asiento entero.
+func AsientoDeCheque(c ChequeAAsentar) (Asiento, bool) {
+	nombre := "Cheque N° " + c.Numero
+	if c.Banco != "" {
+		nombre += " · " + c.Banco
+	}
+	var r []RenglonDeAsiento
+	switch {
+	case c.Sentido == "recibido" && c.Hacia == "acreditado" && c.Desde == "depositado":
+		r = []RenglonDeAsiento{renglon(Cuentas.Banco, c.Importe, 0), renglon(Cuentas.ValoresADepositar, 0, c.Importe)}
+	case c.Sentido == "recibido" && c.Hacia == "rechazado" && c.Desde == "entregado":
+		debe := Cuentas.ValoresADepositar
+		if c.ADeudores {
+			debe = Cuentas.Deudores
+		}
+		r = []RenglonDeAsiento{renglon(debe, c.Importe, 0), renglon(Cuentas.Proveedores, 0, c.Importe)}
+	case c.Sentido == "recibido" && c.Hacia == "rechazado" && (c.Desde == "cartera" || c.Desde == "depositado") && c.ADeudores:
+		r = []RenglonDeAsiento{renglon(Cuentas.Deudores, c.Importe, 0), renglon(Cuentas.ValoresADepositar, 0, c.Importe)}
+	case c.Sentido == "entregado" && c.Hacia == "acreditado" && c.Diferido:
+		r = []RenglonDeAsiento{renglon(Cuentas.ChequesDiferidos, c.Importe, 0), renglon(Cuentas.Banco, 0, c.Importe)}
+	case c.Sentido == "entregado" && c.Hacia == "rechazado":
+		debe := Cuentas.Banco
+		if c.Diferido {
+			debe = Cuentas.ChequesDiferidos
+		}
+		r = []RenglonDeAsiento{renglon(debe, c.Importe, 0), renglon(Cuentas.Proveedores, 0, c.Importe)}
+	default:
+		return Asiento{}, false
+	}
+	a := asiento(c.Fecha, nombre+" "+c.Hacia, r)
+	a.Instante = true
+	if c.Circuito == CircuitoNegro {
+		a.Circuito = CircuitoNegro
+	}
+	return a, true
 }
 
 // GastoAAsentar es GastoAAsentar.

@@ -212,18 +212,56 @@ export default async function CierrePage({
           )}
         </article>
 
+        {/* Lo primero que se mira es cuánto hay que depositar: grande. Si no
+            hay nada, el saldo a favor que pasa al mes que viene. Abajo, más
+            chico, de dónde sale. */}
         <article className="tarjeta p-5">
-          <h2 className="text-lg font-semibold">Posición de IVA</h2>
+          <h2 className="text-lg font-semibold">IVA</h2>
           <p
             className={`tabular mt-2 text-[34px] font-bold leading-none tracking-[-0.03em] ${
-              resumen.posicionIva >= 0 ? "text-saldo-debe" : "text-saldo-favor"
+              resumen.iva.aDepositar > 0 ? "text-saldo-debe" : "text-saldo-favor"
             }`}
           >
-            {formatearMonto(Math.abs(resumen.posicionIva))}
+            {formatearMonto(
+              resumen.iva.aDepositar > 0
+                ? resumen.iva.aDepositar
+                : resumen.iva.saldoTecnico + resumen.iva.saldoLibre,
+            )}
           </p>
           <p className="mt-2 text-base text-muted-foreground">
-            {resumen.posicionIva >= 0 ? "A depositar" : "Saldo a favor"}
+            {resumen.iva.aDepositar > 0 ? "A depositar" : "Saldo a favor"}
           </p>
+          <dl className="tabular mt-4 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            {(
+              [
+                ["Débito", resumen.iva.debito],
+                ["Crédito", -resumen.iva.credito],
+                ["Saldo técnico anterior", -resumen.iva.saldoTecnicoAnterior],
+                ["Percepciones", -resumen.iva.percepciones],
+                ["Retenciones", -resumen.iva.retenciones],
+                ["Libre disponibilidad anterior", -resumen.iva.saldoLibreAnterior],
+              ] as const
+            )
+              .filter(([, v]) => Math.abs(v) > 0.005)
+              .map(([k, v]) => (
+                <div key={k} className="contents">
+                  <dt>{k}</dt>
+                  <dd className="text-right">{formatearMonto(v)}</dd>
+                </div>
+              ))}
+            {resumen.iva.saldoTecnico > 0.005 && (
+              <div className="contents">
+                <dt>Saldo técnico</dt>
+                <dd className="text-right">{formatearMonto(resumen.iva.saldoTecnico)}</dd>
+              </div>
+            )}
+            {resumen.iva.saldoLibre > 0.005 && (
+              <div className="contents">
+                <dt>Libre disponibilidad</dt>
+                <dd className="text-right">{formatearMonto(resumen.iva.saldoLibre)}</dd>
+              </div>
+            )}
+          </dl>
         </article>
       </section>
 

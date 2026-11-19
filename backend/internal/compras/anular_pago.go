@@ -101,7 +101,7 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 			case "acreditado":
 				return fallo("El cheque " + c.numero + " ya lo cobró el proveedor: el pago no se puede anular. Si hay que devolver plata, arreglalo con el proveedor y cargá un movimiento en su cuenta.")
 			case "rechazado":
-				return fallo("El cheque " + c.numero + " lo rechazó el banco: el pago no se puede anular. Cargá en la cuenta del proveedor la deuda que vuelve por el rechazo.")
+				return fallo("El cheque " + c.numero + " lo rechazó el banco: el pago no se puede anular. La deuda ya volvió a la cuenta del proveedor con el rechazo.")
 			default:
 				return fallo("El cheque " + c.numero + " está " + c.estado + ": el pago no se puede anular.")
 			}

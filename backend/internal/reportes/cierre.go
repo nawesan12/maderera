@@ -97,7 +97,8 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	asientos = append(asientos, cobros...)
 
 	rs, err = s.pool.Query(ctx, `
-		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento
+		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento,
+		  coalesce(f.percepcion_iva, 0), coalesce(f.percepcion_iibb, 0)
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
 		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 AND f.anulada_at IS NULL ORDER BY f.fecha_emision`, desde, hasta)
 	if err != nil {
@@ -107,23 +108,32 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		var fecha time.Time
 		var tipo, proveedor string
 		var pv, nro int64
-		var neto, i21, i105, i27, perc, total, exento jsmath.Num
-		if err := rs.Scan(&fecha, &tipo, &pv, &nro, &proveedor, &neto, &i21, &i105, &i27, &perc, &total, &exento); err != nil {
+		var neto, i21, i105, i27, perc, total, exento, percIva, percIibb jsmath.Num
+		if err := rs.Scan(&fecha, &tipo, &pv, &nro, &proveedor, &neto, &i21, &i105, &i27, &perc, &total, &exento, &percIva, &percIibb); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		asientos = append(asientos, AsientoDeCompra(CompraAAsentar{Fecha: fecha,
 			Comprobante: compras.NombreComprobanteCompra(tipo) + " " + compras.NumeroDeCompra(pv, nro), Proveedor: proveedor,
 			Neto: neto.F(), Iva: float64(float64(i21.F()+i105.F()) + i27.F()), Percepciones: perc.F(), Total: total.F(),
-			DaCreditoFiscal: compras.DaCreditoFiscal(tipo), EsNotaDeCredito: strings.HasPrefix(tipo, "nota_credito"), Exento: exento.F()}))
+			DaCreditoFiscal: compras.DaCreditoFiscal(tipo), EsNotaDeCredito: strings.HasPrefix(tipo, "nota_credito"), Exento: exento.F(),
+			PercepcionIva: percIva.F(), PercepcionIibb: percIibb.F()}))
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
 		return nil, err
 	}
 
+	// Cada pago con sus partes (con qué salió la plata: el cheque endosado
+	// sale de Valores a depositar y el propio diferido va a Cheques
+	// diferidos, no al banco) y lo retenido de cada impuesto.
 	rs, err = s.pool.Query(ctx, `
-		SELECT p.fecha, s.nombre, p.referencia, p.total, p.neto, p.medio, p.anulado_at, p.circuito::text
+		SELECT p.fecha, s.nombre, p.referencia, p.total, p.neto, p.medio, p.anulado_at, p.circuito::text,
+		  coalesce((SELECT json_agg(json_build_object('medio', x.medio, 'importe', x.importe::float8, 'sentido', c.sentido::text,
+		      'fechaCheque', c.fecha_pago) ORDER BY x.id)
+		    FROM supplier_payment_parts x LEFT JOIN cheques c ON c.id = x.cheque_id WHERE x.payment_id = p.id), '[]'::json),
+		  coalesce((SELECT json_object_agg(r.impuesto, r.importe) FROM (SELECT impuesto::text, sum(importe)::float8 AS importe
+		    FROM retenciones_practicadas WHERE payment_id = p.id GROUP BY impuesto) r), '{}'::json)
 		FROM supplier_payments p JOIN suppliers s ON s.id = p.supplier_id
 		WHERE (p.fecha >= $1 AND p.fecha <= $2) OR (p.anulado_at >= $1 AND p.anulado_at <= $2)
 		ORDER BY p.fecha`, idesde, ihasta)
@@ -136,12 +146,27 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		var proveedor, medio, circuito string
 		var referencia *string
 		var total, neto jsmath.Num
-		if err := rs.Scan(&fecha, &proveedor, &referencia, &total, &neto, &medio, &anulado, &circuito); err != nil {
+		var partes []struct {
+			Medio       string     `json:"medio"`
+			Importe     float64    `json:"importe"`
+			Sentido     *string    `json:"sentido"`
+			FechaCheque *time.Time `json:"fechaCheque"`
+		}
+		var porImpuesto map[string]float64
+		if err := rs.Scan(&fecha, &proveedor, &referencia, &total, &neto, &medio, &anulado, &circuito, &partes, &porImpuesto); err != nil {
 			rs.Close()
 			return nil, err
 		}
+		var salidas []SalidaDePago
+		for _, x := range partes {
+			if x.Importe <= 0 {
+				continue
+			}
+			diferido := x.FechaCheque != nil && ChequeDiferido(*x.FechaCheque, fecha)
+			salidas = append(salidas, SalidaDePago{Cuenta: CuentaDeSalida(x.Medio, x.Sentido, diferido), Importe: x.Importe})
+		}
 		pago := AsientoDePagoAProveedor(PagoAAsentar{Fecha: fecha, Proveedor: proveedor, Referencia: referencia,
-			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio})
+			Total: total.F(), Retenido: total.F() - neto.F(), Medio: medio, Salidas: salidas, RetenidoPorImpuesto: porImpuesto})
 		// El pago marcado «en negro» no es de este CUIT: va al CSV del
 		// circuito B, no al del estudio.
 		if circuito == CircuitoNegro {
@@ -164,6 +189,12 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 	if err := rs.Err(); err != nil {
 		return nil, err
 	}
+
+	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, cheques...)
 
 	rs, err = s.pool.Query(ctx, `
 		SELECT fecha, descripcion, categoria::text, importe, medio::text, circuito::text
@@ -193,6 +224,38 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 
 	sort.SliceStable(asientos, func(i, j int) bool { return asientos[i].Fecha.Before(asientos[j].Fecha) })
 	return asientos, nil
+}
+
+// asientosDeCheques son los cambios de estado de los cheques del período
+// (cheque_estados, que anota el trigger de la base en cada cambio):
+// AsientoDeCheque decide cuáles mueven cuentas.
+func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	rs, err := s.pool.Query(ctx, `
+		SELECT e.at, c.numero, coalesce(c.banco, ''), c.sentido::text, e.desde::text, e.hacia::text, c.importe::float8, c.circuito::text,
+		  c.fecha_pago, (SELECT p.fecha FROM supplier_payment_parts x JOIN supplier_payments p ON p.id = x.payment_id
+		    WHERE x.cheque_id = c.id ORDER BY p.fecha LIMIT 1),
+		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito')
+		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
+		WHERE e.at >= $1 AND e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado') ORDER BY e.at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	defer rs.Close()
+	out := []Asiento{}
+	for rs.Next() {
+		var c ChequeAAsentar
+		var vence time.Time
+		var pagado *time.Time
+		if err := rs.Scan(&c.Fecha, &c.Numero, &c.Banco, &c.Sentido, &c.Desde, &c.Hacia, &c.Importe, &c.Circuito, &vence, &pagado,
+			&c.ADeudores); err != nil {
+			return nil, err
+		}
+		c.Diferido = c.Sentido == "entregado" && pagado != nil && ChequeDiferido(vence, *pagado)
+		if a, ok := AsientoDeCheque(c); ok {
+			out = append(out, a)
+		}
+	}
+	return out, rs.Err()
 }
 
 // PendienteDelCierre es PendienteDelCierre.
@@ -455,8 +518,11 @@ type ResumenDelMes struct {
 	Gastos                 Totales       `json:"gastos"`
 	RetencionesPracticadas Totales       `json:"retencionesPracticadas"`
 	RetencionesSufridas    Totales       `json:"retencionesSufridas"`
-	// PosicionIva: positivo, hay que depositar; negativo, saldo a favor.
+	// PosicionIva: débito − crédito del mes, sin más (lo de antes).
 	PosicionIva float64 `json:"posicionIva"`
+	// Iva es la posición entera: con percepciones, retenciones y los dos
+	// saldos a favor que se arrastran (PosicionDeIvaDelMes).
+	Iva PosicionDeIva `json:"iva"`
 	// Resultado: ventas netas − costo − gastos, contra el mes anterior (lo
 	// llena la API con ResultadoDelMes).
 	Resultado ResultadoComparado `json:"resultado"`
@@ -509,5 +575,6 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	r.Compras.Neto, r.Compras.Iva, r.Compras.Total = numero(cn), numero(ci), numero(ct)
 	r.Gastos.Total, r.RetencionesPracticadas.Total, r.RetencionesSufridas.Total = numero(g), numero(rp), numero(rs)
 	r.PosicionIva = r.Ventas.Iva - r.Compras.Iva
-	return r, nil
+	r.Iva, err = s.PosicionDeIvaDelMes(ctx, desde, hasta)
+	return r, err
 }

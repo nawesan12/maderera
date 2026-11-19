@@ -406,9 +406,30 @@ export interface components {
             retencionesSufridas: components["schemas"]["CierreTotales"];
             /**
              * Format: double
-             * @description Positivo
+             * @description Débito menos crédito del mes
              */
             posicionIva: number;
+            /** @description La posición de IVA con percepciones, retenciones y los saldos técnico y de libre disponibilidad que se arrastran */
+            iva: {
+                /** Format: double */
+                debito: number;
+                /** Format: double */
+                credito: number;
+                /** Format: double */
+                saldoTecnicoAnterior: number;
+                /** Format: double */
+                percepciones: number;
+                /** Format: double */
+                retenciones: number;
+                /** Format: double */
+                saldoLibreAnterior: number;
+                /** Format: double */
+                aDepositar: number;
+                /** Format: double */
+                saldoTecnico: number;
+                /** Format: double */
+                saldoLibre: number;
+            };
             resultado: components["schemas"]["ResultadoComparado"];
         };
         InicioMetricas: {

@@ -343,14 +343,28 @@ components:
         cantidad: { type: integer }
     CierreResumen:
       type: object
-      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, resultado]
+      required: [ventas, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, iva, resultado]
       properties:
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
         compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
         gastos: { $ref: "#/components/schemas/CierreTotales" }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
-        posicionIva: { type: number, format: double, description: Positivo, hay que depositar }
+        posicionIva: { type: number, format: double, description: Débito menos crédito del mes, sin percepciones ni saldos }
+        iva:
+          type: object
+          description: La posición de IVA con percepciones, retenciones y los saldos técnico y de libre disponibilidad que se arrastran
+          required: [debito, credito, saldoTecnicoAnterior, percepciones, retenciones, saldoLibreAnterior, aDepositar, saldoTecnico, saldoLibre]
+          properties:
+            debito: { type: number, format: double }
+            credito: { type: number, format: double }
+            saldoTecnicoAnterior: { type: number, format: double }
+            percepciones: { type: number, format: double }
+            retenciones: { type: number, format: double }
+            saldoLibreAnterior: { type: number, format: double }
+            aDepositar: { type: number, format: double }
+            saldoTecnico: { type: number, format: double }
+            saldoLibre: { type: number, format: double }
         resultado: { $ref: "#/components/schemas/ResultadoComparado" }
     InicioMetricas:
       type: object

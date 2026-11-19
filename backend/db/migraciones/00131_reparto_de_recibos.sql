@@ -15,8 +15,9 @@
 --     Deudores cuando sale la factura);
 --   - reparto_b: lo que paga ventas sin factura (circuito B, su propio CSV).
 --
--- Nulos en los recibos de antes: se calculan con los hechos hasta su fecha
--- la primera vez que se exporta un cierre, y desde ahí quedan fijos.
+-- Nulos en los recibos de antes: el cierre los calcula con los hechos a su
+-- fecha sin guardarlos, y «mjbj repartos» los fija una vez (revisión del
+-- 18/11: fijarlos al abrir el cierre hacía escribir a un GET).
 ALTER TABLE receipts
 	ADD COLUMN reparto_deudores numeric(12, 2),
 	ADD COLUMN reparto_anticipo numeric(12, 2),

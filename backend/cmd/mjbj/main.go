@@ -42,6 +42,8 @@ func main() {
 		err = salud(os.Args[2:])
 	case "privados":
 		err = correrPrivados()
+	case "repartos":
+		err = correrRepartos()
 	default:
 		uso()
 		os.Exit(2)
@@ -60,6 +62,8 @@ func uso() {
   correo          el webmail (correo.<dominio>)
   migrar          aplica las migraciones de la base (y adopta las de drizzle)
   usuario         alta a mano: «usuario staff …» o «usuario cliente …»
+  repartos        fija una vez el reparto entre circuitos de los recibos de
+                  antes (los que no lo tienen); repetible
   privados        pasa a la carpeta privada los comprobantes de transferencia
                   y los documentos técnicos que quedaron en /subidas/
                   (repetible; ver docs/go/progreso.md)

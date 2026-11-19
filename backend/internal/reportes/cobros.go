@@ -4,8 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
 )
@@ -47,28 +45,16 @@ func mayorFecha(a time.Time, b *time.Time) time.Time {
 
 func entre(t, desde, hasta time.Time) bool { return !t.Before(desde) && !t.After(hasta) }
 
-// repartoHasta recorre las cuentas hasta `hasta` (cobros.RepartirCobros) y
-// fija el reparto de los recibos de antes que todavía no lo tenían: desde la
-// primera vez que se calcula, queda guardado y un cierre ya mandado no
-// cambia.
+// repartoHasta recorre las cuentas hasta `hasta` (cobros.RepartirCobros).
+// Solo lee: los recibos de antes que no tienen el reparto fijado se calculan
+// con la misma regla que los fijaría (cobros.FijarRepartosDeAntes, el
+// comando «mjbj repartos»), pero no se guardan. Mirar el cierre es un GET.
 func (s *Servicio) repartoHasta(ctx context.Context, hasta time.Time) (cobros.ResultadoDelReparto, error) {
 	ev, err := cobros.CargarEventos(ctx, s.pool, hasta, "")
 	if err != nil {
 		return cobros.ResultadoDelReparto{}, err
 	}
-	res := cobros.RepartirCobros(ev)
-	if len(res.Calculados) > 0 {
-		lote := &pgx.Batch{}
-		for _, id := range res.Calculados {
-			r := res.Recibos[id]
-			lote.Queue(`UPDATE receipts SET reparto_deudores = $2::numeric, reparto_anticipo = $3::numeric, reparto_b = $4::numeric
-				WHERE id = $1 AND reparto_deudores IS NULL`, id, jsmath.Fijo2(r.Deudores), jsmath.Fijo2(r.Anticipo), jsmath.Fijo2(r.B))
-		}
-		if err := s.pool.SendBatch(ctx, lote).Close(); err != nil {
-			return res, err
-		}
-	}
-	return res, nil
+	return cobros.RepartirCobros(ev), nil
 }
 
 // asientosDeCobro son los cobros del período, con idesde/ihasta ya en el
@@ -124,8 +110,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 
 	// 2. Los recibos emitidos o anulados en el período.
 	rs, err = s.pool.Query(ctx, `
-		SELECT r.id, r.numero, r.recibido_de, r.created_at, r.anulado_at, p.medio::text, p.importe
-		FROM receipts r JOIN receipt_parts p ON p.receipt_id = r.id
+		SELECT r.id, r.numero, r.recibido_de, r.created_at, r.anulado_at, p.medio::text, p.importe, coalesce(ch.circuito = 'negro', false)
+		FROM receipts r JOIN receipt_parts p ON p.receipt_id = r.id LEFT JOIN cheques ch ON ch.id = p.cheque_id
 		WHERE (r.created_at >= $1 AND r.created_at <= $2) OR (r.anulado_at >= $1 AND r.anulado_at <= $2)
 		ORDER BY r.created_at, r.id, p.orden`, idesde, ihasta)
 	if err != nil {
@@ -144,7 +130,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		var emitido time.Time
 		var anulado *time.Time
 		var importe jsmath.Num
-		if err := rs.Scan(&id, &numero, &cliente, &emitido, &anulado, &medio, &importe); err != nil {
+		var negro bool
+		if err := rs.Scan(&id, &numero, &cliente, &emitido, &anulado, &medio, &importe, &negro); err != nil {
 			rs.Close()
 			return nil, err
 		}
@@ -154,7 +141,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			porID[id] = r
 			recibos = append(recibos, r)
 		}
-		r.partes = append(r.partes, ParteDeRecibo{Medio: medio, Importe: importe.F()})
+		r.partes = append(r.partes, ParteDeRecibo{Medio: medio, Importe: importe.F(), Negro: negro})
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {

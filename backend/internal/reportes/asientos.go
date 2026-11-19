@@ -182,6 +182,15 @@ func AsientoDeReintegro(c CobroAAsentar) Asiento {
 type ParteDeRecibo struct {
 	Medio   string
 	Importe float64
+	// Negro: un cheque marcado del circuito B. Va entero al B.
+	Negro bool
+}
+
+// Bancarizado dice si el medio deja rastro en un banco o en ARCA: la
+// transferencia y el depósito en el extracto, Mercado Pago y las tarjetas en
+// lo que informan a ARCA, y el cheque blanco porque se deposita en la cuenta.
+func (p ParteDeRecibo) Bancarizado() bool {
+	return p.Medio != "efectivo" && p.Medio != "retencion" && !p.Negro
 }
 
 // ReciboAAsentar es un recibo emitido o su anulación.
@@ -194,43 +203,58 @@ type ReciboAAsentar struct {
 	Reparto *cobros.Reparto
 }
 
-// PartesPorCircuito separa las partes de un recibo en lo blanco y lo B. Las
-// retenciones son siempre blancas (son crédito fiscal con certificado); el
-// resto se reparte en proporción, y el último renglón se lleva el redondeo
-// para que cada lado sume justo.
+// PartesPorCircuito separa las partes de un recibo en lo blanco y lo B, por
+// prioridad de medio y no en proporción: las retenciones son siempre blancas
+// (crédito fiscal con certificado) y los cheques del B, siempre B; lo blanco
+// que falta sale primero de lo bancarizado y después del efectivo, y lo B,
+// del efectivo. En proporción, una transferencia de 600 en un recibo con 400
+// de B mandaba 177,78 al archivo B: el extracto mostraba 600 y los libros
+// del estudio 422,22, una diferencia de conciliación por mes. Si lo B no
+// alcanza a salir del efectivo, lo bancarizado que queda en el B lo marca el
+// cierre (BancarizadoEnB).
 func PartesPorCircuito(partes []ParteDeRecibo, rep cobros.Reparto) (blanco, b []ParteDeRecibo) {
-	retenido, otros := 0.0, 0.0
-	ultimo := -1
-	for i, p := range partes {
-		if p.Medio == "retencion" {
-			retenido = float64(retenido + p.Importe)
-		} else {
-			otros = float64(otros + p.Importe)
-			ultimo = i
+	falta := rep.Blanco()
+	asignado := make([]float64, len(partes))
+	tomar := func(i int) {
+		x := min(partes[i].Importe, max(falta, 0))
+		asignado[i] = redondear(x)
+		falta = redondear(falta - asignado[i])
+	}
+	// Retenciones, después lo bancarizado, después el efectivo, y los
+	// cheques del B solo si lo blanco no se completó de otra forma.
+	for _, orden := range []func(ParteDeRecibo) bool{
+		func(p ParteDeRecibo) bool { return p.Medio == "retencion" },
+		func(p ParteDeRecibo) bool { return p.Bancarizado() },
+		func(p ParteDeRecibo) bool { return p.Medio == "efectivo" && !p.Negro },
+		func(p ParteDeRecibo) bool { return p.Negro },
+	} {
+		for i, p := range partes {
+			if orden(p) && asignado[i] == 0 {
+				tomar(i)
+			}
 		}
 	}
-	blancoOtros := max(redondear(rep.Blanco()-retenido), 0)
-	puesto := 0.0
 	for i, p := range partes {
-		bl := p.Importe
-		switch {
-		case p.Medio == "retencion":
-		case i == ultimo:
-			bl = redondear(blancoOtros - puesto)
-		case otros > 0:
-			bl = redondear(float64(p.Importe*blancoOtros) / otros)
-			puesto = float64(puesto + bl)
-		default:
-			bl = 0
+		if bl := asignado[i]; bl > toleranciaAsiento {
+			blanco = append(blanco, ParteDeRecibo{Medio: p.Medio, Importe: bl, Negro: p.Negro})
 		}
-		if bl > toleranciaAsiento {
-			blanco = append(blanco, ParteDeRecibo{Medio: p.Medio, Importe: bl})
-		}
-		if resto := redondear(p.Importe - bl); resto > toleranciaAsiento {
-			b = append(b, ParteDeRecibo{Medio: p.Medio, Importe: resto})
+		if resto := redondear(p.Importe - asignado[i]); resto > toleranciaAsiento {
+			b = append(b, ParteDeRecibo{Medio: p.Medio, Importe: resto, Negro: p.Negro})
 		}
 	}
 	return blanco, b
+}
+
+// BancarizadoEnB es lo bancarizado que el reparto deja en el circuito B.
+func BancarizadoEnB(partes []ParteDeRecibo, rep cobros.Reparto) float64 {
+	_, b := PartesPorCircuito(partes, rep)
+	total := 0.0
+	for _, p := range b {
+		if p.Bancarizado() {
+			total = float64(total + p.Importe)
+		}
+	}
+	return redondear(total)
 }
 
 // AsientosDeRecibo son los del recibo con su reparto: el blanco (las partes

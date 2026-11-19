@@ -64,10 +64,31 @@ reparto no se recalcula después:
   que practica el cliente van siempre acá.
 - **Anticipos de clientes** (cuenta nueva, 2.1.06): lo que se cobra de más
   cuando el cliente tiene algo por facturar (un pedido abierto o una factura
-  que espera el CAE). Es la seña. Cuando la factura sale con CAE, el anticipo
-  se le aplica con un asiento de Anticipos a Deudores.
+  que espera el CAE), hasta el importe de eso. Es la seña. Cuando la factura
+  de ese pedido sale con CAE, el anticipo se le aplica con un asiento de
+  Anticipos a Deudores; a otra factura del cliente no.
 - **Circuito B:** lo que se cobra de más sin nada pendiente de facturar, es
   decir, lo que paga una venta sin factura ya cerrada.
+
+Lo que se mira es lo que había el día del recibo, no lo de hoy. Los recibos
+de antes de este reparto se fijan una sola vez, con la misma regla, antes de
+mandarles el primer cierre.
+
+En cada recibo, lo que va al archivo de ustedes sale primero de lo
+bancarizado (transferencia, depósito, Mercado Pago, tarjeta, cheques) y lo
+del B, primero del efectivo; un cheque marcado «en negro» va entero al B.
+Cuando algo bancarizado igual queda en el B (o se paga en negro por
+transferencia), el cierre lo marca como **«Movimientos bancarios en el
+circuito B»**: el extracto no va a conciliar.
+
+El cierre también marca las **«Señas del mes sin factura»** y los
+**«Anticipos sin aplicar»** (de pedidos que se entregaron o cancelaron sin
+factura con CAE), con el importe.
+
+**A decidir:** ¿las señas congelan precio? Si es así, el cobro de la seña
+perfecciona el hecho imponible (art. 5, inc. b, Ley de IVA): hay que
+facturarla al cobrarla y el débito es de ese mes, no del de la factura del
+pedido.
 
 **A decidir:** el pedido no dice si una venta es del circuito B. Ante la
 duda, el sistema manda el excedente a Anticipos y no al B. ¿Les sirve ese

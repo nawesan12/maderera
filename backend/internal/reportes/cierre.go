@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/compras"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 )
 
@@ -277,6 +279,136 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 	if negativos > 0 {
 		out = append(out, PendienteDelCierre{"deudores", "Clientes con Deudores en negativo",
 			"Cobros o notas de crédito sin factura con CAE detrás.", negativos, "/admin/clientes"})
+	}
+	mas, err := s.pendientesDeAnticiposYBanco(ctx, idesde, ihasta, reparto)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, mas...), nil
+}
+
+// pendientesDeAnticiposYBanco son los que el reparto no puede resolver solo
+// y le tocan al estudio:
+//
+//   - **Señas del mes sin factura**: el anticipo cobrado en el mes que a fin
+//     de mes no se aplicó. Si la seña congela precio, el hecho imponible es
+//     el cobro (art. 5, inc. b, Ley de IVA) y el débito es de este mes.
+//   - **Anticipos sin aplicar**: los que ya no tienen a qué aplicarse (el
+//     pedido se entregó o se canceló sin factura con CAE, la factura se dio
+//     de baja). Sin esto crecían en Anticipos de clientes para siempre.
+//   - **Banco en el circuito B**: lo bancarizado que queda en el archivo B
+//     (un recibo cuya parte B no alcanza a salir del efectivo, un pago o un
+//     gasto en negro por transferencia): el extracto no va a conciliar.
+func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
+	out := []PendienteDelCierre{}
+	var delMes float64
+	recibosDelMes := 0
+	destinos := map[string]bool{}
+	for _, b := range reparto.Bolsas {
+		if entre(b.Fecha, idesde, ihasta) {
+			delMes = float64(delMes + b.Monto)
+			recibosDelMes++
+		}
+		for _, d := range b.Destinos {
+			destinos[d] = false
+		}
+	}
+	if recibosDelMes > 0 {
+		out = append(out, PendienteDelCierre{"senas-del-mes", "Señas del mes sin factura",
+			formato.Moneda(jsmath.Redondear2(delMes)) + " en Anticipos de clientes. Si congelan precio, el IVA es de este mes.", recibosDelMes, "/admin/clientes"})
+	}
+	// Qué destinos siguen vivos hoy: el pedido abierto sin factura con CAE,
+	// la factura que espera el CAE.
+	if len(destinos) > 0 {
+		lista := make([]string, 0, len(destinos))
+		for d := range destinos {
+			lista = append(lista, d)
+		}
+		rs, err := s.pool.Query(ctx, `SELECT d FROM unnest($1::text[]) d WHERE
+			(d LIKE 'o:%' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = substr(d, 3)::uuid AND o.estado NOT IN ('cancelado', 'entregado')
+			  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NOT NULL)))
+			OR (d LIKE 'i:%' AND EXISTS (SELECT 1 FROM invoices i WHERE i.id = substr(d, 3)::uuid AND i.cae IS NULL
+			  AND i.estado IN ('emitida', 'rechazada')))`, lista)
+		if err != nil {
+			return nil, err
+		}
+		for rs.Next() {
+			var d string
+			if err := rs.Scan(&d); err != nil {
+				rs.Close()
+				return nil, err
+			}
+			destinos[d] = true
+		}
+		rs.Close()
+		if err := rs.Err(); err != nil {
+			return nil, err
+		}
+	}
+	var varados float64
+	clientes := map[string]bool{}
+	for _, b := range reparto.Bolsas {
+		vivo := false
+		for _, d := range b.Destinos {
+			vivo = vivo || destinos[d]
+		}
+		if !vivo {
+			varados = float64(varados + b.Monto)
+			clientes[b.Clave] = true
+		}
+	}
+	if len(clientes) > 0 {
+		out = append(out, PendienteDelCierre{"anticipos-sin-aplicar", "Anticipos sin aplicar",
+			formato.Moneda(jsmath.Redondear2(varados)) + " de pedidos entregados o cancelados sin factura con CAE.", len(clientes), "/admin/clientes"})
+	}
+
+	// Lo bancarizado en el B: los recibos del período, y los pagos y gastos en
+	// negro que no fueron en efectivo.
+	rs, err := s.pool.Query(ctx, `SELECT r.id, p.medio::text, p.importe::float8, coalesce(ch.circuito = 'negro', false)
+		FROM receipts r JOIN receipt_parts p ON p.receipt_id = r.id LEFT JOIN cheques ch ON ch.id = p.cheque_id
+		WHERE r.created_at >= $1 AND r.created_at <= $2 ORDER BY r.id, p.orden`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	partes := map[string][]ParteDeRecibo{}
+	var orden []string
+	for rs.Next() {
+		var id string
+		var p ParteDeRecibo
+		if err := rs.Scan(&id, &p.Medio, &p.Importe, &p.Negro); err != nil {
+			rs.Close()
+			return nil, err
+		}
+		if _, ok := partes[id]; !ok {
+			orden = append(orden, id)
+		}
+		partes[id] = append(partes[id], p)
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, err
+	}
+	enBanco, cuantos := 0.0, 0
+	for _, id := range orden {
+		if rep, ok := reparto.Recibos[id]; ok {
+			if x := BancarizadoEnB(partes[id], rep); x > toleranciaAsiento {
+				enBanco, cuantos = float64(enBanco+x), cuantos+1
+			}
+		}
+	}
+	var pagos float64
+	var nPagos int
+	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(x.importe), 0)::float8, count(*)::int FROM (
+		  SELECT p.total AS importe FROM supplier_payments p WHERE p.circuito = 'negro' AND p.anulado_at IS NULL
+		    AND p.fecha >= $1 AND p.fecha <= $2 AND p.medio::text <> 'efectivo' AND p.medio::text NOT LIKE '%tercero%'
+		  UNION ALL
+		  SELECT g.importe FROM expenses g WHERE g.circuito = 'negro' AND g.fecha >= $1 AND g.fecha <= $2 AND g.medio::text <> 'efectivo'
+		) x`, idesde, ihasta).Scan(&pagos, &nPagos); err != nil {
+		return nil, err
+	}
+	if total := jsmath.Redondear2(float64(enBanco + pagos)); cuantos+nPagos > 0 {
+		out = append(out, PendienteDelCierre{"banco-b", "Movimientos bancarios en el circuito B",
+			formato.Moneda(total) + " por banco o Mercado Pago van al archivo B: el extracto no va a conciliar.", cuantos + nPagos, "/admin/cierre"})
 	}
 	return out, nil
 }

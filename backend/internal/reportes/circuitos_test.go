@@ -104,6 +104,7 @@ func TestReciboPorCircuito(t *testing.T) {
 	// con CAE y el saldo. Todo termina en Deudores, nada en el B.
 	sena := cliente("Seña")
 	pedido := e.pedido(t, "P-1", e.central, "pendiente", "mostrador", time.Date(2026, 10, 10, 12, 0, 0, 0, Argentina), sena)
+	e.exec(t, `update orders set total = 1000 where id = $1`, pedido)
 	e.recibir(t, sena, "R-SEÑA", "2026-10-11T15:00:00Z", [2]any{"transferencia", 300.0})
 	e.facturaConCae(t, sena, 11, 1000, "2026-10-20T15:00:00Z", &pedido)
 	e.recibir(t, sena, "R-SALDO", "2026-10-25T15:00:00Z", [2]any{"transferencia", 700.0})
@@ -256,8 +257,12 @@ func TestPagoBDeFacturaBlanca(t *testing.T) {
 	}
 }
 
+// **Lo bancarizado va primero al blanco.** Retención 50, efectivo 750 y
+// transferencia 600, con 1000 a Deudores y 400 al B: la transferencia queda
+// entera en el blanco (el extracto muestra 600 y el estudio asienta 600), y
+// el B sale del efectivo. Un cheque del B va entero al B.
 func TestPartesPorCircuito(t *testing.T) {
-	partes := []ParteDeRecibo{{"retencion", 50}, {"efectivo", 750}, {"transferencia", 600}}
+	partes := []ParteDeRecibo{{Medio: "retencion", Importe: 50}, {Medio: "efectivo", Importe: 750}, {Medio: "transferencia", Importe: 600}}
 	bl, b := PartesPorCircuito(partes, cobros.Reparto{Deudores: 1000, B: 400})
 	suma := func(p []ParteDeRecibo) float64 {
 		s := 0.0
@@ -266,10 +271,24 @@ func TestPartesPorCircuito(t *testing.T) {
 		}
 		return redondear(s)
 	}
-	if suma(bl) != 1000 || suma(b) != 400 || bl[0] != (ParteDeRecibo{"retencion", 50}) {
+	if suma(bl) != 1000 || suma(b) != 400 || bl[0] != (ParteDeRecibo{Medio: "retencion", Importe: 50}) {
 		t.Fatalf("%+v %+v", bl, b)
 	}
-	if bl, b := PartesPorCircuito([]ParteDeRecibo{{"efectivo", 100}}, cobros.Reparto{B: 100}); len(bl) != 0 || suma(b) != 100 {
+	if len(b) != 1 || b[0] != (ParteDeRecibo{Medio: "efectivo", Importe: 400}) {
+		t.Fatalf("la transferencia en el B: %+v", b)
+	}
+	if bl, b := PartesPorCircuito([]ParteDeRecibo{{Medio: "efectivo", Importe: 100}}, cobros.Reparto{B: 100}); len(bl) != 0 || suma(b) != 100 {
 		t.Fatalf("todo B: %+v %+v", bl, b)
+	}
+	// 60.000 en efectivo y 40.000 en un cheque del B contra 60.000 facturados.
+	bl, b = PartesPorCircuito([]ParteDeRecibo{{Medio: "efectivo", Importe: 60000}, {Medio: "cheque", Importe: 40000, Negro: true}},
+		cobros.Reparto{Deudores: 60000, B: 40000})
+	if len(bl) != 1 || bl[0].Medio != "efectivo" || len(b) != 1 || !b[0].Negro || b[0].Importe != 40000 {
+		t.Fatalf("el cheque del B: %+v %+v", bl, b)
+	}
+	// Todo por transferencia y una parte B: lo bancarizado que queda en el B
+	// se marca.
+	if x := BancarizadoEnB([]ParteDeRecibo{{Medio: "transferencia", Importe: 1000}}, cobros.Reparto{Deudores: 700, B: 300}); x != 300 {
+		t.Fatalf("bancarizado en B: %v", x)
 	}
 }

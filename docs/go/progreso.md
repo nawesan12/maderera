@@ -1951,3 +1951,12 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   recalcula. Lo aprendido: recalcular con toda la historia cambiaba meses ya
   mandados al estudio; recorrer en orden de fecha y guardar el reparto los
   deja quietos.
+- **Corrección de T1** (revisión del comité): «algo por facturar» se mira a
+  la fecha del recibo (`order_status_history`, `arca_log`), la seña queda
+  atada a sus pedidos y facturas y llega hasta lo que falta facturar; el
+  cierre solo lee, y los recibos de antes se fijan con **`mjbj repartos`**
+  (va en el despliegue, después de la 00132 y antes de cargar el
+  certificado). Las partes se reparten por prioridad de medio, no en
+  proporción. La venta del mostrador ya no autoriza lo atrasado: la serie se
+  autoriza desde Facturación (`AutorizarConFechas`), con bitácora y aviso de
+  cada comprobante.

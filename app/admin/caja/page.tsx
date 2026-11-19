@@ -223,13 +223,16 @@ export default async function CajaPage({
                         >
                           {diferencia === null ? "—" : formatearMonto(diferencia)}
                         </span>
-                        {/* El esperado cambió después del arqueo: entró una
-                            venta hecha sin conexión que pertenecía a este
-                            turno. La diferencia de esa noche se calculó contra
-                            otro número, y eso hay que poder verlo. */}
+                        {/* Lo que llegó de la cola después del arqueo —una
+                            venta o un retiro sin conexión de este turno— va
+                            aparte y no cambia la diferencia de esa noche. Un
+                            retiro tardío se lee en rojo: es plata que salió
+                            de una caja ya contada. */}
                         {t.tardios > 0 && (
-                          <span className="mt-0.5 block text-sm text-muted-foreground">
-                            +{t.tardios} después del cierre
+                          <span
+                            className={`tabular mt-0.5 block text-sm ${t.tardiosMonto < 0 ? "text-saldo-debe" : "text-muted-foreground"}`}
+                          >
+                            {t.tardios} tarde · {formatearMonto(t.tardiosMonto)}
                           </span>
                         )}
                       </td>

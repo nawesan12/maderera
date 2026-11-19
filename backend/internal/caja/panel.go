@@ -96,9 +96,12 @@ type TurnoCerrado struct {
 	Notas      *string    `json:"notas"`
 	AbiertaPor string     `json:"abiertaPor"`
 	Esperado   float64    `json:"esperado"`
-	// Tardios son los movimientos que entraron después del arqueo (ventas
-	// sin conexión que llegaron tarde): se marcan, no se esconden.
-	Tardios int                `json:"tardios"`
+	// Esperado es lo que tendría que haber habido al arquear: lo que entró
+	// hasta cerrada_at. Tardios son los movimientos que llegaron después
+	// (ventas y retiros sin conexión): van aparte, con su monto, y no cambian
+	// la diferencia de una caja ya contada (T3, hallazgo 9).
+	Tardios      int                `json:"tardios"`
+	TardiosMonto float64            `json:"tardiosMonto"`
 	Cierre  []RenglonDelCierre `json:"cierre"`
 }
 
@@ -115,8 +118,9 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 	}
 	filas, err := p.pool.Query(ctx, `
 		SELECT s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name,
-		       coalesce(sum(m.monto), 0),
-		       count(*) FILTER (WHERE m.created_at > s.cerrada_at)::int
+		       coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at), 0),
+		       count(m.id) FILTER (WHERE m.created_at > s.cerrada_at)::int,
+		       coalesce(sum(m.monto) FILTER (WHERE m.created_at > s.cerrada_at), 0)
 		FROM cash_sessions s
 		JOIN branches b ON b.id = s.branch_id
 		JOIN "user" u ON u.id = s.abierta_por
@@ -134,11 +138,11 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 	for filas.Next() {
 		var t TurnoCerrado
 		var contado *jsmath.Num
-		var esperado jsmath.Num
-		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios); err != nil {
+		var esperado, tardios jsmath.Num
+		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios, &tardios); err != nil {
 			return nil, 0, err
 		}
-		t.Esperado = esperado.F()
+		t.Esperado, t.TardiosMonto = esperado.F(), tardios.F()
 		if contado != nil {
 			c := contado.F()
 			t.Contado = &c

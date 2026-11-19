@@ -252,7 +252,9 @@ func TestTurnosVentasSueltasYFondo(t *testing.T) {
 		t.Errorf("septiembre: %s", b)
 	}
 	tc := cerrados[0]
-	if tc.Esperado != 15000 || *tc.Contado != 14000 || tc.Tardios != 1 || tc.AbiertaPor != "Persona admin" || tc.Sucursal != "Casa Central" {
+	// El esperado es el del arqueo: la venta que llegó tarde va aparte, con su
+	// monto, y no cambia la diferencia (T3, hallazgo 9).
+	if tc.Esperado != 14000 || *tc.Contado != 14000 || tc.Tardios != 1 || tc.TardiosMonto != 1000 || tc.AbiertaPor != "Persona admin" || tc.Sucursal != "Casa Central" {
 		t.Errorf("turno: %+v", tc)
 	}
 	if fmt.Sprint(tc.Cierre) != "[{efectivo 2 6000 false} {debito 1 2000 false}]" {

@@ -324,6 +324,7 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	diferida := v.CobradaAt != nil
 
 	var sesion *string
+	turnoCerrado := false
 	if c.parteEfectivo > 0 {
 		momento := c.ahora
 		if cobrada != nil {
@@ -336,16 +337,20 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		if !hay && !diferida {
 			return fallo("No hay caja abierta en esta sucursal. Abrila antes de cobrar en efectivo."), nil
 		}
-		if hay && !diferida {
+		if hay {
 			// El candado compartido frena el cierre hasta que esta venta
 			// confirme: si no, el arqueo podía hacerse sin su efectivo.
 			var estado string
 			if err := tx.QueryRow(ctx, `SELECT estado FROM cash_sessions WHERE id = $1 FOR SHARE`, turno).Scan(&estado); err != nil {
 				return ResultadoVenta{}, err
 			}
-			if estado != "abierta" {
+			if estado != "abierta" && !diferida {
 				return fallo("La caja se acaba de cerrar. Abrila antes de cobrar en efectivo."), nil
 			}
+			// Una venta de la cola que llega con su turno ya arqueado entra
+			// como tardía (con la hora de llegada): con la de la venta
+			// cambiaba la diferencia de un cierre ya contado (T3, hallazgo 9).
+			turnoCerrado = estado != "abierta"
 		}
 		if hay {
 			sesion = &turno
@@ -489,10 +494,14 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 
 	if sesion != nil && c.parteEfectivo > 0 {
 		// Al cajón entra solo la parte en efectivo, con la fecha de la venta.
+		creado, declarado := cobrada, (*time.Time)(nil)
+		if turnoCerrado {
+			creado, declarado = nil, cobrada
+		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO cash_movements (session_id, tipo, monto, motivo, order_id, creado_por, created_at)
-			VALUES ($1, 'venta', $2::numeric, $3, $4, $5, coalesce($6, now()))`,
-			*sesion, jsmath.Fijo2(c.parteEfectivo), numero, pedido, usuario, cobrada); err != nil {
+			INSERT INTO cash_movements (session_id, tipo, monto, motivo, order_id, creado_por, created_at, declarado_at)
+			VALUES ($1, 'venta', $2::numeric, $3, $4, $5, coalesce($6, now()), $7)`,
+			*sesion, jsmath.Fijo2(c.parteEfectivo), numero, pedido, usuario, creado, declarado); err != nil {
 			return ResultadoVenta{}, err
 		}
 	}

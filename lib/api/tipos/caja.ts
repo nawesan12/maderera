@@ -229,10 +229,18 @@ export interface components {
             contado: number | null;
             notas: string | null;
             abiertaPor: string;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description Lo que entró hasta el arqueo
+             */
             esperado: number;
             /** @description Movimientos que entraron después del arqueo */
             tardios: number;
+            /**
+             * Format: double
+             * @description Su suma; no cambia la diferencia del cierre
+             */
+            tardiosMonto: number;
             cierre: components["schemas"]["CajaRenglonDelCierre"][];
         };
         CajaFisica: {

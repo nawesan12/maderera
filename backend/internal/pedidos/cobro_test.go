@@ -70,6 +70,37 @@ func TestCobroDelPedido(t *testing.T) {
 	}
 }
 
+// Un pedido sin sucursal (de la tienda, del bot) con dos cajas abiertas no
+// sabe adónde va el efectivo: ofrece las cajas y cobra en la elegida. Con la
+// sucursal, el error trae el fondo de cambio para abrirla con él.
+func TestCobroDeUnPedidoSinSucursal(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	u := e.srv.URL + "/api/v1/admin/pedidos/"
+	e.exec(t, `update branches set fondo_base = 15000 where id = $1`, e.sucursal)
+	conSucursal := e.id(t, `insert into orders (numero, contacto_nombre, branch_id, origen, estado, medio_pago, subtotal, total)
+		values ('PED-8', 'Ana', $1, 'presupuesto', 'listo', 'efectivo', 1000, 1000) returning id`, e.sucursal)
+	efectivo := `[{"medio":"efectivo","importe":"1000"}]`
+	if c, b := pedir(t, ven, "POST", u+conSucursal+"/cobro", map[string]any{"partes": efectivo}); c != 422 || !strings.Contains(b, `"fondoBase":"15000.00"`) {
+		t.Fatalf("el fondo de cambio: %d %s", c, b)
+	}
+	otra := e.id(t, `insert into branches (slug, name, sort_order) values ('otra', 'Otra', 9) returning id`)
+	vendedor := `(select id from "user" where email = 'vendedor@prueba.test')`
+	e.exec(t, `insert into cash_sessions (branch_id, abierta_por) values ($1, `+vendedor+`), ($2, `+vendedor+`)`, e.sucursal, otra)
+	sinSucursal := e.id(t, `insert into orders (numero, contacto_nombre, origen, estado, medio_pago, subtotal, total)
+		values ('PED-9', 'Luis', 'tienda', 'listo', 'efectivo', 1000, 1000) returning id`)
+	c, b := pedir(t, ven, "POST", u+sinSucursal+"/cobro", map[string]any{"partes": efectivo, "clave": "s-1"})
+	if c != 422 || !strings.Contains(b, "Elegí en qué caja entra el efectivo.") || !strings.Contains(b, otra) || !strings.Contains(b, e.sucursal) {
+		t.Fatalf("sin sucursal con dos cajas: %d %s", c, b)
+	}
+	if c, b := pedir(t, ven, "POST", u+sinSucursal+"/cobro", map[string]any{"partes": efectivo, "clave": "s-1", "branchId": otra}); c != 200 {
+		t.Fatalf("en la elegida: %d %s", c, b)
+	}
+	if n := e.numero(t, `select coalesce(sum(m.monto), 0) from cash_movements m join cash_sessions s on s.id = m.session_id where s.branch_id = $1`, otra); n != 1000 {
+		t.Errorf("efectivo en la caja elegida: %v", n)
+	}
+}
+
 // El aserradero ve el pedido sin plata (T3, hallazgo 40): la ficha completa
 // le da 403 y la del taller no trae importes, mail, teléfono ni saldo.
 func TestPedidoParaElTaller(t *testing.T) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -188,6 +188,7 @@ function PasarAPedido({
    */
   const [precios, setPrecios] = useState<"actualizar" | "respetar">("actualizar");
   const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
+  const entrega = useRef<HTMLDivElement>(null);
   const totalBase = vencido && precios === "actualizar" ? vencido.totalDeHoy : total;
 
   const medios: { valor: Medio; texto: string }[] = [
@@ -206,14 +207,14 @@ function PasarAPedido({
     if (z && !z.aCotizar) setCosto(String(z.costo));
   }
 
-  function pasar(pin?: string, eleccion: "actualizar" | "respetar" = precios) {
+  function pasar(pin?: string) {
     startTransition(async () => {
       const r = await convertirEnPedido(id, {
         tipoEntrega: tipo,
         ...(tipo === "envio" ? { direccion, zona: zona || undefined, costoEnvio } : {}),
         medioPago: medio ?? undefined,
         entregarEl: entregarEl || undefined,
-        ...(vencido ? { precios: eleccion } : {}),
+        ...(vencido ? { precios } : {}),
         ...(pin ? { pin } : {}),
       });
       if (r.autorizacion) {
@@ -272,11 +273,16 @@ function PasarAPedido({
                         setPrecios(o.valor);
                         setPidePin(null);
                       }}
+                      // Enter elige y sigue a la entrega; no crea el pedido:
+                      // con el foco puesto acá, un Enter de reflejo lo pasaba
+                      // como retiro, sin medio ni fecha, y salteaba lo que
+                      // deshabilita «Crear el pedido».
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
                           setPrecios(o.valor);
-                          pasar(undefined, o.valor);
+                          setPidePin(null);
+                          entrega.current?.querySelector<HTMLElement>("button, [role=radio]")?.focus();
                         }
                       }}
                       className={`flex h-14 items-center justify-between rounded-xl border px-4 text-base font-semibold transition-colors ${
@@ -291,7 +297,7 @@ function PasarAPedido({
               </div>
             )}
 
-            <div className="space-y-2">
+            <div ref={entrega} className="space-y-2">
               <p className="text-base font-medium">Entrega</p>
               <Opciones
                 etiqueta="Entrega"

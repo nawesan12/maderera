@@ -1963,6 +1963,29 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   la facturación desde la ficha del pedido.
 - El aserradero lee `PedidoParaElTaller` (sin plata); la ficha completa es de
   quien entra a Pedidos.
+- **La revisión de T3 (migración 00142)** cerró los atajos que quedaban:
+  - El presupuesto mide lo dejado de cobrar al pasar a pedido, vigente o
+    vencido: contra `quote_items.precio_lista` (la lista del día en que se
+    emitió) o, sin ella, la de hoy. Uno emitido por un admin ya está firmado.
+  - El PIN cuenta el intento antes del scrypt (atómico) y lo descuenta si
+    acierta; los avisos salen una vez por ventana; cada firma con PIN avisa a
+    los admins; «Destrabar el PIN» (con la clave) borra los topes. Una cuenta
+    sin contraseña no carga PIN.
+  - La ficha lleva las dos cifras (precio y crédito, v2): la del precio sola
+    no destraba un pase del límite. El campo del PIN muestra las dos.
+  - Sin conexión se marca también el crédito (`orders.credito_sin_autorizar`)
+    y se avisa por push en el momento. No se puede saber si «sin conexión» es
+    un wifi apagado a propósito: por eso se ve, no se rechaza.
+  - Anular sin PIN: solo propia, de hoy, del turno, de menos de 5 minutos y
+    sin efectivo ni cuenta corriente.
+  - Las pasadas y el canto del corte tienen precio de lista (la tarifa de
+    `cutting_rates`), y lo que falta se valúa a la tarifa.
+  - Un pedido con recibo vivo no se cancela. Falta la pantalla para anular un
+    recibo y devolver la plata (`anularReciboDesdeElPanel` existe sin botón).
+  - El ingreso tardío con hora dentro del turno suma al esperado; el retiro
+    tardío no.
+  - Pendiente, con decisión de Nahuel: que el depósito rinda lo que cobra
+    contra entrega (hoy solo puede «entregar sin cobrar»).
 - Ojo con `TestGananciaSegunLasReglas` (reportes): falla entre las 21 y las
   24 de Argentina, porque el gasto se carga con `current_date` de la base (en
   UTC) y el lapso se arma en hora local. No es de T3.

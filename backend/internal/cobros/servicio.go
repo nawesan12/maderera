@@ -2,6 +2,7 @@ package cobros
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -50,8 +51,15 @@ func comoProblema(err error) error {
 	case errors.Is(err, ErrClaveDeOtroCobro):
 		return plataforma.NuevoProblema(409, ErrClaveDeOtroCobro.Mensaje)
 	case errors.As(err, &sinCaja):
-		// La sucursal va aparte: la pantalla abre la caja ahí mismo.
-		return plataforma.Invalido(map[string]string{"cobro": sinCaja.Error(), "sinCaja": sinCaja.Sucursal})
+		// La sucursal va aparte: la pantalla abre la caja ahí mismo, con el
+		// fondo de cambio; sin sucursal, las opciones para elegir (en JSON:
+		// los errores son texto).
+		e := map[string]string{"cobro": sinCaja.Error(), "sinCaja": sinCaja.Sucursal, "fondoBase": jsmath.Fijo2(sinCaja.FondoBase)}
+		if len(sinCaja.Sucursales) > 0 {
+			b, _ := json.Marshal(sinCaja.Sucursales)
+			e["sucursales"] = string(b)
+		}
+		return plataforma.Invalido(e)
 	}
 	if errors.As(err, &e) {
 		return plataforma.Invalido(map[string]string{"cobro": e.Mensaje})

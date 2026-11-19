@@ -137,6 +137,7 @@ paths:
               properties:
                 partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
                 clave: { type: string, maxLength: 64, description: "la del intento: un reintento devuelve el mismo recibo" }
+                branchId: { type: string, maxLength: 64, description: "un pedido sin sucursal: en qué caja entra el efectivo" }
       responses:
         "200":
           description: El recibo

@@ -19,6 +19,26 @@ export interface EstadoCobro {
   aviso?: string;
   /** El efectivo no entró porque la sucursal no tiene caja abierta: cuál. */
   sinCaja?: string;
+  /** El fondo de cambio de esa sucursal, para abrir la caja con él. */
+  fondoBase?: number;
+  /** Un pedido sin sucursal: en qué caja puede entrar el efectivo. */
+  sucursales?: SucursalParaCobrar[];
+}
+
+export interface SucursalParaCobrar {
+  id: string;
+  nombre: string;
+  abierta: boolean;
+  fondo: number;
+}
+
+function leerSucursales(texto: string | undefined): SucursalParaCobrar[] | undefined {
+  if (!texto) return undefined;
+  try {
+    return JSON.parse(texto) as SucursalParaCobrar[];
+  } catch {
+    return undefined;
+  }
 }
 
 const campo = (formData: FormData, nombre: string) => (formData.get(nombre) as string | null) || undefined;
@@ -57,11 +77,21 @@ export async function cobrarPedido(_previo: EstadoCobro, formData: FormData): Pr
   if (!id) return { error: "Falta el pedido." };
   const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/cobro", {
     params: { path: { id } },
-    body: { partes: (formData.get("partes") as string | null) ?? "", clave: campo(formData, "clave") },
+    body: {
+      partes: (formData.get("partes") as string | null) ?? "",
+      clave: campo(formData, "clave"),
+      branchId: campo(formData, "branchId"),
+    },
   });
   if (!r.data) {
     const p = r.error as Problema | undefined;
-    return { error: mensajeDe(p), sinCaja: p?.errores?.sinCaja };
+    const fondo = Number(p?.errores?.fondoBase);
+    return {
+      error: mensajeDe(p),
+      sinCaja: p?.errores?.sinCaja,
+      fondoBase: Number.isFinite(fondo) ? fondo : undefined,
+      sucursales: leerSucursales(p?.errores?.sucursales),
+    };
   }
   revalidatePath("/admin");
   revalidatePath("/admin/pedidos");

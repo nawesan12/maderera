@@ -178,7 +178,7 @@ func (a *API) CobrarPedido(ctx context.Context, r ventasapi.CobrarPedidoRequestO
 	if err != nil {
 		return nil, err
 	}
-	v, err := cobros.Nuevo(a.s.pool, a.s.log).CobrarPedido(ctx, ses, r.Id.String(), r.Body.Partes, texto(r.Body.Clave))
+	v, err := cobros.Nuevo(a.s.pool, a.s.log).CobrarPedido(ctx, ses, r.Id.String(), r.Body.Partes, texto(r.Body.Clave), texto(r.Body.BranchId))
 	if err != nil {
 		return nil, err
 	}

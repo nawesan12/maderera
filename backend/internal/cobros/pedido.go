@@ -17,10 +17,31 @@ import (
 )
 
 // ErrSinCaja es el cobro en efectivo sin turno abierto en la sucursal del
-// pedido. Lleva la sucursal para que la pantalla abra la caja ahí mismo.
-type ErrSinCaja struct{ Sucursal string }
+// pedido. Lleva la sucursal y su fondo de cambio para que la pantalla abra
+// la caja ahí mismo con el fondo de siempre (abierta con $0 a las apuradas,
+// el turno cerraba con una diferencia falsa). Un pedido sin sucursal (de la
+// tienda, del bot) no sabe en qué caja entra: lleva las sucursales para
+// elegir, las de caja abierta si hay, y si no todas.
+type ErrSinCaja struct {
+	Sucursal   string
+	FondoBase  float64
+	Sucursales []SucursalParaCobrar
+}
 
-func (e *ErrSinCaja) Error() string { return "Abrí la caja para cobrar en efectivo." }
+// SucursalParaCobrar es una de las opciones de un pedido sin sucursal.
+type SucursalParaCobrar struct {
+	ID      string  `json:"id"`
+	Nombre  string  `json:"nombre"`
+	Abierta bool    `json:"abierta"`
+	Fondo   float64 `json:"fondo"`
+}
+
+func (e *ErrSinCaja) Error() string {
+	if e.Sucursal == "" && len(e.Sucursales) > 0 {
+		return "Elegí en qué caja entra el efectivo."
+	}
+	return "Abrí la caja para cobrar en efectivo."
+}
 
 // CobrarPedido cobra un pedido desde su ficha (T3, hallazgo 5): **pasa por
 // EmitirRecibo como cualquier cobro**. Reemplaza a «marcar cobrado», que
@@ -36,7 +57,9 @@ func (e *ErrSinCaja) Error() string { return "Abrí la caja para cobrar en efect
 //     caja abierta sí: esa plata ya está en el banco.
 //   - «Pagado» sale de la suma de lo cobrado, no de un botón.
 //   - La clave hace repetible el cobro.
-func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, partesCrudas, clave string) (ResultadoDeCobro, error) {
+//   - Un pedido sin sucursal cobra el efectivo en la que se elige
+//     (`sucursal`); sin elegir, en la única caja abierta.
+func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, partesCrudas, clave, sucursal string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(pedido) {
 		return ResultadoDeCobro{}, plataforma.NuevoProblema(404, "No se encontró el pedido.")
 	}
@@ -94,16 +117,16 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 		}
 		var c *Caja
 		if hayEfectivo(partes) {
-			turno, err := turnoDelPedido(ctx, q, p.sucursal)
+			donde := p.sucursal
+			if donde == nil && plataforma.UUIDValido(sucursal) {
+				donde = &sucursal
+			}
+			turno, err := turnoDelPedido(ctx, q, donde)
 			if err != nil {
 				return err
 			}
 			if turno == "" {
-				suc := ""
-				if p.sucursal != nil {
-					suc = *p.sucursal
-				}
-				return &ErrSinCaja{Sucursal: suc}
+				return sinCaja(ctx, tx, donde)
 			}
 			c = &Caja{TurnoID: turno}
 		}
@@ -173,4 +196,44 @@ func turnoDelPedido(ctx context.Context, q *sqlc.Queries, sucursal *string) (str
 		return turnos[0].ID, nil
 	}
 	return "", nil
+}
+
+// sinCaja arma el ErrSinCaja: con la sucursal y su fondo, o, sin sucursal,
+// con las opciones para elegir.
+func sinCaja(ctx context.Context, tx pgx.Tx, sucursal *string) error {
+	if sucursal != nil {
+		e := &ErrSinCaja{Sucursal: *sucursal}
+		var fondo jsmath.Num
+		if err := tx.QueryRow(ctx, `SELECT fondo_base FROM branches WHERE id::text = $1`, *sucursal).Scan(&fondo); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		e.FondoBase = fondo.F()
+		return e
+	}
+	filas, err := tx.Query(ctx, `
+		SELECT b.id::text, b.name, exists(SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = b.id AND cs.estado = 'abierta'), b.fondo_base
+		FROM branches b WHERE b.active ORDER BY b.sort_order, b.name`)
+	if err != nil {
+		return err
+	}
+	todas, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (SucursalParaCobrar, error) {
+		var o SucursalParaCobrar
+		var fondo jsmath.Num
+		err := r.Scan(&o.ID, &o.Nombre, &o.Abierta, &fondo)
+		o.Fondo = fondo.F()
+		return o, err
+	})
+	if err != nil {
+		return err
+	}
+	var abiertas []SucursalParaCobrar
+	for _, o := range todas {
+		if o.Abierta {
+			abiertas = append(abiertas, o)
+		}
+	}
+	if len(abiertas) > 0 {
+		return &ErrSinCaja{Sucursales: abiertas}
+	}
+	return &ErrSinCaja{Sucursales: todas}
 }

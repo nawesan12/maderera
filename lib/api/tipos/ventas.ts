@@ -661,6 +661,8 @@ export interface operations {
                     partes: string;
                     /** @description la del intento: un reintento devuelve el mismo recibo */
                     clave?: string;
+                    /** @description un pedido sin sucursal: en qué caja entra el efectivo */
+                    branchId?: string;
                 };
             };
         };

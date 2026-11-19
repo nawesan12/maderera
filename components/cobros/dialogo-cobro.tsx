@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Wallet } from "lucide-react";
@@ -12,7 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, parsearImporte } from "@/lib/formato";
 import {
   cobrarPedido,
   registrarCobroDeCliente,
@@ -70,10 +70,21 @@ export function DialogoCobro({
   const abierto = abiertoAfuera ?? abiertoAdentro;
   const [clave, setClave] = useState(() => crypto.randomUUID());
   const [fondo, setFondo] = useState("");
+  const [fondoMal, setFondoMal] = useState(false);
+  /** Un pedido sin sucursal: la caja elegida para el efectivo. */
+  const [sucursal, setSucursal] = useState<string | null>(null);
+  /** La caja recién abierta: el cuadro y el error de «sin caja» se van. */
+  const [abierta, setAbierta] = useState<string | null>(null);
   const [abriendo, empezarAApertura] = useTransition();
+  const formulario = useRef<HTMLFormElement>(null);
 
   function cambiar(a: boolean) {
-    if (a) setClave(crypto.randomUUID());
+    if (a) {
+      setClave(crypto.randomUUID());
+      setSucursal(null);
+      setAbierta(null);
+      setFondo("");
+    }
     setAbiertoAdentro(a);
     alCambiarAbierto?.(a);
   }
@@ -103,17 +114,38 @@ export function DialogoCobro({
     {} as EstadoCobro,
   );
 
-  /** Sin caja abierta no se cobra en efectivo: se abre ahí mismo y se sigue. */
+  /*
+   * Sin caja abierta no se cobra en efectivo: se abre ahí mismo y se sigue.
+   * La sucursal es la del pedido o, si no tiene, la elegida. El fondo viene
+   * con el de cambio de la sucursal y se lee como se escribe acá («15.000»
+   * son quince mil: con Number() eran $15). Abierta la caja, el mismo cobro
+   * sale solo con la misma clave, que es repetible: abrir y cobrar es un
+   * paso, y nadie se queda dudando si cobró.
+   */
+  const opciones = estado.sucursales ?? [];
+  const elegida = opciones.find((o) => o.id === sucursal) ?? null;
+  const dondeAbrir = estado.sinCaja || (elegida && !elegida.abierta ? elegida.id : "");
+  const fondoDeCambio = estado.sinCaja ? estado.fondoBase : elegida?.fondo;
+  const pideAbrir = Boolean(dondeAbrir) && abierta !== dondeAbrir;
+  const fondoVisto = fondo === "" && fondoDeCambio != null && fondoDeCambio > 0 ? String(fondoDeCambio) : fondo;
+
   function abrirLaCaja() {
-    const sucursal = estado.sinCaja;
-    if (!sucursal) return;
+    if (!dondeAbrir) return;
+    const monto = fondoVisto.trim() === "" ? 0 : parsearImporte(fondoVisto);
+    if (!Number.isFinite(monto) || monto < 0) {
+      setFondoMal(true);
+      return;
+    }
+    setFondoMal(false);
+    const donde = dondeAbrir;
     empezarAApertura(async () => {
-      const r = await abrirCaja(sucursal, Number(fondo.replace(",", ".")) || 0);
+      const r = await abrirCaja(donde, monto);
       if (r.error) {
         toast.error(r.error);
         return;
       }
-      toast.success(r.ok ?? "Caja abierta.");
+      setAbierta(donde);
+      formulario.current?.requestSubmit();
     });
   }
 
@@ -149,8 +181,9 @@ export function DialogoCobro({
           </DialogTitle>
         </DialogHeader>
 
-        <form action={accion} className="space-y-4">
+        <form ref={formulario} action={accion} className="space-y-4">
           <input type="hidden" name="clave" value={clave} />
+          {sucursal && <input type="hidden" name="branchId" value={sucursal} />}
           {customerId && <input type="hidden" name="customerId" value={customerId} />}
           {pedido && <input type="hidden" name="pedidoId" value={pedido.id} />}
           {orderId && <input type="hidden" name="orderId" value={orderId} />}
@@ -168,20 +201,43 @@ export function DialogoCobro({
             </label>
           )}
 
-          {estado.error && (
+          {estado.error && !(abierta && abierta === dondeAbrir) && !(opciones.length > 0 && sucursal) && (
             <p role="alert" className="estado-problema text-base font-medium">
               {estado.error}
             </p>
           )}
 
-          {estado.sinCaja && (
+          {opciones.length > 0 && (
+            <div role="radiogroup" aria-label="Caja" className="flex flex-wrap gap-2">
+              {opciones.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={sucursal === o.id}
+                  onClick={() => setSucursal(o.id)}
+                  className={`h-12 rounded-xl px-4 text-base font-semibold transition-colors ${
+                    sucursal === o.id ? "boton-accion" : "tarjeta-hundida hover:bg-hundida"
+                  }`}
+                >
+                  {o.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {pideAbrir && (
             <div className="tarjeta-hundida flex flex-wrap items-end gap-2.5 rounded-xl p-3">
               <label className="min-w-40 flex-1 text-sm text-muted-foreground">
                 Fondo inicial
                 <input
                   inputMode="decimal"
-                  value={fondo}
-                  onChange={(e) => setFondo(e.target.value)}
+                  value={fondoVisto}
+                  onChange={(e) => {
+                    setFondo(e.target.value);
+                    setFondoMal(false);
+                  }}
+                  aria-invalid={fondoMal || undefined}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -189,7 +245,9 @@ export function DialogoCobro({
                     }
                   }}
                   autoFocus
-                  className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+                  className={`tabular mt-1 block h-11 w-full rounded-lg border bg-background px-3 text-base text-foreground ${
+                    fondoMal ? "border-[var(--estado-acento)] estado-problema" : "border-linea"
+                  }`}
                 />
               </label>
               <button

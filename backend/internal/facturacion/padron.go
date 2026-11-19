@@ -140,6 +140,16 @@ func (s *Servicio) ImportarPadron(ctx context.Context, userID string, archivo io
 	}
 	var r ResultadoDelPadron
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		// El padrón es la excepción a los 30 s del pool principal (cmd/mjbj:
+		// topesDeLaAPI): la copia dura lo que tarda en subir un archivo de
+		// unos 200 MB, y el INSERT … DISTINCT ON recorre millones de
+		// renglones. Con el tope de todos los días moría a la mitad, y el
+		// 57014 salía como «otra operación en curso», que invita a
+		// reintentar sin fin. SET LOCAL vale solo para esta transacción: la
+		// conexión vuelve al pool con su tope de siempre.
+		if _, err := tx.Exec(ctx, `SET LOCAL statement_timeout = '20min'`); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `CREATE TEMP TABLE padron_nuevo (cuit text, alicuota numeric(6, 3), desde date, hasta date) ON COMMIT DROP`); err != nil {
 			return err
 		}

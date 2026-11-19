@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,11 @@ func TestOcupadoEsUn503(t *testing.T) {
 		_ = json.Unmarshal(w.Body.Bytes(), &p)
 		if quiero == 503 && p.Detail+p.Title == "" {
 			t.Errorf("%s: sin mensaje (%s)", codigo, w.Body.String())
+		}
+		// El tope vencido no dice «otra operación en curso» (comité final,
+		// A5): con el padrón invitaba a reintentar sin fin.
+		if enCurso := strings.Contains(p.Detail+p.Title, "otra operación en curso"); quiero == 503 && enCurso != (codigo != "57014") {
+			t.Errorf("%s: %q", codigo, p.Detail+p.Title)
 		}
 	}
 }

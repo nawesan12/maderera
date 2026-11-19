@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	cuits "mjbj/internal/cuit"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/sqlc"
@@ -204,5 +206,58 @@ func TestLaPercepcionSaleDelPadron(t *testing.T) {
 	}
 	if tr := emitir(&ri, "consumidor_final"); tr != "0.00" {
 		t.Errorf("al consumidor final: %s", tr)
+	}
+}
+
+// lectorLento entrega el archivo de a un renglón, con una pausa antes de
+// cada uno: una subida lenta que la copia va esperando.
+type lectorLento struct {
+	renglones []string
+	pausa     time.Duration
+}
+
+func (l *lectorLento) Read(p []byte) (int, error) {
+	if len(l.renglones) == 0 {
+		return 0, io.EOF
+	}
+	time.Sleep(l.pausa)
+	n := copy(p, l.renglones[0])
+	l.renglones[0] = l.renglones[0][n:]
+	if l.renglones[0] == "" {
+		l.renglones = l.renglones[1:]
+	}
+	return n, nil
+}
+
+// La importación del padrón no muere por el tope de sentencia del pool
+// principal (comité final, A5): la copia dura lo que dure la subida. Acá el
+// pool tiene 300 ms de tope y la subida tarda más de un segundo.
+func TestElPadronNoMuerePorElTopeDelPool(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	cfg := e.pool.Config().Copy()
+	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "300"
+	conTope, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conTope.Close()
+	s := Nuevo(conTope, silencio)
+	lento := &lectorLento{pausa: 400 * time.Millisecond, renglones: []string{
+		"P;25102026;01112026;30112026;30712345671;C;N;N;2,50;00;\n",
+		"P;25102026;01112026;30112026;30589445259;C;N;N;1,00;00;\n",
+		"P;25102026;01112026;30112026;20123456786;C;N;N;1,50;00;\n",
+	}}
+	r, err := s.ImportarPadron(ctx, "", lento)
+	if err != nil {
+		t.Fatalf("la subida lenta se cortó: %v", err)
+	}
+	if r.Leidos != 3 {
+		t.Errorf("leídos %d, quería 3", r.Leidos)
+	}
+	// La conexión vuelve al pool con su tope: el SET LOCAL no se escapa.
+	var tope string
+	if err := conTope.QueryRow(ctx, `SHOW statement_timeout`).Scan(&tope); err != nil || tope != "300ms" {
+		t.Errorf("el tope quedó en %q (%v)", tope, err)
 	}
 }

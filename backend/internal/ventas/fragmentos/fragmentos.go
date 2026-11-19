@@ -34,12 +34,20 @@ import "strings"
 //     no es deuda: el cliente dice que pagó y falta que administración lo
 //     verifique. El reparto le pedía la plata otra vez a quien ya había
 //     pagado. Si se rechaza, el pedido vuelve a estar sin cobrar.
+//   - Lo devuelto de lo que no se había cobrado (una devolución parcial con
+//     destino «deuda») baja lo que se debe: la mercadería volvió y nadie
+//     pagó por ella. Lo devuelto por caja u otro medio no se resta: salió
+//     la mercadería y salió la plata, y lo que falta queda igual.
 const SinCobrarDelPedido = `(CASE WHEN o.estado <> 'cancelado' AND o.estado_pago IN ('pendiente', 'rechazado')
 	  AND o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
 	  AND NOT EXISTS (SELECT 1 FROM account_movements am
 	                  WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
 	  AND NOT ` + PagoEnRevision + `
-	THEN nullif(greatest(o.total - ` + CobradoDelPedido + `, 0), 0) END)`
+	THEN nullif(greatest(` + ACobrarDelPedido + ` - ` + CobradoDelPedido + `, 0), 0) END)`
+
+// ACobrarDelPedido es el total de la fila `o` menos lo que las devoluciones
+// le bajaron de la deuda (destino «deuda»): lo que hay que cobrar.
+const ACobrarDelPedido = `(o.total - coalesce((SELECT sum(dv.importe) FROM devoluciones dv WHERE dv.order_id = o.id AND dv.destino = 'deuda'), 0))`
 
 // CobradoDelPedido es, sobre la fila `o`, lo cobrado fuera de la caja del
 // mostrador: los cobros en línea aprobados y los recibos vivos atados al

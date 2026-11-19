@@ -382,6 +382,16 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 	if r.Estado == sqlc.EstadoReciboAnulado {
 		return "", nil, errCobro("Ese recibo ya estaba anulado.")
 	}
+	// Una devolución ya le reintegró plata (receipt_refunds): anularlo
+	// devolvería la deuda entera y el cierre revertiría el cobro entero, con
+	// lo devuelto contado dos veces.
+	var reintegrado bool
+	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM receipt_refunds WHERE receipt_id = $1)`, recibo).Scan(&reintegrado); err != nil {
+		return "", nil, err
+	}
+	if reintegrado {
+		return "", nil, errCobro("De este recibo ya se devolvió plata con una devolución de la venta: no se anula.")
+	}
 	cheques, err := q.ChequesDelRecibo(ctx, recibo)
 	if err != nil {
 		return "", nil, err

@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/reservas"
 	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // La devolución parcial de una venta (revisión del comité, 18/11/2026). La
@@ -79,7 +80,7 @@ type PedidoDeDevolucion struct {
 	InvoiceID string
 	// Clave la genera el navegador por intento (índice único).
 	Clave string
-	// Destino de la plata: "caja", "cuenta" o "afuera".
+	// Destino de la plata: "caja", "cuenta", "afuera" o "deuda".
 	Destino string
 	Motivo  string
 	// SinStock: "rota" u "otro" si algún renglón con producto no vuelve al
@@ -103,11 +104,13 @@ type Devolucion struct {
 	Repetida bool `json:"repetida"`
 }
 
-// Destinos de la plata de una devolución.
+// Destinos de la plata de una devolución. «deuda» no mueve plata: lo
+// devuelto no se había cobrado, y baja lo que se debe del pedido.
 const (
 	DevolverPorCaja   = "caja"
 	DevolverPorCuenta = "cuenta"
 	DevolverPorAfuera = "afuera"
+	DevolverLaDeuda   = "deuda"
 )
 
 // RenglonDevolvible es un renglón de la factura con lo que queda por
@@ -139,10 +142,12 @@ type DatosDeDevolucion struct {
 	Pedido    string              `json:"pedido"`
 	Renglones []RenglonDevolvible `json:"renglones"`
 	// Caja, Cuenta y Afuera son el tope de plata por cada destino (0: no
-	// corresponde).
+	// corresponde). Deuda es lo que falta cobrar: lo que se devuelve sin
+	// que salga plata.
 	Caja       float64                `json:"caja"`
 	Cuenta     float64                `json:"cuenta"`
 	Afuera     float64                `json:"afuera"`
+	Deuda      float64                `json:"deuda"`
 	ConCliente bool                   `json:"conCliente"`
 	Sucursal   *string                `json:"sucursal"`
 	Sucursales []SucursalDeDevolucion `json:"sucursales"`
@@ -150,15 +155,26 @@ type DatosDeDevolucion struct {
 	VentaAnulada bool `json:"ventaAnulada"`
 }
 
-// topesDeLaVenta es cuánto de la venta entró por cada camino de vuelta.
-type topesDeLaVenta struct{ caja, cuenta, afuera float64 }
+// topesDeLaVenta es cuánto de la venta entró por cada camino de vuelta, y
+// cuánto se debe todavía (deuda: lo que se puede devolver sin que salga
+// plata).
+type topesDeLaVenta struct{ caja, cuenta, afuera, deuda float64 }
 
 // partesDeLaVenta es cuánto entró en efectivo, a cuenta corriente y por los
 // demás medios, menos lo que ya devolvieron las devoluciones por cada
-// destino. Es la misma cuenta que mostrador.Anular: order_payments, o el
-// medio único de las ventas viejas.
+// destino.
+//
+// La venta del mostrador lo tiene en order_payments (la misma cuenta que
+// mostrador.Anular). El pedido que se cobra con recibo no (comité final,
+// A3): antes se tomaba su total como cobrado por el medio del pedido, y del
+// pedido de presupuesto «en efectivo» sin cobrar salía efectivo de la caja
+// por plata que nunca entró. Ahora es lo cobrado de verdad: las partes de
+// los recibos vivos del pedido y los cobros en línea aprobados que ningún
+// recibo nombra, menos lo que ya se les reintegró. Lo que no se cobró es la
+// deuda: devolver eso no saca plata, baja lo que se debe. Una retención no
+// vuelve por ningún lado (es un crédito fiscal con su certificado).
 func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *string, total float64) (topesDeLaVenta, error) {
-	var efectivo, aCuenta, resto float64
+	var efectivo, aCuenta, resto, deuda float64
 	var renglones int
 	if err := c.QueryRow(ctx, `SELECT count(*)::int,
 		coalesce(sum(importe) FILTER (WHERE medio::text = $2), 0)::float8,
@@ -167,14 +183,28 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 		FROM order_payments WHERE order_id = $1`, pedido, ventas.Efectivo, ventas.CuentaCorriente).Scan(&renglones, &efectivo, &aCuenta, &resto); err != nil {
 		return topesDeLaVenta{}, err
 	}
-	if renglones == 0 && medio != nil {
-		switch *medio {
-		case ventas.Efectivo:
-			efectivo = total
-		case ventas.CuentaCorriente:
+	if renglones == 0 {
+		if medio != nil && *medio == ventas.CuentaCorriente {
+			// La deuda del pedido está en la cuenta corriente: vuelve ahí.
 			aCuenta = total
-		default:
-			resto = total
+		} else {
+			if err := c.QueryRow(ctx, `
+				SELECT coalesce(sum(x.importe) FILTER (WHERE x.medio = 'efectivo'), 0)::float8,
+				       coalesce(sum(x.importe) FILTER (WHERE x.medio <> 'efectivo'), 0)::float8,
+				       (SELECT greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`, 0) FROM orders o WHERE o.id = $1)::float8
+				FROM (
+				  SELECT rp.medio::text AS medio, rp.importe FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id
+				  WHERE r.order_id = $1 AND r.estado = 'emitido' AND rp.medio <> 'retencion'
+				  UNION ALL
+				  SELECT CASE WHEN p.medio = 'efectivo' THEN 'efectivo' ELSE 'otro' END,
+				         p.monto - coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)
+				  FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'
+				    AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)
+				) x`, pedido).Scan(&efectivo, &resto, &deuda); err != nil {
+				return topesDeLaVenta{}, err
+			}
+			// Lo que ya volvió de los recibos por una devolución anterior
+			// está en devoluciones (abajo): no se resta dos veces.
 		}
 	}
 	var porCaja, porCuenta, porAfuera float64
@@ -185,7 +215,9 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 		return topesDeLaVenta{}, err
 	}
 	r := jsmath.Redondear2
-	return topesDeLaVenta{r(math.Max(0, efectivo-porCaja)), r(math.Max(0, aCuenta-porCuenta)), r(math.Max(0, resto-porAfuera))}, nil
+	// La deuda ya viene neta de las devoluciones «deuda» (ACobrarDelPedido).
+	return topesDeLaVenta{r(math.Max(0, efectivo-porCaja)), r(math.Max(0, aCuenta-porCuenta)), r(math.Max(0, resto-porAfuera)),
+		r(math.Max(0, deuda))}, nil
 }
 
 // DevueltoDeLaVenta es lo que las devoluciones ya sacaron de cada medio: la
@@ -265,7 +297,7 @@ func (s *Servicio) ParaDevolver(ctx context.Context, invoiceID string) (*DatosDe
 	if err != nil {
 		return nil, err
 	}
-	d.Caja, d.Cuenta, d.Afuera = topes.caja, topes.cuenta, topes.afuera
+	d.Caja, d.Cuenta, d.Afuera, d.Deuda = topes.caja, topes.cuenta, topes.afuera, topes.deuda
 	if !d.ConCliente {
 		d.Cuenta = 0
 	}
@@ -362,7 +394,7 @@ func validarDevolucion(p *PedidoDeDevolucion) error {
 	switch {
 	case p.Clave == "" || len(p.Clave) > 100:
 		return errEmision("Falta la clave del intento: recargá la página.")
-	case p.Destino != DevolverPorCaja && p.Destino != DevolverPorCuenta && p.Destino != DevolverPorAfuera:
+	case p.Destino != DevolverPorCaja && p.Destino != DevolverPorCuenta && p.Destino != DevolverPorAfuera && p.Destino != DevolverLaDeuda:
 		return errEmision("Elegí por dónde vuelve la plata.")
 	case plataforma.LargoJS(p.Motivo) < 4:
 		return errEmision("Escribí el motivo de la devolución.")
@@ -666,6 +698,13 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 			}
 			return Devolucion{}, errEmision("Por afuera vuelve hasta " + formato.Moneda(topes.afuera) + ": lo que esta venta cobró con otros medios.")
 		}
+	case DevolverLaDeuda:
+		if total > topes.deuda+0.005 {
+			if topes.deuda <= 0.005 {
+				return Devolucion{}, errEmision("Esta venta no debe nada: la plata vuelve por donde entró.")
+			}
+			return Devolucion{}, errEmision("De la deuda se baja hasta " + formato.Moneda(topes.deuda) + ": lo que falta cobrar.")
+		}
 	}
 
 	if sinNota {
@@ -791,7 +830,15 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		// El tramo devuelto del cobro en efectivo: el cierre lo asienta como
 		// reintegro (Deudores contra Caja) y la anulación de la venta, si
 		// llega, reintegra solo lo que queda.
-		if err := tramosDelEfectivo(ctx, tx, pedido, total, nombre); err != nil {
+		if err := tramosDelEfectivo(ctx, tx, pedido, id, total, nombre); err != nil {
+			return Devolucion{}, err
+		}
+	case DevolverPorAfuera:
+		// Lo que vuelve por el banco de lo cobrado con recibo: el cierre lo
+		// asienta con el reparto del recibo. Lo de la venta del mostrador y lo
+		// cobrado en línea lo reintegra el posnet o Mercado Pago, que avisa
+		// por su lado.
+		if _, err := reintegrarDeLosRecibos(ctx, tx, pedido, id, total, false); err != nil {
 			return Devolucion{}, err
 		}
 	case DevolverPorCuenta:
@@ -816,12 +863,15 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 	return out, nil
 }
 
-// tramosDelEfectivo anota lo devuelto en los cobros en efectivo de la venta
-// (payment_refunds), repartido en orden mientras les quede. Una venta vieja
-// sin cobros anotados no tiene dónde anotarlo (el cierre tampoco le asentó
-// el cobro); una con cobros que no alcanzan es un descuadre, y no se sigue:
-// la caja tendría la salida y el CSV del estudio no tendría el reintegro.
-func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido string, importe float64, referencia string) error {
+// tramosDelEfectivo anota lo devuelto en los cobros en efectivo de la venta,
+// repartido en orden mientras les quede: primero los de la venta del
+// mostrador (payments, en payment_refunds) y después las partes en efectivo
+// de los recibos del pedido (receipt_refunds). El cierre asienta cada tramo
+// como reintegro, y el del recibo con su reparto. Si no alcanzan es un
+// descuadre y no se sigue: la caja tendría la salida y el CSV del estudio no
+// tendría el reintegro (comité final, A3: antes, sin cobros anotados, se
+// seguía sin anotar nada).
+func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string) error {
 	filas, err := tx.Query(ctx, `SELECT p.id, p.monto::float8, coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)::float8
 		FROM payments p WHERE p.order_id = $1 AND p.medio = $2 AND p.estado = 'aprobado' ORDER BY p.created_at FOR UPDATE`, pedido, ventas.Efectivo)
 	if err != nil {
@@ -844,9 +894,6 @@ func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido string, importe fl
 	if err := filas.Err(); err != nil {
 		return err
 	}
-	if len(cobros) == 0 {
-		return nil
-	}
 	falta := importe
 	for _, c := range cobros {
 		if falta <= 0.005 {
@@ -863,7 +910,73 @@ func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido string, importe fl
 		falta = jsmath.Redondear2(falta - tramo)
 	}
 	if falta > 0.005 {
+		resto, err := reintegrarDeLosRecibos(ctx, tx, pedido, devolucion, falta, true)
+		if err != nil {
+			return err
+		}
+		falta = resto
+	}
+	if falta > 0.005 {
 		return errEmision("Los cobros en efectivo de esta venta no alcanzan para devolver " + formato.Moneda(importe) + ": revisalos en Cobros.")
 	}
 	return nil
+}
+
+// reintegrarDeLosRecibos anota en receipt_refunds lo que la devolución le
+// devuelve a los recibos vivos del pedido, en orden, parte por parte: en
+// efectivo (por caja) o por los medios que dejan rastro en el banco (por
+// afuera). No toca las partes de un cobro en línea (payment_id): su
+// reintegro lo trae Mercado Pago. Con los recibos bloqueados: anular uno a
+// la vez que se le devuelve dejaría la plata devuelta dos veces. Devuelve lo
+// que no alcanzó.
+func reintegrarDeLosRecibos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, enEfectivo bool) (float64, error) {
+	// El candado de cada recibo es el de cobros.AnularRecibo (BloquearRecibo),
+	// en orden, y las partes se leen recién con los candados tomados.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext(id::text)) FROM (SELECT id FROM receipts
+		WHERE order_id = $1 AND estado = 'emitido' ORDER BY id) x`, pedido); err != nil {
+		return 0, err
+	}
+	filas, err := tx.Query(ctx, `
+		SELECT rp.receipt_id, rp.medio::text, sum(rp.importe)::float8
+		  - coalesce((SELECT sum(t.importe) FROM receipt_refunds t WHERE t.receipt_id = rp.receipt_id AND t.medio = rp.medio), 0)::float8
+		FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id
+		WHERE r.order_id = $1 AND r.estado = 'emitido' AND rp.payment_id IS NULL
+		  AND CASE WHEN $2 THEN rp.medio = 'efectivo' ELSE rp.medio NOT IN ('efectivo', 'retencion') END
+		GROUP BY rp.receipt_id, rp.medio, r.created_at ORDER BY r.created_at, rp.receipt_id, rp.medio`, pedido, enEfectivo)
+	if err != nil {
+		return 0, err
+	}
+	type parte struct {
+		recibo, medio string
+		queda         float64
+	}
+	var partes []parte
+	for filas.Next() {
+		var x parte
+		if err := filas.Scan(&x.recibo, &x.medio, &x.queda); err != nil {
+			filas.Close()
+			return 0, err
+		}
+		partes = append(partes, x)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return 0, err
+	}
+	falta := importe
+	for _, x := range partes {
+		if falta <= 0.005 {
+			break
+		}
+		tramo := jsmath.Redondear2(math.Min(falta, x.queda))
+		if tramo <= 0.005 {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO receipt_refunds (receipt_id, devolucion_id, medio, importe) VALUES ($1, $2, $3::medio_de_cobro, $4::numeric)`,
+			x.recibo, devolucion, x.medio, jsmath.Fijo2(tramo)); err != nil {
+			return 0, err
+		}
+		falta = jsmath.Redondear2(falta - tramo)
+	}
+	return falta, nil
 }

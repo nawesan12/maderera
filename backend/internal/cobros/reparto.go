@@ -65,6 +65,8 @@ const (
 	EventoAnulacion
 	// EventoTramo es un tramo de un reintegro parcial de un pago con recibo
 	// (el ID es el del recibo): vuelve en la misma proporción que el recibo.
+	// También lo que una devolución de la venta le devuelve al recibo
+	// (receipt_refunds).
 	EventoTramo
 )
 
@@ -415,6 +417,10 @@ SELECT * FROM (
   SELECT ` + claveDeRecibo + `, t.created_at, 4, r.id::text, t.importe::float8, 0, 0, false, NULL, NULL, NULL, '', 0, 0, '', '{}', 0, ''
   FROM payment_refunds t JOIN receipt_parts x ON x.payment_id = t.payment_id JOIN receipts r ON r.id = x.receipt_id
   WHERE t.account_movement_id IS NOT NULL AND t.created_at <= $1 AND {R}
+  UNION ALL
+  SELECT ` + claveDeRecibo + `, t.created_at, 4, r.id::text, t.importe::float8, 0, 0, false, NULL, NULL, NULL, '', 0, 0, '', '{}', 0, ''
+  FROM receipt_refunds t JOIN receipts r ON r.id = t.receipt_id
+  WHERE t.created_at <= $1 AND {R}
   UNION ALL
   SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text, r.total::float8,
     coalesce((SELECT sum(importe) FROM receipt_parts WHERE receipt_id = r.id AND medio = 'retencion'), 0)::float8,

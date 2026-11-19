@@ -255,7 +255,7 @@ export async function devolver(
   invoiceId: string,
   pedido: {
     clave: string;
-    destino: "caja" | "cuenta" | "afuera";
+    destino: "caja" | "cuenta" | "afuera" | "deuda";
     motivo: string;
     sinStock: "rota" | "otro" | null;
     sucursalId: string | null;

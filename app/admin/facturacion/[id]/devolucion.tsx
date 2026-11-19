@@ -10,7 +10,7 @@ import { Confirmar } from "@/components/admin/confirmar";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { calcularDevolucion, devolver, type EstadoFactura } from "../actions";
 
-type Destino = "caja" | "cuenta" | "afuera";
+type Destino = "caja" | "cuenta" | "afuera" | "deuda";
 type SinStock = "rota" | "otro";
 type Renglon = DatosDeDevolucion["renglones"][number];
 
@@ -111,10 +111,19 @@ export function Devolucion({
   const cajaPosible = cajaAbierta && entra(datos.caja);
   const cuentaPosible = datos.conCliente && entra(datos.cuenta);
   const afueraPosible = entra(datos.afuera);
+  // Lo que no se cobró se devuelve bajando lo que se debe: no sale plata.
+  const deudaPosible = entra(datos.deuda);
   // Lo elegido, mientras siga valiendo; si no, el primero que vale.
-  const posibles: Record<Destino, boolean> = { caja: cajaPosible, cuenta: cuentaPosible, afuera: afueraPosible };
+  const posibles: Record<Destino, boolean> = {
+    caja: cajaPosible,
+    cuenta: cuentaPosible,
+    afuera: afueraPosible,
+    deuda: deudaPosible,
+  };
   const destino: Destino | null =
-    elegido && posibles[elegido] ? elegido : (["caja", "cuenta", "afuera"] as const).find((d) => posibles[d]) ?? null;
+    elegido && posibles[elegido]
+      ? elegido
+      : (["caja", "cuenta", "afuera", "deuda"] as const).find((d) => posibles[d]) ?? null;
 
   const listo =
     pedidos.length > 0 &&
@@ -138,7 +147,9 @@ export function Devolucion({
               ? `${formatearMonto(importe)} a la cuenta`
               : destino === "afuera"
                 ? `${formatearMonto(importe)} por el medio de pago`
-                : null,
+                : destino === "deuda"
+                  ? `${formatearMonto(importe)} menos de deuda`
+                  : null,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -254,6 +265,7 @@ export function Devolucion({
               { valor: "caja", texto: "Caja", deshabilitada: !cajaPosible },
               { valor: "cuenta", texto: "Cuenta", deshabilitada: !cuentaPosible },
               { valor: "afuera", texto: "Otro medio", deshabilitada: !afueraPosible },
+              { valor: "deuda", texto: "Baja la deuda", deshabilitada: !deudaPosible },
             ]}
           />
         </div>

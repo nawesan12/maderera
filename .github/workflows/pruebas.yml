@@ -47,6 +47,12 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+      # Los golden del PDF rasterizan y leen el texto con poppler (pdftoppm,
+      # pdftotext). En local se saltean sin él; con CI puesto fallan a
+      # propósito, para que la comparación no deje de correr sin que nadie
+      # se entere.
+      - name: poppler para los golden del PDF
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
       - run: go vet ./...
       - run: go test ./...
       # Lo generado tiene que coincidir con lo que está en el repo: un

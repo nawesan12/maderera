@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
+import { useMedidaElegida } from "@/components/catalogo/medida-elegida";
 
 /**
  * Galería de la ficha pública.
@@ -17,12 +18,15 @@ import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
  */
 export function GaleriaProducto({
   imagenes,
+  fotoDeMedida = {},
   nombre,
   rubro,
   categoria,
   marca,
 }: {
   imagenes: string[];
+  /** Por id de medida, la posición de su foto en `imagenes`. */
+  fotoDeMedida?: Record<string, number>;
   nombre: string;
   /** Para la placa, cuando no hay foto: lo que se estampa y el tono. */
   rubro: string;
@@ -30,13 +34,22 @@ export function GaleriaProducto({
   marca?: string | null;
 }) {
   const [activa, setActiva] = useState(0);
+  const medida = useMedidaElegida()?.id ?? null;
+  const [medidaVista, setMedidaVista] = useState(medida);
+  // Se ajusta al dibujar, no en un efecto: así no se pinta un cuadro con la
+  // foto de la medida anterior.
+  if (medida !== medidaVista) {
+    setMedidaVista(medida);
+    const indice = medida ? fotoDeMedida[medida] : undefined;
+    if (indice !== undefined && indice < imagenes.length) setActiva(indice);
+  }
 
   // Sin foto, la placa del rubro (hallazgo 25): «Sin foto todavía» con un
   // ícono de imagen rota era lo primero que se veía de la ficha. Es una
   // imagen para el lector de pantalla, con el nombre del producto.
   if (imagenes.length === 0) {
     return (
-      <div role="img" aria-label={nombre} className="relative aspect-[4/3] overflow-hidden rounded-2xl shadow-sm">
+      <div role="img" aria-label={nombre} className="relative -mx-6 aspect-[4/3] overflow-hidden shadow-sm sm:mx-0 sm:rounded-2xl">
         <PlacaDeProducto rubro={rubro} categoria={categoria} marca={marca} tamano="ficha" />
       </div>
     );
@@ -44,7 +57,7 @@ export function GaleriaProducto({
 
   return (
     <div>
-      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-card shadow-sm">
+      <div className="relative -mx-6 aspect-[4/3] overflow-hidden bg-card sm:mx-0 sm:rounded-2xl sm:shadow-sm">
         <Image
           src={imagenes[activa]}
           alt={`${nombre}${activa > 0 ? ` — foto ${activa + 1}` : ""}`}

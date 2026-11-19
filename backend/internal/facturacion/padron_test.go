@@ -261,3 +261,29 @@ func TestElPadronNoMuerePorElTopeDelPool(t *testing.T) {
 		t.Errorf("el tope quedó en %q (%v)", tope, err)
 	}
 }
+
+// El listado del padrón cruza los CUIT limpios una sola vez (comité final):
+// el cliente con el CUIT con guiones figura con el nombre del más viejo, y
+// el renglón de quien no es cliente no figura.
+func TestElListadoDelPadron(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	hoy := time.Now().In(fiscal.Argentina)
+	desde, hasta := hoy.AddDate(0, 0, -1).Format("02012006"), hoy.AddDate(0, 0, 20).Format("02012006")
+	archivo := "P;01012026;" + desde + ";" + hasta + ";30712345671;C;N;N;2,50;00;\n" +
+		"P;01012026;" + desde + ";" + hasta + ";30589445259;C;N;N;1,00;00;\n"
+	if _, err := e.s.ImportarPadron(ctx, "", strings.NewReader(archivo)); err != nil {
+		t.Fatal(err)
+	}
+	e.exec(t, `INSERT INTO customers (nombre, razon_social, cuit, condicion_iva, created_at) VALUES
+		('Gómez', 'Gómez SRL', '30-71234567-1', 'responsable_inscripto', now() - interval '1 day'),
+		('Gómez repetido', '', '30712345671', 'responsable_inscripto', now()),
+		('Sin padrón', '', '20-12345678-6', 'responsable_inscripto', now())`)
+	filas, err := e.s.Padron(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filas) != 1 || filas[0].Cuit != "30712345671" || filas[0].Cliente == nil || *filas[0].Cliente != "Gómez SRL" || filas[0].Alicuota != 2.5 {
+		t.Fatalf("%+v", filas)
+	}
+}

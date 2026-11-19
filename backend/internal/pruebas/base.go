@@ -94,7 +94,17 @@ func Base(t testing.TB) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 
-	pool, err := pgxpool.New(ctx, conBase(servidor, nombre))
+	// El pool del tamaño del de producción (DATABASE_POOL_MAX, 20), no el
+	// de pgx por omisión, que es max(4, núcleos): en la Mac daba 10 o más y
+	// en el runner de GitHub (4 núcleos) 4. Las pruebas de concurrencia que
+	// abren diez conexiones de una se quedaban esperando la quinta para
+	// siempre, y solo en la CI.
+	cfgPool, err := pgxpool.ParseConfig(conBase(servidor, nombre))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfgPool.MaxConns = 20
+	pool, err := pgxpool.NewWithConfig(ctx, cfgPool)
 	if err != nil {
 		t.Fatal(err)
 	}

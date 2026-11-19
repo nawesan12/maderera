@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { NARANJA_MARCA, svgLogotipo } from "@/lib/marca/logotipo";
 
 /**
  * La imagen que aparece cuando alguien comparte el sitio por WhatsApp.
@@ -18,7 +19,14 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 /* Los colores de marca, escritos acá porque el generador no lee el CSS. */
-const NARANJA = "#E8590C";
+const NARANJA = NARANJA_MARCA;
+
+/**
+ * El logotipo de la guía en vectores. Antes el nombre iba escrito con la letra
+ * del generador: es el «reemplazo tipográfico» que la guía prohíbe, y era lo
+ * que se veía en cada enlace compartido.
+ */
+const LOGO = `data:image/svg+xml;base64,${Buffer.from(svgLogotipo()).toString("base64")}`;
 const CREMA = "#FBF7F0";
 const TINTA = "#1F1B16";
 const GRIS = "#6B6259";
@@ -48,12 +56,7 @@ export default async function Imagen() {
             padding: "0 72px",
           }}
         >
-          <div style={{ fontSize: 76, fontWeight: 700, color: TINTA, lineHeight: 1.02 }}>
-            Maderera
-          </div>
-          <div style={{ fontSize: 76, fontWeight: 700, color: NARANJA, lineHeight: 1.02 }}>
-            Juan B. Justo
-          </div>
+          <img src={LOGO} alt="Maderera Juan B. Justo" width={760} height={148} style={{ width: 760, height: 148 }} />
 
           <div
             style={{

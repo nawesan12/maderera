@@ -111,12 +111,14 @@ export function TarjetaDeProducto({
           product.image ? "aspect-square" : "aspect-[5/2]"
         }`}
       >
+        {/* El acercamiento crece desde abajo: en las placas el canto ocupa
+            el 8–10 % de abajo de la foto y es lo que muestra qué es. */}
         {product.image ? (
           <Image
             src={product.image}
             alt={product.name}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transform-none"
+            className="origin-bottom object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transform-none"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           />
         ) : (

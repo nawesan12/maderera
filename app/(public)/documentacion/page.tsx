@@ -52,7 +52,6 @@ export default async function DocumentacionPage() {
   return (
     <div className="min-h-screen bg-sitio-alt">
       <EncabezadoPublico
-        foto="/fotos/photo-1700973408133-b45276ec8feb.jpg"
         ruta="/documentacion"
         titulo="Documentación"
         bajada="Fichas técnicas, tablas de carga e instructivos, listos para adjuntar al pliego."

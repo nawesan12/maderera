@@ -693,7 +693,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   background-image: var(--textura-superficie);
   background-size: 180px 180px;
   border-radius: 0.5rem;
-  box-shadow: 0 0 0 1.5px rgb(240 115 22 / 0.45);
+  box-shadow: 0 0 0 1.5px rgb(236 125 56 / 0.45);
 }
 
 .tarjeta-activa:hover {

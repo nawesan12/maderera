@@ -1,73 +1,74 @@
-import Image from "next/image";
+import { TRAZO_ISOTIPO, TRAZO_NOMBRE, VISTA_ISOTIPO, VISTA_LOGOTIPO } from "@/lib/marca/logotipo";
 
 /**
- * La marca: la «M» del logo y el nombre, escrito como en el logo —MADERERA
- * espaciada y fina, JUAN B. JUSTO en negrita—.
+ * La marca: el logotipo de la guía de identidad, en vectores.
  *
- * El nombre va en texto y no en la imagen del logo completo
- * (`public/marca/logo-maderera.png`, 463 × 89): esa tiene el nombre en gris,
- * que no se lee sobre el pie ni el panel oscuros, y no se puede agrandar sin
- * que se pixele. El ícono sí: es de 180 px, y a doble densidad alcanza hasta
- * 90 px en pantalla.
+ * Antes era la «M» en un PNG de 180 px y el nombre escrito en Geist. La guía
+ * del estudio Ranina prohíbe ese «reemplazo tipográfico», y el PNG se pixelaba
+ * al agrandarlo. Ahora es el logotipo apaisado del PDF de la guía
+ * (`lib/marca/logotipo.ts`), con sus dos colores: la «m» en el naranja de la
+ * marca y el nombre en `currentColor` —el gris #505052 de la guía sobre claro,
+ * blanco sobre oscuro—.
  *
  * Una sola pieza para todo el sistema (notas del 9/11/2026: «más presencia a
- * la marca, logo y nombre más grandes en todos lados»); antes cada pantalla
- * tenía su copia, con tamaños distintos.
+ * la marca, logo y nombre más grandes en todos lados»).
  */
-const TAMANOS = {
+const ALTOS = {
   // Entre 1024 y 1280 la barra lleva todos los enlaces: ahí va un poco más
   // chica para no correr la página de costado.
-  barra: {
-    icono: 56,
-    clase: "h-12 w-12 xl:h-14 xl:w-14",
-    nombre: "text-[18px] xl:text-[21px]",
-    arriba: "text-[10px] xl:text-[11px]",
-    radio: "rounded-[13px]",
-  },
-  pie: { icono: 60, nombre: "text-[23px]", arriba: "text-[11.5px]", radio: "rounded-[15px]" },
-  panel: { icono: 38, nombre: "text-[16px]", arriba: "text-[9.5px]", radio: "rounded-[10px]" },
-  grande: { icono: 84, nombre: "text-[28px] sm:text-[34px]", arriba: "text-[14px]", radio: "rounded-[20px]" },
+  barra: "h-10 xl:h-12",
+  pie: "h-12",
+  panel: "h-8",
+  grande: "h-16 sm:h-20",
 } as const;
+
+export function Logotipo({ className = "", titulo = true }: { className?: string; titulo?: boolean }) {
+  return (
+    <svg
+      viewBox={VISTA_LOGOTIPO}
+      className={`w-auto shrink-0 ${className}`}
+      role={titulo ? "img" : undefined}
+      aria-label={titulo ? "Maderera Juan B. Justo" : undefined}
+      aria-hidden={titulo ? undefined : true}
+    >
+      <path fill="var(--marca-naranja, #EC7D38)" fillRule="evenodd" d={TRAZO_ISOTIPO} />
+      <path fill="currentColor" fillRule="evenodd" d={TRAZO_NOMBRE} />
+    </svg>
+  );
+}
+
+/** La «m» sola, en el color del texto (o el que diga `className`). */
+export function Isotipo({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox={VISTA_ISOTIPO} className={`w-auto shrink-0 ${className}`} aria-hidden="true">
+      <path fill="currentColor" fillRule="evenodd" d={TRAZO_ISOTIPO} />
+    </svg>
+  );
+}
 
 export function Marca({
   tamano = "barra",
   tono = "claro",
   etiqueta,
 }: {
-  tamano?: keyof typeof TAMANOS;
+  tamano?: keyof typeof ALTOS;
   /** «oscuro» es sobre fondo oscuro: el pie, el menú del panel. */
   tono?: "claro" | "oscuro";
-  /** Lo que reemplaza a MADERERA arriba del nombre: «Panel», «Taller». */
+  /** Dónde se está: «Panel», «Taller». Va debajo, sin tocar el logotipo. */
   etiqueta?: string;
 }) {
-  const t = TAMANOS[tamano];
+  const color = tono === "oscuro" ? "text-white" : "text-[#505052] dark:text-white";
+  if (!etiqueta) return <Logotipo className={`${ALTOS[tamano]} ${color}`} />;
   return (
-    <span className="flex items-center gap-3">
-      <Image
-        src="/cropped-icon-180x180.png"
-        alt=""
-        width={t.icono}
-        height={t.icono}
-        className={`${t.radio} ${"clase" in t ? t.clase : ""} shrink-0`}
-        priority={tamano === "barra"}
-      />
-      <span className="whitespace-nowrap leading-none">
-        <span
-          className={`block ${t.arriba} font-medium uppercase tracking-[0.42em] ${
-            tono === "oscuro" ? "text-white/65" : "text-texto-3"
-          }`}
-        >
-          {etiqueta ?? "Maderera"}
-        </span>
-        <span
-          className={`mt-1 block ${t.nombre} font-extrabold uppercase tracking-[0.03em] ${
-            tono === "oscuro" ? "text-white" : "text-foreground"
-          }`}
-        >
-          Juan B. Justo
-        </span>
+    <span className="flex flex-col items-start gap-1.5">
+      <Logotipo className={`${ALTOS[tamano]} ${color}`} />
+      <span
+        className={`text-[10.5px] font-semibold uppercase tracking-[0.28em] ${
+          tono === "oscuro" ? "text-white/60" : "text-texto-3"
+        }`}
+      >
+        {etiqueta}
       </span>
-      <span className="sr-only">Maderera Juan B. Justo</span>
     </span>
   );
 }

@@ -1,8 +1,9 @@
-import Image from "next/image";
+import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import { ANIO_FUNDACION } from "@/lib/empresa";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
+import { Isotipo } from "@/components/marca";
 
 /**
  * Encabezado de las páginas de contenido.
@@ -26,8 +27,15 @@ export function EncabezadoPublico({
   foto,
 }: {
   titulo: string;
-  /** Foto de fondo, atenuada. Sin ella la banda era rayas y texto en todas las páginas. */
-  foto?: string;
+  /**
+   * Foto de fondo, atenuada. Sin ella va con las rayas y la «M».
+   *
+   * Las fotos de encabezado se recortan como banda (1920×800, docs/fotos.md):
+   * a 1440×300 en la computadora solo se ve la franja del medio, y en el
+   * teléfono queda detrás de la capa al 85 %. Una página para actuar o de
+   * documentos (contacto, documentación, eventos) no gana nada con una foto.
+   */
+  foto?: string | StaticImageData;
   /** La ruta de la página: si está, emite las migas como datos estructurados. */
   ruta?: string;
   bajada?: string;
@@ -47,7 +55,7 @@ export function EncabezadoPublico({
       )}
       {foto ? (
         <>
-          <Image src={foto} alt="" fill preload className="object-cover" sizes="100vw" />
+          <Image src={foto} alt="" fill preload className="object-cover" sizes="100vw" placeholder={typeof foto === "string" ? "empty" : "blur"} />
           {/* En el teléfono el texto ocupa todo el ancho: oscuro parejo, para
               que las migas y la bajada se lean sobre cualquier parte de la foto. */}
           <div
@@ -57,21 +65,15 @@ export function EncabezadoPublico({
         </>
       ) : (
         <div
-          className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
+          className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.07)_0_12px,transparent_12px_24px)]"
           aria-hidden="true"
         />
       )}
       {/* La «M» del logo, grande y a un costado: la firma de la maderera en
           cada sección (notas del 9/11/2026). */}
-      <Image
-        src="/cropped-icon-180x180.png"
-        alt=""
-        width={180}
-        height={180}
-        className="pointer-events-none absolute -right-6 top-1/2 hidden data-[foto=true]:!hidden -translate-y-1/2 rotate-[-8deg] rounded-[40px] opacity-[0.13] md:block"
-        aria-hidden="true"
-        data-foto={Boolean(foto)}
-      />
+      {!foto && (
+        <Isotipo className="pointer-events-none absolute -right-4 top-1/2 hidden h-[150px] -translate-y-1/2 rotate-[-8deg] text-[#EC7D38] opacity-[0.16] md:block" />
+      )}
       <div className="contenedor relative">
         <nav
           aria-label="Dónde estás"

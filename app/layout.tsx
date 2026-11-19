@@ -78,7 +78,15 @@ export const metadata: Metadata = {
   robots: sitioIndexable()
     ? { index: true, follow: true, "max-image-preview": "large" }
     : { index: false, follow: false },
-  icons: { icon: "/cropped-icon-180x180.png", apple: "/cropped-icon-180x180.png" },
+  // Del isotipo en vectores (scripts/marca/iconos.mjs): el círculo de la guía
+  // para la pestaña y el cuadrado lleno para el celular, que redondea solo.
+  icons: {
+    icon: [
+      { url: "/icono.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "48x48" },
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 /**

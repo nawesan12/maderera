@@ -35,6 +35,11 @@ import { BotonCrearCuenta } from "@/components/boton-crear-cuenta";
 import { MARCAS_DE_PAGO, marcaDelMedio, type MarcaDePago } from "@/lib/medios-de-pago";
 import { metadatosDePagina } from "@/lib/seo";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+// Fotos propias del Drive de la clienta (docs/fotos.md), importadas: Next les
+// pone hash y caché permanente, y el desenfoque mientras cargan.
+import corteCantos from "@/lib/sitio/corte-cantos.webp";
+import fenolico from "@/lib/sitio/fenolico.webp";
+import moldavaCasilleros from "@/lib/sitio/moldava-casilleros.webp";
 
 /**
  * La portada dice primero qué es y dónde: «maderera en Mar del Plata» es lo
@@ -331,7 +336,7 @@ function BannerCorte() {
       <div className="contenedor">
         <div className="relative overflow-hidden rounded-2xl bg-oscuro-marca text-white">
           <div
-            className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.08)_0_11px,transparent_11px_22px)]"
+            className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.08)_0_11px,transparent_11px_22px)]"
             aria-hidden="true"
           />
           <div className="relative grid items-stretch md:grid-cols-[1.35fr_1fr]">
@@ -360,9 +365,10 @@ function BannerCorte() {
             </div>
             <div className="relative order-first min-h-[200px] md:order-none md:min-h-[260px]" aria-hidden="true">
               <Image
-                src="/fotos/photo-1631396328075-9c65a7406f09.jpg"
+                src={corteCantos}
                 alt=""
                 fill
+                placeholder="blur"
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 40vw"
               />
@@ -593,15 +599,16 @@ function BannerProfesionales({ tiendaActiva }: { tiendaActiva: boolean }) {
       <div className="contenedor">
         <div>
           <article className="superficie grid overflow-hidden rounded-2xl md:grid-cols-2">
-            {/* La foto arriba: son carpinteros trabajando con la madera que
-                vende la casa, que es exactamente a quién le habla el bloque.
+            {/* La foto arriba: fenólico con film apilado, con los cantos a la
+                vista, que es lo que compra el gremio.
                 `priority` no: está abajo del hero y cargarla antes le saca
                 ancho de banda a lo primero que se ve. */}
             <div className="relative h-[220px] md:h-auto md:min-h-[320px]">
               <Image
-                src="/fotos/photo-1773430272778-28c224216811.jpg"
+                src={fenolico}
                 alt=""
                 fill
+                placeholder="blur"
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />
@@ -706,9 +713,10 @@ function Historia({ anios }: { anios: number }) {
           <div className="relative">
             <div className="relative h-[360px] overflow-hidden rounded-3xl lg:h-[480px]">
               <Image
-                src="/fotos/photo-1634672652995-ee7525bce595.jpg"
-                alt="Tablas apiladas en el depósito"
+                src={moldavaCasilleros}
+                alt="La estantería de molduras Moldava en el depósito"
                 fill
+                placeholder="blur"
                 className="object-cover"
                 sizes="(max-width: 1024px) 100vw, 50vw"
               />

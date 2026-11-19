@@ -29,7 +29,6 @@ export default async function EventosPage() {
   return (
     <div className="min-h-screen bg-sitio-alt">
       <EncabezadoPublico
-        foto="/fotos/photo-1631396328075-9c65a7406f09.jpg"
         ruta="/eventos"
         titulo="Capacitaciones y eventos"
         bajada="Jornadas en la sucursal, con cupo limitado."

@@ -119,7 +119,9 @@ func TestCorteConLaSierraConfigurada(t *testing.T) {
 	if _, err := e.pool.Exec(context.Background(), `insert into calculator_settings (ancho_sierra_mm) values (3.2)`); err != nil {
 		t.Fatal(err)
 	}
-	v := e.venta("transferencia", e.lineaPlaca(1))
+	// Dos piezas chicas no llevan la placa (comité final, A2: cobrarla sería
+	// de más): se vende el corte con otra cosa.
+	v := e.venta("transferencia", map[string]any{"variantId": e.tornillo, "descripcion": "Tornillo", "unidad": "unidad", "cantidad": 1, "precioUnitario": 150})
 	v["corte"] = map[string]any{"variantId": e.placa, "materialDescripcion": "Placa", "placas": 1, "pasadas": 2,
 		"cantoDescripcion": nil, "placaLargoMm": nil, "placaAnchoMm": nil, "mitad": nil, "acomodoManual": nil,
 		"piezas": []map[string]any{{"largoMm": 600, "anchoMm": 400, "cantidad": 2, "respetaVeta": 0, "cantoLargo": 0, "cantoAncho": 0,

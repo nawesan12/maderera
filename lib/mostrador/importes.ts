@@ -50,6 +50,13 @@ export interface LineaDeVenta {
    * que no le cree a este.
    */
   precioLista?: number | null;
+  /**
+   * El corte de la venta del que salió el renglón, en la pantalla (ver
+   * `lib/mostrador/cortes-de-la-venta.ts`). A Go viaja como `corte`, el
+   * índice del despiece en la venta.
+   */
+  corteId?: string;
+  corte?: number;
 }
 
 /**

@@ -60,7 +60,8 @@ export interface VentaDelMostrador {
   descuento?: number;
   descuentoMotivo?: string | null;
   notas?: string | null;
-  corte?: CorteDeMostrador;
+  /** Los cortes de la venta; cada renglón de uno lleva su índice en `corte`. */
+  cortes?: CorteDeMostrador[];
   /** El PIN de un admin, o la ficha de un PIN anterior para esta venta. */
   pin?: string;
   ficha?: string;

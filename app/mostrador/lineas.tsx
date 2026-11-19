@@ -1,15 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Trash2, X } from "lucide-react";
+import { Scissors, Trash2, X } from "lucide-react";
 import { formatearMonto, formatearUnidad } from "@/lib/formato";
+import { formatearCantidad } from "@/lib/unidades";
 import { esLineaDelCorte, type LineaDeVenta } from "@/lib/mostrador/importes";
 import { enfocar } from "./atajos";
 
-/** Agrega una línea, o suma la cantidad si esa medida ya está en la venta. */
+/**
+ * Agrega una línea, o suma la cantidad si esa medida ya está en la venta. La
+ * placa de un corte no se toca: es de su plano, y sumarle una placa suelta
+ * descuadra lo que se cobra del corte.
+ */
 export function sumar(lineas: LineaDeVenta[], nueva: LineaDeVenta): LineaDeVenta[] {
   const i = lineas.findIndex(
-    (l) => l.variantId && l.variantId === nueva.variantId,
+    (l) =>
+      l.variantId &&
+      l.variantId === nueva.variantId &&
+      l.corteId == null &&
+      (l.presentacion ?? null) === (nueva.presentacion ?? null),
   );
   if (i === -1) return [...lineas, nueva];
 
@@ -22,11 +31,17 @@ export function sumar(lineas: LineaDeVenta[], nueva: LineaDeVenta): LineaDeVenta
 export function Lineas({
   lineas,
   onCambiar,
+  onEditarCorte,
+  onQuitarCorte,
   onLimpiar,
   onNoVaciar,
 }: {
   lineas: LineaDeVenta[];
   onCambiar: (l: LineaDeVenta[]) => void;
+  /** Reabre el corte del renglón para corregirlo. */
+  onEditarCorte: (corteId: string) => void;
+  /** Saca el corte entero: un renglón suyo solo no cierra con el plano. */
+  onQuitarCorte: (corteId: string) => void;
   onLimpiar: () => void;
   /** Se arrepintió de vaciar: el cursor vuelve al buscador. */
   onNoVaciar: () => void;
@@ -74,16 +89,21 @@ export function Lineas({
           // Cambiado a mano respecto de la lista: en naranja, con la lista
           // tachada al lado. Quien mira la pantalla ve qué se tocó.
           const tocado = l.precioLista != null && Math.abs(l.precioLista - l.precioUnitario) > 0.005;
-          // El corte se lee por su importe: la cantidad es de pasadas y el
-          // nombre, de piezas (ver esLineaDelCorte). Se corrige reabriéndolo.
-          const delCorte = esLineaDelCorte(l);
+          // Lo del corte se lee por su importe y se corrige reabriéndolo: Go
+          // rechaza un corte que no cobra lo de su plano (comité final, A2).
+          // La pasada suelta, sin corte atado, también: su cantidad es de
+          // pasadas y su nombre, de piezas (ver esLineaDelCorte).
+          const corteId = l.corteId;
+          const delCorte = esLineaDelCorte(l) || corteId != null;
           return (
             <li key={`${l.variantId ?? "suelta"}-${i}`} className="flex items-center gap-3 px-4 py-3">
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-base font-medium">{l.descripcion}</span>
                 <span className="block text-sm text-muted-foreground">
                   {delCorte
-                    ? "del plano"
+                    ? esLineaDelCorte(l)
+                      ? "del plano"
+                      : `${formatearCantidad(l.cantidad)} ${formatearUnidad(l.unidad)} · del plano`
                     : l.presentacion
                       ? "cada media placa"
                       : `por ${formatearUnidad(l.unidad)}`}
@@ -91,7 +111,18 @@ export function Lineas({
               </span>
 
               {delCorte ? (
-                <span aria-hidden className="w-[16.25rem] shrink-0" />
+                <span className="flex w-[16.25rem] shrink-0 justify-end">
+                  {corteId != null && (
+                    <button
+                      type="button"
+                      onClick={() => onEditarCorte(corteId)}
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-3 text-base font-medium transition-colors hover:bg-hundida"
+                    >
+                      <Scissors className="h-4 w-4" />
+                      Corregir
+                    </button>
+                  )}
+                </span>
               ) : (
                 <>
                   <label className="shrink-0">
@@ -159,8 +190,10 @@ export function Lineas({
               </span>
 
               <button
-                onClick={() => onCambiar(lineas.filter((_, j) => j !== i))}
-                aria-label={`Quitar ${l.descripcion}`}
+                onClick={() =>
+                  corteId != null ? onQuitarCorte(corteId) : onCambiar(lineas.filter((_, j) => j !== i))
+                }
+                aria-label={corteId != null ? `Quitar el corte de ${l.descripcion}` : `Quitar ${l.descripcion}`}
                 className="w-8 shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
               >
                 <Trash2 className="h-4 w-4" />

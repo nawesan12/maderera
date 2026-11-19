@@ -40,6 +40,9 @@ type CorteDeMostrador struct {
 	Piezas              []PiezaDeCorte `json:"piezas"`
 }
 
+// TopeDeCortes es cuántos despieces entran en una venta.
+const TopeDeCortes = 20
+
 // VentaPedida es lo que llega para cobrar: por la acción en línea o por la
 // cola sin conexión (con número provisorio y hora del mostrador).
 type VentaPedida struct {
@@ -58,7 +61,10 @@ type VentaPedida struct {
 	DescuentoMotivo  *string
 	Notas            *string
 	Autorizado       bool
-	Corte            *CorteDeMostrador
+	// Cortes son los despieces de la venta: puede llevar varios (dos placas
+	// distintas, o la misma en dos trabajos), cada uno con sus renglones
+	// atados por LineaDeVenta.Corte (comité final, A2).
+	Cortes []CorteDeMostrador
 	// PIN de un admin, o la Ficha que devolvió un PIN anterior para esta
 	// misma venta (internal/autorizacion).
 	PIN   string
@@ -109,6 +115,7 @@ func leerLinea(e *zodjs.Lector, cola bool) ventas.LineaDeVenta {
 	l.Cantidad = numero(e.Numero("cantidad", zodjs.Num{}, zodjs.Positivo()))
 	l.PrecioUnitario = numero(e.Numero("precioUnitario", zodjs.Num{}, zodjs.Min(0)))
 	l.Presentacion = e.Opcion("presentacion", zodjs.Opciones{Opcional: true, Nulo: true}, "media_largo", "media_ancho")
+	l.Corte = enteroONulo(e.Numero("corte", zodjs.Num{Opcional: true, Nulo: true}, zodjs.Entero(), zodjs.Min(0), zodjs.Max(TopeDeCortes-1)))
 	return l
 }
 
@@ -212,9 +219,14 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	l := zodjs.Raiz(crudo)
 	v := leerComun(l, false)
 	v.Autorizado = booleano(l.Booleano("autorizado", true))
+	// «corte» es el de antes, uno solo y sin renglones atados (lo arma
+	// atarRenglonesAlCorte); «cortes», la lista de ahora.
 	if c := l.Objeto("corte", true, false); c != nil {
-		v.Corte = leerCorte(c)
+		v.Cortes = append(v.Cortes, *leerCorte(c))
 	}
+	l.Objetos("cortes", zodjs.Lista{Opcional: true, Max: TopeDeCortes}, func(_ int, c *zodjs.Lector) {
+		v.Cortes = append(v.Cortes, *leerCorte(c))
+	})
 	if p := l.Cadena("pin", zodjs.Texto{Opcional: true, Nulo: true, Max: 20}); p != nil {
 		v.PIN = *p
 	}

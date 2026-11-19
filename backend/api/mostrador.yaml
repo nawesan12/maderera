@@ -333,6 +333,7 @@ components:
         precioUnitario: { type: number, format: double }
         presentacion: { type: string, nullable: true }
         precioLista: { type: number, format: double, nullable: true, description: el de la lista del cliente, que pone el servidor }
+        corte: { type: integer, description: "el despiece de la venta del que salió el renglón (su índice en cortes)" }
     MostradorResultadoVenta:
       type: object
       required: [ok, total, nueva]

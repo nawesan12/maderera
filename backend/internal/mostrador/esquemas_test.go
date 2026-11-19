@@ -74,18 +74,19 @@ func TestGoldenEsquemas(t *testing.T) {
 				}
 			}
 			if k, ok := c.Datos["corte"].(map[string]any); ok {
-				if v.Corte == nil || v.Corte.MaterialDescripcion != k["materialDescripcion"] {
-					t.Fatalf("ventaAccion %d: corte %+v", i, v.Corte)
+				if len(v.Cortes) != 1 || v.Cortes[0].MaterialDescripcion != k["materialDescripcion"] {
+					t.Fatalf("ventaAccion %d: corte %+v", i, v.Cortes)
 				}
-				if x, ok := k["placaAnchoMm"].(float64); ok && (v.Corte.PlacaAnchoMm == nil || float64(*v.Corte.PlacaAnchoMm) != x) {
+				corte := v.Cortes[0]
+				if x, ok := k["placaAnchoMm"].(float64); ok && (corte.PlacaAnchoMm == nil || float64(*corte.PlacaAnchoMm) != x) {
 					t.Fatalf("ventaAccion %d: placaAnchoMm", i)
 				}
 				for j, p := range k["piezas"].([]any) {
 					m := p.(map[string]any)
-					if float64(v.Corte.Piezas[j].AnchoMm) != m["anchoMm"].(float64) {
+					if float64(corte.Piezas[j].AnchoMm) != m["anchoMm"].(float64) {
 						t.Fatalf("ventaAccion %d: pieza %d", i, j)
 					}
-					if e, ok := m["etiqueta"].(string); ok && (v.Corte.Piezas[j].Etiqueta == nil || *v.Corte.Piezas[j].Etiqueta != e) {
+					if e, ok := m["etiqueta"].(string); ok && (corte.Piezas[j].Etiqueta == nil || *corte.Piezas[j].Etiqueta != e) {
 						t.Fatalf("ventaAccion %d: etiqueta", i)
 					}
 				}

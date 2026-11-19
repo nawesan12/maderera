@@ -21,7 +21,6 @@ import {
 } from "@/lib/mostrador/importes";
 import { useCopiaLocal } from "@/lib/mostrador/offline/use-copia-local";
 import type {
-  CorteDeMostrador,
   ResultadoDeMostrador,
   RenglonDelCierre,
 } from "@/lib/mostrador/tipos";
@@ -45,6 +44,7 @@ import { Buscador } from "./buscador";
 import { PanelDeCaja } from "./caja";
 import { Cobro } from "./cobro";
 import { CorteAMedida, hayAlgoCargado, type EstadoDelCorte } from "./corte-a-medida";
+import { conElCorte, paraCobrar, sinElCorte, type CorteEnLaVenta } from "@/lib/mostrador/cortes-de-la-venta";
 import { sumar, Lineas } from "./lineas";
 import { cobrarSinConexion as guardarSinConexion, useColaDelMostrador } from "./sin-conexion";
 import { faltaIdentificarComprador } from "@/lib/fiscal/umbral";
@@ -198,14 +198,18 @@ export function VistaMostrador({
    *
    * Viaja con la venta y el trabajo nace recién cuando se cobra: armar el
    * despiece y cancelar la venta no puede dejar un trabajo fantasma en la cola
-   * del taller. Ver `CorteDeMostrador` en `lib/mostrador/venta.ts`.
+   * del taller. Ver `CorteDeMostrador` en `lib/mostrador/tipos.ts`.
    */
-  const [corte, setCorte] = useState<CorteDeMostrador | null>(null);
-  // Los renglones que agregó el corte, por descripción: cambiarles la
-  // cantidad no los cambia, y sacarlos todos saca el corte.
-  const [renglonesDelCorte, setRenglonesDelCorte] = useState<string[]>([]);
+  /*
+   * Los cortes de la venta: puede llevar varios, y cada renglón que sale de
+   * uno lleva su `corteId` (comité final, A2). Ver
+   * `lib/mostrador/cortes-de-la-venta.ts`.
+   */
+  const [cortes, setCortes] = useState<CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador>[]>([]);
   /** La placa elegida para cortar, mientras el diálogo está abierto. */
   const [cortando, setCortando] = useState<ResultadoDeMostrador | null>(null);
+  /** El corte de la venta que se está corrigiendo, si se reabrió uno. */
+  const [corrigiendo, setCorrigiendo] = useState<CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador> | null>(null);
   /*
    * Lo que se cargó en el último corte que se cerró sin agregarlo.
    *
@@ -493,8 +497,8 @@ export function VistaMostrador({
     setTarjeta({ nroLote: "", nroCupon: "", marca: "", cuotas: 1 });
     setCheque(CHEQUE_VACIO);
     setPartes(null);
-    setCorte(null);
-    setRenglonesDelCorte([]);
+    setCortes([]);
+    setCorrigiendo(null);
     setPidePin(null);
     setFicha(null);
     // Terminada la venta, el foco vuelve al buscador: lo que sigue siempre es
@@ -664,20 +668,20 @@ export function VistaMostrador({
       return;
     }
 
+    // Cada renglón del corte viaja atado a su despiece, y Go controla que
+    // cada corte cobre lo de su plano.
+    const conLosCortes = paraCobrar(lineas, cortes);
     empezar(async () => {
       const r = await cobrarVenta({
         clave,
         branchId: sucursal.id,
-        lineas,
+        lineas: conLosCortes.lineas,
         customerId: cliente?.id ?? null,
         contactoNombre: cliente?.nombre ?? "Consumidor final",
         medioPago: medio,
         pagos: pagosDeLaVenta(),
         acopio,
-        // El corte viaja mientras sigan en la venta los renglones que lo
-        // trajeron (la placa, las pasadas, el canto): si se sacaron todos,
-        // el taller cortaría algo que no se cobró.
-        ...(corte && lineas.some((l) => renglonesDelCorte.includes(l.descripcion)) ? { corte } : {}),
+        ...(conLosCortes.cortes.length > 0 ? { cortes: conLosCortes.cortes } : {}),
         comprobante,
         cuit: cuit || null,
         descuento: descuentoManual,
@@ -906,6 +910,17 @@ export function VistaMostrador({
           <Lineas
             lineas={lineas}
             onCambiar={setLineas}
+            onEditarCorte={(id) => {
+              const c = cortes.find((x) => x.id === id);
+              if (!c) return;
+              setCorrigiendo(c);
+              setCortando(c.placa);
+            }}
+            onQuitarCorte={(id) => {
+              const r = sinElCorte(lineas, cortes, id);
+              setLineas(r.lineas);
+              setCortes(r.cortes);
+            }}
             onLimpiar={limpiar}
             onNoVaciar={() => volverDe("no-vaciar")}
           />
@@ -999,22 +1014,32 @@ export function VistaMostrador({
             precioMediaPct: cortando.precioMediaPct,
           }}
           anchoSierra={anchoSierra}
+          corrigiendo={corrigiendo !== null}
           inicial={
-            borradorDelCorte &&
-            borradorVale(borradorDelCorte, {
-              clave,
-              variantId: cortando.variantId,
-              clienteId: cliente?.id ?? null,
-              ahora: Date.now(),
-            })
-              ? borradorDelCorte
-              : undefined
+            corrigiendo
+              ? corrigiendo.estado
+              : borradorDelCorte &&
+                  borradorVale(borradorDelCorte, {
+                    clave,
+                    variantId: cortando.variantId,
+                    clienteId: cliente?.id ?? null,
+                    ahora: Date.now(),
+                  })
+                ? borradorDelCorte
+                : undefined
           }
           focoAlCerrar={focoAlCerrar("corte")}
           cliente={cliente?.nombre ?? null}
           precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
           precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
           onCerrar={(estado) => {
+            // Cerrar la corrección deja el corte como estaba en la venta.
+            if (corrigiendo) {
+              setCorrigiendo(null);
+              setCortando(null);
+              volverDe("corte");
+              return;
+            }
             setBorradorDelCorte(
               hayAlgoCargado(estado)
                 ? {
@@ -1034,10 +1059,17 @@ export function VistaMostrador({
             // no llega a correr: el cursor se devuelve acá.
             volverDe("corte");
           }}
-          onAgregar={(nuevas, elCorte) => {
-            setLineas((prev) => [...prev, ...nuevas]);
-            setCorte(elCorte);
-            setRenglonesDelCorte(nuevas.map((l) => l.descripcion));
+          onAgregar={(nuevas, elCorte, estado) => {
+            // Reabierto, el corte se reemplaza: sus renglones viejos salen.
+            const r = conElCorte(lineas, cortes, {
+              id: corrigiendo?.id ?? crypto.randomUUID(),
+              placa: cortando,
+              corte: elCorte,
+              estado,
+            }, nuevas);
+            setLineas(r.lineas);
+            setCortes(r.cortes);
+            setCorrigiendo(null);
             setBorradorDelCorte(null);
             setCortando(null);
             volverDe("corte-agregado");

@@ -175,12 +175,19 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 		}
 	}
 
-	// El corte viaja aparte de los renglones: el despiece tiene que entrar en
-	// lo que el plano acomoda. (Su placa puede no estar entre las líneas: por
-	// debajo de media placa se cobra solo el corte.)
-	if v.Corte != nil && len(v.Corte.Piezas) > 0 {
-		if p := revisarCorte(*v.Corte); p != "" {
+	// Cada corte viaja aparte de los renglones: el despiece tiene que entrar
+	// en lo que el plano acomoda. (Su placa puede no estar entre las líneas:
+	// por debajo de media placa se cobra solo el corte.) El esquema ya exige
+	// al menos una pieza por despiece.
+	atarRenglonesAlCorte(&v)
+	for _, k := range v.Cortes {
+		if p := revisarCorte(k); p != "" {
 			return fallo(p), nil
+		}
+	}
+	for _, l := range v.Lineas {
+		if l.Corte != nil && *l.Corte >= len(v.Cortes) {
+			return fallo(`"` + l.Descripcion + `" es de un corte que no está en la venta. Sacalo y volvé a armar el corte.`), nil
 		}
 	}
 
@@ -189,12 +196,24 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	if err := conPrecioDeLista(ctx, s.pool, v.Lineas, lista); err != nil {
 		return ResultadoVenta{}, err
 	}
-	// Y el de las pasadas y el canto del corte, la tarifa de su placa.
-	tarifa, err := tarifaDelCorte(ctx, s.pool, v.Corte, lista)
-	if err != nil {
-		return ResultadoVenta{}, err
+	// Y el de las pasadas y el canto de cada corte, la tarifa de su placa.
+	tarifas := make([]*cortes.TarifaDeCorte, len(v.Cortes))
+	for i := range v.Cortes {
+		if tarifas[i], err = tarifaDelCorte(ctx, s.pool, &v.Cortes[i], lista); err != nil {
+			return ResultadoVenta{}, err
+		}
 	}
-	conTarifaDelCorte(v.Lineas, tarifa)
+	conTarifaDelCorte(v.Lineas, tarifas)
+	// Lo cobrado de cada corte tiene que ser lo de su plano.
+	for i := range v.Cortes {
+		p, err := s.revisarCobroDelCorte(ctx, v, i, tarifas[i])
+		if err != nil {
+			return ResultadoVenta{}, err
+		}
+		if p != "" {
+			return fallo(p), nil
+		}
+	}
 
 	subtotal := ventas.TotalDeLaVenta(v.Lineas)
 
@@ -251,17 +270,14 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	parteEfectivo := ventas.ImportePorMedio(pagos, ventas.Efectivo)
 	parteCuenta := ventas.ImportePorMedio(pagos, ventas.CuentaCorriente)
 
-	// Lo que se deja de cobrar: bajo la lista, el descuento tipeado y lo que
-	// el corte no trae. La escala automática no cuenta.
-	faltaCorte, err := s.faltaDelCorte(ctx, v, lista, tarifa)
-	if err != nil {
-		return ResultadoVenta{}, err
-	}
+	// Lo que se deja de cobrar: bajo la lista y el descuento tipeado. La
+	// escala automática no cuenta, y lo que el corte no trae ya se rechazó
+	// arriba (revisarCobroDelCorte).
 	manual := 0.0
 	if pedido > 0 {
 		manual = descuento
 	}
-	desvio := ventas.DesvioDeLaVenta(v.Lineas, manual, faltaCorte)
+	desvio := ventas.DesvioDeLaVenta(v.Lineas, manual, 0)
 	libre, err := PorcentajeLibre(ctx, s.pool)
 	if err != nil {
 		return ResultadoVenta{}, err
@@ -525,9 +541,10 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		return ResultadoVenta{}, err
 	}
 
-	// El corte, si la venta lleva uno: nace en la cola del taller, atado al pedido.
-	if v.Corte != nil && len(v.Corte.Piezas) > 0 {
-		if err := insertarCorte(ctx, tx, v, pedido, usuario); err != nil {
+	// Los cortes de la venta: cada uno nace en la cola del taller, atado al
+	// pedido, con su despiece.
+	for i := range v.Cortes {
+		if err := insertarCorte(ctx, tx, v, &v.Cortes[i], pedido, usuario); err != nil {
 			return ResultadoVenta{}, err
 		}
 	}
@@ -728,12 +745,11 @@ func revisarCorte(k CorteDeMostrador) string {
 	return ""
 }
 
-func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, pedido, usuario string) error {
+func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMostrador, pedido, usuario string) error {
 	numero, err := numeracion.Corte(ctx, tx)
 	if err != nil {
 		return err
 	}
-	k := v.Corte
 	sierra := float64(cortes.AnchoDeSierraMm)
 	_ = tx.QueryRow(ctx, `SELECT ancho_sierra_mm::float8 FROM calculator_settings LIMIT 1`).Scan(&sierra) // el configurado, como el alta
 	if k.AnchoSierraMm != nil {

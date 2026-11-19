@@ -1973,7 +1973,24 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
 - **Márgenes de los reportes**: se agrupan solo los renglones de los pedidos
   del período (`margenesDe(where)`). Se midió el LATERAL que proponía el plan
   y perdía en rangos largos (494 ms contra 189 en un año).
-- **Cartera**: «Por cobrar» con los 60 más urgentes y «Al día» de a 30. El
-  aging de cada deudor se calcula con los movimientos posteriores al último
-  saldo exactamente cero (ventana en SQL, con numeric): da lo mismo que con
-  todos, y está probado contra la cuenta de antes.
+- **Cartera**: «Por cobrar» y «Al día» de a 30, cada una con su parámetro
+  (`cobrar` y `pagina`); no hay «ver todos». El aging de cada deudor se
+  calcula con los movimientos posteriores al último saldo exactamente cero
+  (ventana en SQL, con numeric): da lo mismo que con todos, y está probado
+  contra la cuenta de antes. «Al día» corta la página antes de buscar saldo y
+  compras: un LATERAL debajo de `count(*) OVER ()` y del ORDER BY se corre
+  para cada fila antes del LIMIT, no para las 30.
+- **Pendiente de la cartera**: el aging se sigue calculando para todos los
+  deudores en cada carga, porque el orden por urgencia sale de ahí; la
+  ventana lee toda la cuenta de cada deudor para encontrar su último cero.
+  Si con el padrón real pesa, el paso es guardar en `customers` la fecha del
+  último saldo cero, mantenida por trigger sobre `account_movements`, y
+  filtrar `created_at >` esa fecha con el índice de la 00168.
+- **Revisión del comité (corrector)**: con lock_timeout, un candado ocupado
+  ya no es un 500: `plataforma.EnTransaccion` reintenta dos veces (venta,
+  cobros, caja, anulación, pedidos) y `ErrorDeRespuesta` contesta 503 a
+  55P03/40P01/57014. El aviso de precios del mostrador espera menos de 1,5 s
+  (la caja cobra con el precio de la copia). Presupuestos: «Esperando
+  respuesta» de a 30 (`espera`), monto sumado en la base, y la tarea diaria
+  `vencer-presupuestos` vence los enviados un mes después de su validez.
+  `/catalogo/productos` acepta `limite` y `sinFotos`.

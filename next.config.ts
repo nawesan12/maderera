@@ -69,6 +69,21 @@ const nextConfig: NextConfig = {
    */
   partialPrefetching: false,
   /**
+   * Lo que puede pesar lo que se manda por una server action.
+   *
+   * De fábrica es 1 MB, y por server actions pasan los documentos técnicos
+   * (el catálogo de Moldava, unos 5 MB), las fotos de producto (el panel dice
+   * «hasta 8 MB») y la planilla del importador de ISIS, que con el catálogo
+   * entero pasa del mega: todo eso daba 413 sin explicación. 20 MB cubre el
+   * tope de cada uno (16 MB el de adjuntos en Go) con margen, y queda abajo de
+   * los 25 MB de Caddy. `proxyClientMaxBodySize` es el mismo tope para lo que
+   * pasa por `proxy.ts` (todo /admin), que de fábrica corta a 10 MB.
+   */
+  experimental: {
+    serverActions: { bodySizeLimit: "20mb" },
+    proxyClientMaxBodySize: "20mb",
+  },
+  /**
    * Empaquetado para servidor propio.
    *
    * `standalone` deja en `.next/standalone` un servidor con solo las

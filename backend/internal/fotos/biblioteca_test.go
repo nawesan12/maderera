@@ -3,6 +3,7 @@ package fotos_test
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -83,11 +84,11 @@ func TestCargarRevisaYEsTodoONada(t *testing.T) {
 		}
 	}
 	escribir("392.webp", webp(1920, 1440, 100))
-	escribir("4145-veta.webp", webp(1500, 1125, 100)) // el detalle va sin agrandar: alcanza con 1400
-	escribir("391.webp", webp(640, 480, 100))         // chica: de borde a borde se ve borrosa
+	escribir("4145-canto.webp", webp(1500, 1125, 100)) // el detalle va sin agrandar: alcanza con 1400
+	escribir("391.webp", webp(640, 480, 100))          // chica: de borde a borde se ve borrosa
 	escribir("otra.webp", webp(1920, 1440, 100))
 
-	c, err := b.Cargar(origen)
+	c, err := b.Cargar(origen, true)
 	if err == nil || !strings.Contains(c.Rechazado["391.webp"], "640×480") {
 		t.Fatalf("la chica tenía que rechazarse: %+v %v", c, err)
 	}
@@ -96,14 +97,30 @@ func TestCargarRevisaYEsTodoONada(t *testing.T) {
 	}
 
 	escribir("391.webp", []byte("no soy un webp, soy un texto con más de treinta bytes"))
-	if c, _ := b.Cargar(origen); c.Rechazado["391.webp"] != "no es un WebP" {
+	if c, _ := b.Cargar(origen, true); c.Rechazado["391.webp"] != "no es un WebP" {
 		t.Errorf("un archivo que no es WebP: %+v", c.Rechazado)
 	}
 
 	if err := os.Remove(filepath.Join(origen, "391.webp")); err != nil {
 		t.Fatal(err)
 	}
-	c, err = b.Cargar(origen)
+	// Sin --parcial, una carpeta incompleta no copia nada (el `scp -r` que
+	// deja todo en un subdirectorio daba «0 copiadas» y salida 0).
+	if c, err := b.Cargar(origen, false); !errors.Is(err, fotos.ErrFaltan) || len(c.Copiados) != 0 {
+		t.Fatalf("sin --parcial tenía que fallar: %+v %v", c, err)
+	}
+	if entradas, _ := os.ReadDir(destino); len(entradas) != 0 {
+		t.Errorf("sin --parcial copió %d", len(entradas))
+	}
+	// La carpeta con todo adentro de un subdirectorio: error, no «0 copiadas».
+	vacia := t.TempDir()
+	if err := os.Mkdir(filepath.Join(vacia, "biblioteca"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Cargar(vacia, true); err == nil {
+		t.Error("una carpeta sin ningún archivo de la lista tenía que fallar, aun con --parcial")
+	}
+	c, err = b.Cargar(origen, true)
 	if err != nil || len(c.Copiados) != 2 {
 		t.Fatalf("%+v %v", c, err)
 	}
@@ -196,7 +213,7 @@ func (e entorno) archivosPublicos(t *testing.T) int {
 // La foto y su detalle, una sola vez aunque se repita, y sin pisar lo que la
 // clienta subió a mano.
 func TestAdjuntarNoDuplicaNiPisa(t *testing.T) {
-	e := preparar(t, "4145.webp", "4145-veta.webp")
+	e := preparar(t, "4145.webp", "4145-canto.webp")
 	ctx := context.Background()
 	p := e.producto(t, "guatambu", "Enchapado guatambú", "4145")
 	if _, err := e.pool.Exec(ctx, `insert into product_images (product_id, url, alt, sort_order) values ($1, '/subidas/a-mano.jpg', 'a mano', 0)`, p); err != nil {
@@ -209,10 +226,10 @@ func TestAdjuntarNoDuplicaNiPisa(t *testing.T) {
 		t.Errorf("la segunda vez puso %d", n)
 	}
 	fs := e.fotosDe(t, p)
-	if len(fs) != 3 || fs[0].url != "/subidas/a-mano.jpg" || fs[1].origen != "4145.webp" || fs[2].origen != "4145-veta.webp" {
+	if len(fs) != 3 || fs[0].url != "/subidas/a-mano.jpg" || fs[1].origen != "4145.webp" || fs[2].origen != "4145-canto.webp" {
 		t.Fatalf("%+v", fs)
 	}
-	if fs[1].alt != "Enchapado guatambú" || fs[2].alt != "Enchapado guatambú, de cerca" {
+	if fs[1].alt != "Enchapado guatambú" || fs[2].alt != "Enchapado guatambú, el canto de cerca" {
 		t.Errorf("textos alternativos: %q %q", fs[1].alt, fs[2].alt)
 	}
 	if !strings.HasPrefix(fs[1].url, "/subidas/producto-") || !strings.HasSuffix(fs[1].url, ".webp") {
@@ -285,5 +302,89 @@ func TestSinFoto(t *testing.T) {
 	ps, err := fotos.SinFoto(ctx, e.pool)
 	if err != nil || len(ps) != 1 || ps[0].ProductoID != sin || ps[0].Codigo != "392" {
 		t.Fatalf("%+v %v", ps, err)
+	}
+}
+
+// La foto principal es la de la medida que la ficha elige primero, aunque se
+// haya creado después; y cada foto queda atada a su medida (la ficha cambia
+// de foto al elegir otra). Con «MDF» elegido se veía el canto del aglomerado.
+func TestFotoPrincipalEsLaDeLaPrimeraMedida(t *testing.T) {
+	e := preparar(t, "12724.webp", "4696.webp", "392.webp")
+	ctx := context.Background()
+	mel := e.producto(t, "melamina", "Melamina blanca 18 mm")
+	var mdf, aglo string
+	if err := e.pool.QueryRow(ctx, `insert into product_variants (product_id, sku, label, sort_order) values ($1, '4696', 'MDF', 0) returning id`, mel).Scan(&mdf); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into product_variants (product_id, sku, label, sort_order) values ($1, '12724', 'Aglomerado', 1) returning id`, mel).Scan(&aglo); err != nil {
+		t.Fatal(err)
+	}
+	e.b.Adjuntar(ctx, e.pool, fotos.Medida{ProductoID: mel, Codigo: "12724"})
+	e.b.Adjuntar(ctx, e.pool, fotos.Medida{ProductoID: mel, Codigo: "4696"})
+	filas, err := e.pool.Query(ctx, `select origen_biblioteca, variant_id::text from product_images where product_id = $1 order by sort_order`, mel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for filas.Next() {
+		var o, v string
+		if err := filas.Scan(&o, &v); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, o+"="+v)
+	}
+	filas.Close()
+	if want := []string{"4696.webp=" + mdf, "12724.webp=" + aglo}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("orden y medida: %v, tenía que ser %v", got, want)
+	}
+
+	// Una foto a mano adelante manda: la de la biblioteca va al final.
+	otro := e.producto(t, "chapadur", "Chapadur", "392")
+	if _, err := e.pool.Exec(ctx, `insert into product_images (product_id, url, sort_order) values ($1, '/subidas/a-mano.jpg', 0)`, otro); err != nil {
+		t.Fatal(err)
+	}
+	e.b.Adjuntar(ctx, e.pool, fotos.Medida{ProductoID: otro, Codigo: "392"})
+	if fs := e.fotosDe(t, otro); len(fs) != 2 || fs[0].url != "/subidas/a-mano.jpg" {
+		t.Errorf("la foto a mano dejó de ser la primera: %+v", fs)
+	}
+}
+
+// Lo que la clienta borró no vuelve: ni al crear la medida otra vez ni en el
+// lote (revisión del 19/11).
+func TestBorradaNoVuelve(t *testing.T) {
+	e := preparar(t, "392.webp")
+	ctx := context.Background()
+	p := e.producto(t, "chapadur", "Chapadur marrón", "392")
+	if n := e.b.Adjuntar(ctx, e.pool, fotos.Medida{ProductoID: p, Codigo: "392"}); n != 1 {
+		t.Fatalf("puso %d", n)
+	}
+	// Lo mismo que hace BorrarImagenDeProducto (consultas/productos.sql).
+	if _, err := e.pool.Exec(ctx, `WITH borrada AS (DELETE FROM product_images WHERE product_id = $1 RETURNING product_id, origen_biblioteca)
+		INSERT INTO fotos_biblioteca_descartadas (product_id, origen) SELECT product_id, origen_biblioteca FROM borrada
+		WHERE origen_biblioteca IS NOT NULL ON CONFLICT DO NOTHING`, p); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.b.Adjuntar(ctx, e.pool, fotos.Medida{ProductoID: p, Codigo: "392"}); n != 0 {
+		t.Errorf("la foto borrada volvió: %d", n)
+	}
+	if ps, err := fotos.SinFoto(ctx, e.pool); err != nil || len(ps) != 0 {
+		t.Errorf("el lote la volvería a poner: %+v %v", ps, err)
+	}
+	if n := e.archivosPublicos(t); n != 1 {
+		// El archivo de la foto borrada lo borra el servicio de productos;
+		// acá solo se comprueba que el intento no dejó otro suelto.
+		t.Errorf("hay %d archivos en /subidas", n)
+	}
+}
+
+// Con el pedido ya cortado (la pestaña cerrada en medio de un lote), la foto
+// se engancha igual: la medida ya quedó guardada.
+func TestAdjuntarConElPedidoCortado(t *testing.T) {
+	e := preparar(t, "392.webp")
+	p := e.producto(t, "chapadur", "Chapadur marrón", "392")
+	ctx, cancelar := context.WithCancel(context.Background())
+	cancelar()
+	if n := e.b.Adjuntar(ctx, e.pool, fotos.Medida{ProductoID: p, Codigo: "392"}); n != 1 {
+		t.Errorf("con el pedido cortado puso %d", n)
 	}
 }

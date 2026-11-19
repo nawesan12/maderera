@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,7 +35,7 @@ import (
 )
 
 // Entrada es una foto de la biblioteca: sus archivos (la foto y, si hay, el
-// detalle de la veta) y los códigos de las medidas que muestra.
+// canto de cerca) y los códigos de las medidas que muestra.
 type Entrada struct {
 	Archivos []string
 	Codigos  []string
@@ -52,9 +53,9 @@ type Entrada struct {
 var Lista = []Entrada{
 	{Archivos: []string{"392.webp"}, Codigos: []string{"392"}},
 	{Archivos: []string{"391.webp"}, Codigos: []string{"391"}},
-	{Archivos: []string{"4145.webp", "4145-veta.webp"}, Codigos: []string{"4145"}},
-	{Archivos: []string{"4159.webp", "4159-veta.webp"}, Codigos: []string{"4159"}},
-	{Archivos: []string{"4147.webp", "4147-veta.webp"}, Codigos: []string{"4147"}},
+	{Archivos: []string{"4145.webp", "4145-canto.webp"}, Codigos: []string{"4145"}},
+	{Archivos: []string{"4159.webp", "4159-canto.webp"}, Codigos: []string{"4159"}},
+	{Archivos: []string{"4147.webp", "4147-canto.webp"}, Codigos: []string{"4147"}},
 	{Archivos: []string{"5743.webp"}, Codigos: []string{"5743"}},
 	{Archivos: []string{"12724.webp"}, Codigos: []string{"12724"}, Soporte: "aglomerado"},
 	{Archivos: []string{"4696.webp"}, Codigos: []string{"4696"}, Soporte: "MDF"},
@@ -123,6 +124,10 @@ type Medida struct {
 // en el registro y sigue. Va después del commit de quien crea la medida (si
 // algo se deshace no quedan archivos sueltos) y antes de contestar (la página
 // que se vuelve a armar ya la tiene).
+//
+// Con su propio plazo y sin el corte del pedido: la medida ya quedó guardada,
+// y como la foto se engancha solo al crearla, si el usuario cierra la pestaña
+// en medio de un lote grande la foto se perdía para siempre.
 func (b *Biblioteca) Adjuntar(ctx context.Context, pool *pgxpool.Pool, m Medida) int {
 	if b == nil {
 		return 0
@@ -131,9 +136,11 @@ func (b *Biblioteca) Adjuntar(ctx context.Context, pool *pgxpool.Pool, m Medida)
 	if !ok {
 		return 0
 	}
+	ctx, cancelar := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancelar()
 	puestas := 0
 	for i, archivo := range e.Archivos {
-		ok, err := b.adjuntarArchivo(ctx, pool, m.ProductoID, archivo, e.Soporte, i > 0)
+		ok, err := b.adjuntarArchivo(ctx, pool, m.ProductoID, m.Codigo, archivo, e.Soporte, i > 0)
 		if err != nil {
 			b.log.Warn("foto de la biblioteca sin enganchar", "producto", m.ProductoID, "codigo", m.Codigo, "archivo", archivo, "error", err)
 			continue
@@ -146,11 +153,13 @@ func (b *Biblioteca) Adjuntar(ctx context.Context, pool *pgxpool.Pool, m Medida)
 }
 
 // adjuntarArchivo copia un archivo y lo anota. Devuelve false si el producto
-// ya lo tenía (o dejó de existir).
-func (b *Biblioteca) adjuntarArchivo(ctx context.Context, pool *pgxpool.Pool, productoID, archivo, soporte string, detalle bool) (bool, error) {
+// ya lo tenía, la clienta lo había borrado (fotos_biblioteca_descartadas) o
+// el producto dejó de existir.
+func (b *Biblioteca) adjuntarArchivo(ctx context.Context, pool *pgxpool.Pool, productoID, codigo, archivo, soporte string, detalle bool) (bool, error) {
 	// Antes de leer el disco: lo normal al reimportar es que ya esté.
 	var ya bool
-	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM product_images WHERE product_id = $1 AND origen_biblioteca = $2)`,
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM product_images WHERE product_id = $1 AND origen_biblioteca = $2)
+		OR EXISTS (SELECT 1 FROM fotos_biblioteca_descartadas WHERE product_id = $1 AND origen = $2)`,
 		productoID, archivo).Scan(&ya); err != nil || ya {
 		return false, err
 	}
@@ -173,17 +182,19 @@ func (b *Biblioteca) adjuntarArchivo(ctx context.Context, pool *pgxpool.Pool, pr
 			}
 			return err
 		}
+		var descartada bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM fotos_biblioteca_descartadas WHERE product_id = $1 AND origen = $2)`,
+			productoID, archivo).Scan(&descartada); err != nil || descartada {
+			return err
+		}
 		alt := nombre
 		if soporte != "" && !strings.Contains(strings.ToLower(nombre), strings.ToLower(soporte)) {
 			alt += ", " + soporte
 		}
 		if detalle {
-			alt += ", de cerca"
+			alt += ", el canto de cerca"
 		}
-		tag, err := tx.Exec(ctx, `INSERT INTO product_images (product_id, url, alt, sort_order, origen_biblioteca)
-			SELECT $1, $2, $3, coalesce((SELECT max(sort_order) + 1 FROM product_images WHERE product_id = $1), 0), $4
-			ON CONFLICT (product_id, origen_biblioteca) WHERE origen_biblioteca IS NOT NULL DO NOTHING`,
-			productoID, url, alt, archivo)
+		tag, err := tx.Exec(ctx, sqlInsertar, productoID, url, alt, archivo, codigo, detalle)
 		if err != nil {
 			return err
 		}
@@ -197,6 +208,39 @@ func (b *Biblioteca) adjuntarArchivo(ctx context.Context, pool *pgxpool.Pool, pr
 	return puesta, err
 }
 
+// sqlInsertar anota la foto atada a su medida (variant_id) y en su lugar.
+//
+// El lugar: la foto principal del producto tiene que ser la de la medida que
+// la ficha elige primero (el orden del selector: sort_order y sku). Las fotos
+// llegan en el orden en que se crearon las medidas, así que si la primera
+// foto de hoy es de la biblioteca y de una medida que va después de esta,
+// esta pasa adelante. Una foto subida a mano manda: si la primera es de la
+// clienta, la de la biblioteca va al final. El detalle (el canto de cerca)
+// siempre va al final.
+const sqlInsertar = `
+WITH medida AS (
+  SELECT id, sort_order, sku FROM product_variants
+  WHERE product_id = $1 AND lower(trim(sku)) = lower(trim($5))
+  ORDER BY sort_order, sku LIMIT 1
+), cabeza AS (
+  SELECT i.sort_order, i.origen_biblioteca IS NOT NULL AS de_biblioteca, v.sort_order AS vorden, v.sku AS vsku
+  FROM product_images i
+  LEFT JOIN product_variants v ON v.id = i.variant_id
+  WHERE i.product_id = $1
+  ORDER BY i.sort_order LIMIT 1
+)
+INSERT INTO product_images (product_id, url, alt, sort_order, origen_biblioteca, variant_id)
+SELECT $1, $2, $3,
+  CASE WHEN NOT $6::boolean AND EXISTS (
+         SELECT 1 FROM cabeza, medida
+         WHERE cabeza.de_biblioteca AND cabeza.vorden IS NOT NULL
+           AND (medida.sort_order, medida.sku) < (cabeza.vorden, cabeza.vsku))
+       THEN (SELECT min(sort_order) - 1 FROM product_images WHERE product_id = $1)
+       ELSE coalesce((SELECT max(sort_order) + 1 FROM product_images WHERE product_id = $1), 0)
+  END,
+  $4, (SELECT id FROM medida)
+ON CONFLICT (product_id, origen_biblioteca) WHERE origen_biblioteca IS NOT NULL DO NOTHING`
+
 // Pendiente es un producto sin ninguna foto con una medida de la biblioteca.
 type Pendiente struct {
 	ProductoID string
@@ -207,7 +251,9 @@ type Pendiente struct {
 // SinFoto lista los productos que no tienen ninguna foto y tienen alguna
 // medida (activa o no) con un código de la biblioteca. Para el lote: la regla
 // de siempre, «sin ninguna foto», así no se le suma nada a lo que la clienta
-// ya armó a mano.
+// ya armó a mano. Tampoco los que tienen alguna foto de la biblioteca
+// descartada: si la clienta borró las fotos de un producto, lo dejó así a
+// propósito.
 func SinFoto(ctx context.Context, pool *pgxpool.Pool) ([]Pendiente, error) {
 	var codigos []string
 	for _, e := range Lista {
@@ -219,6 +265,7 @@ func SinFoto(ctx context.Context, pool *pgxpool.Pool) ([]Pendiente, error) {
 		JOIN product_variants v ON v.product_id = p.id
 		WHERE lower(trim(v.sku)) = ANY($1)
 		  AND NOT EXISTS (SELECT 1 FROM product_images i WHERE i.product_id = p.id)
+		  AND NOT EXISTS (SELECT 1 FROM fotos_biblioteca_descartadas d WHERE d.product_id = p.id)
 		ORDER BY p.name, v.sort_order, v.sku`, codigos)
 	if err != nil {
 		return nil, err
@@ -238,7 +285,7 @@ const TopeArchivo = 8 << 20
 // una foto más chica se ve borrosa.
 const LadoMinimo = 1600
 
-// LadoMinimoDetalle es el del recorte de la veta: va en píxeles originales,
+// LadoMinimoDetalle es el del recorte del canto: va en píxeles originales,
 // sin agrandar.
 const LadoMinimoDetalle = 1400
 
@@ -283,7 +330,7 @@ func Revisar(nombre string, datos []byte) string {
 		return err.Error()
 	}
 	minimo := LadoMinimo
-	if strings.Contains(nombre, "-veta") || strings.Contains(nombre, "-canto") {
+	if strings.Contains(nombre, "-canto") {
 		minimo = LadoMinimoDetalle
 	}
 	if max(w, h) < minimo {
@@ -300,10 +347,18 @@ type Carga struct {
 	Rechazado map[string]string
 }
 
+// ErrFaltan es una carpeta a la que le faltan archivos de la lista.
+var ErrFaltan = errors.New("faltan archivos de la lista: no se copió ninguno (con --parcial se copian los que están)")
+
 // Cargar copia a la biblioteca los archivos de la lista que estén en
 // `origen`, revisándolos antes. Si alguno no pasa la revisión no se copia
 // ninguno: la biblioteca queda como estaba.
-func (b *Biblioteca) Cargar(origen string) (Carga, error) {
+//
+// Si falta alguno tampoco, salvo con `parcial`: una carpeta mal armada (el
+// `scp -r` que deja todo en un subdirectorio, o la carpeta equivocada) daba
+// «0 copiadas» y salida 0, y la biblioteca quedaba vacía sin que nadie se
+// enterara.
+func (b *Biblioteca) Cargar(origen string, parcial bool) (Carga, error) {
 	c := Carga{Rechazado: map[string]string{}}
 	enLista := map[string]bool{}
 	for _, a := range Archivos() {
@@ -339,6 +394,12 @@ func (b *Biblioteca) Cargar(origen string) (Carga, error) {
 	}
 	if len(c.Rechazado) > 0 {
 		return c, errors.New("hay archivos que no pasan la revisión: no se copió ninguno")
+	}
+	if len(c.Faltan) > 0 && !parcial {
+		return c, ErrFaltan
+	}
+	if len(presentes) == 0 {
+		return c, errors.New("la carpeta no tiene ningún archivo de la lista")
 	}
 	if err := os.MkdirAll(b.carpeta, 0o755); err != nil {
 		return c, err

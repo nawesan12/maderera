@@ -24,11 +24,11 @@ type configFotos struct {
 
 // mjbj fotos: la biblioteca de fotos de producto por código (docs/fotos.md).
 //
-//	fotos cargar <carpeta>       revisa los WebP y los copia a la biblioteca
+//	fotos cargar [--parcial] <carpeta>   revisa los WebP y los copia a la biblioteca
 //	fotos adjuntar [--probar]    engancha las fotos a lo que ya está cargado
 func correrFotos(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("uso: mjbj fotos cargar <carpeta> | mjbj fotos adjuntar [--probar]")
+		return fmt.Errorf("uso: mjbj fotos cargar [--parcial] <carpeta> | mjbj fotos adjuntar [--probar]")
 	}
 	cfg, err := plataforma.Cargar[configFotos]()
 	if err != nil {
@@ -38,10 +38,11 @@ func correrFotos(args []string) error {
 	b := fotos.Nueva(cfg.Fotos, subidas.Nuevo(cfg.Subidas), log)
 	switch args[0] {
 	case "cargar":
-		if len(args) != 2 {
-			return fmt.Errorf("uso: mjbj fotos cargar <carpeta>")
+		parcial := len(args) == 3 && args[1] == "--parcial"
+		if len(args) != 2 && !parcial {
+			return fmt.Errorf("uso: mjbj fotos cargar [--parcial] <carpeta>")
 		}
-		c, err := b.Cargar(args[1])
+		c, err := b.Cargar(args[len(args)-1], parcial)
 		for _, a := range c.Copiados {
 			fmt.Println("copiada:", a)
 		}
@@ -54,8 +55,12 @@ func correrFotos(args []string) error {
 		for _, a := range c.Sobran {
 			fmt.Println("sobra (no está en la lista, no se copió):", a)
 		}
-		fmt.Printf("Listo: %d copiadas en %s.\n", len(c.Copiados), cfg.Fotos.Carpeta)
-		return err
+		if err != nil {
+			fmt.Println("No se copió nada.")
+			return err
+		}
+		fmt.Printf("Listo: %d de %d copiadas en %s.\n", len(c.Copiados), len(fotos.Archivos()), cfg.Fotos.Carpeta)
+		return nil
 	case "adjuntar":
 		probar := len(args) > 1 && args[1] == "--probar"
 		ctx := context.Background()

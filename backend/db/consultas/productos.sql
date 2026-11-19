@@ -124,7 +124,14 @@ INSERT INTO product_images (product_id, url, sort_order) VALUES ($1, $2, $3) RET
 SELECT id, product_id, url FROM product_images WHERE id = $1;
 
 -- name: BorrarImagenDeProducto :exec
-DELETE FROM product_images WHERE id = $1;
+-- Si era de la biblioteca de fotos, queda anotada como descartada: no vuelve
+-- al crear la medida otra vez ni con `mjbj fotos adjuntar` (migración 00186).
+WITH borrada AS (
+  DELETE FROM product_images WHERE id = $1 RETURNING product_id, origen_biblioteca
+)
+INSERT INTO fotos_biblioteca_descartadas (product_id, origen)
+SELECT product_id, origen_biblioteca FROM borrada WHERE origen_biblioteca IS NOT NULL
+ON CONFLICT DO NOTHING;
 
 -- name: OrdenarImagen :exec
 UPDATE product_images SET sort_order = $3 WHERE id = $1 AND product_id = $2;

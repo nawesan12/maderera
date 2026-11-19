@@ -353,13 +353,20 @@ func aplicarProductos(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resulta
 		medida := []any{producto, d["sku"], etiqueta, enteroONulo(d["largoMm"]), enteroONulo(d["anchoMm"]), enteroONulo(d["espesorMm"]),
 			nulo(d["color"]), nulo(d["material"]), nulo(d["terminacion"]), nulo(d["calidad"]), nulo(d["codigoBarras"])}
 		if variante != "" {
-			if _, err := tx.Exec(ctx, `UPDATE product_variants SET product_id = $1, sku = $2, label = $3, largo_mm = $4::integer,
+			// El producto de antes: si en ISIS la medida pasó a otro producto,
+			// el nuevo no tiene su foto (la del viejo se queda donde está).
+			var antes string
+			if err := tx.QueryRow(ctx, `WITH antes AS (SELECT product_id FROM product_variants WHERE id = $12)
+				UPDATE product_variants SET product_id = $1, sku = $2, label = $3, largo_mm = $4::integer,
 				ancho_mm = $5::integer, espesor_mm = $6::integer, color = coalesce($7, color), material = coalesce($8, material),
 				terminacion = coalesce($9, terminacion), calidad = coalesce($10, calidad), codigo_barras = coalesce($11, codigo_barras),
-				updated_at = now() WHERE id = $12`, append(medida, variante)...); err != nil {
+				updated_at = now() WHERE id = $12 RETURNING (SELECT product_id::text FROM antes)`, append(medida, variante)...).Scan(&antes); err != nil {
 				return err
 			}
 			res.Actualizados++
+			if antes != producto {
+				res.medidasNuevas = append(res.medidasNuevas, fotos.Medida{ProductoID: producto, Codigo: d["sku"]})
+			}
 		} else {
 			if err := tx.QueryRow(ctx, `INSERT INTO product_variants (product_id, sku, label, largo_mm, ancho_mm, espesor_mm,
 				color, material, terminacion, calidad, codigo_barras, updated_at)

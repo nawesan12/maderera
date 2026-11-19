@@ -22,6 +22,8 @@ export function PanelDeCaja({
   ventas,
   enLinea,
   onEncolado,
+  onAbierta,
+  focoAlCerrar,
   onCerrar,
 }: {
   sucursal: Sucursal;
@@ -36,6 +38,10 @@ export function PanelDeCaja({
   ventas: VentaDeHoy[];
   enLinea: boolean;
   onEncolado: () => void;
+  /** Se abrió el turno, con el mensaje de Go. */
+  onAbierta?: (mensaje: string) => void;
+  /** A dónde vuelve el cursor al cerrar el panel. */
+  focoAlCerrar?: () => HTMLElement | null;
   onCerrar: () => void;
 }) {
   const router = useRouter();
@@ -50,6 +56,19 @@ export function PanelDeCaja({
   const diferencia =
     turno && contado !== "" ? Number(contado) - turno.esperado : null;
 
+  function abrir() {
+    if (trabajando || fondo === "" || !enLinea) return;
+    empezar(async () => {
+      const r = await abrirCaja(sucursal.id, Number(fondo));
+      setAviso(r.error ?? r.ok ?? null);
+      if (!r.error) {
+        setFondo("");
+        router.refresh();
+        onAbierta?.(r.ok ?? "Caja abierta.");
+      }
+    });
+  }
+
   // Antes de abrir no hay turno, así que la base sale de la sucursal.
   const baseDeCambio = turno?.fondoBase ?? fondoBase;
 
@@ -61,7 +80,10 @@ export function PanelDeCaja({
      * de atrás —el fondo inicial terminaba escrito en el campo del cobro—.
      */
     <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
-      <DialogContent className="flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden p-0 sm:max-w-2xl">
+      <DialogContent
+        finalFocus={focoAlCerrar}
+        className="flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden p-0 sm:max-w-2xl"
+      >
         {/* `mx-0 mt-0` no es redundante: `DialogHeader` trae márgenes negativos
             para desbordar el `p-5` que el diálogo tiene de fábrica, y este
             diálogo lo anula con `p-0` porque su cuerpo scrollea aparte. Sin
@@ -102,23 +124,23 @@ export function PanelDeCaja({
                   type="number"
                   min="0"
                   step="0.01"
+                  // Se abre para cargar el fondo: el cursor arranca acá.
+                  autoFocus
                   value={fondo}
                   onChange={(e) => setFondo(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Es el único dato: Enter (o Ctrl+Enter) abre la caja.
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      abrir();
+                    }
+                  }}
                   className="tabular mt-1.5 h-14 w-full rounded-xl border border-linea bg-background px-3.5 text-right text-2xl font-semibold"
                 />
               </label>
               <button
                 disabled={trabajando || fondo === "" || !enLinea}
-                onClick={() =>
-                  empezar(async () => {
-                    const r = await abrirCaja(sucursal.id, Number(fondo));
-                    setAviso(r.error ?? r.ok ?? null);
-                    if (!r.error) {
-                      setFondo("");
-                      router.refresh();
-                    }
-                  })
-                }
+                onClick={abrir}
                 className="mt-4 inline-flex h-14 w-full items-center justify-center rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
               >
                 Abrir la caja

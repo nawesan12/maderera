@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, Loader2, Plus, Scissors, Trash2 } from "lucide-react";
+import { Download, Loader2, Plus, RotateCcw, Scissors, Trash2 } from "lucide-react";
 import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto";
 import {
   Dialog,
@@ -10,6 +10,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
+import { PreguntaMm } from "@/components/cortes/pregunta-mm";
+import { medidasSospechosas } from "@/lib/cortes/armador";
 import type { PiezaFijada } from "@/lib/cortes/tipos";
 import { usePlano } from "@/lib/cortes/en-vivo";
 import {
@@ -50,6 +52,26 @@ interface PiezaCargada {
   etiqueta: string;
 }
 
+/**
+ * Lo cargado en el diálogo, para devolverlo si se lo vuelve a abrir (ver el
+ * borrador en `vista.tsx`).
+ */
+export interface EstadoDelCorte {
+  piezas: PiezaCargada[];
+  mitad: Mitad;
+  canto: string;
+  fijadas: PiezaFijada[];
+}
+
+/** Si hay algo que valga la pena guardar: una medida, un canto, una pieza movida. */
+export function hayAlgoCargado(e: EstadoDelCorte): boolean {
+  return (
+    e.canto.trim() !== "" ||
+    e.fijadas.length > 0 ||
+    e.piezas.some((p) => p.largo.trim() !== "" || p.ancho.trim() !== "" || p.etiqueta.trim() !== "")
+  );
+}
+
 const vacia = (): PiezaCargada => ({
   largo: "",
   ancho: "",
@@ -66,6 +88,8 @@ export function CorteAMedida({
   precioPorMetroCanto,
   anchoSierra: anchoSierraGeneral,
   cliente,
+  inicial,
+  focoAlCerrar,
   onCerrar,
   onAgregar,
 }: {
@@ -89,12 +113,23 @@ export function CorteAMedida({
   precioPorMetroCanto: number;
   /** El nombre del cliente de la venta, para encabezar el PDF del plano. */
   cliente?: string | null;
-  onCerrar: () => void;
+  /** Lo que quedó cargado la última vez que se cerró esta placa sin agregarla. */
+  inicial?: EstadoDelCorte;
+  /** A dónde vuelve el cursor al cerrar: al buscador, a cargar lo que sigue. */
+  focoAlCerrar?: () => HTMLElement | null;
+  /** Se cerró sin agregar, con lo que había cargado (se guarda como borrador). */
+  onCerrar: (estado: EstadoDelCorte) => void;
   onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador) => void;
 }) {
-  const [piezas, setPiezas] = useState<PiezaCargada[]>([vacia()]);
-  const [canto, setCanto] = useState("");
-  const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
+  const [piezas, setPiezas] = useState<PiezaCargada[]>(() => inicial?.piezas ?? [vacia()]);
+  const [canto, setCanto] = useState(inicial?.canto ?? "");
+  const [fijadas, setFijadas] = useState<PiezaFijada[]>(() => inicial?.fijadas ?? []);
+  /*
+   * Si ya se contestó que las medidas están en milímetros. Se pregunta una
+   * sola vez por armado: preguntar en cada intento es un cartel más.
+   */
+  const [mmConfirmado, setMmConfirmado] = useState(false);
+  const [preguntaMm, setPreguntaMm] = useState(false);
 
   /*
    * De qué sale el trabajo: placa entera o media, y en qué sentido partida.
@@ -103,7 +138,12 @@ export function CorteAMedida({
    * sentido lo elige quien atiende: depende de la placa que haya y de cómo
    * corre el dibujo cuando es de color.
    */
-  const [mitad, setMitad] = useState<Mitad>(null);
+  const [mitad, setMitad] = useState<Mitad>(inicial?.mitad ?? null);
+
+  /** Cerrar nunca pierde lo cargado: vuelve como borrador. */
+  function cerrar() {
+    onCerrar({ piezas, mitad, canto, fijadas });
+  }
 
   /*
    * El disco de este trabajo. Arranca con el de la configuración y se puede
@@ -117,6 +157,7 @@ export function CorteAMedida({
     varianteLargo: placa.largoMm,
     varianteAncho: placa.anchoMm,
     mitad,
+    sierra: anchoSierra,
   });
   const medidaSupuesta = medida.supuesta;
   const placaLargo = medida.largo;
@@ -189,13 +230,20 @@ export function CorteAMedida({
   }
 
   function cambiar(i: number, campo: keyof PiezaCargada, valor: string | boolean | number) {
+    // Tocar una medida responde la pregunta de los milímetros mejor que el «Sí».
+    if (campo === "largo" || campo === "ancho") setPreguntaMm(false);
     setPiezas((previas) =>
       previas.map((p, j) => (j === i ? { ...p, [campo]: valor } : p)),
     );
   }
 
-  function aceptar() {
+  /** `mmOk`: se acaba de contestar que sí, en el mismo toque. */
+  function aceptar(mmOk = mmConfirmado) {
     if (!sePuede) return;
+    if (!mmOk && medidasSospechosas(piezas)) {
+      setPreguntaMm(true);
+      return;
+    }
 
     const lineas: LineaDeVenta[] = [];
 
@@ -227,11 +275,17 @@ export function CorteAMedida({
     }
 
     if (pasadasACobrar > 0 && precioPorPasada > 0) {
+      /*
+       * La línea nombra lo que el cliente pidió —las piezas— y no lo que hace
+       * la sierra: «pasadas» es palabra de taller y esta línea la lee el
+       * cliente en la pantalla (T4, hallazgo 44). Lo que se cobra sigue
+       * siendo por pasada, en la unidad y la cantidad, que es lo que mira Go
+       * (`esPasada`: sin variante y en «pasada»).
+       */
+      const cuantas = validas.reduce((n, p) => n + p.cantidad, 0);
       lineas.push({
         variantId: null,
-        descripcion: `Corte a medida — ${pasadasACobrar} ${
-          pasadasACobrar === 1 ? "pasada" : "pasadas"
-        }`,
+        descripcion: `Corte a medida · ${cuantas} ${cuantas === 1 ? "pieza" : "piezas"}`,
         unidad: "pasada",
         cantidad: pasadasACobrar,
         precioUnitario: precioPorPasada,
@@ -325,13 +379,19 @@ export function CorteAMedida({
   const columnas = "@2xl:grid @2xl:grid-cols-[minmax(110px,1fr)_84px_84px_64px_92px_64px_36px] @2xl:items-center @2xl:gap-2";
 
   return (
-    <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
+    /* Un clic afuera no cierra: es una mesa de trabajo y el mouse pasa cerca
+       del borde todo el tiempo. Esc, la X y «Cancelar» cierran sin preguntar,
+       porque lo cargado vuelve si se abre de nuevo la misma placa. */
+    <Dialog open disablePointerDismissal onOpenChange={(abierto) => !abierto && cerrar()}>
       {/* A pantalla casi completa: es una mesa de trabajo, no un aviso. La
           placa y sus ajustes arriba, la planilla a la izquierda y el plano a
           la derecha, todo a la vista a la vez (antes, en un modal de 1100 px,
           el plano quedaba abajo de las medidas). `sm:max-w-*` porque el
           diálogo base trae `sm:max-w-md` y una clase sin prefijo no lo pisa. */}
-      <DialogContent className="flex h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1600px,96vw)]">
+      <DialogContent
+        finalFocus={focoAlCerrar}
+        className="flex h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1600px,96vw)]"
+      >
         <DialogHeader className="m-0 border-b border-linea px-6 pb-4 pt-5">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pr-12">
             <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
@@ -427,8 +487,8 @@ export function CorteAMedida({
               {/* Encabezado de la planilla: una sola vez, no repetido por fila. */}
               <div className={`sticky top-0 z-10 hidden bg-background py-2 text-sm font-semibold text-muted-foreground ${columnas}`}>
                 <span>Pieza</span>
-                <span>Largo</span>
-                <span>Ancho</span>
+                <span>Largo mm</span>
+                <span>Ancho mm</span>
                 <span>Cant.</span>
                 <span className="text-center">Canto</span>
                 <span className="text-center">Veta</span>
@@ -519,21 +579,50 @@ export function CorteAMedida({
                 ))}
               </div>
 
-              <button
-                type="button"
-                onClick={sumarPieza}
-                className="mt-2 inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-acento-texto hover:bg-hundida"
-              >
-                <Plus className="h-4 w-4" />
-                Agregar medida
-                <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">Enter</kbd>
-              </button>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={sumarPieza}
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-acento-texto hover:bg-hundida"
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar medida
+                  <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">Enter</kbd>
+                </button>
+                {/* Volvió lo de la vez anterior: la salida para arrancar limpio. */}
+                {inicial && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPiezas([vacia()]);
+                      setCanto("");
+                      setFijadas([]);
+                      setMitad(null);
+                      setMmConfirmado(false);
+                      requestAnimationFrame(() =>
+                        document.querySelector<HTMLInputElement>('[data-pieza="largo"]')?.focus(),
+                      );
+                    }}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-muted-foreground hover:bg-hundida"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Empezar de nuevo
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="min-h-0 overflow-y-auto bg-hundida/40 px-6 py-5">
             {validas.length > 0 ? (
-              <PlanoEditable plano={plano} fijadas={fijadas} onFijadas={setFijadas} />
+              <PlanoEditable
+                plano={plano}
+                fijadas={fijadas}
+                onFijadas={setFijadas}
+                sencillo
+                // Con veta, girarla la cortaría contra el dibujo.
+                girable={(indice) => !validas[indice]?.respetaVeta}
+              />
             ) : (
               <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed">
                 <span className="tabular text-base text-muted-foreground">
@@ -578,10 +667,6 @@ export function CorteAMedida({
               </div>
             )}
             <div>
-              <dt className="inline text-muted-foreground">Pasadas </dt>
-              <dd className="inline font-semibold">{pasadasACobrar}</dd>
-            </div>
-            <div>
               <dt className="inline text-muted-foreground">Canto </dt>
               <dd className="inline font-semibold">{metrosCanto.toFixed(2).replace(".", ",")} m</dd>
             </div>
@@ -610,20 +695,37 @@ export function CorteAMedida({
           </button>
           <button
             type="button"
-            onClick={onCerrar}
+            onClick={cerrar}
             className="h-12 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
           >
             Cancelar
           </button>
-          <button
-            type="button"
-            disabled={!sePuede}
-            onClick={aceptar}
-            className="inline-flex h-12 items-center gap-2 rounded-lg boton-accion px-5 text-base font-semibold disabled:opacity-50"
-          >
-            Agregar a la venta
-            <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">Ctrl + Enter</kbd>
-          </button>
+          {preguntaMm ? (
+            <PreguntaMm
+              onSi={() => {
+                setMmConfirmado(true);
+                setPreguntaMm(false);
+                // Contestado, sigue: la pregunta estaba en el camino de agregar.
+                aceptar(true);
+              }}
+              onCorregir={() => {
+                setPreguntaMm(false);
+                requestAnimationFrame(() =>
+                  document.querySelector<HTMLInputElement>('[data-pieza="largo"]')?.focus(),
+                );
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={!sePuede}
+              onClick={() => aceptar()}
+              className="inline-flex h-12 items-center gap-2 rounded-lg boton-accion px-5 text-base font-semibold disabled:opacity-50"
+            >
+              Agregar a la venta
+              <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">Ctrl + Enter</kbd>
+            </button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

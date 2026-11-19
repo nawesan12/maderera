@@ -18,10 +18,13 @@ import type { LineaDeVenta } from "@/lib/mostrador/importes";
  */
 export function AltaAMano({
   descripcionInicial,
+  focoAlCerrar,
   onCerrar,
   onAgregar,
 }: {
   descripcionInicial: string;
+  /** A dónde vuelve el cursor al cerrar: al buscador, a cargar lo que sigue. */
+  focoAlCerrar?: () => HTMLElement | null;
   onCerrar: () => void;
   onAgregar: (l: LineaDeVenta) => void;
 }) {
@@ -46,7 +49,7 @@ export function AltaAMano({
 
   return (
     <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" finalFocus={focoAlCerrar}>
         <DialogHeader>
           <DialogTitle className="text-xl font-bold tracking-tight">
             Cargar a mano

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import { formatearMonto, formatearUnidad } from "@/lib/formato";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
@@ -22,10 +23,13 @@ export function Lineas({
   lineas,
   onCambiar,
   onLimpiar,
+  onNoVaciar,
 }: {
   lineas: LineaDeVenta[];
   onCambiar: (l: LineaDeVenta[]) => void;
   onLimpiar: () => void;
+  /** Se arrepintió de vaciar: el cursor vuelve al buscador. */
+  onNoVaciar: () => void;
 }) {
   if (lineas.length === 0) {
     return (
@@ -47,17 +51,11 @@ export function Lineas({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-linea bg-card">
-      <div className="flex items-center justify-between border-b border-linea px-4 py-2.5">
+      <div className="flex min-h-14 items-center justify-between border-b border-linea px-4 py-2">
         <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           {lineas.length} {lineas.length === 1 ? "producto" : "productos"}
         </span>
-        <button
-          onClick={onLimpiar}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-          Vaciar
-        </button>
+        <Vaciar onVaciar={onLimpiar} onNoVaciar={onNoVaciar} />
       </div>
 
       {/* Los rótulos de las dos cajas, a la vista: eran iguales y sin
@@ -105,7 +103,10 @@ export function Lineas({
                     // Corregida la cantidad, el foco vuelve solo al buscador:
                     // lo que sigue es cargar el próximo producto.
                     if (e.key === "Enter" || e.key === "Escape") {
-                      e.preventDefault();
+                      // Ctrl+Enter no se cancela: sigue hasta la pantalla y
+                      // cobra, con la cantidad ya corregida (se guardó al
+                      // tipearla). Cancelada, el atajo la ignoraba.
+                      if (!(e.key === "Enter" && (e.ctrlKey || e.metaKey))) e.preventDefault();
                       enfocar("buscador");
                     }
                   }}
@@ -155,6 +156,90 @@ export function Lineas({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * «Vaciar», en dos pasos y en el mismo lugar.
+ *
+ * Un toque tiraba la venta entera (T4, hallazgo 20). El primero pregunta, ahí
+ * mismo, con dos botones del tamaño de los demás; el segundo vacía. Sin
+ * temporizador: una pregunta que se va sola es mala con el teclado, y con la
+ * cola enfrente nadie la lee a tiempo. Se desarma con Esc, con «No» y al irse
+ * el foco a otra parte: un Enter que caiga después en el botón no puede
+ * vaciar.
+ *
+ * Y el «Vaciar» de la pregunta no cuenta durante 400 ms: los dos clics de un
+ * doble clic caen en el mismo lugar, y el segundo vaciaba igual.
+ *
+ * Se eligió esto antes que un «Deshacer»: deshacer obliga a guardar y
+ * devolver los dieciséis estados de la venta, y es fácil devolver la mitad.
+ */
+function Vaciar({ onVaciar, onNoVaciar }: { onVaciar: () => void; onNoVaciar: () => void }) {
+  const [armado, setArmado] = useState(false);
+  const desde = useRef(0);
+
+  function armar() {
+    desde.current = Date.now();
+    setArmado(true);
+  }
+
+  function no() {
+    setArmado(false);
+    onNoVaciar();
+  }
+
+  if (!armado) {
+    return (
+      <button
+        type="button"
+        onClick={armar}
+        className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
+      >
+        <X className="h-3.5 w-3.5" />
+        Vaciar
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label="¿Vaciar la venta?"
+      className="flex items-center gap-2"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          no();
+        }
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setArmado(false);
+      }}
+    >
+      <span className="text-base font-semibold">¿Vaciar?</span>
+      <button
+        type="button"
+        // El foco cae en «No»: un Enter de más deja la venta como estaba.
+        autoFocus
+        onClick={no}
+        className="h-10 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+      >
+        No
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (Date.now() - desde.current < 400) return;
+          setArmado(false);
+          onVaciar();
+        }}
+        className="h-10 rounded-lg bg-destructive px-4 text-base font-semibold text-white transition-colors hover:bg-destructive/90"
+      >
+        Vaciar
+      </button>
     </div>
   );
 }

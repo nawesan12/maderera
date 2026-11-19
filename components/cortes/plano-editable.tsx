@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, RotateCw } from "lucide-react";
 import type {
   PiezaColocada,
   PiezaFijada,
@@ -25,7 +25,10 @@ import type {
  * ancho de sierra.
  *
  * Se puede girar una pieza con doble clic, salvo que la veta lo prohíba, y
- * siempre se puede volver al acomodo automático.
+ * siempre se puede volver al acomodo automático. Tocar una pieza la marca, y
+ * la marcada muestra un botón de girar de 44 px —el doble clic no existe en
+ * una pantalla táctil, y nadie lo adivina—; con el teclado, Tab llega a cada
+ * pieza, Enter la marca y R la gira.
  *
  * **Va con eventos de puntero y no con el arrastre del navegador.** El arrastre
  * de HTML no está definido sobre elementos de SVG y en la práctica funciona
@@ -37,13 +40,25 @@ export function PlanoEditable({
   plano,
   fijadas,
   onFijadas,
+  sencillo = false,
+  girable = () => true,
 }: {
   plano: PlanoDeCorte;
   fijadas: PiezaFijada[];
   onFijadas: (f: PiezaFijada[]) => void;
+  /**
+   * Para el mostrador: sin el porcentaje, sin las pasadas y sin la frase de
+   * cómo se usa. Son números y palabras de taller, y del otro lado del
+   * mostrador hay un cliente mirando la pantalla (T4, hallazgo 44).
+   */
+  sencillo?: boolean;
+  /** Si la pieza (por su índice en el despiece) se puede girar: con veta, no. */
+  girable?: (indice: number) => boolean;
 }) {
   const [agarrada, setAgarrada] = useState<PiezaColocada | null>(null);
   const [encima, setEncima] = useState<number | null>(null);
+  /** La pieza tocada: la que muestra el botón de girar. */
+  const [elegida, setElegida] = useState<string | null>(null);
 
   // Si se suelta fuera de una placa, no pasa nada: la pieza se queda donde
   // estaba. Sin esto quedaría agarrada para siempre.
@@ -64,6 +79,7 @@ export function PlanoEditable({
   }
 
   function girar(pieza: PiezaColocada, placa: number) {
+    if (!girable(pieza.indice)) return;
     const otras = fijadas.filter((f) => clave(f) !== clave(pieza));
     onFijadas([
       ...otras,
@@ -80,12 +96,42 @@ export function PlanoEditable({
     onFijadas(fijadas.filter((f) => clave(f) !== clave(pieza)));
   }
 
+  /** En qué placa está la pieza de esta clave, y la pieza. */
+  function dondeEsta(c: string): { pieza: PiezaColocada; placa: number } | null {
+    for (const pl of plano.placas) {
+      const pieza = pl.piezas.find((x) => clave(x) === c);
+      if (pieza) return { pieza, placa: pl.numero };
+    }
+    return null;
+  }
+
+  /*
+   * Soltar sobre una placa. Soltada en la misma placa de donde salió no es una
+   * mudanza: es un toque, y marca la pieza. Antes cada clic la «movía» a su
+   * propia placa y la dejaba fijada a mano sin que nadie lo pidiera. Con una
+   * pieza marcada, tocar otra placa la manda ahí: es la forma de hacerlo sin
+   * arrastrar.
+   */
+  function soltarEn(numero: number) {
+    if (agarrada) {
+      const origen = dondeEsta(clave(agarrada));
+      if (origen?.placa === numero) setElegida(clave(agarrada));
+      else mandarA(agarrada, numero);
+    } else if (elegida) {
+      const origen = dondeEsta(elegida);
+      if (origen && origen.placa !== numero) mandarA(origen.pieza, numero);
+    }
+    setAgarrada(null);
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-base text-muted-foreground">
-          Arrastrá una pieza a otra placa para mandarla ahí. Doble clic la gira.
-        </p>
+        {!sencillo && (
+          <p className="text-base text-muted-foreground">
+            Arrastrá una pieza a otra placa para mandarla ahí. Doble clic la gira.
+          </p>
+        )}
         {fijadas.length > 0 && (
           <button
             type="button"
@@ -116,8 +162,7 @@ export function PlanoEditable({
             onPointerLeave={() => setEncima(null)}
             onPointerUp={() => {
               setEncima(null);
-              if (agarrada) mandarA(agarrada, placa.numero);
-              setAgarrada(null);
+              soltarEn(placa.numero);
             }}
           >
             <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -132,10 +177,16 @@ export function PlanoEditable({
                 {placa.seVendeEntera ? "Se vende entera" : "Se cobra el corte"}
               </span>
               <span className="tabular w-full text-sm text-muted-foreground">
-                {Math.round(placa.aprovechado * 100)}% · {placa.piezas.length}{" "}
-                {placa.piezas.length === 1 ? "pieza" : "piezas"} ·{" "}
-                {placa.cortes.length}{" "}
-                {placa.cortes.length === 1 ? "pasada" : "pasadas"}
+                {sencillo ? (
+                  `${placa.piezas.length} ${placa.piezas.length === 1 ? "pieza" : "piezas"}`
+                ) : (
+                  <>
+                    {Math.round(placa.aprovechado * 100)}% · {placa.piezas.length}{" "}
+                    {placa.piezas.length === 1 ? "pieza" : "piezas"} ·{" "}
+                    {placa.cortes.length}{" "}
+                    {placa.cortes.length === 1 ? "pasada" : "pasadas"}
+                  </>
+                )}
               </span>
             </figcaption>
 
@@ -146,7 +197,10 @@ export function PlanoEditable({
               agarrada={agarrada}
               movidas={movidas}
               claveDe={clave}
+              elegida={elegida}
+              girable={girable}
               onAgarrar={setAgarrada}
+              onElegir={(p) => setElegida(clave(p))}
               onGirar={(p) => girar(p, placa.numero)}
               onSoltarUna={soltarUna}
             />
@@ -164,7 +218,10 @@ function Dibujo({
   agarrada,
   movidas,
   claveDe,
+  elegida,
+  girable,
   onAgarrar,
+  onElegir,
   onGirar,
   onSoltarUna,
 }: {
@@ -174,13 +231,22 @@ function Dibujo({
   agarrada: PiezaColocada | null;
   movidas: Set<string>;
   claveDe: (p: { indice: number; unidad: number }) => string;
+  elegida: string | null;
+  girable: (indice: number) => boolean;
   onAgarrar: (p: PiezaColocada) => void;
+  onElegir: (p: PiezaColocada) => void;
   onGirar: (p: PiezaColocada) => void;
   onSoltarUna: (p: PiezaColocada) => void;
 }) {
   const { placaLargo, placaAncho } = plano;
+  // El viewBox arranca en −4 y suma 8: de milímetros de placa a porcentaje
+  // del dibujo, para poner el botón de girar (HTML) encima de la pieza (SVG).
+  const pctX = (mm: number) => `${((mm + 4) / (placaLargo + 8)) * 100}%`;
+  const pctY = (mm: number) => `${((mm + 4) / (placaAncho + 8)) * 100}%`;
+  const marcada = placa.piezas.find((p) => claveDe(p) === elegida);
 
   return (
+    <div className="relative">
     <svg
       viewBox={`-4 -4 ${placaLargo + 8} ${placaAncho + 8}`}
       /* `select-none`: sin esto, arrastrar una pieza va seleccionando los
@@ -188,7 +254,7 @@ function Dibujo({
       className={`block h-auto w-full select-none rounded border transition-colors ${
         resaltada ? "border-brand-orange bg-brand-orange/5" : "border-linea"
       }`}
-      role="img"
+      role="group"
       aria-label={`Placa ${placa.numero}: ${placa.piezas.length} piezas, ${Math.round(
         placa.aprovechado * 100,
       )} por ciento aprovechado${
@@ -220,7 +286,23 @@ function Dibujo({
             key={i}
             onPointerDown={() => onAgarrar(p)}
             onDoubleClick={() => onGirar(p)}
-            className="cursor-grab active:cursor-grabbing"
+            tabIndex={0}
+            role="button"
+            aria-pressed={claveDe(p) === elegida}
+            aria-label={`Pieza ${p.largoOriginal} × ${p.anchoOriginal} mm${p.etiqueta ? `, ${p.etiqueta}` : ""}`}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onElegir(p);
+              } else if ((e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                onGirar(p);
+              }
+            }}
+            // Con el teclado, la pieza enfocada es la marcada: se ve el borde
+            // grueso y R la gira. (Un `g` de SVG no dibuja el contorno del foco.)
+            onFocus={() => onElegir(p)}
+            className="cursor-grab outline-none active:cursor-grabbing"
             opacity={
               agarrada &&
               agarrada.indice === p.indice &&
@@ -241,9 +323,9 @@ function Dibujo({
               y={p.y}
               width={p.ancho}
               height={p.alto}
-              className="fill-card"
+              className={claveDe(p) === elegida ? "fill-card text-accion" : "fill-card"}
               stroke="currentColor"
-              strokeWidth={aMano ? 9 : 5}
+              strokeWidth={claveDe(p) === elegida ? 14 : aMano ? 9 : 5}
               strokeDasharray={aMano ? "34 20" : undefined}
             />
             {cuerpo >= 44 && (
@@ -300,6 +382,23 @@ function Dibujo({
         />
       ))}
     </svg>
+      {/* El botón de girar, solo en la pieza marcada: en todas, el plano se
+          llena de ruido. Es HTML encima del dibujo y no parte del SVG para
+          que mida 44 px de verdad a cualquier escala, y queda fuera del
+          arrastre: tocarlo no agarra la pieza. */}
+      {marcada && girable(marcada.indice) && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => onGirar(marcada)}
+          aria-label="Girar la pieza"
+          style={{ left: pctX(marcada.x + marcada.ancho), top: pctY(marcada.y) }}
+          className="absolute flex h-11 w-11 -translate-x-full items-center justify-center rounded-full border border-linea bg-card text-foreground shadow-md transition-colors hover:bg-hundida"
+        >
+          <RotateCw className="h-5 w-5" />
+        </button>
+      )}
+    </div>
   );
 }
 

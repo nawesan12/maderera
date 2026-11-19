@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ClipboardList, Loader2, Plus, FileText, Printer } from "lucide-react";
+import { Banknote, ClipboardList, Loader2, Plus, FileText, Printer } from "lucide-react";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { formatearMonto } from "@/lib/formato";
 import type { TipoDescuento, MedioDeMostrador } from "@/lib/mostrador/importes";
@@ -50,7 +50,8 @@ export function Cobro({
   recibido,
   onRecibido,
   cambio,
-  hayCaja,
+  faltaCaja,
+  onAbrirCaja,
   enviando,
   puede,
   puedeCobrar,
@@ -101,7 +102,13 @@ export function Cobro({
   recibido: string;
   onRecibido: (v: string) => void;
   cambio: number | null;
-  hayCaja: boolean;
+  /**
+   * Hay efectivo en el cobro (solo o en una parte del pago partido) y la
+   * sucursal no tiene turno abierto: Go lo rechazaría.
+   */
+  faltaCaja: boolean;
+  /** Abre el panel de la caja para abrir el turno y volver a este cobro. */
+  onAbrirCaja: () => void;
   enviando: boolean;
   /** Hay algo cargado: alcanza para un presupuesto. */
   puede: boolean;
@@ -142,7 +149,12 @@ export function Cobro({
   onRemito: () => void;
   onPresupuesto: () => void;
 }) {
-  const faltaCaja = medio === "efectivo" && !hayCaja;
+  /*
+   * Sin caja, el botón grande abre la caja: la tecla y el botón hacen lo que
+   * el botón dice. Antes había tres avisos de «no hay caja» —la barra, un
+   * párrafo rojo acá y el botón apagado— y ninguno la abría (T4, hallazgo 19).
+   */
+  const alCobrar = faltaCaja ? onAbrirCaja : onCobrar;
 
   /*
    * El precio de profesional es de contado.
@@ -309,7 +321,8 @@ export function Cobro({
                     // Es el último dato de la venta en efectivo: Enter cobra.
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      if (puedeCobrar) onCobrar();
+                      if (faltaCaja) onAbrirCaja();
+                      else if (puedeCobrar) onCobrar();
                     }
                   }}
                   placeholder="0"
@@ -326,12 +339,6 @@ export function Cobro({
               </label>
             )}
 
-            {faltaCaja && (
-              <p className="estado-problema mt-3 rounded-xl bg-[var(--estado-fondo)] p-3.5 text-base text-[var(--estado-tinta)]">
-                No hay caja abierta en esta sucursal. Abrila para poder cobrar en
-                efectivo.
-              </p>
-            )}
           </div>
 
           <div className="min-w-0">
@@ -597,12 +604,25 @@ export function Cobro({
             son los que hacían falta arriba. */
         <div className="mt-3.5 flex gap-2">
           <button
-            onClick={() => onCobrar()}
-            disabled={!puedeCobrar}
-            className="inline-flex h-16 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl bg-accion text-xl font-bold text-white transition-colors hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => alCobrar()}
+            disabled={faltaCaja ? enviando : !puedeCobrar}
+            data-foco="cobrar"
+            className={`inline-flex h-16 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl text-xl font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              faltaCaja
+                ? "estado-problema border-2 border-[var(--estado-acento)] bg-[var(--estado-fondo)] text-[var(--estado-tinta)] hover:brightness-95"
+                : "bg-accion text-white hover:bg-accion-hover"
+            }`}
           >
             {enviando ? (
               <Loader2 className="h-6 w-6 animate-spin" />
+            ) : faltaCaja ? (
+              <>
+                <Banknote className="h-6 w-6" />
+                Abrir la caja
+                <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">
+                  Ctrl + Enter
+                </kbd>
+              </>
             ) : (
               <>
                 {acopio ? "Cobrar y dejar en acopio" : "Cobrar"}

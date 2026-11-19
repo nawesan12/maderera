@@ -12,25 +12,35 @@ interface CajaDisponible {
 }
 
 /**
- * Vincular esta máquina a una caja física.
+ * Vincular esta máquina a una caja física, desde la barra de arriba.
  *
- * Aparece una sola vez, la primera. Sin vincular, el mostrador puede leer sin
- * internet pero no cobrar: la venta necesita un número que el cliente se pueda
- * llevar escrito, y ese número lleva el código de la caja.
+ * Sin vincular, el mostrador puede leer sin internet pero no cobrar: la venta
+ * necesita un número que el cliente se pueda llevar escrito, y ese número
+ * lleva el código de la caja.
  *
  * Se vincula **estando en línea**, a propósito: el código lo asigna el servidor
  * y no la máquina. Si cada navegador se autobautizara, dos terminarían
  * llamándose `CAJA1` y dos clientes se irían con el mismo papel; la clave de
  * idempotencia protege la base de ese duplicado, pero no protege el papel, que
  * es sobre lo que la gente discute.
+ *
+ * Antes era una franja con dos frases arriba de la venta (T4, hallazgo 19).
+ * Ahora es un selector del mismo alto que la píldora del turno y en segundo
+ * plano: sin la palabra «caja», porque al lado está «Abrir caja», que es otra
+ * cosa (el turno), y la misma palabra para dos cosas confunde. Sin cajas
+ * dadas de alta o sin conexión no aparece: el que atiende no tiene nada que
+ * hacer ahí, y un cartel que no se puede resolver es ruido.
  */
 export function VincularCaja({
   branchId,
   enLinea,
+  vinculada,
   onVincular,
 }: {
   branchId: string;
   enLinea: boolean;
+  /** El código de la caja de esta máquina, si ya está vinculada. */
+  vinculada: string | null;
   onVincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
 }) {
   const [cajas, setCajas] = useState<CajaDisponible[] | null>(null);
@@ -38,7 +48,7 @@ export function VincularCaja({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!enLinea) return;
+    if (!enLinea || vinculada) return;
 
     let vivo = true;
     void fetch(`/api/mostrador/caja/vincular?branchId=${branchId}`)
@@ -53,7 +63,7 @@ export function VincularCaja({
     return () => {
       vivo = false;
     };
-  }, [branchId, enLinea]);
+  }, [branchId, enLinea, vinculada]);
 
   async function vincular(cajaId: string) {
     setEnCurso(true);
@@ -75,54 +85,53 @@ export function VincularCaja({
 
       await onVincular(datos.caja);
     } catch {
-      setError("No se pudo vincular. Probá de nuevo.");
+      setError("No se pudo vincular.");
     } finally {
       setEnCurso(false);
     }
   }
 
-  return (
-    <div className="tarjeta flex flex-wrap items-center gap-3 border-[var(--estado-borde)] p-4">
-      <span className="estado-espera flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--estado-fondo)]">
-        <Monitor className="h-5 w-5" />
+  // Ya vinculada: el código, quieto, para leerlo en el papel del cliente.
+  if (vinculada) {
+    return (
+      <span className="inline-flex h-9 items-center gap-1.5 px-1 text-sm text-muted-foreground" title="Esta PC">
+        <Monitor className="h-4 w-4" />
+        {vinculada}
       </span>
+    );
+  }
 
-      <div className="min-w-0 flex-1">
-        <p className="text-base font-semibold">Esta máquina no está vinculada</p>
-        <p className="text-sm text-muted-foreground">
-          {enLinea
-            ? "Elegí qué caja es para poder cobrar cuando se corte internet."
-            : "Conectate una vez para vincularla. Mientras tanto se puede consultar, pero no cobrar sin conexión."}
-        </p>
-        {error && <p className="mt-1 text-sm text-saldo-debe">{error}</p>}
-      </div>
+  // Mientras carga no se muestra nada: un círculo que gira en la barra, en
+  // cada arranque, es más ruido que lo que informa.
+  if (!enLinea || !cajas || cajas.length === 0) return null;
 
-      {enLinea &&
-        (cajas === null ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-        ) : cajas.length === 0 ? (
-          <p className="shrink-0 text-sm text-muted-foreground">
-            No hay cajas dadas de alta en esta sucursal.
-          </p>
-        ) : (
-          <select
-            aria-label="Caja de esta PC"
-            defaultValue=""
-            disabled={enCurso}
-            onChange={(e) => {
-              if (e.target.value) void vincular(e.target.value);
-            }}
-            className="h-11 shrink-0 rounded-lg superficie px-3 text-base"
-          >
-            <option value="">Elegí la caja…</option>
-            {cajas.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.codigo}
-                {c.nombre ? ` · ${c.nombre}` : ""}
-              </option>
-            ))}
-          </select>
-        ))}
-    </div>
+  return (
+    <span className="inline-flex items-center gap-2">
+      <label className="estado-espera inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--estado-acento)] pl-2.5 text-sm font-medium">
+        {enCurso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Monitor className="h-4 w-4" />}
+        <span className="sr-only">Qué terminal es esta PC</span>
+        {/* Controlado y siempre en blanco: si falla, elegir la misma otra vez
+            tiene que volver a intentar, y un `select` que ya la muestra
+            elegida no dispara `onChange`. */}
+        <select
+          value=""
+          disabled={enCurso}
+          aria-invalid={error ? true : undefined}
+          onChange={(e) => {
+            if (e.target.value) void vincular(e.target.value);
+          }}
+          className="h-full rounded-r-lg bg-transparent pr-2 text-sm font-medium outline-none"
+        >
+          <option value="">Esta PC…</option>
+          {cajas.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.codigo}
+              {c.nombre ? ` · ${c.nombre}` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {error && <span className="text-sm font-medium text-saldo-debe">{error}</span>}
+    </span>
   );
 }

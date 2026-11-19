@@ -365,6 +365,8 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 //     a favor (una nota de crédito sobre algo ya cobrado, una retención sin
 //     factura detrás). El saldo de Deudores tiene que ser el de la cuenta
 //     corriente facturada.
+//   - **El listado de deudores no da el mayor**: la suma de las cuentas del
+//     reparto contra el saldo de 1.1.03 del archivo.
 func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
 	idesde, ihasta := instantes(desde, hasta)
 	var fueraDeMes, pagosB int
@@ -400,6 +402,25 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 	if negativos > 0 {
 		out = append(out, PendienteDelCierre{"deudores", "Clientes con Deudores en negativo",
 			"Cobros o notas de crédito sin factura con CAE detrás.", negativos, "/admin/clientes"})
+	}
+	// El listado de deudores del contador sale del reparto, cuenta por
+	// cuenta (CsvDeudores); el saldo de 1.1.03, de los asientos del CSV
+	// desde el principio. Lo que el reparto no ve y el CSV sí (el cheque
+	// rechazado que le devuelve la deuda al cliente, un asiento cargado de
+	// otra forma) los separa: el contador concilia uno con otro y la
+	// diferencia tiene que estar dicha (comité final, M7).
+	listado := 0.0
+	for _, d := range reparto.Deudores {
+		listado = float64(listado + d)
+	}
+	todos, err := s.AsientosDelPeriodo(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), hasta)
+	if err != nil {
+		return nil, err
+	}
+	if dif := redondear(SaldoDeCuenta(DelCircuito(todos, "blanco"), Cuentas.Deudores) - listado); dif > 0.01 || dif < -0.01 {
+		out = append(out, PendienteDelCierre{"deudores-mayor", "El listado de deudores no da el mayor",
+			"El saldo de Deudores por ventas del archivo difiere en " + formato.Moneda(dif) + " de lo que suman las cuentas.", 1,
+			"/admin/cierre"})
 	}
 	mas, err := s.pendientesDeAnticiposYBanco(ctx, idesde, ihasta, reparto)
 	if err != nil {

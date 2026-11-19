@@ -163,6 +163,10 @@ type ResultadoDelReparto struct {
 	Aplicaciones []Aplicacion
 	// Lo que queda en Deudores y en Anticipos de cada clave al final.
 	Deudores, Anticipos map[string]float64
+	// MovimientosDeDeudores son los cambios de Deudores de cada clave, en
+	// orden y con su fecha: el mayor de 1.1.03 por cuenta, sin el circuito B.
+	// De acá sale el listado de deudores del contador (CsvDeudores).
+	MovimientosDeDeudores map[string][]Movimiento
 	// Los anticipos que quedan sin aplicar al final, en orden.
 	Bolsas []Bolsa
 }
@@ -217,7 +221,8 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 		}
 		return a.ID < b.ID
 	})
-	res := ResultadoDelReparto{Recibos: map[string]Reparto{}, Deudores: map[string]float64{}, Anticipos: map[string]float64{}}
+	res := ResultadoDelReparto{Recibos: map[string]Reparto{}, Deudores: map[string]float64{}, Anticipos: map[string]float64{},
+		MovimientosDeDeudores: map[string][]Movimiento{}}
 	r2 := jsmath.Redondear2
 	bolsas := map[string][]*Bolsa{}
 	deRecibo := map[string]*Bolsa{}
@@ -289,6 +294,9 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 				}
 				b.Monto, b.Aplicado = 0, 0
 			}
+		}
+		if d := r2(deudores - res.Deudores[e.Clave]); d > 0.005 || d < -0.005 {
+			res.MovimientosDeDeudores[e.Clave] = append(res.MovimientosDeDeudores[e.Clave], Movimiento{Monto: d, Fecha: e.Fecha})
 		}
 		res.Deudores[e.Clave], res.Anticipos[e.Clave] = deudores, anticipo
 	}

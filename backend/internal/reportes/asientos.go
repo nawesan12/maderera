@@ -698,6 +698,19 @@ func CsvAsientos(todos []Asiento, circuito string) string {
 		filas, []string{csvexcel.Texto("Totales"), "", "", "", "", csvexcel.NumeroCsv(totalDebe, 2), csvexcel.NumeroCsv(totalHaber, 2), csvexcel.Texto(cierra)})
 }
 
+// SaldoDeCuenta es debe menos haber de la cuenta en los asientos.
+func SaldoDeCuenta(asientos []Asiento, cuenta string) float64 {
+	neto := 0.0
+	for _, a := range asientos {
+		for _, r := range a.Renglones {
+			if r.Cuenta == cuenta {
+				neto = float64(neto + float64(r.Debe-r.Haber))
+			}
+		}
+	}
+	return redondear(neto)
+}
+
 // DelCircuito son los asientos de un circuito ("" es el blanco).
 func DelCircuito(asientos []Asiento, circuito string) []Asiento {
 	if circuito == "" {

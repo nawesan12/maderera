@@ -292,3 +292,27 @@ func TestPartesPorCircuito(t *testing.T) {
 		t.Fatalf("bancarizado en B: %v", x)
 	}
 }
+
+// El listado de deudores del contador sale del reparto y el mayor de 1.1.03
+// de los asientos (comité final, M7): si no coinciden, el cierre lo dice.
+// Con las facturas y los recibos de siempre coinciden; el cheque rechazado
+// que le devuelve la deuda al cliente mueve 1.1.03 y el reparto no lo ve.
+func TestElListadoDeDeudoresContraElMayor(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cli := e.id(t, `insert into customers (nombre) values ('Gómez') returning id`)
+	e.facturaConCae(t, &cli, 40, 1000, "2026-10-05T15:00:00Z", nil)
+	e.recibir(t, &cli, "R-1", "2026-10-06T15:00:00Z", [2]any{"transferencia", 400.0})
+	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if strings.Contains(pend, `"clave":"deudores-mayor"`) {
+		t.Errorf("coinciden y se avisa: %s", pend)
+	}
+	cheque := e.id(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, customer_id) values ('recibido', '77', 'Nación', '2026-10-10', 200, 'cartera', $1) returning id`, cli)
+	e.exec(t, `update cheques set estado = 'rechazado' where id = $1`, cheque)
+	e.exec(t, `update cheque_estados set at = '2026-10-11T15:00:00Z' where cheque_id = $1`, cheque)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, cheque_id, created_at) values ($1, 'nota_debito', 200, $2, '2026-10-11T15:00:00Z')`, cli, cheque)
+	_, pend, _ = pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	if !strings.Contains(pend, `"clave":"deudores-mayor"`) || !strings.Contains(pend, "200") {
+		t.Errorf("el cheque rechazado separa el listado del mayor: %s", pend)
+	}
+}

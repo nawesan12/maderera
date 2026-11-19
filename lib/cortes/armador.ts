@@ -209,3 +209,33 @@ export function textoDelPedido(grupos: GrupoDelMensaje[], enlace: string): strin
   );
   return ["Hola! Quería pedir este corte:", bloques.join("\n\n"), enlace].join("\n");
 }
+
+/** Una medida tipeada: «605», «60,5» o «60.5». Lo que no es número da 0. */
+function medidaTipeada(v: string | number): number {
+  const n = typeof v === "number" ? v : Number(String(v).trim().replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** Abajo de esto, en los dos lados, una pieza más parece en centímetros. */
+export const SOSPECHA_DE_CM = 100;
+
+/**
+ * Si el despiece parece cargado en centímetros.
+ *
+ * Pasa en el sitio y en el mostrador: el carpintero dice «60 por 40» y se
+ * tipea 60 × 40, que en milímetros es un taco. Cuando **todas** las piezas
+ * cargadas miden menos de 10 cm de cada lado, se pregunta antes de mandar
+ * (T4, hallazgo 22). Es una pregunta, no un cartel: con una pieza grande en
+ * la lista ya no hay duda y no se molesta a nadie.
+ *
+ * Se descartó afinar más —«y alguna con decimales», como proponía la
+ * revisión—: el caso típico en centímetros es justamente 60 × 40, sin
+ * decimales, y equivocarse para ese lado sale una placa cortada en tacos. Un
+ * falso aviso cuesta un toque, y se pregunta una sola vez por armado.
+ */
+export function medidasSospechosas(piezas: { largo: string | number; ancho: string | number }[]): boolean {
+  const cargadas = piezas
+    .map((p) => ({ largo: medidaTipeada(p.largo), ancho: medidaTipeada(p.ancho) }))
+    .filter((p) => p.largo > 0 && p.ancho > 0);
+  return cargadas.length > 0 && cargadas.every((p) => p.largo < SOSPECHA_DE_CM && p.ancho < SOSPECHA_DE_CM);
+}

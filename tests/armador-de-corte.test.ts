@@ -4,6 +4,7 @@ import {
   filasDelEnlace,
   leerBorrador,
   medidasDelBorrador,
+  medidasSospechosas,
   nombreDelTapacanto,
   textoDelPedido,
   type PiezaDelPedido,
@@ -157,5 +158,38 @@ describe("el mensaje de WhatsApp", () => {
         "https://mjbj.test/corte/c/abc",
       ].join("\n"),
     );
+  });
+});
+
+describe("¿están en mm?", () => {
+  // T4, hallazgo 22: el carpintero dice «60 por 40» y se tipea 60 × 40.
+  it("todas las piezas de menos de 10 cm por lado: se pregunta", () => {
+    expect(medidasSospechosas([{ largo: "60", ancho: "40" }, { largo: "99", ancho: "99" }])).toBe(true);
+  });
+
+  it("con una pieza grande ya no hay duda", () => {
+    expect(medidasSospechosas([{ largo: "60", ancho: "40" }, { largo: "600", ancho: "400" }])).toBe(false);
+  });
+
+  it("el borde: 100 mm ya no es sospechoso", () => {
+    expect(medidasSospechosas([{ largo: "100", ancho: "50" }])).toBe(false);
+    expect(medidasSospechosas([{ largo: "50", ancho: "100" }])).toBe(false);
+    expect(medidasSospechosas([{ largo: "99", ancho: "50" }])).toBe(true);
+  });
+
+  it("sin piezas cargadas no se pregunta nada", () => {
+    expect(medidasSospechosas([])).toBe(false);
+    expect(medidasSospechosas([{ largo: "", ancho: "" }])).toBe(false);
+    // Una medida a medias no cuenta, ni para un lado ni para el otro.
+    expect(medidasSospechosas([{ largo: "60", ancho: "" }])).toBe(false);
+  });
+
+  it("la coma es decimal: 60,5 son sesenta milímetros y medio, no 605", () => {
+    expect(medidasSospechosas([{ largo: "60,5", ancho: "40" }])).toBe(true);
+    expect(medidasSospechosas([{ largo: "60.5", ancho: "40" }])).toBe(true);
+  });
+
+  it("lo que no es número no cuenta", () => {
+    expect(medidasSospechosas([{ largo: "abc", ancho: "40" }, { largo: "600", ancho: "40" }])).toBe(false);
   });
 });

@@ -343,3 +343,27 @@ func TestCancelarConPagoEnLinea(t *testing.T) {
 		t.Errorf("con el reintegro completo se cancela: %v", err)
 	}
 }
+
+// Una transferencia informada que nadie verificó frena la cancelación
+// (revisión del carril E): si se aprobaba después, quedaba plata cobrada de
+// un pedido cancelado. El depósito no la cancela, y quien maneja la plata
+// tiene que resolver el pago primero.
+func TestCancelarConTransferenciaEnRevision(t *testing.T) {
+	e := armar(t)
+	_, ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	_, dep := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
+	pedido := e.id(t, `insert into orders (numero, contacto_nombre, branch_id, origen, medio_pago, total, estado)
+		values ('P-2026-0010', 'Juan', $1, 'tienda', 'transferencia', 1210, 'pendiente') returning id`, e.sucursal)
+	pago := e.id(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado)
+		values ($1, 'pedido', 'transferencia', 'transferencia', 1210, 'en_revision') returning id`, pedido)
+	if _, err := e.s.Cancelar(context.Background(), dep, pedido, nil); !esProblema(err, 403) {
+		t.Errorf("el depósito cancela con la transferencia en revisión: %v", err)
+	}
+	if _, err := e.s.Cancelar(context.Background(), ven, pedido, nil); !esProblema(err, 422) || !strings.Contains(err.Error(), "en revisión") {
+		t.Errorf("cancelar con la transferencia en revisión: %v", err)
+	}
+	e.exec(t, `update payments set estado = 'rechazado' where id = $1`, pago)
+	if _, err := e.s.Cancelar(context.Background(), dep, pedido, nil); err != nil {
+		t.Errorf("con la transferencia rechazada se cancela: %v", err)
+	}
+}

@@ -259,11 +259,24 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 		// Primero se anula el recibo y se devuelve la plata; recién ahí se
 		// cancela. Así el depósito, que abre Pedidos, tampoco cancela un
 		// pedido cobrado.
+		//
+		// También los recibos que cobraron su factura desde Facturación
+		// (fragmentos.RecibosDelPedido). El recibo al que una devolución ya le
+		// reintegró plata no se puede anular (cobros.AnularRecibo): lo que
+		// queda vuelve con otra devolución desde la factura, y el mensaje lo
+		// dice para que nadie quede trabado.
 		var recibos []string
+		var conReintegro bool
 		if err := tx.QueryRow(ctx, `
-			SELECT coalesce(array_agg(numero ORDER BY numero), '{}') FROM receipts
-			WHERE order_id = $1 AND estado = 'emitido'`, id).Scan(&recibos); err != nil {
+			SELECT coalesce(array_agg(numero ORDER BY numero), '{}'),
+			       coalesce(bool_or(EXISTS (SELECT 1 FROM receipt_refunds t WHERE t.receipt_id = r.id)), false)
+			FROM receipts r
+			WHERE r.id IN `+fragmentos.RecibosDelPedido("$1::uuid")+` AND r.estado = 'emitido'`, id).Scan(&recibos, &conReintegro); err != nil {
 			return err
+		}
+		if len(recibos) > 0 && conReintegro {
+			return fallo("Ya se cobró con el recibo " + strings.Join(recibos, ", ") +
+				" y una devolución ya le reintegró una parte: devolvé lo que queda desde la factura.")
 		}
 		if len(recibos) > 0 {
 			return fallo("Ya se cobró con el recibo " + strings.Join(recibos, ", ") +
@@ -275,16 +288,26 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 		// que se la devuelva. Primero el reintegro (Mercado Pago o la
 		// transferencia de vuelta); y aun reintegrado, lo cancela solo quien
 		// maneja la plata.
-		var pagado, sinDevolver float64
+		//
+		// Una transferencia informada que nadie verificó (en_revision) frena
+		// igual (revisión del carril E): si el depósito cancelaba y después
+		// administración la aprobaba, quedaba plata cobrada de un pedido
+		// cancelado, sin recibo ni reintegro. Primero se resuelve el pago.
+		var pagado, sinDevolver, enRevision float64
 		if err := tx.QueryRow(ctx, `
-			SELECT coalesce(sum(p.monto), 0)::float8,
+			SELECT coalesce(sum(p.monto) FILTER (WHERE p.estado IN ('aprobado', 'reintegrado')), 0)::float8,
 			       coalesce(sum(p.monto - coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0))
-			                FILTER (WHERE p.estado = 'aprobado'), 0)::float8
-			FROM payments p WHERE p.order_id = $1 AND p.estado IN ('aprobado', 'reintegrado')`, id).Scan(&pagado, &sinDevolver); err != nil {
+			                FILTER (WHERE p.estado = 'aprobado'), 0)::float8,
+			       coalesce(sum(p.monto) FILTER (WHERE p.estado = 'en_revision'), 0)::float8
+			FROM payments p WHERE p.order_id = $1 AND p.estado IN ('aprobado', 'reintegrado', 'en_revision')`, id).
+			Scan(&pagado, &sinDevolver, &enRevision); err != nil {
 			return err
 		}
-		if pagado > 0.005 && !manejaPlata(ses) {
+		if pagado+enRevision > 0.005 && !manejaPlata(ses) {
 			return plataforma.NuevoProblema(http.StatusForbidden, "El pedido se pagó en línea: lo cancela administración o un vendedor.")
+		}
+		if enRevision > 0.005 {
+			return fallo("El pedido tiene una transferencia de " + formato.Moneda(enRevision) + " en revisión: primero resolvé el pago.")
 		}
 		if sinDevolver > 0.005 {
 			return fallo("El pedido tiene un pago aprobado de " + formato.Moneda(sinDevolver) + ": primero devolvé el pago.")

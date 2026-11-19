@@ -14,8 +14,8 @@
  *
  * El lado sin canto va punteado y en el gris del texto, no en el de las
  * líneas: con el gris de las líneas no se distinguía de la pieza y nadie
- * sabía que se podía tocar (T4, hallazgo 22). Y abajo, un botón para los
- * cuatro lados de una vez, que es lo que más se pide.
+ * sabía que se podía tocar (T4, hallazgo 22). Y el cuerpo de la pieza pone
+ * o saca los cuatro lados de una vez, que es lo que más se pide.
  */
 export interface LadosConCanto {
   arriba: boolean;
@@ -102,29 +102,35 @@ export function SelectorDeCanto({
     <div className="flex shrink-0 flex-col items-center">
       {rotulo && <span className="mb-0.5 self-start text-xs text-texto-3 @2xl:sr-only">Canto</span>}
       <div className="relative shrink-0" style={{ width: anchoPx + 24, height: altoPx + 24 }}>
-        {/* El cuerpo de la pieza es el botón de todos los lados, y dice lo
-            que hace el próximo toque: si falta alguno, los pone todos; si
-            están todos, los saca. Un «Todo / Nada» fijo no decía en qué
-            estado estaba. Va adentro del dibujo para no cambiar el alto del
-            renglón de la planilla. */}
+        {/* El cuerpo de la pieza pone los lados que faltan o, si están
+            todos, los saca. No lleva texto: una palabra adentro del dibujo
+            se lee como el estado, y «Ninguno» sobre una pieza con los cuatro
+            lados o «4 lados» en cada renglón vacío decían lo contrario de lo
+            que había (comité de T4). El estado lo dicen las barras, y el
+            cuerpo se tiñe cuando están todas. La acción va en el aria-label.
+
+            En la planilla con el dedo (pointer-coarse) el cuerpo no se toca:
+            queda entre franjas de 24 px y un toque que erraba un lado por
+            poco prendía o borraba los cuatro sin que se viera. Ahí cada lado
+            se toca solo. */}
         <button
           type="button"
           onClick={todosOninguno}
-          className={`absolute flex items-center justify-center rounded-[3px] border border-linea bg-sitio-alt font-medium leading-none text-texto-2 transition-colors hover:text-foreground ${
-            chico ? "text-[11px]" : "text-xs"
-          }`}
+          aria-label={todos ? "Sacar el canto" : soloLargos ? "Poner canto en los dos largos" : "Poner canto en los 4 lados"}
+          className={`absolute rounded-[3px] border transition-colors ${
+            todos ? "border-accion/40 bg-accion/10" : "border-linea bg-sitio-alt hover:border-accion/40"
+          } ${chico ? "pointer-coarse:pointer-events-none" : ""}`}
           style={{ left: 12, top: 12, width: anchoPx, height: altoPx }}
-        >
-          {todos ? "Ninguno" : soloLargos ? "2 lados" : "4 lados"}
-        </button>
-        {/* Cada lado se toca en una franja centrada en el borde; en la
-            planilla, de 20 px y no de 24, para dejarle lugar al cuerpo. */}
-        {lado("arriba", "en el largo de arriba", chico ? "left-3 right-3 top-0.5 h-5" : "left-3 right-3 top-0 h-6", true)}
-        {lado("abajo", "en el largo de abajo", chico ? "bottom-0.5 left-3 right-3 h-5" : "bottom-0 left-3 right-3 h-6", true)}
+        />
+        {/* Cada lado se toca en una franja centrada en el borde. En la
+            planilla, de 20 px con mouse, para dejarle lugar al cuerpo, y de
+            24 con el dedo, donde el cuerpo no se toca. */}
+        {lado("arriba", "en el largo de arriba", chico ? "left-3 right-3 top-0.5 h-5 pointer-coarse:top-0 pointer-coarse:h-6" : "left-3 right-3 top-0 h-6", true)}
+        {lado("abajo", "en el largo de abajo", chico ? "bottom-0.5 left-3 right-3 h-5 pointer-coarse:bottom-0 pointer-coarse:h-6" : "bottom-0 left-3 right-3 h-6", true)}
         {!soloLargos &&
-          lado("izquierda", "en el ancho de la izquierda", chico ? "bottom-3 left-0.5 top-3 w-5" : "bottom-3 left-0 top-3 w-6", false)}
+          lado("izquierda", "en el ancho de la izquierda", chico ? "bottom-3 left-0.5 top-3 w-5 pointer-coarse:left-0 pointer-coarse:w-6" : "bottom-3 left-0 top-3 w-6", false)}
         {!soloLargos &&
-          lado("derecha", "en el ancho de la derecha", chico ? "bottom-3 right-0.5 top-3 w-5" : "bottom-3 right-0 top-3 w-6", false)}
+          lado("derecha", "en el ancho de la derecha", chico ? "bottom-3 right-0.5 top-3 w-5 pointer-coarse:right-0 pointer-coarse:w-6" : "bottom-3 right-0 top-3 w-6", false)}
       </div>
     </div>
   );

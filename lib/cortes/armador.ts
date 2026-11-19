@@ -216,26 +216,31 @@ function medidaTipeada(v: string | number): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-/** Abajo de esto, en los dos lados, una pieza más parece en centímetros. */
-export const SOSPECHA_DE_CM = 100;
+/**
+ * Abajo de esto, el lado más largo de todo el despiece parece en centímetros.
+ * En cm ningún número pasa de lo que mide la placa (275 de una 2750, 244 de
+ * una 2440); en mm, casi todo despiece tiene algo de 30 cm o más.
+ */
+export const SOSPECHA_DE_CM = 300;
 
 /**
  * Si el despiece parece cargado en centímetros.
  *
  * Pasa en el sitio y en el mostrador: el carpintero dice «60 por 40» y se
- * tipea 60 × 40, que en milímetros es un taco. Cuando **todas** las piezas
- * cargadas miden menos de 10 cm de cada lado, se pregunta antes de mandar
- * (T4, hallazgo 22). Es una pregunta, no un cartel: con una pieza grande en
- * la lista ya no hay duda y no se molesta a nadie.
+ * tipea 60 × 40, que en milímetros es un taco (T4, hallazgo 22). Se mira el
+ * despiece entero: si **su lado más largo** mide menos de 300, se pregunta
+ * antes de mandar.
  *
- * Se descartó afinar más —«y alguna con decimales», como proponía la
- * revisión—: el caso típico en centímetros es justamente 60 × 40, sin
- * decimales, y equivocarse para ese lado sale una placa cortada en tacos. Un
- * falso aviso cuesta un toque, y se pregunta una sola vez por armado.
+ * La primera regla —todas las piezas de menos de 10 cm por lado— dejaba
+ * pasar el error más común: un placard en cm tiene laterales de 180 y con
+ * uno solo de un metro ya no se preguntaba nada (comité de T4). Un falso
+ * aviso, en un despiece real en mm todo chico, cuesta un toque, y se pregunta
+ * una sola vez por armado. Pedir decimales, como proponía otra revisión, no
+ * sirve: en cm el caso típico es 60 × 40, sin decimales.
  */
 export function medidasSospechosas(piezas: { largo: string | number; ancho: string | number }[]): boolean {
   const cargadas = piezas
     .map((p) => ({ largo: medidaTipeada(p.largo), ancho: medidaTipeada(p.ancho) }))
     .filter((p) => p.largo > 0 && p.ancho > 0);
-  return cargadas.length > 0 && cargadas.every((p) => p.largo < SOSPECHA_DE_CM && p.ancho < SOSPECHA_DE_CM);
+  return cargadas.length > 0 && Math.max(...cargadas.map((p) => Math.max(p.largo, p.ancho))) < SOSPECHA_DE_CM;
 }

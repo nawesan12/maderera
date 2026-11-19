@@ -171,10 +171,23 @@ describe("¿están en mm?", () => {
     expect(medidasSospechosas([{ largo: "60", ancho: "40" }, { largo: "600", ancho: "400" }])).toBe(false);
   });
 
-  it("el borde: 100 mm ya no es sospechoso", () => {
-    expect(medidasSospechosas([{ largo: "100", ancho: "50" }])).toBe(false);
-    expect(medidasSospechosas([{ largo: "50", ancho: "100" }])).toBe(false);
-    expect(medidasSospechosas([{ largo: "99", ancho: "50" }])).toBe(true);
+  it("un mueble en cm, aunque tenga piezas de más de un metro: se pregunta", () => {
+    // Placard dictado en cm (comité de T4): con el 180 la regla vieja callaba.
+    expect(
+      medidasSospechosas([
+        { largo: "180", ancho: "45" },
+        { largo: "80", ancho: "45" },
+        { largo: "120", ancho: "45" },
+      ]),
+    ).toBe(true);
+    expect(medidasSospechosas([{ largo: "244", ancho: "60" }])).toBe(true);
+    expect(medidasSospechosas([{ largo: "180", ancho: "55" }, { largo: "76", ancho: "50" }])).toBe(true);
+  });
+
+  it("el borde: con un lado de 300 mm ya no es sospechoso", () => {
+    expect(medidasSospechosas([{ largo: "300", ancho: "50" }, { largo: "60", ancho: "40" }])).toBe(false);
+    expect(medidasSospechosas([{ largo: "50", ancho: "300" }])).toBe(false);
+    expect(medidasSospechosas([{ largo: "299", ancho: "50" }])).toBe(true);
   });
 
   it("sin piezas cargadas no se pregunta nada", () => {
@@ -191,5 +204,18 @@ describe("¿están en mm?", () => {
 
   it("lo que no es número no cuenta", () => {
     expect(medidasSospechosas([{ largo: "abc", ancho: "40" }, { largo: "600", ancho: "40" }])).toBe(false);
+  });
+});
+
+describe("el selector de canto", () => {
+  // Comité de T4: «Ninguno» adentro de una pieza con los cuatro lados y
+  // «4 lados» en cada renglón vacío se leían como el estado. El cuerpo no
+  // lleva texto, y en la planilla con el dedo no se toca.
+  it("el cuerpo de la pieza no dice la acción, y con el dedo cada lado mide 24 px", async () => {
+    const { readFileSync } = await import("node:fs");
+    const fuente = readFileSync(new URL("../components/cortes/selector-canto.tsx", import.meta.url), "utf8");
+    expect(fuente).not.toMatch(/"Ninguno"|"4 lados"|"2 lados"/);
+    expect(fuente).toMatch(/pointer-coarse:pointer-events-none/);
+    expect(fuente.match(/pointer-coarse:(h|w)-6/g)).toHaveLength(4);
   });
 });

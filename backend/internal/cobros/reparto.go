@@ -431,7 +431,8 @@ SELECT * FROM (
     WHERE p.estado IN ('aprobado', 'reintegrado') AND {P}
       AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)
       AND ((p.tipo = 'pedido' AND f.id IS NOT NULL
-            AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = f.id AND ip.medio <> 'cuenta_corriente'))
+            AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = f.id AND ip.medio <> 'cuenta_corriente'
+                              AND ip.receipt_id IS NULL))
         OR (p.tipo = 'deuda' AND p.customer_id IS NOT NULL))
   ) y CROSS JOIN LATERAL (
     SELECT y.clave, y.fecha, y.id, y.monto

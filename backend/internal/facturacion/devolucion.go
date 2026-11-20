@@ -196,6 +196,16 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 		FROM order_payments WHERE order_id = $1`, pedido, ventas.Efectivo, ventas.CuentaCorriente).Scan(&renglones, &efectivo, &aCuenta, &resto); err != nil {
 		return topesDeLaVenta{}, err
 	}
+	// Un cheque de la venta que rebotó ya no es plata cobrada: la nota de
+	// débito del cheque le volvió a cargar al cliente el importe entero, así
+	// que no se le devuelve por afuera (y con el tramo, además se asentaba un
+	// reintegro contra Banco de algo que nunca se cobró).
+	var rechazados float64
+	if err := c.QueryRow(ctx, `SELECT coalesce(sum(ch.importe), 0)::float8 FROM cheques ch
+		JOIN order_payments op ON op.id = ch.order_payment_id WHERE op.order_id = $1 AND ch.estado = 'rechazado'`, pedido).Scan(&rechazados); err != nil {
+		return topesDeLaVenta{}, err
+	}
+	resto -= rechazados
 	var porCaja, porCuenta, porAfuera float64
 	if err := c.QueryRow(ctx, `SELECT coalesce(sum(importe) FILTER (WHERE destino = 'caja'), 0)::float8,
 		coalesce(sum(importe) FILTER (WHERE destino = 'cuenta'), 0)::float8,
@@ -860,8 +870,17 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		// El tramo devuelto del cobro en efectivo: el cierre lo asienta como
 		// reintegro (Deudores contra Caja) y la anulación de la venta, si
 		// llega, reintegra solo lo que queda.
-		if err := tramosDelEfectivo(ctx, tx, pedido, id, total, nombre); err != nil {
+		falta, err := tramosDeLosPagos(ctx, tx, pedido, id, total, nombre, true)
+		if err != nil {
 			return Devolucion{}, err
+		}
+		if falta > 0.005 {
+			if falta, err = reintegrarDeLosRecibos(ctx, tx, pedido, id, falta, true); err != nil {
+				return Devolucion{}, err
+			}
+		}
+		if falta > 0.005 {
+			return Devolucion{}, errEmision("Los cobros en efectivo de esta venta no alcanzan para devolver " + formato.Moneda(total) + ": revisalos en Cobros.")
 		}
 	case DevolverPorAfuera:
 		// Lo de la venta del mostrador lo reintegra el posnet, y lo cobrado en
@@ -871,14 +890,39 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		// Antes se cargaba primero a los recibos: con una transferencia y un
 		// pago de Mercado Pago, el reintegro que después avisaba Mercado Pago
 		// quedaba en el CSV dos veces.
-		if topes.conRecibos {
-			aRecibos := jsmath.Redondear2(math.Max(0, total-topes.enLinea))
-			falta, err := reintegrarDeLosRecibos(ctx, tx, pedido, id, aRecibos, false)
+		//
+		// La venta del mostrador anota el tramo en sus cobros (comité final:
+		// la devolución por afuera no tenía asiento de reintegro y Deudores
+		// quedaba con un saldo en contra igual a lo devuelto). El cheque va
+		// último, así una devolución chica sale de la tarjeta o la
+		// transferencia y no toca el cheque. El tope ya lo controló
+		// partesDeLaVenta: si los cobros no alcanzan es un descuadre.
+		if !topes.conRecibos {
+			falta, err := tramosDeLosPagos(ctx, tx, pedido, id, total, nombre, false)
 			if err != nil {
 				return Devolucion{}, err
 			}
 			if falta > 0.005 {
 				return Devolucion{}, errEmision("Los cobros de esta venta no alcanzan para devolver " + formato.Moneda(total) + ": revisalos en Cobros.")
+			}
+			break
+		}
+		aRecibos := jsmath.Redondear2(math.Max(0, total-topes.enLinea))
+		falta, err := reintegrarDeLosRecibos(ctx, tx, pedido, id, aRecibos, false)
+		if err != nil {
+			return Devolucion{}, err
+		}
+		if falta > 0.005 {
+			return Devolucion{}, errEmision("Los cobros de esta venta no alcanzan para devolver " + formato.Moneda(total) + ": revisalos en Cobros.")
+		}
+		// Lo cobrado en línea que no es de Mercado Pago (una transferencia
+		// aprobada, el cobro de una venta vieja del mostrador sin
+		// order_payments) nunca recibe aviso: sin el tramo quedaba el mismo
+		// agujero en Deudores. Lo que no alcance ahí es de Mercado Pago, que
+		// avisa por su lado.
+		if enLinea := jsmath.Redondear2(math.Min(total, topes.enLinea)); enLinea > 0.005 {
+			if _, err := tramosDeLosPagos(ctx, tx, pedido, id, enLinea, nombre, false); err != nil {
+				return Devolucion{}, err
 			}
 		}
 	case DevolverPorCuenta:
@@ -914,19 +958,32 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 	return out, nil
 }
 
-// tramosDelEfectivo anota lo devuelto en los cobros en efectivo de la venta,
-// repartido en orden mientras les quede: primero los de la venta del
-// mostrador (payments, en payment_refunds) y después las partes en efectivo
-// de los recibos del pedido (receipt_refunds). El cierre asienta cada tramo
-// como reintegro, y el del recibo con su reparto. Si no alcanzan es un
-// descuadre y no se sigue: la caja tendría la salida y el CSV del estudio no
-// tendría el reintegro (comité final, A3: antes, sin cobros anotados, se
-// seguía sin anotar nada).
-func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string) error {
+// tramosDeLosPagos anota lo devuelto en los cobros sin recibo de la venta
+// (payments, en payment_refunds, con la devolución de la que sale),
+// repartido en orden mientras les quede, y devuelve lo que no alcanzó. El
+// cierre asienta cada tramo como reintegro (sección 4 de los asientos) y la
+// anulación de la venta, si llega, reintegra solo lo que queda.
+//
+// enEfectivo: los cobros en efectivo, para la devolución por caja; lo que
+// falte sale de las partes en efectivo de los recibos (reintegrarDeLosRecibos).
+// Si no, los que vuelven por afuera: ni efectivo ni cuenta corriente, sin los
+// de Mercado Pago (su reintegro lo trae el aviso de Mercado Pago, que suma
+// payment_refunds por su lado: anotarlo acá lo devolvía dos veces) ni los que
+// cobró un recibo (vuelven por el recibo). El cheque va último porque es el
+// único que no vuelve solo por el posnet o el banco: así una devolución chica
+// no lo toca y la anulación lo puede devolver entero. Los cobros de una venta
+// del mostrador nacen en la misma transacción, con el mismo created_at: entre
+// débito y transferencia decide el id, y da igual porque los dos van a Banco.
+func tramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string, enEfectivo bool) (float64, error) {
 	filas, err := tx.Query(ctx, `SELECT p.id, p.monto::float8, coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)::float8
-		FROM payments p WHERE p.order_id = $1 AND p.medio = $2 AND p.estado = 'aprobado' ORDER BY p.created_at FOR UPDATE`, pedido, ventas.Efectivo)
+		FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'
+		  AND CASE WHEN $2::bool THEN p.medio = $3
+		           ELSE coalesce(p.medio, '') NOT IN ($3, $4) AND p.proveedor <> 'mercado_pago'
+		                AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id) END
+		ORDER BY coalesce(p.medio = $5, false), p.created_at, p.id FOR UPDATE`,
+		pedido, enEfectivo, ventas.Efectivo, ventas.CuentaCorriente, ventas.Cheque)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	type cobro struct {
 		id              string
@@ -937,15 +994,15 @@ func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido, devolucion string
 		var c cobro
 		if err := filas.Scan(&c.id, &c.monto, &c.devuelto); err != nil {
 			filas.Close()
-			return err
+			return 0, err
 		}
 		cobros = append(cobros, c)
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {
-		return err
+		return 0, err
 	}
-	falta := importe
+	falta := jsmath.Redondear2(importe)
 	for _, c := range cobros {
 		if falta <= 0.005 {
 			break
@@ -954,23 +1011,14 @@ func tramosDelEfectivo(ctx context.Context, tx pgx.Tx, pedido, devolucion string
 		if tramo <= 0.005 {
 			continue
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO payment_refunds (payment_id, importe, acumulado, referencia) VALUES ($1, $2::numeric, $3::numeric, $4)`,
-			c.id, jsmath.Fijo2(tramo), jsmath.Fijo2(jsmath.Redondear2(c.devuelto+tramo)), referencia); err != nil {
-			return err
+		if _, err := tx.Exec(ctx, `INSERT INTO payment_refunds (payment_id, importe, acumulado, referencia, devolucion_id)
+			VALUES ($1, $2::numeric, $3::numeric, $4, $5)`,
+			c.id, jsmath.Fijo2(tramo), jsmath.Fijo2(jsmath.Redondear2(c.devuelto+tramo)), referencia, devolucion); err != nil {
+			return 0, err
 		}
 		falta = jsmath.Redondear2(falta - tramo)
 	}
-	if falta > 0.005 {
-		resto, err := reintegrarDeLosRecibos(ctx, tx, pedido, devolucion, falta, true)
-		if err != nil {
-			return err
-		}
-		falta = resto
-	}
-	if falta > 0.005 {
-		return errEmision("Los cobros en efectivo de esta venta no alcanzan para devolver " + formato.Moneda(importe) + ": revisalos en Cobros.")
-	}
-	return nil
+	return falta, nil
 }
 
 // reintegrarDeLosRecibos anota en receipt_refunds lo que la devolución le

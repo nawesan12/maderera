@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/sync/singleflight"
 
 	"mjbj/internal/jsmath"
 )
@@ -28,7 +27,7 @@ type Servicio struct {
 	ahora   func() time.Time
 	// repartos y asientos juntan las llamadas iguales que llegan a la vez
 	// (repartoHasta, AsientosDelPeriodo).
-	repartos, asientos singleflight.Group
+	repartos, asientos grupo
 	// alCargarReparto, si está, corre dentro de la transacción de cada
 	// reparto que se lee de la base (solo las pruebas: cuentan las lecturas
 	// y miran el JIT).

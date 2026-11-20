@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"mjbj/internal/cobros"
 )
 
 // Un solo reparto por vista del cierre: los asientos con el reparto ya
@@ -218,5 +220,118 @@ func TestLosAsientosDeLaVistaSeArmanUnaVez(t *testing.T) {
 	a[0] = Asiento{}
 	if reflect.DeepEqual(a[0], b[0]) {
 		t.Error("las dos llamadas comparten la lista")
+	}
+}
+
+// Cuando se va el último que esperaba, el reparto se cancela y no sigue
+// ocupando una conexión del pool de los reportes; el que llega después hace
+// su propia lectura en vez de sumarse a la cancelada.
+func TestElUltimoQueSeVaCancelaElReparto(t *testing.T) {
+	e := armar(t)
+	var lecturas atomic.Int32
+	empezo := make(chan struct{}, 10)
+	cancelado := make(chan error, 10)
+	e.s.alCargarReparto = func(ctx context.Context, tx pgx.Tx) error {
+		if lecturas.Add(1) > 1 {
+			return nil
+		}
+		empezo <- struct{}{}
+		select {
+		case <-ctx.Done():
+			cancelado <- ctx.Err()
+			return ctx.Err()
+		case <-time.After(10 * time.Second):
+			cancelado <- nil
+			return nil
+		}
+	}
+	hasta := time.Date(2026, 10, 31, 23, 59, 59, 0, Argentina)
+	ctx := context.Background()
+	uno, irseUno := context.WithCancel(ctx)
+	dos, irseDos := context.WithCancel(ctx)
+	errs := make(chan error, 2)
+	go func() { _, err := e.s.repartoHasta(uno, hasta); errs <- err }()
+	<-empezo
+	go func() { _, err := e.s.repartoHasta(dos, hasta); errs <- err }()
+	time.Sleep(200 * time.Millisecond)
+	irseUno()
+	if err := <-errs; !errors.Is(err, context.Canceled) {
+		t.Errorf("el primero que se fue: %v", err)
+	}
+	// Queda uno esperando: el reparto sigue.
+	select {
+	case err := <-cancelado:
+		t.Fatalf("el reparto terminó con uno esperando: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	irseDos()
+	if err := <-errs; !errors.Is(err, context.Canceled) {
+		t.Errorf("el último que se fue: %v", err)
+	}
+	if err := <-cancelado; !errors.Is(err, context.Canceled) {
+		t.Errorf("el reparto sin nadie que lo espere: %v, se esperaba que se cancelara", err)
+	}
+	if _, err := e.s.repartoHasta(ctx, hasta); err != nil {
+		t.Fatal(err)
+	}
+	if n := lecturas.Load(); n != 2 {
+		t.Errorf("lecturas: %d, se esperaban 2", n)
+	}
+}
+
+// Lo que se emite o se anula después de la foto del reparto queda para la
+// próxima lectura, igual que en el reparto: el cierre del mes no da error
+// y el saldo de 1.1.03 sigue dando lo que suman las cuentas.
+func TestLoDeDespuesDeLaFotoQuedaParaLaProxima(t *testing.T) {
+	e := armar(t)
+	cli := e.id(t, `insert into customers (nombre) values ('Gómez') returning id`)
+	pedido := e.pedido(t, "P-1", e.central, "pendiente", "mostrador", time.Date(2026, 9, 1, 12, 0, 0, 0, Argentina), &cli)
+	e.exec(t, `update orders set total = 1500 where id = $1`, pedido)
+	sena := e.recibir(t, &cli, "R-1", "2026-09-05T15:00:00Z", [2]any{"efectivo", 500.0})
+	e.facturaConCae(t, &cli, 40, 1500, "2026-10-05T15:00:00Z", &pedido)
+	e.recibir(t, &cli, "R-2", "2026-10-06T15:00:00Z", [2]any{"transferencia", 600.0})
+
+	ctx := context.Background()
+	octubre := PeriodoDelCierre("2026-10", ahoraDePrueba)
+	_, ihasta := instantes(octubre.Desde, octubre.Hasta)
+	foto, err := e.s.repartoHasta(ctx, ihasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saldo := func(reparto cobros.ResultadoDelReparto) (mayor, listado float64, n int) {
+		t.Helper()
+		todos, err := e.s.asientosDeDeudores(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), octubre.Hasta, reparto)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range reparto.Deudores {
+			listado = float64(listado + d)
+		}
+		return redondear(SaldoDeCuenta(DelCircuito(todos, "blanco"), Cuentas.Deudores)), redondear(listado), len(todos)
+	}
+	mayor, listado, antes := saldo(foto)
+	if mayor != listado {
+		t.Fatalf("de entrada: mayor %v, listado %v", mayor, listado)
+	}
+
+	// Después de la foto: la seña se anula y sale otro recibo, los dos en
+	// octubre.
+	e.exec(t, `update receipts set estado = 'anulado', anulado_at = '2026-10-20T15:00:00Z', motivo_anulacion = 'prueba' where id = $1`, sena)
+	e.recibir(t, &cli, "R-3", "2026-10-25T15:00:00Z", [2]any{"efectivo", 200.0})
+	mayor, listado, n := saldo(foto)
+	if mayor != listado || n != antes {
+		t.Errorf("con la foto de antes: mayor %v, listado %v, %d asientos (eran %d)", mayor, listado, n, antes)
+	}
+	// La próxima lectura los ve.
+	nuevo, err := e.s.repartoHasta(ctx, ihasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !nuevo.Anulados[sena] {
+		t.Error("el reparto nuevo no ve la anulación")
+	}
+	mayor, listado, n = saldo(nuevo)
+	if mayor != listado || n <= antes {
+		t.Errorf("con el reparto nuevo: mayor %v, listado %v, %d asientos (eran %d)", mayor, listado, n, antes)
 	}
 }

@@ -2,13 +2,12 @@ package reportes
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/sync/singleflight"
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
@@ -165,28 +164,74 @@ func (s *Servicio) cargarReparto(ctx context.Context, hasta time.Time) (cobros.R
 }
 
 // compartido corre f una sola vez para todos los que piden la misma clave
-// mientras está en curso (singleflight). f corre con un contexto propio: si
-// el primero que llegó se va (cambió de mes, cerró la pestaña), los demás
-// siguen esperando el mismo cálculo y no reciben su «context canceled». El
-// que se va deja de esperar enseguida; el cálculo sigue hasta terminar o
-// hasta el tope, que deja pasar el minuto por sentencia del pool de los
-// reportes.
-func compartido[T any](ctx context.Context, g *singleflight.Group, clave string, f func(context.Context) (T, error)) (T, error) {
-	ch := g.DoChan(clave, func() (any, error) {
-		c, listo := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-		defer listo()
-		return f(c)
-	})
+// mientras está en curso. f corre con un contexto propio: si el primero que
+// llegó se va (cambió de mes, cerró la pestaña), los demás siguen esperando
+// el mismo cálculo y no reciben su «context canceled». Pero cuando se va el
+// último, el cálculo se cancela: la clave es el instante, cada mes es un
+// cálculo distinto, y el contador que pasa de octubre a julio con las
+// flechas dejaba cuatro repartos sin nadie que los esperara, cada uno con
+// una de las cuatro conexiones del pool de los reportes, y el mes que de
+// verdad miraba esperaba a que se liberaran. El tope deja pasar el minuto
+// por sentencia de ese pool.
+func compartido[T any](ctx context.Context, g *grupo, clave string, f func(context.Context) (T, error)) (T, error) {
+	g.mu.Lock()
+	if g.en == nil {
+		g.en = map[string]*llamada{}
+	}
+	l, ok := g.en[clave]
+	if !ok {
+		c, cancelar := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+		l = &llamada{cancelar: cancelar, listo: make(chan struct{})}
+		g.en[clave] = l
+		go func() {
+			defer close(l.listo)
+			defer cancelar()
+			v, err := f(c)
+			g.mu.Lock()
+			l.val, l.err = v, err
+			if g.en[clave] == l {
+				delete(g.en, clave)
+			}
+			g.mu.Unlock()
+		}()
+	}
+	l.esperan++
+	g.mu.Unlock()
+
 	var cero T
 	select {
-	case <-ctx.Done():
-		return cero, ctx.Err()
-	case r := <-ch:
-		if r.Err != nil {
-			return cero, r.Err
+	case <-l.listo:
+		if l.err != nil {
+			return cero, l.err
 		}
-		return r.Val.(T), nil
+		return l.val.(T), nil
+	case <-ctx.Done():
+		g.mu.Lock()
+		l.esperan--
+		if l.esperan == 0 {
+			l.cancelar()
+			// El que llegue después no se suma a un cálculo cancelado.
+			if g.en[clave] == l {
+				delete(g.en, clave)
+			}
+		}
+		g.mu.Unlock()
+		return cero, ctx.Err()
 	}
+}
+
+// grupo son los cálculos en curso de compartido, por clave.
+type grupo struct {
+	mu sync.Mutex
+	en map[string]*llamada
+}
+
+type llamada struct {
+	esperan  int
+	cancelar context.CancelFunc
+	listo    chan struct{}
+	val      any
+	err      error
 }
 
 // asientosDeCobro son los cobros del período, con idesde/ihasta ya en el
@@ -273,13 +318,22 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		return nil, err
 	}
 	for _, r := range recibos {
+		// El reparto (CargarEventos de todas las cuentas) ve todo recibo
+		// hasta ihasta, como último recurso con la clave «r:», y toda
+		// anulación hasta ihasta. Lo que no ve se hizo después de su foto de
+		// la base: entre que se leyó y esta consulta, una ventana que el
+		// reparto compartido estira a lo que tarda (1,5 s con la base
+		// fijada). Se deja para la próxima lectura, igual que lo deja el
+		// reparto: asentarlo sin él descuadraba el mes en curso (el recibo
+		// sin reparto, o la anulación sin su «Desaplica anticipo» y fuera de
+		// reparto.Deudores, que encendía «El listado de deudores no da el
+		// mayor»). Antes era un error que había que reintentar.
 		rep, ok := reparto.Recibos[r.id]
 		if !ok {
-			// Todo recibo hasta ihasta está en el reparto (como último recurso
-			// con la clave «r:»). El que falta se emitió entre que se leyó el
-			// reparto y esta consulta: antes se salteaba y el CSV del estudio
-			// salía sin ese recibo. Mejor un error que se reintenta.
-			return nil, fmt.Errorf("el recibo %s se emitió mientras se armaba el cierre: volver a pedirlo", r.numero)
+			continue
+		}
+		if r.anulado != nil && !reparto.Anulados[r.id] {
+			r.anulado = nil
 		}
 		if entre(r.emitido, idesde, ihasta) {
 			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: r.emitido, Numero: r.numero, Cliente: r.cliente,

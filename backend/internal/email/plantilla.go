@@ -26,12 +26,15 @@ const (
 	fuente        = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 )
 
+// escapador es uno solo para el paquete: armarlo en cada llamada eran unos
+// 98 KB por correo de campaña. Un Replacer se puede usar desde varias
+// goroutines a la vez.
+var escapador = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
+
 // Escapar prepara texto de afuera para meterlo en el HTML. Los párrafos y el
 // cierre van crudos (las plantillas propias mandan <strong>), así que lo que
 // escribe cualquiera —el formulario de contacto— pasa por acá antes.
-func Escapar(t string) string {
-	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(t)
-}
+func Escapar(t string) string { return escapador.Replace(t) }
 
 // Bloque es una fila etiqueta/valor.
 type Bloque struct{ Etiqueta, Valor string }

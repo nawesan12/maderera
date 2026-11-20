@@ -9,7 +9,7 @@ import (
 	"mjbj/internal/sucursales"
 )
 
-// La plantilla de los correos (lib/email/plantillas.ts → envolver): HTML con
+// La plantilla de los correos (scripts/golden/originales/email/plantillas.ts → envolver): HTML con
 // tablas y estilos en línea, que es lo único que se ve igual en Gmail, en
 // Outlook y en el Mail del iPhone, y su versión en texto plano, que los
 // filtros de spam piden. El golden (testdata/golden/email) la compara byte a
@@ -241,7 +241,7 @@ func Envolver(sitio string, o Opciones) (html, texto string) {
 // El pie con las dos sucursales sale de internal/sucursales, como el del
 // presupuesto en PDF: antes estaba escrito acá con dos teléfonos que no eran
 // los publicados («(0223) 474-3328» y «(0223) 483-0535») y «Canosa 61» por
-// «Diagonal Canosa 61». Igual que pieSucursales de lib/email/plantillas.ts.
+// «Diagonal Canosa 61». Igual que pieSucursales de scripts/golden/originales/email/plantillas.ts.
 func pieSucursalesHTML() string {
 	var b strings.Builder
 	for _, s := range sucursales.Publicadas {

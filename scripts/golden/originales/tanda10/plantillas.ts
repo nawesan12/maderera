@@ -7,7 +7,7 @@
  * `cuandoSeLee` usaba los formateadores de lib/formato sin zona: con la del
  * servidor. El golden se corre en la de Argentina, que es lo que hace Go.
  */
-import { envolver, type CorreoArmado } from "@/lib/email/plantillas";
+import { envolver, type CorreoArmado } from "../email/plantillas";
 import { fechaLarga, formatearMonto, hora } from "@/lib/formato";
 import { urlBase } from "@/lib/pagos/config";
 

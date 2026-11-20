@@ -1,5 +1,5 @@
 /**
- * Golden de la plantilla de los correos (lib/email/plantillas.ts): envolver,
+ * Golden de la plantilla de los correos (scripts/golden/originales/email/plantillas.ts): envolver,
  * escapar y formatearPrecio. El Go (internal/email/plantilla.go,
  * internal/formato) tiene que dar el mismo HTML y el mismo texto, byte a byte.
  *
@@ -10,7 +10,7 @@ import { writeFileSync } from "node:fs";
 process.env.APP_URL = "https://mjbj.com.ar/";
 
 async function main() {
-  const { envolver, escapar } = await import("../../lib/email/plantillas");
+  const { envolver, escapar } = await import("./originales/email/plantillas");
   const { formatearPrecio } = await import("../../lib/formato");
 
   const casos: Record<string, unknown>[] = [

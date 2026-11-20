@@ -1,5 +1,5 @@
 /**
- * Golden de los correos de cobros y facturación (lib/email/plantillas.ts:
+ * Golden de los correos de cobros y facturación (scripts/golden/originales/email/plantillas.ts:
  * reciboEmitido, chequeRechazado, facturaEmitida). El Go
  * (backend/internal/avisos/plantillas.go) tiene que dar el mismo asunto, HTML
  * y texto.
@@ -11,7 +11,7 @@ import { writeFileSync } from "node:fs";
 process.env.APP_URL = "https://mjbj.com.ar/";
 
 async function main() {
-  const p = await import("../../lib/email/plantillas");
+  const p = await import("./originales/email/plantillas");
   const nombres = ["Juan", "Ana <María>", "Ñandú & Cía", ""];
   const importes = [0, 1, 84500.5, 1234567.49, 999.5, 2.5, -10];
   const saldos: (number | null)[] = [null, 0, 15000, -2500.5, -0.004, 0.005];

@@ -9,7 +9,7 @@ import (
 )
 
 // Las plantillas de los avisos de cobros y de facturación
-// (lib/email/plantillas.ts: reciboEmitido, chequeRechazado y
+// (scripts/golden/originales/email/plantillas.ts: reciboEmitido, chequeRechazado y
 // facturaEmitida), comparadas con el TS en el golden de avisos.
 
 func base(sitio string) string { return strings.TrimSuffix(sitio, "/") }

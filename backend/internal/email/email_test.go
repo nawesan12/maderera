@@ -48,3 +48,15 @@ func TestRemitenteConLaCasillaDelUsuario(t *testing.T) {
 		t.Errorf("sin nombre: %q <%s>", n, d)
 	}
 }
+
+func TestNombreTLS(t *testing.T) {
+	for _, c := range []struct{ host, nombre, quiero string }{
+		{"correo", "mail.mjbj.com.ar", "mail.mjbj.com.ar"},
+		{"smtp.hostinger.com", "mail.mjbj.com.ar", "smtp.hostinger.com"},
+		{"correo", "", "correo"},
+	} {
+		if got := nombreTLS(c.host, c.nombre); got != c.quiero {
+			t.Errorf("%s con %q: %s, quería %s", c.host, c.nombre, got, c.quiero)
+		}
+	}
+}

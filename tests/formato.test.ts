@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   enlaceDeWhatsapp,
+  formatearDecimal,
+  formatearPeso,
   ABREVIATURA_UNIDAD,
   formatearUnidad,
   primerNombre,
@@ -114,5 +116,23 @@ describe("formatearPorcentaje", () => {
     expect(formatearPorcentaje(12.54)).toBe("12,5%");
     expect(formatearPorcentaje(100)).toBe("100,0%");
     expect(formatearPorcentaje(-3.25)).toMatch(/^-3,[23]%$/);
+  });
+});
+
+describe("formatearDecimal y formatearPeso (hallazgo 32)", () => {
+  it("pone coma decimal y la cantidad fija de decimales", () => {
+    expect(formatearDecimal(4.5, 1)).toBe("4,5");
+    expect(formatearDecimal(4, 1)).toBe("4,0");
+    expect(formatearDecimal(21, 2)).toBe("21,00");
+    expect(formatearDecimal(0.333, 2)).toBe("0,33");
+    expect(formatearDecimal(1234.5, 1)).toBe("1.234,5");
+  });
+  it("el peso de un archivo", () => {
+    expect(formatearPeso(null)).toBe("");
+    expect(formatearPeso(0)).toBe("");
+    expect(formatearPeso(100)).toBe("1 KB");
+    expect(formatearPeso(340 * 1024)).toBe("340 KB");
+    expect(formatearPeso(1.5 * 1024 * 1024)).toBe("1,5 MB");
+    expect(formatearPeso(40 * 1024 * 1024)).toBe("40,0 MB");
   });
 });

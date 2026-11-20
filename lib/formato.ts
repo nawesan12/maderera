@@ -56,6 +56,32 @@ export function formatearPorcentaje(valor: number): string {
   return `${UN_DECIMAL.format(valor)}%`;
 }
 
+const DECIMALES = new Map<number, Intl.NumberFormat>();
+
+/**
+ * Un número con coma decimal y una cantidad fija de decimales: «4,5»,
+ * «21,00». Es el `toFixed` para mostrar (hallazgo 32): `toFixed` pone el
+ * punto, y en pantalla «4.5» se lee como cuatro mil quinientos.
+ */
+export function formatearDecimal(valor: number, decimales: number): string {
+  let f = DECIMALES.get(decimales);
+  if (!f) {
+    f = new Intl.NumberFormat("es-AR", { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+    DECIMALES.set(decimales, f);
+  }
+  return f.format(valor);
+}
+
+/**
+ * El peso de un archivo: «340 KB», «1,5 MB». Nunca «0 KB»: un archivo chico
+ * es «1 KB». Sin tamaño, nada.
+ */
+export function formatearPeso(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${formatearDecimal(bytes / 1024 / 1024, 1)} MB`;
+}
+
 /**
  * Un importe de la base, listo para meter en un campo editable.
  *

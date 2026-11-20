@@ -46,6 +46,7 @@ import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import { restanteLegible } from "@/lib/whatsapp/ventana";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { ConfirmarTope } from "./confirmar-tope";
+import { formatearPeso } from "@/lib/formato";
 
 const estadoInicial: EstadoWhatsapp = {};
 
@@ -685,10 +686,7 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
   );
 }
 
-function tamano(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+const tamano = formatearPeso;
 
 /** Los tildes de WhatsApp: uno enviado, dos entregado, dos azules leído. */
 function EstadoEntrega({ estado }: { estado: string }) {

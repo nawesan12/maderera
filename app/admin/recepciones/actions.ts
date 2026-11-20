@@ -4,6 +4,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import { ETIQUETAS } from "@/lib/cache-publico";
 import { buscarParaRecibir } from "@/lib/dal/admin/recepciones";
+import { formatearMonto } from "@/lib/formato";
 
 /*
  * Las recepciones de mercadería. Las carga, las confirma (entra el stock con
@@ -48,7 +49,7 @@ export async function confirmarRecepcion(id: string): Promise<EstadoRecepcion> {
   // El stock cambió y el catálogo público muestra disponibilidad.
   updateTag(ETIQUETAS.catalogo);
   refrescar(id);
-  return { ok: `Recepción confirmada: ${r.data.lineas} renglones, $${r.data.neto.toFixed(2)} netos.` };
+  return { ok: `Recepción confirmada: ${r.data.lineas} renglones, ${formatearMonto(r.data.neto)} netos.` };
 }
 
 export async function anularRecepcion(id: string, motivo: string): Promise<EstadoRecepcion> {

@@ -11,7 +11,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { formatearMonto, hoyEnArgentina } from "@/lib/formato";
+import { formatearMonto, hoyEnArgentina, formatearDecimal } from "@/lib/formato";
 import { Hoja, Opciones, Seccion } from "@/components/admin/formulario";
 import {
   ElegirCliente,
@@ -145,7 +145,7 @@ export function CargarSufrida() {
           />
           {alicuota !== null && n(importe) > 0 && (
             <span className="text-sm text-muted-foreground">
-              da {alicuota.toFixed(2)}%
+              da {formatearDecimal(alicuota, 2)}%
             </span>
           )}
         </label>

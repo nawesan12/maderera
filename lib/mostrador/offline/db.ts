@@ -211,6 +211,8 @@ export type ClaveMeta =
   | "config"
   | "sesion"
   | "caja"
+  /** El último número usado por cada código de caja que tuvo esta máquina. */
+  | "contadores"
   | "turno"
   | "sucursalElegida";
 

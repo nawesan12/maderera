@@ -2355,9 +2355,10 @@ Se aplicó el default prudente; lo valida Nahuel (o el contador donde se dice).
       disco es el de `/admin/calculadoras`. Volverlo es devolver el campo en
       `corte-a-medida.tsx` y que Go vuelva a leer `anchoSierraMm`, que desde
       la revisión del carril F ignora (`sierraConfigurada`).
-- [ ] **Desvincular una terminal**: «Esta PC…» ahora confirma, pero sigue sin
+- [x] **Desvincular una terminal**: «Esta PC…» ahora confirma, pero sigue sin
       haber cómo desvincular desde el mostrador; hace falta una ruta en Go
       (y decidir quién puede).
+      Hecho (default prudente: solo admin): `POST /api/v1/mostrador/caja/desvincular` cambia el secreto de la caja (con ventas sin subir, no), deja «Desvinculó la terminal CAJA1» en la bitácora, y el latido contesta `cajaVigente: false` a la PC con el secreto viejo, que suelta la caja y vuelve a pedir que se la vincule sin perder su contador. Para el admin, el código de la barra es un botón con «¿Esta PC deja de ser CAJA1?». `TestDesvincularTerminal`.
 - [ ] **Cuenta corriente desde la cola**: solo se rechaza la cuenta
       bloqueada. El cliente sin cuenta habilitada (o sin saldo a favor que
       alcance) cobrado sin conexión entra con la deuda cargada y marcado como

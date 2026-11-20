@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Monitor, MonitorOff } from "lucide-react";
 import type { CajaVinculada } from "@/lib/mostrador/offline/use-caja";
+import { desvincularTerminal } from "@/app/mostrador/actions";
 
 interface CajaDisponible {
   id: string;
@@ -38,31 +39,40 @@ interface CajaDisponible {
  *
  * Vinculada muestra el código y no el nombre: es lo que sale en el número
  * provisorio del papel (`CAJA1-017`), y con eso se lo busca después.
+ *
+ * Desvincular es solo del admin (el default prudente del comité final, lo
+ * controla Go): para quien administra, el código es un botón que pide la
+ * misma confirmación al revés. Go cambia el secreto de la caja; esta PC la
+ * suelta y vuelve a pedir que se la vincule, sin perder su contador.
  */
 export function VincularCaja({
   branchId,
   enLinea,
   vinculada,
   onVincular,
+  onDesvincular,
   administra = false,
 }: {
   branchId: string;
   enLinea: boolean;
   /** Si quien atiende puede dar de alta terminales (/admin/caja). */
   administra?: boolean;
-  /** El código de la caja de esta máquina, si ya está vinculada. */
-  vinculada: string | null;
+  /** La caja de esta máquina, si ya está vinculada. */
+  vinculada: { id: string; codigo: string } | null;
   onVincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
+  /** Suelta la caja local, después de que Go la desvinculó. */
+  onDesvincular?: () => Promise<void>;
 }) {
   const [cajas, setCajas] = useState<CajaDisponible[] | null>(null);
   const [enCurso, setEnCurso] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /*
    * La terminal elegida, antes de vincularla. Elegirla en el selector la
-   * vinculaba en el acto, y no hay cómo desvincular desde acá: un toque de
-   * más dejaba esta PC numerando como otra (comité final). Ahora se confirma.
+   * vinculaba en el acto, y desvincular es solo del admin: un toque de más
+   * dejaba esta PC numerando como otra (comité final). Ahora se confirma.
    */
   const [elegida, setElegida] = useState<CajaDisponible | null>(null);
+  const [soltando, setSoltando] = useState(false);
 
   useEffect(() => {
     if (!enLinea || vinculada) return;
@@ -108,13 +118,78 @@ export function VincularCaja({
     }
   }
 
+  async function desvincular(cajaId: string) {
+    setEnCurso(true);
+    setError(null);
+    try {
+      const r = await desvincularTerminal(cajaId);
+      if (r.error) {
+        setError(r.error);
+        return;
+      }
+      setSoltando(false);
+      await onDesvincular?.();
+    } catch {
+      setError("No se pudo desvincular.");
+    } finally {
+      setEnCurso(false);
+    }
+  }
+
   // Ya vinculada: el código, quieto, para leerlo en el papel del cliente.
   if (vinculada) {
-    return (
-      <span className="inline-flex h-9 items-center gap-1.5 px-1 text-sm text-muted-foreground" title="Esta PC">
+    const codigo = (
+      <>
         <Monitor className="h-4 w-4" />
-        {vinculada}
-      </span>
+        {vinculada.codigo}
+      </>
+    );
+    if (!administra || !onDesvincular || !enLinea) {
+      return (
+        <span className="inline-flex h-9 items-center gap-1.5 px-1 text-sm text-muted-foreground" title="Esta PC">
+          {codigo}
+        </span>
+      );
+    }
+    if (soltando) {
+      return (
+        <span role="group" aria-label="Desvincular esta PC" className="inline-flex items-center gap-2 text-sm">
+          <span className="font-semibold">¿Esta PC deja de ser {vinculada.codigo}?</span>
+          <button
+            type="button"
+            disabled={enCurso}
+            onClick={() => void desvincular(vinculada.id)}
+            className="boton-accion inline-flex h-9 items-center gap-1.5 rounded-lg px-3 font-semibold disabled:opacity-50"
+          >
+            {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+            Sí
+          </button>
+          <button
+            type="button"
+            autoFocus
+            disabled={enCurso}
+            onClick={() => {
+              setSoltando(false);
+              setError(null);
+            }}
+            className="h-9 rounded-lg border border-linea px-3 font-medium hover:bg-hundida"
+          >
+            No
+          </button>
+          {error && <span className="text-sm font-medium text-saldo-debe">{error}</span>}
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => setSoltando(true)}
+        title="Esta PC"
+        aria-label={`Esta PC es ${vinculada.codigo}. Desvincular`}
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground hover:bg-hundida"
+      >
+        {codigo}
+      </button>
     );
   }
 

@@ -13,6 +13,7 @@ import {
   precioLocal,
   type PreciosLocales,
 } from "@/lib/mostrador/offline/precio-local";
+import { proximoAlVincular } from "@/lib/mostrador/offline/use-caja";
 
 /**
  * El riesgo de tener dos búsquedas —la de la base y la del navegador— es que
@@ -160,5 +161,20 @@ describe("precio local", () => {
 
   it("sin ningún precio devuelve cero, que la pantalla lee como a consultar", () => {
     expect(precioLocal(precios, "v9", "pro", "general")).toBe(0);
+  });
+});
+
+describe("proximoAlVincular: desvincular no reinicia la numeración", () => {
+  it("una PC nueva arranca en 1", () => {
+    expect(proximoAlVincular("CAJA1", null, null)).toBe(1);
+  });
+  it("re-vincular la misma caja sigue con su contador", () => {
+    expect(proximoAlVincular("CAJA1", { codigo: "CAJA1", proximoNumero: 17 }, null)).toBe(17);
+  });
+  it("después de desvincular, la misma caja sigue desde lo guardado", () => {
+    expect(proximoAlVincular("CAJA1", null, { CAJA1: 17 })).toBe(17);
+  });
+  it("otra caja arranca en lo suyo, no en lo de la anterior", () => {
+    expect(proximoAlVincular("CAJA2", { codigo: "CAJA1", proximoNumero: 17 }, { CAJA1: 17 })).toBe(1);
   });
 });

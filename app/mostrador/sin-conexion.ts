@@ -42,12 +42,20 @@ export function useColaDelMostrador(branchId: string) {
   const informe = useCallback(() => informeRef.current, []);
 
   // La verdad sobre si hay servidor, medida y no adivinada.
-  const conexion = useConexion(branchId, informe);
+  // Si el servidor ya no reconoce la caja (la desvincularon), se suelta acá
+  // y la barra vuelve a pedir que se vincule.
+  const desvincularRef = useRef<(secreto?: string) => Promise<void>>(async () => {});
+  const alPerderLaCaja = useCallback((secreto: string) => void desvincularRef.current(secreto), []);
+  const conexion = useConexion(branchId, informe, alPerderLaCaja);
   const {
     caja: cajaFisica,
     vincular: vincularCaja,
+    desvincular: desvincularCaja,
     avanzar: avanzarContador,
   } = useCaja();
+  useEffect(() => {
+    desvincularRef.current = desvincularCaja;
+  }, [desvincularCaja]);
 
   /*
    * La cola de ventas sin subir. Drena sola al volver la conexión; acá se usa
@@ -67,7 +75,7 @@ export function useColaDelMostrador(branchId: string) {
     };
   }, [cajaFisica, cola.sinSubir, cola.atascadas]);
 
-  return { conexion, cajaFisica, vincularCaja, avanzarContador, cola };
+  return { conexion, cajaFisica, vincularCaja, desvincularCaja, avanzarContador, cola };
 }
 
 type CajaFisica = ReturnType<typeof useCaja>["caja"];

@@ -442,6 +442,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"BuscarEnMostrador":              "/mostrador",                    // GET /api/v1/mostrador/buscar
 	"AbrirCaja":                      "/mostrador",                    // POST /api/v1/mostrador/caja/abrir
 	"CerrarCaja":                     "/mostrador",                    // POST /api/v1/mostrador/caja/cerrar
+	"DesvincularTerminal":            "admin",                         // POST /api/v1/mostrador/caja/desvincular
 	"MovimientoDeCaja":               "/mostrador",                    // POST /api/v1/mostrador/caja/movimiento
 	"ClientesRecientes":              "/mostrador",                    // GET /api/v1/mostrador/clientes/recientes
 	"CobrarCuentaEnMostrador":        "/mostrador",                    // POST /api/v1/mostrador/clientes/{id}/cobro

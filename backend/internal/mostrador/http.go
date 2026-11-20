@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -162,7 +163,10 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 		detalle = map[string]any{"autorizadoPor": res.AutorizadoPor, "volvioLaMercaderia": pedido.VolvioLaMercaderia, "total": res.Total}
 	}
 	a.s.anotar(ctx, ses, sqlc.AccionAuditoriaAnular, "pedido", r.Id, desc, detalle)
-	out := map[string]any{"ok": "Venta anulada."}
+	out := map[string]any{"ok": "Venta anulada.", "porAfuera": res.PorAfuera}
+	if res.PorAfuera > 0.005 {
+		out["ok"] = "Venta anulada. Por afuera se devuelven " + formato.Moneda(res.PorAfuera) + "."
+	}
 	if res.FacturaPendiente != nil {
 		out["facturaPendiente"] = *res.FacturaPendiente
 		out["facturaSinCae"] = res.FacturaSinCAE

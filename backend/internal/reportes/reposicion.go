@@ -36,8 +36,8 @@ func LeerObjetivo(v float64) float64 {
 }
 
 // Reposicion es reporteDeReposicion: el stock disponible por sucursal de
-// cada medida activa, lo vendido en los últimos N días (sin las canceladas;
-// con la sucursal del pedido) y lo que convendría comprar.
+// cada medida activa, lo vendido en los últimos N días (sin las canceladas
+// ni lo devuelto; con la sucursal del pedido) y lo que convendría comprar.
 //
 // La ventana es «los últimos N días» desde ahora, no días calendario: no
 // depende de la zona.
@@ -97,8 +97,19 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 		ventaArgs = append(ventaArgs, o.Sucursal)
 		sucursal = " AND o.branch_id = (SELECT id FROM branches WHERE slug = $3)"
 	}
+	// Lo devuelto se resta del renglón de la venta, sin importar cuándo se
+	// devolvió. Es lo contrario de hechosDeVenta (ventas.go), que lo resta
+	// en el mes de la devolución para no tocar un mes ya cerrado: acá se
+	// estima la demanda, y una venta de hace 40 días devuelta ayer no tiene
+	// que bajar la de este mes. Entra también lo que volvió roto
+	// (al_stock = false): el cliente no lo usó. Lo devuelto sin renglón del
+	// pedido queda vendido, igual que en ventas. Y la sucursal es la del
+	// pedido aunque lo devuelto entre al stock de otra: se mide dónde se
+	// pidió, no dónde quedó la placa.
 	rs, err = s.lectura.Query(ctx, `
-		SELECT oi.variant_id::text, coalesce(sum(oi.cantidad), 0)
+		SELECT oi.variant_id::text,
+		       coalesce(sum(greatest(oi.cantidad - coalesce((SELECT sum(di.cantidad) FROM devolucion_items di
+		                                                     WHERE di.order_item_id = oi.id), 0), 0)), 0)
 		FROM order_items oi JOIN orders o ON o.id = oi.order_id
 		WHERE o.created_at >= $1 AND o.estado <> 'cancelado' AND oi.variant_id = ANY($2::uuid[])`+sucursal+`
 		GROUP BY oi.variant_id`, ventaArgs...)

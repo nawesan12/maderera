@@ -314,7 +314,7 @@ func TestVentaPartidaACuentaYMedia(t *testing.T) {
 		t.Fatalf("anular sin turno: %d %v", st, m)
 	}
 	adm := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
-	if st, m, _ := pedir(t, adm, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 || m["ok"] != "Venta anulada." {
+	if st, m, _ := pedir(t, adm, "POST", e.u+"/api/v1/mostrador/ventas/"+pedido+"/anular", map[string]any{"motivo": "No la quiso"}); st != 200 || m["ok"] != "Venta anulada. Por afuera se devuelven $\u00a04.000,00." || m["porAfuera"] != 4000.0 {
 		t.Fatalf("anular: %d %v", st, m)
 	}
 	if d := e.num(t, `select sum(monto)::float8 from account_movements where customer_id = $1`, e.cliente); d != 0 {

@@ -19,6 +19,7 @@ import (
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // SeriePagosAProveedores es la clave del candado de los pagos a proveedores.
@@ -650,12 +651,21 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 	if parte.ChequeID != nil && *parte.ChequeID != "" {
 		var importe jsmath.Num
 		var tipo, delCheque string
-		err := tx.QueryRow(ctx, `SELECT importe, tipo::text, circuito::text FROM cheques WHERE id = $1 AND estado = 'cartera' FOR UPDATE`,
-			*parte.ChequeID).Scan(&importe, &tipo, &delCheque)
+		err := tx.QueryRow(ctx, `SELECT ch.importe, ch.tipo::text FROM cheques ch WHERE ch.id = $1 AND ch.estado = 'cartera' FOR UPDATE OF ch`,
+			*parte.ChequeID).Scan(&importe, &tipo)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fallo("Uno de los cheques elegidos ya no está en cartera.")
 		}
 		if err != nil {
+			return err
+		}
+		// El circuito, en otra consulta y con el cheque ya bloqueado: si la
+		// factura del pedido se estaba emitiendo (facturacion.EmitirEnTransaccion
+		// toma el mismo candado), esta lectura ya la ve. En la misma consulta
+		// del candado salía con la foto de antes de esperar, y un cheque recién
+		// facturado se endosaba en un pago B.
+		if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CircuitoDelCheque("ch")+` FROM cheques ch WHERE ch.id = $1`,
+			*parte.ChequeID).Scan(&delCheque); err != nil {
 			return err
 		}
 		if circuito == "negro" && tipo == "echeq" {

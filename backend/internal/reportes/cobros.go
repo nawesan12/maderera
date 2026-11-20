@@ -28,7 +28,13 @@ import (
 //     nombra): la venta del mostrador cobrada al contado y el pedido pagado
 //     en línea no emiten recibo. Se asientan contra Deudores **solo si el
 //     pedido tiene factura** (con CAE), que es la que debitó Deudores, y si
-//     esa factura no tiene cobros propios. La fecha es la del cobro o, si la
+//     esa factura no tiene cobros propios de antes de los recibos (los de
+//     invoice_payments sin recibo, que ya se asientan solos). Lo que se le
+//     cobró con un recibo no cuenta: el recibo se asienta aparte, y con eso
+//     la venta mixta del mostrador cuya parte a cuenta corriente se cobraba
+//     después desde Facturación perdía hacia atrás el cobro con tarjeta, y
+//     Deudores quedaba debiendo esa parte para siempre (también en meses ya
+//     entregados). La fecha es la del cobro o, si la
 //     factura salió después, la de la factura: así un mes ya cerrado no
 //     cambia porque se facture tarde. Una venta sin factura no tiene asiento
 //     de venta, así que tampoco de cobro. También entran los pagos de deuda
@@ -315,7 +321,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		                p.conciliado_at, p.created_at),
 		       f.fecha_emision, f.tipo, f.punto_venta, f.numero, o.numero,
 		       coalesce(f.receptor_nombre, nullif(c.razon_social, ''), c.nombre, o.contacto_nombre, ''),
-		       coalesce((SELECT json_agg(json_build_object('fecha', x.created_at, 'importe', x.importe::float8) ORDER BY x.created_at)
+		       coalesce((SELECT json_agg(json_build_object('fecha', `+cobros.FechaDelTramo("x")+`, 'importe', x.importe::float8,
+		                                           'devolucion', x.devolucion_id IS NOT NULL) ORDER BY x.created_at)
 		                 FROM payment_refunds x WHERE x.payment_id = p.id), '[]'::json)
 		FROM payments p
 		LEFT JOIN orders o ON o.id = p.order_id
@@ -328,7 +335,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		WHERE p.estado IN ('aprobado', 'reintegrado')
 		  AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)
 		  AND ((p.tipo = 'pedido' AND f.id IS NOT NULL
-		        AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = f.id AND ip.medio <> 'cuenta_corriente'))
+		        AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = f.id AND ip.medio <> 'cuenta_corriente'
+		                          AND ip.receipt_id IS NULL))
 		    OR (p.tipo = 'deuda' AND p.customer_id IS NOT NULL))`)
 	if err != nil {
 		return nil, err
@@ -343,6 +351,9 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		var tramos []struct {
 			Fecha   time.Time `json:"fecha"`
 			Importe float64   `json:"importe"`
+			// Devolucion: el tramo lo dejó una devolución de la venta y no un
+			// aviso de Mercado Pago.
+			Devolucion bool `json:"devolucion"`
 		}
 		if err := rs.Scan(&id, &tipo, &medio, &monto, &estado, &actualizado, &cobrado, &factura, &tipoFactura, &pv, &nro, &pedido,
 			&cliente, &tramos); err != nil {
@@ -367,6 +378,12 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			if f := mayorFecha(t.Fecha, factura); entre(f, idesde, ihasta) {
 				r := c
 				r.Fecha, r.Importe, r.Comprobante = f, t.Importe, "parcial "+comprobante
+				// Lo que una devolución saca de un cobro con cheque vuelve por el
+				// banco: el cheque sigue en cartera (en Valores a depositar) y
+				// se deposita entero. La misma regla que la 3b.
+				if t.Devolucion && (medio == "cheque" || medio == "echeq") {
+					r.Medio = "transferencia"
+				}
 				asientos = append(asientos, AsientoDeReintegro(r))
 			}
 		}

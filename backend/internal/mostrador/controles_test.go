@@ -297,7 +297,8 @@ func TestQuienAnula(t *testing.T) {
 
 	// Propia, del turno, recién hecha y por transferencia: sin PIN (la
 	// devolución se ve en el banco).
-	if m := anular(ven, vender(ven, "transferencia"), map[string]any{}); m["ok"] != "Venta anulada." {
+	// Lo que vuelve por el banco se dice con el importe.
+	if m := anular(ven, vender(ven, "transferencia"), map[string]any{}); m["ok"] != "Venta anulada. Por afuera se devuelven $\u00a045.000,50." || m["porAfuera"] != 45000.5 {
 		t.Fatalf("propia y reciente: %v", m)
 	}
 	// En efectivo, aunque sea propia y de hace un minuto: PIN. Cobrar, dejar

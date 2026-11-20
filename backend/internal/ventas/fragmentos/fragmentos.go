@@ -125,3 +125,45 @@ var FacturaSinAcreditar = strings.ReplaceAll(facturaSinAcreditar, "fv.", "i.")
 const facturaSinAcreditar = `fv.estado <> 'borrador' AND fv.cae IS NOT NULL AND fv.tipo::text NOT LIKE 'nota_credito%'
 	AND fv.total - coalesce((SELECT sum(nc.total) FROM invoices nc WHERE nc.comprobante_origen_id = fv.id
 	      AND nc.tipo::text LIKE 'nota_credito%' AND nc.cae IS NOT NULL AND nc.estado NOT IN ('borrador', 'anulada', 'rechazada')), 0) > 0.009`
+
+// CircuitoDelCheque es, sobre la fila `ch` de cheques (con otro alias si se
+// pasa), el circuito en el que está el valor: «blanco» o «negro».
+//
+// **El cheque de una venta del mostrador no lo guarda, lo calcula.** Nace
+// con el «blanco» que pone cobros.RegistrarChequeRecibido, y una venta B
+// del mostrador no tiene asiento de cobro (la sección 4 de los asientos
+// solo asienta pagos de pedidos con factura con CAE): ese cheque nunca
+// debitó Valores a depositar del estudio. Con el dato guardado, su depósito
+// acreditaba esa cuenta en el estudio, donde nunca entró, y se podía endosar
+// en un pago blanco (la fuga que cierra la regla M8 de compras). Y no se
+// puede fijar al cobrar, porque la factura puede salir después de la venta:
+// el valor guardado quedaría viejo. Por eso es blanco solo si el pedido
+// tiene la misma factura que mira la sección 4 (con CAE y no de prueba).
+// Los demás cheques (los de un recibo, los entregados) llevan el suyo.
+func CircuitoDelCheque(ch string) string {
+	return strings.ReplaceAll(`(CASE WHEN ch.order_payment_id IS NULL THEN ch.circuito::text
+	  WHEN EXISTS (SELECT 1 FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
+	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
+	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion')
+	  THEN 'blanco' ELSE 'negro' END)`, "ch.", ch+".")
+}
+
+// FechaDelCheque es, sobre la fila `ch` de cheques, la fecha con la que el
+// cierre asienta un cambio de estado del cheque ocurrido en `at`.
+//
+// **El cheque del mostrador cobrado antes de la factura no puede mover un
+// mes ya entregado.** CircuitoDelCheque lo vuelve blanco cuando la factura
+// sale, y la sección 4 de los asientos corre su cobro (Valores a depositar a
+// Deudores) a la fecha de la factura. Con la fecha del evento, un depósito
+// acreditado en octubre de una venta facturada en noviembre aparecía en
+// octubre al volver a sacarlo (octubre distinto de lo entregado y Valores a
+// depositar acreedor hasta noviembre). Corrido a la misma factura que miran
+// la sección 4 y CircuitoDelCheque, el cobro y el depósito caen juntos. Los
+// demás cheques (sin order_payment_id) llevan la fecha del evento.
+func FechaDelCheque(ch, at string) string {
+	return strings.NewReplacer("ch.", ch+".", "{AT}", at).Replace(`(CASE WHEN ch.order_payment_id IS NULL THEN {AT}
+	  ELSE greatest({AT}, coalesce((SELECT cfi.fecha_emision FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
+	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
+	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion'
+	               ORDER BY (cfi.estado = 'anulada'), cfi.fecha_emision LIMIT 1), {AT})) END)`)
+}

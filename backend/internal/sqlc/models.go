@@ -5812,6 +5812,7 @@ type PaymentRefund struct {
 	Referencia        *string            `json:"referencia"`
 	AccountMovementID *string            `json:"accountMovementId"`
 	CreatedAt         pgtype.Timestamptz `json:"createdAt"`
+	DevolucionID      *string            `json:"devolucionId"`
 }
 
 type PosDevice struct {

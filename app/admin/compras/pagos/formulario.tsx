@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { diasHasta, fechaCorta, formatearMonto, hoyEnArgentina } from "@/lib/formato";
 import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { type ChequeDeCartera, chequesParaEndosar, sinEndososDelOtroCircuito } from "./endoso";
 import {
   BarraGuardar,
   Hoja,
@@ -86,17 +87,6 @@ interface FacturaConSaldo {
   saldo: number;
   /** Neto gravado + no gravado/exento, sin IVA ni percepciones. */
   netoSinIva: number;
-}
-
-interface ChequeDeCartera {
-  id: string;
-  numero: string;
-  banco: string | null;
-  fechaPago: Date | string;
-  importe: number;
-  /** Físico o e-Cheq: al endosar hay que ofrecer el que corresponde. */
-  tipo: string;
-  cliente: string | null;
 }
 
 /** Un renglón de "con qué sale la plata". Los importes se tipean. */
@@ -483,6 +473,9 @@ export function FormularioPago({
                 alCambiar={(v) => {
                   const c = v as "blanco" | "negro";
                   setCircuito(c);
+                  // Los endosos de un cheque del otro circuito vuelven a «cheque
+                  // nuevo» antes de guardar, no al rechazo.
+                  setPartes((previas) => (previas ? sinEndososDelOtroCircuito(previas, cartera, c) : previas));
                   // Pasar al circuito B saca los e-Cheq antes de guardar, no al rechazo.
                   if (c === "negro") {
                     if (medio === "echeq") setMedio("cheque");
@@ -556,9 +549,14 @@ export function FormularioPago({
 
                     {(parte.medio === "cheque" || parte.medio === "echeq") && (
                       <div className="space-y-2">
-                        {/* Endosar uno de la cartera, del mismo tipo: un e-Cheq
-                          recibido no se endosa como cheque de papel. */}
-                        {chequesParaEndosar(cartera, parte.medio).length > 0 && (
+                        {/* Endosar uno de la cartera, del mismo tipo y del
+                          circuito del pago. Los del otro circuito se ven
+                          apagados bajo el nombre de su circuito: así se ve por
+                          qué no se pueden elegir. */}
+                        {(() => {
+                          const { endosables, delOtroCircuito } = chequesParaEndosar(cartera, parte.medio, circuito);
+                          if (endosables.length + delOtroCircuito.length === 0) return null;
+                          return (
                           <select
                             value={parte.chequeId}
                             onChange={(e) => {
@@ -573,15 +571,23 @@ export function FormularioPago({
                             className="h-11 w-full rounded-lg border border-linea bg-card px-2 text-base"
                           >
                             <option value="">Cheque nuevo (propio)</option>
-                            {chequesParaEndosar(cartera, parte.medio).map((c) => (
+                            {endosables.map((c) => (
                               <option key={c.id} value={c.id}>
-                                Endosar {c.numero}
-                                {c.banco ? ` · ${c.banco}` : ""} · {formatearMonto(c.importe)}
-                                {c.cliente ? ` · de ${c.cliente}` : ""}
+                                {textoDelEndoso(c)}
                               </option>
                             ))}
+                            {delOtroCircuito.length > 0 && (
+                              <optgroup label={ETIQUETA_CIRCUITO[circuito === "negro" ? "blanco" : "negro"]}>
+                                {delOtroCircuito.map((c) => (
+                                  <option key={c.id} value={c.id} disabled>
+                                    {textoDelEndoso(c)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
-                        )}
+                          );
+                        })()}
 
                         {!parte.chequeId && (
                           <div className="grid grid-cols-3 gap-2">
@@ -824,16 +830,7 @@ export function FormularioPago({
   );
 }
 
-/**
- * Los cheques de cartera que se pueden endosar en un renglón: del mismo tipo
- * que el medio elegido. Un e-Cheq recibido no se puede entregar como cheque de
- * papel ni al revés: son dos instrumentos distintos.
- */
-function chequesParaEndosar(
-  cartera: ChequeDeCartera[],
-  medio: ParteUI["medio"],
-): ChequeDeCartera[] {
-  if (medio !== "cheque" && medio !== "echeq") return [];
-  const buscado = medio === "echeq" ? "echeq" : "fisico";
-  return cartera.filter((c) => c.tipo === buscado);
+/** Cómo se lee un cheque de la cartera en la lista de endosos. */
+function textoDelEndoso(c: ChequeDeCartera): string {
+  return `Endosar ${c.numero}${c.banco ? ` · ${c.banco}` : ""} · ${formatearMonto(c.importe)}${c.cliente ? ` · de ${c.cliente}` : ""}`;
 }

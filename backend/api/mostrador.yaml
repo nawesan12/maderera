@@ -91,6 +91,7 @@ paths:
                 type: object
                 properties:
                   ok: { type: string }
+                  porAfuera: { type: number, format: double, description: "Lo que falta devolver por el posnet o el banco (sin el efectivo, la cuenta corriente ni el cheque en cartera)" }
                   facturaPendiente: { type: string }
                   facturaSinCae: { type: boolean }
                   error: { type: string }

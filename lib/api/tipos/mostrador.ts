@@ -607,6 +607,11 @@ export interface operations {
                 content: {
                     "application/json": {
                         ok?: string;
+                        /**
+                         * Format: double
+                         * @description Lo que falta devolver por el posnet o el banco (sin el efectivo, la cuenta corriente ni el cheque en cartera)
+                         */
+                        porAfuera?: number;
                         facturaPendiente?: string;
                         facturaSinCae?: boolean;
                         error?: string;

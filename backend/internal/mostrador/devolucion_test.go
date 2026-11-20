@@ -35,6 +35,7 @@ type conFactura struct {
 	numero          string
 	renglon         string // el primer renglón de la factura
 	turno           string
+	venta           VentaPedida
 }
 
 // abrirCaja abre un turno en la sucursal.
@@ -44,9 +45,8 @@ func (e *entorno) abrirCaja(t *testing.T, sucursal string) string {
 		returning id::text`, sucursal)
 }
 
-// vendidaYFacturada registra la venta, emite su factura y le pone un CAE
-// (el proveedor interno no autoriza).
-func (e *entorno) vendidaYFacturada(t *testing.T, correo string, v VentaPedida) *conFactura {
+// vendidaSinFactura registra la venta, todavía sin comprobante.
+func (e *entorno) vendidaSinFactura(t *testing.T, correo string, v VentaPedida) *conFactura {
 	t.Helper()
 	ctx := context.Background()
 	ses := e.sesionDe(t, correo)
@@ -75,12 +75,28 @@ func (e *entorno) vendidaYFacturada(t *testing.T, correo string, v VentaPedida) 
 		t.Fatalf("venta: %v %+v", err, r)
 	}
 	c.pedido, c.numero = r.OrderID, r.Numero
-	lineas := make([]facturacion.LineaDeVenta, len(v.Lineas))
-	for i, l := range v.Lineas {
+	c.venta = v
+	return c
+}
+
+// facturar emite la factura de la venta (sin CAE).
+func (c *conFactura) facturar(t *testing.T) (facturacion.ResultadoComprobante, error) {
+	t.Helper()
+	lineas := make([]facturacion.LineaDeVenta, len(c.venta.Lineas))
+	for i, l := range c.venta.Lineas {
 		lineas[i] = facturacion.LineaDeVenta{Descripcion: l.Descripcion, Unidad: l.Unidad, Cantidad: l.Cantidad, PrecioUnitario: l.PrecioUnitario}
 	}
-	res, err := c.fac.EmitirParaLaVenta(ctx, facturacion.PedidoDeComprobante{OrderID: r.OrderID, CustomerID: v.CustomerID,
-		ReceptorNombre: v.ContactoNombre, Lineas: lineas, UsuarioID: ses.UserID})
+	return c.fac.EmitirParaLaVenta(context.Background(), facturacion.PedidoDeComprobante{OrderID: c.pedido, CustomerID: c.venta.CustomerID,
+		ReceptorNombre: c.venta.ContactoNombre, Lineas: lineas, UsuarioID: c.usuario})
+}
+
+// vendidaYFacturada registra la venta, emite su factura y le pone un CAE
+// (el proveedor interno no autoriza).
+func (e *entorno) vendidaYFacturada(t *testing.T, correo string, v VentaPedida) *conFactura {
+	t.Helper()
+	ctx := context.Background()
+	c := e.vendidaSinFactura(t, correo, v)
+	res, err := c.facturar(t)
 	if err != nil || res.InvoiceID == nil {
 		t.Fatalf("factura: %v %+v", err, res)
 	}
@@ -514,6 +530,11 @@ func TestDevolucionPorAfuera(t *testing.T) {
 	}
 	if q, _ := e.fisicoYReservado(t); q != 92 {
 		t.Errorf("físico %v, quería 92", q)
+	}
+	// El tramo queda en el cobro con débito, atado a la devolución: el cierre
+	// lo asienta como reintegro.
+	if tr := e.tramos(t, d.ID); len(tr) != 1 || tr[ventas.Debito] != 200 {
+		t.Errorf("tramos: %v", tr)
 	}
 	// La mixta: lo que entró con débito vuelve por afuera, hasta lo que
 	// entró con débito.

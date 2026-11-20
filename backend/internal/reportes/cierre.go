@@ -231,13 +231,19 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 // (cheque_estados, que anota el trigger de la base en cada cambio):
 // AsientoDeCheque decide cuáles mueven cuentas.
 func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	// El período va sobre la fecha corrida (fragmentos.FechaDelCheque), que
+	// nunca es anterior al evento: por eso el evento ya puede filtrar el
+	// final del período adentro, con el índice.
 	rs, err := s.pool.Query(ctx, `
-		SELECT e.at, c.numero, coalesce(c.banco, ''), c.sentido::text, e.desde::text, e.hacia::text, c.importe::float8, c.circuito::text,
+		SELECT * FROM (
+		SELECT `+fragmentos.FechaDelCheque("c", "e.at")+` AS asentado, c.numero, coalesce(c.banco, ''), c.sentido::text, e.desde::text, e.hacia::text,
+		  c.importe::float8, `+fragmentos.CircuitoDelCheque("c")+`,
 		  c.fecha_pago, (SELECT p.fecha FROM supplier_payment_parts x JOIN supplier_payments p ON p.id = x.payment_id
 		    WHERE x.cheque_id = c.id ORDER BY p.fecha LIMIT 1),
 		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito')
 		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
-		WHERE e.at >= $1 AND e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado') ORDER BY e.at`, idesde, ihasta)
+		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')) x
+		WHERE x.asentado >= $1 AND x.asentado <= $2 ORDER BY x.asentado`, idesde, ihasta)
 	if err != nil {
 		return nil, err
 	}

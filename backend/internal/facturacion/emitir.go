@@ -128,6 +128,28 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 	if tipo == "" {
 		tipo = fiscal.TipoFactura(fiscal.LetraQueCorresponde(config.CondicionIva, d.ReceptorCondicionIva))
 	}
+	// La factura de una venta cuyo cheque ya se endosó en un pago del B no se
+	// emite. Con la factura, el cheque pasa al blanco (CircuitoDelCheque) y
+	// la sección 4 asienta su cobro contra Valores a depositar del estudio,
+	// pero el endoso salió por el B: ese valor quedaba debitado para siempre.
+	// El candado sobre los cheques del pedido espera a un endoso en curso
+	// (compras.registrarParte bloquea el cheque antes de mirar su circuito),
+	// así que lo que se lee después ya incluye el que confirmó.
+	if d.OrderID != nil && fiscal.EsFactura(tipo) {
+		if _, err := tx.Exec(ctx, `SELECT ch.id FROM cheques ch JOIN order_payments op ON op.id = ch.order_payment_id
+			WHERE op.order_id = $1 FOR UPDATE OF ch`, *d.OrderID); err != nil {
+			return "", err
+		}
+		var numero *string
+		if err := tx.QueryRow(ctx, `SELECT min(ch.numero) FROM cheques ch JOIN order_payments op ON op.id = ch.order_payment_id
+			JOIN supplier_payment_parts x ON x.cheque_id = ch.id JOIN supplier_payments sp ON sp.id = x.payment_id
+			WHERE op.order_id = $1 AND sp.circuito = 'negro' AND sp.anulado_at IS NULL`, *d.OrderID).Scan(&numero); err != nil {
+			return "", err
+		}
+		if numero != nil {
+			return "", errEmision("El cheque N° " + *numero + " de esta venta ya se endosó en un pago del circuito B: con la factura quedaría en el blanco. Anulá ese pago antes de facturar.")
+		}
+	}
 	// Una A sin CUIT válido del receptor no llega a numerarse: venga de un
 	// pedido, del mostrador o de una ficha sin CUIT, ARCA la rechazaría.
 	if fiscal.LetraDe(tipo) == "A" {

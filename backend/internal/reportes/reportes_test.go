@@ -225,9 +225,9 @@ func TestReposicion(t *testing.T) {
 	placa, tirante := e.catalogo(t)
 	// 60 placas en los últimos 30 días (2 por día): en las dos sucursales
 	// hay 8 + 5 = 13 disponibles.
-	e.pedido(t, "R-1", e.central, "entregado", "mostrador", ahoraDePrueba.Add(-5*24*time.Hour), nil, [4]any{placa, 60.0, 1.0, nil})
-	e.pedido(t, "R-2", e.central, "cancelado", "mostrador", ahoraDePrueba.Add(-5*24*time.Hour), nil, [4]any{placa, 600.0, 1.0, nil})
-	e.pedido(t, "R-3", e.central, "entregado", "mostrador", ahoraDePrueba.Add(-40*24*time.Hour), nil, [4]any{tirante, 9.0, 1.0, nil})
+	r1 := e.pedido(t, "R-1", e.central, "entregado", "mostrador", ahoraDePrueba.Add(-5*24*time.Hour), nil, [4]any{placa, 60.0, 1.0, nil})
+	r2 := e.pedido(t, "R-2", e.central, "cancelado", "mostrador", ahoraDePrueba.Add(-5*24*time.Hour), nil, [4]any{placa, 600.0, 1.0, nil})
+	r3 := e.pedido(t, "R-3", e.central, "entregado", "mostrador", ahoraDePrueba.Add(-40*24*time.Hour), nil, [4]any{tirante, 9.0, 1.0, nil})
 
 	_, b, _ := pedir(t, adm, e.u+"reportes/reposicion?dias=30&objetivo=30")
 	var r ReporteDeReposicion
@@ -235,6 +235,37 @@ func TestReposicion(t *testing.T) {
 	if len(r.Filas) != 2 || r.Filas[0].VariantID != placa || r.Filas[0].Disponible != 13 || r.Filas[0].Vendido != 60 ||
 		*r.Filas[0].Cobertura != 7 || r.Filas[0].Sugerido != 47 || r.Filas[1].Vendido != 0 || r.Filas[1].Cobertura != nil {
 		t.Fatalf("reposición: %s", b)
+	}
+
+	// Lo devuelto no es demanda: 20 de las 60 placas de R-1 vuelven (una
+	// parte rota). La devolución de R-3 (fuera de la ventana) no cambia
+	// nada, y la de R-2 (cancelado) no resta dos veces.
+	usuario := e.id(t, `select id from "user" limit 1`)
+	devolver := func(pedido string, numero int, partes ...[2]any) {
+		t.Helper()
+		factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
+			values ('factura_b', 3, $1, 'X', 1, 0, 0, 0, 0, 1, 'autorizada', now(), '7612', $2) returning id`, numero, pedido)
+		dev := e.id(t, `insert into devoluciones (clave, order_id, invoice_id, importe, destino, motivo, created_by_user_id)
+			values ($1, $2, $3, 1, 'afuera', 'sobró', $4) returning id`, fmt.Sprint("d", numero), pedido, factura, usuario)
+		renglon := e.id(t, `select id from order_items where order_id = $1`, pedido)
+		item := e.id(t, `insert into invoice_items (invoice_id, descripcion, cantidad, precio_unitario, neto, iva, subtotal, order_item_id)
+			values ($1, 'renglón', 1, 1, 1, 0, 1, $2) returning id`, factura, renglon)
+		for _, p := range partes {
+			e.exec(t, `insert into devolucion_items (devolucion_id, invoice_item_id, order_item_id, cantidad, al_stock, importe) values ($1, $2, $3, $4, $5, 1)`,
+				dev, item, renglon, p[0], p[1])
+		}
+	}
+	devolver(r1, 901, [2]any{15.0, true}, [2]any{5.0, false})
+	devolver(r2, 902, [2]any{100.0, true})
+	devolver(r3, 903, [2]any{9.0, true})
+	_, b, _ = pedir(t, adm, e.u+"reportes/reposicion?dias=30&objetivo=30")
+	_ = json.Unmarshal([]byte(b), &r)
+	if len(r.Filas) != 2 || r.Filas[0].Vendido != 40 || r.Filas[0].Sugerido != 27 || r.Filas[1].Vendido != 0 {
+		t.Fatalf("reposición con devoluciones: %s", b)
+	}
+	if want := ArmarReposicion([]StockDeVariante{{VariantID: placa, DisponibleCentral: 8, DisponibleAserradero: 5}},
+		map[string]float64{placa: 40}, 30, 30, "todos").Filas[0]; *r.Filas[0].Cobertura != *want.Cobertura {
+		t.Errorf("cobertura: %v, quería %v", *r.Filas[0].Cobertura, *want.Cobertura)
 	}
 	if len(r.PorCategoria) != 1 || r.PorCategoria[0].Nombre != "Placas" {
 		t.Errorf("por categoría: %+v", r.PorCategoria)

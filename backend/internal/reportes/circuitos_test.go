@@ -373,3 +373,40 @@ func TestLaRetencionDeUnPagoBVaAlBlanco(t *testing.T) {
 		t.Errorf("pendientes: %s", pend)
 	}
 }
+
+// El cheque de una venta del mostrador nace «blanco», pero el circuito sale
+// de la factura del pedido (fragmentos.CircuitoDelCheque). El de una venta
+// B nunca debitó Valores a depositar del estudio (la venta no tiene asiento
+// de cobro), así que su depósito tampoco la acredita ahí: va al B.
+func TestElChequeDeUnaVentaBDelMostradorNoEntraAlEstudio(t *testing.T) {
+	e := armar(t)
+	cheque := func(numero string, conFactura bool) {
+		t.Helper()
+		pedido := e.id(t, `insert into orders (numero, contacto_nombre, branch_id, origen, estado, total, created_at)
+			values ($1, 'Mostrador', $2, 'mostrador', 'entregado', 500, '2026-10-05T15:00:00Z') returning id`, "M-"+numero, e.central)
+		pago := e.id(t, `insert into order_payments (order_id, medio, importe) values ($1, 'cheque', 500) returning id`, pedido)
+		if conFactura {
+			e.facturaConCae(t, nil, 70, 500, "2026-10-05T15:00:00Z", &pedido)
+		}
+		ch := e.id(t, `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito, order_payment_id)
+			values ('recibido', 'fisico', $1, '2026-10-06', 500, 'depositado', 'blanco', $2) returning id`, numero, pago)
+		e.exec(t, `update cheques set estado = 'acreditado' where id = $1`, ch)
+		e.exec(t, `update cheque_estados set at = '2026-10-08T15:00:00Z' where cheque_id = $1`, ch)
+	}
+	cheque("100", false)
+	cheque("200", true)
+	var b, n []string
+	for _, a := range e.asientosDe(t, "2026-10") {
+		if !strings.HasPrefix(a.Concepto, "Cheque N° ") {
+			continue
+		}
+		if a.Circuito == CircuitoNegro {
+			n = append(n, a.Concepto)
+		} else {
+			b = append(b, a.Concepto)
+		}
+	}
+	if len(b) != 1 || !strings.HasPrefix(b[0], "Cheque N° 200") || len(n) != 1 || !strings.HasPrefix(n[0], "Cheque N° 100") {
+		t.Errorf("del estudio: %v; del B: %v", b, n)
+	}
+}

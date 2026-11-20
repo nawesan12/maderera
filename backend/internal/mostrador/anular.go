@@ -34,6 +34,10 @@ type ResultadoAnulacion struct {
 	// AutorizadoPor: el admin que la autorizó (con su PIN o su sesión).
 	AutorizadoPor string
 	Total         float64
+	// PorAfuera es lo que falta devolver por el posnet o el banco: lo cobrado
+	// con tarjeta o transferencia menos lo que ya devolvieron las
+	// devoluciones por afuera. El cheque en cartera vuelve en mano.
+	PorAfuera float64
 }
 
 // PedidoDeAnulacion es lo que llega para anular.
@@ -284,6 +288,32 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		}
 	}
 
+	// Si una devolución por afuera ya sacó plata del cobro con cheque, anular
+	// le devolvería además el cheque entero: el cliente cobraba dos veces. Lo
+	// que cierra es devolver el resto con otra devolución por afuera (el
+	// cheque se deposita entero y al cliente le vuelve todo por el banco);
+	// desde Cheques no hay cómo devolver una parte. Va antes de la primera
+	// escritura, como todo lo que rechaza esta función.
+	var chequeTocado bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM payment_refunds t JOIN payments p ON p.id = t.payment_id
+		WHERE p.order_id = $1 AND p.medio = $2 AND t.devolucion_id IS NOT NULL)`, id, ventas.Cheque).Scan(&chequeTocado); err != nil {
+		return ResultadoAnulacion{}, err
+	}
+	if chequeTocado {
+		return no("Parte del cheque de esta venta ya se devolvió por afuera: devolvé el resto desde la factura.")
+	}
+
+	// Lo que el cajero devuelve por el posnet o el banco, antes de que los
+	// cobros pasen a reintegrado: sin restar los tramos de las devoluciones
+	// por afuera, el resultado decía el total y se devolvía otra vez lo que
+	// ya había salido.
+	var porAfuera float64
+	if err := tx.QueryRow(ctx, `SELECT coalesce(sum(p.monto - coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)), 0)::float8
+		FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado' AND coalesce(p.medio, '') NOT IN ($2, $3, $4)`,
+		id, ventas.Efectivo, ventas.CuentaCorriente, ventas.Cheque).Scan(&porAfuera); err != nil {
+		return ResultadoAnulacion{}, err
+	}
+
 	var conRetiro bool
 	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada')`, id).Scan(&conRetiro); err != nil {
 		return ResultadoAnulacion{}, err
@@ -381,7 +411,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		sinCAE bool
 	}
 	err = tx.QueryRow(ctx, `SELECT id, estado::text, cae IS NULL FROM invoices WHERE order_id = $1 LIMIT 1`, id).Scan(&factura.id, &factura.estado, &factura.sinCAE)
-	r := ResultadoAnulacion{Ok: true, Numero: p.numero, Total: total}
+	r := ResultadoAnulacion{Ok: true, Numero: p.numero, Total: total, PorAfuera: jsmath.Redondear2(max(0, porAfuera))}
 	if err == nil && factura.estado != "anulada" {
 		r.FacturaPendiente = &factura.id
 		r.FacturaSinCAE = factura.sinCAE

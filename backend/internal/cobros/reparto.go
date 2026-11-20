@@ -371,18 +371,21 @@ const abiertoA = `CASE WHEN EXISTS (SELECT 1 FROM order_status_history h WHERE h
 // el recibo, con su importe: las facturas que ese día esperaban el CAE y los
 // pedidos abiertos ese día sin factura emitida. Sin cliente, la factura que
 // cobra si ese día no tenía CAE, o el pedido que cobra y sus facturas.
+//
+// {F} es el recorte de los recibos ya fijados (recorteDelRecibo): sin él, la
+// lista queda vacía sin leer nada.
 const pendientesDelRecibo = `
 SELECT coalesce(array_agg(d.destino ORDER BY d.destino), '{}'::text[]) AS destinos, coalesce(sum(d.monto), 0)::float8 AS por_facturar
 FROM (
   SELECT 'i:' || i.id::text AS destino, i.total AS monto FROM invoices i
-  WHERE i.tipo::text NOT LIKE 'nota_credito%' AND i.estado <> 'borrador' AND i.created_at <= r.created_at
+  WHERE {F} AND i.tipo::text NOT LIKE 'nota_credito%' AND i.estado <> 'borrador' AND i.created_at <= r.created_at
     AND i.id IN (SELECT x.id FROM invoices x WHERE x.customer_id = r.customer_id
                  UNION ALL SELECT ip.invoice_id FROM invoice_payments ip WHERE r.customer_id IS NULL AND ip.receipt_id = r.id
                  UNION ALL SELECT x.id FROM invoices x WHERE r.customer_id IS NULL AND x.order_id = r.order_id)
     AND CASE WHEN i.cae IS NULL THEN i.estado IN ('emitida', 'rechazada') ELSE ` + caeA + ` > r.created_at END
   UNION ALL
   SELECT 'o:' || o.id::text, o.total FROM orders o
-  WHERE (o.customer_id = r.customer_id OR (r.customer_id IS NULL AND o.id = r.order_id)) AND o.created_at <= r.created_at AND ` + abiertoA + `
+  WHERE {F} AND (o.customer_id = r.customer_id OR (r.customer_id IS NULL AND o.id = r.order_id)) AND o.created_at <= r.created_at AND ` + abiertoA + `
     AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.tipo::text LIKE 'factura%' AND i.created_at <= r.created_at
       AND (i.cae IS NOT NULL OR i.estado IN ('emitida', 'rechazada')))
 ) d`
@@ -399,7 +402,8 @@ FROM (
 // {I}, {P} y {R} son los filtros de cada rama: todo, o solo lo de una clave
 // (eventosDeUnaClave). Con el filtro sobre la clave calculada no servía
 // ningún índice, y cada recibo recorría la historia entera de cobros con el
-// candado de recibos tomado.
+// candado de recibos tomado. {F} y {G} recortan lo que un recibo ya fijado
+// no usa (recorteDelRecibo y sinRepartoGuardado).
 const eventosSQL = `
 SELECT * FROM (
   SELECT ` + claveDeFactura + ` AS clave, i.fecha_emision AS fecha, 0 AS tipo, i.id::text AS id,
@@ -467,9 +471,9 @@ SELECT * FROM (
     AND e.at <= $1 AND {M}
   UNION ALL
   SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text, r.total::float8,
-    coalesce((SELECT sum(importe) FROM receipt_parts WHERE receipt_id = r.id AND medio = 'retencion'), 0)::float8,
-    coalesce((SELECT sum(x.importe) FROM receipt_parts x JOIN cheques ch ON ch.id = x.cheque_id
-              WHERE x.receipt_id = r.id AND ch.circuito = 'negro'), 0)::float8,
+    CASE WHEN {G} THEN coalesce((SELECT sum(importe) FROM receipt_parts WHERE receipt_id = r.id AND medio = 'retencion'), 0) ELSE 0 END::float8,
+    CASE WHEN {G} THEN coalesce((SELECT sum(x.importe) FROM receipt_parts x JOIN cheques ch ON ch.id = x.cheque_id
+              WHERE x.receipt_id = r.id AND ch.circuito = 'negro'), 0) ELSE 0 END::float8,
     cardinality(pend.destinos) > 0,
     r.reparto_deudores::float8, r.reparto_anticipo::float8, r.reparto_b::float8, '', 0, 0, r.recibido_de,
     pend.destinos, pend.por_facturar, ''
@@ -481,15 +485,35 @@ SELECT * FROM (
   FROM receipts r WHERE r.anulado_at IS NOT NULL AND r.anulado_at <= $1 AND {R}
 ) e`
 
-// eventosDeTodas y eventosDeUnaClave son eventosSQL sin filtro y con el de
-// una clave: $2 la clave, $3 el cliente, $4 la factura, $5 el recibo y $6 el
-// pedido (los que no correspondan, nulos). Los filtros de las ramas traen de más (todo
-// lo del cliente o de la factura, con índice) y el de afuera deja la clave
-// exacta.
-var (
-	eventosDeTodas = strings.NewReplacer("{I}", "true", "{P}", "true", "{R}", "true", "{M}", "true").Replace(eventosSQL)
+// sinRepartoGuardado es la condición con la que CargarEventos deja un recibo
+// sin Guardado (alguna de las tres columnas nula: la 00131 no obliga a que
+// vayan juntas, y una carga a mano o una migración a medias puede dejar
+// una). Tiene que ser la misma que la de Go: si el SQL diera por fijado un
+// recibo que Go recalcula, Go lo recalcularía sin sus pendientes, sin su
+// retención y sin su parte B, y el reparto cambiaría sin que nadie lo vea.
+const sinRepartoGuardado = `(r.reparto_deudores IS NULL OR r.reparto_anticipo IS NULL OR r.reparto_b IS NULL)`
 
-	eventosDeUnaClave = strings.NewReplacer(
+// recorteDelRecibo dice cuándo un recibo necesita sus pendientes (el LATERAL
+// de pendientesDelRecibo): si no tiene el reparto guardado, o si lo tiene con
+// anticipo, porque los destinos de la seña son los de su bolsa
+// (RepartirCobros). Al fijado sin anticipo RepartirCobros le descarta lo que
+// calcula con ellos, y con el volumen de ISIS eran 2,3 millones de páginas
+// leídas: con los repartos fijados, la consulta de todas las cuentas baja de
+// 3,7 s a 0,6 s (sin JIT) y lee 200.000.
+// 0,005 es el mismo umbral que el motor (rep.Anticipo > 0.005).
+const recorteDelRecibo = `(` + sinRepartoGuardado + ` OR r.reparto_anticipo > 0.005)`
+
+// armarEventos arma eventosSQL sin filtro y con el de una clave: $2 la
+// clave, $3 el cliente, $4 la factura, $5 el recibo y $6 el pedido (los que
+// no correspondan, nulos). Los filtros de las ramas traen de más (todo lo
+// del cliente o de la factura, con índice) y el de afuera deja la clave
+// exacta. recorte y sinGuardar son {F} y {G}: las pruebas los arman con
+// «true» para comparar contra el SQL sin recortar.
+func armarEventos(recorte, sinGuardar string) (todas, unaClave string) {
+	todas = strings.NewReplacer("{I}", "true", "{P}", "true", "{R}", "true", "{M}", "true",
+		"{F}", recorte, "{G}", sinGuardar).Replace(eventosSQL)
+	unaClave = strings.NewReplacer(
+		"{F}", recorte, "{G}", sinGuardar,
 		"{M}", `m.customer_id = $3::uuid`,
 		"{I}", `(i.customer_id = $3::uuid OR i.id = $4::uuid OR i.order_id = $6::uuid)`,
 		"{P}", `(p.customer_id = $3::uuid OR p.order_id = $6::uuid OR p.order_id IN (SELECT i.order_id FROM invoices i
@@ -499,17 +523,50 @@ var (
 			WHERE ip.receipt_id IS NOT NULL AND (i.customer_id = $3::uuid OR i.id = $4::uuid OR i.order_id = $6::uuid))
 			OR r.order_id IN (SELECT i.order_id FROM invoices i WHERE i.customer_id = $3::uuid AND i.order_id IS NOT NULL))))`,
 	).Replace(eventosSQL) + ` WHERE e.clave = $2`
-)
+	return todas, unaClave
+}
+
+var eventosDeTodas, eventosDeUnaClave = armarEventos(recorteDelRecibo, sinRepartoGuardado)
+
+// ApagarJIT apaga el JIT de Postgres hasta el final de la transacción, y
+// devuelve con qué volver al de antes. Va antes de CargarEventos.
+//
+// Por qué: las subconsultas correlacionadas de eventosSQL hacen que el
+// planificador estime un costo de 24 millones para todas las cuentas, y de
+// 125.000 para un cliente con 8 recibos: las dos por encima de
+// jit_above_cost (100.000), y Postgres compila la consulta. Con el volumen
+// de ISIS eran 4,9 s de JIT sobre 3,7 s de trabajo en cada vista del cierre,
+// y 0,4–0,6 s de JIT sobre 15–40 ms en cada recibo que se emite. Se apaga solo acá, con SET LOCAL, y no en el pool:
+// ninguna otra consulta cambia de plan.
+func ApagarJIT(ctx context.Context, tx pgx.Tx) (volver func(context.Context) error, err error) {
+	var antes string
+	if err := tx.QueryRow(ctx, `SELECT current_setting('jit')`).Scan(&antes); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `SET LOCAL jit = off`); err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context) error {
+		_, err := tx.Exec(ctx, `SELECT set_config('jit', $1, true)`, antes)
+		return err
+	}, nil
+}
 
 // CargarEventos lee los hechos de las cuentas hasta `hasta` (de una clave,
 // o de todas con "").
-func CargarEventos(ctx context.Context, db interface {
+func CargarEventos(ctx context.Context, db consultor, hasta time.Time, clave string) ([]EventoDeCuenta, error) {
+	return cargarEventos(ctx, db, hasta, clave, eventosDeTodas, eventosDeUnaClave)
+}
+
+type consultor interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-}, hasta time.Time, clave string) ([]EventoDeCuenta, error) {
+}
+
+func cargarEventos(ctx context.Context, db consultor, hasta time.Time, clave, todas, unaClave string) ([]EventoDeCuenta, error) {
 	var rs pgx.Rows
 	var err error
 	if clave == "" {
-		rs, err = db.Query(ctx, eventosDeTodas, hasta)
+		rs, err = db.Query(ctx, todas, hasta)
 	} else {
 		var cliente, factura, recibo, pedido *string
 		id := clave[2:]
@@ -523,7 +580,7 @@ func CargarEventos(ctx context.Context, db interface {
 		default:
 			recibo = &id
 		}
-		rs, err = db.Query(ctx, eventosDeUnaClave, hasta, clave, cliente, factura, recibo, pedido)
+		rs, err = db.Query(ctx, unaClave, hasta, clave, cliente, factura, recibo, pedido)
 	}
 	if err != nil {
 		return nil, err
@@ -556,8 +613,18 @@ func FijarReparto(ctx context.Context, tx pgx.Tx, recibo string) (Reparto, error
 	if err := tx.QueryRow(ctx, `SELECT `+claveDeRecibo+` FROM receipts r WHERE r.id = $1`, recibo).Scan(&clave); err != nil {
 		return Reparto{}, err
 	}
+	// Sin JIT también acá: la cuenta de un solo cliente ya pasa el umbral
+	// (ApagarJIT), y esto corre con el candado de recibos tomado. Después
+	// vuelve al de antes: el resto de la emisión no cambia.
+	volver, err := ApagarJIT(ctx, tx)
+	if err != nil {
+		return Reparto{}, err
+	}
 	ev, err := CargarEventos(ctx, tx, time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), clave)
 	if err != nil {
+		return Reparto{}, err
+	}
+	if err := volver(ctx); err != nil {
 		return Reparto{}, err
 	}
 	rep := RepartirCobros(ev).Recibos[recibo]
@@ -574,8 +641,15 @@ func FijarReparto(ctx context.Context, tx pgx.Tx, recibo string) (Reparto, error
 // cargar el certificado; mientras no se corra, el cierre los calcula igual,
 // con la misma regla, sin guardarlos.
 func FijarRepartosDeAntes(ctx context.Context, tx pgx.Tx) ([]string, error) {
+	volver, err := ApagarJIT(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
 	ev, err := CargarEventos(ctx, tx, time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), "")
 	if err != nil {
+		return nil, err
+	}
+	if err := volver(ctx); err != nil {
 		return nil, err
 	}
 	res := RepartirCobros(ev)

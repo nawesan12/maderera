@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,12 +14,79 @@ import (
 	"mjbj/internal/pruebas"
 )
 
-// El recorte de los recibos ya fijados (recorteDelRecibo) no puede cambiar
-// ningún reparto: el SQL recortado y el de siempre ({F} y {G} en «true»)
-// tienen que dar el mismo ResultadoDelReparto, entero, antes y después de
-// fijar, en todas las cuentas y en cada una sola.
+// El recorte de los recibos ya fijados (recorteDelRecibo) y los pendientes
+// en Go (pendientes.delRecibo) no pueden cambiar ningún reparto:
+// CargarEventos y el SQL de antes —sin recortar ({F} y {G} en «true») y con
+// el LATERAL que calculaba los pendientes de cada recibo— tienen que dar el
+// mismo ResultadoDelReparto, entero, antes y después de fijar, en todas las
+// cuentas y en cada una sola.
 
-var todasSinRecorte, unaClaveSinRecorte = armarEventos("true", "true")
+// caeADeAntes, abiertoADeAntes y pendientesDeAntes son los del LATERAL de
+// antes, tal cual.
+const caeADeAntes = `coalesce((SELECT max(l.created_at) FROM arca_log l WHERE l.invoice_id = i.id AND l.exito
+	  AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), i.fecha_emision)`
+
+const abiertoADeAntes = `CASE WHEN EXISTS (SELECT 1 FROM order_status_history h WHERE h.order_id = o.id AND h.created_at > r.created_at)
+	  THEN coalesce((SELECT h.estado::text FROM order_status_history h WHERE h.order_id = o.id AND h.created_at <= r.created_at
+	                 ORDER BY h.created_at DESC LIMIT 1), 'pendiente')
+	  ELSE o.estado::text END NOT IN ('cancelado', 'entregado')`
+
+const pendientesDeAntes = `
+SELECT coalesce(array_agg(d.destino ORDER BY d.destino), '{}'::text[]) AS destinos, coalesce(sum(d.monto), 0)::float8 AS por_facturar
+FROM (
+  SELECT 'i:' || i.id::text AS destino, i.total AS monto FROM invoices i
+  WHERE {F} AND i.tipo::text NOT LIKE 'nota_credito%' AND i.estado <> 'borrador' AND i.created_at <= r.created_at
+    AND i.id IN (SELECT x.id FROM invoices x WHERE x.customer_id = r.customer_id
+                 UNION ALL SELECT ip.invoice_id FROM invoice_payments ip WHERE r.customer_id IS NULL AND ip.receipt_id = r.id
+                 UNION ALL SELECT x.id FROM invoices x WHERE r.customer_id IS NULL AND x.order_id = r.order_id)
+    AND CASE WHEN i.cae IS NULL THEN i.estado IN ('emitida', 'rechazada') ELSE ` + caeADeAntes + ` > r.created_at END
+  UNION ALL
+  SELECT 'o:' || o.id::text, o.total FROM orders o
+  WHERE {F} AND (o.customer_id = r.customer_id OR (r.customer_id IS NULL AND o.id = r.order_id)) AND o.created_at <= r.created_at AND ` + abiertoADeAntes + `
+    AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.tipo::text LIKE 'factura%' AND i.created_at <= r.created_at
+      AND (i.cae IS NOT NULL OR i.estado IN ('emitida', 'rechazada')))
+) d`
+
+const ramaDelReciboDeAntes = `SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text, r.total::float8,
+    CASE WHEN {G} THEN coalesce((SELECT sum(importe) FROM receipt_parts WHERE receipt_id = r.id AND medio = 'retencion'), 0) ELSE 0 END::float8,
+    CASE WHEN {G} THEN coalesce((SELECT sum(x.importe) FROM receipt_parts x JOIN cheques ch ON ch.id = x.cheque_id
+              WHERE x.receipt_id = r.id AND ch.circuito = 'negro'), 0) ELSE 0 END::float8,
+    cardinality(pend.destinos) > 0,
+    r.reparto_deudores::float8, r.reparto_anticipo::float8, r.reparto_b::float8, '', 0, 0, r.recibido_de,
+    pend.destinos, pend.por_facturar, ''
+  FROM receipts r CROSS JOIN LATERAL (` + pendientesDeAntes + `) pend
+  WHERE r.created_at <= $1 AND {R}`
+
+var (
+	eventosDeAntes                      = strings.Replace(eventosSQL, ramaDelRecibo, ramaDelReciboDeAntes, 1)
+	todasSinRecorte, unaClaveSinRecorte = armarEventos(eventosDeAntes, "true", "true")
+	// El SQL de producción de antes de pendientes.go: con el recorte y el
+	// LATERAL (volumen_test.go).
+	todasDeAntes, unaClaveDeAntes = armarEventos(eventosDeAntes, recorteDelRecibo, sinRepartoGuardado)
+)
+
+// cargarDeAntes lee los eventos con el SQL de antes, sin recortar.
+func cargarDeAntes(ctx context.Context, db *pgxpool.Pool, hasta time.Time, clave string) ([]EventoDeCuenta, error) {
+	return cargarCon(ctx, db, todasSinRecorte, unaClaveSinRecorte, hasta, clave)
+}
+
+func cargarCon(ctx context.Context, db *pgxpool.Pool, todas, unaClave string, hasta time.Time, clave string) ([]EventoDeCuenta, error) {
+	sql := todas
+	if clave != "" {
+		sql = unaClave
+	}
+	rs, err := db.Query(ctx, sql, argumentosDeEventos(hasta, clave)...)
+	if err != nil {
+		return nil, err
+	}
+	return leerEventos(rs)
+}
+
+func TestElSQLDeAntesTieneElLateral(t *testing.T) {
+	if !strings.Contains(eventosSQL, ramaDelRecibo) || !strings.Contains(todasSinRecorte, "CROSS JOIN LATERAL") {
+		t.Fatal("la rama de los recibos no se reemplazó: la comparación sería contra el mismo SQL")
+	}
+}
 
 type escenario struct {
 	t    *testing.T
@@ -116,7 +184,7 @@ func (e *escenario) comparar(etapa string) {
 		if err != nil {
 			e.t.Fatal(err)
 		}
-		sin, err := cargarEventos(ctx, e.pool, hasta, "", todasSinRecorte, unaClaveSinRecorte)
+		sin, err := cargarDeAntes(ctx, e.pool, hasta, "")
 		if err != nil {
 			e.t.Fatal(err)
 		}
@@ -132,7 +200,7 @@ func (e *escenario) comparar(etapa string) {
 			if err != nil {
 				e.t.Fatal(err)
 			}
-			sin, err := cargarEventos(ctx, e.pool, hasta, clave, todasSinRecorte, unaClaveSinRecorte)
+			sin, err := cargarDeAntes(ctx, e.pool, hasta, clave)
 			if err != nil {
 				e.t.Fatal(err)
 			}
@@ -203,6 +271,22 @@ func TestElRecorteNoCambiaElReparto(t *testing.T) {
 	e.factura(nil, &ps, "factura_b", 900, "2026-10-08T12:00:00Z", "2026-10-08T12:01:00Z")
 	e.recibo(nil, &ps, "2026-10-09T12:00:00Z", [2]any{"efectivo", 500.0})
 
+	// Otro pedido sin cliente cuya factura espera el CAE cuando llega el
+	// recibo: el destino sale de las facturas del pedido.
+	ps2 := e.pedido(nil, 800, "2026-10-03T12:00:00Z", "")
+	e.factura(nil, &ps2, "factura_b", 800, "2026-10-04T12:00:00Z", "")
+	e.recibo(nil, &ps2, "2026-10-05T12:00:00Z", [2]any{"transferencia", 300.0})
+
+	// Un pedido entregado en septiembre y reabierto en noviembre: en octubre
+	// estaba cerrado según el historial, aunque hoy esté abierto. Y otro
+	// entregado después del recibo: ese día estaba abierto.
+	hist := e.id(`insert into customers (nombre) values ('Historial') returning id`)
+	re := e.pedido(&hist, 400, "2026-09-01T12:00:00Z", "2026-09-10T12:00:00Z")
+	e.exec(`insert into order_status_history (order_id, estado, created_at) values ($1, 'pendiente', '2026-11-01T12:00:00Z')`, re)
+	e.exec(`update orders set estado = 'pendiente' where id = $1`, re)
+	e.pedido(&hist, 600, "2026-09-25T12:00:00Z", "2026-10-15T12:00:00Z")
+	e.recibo(&hist, nil, "2026-10-01T12:00:00Z", [2]any{"efectivo", 900.0})
+
 	e.comparar("sin fijar")
 	e.fijarTodos()
 	e.comparar("fijados")
@@ -231,7 +315,7 @@ func TestElRecorteNoCambiaElReparto(t *testing.T) {
 
 	// FijarReparto sobre una cuenta con recibos fijados con y sin anticipo
 	// da lo mismo que el cálculo sin recortar.
-	ev, err := cargarEventos(ctx, e.pool, time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), "c:"+cli, todasSinRecorte, unaClaveSinRecorte)
+	ev, err := cargarDeAntes(ctx, e.pool, time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), "c:"+cli)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,6 +339,7 @@ func TestElRecorteNoCambiaElReparto(t *testing.T) {
 func TestNoQuedanMarcasEnElSQL(t *testing.T) {
 	marca := regexp.MustCompile(`\{[A-Z]\}`)
 	for n, sql := range map[string]string{"todas": eventosDeTodas, "una clave": eventosDeUnaClave,
+		"pendientes de todas": pendientesDeTodas, "pendientes de un cliente": pendientesDeUnCliente, "pendientes sin cliente": pendientesSinCliente,
 		"todas sin recorte": todasSinRecorte, "una clave sin recorte": unaClaveSinRecorte} {
 		if m := marca.FindAllString(sql, -1); m != nil {
 			t.Errorf("%s: quedan %v", n, m)
@@ -262,9 +347,10 @@ func TestNoQuedanMarcasEnElSQL(t *testing.T) {
 	}
 }
 
-// ApagarJIT apaga el JIT en la transacción, vuelve al de antes cuando se le
-// pide, y no deja nada en la conexión: el pool la reusa para otra cosa.
-func TestApagarJIT(t *testing.T) {
+// PlanDelReparto apaga el JIT y fuerza el plan a medida en la transacción,
+// vuelve a los de antes cuando se le pide, y no deja nada en la conexión: el
+// pool la reusa para otra cosa.
+func TestPlanDelReparto(t *testing.T) {
 	pool := pruebas.Base(t)
 	ctx := context.Background()
 	conn, err := pool.Acquire(ctx)
@@ -272,38 +358,60 @@ func TestApagarJIT(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Release()
-	if _, err := conn.Exec(ctx, `SET jit = on`); err != nil {
+	if _, err := conn.Exec(ctx, `SET jit = on; SET plan_cache_mode = auto`); err != nil {
 		t.Fatal(err)
 	}
-	jit := func(q interface {
+	ajustes := func(q interface {
 		QueryRow(context.Context, string, ...any) pgx.Row
 	}) string {
 		var v string
-		if err := q.QueryRow(ctx, `SELECT current_setting('jit')`).Scan(&v); err != nil {
+		if err := q.QueryRow(ctx, `SELECT current_setting('jit') || ' ' || current_setting('plan_cache_mode')`).Scan(&v); err != nil {
 			t.Fatal(err)
 		}
 		return v
 	}
 	if err := pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
-		volver, err := ApagarJIT(ctx, tx)
+		volver, err := PlanDelReparto(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if v := jit(tx); v != "off" {
-			t.Errorf("dentro de la transacción: jit = %s", v)
+		if v := ajustes(tx); v != "off force_custom_plan" {
+			t.Errorf("dentro de la transacción: %s", v)
 		}
 		if err := volver(ctx); err != nil {
 			return err
 		}
-		if v := jit(tx); v != "on" {
-			t.Errorf("después de volver: jit = %s", v)
+		if v := ajustes(tx); v != "on auto" {
+			t.Errorf("después de volver: %s", v)
 		}
-		_, err = ApagarJIT(ctx, tx)
+		_, err = PlanDelReparto(ctx, tx)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if v := jit(conn); v != "on" {
-		t.Errorf("la conexión quedó con jit = %s", v)
+	if v := ajustes(conn); v != "on auto" {
+		t.Errorf("la conexión quedó con %s", v)
+	}
+}
+
+// Dos cambios del historial en el mismo instante son de una transacción:
+// cuenta el cerrado, en el orden que sea.
+func TestAbiertoAConCambiosEnElMismoInstante(t *testing.T) {
+	a := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	b := a.Add(48 * time.Hour)
+	for _, estados := range [][]string{{"entregado", "pendiente"}, {"pendiente", "entregado"}} {
+		o := &pedidoPendiente{estado: "pendiente", cambios: []time.Time{a, a, b}, estados: append(estados, "pendiente")}
+		if o.abiertoA(a.Add(time.Hour)) {
+			t.Errorf("%v: abierto entre los cambios", estados)
+		}
+		if !o.abiertoA(a.Add(-time.Hour)) {
+			t.Errorf("%v: cerrado antes del historial", estados)
+		}
+		if !o.abiertoA(b.Add(time.Hour)) {
+			t.Errorf("%v: cerrado después de reabrirse", estados)
+		}
+	}
+	if deCentavos(123456) != 1234.56 || deCentavos(-5) != -0.05 || deCentavos(0) != 0 || deCentavos(100) != 1 {
+		t.Error("deCentavos")
 	}
 }

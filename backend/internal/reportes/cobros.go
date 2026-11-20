@@ -138,14 +138,15 @@ func (s *Servicio) repartoHasta(ctx context.Context, hasta time.Time) (cobros.Re
 }
 
 // cargarReparto lee los eventos por el pool de los reportes, en una
-// transacción de solo lectura que existe para el SET LOCAL del JIT
-// (cobros.ApagarJIT) y nada más: CargarEventos es una sola sentencia, así
-// que ya veía una sola foto de la base. Reparte afuera, con la conexión ya
-// devuelta: el pool de los reportes tiene cuatro.
+// transacción de solo lectura: apaga el JIT y fuerza el plan a medida
+// (cobros.PlanDelReparto), y es REPEATABLE READ porque CargarEventos son dos
+// consultas (los eventos y los pendientes de los recibos) que tienen que ver
+// la misma foto de la base. Reparte afuera, con la conexión ya devuelta: el
+// pool de los reportes tiene cuatro.
 func (s *Servicio) cargarReparto(ctx context.Context, hasta time.Time) (cobros.ResultadoDelReparto, error) {
 	var ev []cobros.EventoDeCuenta
-	err := pgx.BeginTxFunc(ctx, s.lectura, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		if _, err := cobros.ApagarJIT(ctx, tx); err != nil {
+	err := pgx.BeginTxFunc(ctx, s.lectura, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
+		if _, err := cobros.PlanDelReparto(ctx, tx); err != nil {
 			return err
 		}
 		if s.alCargarReparto != nil {

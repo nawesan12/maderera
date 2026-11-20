@@ -107,19 +107,19 @@ func TestLosAsientosDeDeudoresSonLosDelArchivo(t *testing.T) {
 // Las llamadas que reparten hasta el mismo instante mientras otra ya está
 // leyendo esperan esa lectura en vez de hacer la suya; otro instante hace la
 // suya. El primero que se va no se lleva a los demás: reciben el reparto.
-// Y la lectura corre sin JIT (cobros.ApagarJIT).
+// Y la lectura corre sin JIT y con el plan a medida (cobros.PlanDelReparto).
 func TestUnSoloRepartoALaVez(t *testing.T) {
 	e := armar(t)
 	var lecturas atomic.Int32
 	empezo := make(chan struct{}, 10)
 	soltar := make(chan struct{})
 	e.s.alCargarReparto = func(ctx context.Context, tx pgx.Tx) error {
-		var jit string
-		if err := tx.QueryRow(ctx, `SELECT current_setting('jit')`).Scan(&jit); err != nil {
+		var ajustes string
+		if err := tx.QueryRow(ctx, `SELECT current_setting('jit') || ' ' || current_setting('plan_cache_mode')`).Scan(&ajustes); err != nil {
 			return err
 		}
-		if jit != "off" {
-			t.Errorf("el reparto se lee con jit = %s", jit)
+		if ajustes != "off force_custom_plan" {
+			t.Errorf("el reparto se lee con %s", ajustes)
 		}
 		lecturas.Add(1)
 		empezo <- struct{}{}

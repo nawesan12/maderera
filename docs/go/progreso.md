@@ -2102,8 +2102,14 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
     sin efectivo ni cuenta corriente.
   - Las pasadas y el canto del corte tienen precio de lista (la tarifa de
     `cutting_rates`), y lo que falta se valúa a la tarifa.
-  - Un pedido con recibo vivo no se cancela. Falta la pantalla para anular un
-    recibo y devolver la plata (`anularReciboDesdeElPanel` existe sin botón).
+  - Un pedido con recibo vivo no se cancela. ~~Falta la pantalla para anular un
+    recibo y devolver la plata (`anularReciboDesdeElPanel` existe sin botón).~~
+    Hecho (20/11, carril-k): «Anular» con motivo obligatorio en cada recibo
+    vivo de la cuenta del cliente (`components/cobros/anular-recibo.tsx`, por
+    `LineaDeTiempo.accionDelRecibo`), solo para `MANEJAN_PLATA`; Go pasa de
+    «solo el admin» a `roles.ManejanPlata` (la decisión del 19/11 sobre
+    cancelar un pedido pagado). El error de Go (plata devuelta, cheque
+    endosado) se muestra pegado al recibo. E2E en `e2e/cuentas.spec.ts`.
   - El ingreso tardío con hora dentro del turno suma al esperado; el retiro
     tardío no.
   - Pendiente, con decisión de Nahuel: que el depósito rinda lo que cobra
@@ -2297,6 +2303,13 @@ otra cosa, se cambia en el lugar que se indica.
 - **M12**: «El personal · 7 días» suma los renglones a mano de cada uno
   (`aMano`; sin variante y fuera de un corte, ver la revisión abajo).
 - **M13**: la caja lee los importes con `parsearImporte` (`importeDeCaja`).
+  El mismo defecto en el resto de los campos de plata, arreglado el 20/11
+  (carril-k): pagos a proveedores, gastos, facturas de compra, notas de
+  débito y crédito, cambio fijo de la caja, cuenta del proveedor, cobro a
+  cuenta de una factura, y el mostrador (con cuánto paga, descuento y pago
+  partido). `type="text"` con `inputMode="decimal"`, leídos con
+  `importeDelCampo` y precargados con `importeParaElCampo` («15.000»,
+  «1.234,56»; `tests/importe-del-campo.test.ts`).
 - **M15**: abajo de `lg` el mostrador se apila con el total fijo al pie;
   abajo de `sm`, «Usalo en la computadora o la tablet.».
 - Bajos: horas en 24 h y medios con nombre (ventas de hoy, caja del panel);

@@ -11,6 +11,7 @@ import {
   type EstadoFactura,
 } from "../actions";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
+import { importeParaElCampo } from "@/lib/formato";
 
 const inicial: EstadoFactura = {};
 
@@ -290,7 +291,7 @@ export function FormularioCobro({
             name="monto"
             required
             inputMode="decimal"
-            defaultValue={saldo > 0 ? saldo.toFixed(2) : ""}
+            defaultValue={saldo > 0 ? importeParaElCampo(saldo) : ""}
             className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
           />
         </label>

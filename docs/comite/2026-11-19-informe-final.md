@@ -113,6 +113,7 @@ Unifica el hallazgo del dueño (topes) con el del contador (asiento).
 - **M13. La caja del mostrador lee «15.000» como $15.**
   - **Archivo:** `app/mostrador/caja.tsx:57,62,282,298,396` (`Number()` sobre `type=number`).
   - **Arreglo:** usar `type=text` con `inputMode=decimal`, leer con `parsearImporte`, y sumar un test.
+  - **Hecho** (caja, 19/11; el resto de los campos de plata del panel y del mostrador, 20/11 en carril-k: `importeDelCampo` / `importeParaElCampo`).
 - **M14. Ctrl+Enter cobra en el acto.**
   - **Archivos:** `lib/mostrador/atajos.ts:197-201` y `backend/internal/mostrador/venta.go:233-234`.
   - **Qué pasa:** sin conexión, sobre una placa, la vende entera y la cobra en efectivo. Sobre un producto en $0, responde «El descuento no puede llevarse toda la venta» aunque nadie puso un descuento.

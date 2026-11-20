@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { tarifaDeCorte, type TarifaDeCorte } from "@/lib/cortes/tarifa";
 import type { PromoVigente } from "@/lib/dal/contenido";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeDelCampo } from "@/lib/formato";
 import { borradorVale, duenoDelBorrador, type DuenoDelBorrador } from "@/lib/mostrador/borrador-del-corte";
 import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 import {
@@ -303,7 +303,7 @@ export function VistaMostrador({
 
   const subtotal = useMemo(() => totalDeLaVenta(lineas), [lineas]);
   const descuentoManual = useMemo(
-    () => montoDelDescuento(subtotal, tipoDesc, Number(valorDesc)),
+    () => montoDelDescuento(subtotal, tipoDesc, importeDelCampo(valorDesc)),
     [subtotal, tipoDesc, valorDesc],
   );
   /*
@@ -314,7 +314,7 @@ export function VistaMostrador({
    */
   const escalaDePago = useMemo(() => {
     const unSoloMedio =
-      !partes || partes.every((p) => !(Number(p.importe) > 0) || p.medio === medio);
+      !partes || partes.every((p) => !(importeDelCampo(p.importe) > 0) || p.medio === medio);
     return unSoloMedio ? descuentoPorMedioDePago(escalasDePago, medio, subtotal) : null;
   }, [escalasDePago, partes, medio, subtotal]);
   const descuento =
@@ -337,13 +337,13 @@ export function VistaMostrador({
     () => aAutorizar(desvioDeLaVenta(lineas, descuentoManual), descuentoLibrePct),
     [lineas, descuentoManual, descuentoLibrePct],
   );
-  // Sin nada tipeado no hay vuelto que mostrar: `Number("")` es 0, y un vuelto
+  // Sin nada tipeado no hay vuelto que mostrar: vacío es 0, y un vuelto
   // de $0 en pantalla antes de que el cliente saque la plata se lee como si ya
   // hubiera pagado justo.
   const cambio = useMemo(
     () =>
       medio === "efectivo" && recibido.trim() !== ""
-        ? vuelto(total, Number(recibido))
+        ? vuelto(total, importeDelCampo(recibido))
         : null,
     [medio, total, recibido],
   );
@@ -351,7 +351,7 @@ export function VistaMostrador({
   // Cuánto falta repartir cuando el pago está partido. Cero es "listo".
   const restanteDePartes = useMemo(() => {
     if (!partes) return 0;
-    const suma = partes.reduce((s, p) => s + (Number(p.importe) || 0), 0);
+    const suma = partes.reduce((s, p) => s + importeDelCampo(p.importe), 0);
     return Math.round((total - suma) * 100) / 100;
   }, [partes, total]);
 
@@ -362,7 +362,7 @@ export function VistaMostrador({
    * parte en efectivo llegaba hasta el servidor para enterarse.
    */
   const conEfectivo = partes
-    ? partes.some((p) => p.medio === "efectivo" && Number(p.importe) > 0)
+    ? partes.some((p) => p.medio === "efectivo" && importeDelCampo(p.importe) > 0)
     : medio === "efectivo";
   const faltaCaja = conEfectivo && !hayTurno;
 
@@ -402,10 +402,10 @@ export function VistaMostrador({
   function pagosDeLaVenta() {
     if (partes) {
       return partes
-        .filter((p) => (Number(p.importe) || 0) > 0)
+        .filter((p) => importeDelCampo(p.importe) > 0)
         .map((p) => ({
           medio: p.medio,
-          importe: Number(p.importe),
+          importe: importeDelCampo(p.importe),
           nroLote: p.nroLote.trim() || null,
           nroCupon: p.nroCupon.trim() || null,
           tarjeta: p.tarjeta.trim() || null,

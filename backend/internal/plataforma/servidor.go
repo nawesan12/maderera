@@ -163,6 +163,14 @@ func cabeceras(h http.Handler) http.Handler {
 // viene de la red de Docker y la IP de verdad está en X-Forwarded-For; esa
 // cabecera solo se cree cuando el pedido llega desde una red privada (Caddy),
 // porque de cualquier otro lado la puede escribir quien quiera.
+//
+// **Con Cloudflare adelante**, lo que Caddy ve es un servidor de Cloudflare.
+// Caddy ya resuelve la IP del visitante con CF-Connecting-IP
+// (`trusted_proxies` y `client_ip_headers` en el Caddyfile) y la escribe
+// como único X-Forwarded-For; si igual llega al final una IP de Cloudflare
+// (un Caddy sin esa configuración), se toma CF-Connecting-IP. Solo en ese
+// caso: el último salto lo anotó Caddy, así que el pedido de verdad pasó por
+// Cloudflare, que pisa esa cabecera. Sin eso la podría escribir cualquiera.
 func IPDelCliente(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -176,9 +184,54 @@ func IPDelCliente(r *http.Request) string {
 		// Caddy agrega al final la IP que vio: es la única confiable de la
 		// lista.
 		partes := strings.Split(xff, ",")
-		return strings.TrimSpace(partes[len(partes)-1])
+		ultima := strings.TrimSpace(partes[len(partes)-1])
+		if ip, err := netip.ParseAddr(ultima); err == nil && EsDeCloudflare(ip) {
+			if cf, err := netip.ParseAddr(strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))); err == nil {
+				return cf.String()
+			}
+		}
+		return ultima
 	}
 	return host
+}
+
+// rangosDeCloudflare son los publicados en https://www.cloudflare.com/ips/
+// (20/11/2026). Los mismos van en el Caddyfile (`trusted_proxies`): si
+// Cloudflare suma uno, se cambian los dos.
+var rangosDeCloudflare = func() []netip.Prefix {
+	var out []netip.Prefix
+	for _, r := range []string{
+		"173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+		"141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+		"197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+		"104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+		"2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
+		"2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+	} {
+		out = append(out, netip.MustParsePrefix(r))
+	}
+	return out
+}()
+
+// RangosDeCloudflare son los rangos de arriba, como texto (para comparar con
+// el Caddyfile).
+func RangosDeCloudflare() []string {
+	out := make([]string, len(rangosDeCloudflare))
+	for i, p := range rangosDeCloudflare {
+		out[i] = p.String()
+	}
+	return out
+}
+
+// EsDeCloudflare dice si la IP es de un servidor de Cloudflare.
+func EsDeCloudflare(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	for _, p := range rangosDeCloudflare {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // ConMasTiempoParaLeer le da a una ruta de subida más tiempo para leer el

@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // ErrNoEsta es un recibo o una ficha que no existe.
@@ -41,9 +43,9 @@ const EstadosVivos = `('informado', 'cartera', 'depositado', 'entregado')`
 // columnasDeCheque: el proveedor es el del último pago que lo nombra y no
 // se anuló (un cheque de un pago anulado vuelve a la cartera y puede salir
 // en otro: un JOIN directo lo repetía una vez por pago).
-const columnasDeCheque = `
+var columnasDeCheque = `
 		SELECT ch.id, ch.sentido::text, ch.tipo::text, ch.numero, ch.banco, ch.librador, ch.fecha_pago, ch.importe::float8,
-		  ch.estado::text, cu.nombre, ch.customer_id, ch.circuito::text, pr.nombre, pr.id, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo
+		  ch.estado::text, cu.nombre, ch.customer_id, ` + fragmentos.CircuitoDelCheque("ch") + `, pr.nombre, pr.id, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo
 		FROM cheques ch
 		LEFT JOIN customers cu ON cu.id = ch.customer_id
 		LEFT JOIN LATERAL (
@@ -109,12 +111,15 @@ type ChequeEnCartera struct {
 	Importe   float64   `json:"importe"`
 	Tipo      string    `json:"tipo"`
 	Cliente   *string   `json:"cliente"`
+	// Circuito es en el que está el valor (fragmentos.CircuitoDelCheque):
+	// la pantalla de pagos solo ofrece endosar los del circuito del pago.
+	Circuito string `json:"circuito"`
 }
 
 // EnCartera es chequesEnCartera.
 func EnCartera(ctx context.Context, pool *pgxpool.Pool) ([]ChequeEnCartera, error) {
 	filas, err := pool.Query(ctx, `
-		SELECT ch.id, ch.numero, ch.banco, ch.fecha_pago, ch.importe::float8, ch.tipo::text, cu.nombre
+		SELECT ch.id, ch.numero, ch.banco, ch.fecha_pago, ch.importe::float8, ch.tipo::text, cu.nombre, `+fragmentos.CircuitoDelCheque("ch")+`
 		FROM cheques ch LEFT JOIN customers cu ON cu.id = ch.customer_id
 		WHERE ch.estado = 'cartera' AND ch.sentido = 'recibido'
 		ORDER BY ch.fecha_pago`)
@@ -123,7 +128,7 @@ func EnCartera(ctx context.Context, pool *pgxpool.Pool) ([]ChequeEnCartera, erro
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ChequeEnCartera, error) {
 		var c ChequeEnCartera
-		return c, r.Scan(&c.ID, &c.Numero, &c.Banco, &c.FechaPago, &c.Importe, &c.Tipo, &c.Cliente)
+		return c, r.Scan(&c.ID, &c.Numero, &c.Banco, &c.FechaPago, &c.Importe, &c.Tipo, &c.Cliente, &c.Circuito)
 	})
 }
 

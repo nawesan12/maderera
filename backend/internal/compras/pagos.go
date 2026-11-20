@@ -19,6 +19,7 @@ import (
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // SeriePagosAProveedores es la clave del candado de los pagos a proveedores.
@@ -650,7 +651,7 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 	if parte.ChequeID != nil && *parte.ChequeID != "" {
 		var importe jsmath.Num
 		var tipo, delCheque string
-		err := tx.QueryRow(ctx, `SELECT importe, tipo::text, circuito::text FROM cheques WHERE id = $1 AND estado = 'cartera' FOR UPDATE`,
+		err := tx.QueryRow(ctx, `SELECT ch.importe, ch.tipo::text, `+fragmentos.CircuitoDelCheque("ch")+` FROM cheques ch WHERE ch.id = $1 AND ch.estado = 'cartera' FOR UPDATE OF ch`,
 			*parte.ChequeID).Scan(&importe, &tipo, &delCheque)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fallo("Uno de los cheques elegidos ya no está en cartera.")

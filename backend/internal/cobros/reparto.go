@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // El reparto de los cobros entre los dos circuitos, para el CSV del estudio.
@@ -400,7 +401,7 @@ FROM (
 // (eventosDeUnaClave). Con el filtro sobre la clave calculada no servía
 // ningún índice, y cada recibo recorría la historia entera de cobros con el
 // candado de recibos tomado.
-const eventosSQL = `
+var eventosSQL = `
 SELECT * FROM (
   SELECT ` + claveDeFactura + ` AS clave, i.fecha_emision AS fecha, 0 AS tipo, i.id::text AS id,
     (CASE WHEN i.tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * i.total)::float8 AS monto, 0::float8 AS retencion,
@@ -463,7 +464,7 @@ SELECT * FROM (
   FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
   CROSS JOIN LATERAL (SELECT am.customer_id FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito'
                       ORDER BY am.created_at LIMIT 1) m
-  WHERE c.sentido = 'recibido' AND c.circuito <> 'negro' AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado', 'entregado')
+  WHERE c.sentido = 'recibido' AND ` + fragmentos.CircuitoDelCheque("c") + ` <> 'negro' AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado', 'entregado')
     AND e.at <= $1 AND {M}
   UNION ALL
   SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text, r.total::float8,

@@ -232,7 +232,7 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 // AsientoDeCheque decide cuáles mueven cuentas.
 func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
 	rs, err := s.pool.Query(ctx, `
-		SELECT e.at, c.numero, coalesce(c.banco, ''), c.sentido::text, e.desde::text, e.hacia::text, c.importe::float8, c.circuito::text,
+		SELECT e.at, c.numero, coalesce(c.banco, ''), c.sentido::text, e.desde::text, e.hacia::text, c.importe::float8, `+fragmentos.CircuitoDelCheque("c")+`,
 		  c.fecha_pago, (SELECT p.fecha FROM supplier_payment_parts x JOIN supplier_payments p ON p.id = x.payment_id
 		    WHERE x.cheque_id = c.id ORDER BY p.fecha LIMIT 1),
 		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito')

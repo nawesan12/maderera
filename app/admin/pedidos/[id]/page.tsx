@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import { MapPin, Printer, MessageCircle, Phone, Scissors, Store, Truck } from "lucide-react";
@@ -452,6 +453,9 @@ export default async function FichaPedidoPage({
               </Link>
             ) : (
               <p className="text-base font-medium">{pedido.cliente}</p>
+            )}
+            {pedido.fichaPorCorreo && verCliente && (
+              <UnirAFicha que="pedido" id={pedido.id} ficha={pedido.fichaPorCorreo} />
             )}
             {pedido.telefono && (
               <div className="mt-2 flex flex-wrap items-center gap-2">

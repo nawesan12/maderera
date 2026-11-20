@@ -220,6 +220,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"CortesDelPedido":                "/admin/cortes",                 // GET /api/v1/admin/pedidos/{id}/cortes
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos
 	"FichaDePedido":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}
+	"UnirPedidoAFicha":               "/admin/clientes",               // POST /api/v1/admin/pedidos/{id}/ficha
+	"UnirPresupuestoAFicha":          "/admin/clientes",               // POST /api/v1/admin/presupuestos/{id}/ficha
 	"PedidoParaElTaller":             "personal",                      // GET /api/v1/admin/pedidos/{id}/taller
 	"ListarPedidos":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos
 	"ChequesTerminados":              "/admin/cheques",                // GET /api/v1/admin/cheques/terminados

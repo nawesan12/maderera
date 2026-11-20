@@ -1824,11 +1824,12 @@ rol). Lo que se arregló, cada cosa con su prueba:
 
 Decisiones pendientes (no se hicieron):
 
-- [ ] **Vincular por correo una compra anónima a la ficha de un cliente
+- [x] **Vincular por correo una compra anónima a la ficha de un cliente
       existente** (`internal/checkout/compra.go`, `clientePorCorreo`): hoy
       quien compra sin cuenta con el correo de otro cliente queda asociado a
       su ficha (y a su historial). Decidir si se vincula solo con sesión, o
       se crea ficha aparte y se avisa.
+      Hecho (default prudente): la compra y el presupuesto se atan a la ficha del correo solo con la sesión de ese correo (y si la ficha no es de otra cuenta web). Sin sesión quedan sin cliente; la ficha del pedido y la del presupuesto muestran la ficha con ese correo (`fichaPorCorreo`) y quien entra a Clientes los une a mano (`POST /api/v1/admin/pedidos/{id}/ficha` y `.../presupuestos/{id}/ficha`, solo a la ficha con ese correo, con bitácora). Un pedido con recibos o comprobantes ya emitidos sin cliente no se une desde ahí. `TestElCorreoDeOtroNoAtaLaCompraASuFicha`, `TestUnirALaFichaDelCorreo`.
 - [ ] **`trusted_proxies` de Cloudflare en Caddy**: cuando se ponga
       Cloudflare, `IPDelCliente` va a ver la IP de Cloudflare en todos los
       pedidos (límites por IP compartidos por todo el mundo). Se configura

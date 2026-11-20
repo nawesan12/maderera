@@ -79,6 +79,26 @@ export async function cambiarEstadoPresupuesto(id: string, estado: string): Prom
   return { ok: r.data.ok };
 }
 
+/**
+ * Ata un pedido o presupuesto sin cliente a la ficha con el correo de su
+ * contacto. La tienda ya no lo hace sola sin la sesión de ese correo.
+ */
+export async function unirAFicha(
+  que: "pedido" | "presupuesto",
+  id: string,
+  customerId: string,
+): Promise<EstadoVenta> {
+  const a = await api();
+  const r =
+    que === "pedido"
+      ? await a.POST("/api/v1/admin/pedidos/{id}/ficha", { params: { path: { id } }, body: { customerId } })
+      : await a.POST("/api/v1/admin/presupuestos/{id}/ficha", { params: { path: { id } }, body: { customerId } });
+  if (!r.data) return fallo(r);
+  refrescar();
+  revalidatePath(`/admin/${que === "pedido" ? "pedidos" : "presupuestos"}/${id}`);
+  return { ok: r.data.ok };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Presupuesto a pedido                                                        */
 /* -------------------------------------------------------------------------- */

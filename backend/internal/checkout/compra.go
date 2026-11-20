@@ -6,10 +6,12 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/auth"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/cortes"
@@ -37,10 +39,20 @@ func espera(v limites.Veredicto) error {
 	return plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
 }
 
-// clientePorCorreo es la ficha con ese correo, si hay.
-func (s *Servicio) clientePorCorreo(ctx context.Context, email string) (*string, error) {
+// clientePorCorreo es la ficha con ese correo, **solo si el correo es el de
+// la sesión** (auditoría del 30/10, default prudente): sin sesión, o con un
+// correo que no es el de quien entró, el pedido o el presupuesto queda sin
+// cliente aunque haya una ficha con ese correo. Si no, cualquiera que supiera
+// el correo de un cliente le metía pedidos en su historial (y en su portal).
+// El panel los muestra para unirlos a mano (pedidos.UnirAFicha). Una ficha
+// que ya es de otra cuenta web tampoco se toma.
+func (s *Servicio) clientePorCorreo(ctx context.Context, ses *auth.Sesion, email string) (*string, error) {
+	if ses == nil || ses.Correo == "" || !strings.EqualFold(strings.TrimSpace(ses.Correo), strings.TrimSpace(email)) {
+		return nil, nil
+	}
 	var id string
-	err := s.pool.QueryRow(ctx, `SELECT id FROM customers WHERE email = $1 LIMIT 1`, email).Scan(&id)
+	err := s.pool.QueryRow(ctx, `SELECT id FROM customers WHERE email = $1 AND (user_id IS NULL OR user_id = $2) LIMIT 1`,
+		email, ses.UserID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -84,7 +96,7 @@ func (s *Servicio) PedirPresupuesto(ctx context.Context, q Quien, ip string, m m
 	}
 	cliente := prof.CustomerID
 	if cliente == nil {
-		if cliente, err = s.clientePorCorreo(ctx, d.Email); err != nil {
+		if cliente, err = s.clientePorCorreo(ctx, q.Ses, d.Email); err != nil {
 			return nil, err
 		}
 	}
@@ -238,7 +250,7 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 		}
 	}
 	if cliente == nil {
-		if cliente, err = s.clientePorCorreo(ctx, d.Email); err != nil {
+		if cliente, err = s.clientePorCorreo(ctx, q.Ses, d.Email); err != nil {
 			return nil, err
 		}
 	}

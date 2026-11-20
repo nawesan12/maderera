@@ -238,6 +238,8 @@ type FichaDePresupuesto struct {
 	// que elegir entre los precios de hoy (TotalDeHoy) y los suyos.
 	Vencido    bool    `json:"vencido"`
 	TotalDeHoy *string `json:"totalDeHoy"`
+	// FichaPorCorreo: como en FichaDePedido.
+	FichaPorCorreo *FichaParaUnir `json:"fichaPorCorreo"`
 }
 
 // Presupuesto es la ficha, o nil si no existe.
@@ -287,6 +289,14 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 		return nil, err
 	}
 	filas.Close()
+	if p.CustomerID == nil {
+		if p.FichaPorCorreo, err = s.fichaConElCorreo(ctx, p.Email); err != nil {
+			return nil, err
+		}
+		if p.FichaPorCorreo != nil {
+			p.FichaPorCorreo.Unible = true
+		}
+	}
 	p.Vencido = p.PedidoID == nil && PresupuestoVencido(p.Estado, p.ValidoHasta, s.ahora())
 	if p.Vencido {
 		total, err := s.totalDeHoy(ctx, id, p.CustomerID, jsmath.Numero(p.Total)-jsmath.Numero(p.Subtotal))
@@ -555,6 +565,9 @@ type FichaDePedido struct {
 	EntregarEl *string `json:"entregarEl"`
 	// SinCobrar: como en PedidoListado.
 	SinCobrar *float64 `json:"sinCobrar"`
+	// FichaPorCorreo: sin cliente, la ficha con el correo del contacto, para
+	// unirlo a mano (unir.go).
+	FichaPorCorreo *FichaParaUnir `json:"fichaPorCorreo"`
 }
 
 // Pedido es la ficha, o nil si no existe. Con `conMargen`, el margen de la
@@ -582,6 +595,18 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	}
 	if err != nil {
 		return nil, err
+	}
+	if p.CustomerID == nil {
+		if p.FichaPorCorreo, err = s.fichaConElCorreo(ctx, p.Email); err != nil {
+			return nil, err
+		}
+		if p.FichaPorCorreo != nil {
+			hay, err := pedidoConPapeles(ctx, s.pool, id)
+			if err != nil {
+				return nil, err
+			}
+			p.FichaPorCorreo.Unible = !hay
+		}
 	}
 
 	filas, err := s.pool.Query(ctx, `

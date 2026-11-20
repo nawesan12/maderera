@@ -2522,24 +2522,32 @@ fija con `mjbj repartos`, que tardó 17,6 s para 41.000 recibos.
 
 Qué cambió (`cobros/reparto.go`, `reportes/cobros.go`, `reportes/cierre.go`):
 
-- **`ApagarJIT`.** Hace `SET LOCAL jit = off` en el reparto del cierre, en
-  `FijarReparto` y en `FijarRepartosDeAntes`, y después vuelve al valor de
-  antes. El pool no cambia.
+- **`PlanDelReparto`** (antes `ApagarJIT`). Apaga el JIT y fuerza el plan
+  a medida (`plan_cache_mode`), con alcance de transacción, en el reparto
+  del cierre, en `FijarReparto` y en `FijarRepartosDeAntes`, y después
+  vuelve a los valores de antes. Lee y cambia los dos en una sola ida a la
+  base. El pool no cambia.
 - **El recorte `{F}`/`{G}` en `eventosSQL`**, en las dos variantes. La
   condición copia la de `Guardado` en `CargarEventos`: las tres columnas no
   nulas. Si mirara solo `reparto_deudores`, un recibo cargado a medias se
   recalcularía sin sus pendientes.
 - **`repartoHasta`** lee por el pool de lectura, en una transacción de solo
-  lectura que existe solo para el `SET LOCAL`.
-- **`singleflight`** en `repartoHasta` y en `AsientosDelPeriodo`. Corre con
-  un contexto propio de 2 minutos: si el primero se va, los demás no
-  reciben su cancelación. No guarda nada: el que llega cuando el cálculo
-  terminó reparte de nuevo.
+  lectura y REPEATABLE READ: los eventos y los pendientes son dos consultas
+  que tienen que ver la misma foto.
+- **`compartido`** en `repartoHasta` y en `AsientosDelPeriodo`: las llamadas
+  iguales que llegan a la vez hacen un solo cálculo. Corre con un contexto
+  propio de 2 minutos: si el primero se va, los demás no reciben su
+  cancelación; si se va el último, el cálculo se cancela y suelta su
+  conexión. No guarda nada: el que llega cuando el cálculo terminó reparte
+  de nuevo.
 - **«Deudores-mayor»** reusa el reparto de los pendientes y suma
   `asientosDeDeudores` (ventas, cobros y cheques, en el mismo orden). En el
   volumen, ningún otro asiento toca 1.1.03.
-- **Un recibo emitido mientras se arma el cierre** da error para reintentar.
-  Antes faltaba en el CSV.
+- **Lo emitido o anulado después de la foto del reparto** queda para la
+  próxima lectura, igual que en el reparto: el recibo que el reparto no ve
+  no se asienta, y la anulación que no ve tampoco
+  (`ResultadoDelReparto.Anulados`). Antes el recibo era un error para
+  reintentar, y la anulación se asentaba sin su «Desaplica anticipo».
 
 Las pruebas que dicen que no cambió un centavo:
 
@@ -2557,19 +2565,87 @@ Las pruebas que dicen que no cambió un centavo:
 
 Lo que queda:
 
-- **Anticipos.** En la siembra, el 8,9 % de los recibos fijados tiene
-  anticipo, y esos siguen leyendo sus pendientes. Si en producción pasan del
-  20 %, el próximo paso es guardar los destinos en el recibo al emitirlo.
-  Eso lleva migración.
+- ~~**Anticipos.**~~ Resuelto en «Las cuentas pesadas» (abajo): los
+  pendientes ya no se calculan recibo por recibo, y la proporción de
+  anticipos pesa poco.
 - **Caché por mes cerrado.** No se hace: el CAE tardío, el reintegro y el
   `acreditado_at` cargan hechos con fecha en el pasado. Después del recorte,
   el costo crece con la historia: unos 1,2 s a 5 años y 2,5 s a 10. Si la
   vista vuelve a pasar los 3 s, conviene un corte por período con el estado
-  arrastrado, invalidado por el LISTEN que ya existe.
+  arrastrado, invalidado por el LISTEN que ya existe. Con las cuentas
+  pesadas de abajo la vista da 2,5 s: es el límite, y si en la VPS pasa de
+  3 s lo que sigue es el saldo de apertura de 1.1.03 por mes cerrado.
 - **Producción** usa los valores por defecto de la imagen (`shared_buffers`
   128 MB, `work_mem` 4 MB). Si la imagen no trae llvmjit, ahí no había JIT
   que sacar y lo que pesa es leer de disco. Por eso la medición en la VPS
   está en los pendientes.
+
+### Las cuentas pesadas
+
+La revisión del reparto encontró que la siembra no tenía cuentas grandes:
+los clientes se repartían parejo y el más grande tenía 8 recibos. Una
+maderera tiene pocas cuentas grandes (constructoras, carpinteros) con miles
+de pedidos, y los pendientes de cada recibo recorrían todos los pedidos y
+las facturas del cliente. `reportes/testdata/volumen_pesadas.sql` suma, en
+un archivo aparte para no mover la foto, 3 cuentas con 5.000 pedidos y
+2.000 recibos cada una, con una seña de cada cinco recibos
+(`mjbj_volumen_j_pesadas`, armada desde `mjbj_volumen_j`).
+
+Medido así, el LATERAL de los pendientes costaba 65 ms por recibo:
+
+- con la base sin fijar, `FijarReparto` de esa cuenta no terminó en 10
+  minutos (2.000 recibos × 65 ms, con el candado de recibos tomado);
+- con la base fijada, cada seña con anticipo sumaba sus 65 ms: con 125
+  señas, 1,9 s por emisión, y con el 20 % de señas que pedía la revisión
+  hubieran sido unos 26 s.
+
+**Los pendientes ahora se calculan en Go** (`cobros/pendientes.go`).
+`pendientesSQL` lee una vez cada pedido y cada factura de los clientes que
+hacen falta, con lo que no depende del recibo (cuándo llegó el CAE, cuándo
+se facturó el pedido, su historial), y Go cruza cada recibo con los de su
+cliente. Va en el mismo viaje a la base que los eventos. La regla es la
+misma, condición por condición, con una sola diferencia: dos cambios del
+historial en el mismo instante cuentan como cerrados, y el LATERAL elegía
+cualquiera de los dos.
+
+| Con las cuentas pesadas | Antes | Después |
+|---|---|---|
+| `FijarReparto` de la cuenta pesada, sin fijar | más de 10 min | 0,45–0,77 s |
+| `FijarReparto` de la cuenta pesada, fijada | 1,9 s (125 señas) | 0,25–0,42 s |
+| Todas las cuentas, fijada | 7,0 s | 1,0 s |
+| Vista del cierre, fijada: pendientes | — | 2,5 s |
+| Vista del cierre, sin fijar: pendientes | — | 5,0 s |
+| `mjbj repartos` (47.000 recibos) | — | 10,4 s |
+
+**El límite de `FijarReparto` es 0,5 s** en la cuenta más pesada con la
+base fijada (`limiteDeFijarReparto` en `cobros/volumen_test.go`). Hoy la
+mitad es leer los 5.000 pedidos y las 4.000 facturas de la cuenta; si se
+pasa, lo que sigue es leer solo los que pueden estar abiertos a la fecha de
+alguna seña. Una cuenta chica paga unos milisegundos más que antes por la
+segunda consulta (29 ms contra 26 ms).
+
+**El plan genérico.** `FijarReparto` corre por el pool principal, donde pgx
+deja la sentencia preparada y Postgres puede pasar al plan genérico desde la
+sexta ejecución. Medido con diez emisiones seguidas en la misma conexión, el
+genérico forzado da lo mismo que el a medida (0,20–0,24 s contra
+0,21–0,29 s). Igual `PlanDelReparto` fuerza el plan a medida, porque los
+filtros de una clave tienen la mitad de los parámetros nulos según la clave.
+
+Las pruebas:
+
+- `cobros/reparto_recorte_test.go` compara `CargarEventos` contra el SQL de
+  antes, con el LATERAL y sin recortar, y suma un pedido sin cliente con la
+  factura esperando el CAE y un pedido reabierto. Falla si se saca el
+  historial, la primera factura del pedido o las facturas del pedido de un
+  recibo sin cliente.
+- `cobros/volumen_test.go`: `TestVolumenLosPendientesDanLoMismo` da el mismo
+  `ResultadoDelReparto` que el SQL de producción de antes, de todas las
+  cuentas y de la más pesada, en `mjbj_volumen_j_fijo` y en
+  `mjbj_volumen_j_pesadas`; `TestVolumenDeLaCuentaPesada` mide la emisión.
+- La foto de 13 archivos sigue dando igual en `mjbj_volumen_j` y en
+  `mjbj_volumen_j_fijo`.
+- `reportes/cierre_reparto_test.go`: el último que se va cancela el
+  reparto, y lo emitido o anulado después de la foto queda para la próxima.
 
 ### Pendiente
 
@@ -2581,7 +2657,8 @@ Lo que queda:
   el volumen de ISIS» (abajo):
   `SELECT pg_jit_available(), current_setting('jit'), current_setting('jit_above_cost')`
   y `EXPLAIN (ANALYZE, BUFFERS)` de la consulta de todas las cuentas con y
-  sin `jit = off`; y `count(*) FILTER (WHERE reparto_anticipo > 0.005)`
-  sobre `receipts`.
+  sin `jit = off`. La proporción de recibos con anticipo ya no decide nada
+  (ver «Las cuentas pesadas»). Con los datos de ISIS cargados, correr
+  `TestVolumenDeLaCuentaPesada` contra una copia: el límite es 0,5 s.
 - «Sucursales como lista» (hallazgo 35) y Sucursales en la barra de arriba:
   los confirma la clienta.

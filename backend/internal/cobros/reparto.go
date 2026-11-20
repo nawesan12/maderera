@@ -437,7 +437,7 @@ SELECT * FROM (
   ) y CROSS JOIN LATERAL (
     SELECT y.clave, y.fecha, y.id, y.monto
     UNION ALL
-    SELECT y.clave, greatest(t.created_at, coalesce(y.factura, '-infinity')), y.id || ':tramo:' || t.id::text, -t.importe::float8
+    SELECT y.clave, greatest(` + FechaDelTramo("t") + `, coalesce(y.factura, '-infinity')), y.id || ':tramo:' || t.id::text, -t.importe::float8
     FROM payment_refunds t WHERE t.payment_id = y.id::uuid
     UNION ALL
     SELECT y.clave, greatest(y.updated_at, coalesce(y.factura, '-infinity')), y.id || ':reintegro',
@@ -459,14 +459,16 @@ SELECT * FROM (
   -- el cheque es del blanco (AsientoDeCheque), así que acá también. Sin esto
   -- el listado de deudores, que sale de este reparto, dejaba afuera al
   -- cliente que debe un cheque rechazado, y el control contra el mayor de
-  -- 1.1.03 quedaba encendido para siempre.
-  SELECT 'c:' || m.customer_id::text, e.at, 1, 'cheque:' || c.id::text, (-c.importe)::float8, 0, 0, false, NULL, NULL, NULL,
+  -- 1.1.03 quedaba encendido para siempre. Con la fecha del cierre
+  -- (fragmentos.FechaDelCheque): el del mostrador rechazado antes de la
+  -- factura cae con ella, igual que su cobro.
+  SELECT 'c:' || m.customer_id::text, ` + fragmentos.FechaDelCheque("c", "e.at") + `, 1, 'cheque:' || c.id::text, (-c.importe)::float8, 0, 0, false, NULL, NULL, NULL,
     '', 0, 0, '', '{}', 0, ''
   FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
   CROSS JOIN LATERAL (SELECT am.customer_id FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito'
                       ORDER BY am.created_at LIMIT 1) m
   WHERE c.sentido = 'recibido' AND ` + fragmentos.CircuitoDelCheque("c") + ` <> 'negro' AND e.hacia = 'rechazado' AND e.desde IN ('cartera', 'depositado', 'entregado')
-    AND e.at <= $1 AND {M}
+    AND ` + fragmentos.FechaDelCheque("c", "e.at") + ` <= $1 AND {M}
   UNION ALL
   SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text, r.total::float8,
     coalesce((SELECT sum(importe) FROM receipt_parts WHERE receipt_id = r.id AND medio = 'retencion'), 0)::float8,
@@ -482,6 +484,19 @@ SELECT * FROM (
     '{}', 0, ''
   FROM receipts r WHERE r.anulado_at IS NOT NULL AND r.anulado_at <= $1 AND {R}
 ) e`
+
+// FechaDelTramo es, sobre la fila `t` de payment_refunds, la fecha con la
+// que se asienta el tramo (antes de correrlo a la de la factura): la de la
+// nota de crédito de la devolución de la que sale, si es posterior. La nota
+// que ARCA autoriza al día siguiente sale con la fecha de ese día (y el
+// crédito a Deudores, en ese mes): con la del tramo, una devolución por
+// afuera del 31 a la noche debitaba Deudores en un mes y la nota lo
+// acreditaba en el otro, y el cierre del primero quedaba descuadrado por lo
+// devuelto. El aviso de Mercado Pago no tiene devolución: va con la suya.
+func FechaDelTramo(t string) string {
+	return strings.ReplaceAll(`greatest(t.created_at, coalesce((SELECT dn.fecha_emision FROM devoluciones dd JOIN invoices dn ON dn.id = dd.nota_id
+	  WHERE dd.id = t.devolucion_id), t.created_at))`, "t.", t+".")
+}
 
 // eventosDeTodas y eventosDeUnaClave son eventosSQL sin filtro y con el de
 // una clave: $2 la clave, $3 el cliente, $4 la factura, $5 el recibo y $6 el

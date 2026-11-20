@@ -321,7 +321,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		                p.conciliado_at, p.created_at),
 		       f.fecha_emision, f.tipo, f.punto_venta, f.numero, o.numero,
 		       coalesce(f.receptor_nombre, nullif(c.razon_social, ''), c.nombre, o.contacto_nombre, ''),
-		       coalesce((SELECT json_agg(json_build_object('fecha', x.created_at, 'importe', x.importe::float8,
+		       coalesce((SELECT json_agg(json_build_object('fecha', `+cobros.FechaDelTramo("x")+`, 'importe', x.importe::float8,
 		                                           'devolucion', x.devolucion_id IS NOT NULL) ORDER BY x.created_at)
 		                 FROM payment_refunds x WHERE x.payment_id = p.id), '[]'::json)
 		FROM payments p

@@ -237,9 +237,12 @@ func (a *arca) largo(ctx context.Context, c *comprobanteArca) (string, error) {
 	case c.numero <= ultimo:
 		return a.recuperar(ctx, c)
 	case c.numero > ultimo+1:
-		if c.numero-ultimo-1 > maxAnteriores {
-			return "", errEmision("ARCA tiene autorizado hasta el " + fiscal.NumeroFormateado(c.puntoVenta, ultimo) + " y faltan " +
-				strconv.FormatInt(c.numero-ultimo-1, 10) + " comprobantes antes de este: revisá el número inicial del punto de venta en ARCA › Puntos de venta.")
+		if faltan := c.numero - ultimo - 1; faltan > maxAnteriores {
+			// La serie se autoriza de a maxAnteriores: desde el que tiene
+			// justo esa cantidad atrás, y después el siguiente tramo.
+			return "", errEmision("Faltan " + strconv.FormatInt(faltan, 10) + " comprobantes sin CAE antes de este y se autorizan de a " +
+				strconv.Itoa(maxAnteriores) + ": autorizá la serie desde el " +
+				fiscal.NumeroFormateado(c.puntoVenta, ultimo+1+maxAnteriores) + " en Facturación.")
 		}
 		for n := ultimo + 1; n < c.numero; n++ {
 			if err := a.anterior(ctx, c, n); err != nil {

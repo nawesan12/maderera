@@ -2467,6 +2467,10 @@ quedan confirmados:
 - CSV de Deudores sin el circuito B.
 - El centavo de las notas de crédito parciales.
 - Cómo se autoriza la serie trabada de más de 50 comprobantes sin CAE.
+  Default aplicado (20/11, carril-k): de a 50 desde Facturación. El error
+  dice cuántos faltan y desde qué número, y la ficha de un comprobante con
+  más de 50 atrás muestra «Autorizar la serie desde el …» en lugar del botón
+  (`SerieDelComprobante.tramo`; `TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie`).
 - Anular una venta con cheque devuelto en parte por afuera (hoy, prohibido;
   ver abajo, «Los pendientes del 19/11»).
 - Facturar una venta del mostrador cuyo cheque ya se endosó en un pago B

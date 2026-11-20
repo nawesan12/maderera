@@ -225,7 +225,22 @@ export default async function FichaComprobantePage({
               </details>
             </div>
           ))}
-          {!anulada && (
+          {!anulada && serie?.tramo && (
+            // Con más de 50 sin CAE atrás, ARCA no se pide desde acá: la serie
+            // se autoriza de a 50, desde el que tiene justo 50 atrás.
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Link
+                href={`/admin/facturacion/${serie.tramo.invoiceId}`}
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
+              >
+                Autorizar la serie desde el {numeroFormateado(comprobante.puntoVenta, serie.tramo.numero)}
+              </Link>
+              <span className="text-sm text-muted-foreground">
+                {plural(serie.anterioresSinCae, "anterior", "anteriores")} sin CAE
+              </span>
+            </div>
+          )}
+          {!anulada && !serie?.tramo && (
             <div className="mt-3">
               <BotonAutorizar
                 id={comprobante.id}

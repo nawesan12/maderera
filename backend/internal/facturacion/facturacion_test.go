@@ -773,3 +773,45 @@ func TestEmisorYPuntosDeVenta(t *testing.T) {
 		t.Fatalf("puntos: %s", b)
 	}
 }
+
+// Con más de 50 sin CAE atrás, el pedido no dice que se revise el número
+// inicial en ARCA: dice cuántos faltan y desde cuál se autoriza la serie, y
+// la ficha lo muestra (Serie.Tramo). Desde ahí, de a 50, sale todo.
+func TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie(t *testing.T) {
+	e := armar(t, true)
+	ctx := context.Background()
+	var ids []string
+	for i := 0; i < 61; i++ {
+		id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "CF", ReceptorCondicionIva: "consumidor_final",
+			Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 1000}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	_, err := e.s.Autorizar(ctx, ids[60])
+	if m := Mensaje(err); m != "Faltan 60 comprobantes sin CAE antes de este y se autorizan de a 50: autorizá la serie desde el 0003-00000051 en Facturación." {
+		t.Fatalf("mensaje: %q", m)
+	}
+	serie, err := e.s.Serie(ctx, ids[60])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serie.AnterioresSinCae != 60 || serie.Tramo == nil || serie.Tramo.InvoiceID != ids[50] || serie.Tramo.Numero != 51 {
+		t.Fatalf("serie: %+v %+v", serie, serie.Tramo)
+	}
+	if s, _ := e.s.Serie(ctx, ids[50]); s.Tramo != nil {
+		t.Fatalf("el 51 tiene justo 50 atrás: %+v", s.Tramo)
+	}
+	if _, _, err := e.s.AutorizarConFechas(ctx, ids[50]); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.s.AutorizarConFechas(ctx, ids[60]); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	e.uno(t, `SELECT count(*) FROM invoices WHERE cae IS NOT NULL`, &n)
+	if n != 61 {
+		t.Fatalf("autorizados: %d", n)
+	}
+}

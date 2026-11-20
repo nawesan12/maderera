@@ -124,6 +124,13 @@ func TestVolumenDelCierre(t *testing.T) {
 	}
 	wg.Wait()
 
+	// Ningún asiento fuera de ventas, cobros y cheques toca 1.1.03 en toda
+	// la historia: el control «deudores-mayor» puede sumar solo esos.
+	medir(t, "asientosDeDeudores contra el armado entero", func() error {
+		mismosDeudores(t, s, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), octubre.Hasta)
+		return nil
+	})
+
 	if dir := os.Getenv("MJBJ_VOLUMEN_FOTO"); dir != "" {
 		fotoDelCierre(t, s, filepath.Join(dir, base), os.Getenv("MJBJ_VOLUMEN_FOTO_ESCRIBIR") == "1")
 	}

@@ -2,8 +2,13 @@ package reportes
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/singleflight"
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
@@ -118,27 +123,80 @@ func entre(t, desde, hasta time.Time) bool { return !t.Before(desde) && !t.After
 // Solo lee: los recibos de antes que no tienen el reparto fijado se calculan
 // con la misma regla que los fijaría (cobros.FijarRepartosDeAntes, el
 // comando «mjbj repartos»), pero no se guardan. Mirar el cierre es un GET.
+//
+// La vista del cierre pide a la vez los pendientes y los asientos de los dos
+// circuitos, y los tres reparten hasta el mismo instante: el que llega
+// mientras otro ya está calculando espera ese mismo cálculo (compartido) en
+// vez de hacer el suyo. **El resultado es de todos los que lo esperaron:
+// nadie lo puede modificar** (CalcularAging copia antes de ordenar,
+// CsvDeudores ordena sus propias claves). No se guarda nada después: el que
+// llega cuando terminó reparte de nuevo, con los hechos de ese momento.
 func (s *Servicio) repartoHasta(ctx context.Context, hasta time.Time) (cobros.ResultadoDelReparto, error) {
-	ev, err := cobros.CargarEventos(ctx, s.pool, hasta, "")
+	return compartido(ctx, &s.repartos, strconv.FormatInt(hasta.UnixNano(), 10), func(c context.Context) (cobros.ResultadoDelReparto, error) {
+		return s.cargarReparto(c, hasta)
+	})
+}
+
+// cargarReparto lee los eventos por el pool de los reportes, en una
+// transacción de solo lectura que existe para el SET LOCAL del JIT
+// (cobros.ApagarJIT) y nada más: CargarEventos es una sola sentencia, así
+// que ya veía una sola foto de la base. Reparte afuera, con la conexión ya
+// devuelta: el pool de los reportes tiene cuatro.
+func (s *Servicio) cargarReparto(ctx context.Context, hasta time.Time) (cobros.ResultadoDelReparto, error) {
+	var ev []cobros.EventoDeCuenta
+	err := pgx.BeginTxFunc(ctx, s.lectura, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		if _, err := cobros.ApagarJIT(ctx, tx); err != nil {
+			return err
+		}
+		if s.alCargarReparto != nil {
+			if err := s.alCargarReparto(ctx, tx); err != nil {
+				return err
+			}
+		}
+		var err error
+		ev, err = cobros.CargarEventos(ctx, tx, hasta, "")
+		return err
+	})
 	if err != nil {
 		return cobros.ResultadoDelReparto{}, err
 	}
 	return cobros.RepartirCobros(ev), nil
 }
 
+// compartido corre f una sola vez para todos los que piden la misma clave
+// mientras está en curso (singleflight). f corre con un contexto propio: si
+// el primero que llegó se va (cambió de mes, cerró la pestaña), los demás
+// siguen esperando el mismo cálculo y no reciben su «context canceled». El
+// que se va deja de esperar enseguida; el cálculo sigue hasta terminar o
+// hasta el tope, que deja pasar el minuto por sentencia del pool de los
+// reportes.
+func compartido[T any](ctx context.Context, g *singleflight.Group, clave string, f func(context.Context) (T, error)) (T, error) {
+	ch := g.DoChan(clave, func() (any, error) {
+		c, listo := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+		defer listo()
+		return f(c)
+	})
+	var cero T
+	select {
+	case <-ctx.Done():
+		return cero, ctx.Err()
+	case r := <-ch:
+		if r.Err != nil {
+			return cero, r.Err
+		}
+		return r.Val.(T), nil
+	}
+}
+
 // asientosDeCobro son los cobros del período, con idesde/ihasta ya en el
-// mes argentino (son instantes).
+// mes argentino (son instantes), y el reparto hasta ihasta.
 //
 // Los recibos se asientan con su reparto entre los circuitos
 // (cobros.Reparto): lo que cancela facturas con CAE contra Deudores, la seña
 // contra Anticipos de clientes y lo que paga ventas sin factura en el
 // circuito B. Cuando sale la factura de una seña, el anticipo se le aplica.
-func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]Asiento, error) {
 	asientos := []Asiento{}
-	reparto, err := s.repartoHasta(ctx, ihasta)
-	if err != nil {
-		return nil, err
-	}
 	for _, ap := range reparto.Aplicaciones {
 		if !entre(ap.Fecha, idesde, ihasta) {
 			continue
@@ -216,7 +274,11 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	for _, r := range recibos {
 		rep, ok := reparto.Recibos[r.id]
 		if !ok {
-			continue
+			// Todo recibo hasta ihasta está en el reparto (como último recurso
+			// con la clave «r:»). El que falta se emitió entre que se leyó el
+			// reparto y esta consulta: antes se salteaba y el CSV del estudio
+			// salía sin ese recibo. Mejor un error que se reintenta.
+			return nil, fmt.Errorf("el recibo %s se emitió mientras se armaba el cierre: volver a pedirlo", r.numero)
 		}
 		if entre(r.emitido, idesde, ihasta) {
 			asientos = append(asientos, AsientosDeRecibo(ReciboAAsentar{Fecha: r.emitido, Numero: r.numero, Cliente: r.cliente,
@@ -382,6 +444,9 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	rs.Close()
 	if err := rs.Err(); err != nil {
 		return nil, err
+	}
+	for i := range asientos {
+		asientos[i].Instante = true
 	}
 	return asientos, nil
 }

@@ -501,6 +501,12 @@ input::placeholder, textarea::placeholder {
 :root {
   --sucursal-central: oklch(0.68 0.19 48);
   --sucursal-aserradero: oklch(0.48 0.13 250);
+  /* Una sucursal nueva toma el siguiente (grafico-ventas.tsx): verde
+     azulado, violeta y ocre, lejos del naranja y del azul también en
+     visión protán. */
+  --sucursal-otra-1: oklch(0.58 0.11 175);
+  --sucursal-otra-2: oklch(0.52 0.16 320);
+  --sucursal-otra-3: oklch(0.62 0.12 95);
 }
 
 .panel {

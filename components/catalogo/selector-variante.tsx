@@ -166,7 +166,7 @@ export function SelectorVariante({
   // Con el stock oculto (todavía sin cargar) nada cuenta como agotado: diría
   // «sin existencia» de todo y frenaría ventas que sí se pueden hacer.
   const agotadaLaMedida = (v: VarianteDetalle) =>
-    tienda.stockVisible && v.stockCentral === "sin-stock" && v.stockAserradero === "sin-stock";
+    tienda.stockVisible && v.stock.every((s) => s.nivel === "sin-stock");
   const sinStock = agotadaLaMedida(elegida);
   const subtotal = sinPrecio ? 0 : precioElegido * cantidad;
 
@@ -302,7 +302,7 @@ export function SelectorVariante({
 
             {tienda.stockVisible && (
               <div className="mt-3.5 border-t border-linea-tenue pt-3.5">
-                <DisponibilidadPorSucursal central={elegida.stockCentral} aserradero={elegida.stockAserradero} />
+                <DisponibilidadPorSucursal stock={elegida.stock} />
               </div>
             )}
           </div>
@@ -513,7 +513,7 @@ function ConsultaDeLaMedida({
         )}
         {stockVisible && (
           <div className="mt-3.5 border-t border-linea-tenue pt-3.5">
-            <DisponibilidadPorSucursal central={medida.stockCentral} aserradero={medida.stockAserradero} />
+            <DisponibilidadPorSucursal stock={medida.stock} />
           </div>
         )}
       </div>

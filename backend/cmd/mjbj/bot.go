@@ -44,10 +44,13 @@ func buscadorDelBot(pool *pgxpool.Pool) whatsapp.Buscador {
 		}
 		out := make([]whatsapp.ProductoBot, 0, len(ps))
 		for _, p := range ps {
-			out = append(out, whatsapp.ProductoBot{
-				Nombre: p.Name, Slug: p.Slug, Medidas: p.Labels,
-				Central: p.StockCentral != catalogo.SinStock, Aserr: p.StockAserradero != catalogo.SinStock,
-			})
+			b := whatsapp.ProductoBot{Nombre: p.Name, Slug: p.Slug, Medidas: p.Labels, Sucursales: len(p.Stock)}
+			for _, x := range p.Stock {
+				if x.Nivel != catalogo.SinStock {
+					b.ConStock = append(b.ConStock, x.Nombre)
+				}
+			}
+			out = append(out, b)
 		}
 		return out, nil
 	}

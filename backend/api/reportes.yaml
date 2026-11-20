@@ -400,7 +400,7 @@ components:
         resultado: { $ref: "#/components/schemas/ResultadoComparado" }
     InicioMetricas:
       type: object
-      required: [ventasMes, variacionVentas, presupuestosPendientes, presupuestosRevision, clientesActivos, reponer, reponerCentral, reponerAserradero, pedidosSinEntregar, clientesConPedido]
+      required: [ventasMes, variacionVentas, presupuestosPendientes, presupuestosRevision, clientesActivos, reponer, reponerPorSucursal, reponerCentral, reponerAserradero, pedidosSinEntregar, clientesConPedido]
       properties:
         ventasMes: { type: number, format: double }
         variacionVentas: { type: number, format: double, nullable: true }
@@ -408,15 +408,37 @@ components:
         presupuestosRevision: { type: integer }
         clientesActivos: { type: integer }
         reponer: { type: integer }
+        reponerPorSucursal:
+          description: cada sucursal activa, en el orden de branches
+          type: array
+          items: { $ref: "#/components/schemas/CantidadDeSucursal" }
         reponerCentral: { type: integer }
         reponerAserradero: { type: integer }
         pedidosSinEntregar: { type: integer }
         clientesConPedido: { type: integer }
+    CantidadDeSucursal:
+      type: object
+      required: [sucursal, nombre, cantidad]
+      properties:
+        sucursal: { type: string, description: el slug de branches }
+        nombre: { type: string }
+        cantidad: { type: integer }
+    VentaDeSucursal:
+      type: object
+      required: [sucursal, nombre, total]
+      properties:
+        sucursal: { type: string, description: el slug de branches }
+        nombre: { type: string }
+        total: { type: number, format: double }
     InicioMes:
       type: object
-      required: [mes, central, aserradero]
+      required: [mes, sucursales, central, aserradero]
       properties:
         mes: { type: string }
+        sucursales:
+          description: cada sucursal activa, en el orden de branches
+          type: array
+          items: { $ref: "#/components/schemas/VentaDeSucursal" }
         central: { type: number, format: double }
         aserradero: { type: number, format: double }
     InicioReponer:

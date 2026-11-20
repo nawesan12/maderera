@@ -37,9 +37,9 @@ export const CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO = ["cortes", "preparar"] as const
  * curso de cada sucursal.
  */
 export function mesesConVentas(
-  ventas: { central: number; aserradero: number }[],
+  ventas: { sucursales: { total: number }[] }[],
 ): number {
-  return ventas.filter((m) => m.central + m.aserradero > 0).length;
+  return ventas.filter((m) => m.sucursales.some((s) => s.total > 0)).length;
 }
 
 /** Desde cuántos meses con ventas el gráfico dice algo. */

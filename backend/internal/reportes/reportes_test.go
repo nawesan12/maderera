@@ -357,7 +357,8 @@ func TestInicioDelPanel(t *testing.T) {
 		t.Errorf("métricas: %s", b)
 	}
 	_, b, _ = pedir(t, adm, e.u+"inicio/ventas-por-sucursal")
-	if !strings.HasSuffix(b, `{"mes":"Sep","central":0,"aserradero":500},{"mes":"Oct","central":1000,"aserradero":0}]`+"\n") {
+	if !strings.HasSuffix(b, `{"mes":"Sep","sucursales":[{"sucursal":"casa-central","nombre":"Casa Central","total":0},{"sucursal":"aserradero","nombre":"Aserradero","total":500}],"central":0,"aserradero":500},`+
+		`{"mes":"Oct","sucursales":[{"sucursal":"casa-central","nombre":"Casa Central","total":1000},{"sucursal":"aserradero","nombre":"Aserradero","total":0}],"central":1000,"aserradero":0}]`+"\n") {
 		t.Errorf("por sucursal: %s", b)
 	}
 	_, b, _ = pedir(t, adm, e.u+"inicio/reponer")

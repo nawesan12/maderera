@@ -26,8 +26,8 @@ import { enlaceDeConsulta } from "@/lib/catalogo/consulta";
  * **La tarjeta ya no muestra stock.** Salieron la franja "Sin stock" y el
  * detalle por sucursal: al cliente no le importa en qué depósito está la
  * madera, y publicar existencias por sucursal invitaba a preguntas que se
- * resuelven recién en el carrito. `Disponibilidad` sigue en uso en la ficha
- * del producto y en el panel.
+ * resuelven recién en el carrito. Dónde hay lo dice la ficha
+ * (`DisponibilidadPorSucursal`).
  *
  * `height: 100%` no es decorativo: iguala las alturas dentro de la grilla para
  * que la fila de botones quede alineada entre tarjetas vecinas.

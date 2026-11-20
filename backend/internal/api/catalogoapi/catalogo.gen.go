@@ -221,54 +221,6 @@ func (e FiltroOrden) Valid() bool {
 	}
 }
 
-// Defines values for FiltroStock.
-const (
-	FiltroStockAserradero  FiltroStock = "aserradero"
-	FiltroStockCasaCentral FiltroStock = "casa-central"
-	FiltroStockEnStock     FiltroStock = "en-stock"
-	FiltroStockTodos       FiltroStock = "todos"
-)
-
-// Valid indicates whether the value is a known member of the FiltroStock enum.
-func (e FiltroStock) Valid() bool {
-	switch e {
-	case FiltroStockAserradero:
-		return true
-	case FiltroStockCasaCentral:
-		return true
-	case FiltroStockEnStock:
-		return true
-	case FiltroStockTodos:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProductosParamsStock.
-const (
-	ProductosParamsStockAserradero  ProductosParamsStock = "aserradero"
-	ProductosParamsStockCasaCentral ProductosParamsStock = "casa-central"
-	ProductosParamsStockEnStock     ProductosParamsStock = "en-stock"
-	ProductosParamsStockTodos       ProductosParamsStock = "todos"
-)
-
-// Valid indicates whether the value is a known member of the ProductosParamsStock enum.
-func (e ProductosParamsStock) Valid() bool {
-	switch e {
-	case ProductosParamsStockAserradero:
-		return true
-	case ProductosParamsStockCasaCentral:
-		return true
-	case ProductosParamsStockEnStock:
-		return true
-	case ProductosParamsStockTodos:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ProductosParamsOrden.
 const (
 	ProductosParamsOrdenNombre     ProductosParamsOrden = "nombre"
@@ -293,30 +245,6 @@ func (e ProductosParamsOrden) Valid() bool {
 	}
 }
 
-// Defines values for PaginaDeProductosParamsStock.
-const (
-	PaginaDeProductosParamsStockAserradero  PaginaDeProductosParamsStock = "aserradero"
-	PaginaDeProductosParamsStockCasaCentral PaginaDeProductosParamsStock = "casa-central"
-	PaginaDeProductosParamsStockEnStock     PaginaDeProductosParamsStock = "en-stock"
-	PaginaDeProductosParamsStockTodos       PaginaDeProductosParamsStock = "todos"
-)
-
-// Valid indicates whether the value is a known member of the PaginaDeProductosParamsStock enum.
-func (e PaginaDeProductosParamsStock) Valid() bool {
-	switch e {
-	case PaginaDeProductosParamsStockAserradero:
-		return true
-	case PaginaDeProductosParamsStockCasaCentral:
-		return true
-	case PaginaDeProductosParamsStockEnStock:
-		return true
-	case PaginaDeProductosParamsStockTodos:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for PaginaDeProductosParamsOrden.
 const (
 	PaginaDeProductosParamsOrdenNombre     PaginaDeProductosParamsOrden = "nombre"
@@ -335,30 +263,6 @@ func (e PaginaDeProductosParamsOrden) Valid() bool {
 	case PaginaDeProductosParamsOrdenPrecioDesc:
 		return true
 	case PaginaDeProductosParamsOrdenRelevancia:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ResumenDeProductosParamsStock.
-const (
-	ResumenDeProductosParamsStockAserradero  ResumenDeProductosParamsStock = "aserradero"
-	ResumenDeProductosParamsStockCasaCentral ResumenDeProductosParamsStock = "casa-central"
-	ResumenDeProductosParamsStockEnStock     ResumenDeProductosParamsStock = "en-stock"
-	ResumenDeProductosParamsStockTodos       ResumenDeProductosParamsStock = "todos"
-)
-
-// Valid indicates whether the value is a known member of the ResumenDeProductosParamsStock enum.
-func (e ResumenDeProductosParamsStock) Valid() bool {
-	switch e {
-	case ResumenDeProductosParamsStockAserradero:
-		return true
-	case ResumenDeProductosParamsStockCasaCentral:
-		return true
-	case ResumenDeProductosParamsStockEnStock:
-		return true
-	case ResumenDeProductosParamsStockTodos:
 		return true
 	default:
 		return false
@@ -538,30 +442,33 @@ type ProductoDetalleFormaDeVenta string
 
 // ProductoListado defines model for ProductoListado.
 type ProductoListado struct {
-	APedido         bool                        `json:"aPedido"`
-	AlicuotaIva     string                      `json:"alicuotaIva"`
-	Brand           *string                     `json:"brand"`
-	CategoryName    string                      `json:"categoryName"`
-	CategorySlug    string                      `json:"categorySlug"`
-	Description     string                      `json:"description"`
-	Descuento       *float64                    `json:"descuento"`
-	Featured        bool                        `json:"featured"`
-	FormaDeVenta    ProductoListadoFormaDeVenta `json:"formaDeVenta"`
-	HayStock        bool                        `json:"hayStock"`
-	Id              string                      `json:"id"`
-	Image           *string                     `json:"image"`
-	Labels          []string                    `json:"labels"`
-	Name            string                      `json:"name"`
-	PrecioAnterior  *string                     `json:"precioAnterior"`
-	PrecioDesde     *string                     `json:"precioDesde"`
-	PrecioMediaPct  float64                     `json:"precioMediaPct"`
-	Slug            string                      `json:"slug"`
-	StockAserradero NivelStock                  `json:"stockAserradero"`
-	StockCentral    NivelStock                  `json:"stockCentral"`
-	Subcategory     *string                     `json:"subcategory"`
-	SubcategoryName *string                     `json:"subcategoryName"`
-	SubcategorySlug *string                     `json:"subcategorySlug"`
-	Unit            string                      `json:"unit"`
+	APedido        bool                        `json:"aPedido"`
+	AlicuotaIva    string                      `json:"alicuotaIva"`
+	Brand          *string                     `json:"brand"`
+	CategoryName   string                      `json:"categoryName"`
+	CategorySlug   string                      `json:"categorySlug"`
+	Description    string                      `json:"description"`
+	Descuento      *float64                    `json:"descuento"`
+	Featured       bool                        `json:"featured"`
+	FormaDeVenta   ProductoListadoFormaDeVenta `json:"formaDeVenta"`
+	HayStock       bool                        `json:"hayStock"`
+	Id             string                      `json:"id"`
+	Image          *string                     `json:"image"`
+	Labels         []string                    `json:"labels"`
+	Name           string                      `json:"name"`
+	PrecioAnterior *string                     `json:"precioAnterior"`
+	PrecioDesde    *string                     `json:"precioDesde"`
+	PrecioMediaPct float64                     `json:"precioMediaPct"`
+	Slug           string                      `json:"slug"`
+
+	// Stock el nivel en cada sucursal activa, en el orden de branches
+	Stock           []StockDeSucursal `json:"stock"`
+	StockAserradero NivelStock        `json:"stockAserradero"`
+	StockCentral    NivelStock        `json:"stockCentral"`
+	Subcategory     *string           `json:"subcategory"`
+	SubcategoryName *string           `json:"subcategoryName"`
+	SubcategorySlug *string           `json:"subcategorySlug"`
+	Unit            string            `json:"unit"`
 }
 
 // ProductoListadoFormaDeVenta defines model for ProductoListado.FormaDeVenta.
@@ -585,6 +492,15 @@ type Rubro struct {
 	Slug         string `json:"slug"`
 }
 
+// StockDeSucursal defines model for StockDeSucursal.
+type StockDeSucursal struct {
+	Nivel  NivelStock `json:"nivel"`
+	Nombre string     `json:"nombre"`
+
+	// Sucursal el slug de branches
+	Sucursal string `json:"sucursal"`
+}
+
 // Sugeridos defines model for Sugeridos.
 type Sugeridos struct {
 	Complementarios       []ProductoListado `json:"complementarios"`
@@ -594,20 +510,21 @@ type Sugeridos struct {
 
 // VarianteDetalle defines model for VarianteDetalle.
 type VarianteDetalle struct {
-	AnchoMm         *int       `json:"anchoMm"`
-	Calidad         *string    `json:"calidad"`
-	Color           *string    `json:"color"`
-	Disponibles     float64    `json:"disponibles"`
-	EspesorMm       *int       `json:"espesorMm"`
-	Id              string     `json:"id"`
-	Label           string     `json:"label"`
-	LargoMm         *int       `json:"largoMm"`
-	Material        *string    `json:"material"`
-	Precio          *string    `json:"precio"`
-	Sku             string     `json:"sku"`
-	StockAserradero NivelStock `json:"stockAserradero"`
-	StockCentral    NivelStock `json:"stockCentral"`
-	Terminacion     *string    `json:"terminacion"`
+	AnchoMm         *int              `json:"anchoMm"`
+	Calidad         *string           `json:"calidad"`
+	Color           *string           `json:"color"`
+	Disponibles     float64           `json:"disponibles"`
+	EspesorMm       *int              `json:"espesorMm"`
+	Id              string            `json:"id"`
+	Label           string            `json:"label"`
+	LargoMm         *int              `json:"largoMm"`
+	Material        *string           `json:"material"`
+	Precio          *string           `json:"precio"`
+	Sku             string            `json:"sku"`
+	Stock           []StockDeSucursal `json:"stock"`
+	StockAserradero NivelStock        `json:"stockAserradero"`
+	StockCentral    NivelStock        `json:"stockCentral"`
+	Terminacion     *string           `json:"terminacion"`
 }
 
 // FiltroBusqueda defines model for filtro_busqueda.
@@ -635,7 +552,7 @@ type FiltroPublico = bool
 type FiltroSoloOfertas = bool
 
 // FiltroStock defines model for filtro_stock.
-type FiltroStock string
+type FiltroStock = string
 
 // FiltroSubcategoria defines model for filtro_subcategoria.
 type FiltroSubcategoria = string
@@ -668,13 +585,15 @@ type PreciosPorVarianteParams struct {
 
 // ProductosParams defines parameters for Productos.
 type ProductosParams struct {
-	Categoria    *FiltroCategoria      `form:"categoria,omitempty" json:"categoria,omitempty"`
-	Subcategoria *FiltroSubcategoria   `form:"subcategoria,omitempty" json:"subcategoria,omitempty"`
-	Busqueda     *FiltroBusqueda       `form:"busqueda,omitempty" json:"busqueda,omitempty"`
-	Stock        *ProductosParamsStock `form:"stock,omitempty" json:"stock,omitempty"`
-	Orden        *ProductosParamsOrden `form:"orden,omitempty" json:"orden,omitempty"`
-	SoloOfertas  *FiltroSoloOfertas    `form:"soloOfertas,omitempty" json:"soloOfertas,omitempty"`
-	Marca        *FiltroMarca          `form:"marca,omitempty" json:"marca,omitempty"`
+	Categoria    *FiltroCategoria    `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Subcategoria *FiltroSubcategoria `form:"subcategoria,omitempty" json:"subcategoria,omitempty"`
+	Busqueda     *FiltroBusqueda     `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+
+	// Stock todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa)
+	Stock       *FiltroStock          `form:"stock,omitempty" json:"stock,omitempty"`
+	Orden       *ProductosParamsOrden `form:"orden,omitempty" json:"orden,omitempty"`
+	SoloOfertas *FiltroSoloOfertas    `form:"soloOfertas,omitempty" json:"soloOfertas,omitempty"`
+	Marca       *FiltroMarca          `form:"marca,omitempty" json:"marca,omitempty"`
 
 	// Ids Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno».
 	Ids *FiltroIds `form:"ids,omitempty" json:"ids,omitempty"`
@@ -694,21 +613,20 @@ type ProductosParams struct {
 	SinFotos *bool `form:"sinFotos,omitempty" json:"sinFotos,omitempty"`
 }
 
-// ProductosParamsStock defines parameters for Productos.
-type ProductosParamsStock string
-
 // ProductosParamsOrden defines parameters for Productos.
 type ProductosParamsOrden string
 
 // PaginaDeProductosParams defines parameters for PaginaDeProductos.
 type PaginaDeProductosParams struct {
-	Categoria    *FiltroCategoria              `form:"categoria,omitempty" json:"categoria,omitempty"`
-	Subcategoria *FiltroSubcategoria           `form:"subcategoria,omitempty" json:"subcategoria,omitempty"`
-	Busqueda     *FiltroBusqueda               `form:"busqueda,omitempty" json:"busqueda,omitempty"`
-	Stock        *PaginaDeProductosParamsStock `form:"stock,omitempty" json:"stock,omitempty"`
-	Orden        *PaginaDeProductosParamsOrden `form:"orden,omitempty" json:"orden,omitempty"`
-	SoloOfertas  *FiltroSoloOfertas            `form:"soloOfertas,omitempty" json:"soloOfertas,omitempty"`
-	Marca        *FiltroMarca                  `form:"marca,omitempty" json:"marca,omitempty"`
+	Categoria    *FiltroCategoria    `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Subcategoria *FiltroSubcategoria `form:"subcategoria,omitempty" json:"subcategoria,omitempty"`
+	Busqueda     *FiltroBusqueda     `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+
+	// Stock todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa)
+	Stock       *FiltroStock                  `form:"stock,omitempty" json:"stock,omitempty"`
+	Orden       *PaginaDeProductosParamsOrden `form:"orden,omitempty" json:"orden,omitempty"`
+	SoloOfertas *FiltroSoloOfertas            `form:"soloOfertas,omitempty" json:"soloOfertas,omitempty"`
+	Marca       *FiltroMarca                  `form:"marca,omitempty" json:"marca,omitempty"`
 
 	// Ids Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno».
 	Ids *FiltroIds `form:"ids,omitempty" json:"ids,omitempty"`
@@ -723,21 +641,20 @@ type PaginaDeProductosParams struct {
 	Pagina *int         `form:"pagina,omitempty" json:"pagina,omitempty"`
 }
 
-// PaginaDeProductosParamsStock defines parameters for PaginaDeProductos.
-type PaginaDeProductosParamsStock string
-
 // PaginaDeProductosParamsOrden defines parameters for PaginaDeProductos.
 type PaginaDeProductosParamsOrden string
 
 // ResumenDeProductosParams defines parameters for ResumenDeProductos.
 type ResumenDeProductosParams struct {
-	Categoria    *FiltroCategoria               `form:"categoria,omitempty" json:"categoria,omitempty"`
-	Subcategoria *FiltroSubcategoria            `form:"subcategoria,omitempty" json:"subcategoria,omitempty"`
-	Busqueda     *FiltroBusqueda                `form:"busqueda,omitempty" json:"busqueda,omitempty"`
-	Stock        *ResumenDeProductosParamsStock `form:"stock,omitempty" json:"stock,omitempty"`
-	Orden        *ResumenDeProductosParamsOrden `form:"orden,omitempty" json:"orden,omitempty"`
-	SoloOfertas  *FiltroSoloOfertas             `form:"soloOfertas,omitempty" json:"soloOfertas,omitempty"`
-	Marca        *FiltroMarca                   `form:"marca,omitempty" json:"marca,omitempty"`
+	Categoria    *FiltroCategoria    `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Subcategoria *FiltroSubcategoria `form:"subcategoria,omitempty" json:"subcategoria,omitempty"`
+	Busqueda     *FiltroBusqueda     `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+
+	// Stock todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa)
+	Stock       *FiltroStock                   `form:"stock,omitempty" json:"stock,omitempty"`
+	Orden       *ResumenDeProductosParamsOrden `form:"orden,omitempty" json:"orden,omitempty"`
+	SoloOfertas *FiltroSoloOfertas             `form:"soloOfertas,omitempty" json:"soloOfertas,omitempty"`
+	Marca       *FiltroMarca                   `form:"marca,omitempty" json:"marca,omitempty"`
 
 	// Ids Un conjunto puntual de productos (por id, separados por coma). Vacío es «ninguno».
 	Ids *FiltroIds `form:"ids,omitempty" json:"ids,omitempty"`
@@ -750,9 +667,6 @@ type ResumenDeProductosParams struct {
 	// los guarda en su caché por lista); si no, 403.
 	Lista *FiltroLista `form:"lista,omitempty" json:"lista,omitempty"`
 }
-
-// ResumenDeProductosParamsStock defines parameters for ResumenDeProductos.
-type ResumenDeProductosParamsStock string
 
 // ResumenDeProductosParamsOrden defines parameters for ResumenDeProductos.
 type ResumenDeProductosParamsOrden string
@@ -2709,69 +2623,70 @@ func (sh *strictHandler) Rubros(w http.ResponseWriter, r *http.Request, params R
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"/19c/O8A",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

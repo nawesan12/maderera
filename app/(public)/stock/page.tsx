@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FiltrosStock } from "@/components/catalogo/filtros-stock";
-import { listarCategorias, listarProductosPublicos } from "@/lib/dal/catalog";
+import { listarCategorias, listarProductosPublicos, type ProductoListado } from "@/lib/dal/catalog";
 import type { StockLevel } from "@/lib/stock-level";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
@@ -97,26 +97,32 @@ export default async function StockPage({
  */
 async function Resumen() {
   const productos = await listarProductosPublicos({ sinFotos: true });
-
-  const enAmbas = productos.filter(
-    (p) => p.stockCentral !== "sin-stock" && p.stockAserradero !== "sin-stock",
-  ).length;
-  const soloCentral = productos.filter(
-    (p) => p.stockCentral !== "sin-stock" && p.stockAserradero === "sin-stock",
-  ).length;
-  const soloAserradero = productos.filter(
-    (p) => p.stockCentral === "sin-stock" && p.stockAserradero !== "sin-stock",
-  ).length;
+  // Las sucursales activas, en el orden de `branches`: todos los productos
+  // traen la misma lista (hallazgo 35).
+  const sucursales = productos[0]?.stock ?? [];
+  const hay = (p: ProductoListado, slug: string) =>
+    p.stock.some((s) => s.sucursal === slug && s.nivel !== "sin-stock");
 
   const tarjetas = [
     { label: "Total productos", value: productos.length },
-    { label: "En ambas sucursales", value: enAmbas },
-    { label: "Solo Casa Central", value: soloCentral },
-    { label: "Solo Aserradero", value: soloAserradero },
+    ...(sucursales.length > 1
+      ? [
+          {
+            label: sucursales.length === 2 ? "En ambas sucursales" : "En todas las sucursales",
+            value: productos.filter((p) => sucursales.every((s) => hay(p, s.sucursal))).length,
+          },
+        ]
+      : []),
+    ...sucursales.map((s) => ({
+      label: sucursales.length > 1 ? `Solo ${s.nombre}` : `En ${s.nombre}`,
+      value: productos.filter(
+        (p) => hay(p, s.sucursal) && sucursales.every((o) => o.sucursal === s.sucursal || !hay(p, o.sucursal)),
+      ).length,
+    })),
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
       {tarjetas.map((t) => (
         <Card key={t.label}>
           <CardContent className="p-4 text-center">
@@ -157,6 +163,8 @@ async function Tabla({ params }: { params: Params }) {
     );
   }
 
+  const sucursales = productos[0]!.stock;
+
   return (
     <Card>
       <CardContent className="p-0">
@@ -166,18 +174,17 @@ async function Tabla({ params }: { params: Params }) {
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-4 text-sm font-semibold">Producto</th>
                 <th className="text-left p-4 text-sm font-semibold">Categoría</th>
-                <th className="text-center p-4 text-sm font-semibold">
-                  <div className="flex items-center justify-center gap-1">
-                    <Building2 className="h-4 w-4" />
-                    Casa Central
-                  </div>
-                </th>
-                <th className="text-center p-4 text-sm font-semibold">
-                  <div className="flex items-center justify-center gap-1">
-                    <Warehouse className="h-4 w-4" />
-                    Aserradero
-                  </div>
-                </th>
+                {sucursales.map((s) => {
+                  const Icono = s.sucursal === "aserradero" ? Warehouse : Building2;
+                  return (
+                    <th key={s.sucursal} className="text-center p-4 text-sm font-semibold">
+                      <div className="flex items-center justify-center gap-1">
+                        <Icono className="h-4 w-4" />
+                        {s.nombre}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -199,16 +206,13 @@ async function Tabla({ params }: { params: Params }) {
                       {producto.categoryName}
                     </Badge>
                   </td>
-                  <td className="p-4">
-                    <div className="flex justify-center">
-                      <StockBadge level={producto.stockCentral} />
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex justify-center">
-                      <StockBadge level={producto.stockAserradero} />
-                    </div>
-                  </td>
+                  {producto.stock.map((s) => (
+                    <td key={s.sucursal} className="p-4">
+                      <div className="flex justify-center">
+                        <StockBadge level={s.nivel} />
+                      </div>
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

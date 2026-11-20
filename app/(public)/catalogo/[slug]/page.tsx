@@ -189,7 +189,7 @@ export default async function ProductoPage({
         sku: v.sku,
         label: v.label,
         precio: v.precio,
-        disponibilidad: combinedStockLevel([v.stockCentral, v.stockAserradero]),
+        disponibilidad: combinedStockLevel(v.stock.map((s) => s.nivel)),
         color: v.color,
         conMedidas: Boolean(v.largoMm || v.anchoMm || v.espesorMm),
       })),

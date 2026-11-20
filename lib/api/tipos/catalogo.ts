@@ -303,6 +303,12 @@ export interface components {
         };
         /** @enum {string} */
         NivelStock: "alto" | "medio" | "bajo" | "sin-stock";
+        StockDeSucursal: {
+            /** @description el slug de branches */
+            sucursal: string;
+            nombre: string;
+            nivel: components["schemas"]["NivelStock"];
+        };
         ListaYVista: {
             lista: {
                 id: string | null;
@@ -358,6 +364,8 @@ export interface components {
             /** Format: double */
             descuento: number | null;
             labels: string[];
+            /** @description el nivel en cada sucursal activa, en el orden de branches */
+            stock: components["schemas"]["StockDeSucursal"][];
             stockCentral: components["schemas"]["NivelStock"];
             stockAserradero: components["schemas"]["NivelStock"];
             hayStock: boolean;
@@ -390,6 +398,7 @@ export interface components {
             anchoMm: number | null;
             espesorMm: number | null;
             precio: string | null;
+            stock: components["schemas"]["StockDeSucursal"][];
             stockCentral: components["schemas"]["NivelStock"];
             stockAserradero: components["schemas"]["NivelStock"];
             /** Format: double */
@@ -464,7 +473,8 @@ export interface components {
         filtro_categoria: string;
         filtro_subcategoria: string;
         filtro_busqueda: string;
-        filtro_stock: "todos" | "en-stock" | "casa-central" | "aserradero";
+        /** @description todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa) */
+        filtro_stock: string;
         filtro_orden: "relevancia" | "precio-asc" | "precio-desc" | "nombre";
         filtro_soloOfertas: boolean;
         filtro_marca: string;
@@ -575,6 +585,7 @@ export interface operations {
                 categoria?: components["parameters"]["filtro_categoria"];
                 subcategoria?: components["parameters"]["filtro_subcategoria"];
                 busqueda?: components["parameters"]["filtro_busqueda"];
+                /** @description todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa) */
                 stock?: components["parameters"]["filtro_stock"];
                 orden?: components["parameters"]["filtro_orden"];
                 soloOfertas?: components["parameters"]["filtro_soloOfertas"];
@@ -618,6 +629,7 @@ export interface operations {
                 categoria?: components["parameters"]["filtro_categoria"];
                 subcategoria?: components["parameters"]["filtro_subcategoria"];
                 busqueda?: components["parameters"]["filtro_busqueda"];
+                /** @description todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa) */
                 stock?: components["parameters"]["filtro_stock"];
                 orden?: components["parameters"]["filtro_orden"];
                 soloOfertas?: components["parameters"]["filtro_soloOfertas"];
@@ -658,6 +670,7 @@ export interface operations {
                 categoria?: components["parameters"]["filtro_categoria"];
                 subcategoria?: components["parameters"]["filtro_subcategoria"];
                 busqueda?: components["parameters"]["filtro_busqueda"];
+                /** @description todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa) */
                 stock?: components["parameters"]["filtro_stock"];
                 orden?: components["parameters"]["filtro_orden"];
                 soloOfertas?: components["parameters"]["filtro_soloOfertas"];

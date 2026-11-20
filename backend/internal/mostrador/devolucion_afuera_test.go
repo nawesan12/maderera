@@ -369,6 +369,11 @@ func TestElReintegroCaeEnSuMes(t *testing.T) {
 		if _, err := e.pool.Exec(ctx, `UPDATE payment_refunds SET created_at = $2 WHERE devolucion_id = $1`, d.ID, caso.devuelta); err != nil {
 			t.Fatal(err)
 		}
+		// La nota, autorizada en el momento: el tramo va con ella
+		// (cobros.FechaDelTramo; TestElReintegroVaConLaNotaDeCredito).
+		if _, err := e.pool.Exec(ctx, `UPDATE invoices SET fecha_emision = $2 WHERE id = $1`, d.NotaID, caso.devuelta); err != nil {
+			t.Fatal(err)
+		}
 		pedido := e.txt(t, `select numero from orders where id = $1`, c.pedido)
 		od, oh := periodo("2026-10")
 		nd, nh := periodo("2026-11")

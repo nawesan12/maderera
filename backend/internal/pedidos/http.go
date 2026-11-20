@@ -9,6 +9,7 @@ import (
 	"mjbj/internal/api/ventasapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/cobros"
+	"mjbj/internal/entregas"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -156,7 +157,11 @@ func (a *API) AvanzarPedido(ctx context.Context, r ventasapi.AvanzarPedidoReques
 	if r.Params.Desde != nil {
 		desde = *r.Params.Desde
 	}
-	v, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde)
+	var quien entregas.Receptor
+	if r.Body != nil {
+		quien = entregas.NuevoReceptor(r.Body.ReceptorNombre, r.Body.ReceptorDocumento)
+	}
+	v, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde, quien)
 	if err != nil {
 		return nil, err
 	}

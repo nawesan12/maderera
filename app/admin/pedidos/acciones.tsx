@@ -7,6 +7,7 @@ import { ArrowRight, Ban, Loader2 } from "lucide-react";
 import { avanzarPedido, cancelarPedido } from "@/app/admin/ventas-actions";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { moneda } from "@/components/admin/formato";
 
@@ -54,6 +55,10 @@ export function AccionesPedido({
   const [confirmando, setConfirmando] = useState(false);
   // «Cobrar y entregar» abre el cobro y, cobrado, entrega.
   const [cobrandoParaEntregar, setCobrandoParaEntregar] = useState(false);
+  // Quién retira: el remito que sale al entregar un retiro lo lleva, y el
+  // documento es obligatorio como en el remito a mano.
+  const [receptorNombre, setReceptorNombre] = useState("");
+  const [receptorDocumento, setReceptorDocumento] = useState("");
 
   // Un pedido de retiro no se despacha: el cliente lo busca.
   const etiqueta =
@@ -75,7 +80,18 @@ export function AccionesPedido({
     });
   }
 
-  const preguntar = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
+  const entregaUnRetiro = estado === "listo" && tipoEntrega === "retiro";
+  const debe = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
+  const preguntar = debe || entregaUnRetiro;
+  const faltaDocumento = entregaUnRetiro && receptorDocumento.trim() === "";
+
+  function avanzar() {
+    return avanzarPedido(
+      id,
+      estado,
+      entregaUnRetiro ? { receptorNombre: receptorNombre.trim(), receptorDocumento: receptorDocumento.trim() } : undefined,
+    );
+  }
 
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
@@ -92,7 +108,7 @@ export function AccionesPedido({
 
       {etiqueta && (
         <button
-          onClick={() => (preguntar ? setConfirmando(true) : accion(() => avanzarPedido(id, estado)))}
+          onClick={() => (preguntar ? setConfirmando(true) : accion(avanzar))}
           disabled={pendiente}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
@@ -105,31 +121,76 @@ export function AccionesPedido({
         </button>
       )}
 
-      {preguntar && sinCobrar && (
+      {preguntar && (
         <Dialog open={confirmando} onOpenChange={(abierto) => !pendiente && setConfirmando(abierto)}>
           <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>
-                {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+                {debe && sinCobrar ? (
+                  <>
+                    {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+                  </>
+                ) : (
+                  "Quién retira"
+                )}
               </DialogTitle>
             </DialogHeader>
+            {entregaUnRetiro && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1.5 text-base font-medium">
+                  Quién retira
+                  <Input
+                    name="receptorNombre"
+                    value={receptorNombre}
+                    onChange={(e) => setReceptorNombre(e.target.value)}
+                    maxLength={120}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-base font-medium">
+                  Documento
+                  <Input
+                    name="receptorDocumento"
+                    value={receptorDocumento}
+                    onChange={(e) => setReceptorDocumento(e.target.value)}
+                    maxLength={30}
+                    required
+                    autoFocus
+                    autoComplete="off"
+                    inputMode="numeric"
+                  />
+                </label>
+              </div>
+            )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
-              <button
-                type="button"
-                disabled={pendiente}
-                onClick={() => accion(() => avanzarPedido(id, estado))}
-                className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
-              >
-                Entregar sin cobrar
-              </button>
+              {debe ? (
+                <button
+                  type="button"
+                  disabled={pendiente || faltaDocumento}
+                  onClick={() => accion(avanzar)}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
+                >
+                  Entregar sin cobrar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pendiente || faltaDocumento}
+                  onClick={() => accion(avanzar)}
+                  className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
+                >
+                  {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Entregar
+                </button>
+              )}
               {/* Cobrar ahí mismo, con recibo: antes había que cerrar, buscar
                   «Cobrar» en la tarjeta y volver a entregar. Quien no cobra no
                   ve el cobro. */}
-              {cobro && (
+              {debe && sinCobrar && cobro && (
                 <button
                   type="button"
-                  autoFocus
-                  disabled={pendiente}
+                  autoFocus={!entregaUnRetiro}
+                  disabled={pendiente || faltaDocumento}
                   onClick={() => {
                     setConfirmando(false);
                     setCobrandoParaEntregar(true);
@@ -144,7 +205,7 @@ export function AccionesPedido({
         </Dialog>
       )}
 
-      {preguntar && sinCobrar && cobro && (
+      {debe && sinCobrar && cobro && (
         <DialogoCobro
           sinBoton
           abierto={cobrandoParaEntregar}
@@ -153,7 +214,7 @@ export function AccionesPedido({
           nombre={cobro.nombre}
           aCobrar={sinCobrar.monto}
           pedido={{ id, numero: cobro.numero }}
-          alCobrar={() => accion(() => avanzarPedido(id, estado))}
+          alCobrar={() => accion(avanzar)}
         />
       )}
     </div>

@@ -148,7 +148,7 @@ func TestAvanzarAEntregadoSacaConRemito(t *testing.T) {
 	ctx := context.Background()
 	pedido := e.ventaEnAcopio(t, ses.UserID, 5) // queda «listo», de retiro
 	ps := pedidos.Nuevo(e.pool, silencio)
-	res, err := ps.Avanzar(ctx, ses, pedido, "")
+	res, err := ps.Avanzar(ctx, ses, pedido, "", entregas.Receptor{Documento: &documentoDePrueba})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,3 +395,5 @@ func TestElRemitoDeUnaVentaYaEntregadaNoDescuentaDosVeces(t *testing.T) {
 		t.Errorf("la constancia tocó el stock: %v", q)
 	}
 }
+
+var documentoDePrueba = "30111222"

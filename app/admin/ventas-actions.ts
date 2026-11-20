@@ -45,9 +45,15 @@ function fallo(r: Respuesta): EstadoVenta {
  * "en camino". `desde` es el estado que se veía: si ya cambió, Go contesta
  * 409 en vez de dar un paso de más (que en un retiro emite el remito).
  */
-export async function avanzarPedido(id: string, desde?: string): Promise<EstadoVenta> {
+export async function avanzarPedido(
+  id: string,
+  desde?: string,
+  /** Quien retira: en un retiro que pasa a entregado, el documento va en el remito y es obligatorio. */
+  quien?: { receptorNombre?: string; receptorDocumento?: string },
+): Promise<EstadoVenta> {
   const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/avanzar", {
     params: { path: { id }, query: desde ? { desde } : {} },
+    body: quien ?? {},
   });
   if (!r.data) return fallo(r);
 

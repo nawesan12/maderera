@@ -102,6 +102,20 @@ paths:
         409 y no se avanza un paso de más (que en un retiro emite el remito).
       parameters:
         - { name: desde, in: query, schema: { type: string, maxLength: 40 } }
+      requestBody:
+        required: false
+        description: >-
+          Quien retira, para el remito de un retiro que pasa a entregado: el
+          documento es obligatorio (422 en receptorDocumento sin él). En un
+          envío no se usa.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                receptorNombre: { type: string, maxLength: 120 }
+                receptorDocumento: { type: string, maxLength: 30 }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }

@@ -24,7 +24,7 @@ func TestEntregarSinCobrarDejaFirma(t *testing.T) {
 
 	for _, id := range []string{sinCobrar, cobrado} {
 		for i := 0; i < 4; i++ {
-			r, err := e.s.Avanzar(ctx, ses, id, e.texto(t, `select estado::text from orders where id = $1`, id))
+			r, err := e.s.Avanzar(ctx, ses, id, e.texto(t, `select estado::text from orders where id = $1`, id), retira)
 			if err != nil {
 				t.Fatal(err)
 			}

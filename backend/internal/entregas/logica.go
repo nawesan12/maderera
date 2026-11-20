@@ -195,6 +195,44 @@ type FormRemito struct {
 // MsjFaltaDocumento es la regla del retiro: la firma sola no identifica.
 const MsjFaltaDocumento = "Falta el documento de quien retira. En un retiro es obligatorio: la firma sola no identifica a nadie."
 
+// Receptor es quien retira, para el remito que emite «Avanzar» a
+// entregado en un retiro (pedidos.Avanzar): los mismos campos y las mismas
+// reglas que el remito a mano.
+type Receptor struct {
+	Nombre    *string
+	Documento *string
+}
+
+// NuevoReceptor recorta los dos campos (vacío es nil).
+func NuevoReceptor(nombre, documento *string) Receptor {
+	limpio := func(p *string) *string {
+		if p == nil {
+			return nil
+		}
+		t := zodjs.TrimJS(*p)
+		if t == "" {
+			return nil
+		}
+		return &t
+	}
+	return Receptor{Nombre: limpio(nombre), Documento: limpio(documento)}
+}
+
+// Revisar devuelve el campo y el mensaje del primer problema: el documento
+// es obligatorio, y los largos son los del formulario del remito.
+func (r Receptor) Revisar() (string, string) {
+	if r.Documento == nil || *r.Documento == "" {
+		return "receptorDocumento", MsjFaltaDocumento
+	}
+	if len([]rune(*r.Documento)) > 30 {
+		return "receptorDocumento", "El documento es muy largo."
+	}
+	if r.Nombre != nil && len([]rune(*r.Nombre)) > 120 {
+		return "receptorNombre", "El nombre es muy largo."
+	}
+	return "", ""
+}
+
 // LeerRemito lee el formulario como prepararRemito: el esquema de zod, el
 // documento obligatorio en un retiro (que se controlaba **antes** de mirar si
 // zod había fallado, pero solo si no había fallado) y las cantidades

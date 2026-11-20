@@ -1757,9 +1757,10 @@ Pendiente y preguntas (decisiones de negocio, no se tocaron):
       vez: lo correcto ahí es el remito de constancia. ¿Se rechaza
       `CrearEntrega` si el pedido tiene movimientos «Mostrador V-…»?
       Hecho: `CrearEntrega` rechaza el pedido ya entregado y manda al remito de constancia.
-- [ ] El remito implícito de «Avanzar» nace sin documento de quien retira
+- [x] El remito implícito de «Avanzar» nace sin documento de quien retira
       (en el remito a mano es obligatorio en un retiro): se completa al
       firmar.
+      Hecho: en un retiro, «Avanzar» a entregado recibe `receptorNombre` y `receptorDocumento` (el documento obligatorio, con el mismo mensaje del remito a mano; sin él, 422 y no se mueve nada) y los guarda en el remito. En un envío no cambia nada. El tablero abre el diálogo «Quién retira» (junto con el «sin cobrar», si falta cobrar). `TestAvanzarUnRetiroPideElDocumento` y la e2e de entregas.
 - [x] Cancelar desde Pedidos un pedido ya entregado sigue permitido y no
       devuelve nada (solo libera reservas, que ya no hay).
       Hecho: con un remito vigente pide anularlo primero (`TestNoSeCancelaUnPedidoConRemito`).

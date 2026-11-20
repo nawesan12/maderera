@@ -663,7 +663,15 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Quien retira, para el remito de un retiro que pasa a entregado: el documento es obligatorio (422 en receptorDocumento sin él). En un envío no se usa. */
+        requestBody?: {
+            content: {
+                "application/json": {
+                    receptorNombre?: string;
+                    receptorDocumento?: string;
+                };
+            };
+        };
         responses: {
             200: components["responses"]["Hecho"];
             401: components["responses"]["Problema"];

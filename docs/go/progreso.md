@@ -2781,7 +2781,13 @@ misma consulta al contador.
 
 ### Pendiente
 
-- Los tramos de una devolución por afuera sobre un pedido con Mercado Pago y
+- ~~Los tramos de una devolución por afuera sobre un pedido con Mercado Pago y
   transferencia sin recibo van primero a la transferencia: si en realidad se
   devolvió por Mercado Pago, su aviso suma otro tramo y el CSV lo cuenta dos
-  veces.
+  veces.~~ Hecho (20/11, carril-k): lo devuelto va primero a lo cobrado por
+  Mercado Pago (`topes.mercadoPago`, sin tramo: lo anota su aviso) y solo lo
+  que pasa de ahí lleva tramo en la transferencia o la tarjeta. Lo ya
+  devuelto por Mercado Pago es lo mayor entre lo avisado y lo que las
+  devoluciones le dejaron sin tramo. Prueba:
+  `TestLaDevolucionPorAfueraVaPrimeroAMercadoPago` (MP $600 + transferencia
+  $400; devolver $300 y $800, Deudores en 0 y Banco en 900).

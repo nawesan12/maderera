@@ -164,6 +164,9 @@ type topesDeLaVenta struct {
 	caja, cuenta, afuera, deuda float64
 	conRecibos                  bool
 	enLinea                     float64
+	// mercadoPago es la parte de enLinea que cobró Mercado Pago: la devuelve
+	// él y la anota su aviso (payment_refunds), así que no lleva tramo.
+	mercadoPago float64
 }
 
 // partesDeLaVenta es cuánto entró en efectivo, a cuenta corriente y por los
@@ -232,15 +235,16 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 		return topesDeLaVenta{caja: r(math.Max(0, efectivo-porCaja)), cuenta: r(math.Max(0, aCuenta-porCuenta)),
 			afuera: r(math.Max(0, resto-porAfuera))}, nil
 	}
-	var banco, enLinea, reintegradoEnLinea, alBanco, deuda float64
+	var banco, enLinea, reintegradoEnLinea, alBanco, deuda, cobradoMP, avisadoMP, tramosEnLinea float64
 	if err := c.QueryRow(ctx, `
 		WITH recibos AS (SELECT id FROM receipts WHERE estado = 'emitido' AND id IN `+fragmentos.RecibosDelPedido("$1::uuid")+`),
 		cobros AS (
 		  SELECT CASE WHEN rp.medio = 'efectivo' THEN 'efectivo' WHEN rp.payment_id IS NULL THEN 'banco' ELSE 'linea' END AS tipo,
-		         rp.importe, rp.payment_id
+		         rp.importe, rp.payment_id,
+		         coalesce((SELECT y.proveedor = 'mercado_pago' FROM payments y WHERE y.id = rp.payment_id), false) AS mp
 		  FROM receipt_parts rp WHERE rp.receipt_id IN (SELECT id FROM recibos) AND rp.medio <> 'retencion'
 		  UNION ALL
-		  SELECT CASE WHEN p.medio = 'efectivo' THEN 'efectivo' ELSE 'linea' END, p.monto, p.id
+		  SELECT CASE WHEN p.medio = 'efectivo' THEN 'efectivo' ELSE 'linea' END, p.monto, p.id, p.proveedor = 'mercado_pago'
 		  FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'
 		    AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id))
 		SELECT coalesce(sum(importe) FILTER (WHERE tipo = 'efectivo'), 0)::float8,
@@ -250,16 +254,26 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 		       coalesce((SELECT sum(t.importe) FROM receipt_refunds t WHERE t.receipt_id IN (SELECT id FROM recibos) AND t.medio <> 'efectivo'), 0)::float8,
 		       (SELECT greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`
 		          - coalesce((SELECT sum(pr.monto) FROM payments pr WHERE pr.order_id = o.id AND pr.estado = 'en_revision'), 0), 0)
-		        FROM orders o WHERE o.id = $1)::float8
-		FROM cobros`, pedido).Scan(&efectivo, &banco, &enLinea, &reintegradoEnLinea, &alBanco, &deuda); err != nil {
+		        FROM orders o WHERE o.id = $1)::float8,
+		       coalesce(sum(importe) FILTER (WHERE tipo = 'linea' AND mp), 0)::float8,
+		       coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.devolucion_id IS NULL
+		         AND t.payment_id IN (SELECT payment_id FROM cobros WHERE tipo = 'linea' AND mp)), 0)::float8,
+		       coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.devolucion_id IS NOT NULL
+		         AND t.payment_id IN (SELECT payment_id FROM cobros WHERE tipo = 'linea')), 0)::float8
+		FROM cobros`, pedido).Scan(&efectivo, &banco, &enLinea, &reintegradoEnLinea, &alBanco, &deuda,
+		&cobradoMP, &avisadoMP, &tramosEnLinea); err != nil {
 		return topesDeLaVenta{}, err
 	}
 	// Lo de las devoluciones «por afuera» que no fue a un recibo volvió por
 	// lo cobrado en línea.
 	libre := r(math.Max(0, enLinea-math.Max(reintegradoEnLinea, porAfuera-alBanco)))
+	// Lo que ya volvió por Mercado Pago es, también, lo mayor entre lo que
+	// avisó y lo que las devoluciones le dejaron sin tramo: el aviso llega por
+	// una devolución ya anotada.
+	libreMP := r(math.Min(libre, math.Max(0, cobradoMP-math.Max(avisadoMP, porAfuera-alBanco-tramosEnLinea))))
 	// La deuda ya viene neta de las devoluciones «deuda» (ACobrarDelPedido).
 	return topesDeLaVenta{caja: r(math.Max(0, efectivo-porCaja)), afuera: r(math.Max(0, banco-alBanco) + libre),
-		deuda: r(math.Max(0, deuda)), conRecibos: true, enLinea: libre}, nil
+		deuda: r(math.Max(0, deuda)), conRecibos: true, enLinea: libre, mercadoPago: libreMP}, nil
 }
 
 // DevueltoDeLaVenta es lo que las devoluciones ya sacaron de cada medio: la
@@ -925,14 +939,18 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		if falta > 0.005 {
 			return Devolucion{}, errEmision("Los cobros de esta venta no alcanzan para devolver " + formato.Moneda(total) + ": revisalos en Cobros.")
 		}
-		// Lo cobrado en línea que no es de Mercado Pago (una transferencia
-		// aprobada, el cobro de una venta vieja del mostrador sin
-		// order_payments) nunca recibe aviso: sin el tramo quedaba el mismo
-		// agujero en Deudores. Lo que no alcance ahí es de Mercado Pago, que
-		// avisa por su lado.
+		// De lo cobrado en línea, va primero lo de Mercado Pago: vuelve solo y
+		// lo anota su aviso, sin tramo. Antes iba primero a la transferencia,
+		// y si en realidad se devolvía por Mercado Pago su aviso sumaba otro
+		// reintegro: el CSV lo contaba dos veces. Lo que pasa de ahí (una
+		// transferencia aprobada, el cobro de una venta vieja del mostrador
+		// sin order_payments) nunca recibe aviso: sin el tramo quedaba el
+		// mismo agujero en Deudores.
 		if enLinea := jsmath.Redondear2(math.Min(total, topes.enLinea)); enLinea > 0.005 {
-			if _, err := tramosDeLosPagos(ctx, tx, pedido, id, enLinea, nombre, false); err != nil {
-				return Devolucion{}, err
+			if aPagos := jsmath.Redondear2(enLinea - math.Min(enLinea, topes.mercadoPago)); aPagos > 0.005 {
+				if _, err := tramosDeLosPagos(ctx, tx, pedido, id, aPagos, nombre, false); err != nil {
+					return Devolucion{}, err
+				}
 			}
 		}
 	case DevolverPorCuenta:

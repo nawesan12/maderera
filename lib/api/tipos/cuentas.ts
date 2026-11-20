@@ -1307,6 +1307,8 @@ export interface operations {
                         importe: number;
                         tipo: string;
                         cliente: string | null;
+                        /** @enum {string} */
+                        circuito: "blanco" | "negro";
                     }[];
                 };
             };

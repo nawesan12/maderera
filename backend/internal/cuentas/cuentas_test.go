@@ -202,7 +202,14 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	// Cheques: el de la cartera, y anular (solo el admin) lo anula.
 	// La cartera la usa el pago a proveedores (/admin/compras/pagos), y el
 	// listado de cheques es de /admin/cheques: los dos, solo del admin.
-	if _, b := pedir(t, adm, "GET", u+"cheques/cartera", nil); !strings.Contains(b, "00123456") {
+	// Cada cheque trae su circuito: la pantalla de pagos solo ofrece endosar
+	// los del circuito del pago.
+	if _, err := e.pool.Exec(context.Background(), `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito)
+		values ('recibido', 'fisico', '00999999', now(), 100, 'cartera', 'negro')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, b := pedir(t, adm, "GET", u+"cheques/cartera", nil); !strings.Contains(b, "00123456") ||
+		!strings.Contains(b, `"circuito":"blanco"`) || !strings.Contains(b, `"circuito":"negro"`) {
 		t.Errorf("cartera: %s", b)
 	}
 	if c, _ := pedir(t, ven, "GET", u+"cheques/cartera", nil); c != 403 {

@@ -336,7 +336,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, banco, fechaPago, importe, tipo, cliente]
+                  required: [id, numero, banco, fechaPago, importe, tipo, cliente, circuito]
                   properties:
                     id: { type: string }
                     numero: { type: string }
@@ -345,6 +345,7 @@ paths:
                     importe: { type: number, format: double }
                     tipo: { type: string }
                     cliente: { type: string, nullable: true }
+                    circuito: { type: string, enum: [blanco, negro] }
   /api/v1/admin/cheques/{id}/estado:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

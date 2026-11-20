@@ -200,12 +200,22 @@ func partesDeLaVenta(ctx context.Context, c consultor, pedido string, medio *str
 	// débito del cheque le volvió a cargar al cliente el importe entero, así
 	// que no se le devuelve por afuera (y con el tramo, además se asentaba un
 	// reintegro contra Banco de algo que nunca se cobró).
-	var rechazados float64
-	if err := c.QueryRow(ctx, `SELECT coalesce(sum(ch.importe), 0)::float8 FROM cheques ch
-		JOIN order_payments op ON op.id = ch.order_payment_id WHERE op.order_id = $1 AND ch.estado = 'rechazado'`, pedido).Scan(&rechazados); err != nil {
+	//
+	// Lo que la nota de débito cargó en la cuenta sí vuelve a la cuenta: el
+	// cliente lo debe ahí, y devolverle mercadería es una nota de crédito
+	// contra esa deuda, sin reintegro. Sin esto, con el cheque rebotado no
+	// había destino para devolver nada (por afuera 0, a la cuenta 0 y deuda
+	// siempre 0 en el mostrador). Solo con la nota: un rechazo sin cliente no
+	// carga ninguna cuenta.
+	var rechazados, rechazadosACuenta float64
+	if err := c.QueryRow(ctx, `SELECT coalesce(sum(ch.importe), 0)::float8,
+		coalesce(sum(ch.importe) FILTER (WHERE EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = ch.id AND m.tipo = 'nota_debito')), 0)::float8
+		FROM cheques ch JOIN order_payments op ON op.id = ch.order_payment_id WHERE op.order_id = $1 AND ch.estado = 'rechazado'`, pedido).
+		Scan(&rechazados, &rechazadosACuenta); err != nil {
 		return topesDeLaVenta{}, err
 	}
 	resto -= rechazados
+	aCuenta += rechazadosACuenta
 	var porCaja, porCuenta, porAfuera float64
 	if err := c.QueryRow(ctx, `SELECT coalesce(sum(importe) FILTER (WHERE destino = 'caja'), 0)::float8,
 		coalesce(sum(importe) FILTER (WHERE destino = 'cuenta'), 0)::float8,
@@ -975,7 +985,8 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 // del mostrador nacen en la misma transacción, con el mismo created_at: entre
 // débito y transferencia decide el id, y da igual porque los dos van a Banco.
 func tramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string, enEfectivo bool) (float64, error) {
-	filas, err := tx.Query(ctx, `SELECT p.id, p.monto::float8, coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)::float8
+	filas, err := tx.Query(ctx, `SELECT p.id, p.monto::float8, coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)::float8,
+		coalesce(p.medio = $5, false)
 		FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'
 		  AND CASE WHEN $2::bool THEN p.medio = $3
 		           ELSE coalesce(p.medio, '') NOT IN ($3, $4) AND p.proveedor <> 'mercado_pago'
@@ -988,11 +999,12 @@ func tramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string,
 	type cobro struct {
 		id              string
 		monto, devuelto float64
+		cheque          bool
 	}
 	var cobros []cobro
 	for filas.Next() {
 		var c cobro
-		if err := filas.Scan(&c.id, &c.monto, &c.devuelto); err != nil {
+		if err := filas.Scan(&c.id, &c.monto, &c.devuelto, &c.cheque); err != nil {
 			filas.Close()
 			return 0, err
 		}
@@ -1001,6 +1013,40 @@ func tramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string,
 	filas.Close()
 	if err := filas.Err(); err != nil {
 		return 0, err
+	}
+	if !enEfectivo {
+		// El cobro de un cheque que rebotó no recibe tramo: esa plata nunca
+		// entró (partesDeLaVenta ya la saca del tope) y el tramo quedaba
+		// colgado de un valor sin cobrar, confundiendo la conciliación por
+		// cheque. payments no apunta al cheque: el mostrador anota un cobro
+		// por cada pago de la venta (order_payments), así que cada rechazado
+		// descarta un cobro con cheque de su mismo importe.
+		rechazados, err := tx.Query(ctx, `SELECT ch.importe::float8 FROM cheques ch JOIN order_payments op ON op.id = ch.order_payment_id
+			WHERE op.order_id = $1 AND ch.estado = 'rechazado'`, pedido)
+		if err != nil {
+			return 0, err
+		}
+		var importes []float64
+		for rechazados.Next() {
+			var i float64
+			if err := rechazados.Scan(&i); err != nil {
+				rechazados.Close()
+				return 0, err
+			}
+			importes = append(importes, i)
+		}
+		rechazados.Close()
+		if err := rechazados.Err(); err != nil {
+			return 0, err
+		}
+		for _, imp := range importes {
+			for i, c := range cobros {
+				if c.cheque && math.Abs(c.monto-imp) < 0.005 {
+					cobros = append(cobros[:i], cobros[i+1:]...)
+					break
+				}
+			}
+		}
 	}
 	falta := jsmath.Redondear2(importe)
 	for _, c := range cobros {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"mjbj/internal/jsmath"
 )
@@ -74,7 +75,7 @@ func leerXML(archivos map[string][]byte, ruta string) (valor, error) {
 	if !ok {
 		return nil, nil
 	}
-	o, err := parsearXML(decodificarUTF8(b))
+	o, err := parsearXML(conEspaciosGuardados(decodificarUTF8(b)))
 	if err != nil {
 		return nil, err
 	}
@@ -117,11 +118,57 @@ func sinPrefijos(v valor) valor {
 	return v
 }
 
+// Los espacios de `<t xml:space="preserve">` (tanda 13, «Queda el
+// xml:space»): fast-xml-parser recorta todos los textos, y una celda
+// «  10 x 20  » escrita así salía «10 x 20». Antes de parsear, el texto de
+// cada `<t>` con preserve que empieza o termina con espacios queda entre dos
+// marcas que no son espacio (U+E000 y U+E001, de uso privado), así el recorte
+// no lo toca; conCaracteres las saca al final. Es una pasada de texto y no un
+// cambio del parser para que el original TS de las golden haga exactamente lo
+// mismo con la misma expresión (scripts/golden/originales/xlsx.ts). Solo el
+// `<t>` (con o sin prefijo) y sin hijos: es lo que escribe Excel en
+// sharedStrings y en los inlineStr.
+const (
+	marcaInicio = "\ue000"
+	marcaFin    = "\ue001"
+)
+
+var (
+	textoPreservado = regexp.MustCompile(`<((?:[A-Za-z_][\w.-]*:)?t)([ \t\n\r][^<>]*)>([^<]*)</(?:[A-Za-z_][\w.-]*:)?t>`)
+	conPreserve     = regexp.MustCompile(`(?:^|[ \t\n\r])xml:space[ \t\n\r]*=[ \t\n\r]*(?:"preserve"|'preserve')`)
+	marcas          = strings.NewReplacer(marcaInicio, "", marcaFin, "")
+)
+
+func conEspaciosGuardados(xml string) string {
+	if !strings.Contains(xml, "preserve") {
+		return xml
+	}
+	return textoPreservado.ReplaceAllStringFunc(xml, func(todo string) string {
+		m := textoPreservado.FindStringSubmatch(todo)
+		attrs, contenido := m[2], m[3]
+		if strings.HasSuffix(attrs, "/") || !conPreserve.MatchString(attrs) || contenido == "" {
+			return todo
+		}
+		primero, _ := utf8.DecodeRuneInString(contenido)
+		ultimo, _ := utf8.DecodeLastRuneInString(contenido)
+		if !esEspacioJS(primero) && !esEspacioJS(ultimo) {
+			return todo
+		}
+		// El contenido no tiene "<": termina donde empieza el cierre.
+		cierre := strings.LastIndex(todo, "</")
+		inicio := cierre - len(contenido)
+		return todo[:inicio] + marcaInicio + contenido + marcaFin + todo[cierre:]
+	})
+}
+
 var referenciaNumerica = regexp.MustCompile(`&#(?:x([0-9a-fA-F]{1,6})|([0-9]{1,7}));`)
 
 // conCaracteres resuelve las referencias numéricas (`&#10;`, `&#x41;`) que
 // el parser deja escritas. Las que no son un carácter válido quedan.
 func conCaracteres(texto string) string {
+	if strings.ContainsAny(texto, marcaInicio+marcaFin) {
+		texto = marcas.Replace(texto)
+	}
 	if !strings.Contains(texto, "&#") {
 		return texto
 	}

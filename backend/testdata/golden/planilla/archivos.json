@@ -704,7 +704,7 @@
      "2026-09-04T18:00:00.000Z"
     ],
     [
-     "con espacios",
+     "  con espacios  ",
      "",
      "12",
      "",
@@ -737,7 +737,7 @@
     ],
     [
      "46269",
-     "unodos",
+     " uno dos",
      "0",
      "-5",
      "abc",
@@ -795,7 +795,7 @@
     ],
     [
      "15",
-     "hola"
+     "  hola  "
     ]
    ],
    "codificacion": "xlsx · hoja \"Precios\""
@@ -888,7 +888,7 @@
      "2026-09-04T18:00:00.000Z"
     ],
     [
-     "con espacios",
+     "  con espacios  ",
      "",
      "12",
      "",
@@ -921,7 +921,7 @@
     ],
     [
      "46269",
-     "unodos",
+     " uno dos",
      "0",
      "-5",
      "abc",
@@ -979,7 +979,7 @@
     ],
     [
      "15",
-     "hola"
+     "  hola  "
     ]
    ],
    "codificacion": "xlsx · hoja \"Precios\""

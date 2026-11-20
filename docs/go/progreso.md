@@ -142,7 +142,8 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - Bugs del TS que el lector de Go reproduce a propósito (se arreglan cuando
   se mude la migración, tanda 13): las fechas de un .xlsx salen un día antes;
   se lee el sheetN.xml primero en orden alfabético (sheet10 antes que
-  sheet2); se pierden los espacios de xml:space="preserve"; los &#NN; quedan
+  sheet2); se pierden los espacios de xml:space="preserve" (arreglado el
+  20/11); los &#NN; quedan
   escritos; con prefijo de espacio de nombres (<x:worksheet>) la planilla sale
   vacía; «0,125» se lee como 125.
 
@@ -1240,11 +1241,11 @@ Reproducido a propósito, y pendiente:
       deshace el lote entero con «numeric field overflow», y la corrida
       queda interrumpida: habría que validarla en la fila.
       Hecho: es un error de la fila (`TestAlicuotaInvalidaRechazaSoloSuFila`); la regla se copió al original TS de las golden.
-- [ ] Los otros bugs del lector de .xlsx de la tanda 3 siguen: la hoja se
+- [x] Los otros bugs del lector de .xlsx de la tanda 3 siguen: la hoja se
       elige por nombre de archivo y no por las relaciones del libro, se
       pierden los espacios de `xml:space="preserve"`, los `&#NN;` quedan
       escritos y con prefijo de espacio de nombres la planilla sale vacía.
-      Arreglados el 30/10 (en Go y en el original TS, con las golden regeneradas): la hoja sale de `xl/_rels/workbook.xml.rels`, los prefijos se sacan después de parsear y las `&#NN;` se resuelven en el texto de la celda. Queda el `xml:space="preserve"` (habría que tocar el parser).
+      Arreglados el 30/10 (en Go y en el original TS, con las golden regeneradas): la hoja sale de `xl/_rels/workbook.xml.rels`, los prefijos se sacan después de parsear y las `&#NN;` se resuelven en el texto de la celda. El `xml:space="preserve"` también, el 20/11: el texto de un `<t>` con preserve que empieza o termina con espacios pasa el recorte de fast-xml-parser entre dos marcas de uso privado que `conCaracteres` saca (`conEspaciosGuardados`, la misma expresión en Go y en el original TS); golden regeneradas, 11.344 casos en verde. `TestEspaciosDeXmlSpacePreserve`.
 - [x] Dos lotes de saldos a la vez podrían cargar dos veces el saldo de un
       cliente (mirar y escribir, sin candado). La pantalla manda los lotes
       de a uno, como el TS.

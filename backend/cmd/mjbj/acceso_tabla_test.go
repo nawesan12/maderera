@@ -288,7 +288,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"Recepcion":                      "/admin/recepciones",            // GET /api/v1/admin/recepciones/{id}
 	"ListarRecepciones":              "/admin/recepciones",            // GET /api/v1/admin/recepciones
 	"CrearRecepcion":                 "/admin/recepciones",            // POST /api/v1/admin/recepciones
-	"AnularRecibo":                   "admin",                         // POST /api/v1/admin/recibos/{id}/anular
+	"AnularRecibo":                   "plata",                         // POST /api/v1/admin/recibos/{id}/anular
 	"AnularRemito":                   "/admin/pedidos",                // POST /api/v1/admin/remitos/{id}/anular
 	"PrepararRemito":                 "/admin/pedidos",                // POST /api/v1/admin/remitos
 	"ReporteDeReposicionArchivo":     "/admin/reportes",               // GET /api/v1/admin/reportes/reposicion/archivo

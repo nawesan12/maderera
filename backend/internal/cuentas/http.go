@@ -273,8 +273,12 @@ func (a *API) CobrarACliente(ctx context.Context, r cuentasapi.CobrarAClienteReq
 	return ok(v), err
 }
 
+// AnularRecibo: quien mueve plata (roles.ManejanPlata), como el cobro.
+// Decidido el 19/11: cancelar un pedido pagado pide primero el reintegro, y
+// lo hacen los roles que manejan plata; el pedido con recibo vivo no se
+// cancela hasta anularlo.
 func (a *API) AnularRecibo(ctx context.Context, r cuentasapi.AnularReciboRequestObject) (cuentasapi.AnularReciboResponseObject, error) {
-	ses, err := admin(ctx)
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
 	if err != nil {
 		return nil, err
 	}

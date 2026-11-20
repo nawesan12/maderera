@@ -101,7 +101,11 @@ export async function cobrarPedido(_previo: EstadoCobro, formData: FormData): Pr
   return { ok: r.data.ok, aviso: r.data.aviso, receiptId: r.data.receiptId };
 }
 
-/** Anula un recibo, con motivo (solo el admin): la deuda vuelve a la cuenta. */
+/**
+ * Anula un recibo, con motivo (quien maneja plata): la deuda vuelve a la
+ * cuenta. Go lo frena si una devolución ya le reintegró plata o si un cheque
+ * suyo ya salió de la cartera, y el mensaje se muestra tal cual.
+ */
 export async function anularReciboDesdeElPanel(receiptId: string, motivo: string): Promise<EstadoCobro> {
   if (!motivo.trim()) return { error: "Poné el motivo de la anulación." };
   const r = await (await api()).POST("/api/v1/admin/recibos/{id}/anular", {
@@ -110,6 +114,15 @@ export async function anularReciboDesdeElPanel(receiptId: string, motivo: string
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   revalidatePath("/admin/clientes");
+  revalidatePath("/admin/pedidos");
   revalidatePath("/admin/cheques");
+  revalidatePath("/admin/caja");
   return { ok: r.data.ok };
+}
+
+/** `anularReciboDesdeElPanel` desde un formulario (useActionState). */
+export async function anularRecibo(_previo: EstadoCobro, formData: FormData): Promise<EstadoCobro> {
+  const id = campo(formData, "receiptId");
+  if (!id) return { error: "Falta el recibo." };
+  return anularReciboDesdeElPanel(id, (formData.get("motivo") as string | null) ?? "");
 }

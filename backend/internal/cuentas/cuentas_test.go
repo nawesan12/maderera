@@ -215,8 +215,14 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	if c, _ := pedir(t, ven, "GET", u+"cheques/cartera", nil); c != 403 {
 		t.Errorf("cartera, el vendedor: %d", c)
 	}
-	if c, _ := pedir(t, ven, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "error"}); c != 403 {
-		t.Errorf("anular del vendedor: %d", c)
+	// Anular un recibo es de quien maneja plata (roles.ManejanPlata): el
+	// depósito no; sin motivo, no sale.
+	dep := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
+	if c, _ := pedir(t, dep, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "error"}); c != 403 {
+		t.Errorf("anular del depósito: %d", c)
+	}
+	if c, b := pedir(t, ven, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "  "}); c != 422 || !strings.Contains(b, "Poné el motivo") {
+		t.Errorf("anular sin motivo: %d %s", c, b)
 	}
 	if c, b := pedir(t, adm, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "lo cargué mal"}); c != 200 {
 		t.Errorf("anular: %d %s", c, b)

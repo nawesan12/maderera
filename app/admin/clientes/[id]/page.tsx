@@ -5,7 +5,7 @@ import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
 import { ArrowLeft, ClipboardList, Download, MessageCircle, Printer, Scissors } from "lucide-react";
-import { puedeEntrar } from "@/lib/roles";
+import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { enlaceDeWhatsapp, fechaSolaCorta } from "@/lib/formato";
 import {
@@ -18,6 +18,7 @@ import { AvisoCuentaWeb } from "./aviso-cuenta-web";
 import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
+import { AnularRecibo } from "@/components/cobros/anular-recibo";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
 import { historialDelCliente } from "@/lib/dal/historial-cliente";
@@ -56,6 +57,7 @@ export default async function FichaClientePage({
 
   if (!cliente) notFound();
   const esAdmin = usuario.staffRole === "admin";
+  const manejaPlata = usuario.staffRole != null && MANEJAN_PLATA.includes(usuario.staffRole);
 
   const [recordatorio, resumenCuenta, recibo] = await Promise.all([
     cliente.saldo > 0
@@ -320,6 +322,7 @@ export default async function FichaClientePage({
             <LineaDeTiempo
               movimientos={historial.movimientos}
               enlacePedido={(p) => `/admin/pedidos/${p.id}`}
+              accionDelRecibo={manejaPlata ? (r) => <AnularRecibo id={r.id} numero={r.numero} /> : undefined}
             />
             {historial.hayMas && (
               <p className="border-t border-linea px-5 py-3 text-sm text-muted-foreground">

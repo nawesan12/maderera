@@ -2469,6 +2469,13 @@ quedan confirmados:
 - Cómo se autoriza la serie trabada de más de 50 comprobantes sin CAE.
 - Anular una venta con cheque devuelto en parte por afuera (hoy, prohibido;
   ver abajo, «Los pendientes del 19/11»).
+- Facturar una venta del mostrador cuyo cheque ya se endosó en un pago B
+  (hoy, prohibido hasta anular el pago).
+- Los cheques de ventas B del mostrador que salen del archivo del estudio, y
+  su depósito fuera de «Lo bancarizado en el B» (ver «Antes de desplegar» de
+  los pendientes del 19/11).
+- El reintegro de una devolución que va al mes de su nota de crédito, no al
+  del día en que salió la plata.
 
 Cada una tiene aplicado el default prudente que se describe arriba.
 
@@ -2521,6 +2528,31 @@ plan. Migración 00190 (`payment_refunds.devolucion_id`).
 - **La reposición resta lo devuelto** del renglón de la venta, sin importar
   la fecha de la devolución (es demanda, no un mes cerrado).
 
+Después, lo que encontraron la revisión contable y la adversarial:
+
+- **El cheque del mostrador facturado tarde no mueve un mes entregado.** El
+  depósito o el rechazo de un cheque cobrado antes de la factura se asienta
+  con `fragmentos.FechaDelCheque`: el mayor entre el evento y la factura, la
+  misma que la sección 4 usa para el cobro. Antes, al volver a sacar octubre
+  aparecía «Banco a Valores a depositar» de una venta facturada en noviembre
+  (y Valores a depositar acreedor). Lo usan los asientos de cheques y la rama
+  del cheque rechazado del reparto.
+- **No se factura una venta cuyo cheque ya se endosó en un pago B**
+  (`facturacion.EmitirEnTransaccion`): con la factura el cheque pasaba al
+  blanco y Valores a depositar del estudio quedaba debitado para siempre.
+  Anulado el pago, se factura. La emisión y el endoso toman el mismo candado
+  sobre el cheque, y el endoso lee el circuito después de tomarlo.
+- **Con el cheque rebotado, lo que se devuelve va a la cuenta**: la nota de
+  débito del cheque suma al tope «a la cuenta», y la nota de crédito baja esa
+  deuda sin reintegro. Antes no había destino (afuera, cuenta y deuda en 0).
+- **El cobro de un cheque rechazado no recibe tramo** de una devolución por
+  afuera (`tramosDeLosPagos`). `payments` no apunta al cheque: cada rechazado
+  descarta un cobro con cheque de su mismo importe.
+- **El tramo de una devolución va con su nota de crédito**
+  (`cobros.FechaDelTramo`, en la sección 4 y en el reparto): la nota que ARCA
+  autoriza al día siguiente sale con esa fecha, y el reintegro del 31 a la
+  noche dejaba Deudores debitado en octubre. Vale también para los de caja.
+
 ### Antes de desplegar
 
 Los datos viejos no se migran. Correr en producción:
@@ -2538,11 +2570,32 @@ Si no da 0, hace falta un comando que reparta los tramos con
 `created_at = d.created_at` (no `now()`: el reintegro tiene que caer en el
 mes de la nota de crédito) y que diga qué meses ya entregados cambian.
 
+**El circuito calculado también cambia meses entregados.** Los cheques de
+ventas B del mostrador se asentaban como «blanco» (lo decía la fila); con
+`CircuitoDelCheque` son del B y sus depósitos y rechazos salen del archivo
+del estudio, y cambian los saldos de Valores a depositar. Contarlos por mes:
+
+```sql
+select to_char(date_trunc('month', e.at at time zone 'America/Argentina/Buenos_Aires'), 'YYYY-MM') as mes,
+       e.hacia, count(*), sum(c.importe)
+from cheque_estados e join cheques c on c.id = e.cheque_id
+where c.order_payment_id is not null and c.circuito = 'blanco'
+  and e.hacia in ('acreditado', 'rechazado')
+  and not exists (select 1 from order_payments op join invoices i on i.order_id = op.order_id
+                  where op.id = c.order_payment_id and i.tipo::text like 'factura%' and i.estado <> 'borrador'
+                    and i.cae is not null and i.cae_ambiente is distinct from 'homologacion')
+group by 1, 2 order by 1;
+```
+
+Con la factura que salió después, el mismo cheque se corre a la fecha de la
+factura: ese caso también cambia el mes del evento. Si alguna de las dos da
+filas en meses entregados, avisarle al contador qué meses cambian. Y el
+depósito de un cheque B del mostrador ya no cuenta en «Lo bancarizado en el
+B» (que mira recibos, pagos y gastos): antes contaba como blanco. Va en la
+misma consulta al contador.
+
 ### Pendiente
 
-- Un cheque del mostrador endosado en un pago B antes de que saliera la
-  factura de la venta pasa a «blanco» cuando la factura sale: el cobro entra
-  al estudio y el endoso no.
 - Los tramos de una devolución por afuera sobre un pedido con Mercado Pago y
   transferencia sin recibo van primero a la transferencia: si en realidad se
   devolvió por Mercado Pago, su aviso suma otro tramo y el CSV lo cuenta dos

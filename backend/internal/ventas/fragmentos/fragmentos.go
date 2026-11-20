@@ -147,3 +147,23 @@ func CircuitoDelCheque(ch string) string {
 	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion')
 	  THEN 'blanco' ELSE 'negro' END)`, "ch.", ch+".")
 }
+
+// FechaDelCheque es, sobre la fila `ch` de cheques, la fecha con la que el
+// cierre asienta un cambio de estado del cheque ocurrido en `at`.
+//
+// **El cheque del mostrador cobrado antes de la factura no puede mover un
+// mes ya entregado.** CircuitoDelCheque lo vuelve blanco cuando la factura
+// sale, y la sección 4 de los asientos corre su cobro (Valores a depositar a
+// Deudores) a la fecha de la factura. Con la fecha del evento, un depósito
+// acreditado en octubre de una venta facturada en noviembre aparecía en
+// octubre al volver a sacarlo (octubre distinto de lo entregado y Valores a
+// depositar acreedor hasta noviembre). Corrido a la misma factura que miran
+// la sección 4 y CircuitoDelCheque, el cobro y el depósito caen juntos. Los
+// demás cheques (sin order_payment_id) llevan la fecha del evento.
+func FechaDelCheque(ch, at string) string {
+	return strings.NewReplacer("ch.", ch+".", "{AT}", at).Replace(`(CASE WHEN ch.order_payment_id IS NULL THEN {AT}
+	  ELSE greatest({AT}, coalesce((SELECT cfi.fecha_emision FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
+	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
+	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion'
+	               ORDER BY (cfi.estado = 'anulada'), cfi.fecha_emision LIMIT 1), {AT})) END)`)
+}

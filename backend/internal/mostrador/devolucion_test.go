@@ -515,6 +515,11 @@ func TestDevolucionPorAfuera(t *testing.T) {
 	if q, _ := e.fisicoYReservado(t); q != 92 {
 		t.Errorf("físico %v, quería 92", q)
 	}
+	// El tramo queda en el cobro con débito, atado a la devolución: el cierre
+	// lo asienta como reintegro.
+	if tr := e.tramos(t, d.ID); len(tr) != 1 || tr[ventas.Debito] != 200 {
+		t.Errorf("tramos: %v", tr)
+	}
 	// La mixta: lo que entró con débito vuelve por afuera, hasta lo que
 	// entró con débito.
 	m := e.vendidaYFacturada(t, "afuera-mixta@prueba.test", VentaPedida{MedioPago: ventas.Efectivo, Lineas: placas(e, 10, 10),

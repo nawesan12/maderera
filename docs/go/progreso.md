@@ -2467,16 +2467,83 @@ quedan confirmados:
 - CSV de Deudores sin el circuito B.
 - El centavo de las notas de crédito parciales.
 - Cómo se autoriza la serie trabada de más de 50 comprobantes sin CAE.
+- Anular una venta con cheque devuelto en parte por afuera (hoy, prohibido;
+  ver abajo, «Los pendientes del 19/11»).
 
 Cada una tiene aplicado el default prudente que se describe arriba.
 
 ### Pendiente
 
-- La devolución «por afuera» con tarjeta o transferencia de una venta del
-  mostrador no tiene asiento de reintegro.
-- La pantalla de pagos a proveedores lista cheques de los dos circuitos.
-- `reportes/reposicion.go` no resta las devoluciones.
 - «Deudores-mayor» rehace el reparto en cada vista del cierre: medirlo con el
   volumen de ISIS.
 - «Sucursales como lista» (hallazgo 35) y Sucursales en la barra de arriba:
   los confirma la clienta.
+
+## 19/11/2026: los pendientes del despliegue (carril-i)
+
+Los tres pendientes de arriba, más lo que encontraron los dos revisores del
+plan. Migración 00190 (`payment_refunds.devolucion_id`).
+
+- **La devolución «por afuera» del mostrador anota su tramo.** La rama
+  afuera de `facturacion.devolverEnTransaccion` no anotaba nada: la nota de
+  crédito acreditaba Deudores y el CSV no tenía el reintegro (Deudores contra
+  Banco). Ahora `tramosDeLosPagos` (la generalización de `tramosDelEfectivo`)
+  deja el tramo en los cobros sin recibo de la venta, con el cheque último:
+  una devolución chica sale de la tarjeta o la transferencia. La sección 4
+  de los asientos asienta lo que una devolución saca de un cheque por Banco,
+  no contra Valores a depositar (el cheque sigue en cartera), como la 3b.
+- **Lo cobrado en línea sin Mercado Pago** (una transferencia aprobada, una
+  venta vieja del mostrador sin `order_payments`) tenía el mismo agujero en
+  la rama de los recibos: ahora también lleva su tramo. Lo de Mercado Pago
+  sigue esperando el aviso.
+- **El cheque rechazado ya no se devuelve por afuera**: el tope de la venta
+  del mostrador lo resta (la nota de débito ya le volvió a cargar el importe).
+- **La anulación dice cuánto vuelve por afuera** (`porAfuera`, «Venta
+  anulada. Por afuera se devuelven $ X.»): decía el total y el cajero volvía
+  a devolver lo que ya había salido. **Y no anula si una devolución por
+  afuera ya tocó el cobro con cheque**: le devolvía además el cheque entero.
+  Lo que cierra es devolver el resto desde la factura (el cheque se deposita
+  entero y al cliente le vuelve todo por el banco).
+- **Sección 4 y reparto: lo cobrado con recibo no saca la venta.** El
+  `NOT EXISTS invoice_payments` no filtraba `receipt_id IS NULL`: la venta
+  mixta del mostrador cuya parte a cuenta corriente se cobraba después desde
+  Facturación perdía hacia atrás el cobro con tarjeta (Deudores debía esa
+  parte para siempre). **Esto cambia meses ya entregados al estudio** si
+  hubo un caso así: avisarle al contador.
+- **El circuito del cheque del mostrador sale de la factura**
+  (`fragmentos.CircuitoDelCheque`). Nacía siempre «blanco»: el de una venta B
+  se podía endosar en un pago blanco y su depósito acreditaba Valores a
+  depositar del estudio, donde nunca entró. Lo usan la cartera, el endoso,
+  los asientos de cheques, el listado y el reparto del cheque rechazado.
+- **Pagos a proveedores** ofrece endosar solo los cheques del circuito del
+  pago (`app/admin/compras/pagos/endoso.ts`); los del otro se ven apagados
+  bajo el nombre de su circuito. La regla sigue en `compras.registrarParte`.
+- **La reposición resta lo devuelto** del renglón de la venta, sin importar
+  la fecha de la devolución (es demanda, no un mes cerrado).
+
+### Antes de desplegar
+
+Los datos viejos no se migran. Correr en producción:
+
+```sql
+select count(*) from devoluciones d
+where d.destino = 'afuera'
+  and exists (select 1 from order_payments op where op.order_id = d.order_id)
+  and exists (select 1 from invoices i where i.order_id = d.order_id and i.tipo::text like 'factura%'
+              and i.estado <> 'borrador' and i.cae is not null and i.cae_ambiente is distinct from 'homologacion')
+  and not exists (select 1 from payment_refunds t where t.devolucion_id = d.id);
+```
+
+Si no da 0, hace falta un comando que reparta los tramos con
+`created_at = d.created_at` (no `now()`: el reintegro tiene que caer en el
+mes de la nota de crédito) y que diga qué meses ya entregados cambian.
+
+### Pendiente
+
+- Un cheque del mostrador endosado en un pago B antes de que saliera la
+  factura de la venta pasa a «blanco» cuando la factura sale: el cobro entra
+  al estudio y el endoso no.
+- Los tramos de una devolución por afuera sobre un pedido con Mercado Pago y
+  transferencia sin recibo van primero a la transferencia: si en realidad se
+  devolvió por Mercado Pago, su aviso suma otro tramo y el CSV lo cuenta dos
+  veces.

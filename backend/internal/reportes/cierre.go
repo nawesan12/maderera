@@ -3,6 +3,7 @@ package reportes
 import (
 	"context"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,10 +58,31 @@ func numero(n jsmath.Num) float64 { return n.F() }
 // estudio lleva solo el blanco (CsvAsientos). Antes los gastos y pagos «en
 // negro» y los cobros de ventas sin factura entraban a los asientos de este
 // CUIT.
+//
+// La vista del cierre pide los asientos del blanco y los del B a la vez, y
+// cada uno filtraba el mismo armado entero: los dos que llegan juntos con el
+// mismo período comparten uno (compartido). Cada uno recibe su propia
+// lista, pero los asientos y sus renglones son de los dos: nadie los
+// modifica.
 func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Time) ([]Asiento, error) {
-	asientos := []Asiento{}
-	idesde, ihasta := instantes(desde, hasta)
+	clave := strconv.FormatInt(desde.UnixNano(), 10) + "|" + strconv.FormatInt(hasta.UnixNano(), 10)
+	v, err := compartido(ctx, &s.asientos, clave, func(c context.Context) ([]Asiento, error) {
+		_, ihasta := instantes(desde, hasta)
+		reparto, err := s.repartoHasta(c, ihasta)
+		if err != nil {
+			return nil, err
+		}
+		return s.asientosDelPeriodoCon(c, desde, hasta, reparto)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return append([]Asiento{}, v...), nil
+}
 
+// asientosDeVentas son las facturas y notas con CAE del período (instantes).
+func (s *Servicio) asientosDeVentas(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	asientos := []Asiento{}
 	rs, err := s.lectura.Query(ctx, `
 		SELECT fecha_emision, tipo::text, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, exento
 		FROM invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND `+conCae+`
@@ -85,20 +107,56 @@ func (s *Servicio) AsientosDelPeriodo(ctx context.Context, desde, hasta time.Tim
 		asientos = append(asientos, venta)
 	}
 	rs.Close()
-	if err := rs.Err(); err != nil {
-		return nil, err
-	}
+	return asientos, rs.Err()
+}
 
-	cobros, err := s.asientosDeCobro(ctx, idesde, ihasta)
+// asientosDeDeudores son, de los asientos del período, los que pueden tocar
+// Deudores por ventas (1.1.03): las ventas, los cobros —con las
+// aplicaciones de anticipo— y los cheques, en el mismo orden en que los
+// junta asientosDelPeriodoCon. Con el mismo orden, SaldoDeCuenta suma lo
+// mismo en el mismo orden y da el mismo centavo.
+//
+// Es para el control «deudores-mayor», que necesita el saldo de 1.1.03 desde
+// el principio: armaba la historia entera, compras, pagos a proveedores y
+// gastos incluidos, que no tocan Deudores. Sale de los mismos constructores
+// que el CSV, así que el control sigue siendo independiente del reparto (la
+// prueba del volumen verifica que ningún otro asiento toca 1.1.03).
+func (s *Servicio) asientosDeDeudores(ctx context.Context, desde, hasta time.Time, reparto cobros.ResultadoDelReparto) ([]Asiento, error) {
+	idesde, ihasta := instantes(desde, hasta)
+	asientos, err := s.asientosDeVentas(ctx, idesde, ihasta)
 	if err != nil {
 		return nil, err
 	}
-	for i := range cobros {
-		cobros[i].Instante = true
+	cobros, err := s.asientosDeCobro(ctx, idesde, ihasta, reparto)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, cobros...)
+	cheques, err := s.asientosDeCheques(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, cheques...)
+	sort.SliceStable(asientos, func(i, j int) bool { return asientos[i].Fecha.Before(asientos[j].Fecha) })
+	return asientos, nil
+}
+
+// asientosDelPeriodoCon es AsientosDelPeriodo con el reparto hasta el fin
+// del período ya hecho.
+func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.Time, reparto cobros.ResultadoDelReparto) ([]Asiento, error) {
+	idesde, ihasta := instantes(desde, hasta)
+	asientos, err := s.asientosDeVentas(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+
+	cobros, err := s.asientosDeCobro(ctx, idesde, ihasta, reparto)
+	if err != nil {
+		return nil, err
 	}
 	asientos = append(asientos, cobros...)
 
-	rs, err = s.lectura.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento,
 		  coalesce(f.percepcion_iva, 0), coalesce(f.percepcion_iibb, 0)
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
@@ -234,7 +292,7 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 	// El período va sobre la fecha corrida (fragmentos.FechaDelCheque), que
 	// nunca es anterior al evento: por eso el evento ya puede filtrar el
 	// final del período adentro, con el índice.
-	rs, err := s.pool.Query(ctx, `
+	rs, err := s.lectura.Query(ctx, `
 		SELECT * FROM (
 		SELECT `+fragmentos.FechaDelCheque("c", "e.at")+` AS asentado, c.numero, coalesce(c.banco, ''), c.sentido::text, e.desde::text, e.hacia::text,
 		  c.importe::float8, `+fragmentos.CircuitoDelCheque("c")+`,
@@ -378,7 +436,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta time.Time) ([]PendienteDelCierre, error) {
 	idesde, ihasta := instantes(desde, hasta)
 	var fueraDeMes, pagosB, retencionesB int
-	if err := s.pool.QueryRow(ctx, `
+	if err := s.lectura.QueryRow(ctx, `
 		SELECT
 		  (SELECT count(*)::int FROM invoices WHERE `+conCae+` AND fecha_emision >= $1 AND fecha_emision <= $2
 		     AND fecha_emision_original < $1),
@@ -427,7 +485,12 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 	for _, d := range reparto.Deudores {
 		listado = float64(listado + d)
 	}
-	todos, err := s.AsientosDelPeriodo(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), hasta)
+	//
+	// El saldo de 1.1.03 hasta el fin del mes reparte hasta el mismo instante
+	// que el de arriba (instantes da el mismo ihasta con cualquier desde):
+	// usa el mismo reparto en vez de repetirlo, y solo los asientos que
+	// pueden tocar Deudores (asientosDeDeudores).
+	todos, err := s.asientosDeDeudores(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), hasta, reparto)
 	if err != nil {
 		return nil, err
 	}

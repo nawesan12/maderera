@@ -2216,8 +2216,8 @@ Quedó sin hacer, a propósito:
   asiento). En la base local no hay ninguna (0 de 63 ventas con
   order_payments); el mostrador siempre escribe las dos. Si la migración de
   ISIS trae ventas así, hay que darles su `payments` o una salida explícita.
-- «Deudores-mayor» rehace todo el reparto en cada vista del cierre: con el
-  volumen de ISIS puede ponerse lento.
+- ~~«Deudores-mayor» rehace todo el reparto en cada vista del cierre~~:
+  resuelto, ver «Reparto con el volumen de ISIS» en «19/11/2026».
 
 **Paso del despliegue: correr `mjbj repartos` (FijarRepartosDeAntes) antes
 de desplegar esta rama.** Los recibos de pedidos sin cliente no tenían el
@@ -2479,10 +2479,195 @@ quedan confirmados:
 
 Cada una tiene aplicado el default prudente que se describe arriba.
 
+### Reparto con el volumen de ISIS
+
+«Deudores-mayor» rehacía el reparto en cada vista del cierre. Se midió con
+`backend/internal/reportes/testdata/volumen.sql`, que siembra 3 años de
+historia:
+
+- 5.000 clientes y 60.000 pedidos;
+- 10.000 facturas, el 1 % esperando el CAE;
+- 41.000 recibos, con retenciones, cheques B, anulados, devoluciones y
+  pedidos sin cliente;
+- cobros sin recibo y cheques rechazados;
+- compras, pagos y gastos.
+
+Las pruebas que miden se saltean sin `MJBJ_VOLUMEN`:
+`reportes/volumen_test.go` (con `MJBJ_VOLUMEN_FOTO` compara byte a byte
+contra la foto del código de antes) y `cobros/volumen_test.go` (los
+`EXPLAIN`). Las dos bases son `mjbj_volumen_j` (sin fijar) y
+`mjbj_volumen_j_fijo` (después de `mjbj repartos`, que es como queda
+producción). Se midió en PG 17 local, con 12 CPU y `pg_jit_available` en
+true.
+
+Lo que costaba:
+
+- **El JIT.** Las subconsultas correlacionadas estiman 24 M de costo, y la
+  consulta se compilaba: eran 4,9 s de JIT sobre 3,7 s de trabajo.
+- **Un solo cliente también se compilaba.** Uno de 8 recibos estima 125.000,
+  por encima de `jit_above_cost`. Al emitir cada recibo, con el candado
+  tomado, eran 0,4–0,6 s de JIT sobre 15–40 ms de trabajo. Lo de «5,5 ms,
+  nada que tocar» era sobre datos más chicos.
+- **Los pendientes de cada recibo**, aunque estuviera fijado y sin anticipo:
+  2,3 M de páginas leídas. Un recibo fijado sin anticipo ya no los lee, y
+  quedan 200.000. Sobre la base sin fijar, el recorte no cambia nada (3,5 s
+  con y sin).
+- **Repartos repetidos.** Pendientes repartía dos veces, y asientos y
+  asientos-b una cada uno, en paralelo.
+
+| Base fijada | Antes | Después |
+|---|---|---|
+| Consulta de todas las cuentas (`EXPLAIN`) | 8,6 s (4,9 s de JIT) | 0,62 s |
+| Consulta de un cliente (`EXPLAIN`) | 0,48 s | 0,015 s |
+| Un reparto (`repartoHasta`) | 10,4 s | 0,83 s |
+| `AsientosDelPeriodo` del mes | 9,9 s | 0,98 s |
+| `PendientesDelCierre` | 22,1 s | 1,45 s |
+| `CsvDeudores` | 9,5 s | 0,90 s |
+| Vista del cierre, las 4 a la vez: pendientes | 20,0 s | 1,56 s |
+| Vista del cierre: asientos y asientos-b | 10,4 s | 1,08 s |
+
+En la base sin fijar, la vista pasa de 17–41 s (según la carga) a 5,5 s. Se
+fija con `mjbj repartos`, que tardó 17,6 s para 41.000 recibos.
+
+Qué cambió (`cobros/reparto.go`, `reportes/cobros.go`, `reportes/cierre.go`):
+
+- **`PlanDelReparto`** (antes `ApagarJIT`). Apaga el JIT y fuerza el plan
+  a medida (`plan_cache_mode`), con alcance de transacción, en el reparto
+  del cierre, en `FijarReparto` y en `FijarRepartosDeAntes`, y después
+  vuelve a los valores de antes. Lee y cambia los dos en una sola ida a la
+  base. El pool no cambia.
+- **El recorte `{F}`/`{G}` en `eventosSQL`**, en las dos variantes. La
+  condición copia la de `Guardado` en `CargarEventos`: las tres columnas no
+  nulas. Si mirara solo `reparto_deudores`, un recibo cargado a medias se
+  recalcularía sin sus pendientes.
+- **`repartoHasta`** lee por el pool de lectura, en una transacción de solo
+  lectura y REPEATABLE READ: los eventos y los pendientes son dos consultas
+  que tienen que ver la misma foto.
+- **`compartido`** en `repartoHasta` y en `AsientosDelPeriodo`: las llamadas
+  iguales que llegan a la vez hacen un solo cálculo. Corre con un contexto
+  propio de 2 minutos: si el primero se va, los demás no reciben su
+  cancelación; si se va el último, el cálculo se cancela y suelta su
+  conexión. No guarda nada: el que llega cuando el cálculo terminó reparte
+  de nuevo.
+- **«Deudores-mayor»** reusa el reparto de los pendientes y suma
+  `asientosDeDeudores` (ventas, cobros y cheques, en el mismo orden). En el
+  volumen, ningún otro asiento toca 1.1.03.
+- **Lo emitido o anulado después de la foto del reparto** queda para la
+  próxima lectura, igual que en el reparto: el recibo que el reparto no ve
+  no se asienta, y la anulación que no ve tampoco
+  (`ResultadoDelReparto.Anulados`). Antes el recibo era un error para
+  reintentar, y la anulación se asentaba sin su «Desaplica anticipo».
+
+Las pruebas que dicen que no cambió un centavo:
+
+- `cobros/reparto_recorte_test.go`: el `ResultadoDelReparto` entero con y
+  sin recorte. Cubre antes y después de fijar, el estado mixto, repartos
+  guardados distintos del recálculo, anticipos de 0,01 y de 0, un reparto a
+  medias y `FijarReparto`. Falla si se saca una de las dos mitades de la
+  condición.
+- `reportes/cierre_reparto_test.go`: `asientosDeDeudores` y
+  `asientosDelPeriodoCon` contra el armado entero, y el `singleflight` (con
+  `-race`).
+- La foto de 13 archivos: asientos blanco y B y pendientes de 2024-01,
+  2025-06, 2026-10 y 2026-11, y el listado de deudores. Da igual en las dos
+  bases.
+
+Lo que queda:
+
+- ~~**Anticipos.**~~ Resuelto en «Las cuentas pesadas» (abajo): los
+  pendientes ya no se calculan recibo por recibo, y la proporción de
+  anticipos pesa poco.
+- **Caché por mes cerrado.** No se hace: el CAE tardío, el reintegro y el
+  `acreditado_at` cargan hechos con fecha en el pasado. Después del recorte,
+  el costo crece con la historia: unos 1,2 s a 5 años y 2,5 s a 10. Si la
+  vista vuelve a pasar los 3 s, conviene un corte por período con el estado
+  arrastrado, invalidado por el LISTEN que ya existe. Con las cuentas
+  pesadas de abajo la vista da 2,5 s: es el límite, y si en la VPS pasa de
+  3 s lo que sigue es el saldo de apertura de 1.1.03 por mes cerrado.
+- **Producción** usa los valores por defecto de la imagen (`shared_buffers`
+  128 MB, `work_mem` 4 MB). Si la imagen no trae llvmjit, ahí no había JIT
+  que sacar y lo que pesa es leer de disco. Por eso la medición en la VPS
+  está en los pendientes.
+
+### Las cuentas pesadas
+
+La revisión del reparto encontró que la siembra no tenía cuentas grandes:
+los clientes se repartían parejo y el más grande tenía 8 recibos. Una
+maderera tiene pocas cuentas grandes (constructoras, carpinteros) con miles
+de pedidos, y los pendientes de cada recibo recorrían todos los pedidos y
+las facturas del cliente. `reportes/testdata/volumen_pesadas.sql` suma, en
+un archivo aparte para no mover la foto, 3 cuentas con 5.000 pedidos y
+2.000 recibos cada una, con una seña de cada cinco recibos
+(`mjbj_volumen_j_pesadas`, armada desde `mjbj_volumen_j`).
+
+Medido así, el LATERAL de los pendientes costaba 65 ms por recibo:
+
+- con la base sin fijar, `FijarReparto` de esa cuenta no terminó en 10
+  minutos (2.000 recibos × 65 ms, con el candado de recibos tomado);
+- con la base fijada, cada seña con anticipo sumaba sus 65 ms: con 125
+  señas, 1,9 s por emisión, y con el 20 % de señas que pedía la revisión
+  hubieran sido unos 26 s.
+
+**Los pendientes ahora se calculan en Go** (`cobros/pendientes.go`).
+`pendientesSQL` lee una vez cada pedido y cada factura de los clientes que
+hacen falta, con lo que no depende del recibo (cuándo llegó el CAE, cuándo
+se facturó el pedido, su historial), y Go cruza cada recibo con los de su
+cliente. Va en el mismo viaje a la base que los eventos. La regla es la
+misma, condición por condición, con una sola diferencia: dos cambios del
+historial en el mismo instante cuentan como cerrados, y el LATERAL elegía
+cualquiera de los dos.
+
+| Con las cuentas pesadas | Antes | Después |
+|---|---|---|
+| `FijarReparto` de la cuenta pesada, sin fijar | más de 10 min | 0,45–0,77 s |
+| `FijarReparto` de la cuenta pesada, fijada | 1,9 s (125 señas) | 0,25–0,42 s |
+| Todas las cuentas, fijada | 7,0 s | 1,0 s |
+| Vista del cierre, fijada: pendientes | — | 2,5 s |
+| Vista del cierre, sin fijar: pendientes | — | 5,0 s |
+| `mjbj repartos` (47.000 recibos) | — | 10,4 s |
+
+**El límite de `FijarReparto` es 0,5 s** en la cuenta más pesada con la
+base fijada (`limiteDeFijarReparto` en `cobros/volumen_test.go`). Hoy la
+mitad es leer los 5.000 pedidos y las 4.000 facturas de la cuenta; si se
+pasa, lo que sigue es leer solo los que pueden estar abiertos a la fecha de
+alguna seña. Una cuenta chica paga unos milisegundos más que antes por la
+segunda consulta (29 ms contra 26 ms).
+
+**El plan genérico.** `FijarReparto` corre por el pool principal, donde pgx
+deja la sentencia preparada y Postgres puede pasar al plan genérico desde la
+sexta ejecución. Medido con diez emisiones seguidas en la misma conexión, el
+genérico forzado da lo mismo que el a medida (0,20–0,24 s contra
+0,21–0,29 s). Igual `PlanDelReparto` fuerza el plan a medida, porque los
+filtros de una clave tienen la mitad de los parámetros nulos según la clave.
+
+Las pruebas:
+
+- `cobros/reparto_recorte_test.go` compara `CargarEventos` contra el SQL de
+  antes, con el LATERAL y sin recortar, y suma un pedido sin cliente con la
+  factura esperando el CAE y un pedido reabierto. Falla si se saca el
+  historial, la primera factura del pedido o las facturas del pedido de un
+  recibo sin cliente.
+- `cobros/volumen_test.go`: `TestVolumenLosPendientesDanLoMismo` da el mismo
+  `ResultadoDelReparto` que el SQL de producción de antes, de todas las
+  cuentas y de la más pesada, en `mjbj_volumen_j_fijo` y en
+  `mjbj_volumen_j_pesadas`; `TestVolumenDeLaCuentaPesada` mide la emisión.
+- La foto de 13 archivos sigue dando igual en `mjbj_volumen_j` y en
+  `mjbj_volumen_j_fijo`.
+- `reportes/cierre_reparto_test.go`: el último que se va cancela el
+  reparto, y lo emitido o anulado después de la foto queda para la próxima.
+
 ### Pendiente
 
-- «Deudores-mayor» rehace el reparto en cada vista del cierre: medirlo con el
-  volumen de ISIS.
+Lo del reintegro por afuera, los cheques por circuito y la reposición lo
+resolvió carril-i; el reparto con el volumen de ISIS, carril-j (abajo).
+
+- Medir en la VPS, de solo lectura, antes de dar por cerrado «Reparto con
+  el volumen de ISIS» (abajo):
+  `SELECT pg_jit_available(), current_setting('jit'), current_setting('jit_above_cost')`
+  y `EXPLAIN (ANALYZE, BUFFERS)` de la consulta de todas las cuentas con y
+  sin `jit = off`. La proporción de recibos con anticipo ya no decide nada
+  (ver «Las cuentas pesadas»). Con los datos de ISIS cargados, correr
+  `TestVolumenDeLaCuentaPesada` contra una copia: el límite es 0,5 s.
 - «Sucursales como lista» (hallazgo 35) y Sucursales en la barra de arriba:
   los confirma la clienta.
 

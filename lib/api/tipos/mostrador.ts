@@ -252,6 +252,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mostrador/caja/desvincular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Suelta la caja física de la PC que la tiene: le cambia el secreto, así
+         *     esa PC deja de reconocerse en el latido y vuelve a pedir que se la
+         *     vincule. Solo admin. Con ventas sin subir, no.
+         */
+        post: operations["DesvincularTerminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -919,6 +940,25 @@ export interface operations {
                     /** Format: double */
                     contado: number | null;
                     notas: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    DesvincularTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    cajaId: string;
                 };
             };
         };

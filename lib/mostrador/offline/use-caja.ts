@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { guardarMeta, leerMeta } from "./db";
+import { borrar, guardarMeta, leerMeta } from "./db";
 
 /**
  * La caja física de esta máquina y su contador de números provisorios.
@@ -25,8 +25,31 @@ export interface CajaVinculada {
 export interface EstadoCaja {
   caja: CajaVinculada | null;
   vincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
+  /**
+   * Suelta la caja de esta máquina (ya desvinculada en el servidor). Si se
+   * pasa el secreto, solo la suelta si sigue siendo ese: un latido viejo no
+   * puede soltar la que se vinculó después.
+   */
+  desvincular: (secreto?: string) => Promise<void>;
   /** Consume el número actual. Se llama **después** de guardar la venta. */
   avanzar: () => Promise<void>;
+}
+
+type Contadores = Record<string, number>;
+
+/**
+ * El próximo número al volver a vincular `codigo`: el de la caja que ya tenía
+ * esta máquina, o el que quedó guardado al desvincularla, o 1. Desvincular y
+ * volver a vincular la misma caja no puede reiniciar la numeración.
+ */
+export function proximoAlVincular(
+  codigo: string,
+  previa: Pick<CajaVinculada, "codigo" | "proximoNumero"> | null,
+  contadores: Contadores | null,
+): number {
+  const guardado = contadores?.[codigo] ?? 1;
+  const actual = previa && previa.codigo === codigo ? previa.proximoNumero : 1;
+  return Math.max(1, guardado, actual);
 }
 
 export function useCaja(): EstadoCaja {
@@ -50,8 +73,8 @@ export function useCaja(): EstadoCaja {
        * de días distintos terminarían con el mismo papel.
        */
       const previa = await leerMeta<CajaVinculada>("caja");
-      const proximoNumero =
-        previa && previa.codigo === datos.codigo ? previa.proximoNumero : 1;
+      const contadores = await leerMeta<Contadores>("contadores");
+      const proximoNumero = proximoAlVincular(datos.codigo, previa, contadores);
 
       const nueva = { ...datos, proximoNumero };
       await guardarMeta("caja", nueva);
@@ -59,6 +82,18 @@ export function useCaja(): EstadoCaja {
     },
     [],
   );
+
+  const desvincular = useCallback(async (secreto?: string) => {
+    const actual = await leerMeta<CajaVinculada>("caja");
+    if (!actual) return;
+    if (secreto !== undefined && actual.secreto !== secreto) return;
+
+    const contadores = (await leerMeta<Contadores>("contadores")) ?? {};
+    contadores[actual.codigo] = Math.max(contadores[actual.codigo] ?? 1, actual.proximoNumero);
+    await guardarMeta("contadores", contadores);
+    await borrar("meta", "caja");
+    setCaja(null);
+  }, []);
 
   const avanzar = useCallback(async () => {
     const actual = await leerMeta<CajaVinculada>("caja");
@@ -69,5 +104,5 @@ export function useCaja(): EstadoCaja {
     setCaja(siguiente);
   }, []);
 
-  return { caja, vincular, avanzar };
+  return { caja, vincular, desvincular, avanzar };
 }

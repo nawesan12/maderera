@@ -298,6 +298,26 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/caja/desvincular:
+    post:
+      operationId: DesvincularTerminal
+      description: |
+        Suelta la caja física de la PC que la tiene: le cambia el secreto, así
+        esa PC deja de reconocerse en el latido y vuelve a pedir que se la
+        vincule. Solo admin. Con ventas sin subir, no.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cajaId]
+              additionalProperties: false
+              properties:
+                cajaId: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
 components:
   responses:
     Problema:

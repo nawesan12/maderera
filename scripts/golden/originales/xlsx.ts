@@ -132,7 +132,32 @@ function comoLista<T>(valor: T | T[] | undefined): T[] {
 function leerXml(archivos: Map<string, Uint8Array>, ruta: string): unknown {
   const bytes = archivos.get(ruta);
   if (!bytes) return null;
-  return sinPrefijos(parser.parse(new TextDecoder().decode(bytes)));
+  return sinPrefijos(parser.parse(conEspaciosGuardados(new TextDecoder().decode(bytes))));
+}
+
+/**
+ * Los espacios de `<t xml:space="preserve">`: el parser recorta todos los
+ * textos, y una celda «  10 x 20  » salía «10 x 20». El texto de cada `<t>`
+ * con preserve que empieza o termina con espacios queda entre dos marcas que
+ * no son espacio (U+E000 y U+E001), así el recorte no lo toca, y
+ * `conCaracteres` las saca. Agregado en Go el 20/11 (planilla/xlsx.go) y
+ * copiado acá con la misma expresión: las golden siguen siendo la
+ * especificación.
+ */
+const MARCA_INICIO = "\ue000";
+const MARCA_FIN = "\ue001";
+const TEXTO_PRESERVADO = /<((?:[A-Za-z_][\w.-]*:)?t)([ \t\n\r][^<>]*)>([^<]*)<\/(?:[A-Za-z_][\w.-]*:)?t>/g;
+const CON_PRESERVE = /(?:^|[ \t\n\r])xml:space[ \t\n\r]*=[ \t\n\r]*(?:"preserve"|'preserve')/;
+
+function conEspaciosGuardados(xml: string): string {
+  if (!xml.includes("preserve")) return xml;
+  return xml.replace(TEXTO_PRESERVADO, (todo: string, _t: string, attrs: string, contenido: string) => {
+    if (attrs.endsWith("/") || !CON_PRESERVE.test(attrs) || contenido === "") return todo;
+    if (!/^\s/u.test(contenido) && !/\s$/u.test(contenido)) return todo;
+    const cierre = todo.lastIndexOf("</");
+    const inicio = cierre - contenido.length;
+    return todo.slice(0, inicio) + MARCA_INICIO + contenido + MARCA_FIN + todo.slice(cierre);
+  });
 }
 
 /**
@@ -160,7 +185,7 @@ function sinPrefijos(v: unknown): unknown {
  * Las que no son un carácter válido quedan como están.
  */
 function conCaracteres(texto: string): string {
-  return texto.replace(/&#(?:x([0-9a-fA-F]{1,6})|([0-9]{1,7}));/g, (todo, hex, dec) => {
+  return texto.replaceAll(MARCA_INICIO, "").replaceAll(MARCA_FIN, "").replace(/&#(?:x([0-9a-fA-F]{1,6})|([0-9]{1,7}));/g, (todo, hex, dec) => {
     const cp = hex !== undefined ? parseInt(hex, 16) : parseInt(dec, 10);
     if (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return todo;
     return String.fromCodePoint(cp);

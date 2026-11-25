@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
@@ -147,6 +148,7 @@ export default async function FichaPresupuestoPage({
             ) : (
               <p className="text-base font-medium">{p.cliente}</p>
             )}
+            {p.fichaPorCorreo && <UnirAFicha que="presupuesto" id={p.id} ficha={p.fichaPorCorreo} />}
             {p.empresa && (
               <p className="text-base text-muted-foreground">{p.empresa}</p>
             )}

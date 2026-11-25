@@ -58,6 +58,27 @@ paths:
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/ficha:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: UnirPedidoAFicha
+      summary: Ata un pedido sin cliente (y sin recibos ni comprobantes) a la ficha con el correo de su contacto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId]
+              additionalProperties: false
+              properties:
+                customerId: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/taller:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     get:
@@ -81,6 +102,20 @@ paths:
         409 y no se avanza un paso de más (que en un retiro emite el remito).
       parameters:
         - { name: desde, in: query, schema: { type: string, maxLength: 40 } }
+      requestBody:
+        required: false
+        description: >-
+          Quien retira, para el remito de un retiro que pasa a entregado: el
+          documento es obligatorio (422 en receptorDocumento sin él). En un
+          envío no se usa.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                receptorNombre: { type: string, maxLength: 120 }
+                receptorDocumento: { type: string, maxLength: 30 }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -220,6 +255,27 @@ paths:
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/presupuestos/{id}/ficha:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: UnirPresupuestoAFicha
+      summary: Ata un presupuesto sin cliente a la ficha con el correo de su contacto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId]
+              additionalProperties: false
+              properties:
+                customerId: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/presupuestos/{id}/estado:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
     post:
@@ -360,6 +416,13 @@ components:
         subtotal: { type: string }
         orden: { type: integer }
         alicuotaIva: { type: string, nullable: true }
+    FichaParaUnir:
+      type: object
+      required: [id, nombre, unible]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        unible: { type: boolean, description: "un pedido con recibos o comprobantes no se une desde acá" }
     FichaDePresupuesto:
       type: object
       required: [id, numero, cliente, email, telefono, empresa, customerId, clienteCodigo, clienteCuit, clienteCondicionIva,
@@ -368,6 +431,10 @@ components:
       properties:
         vencido: { type: boolean, description: "pasó su validez: para pasarlo a pedido hay que elegir los precios" }
         totalDeHoy: { type: string, nullable: true, description: "el total con los precios de lista de hoy, si venció" }
+        fichaPorCorreo:
+          nullable: true
+          description: Sin cliente, la ficha con el correo del contacto (para unirlo a mano)
+          allOf: [{ $ref: "#/components/schemas/FichaParaUnir" }]
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
@@ -543,3 +610,7 @@ components:
         saldoCliente: { type: number, format: double, nullable: true, description: Positivo, debe }
         entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }
         sinCobrar: { $ref: "#/components/schemas/SinCobrar" }
+        fichaPorCorreo:
+          nullable: true
+          description: Sin cliente, la ficha con el correo del contacto (para unirlo a mano)
+          allOf: [{ $ref: "#/components/schemas/FichaParaUnir" }]

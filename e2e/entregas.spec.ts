@@ -83,6 +83,54 @@ test("un retiro parcial con remito, su firma y su anulación", async ({ page }) 
   await expect(page.getByText("Pedido cancelado. La mercadería reservada quedó disponible.")).toBeVisible();
 });
 
+test("entregar un retiro desde el tablero pide el documento de quien retira", async ({ page }) => {
+  test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
+
+  // Un pedido propio de retiro, como el de arriba.
+  await page.goto("/admin/presupuestos/nuevo");
+  await page.locator("#contactoNombre").fill(`E2E retira ${Date.now()}`);
+  await page.getByPlaceholder("Buscar por nombre, medida o código").fill("mm");
+  const primera = page.locator("ul button").first();
+  await expect(primera).toBeVisible();
+  await primera.click();
+  await page.locator("#cantidad-0").fill("1");
+  await page.getByRole("button", { name: "Guardar presupuesto" }).click();
+  await page.waitForURL(/\/admin\/presupuestos\/[0-9a-f-]{36}/);
+  await page.getByRole("button", { name: "Aceptar" }).click();
+  await expect(page.getByText("Presupuesto actualizado.")).toBeVisible();
+  await page.getByRole("button", { name: "Pasar a pedido" }).click();
+  await page.getByRole("dialog").getByRole("radio", { name: "Efectivo" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Crear el pedido" }).click();
+  await page.waitForURL(/\/admin\/pedidos\/[0-9a-f-]{36}/);
+
+  await page.getByRole("button", { name: "Preparar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Marcar listo" })).toBeVisible();
+  await page.getByRole("button", { name: "Marcar listo" }).click();
+  await page.getByRole("button", { name: "Marcar entregado" }).click();
+
+  // El diálogo pide quién retira; sin documento no entrega.
+  const dialogo = page.getByRole("dialog");
+  const entregar = dialogo.getByRole("button", { name: /^Entregar/ }).first();
+  await expect(dialogo.locator('input[name="receptorDocumento"]')).toBeVisible();
+  await expect(entregar).toBeDisabled();
+  await dialogo.locator('input[name="receptorNombre"]').fill("Prueba de punta a punta");
+  await dialogo.locator('input[name="receptorDocumento"]').fill("30111222");
+  await entregar.click();
+  await expect(page.getByText(/quedó entregado/)).toBeVisible();
+
+  // El remito que salió lleva a quien retiró; se anula y el pedido se cancela.
+  await page.reload();
+  await expect(page.getByText("Retiro · Prueba de punta a punta")).toBeVisible();
+  const fila = page.locator("li, div").filter({ hasText: "Retiro · Prueba de punta a punta" }).filter({ has: page.getByRole("button", { name: "Anular" }) }).last();
+  await fila.getByRole("button", { name: "Anular" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Anular el remito" }).click();
+  await expect(page.getByText("Remito anulado. La mercadería volvió al stock.")).toBeVisible();
+  await page.getByRole("button", { name: "Cancelar pedido" }).click();
+  await page.getByRole("dialog").getByLabel("Por qué").fill("Prueba de punta a punta");
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar el pedido" }).click();
+  await expect(page.getByText(/Pedido cancelado/)).toBeVisible();
+});
+
 test("las zonas de envío cargan", async ({ page }) => {
   test.skip(test.info().project.name === "telefono", "el panel se prueba en escritorio");
   const r = await page.goto("/admin/envios");

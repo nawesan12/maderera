@@ -220,6 +220,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"CortesDelPedido":                "/admin/cortes",                 // GET /api/v1/admin/pedidos/{id}/cortes
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos
 	"FichaDePedido":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}
+	"UnirPedidoAFicha":               "/admin/clientes",               // POST /api/v1/admin/pedidos/{id}/ficha
+	"UnirPresupuestoAFicha":          "/admin/clientes",               // POST /api/v1/admin/presupuestos/{id}/ficha
 	"PedidoParaElTaller":             "personal",                      // GET /api/v1/admin/pedidos/{id}/taller
 	"ListarPedidos":                  "/admin/pedidos",                // GET /api/v1/admin/pedidos
 	"ChequesTerminados":              "/admin/cheques",                // GET /api/v1/admin/cheques/terminados
@@ -442,6 +444,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"BuscarEnMostrador":              "/mostrador",                    // GET /api/v1/mostrador/buscar
 	"AbrirCaja":                      "/mostrador",                    // POST /api/v1/mostrador/caja/abrir
 	"CerrarCaja":                     "/mostrador",                    // POST /api/v1/mostrador/caja/cerrar
+	"DesvincularTerminal":            "admin",                         // POST /api/v1/mostrador/caja/desvincular
 	"MovimientoDeCaja":               "/mostrador",                    // POST /api/v1/mostrador/caja/movimiento
 	"ClientesRecientes":              "/mostrador",                    // GET /api/v1/mostrador/clientes/recientes
 	"CobrarCuentaEnMostrador":        "/mostrador",                    // POST /api/v1/mostrador/clientes/{id}/cobro

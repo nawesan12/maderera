@@ -80,6 +80,9 @@ func (o respuesta) VisitPresupuestoDeMostradorResponse(w http.ResponseWriter) er
 func (o respuesta) VisitAbrirCajaResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitMovimientoDeCajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCerrarCajaResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitDesvincularTerminalResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 
 // comoProblema: un Rechazo es un 422 con su mensaje (lo que la acción
 // devolvía como `error`).
@@ -282,6 +285,20 @@ func numeroONaN(p *float64) float64 {
 		return math.NaN() // el NaN de JS llega como null
 	}
 	return *p
+}
+
+// DesvincularTerminal es solo del admin (el default prudente del comité
+// final): soltar una terminal deja esa PC sin poder cobrar sin conexión.
+func (a *API) DesvincularTerminal(ctx context.Context, r mostradorapi.DesvincularTerminalRequestObject) (mostradorapi.DesvincularTerminalResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.Desvincular(ctx, ses, r.Body.CajaId)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	return mensaje(m), nil
 }
 
 func (a *API) AbrirCaja(ctx context.Context, r mostradorapi.AbrirCajaRequestObject) (mostradorapi.AbrirCajaResponseObject, error) {

@@ -205,3 +205,32 @@ export function seccionesPara(rol?: RolStaff | null) {
     }))
     .filter((seccion) => seccion.items.length > 0);
 }
+
+/**
+ * El nombre de la sección a la que pertenece una ruta (la de href más largo
+ * que la contiene), para el aviso del rebote de permisos. Null si no es de
+ * ninguna: el aviso no repite una dirección que vino en la URL.
+ */
+export function nombreDeSeccion(ruta: string): string | null {
+  let mejor: ItemNav | null = null;
+  for (const seccion of secciones) {
+    for (const item of seccion.items) {
+      const contiene = ruta === item.href || ruta.startsWith(item.href + "/");
+      if (contiene && (!mejor || item.href.length > mejor.href.length)) mejor = item;
+    }
+  }
+  return mejor && mejor.href !== "/admin" ? mejor.label : null;
+}
+
+/** El parámetro con que el panel rebota a quien no puede entrar. */
+export const PARAMETRO_SIN_ACCESO = "sin-acceso";
+
+/**
+ * El destino del rebote: el inicio del rol, con la ruta que no pudo abrir.
+ * El resumen del panel no lleva aviso: es a donde se cae por omisión (el
+ * aserradero que abre /admin va a su taller sin más).
+ */
+export function rebote(inicio: string, ruta: string): string {
+  if (!ruta || ruta === "/admin") return inicio;
+  return `${inicio}?${PARAMETRO_SIN_ACCESO}=${encodeURIComponent(ruta)}`;
+}

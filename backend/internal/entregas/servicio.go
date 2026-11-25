@@ -346,7 +346,7 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 // Quien llama ya tiene el candado de la serie (numeracion.BloquearRemitos,
 // **antes** de bloquear el pedido, el orden de CrearEntrega) y la fila del
 // pedido. No cambia el estado del pedido: eso lo hace quien avanza.
-func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucursal *string, tipo string, usuario *string) (*EntregaCreada, error) {
+func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucursal *string, tipo string, usuario *string, quien Receptor) (*EntregaCreada, error) {
 	pendientes, err := SaldoDeAcopio(ctx, tx, pedidoID)
 	if err != nil {
 		return nil, err
@@ -354,6 +354,11 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 	lineas := LineasDeConstancia(pendientes)
 	if len(lineas) == 0 {
 		return nil, nil
+	}
+	if tipo != "envio" {
+		if campo, msj := quien.Revisar(); msj != "" {
+			return nil, plataforma.Invalido(map[string]string{campo: msj})
+		}
 	}
 	numero, err := numeracion.Remito(ctx, tx)
 	if err != nil {
@@ -368,7 +373,11 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 	}
 	nota := "Entregado desde el tablero de pedidos"
 	token := tokenDeFirma()
-	id, err := insertarRemito(ctx, tx, numero, pedidoID, salida, tipo, "preparada", nil, nil, &nota, token, usuario, lineas)
+	var nombre, documento *string
+	if tipo == "retiro" {
+		nombre, documento = quien.Nombre, quien.Documento
+	}
+	id, err := insertarRemito(ctx, tx, numero, pedidoID, salida, tipo, "preparada", nombre, documento, &nota, token, usuario, lineas)
 	if err != nil {
 		return nil, err
 	}

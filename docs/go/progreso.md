@@ -142,7 +142,8 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
 - Bugs del TS que el lector de Go reproduce a propósito (se arreglan cuando
   se mude la migración, tanda 13): las fechas de un .xlsx salen un día antes;
   se lee el sheetN.xml primero en orden alfabético (sheet10 antes que
-  sheet2); se pierden los espacios de xml:space="preserve"; los &#NN; quedan
+  sheet2); se pierden los espacios de xml:space="preserve" (arreglado el
+  20/11); los &#NN; quedan
   escritos; con prefijo de espacio de nombres (<x:worksheet>) la planilla sale
   vacía; «0,125» se lee como 125.
 
@@ -1240,11 +1241,11 @@ Reproducido a propósito, y pendiente:
       deshace el lote entero con «numeric field overflow», y la corrida
       queda interrumpida: habría que validarla en la fila.
       Hecho: es un error de la fila (`TestAlicuotaInvalidaRechazaSoloSuFila`); la regla se copió al original TS de las golden.
-- [ ] Los otros bugs del lector de .xlsx de la tanda 3 siguen: la hoja se
+- [x] Los otros bugs del lector de .xlsx de la tanda 3 siguen: la hoja se
       elige por nombre de archivo y no por las relaciones del libro, se
       pierden los espacios de `xml:space="preserve"`, los `&#NN;` quedan
       escritos y con prefijo de espacio de nombres la planilla sale vacía.
-      Arreglados el 30/10 (en Go y en el original TS, con las golden regeneradas): la hoja sale de `xl/_rels/workbook.xml.rels`, los prefijos se sacan después de parsear y las `&#NN;` se resuelven en el texto de la celda. Queda el `xml:space="preserve"` (habría que tocar el parser).
+      Arreglados el 30/10 (en Go y en el original TS, con las golden regeneradas): la hoja sale de `xl/_rels/workbook.xml.rels`, los prefijos se sacan después de parsear y las `&#NN;` se resuelven en el texto de la celda. El `xml:space="preserve"` también, el 20/11: el texto de un `<t>` con preserve que empieza o termina con espacios pasa el recorte de fast-xml-parser entre dos marcas de uso privado que `conCaracteres` saca (`conEspaciosGuardados`, la misma expresión en Go y en el original TS); golden regeneradas, 11.344 casos en verde. `TestEspaciosDeXmlSpacePreserve`.
 - [x] Dos lotes de saldos a la vez podrían cargar dos veces el saldo de un
       cliente (mirar y escribir, sin candado). La pantalla manda los lotes
       de a uno, como el TS.
@@ -1786,9 +1787,10 @@ Pendiente y preguntas (decisiones de negocio, no se tocaron):
       vez: lo correcto ahí es el remito de constancia. ¿Se rechaza
       `CrearEntrega` si el pedido tiene movimientos «Mostrador V-…»?
       Hecho: `CrearEntrega` rechaza el pedido ya entregado y manda al remito de constancia.
-- [ ] El remito implícito de «Avanzar» nace sin documento de quien retira
+- [x] El remito implícito de «Avanzar» nace sin documento de quien retira
       (en el remito a mano es obligatorio en un retiro): se completa al
       firmar.
+      Hecho: en un retiro, «Avanzar» a entregado recibe `receptorNombre` y `receptorDocumento` (el documento obligatorio, con el mismo mensaje del remito a mano; sin él, 422 y no se mueve nada) y los guarda en el remito. En un envío no cambia nada. El tablero abre el diálogo «Quién retira» (junto con el «sin cobrar», si falta cobrar). `TestAvanzarUnRetiroPideElDocumento` y la e2e de entregas.
 - [x] Cancelar desde Pedidos un pedido ya entregado sigue permitido y no
       devuelve nada (solo libera reservas, que ya no hay).
       Hecho: con un remito vigente pide anularlo primero (`TestNoSeCancelaUnPedidoConRemito`).
@@ -1854,11 +1856,12 @@ rol). Lo que se arregló, cada cosa con su prueba:
 
 Decisiones pendientes (no se hicieron):
 
-- [ ] **Vincular por correo una compra anónima a la ficha de un cliente
+- [x] **Vincular por correo una compra anónima a la ficha de un cliente
       existente** (`internal/checkout/compra.go`, `clientePorCorreo`): hoy
       quien compra sin cuenta con el correo de otro cliente queda asociado a
       su ficha (y a su historial). Decidir si se vincula solo con sesión, o
       se crea ficha aparte y se avisa.
+      Hecho (default prudente): la compra y el presupuesto se atan a la ficha del correo solo con la sesión de ese correo (y si la ficha no es de otra cuenta web). Sin sesión quedan sin cliente; la ficha del pedido y la del presupuesto muestran la ficha con ese correo (`fichaPorCorreo`) y quien entra a Clientes los une a mano (`POST /api/v1/admin/pedidos/{id}/ficha` y `.../presupuestos/{id}/ficha`, solo a la ficha con ese correo, con bitácora). Un pedido con recibos o comprobantes ya emitidos sin cliente no se une desde ahí. `TestElCorreoDeOtroNoAtaLaCompraASuFicha`, `TestUnirALaFichaDelCorreo`.
 - [ ] **`trusted_proxies` de Cloudflare en Caddy**: cuando se ponga
       Cloudflare, `IPDelCliente` va a ver la IP de Cloudflare en todos los
       pedidos (límites por IP compartidos por todo el mundo). Se configura
@@ -2426,9 +2429,10 @@ Se aplicó el default prudente; lo valida Nahuel (o el contador donde se dice).
       disco es el de `/admin/calculadoras`. Volverlo es devolver el campo en
       `corte-a-medida.tsx` y que Go vuelva a leer `anchoSierraMm`, que desde
       la revisión del carril F ignora (`sierraConfigurada`).
-- [ ] **Desvincular una terminal**: «Esta PC…» ahora confirma, pero sigue sin
+- [x] **Desvincular una terminal**: «Esta PC…» ahora confirma, pero sigue sin
       haber cómo desvincular desde el mostrador; hace falta una ruta en Go
       (y decidir quién puede).
+      Hecho (default prudente: solo admin): `POST /api/v1/mostrador/caja/desvincular` cambia el secreto de la caja (con ventas sin subir, no), deja «Desvinculó la terminal CAJA1» en la bitácora, y el latido contesta `cajaVigente: false` a la PC con el secreto viejo, que suelta la caja y vuelve a pedir que se la vincule sin perder su contador. Para el admin, el código de la barra es un botón con «¿Esta PC deja de ser CAJA1?». `TestDesvincularTerminal`.
 - [ ] **Cuenta corriente desde la cola**: solo se rechaza la cuenta
       bloqueada. El cliente sin cuenta habilitada (o sin saldo a favor que
       alcance) cobrado sin conexión entra con la deuda cargada y marcado como
@@ -2745,6 +2749,15 @@ resolvió carril-i; el reparto con el volumen de ISIS, carril-j (abajo).
   `TestVolumenDeLaCuentaPesada` contra una copia: el límite es 0,5 s.
 - «Sucursales como lista» (hallazgo 35) y Sucursales en la barra de arriba:
   los confirma la clienta.
+- ~~Los rebotes de permisos no dicen por qué~~ (comité final, «Permisos»).
+  Hecho (carril-l): el panel rebota con `?sin-acceso=<ruta>`
+  (`rebote` en `components/admin/secciones.ts`) y el inicio del rol —el
+  resumen o `/taller`— muestra «No tenés acceso a Precios» en un aviso que se
+  va solo a los 4 s y saca el parámetro de la dirección, así que recargar no
+  lo repite. El nombre sale del menú; una ruta que no es del menú dice «esa
+  pantalla» y no repite lo que vino en la URL. `tests/sin-acceso.test.ts` y
+  `e2e/permisos.spec.ts` (vendedor en /admin/precios, aserradero en
+  /admin/clientes).
 
 ## 19/11/2026: los pendientes del despliegue (carril-i)
 

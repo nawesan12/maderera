@@ -38,6 +38,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pedidos/{id}/ficha": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ata un pedido sin cliente (y sin recibos ni comprobantes) a la ficha con el correo de su contacto */
+        post: operations["UnirPedidoAFicha"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pedidos/{id}/taller": {
         parameters: {
             query?: never;
@@ -171,6 +190,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/presupuestos/{id}/ficha": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ata un presupuesto sin cliente a la ficha con el correo de su contacto */
+        post: operations["UnirPresupuestoAFicha"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/presupuestos/{id}/estado": {
         parameters: {
             query?: never;
@@ -293,11 +331,19 @@ export interface components {
             orden: number;
             alicuotaIva: string | null;
         };
+        FichaParaUnir: {
+            id: string;
+            nombre: string;
+            /** @description un pedido con recibos o comprobantes no se une desde acá */
+            unible: boolean;
+        };
         FichaDePresupuesto: {
             /** @description pasó su validez: para pasarlo a pedido hay que elegir los precios */
             vencido: boolean;
             /** @description el total con los precios de lista de hoy, si venció */
             totalDeHoy: string | null;
+            /** @description Sin cliente, la ficha con el correo del contacto (para unirlo a mano) */
+            fichaPorCorreo?: components["schemas"]["FichaParaUnir"] | null;
             id: string;
             numero: string;
             cliente: string;
@@ -469,6 +515,8 @@ export interface components {
             /** @description AAAA-MM-DD */
             entregarEl: string | null;
             sinCobrar: components["schemas"]["SinCobrar"];
+            /** @description Sin cliente, la ficha con el correo del contacto (para unirlo a mano) */
+            fichaPorCorreo?: components["schemas"]["FichaParaUnir"] | null;
         };
     };
     responses: {
@@ -555,6 +603,30 @@ export interface operations {
             404: components["responses"]["Problema"];
         };
     };
+    UnirPedidoAFicha: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    customerId: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
     PedidoParaElTaller: {
         parameters: {
             query?: never;
@@ -591,7 +663,15 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Quien retira, para el remito de un retiro que pasa a entregado: el documento es obligatorio (422 en receptorDocumento sin él). En un envío no se usa. */
+        requestBody?: {
+            content: {
+                "application/json": {
+                    receptorNombre?: string;
+                    receptorDocumento?: string;
+                };
+            };
+        };
         responses: {
             200: components["responses"]["Hecho"];
             401: components["responses"]["Problema"];
@@ -776,6 +856,30 @@ export interface operations {
             401: components["responses"]["Problema"];
             403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+        };
+    };
+    UnirPresupuestoAFicha: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    customerId: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     CambiarEstadoDePresupuesto: {

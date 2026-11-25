@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { CircleHelp, LayoutDashboard, Settings2 } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { listarCortes } from "@/lib/dal/admin/cortes";
@@ -9,6 +10,7 @@ import { TableroDeCortes } from "@/app/admin/cortes/vista";
 import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 import { Marca } from "@/components/marca";
 import { MenuDelTaller } from "./menu-taller";
+import { AvisoSinAcceso } from "@/components/admin/aviso-sin-acceso";
 
 export const metadata: Metadata = {
   title: "Taller · Cola de corte",
@@ -49,6 +51,9 @@ export default async function TallerPage({
 
   return (
     <div className="panel panel-fondo flex min-h-screen flex-col text-[17px] text-foreground">
+      <Suspense fallback={null}>
+        <AvisoSinAcceso />
+      </Suspense>
       {/* El mismo encabezado que el panel —claro, con textura—. Estaba en
           `bg-sidebar`, el color del menú lateral: acá no hay menú, así que la
           barra entera quedaba negra y el título, negro encima. */}

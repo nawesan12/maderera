@@ -45,9 +45,15 @@ function fallo(r: Respuesta): EstadoVenta {
  * "en camino". `desde` es el estado que se veía: si ya cambió, Go contesta
  * 409 en vez de dar un paso de más (que en un retiro emite el remito).
  */
-export async function avanzarPedido(id: string, desde?: string): Promise<EstadoVenta> {
+export async function avanzarPedido(
+  id: string,
+  desde?: string,
+  /** Quien retira: en un retiro que pasa a entregado, el documento va en el remito y es obligatorio. */
+  quien?: { receptorNombre?: string; receptorDocumento?: string },
+): Promise<EstadoVenta> {
   const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/avanzar", {
     params: { path: { id }, query: desde ? { desde } : {} },
+    body: quien ?? {},
   });
   if (!r.data) return fallo(r);
 
@@ -76,6 +82,26 @@ export async function cambiarEstadoPresupuesto(id: string, estado: string): Prom
   });
   if (!r.data) return fallo(r);
   refrescar();
+  return { ok: r.data.ok };
+}
+
+/**
+ * Ata un pedido o presupuesto sin cliente a la ficha con el correo de su
+ * contacto. La tienda ya no lo hace sola sin la sesión de ese correo.
+ */
+export async function unirAFicha(
+  que: "pedido" | "presupuesto",
+  id: string,
+  customerId: string,
+): Promise<EstadoVenta> {
+  const a = await api();
+  const r =
+    que === "pedido"
+      ? await a.POST("/api/v1/admin/pedidos/{id}/ficha", { params: { path: { id } }, body: { customerId } })
+      : await a.POST("/api/v1/admin/presupuestos/{id}/ficha", { params: { path: { id } }, body: { customerId } });
+  if (!r.data) return fallo(r);
+  refrescar();
+  revalidatePath(`/admin/${que === "pedido" ? "pedidos" : "presupuestos"}/${id}`);
   return { ok: r.data.ok };
 }
 

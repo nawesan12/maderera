@@ -129,7 +129,12 @@ func bloquearPedido(ctx context.Context, tx pgx.Tx, id string) (*filaDePedido, e
 // se avanzaría un paso que nadie pidió: de «preparando» a «entregado» con
 // remito, baja del físico y un WhatsApp al cliente. Con la fila bloqueada se
 // compara y, si no coincide, 409.
-func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde string) (*Resultado, error) {
+//
+// Un retiro que pasa a «entregado» con saldo emite el remito con quien
+// retira: el documento es obligatorio, como en el remito a mano (la firma
+// sola no identifica a nadie), y sin él es un 422 en `receptorDocumento`.
+// En un envío no se pide nada.
+func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde string, quien entregas.Receptor) (*Resultado, error) {
 	var p *filaDePedido
 	var siguiente string
 	var remito *entregas.EntregaCreada
@@ -144,7 +149,7 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 			return err
 		}
 		if desde != "" && desde != p.estado {
-			return yaCambio(p.numero+" ya estaba "+nombreDelEstado(p.estado)+": se actualizó la lista.")
+			return yaCambio(p.numero + " ya estaba " + nombreDelEstado(p.estado) + ": se actualizó la lista.")
 		}
 		switch p.estado {
 		case "entregado":
@@ -173,7 +178,7 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return err
 			}
 			usuario := ses.UserID
-			if remito, err = entregas.RemitoPorLoQueQueda(ctx, tx, id, sucursal, p.tipoEntrega, &usuario); err != nil {
+			if remito, err = entregas.RemitoPorLoQueQueda(ctx, tx, id, sucursal, p.tipoEntrega, &usuario, quien); err != nil {
 				return err
 			}
 		}

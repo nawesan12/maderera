@@ -7,6 +7,8 @@ import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
+import { AvisoSinAcceso } from "@/components/admin/aviso-sin-acceso";
+import { rebote } from "@/components/admin/secciones";
 import { BuscadorGlobal } from "@/components/admin/buscador-global";
 import { TablasApilables } from "@/components/admin/tablas-apilables";
 import { MenuUsuario } from "@/components/admin/menu-usuario";
@@ -122,7 +124,7 @@ async function PanelConSesion({
     // poder abrir una guía. La 8 —"Cortes y WhatsApp"— está escrita para él.
     !ruta.startsWith("/admin/ayuda")
   ) {
-    redirect("/taller");
+    redirect(rebote("/taller", ruta));
   }
 
   if (ruta && !puedeEntrar(ruta, usuario.staffRole)) {
@@ -136,7 +138,9 @@ async function PanelConSesion({
      * nueva no puede quedar con una regla en el menú y otra en la página,
      * porque hay una sola regla.
      */
-    redirect(inicioDelRol(usuario.staffRole));
+    // Con la ruta que no pudo abrir: el inicio avisa a qué no tiene acceso
+    // (comité final, «Permisos»: el rebote no decía por qué).
+    redirect(rebote(inicioDelRol(usuario.staffRole), ruta));
   }
 
   // El contador de conversaciones sin leer es un adorno del menú: si falla, el
@@ -157,6 +161,9 @@ async function PanelConSesion({
       <EnterAvanza />
       <TablasApilables />
       <AvisoDePedidosEnVivo />
+      <Suspense fallback={null}>
+        <AvisoSinAcceso />
+      </Suspense>
       <AdminSidebar whatsappSinLeer={sinLeer} rol={usuario.staffRole} />
       {/* `min-w-0` no es decorativo: sin él este hijo de flex no baja del ancho
           de su contenido, así que el `overflow-x` del tablero no recorta nada y

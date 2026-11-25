@@ -297,14 +297,20 @@ func (s *Servicio) Vincular(ctx context.Context, id string) (map[string]any, err
 // anota los pendientes de la caja física si viene con su secreto.
 func (s *Servicio) Latido(ctx context.Context, ses *auth.Sesion, cuerpo map[string]any) (map[string]any, error) {
 	sucursal, _ := cuerpo["branchId"].(string)
+	// Si la máquina dice ser una caja física y el secreto ya no es el suyo
+	// (la desvincularon, ver terminal.go), se le avisa para que pida
+	// vincularse otra vez. Un sw.js viejo lo ignora.
+	var cajaVigente *bool
 	if c, ok := cuerpo["caja"].(map[string]any); ok {
 		id, ok1 := c["id"].(string)
 		secreto, ok2 := c["secreto"].(string)
 		pendientes, ok3 := cuerpo["pendientes"].(float64)
 		if ok1 && ok2 && ok3 {
-			if _, err := caja.AnotarLatido(ctx, s.pool, id, secreto, pendientes); err != nil {
+			vigente, err := caja.AnotarLatido(ctx, s.pool, id, secreto, pendientes)
+			if err != nil {
 				return nil, err
 			}
+			cajaVigente = &vigente
 		}
 	}
 	var turno any
@@ -325,6 +331,9 @@ func (s *Servicio) Latido(ctx context.Context, ses *auth.Sesion, cuerpo map[stri
 		"sesion":     map[string]any{"userId": ses.UserID, "nombre": ses.Nombre, "staffRole": rol},
 		"turno":      turno,
 		"servidorAt": FechaJS(s.ahora()),
+	}
+	if cajaVigente != nil {
+		out["cajaVigente"] = *cajaVigente
 	}
 	// La firma con que esta sesión deja sus ventas en la cola (firma.go). Un
 	// sw.js viejo la ignora.

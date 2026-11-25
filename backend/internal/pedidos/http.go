@@ -9,6 +9,7 @@ import (
 	"mjbj/internal/api/ventasapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/cobros"
+	"mjbj/internal/entregas"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -63,6 +64,10 @@ func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error 
 func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCambiarEstadoDePresupuestoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitUnirPedidoAFichaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitUnirPresupuestoAFichaResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
 func (o respuesta) VisitConvertirPresupuestoEnPedidoResponse(w http.ResponseWriter) error {
@@ -152,7 +157,11 @@ func (a *API) AvanzarPedido(ctx context.Context, r ventasapi.AvanzarPedidoReques
 	if r.Params.Desde != nil {
 		desde = *r.Params.Desde
 	}
-	v, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde)
+	var quien entregas.Receptor
+	if r.Body != nil {
+		quien = entregas.NuevoReceptor(r.Body.ReceptorNombre, r.Body.ReceptorDocumento)
+	}
+	v, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde, quien)
 	if err != nil {
 		return nil, err
 	}
@@ -236,6 +245,32 @@ func (a *API) FichaDePresupuesto(ctx context.Context, r ventasapi.FichaDePresupu
 		return nil, noEsta("No se encontró el presupuesto.")
 	}
 	return ok(p), nil
+}
+
+// UnirPedidoAFicha y UnirPresupuestoAFicha: quien entra a Clientes (unir es
+// tocar el historial de una ficha), ver unir.go.
+func (a *API) UnirPedidoAFicha(ctx context.Context, r ventasapi.UnirPedidoAFichaRequestObject) (ventasapi.UnirPedidoAFichaResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.UnirAFicha(ctx, ses, "orders", r.Id.String(), r.Body.CustomerId)
+	if err != nil {
+		return nil, err
+	}
+	return ok(Resultado{Ok: m}), nil
+}
+
+func (a *API) UnirPresupuestoAFicha(ctx context.Context, r ventasapi.UnirPresupuestoAFichaRequestObject) (ventasapi.UnirPresupuestoAFichaResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/clientes")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.UnirAFicha(ctx, ses, "quotes", r.Id.String(), r.Body.CustomerId)
+	if err != nil {
+		return nil, err
+	}
+	return ok(Resultado{Ok: m}), nil
 }
 
 func (a *API) CambiarEstadoDePresupuesto(ctx context.Context, r ventasapi.CambiarEstadoDePresupuestoRequestObject) (ventasapi.CambiarEstadoDePresupuestoResponseObject, error) {

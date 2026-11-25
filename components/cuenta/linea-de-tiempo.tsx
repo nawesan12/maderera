@@ -49,7 +49,7 @@ export function LineaDeTiempo({
   /** Adónde lleva un pedido: la ficha del panel o el seguimiento del cliente. */
   enlacePedido: (pedido: { id: string; numero: string }) => string;
   /** Lo que el panel ofrece sobre un recibo vivo (anularlo); el portal, nada. */
-  accionDelRecibo?: (recibo: ReciboDelMovimiento) => ReactNode;
+  accionDelRecibo?: (recibo: ReciboDelMovimiento, movimiento: MovimientoDelCliente) => ReactNode;
   vacio?: string;
 }) {
   if (movimientos.length === 0) {
@@ -98,7 +98,7 @@ function Fila({
 }: {
   movimiento: MovimientoDelCliente;
   enlacePedido: (pedido: { id: string; numero: string }) => string;
-  accionDelRecibo?: (recibo: ReciboDelMovimiento) => ReactNode;
+  accionDelRecibo?: (recibo: ReciboDelMovimiento, movimiento: MovimientoDelCliente) => ReactNode;
 }) {
   const estilo = ESTILO[m.clase];
   // Si el título repite la etiqueta («Compra a cuenta» dos veces), el detalle
@@ -149,7 +149,7 @@ function Fila({
                 {m.recibo.anulado && " (anulado)"}
               </a>
             )}
-            {m.recibo && !m.recibo.anulado && accionDelRecibo?.(m.recibo)}
+            {m.recibo && !m.recibo.anulado && accionDelRecibo?.(m.recibo, m)}
           </span>
         )}
       </span>

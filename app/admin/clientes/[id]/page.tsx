@@ -326,7 +326,15 @@ export default async function FichaClientePage({
                 manejaPlata
                   ? // El cobro de Mercado Pago se devuelve desde MP y su aviso
                     // anula el recibo: a mano, el cliente pagaría dos veces.
-                    (r) => (r.porMercadoPago ? null : <AnularRecibo id={r.id} numero={r.numero} />)
+                    (r, m) =>
+                      r.porMercadoPago ? null : (
+                        <AnularRecibo
+                          id={r.id}
+                          numero={r.numero}
+                          importe={Math.abs(m.importe ?? m.importeInformativo ?? 0)}
+                          cliente={cliente.nombre}
+                        />
+                      )
                   : undefined
               }
             />

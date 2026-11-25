@@ -41,6 +41,12 @@ describe("stock con decimales", () => {
     expect(leerCantidad("")).toBeNaN();
   });
 
+  it("una cantidad con tres decimales no son miles (la nota de crédito parcial)", () => {
+    expect(leerCantidad("0.125")).toBe(0.125);
+    expect(leerCantidad("1.250")).toBe(1.25);
+    expect(leerCantidad("0,125")).toBe(0.125);
+  });
+
   it("el paso de la cantidad sigue a la unidad", () => {
     expect(pasoDeCantidad("placa")).toBe(0.5);
     expect(pasoDeCantidad("metro_lineal")).toBe(0.1);

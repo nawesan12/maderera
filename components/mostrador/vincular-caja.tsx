@@ -52,6 +52,7 @@ export function VincularCaja({
   onVincular,
   onDesvincular,
   administra = false,
+  pendientesLocales = 0,
 }: {
   branchId: string;
   enLinea: boolean;
@@ -62,6 +63,12 @@ export function VincularCaja({
   onVincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
   /** Suelta la caja local, después de que Go la desvinculó. */
   onDesvincular?: () => Promise<void>;
+  /**
+   * Las ventas de la cola local sin subir. El latido puede estar viejo si se
+   * cobró sin conexión: con ventas en la cola no se suelta, y Go también lo
+   * controla con este número.
+   */
+  pendientesLocales?: number;
 }) {
   const [cajas, setCajas] = useState<CajaDisponible[] | null>(null);
   const [enCurso, setEnCurso] = useState(false);
@@ -122,7 +129,7 @@ export function VincularCaja({
     setEnCurso(true);
     setError(null);
     try {
-      const r = await desvincularTerminal(cajaId);
+      const r = await desvincularTerminal(cajaId, pendientesLocales);
       if (r.error) {
         setError(r.error);
         return;
@@ -154,10 +161,14 @@ export function VincularCaja({
     if (soltando) {
       return (
         <span role="group" aria-label="Desvincular esta PC" className="inline-flex items-center gap-2 text-sm">
-          <span className="font-semibold">¿Esta PC deja de ser {vinculada.codigo}?</span>
+          <span className="font-semibold">
+            {pendientesLocales > 0
+              ? `${pendientesLocales === 1 ? "Queda 1 venta" : `Quedan ${pendientesLocales} ventas`} sin subir: esperá a que suban.`
+              : `¿Esta PC deja de ser ${vinculada.codigo}?`}
+          </span>
           <button
             type="button"
-            disabled={enCurso}
+            disabled={enCurso || pendientesLocales > 0}
             onClick={() => void desvincular(vinculada.id)}
             className="boton-accion inline-flex h-9 items-center gap-1.5 rounded-lg px-3 font-semibold disabled:opacity-50"
           >

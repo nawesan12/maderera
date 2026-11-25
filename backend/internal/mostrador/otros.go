@@ -321,11 +321,11 @@ func (s *Servicio) Vincular(ctx context.Context, ses *auth.Sesion, id string) (m
 		return nil, err
 	}
 	if pendientes > 0 {
-		ventas := "ventas cobradas"
+		ventas, verbo := "ventas cobradas", "subieron"
 		if pendientes == 1 {
-			ventas = "venta cobrada"
+			ventas, verbo = "venta cobrada", "subió"
 		}
-		return map[string]any{"error": fmt.Sprintf("%s tiene %d %s en otra PC que todavía no subieron. Esperá a que suban.", codigo, pendientes, ventas)}, nil
+		return map[string]any{"error": fmt.Sprintf("%s tiene %d %s en otra PC que todavía no %s. Esperá a que suban.", codigo, pendientes, ventas, verbo)}, nil
 	}
 	admin := ses != nil && ses.RolStaff != nil && *ses.RolStaff == sqlc.StaffRoleAdmin
 	if enUso && !admin {

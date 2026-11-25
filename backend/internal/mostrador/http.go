@@ -294,7 +294,11 @@ func (a *API) DesvincularTerminal(ctx context.Context, r mostradorapi.Desvincula
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.Desvincular(ctx, ses, r.Body.CajaId)
+	locales := 0
+	if r.Body.Pendientes != nil {
+		locales = *r.Body.Pendientes
+	}
+	m, err := a.s.Desvincular(ctx, ses, r.Body.CajaId, locales)
 	if err != nil {
 		return nil, comoProblema(err)
 	}

@@ -51,6 +51,12 @@ func TestDesvincularTerminal(t *testing.T) {
 	if _, err := e.pool.Exec(ctx, `update pos_devices set pendientes = 0 where id = $1`, caja); err != nil {
 		t.Fatal(err)
 	}
+	// Comité del 25/11: el último latido dice 0, pero la PC cobró sin
+	// conexión y tiene una venta en su cola. Tampoco se suelta.
+	st, m, _ = pedir(t, adm, "POST", ruta, map[string]any{"cajaId": caja, "pendientes": 1})
+	if st != 422 || !strings.Contains(fmt.Sprint(m["errores"]), "CAJA1 tiene 1 venta cobrada que todavía no subió") {
+		t.Fatalf("con la cola local: %d %v", st, m)
+	}
 
 	// Una que no existe.
 	st, m, _ = pedir(t, adm, "POST", ruta, map[string]any{"cajaId": "00000000-0000-0000-0000-000000000000"})
@@ -59,7 +65,7 @@ func TestDesvincularTerminal(t *testing.T) {
 	}
 
 	// El admin la suelta.
-	st, m, _ = pedir(t, adm, "POST", ruta, map[string]any{"cajaId": caja})
+	st, m, _ = pedir(t, adm, "POST", ruta, map[string]any{"cajaId": caja, "pendientes": 0})
 	if st != 200 || m["ok"] != "Esta PC ya no es CAJA1." {
 		t.Fatalf("desvincular: %d %v", st, m)
 	}
@@ -69,7 +75,7 @@ func TestDesvincularTerminal(t *testing.T) {
 	if n := e.num(t, `select count(*)::float8 from pos_devices where id = $1 and ultima_vez_at is null and activo`, caja); n != 1 {
 		t.Fatal("la caja tiene que quedar activa y sin latido")
 	}
-	if n := e.num(t, `select count(*)::float8 from audit_log where entidad = 'caja' and entidad_id = $1 and descripcion = 'Desvinculó la terminal CAJA1'`, caja); n != 1 {
+	if n := e.num(t, `select count(*)::float8 from audit_log where entidad = 'caja' and entidad_id = $1 and descripcion = 'Desvinculó la terminal CAJA1' and detalle::text like '%ultimoLatido%'`, caja); n != 1 {
 		t.Fatalf("bitácora: %v", n)
 	}
 

@@ -936,6 +936,7 @@ export function VistaMostrador({
               onVincular={vincularCaja}
               onDesvincular={() => desvincularCaja()}
               administra={usuario.administraCaja}
+              pendientesLocales={cola.sinSubir + cola.atascadas}
             />
           }
         />

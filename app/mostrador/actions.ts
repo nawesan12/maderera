@@ -108,8 +108,10 @@ export async function cerrarCaja(sessionId: string, contado: number, notas: stri
 }
 
 /** Suelta la caja física de esta PC. Solo admin (lo controla Go). */
-export async function desvincularTerminal(cajaId: string): Promise<EstadoMostrador> {
-  const r = await (await api()).POST("/api/v1/mostrador/caja/desvincular", { body: { cajaId } });
+export async function desvincularTerminal(cajaId: string, pendientes = 0): Promise<EstadoMostrador> {
+  const r = await (await api()).POST("/api/v1/mostrador/caja/desvincular", {
+    body: { cajaId, pendientes: Math.max(0, Math.trunc(pendientes)) },
+  });
   if (!r.data) return error(r);
   revalidatePath("/admin/caja");
   return { ok: r.data.ok };

@@ -31,6 +31,7 @@ import { useCarrito } from "@/lib/carrito-context";
 import { useTienda } from "@/lib/tienda-context";
 import { ETIQUETA_ASISTENTE, EVENTO_ABRIR_ASISTENTE } from "@/lib/asistente/abrir";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { MuestraDePlaca } from "@/components/catalogo/placa-de-producto";
 
 /** Dónde queda el equipaje mientras dure la pestaña. */
 const CLAVE_EQUIPAJE = "mjbj-asistente-equipaje";
@@ -315,16 +316,22 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   const aWhatsapp = extra.aPersona || paso.accion?.tipo === "whatsapp";
   const irA = paso.accion?.tipo === "ir" ? paso.accion.ruta : null;
 
-  // Los botones del guion, más los que dejó la última respuesta escrita.
-  const opciones = [...extra.sugerencias, ...paso.opciones];
+  // Los botones del guion, más los que dejó la última respuesta escrita. Uno
+  // por destino: tras una búsqueda, «Hablar con alguien» de la respuesta y
+  // «Quiero hablar con alguien» del inicio llevaban al mismo lado.
+  const opciones = [...extra.sugerencias, ...paso.opciones].filter(
+    (opcion, i, todas) => todas.findIndex((o) => o.va === opcion.va) === i,
+  );
 
   if (!abierto) return null;
 
   return (
     <>
     {/* El fondo del celular: la hoja tapa casi toda la pantalla y lo de atrás
-        no se usa mientras tanto. Tocarlo cierra, como en cualquier hoja. */}
-    <div aria-hidden className="fixed inset-0 z-50 bg-black/30 sm:hidden" onClick={cerrar} />
+        no se usa mientras tanto. Tocarlo cierra, como en cualquier hoja. En
+        oscuro, un 30 % de negro sobre la página oscura no se notaba y la hoja
+        se fundía con lo de atrás. */}
+    <div aria-hidden className="fixed inset-0 z-50 bg-black/30 dark:bg-black/60 sm:hidden" onClick={cerrar} />
     <div
       ref={panelRef}
       role="dialog"
@@ -524,7 +531,7 @@ function Renglon({ renglon }: { renglon: Renglon }) {
                 className="h-12 w-12 shrink-0 rounded-lg object-cover"
               />
             ) : (
-              <span className="h-12 w-12 shrink-0 rounded-lg bg-brand-wood-light/30" />
+              <MuestraDePlaca categoria={p.categoriaSlug} className="h-12 w-12 shrink-0 rounded-lg" />
             )}
 
             <span className="min-w-0 flex-1">

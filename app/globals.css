@@ -1964,7 +1964,10 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
    decodifica una vez para todas las tarjetas, en vez de un filtro por placa.
    `feTurbulence` con la frecuencia muy baja a lo ancho y alta a lo alto da
    rayas largas; la opacidad es baja a propósito (7 %): tiene que sugerir
-   madera, no parecer una foto de madera. */
+   madera, no parecer una foto de madera. En oscuro va al 3,5 %: rayas claras
+   sobre madera oscura se notan mucho más, y al 6 % la placa parecía chapa
+   cepillada (medido el 25/11 en las capturas: el desvío de luminancia era
+   casi el doble que en claro). */
 .placa {
   background-color: var(--placa-fondo);
   color: var(--placa-texto);
@@ -1978,7 +1981,7 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
   background-size: 100% 100%;
 }
 .dark .placa-veta {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' preserveAspectRatio='none'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.09' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.92 0 0 0 0 0.8 0 0 0 -1.6 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)' opacity='0.06'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' preserveAspectRatio='none'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.09' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.92 0 0 0 0 0.8 0 0 0 -1.6 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)' opacity='0.035'/%3E%3C/svg%3E");
 }
 
 /* El PIN equivocado tiembla (components/autorizacion/campo-pin.tsx): se ve

@@ -111,6 +111,7 @@ export default async function RepartoPage() {
                       estado={p.estado}
                       estadoPago={p.estadoPago}
                       tipoEntrega={p.tipoEntrega}
+                      pedido={{ numero: p.numero, nombre: p.cliente }}
                       cobro={cobra && p.sinCobrar != null ? cobroDelPedido(p) : null}
                       sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
                     />

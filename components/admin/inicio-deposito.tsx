@@ -136,6 +136,7 @@ export async function InicioDelDeposito() {
                     estado={p.estado}
                     estadoPago={p.estadoPago}
                     tipoEntrega={p.tipoEntrega}
+                    pedido={{ numero: p.numero, nombre: p.cliente }}
                   />
                 </div>
               </li>

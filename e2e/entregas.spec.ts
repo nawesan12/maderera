@@ -113,9 +113,14 @@ test("entregar un retiro desde el tablero pide el documento de quien retira", as
   const entregar = dialogo.getByRole("button", { name: /^Entregar/ }).first();
   await expect(dialogo.locator('input[name="receptorDocumento"]')).toBeVisible();
   await expect(entregar).toBeDisabled();
+  // Dice por qué está apagado, y el documento acepta letras (un pasaporte).
+  await expect(dialogo.getByText("Falta el documento de quien retira.")).toBeVisible();
+  await expect(dialogo.locator('input[name="receptorDocumento"]')).not.toHaveAttribute("inputmode", "numeric");
   await dialogo.locator('input[name="receptorNombre"]').fill("Prueba de punta a punta");
   await dialogo.locator('input[name="receptorDocumento"]').fill("30111222");
-  await entregar.click();
+  await expect(dialogo.getByText("Falta el documento de quien retira.")).toHaveCount(0);
+  // Enter entrega.
+  await dialogo.locator('input[name="receptorDocumento"]').press("Enter");
   await expect(page.getByText(/quedó entregado/)).toBeVisible();
 
   // El remito que salió lleva a quien retiró; se anula y el pedido se cancela.

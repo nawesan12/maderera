@@ -167,6 +167,7 @@ export default async function FichaPedidoPage({
               estado={pedido.estado}
               estadoPago={pedido.estadoPago}
               tipoEntrega={pedido.tipoEntrega}
+              pedido={{ numero: pedido.numero, nombre: pedido.cliente }}
               cobro={usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole) ? cobroDelPedido(pedido) : null}
               sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
             />

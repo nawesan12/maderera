@@ -411,6 +411,7 @@ function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso:
           estado={pedido.estado}
           estadoPago={pedido.estadoPago}
           tipoEntrega={pedido.tipoEntrega}
+          pedido={{ numero: pedido.numero, nombre: pedido.cliente }}
           cobro={cobra ? cobroDelPedido(pedido) : null}
           sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
           compacto

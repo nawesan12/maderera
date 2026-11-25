@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { VincularCaja } from "@/components/mostrador/vincular-caja";
@@ -904,8 +905,15 @@ export function VistaMostrador({
       {/* En el teléfono no se vende (decisión 2 del comité final): no entran el
           buscador, la venta y el cobro, y armar otra pantalla para eso no vale
           lo que cuesta. La tablet vertical sí: abajo de `lg` se apila. */}
-      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground sm:hidden">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-center text-foreground sm:hidden">
         <p className="text-xl font-semibold">Usalo en la computadora o la tablet.</p>
+        {/* No es un callejón: el panel sí anda en el teléfono. */}
+        <Link
+          href="/admin"
+          className="boton-accion inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-semibold"
+        >
+          Volver al panel
+        </Link>
       </div>
       {/* Abajo de `lg` (la tablet vertical) la venta y el cobro van uno abajo
           del otro, la página scrollea y el total con «Cobrar» queda fijo abajo

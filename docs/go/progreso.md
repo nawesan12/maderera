@@ -2580,11 +2580,24 @@ quedan confirmados:
 - Devolución de un pedido cobrado con recibo.
 - CSV de Deudores sin el circuito B.
 - El centavo de las notas de crédito parciales.
-- Cómo se autoriza la serie trabada de más de 50 comprobantes sin CAE.
-  Default aplicado (20/11, carril-k): de a 50 desde Facturación. El error
+- Cómo se autoriza la serie trabada de muchos comprobantes sin CAE.
+  Default aplicado (20/11, carril-k): por tramos desde Facturación. El error
   dice cuántos faltan y desde qué número, y la ficha de un comprobante con
-  más de 50 atrás muestra «Autorizar la serie desde el …» en lugar del botón
-  (`SerieDelComprobante.tramo`; `TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie`).
+  más de un tramo atrás muestra «Autorizar la serie desde el …» en lugar del
+  botón (`SerieDelComprobante.tramo`; `TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie`).
+  El comité del 25/11 bajó el tramo de 50 a 15 (`maxAnteriores`) y le puso un
+  tope de 60 s por pedido (`presupuestoDeLaSerie`): con el candado de CAE
+  tomado, 51 llamadas a ARCA frenaban la facturación de todo el negocio y
+  pasaban los 100 s de Cloudflare. Si ARCA tarda, corta con lo hecho
+  guardado y dice cuántos faltan (`TestLaSerieCortaConElTiempoYSigue`).
+- La comisión de Mercado Pago en un reintegro por tramos (comité del 25/11).
+  El aviso no dice cuánto de su comisión devuelve MP en cada tramo: los
+  parciales salen del Banco por su importe y la comisión queda como gasto
+  (cobro de $1000 con $60, devuelto en $400 + $600: Banco −$60, Comisiones
+  $60). El reintegro entero de una vez sí la revierte. Fijado en
+  `TestComisionEnUnReintegroPorTramos`. Con un reintegro parcial real a la
+  vista, ver si MP informa la comisión devuelta (`fee_details` del refund)
+  para guardarla en payment_refunds y asentarla.
 - Anular una venta con cheque devuelto en parte por afuera (hoy, prohibido;
   ver abajo, «Los pendientes del 19/11»).
 - Facturar una venta del mostrador cuyo cheque ya se endosó en un pago B

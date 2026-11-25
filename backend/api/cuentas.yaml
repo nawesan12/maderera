@@ -738,8 +738,9 @@ components:
         recibo:
           type: object
           nullable: true
-          required: [id, numero, anulado]
-          properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean } }
+          required: [id, numero, anulado, porMercadoPago]
+          properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean },
+            porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel } }
     Historial:
       type: object
       required: [movimientos, hayMas, saldo]

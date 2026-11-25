@@ -322,7 +322,13 @@ export default async function FichaClientePage({
             <LineaDeTiempo
               movimientos={historial.movimientos}
               enlacePedido={(p) => `/admin/pedidos/${p.id}`}
-              accionDelRecibo={manejaPlata ? (r) => <AnularRecibo id={r.id} numero={r.numero} /> : undefined}
+              accionDelRecibo={
+                manejaPlata
+                  ? // El cobro de Mercado Pago se devuelve desde MP y su aviso
+                    // anula el recibo: a mano, el cliente pagaría dos veces.
+                    (r) => (r.porMercadoPago ? null : <AnularRecibo id={r.id} numero={r.numero} />)
+                  : undefined
+              }
             />
             {historial.hayMas && (
               <p className="border-t border-linea px-5 py-3 text-sm text-muted-foreground">

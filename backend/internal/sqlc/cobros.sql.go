@@ -739,19 +739,22 @@ func (q *Queries) PagosInformados(ctx context.Context, arg PagosInformadosParams
 }
 
 const partesDeRecibos = `-- name: PartesDeRecibos :many
-SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo
+SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
+       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
+LEFT JOIN payments pay ON pay.id = p.payment_id
 WHERE p.receipt_id = ANY($1::uuid[])
 ORDER BY p.orden
 `
 
 type PartesDeRecibosRow struct {
-	ReceiptID string      `json:"receiptId"`
-	Medio     string      `json:"medio"`
-	Importe   float64     `json:"importe"`
-	Banco     *string     `json:"banco"`
-	Numero    *string     `json:"numero"`
-	Tipo      *TipoCheque `json:"tipo"`
+	ReceiptID      string      `json:"receiptId"`
+	Medio          string      `json:"medio"`
+	Importe        float64     `json:"importe"`
+	Banco          *string     `json:"banco"`
+	Numero         *string     `json:"numero"`
+	Tipo           *TipoCheque `json:"tipo"`
+	PorMercadoPago bool        `json:"porMercadoPago"`
 }
 
 func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]PartesDeRecibosRow, error) {
@@ -770,6 +773,7 @@ func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]Part
 			&i.Banco,
 			&i.Numero,
 			&i.Tipo,
+			&i.PorMercadoPago,
 		); err != nil {
 			return nil, err
 		}

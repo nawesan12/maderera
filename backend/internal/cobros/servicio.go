@@ -164,7 +164,26 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", Aviso: r.Aviso, ReceiptID: &r.ReceiptID}, nil
 }
 
-// Anular es anularReciboDesdeElPanel (solo el admin).
+// cobradoPorMercadoPago dice si alguna parte del recibo es un pago de Mercado
+// Pago que sigue aprobado. Ese recibo no se anula a mano: la deuda volvería
+// entera con la plata todavía en MP, el cliente pagaría dos veces, el cierre
+// revertiría un cobro que existió y el reintegro que llegara después se daría
+// por hecho sin asentarse. La devolución se hace desde Mercado Pago y su
+// aviso anula el recibo solo (pagos.Acreditar llama a AnularRecibo, no a
+// esto).
+//
+// La transferencia del portal sí se anula: la plata no queda en ningún
+// proveedor que avise, y anular es la única forma de corregir una
+// conciliación equivocada o de registrar que se devolvió por el banco.
+func cobradoPorMercadoPago(ctx context.Context, tx pgx.Tx, recibo string) (bool, error) {
+	var si bool
+	err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM receipt_parts x JOIN payments pay ON pay.id = x.payment_id
+		WHERE x.receipt_id = $1 AND pay.estado = 'aprobado' AND pay.proveedor = 'mercado_pago')`, recibo).Scan(&si)
+	return si, err
+}
+
+// Anular es anularReciboDesdeElPanel: los roles que manejan plata, salvo el
+// recibo de un cobro de Mercado Pago (cobradoPorMercadoPago).
 func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, recibo, motivo string) (string, error) {
 	limpio := strings.TrimSpace(motivo)
 	if r := []rune(limpio); len(r) > 300 {
@@ -175,7 +194,16 @@ func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, recibo, motivo 
 	}
 	var numero string
 	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
-		var err error
+		if err := sqlc.New(tx).BloquearRecibo(ctx, recibo); err != nil {
+			return err
+		}
+		porMP, err := cobradoPorMercadoPago(ctx, tx, recibo)
+		if err != nil {
+			return err
+		}
+		if porMP {
+			return errCobro("Este cobro entró por Mercado Pago: devolvelo desde Mercado Pago y el recibo se anula solo cuando llega el aviso.")
+		}
 		numero, _, err = AnularRecibo(ctx, tx, recibo, limpio, &ses.UserID)
 		return err
 	})

@@ -40,6 +40,10 @@ type RefRecibo struct {
 	ID      string `json:"id"`
 	Numero  string `json:"numero"`
 	Anulado bool   `json:"anulado"`
+	// PorMercadoPago: una parte es un cobro de Mercado Pago que sigue
+	// aprobado. Ese recibo no se anula desde el panel (Servicio.Anular): se
+	// devuelve desde MP y el aviso lo anula.
+	PorMercadoPago bool `json:"porMercadoPago"`
 }
 
 // ClasesPorFiltro son las clases que muestra cada filtro (nil: todas).
@@ -113,12 +117,16 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		}
 	}
 	medios := map[string]string{}
+	porMP := map[string]bool{}
 	if len(recibos) > 0 {
 		partes, err := q.PartesDeRecibos(ctx, recibos)
 		if err != nil {
 			return nil, false, err
 		}
 		for _, p := range partes {
+			if p.PorMercadoPago {
+				porMP[p.ReceiptID] = true
+			}
 			var t string
 			if p.Numero != nil {
 				tipo := ""
@@ -160,7 +168,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			x.Pedido = &RefPedido{*m.PedidoID, *m.Referencia}
 		}
 		if m.ReciboID != nil {
-			x.Recibo = &RefRecibo{*m.ReciboID, deref(m.ReciboNumero), m.ReciboEstado != nil && *m.ReciboEstado == sqlc.EstadoReciboAnulado}
+			x.Recibo = &RefRecibo{*m.ReciboID, deref(m.ReciboNumero), m.ReciboEstado != nil && *m.ReciboEstado == sqlc.EstadoReciboAnulado, porMP[*m.ReciboID]}
 		}
 		movs = append(movs, x)
 	}

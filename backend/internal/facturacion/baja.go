@@ -71,6 +71,10 @@ type Corrimiento struct {
 type SerieDelComprobante struct {
 	// Los anteriores sin CAE que se autorizan antes que este al reintentar.
 	AnterioresSinCae int `json:"anterioresSinCae"`
+	// Con más de maxAnteriores atrás, el pedido de CAE no sale: la serie se
+	// autoriza de a tramos, empezando por este (el que tiene justo
+	// maxAnteriores sin CAE antes). nil si no hace falta.
+	Tramo *TramoDeLaSerie `json:"tramo"`
 	// Los que bajan un número si este se da de baja.
 	Corren []Corrimiento `json:"corren"`
 	// La deuda que este comprobante cargó en la cuenta corriente y que se va
@@ -79,6 +83,12 @@ type SerieDelComprobante struct {
 	// Por qué no se puede dar de baja, o nil. No mira ARCA: eso lo hace la
 	// baja, que es la que decide.
 	Bloqueo *string `json:"bloqueo"`
+}
+
+// TramoDeLaSerie es el comprobante desde el que se autoriza la serie.
+type TramoDeLaSerie struct {
+	InvoiceID string `json:"invoiceId"`
+	Numero    int64  `json:"numero"`
 }
 
 // ResultadoDeBaja es lo que se hizo.
@@ -182,6 +192,14 @@ func (s *Servicio) Serie(ctx context.Context, id string) (*SerieDelComprobante, 
 	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE punto_venta = $1 AND tipo = $2::tipo_comprobante
 		AND numero < $3 AND cae IS NULL`, x.pv, x.tipo, x.numero).Scan(&out.AnterioresSinCae); err != nil {
 		return nil, err
+	}
+	if out.AnterioresSinCae > maxAnteriores {
+		var t TramoDeLaSerie
+		if err := s.pool.QueryRow(ctx, `SELECT id, numero FROM invoices WHERE punto_venta = $1 AND tipo = $2::tipo_comprobante
+			AND numero < $3 AND cae IS NULL ORDER BY numero OFFSET $4 LIMIT 1`, x.pv, x.tipo, x.numero, maxAnteriores).Scan(&t.InvoiceID, &t.Numero); err != nil {
+			return nil, err
+		}
+		out.Tramo = &t
 	}
 	if out.Corren, err = posteriores(ctx, s.pool, x, false); err != nil {
 		return nil, err

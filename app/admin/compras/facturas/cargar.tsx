@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calculator, FileText, Loader2, Plus } from "lucide-react";
 import { BarraGuardar, Hoja, Seccion } from "@/components/admin/formulario";
-import { fechaCorta, formatearMonto, hoyEnArgentina } from "@/lib/formato";
+import { fechaCorta, formatearMonto, hoyEnArgentina, importeDelCampo, importeParaElCampo } from "@/lib/formato";
 import { COMPROBANTES_DE_COMPRA } from "@/lib/fiscal/comprobantes-compra";
 import {
   cargarFacturaDeCompra,
@@ -61,7 +61,7 @@ function sumarDias(dia: string, dias: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const texto = (n: number) => (n ? String(n) : "");
+const texto = (n: number) => (n ? importeParaElCampo(n) : "");
 
 /**
  * La carga de una factura de proveedor, y su corrección.
@@ -146,7 +146,7 @@ export function CargarFactura({
   const delProveedor = corregir ? [] : recepciones.filter((r) => r.supplierId === supplierId);
   const vence = venceTocado ?? sumarDias(fechaEmision, proveedor?.diasPago ?? 0);
 
-  const n = (v: string) => Number(v || 0);
+  const n = importeDelCampo;
   const percepciones = Math.round((n(percepcionIva) + n(percepcionIibb)) * 100) / 100;
   const total =
     Math.round((n(neto) + n(iva21) + n(iva105) + n(iva27) + n(exento) + percepciones) * 100) / 100;
@@ -316,9 +316,8 @@ export function CargarFactura({
           <label className="block">
             <span className="text-base font-medium">Neto gravado</span>
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={neto}
               onChange={(e) => setNeto(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
@@ -326,7 +325,7 @@ export function CargarFactura({
             {sugerido > 0 && n(iva21) === 0 && (
               <button
                 type="button"
-                onClick={() => setIva21(String(sugerido))}
+                onClick={() => setIva21(importeParaElCampo(sugerido))}
                 className="mt-1 text-base text-muted-foreground underline"
               >
                 IVA 21% = {formatearMonto(sugerido)}
@@ -350,9 +349,8 @@ export function CargarFactura({
           <label className="block">
             <span className="text-base font-medium">Total del papel</span>
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={totalPapel}
               onChange={(e) => setTotalPapel(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
@@ -424,10 +422,12 @@ function Campo({
     <label className="block">
       <span className="text-base font-medium">{etiqueta}</span>
       <input
-        type={numerico ? "number" : "text"}
+        // La plata va en texto y se lee con importeDelCampo («15.000» son
+        // quince mil); los números enteros (punto de venta, número), no.
+        type={numerico && entero ? "number" : "text"}
         inputMode={numerico ? (entero ? "numeric" : "decimal") : undefined}
-        min={numerico ? "0" : undefined}
-        step={numerico ? (entero ? "1" : "0.01") : undefined}
+        min={numerico && entero ? "0" : undefined}
+        step={numerico && entero ? "1" : undefined}
         value={valor}
         onChange={(e) => onCambio(e.target.value)}
         className={`mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base ${

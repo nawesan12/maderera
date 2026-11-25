@@ -113,6 +113,7 @@ Unifica el hallazgo del dueño (topes) con el del contador (asiento).
 - **M13. La caja del mostrador lee «15.000» como $15.**
   - **Archivo:** `app/mostrador/caja.tsx:57,62,282,298,396` (`Number()` sobre `type=number`).
   - **Arreglo:** usar `type=text` con `inputMode=decimal`, leer con `parsearImporte`, y sumar un test.
+  - **Hecho** (caja, 19/11; el resto de los campos de plata del panel y del mostrador, 20/11 en carril-k: `importeDelCampo` / `importeParaElCampo`).
 - **M14. Ctrl+Enter cobra en el acto.**
   - **Archivos:** `lib/mostrador/atajos.ts:197-201` y `backend/internal/mostrador/venta.go:233-234`.
   - **Qué pasa:** sin conexión, sobre una placa, la vende entera y la cobra en efectivo. Sobre un producto en $0, responde «El descuento no puede llevarse toda la venta» aunque nadie puso un descuento.
@@ -150,7 +151,7 @@ Unifica el hallazgo del dueño (topes) con el del contador (asiento).
 ## Bajos
 - Efectivo de recibos, anulaciones y devoluciones que entra a un turno mientras se cierra. Falta `FOR SHARE` en `cobros/recibo.go:357`, `mostrador/anular.go:298` y `facturacion/devolucion.go:645`. Es teórico: no se reprodujo.
 - Una devolución parcial cuenta dos veces si después se anula la venta (`reportes/dueno.go:284`).
-- Con más de 50 comprobantes sin CAE, el mensaje es engañoso: manda a revisar el punto de venta en ARCA (`facturacion/autorizar.go:240-243`).
+- ~~Con más de 50 comprobantes sin CAE, el mensaje es engañoso: manda a revisar el punto de venta en ARCA (`facturacion/autorizar.go:240-243`).~~ Hecho (20/11, carril-k): dice cuántos faltan y desde cuál autorizar la serie; la ficha muestra «Autorizar la serie desde el …» (`Serie.Tramo`).
 - Una nota de crédito en dos partes deja el neto y el IVA a un centavo del original (`fiscal/notas.go:57-68`).
 - El listado del padrón hace un regexp por cliente y por renglón (`facturacion/padron.go:241-248`). Hay que pasarlo a un CTE con hash join. Crece con los clientes de ISIS; con el tope de 30 s puede subir a medio.
 - El tablero de cortes trae todos los cancelados de la historia (`cortes/servicio.go:103-107`).

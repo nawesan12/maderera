@@ -602,9 +602,17 @@ components:
         recibos: { type: array, items: { type: string } }
     SerieDelComprobante:
       type: object
-      required: [anterioresSinCae, corren, deuda, bloqueo]
+      required: [anterioresSinCae, tramo, corren, deuda, bloqueo]
       properties:
         anterioresSinCae: { type: integer }
+        tramo:
+          description: Con más de 50 anteriores sin CAE, el comprobante desde el que se autoriza la serie (de a 50).
+          type: object
+          nullable: true
+          required: [invoiceId, numero]
+          properties:
+            invoiceId: { type: string }
+            numero: { type: integer, format: int64 }
         corren: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
         deuda: { type: number, format: double }
         bloqueo: { type: string, nullable: true }

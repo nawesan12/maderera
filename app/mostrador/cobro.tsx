@@ -319,9 +319,9 @@ export function Cobro({
                   Con cuánto paga
                 </span>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
+                  aria-label="Con cuánto paga"
                   value={recibido}
                   onChange={(e) => onRecibido(e.target.value)}
                   data-foco="recibido"
@@ -368,9 +368,9 @@ export function Cobro({
                 ))}
               </div>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                aria-label="Descuento"
                 value={valorDesc}
                 onChange={(e) => onValorDesc(e.target.value)}
                 data-foco="descuento"

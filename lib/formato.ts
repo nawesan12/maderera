@@ -297,6 +297,36 @@ export function parsearImporte(texto: string): number {
 }
 
 /**
+ * Lo que vale un campo de plata (`type="text"` con `inputMode="decimal"`),
+ * leído con `parsearImporte`: «15.000» son quince mil y «1.234,56», mil
+ * doscientos treinta y cuatro con cincuenta y seis. Vacío o ilegible es 0,
+ * como el `Number(x) || 0` que reemplaza (comité final, M13: con
+ * `type="number"` y `Number()`, «15.000» se guardaba como $15).
+ */
+export function importeDelCampo(texto: string | null | undefined): number {
+  const n = parsearImporte(texto ?? "");
+  return Number.isFinite(n) ? n : 0;
+}
+
+const IMPORTE_DEL_CAMPO = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+  useGrouping: true,
+});
+
+/**
+ * Un importe listo para precargar un campo de plata, como lo escribe una
+ * persona: 15000 → «15.000», 1234.5 → «1.234,5». `importeDelCampo` lo lee de
+ * vuelta igual. Antes se precargaba con `toFixed(2)` («1234.50», con punto).
+ */
+export function importeParaElCampo(valor: number | string | null | undefined): string {
+  if (valor === null || valor === undefined || valor === "") return "";
+  const n = typeof valor === "string" ? Number(valor) : valor;
+  if (!Number.isFinite(n)) return "";
+  return IMPORTE_DEL_CAMPO.format(Number(n.toFixed(2)));
+}
+
+/**
  * El nombre de pila, para saludar.
  *
  * Salta el título profesional. Las fichas del mostrador vienen cargadas como

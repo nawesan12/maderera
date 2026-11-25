@@ -260,6 +260,15 @@ func (s *Servicio) Acreditar(ctx context.Context, pagoID string, r *PagoRemoto) 
 			WHERE id = $1`, pagoID, r.Estado, r.ID, medio, crudo(r), r.MotivoRechazo, movimiento, acreditado); err != nil {
 			return err
 		}
+		// La comisión de Mercado Pago, la que trae el aviso que lo acredita:
+		// el cierre asienta Banco por el neto y la comisión aparte. Un aviso
+		// sin el dato no borra lo que ya se sabía.
+		if acredita && r.Comision != nil && r.Neto != nil {
+			if _, err := tx.Exec(ctx, `UPDATE payments SET comision = $2::numeric, neto_acreditado = $3::numeric WHERE id = $1`,
+				pagoID, jsmath.Fijo2(*r.Comision), jsmath.Fijo2(*r.Neto)); err != nil {
+				return err
+			}
+		}
 		if p.orderID != nil && (acredita || revierte) {
 			estado := "pagado"
 			if !acredita {

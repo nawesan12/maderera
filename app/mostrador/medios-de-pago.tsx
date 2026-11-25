@@ -216,9 +216,9 @@ export function PagoPartido({
               ))}
             </select>
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              aria-label={`Importe del medio ${i + 1}`}
               value={parte.importe}
               onChange={(e) =>
                 onPartes(

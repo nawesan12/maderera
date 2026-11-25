@@ -69,3 +69,40 @@ test("cheques, vendedores y seguimiento cargan desde la API", async ({ page }) =
     await expect(page.getByRole("heading", { name: titulo, level: 1 })).toBeVisible();
   }
 });
+
+test("anular un recibo desde la ficha: la deuda vuelve y queda en la bitácora", async ({ page }) => {
+  await page.goto("/admin/clientes");
+  const href = await page
+    .locator("a")
+    .evaluateAll((as) =>
+      as.map((a) => a.getAttribute("href") ?? "").find((h) => /^\/admin\/clientes\/[0-9a-f-]{36}$/.test(h)),
+    );
+  expect(href, "hay al menos un cliente en la cartera").toBeTruthy();
+  await page.goto(`${href}?ver=pagos`);
+  const saldo = async () =>
+    (await page.getByText(/^(Debe|A favor|Al día)/).first().textContent().catch(() => "")) ?? "";
+  const antes = await saldo();
+
+  // Un cobro por transferencia: no pide caja.
+  await page.getByRole("button", { name: "Registrar cobro" }).first().click();
+  await page.getByLabel("Con qué paga").selectOption("transferencia");
+  await page.getByLabel("Importe del medio 1").fill("1.234,56");
+  await page.getByRole("button", { name: "Registrar y emitir recibo" }).click();
+  const fila = page.locator("li", { has: page.getByRole("button", { name: /^Anular el recibo / }) }).first();
+  await expect(fila).toBeVisible();
+  await expect(fila).toContainText("1234,56".replace(/(\d)(?=(\d{3})+,)/g, "$1."));
+  const etiqueta = (await fila.getByRole("button", { name: /^Anular el recibo / }).getAttribute("aria-label")) ?? "";
+  const numero = etiqueta.replace("Anular el recibo ", "");
+
+  // Sin motivo no sale; con motivo, se anula.
+  await fila.getByRole("button", { name: etiqueta }).click();
+  await page.getByLabel(`Motivo para anular el recibo ${numero}`).fill("Prueba de punta a punta");
+  await page.getByRole("button", { name: "Anular el recibo", exact: true }).click();
+  await expect(page.getByText(`Recibo ${numero} anulado. La deuda volvió a la cuenta.`)).toBeVisible();
+  await expect(page.getByText(`Recibo ${numero} (anulado)`).first()).toBeVisible();
+  await page.reload();
+  expect(await saldo()).toBe(antes);
+
+  await page.goto(`/admin/bitacora?q=${encodeURIComponent(numero)}`);
+  await expect(page.getByText(`Anuló el recibo ${numero}: Prueba de punta a punta`).first()).toBeVisible();
+});

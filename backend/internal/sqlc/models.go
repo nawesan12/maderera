@@ -5230,6 +5230,8 @@ type Customer struct {
 	DiasCredito     int32         `json:"diasCredito"`
 	CuentaBloqueada bool          `json:"cuentaBloqueada"`
 	MotivoBloqueo   *string       `json:"motivoBloqueo"`
+	CuentaEnCeroAt  *time.Time    `json:"cuentaEnCeroAt"`
+	CuentaEnCeroID  *string       `json:"cuentaEnCeroId"`
 }
 
 type CustomerFollowUp struct {
@@ -5780,6 +5782,8 @@ type Payment struct {
 	CreatedAt          time.Time       `json:"createdAt"`
 	UpdatedAt          time.Time       `json:"updatedAt"`
 	AcreditadoAt       *time.Time      `json:"acreditadoAt"`
+	Comision           *jsmath.Num     `json:"comision"`
+	NetoAcreditado     *jsmath.Num     `json:"netoAcreditado"`
 }
 
 type PaymentDiscount struct {

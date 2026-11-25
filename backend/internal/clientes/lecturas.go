@@ -318,24 +318,32 @@ func (s *Servicio) deudaVencida(ctx context.Context, deudores []ClienteListado, 
 // Lo de antes de ese cero no cambia el aging: en ese punto cada pago ya
 // canceló sus deudas (FIFO) y no queda nada a favor, así que CalcularAging
 // llega al mismo resultado empezando desde ahí. Un cliente con diez años de
-// cuenta al día y una factura de este mes manda una fila, no diez años. El
-// saldo corrido se suma en la base, con numeric: exacto, sin el resto de la
-// coma flotante. El orden es el mismo de CalcularAging (fecha, y el id para
-// que dos movimientos del mismo instante salgan siempre igual).
+// cuenta al día y una factura de este mes manda una fila, no diez años.
+//
+// El cero está guardado en la ficha (customers.cuenta_en_cero_at y _id, que
+// mantiene un trigger sobre account_movements: la 00201), con el saldo
+// corrido sumado en numeric, exacto. Antes se buscaba acá con una ventana
+// que leía la cuenta entera de cada deudor; ahora se lee solo lo posterior
+// con el índice (customer_id, created_at, id) de la 00168. El orden es el
+// mismo de CalcularAging (fecha, y el id para que dos movimientos del mismo
+// instante salgan siempre igual).
+//
+// LATERAL y no un JOIN: con el JOIN, Postgres no sabe cuántas filas deja la
+// comparación de filas y prefiere recorrer account_movements entera con un
+// hash (167 ms con 300.000 movimientos); así es un recorrido del índice por
+// deudor, sin tocar la tabla (32 ms, docs/go/progreso.md).
 func (s *Servicio) movimientosAbiertos(ctx context.Context, ids []string) (map[string][]cobros.Movimiento, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT customer_id::text, monto::float8, created_at FROM (
-		  SELECT customer_id, monto, created_at, orden,
-		         max(orden) FILTER (WHERE acumulado = 0) OVER (PARTITION BY customer_id) AS ultimo_cero
-		  FROM (
-		    SELECT customer_id, monto, created_at,
-		           row_number() OVER w AS orden, sum(monto) OVER w AS acumulado
-		    FROM account_movements WHERE customer_id = ANY($1::uuid[])
-		    WINDOW w AS (PARTITION BY customer_id ORDER BY created_at, id)
-		  ) m
-		) x
-		WHERE ultimo_cero IS NULL OR orden > ultimo_cero
-		ORDER BY customer_id, orden`, ids)
+		SELECT c.id::text, m.monto::float8, m.created_at
+		FROM customers c
+		CROSS JOIN LATERAL (
+		  SELECT m.monto, m.created_at, m.id FROM account_movements m
+		  WHERE m.customer_id = c.id
+		    AND (m.created_at, m.id) > (coalesce(c.cuenta_en_cero_at, '-infinity'),
+		                                coalesce(c.cuenta_en_cero_id, '00000000-0000-0000-0000-000000000000'))
+		) m
+		WHERE c.id = ANY($1::uuid[])
+		ORDER BY c.id, m.created_at, m.id`, ids)
 	if err != nil {
 		return nil, err
 	}

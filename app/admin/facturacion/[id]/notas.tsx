@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2, MinusCircle, PlusCircle, Undo2 } from "lucide-react";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeDelCampo } from "@/lib/formato";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { acreditarParcial, debitar, type EstadoFactura } from "../actions";
 import { Confirmar } from "@/components/admin/confirmar";
@@ -63,8 +63,8 @@ export function NotasSobreElComprobante({
   // Lo que va a salir, para decirlo antes de emitir: es un comprobante fiscal.
   const importeDeLaNota =
     modo === "credito"
-      ? items.reduce((s, i) => s + (i.cantidad > 0 ? (Number(cantidades[i.id] ?? 0) / i.cantidad) * i.subtotal : 0), 0)
-      : Number(importe || 0);
+      ? items.reduce((s, i) => s + (i.cantidad > 0 ? (importeDelCampo(cantidades[i.id]) / i.cantidad) * i.subtotal : 0), 0)
+      : importeDelCampo(importe);
 
   if (modo === null) {
     return (
@@ -129,10 +129,9 @@ export function NotasSobreElComprobante({
                   </span>
                 </span>
                 <input
-                  type="number"
-                  min="0"
-                  max={i.cantidad}
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
+                  aria-label={`Cuánto se acredita de ${i.descripcion}`}
                   value={cantidades[i.id] ?? ""}
                   onChange={(e) =>
                     setCantidades((prev) => ({ ...prev, [i.id]: e.target.value }))
@@ -158,9 +157,8 @@ export function NotasSobreElComprobante({
           <label className="block">
             <span className="text-sm font-medium">Importe final</span>
             <input
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               value={importe}
               onChange={(e) => setImporte(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-background px-3 text-right text-base"
@@ -215,14 +213,14 @@ export function NotasSobreElComprobante({
                       motivo,
                       items.map((i) => ({
                         itemId: i.id,
-                        cantidad: Number(cantidades[i.id] ?? 0),
+                        cantidad: importeDelCampo(cantidades[i.id]),
                       })),
                     )
                   : await debitar(
                       invoiceId,
                       motivo,
                       concepto,
-                      Number(importe || 0),
+                      importeDelCampo(importe),
                       Number(alicuota),
                     );
               // Si sale bien, la acción redirige a la nota emitida.

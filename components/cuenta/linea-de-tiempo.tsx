@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import type { ClaseDeMovimiento, MovimientoDelCliente } from "@/lib/dal/historial-cliente";
@@ -36,14 +37,19 @@ const PESOS = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 2,
 });
 
+type ReciboDelMovimiento = NonNullable<MovimientoDelCliente["recibo"]>;
+
 export function LineaDeTiempo({
   movimientos,
   enlacePedido,
+  accionDelRecibo,
   vacio = "Todavía no hay movimientos en este período.",
 }: {
   movimientos: MovimientoDelCliente[];
   /** Adónde lleva un pedido: la ficha del panel o el seguimiento del cliente. */
   enlacePedido: (pedido: { id: string; numero: string }) => string;
+  /** Lo que el panel ofrece sobre un recibo vivo (anularlo); el portal, nada. */
+  accionDelRecibo?: (recibo: ReciboDelMovimiento) => ReactNode;
   vacio?: string;
 }) {
   if (movimientos.length === 0) {
@@ -71,7 +77,12 @@ export function LineaDeTiempo({
           </h3>
           <ul className="divide-y divide-linea">
             {mes.filas.map((m) => (
-              <Fila key={`${m.clase}-${m.id}`} movimiento={m} enlacePedido={enlacePedido} />
+              <Fila
+                key={`${m.clase}-${m.id}`}
+                movimiento={m}
+                enlacePedido={enlacePedido}
+                accionDelRecibo={accionDelRecibo}
+              />
             ))}
           </ul>
         </section>
@@ -83,9 +94,11 @@ export function LineaDeTiempo({
 function Fila({
   movimiento: m,
   enlacePedido,
+  accionDelRecibo,
 }: {
   movimiento: MovimientoDelCliente;
   enlacePedido: (pedido: { id: string; numero: string }) => string;
+  accionDelRecibo?: (recibo: ReciboDelMovimiento) => ReactNode;
 }) {
   const estilo = ESTILO[m.clase];
   // Si el título repite la etiqueta («Compra a cuenta» dos veces), el detalle
@@ -136,6 +149,7 @@ function Fila({
                 {m.recibo.anulado && " (anulado)"}
               </a>
             )}
+            {m.recibo && !m.recibo.anulado && accionDelRecibo?.(m.recibo)}
           </span>
         )}
       </span>

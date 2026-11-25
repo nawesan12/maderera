@@ -17,7 +17,14 @@ import {
   Truck,
   Wallet,
 } from "lucide-react";
-import { diasHasta, fechaCorta, formatearMonto, hoyEnArgentina } from "@/lib/formato";
+import {
+  diasHasta,
+  fechaCorta,
+  formatearMonto,
+  hoyEnArgentina,
+  importeDelCampo,
+  importeParaElCampo,
+} from "@/lib/formato";
 import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import { type ChequeDeCartera, chequesParaEndosar, sinEndososDelOtroCircuito } from "./endoso";
 import {
@@ -212,7 +219,7 @@ export function FormularioPago({
       setFacturas(filas);
       // Si se llegó desde una factura, viene tildada por su saldo entero.
       const objetivo = filas.find((f) => f.id === facturaInicial);
-      setAplicado(objetivo ? { [objetivo.id]: String(objetivo.saldo) } : {});
+      setAplicado(objetivo ? { [objetivo.id]: importeParaElCampo(objetivo.saldo) } : {});
       // El total que ya se escribió no se borra: si las facturas tardaban en
       // llegar, el importe tipeado desaparecía y «Pagar» quedaba apagado sin
       // decir por qué. Cambiar de proveedor ya lo limpia (`elegirProveedor`).
@@ -237,12 +244,12 @@ export function FormularioPago({
 
   const tildadas = facturas.filter((f) => f.id in aplicado);
   const sumaAplicada = redondear(
-    tildadas.reduce((s, f) => s + (Number(aplicado[f.id]) || 0), 0),
+    tildadas.reduce((s, f) => s + importeDelCampo(aplicado[f.id]), 0),
   );
-  const total = totalTocado === null ? sumaAplicada : Number(totalTocado) || 0;
+  const total = totalTocado === null ? sumaAplicada : importeDelCampo(totalTocado);
   const aCuenta = redondear(total - sumaAplicada);
   const sumaPartes = redondear(
-    (partes ?? []).reduce((s, p) => s + (Number(p.importe) || 0), 0),
+    (partes ?? []).reduce((s, p) => s + importeDelCampo(p.importe), 0),
   );
 
   /*
@@ -252,13 +259,13 @@ export function FormularioPago({
    */
   const baseDeLasFacturas = redondear(
     tildadas.reduce((s, f) => {
-      const pagado = Number(aplicado[f.id]) || 0;
+      const pagado = importeDelCampo(aplicado[f.id]);
       return f.total > 0 ? s + (pagado * f.netoSinIva) / f.total : s;
     }, 0),
   );
   const conFacturas = tildadas.length > 0;
   const baseDe = (r: Regimen) =>
-    conFacturas ? baseDeLasFacturas : Number(basesAMano[r.id]) || 0;
+    conFacturas ? baseDeLasFacturas : importeDelCampo(basesAMano[r.id]);
   const proveedor = proveedores.find((p) => p.id === supplierId);
   const hoy = hoyEnArgentina();
   const regimenesDelProveedor = regimenes.filter((r) => leCorresponde(r, proveedor, hoy));
@@ -271,7 +278,7 @@ export function FormularioPago({
   const hayEfectivo =
     partes === null
       ? medio === "efectivo"
-      : partes.some((p) => p.medio === "efectivo" && Number(p.importe) > 0);
+      : partes.some((p) => p.medio === "efectivo" && importeDelCampo(p.importe) > 0);
   const sucursal = sucursales.find((s) => s.id === branchId);
 
   /** Tilda o destilda una factura; tildada, se paga entera. */
@@ -279,7 +286,7 @@ export function FormularioPago({
     setTotalTocado(null);
     setAplicado((prev) => {
       const nuevo = { ...prev };
-      if (si) nuevo[f.id] = String(f.saldo);
+      if (si) nuevo[f.id] = importeParaElCampo(f.saldo);
       else delete nuevo[f.id];
       return nuevo;
     });
@@ -292,11 +299,11 @@ export function FormularioPago({
   function escribirTotal(valor: string) {
     setTotalTocado(valor);
     if (tildadas.length === 0) return;
-    let resto = Number(valor) || 0;
+    let resto = importeDelCampo(valor);
     const nuevo: Record<string, string> = {};
     for (const f of tildadas) {
       const cubre = Math.max(0, Math.min(f.saldo, resto));
-      nuevo[f.id] = cubre.toFixed(2);
+      nuevo[f.id] = importeParaElCampo(cubre);
       resto = redondear(resto - cubre);
     }
     setAplicado(nuevo);
@@ -387,10 +394,8 @@ export function FormularioPago({
                       </span>
                       {tildada && (
                         <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          max={f.saldo}
+                          type="text"
+                          inputMode="decimal"
                           value={aplicado[f.id]}
                           aria-label={`Cuánto se paga de la ${f.numero}`}
                           onChange={(e) => {
@@ -410,10 +415,9 @@ export function FormularioPago({
               <label className="block">
                 <span className="text-base font-medium">Total del pago</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={totalTocado ?? (sumaAplicada ? sumaAplicada.toFixed(2) : "")}
+                  type="text"
+                  inputMode="decimal"
+                  value={totalTocado ?? (sumaAplicada ? importeParaElCampo(sumaAplicada) : "")}
                   onChange={(e) => escribirTotal(e.target.value)}
                   className="tabular mt-1 h-12 w-full rounded-lg border border-linea bg-card px-3 text-right text-xl font-semibold"
                 />
@@ -455,7 +459,7 @@ export function FormularioPago({
                   setMedio(elegido);
                   // Un cheque necesita sus datos, así que abre el detalle.
                   if ((elegido === "cheque" || elegido === "echeq") && !partes) {
-                    setPartes([{ ...parteVacia(elegido as ParteUI["medio"]), importe: total ? String(total) : "" }]);
+                    setPartes([{ ...parteVacia(elegido as ParteUI["medio"]), importe: total ? importeParaElCampo(total) : "" }]);
                   }
                 }}
               />
@@ -518,9 +522,8 @@ export function FormularioPago({
                         {circuito !== "negro" && <option value="echeq">e-Cheq</option>}
                       </select>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={parte.importe}
                         onChange={(e) => actualizarParte(i, { importe: e.target.value })}
                         placeholder="Importe"
@@ -564,7 +567,7 @@ export function FormularioPago({
                               actualizarParte(i, {
                                 chequeId: e.target.value,
                                 // El importe del endoso es el del cheque: no se endosa medio cheque.
-                                ...(elegido ? { importe: String(elegido.importe) } : {}),
+                                ...(elegido ? { importe: importeParaElCampo(elegido.importe) } : {}),
                               });
                             }}
                             aria-label="Cheque"
@@ -638,7 +641,7 @@ export function FormularioPago({
                 onClick={() =>
                   setPartes(
                     partes === null
-                      ? [{ ...parteVacia(medio as ParteUI["medio"]), importe: total ? String(total) : "" }]
+                      ? [{ ...parteVacia(medio as ParteUI["medio"]), importe: total ? importeParaElCampo(total) : "" }]
                       : null,
                   )
                 }
@@ -695,9 +698,8 @@ export function FormularioPago({
                         <label className="block">
                           <span className="text-base font-medium">Base</span>
                           <input
-                            type="number"
-                            min="0"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={basesAMano[r.id] ?? ""}
                             onChange={(e) => setBasesAMano((prev) => ({ ...prev, [r.id]: e.target.value }))}
                             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
@@ -773,16 +775,16 @@ export function FormularioPago({
                 referencia,
                 retenciones,
                 imputaciones: tildadas
-                  .map((f) => ({ purchaseInvoiceId: f.id, importe: Number(aplicado[f.id]) || 0 }))
+                  .map((f) => ({ purchaseInvoiceId: f.id, importe: importeDelCampo(aplicado[f.id]) }))
                   .filter((x) => x.importe > 0),
                 partes:
                   partes === null
                     ? undefined
                     : partes
-                        .filter((p) => Number(p.importe) > 0)
+                        .filter((p) => importeDelCampo(p.importe) > 0)
                         .map((p) => ({
                           medio: p.medio,
-                          importe: Number(p.importe),
+                          importe: importeDelCampo(p.importe),
                           referencia: p.referencia || null,
                           chequeId: p.chequeId || null,
                           cheque:

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
+import { cerrarSesion as salirDeLaApi } from "@/lib/api/salir";
 import { SENAL_ESTADO } from "@/lib/senal-navegador";
 import { olvidarEstado } from "@/lib/estado-context";
 
@@ -13,7 +13,7 @@ export function BotonSalir() {
 
   async function cerrarSesion() {
     setSaliendo(true);
-    await authClient.signOut();
+    await salirDeLaApi();
 
     // Sin señal, el servidor no busca nada de quien mira: el menú vuelve a
     // decir "Ingresar" sin una sola consulta. Si quedara prendida, cada página

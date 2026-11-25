@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { ATAJOS, accionDeLaTecla, type Accion } from "@/lib/mostrador/atajos";
 
 /**
  * Los atajos del mostrador, en un solo lugar.
@@ -11,93 +12,14 @@ import { Fragment, useEffect, useRef, useState } from "react";
  * para usarlos no los usaría nadie— y por eso llevan `Alt`, que no se pisa con
  * lo que se tipea.
  *
- * La tabla es una sola: de acá salen los manejadores y también la ayuda que se
- * muestra en pantalla. Dos listas del mismo dato terminan diciendo cosas
- * distintas, como pasó con los nombres de los medios de pago.
- *
- * Se lee `event.code` y no `event.key`: con `Alt` apretado, el teclado entrega
- * el carácter alternativo —en Mac, Alt+C es «ç»— y la letra se pierde. El
- * `code` es la tecla física.
+ * La tabla es una sola (`lib/mostrador/atajos.ts`): de ahí salen los
+ * manejadores y también la ayuda que se muestra en pantalla. Dos listas del
+ * mismo dato terminan diciendo cosas distintas, como pasó con los nombres de
+ * los medios de pago.
  */
 
-export type Accion =
-  | "cobrar"
-  | "cliente"
-  | "buscador"
-  | "tipo"
-  | "medio1"
-  | "medio2"
-  | "medio3"
-  | "medio4"
-  | "descuento"
-  | "papel"
-  | "partir"
-  | "presupuesto"
-  | "imprimir"
-  | "caja"
-  | "cantidad"
-  | "recibo";
-
-interface Definicion {
-  accion: Accion;
-  /** Cómo se escribe la tecla en la ayuda. */
-  teclas: string;
-  /** Qué hace, en la ayuda. Vacío: no se muestra (los medios van juntos). */
-  texto: string;
-  coincide: (e: KeyboardEvent) => boolean;
-}
-
-/** Alt y nada más: con Ctrl o Shift encima es otro atajo, no este. */
-function alt(code: string) {
-  return (e: KeyboardEvent) =>
-    e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === code;
-}
-
-export const ATAJOS: Definicion[] = [
-  {
-    accion: "cobrar",
-    teclas: "Ctrl + Enter",
-    texto: "Cobrar",
-    coincide: (e) =>
-      (e.ctrlKey || e.metaKey) && !e.altKey && e.code === "Enter",
-  },
-  { accion: "buscador", teclas: "Alt + B", texto: "Buscar un producto", coincide: alt("KeyB") },
-  { accion: "cantidad", teclas: "F2", texto: "Cambiar la cantidad del último", coincide: (e) => e.code === "F2" },
-  { accion: "cliente", teclas: "Alt + C", texto: "Elegir el cliente", coincide: alt("KeyC") },
-  {
-    accion: "tipo",
-    // Alt+T no: es el atajo con el que los avisos (`sonner`) se enfocan a sí
-    // mismos, y dos cosas distintas en la misma tecla es peor que una letra
-    // menos obvia.
-    teclas: "Alt + O",
-    texto: "Contado, cuenta corriente o acopio",
-    coincide: alt("KeyO"),
-  },
-  { accion: "medio1", teclas: "Alt + 1", texto: "Los medios de pago, por su lugar en pantalla", coincide: alt("Digit1") },
-  { accion: "medio2", teclas: "Alt + 2", texto: "", coincide: alt("Digit2") },
-  { accion: "medio3", teclas: "Alt + 3", texto: "", coincide: alt("Digit3") },
-  { accion: "medio4", teclas: "Alt + 4", texto: "", coincide: alt("Digit4") },
-  { accion: "descuento", teclas: "Alt + D", texto: "Hacer un descuento", coincide: alt("KeyD") },
-  { accion: "papel", teclas: "Alt + F", texto: "Comprobante o factura", coincide: alt("KeyF") },
-  { accion: "partir", teclas: "Alt + P", texto: "Partir el pago en más de un medio", coincide: alt("KeyP") },
-  { accion: "presupuesto", teclas: "Alt + U", texto: "Emitir presupuesto sin cobrar", coincide: alt("KeyU") },
-  { accion: "imprimir", teclas: "Alt + I", texto: "Imprimir la última venta", coincide: alt("KeyI") },
-  {
-    accion: "recibo",
-    // R de recibo: cobrarle la cuenta al cliente elegido, con su recibo.
-    teclas: "Alt + R",
-    texto: "Cobrar la cuenta del cliente elegido",
-    coincide: alt("KeyR"),
-  },
-  {
-    accion: "caja",
-    // K y no C: la C es del cliente, que se toca mil veces por día y se lleva
-    // la inicial.
-    teclas: "Alt + K",
-    texto: "Abrir y cerrar el panel de caja",
-    coincide: alt("KeyK"),
-  },
-];
+export type { Accion } from "@/lib/mostrador/atajos";
+export { ATAJOS } from "@/lib/mostrador/atajos";
 
 /**
  * Las teclas que valen **sobre un resultado del buscador**.
@@ -155,26 +77,18 @@ export function useAtajos(manejadores: Partial<Record<Accion, () => void>>) {
 
   useEffect(() => {
     function alApretar(e: KeyboardEvent) {
-      /*
-       * Con un diálogo abierto, la pantalla de atrás no escucha.
-       *
-       * Pasó de verdad: `Ctrl + Enter` para cerrar el corte a medida cerró el
-       * corte **y cobró la venta**, porque la tecla siguió viajando hasta acá.
-       * Mientras hay algo encima, los atajos son del diálogo; el que quiera
-       * uno propio se lo pone adentro.
-       */
-      if (hayAlgoEncima()) return;
-
-      for (const atajo of ATAJOS) {
-        if (!atajo.coincide(e)) continue;
-        const hacer = caja.current[atajo.accion];
-        if (!hacer) return;
-        e.preventDefault();
-        hacer();
-        return;
-      }
+      // Qué atajo es, si es alguno: ni la tecla que un campo ya usó ni la que
+      // llega con un diálogo encima (ver `accionDeLaTecla`).
+      const accion = accionDeLaTecla(e, ATAJOS, hayAlgoEncima);
+      if (!accion) return;
+      const hacer = caja.current[accion];
+      if (!hacer) return;
+      e.preventDefault();
+      hacer();
     }
 
+    // En burbuja y en `window`, a propósito: llega después de los `onKeyDown`
+    // de React, que es lo que hace que `defaultPrevented` sirva.
     window.addEventListener("keydown", alApretar);
     return () => window.removeEventListener("keydown", alApretar);
   }, []);
@@ -199,8 +113,13 @@ export type Campo =
   | "parte"
   | "recibo";
 
+/** El elemento del campo, si está en pantalla. */
+export function campoEnPantalla(campo: Campo): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-foco="${campo}"]`);
+}
+
 export function enfocar(campo: Campo, centrar = false) {
-  const el = document.querySelector<HTMLElement>(`[data-foco="${campo}"]`);
+  const el = campoEnPantalla(campo);
   if (!el) return;
   el.focus();
   // Lo que ya está escrito queda seleccionado: el vendedor tipea encima en vez

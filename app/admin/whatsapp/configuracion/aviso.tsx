@@ -79,7 +79,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
             aria-pressed={aviso.activo}
             className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-base font-medium transition-colors disabled:opacity-60 ${
               aviso.activo
-                ? "bg-brand-green text-white hover:bg-brand-green/90"
+                ? "bg-verde-whatsapp text-white hover:bg-brand-green/90"
                 : "border hover:bg-muted"
             }`}
           >
@@ -128,7 +128,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
               <button
                 type="submit"
                 disabled={guardando}
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
               >
                 {guardando && <Loader2 className="h-5 w-5 animate-spin" />}
                 Guardar
@@ -154,7 +154,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
         )}
 
         {(estadoCambio.error || estadoTexto.error) && (
-          <p role="alert" className="mt-2 text-base text-red-700">
+          <p role="alert" className="mt-2 text-base text-saldo-debe">
             {estadoCambio.error ?? estadoTexto.error}
           </p>
         )}

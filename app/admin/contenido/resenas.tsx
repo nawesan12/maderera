@@ -49,8 +49,8 @@ export function Resenas({ resenas }: { resenas: ResenaParaModerar[] }) {
 
       {resenas.length === 0 ? (
         <p className="px-5 py-8 text-base text-muted-foreground">
-          Todavía no hay reseñas. Solo puede dejar una quien compró el producto
-          y ya lo recibió.
+          {/* Solo puede dejar una quien compró el producto y ya lo recibió. */}
+          Todavía no hay reseñas.
         </p>
       ) : (
         <ul className="divide-y">
@@ -102,7 +102,7 @@ export function Resenas({ resenas }: { resenas: ResenaParaModerar[] }) {
                     <input type="hidden" name="estado" value="publicada" />
                     <button
                       type="submit"
-                      className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-opacity hover:opacity-90"
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-verde-whatsapp px-3 text-base font-medium text-white transition-opacity hover:opacity-90"
                     >
                       <Check className="h-4 w-4" />
                       Publicar

@@ -34,7 +34,7 @@ const LISTADOS: Record<string, string> = {
   caja: "/admin/caja",
   cheque: "/admin/cheques",
   condicion_proveedor: "/admin/proveedores",
-  configuracion: "/admin/arca",
+  configuracion: "/admin/arca/configuracion",
   descuento_pago: "/admin/precios/formas-de-pago",
   factura_compra: "/admin/compras/facturas",
   gasto: "/admin/compras/gastos",
@@ -48,6 +48,7 @@ const LISTADOS: Record<string, string> = {
   retencion_sufrida: "/admin/arca/retenciones",
   stock: "/admin/stock",
   tarifa_corte: "/admin/cortes/tarifas",
+  tienda: "/admin/contenido",
   vendedor: "/admin/clientes/vendedores",
   zona_envio: "/admin/envios",
 };
@@ -109,6 +110,7 @@ const ETIQUETAS: Record<string, string> = {
   retencion_sufrida: "Retención que nos hicieron",
   stock: "Stock",
   tarifa_corte: "Tarifa de corte",
+  tienda: "Tienda online",
   vendedor: "Vendedor",
   zona_envio: "Zona de envío",
 };

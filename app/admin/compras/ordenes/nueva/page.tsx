@@ -4,8 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { variantesParaPedir } from "@/lib/dal/admin/recepciones";
-import { sucursalesConCaja } from "@/lib/mostrador/caja";
-import { importeParaEditar } from "@/lib/formato";
+import { sucursalesParaGasto } from "@/lib/dal/admin/gastos";
+import { importeParaElCampo } from "@/lib/formato";
 import { FormularioOrden } from "./formulario";
 
 export const metadata: Metadata = { title: "Nueva orden de compra" };
@@ -32,7 +32,7 @@ export default async function NuevaOrdenPage({
 
   const [proveedores, sucursales, variantes] = await Promise.all([
     proveedoresParaElegir(),
-    sucursalesConCaja(),
+    sucursalesParaGasto(),
     pedidos.length > 0
       ? variantesParaPedir(pedidos.map((p) => p.variantId))
       : Promise.resolve([]),
@@ -51,7 +51,7 @@ export default async function NuevaOrdenPage({
         variantId: v.variantId,
         descripcion: [v.producto, v.variante].filter(Boolean).join(" "),
         cantidad: String(p.cantidad),
-        costoUnitario: importeParaEditar(v.costoActual),
+        costoUnitario: importeParaElCampo(v.costoActual),
         alicuotaIva: v.alicuotaIva,
       },
     ];
@@ -70,23 +70,22 @@ export default async function NuevaOrdenPage({
         <h1 className="mt-2 text-[26px] font-bold tracking-tight">
           Nueva orden de compra
         </h1>
+        {/* Nace en borrador: cuenta como "en camino" recién cuando se marca como enviada. */}
         <p className="mt-1 text-base text-muted-foreground">
-          Los costos van <strong>netos</strong>. Nace en borrador: cuenta como
-          &quot;en camino&quot; recién cuando se marca como enviada.
+          Los costos van <strong>netos</strong>.
         </p>
       </div>
 
       {renglones.length > 0 && (
         <p className="tarjeta-atencion px-4 py-3 text-base">
           Vienen <strong>{renglones.length}</strong> renglones del reporte de
-          reposición, con la cantidad sugerida. Falta elegir el proveedor y
-          revisar los costos.
+          reposición. Falta elegir el proveedor y revisar los costos.
         </p>
       )}
 
       <FormularioOrden
         proveedores={proveedores}
-        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
+        sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre, deLaSesion: s.deLaSesion }))}
         renglonesIniciales={renglones.length > 0 ? renglones : undefined}
       />
     </div>

@@ -1,0 +1,58 @@
+[
+ {
+  "nombre": "",
+  "primero": ""
+ },
+ {
+  "nombre": "Ana",
+  "primero": "Ana"
+ },
+ {
+  "nombre": "Arq. Juan Pérez",
+  "primero": "Juan"
+ },
+ {
+  "nombre": "  María   José ",
+  "primero": "María"
+ },
+ {
+  "nombre": "Ing.",
+  "primero": "Ing."
+ },
+ {
+  "nombre": "sr. pepe",
+  "primero": "pepe"
+ },
+ {
+  "nombre": "Lic Laura Gómez",
+  "primero": "Laura"
+ },
+ {
+  "nombre": "Dra. Ana",
+  "primero": "Ana"
+ },
+ {
+  "nombre": "téc. Ruiz",
+  "primero": "Ruiz"
+ },
+ {
+  "nombre": "Cra Sosa",
+  "primero": "Sosa"
+ },
+ {
+  "nombre": "ARQ. LUIS",
+  "primero": "LUIS"
+ },
+ {
+  "nombre": "Prof.",
+  "primero": "Prof."
+ },
+ {
+  "nombre": "  ",
+  "primero": ""
+ },
+ {
+  "nombre": "Esc. Juana Pérez",
+  "primero": "Juana"
+ }
+]

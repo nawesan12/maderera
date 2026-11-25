@@ -155,16 +155,26 @@ export function importeEnLetras(importe: number): string {
   const apocopar = (t: string) =>
     t.endsWith("veintiuno") ? t.replace(/veintiuno$/, "veintiún") : t.replace(/uno$/, "un");
 
+  // Hasta 999.999 en palabras: «veintiún mil trescientos».
+  const hastaUnMillon = (n: number): string => {
+    const miles = Math.floor(n / 1000);
+    const resto = n % 1000;
+    const trozos: string[] = [];
+    if (miles > 0) trozos.push(miles === 1 ? "mil" : `${apocopar(hastaMil(miles))} mil`);
+    if (resto > 0) trozos.push(hastaMil(resto));
+    return trozos.join(" ");
+  };
+
+  // Los millones pueden ser más de mil: 1.500.000.000 es «mil quinientos
+  // millones». Antes se escribía con hastaMil y mil millones salía «millones».
   const millones = Math.floor(entero / 1_000_000);
-  const miles = Math.floor((entero % 1_000_000) / 1000);
-  const resto = entero % 1000;
+  const resto = entero % 1_000_000;
 
   const partes: string[] = [];
   if (millones > 0) {
-    partes.push(millones === 1 ? "un millón" : `${apocopar(hastaMil(millones))} millones`);
+    partes.push(millones === 1 ? "un millón" : `${apocopar(hastaUnMillon(millones))} millones`);
   }
-  if (miles > 0) partes.push(miles === 1 ? "mil" : `${apocopar(hastaMil(miles))} mil`);
-  if (resto > 0) partes.push(hastaMil(resto));
+  if (resto > 0) partes.push(hastaUnMillon(resto));
 
   const letras = partes.length ? partes.join(" ") : "cero";
   return `${letras} con ${String(centavos).padStart(2, "0")}/100`;

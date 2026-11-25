@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { guardarFirma } from "./firma";
 
 /**
  * ¿Hay servidor de verdad?
@@ -48,15 +49,22 @@ export function useConexion(
    * intervalo cada vez que se cobra.
    */
   informe?: () => InformeDeCaja,
+  /**
+   * El servidor ya no reconoce la caja de esta máquina (la desvincularon):
+   * recibe el secreto con que se latió, para soltar solo esa.
+   */
+  alPerderLaCaja?: (secreto: string) => void,
 ): EstadoConexion {
   const [enLinea, setEnLinea] = useState(true);
   const [ultimoContacto, setUltimoContacto] = useState<Date | null>(null);
   const [desfasajeMin, setDesfasaje] = useState<number | null>(null);
 
   const informeRef = useRef(informe);
+  const perderRef = useRef(alPerderLaCaja);
   useEffect(() => {
     informeRef.current = informe;
-  }, [informe]);
+    perderRef.current = alPerderLaCaja;
+  }, [informe, alPerderLaCaja]);
 
   const latir = useCallback(async () => {
     // Salir del pulso sincrónico: si no, la primera llamada desde el efecto
@@ -69,10 +77,11 @@ export function useConexion(
     }
 
     try {
+      const informe = informeRef.current?.();
       const respuesta = await fetch("/api/mostrador/latido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branchId, ...informeRef.current?.() }),
+        body: JSON.stringify({ branchId, ...informe }),
         signal: AbortSignal.timeout(TOPE_MS),
       });
 
@@ -88,6 +97,11 @@ export function useConexion(
 
       setEnLinea(true);
       setUltimoContacto(ahora);
+      // La firma de esta sesión para las ventas que se encolen sin conexión.
+      guardarFirma(datos?.firmaCola);
+      if (datos?.cajaVigente === false && informe?.caja) {
+        perderRef.current?.(informe.caja.secreto);
+      }
 
       if (datos?.servidorAt) {
         const diferencia = Math.abs(

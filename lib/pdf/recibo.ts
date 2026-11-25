@@ -60,7 +60,7 @@ export async function reciboPdf(
     fuente: hoja.mono,
     derecha: true,
   });
-  escribir(hoja, recibo.fecha.toLocaleDateString("es-AR"), {
+  escribir(hoja, recibo.fecha.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }), {
     x: derecha,
     y: hoja.y - 28,
     tamano: 8,

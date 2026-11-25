@@ -60,3 +60,31 @@ export function siguienteCampo<T>(campos: T[], actual: T): T | null {
   if (i === -1) return null;
   return campos[i + 1] ?? null;
 }
+
+/**
+ * Qué hace Enter en un buscador que elige de una lista traída del servidor
+ * (el del cliente, `components/admin/elegir-cliente.tsx`).
+ *
+ * Quien viene de ISIS escribe «gomez» y aprieta Enter enseguida, antes de
+ * que lleguen los resultados. Si la tecla seguía de largo, el avance del
+ * panel la tomaba y el foco caía en el campo siguiente sin cliente elegido,
+ * con el botón deshabilitado y nada que dijera por qué.
+ *
+ * - `elegir`: hay un resultado marcado, se elige ese.
+ * - `al-llegar`: todavía se está buscando; se elige el primero cuando lleguen.
+ * - `quedarse`: hay texto pero nada que elegir (ninguno, falló o es muy
+ *   corto): la tecla no hace nada, el foco no se va.
+ * - `seguir`: el campo está vacío; Enter avanza como en cualquier otro (el
+ *   cliente puede ser opcional).
+ */
+export type EnterEnBuscador = "elegir" | "al-llegar" | "quedarse" | "seguir";
+
+export function enterEnBuscador(estado: {
+  texto: string;
+  buscando: boolean;
+  hayMarcado: boolean;
+}): EnterEnBuscador {
+  if (estado.hayMarcado) return "elegir";
+  if (estado.buscando) return "al-llegar";
+  return estado.texto.trim() ? "quedarse" : "seguir";
+}

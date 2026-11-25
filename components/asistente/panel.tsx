@@ -5,8 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  Calculator,
-  MessageCircle,
   Plus,
   Search,
   Send,
@@ -25,11 +23,15 @@ import {
   productosDelRubro,
   type DatoDelAsistente,
   type EquipajeDelAsistente,
+  type RespuestaDelAsistente,
   type ProductoDelAsistente,
 } from "@/app/(public)/asistente-actions";
-import { responderLocal } from "@/lib/asistente/respuestas";
 import { formatearPrecio } from "@/lib/formato";
 import { useCarrito } from "@/lib/carrito-context";
+import { useTienda } from "@/lib/tienda-context";
+import { ETIQUETA_ASISTENTE, EVENTO_ABRIR_ASISTENTE } from "@/lib/asistente/abrir";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { MuestraDePlaca } from "@/components/catalogo/placa-de-producto";
 
 /** Dónde queda el equipaje mientras dure la pestaña. */
 const CLAVE_EQUIPAJE = "mjbj-asistente-equipaje";
@@ -52,13 +54,6 @@ type Renglon =
   | { tipo: "datos"; items: DatoDelAsistente[] }
   | { tipo: "vacio"; texto: string };
 
-const CALCULADORAS: Record<string, string> = {
-  techos: "/calculadora#techos",
-  placas: "/calculadora#placas",
-  pisos: "/calculadora#pisos",
-  decks: "/calculadora#decks",
-};
-
 /**
  * El asistente del sitio.
  *
@@ -70,6 +65,16 @@ const CALCULADORAS: Record<string, string> = {
  * Todo el estado vive acá y nada se guarda: cerrar el panel es empezar de
  * nuevo. Una conversación a medias que reaparece tres días después es peor que
  * ninguna.
+ *
+ * **Cerrado no dibuja nada** (hallazgo 27, 18/11/2026). Era un círculo
+ * naranja flotante al lado del WhatsApp: no decía qué era y en la ficha tapaba
+ * el botón principal. Ahora lo abren la barra de escritorio, el buscador del
+ * catálogo, el menú del celular y la página de «no existe», con
+ * `abrirAsistente()`.
+ *
+ * Abierto es un diálogo: en el celular, una hoja desde abajo; desde `sm`, una
+ * ventana en la esquina. El foco entra al campo, Tab no se escapa del panel,
+ * Escape lo cierra y el foco vuelve a lo que lo abrió.
  */
 export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }) {
   const [abierto, setAbierto] = useState(false);
@@ -81,14 +86,69 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
   const [texto, setTexto] = useState("");
   const [trabajando, setTrabajando] = useState(false);
 
-  /** Lo que dejó la última respuesta escrita a mano: botones, calculadora, WhatsApp. */
+  /** Lo que dejó la última respuesta escrita a mano: botones y WhatsApp. */
   const [extra, setExtra] = useState<{
     sugerencias: { texto: string; va: string }[];
-    calculadora: string | null;
     aPersona: boolean;
-  }>({ sugerencias: [], calculadora: null, aPersona: false });
+    enlace?: { texto: string; href: string } | null;
+  }>({ sugerencias: [], aPersona: false });
+  /** Lo último que se buscó en el catálogo, para la pregunta que sigue. */
+  const [ultimaConsulta, setUltimaConsulta] = useState<string | null>(null);
 
   const finRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const campoRef = useRef<HTMLInputElement>(null);
+  /** Lo que tenía el foco al abrir, para devolvérselo al cerrar. */
+  const origenRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const abrir = () => {
+      origenRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setAbierto(true);
+    };
+    document.addEventListener(EVENTO_ABRIR_ASISTENTE, abrir);
+    return () => document.removeEventListener(EVENTO_ABRIR_ASISTENTE, abrir);
+  }, []);
+
+  function cerrar() {
+    setAbierto(false);
+    // El menú del celular se cierra al abrir el asistente: si lo que lo abrió
+    // ya no está en la página, el foco va al contenido y no al vacío.
+    const origen = origenRef.current;
+    if (origen?.isConnected) origen.focus();
+    else document.getElementById("contenido")?.focus();
+  }
+
+  useEffect(() => {
+    if (!abierto) return;
+    campoRef.current?.focus();
+
+    function teclado(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cerrar();
+        return;
+      }
+      if (e.key !== "Tab" || !panelRef.current) return;
+      // El foco queda adentro: lo de atrás no se ve (en el celular la hoja lo
+      // tapa) y tabular hacia allá es perderse.
+      const enfocables = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (enfocables.length === 0) return;
+      const primero = enfocables[0];
+      const ultimo = enfocables[enfocables.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero.focus();
+      }
+    }
+    document.addEventListener("keydown", teclado);
+    return () => document.removeEventListener("keydown", teclado);
+  }, [abierto]);
 
   /*
    * Una sola llamada, y solo al abrir.
@@ -159,7 +219,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     setPaso(destino);
     decir([{ tipo: "asistente", texto: destino.mensaje }]);
     setTexto("");
-    setExtra({ sugerencias: [], calculadora: null, aPersona: false });
+    setExtra({ sugerencias: [], aPersona: false });
 
     const accion = destino.accion;
     if (!accion) return;
@@ -206,35 +266,39 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
    * siente a formulario y no a conversación.
    */
   async function preguntar(consultaCruda?: string) {
-    const consulta = (consultaCruda ?? texto).trim();
-    if (consulta.length < 1 || trabajando) return;
+    const escrito = (consultaCruda ?? texto).trim();
+    if (escrito.length < 1 || trabajando) return;
 
-    decir([{ tipo: "persona", texto: consulta }]);
+    decir([{ tipo: "persona", texto: escrito }]);
     setTexto("");
     setTrabajando(true);
 
     /*
-     * Lo que se puede contestar acá, se contesta acá.
-     *
-     * El motor de intención es lógica pura, así que corre igual en el
-     * navegador, y los datos del negocio ya bajaron al abrir. Preguntar el
-     * horario no tiene por qué costar una ida al servidor. Lo único que sí va
-     * es buscar productos: el precio depende de la lista de quien mira.
+     * Lo que se entendió lo dice el motor de Go, el mismo del bot de WhatsApp
+     * (10/11/2026). Va la consulta anterior para «¿y en 18?» después de hablar
+     * de MDF. La espera mínima es a propósito: aparecer instantáneo se siente
+     * a formulario y no a conversación.
      */
-    const local = equipaje ? responderLocal(consulta, equipaje) : null;
-
+    // Si el servidor no contesta, el panel no puede quedar trabado en los
+    // tres puntitos: se ofrece una persona, como cuando no se entiende.
     const [respuesta] = await Promise.all([
-      local ?? preguntarAlAsistente(consulta),
-      new Promise((listo) => setTimeout(listo, local ? 320 : 550)),
+      preguntarAlAsistente(escrito, ultimaConsulta).catch(
+        (): RespuestaDelAsistente => ({
+          texto: "Ahora no te puedo contestar. Te paso con alguien del mostrador.",
+          aPersona: true,
+        }),
+      ),
+      new Promise((listo) => setTimeout(listo, 400)),
     ]);
 
     setTrabajando(false);
 
     const nuevos: Renglon[] = [{ tipo: "asistente", texto: respuesta.texto }];
 
-    const productos = "productos" in respuesta ? respuesta.productos : undefined;
+    const productos = respuesta.productos;
     if (productos?.length) {
       nuevos.push({ tipo: "productos", items: productos });
+      if (respuesta.consulta) setUltimaConsulta(respuesta.consulta);
     }
     if (respuesta.datos?.length) {
       nuevos.push({ tipo: "datos", items: respuesta.datos });
@@ -243,56 +307,51 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
     decir(nuevos);
     setExtra({
       sugerencias: respuesta.sugerencias ?? [],
-      calculadora: respuesta.calculadora ?? null,
       aPersona: respuesta.aPersona ?? false,
+      enlace: respuesta.enlace ?? null,
     });
   }
 
   const enRubros = paso.id === "rubros";
-  const calculadora =
-    extra.calculadora
-      ? CALCULADORAS[extra.calculadora]
-      : paso.accion?.tipo === "calculadora"
-        ? CALCULADORAS[paso.accion.cual]
-        : null;
   const aWhatsapp = extra.aPersona || paso.accion?.tipo === "whatsapp";
   const irA = paso.accion?.tipo === "ir" ? paso.accion.ruta : null;
 
-  // Los botones del guion, más los que dejó la última respuesta escrita.
-  const opciones = [...extra.sugerencias, ...paso.opciones];
+  // Los botones del guion, más los que dejó la última respuesta escrita. Uno
+  // por destino: tras una búsqueda, «Hablar con alguien» de la respuesta y
+  // «Quiero hablar con alguien» del inicio llevaban al mismo lado.
+  const opciones = [...extra.sugerencias, ...paso.opciones].filter(
+    (opcion, i, todas) => todas.findIndex((o) => o.va === opcion.va) === i,
+  );
 
-  if (!abierto) {
-    return (
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        aria-label="Abrir el asistente"
-        className="fixed bottom-6 right-[5.5rem] z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accion text-white shadow-lg transition-all hover:scale-110 hover:shadow-xl"
-      >
-        <PersonajeAsistente className="h-7 w-7" />
-      </button>
-    );
-  }
+  if (!abierto) return null;
 
   return (
+    <>
+    {/* El fondo del celular: la hoja tapa casi toda la pantalla y lo de atrás
+        no se usa mientras tanto. Tocarlo cierra, como en cualquier hoja. En
+        oscuro, un 30 % de negro sobre la página oscura no se notaba y la hoja
+        se fundía con lo de atrás. */}
+    <div aria-hidden className="fixed inset-0 z-50 bg-black/30 dark:bg-black/60 sm:hidden" onClick={cerrar} />
     <div
+      ref={panelRef}
       role="dialog"
-      aria-label="Asistente"
-      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[min(80vh,620px)] flex-col overflow-hidden rounded-2xl border border-linea bg-card shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.45)] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[420px]"
+      aria-modal="true"
+      aria-labelledby="asistente-titulo"
+      className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col overflow-hidden rounded-t-2xl superficie pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_-12px_rgb(60_50_40_/_0.45)] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:max-h-[min(80vh,620px)] sm:w-[420px] sm:rounded-2xl sm:pb-0 sm:shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.45)]"
     >
       <header className="flex shrink-0 items-center gap-3 border-b border-linea px-4 py-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-naranja-claro">
           <PersonajeAsistente className="h-5 w-5 text-acento-texto" />
         </span>
         <div className="flex-1">
-          <p className="font-semibold leading-tight">Te ayudo a encontrar</p>
+          <p id="asistente-titulo" className="font-semibold leading-tight">{ETIQUETA_ASISTENTE}</p>
           <p className="text-sm text-texto-3">Maderera Juan B. Justo</p>
         </div>
         <button
           type="button"
-          onClick={() => setAbierto(false)}
+          onClick={cerrar}
           aria-label="Cerrar el asistente"
-          className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-sitio-alt"
+          className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-sitio-alt"
         >
           <X className="h-4 w-4" />
         </button>
@@ -336,6 +395,7 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
                   void preguntar();
                 }
               }}
+              ref={campoRef}
               placeholder="Escribime lo que necesitás…"
               className="pl-9"
               aria-label="Escribí tu consulta"
@@ -367,26 +427,20 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
           </div>
         )}
 
-        {calculadora && (
+        {extra.enlace && (
           <Button
-            render={<Link href={calculadora} />}
+            render={<Link href={extra.enlace.href} />}
             className="w-full bg-accion text-white hover:bg-accion-hover"
           >
-            <Calculator className="h-4 w-4" />
-            Abrir la calculadora
+            {extra.enlace.texto}
+            <ArrowRight className="h-4 w-4" />
           </Button>
         )}
 
         {aWhatsapp && (
-          <Button
-            render={
-              <a href={enlaceWhatsapp} target="_blank" rel="noopener noreferrer" />
-            }
-            className="w-full bg-[#25D366] text-white hover:bg-[#1fb757]"
-          >
-            <MessageCircle className="h-4 w-4" />
+          <BotonWhatsapp enlace={enlaceWhatsapp} className="w-full">
             Escribir por WhatsApp
-          </Button>
+          </BotonWhatsapp>
         )}
 
         {irA && (
@@ -410,10 +464,12 @@ export function PanelDelAsistente({ enlaceWhatsapp }: { enlaceWhatsapp: string }
         </div>
       </div>
     </div>
+    </>
   );
 }
 
 function Renglon({ renglon }: { renglon: Renglon }) {
+  const tienda = useTienda();
   if (renglon.tipo === "persona") {
     return (
       <div className="flex justify-end">
@@ -475,7 +531,7 @@ function Renglon({ renglon }: { renglon: Renglon }) {
                 className="h-12 w-12 shrink-0 rounded-lg object-cover"
               />
             ) : (
-              <span className="h-12 w-12 shrink-0 rounded-lg bg-brand-wood-light/30" />
+              <MuestraDePlaca categoria={p.categoriaSlug} className="h-12 w-12 shrink-0 rounded-lg" />
             )}
 
             <span className="min-w-0 flex-1">
@@ -487,21 +543,27 @@ function Renglon({ renglon }: { renglon: Renglon }) {
               </span>
             </span>
 
-            <span className="shrink-0 text-right">
-              <span className="block text-[15px] font-semibold">
-                {formatearPrecio(p.precioDesde)}
+            {/* Sin tienda no hay precio que mostrar, y sin stock cargado
+                todo diría «a pedido». */}
+            {(tienda.activa || tienda.stockVisible) && (
+              <span className="shrink-0 text-right">
+                {tienda.activa && (
+                  <span className="block text-[15px] font-semibold">
+                    {formatearPrecio(p.precioDesde)}
+                  </span>
+                )}
+                {tienda.stockVisible && !p.hayStock && (
+                  <span className="block text-xs text-texto-3">a pedido</span>
+                )}
               </span>
-              {!p.hayStock && (
-                <span className="block text-xs text-texto-3">a pedido</span>
-              )}
-            </span>
+            )}
           </Link>
 
           {/* Se puede sumar al presupuesto sin salir de la conversación. Es la
               diferencia entre un asistente que informa y uno que sirve para
               algo: la persona ya dijo qué necesita, hacerla navegar hasta la
               ficha para tocar otro botón es perderla en el camino. */}
-          <AgregarAlPresupuesto producto={p} />
+          {tienda.activa && <AgregarAlPresupuesto producto={p} />}
         </li>
       ))}
     </ul>

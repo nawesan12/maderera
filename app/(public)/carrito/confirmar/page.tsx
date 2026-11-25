@@ -13,6 +13,7 @@ import {
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { listaVigente } from "@/lib/dal/precios-sesion";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
+import { tienda } from "@/lib/dal/contenido";
 import { FormularioDeCompra } from "./formulario";
 import { ACotizar } from "./a-cotizar";
 
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ConfirmarCompraPage() {
+  if (!(await tienda()).activa) redirect("/catalogo");
   const carrito = await obtenerCarrito();
 
   // Sin nada en el presupuesto no hay nada que confirmar.

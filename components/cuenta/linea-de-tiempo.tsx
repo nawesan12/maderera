@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import type { ClaseDeMovimiento, MovimientoDelCliente } from "@/lib/dal/historial-cliente";
@@ -36,14 +37,19 @@ const PESOS = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 2,
 });
 
+type ReciboDelMovimiento = NonNullable<MovimientoDelCliente["recibo"]>;
+
 export function LineaDeTiempo({
   movimientos,
   enlacePedido,
+  accionDelRecibo,
   vacio = "Todavía no hay movimientos en este período.",
 }: {
   movimientos: MovimientoDelCliente[];
   /** Adónde lleva un pedido: la ficha del panel o el seguimiento del cliente. */
   enlacePedido: (pedido: { id: string; numero: string }) => string;
+  /** Lo que el panel ofrece sobre un recibo vivo (anularlo); el portal, nada. */
+  accionDelRecibo?: (recibo: ReciboDelMovimiento, movimiento: MovimientoDelCliente) => ReactNode;
   vacio?: string;
 }) {
   if (movimientos.length === 0) {
@@ -71,7 +77,12 @@ export function LineaDeTiempo({
           </h3>
           <ul className="divide-y divide-linea">
             {mes.filas.map((m) => (
-              <Fila key={`${m.clase}-${m.id}`} movimiento={m} enlacePedido={enlacePedido} />
+              <Fila
+                key={`${m.clase}-${m.id}`}
+                movimiento={m}
+                enlacePedido={enlacePedido}
+                accionDelRecibo={accionDelRecibo}
+              />
             ))}
           </ul>
         </section>
@@ -83,9 +94,11 @@ export function LineaDeTiempo({
 function Fila({
   movimiento: m,
   enlacePedido,
+  accionDelRecibo,
 }: {
   movimiento: MovimientoDelCliente;
   enlacePedido: (pedido: { id: string; numero: string }) => string;
+  accionDelRecibo?: (recibo: ReciboDelMovimiento, movimiento: MovimientoDelCliente) => ReactNode;
 }) {
   const estilo = ESTILO[m.clase];
   // Si el título repite la etiqueta («Compra a cuenta» dos veces), el detalle
@@ -95,9 +108,12 @@ function Fila({
   const detalle = repite ? null : m.detalle;
   const mueve = m.importe !== null;
   const importe = m.importe ?? m.importeInformativo;
+  // El pago de un recibo anulado sigue en la historia (con su ajuste al lado),
+  // pero no puede verse como un pago vivo: fila apagada e importe tachado.
+  const anulado = m.clase === "pago" && Boolean(m.recibo?.anulado);
 
   return (
-    <li className="flex flex-wrap items-start gap-x-4 gap-y-1.5 px-5 py-3.5">
+    <li className={`flex flex-wrap items-start gap-x-4 gap-y-1.5 px-5 py-3.5 ${anulado ? "opacity-70" : ""}`}>
       <span className="tabular w-12 shrink-0 pt-0.5 text-sm text-muted-foreground">
         {DIA.format(m.fecha)}
       </span>
@@ -132,10 +148,15 @@ function Fila({
                 className="inline-flex items-center gap-1 text-acento-texto hover:underline"
               >
                 <FileText className="h-3.5 w-3.5" />
-                Recibo <span className="tabular">{m.recibo.numero}</span>
-                {m.recibo.anulado && " (anulado)"}
+                Recibo <span className="tabular whitespace-nowrap">{m.recibo.numero}</span>
               </a>
             )}
+            {m.recibo?.anulado && (
+              <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2 py-0.5 text-xs font-semibold">
+                Anulado
+              </span>
+            )}
+            {m.recibo && !m.recibo.anulado && accionDelRecibo?.(m.recibo, m)}
           </span>
         )}
       </span>
@@ -143,7 +164,9 @@ function Fila({
       {importe !== null && (
         <span
           className={`tabular shrink-0 text-right text-base ${
-            !mueve
+            anulado
+              ? "text-muted-foreground line-through"
+              : !mueve
               ? "text-muted-foreground"
               : importe > 0
                 ? "font-semibold"

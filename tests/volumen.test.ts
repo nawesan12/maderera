@@ -3,7 +3,7 @@ import {
   descuentoPorVolumen,
   precioConDescuento,
   type EscalaDeVolumen,
-} from "@/lib/precios/volumen";
+} from "../scripts/golden/originales/tanda6/volumen";
 
 function escala(
   parcial: Partial<EscalaDeVolumen> & { desdeCantidad: number; porcentaje: number },

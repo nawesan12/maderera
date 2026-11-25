@@ -1,0 +1,2 @@
+    drenar_bench_test.go:50: drenaje-go 5200 payloads en 68.6 s
+drenaje-ts     5200 payloads: {"hechos":5200,"ms":115489}

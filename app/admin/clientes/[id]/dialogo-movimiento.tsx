@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import {
+  Banknote,
+  FileMinus,
+  FilePlus,
+  Loader2,
+  Plus,
+  ShoppingCart,
+  SlidersHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAccionDeDialogo } from "@/components/admin/usar-accion";
 import {
@@ -13,25 +21,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Opciones, Seccion } from "@/components/admin/formulario";
 import { registrarMovimiento, type EstadoCliente } from "../actions";
 
 /**
  * Los movimientos que corrigen la cuenta. El pago no está: se registra con su
  * recibo, desde «Registrar cobro», para que diga con qué se pagó.
  */
-const TIPOS = {
-  compra: "Compra a cuenta",
-  nota_credito: "Nota de crédito",
-  nota_debito: "Nota de débito",
-  ajuste: "Ajuste",
-};
+const TIPOS = [
+  { valor: "compra", texto: "Compra a cuenta", icono: ShoppingCart },
+  { valor: "nota_credito", texto: "Nota de crédito", icono: FileMinus },
+  { valor: "nota_debito", texto: "Nota de débito", icono: FilePlus },
+  { valor: "ajuste", texto: "Ajuste", icono: SlidersHorizontal },
+];
 
 /** Qué hace cada tipo con el saldo, dicho en criollo. */
 const EFECTO: Record<string, string> = {
@@ -56,7 +58,6 @@ export function DialogoMovimiento({
     () => setAbierto(false),
   );
 
-
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
       <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-linea px-3 text-base font-medium transition-colors hover:bg-muted">
@@ -72,45 +73,43 @@ export function DialogoMovimiento({
           <input type="hidden" name="customerId" value={customerId} />
           <input type="hidden" name="tipo" value={tipo} />
 
-          <div className="space-y-2">
-            <Label htmlFor="movimiento-tipo">Tipo</Label>
-            <Select value={tipo} onValueChange={(v) => v && setTipo(v)} items={TIPOS}>
-              <SelectTrigger id="movimiento-tipo" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(TIPOS).map(([valor, texto]) => (
-                  <SelectItem key={valor} value={valor}>
-                    {texto}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">{EFECTO[tipo]}</p>
-          </div>
+          <div className="divide-y divide-linea-suave">
+            <Seccion titulo="Tipo" icono={SlidersHorizontal} columnas={1}>
+              <div className="space-y-2">
+                <Opciones
+                  nombre="tipo-opcion"
+                  opciones={TIPOS}
+                  valor={tipo}
+                  alCambiar={setTipo}
+                  columnas={2}
+                />
+                {/* El efecto sobre el saldo se dice: elegir mal el tipo da
+                    vuelta la deuda del cliente. */}
+                <p className="text-sm text-muted-foreground">{EFECTO[tipo]}</p>
+              </div>
+            </Seccion>
 
-          <div className="space-y-2">
-            <Label htmlFor="monto">Importe</Label>
-            <Input
-              id="monto"
-              name="monto"
-              inputMode="decimal"
-              placeholder="150000"
-              required
-              autoFocus
-            />
-            <p className="text-sm text-muted-foreground">
-              Poné el importe en positivo: el signo lo pone el tipo de movimiento.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="detalle">Detalle</Label>
-            <Input
-              id="detalle"
-              name="detalle"
-              placeholder="Nota de crédito por devolución, factura 0001-00012847…"
-            />
+            <Seccion titulo="Importe" icono={Banknote} columnas={1}>
+              <div className="space-y-2">
+                <Label htmlFor="monto">Importe</Label>
+                <Input
+                  id="monto"
+                  name="monto"
+                  inputMode="decimal"
+                  placeholder="150000"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="detalle">Detalle</Label>
+                <Input
+                  id="detalle"
+                  name="detalle"
+                  placeholder="Nota de crédito por devolución, factura 0001-00012847…"
+                />
+              </div>
+            </Seccion>
           </div>
 
           <Button

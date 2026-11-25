@@ -5,6 +5,7 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { libroIvaVentas } from "@/lib/dal/admin/facturacion";
 import { fechaCorta, formatearCuit, moneda } from "@/lib/formato";
 import { leerPeriodoMensual } from "@/lib/periodos";
+import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
 
 export const metadata: Metadata = { title: "Libro IVA ventas" };
@@ -31,25 +32,18 @@ export default async function LibroIvaPage({
   const hoy = new Date();
   // La misma lectura que usa la exportación: estaba escrita dos veces con la
   // fórmula copiada, que es como una arregla un borde y la otra no.
-  const { anio, mes, desde, hasta } = leerPeriodoMensual(periodo, hoy);
+  const { anio, mes } = leerPeriodoMensual(periodo, hoy);
 
-  const libro = await libroIvaVentas(desde, hasta);
-
-  // Últimos doce meses para el selector.
-  const periodos = Array.from({ length: 12 }, (_, i) => {
-    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
-    return {
-      valor: `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`,
-      texto: `${MESES[fecha.getMonth()]} ${fecha.getFullYear()}`,
-    };
-  });
+  // El mes lo corta Go en hora argentina (una factura de las 22 del último
+  // día es de ese mes, no del siguiente).
+  const libro = await libroIvaVentas(`${anio}-${String(mes).padStart(2, "0")}`);
 
   const actual = `${anio}-${String(mes).padStart(2, "0")}`;
 
   return (
     <div className="space-y-5">
       <Link
-        href="/admin/arca"
+        href={`/admin/arca?periodo=${actual}`}
         className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-5 w-5" />
@@ -58,8 +52,12 @@ export default async function LibroIvaPage({
 
       <EncabezadoPanel
         titulo="Libro IVA ventas"
-        detalle={`${MESES[mes - 1]} de ${anio} · las notas de crédito ya restan.`}
+        resumen={`${MESES[mes - 1]} de ${anio}`}
       >
+        {/* El mismo selector de mes que el libro de compras, el cierre y los
+            impuestos: antes era una tira de doce enlaces y no llegaba a un
+            mes de hace dos años. */}
+        <SelectorDeMes actual={actual} />
         <a
           href={`/admin/arca/libro-iva/exportar?periodo=${actual}`}
           className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
@@ -67,24 +65,16 @@ export default async function LibroIvaPage({
           <Download className="h-5 w-5" />
           Exportar
         </a>
+        {/* Los archivos de la RG 4597 (ventas y compras juntos) que el
+            contador importa en el aplicativo de ARCA. */}
+        <a
+          href={`/admin/arca/libro-iva/digital?periodo=${actual}`}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Download className="h-5 w-5" />
+          Libro IVA Digital
+        </a>
       </EncabezadoPanel>
-
-      {/* Selector de período */}
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-        {periodos.map((p) => (
-          <Link
-            key={p.valor}
-            href={`/admin/arca/libro-iva?periodo=${p.valor}`}
-            className={`shrink-0 rounded-lg px-3 py-2 text-base transition-colors ${
-              p.valor === actual
-                ? "bg-brand-orange/12 font-medium text-brand-orange-dark"
-                : "text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            {p.texto}
-          </Link>
-        ))}
-      </div>
 
       {libro.filas.length === 0 ? (
         <section className="tarjeta px-6 py-14 text-center">
@@ -190,7 +180,7 @@ function Importe({
   return (
     <td
       className={`tabular whitespace-nowrap px-3 py-3 text-right text-base ${
-        destacado ? "" : valor < 0 ? "text-green-700" : "text-muted-foreground"
+        destacado ? "" : valor < 0 ? "text-saldo-favor" : "text-muted-foreground"
       }`}
     >
       {valor === 0 ? "—" : moneda.format(valor)}

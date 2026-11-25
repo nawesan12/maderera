@@ -2,9 +2,40 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileCheck2, Loader2 } from "lucide-react";
-import { formatearMonto } from "@/lib/formato";
-import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import Link from "next/link";
+import {
+  ArrowRightLeft,
+  Banknote,
+  CalendarDays,
+  FileCheck2,
+  FileDigit,
+  FileText,
+  Landmark,
+  Loader2,
+  ReceiptText,
+  Store,
+  Truck,
+  Wallet,
+} from "lucide-react";
+import {
+  diasHasta,
+  fechaCorta,
+  formatearMonto,
+  hoyEnArgentina,
+  importeDelCampo,
+  importeParaElCampo,
+  importeIlegible,
+} from "@/lib/formato";
+import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { type ChequeDeCartera, chequesParaEndosar, sinEndososDelOtroCircuito } from "./endoso";
+import {
+  BarraGuardar,
+  Hoja,
+  Interruptor,
+  Opciones,
+  Seccion,
+} from "@/components/admin/formulario";
+import { sucursalPropuesta } from "../sucursal-propuesta";
 import {
   pagarAProveedor,
   verAcumulado,
@@ -16,12 +47,31 @@ import {
 interface Proveedor {
   id: string;
   nombre: string;
-  cuit: string | null;
   saldo: number;
+  condicionIva: string;
+  condicionGanancias: string | null;
+  exentoGananciasHasta: string | null;
+}
+
+/**
+ * Si el régimen le corresponde al proveedor: la misma regla que Go
+ * (compras.SujetoARetencion), para no ofrecer lo que después se rechaza.
+ * Ganancias sin condición cargada se ofrece igual: el rechazo dice qué
+ * cargar.
+ */
+function leCorresponde(r: Regimen, p: Proveedor | undefined, hoy: string): boolean {
+  if (!p) return true;
+  if (r.impuesto === "iva") return p.condicionIva === "responsable_inscripto";
+  if (r.impuesto === "ganancias") {
+    if (p.condicionIva === "monotributista") return false;
+    if (p.condicionGanancias === "exento" && p.exentoGananciasHasta && hoy <= p.exentoGananciasHasta) return false;
+  }
+  return true;
 }
 
 interface Regimen {
   id: string;
+  /** El código («IIBB-MI»): no se muestra, el acumulado del mes viene por él. */
   codigo: string;
   nombre: string;
   impuesto: string;
@@ -29,24 +79,22 @@ interface Regimen {
   minimoNoImponible: number;
 }
 
+interface Sucursal {
+  id: string;
+  nombre: string;
+  turnoAbierto: string | null;
+  deLaSesion: boolean;
+}
+
 interface FacturaConSaldo {
   id: string;
   numero: string;
-  tipo: string;
-  fechaEmision: Date | string | null;
+  fechaEmision: Date | string;
+  fechaVencimiento: Date | string | null;
   total: number;
   saldo: number;
-}
-
-interface ChequeDeCartera {
-  id: string;
-  numero: string;
-  banco: string | null;
-  fechaPago: Date | string;
-  importe: number;
-  /** Físico o e-Cheq: al endosar hay que ofrecer el que corresponde. */
-  tipo: string;
-  cliente: string | null;
+  /** Neto gravado + no gravado/exento, sin IVA ni percepciones. */
+  netoSinIva: number;
 }
 
 /** Un renglón de "con qué sale la plata". Los importes se tipean. */
@@ -61,6 +109,18 @@ interface ParteUI {
   fechaPago: string;
 }
 
+const MEDIOS = [
+  { valor: "transferencia", texto: "Transferencia", icono: ArrowRightLeft },
+  { valor: "efectivo", texto: "Efectivo", icono: Banknote },
+  { valor: "cheque", texto: "Cheque", icono: FileText },
+  { valor: "echeq", texto: "e-Cheq", icono: FileDigit },
+];
+
+const OPCIONES_CIRCUITO = CIRCUITOS.map((c) => ({
+  valor: c,
+  texto: ETIQUETA_CIRCUITO[c],
+}));
+
 const parteVacia = (medio: ParteUI["medio"] = "transferencia"): ParteUI => ({
   medio,
   importe: "",
@@ -71,33 +131,45 @@ const parteVacia = (medio: ParteUI["medio"] = "transferencia"): ParteUI => ({
   fechaPago: "",
 });
 
+const redondear = (n: number) => Math.round(n * 100) / 100;
+const fecha = (d: Date | string) => (typeof d === "string" ? new Date(d) : d);
+
 /**
  * Pagarle a un proveedor.
  *
- * El proceso real: se eligen **las facturas que se están pagando**, se decide
- * **con qué sale la plata** —una transferencia, dos cheques a fecha, un
- * endoso— y las retenciones se calculan sobre eso. La pantalla sigue ese
- * orden. El importe que se carga es lo que se imputa a la deuda; lo que sale
- * del banco lo calcula el sistema restando las retenciones.
+ * **El gesto es «estoy pagando estas facturas».** Antes la pantalla pedía el
+ * proveedor (venía puesto el primero de la lista), un «Se le imputa» a mano
+ * y recién después mostraba las facturas, sin fecha ni vencimiento. Ahora: se
+ * elige el proveedor (ninguno de entrada), se ven sus facturas pendientes por
+ * vencimiento y se tildan. El total sale de lo tildado; tocarlo reparte entre
+ * las tildadas de la que vence antes a la que vence después (un pago
+ * parcial), y lo que pase de lo tildado queda a cuenta.
+ *
+ * **La base de la retención sale de las facturas elegidas.** Para Ganancias e
+ * IIBB es el neto de IVA de lo que se paga, en proporción a cuánto se paga de
+ * cada factura. Antes se escribía a mano, y un total con IVA retenía de más.
+ * Solo un pago a cuenta, sin facturas, la pide escrita.
+ *
+ * **El efectivo sale de una caja**, como un gasto: se elige la sucursal (se
+ * propone la del turno abierto por quien carga) y Go lo descuenta del turno.
+ *
+ * Con qué sale la plata —una transferencia, dos cheques a fecha, un endoso—
+ * sigue igual: el importe que se carga es lo que baja la deuda; lo que sale
+ * del banco lo calcula Go restando las retenciones.
  */
 export function FormularioPago({
   proveedores,
   regimenes,
+  sucursales,
   proveedorInicial,
   facturaInicial,
 }: {
   proveedores: Proveedor[];
   regimenes: Regimen[];
-  /**
-   * Con quién arranca el formulario, cuando se llega desde una factura impaga.
-   *
-   * Sin esto el pago siempre empezaba en `proveedores[0]` —el primero de la
-   * lista, alfabético, casi nunca el que se quiere pagar—. Se veía la factura
-   * vencida en su pantalla, se apretaba Pagos, y había que volver a buscar el
-   * proveedor a mano para que recién ahí aparecieran sus facturas abiertas.
-   */
+  sucursales: Sucursal[];
+  /** Con quién arranca, cuando se llega desde una factura o la ficha del proveedor. */
   proveedorInicial?: string;
-  /** Qué factura viene a pagarse: se marca sola al cargar las del proveedor. */
+  /** Qué factura viene a pagarse: se tilda sola al cargar las del proveedor. */
   facturaInicial?: string;
 }) {
   const router = useRouter();
@@ -105,16 +177,22 @@ export function FormularioPago({
   const [enCurso, empezar] = useTransition();
 
   const [supplierId, setSupplierId] = useState(
-    proveedorInicial ?? proveedores[0]?.id ?? "",
+    proveedores.some((p) => p.id === proveedorInicial) ? proveedorInicial! : "",
   );
-  const [total, setTotal] = useState("");
+  const [fechaPago, setFechaPago] = useState(hoyEnArgentina);
   const [medio, setMedio] = useState("transferencia");
   const [circuito, setCircuito] = useState<"blanco" | "negro">("blanco");
   const [referencia, setReferencia] = useState("");
-  const [bases, setBases] = useState<Record<string, string>>({});
+  const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
 
   const [facturas, setFacturas] = useState<FacturaConSaldo[]>([]);
-  const [imputado, setImputado] = useState<Record<string, string>>({});
+  /** Las tildadas, con cuánto se paga de cada una. */
+  const [aplicado, setAplicado] = useState<Record<string, string>>({});
+  /** null: el total es la suma de lo tildado. Si se escribe, manda. */
+  const [totalTocado, setTotalTocado] = useState<string | null>(null);
+
+  const [retener, setRetener] = useState<Record<string, boolean>>({});
+  const [basesAMano, setBasesAMano] = useState<Record<string, string>>({});
 
   const [partes, setPartes] = useState<ParteUI[] | null>(null);
   const [cartera, setCartera] = useState<ChequeDeCartera[]>([]);
@@ -125,7 +203,6 @@ export function FormularioPago({
 
   useEffect(() => {
     if (!supplierId) return;
-
     let vivo = true;
     void verAcumulado(supplierId).then((filas) => {
       if (!vivo) return;
@@ -138,27 +215,21 @@ export function FormularioPago({
         ),
       );
     });
-    // Las facturas abiertas del proveedor: es contra lo que se paga.
     void verFacturasConSaldo(supplierId).then((filas) => {
       if (!vivo) return;
       setFacturas(filas);
-      /*
-       * Si se llegó desde una factura, viene ya imputada por su saldo entero.
-       * Es el caso normal —se paga lo que se debe— y deja el importe listo
-       * para corregir si se paga una parte, en vez de obligar a tipearlo.
-       */
+      // Si se llegó desde una factura, viene tildada por su saldo entero.
       const objetivo = filas.find((f) => f.id === facturaInicial);
-      setImputado(
-        objetivo ? { [objetivo.id]: String(objetivo.saldo) } : {},
-      );
-      if (objetivo) setTotal(String(objetivo.saldo));
+      setAplicado(objetivo ? { [objetivo.id]: importeParaElCampo(objetivo.saldo) } : {});
+      // El total que ya se escribió no se borra: si las facturas tardaban en
+      // llegar, el importe tipeado desaparecía y «Pagar» quedaba apagado sin
+      // decir por qué. Cambiar de proveedor ya lo limpia (`elegirProveedor`).
+      if (objetivo) setTotalTocado(null);
     });
-
     return () => {
       vivo = false;
     };
-    // `facturaInicial` viene del URL y no cambia mientras la pantalla vive:
-    // meterlo en las dependencias solo agregaría ruido a la lectura.
+    // `facturaInicial` viene del URL y no cambia mientras la pantalla vive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supplierId]);
 
@@ -172,29 +243,71 @@ export function FormularioPago({
     };
   }, []);
 
-  const proveedor = proveedores.find((p) => p.id === supplierId);
-  const importe = Number(total || 0);
-  const sumaImputada = Object.values(imputado).reduce(
-    (s, v) => s + (Number(v) || 0),
-    0,
+  const tildadas = facturas.filter((f) => f.id in aplicado);
+  const sumaAplicada = redondear(
+    tildadas.reduce((s, f) => s + importeDelCampo(aplicado[f.id]), 0),
   );
-  const sumaPartes = (partes ?? []).reduce(
-    (s, p) => s + (Number(p.importe) || 0),
-    0,
+  const total = totalTocado === null ? sumaAplicada : importeDelCampo(totalTocado);
+  const aCuenta = redondear(total - sumaAplicada);
+  const sumaPartes = redondear(
+    (partes ?? []).reduce((s, p) => s + importeDelCampo(p.importe), 0),
   );
-  const hayRetenciones = Object.values(bases).some((b) => Number(b) > 0);
 
-  /** Reparte el total entre las facturas más viejas, como se paga de verdad. */
-  function repartirEntreFacturas() {
-    let resto = importe;
+  /*
+   * La base de las retenciones: el neto de IVA de lo que se paga de cada
+   * factura tildada (pagar la mitad de una factura es pagar la mitad de su
+   * neto). Sin facturas, a mano.
+   */
+  const baseDeLasFacturas = redondear(
+    tildadas.reduce((s, f) => {
+      const pagado = importeDelCampo(aplicado[f.id]);
+      return f.total > 0 ? s + (pagado * f.netoSinIva) / f.total : s;
+    }, 0),
+  );
+  const conFacturas = tildadas.length > 0;
+  const baseDe = (r: Regimen) =>
+    conFacturas ? baseDeLasFacturas : importeDelCampo(basesAMano[r.id]);
+  const proveedor = proveedores.find((p) => p.id === supplierId);
+  const hoy = hoyEnArgentina();
+  const regimenesDelProveedor = regimenes.filter((r) => leCorresponde(r, proveedor, hoy));
+  const retenciones = regimenesDelProveedor
+    .filter((r) => retener[r.id])
+    .map((r) => ({ regimenId: r.id, base: baseDe(r) }))
+    .filter((r) => r.base > 0);
+  const basePasada = retenciones.some((r) => r.base - total > 0.009);
+
+  const hayEfectivo =
+    partes === null
+      ? medio === "efectivo"
+      : partes.some((p) => p.medio === "efectivo" && importeDelCampo(p.importe) > 0);
+  const sucursal = sucursales.find((s) => s.id === branchId);
+
+  /** Tilda o destilda una factura; tildada, se paga entera. */
+  function tildar(f: FacturaConSaldo, si: boolean) {
+    setTotalTocado(null);
+    setAplicado((prev) => {
+      const nuevo = { ...prev };
+      if (si) nuevo[f.id] = importeParaElCampo(f.saldo);
+      else delete nuevo[f.id];
+      return nuevo;
+    });
+  }
+
+  /**
+   * Escribir el total reparte entre las tildadas, de la que vence antes a la
+   * que vence después, como se paga de verdad; lo que sobra queda a cuenta.
+   */
+  function escribirTotal(valor: string) {
+    setTotalTocado(valor);
+    if (tildadas.length === 0) return;
+    let resto = importeDelCampo(valor);
     const nuevo: Record<string, string> = {};
-    for (const f of facturas) {
-      if (resto <= 0) break;
-      const cubre = Math.min(f.saldo, resto);
-      nuevo[f.id] = cubre.toFixed(2);
-      resto = Math.round((resto - cubre) * 100) / 100;
+    for (const f of tildadas) {
+      const cubre = Math.max(0, Math.min(f.saldo, resto));
+      nuevo[f.id] = importeParaElCampo(cubre);
+      resto = redondear(resto - cubre);
     }
-    setImputado(nuevo);
+    setAplicado(nuevo);
   }
 
   function actualizarParte(i: number, cambios: Partial<ParteUI>) {
@@ -203,520 +316,486 @@ export function FormularioPago({
     );
   }
 
-  if (proveedores.length === 0) {
-    return (
-      <p className="tarjeta px-5 py-8 text-center text-base text-muted-foreground">
-        No hay proveedores con saldo pendiente.
-      </p>
-    );
+  function elegirProveedor(id: string) {
+    setSupplierId(id);
+    setFacturas([]);
+    setAplicado({});
+    setTotalTocado(null);
+    setBasesAMano({});
+    // Los regímenes tildados eran del proveedor anterior.
+    setRetener({});
+    setEstado({});
   }
 
   return (
-    <section className="tarjeta space-y-4 p-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block">
-          <span className="text-sm font-medium">Proveedor</span>
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre} · debe {formatearMonto(p.saldo)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-sm font-medium">Se le imputa</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={total}
-            onChange={(e) => setTotal(e.target.value)}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
-          />
-          {proveedor && (
-            <button
-              type="button"
-              onClick={() => setTotal(String(proveedor.saldo))}
-              className="mt-1 text-sm text-muted-foreground underline"
+    <div className="space-y-4">
+      <Hoja>
+        <Seccion titulo="Proveedor" icono={Truck}>
+          <label className="block md:col-span-2">
+            <span className="text-base font-medium">A quién se le paga</span>
+            <select
+              value={supplierId}
+              onChange={(e) => elegirProveedor(e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             >
-              Saldar todo: {formatearMonto(proveedor.saldo)}
-            </button>
-          )}
-        </label>
+              <option value="" disabled>
+                Elegí el proveedor
+              </option>
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                  {p.saldo > 0.005 ? ` · se le deben ${formatearMonto(p.saldo)}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        </Seccion>
 
-        <label className="block">
-          <span className="text-sm font-medium">Forma de pago</span>
-          <select
-            value={medio}
-            onChange={(e) => {
-              const elegido = e.target.value;
-              setMedio(elegido);
-              // Un cheque necesita sus datos —número, banco, fecha de pago—,
-              // así que elegirlo abre el detalle con un renglón ya armado.
-              if ((elegido === "cheque" || elegido === "echeq") && !partes) {
-                setPartes([
-                  {
-                    ...parteVacia(elegido as ParteUI["medio"]),
-                    importe: total,
-                  },
-                ]);
-              }
-            }}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            <option value="transferencia">Transferencia</option>
-            <option value="efectivo">Efectivo</option>
-            <option value="cheque">Cheque</option>
-            {/* El e-Cheq solo en el circuito de facturas: es electrónico y
-                queda a nombre de la empresa en el banco, así que por el otro
-                circuito cruzaría las dos cajas. Lo pidió la clienta y el
-                servidor lo rechaza igual. */}
-            {circuito !== "negro" && <option value="echeq">e-Cheq</option>}
-          </select>
-        </label>
+        {supplierId && (
+          <Seccion titulo="Qué facturas se pagan" icono={ReceiptText} columnas={1}>
+            {facturas.length === 0 ? (
+              <p className="text-base text-muted-foreground">No tiene facturas pendientes</p>
+            ) : (
+              <ul className="space-y-2">
+                {facturas.map((f) => {
+                  const tildada = f.id in aplicado;
+                  const vence = f.fechaVencimiento ? fecha(f.fechaVencimiento) : null;
+                  const dias = diasHasta(vence);
+                  return (
+                    <li
+                      key={f.id}
+                      className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl px-4 py-3 ${
+                        tildada ? "tarjeta-hundida" : ""
+                      }`}
+                    >
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={tildada}
+                          onChange={(e) => tildar(f, e.target.checked)}
+                          className="h-5 w-5 shrink-0 accent-[var(--accion)]"
+                        />
+                        <span className="min-w-0">
+                          <span className="tabular block text-base font-medium">{f.numero}</span>
+                          <span className="block text-sm text-muted-foreground">
+                            del {fechaCorta.format(fecha(f.fechaEmision))}
+                            {vence && (
+                              <span className={dias !== null && dias < 0 ? "font-semibold text-saldo-debe" : undefined}>
+                                {" · "}
+                                {dias !== null && dias < 0 ? "venció" : "vence"} el {fechaCorta.format(vence)}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </label>
+                      <span className="tabular text-base text-muted-foreground">
+                        {f.saldo < f.total
+                          ? `quedan ${formatearMonto(f.saldo)} de ${formatearMonto(f.total)}`
+                          : formatearMonto(f.saldo)}
+                      </span>
+                      {tildada && (
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={aplicado[f.id]}
+                          aria-invalid={importeIlegible(aplicado[f.id]) || undefined}
+                          aria-label={`Cuánto se paga de la ${f.numero}`}
+                          onChange={(e) => {
+                            setTotalTocado(null);
+                            setAplicado((prev) => ({ ...prev, [f.id]: e.target.value }));
+                          }}
+                          className="tabular h-11 w-36 rounded-lg border border-linea bg-card px-3 text-right text-base"
+                        />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-        <label className="block">
-          <span className="text-sm font-medium">Referencia</span>
-          <input
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-            placeholder="N.º de operación"
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
+            <div className="grid gap-5 md:grid-cols-2">
+              <label className="block">
+                <span className="text-base font-medium">Total del pago</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={totalTocado ?? (sumaAplicada ? importeParaElCampo(sumaAplicada) : "")}
+                  aria-invalid={importeIlegible(totalTocado) || undefined}
+                  onChange={(e) => escribirTotal(e.target.value)}
+                  className="tabular mt-1 h-12 w-full rounded-lg border border-linea bg-card px-3 text-right text-xl font-semibold"
+                />
+                {aCuenta > 0.009 && (
+                  <span className="mt-1 block text-base text-muted-foreground">
+                    {formatearMonto(aCuenta)} a cuenta
+                  </span>
+                )}
+              </label>
+              <label className="block">
+                <span className="text-base font-medium">Fecha del pago</span>
+                <span className="relative mt-1 block">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="date"
+                    value={fechaPago}
+                    max={hoyEnArgentina()}
+                    onChange={(e) => setFechaPago(e.target.value)}
+                    className="tabular h-12 w-full rounded-lg border border-linea bg-card pl-10 pr-3 text-base"
+                  />
+                </span>
+              </label>
+            </div>
+          </Seccion>
+        )}
 
-        {/* Por qué circuito sale el pago. Los cheques que se emitan en él lo
-            heredan: salen con esa plata y por esa vía. */}
-        <label className="block">
-          <span className="text-sm font-medium">Circuito de facturación</span>
-          <div
-            className="mt-1 flex gap-1.5"
-            role="group"
-            aria-label="Circuito de facturación"
-          >
-            {(["blanco", "negro"] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
+        {supplierId && (
+          <Seccion titulo="Con qué sale" icono={Wallet}>
+            <div className="space-y-1 md:col-span-2">
+              <span className="text-base font-medium">Forma de pago</span>
+              <Opciones
+                nombre="pago-medio"
+                /* El e-Cheq solo en el circuito de facturas: es electrónico y
+                 queda a nombre de la empresa en el banco, así que por el otro
+                 circuito cruzaría las dos cajas. El servidor lo rechaza igual. */
+                opciones={MEDIOS.filter((m) => m.valor !== "echeq" || circuito !== "negro")}
+                valor={medio}
+                alCambiar={(elegido) => {
+                  setMedio(elegido);
+                  // Un cheque necesita sus datos, así que abre el detalle.
+                  if ((elegido === "cheque" || elegido === "echeq") && !partes) {
+                    setPartes([{ ...parteVacia(elegido as ParteUI["medio"]), importe: total ? importeParaElCampo(total) : "" }]);
+                  }
+                }}
+              />
+            </div>
+
+            {/* Por qué circuito sale el pago. Los cheques que se emitan en él lo
+              heredan: salen con esa plata y por esa vía. */}
+            <div className="space-y-1">
+              <span className="text-base font-medium">Circuito</span>
+              <Opciones
+                nombre="pago-circuito"
+                opciones={OPCIONES_CIRCUITO}
+                valor={circuito}
+                columnas={2}
+                alCambiar={(v) => {
+                  const c = v as "blanco" | "negro";
                   setCircuito(c);
-
-                  /*
-                   * Pasar el pago al circuito B saca los e-Cheq.
-                   *
-                   * Sin esto se podía elegir e-Cheq, cambiar el circuito
-                   * después y mandar el formulario: el servidor lo rechaza,
-                   * pero recién al guardar, con todo tipeado.
-                   */
+                  // Los endosos de un cheque del otro circuito vuelven a «cheque
+                  // nuevo» antes de guardar, no al rechazo.
+                  setPartes((previas) => (previas ? sinEndososDelOtroCircuito(previas, cartera, c) : previas));
+                  // Pasar al circuito B saca los e-Cheq antes de guardar, no al rechazo.
                   if (c === "negro") {
                     if (medio === "echeq") setMedio("cheque");
                     setPartes((previas) =>
                       previas
-                        ? previas.map((p) =>
-                            p.medio === "echeq"
-                              ? { ...p, medio: "cheque", chequeId: "" }
-                              : p,
-                          )
+                        ? previas.map((p) => (p.medio === "echeq" ? { ...p, medio: "cheque", chequeId: "" } : p))
                         : previas,
                     );
                   }
                 }}
-                aria-pressed={circuito === c}
-                className={`h-11 flex-1 rounded-lg text-base font-medium transition-colors ${
-                  circuito === c
-                    ? "boton-accion"
-                    : "border border-linea text-muted-foreground hover:bg-hundida"
-                }`}
-              >
-                {ETIQUETA_CIRCUITO[c]}
-              </button>
-            ))}
-          </div>
-        </label>
-      </div>
+              />
+            </div>
 
-      {/* Qué facturas cubre. Es la relación pago↔factura que pidió la
-          clienta: después, cada factura sabe si está paga entera o en parte. */}
-      {facturas.length > 0 && (
-        <div className="border-t border-linea pt-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Qué facturas paga
-            </h3>
-            {importe > 0 && (
-              <button
-                type="button"
-                onClick={repartirEntreFacturas}
-                className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              >
-                Repartir {formatearMonto(importe)} entre las más viejas
-              </button>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Opcional: sin elegir ninguna queda como pago a cuenta y se imputa
-            después desde la factura.
-          </p>
+            <label className="block">
+              <span className="text-base font-medium">Referencia</span>
+              <input
+                value={referencia}
+                onChange={(e) => setReferencia(e.target.value)}
+                placeholder="N.º de operación"
+                className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
 
-          <ul className="mt-3 space-y-2">
-            {facturas.map((f) => (
-              <li key={f.id} className="flex flex-wrap items-center gap-3">
-                <span className="tabular min-w-36 text-base font-medium">
-                  {f.numero}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {f.saldo < f.total
-                    ? `quedan ${formatearMonto(f.saldo)} de ${formatearMonto(f.total)}`
-                    : formatearMonto(f.total)}
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={imputado[f.id] ?? ""}
-                  onChange={(e) =>
-                    setImputado((prev) => ({ ...prev, [f.id]: e.target.value }))
-                  }
-                  placeholder="0"
-                  className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
-                />
-              </li>
-            ))}
-          </ul>
-
-          {sumaImputada > 0 && (
-            <p
-              className={`mt-2 text-sm font-medium ${
-                sumaImputada - importe > 0.01
-                  ? "text-saldo-debe"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Imputado: {formatearMonto(sumaImputada)} de{" "}
-              {formatearMonto(importe)}
-              {sumaImputada - importe > 0.01 && " — suma más que el pago"}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Con qué sale la plata: la transferencia más los cheques a fecha. Cada
-          cheque queda en la cartera con su vencimiento. */}
-      <div className="border-t border-linea pt-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Con qué sale
-          </h3>
-          {partes === null ? (
-            <button
-              type="button"
-              onClick={() =>
-                setPartes([
-                  { ...parteVacia(medio as ParteUI["medio"]), importe: total },
-                ])
-              }
-              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Partir en varios medios o detallar cheques
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPartes(null)}
-              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Un solo medio, sin detalle
-            </button>
-          )}
-        </div>
-
-        {partes === null ? (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sale todo por {medio === "echeq" ? "e-Cheq" : medio}.
-          </p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            {partes.map((parte, i) => (
-              <div
-                key={i}
-                className="space-y-2 rounded-lg border border-linea p-3"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={parte.medio}
-                    onChange={(e) =>
-                      actualizarParte(i, {
-                        medio: e.target.value as ParteUI["medio"],
-                        chequeId: "",
-                      })
-                    }
-                    className="h-10 rounded-lg border border-linea bg-card px-2 text-base"
-                  >
-                    <option value="transferencia">Transferencia</option>
-                    <option value="efectivo">Efectivo</option>
-                    <option value="cheque">Cheque</option>
-                    {circuito !== "negro" && (
-                      <option value="echeq">e-Cheq</option>
-                    )}
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={parte.importe}
-                    onChange={(e) => actualizarParte(i, { importe: e.target.value })}
-                    placeholder="Importe"
-                    className="tabular h-10 w-32 rounded-lg border border-linea bg-card px-3 text-right text-base"
-                  />
-                  {parte.medio === "transferencia" && (
-                    <input
-                      value={parte.referencia}
-                      onChange={(e) =>
-                        actualizarParte(i, { referencia: e.target.value })
-                      }
-                      placeholder="N.º de operación"
-                      className="h-10 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
-                    />
-                  )}
-                  {partes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPartes(partes.filter((_, j) => j !== i))
-                      }
-                      aria-label="Sacar este renglón"
-                      className="h-10 w-9 rounded-lg border border-linea text-muted-foreground hover:bg-hundida"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-
-                {(parte.medio === "cheque" || parte.medio === "echeq") && (
-                  <div className="space-y-2">
-                    {/* Endosar uno de los que están en cartera, en vez de
-                        tipear uno nuevo. Se ofrecen los del mismo tipo: un
-                        e-Cheq recibido no se endosa como cheque de papel. */}
-                    {chequesParaEndosar(cartera, parte.medio).length > 0 && (
+            {partes !== null && (
+              <div className="space-y-3 md:col-span-2">
+                {partes.map((parte, i) => (
+                  <div key={i} className="tarjeta-hundida space-y-2 rounded-xl p-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <select
-                        value={parte.chequeId}
-                        onChange={(e) => {
-                          const elegido = cartera.find(
-                            (c) => c.id === e.target.value,
-                          );
-                          actualizarParte(i, {
-                            chequeId: e.target.value,
-                            // El importe del endoso es el del cheque: no se
-                            // endosa medio cheque.
-                            ...(elegido
-                              ? { importe: String(elegido.importe) }
-                              : {}),
-                          });
-                        }}
-                        className="h-10 w-full rounded-lg border border-linea bg-card px-2 text-base"
+                        value={parte.medio}
+                        onChange={(e) =>
+                          actualizarParte(i, { medio: e.target.value as ParteUI["medio"], chequeId: "" })
+                        }
+                        aria-label="Medio"
+                        className="h-11 rounded-lg border border-linea bg-card px-2 text-base"
                       >
-                        <option value="">Cheque nuevo (propio)</option>
-                        {chequesParaEndosar(cartera, parte.medio).map((c) => (
-                          <option key={c.id} value={c.id}>
-                            Endosar {c.numero}
-                            {c.banco ? ` · ${c.banco}` : ""} ·{" "}
-                            {formatearMonto(c.importe)}
-                            {c.cliente ? ` · de ${c.cliente}` : ""}
-                          </option>
-                        ))}
+                        <option value="transferencia">Transferencia</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="cheque">Cheque</option>
+                        {circuito !== "negro" && <option value="echeq">e-Cheq</option>}
                       </select>
-                    )}
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={parte.importe}
+                        aria-invalid={importeIlegible(parte.importe) || undefined}
+                        onChange={(e) => actualizarParte(i, { importe: e.target.value })}
+                        placeholder="Importe"
+                        aria-label="Importe"
+                        className="tabular h-11 w-36 rounded-lg border border-linea bg-card px-3 text-right text-base"
+                      />
+                      {parte.medio === "transferencia" && (
+                        <input
+                          value={parte.referencia}
+                          onChange={(e) => actualizarParte(i, { referencia: e.target.value })}
+                          placeholder="N.º de operación"
+                          className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
+                        />
+                      )}
+                      {partes.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setPartes(partes.filter((_, j) => j !== i))}
+                          aria-label="Sacar este renglón"
+                          className="tarjeta h-11 w-11 rounded-lg text-lg text-muted-foreground"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
 
-                    {!parte.chequeId && (
-                      <div className="grid grid-cols-3 gap-2">
-                        <input
-                          value={parte.numero}
-                          onChange={(e) =>
-                            actualizarParte(i, { numero: e.target.value })
-                          }
-                          placeholder="N.º de cheque"
-                          className="tabular h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
-                        />
-                        <input
-                          value={parte.banco}
-                          onChange={(e) =>
-                            actualizarParte(i, { banco: e.target.value })
-                          }
-                          placeholder="Banco"
-                          className="h-10 rounded-lg border border-linea bg-card px-2.5 text-base"
-                        />
-                        <label className="block">
-                          <input
-                            type="date"
-                            value={parte.fechaPago}
-                            onChange={(e) =>
-                              actualizarParte(i, { fechaPago: e.target.value })
-                            }
-                            aria-label="Fecha de pago del cheque"
-                            className="tabular h-10 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
-                          />
-                        </label>
+                    {(parte.medio === "cheque" || parte.medio === "echeq") && (
+                      <div className="space-y-2">
+                        {/* Endosar uno de la cartera, del mismo tipo y del
+                          circuito del pago. Los del otro circuito se ven
+                          apagados bajo el nombre de su circuito: así se ve por
+                          qué no se pueden elegir. */}
+                        {(() => {
+                          const { endosables, delOtroCircuito } = chequesParaEndosar(cartera, parte.medio, circuito);
+                          if (endosables.length + delOtroCircuito.length === 0) return null;
+                          return (
+                          <select
+                            value={parte.chequeId}
+                            onChange={(e) => {
+                              const elegido = cartera.find((c) => c.id === e.target.value);
+                              actualizarParte(i, {
+                                chequeId: e.target.value,
+                                // El importe del endoso es el del cheque: no se endosa medio cheque.
+                                ...(elegido ? { importe: importeParaElCampo(elegido.importe) } : {}),
+                              });
+                            }}
+                            aria-label="Cheque"
+                            className="h-11 w-full rounded-lg border border-linea bg-card px-2 text-base"
+                          >
+                            <option value="">Cheque nuevo (propio)</option>
+                            {endosables.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {textoDelEndoso(c)}
+                              </option>
+                            ))}
+                            {delOtroCircuito.length > 0 && (
+                              <optgroup label={ETIQUETA_CIRCUITO[circuito === "negro" ? "blanco" : "negro"]}>
+                                {delOtroCircuito.map((c) => (
+                                  <option key={c.id} value={c.id} disabled>
+                                    {textoDelEndoso(c)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                          );
+                        })()}
+
+                        {!parte.chequeId && (
+                          <div className="grid grid-cols-3 gap-2">
+                            <input
+                              value={parte.numero}
+                              onChange={(e) => actualizarParte(i, { numero: e.target.value })}
+                              placeholder="N.º de cheque"
+                              className="tabular h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
+                            />
+                            <input
+                              value={parte.banco}
+                              onChange={(e) => actualizarParte(i, { banco: e.target.value })}
+                              placeholder="Banco"
+                              className="h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
+                            />
+                            <input
+                              type="date"
+                              value={parte.fechaPago}
+                              onChange={(e) => actualizarParte(i, { fechaPago: e.target.value })}
+                              aria-label="Fecha de pago del cheque"
+                              className="tabular h-11 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            ))}
+                ))}
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {partes.length < 6 && (
-                <button
-                  type="button"
-                  onClick={() => setPartes([...partes, parteVacia()])}
-                  className="text-sm font-medium text-muted-foreground hover:text-foreground"
-                >
-                  + Otro renglón
-                </button>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Suman {formatearMonto(sumaPartes)}
-                {hayRetenciones
-                  ? " — tienen que dar lo que sale del banco, ya sin retenciones"
-                  : importe > 0 && Math.abs(sumaPartes - importe) > 0.01
-                    ? ` de ${formatearMonto(importe)}`
-                    : ""}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {regimenes.length > 0 && (
-        <div className="border-t border-linea pt-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Retenciones a practicar
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Poné la base de cada régimen. El sistema mira el acumulado del mes:
-            puede no retener aunque cargues una base, si todavía no llega al
-            mínimo.
-          </p>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {regimenes.map((r) => (
-              <label key={r.id} className="block">
-                <span className="text-sm font-medium">
-                  {r.codigo} · {r.nombre}
-                </span>
-                <span className="block text-sm text-muted-foreground">
-                  {r.alicuota}%
-                  {r.minimoNoImponible > 0 &&
-                    ` · mínimo ${formatearMonto(r.minimoNoImponible)} en el mes`}
-                </span>
-                {acumulado[r.codigo] && (
-                  <span className="block text-sm text-muted-foreground">
-                    Este mes ya lleva{" "}
-                    {formatearMonto(acumulado[r.codigo].base)} de base y{" "}
-                    {formatearMonto(acumulado[r.codigo].retenido)} retenidos.
-                  </span>
-                )}
-                <div className="mt-1 flex gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={bases[r.id] ?? ""}
-                    onChange={(e) =>
-                      setBases((prev) => ({ ...prev, [r.id]: e.target.value }))
-                    }
-                    placeholder="Base"
-                    className="tabular h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-right text-base"
-                  />
-                  {importe > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {partes.length < 6 && (
                     <button
                       type="button"
-                      onClick={() =>
-                        setBases((prev) => ({ ...prev, [r.id]: String(importe) }))
-                      }
-                      className="h-11 shrink-0 rounded-lg border border-linea px-3 text-sm"
+                      onClick={() => setPartes([...partes, parteVacia()])}
+                      className="tarjeta-hundida h-11 rounded-xl px-4 text-base font-medium"
                     >
-                      Todo
+                      + Otro renglón
                     </button>
                   )}
+                  <p className="tabular text-base text-muted-foreground">Suman {formatearMonto(sumaPartes)}</p>
                 </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
+              </div>
+            )}
 
-      {(estado.error || estado.ok) && (
-        <p
-          className={`text-base ${estado.error ? "text-saldo-debe" : "text-saldo-favor"}`}
-        >
-          {estado.error ?? estado.ok}
-        </p>
-      )}
+            <div className="md:col-span-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setPartes(
+                    partes === null
+                      ? [{ ...parteVacia(medio as ParteUI["medio"]), importe: total ? importeParaElCampo(total) : "" }]
+                      : null,
+                  )
+                }
+                className="tarjeta-hundida h-11 rounded-xl px-4 text-base font-medium"
+              >
+                {partes === null ? "Partir en varios medios o detallar cheques" : "Un solo medio"}
+              </button>
+            </div>
 
-      {estado.certificados && estado.certificados.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {estado.certificados.map((c) => (
-            <li key={c.numero}>
+            {hayEfectivo && (
+              <div className="space-y-1 md:col-span-2">
+                <span className="text-base font-medium">De qué caja sale el efectivo</span>
+                <Opciones
+                  nombre="pago-caja"
+                  opciones={sucursales.map((s) => ({
+                    valor: s.id,
+                    texto: s.turnoAbierto ? s.nombre : `${s.nombre} · sin turno abierto`,
+                    icono: Store,
+                  }))}
+                  valor={branchId}
+                  alCambiar={setBranchId}
+                  columnas={sucursales.length >= 3 ? 3 : 2}
+                />
+                {sucursal && !sucursal.turnoAbierto && (
+                  <span className="block text-base text-saldo-debe">
+                    Sin turno abierto: el efectivo no va a salir de ninguna caja
+                  </span>
+                )}
+              </div>
+            )}
+          </Seccion>
+        )}
+
+        {supplierId && regimenesDelProveedor.length > 0 && (
+          <Seccion titulo="Retenciones" icono={Landmark} columnas={1}>
+            <div className="grid gap-4 md:grid-cols-2">
+              {regimenesDelProveedor.map((r) => {
+                const mes = acumulado[r.codigo];
+                return (
+                  <div key={r.id} className="space-y-2">
+                    <Interruptor
+                      etiqueta={`${r.nombre} · ${r.alicuota.toLocaleString("es-AR")}%`}
+                      icono={Landmark}
+                      marcado={Boolean(retener[r.id])}
+                      alCambiar={(v) => setRetener((prev) => ({ ...prev, [r.id]: v }))}
+                    />
+                    {retener[r.id] &&
+                      (conFacturas ? (
+                        <p className="tabular px-1 text-base">
+                          Base: <strong>{formatearMonto(baseDeLasFacturas)}</strong>
+                          <span className="text-muted-foreground"> · neto de las facturas elegidas</span>
+                        </p>
+                      ) : (
+                        <label className="block">
+                          <span className="text-base font-medium">Base</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={basesAMano[r.id] ?? ""}
+                            aria-invalid={importeIlegible(basesAMano[r.id] ?? "") || undefined}
+                            onChange={(e) => setBasesAMano((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
+                          />
+                        </label>
+                      ))}
+                    {retener[r.id] && mes && (
+                      <p className="tabular px-1 text-sm text-muted-foreground">
+                        Este mes: {formatearMonto(mes.base)} de base, {formatearMonto(mes.retenido)} retenidos
+                      </p>
+                    )}
+                    {retener[r.id] && baseDe(r) - total > 0.009 && (
+                      <p className="px-1 text-base text-saldo-debe">La base no puede ser mayor al pago</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Seccion>
+        )}
+      </Hoja>
+
+      {(estado.ok || estado.aviso || (estado.certificados?.length ?? 0) > 0) && (
+        <div className="tarjeta space-y-3 p-5">
+          {estado.ok && <p className="text-base font-medium text-saldo-favor">{estado.ok}</p>}
+          {estado.aviso && <p className="text-base text-saldo-debe">{estado.aviso}</p>}
+          <div className="flex flex-wrap gap-2">
+            {estado.id && (
+              <>
+                <Link
+                  href={`/admin/compras/pagos/${estado.id}`}
+                  className="tarjeta-hundida inline-flex h-11 items-center rounded-xl px-4 text-base font-medium"
+                >
+                  Ver el pago
+                </Link>
+                <a
+                  href={`/admin/compras/pagos/${estado.id}/orden`}
+                  target="_blank"
+                  className="tarjeta-hundida inline-flex h-11 items-center gap-1.5 rounded-xl px-4 text-base font-medium"
+                >
+                  <FileText className="h-4 w-4" />
+                  Orden de pago
+                </a>
+              </>
+            )}
+            {estado.certificados?.map((c) => (
               <a
+                key={c.numero}
                 href={`/admin/compras/pagos/certificado/${c.numero}`}
                 target="_blank"
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium hover:bg-hundida"
+                className="tarjeta-hundida inline-flex h-11 items-center gap-1.5 rounded-xl px-4 text-base font-medium"
               >
                 <FileCheck2 className="h-4 w-4" />
                 {c.numero} · {formatearMonto(c.importe)}
               </a>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+        </div>
       )}
 
-      <div className="flex justify-end border-t border-linea pt-4">
+      <BarraGuardar error={estado.error}>
         <button
           type="button"
           onClick={() =>
             empezar(async () => {
               const r = await pagarAProveedor({
                 supplierId,
-                total: importe,
+                total,
+                fecha: fechaPago,
+                branchId: hayEfectivo && branchId ? branchId : undefined,
                 medio: medio as "transferencia",
                 circuito,
                 referencia,
-                retenciones: regimenes
-                  .map((g) => ({
-                    regimenId: g.id,
-                    base: Number(bases[g.id] ?? 0),
-                  }))
-                  .filter((g) => g.base > 0),
-                imputaciones: Object.entries(imputado)
-                  .map(([purchaseInvoiceId, v]) => ({
-                    purchaseInvoiceId,
-                    importe: Number(v) || 0,
-                  }))
+                retenciones,
+                imputaciones: tildadas
+                  .map((f) => ({ purchaseInvoiceId: f.id, importe: importeDelCampo(aplicado[f.id]) }))
                   .filter((x) => x.importe > 0),
                 partes:
                   partes === null
                     ? undefined
                     : partes
-                        .filter((p) => Number(p.importe) > 0)
+                        .filter((p) => importeDelCampo(p.importe) > 0)
                         .map((p) => ({
                           medio: p.medio,
-                          importe: Number(p.importe),
+                          importe: importeDelCampo(p.importe),
                           referencia: p.referencia || null,
                           chequeId: p.chequeId || null,
                           cheque:
-                            !p.chequeId &&
-                            (p.medio === "cheque" || p.medio === "echeq")
+                            !p.chequeId && (p.medio === "cheque" || p.medio === "echeq")
                               ? {
-                                  tipo:
-                                    p.medio === "echeq"
-                                      ? ("echeq" as const)
-                                      : ("fisico" as const),
+                                  tipo: p.medio === "echeq" ? ("echeq" as const) : ("fisico" as const),
                                   numero: p.numero,
                                   banco: p.banco || null,
                                   fechaPago: new Date(`${p.fechaPago}T12:00:00`),
@@ -726,38 +805,49 @@ export function FormularioPago({
               });
               setEstado(r);
               if (r.ok) {
-                setTotal("");
+                setAplicado({});
+                setTotalTocado(null);
                 setReferencia("");
-                setBases({});
-                setImputado({});
+                setRetener({});
+                setBasesAMano({});
                 setPartes(null);
                 router.refresh();
+                void verFacturasConSaldo(supplierId).then(setFacturas);
+                // El acumulado del mes cambió con este pago, y el cheque que
+                // se entregó ya no está en la cartera.
+                void verAcumulado(supplierId).then((filas) =>
+                  setAcumulado(
+                    Object.fromEntries(
+                      filas.map((f) => [f.codigoRegimen, { base: Number(f.base), retenido: Number(f.retenido) }]),
+                    ),
+                  ),
+                );
+                void verChequesEnCartera().then(setCartera);
               }
             })
           }
-          disabled={enCurso || importe <= 0 || sumaImputada - importe > 0.01}
-          className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          disabled={
+            enCurso ||
+            !supplierId ||
+            total <= 0 ||
+            aCuenta < -0.01 ||
+            basePasada ||
+            importeIlegible(totalTocado) ||
+            Object.values(aplicado).some(importeIlegible) ||
+            Object.values(basesAMano).some(importeIlegible) ||
+            (partes ?? []).some((p) => importeIlegible(p.importe))
+          }
+          className="boton-accion inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          Registrar el pago
+          {total > 0 ? `Pagar ${formatearMonto(total)}` : "Pagar"}
         </button>
-      </div>
-    </section>
+      </BarraGuardar>
+    </div>
   );
 }
 
-/**
- * Los cheques de cartera que se pueden endosar en un renglón.
- *
- * Del mismo tipo que el medio elegido: un e-Cheq recibido no se puede entregar
- * como cheque de papel ni al revés, porque son dos instrumentos distintos aunque
- * en la pantalla se carguen igual.
- */
-function chequesParaEndosar(
-  cartera: ChequeDeCartera[],
-  medio: ParteUI["medio"],
-): ChequeDeCartera[] {
-  if (medio !== "cheque" && medio !== "echeq") return [];
-  const buscado = medio === "echeq" ? "echeq" : "fisico";
-  return cartera.filter((c) => c.tipo === buscado);
+/** Cómo se lee un cheque de la cartera en la lista de endosos. */
+function textoDelEndoso(c: ChequeDeCartera): string {
+  return `Endosar ${c.numero}${c.banco ? ` · ${c.banco}` : ""} · ${formatearMonto(c.importe)}${c.cliente ? ` · de ${c.cliente}` : ""}`;
 }

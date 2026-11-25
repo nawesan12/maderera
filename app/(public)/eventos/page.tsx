@@ -41,10 +41,6 @@ export default async function EventosPage() {
             <h2 className="mt-4 text-xl font-semibold">
               No hay eventos programados
             </h2>
-            <p className="mx-auto mt-1.5 max-w-md text-muted-foreground">
-              Publicamos las capacitaciones acá apenas se confirman. Si te
-              interesa alguna en particular, escribinos.
-            </p>
           </div>
         ) : (
           <ul className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -72,7 +68,7 @@ export default async function EventosPage() {
                     )}
 
                     <div className="flex flex-1 flex-col p-5">
-                      <p className="flex items-center gap-2 text-sm font-medium text-brand-orange-dark">
+                      <p className="flex items-center gap-2 text-sm font-medium text-acento-sobre-claro">
                         <CalendarDays className="h-4 w-4" />
                         {fechaLarga.format(evento.inicia)} ·{" "}
                         {hora.format(evento.inicia)}
@@ -108,7 +104,7 @@ export default async function EventosPage() {
                               agotado
                                 ? "text-muted-foreground"
                                 : lugares <= 5
-                                  ? "text-brand-orange-dark"
+                                  ? "text-acento-sobre-claro"
                                   : "text-muted-foreground"
                             }`}
                           >
@@ -120,7 +116,7 @@ export default async function EventosPage() {
                         )}
 
                         {evento.soloProfesionales && (
-                          <span className="rounded-full bg-brand-orange/10 px-2 py-0.5 text-brand-orange-dark">
+                          <span className="rounded-full bg-naranja-claro px-2 py-0.5 text-acento-sobre-claro">
                             Profesionales
                           </span>
                         )}

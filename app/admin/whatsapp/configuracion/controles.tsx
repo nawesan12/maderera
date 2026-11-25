@@ -8,7 +8,7 @@ import { CATEGORIAS_COBRO, NOMBRE_CATEGORIA, type CategoriaCobro } from "@/lib/w
 function Resultado({ estado }: { estado: EstadoAviso }) {
   if (estado.error) {
     return (
-      <p role="alert" className="flex items-start gap-1.5 text-base text-red-700">
+      <p role="alert" className="flex items-start gap-1.5 text-base text-saldo-debe">
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
         {estado.error}
       </p>
@@ -16,7 +16,7 @@ function Resultado({ estado }: { estado: EstadoAviso }) {
   }
   if (estado.ok) {
     return (
-      <p role="status" className="flex items-start gap-1.5 text-base text-green-800">
+      <p role="status" className="flex items-start gap-1.5 text-base text-saldo-favor">
         <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
         {estado.ok}
       </p>
@@ -73,7 +73,7 @@ export function MensajeDePrueba() {
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-green px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-60"
+        className="inline-flex h-10 items-center gap-2 rounded-lg bg-verde-whatsapp px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-60"
       >
         {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
         Mandar mensaje de prueba

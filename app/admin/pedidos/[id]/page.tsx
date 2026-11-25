@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { MapPin, Scissors, Store, Truck } from "lucide-react";
+import { MapPin, Printer, MessageCircle, Phone, Scissors, Store, Truck } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import {
@@ -9,18 +10,19 @@ import {
   ETAPAS_RETIRO,
   Pasos,
 } from "@/components/admin/pasos";
-import { fechaHora, moneda } from "@/components/admin/formato";
+import { fechaHora, formatearPorcentaje, moneda } from "@/components/admin/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
-import { AccionesPedido } from "../acciones";
+import { AccionesPedido, CancelarPedido } from "../acciones";
+import { DiaDeEntrega } from "./dia-de-entrega";
 import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { BotonFacturar } from "./facturar";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { remitosDelPedido } from "@/lib/dal/admin/entregas";
 import { cortesDelPedido } from "@/lib/dal/admin/cortes";
-import { margenDeLinea } from "@/lib/compras/costo";
 import { requireStaff } from "@/lib/dal/session";
-import { puedeEntrar } from "@/lib/roles";
+import { cobroDelPedido } from "../cobro";
+import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoManual, avisosManuales } from "@/lib/whatsapp/aviso-manual-datos";
 import type { EventoManual } from "@/lib/whatsapp/aviso-manual";
@@ -29,9 +31,17 @@ const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
   transferencia: "Transferencia",
   efectivo: "Efectivo",
+  debito: "Débito",
+  credito: "Crédito",
   cuenta_corriente: "Cuenta corriente",
   cheque: "Cheque",
 };
+
+/** El teléfono como lo marca WhatsApp: solo dígitos, con el 54 adelante. */
+function paraWhatsapp(telefono: string): string {
+  const d = telefono.replace(/\D/g, "");
+  return d.startsWith("54") ? d : `54${d.replace(/^0/, "")}`;
+}
 
 export default async function FichaPedidoPage({
   params,
@@ -50,15 +60,25 @@ export default async function FichaPedidoPage({
   /*
    * El margen es de administración, como los reportes: es el número que no se
    * muestra en el mostrador. La pantalla la ven también vendedores y depósito.
+   * Lo calcula Go (internal/pedidos, MargenDelPedido) y solo se lo manda al
+   * admin.
    */
   const esAdmin = usuario.staffRole === "admin";
 
-  const margen = esAdmin ? calcularMargen(pedido.items) : null;
+  const margen = esAdmin ? pedido.margen : null;
 
   // Si el pedido ya se facturó, el botón se reemplaza por el enlace al
   // comprobante: dos facturas del mismo pedido obligan a anular una.
-  const datosFactura = await pedidoParaFacturar(id);
+  // Facturar es del admin: a los demás el botón los mandaba a una pantalla
+  // que los rebotaba al inicio.
+  const factura = puedeEntrar("/admin/facturacion", usuario.staffRole);
+  const datosFactura = factura ? await pedidoParaFacturar(id) : null;
   const facturado = datosFactura?.yaFacturado ?? null;
+  const verCliente = puedeEntrar("/admin/clientes", usuario.staffRole);
+  const cancelable =
+    puedeEntrar("/admin/presupuestos", usuario.staffRole) &&
+    pedido.origen !== "mostrador" &&
+    !["cancelado", "entregado"].includes(pedido.estado);
 
   // El aviso que corresponde al estado: lo que el cliente tiene que saber ahora.
   // Solo para quien atiende el WhatsApp de la maderera (no depósito).
@@ -91,7 +111,7 @@ export default async function FichaPedidoPage({
         titulo={pedido.cliente}
         estado={
           <>
-            <EtiquetaEstado estado={pedido.estado} />
+            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
             {pedido.estadoPago !== "pagado" && (
               <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
                 Sin cobrar
@@ -104,32 +124,52 @@ export default async function FichaPedidoPage({
             <span className="tabular">{pedido.numero}</span>
             {pedido.empresa && ` · ${pedido.empresa}`}
             {` · ${fechaHora.format(pedido.createdAt)}`}
+            {pedido.quoteId && pedido.numeroPresupuesto && puedeEntrar("/admin/presupuestos", usuario.staffRole) && (
+              <>
+                {" · del presupuesto "}
+                <Link href={`/admin/presupuestos/${pedido.quoteId}`} className="tabular text-brand-orange hover:underline">
+                  {pedido.numeroPresupuesto}
+                </Link>
+              </>
+            )}
           </>
         }
         acciones={
           <>
-            <BotonFacturar
-              orderId={pedido.id}
-              comprobante={
-                facturado
-                  ? {
-                      id: facturado.id,
-                      numero: facturado.numero,
-                      tipo: facturado.tipo,
-                    }
-                  : null
-              }
-            />
+            {cancelable && <CancelarPedido id={pedido.id} numero={pedido.numero} cobrado={pedido.estadoPago === "pagado"} />}
+            <a
+              href={`/ticket/${pedido.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+            >
+              <Printer className="h-5 w-5" aria-hidden="true" />
+              Imprimir
+            </a>
+            {/* Un pedido cancelado no se factura; si tiene comprobante, el
+                enlace sigue. */}
+            {factura && (facturado || pedido.estado !== "cancelado") && (
+              <BotonFacturar
+                orderId={pedido.id}
+                comprobante={
+                  facturado
+                    ? {
+                        id: facturado.id,
+                        numero: facturado.numero,
+                        tipo: facturado.tipo,
+                      }
+                    : null
+                }
+              />
+            )}
             <AccionesPedido
               id={pedido.id}
               estado={pedido.estado}
               estadoPago={pedido.estadoPago}
               tipoEntrega={pedido.tipoEntrega}
-              cobroACuenta={
-                pedido.medioPago === "cuenta_corriente" && pedido.customerId
-                  ? { customerId: pedido.customerId, nombre: pedido.cliente, numero: pedido.numero, total: Number(pedido.total) }
-                  : null
-              }
+              pedido={{ numero: pedido.numero, nombre: pedido.cliente }}
+              cobro={usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole) ? cobroDelPedido(pedido) : null}
+              sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
             />
           </>
         }
@@ -175,7 +215,8 @@ export default async function FichaPedidoPage({
                 <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                   Cantidad
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
+                {/* En el teléfono no entra: el subtotal quedaba cortado. */}
+                <th className="hidden px-4 py-3 text-right text-sm font-medium text-muted-foreground sm:table-cell">
                   Unitario
                 </th>
                 <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">
@@ -190,7 +231,7 @@ export default async function FichaPedidoPage({
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {Number(item.cantidad)} {item.unidad.replace("_", " ")}
                   </td>
-                  <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
+                  <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
                     {moneda.format(Number(item.precioUnitario))}
                   </td>
                   <td className="tabular px-5 py-3.5 text-right text-base">
@@ -203,17 +244,19 @@ export default async function FichaPedidoPage({
               {Number(pedido.costoEnvio) > 0 && (
                 <>
                   <tr>
-                    <td colSpan={3} className="px-5 pt-4 text-base">
+                    <td colSpan={2} className="px-5 pt-4 text-base">
                       Subtotal
                     </td>
+                    <td className="hidden sm:table-cell" />
                     <td className="tabular px-5 pt-4 text-right text-base">
                       {moneda.format(Number(pedido.subtotal))}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={3} className="px-5 pb-2 pt-1 text-base">
+                    <td colSpan={2} className="px-5 pb-2 pt-1 text-base">
                       Envío · {pedido.zonaEnvio}
                     </td>
+                    <td className="hidden sm:table-cell" />
                     <td className="tabular px-5 pb-2 pt-1 text-right text-base">
                       {moneda.format(Number(pedido.costoEnvio))}
                     </td>
@@ -221,9 +264,10 @@ export default async function FichaPedidoPage({
                 </>
               )}
               <tr>
-                <td colSpan={3} className="px-5 py-4 text-base font-medium">
+                <td colSpan={2} className="px-5 py-4 text-base font-medium">
                   Total
                 </td>
+                <td className="hidden sm:table-cell" />
                 <td className="tabular px-5 py-4 text-right text-xl font-semibold">
                   {moneda.format(Number(pedido.total))}
                 </td>
@@ -259,7 +303,7 @@ export default async function FichaPedidoPage({
                   {moneda.format(margen.ganancia)}
                   {margen.neto > 0 && (
                     <span className="ml-2 text-base text-muted-foreground">
-                      {((margen.ganancia / margen.neto) * 100).toFixed(1)}%
+                      {formatearPorcentaje((margen.ganancia / margen.neto) * 100)}
                     </span>
                   )}
                 </p>
@@ -353,6 +397,14 @@ export default async function FichaPedidoPage({
                 Retira en {pedido.sucursal}
               </p>
             )}
+            {!["entregado", "cancelado"].includes(pedido.estado) && (
+              <DiaDeEntrega
+                id={pedido.id}
+                dia={pedido.entregarEl}
+                retiro={pedido.tipoEntrega === "retiro"}
+                editable={puedeEntrar("/admin/presupuestos", usuario.staffRole)}
+              />
+            )}
           </section>
 
           <section className="tarjeta p-5">
@@ -367,9 +419,25 @@ export default async function FichaPedidoPage({
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Estado</dt>
                 <dd>
-                  <EtiquetaEstado estado={pedido.estadoPago} />
+                  <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
                 </dd>
               </div>
+              {pedido.saldoCliente != null && verCliente && (
+                <div className="flex justify-between gap-3 border-t pt-2">
+                  <dt className="text-muted-foreground">Cuenta del cliente</dt>
+                  <dd
+                    className={`tabular font-medium ${
+                      pedido.saldoCliente > 0.004 ? "text-saldo-debe" : pedido.saldoCliente < -0.004 ? "text-saldo-favor" : ""
+                    }`}
+                  >
+                    {pedido.saldoCliente > 0.004
+                      ? `Debe ${moneda.format(pedido.saldoCliente)}`
+                      : pedido.saldoCliente < -0.004
+                        ? `A favor ${moneda.format(-pedido.saldoCliente)}`
+                        : "Al día"}
+                  </dd>
+                </div>
+              )}
             </dl>
           </section>
 
@@ -377,7 +445,7 @@ export default async function FichaPedidoPage({
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Contacto
             </h2>
-            {pedido.customerId ? (
+            {pedido.customerId && verCliente ? (
               <Link
                 href={`/admin/clientes/${pedido.customerId}`}
                 className="text-base font-medium hover:text-brand-orange"
@@ -387,10 +455,35 @@ export default async function FichaPedidoPage({
             ) : (
               <p className="text-base font-medium">{pedido.cliente}</p>
             )}
+            {pedido.fichaPorCorreo && verCliente && (
+              <UnirAFicha
+                que="pedido"
+                id={pedido.id}
+                numero={pedido.numero}
+                total={Number(pedido.total)}
+                contacto={{ nombre: pedido.cliente, telefono: pedido.telefono }}
+                ficha={pedido.fichaPorCorreo}
+              />
+            )}
             {pedido.telefono && (
-              <p className="tabular mt-1 text-base text-muted-foreground">
-                {pedido.telefono}
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <a
+                  href={`tel:${pedido.telefono.replace(/[^\d+]/g, "")}`}
+                  className="tabular inline-flex h-10 items-center gap-1.5 rounded-lg bg-hundida px-3 text-base hover:bg-muted"
+                >
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  {pedido.telefono}
+                </a>
+                <a
+                  href={`https://wa.me/${paraWhatsapp(pedido.telefono)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Escribirle por WhatsApp"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-hundida hover:bg-muted"
+                >
+                  <MessageCircle className="h-5 w-5" aria-hidden="true" />
+                </a>
+              </div>
             )}
             {pedido.email && (
               <p className="truncate text-base text-muted-foreground">
@@ -411,7 +504,7 @@ export default async function FichaPedidoPage({
                     aria-hidden="true"
                   />
                   <div>
-                    <EtiquetaEstado estado={h.estado} />
+                    <EtiquetaEstado estado={h.estado} contexto="pedido" />
                     {h.nota && (
                       <p className="mt-1 text-base text-muted-foreground">
                         {h.nota}
@@ -419,6 +512,7 @@ export default async function FichaPedidoPage({
                     )}
                     <p className="text-sm text-muted-foreground">
                       {fechaHora.format(h.createdAt)}
+                      {h.quien && ` · ${h.quien}`}
                     </p>
                   </div>
                 </li>
@@ -429,48 +523,6 @@ export default async function FichaPedidoPage({
       </div>
     </div>
   );
-}
-
-/**
- * El margen del pedido, sumando renglón por renglón.
- *
- * Se apoya en `margenDeLinea`, que compara **neto contra neto** con la alícuota
- * de cada línea: el subtotal lleva IVA adentro y el costo no, y compararlos
- * directo inflaría el margen un 21 % sistemático.
- *
- * Devuelve `null` si ninguna línea tiene costo, que es el caso de todo lo
- * anterior al módulo de compras. Mostrar cero ahí diría que se vendió sin
- * ganancia, que es distinto de no saberlo.
- */
-function calcularMargen(
-  items: { subtotal: string; cantidad: string; alicuotaIva: string | null; costoUnitario: string | null }[],
-) {
-  let neto = 0;
-  let costo = 0;
-  let conCosto = 0;
-  let sinCosto = 0;
-
-  for (const item of items) {
-    const r = margenDeLinea({
-      subtotal: Number(item.subtotal),
-      cantidad: Number(item.cantidad),
-      alicuotaIva: Number(item.alicuotaIva ?? 21),
-      costoUnitario: item.costoUnitario === null ? null : Number(item.costoUnitario),
-    });
-
-    if (r.costoTotal === null) {
-      sinCosto += 1;
-      continue;
-    }
-
-    neto += r.netoVenta;
-    costo += r.costoTotal;
-    conCosto += 1;
-  }
-
-  if (conCosto === 0) return null;
-
-  return { neto, costo, ganancia: neto - costo, sinCosto };
 }
 
 /** Qué aviso le corresponde al pedido según dónde está. */

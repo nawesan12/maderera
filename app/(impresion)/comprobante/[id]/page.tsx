@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { puedeEntrar } from "@/lib/roles";
 import { notFound } from "next/navigation";
 import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import {
@@ -49,6 +50,8 @@ async function Contenido({
   if (!sesion) notFound();
 
   if (sesion.role === "staff") {
+    // Quien factura o cobra, como en Go: el aserradero no.
+    if (!puedeEntrar("/admin/pedidos", sesion.staffRole)) notFound();
     const [comprobante, emisor] = await Promise.all([
       obtenerComprobante(id),
       configuracionFiscalActual(),

@@ -1,11 +1,8 @@
 import "server-only";
 
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { cuttingOrders, deliveries, invoices, orders, quotes, receipts } from "@/lib/db/schema";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 import { numeroFormateado } from "@/lib/fiscal/comprobantes";
-import { fechaCorta, moneda } from "@/lib/formato";
+import { fechaCorta } from "@/lib/formato";
 
 /**
  * Los papeles de la plataforma que se pueden mandar por WhatsApp.
@@ -16,7 +13,9 @@ import { fechaCorta, moneda } from "@/lib/formato";
  * por id: no se publican en una URL, porque el remito de un cliente no tiene
  * por qué estar en internet para que Meta lo vaya a buscar.
  *
- * Solo para el personal: quien llama ya validó que puede usar la bandeja.
+ * Solo para el personal: quien llama ya validó que puede usar la bandeja. La
+ * lista de los papeles de un cliente la arma la API de Go; los PDF siguen acá
+ * hasta la tanda 12 y viajan a Go en el pedido que los manda.
  */
 
 export const TIPOS_DE_DOCUMENTO = ["presupuesto", "comprobante", "remito", "recibo", "cuenta", "corte"] as const;
@@ -55,47 +54,57 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
 
   switch (doc.tipo) {
     case "presupuesto": {
+      // La ficha y el PDF los da Go (backend/internal/pedidos), con el
+      // secreto interno: esto corre también desde la cola, sin cookie.
       const { consultarPresupuesto } = await import("@/lib/dal/admin/ventas");
-      const { datosParaTransferir } = await import("@/lib/dal/pagos");
-      const { presupuestoPdf } = await import("@/lib/pdf/presupuesto");
+      const { apiInterna } = await import("@/lib/api/servidor");
       const p = await consultarPresupuesto(doc.id);
       if (!p) return null;
-      const pdf = await presupuestoPdf(p, emisor, await datosParaTransferir());
+      const r = await apiInterna.GET("/api/v1/presupuestos/{id}/pdf", {
+        params: { path: { id: doc.id } },
+        parseAs: "arrayBuffer",
+      });
+      if (!r.data) throw new Error(`La API respondió ${r.response.status} al PDF del presupuesto`);
       return {
-        contenido: new Uint8Array(pdf),
+        contenido: new Uint8Array(r.data),
         nombre: `${p.numero}.pdf`,
         descripcion: `el presupuesto ${p.numero}`,
         customerId: p.customerId ?? null,
-        telefono: (p as { contactoTelefono?: string | null }).contactoTelefono ?? null,
-        contacto: (p as { contactoNombre?: string | null }).contactoNombre ?? null,
+        // Antes leía `contactoTelefono` y `contactoNombre`, que la ficha no
+        // tiene (se llaman `telefono` y `cliente`): salían siempre null.
+        telefono: p.telefono ?? null,
+        contacto: p.cliente ?? null,
       };
     }
 
     case "comprobante": {
-      const { obtenerComprobante } = await import("@/lib/dal/admin/facturacion");
-      const { comprobantePdf } = await import("@/lib/pdf/comprobante");
-      const c = await obtenerComprobante(doc.id);
+      // El PDF lo arma Go (backend/internal/facturacion), como el que baja el panel.
+      const { comprobanteInterno } = await import("@/lib/dal/admin/facturacion");
+      const c = await comprobanteInterno(doc.id);
       if (!c) return null;
-      const pdf = await comprobantePdf(c, emisor);
+      const pdf = await pdfDelComprobante(doc.id);
+      if (!pdf) return null;
       const numero = numeroFormateado(c.puntoVenta, c.numero).replace(/\s/g, "");
       return {
-        contenido: new Uint8Array(pdf),
-        nombre: `${c.tipo.toUpperCase()}-${numero}.pdf`,
+        contenido: pdf.contenido,
+        nombre: pdf.nombre,
         descripcion: `la factura ${numero}`,
-        customerId: (c as { customerId?: string | null }).customerId ?? null,
+        customerId: c.customerId ?? null,
         telefono: null,
         contacto: null,
       };
     }
 
     case "remito": {
+      // El PDF lo arma Go (backend/internal/entregas), el mismo de la descarga.
       const { remitoCompleto } = await import("@/lib/dal/admin/entregas");
-      const { remitoPdf } = await import("@/lib/pdf/remito");
+      const { apiInterna } = await import("@/lib/api/servidor");
       const r = await remitoCompleto(doc.id);
       if (!r) return null;
-      const pdf = await remitoPdf(r, emisor);
+      const pdf = await apiInterna.GET("/api/v1/remitos/{id}/pdf", { params: { path: { id: doc.id } }, parseAs: "arrayBuffer" });
+      if (!pdf.data) return null;
       return {
-        contenido: new Uint8Array(pdf),
+        contenido: new Uint8Array(pdf.data),
         nombre: `${r.numero}.pdf`,
         descripcion: `el remito ${r.numero}`,
         customerId: r.customerId,
@@ -137,22 +146,14 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
     }
 
     case "corte": {
-      const { obtenerCorte } = await import("@/lib/dal/admin/cortes");
-      const { calcularPlanoDeCorteSinTrabar, leerAcomodoManual } = await import("@/lib/cortes/plano");
+      const { hojaDelCorte } = await import("@/lib/dal/admin/cortes");
       const { nombreDeLaMitad } = await import("@/lib/cortes/placa");
-      const { metrosDeTapacanto } = await import("@/lib/cortes/tarifa");
       const { cortePdf } = await import("@/lib/pdf/corte");
-      const corte = await obtenerCorte(doc.id);
-      if (!corte) return null;
-      // El mismo cálculo que la descarga del panel (`/api/cortes/[id]/pdf`).
-      const plano = await calcularPlanoDeCorteSinTrabar({
-        piezas: corte.piezas,
-        placaLargo: corte.medida.largo,
-        placaAncho: corte.medida.ancho,
-        anchoSierra: corte.anchoSierraMm,
-        fijadas: leerAcomodoManual(corte.acomodoManual),
-        busqueda: corte.motorPlano >= 2,
-      });
+      // El mismo plano que la descarga del panel (`/api/cortes/[id]/pdf`): lo
+      // arma Go con el disco y el motor del trabajo.
+      const datos = await hojaDelCorte(doc.id);
+      if (!datos) return null;
+      const { corte, plano } = datos;
       const pdf = await cortePdf(
         {
           numero: corte.numero,
@@ -161,7 +162,8 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
           cantoDescripcion: corte.cantoDescripcion,
           deQueSale: nombreDeLaMitad(corte.medida.mitad),
           createdAt: corte.createdAt,
-          metrosCanto: metrosDeTapacanto(corte.piezas),
+          metrosCanto: datos.metrosCanto,
+          superficieSierra: datos.superficies.reduce((t, x) => t + x, 0),
         },
         plano,
         emisor,
@@ -178,104 +180,20 @@ export async function documentoPdf(doc: { tipo: TipoDeDocumento; id: string }): 
   }
 }
 
-export interface DocumentoListado {
-  tipo: TipoDeDocumento;
-  id: string;
-  titulo: string;
-  detalle: string;
-  /** Cómo se lo nombra en el mensaje: «el remito R-0001-00000452». */
-  descripcion: string;
-  fecha: Date | null;
-}
-
 /**
- * Los papeles recientes de un cliente, para elegir cuál mandar desde la
- * conversación. Cinco de cada uno: lo que se manda por WhatsApp es casi
- * siempre lo último.
+ * El comprobante en PDF tal como lo arma Go (backend/internal/facturacion),
+ * pedido con el secreto interno: quien llama ya decidió que se puede mandar.
+ * Null si no existe. (Vivía en lib/notificaciones/fiscal.ts, con el correo
+ * del comprobante, que ya manda Go.)
  */
-export async function documentosDelCliente(customerId: string): Promise<DocumentoListado[]> {
-  const [presupuestos, comprobantes, remitos, recibos, cortes] = await Promise.all([
-    db
-      .select({ id: quotes.id, numero: quotes.numero, total: quotes.total, fecha: quotes.createdAt })
-      .from(quotes)
-      .where(eq(quotes.customerId, customerId))
-      .orderBy(desc(quotes.createdAt))
-      .limit(5),
-    db
-      .select({
-        id: invoices.id,
-        tipo: invoices.tipo,
-        puntoVenta: invoices.puntoVenta,
-        numero: invoices.numero,
-        total: invoices.total,
-        fecha: invoices.createdAt,
-      })
-      .from(invoices)
-      .where(and(eq(invoices.customerId, customerId), ne(invoices.estado, "borrador")))
-      .orderBy(desc(invoices.createdAt))
-      .limit(5),
-    db
-      .select({ id: deliveries.id, numero: deliveries.numero, pedido: orders.numero, fecha: deliveries.createdAt })
-      .from(deliveries)
-      .innerJoin(orders, eq(orders.id, deliveries.orderId))
-      .where(eq(orders.customerId, customerId))
-      .orderBy(desc(deliveries.createdAt))
-      .limit(5),
-    db
-      .select({ id: receipts.id, numero: receipts.numero, total: receipts.total, fecha: receipts.createdAt })
-      .from(receipts)
-      .where(and(eq(receipts.customerId, customerId), inArray(receipts.estado, ["emitido"])))
-      .orderBy(desc(receipts.createdAt))
-      .limit(5),
-    db
-      .select({ id: cuttingOrders.id, numero: cuttingOrders.numero, fecha: cuttingOrders.createdAt })
-      .from(cuttingOrders)
-      .where(eq(cuttingOrders.customerId, customerId))
-      .orderBy(desc(cuttingOrders.createdAt))
-      .limit(5),
-  ]);
-
-  return [
-    { tipo: "cuenta" as const, id: customerId, titulo: "Resumen de cuenta", detalle: "Movimientos y saldo al día de hoy", descripcion: "el resumen de tu cuenta corriente", fecha: null },
-    ...presupuestos.map((p) => ({
-      tipo: "presupuesto" as const,
-      id: p.id,
-      titulo: `Presupuesto ${p.numero}`,
-      descripcion: `el presupuesto ${p.numero}`,
-      detalle: moneda.format(Number(p.total)),
-      fecha: p.fecha,
-    })),
-    ...comprobantes.map((c) => ({
-      tipo: "comprobante" as const,
-      id: c.id,
-      titulo: `Factura ${c.tipo.replace("factura_", "").toUpperCase()} ${numeroFormateado(c.puntoVenta, c.numero)}`,
-      descripcion: `la factura ${numeroFormateado(c.puntoVenta, c.numero)}`,
-      detalle: moneda.format(Number(c.total)),
-      fecha: c.fecha,
-    })),
-    ...remitos.map((r) => ({
-      tipo: "remito" as const,
-      id: r.id,
-      titulo: `Remito ${r.numero}`,
-      descripcion: `el remito ${r.numero}`,
-      detalle: `Pedido ${r.pedido}`,
-      fecha: r.fecha,
-    })),
-    ...recibos.map((r) => ({
-      tipo: "recibo" as const,
-      id: r.id,
-      titulo: `Recibo ${r.numero}`,
-      descripcion: `el recibo ${r.numero}`,
-      detalle: moneda.format(Number(r.total)),
-      fecha: r.fecha,
-    })),
-    ...cortes.map((c) => ({
-      tipo: "corte" as const,
-      id: c.id,
-      titulo: `Corte ${c.numero}`,
-      descripcion: `el plano de corte ${c.numero}`,
-      detalle: "Plano de corte",
-      fecha: c.fecha,
-    })),
-  ];
+async function pdfDelComprobante(invoiceId: string): Promise<{ nombre: string; contenido: Uint8Array } | null> {
+  const { apiInterna } = await import("@/lib/api/servidor");
+  const r = await apiInterna.GET("/api/v1/comprobantes/{id}/pdf", {
+    params: { path: { id: invoiceId } },
+    parseAs: "arrayBuffer",
+  });
+  if (!r.response.ok || !r.data) return null;
+  const disposicion = r.response.headers.get("Content-Disposition") ?? "";
+  const nombre = /filename="([^"]+)"/.exec(disposicion)?.[1] ?? "comprobante.pdf";
+  return { nombre, contenido: new Uint8Array(r.data as ArrayBuffer) };
 }

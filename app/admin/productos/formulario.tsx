@@ -1,13 +1,32 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { GrillaDeMedidas, etiquetaSugerida, vacia, type Atributos } from "./medidas";
 import Link from "next/link";
-import { AlertCircle, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Boxes,
+  Columns2,
+  Cylinder,
+  Droplet,
+  Eye,
+  Globe,
+  Grid2x2,
+  Hammer,
+  ImageIcon,
+  Layers,
+  Loader2,
+  Package,
+  Receipt,
+  RectangleHorizontal,
+  Ruler,
+  Star,
+  Weight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -21,11 +40,21 @@ import {
   type ImagenProducto,
 } from "@/components/admin/galeria-imagenes";
 import { generarSlug } from "@/lib/validation/product";
-import { admiteDecimales } from "@/lib/unidades";
 import { guardarProducto, type EstadoFormulario } from "./actions";
+import {
+  BarraGuardar,
+  Hoja,
+  Pestanas,
+  Seccion,
+  sinReiniciar,
+  Interruptor,
+  Opciones,
+} from "@/components/admin/formulario";
 
 export interface VarianteForm {
   id?: string;
+  /** Para la pantalla: identifica la fila nueva hasta que tenga id. */
+  clave?: string;
   sku: string;
   label: string;
   largoMm: number | null;
@@ -35,12 +64,21 @@ export interface VarianteForm {
   color: string;
   terminacion: string;
   calidad: string;
+  codigoBarras: string;
   precioGeneral: string;
   precioProfesional: string;
-  stockCentral: number;
-  stockAserradero: number;
-  minCentral: number;
-  minAserradero: number;
+  /**
+   * El stock y el mínimo de cada sucursal, por id de la fila de `branches`.
+   * Stock null: el campo quedó vacío y el físico no se toca.
+   */
+  stocks: Record<string, { stock: number | null; minimo: number }>;
+}
+
+/** Una sucursal activa de la base: una columna de stock en la grilla de medidas. */
+export interface SucursalDeFicha {
+  id: string;
+  slug: string;
+  nombre: string;
 }
 
 export interface ProductoForm {
@@ -63,6 +101,9 @@ export interface ProductoForm {
   recargoElaboracionPct: string;
   /** A qué cuenta contable imputa. Texto libre. */
   imputacion: string;
+  /** Para qué sirve y cómo se cuida: van a la ficha pública. */
+  usos: string;
+  cuidados: string;
   featured: boolean;
   aPedido: boolean;
   active: boolean;
@@ -80,20 +121,31 @@ export interface ProductoForm {
  * desde el panel.
  */
 const UNIDADES = [
-  { valor: "unidad", texto: "Por unidad", nombre: "unidades" },
-  { valor: "metro_lineal", texto: "Por metro lineal", nombre: "metros" },
+  { valor: "unidad", texto: "Por unidad", nombre: "unidades", icono: Package },
+  {
+    valor: "metro_lineal",
+    texto: "Por metro lineal",
+    nombre: "metros",
+    icono: Ruler,
+  },
   {
     valor: "metro_cuadrado",
     texto: "Por metro cuadrado",
     nombre: "metros cuadrados",
+    icono: Grid2x2,
   },
-  { valor: "tabla", texto: "Por tabla", nombre: "tablas" },
-  { valor: "placa", texto: "Por placa", nombre: "placas" },
-  { valor: "rollo", texto: "Por rollo", nombre: "rollos" },
-  { valor: "par", texto: "Por par", nombre: "pares" },
-  { valor: "juego", texto: "Por juego", nombre: "juegos" },
-  { valor: "kg", texto: "Por kilo", nombre: "kilos" },
-  { valor: "litro", texto: "Por litro", nombre: "litros" },
+  {
+    valor: "tabla",
+    texto: "Por tabla",
+    nombre: "tablas",
+    icono: RectangleHorizontal,
+  },
+  { valor: "placa", texto: "Por placa", nombre: "placas", icono: Layers },
+  { valor: "rollo", texto: "Por rollo", nombre: "rollos", icono: Cylinder },
+  { valor: "par", texto: "Por par", nombre: "pares", icono: Columns2 },
+  { valor: "juego", texto: "Por juego", nombre: "juegos", icono: Boxes },
+  { valor: "kg", texto: "Por kilo", nombre: "kilos", icono: Weight },
+  { valor: "litro", texto: "Por litro", nombre: "litros", icono: Droplet },
 ];
 
 /** Cómo se nombra la unidad al lado de una cantidad. */
@@ -101,23 +153,7 @@ function textoDeUnidad(valor: string): string {
   return UNIDADES.find((u) => u.valor === valor)?.nombre ?? "unidades";
 }
 
-const varianteVacia = (): VarianteForm => ({
-  sku: "",
-  label: "",
-  largoMm: null,
-  anchoMm: null,
-  espesorMm: null,
-  material: "",
-  color: "",
-  terminacion: "",
-  calidad: "",
-  precioGeneral: "0",
-  precioProfesional: "0",
-  stockCentral: 0,
-  stockAserradero: 0,
-  minCentral: 0,
-  minAserradero: 0,
-});
+const varianteVacia = vacia;
 
 const estadoInicial: EstadoFormulario = {};
 
@@ -127,8 +163,17 @@ export function FormularioProducto({
   categorias,
   rubros,
   galeria = [],
+  atributos = { material: [], color: [], terminacion: [], calidad: [] },
+  pestanaInicial = "datos",
+  sucursales,
 }: {
   inicial: ProductoForm;
+  /** Las sucursales activas, en orden: salen de la base, no de una lista fija. */
+  sucursales: SucursalDeFicha[];
+  /** Lo ya cargado en material, color, terminación y calidad. */
+  atributos?: Atributos;
+  /** Recién creado, se abre en Fotos: es lo que le falta. */
+  pestanaInicial?: "datos" | "fotos" | "medidas";
   categorias: { id: string; name: string }[];
   /** Las imputaciones ya cargadas, como sugerencia del campo. */
   imputaciones?: string[];
@@ -140,6 +185,35 @@ export function FormularioProducto({
     guardarProducto,
     estadoInicial,
   );
+  const [pestana, setPestana] =
+    useState<(typeof PESTANAS)[number]["id"]>(pestanaInicial);
+
+  /*
+   * El error del servidor, en su campo: abre la pestaña donde está y lo
+   * enfoca. Antes llegaba solo el mensaje arriba, sin decir en qué medida ni
+   * en qué pestaña estaba el problema.
+   */
+  useEffect(() => {
+    const campo = estado.campo;
+    if (!campo) return;
+    const m = /^variantes\.(\d+)\.(\w+)$/.exec(campo);
+    // El stock de una sucursal llega como «variantes.0.stocks.1.stock»: la
+    // celda se llama por el slug de la sucursal.
+    const st = /^variantes\.(\d+)\.stocks\.(\d+)\.(stock|minimo|sucursal)$/.exec(campo);
+    const suc = st ? sucursales[Number(st[2])] : undefined;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- responde a la respuesta del servidor, no a un render
+    setPestana(m || st ? "medidas" : "datos");
+    const id = st
+      ? `v-${st[1]}-${st[3] === "minimo" ? "min" : "stock"}-${suc?.slug ?? ""}`
+      : m
+        ? `v-${m[1]}-${m[2]}`
+        : campo;
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      el?.scrollIntoView({ block: "center" });
+      el?.focus();
+    });
+  }, [estado, sucursales]);
 
   const [nombre, setNombre] = useState(inicial.name);
   const [slug, setSlug] = useState(inicial.slug);
@@ -151,6 +225,7 @@ export function FormularioProducto({
   const [pctMedia, setPctMedia] = useState(inicial.precioMediaPct);
   const [categoria, setCategoria] = useState(inicial.categoryId);
   const [rubro, setRubro] = useState(inicial.subcategoryId);
+  const [descripcion, setDescripcion] = useState(inicial.description);
 
   const rubrosDeLaCategoria = rubros.filter((r) => r.categoryId === categoria);
 
@@ -175,52 +250,50 @@ export function FormularioProducto({
     if (!slugFijo) setSlug(generarSlug(valor));
   }
 
-  function actualizarVariante(
-    indice: number,
-    campo: keyof VarianteForm,
-    valor: string,
-  ) {
-    setVariantes((prev) =>
-      prev.map((v, i) => {
-        if (i !== indice) return v;
-        const numericos: (keyof VarianteForm)[] = [
-          "largoMm",
-          "anchoMm",
-          "espesorMm",
-          "stockCentral",
-          "stockAserradero",
-          "minCentral",
-          "minAserradero",
-        ];
-        if (numericos.includes(campo)) {
-          return { ...v, [campo]: valor === "" ? null : Number(valor) };
-        }
-        return { ...v, [campo]: valor };
-      }),
-    );
-  }
-
   return (
-    <form action={accion} className="space-y-6">
+    <form {...sinReiniciar(accion)} className="space-y-6">
       {inicial.id && <input type="hidden" name="id" value={inicial.id} />}
       <input
         type="hidden"
         name="variantes"
         value={JSON.stringify(
-          variantes.map((v) => ({
-            ...v,
-            largoMm: v.largoMm === null ? "" : String(v.largoMm),
-            anchoMm: v.anchoMm === null ? "" : String(v.anchoMm),
-            espesorMm: v.espesorMm === null ? "" : String(v.espesorMm),
-            stockCentral: String(v.stockCentral ?? 0),
-            stockAserradero: String(v.stockAserradero ?? 0),
-            minCentral: String(v.minCentral ?? 0),
-            minAserradero: String(v.minAserradero ?? 0),
-          })),
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- la clave es solo de la pantalla
+          variantes.map(({ clave, ...v }) => {
+            // Lo que se vio al abrir la ficha: Go corrige el stock por
+            // diferencia contra esto, así una venta hecha mientras tanto no
+            // se pisa. Un stock vacío viaja vacío y no toca el físico.
+            const visto = v.id
+              ? inicial.variantes.find((x) => x.id === v.id)
+              : undefined;
+            return {
+              ...v,
+              // Sin texto propio, el que se arma con las medidas y el color.
+              label: v.label.trim() || etiquetaSugerida(v),
+              largoMm: v.largoMm === null ? "" : String(v.largoMm),
+              anchoMm: v.anchoMm === null ? "" : String(v.anchoMm),
+              espesorMm: v.espesorMm === null ? "" : String(v.espesorMm),
+              // Una entrada por sucursal activa, en el orden de la pantalla:
+              // Go señala el error por esa posición.
+              stocks: sucursales.map((s) => {
+                const st = v.stocks[s.id] ?? { stock: 0, minimo: 0 };
+                const vio = visto?.stocks[s.id];
+                return {
+                  sucursal: s.id,
+                  stock: st.stock === null ? "" : String(st.stock),
+                  minimo: String(st.minimo ?? 0),
+                  ...(visto ? { visto: String(vio?.stock ?? 0) } : {}),
+                };
+              }),
+            };
+          }),
         )}
       />
       <input type="hidden" name="unit" value={unidad} />
-      <input type="hidden" name="formaDeVenta" value={unidad === "placa" ? forma : "entera"} />
+      <input
+        type="hidden"
+        name="formaDeVenta"
+        value={unidad === "placa" ? forma : "entera"}
+      />
       <input type="hidden" name="precioMediaPct" value={pctMedia} />
       <input type="hidden" name="categoryId" value={categoria} />
 
@@ -234,13 +307,16 @@ export function FormularioProducto({
         </p>
       )}
 
-      {/* Datos generales */}
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <h2 className="text-base font-semibold text-foreground">Datos generales</h2>
+      <Pestanas pestanas={PESTANAS} activa={pestana} alCambiar={setPestana} />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
+      {/* Datos generales */}
+      <div
+        hidden={pestana !== "datos"}
+        className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]"
+      >
+        <Hoja>
+          <Seccion titulo="Producto" icono={Package}>
+            <div className="space-y-2 md:col-span-2">
               <Label htmlFor="name">Nombre</Label>
               <Input
                 id="name"
@@ -250,14 +326,12 @@ export function FormularioProducto({
                 required
               />
             </div>
-
             {/* La "dirección web" salió del formulario a pedido de la
                 clienta: el slug se genera solo desde el nombre en el alta y
                 no se regenera al editar —la URL publicada ya está indexada—.
                 Viaja oculto; si choca con otro producto, el alta lo
                 desambigua sola. */}
             <input type="hidden" name="slug" value={slug} />
-
             <div className="space-y-2">
               <Label htmlFor="categoria">Categoría</Label>
               <Select
@@ -267,7 +341,7 @@ export function FormularioProducto({
                   categorias.map((c) => [c.id, c.name]),
                 )}
               >
-                <SelectTrigger id="categoria">
+                <SelectTrigger id="categoria" className="w-full">
                   <SelectValue placeholder="Elegí una categoría" />
                 </SelectTrigger>
                 <SelectContent>
@@ -279,7 +353,6 @@ export function FormularioProducto({
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="rubro">Rubro</Label>
               {/* El valor viaja en un campo oculto: `Select` no es un
@@ -293,7 +366,7 @@ export function FormularioProducto({
                   ...rubrosDeLaCategoria.map((r) => [r.id, r.name]),
                 ])}
               >
-                <SelectTrigger id="rubro">
+                <SelectTrigger id="rubro" className="w-full">
                   <SelectValue placeholder="Sin rubro" />
                 </SelectTrigger>
                 <SelectContent>
@@ -312,7 +385,6 @@ export function FormularioProducto({
                 </p>
               )}
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="brand">Marca</Label>
               <Input
@@ -322,65 +394,102 @@ export function FormularioProducto({
                 placeholder="Moldava, Curvin…"
               />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="unidad-de-venta">Unidad de venta</Label>
-              <Select
-                value={unidad}
-                onValueChange={(v) => v && setUnidad(v)}
-                items={Object.fromEntries(
-                  UNIDADES.map((u) => [u.valor, u.texto]),
-                )}
-              >
-                <SelectTrigger id="unidad-de-venta">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNIDADES.map((u) => (
-                    <SelectItem key={u.valor} value={u.valor}>
-                      {u.texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Unidad de venta</Label>
+              <Opciones
+                nombre="unidad-de-venta"
+                opciones={UNIDADES}
+                valor={unidad}
+                alCambiar={setUnidad}
+              />
             </div>
-          </div>
-
-          {unidad === "placa" && (
-            <FormaDeVentaDePlaca
-              forma={forma}
-              onForma={setForma}
-              pct={pctMedia}
-              onPct={setPctMedia}
-              precioEjemplo={Number(
-                (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
-              )}
-              sinMedidas={variantes.filter((v) => !v.largoMm || !v.anchoMm).length}
-            />
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
+            {unidad === "placa" && (
+              <div className="md:col-span-2">
+                <FormaDeVentaDePlaca
+                  forma={forma}
+                  onForma={setForma}
+                  pct={pctMedia}
+                  onPct={setPctMedia}
+                  precioEjemplo={Number(
+                    (variantes[0]?.precioGeneral ?? "0").replace(",", "."),
+                  )}
+                  sinMedidas={
+                    variantes.filter((v) => !v.largoMm || !v.anchoMm).length
+                  }
+                />
+              </div>
+            )}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="description">Descripción</Label>
+              <Textarea
+                id="description"
+                name="description"
+                defaultValue={inicial.description}
+                onChange={(e) => setDescripcion(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </Seccion>
+          <Seccion titulo="En el sitio" icono={Globe}>
+            <div className="space-y-2">
+              <Label htmlFor="usos">Usos</Label>
+              <Textarea
+                id="usos"
+                name="usos"
+                defaultValue={inicial.usos}
+                rows={4}
+                placeholder="Muebles de cocina, placares, revestimientos…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cuidados">Cuidados</Label>
+              <Textarea
+                id="cuidados"
+                name="cuidados"
+                defaultValue={inicial.cuidados}
+                rows={4}
+                placeholder="Limpiar con paño húmedo, sin solventes…"
+              />
+            </div>
+            <div className="grid gap-2.5 md:col-span-2 lg:grid-cols-3">
+              <Interruptor
+                nombre="featured"
+                etiqueta="Destacado"
+                icono={Star}
+                defecto={inicial.featured}
+              />
+              <Interruptor
+                nombre="active"
+                etiqueta="Visible en el sitio"
+                icono={Eye}
+                defecto={inicial.active}
+              />
+              <Interruptor
+                nombre="aPedido"
+                etiqueta="Se fabrica a pedido"
+                icono={Hammer}
+                defecto={inicial.aPedido}
+              />
+            </div>
+            <input type="hidden" name="imagen" value={inicial.imagen} />
+          </Seccion>
+          <Seccion titulo="Impuestos" icono={Receipt}>
             {/* La clienta pidió "tipos de IVA" en productos. El campo existía
                 en la base desde el primer schema y el formulario nunca lo
                 ofreció, así que todo el catálogo quedaba al 21. */}
             <div className="space-y-2">
-              <Label htmlFor="alicuotaIva">IVA</Label>
-              <select
-                id="alicuotaIva"
-                name="alicuotaIva"
-                defaultValue={inicial.alicuotaIva || "21"}
-                className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-base"
-              >
-                <option value="21">21 % — general</option>
-                <option value="10.5">10,5 % — reducida</option>
-                <option value="0">Exento</option>
-              </select>
-              <p className="text-sm text-muted-foreground">
-                Los precios siguen siendo finales; esto decide cómo se
-                desagrega en la factura.
-              </p>
+              <Label>IVA</Label>
+              <Opciones
+                nombre="alicuotaIva"
+                defecto={inicial.alicuotaIva || "21"}
+                columnas={3}
+                opciones={[
+                  { valor: "21", texto: "21 %" },
+                  { valor: "10.5", texto: "10,5 %" },
+                  { valor: "0", texto: "Exento" },
+                ]}
+              />
             </div>
-
             {/*
               La imputación contable, que pidió la clienta junto con subrubros,
               IVA y SKU. Las otras tres existían; esta no.
@@ -404,15 +513,10 @@ export function FormularioProducto({
                   <option key={i} value={i} />
                 ))}
               </datalist>
-              <p className="text-sm text-muted-foreground">
-                A qué cuenta va este producto. Se escribe libre: cuando esté el
-                plan de cuentas del contador, se pasa a una lista.
-              </p>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="recargoElaboracionPct">
-                Recargo por elaboración
+                Recargo por elaboración (%)
               </Label>
               <Input
                 id="recargoElaboracionPct"
@@ -421,305 +525,55 @@ export function FormularioProducto({
                 inputMode="decimal"
                 placeholder="0"
               />
-              <p className="text-sm text-muted-foreground">
-                % sobre el costo por maquinarlo en planta. Lo usa el ajuste de
-                precios con base «costo con elaboración».
-              </p>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción</Label>
-            <Textarea
-              id="description"
-              name="description"
-              defaultValue={inicial.description}
-              rows={3}
-            />
-          </div>
-
-          <input type="hidden" name="imagen" value={inicial.imagen} />
-
-          <div className="flex flex-wrap gap-8 pt-2">
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <Switch name="featured" defaultChecked={inicial.featured} />
-              Destacado
-            </label>
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <Switch name="active" defaultChecked={inicial.active} />
-              Visible en el sitio
-            </label>
-            <label className="flex items-center gap-2 text-base text-foreground">
-              <Switch name="aPedido" defaultChecked={inicial.aPedido} />
-              Se fabrica a pedido
-            </label>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            «Se fabrica a pedido» es para los maquinados especiales: escaleras a
-            medida, tirantes que no vienen de origen. La ficha deja de decir
-            «sin stock» y pasa a ofrecer encargarlo.
-          </p>
-        </CardContent>
-      </Card>
+          </Seccion>
+        </Hoja>
+        <VistaPrevia
+          nombre={nombre}
+          categoria={categorias.find((c) => c.id === categoria)?.name ?? ""}
+          descripcion={descripcion}
+          unidad={UNIDADES.find((u) => u.valor === unidad)?.texto ?? ""}
+          foto={galeria[0]?.url ?? inicial.imagen}
+        />
+      </div>
 
       {/* Fotos */}
       {inicial.id ? (
-        <Card className="tarjeta border-0">
+        <Card hidden={pestana !== "fotos"} className="tarjeta border-0">
           <CardContent className="space-y-4 p-6">
             <div>
               <h2 className="text-base font-semibold">Fotos</h2>
-              <p className="text-sm text-muted-foreground">
-                Lo primero que mira quien entra al catálogo.
-              </p>
             </div>
             <GaleriaImagenes productId={inicial.id} imagenes={galeria} />
           </CardContent>
         </Card>
       ) : (
-        <Card className="tarjeta-hundida border-0">
+        <Card hidden={pestana !== "fotos"} className="tarjeta-hundida border-0">
           <CardContent className="p-6 text-center">
             <p className="text-base text-muted-foreground">
-              Guardá el producto y después le cargás las fotos.
+              Las fotos se cargan apenas se guarda el producto.
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Variantes */}
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                Medidas y presentaciones
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Cada medida tiene su propio código, precio y stock.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setVariantes((p) => [...p, varianteVacia()])}
-            >
-              <Plus className="h-5 w-5" />
-              Agregar medida
-            </Button>
-          </div>
-
-          {variantes.map((variante, i) => (
-            <div
-              key={variante.id ?? `nueva-${i}`}
-              className="tarjeta space-y-3 p-4"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">
-                  Medida {i + 1}
-                </span>
-                {variantes.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setVariantes((p) => p.filter((_, idx) => idx !== i))
-                    }
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`sku-${i}`}>Código del producto</Label>
-                  <Input
-                    id={`sku-${i}`}
-                    value={variante.sku}
-                    onChange={(e) => actualizarVariante(i, "sku", e.target.value)}
-                    placeholder="PLA-MEL-BLA-18"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`label-${i}`}>Cómo se muestra</Label>
-                  <Input
-                    id={`label-${i}`}
-                    value={variante.label}
-                    onChange={(e) => actualizarVariante(i, "label", e.target.value)}
-                    placeholder='1830 x 2600mm — 18mm'
-                  />
-                </div>
-              </div>
-
-              <p className="text-sm font-medium text-muted-foreground">
-                Medidas
-              </p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {(
-                  [
-                    ["largoMm", "Largo (mm)"],
-                    ["anchoMm", "Ancho (mm)"],
-                    ["espesorMm", "Espesor (mm)"],
-                  ] as const
-                ).map(([campo, etiqueta]) => (
-                  <div key={campo} className="space-y-1.5">
-                    <Label htmlFor={`${campo}-${i}`}>
-                      {etiqueta}
-                      {/* En el metro lineal el largo es el de la pieza: con
-                          él, el stock se carga contando piezas. */}
-                      {campo === "largoMm" && unidad === "metro_lineal" && (
-                        <span className="ml-1 font-normal text-muted-foreground">
-                          de la pieza
-                        </span>
-                      )}
-                    </Label>
-                    <Input
-                      id={`${campo}-${i}`}
-                      type="number"
-                      min={0}
-                      value={variante[campo] ?? ""}
-                      onChange={(e) =>
-                        actualizarVariante(i, campo, e.target.value)
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`material-${i}`}>Material</Label>
-                  <Input
-                    id={`material-${i}`}
-                    value={variante.material}
-                    onChange={(e) =>
-                      actualizarVariante(i, "material", e.target.value)
-                    }
-                    placeholder="Pino Tratado"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`color-${i}`}>Color</Label>
-                  <Input
-                    id={`color-${i}`}
-                    value={variante.color}
-                    onChange={(e) => actualizarVariante(i, "color", e.target.value)}
-                    placeholder="Blanco"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`terminacion-${i}`}>Terminación</Label>
-                  <Input
-                    id={`terminacion-${i}`}
-                    value={variante.terminacion}
-                    onChange={(e) =>
-                      actualizarVariante(i, "terminacion", e.target.value)
-                    }
-                    placeholder="Cepillada, laqueada, cruda…"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`calidad-${i}`}>Tipo o calidad</Label>
-                  <Input
-                    id={`calidad-${i}`}
-                    value={variante.calidad}
-                    onChange={(e) =>
-                      actualizarVariante(i, "calidad", e.target.value)
-                    }
-                    placeholder="Primera, segunda, premium…"
-                  />
-                </div>
-              </div>
-
-              <div className="border-t" />
-
-              <p className="text-sm font-medium text-muted-foreground">
-                Precios y stock
-              </p>
-
-              {/* Los dos precios se guardan finales, con IVA incluido: es la
-                  regla de `lib/precios/vista.ts` y no estaba dicha en ningún
-                  lado de la pantalla donde se los carga. */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`precio-lista-${i}`}>
-                    Precio de lista (con IVA)
-                  </Label>
-                  <Input
-                    id={`precio-lista-${i}`}
-                    value={variante.precioGeneral}
-                    onChange={(e) =>
-                      actualizarVariante(i, "precioGeneral", e.target.value)
-                    }
-                    inputMode="decimal"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    El precio final, como se cobra en el mostrador.
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`precio-prof-${i}`}>
-                    Precio profesional (con IVA)
-                  </Label>
-                  <Input
-                    id={`precio-prof-${i}`}
-                    value={variante.precioProfesional}
-                    onChange={(e) =>
-                      actualizarVariante(i, "precioProfesional", e.target.value)
-                    }
-                    inputMode="decimal"
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    También final. Al profesional se le muestra el neto aparte.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-4">
-                {(
-                  [
-                    ["stockCentral", "Stock Central"],
-                    ["minCentral", "Mínimo Central"],
-                    ["stockAserradero", "Stock Aserradero"],
-                    ["minAserradero", "Mínimo Aserradero"],
-                  ] as const
-                ).map(([campo, etiqueta]) => (
-                  <div key={campo} className="space-y-1.5">
-                    <Label htmlFor={`${campo}-${i}`}>
-                      {etiqueta}
-                      {/* Sin la unidad, "Stock Central: 40" no dice si son
-                          chapas, metros o tablas. La unidad ya está elegida
-                          más arriba en la misma pantalla. */}
-                      <span className="ml-1 font-normal text-muted-foreground">
-                        (en {textoDeUnidad(unidad)})
-                      </span>
-                    </Label>
-                    <Input
-                      id={`${campo}-${i}`}
-                      type="number"
-                      min={0}
-                      step={admiteDecimales(unidad) ? "any" : 1}
-                      inputMode={admiteDecimales(unidad) ? "decimal" : "numeric"}
-                      value={variante[campo] ?? 0}
-                      onChange={(e) =>
-                        actualizarVariante(i, campo, e.target.value)
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+      {/* Medidas */}
+      <Card hidden={pestana !== "medidas"} className="tarjeta border-0">
+        <CardContent className="p-5">
+          <GrillaDeMedidas
+            variantes={variantes}
+            setVariantes={setVariantes}
+            unidad={unidad}
+            nombreUnidad={textoDeUnidad(unidad)}
+            atributos={atributos}
+            sucursales={sucursales}
+            campoConError={estado.campo}
+          />
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-3">
-        <Button
-          type="submit"
-          disabled={pendiente}
-          className="boton-accion"
-        >
+      <BarraGuardar>
+        <Button type="submit" disabled={pendiente} className="boton-accion">
           {pendiente ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -729,30 +583,45 @@ export function FormularioProducto({
             "Guardar producto"
           )}
         </Button>
+        {/* En la carga del catálogo se dan de alta muchos seguidos. */}
+        {!inicial.id && (
+          <Button type="submit" name="despues" value="otro" disabled={pendiente} variant="outline">
+            Guardar y cargar otro
+          </Button>
+        )}
         <Button render={<Link href="/admin/productos" />} variant="ghost">
           Cancelar
         </Button>
-      </div>
+      </BarraGuardar>
     </form>
   );
 }
 
+/** El producto, partido en tres: lo que es, cómo se ve y cómo se vende. */
+const PESTANAS = [
+  { id: "datos", nombre: "Datos" },
+  { id: "fotos", nombre: "Fotos" },
+  { id: "medidas", nombre: "Medidas y precios" },
+] as const;
 
 const FORMAS_DE_VENTA = [
   {
     valor: "entera",
     titulo: "Solo entera",
-    detalle: "Se vende la placa completa. Es lo que corresponde a un fenólico o a una placa de color con dibujo.",
+    detalle:
+      "Se vende la placa completa. Es lo que corresponde a un fenólico o a una placa de color con dibujo.",
   },
   {
     valor: "entera_o_media",
     titulo: "Entera o media",
-    detalle: "Además media placa, partida al largo o al ancho. La otra mitad queda en el stock.",
+    detalle:
+      "Además media placa, partida al largo o al ancho. La otra mitad queda en el stock.",
   },
   {
     valor: "metro_cuadrado",
     titulo: "Por metro cuadrado",
-    detalle: "El precio de lista es el del m² y se pide en m². El stock se sigue contando en placas.",
+    detalle:
+      "El precio de lista es el del m² y se pide en m². El stock se sigue contando en placas.",
   },
 ] as const;
 
@@ -827,17 +696,16 @@ function FormaDeVentaDePlaca({
                 inputMode="decimal"
                 className="tabular w-24"
               />
-              <span className="text-base text-muted-foreground">% de la entera</span>
+              <span className="text-base text-muted-foreground">
+                % de la entera
+              </span>
             </div>
           </div>
           {media !== null && (
             <p className="text-base">
-              Entera <span className="tabular">{formatearPesos(precioEjemplo)}</span> → media{" "}
-              <strong className="tabular">{formatearPesos(media)}</strong>
-              <span className="block text-sm text-muted-foreground">
-                Con la primera medida y el precio general. Vale igual para cada
-                lista de precios.
-              </span>
+              Entera{" "}
+              <span className="tabular">{formatearPesos(precioEjemplo)}</span> →
+              media <strong className="tabular">{formatearPesos(media)}</strong>
             </p>
           )}
         </div>
@@ -863,4 +731,54 @@ const PESOS = new Intl.NumberFormat("es-AR", {
 
 function formatearPesos(n: number): string {
   return PESOS.format(n);
+}
+
+/**
+ * Cómo va a quedar la tarjeta en el catálogo, mientras se carga: el nombre, la
+ * categoría y la descripción se ven ahí y no en una lista de campos.
+ */
+function VistaPrevia({
+  nombre,
+  categoria,
+  descripcion,
+  unidad,
+  foto,
+}: {
+  nombre: string;
+  categoria: string;
+  descripcion: string;
+  unidad: string;
+  foto: string;
+}) {
+  return (
+    <aside className="sticky top-24 hidden xl:block">
+      <p className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-texto-3">
+        En el catálogo
+      </p>
+      <div className="tarjeta overflow-hidden">
+        <div className="flex aspect-[4/3] items-center justify-center bg-hundida">
+          {foto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={foto} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon className="h-10 w-10 text-texto-3" />
+          )}
+        </div>
+        <div className="space-y-1.5 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-acento-texto">
+            {categoria || "Categoría"}
+          </p>
+          <p className="text-lg font-bold leading-tight tracking-tight">
+            {nombre || (
+              <span className="text-texto-3">Nombre del producto</span>
+            )}
+          </p>
+          {descripcion && (
+            <p className="line-clamp-3 text-sm text-texto-2">{descripcion}</p>
+          )}
+          <p className="pt-1 text-sm font-medium text-texto-3">{unidad}</p>
+        </div>
+      </div>
+    </aside>
+  );
 }

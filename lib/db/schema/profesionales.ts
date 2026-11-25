@@ -122,6 +122,8 @@ export const professionalApplications = pgTable(
     resueltoAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    cuentaCreada: boolean().notNull().default(false),
   },
   (t) => [
     index("professional_applications_estado_idx").on(t.estado),

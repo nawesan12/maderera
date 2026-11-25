@@ -7,7 +7,7 @@ import type {
   OperacionDeCorte,
   PatronDeCorte,
   Salida,
-} from "@/lib/cortes/secuencia";
+} from "@/lib/cortes/tipos";
 
 /**
  * La hoja de corte para la seccionadora, en papel y en la tablet del taller.

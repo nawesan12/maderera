@@ -1,0 +1,1 @@
+Lo que hay en esta carpeta lo arma `npm run build` y lo embebe el binario de Go (embed.go).

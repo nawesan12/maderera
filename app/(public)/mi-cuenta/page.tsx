@@ -17,6 +17,8 @@ import {
 } from "@/lib/dal/cuenta";
 import { diasHasta, fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { RespuestaPresupuesto } from "./presupuestos/respuesta";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
+import { tienda } from "@/lib/dal/contenido";
 
 export default async function ResumenCuentaPage() {
   const [cliente, resumen, pedidos, presupuestos] = await Promise.all([
@@ -129,7 +131,7 @@ export default async function ResumenCuentaPage() {
 
             <Link
               href="/mi-cuenta/cuenta-corriente"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-orange hover:underline"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-acento-texto hover:underline"
             >
               Ver movimientos
               <ArrowRight className="h-4 w-4" />
@@ -167,7 +169,7 @@ export default async function ResumenCuentaPage() {
               No tenés pedidos en curso. El último fue{" "}
               <Link
                 href={`/mi-cuenta/pedidos/${pedidos[0].numero}`}
-                className="tabular font-medium text-brand-orange hover:underline"
+                className="tabular font-medium text-acento-texto hover:underline"
               >
                 {pedidos[0].numero}
               </Link>
@@ -214,7 +216,7 @@ function EncabezadoSeccion({
       {verMas && (
         <Link
           href={verMas}
-          className="shrink-0 text-sm font-medium text-brand-orange hover:underline"
+          className="shrink-0 text-sm font-medium text-acento-texto hover:underline"
         >
           Ver todos
         </Link>
@@ -256,7 +258,7 @@ function MedidorCredito({ saldo, limite }: { saldo: number; limite: number }) {
         <div
           className={`h-full rounded-full ${
             excedido
-              ? "bg-red-600"
+              ? "bg-destructive"
               : porcentaje > 80
                 ? "bg-amber-500"
                 : "bg-brand-orange"
@@ -274,13 +276,13 @@ function AccesosRapidos() {
       href: "/catalogo",
       icono: PackageOpen,
       titulo: "Seguir comprando",
-      texto: "Todo el catálogo con precio y disponibilidad",
+      texto: "Todo el catálogo, por rubro y por medida",
     },
     {
-      href: "/carrito",
+      href: "/corte",
       icono: Scissors,
       titulo: "Pedir un corte a medida",
-      texto: "Mandanos el despiece y lo cortamos en el aserradero",
+      texto: `Mandanos el despiece y lo cortamos ${DONDE_SE_CORTA.frase}`,
     },
     {
       href: "/mi-cuenta/presupuestos",
@@ -309,7 +311,10 @@ function AccesosRapidos() {
 
 /** Primera visita: qué hacer, no un vacío con un ícono gris. */
 async function Bienvenida({ nombre }: { nombre: string }) {
-  const whatsapp = await enlaceWhatsapp();
+  const [whatsapp, laTienda] = await Promise.all([enlaceWhatsapp(), tienda()]);
+  // Con la tienda apagada no hay carrito (redirige al catálogo): los pasos son
+  // los de verdad, y la consulta por WhatsApp es lo principal (comité del 25/11).
+  const vende = laTienda.activa;
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-2xl border bg-card">
@@ -317,46 +322,78 @@ async function Bienvenida({ nombre }: { nombre: string }) {
           <h2 className="text-2xl font-bold">
             {nombre ? `Bienvenido, ${nombre.split(" ")[0]}` : "Bienvenido"}
           </h2>
-          <p className="mt-2 max-w-lg text-white/70">
-            Acá vas a ver tus pedidos, tus presupuestos y —si comprás a cuenta
-            corriente— tu saldo con cada movimiento. Por ahora está vacío
-            porque todavía no hiciste tu primera compra.
-          </p>
         </div>
 
-        <div className="grid gap-4 p-6 sm:grid-cols-3">
-          <Paso
-            numero={1}
-            titulo="Armá tu presupuesto"
-            texto="Sumá productos del catálogo o pedí un corte a medida."
-          />
-          <Paso
-            numero={2}
-            titulo="Confirmá el pedido"
-            texto="Elegís retiro en sucursal o envío, y cómo lo querés abonar."
-          />
-          <Paso
-            numero={3}
-            titulo="Seguilo desde acá"
-            texto="Te mostramos en qué etapa está hasta que lo tenés en la obra."
-          />
-        </div>
+        {vende ? (
+          <div className="grid gap-4 p-6 sm:grid-cols-3">
+            <Paso
+              numero={1}
+              titulo="Armá tu presupuesto"
+              texto="Sumá productos del catálogo o pedí un corte a medida."
+            />
+            <Paso
+              numero={2}
+              titulo="Confirmá el pedido"
+              texto="Elegís retiro en sucursal o envío, y cómo lo querés abonar."
+            />
+            <Paso
+              numero={3}
+              titulo="Seguilo desde acá"
+              texto="Te mostramos en qué etapa está hasta que lo tenés en la obra."
+            />
+          </div>
+        ) : (
+          <div className="grid gap-4 p-6 sm:grid-cols-3">
+            <Paso
+              numero={1}
+              titulo="Elegí del catálogo"
+              texto="Medidas, maderas y placas que trabajamos."
+            />
+            <Paso
+              numero={2}
+              titulo="Consultanos"
+              texto="Por WhatsApp te pasamos precio y disponibilidad."
+            />
+            <Paso
+              numero={3}
+              titulo="Seguilo desde acá"
+              texto="Los presupuestos y pedidos que te armemos aparecen en tu cuenta."
+            />
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 border-t bg-sitio-alt px-6 py-5">
+          {!vende && (
+            <a
+              href={whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-whatsapp-boton px-5 font-medium text-white transition-colors hover:bg-whatsapp-boton-hover"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Consultar por WhatsApp
+            </a>
+          )}
           <Link
             href="/catalogo"
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+            className={
+              vende
+                ? "inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+                : "inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-5 font-medium transition-colors hover:bg-sitio-alt"
+            }
           >
             Ver el catálogo
             <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link
-            href="/carrito"
-            className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-5 font-medium transition-colors hover:bg-sitio-alt"
-          >
-            <Scissors className="h-4 w-4" />
-            Pedir un corte a medida
-          </Link>
+          {vende && (
+            <Link
+              href="/corte"
+              className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-5 font-medium transition-colors hover:bg-sitio-alt"
+            >
+              <Scissors className="h-4 w-4" />
+              Pedir un corte a medida
+            </Link>
+          )}
         </div>
       </section>
 

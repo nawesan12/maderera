@@ -1,8 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Monitor } from "lucide-react";
-import type { CajaVinculada } from "@/lib/mostrador/offline/use-caja";
+import Link from "next/link";
+import { Loader2, Monitor, MonitorOff, Unlink } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { CajaDelServidor } from "@/lib/mostrador/offline/use-caja";
+import { desvincularTerminal } from "@/app/mostrador/actions";
 
 interface CajaDisponible {
   id: string;
@@ -12,33 +22,75 @@ interface CajaDisponible {
 }
 
 /**
- * Vincular esta máquina a una caja física.
+ * Vincular esta máquina a una caja física, desde la barra de arriba.
  *
- * Aparece una sola vez, la primera. Sin vincular, el mostrador puede leer sin
- * internet pero no cobrar: la venta necesita un número que el cliente se pueda
- * llevar escrito, y ese número lleva el código de la caja.
+ * Sin vincular, el mostrador puede leer sin internet pero no cobrar: la venta
+ * necesita un número que el cliente se pueda llevar escrito, y ese número
+ * lleva el código de la caja.
  *
  * Se vincula **estando en línea**, a propósito: el código lo asigna el servidor
  * y no la máquina. Si cada navegador se autobautizara, dos terminarían
  * llamándose `CAJA1` y dos clientes se irían con el mismo papel; la clave de
  * idempotencia protege la base de ese duplicado, pero no protege el papel, que
  * es sobre lo que la gente discute.
+ *
+ * Antes era una franja con dos frases arriba de la venta (T4, hallazgo 19).
+ * Ahora es un selector del mismo alto que la píldora del turno y en segundo
+ * plano: sin la palabra «caja», porque al lado está «Abrir caja», que es otra
+ * cosa (el turno), y la misma palabra para dos cosas confunde.
+ *
+ * Sin vincular nunca desaparece del todo (comité de T4): el problema se ve el
+ * día que se corta internet, que es justo cuando no se puede vincular, y no
+ * mostrar nada no daba ninguna pista de por qué no cobra. Ahí queda un ícono
+ * quieto de terminal tachada. Y si la sucursal no tiene terminales dadas de
+ * alta, quien puede darlas de alta ve el camino; el resto, el mismo ícono.
+ *
+ * Vinculada muestra el código y no el nombre: es lo que sale en el número
+ * provisorio del papel (`CAJA1-017`), y con eso se lo busca después.
+ *
+ * Desvincular es solo del admin (el default prudente del comité final, lo
+ * controla Go): para quien administra, el código es un botón que pide la
+ * misma confirmación al revés. Go cambia el secreto de la caja; esta PC la
+ * suelta y vuelve a pedir que se la vincule, sin perder su contador.
  */
 export function VincularCaja({
   branchId,
   enLinea,
+  vinculada,
   onVincular,
+  onDesvincular,
+  administra = false,
+  pendientesLocales = 0,
 }: {
   branchId: string;
   enLinea: boolean;
-  onVincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
+  /** Si quien atiende puede dar de alta terminales (/admin/caja). */
+  administra?: boolean;
+  /** La caja de esta máquina, si ya está vinculada. */
+  vinculada: { id: string; codigo: string } | null;
+  onVincular: (caja: CajaDelServidor) => Promise<void>;
+  /** Suelta la caja local, después de que Go la desvinculó. */
+  onDesvincular?: () => Promise<void>;
+  /**
+   * Las ventas de la cola local sin subir. El latido puede estar viejo si se
+   * cobró sin conexión: con ventas en la cola no se suelta, y Go también lo
+   * controla con este número.
+   */
+  pendientesLocales?: number;
 }) {
   const [cajas, setCajas] = useState<CajaDisponible[] | null>(null);
   const [enCurso, setEnCurso] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * La terminal elegida, antes de vincularla. Elegirla en el selector la
+   * vinculaba en el acto, y desvincular es solo del admin: un toque de más
+   * dejaba esta PC numerando como otra (comité final). Ahora se confirma.
+   */
+  const [elegida, setElegida] = useState<CajaDisponible | null>(null);
+  const [soltando, setSoltando] = useState(false);
 
   useEffect(() => {
-    if (!enLinea) return;
+    if (!enLinea || vinculada) return;
 
     let vivo = true;
     void fetch(`/api/mostrador/caja/vincular?branchId=${branchId}`)
@@ -53,7 +105,7 @@ export function VincularCaja({
     return () => {
       vivo = false;
     };
-  }, [branchId, enLinea]);
+  }, [branchId, enLinea, vinculada]);
 
   async function vincular(cajaId: string) {
     setEnCurso(true);
@@ -75,53 +127,203 @@ export function VincularCaja({
 
       await onVincular(datos.caja);
     } catch {
-      setError("No se pudo vincular. Probá de nuevo.");
+      setError("No se pudo vincular.");
     } finally {
       setEnCurso(false);
     }
   }
 
-  return (
-    <div className="tarjeta flex flex-wrap items-center gap-3 border-[var(--estado-borde)] p-4">
-      <span className="estado-espera flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--estado-fondo)]">
-        <Monitor className="h-5 w-5" />
+  async function desvincular(cajaId: string) {
+    setEnCurso(true);
+    setError(null);
+    try {
+      const r = await desvincularTerminal(cajaId, pendientesLocales);
+      if (r.error) {
+        setError(r.error);
+        return;
+      }
+      setSoltando(false);
+      await onDesvincular?.();
+      toast.success(r.ok ?? "Esta PC ya no es una terminal.");
+    } catch {
+      setError("No se pudo desvincular.");
+    } finally {
+      setEnCurso(false);
+    }
+  }
+
+  // Ya vinculada: el código, quieto, para leerlo en el papel del cliente.
+  if (vinculada) {
+    const codigo = (
+      <>
+        <Monitor className="h-4 w-4" />
+        {vinculada.codigo}
+      </>
+    );
+    if (!administra || !onDesvincular || !enLinea) {
+      return (
+        <span className="inline-flex h-9 items-center gap-1.5 px-1 text-sm text-muted-foreground" title="Esta PC">
+          {codigo}
+        </span>
+      );
+    }
+    /* El código se ve siempre (es el que va en el papel del cliente) y al
+       lado, a la vista, «Desvincular»: antes la única forma era tocar el
+       código gris, sin ícono. La pregunta va en un diálogo que dice la
+       consecuencia, con el rechazo de Go adentro, y no en la barra. */
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="inline-flex h-9 items-center gap-1.5 px-1 text-sm text-muted-foreground" title="Esta PC">
+          {codigo}
+        </span>
+        <button
+          type="button"
+          onClick={() => setSoltando(true)}
+          aria-label={`Desvincular esta PC de ${vinculada.codigo}`}
+          className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm font-medium text-muted-foreground ring-1 ring-linea hover:bg-hundida hover:text-foreground"
+        >
+          <Unlink className="h-3.5 w-3.5" />
+          Desvincular
+        </button>
+
+        <Dialog
+          open={soltando}
+          onOpenChange={(v) => {
+            if (enCurso) return;
+            setSoltando(v);
+            if (!v) setError(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                Desvincular <span className="tabular">{vinculada.codigo}</span> de esta PC
+              </DialogTitle>
+              <DialogDescription className="text-base">
+                {pendientesLocales > 0
+                  ? pendientesLocales === 1
+                    ? "Queda 1 venta sin subir: esperá a que suba."
+                    : `Quedan ${pendientesLocales} ventas sin subir: esperá a que suban.`
+                  : `Esta PC deja de ser ${vinculada.codigo}: sin conexión no va a poder cobrar hasta vincularla otra vez. La numeración de ${vinculada.codigo} sigue donde quedó.`}
+              </DialogDescription>
+            </DialogHeader>
+            {error && (
+              <p role="alert" className="text-base text-saldo-debe">
+                {error}
+              </p>
+            )}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <button
+                type="button"
+                autoFocus
+                disabled={enCurso}
+                onClick={() => {
+                  setSoltando(false);
+                  setError(null);
+                }}
+                className="h-11 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
+              >
+                Mejor no
+              </button>
+              <button
+                type="button"
+                disabled={enCurso || pendientesLocales > 0}
+                onClick={() => void desvincular(vinculada.id)}
+                className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
+              >
+                {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+                Desvincular
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </span>
+    );
+  }
 
-      <div className="min-w-0 flex-1">
-        <p className="text-base font-semibold">Esta máquina no está vinculada</p>
-        <p className="text-sm text-muted-foreground">
-          {enLinea
-            ? "Elegí qué caja es para poder cobrar cuando se corte internet."
-            : "Conectate una vez para vincularla. Mientras tanto se puede consultar, pero no cobrar sin conexión."}
-        </p>
-        {error && <p className="mt-1 text-sm text-saldo-debe">{error}</p>}
-      </div>
+  const sinVincular = (
+    <span
+      role="img"
+      aria-label="Esta PC no está vinculada a una terminal: sin conexión no puede cobrar"
+      title="Esta PC no está vinculada a una terminal: sin conexión no puede cobrar"
+      className="estado-espera inline-flex h-9 items-center px-1"
+    >
+      <MonitorOff className="h-4 w-4" />
+    </span>
+  );
 
-      {enLinea &&
-        (cajas === null ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-        ) : cajas.length === 0 ? (
-          <p className="shrink-0 text-sm text-muted-foreground">
-            No hay cajas dadas de alta en esta sucursal.
-          </p>
-        ) : (
-          <select
-            defaultValue=""
-            disabled={enCurso}
-            onChange={(e) => {
-              if (e.target.value) void vincular(e.target.value);
-            }}
-            className="h-11 shrink-0 rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            <option value="">Elegí la caja…</option>
-            {cajas.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.codigo}
-                {c.nombre ? ` · ${c.nombre}` : ""}
-              </option>
-            ))}
-          </select>
-        ))}
-    </div>
+  if (!enLinea) return sinVincular;
+  // Mientras carga no se muestra nada: un círculo que gira en la barra, en
+  // cada arranque, es más ruido que lo que informa.
+  if (!cajas) return null;
+  if (cajas.length === 0) {
+    return administra ? (
+      <Link
+        href="/admin/caja"
+        className="estado-espera inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--estado-acento)] px-2.5 text-sm font-medium"
+      >
+        <MonitorOff className="h-4 w-4" />
+        Dar de alta terminales
+      </Link>
+    ) : (
+      sinVincular
+    );
+  }
+
+  if (elegida) {
+    return (
+      <span role="group" aria-label="Vincular esta PC" className="inline-flex items-center gap-2 text-sm">
+        <span className="font-semibold">¿Esta PC es {elegida.codigo}?</span>
+        <button
+          type="button"
+          disabled={enCurso}
+          onClick={() => void vincular(elegida.id).then(() => setElegida(null))}
+          className="boton-accion inline-flex h-9 items-center gap-1.5 rounded-lg px-3 font-semibold disabled:opacity-50"
+        >
+          {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+          Sí
+        </button>
+        <button
+          type="button"
+          autoFocus
+          disabled={enCurso}
+          onClick={() => setElegida(null)}
+          className="h-9 rounded-lg border border-linea px-3 font-medium hover:bg-hundida"
+        >
+          No
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <label className="estado-espera inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--estado-acento)] pl-2.5 text-sm font-medium">
+        {enCurso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Monitor className="h-4 w-4" />}
+        <span className="sr-only">Qué terminal es esta PC</span>
+        {/* Controlado y siempre en blanco: si falla, elegir la misma otra vez
+            tiene que volver a intentar, y un `select` que ya la muestra
+            elegida no dispara `onChange`. */}
+        <select
+          value=""
+          disabled={enCurso}
+          aria-invalid={error ? true : undefined}
+          onChange={(e) => {
+            const caja = cajas.find((c) => c.id === e.target.value);
+            if (caja) setElegida(caja);
+          }}
+          className="h-full rounded-r-lg bg-transparent pr-2 text-sm font-medium outline-none"
+        >
+          <option value="">Esta PC…</option>
+          {cajas.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.codigo}
+              {c.nombre ? ` · ${c.nombre}` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {error && <span className="text-sm font-medium text-saldo-debe">{error}</span>}
+    </span>
   );
 }

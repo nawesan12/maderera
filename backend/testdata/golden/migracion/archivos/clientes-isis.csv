@@ -1,0 +1,10 @@
+Código;Razón Social;Nombre Fantasía;C.U.I.T.;Condición IVA;Domicilio;Localidad;Teléfono;E-mail;Límite Crédito;Vendedor;Observaciones
+00012;Pérez Juan Carlos;;20-12345678-6;Consumidor Final;"Alem 3400
+Piso 2";Mar del Plata;223 155-1234;JUAN@MAIL.COM;"1.500.000,00";Pablo;
+00013;Construcciones Ñandú SRL;Ñandú;30-71234567-1;Resp. Inscripto;Colón 1200;Batán;;compras@nandu.com.ar;(1.000,00);Pablo;Paga a 30 días
+00014;;Sin nombre;20-11111111-1;Monotributo;;;;;0;;
+00015;Gómez, Ana;;27-2345678-9;CF;San Martín 99;;;ana@;;;
+00016;Carpintería El Roble;;30-70000000-0;Exento;;;;;$ 50.000;María;gremio
+;López María;;;;;;;;;;sin código ni cuit
+00012;Pérez Juan Carlos;;20-12345678-6;Consumidor Final;Alem 3400;Mar del Plata;;;;;repetido
+00017;Muñoz Hnos.;;23-30123456-9;Responsable Inscripto;Independencia 2500;;;;2.500,50;;

@@ -11,10 +11,6 @@ export default async function DireccionesPage() {
     <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Mis direcciones</h1>
-        <p className="mt-1 text-muted-foreground">
-          Las guardás una vez y las elegís en el carrito, sin volver a
-          tipearlas.
-        </p>
       </header>
 
       <GestorDirecciones

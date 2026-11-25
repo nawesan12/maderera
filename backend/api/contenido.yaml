@@ -1,0 +1,866 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Contenido
+  version: "1"
+  description: |
+    Lo que la maderera edita del sitio sin un despliegue: ajustes, promociones
+    bancarias, banners y reseñas de productos. Las rutas /api/v1/admin/… son
+    del admin (ACCESO de /admin/contenido).
+paths:
+  /api/v1/contenido/ajustes:
+    get:
+      operationId: Ajustes
+      responses:
+        "200":
+          description: clave → valor
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: { type: string } }
+  /api/v1/contenido/promos:
+    get:
+      operationId: Promos
+      responses:
+        "200":
+          description: Las promociones vigentes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PromoVigente" } }
+  /api/v1/contenido/banners:
+    get:
+      operationId: Banners
+      parameters:
+        - name: ubicacion
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/Ubicacion" }
+      responses:
+        "200":
+          description: Los banners al aire en esa ubicación
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Banner" } }
+  /api/v1/contenido/productos/{id}/resenas:
+    get:
+      operationId: ResenasDelProducto
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Las publicadas, las 50 más nuevas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Resena" } }
+  /api/v1/contenido/productos/{id}/resumen:
+    get:
+      operationId: ResumenDeResenas
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: El promedio y el reparto, o null si no hay ninguna publicada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Resumen" }
+  /api/v1/contenido/mis-resenas:
+    get:
+      operationId: MisResenables
+      summary: Lo que el cliente compró y puede reseñar
+      responses:
+        "200":
+          description: Los productos de pedidos entregados
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Resenable" } }
+        "401": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DejarResena
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, orderId, estrellas]
+              additionalProperties: false
+              properties:
+                productId: { type: string, format: uuid }
+                orderId: { type: string, format: uuid }
+                estrellas: { type: integer }
+                texto: { type: string }
+      responses:
+        "201":
+          description: Quedó pendiente de revisión
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConSlug" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/ajustes:
+    get:
+      operationId: AdminAjustes
+      responses:
+        "200":
+          description: Todos los ajustes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Ajuste" } }
+  /api/v1/admin/contenido/ajustes/{clave}:
+    put:
+      operationId: GuardarAjuste
+      parameters:
+        - { name: clave, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor]
+              additionalProperties: false
+              properties:
+                valor: { type: string }
+      responses:
+        "204": { description: Guardado }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/resenas:
+    get:
+      operationId: AdminResenas
+      responses:
+        "200":
+          description: Las reseñas, primero las pendientes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ResenaParaModerar" } }
+  /api/v1/admin/contenido/resenas/{id}/moderar:
+    post:
+      operationId: ModerarResena
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              additionalProperties: false
+              properties:
+                estado: { type: string, enum: [publicada, rechazada, pendiente] }
+                motivo: { type: string }
+      responses:
+        "200":
+          description: Moderada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConSlug" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/banners:
+    get:
+      operationId: AdminBanners
+      responses:
+        "200":
+          description: Todos los banners
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/BannerCompleto" } }
+    post:
+      operationId: CrearBanner
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormBanner" }
+      responses:
+        "204": { description: Creado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/banners/{id}:
+    put:
+      operationId: EditarBanner
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormBanner" }
+      responses:
+        "204": { description: Guardado }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+    delete:
+      operationId: BorrarBanner
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Borrado }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/promos:
+    get:
+      operationId: AdminPromos
+      responses:
+        "200":
+          description: Todas las promociones
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PromoCompleta" } }
+    post:
+      operationId: CrearPromo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormPromo" }
+      responses:
+        "204": { description: Creada }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/promos/{id}:
+    put:
+      operationId: EditarPromo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/FormPromo" }
+      responses:
+        "204": { description: Guardada }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+    delete:
+      operationId: BorrarPromo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Borrada }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/negocio/resenas:
+    get:
+      operationId: ResenasDelNegocio
+      responses:
+        "200":
+          description: Las publicadas, hasta 12
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ResenaDelNegocio" } }
+  /api/v1/contenido/negocio/resumen:
+    get:
+      operationId: ResumenDelNegocio
+      responses:
+        "200":
+          description: El promedio, o null si no hay ninguna publicada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResumenNegocio" }
+  /api/v1/admin/contenido/negocio:
+    get:
+      operationId: AdminResenasDelNegocio
+      responses:
+        "200":
+          description: Todas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ResenaDelNegocioCompleta" } }
+    post:
+      operationId: CrearResenaDelNegocio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormResenaNegocio" }
+      responses:
+        "200":
+          description: Guardada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Publicada" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/negocio/google:
+    post:
+      operationId: TraerDeGoogle
+      summary: Trae las reseñas nuevas de Google (entran sin publicar)
+      responses:
+        "200":
+          description: Lo que trajo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [traidas, nuevas]
+                properties:
+                  traidas: { type: integer }
+                  nuevas: { type: integer }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/contenido/negocio/{id}:
+    put:
+      operationId: EditarResenaDelNegocio
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormResenaNegocio" }
+      responses:
+        "200":
+          description: Guardada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Publicada" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+    delete:
+      operationId: BorrarResenaDelNegocio
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Borrada }
+  /api/v1/admin/contenido/negocio/{id}/publicar:
+    post:
+      operationId: PublicarResenaDelNegocio
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Publicada" }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/documentos:
+    get:
+      operationId: Documentos
+      summary: Los documentos técnicos que quien pide puede ver
+      responses:
+        "200":
+          description: Los activos; los reservados solo si es profesional
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DocumentoTecnico" } }
+  /api/v1/contenido/documentos/reservados:
+    get:
+      operationId: DocumentosReservados
+      summary: Cuántos hay reservados para profesionales, sin decir cuáles
+      responses:
+        "200":
+          description: La cantidad
+          content:
+            application/json:
+              schema: { type: integer }
+  /api/v1/contenido/eventos:
+    get:
+      operationId: EventosProximos
+      responses:
+        "200":
+          description: Los publicados que no pasaron
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/EventoPublico" } }
+  /api/v1/contenido/eventos-visibles:
+    get:
+      operationId: SlugsDeEventos
+      parameters:
+        - { name: limite, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 500 } }
+      responses:
+        "200":
+          description: Los slugs de los que no son borrador, los más nuevos primero
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /api/v1/contenido/eventos/{slug}:
+    get:
+      operationId: EventoPorSlug
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: La ficha, con la inscripción de quien mira
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventoConDetalle" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/eventos/{slug}/visible:
+    get:
+      operationId: EventoVisible
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Si existe y no es borrador
+          content:
+            application/json:
+              schema: { type: boolean }
+  /api/v1/contenido/sitemap/{seccion}:
+    get:
+      operationId: Sitemap
+      parameters:
+        - { name: seccion, in: path, required: true, schema: { type: string, enum: [catalogo, categorias, eventos] } }
+      responses:
+        "200":
+          description: Las rutas de la sección
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/RutaSitemap" } }
+  /api/v1/contenido/contacto:
+    post:
+      operationId: EnviarConsulta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, motivo, mensaje]
+              additionalProperties: false
+              properties:
+                nombre: { type: string }
+                # WhatsApp o correo: alguno de los dos (lo controla validar()).
+                email: { type: string }
+                telefono: { type: string }
+                motivo: { type: string }
+                mensaje: { type: string }
+      responses:
+        "200":
+          description: Qué pasó con el correo. «simulada» es que no hay correo conectado y conviene WhatsApp.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resultado]
+                properties:
+                  resultado: { type: string, enum: [enviada, simulada, fallida] }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/contenido/sucursales:
+    get:
+      operationId: Sucursales
+      summary: Las sucursales activas (solo la fila; la ficha publicada la pone Next)
+      responses:
+        "200":
+          description: Por orden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, slug, nombre, sortOrder]
+                  properties:
+                    id: { type: string }
+                    slug: { type: string }
+                    nombre: { type: string }
+                    sortOrder: { type: integer }
+  /api/v1/contenido/zonas-envio:
+    get:
+      operationId: ZonasDeEnvio
+      responses:
+        "200":
+          description: Las activas, por orden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, costo, envioGratisDesde, demoraEstimada, aCotizar]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    costo: { type: number, format: double }
+                    envioGratisDesde: { type: number, format: double }
+                    demoraEstimada: { type: string, nullable: true }
+                    aCotizar: { type: boolean }
+  /api/v1/contenido/escalas-pago:
+    get:
+      operationId: EscalasDePago
+      summary: Los descuentos por medio de pago y monto
+      responses:
+        "200":
+          description: Las activas, por medio y monto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [medio, desdeMonto, porcentaje, etiqueta]
+                  properties:
+                    medio: { type: string }
+                    desdeMonto: { type: number, format: double }
+                    porcentaje: { type: number, format: double }
+                    etiqueta: { type: string }
+  /api/v1/admin/documentos:
+    get:
+      operationId: AdminDocumentos
+      responses:
+        "200":
+          description: Todos, primero los activos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DocumentoDelPanel" } }
+    post:
+      operationId: SubirDocumento
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                titulo: { type: string }
+                descripcion: { type: string }
+                categoria: { type: string }
+                soloProfesionales: { type: string, description: «on» si está marcado }
+                archivo: { type: string, format: binary }
+      responses:
+        "204": { description: Publicado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/documentos/categorias:
+    get:
+      operationId: CategoriasDeDocumentos
+      responses:
+        "200":
+          description: Las categorías en uso
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /api/v1/admin/documentos/{id}/visibilidad:
+    post:
+      operationId: VisibilidadDocumento
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [soloProfesionales]
+              additionalProperties: false
+              properties:
+                soloProfesionales: { type: boolean }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/documentos/{id}/destinos:
+    put:
+      operationId: DestinosDeDocumento
+      description: A qué productos y categorías se ata el documento; reemplaza los anteriores.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productos, categorias]
+              additionalProperties: false
+              properties:
+                productos: { type: array, maxItems: 200, items: { type: string, format: uuid } }
+                categorias: { type: array, maxItems: 50, items: { type: string, format: uuid } }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/documentos/{id}/activo:
+    post:
+      operationId: ActivarDocumento
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activo]
+              additionalProperties: false
+              properties:
+                activo: { type: boolean }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    Ubicacion: { type: string, enum: [franja, portada, catalogo] }
+    ConSlug:
+      type: object
+      required: [slug]
+      properties:
+        slug: { type: string, description: el producto, para revalidar su ficha }
+    PromoVigente:
+      type: object
+      required: [id, medio, titulo, detalle, dias, vigenciaHasta, quienPaga, imagenUrl]
+      properties:
+        id: { type: string }
+        medio: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        dias: { type: string }
+        vigenciaHasta: { type: string, description: «dd/mm/aa», o vacío }
+        quienPaga: { type: string, enum: [banco, nosotros] }
+        imagenUrl: { type: string, nullable: true }
+    Banner:
+      type: object
+      required: [id, etiqueta, titulo, bajada, enlace, textoEnlace, imagenUrl, actualizado]
+      properties:
+        id: { type: string }
+        etiqueta: { type: string }
+        titulo: { type: string }
+        bajada: { type: string }
+        enlace: { type: string, nullable: true }
+        textoEnlace: { type: string }
+        imagenUrl: { type: string, nullable: true }
+        actualizado: { type: string, format: date-time }
+    Resena:
+      type: object
+      required: [id, nombre, estrellas, texto, fecha]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, format: date-time }
+    Resumen:
+      type: object
+      nullable: true
+      required: [promedio, cantidad, reparto]
+      properties:
+        promedio: { type: number, format: double }
+        cantidad: { type: integer }
+        reparto: { type: object, additionalProperties: { type: integer } }
+    Resenable:
+      type: object
+      required: [productId, slug, nombre, orderId, numeroPedido, yaResenado]
+      properties:
+        productId: { type: string }
+        slug: { type: string }
+        nombre: { type: string }
+        orderId: { type: string }
+        numeroPedido: { type: string }
+        yaResenado: { type: boolean }
+    Ajuste:
+      type: object
+      required: [clave, valor, descripcion, updatedAt]
+      properties:
+        clave: { type: string }
+        valor: { type: string }
+        descripcion: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    ResenaParaModerar:
+      type: object
+      required: [id, producto, productoSlug, nombre, estrellas, texto, estado, motivoRechazo, numeroPedido, createdAt]
+      properties:
+        id: { type: string }
+        producto: { type: string }
+        productoSlug: { type: string }
+        nombre: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        estado: { type: string, enum: [pendiente, publicada, rechazada] }
+        motivoRechazo: { type: string, nullable: true }
+        numeroPedido: { type: string }
+        createdAt: { type: string, format: date-time }
+    BannerCompleto:
+      type: object
+      required: [id, ubicacion, etiqueta, titulo, bajada, enlace, textoEnlace, imagenUrl, desde, hasta, orden, activo, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        ubicacion: { $ref: "#/components/schemas/Ubicacion" }
+        etiqueta: { type: string }
+        titulo: { type: string }
+        bajada: { type: string }
+        enlace: { type: string, nullable: true }
+        textoEnlace: { type: string }
+        imagenUrl: { type: string, nullable: true }
+        desde: { type: string, format: date-time, nullable: true }
+        hasta: { type: string, format: date-time, nullable: true }
+        orden: { type: integer }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PromoCompleta:
+      type: object
+      required: [id, medio, titulo, detalle, dias, vigenciaHasta, quienPaga, imagenUrl, orden, activo, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        medio: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        dias: { type: string }
+        vigenciaHasta: { type: string, format: date-time, nullable: true }
+        quienPaga: { type: string, enum: [banco, nosotros] }
+        imagenUrl: { type: string, nullable: true }
+        orden: { type: integer }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ResenaDelNegocio:
+      type: object
+      required: [id, autor, estrellas, texto, fecha, origen, fotoUrl]
+      properties:
+        id: { type: string }
+        autor: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, format: date-time }
+        origen: { type: string, enum: [manual, google] }
+        fotoUrl: { type: string, nullable: true }
+    ResenaDelNegocioCompleta:
+      type: object
+      required: [id, autor, estrellas, texto, fecha, origen, externoId, fotoUrl, publicada, orden, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        autor: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, format: date-time }
+        origen: { type: string, enum: [manual, google] }
+        externoId: { type: string, nullable: true }
+        fotoUrl: { type: string, nullable: true }
+        publicada: { type: boolean }
+        orden: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ResumenNegocio:
+      type: object
+      nullable: true
+      required: [promedio, cuantas]
+      properties:
+        promedio: { type: number, format: double }
+        cuantas: { type: integer }
+    Publicada:
+      type: object
+      required: [publicada]
+      additionalProperties: false
+      properties:
+        publicada: { type: boolean }
+    FormResenaNegocio:
+      type: object
+      required: [autor, estrellas, texto, publicada]
+      additionalProperties: false
+      properties:
+        autor: { type: string }
+        estrellas: { type: integer }
+        texto: { type: string }
+        fecha: { type: string, description: AAAA-MM-DD }
+        publicada: { type: boolean }
+    DocumentoTecnico:
+      type: object
+      required: [id, titulo, descripcion, categoria, url, formato, tamanoBytes, soloProfesionales]
+      properties:
+        id: { type: string }
+        titulo: { type: string }
+        descripcion: { type: string, nullable: true }
+        categoria: { type: string }
+        url: { type: string }
+        formato: { type: string }
+        tamanoBytes: { type: integer, nullable: true }
+        soloProfesionales: { type: boolean }
+    EventoPublico:
+      type: object
+      required: [id, slug, titulo, resumen, imagenUrl, lugar, inicia, termina, cupo, precio, soloProfesionales, inscriptos]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        titulo: { type: string }
+        resumen: { type: string, nullable: true }
+        imagenUrl: { type: string, nullable: true }
+        lugar: { type: string, nullable: true }
+        inicia: { type: string, format: date-time }
+        termina: { type: string, format: date-time, nullable: true }
+        cupo: { type: integer }
+        precio: { type: number, format: double }
+        soloProfesionales: { type: boolean }
+        inscriptos: { type: integer, description: Reservadas, confirmadas y que asistieron }
+    EventoConDetalle:
+      allOf:
+        - $ref: "#/components/schemas/EventoPublico"
+        - type: object
+          required: [descripcion, estado, miInscripcion, yaPaso]
+          properties:
+            descripcion: { type: string, nullable: true }
+            estado: { type: string, enum: [publicado, cerrado, cancelado] }
+            miInscripcion:
+              type: object
+              nullable: true
+              required: [id, estado]
+              properties:
+                id: { type: string }
+                estado: { type: string }
+            yaPaso: { type: boolean }
+    RutaSitemap:
+      type: object
+      required: [ruta, actualizada, imagenes]
+      properties:
+        ruta: { type: string }
+        actualizada: { type: string, format: date-time }
+        imagenes: { type: array, items: { type: string } }
+    DocumentoDelPanel:
+      type: object
+      required: [id, titulo, descripcion, categoria, url, formato, tamanoBytes, soloProfesionales, activo, createdAt, productos, categorias]
+      properties:
+        productos: { type: array, items: { $ref: "#/components/schemas/Destino" } }
+        categorias: { type: array, items: { $ref: "#/components/schemas/Destino" } }
+        id: { type: string }
+        titulo: { type: string }
+        descripcion: { type: string, nullable: true }
+        categoria: { type: string }
+        url: { type: string }
+        formato: { type: string }
+        tamanoBytes: { type: integer, nullable: true }
+        soloProfesionales: { type: boolean }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Destino:
+      type: object
+      required: [id, nombre]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+    FormBanner:
+      type: object
+      required: [ubicacion, titulo]
+      properties:
+        ubicacion: { type: string }
+        etiqueta: { type: string }
+        titulo: { type: string }
+        bajada: { type: string }
+        enlace: { type: string }
+        textoEnlace: { type: string }
+        desde: { type: string, description: AAAA-MM-DD }
+        hasta: { type: string, description: AAAA-MM-DD }
+        orden: { type: string }
+        activo: { type: string, description: «on» si está marcado }
+        imagen: { type: string, format: binary }
+    FormPromo:
+      type: object
+      required: [medio, titulo, quienPaga]
+      properties:
+        medio: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        dias: { type: string }
+        quienPaga: { type: string }
+        vigenciaHasta: { type: string, description: AAAA-MM-DD }
+        orden: { type: string }
+        activo: { type: string, description: «on» si está marcado }
+        quitarImagen: { type: string, description: «on» si está marcado }
+        imagen: { type: string, format: binary }

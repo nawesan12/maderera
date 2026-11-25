@@ -1,3 +1,5 @@
+import { parsearImporte } from "@/lib/formato";
+
 /**
  * El arqueo, en palabras.
  *
@@ -22,4 +24,17 @@ export function nombreDeLaDiferencia(
 ): "sin diferencia" | "faltante" | "sobrante" {
   if (Math.abs(diferencia) <= TOLERANCIA_ARQUEO) return "sin diferencia";
   return diferencia > 0 ? "sobrante" : "faltante";
+}
+
+/**
+ * Lo tipeado en un campo de plata de la caja: el fondo, un ingreso o retiro,
+ * el efectivo contado. `null` si no se puede leer o es negativo.
+ *
+ * Los campos eran `type="number"` y se leían con `Number()`: «15.000», como se
+ * escribe acá, quedaba en $15 (comité final, M13). Se lee con la regla de los
+ * cobros (`parsearImporte`): el punto con tres cifras atrás es de miles.
+ */
+export function importeDeCaja(texto: string): number | null {
+  const n = parsearImporte(texto);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }

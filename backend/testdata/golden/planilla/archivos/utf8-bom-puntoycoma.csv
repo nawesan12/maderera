@@ -1,0 +1,13 @@
+﻿SKU;Producto;Medida;Categoria;Precio lista;Precio profesional
+FEN18;Fenólico 18 mm;2440 x 1220;Placas;84.500,50;80.275,48
+TIR23;"Tirante 2"" x 3""";3,05 m;Maderas;"12.345,67";11.111,10
+MDF;"MDF crudo, de 15 mm
+con salto adentro";1830 x 2600;Placas;$ 1.234;
+
+;;;;;
+PIN;Pino 1" x 4";;Maderas;1,234.56;1234.5
+CLA;Clavos;;Ferretería;  96.500  ;(1.500,00)
+SINPRECIO;Algo;;;abc;-
+;Fila sin código;;;100;200
+NEG;Negativo;;;-5;-0,001
+

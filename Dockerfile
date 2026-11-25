@@ -35,28 +35,15 @@ COPY scripts ./scripts
 RUN mkdir -p /datos/subidas /datos/privado && chown 1001:1001 /datos/subidas /datos/privado
 ENV HOME=/tmp
 USER 1001:1001
-CMD ["node_modules/.bin/drizzle-kit", "migrate"]
+# Las migraciones las hace `mjbj migrar` (goose). Este contenedor es para los
+# scripts de mudanza: `docker compose run --rm migrador npx tsx scripts/<x>.ts`.
+# Sin comando no hace nada: drizzle-kit migrate contra la base de goose
+# era una mina.
+CMD ["sh", "-c", "echo 'Las migraciones van con mjbj migrar. Pasá el script: docker compose run --rm migrador npx tsx scripts/<script>.ts' >&2; exit 1"]
 
 
 FROM deps AS build
 COPY . .
-
-# El build **necesita la base**, y conviene saberlo antes de que falle: Next
-# prerenderiza las páginas públicas —«Quiénes somos», sucursales, contacto— y
-# esas leen los ajustes del sitio, las sucursales y los avisos. Sin base, el
-# build no termina.
-#
-# En el servidor propio no es problema: la base corre en la misma máquina, así
-# que el build se hace contra ella por la red del host. El compose se encarga
-# de pasar la URL.
-#
-# La contraseña queda en el historial de esta imagen. Es aceptable porque la
-# imagen no sale de la máquina donde se construye; si alguna vez se publicara
-# en un registro, hay que pasar a `--secret`.
-ARG DATABASE_URL
-ARG DATABASE_SSL=off
-ENV DATABASE_URL=$DATABASE_URL
-ENV DATABASE_SSL=$DATABASE_SSL
 
 # Lo que se hornea en las páginas estáticas: `robots.txt` decide si se indexa
 # con `APP_ENV` y `SEO_INDEXAR`, y las canónicas y el `metadataBase` salen de
@@ -69,13 +56,12 @@ ENV APP_URL=$APP_URL
 ENV APP_ENV=$APP_ENV
 ENV SEO_INDEXAR=$SEO_INDEXAR
 
-# Better Auth se carga mientras se prerenderiza y, sin estas dos, llena el
-# registro del build de errores que no son: «falta el secreto», «falta la URL».
-# El secreto de acá es de mentira y **solo vive en esta etapa**: la imagen final
-# sale de `runner`, que no lo hereda, y el verdadero llega al arrancar por el
-# `env_file`. Nada de lo que se prerenderiza firma ni lee una sesión.
-ENV BETTER_AUTH_URL=$APP_URL
-ENV BETTER_AUTH_SECRET=solo-para-el-build-no-firma-nada-real-000000
+# La API de Go: lo público en caché (rubros, sucursales, el equipaje del
+# asistente) se arma en el build y sus datos salen de ahí. La pasa el compose
+# (loopback del servidor, como la base); en la imagen final la pisa el
+# `environment` del compose con la red interna.
+ARG API_URL
+ENV API_URL=$API_URL
 
 # El commit, para el identificador del build (ver `next.config.ts`). Adentro
 # del build no hay `.git`: lo pasa `scripts/desplegar.sh`.
@@ -111,5 +97,14 @@ EXPOSE 3000
 # `node` directo y no `npm start`: así es el proceso 1 del contenedor y recibe
 # el SIGTERM de `docker stop`. Next lo atiende solo —deja de aceptar pedidos,
 # termina los que están en curso y corre lo pendiente de `after()`— antes de
-# salir; el compose le da treinta segundos para eso.
-CMD ["node", "server.js"]
+# salir; el compose le da treinta segundos para eso. `exec` reemplaza al shell,
+# así que `node` sigue siendo el proceso 1.
+#
+# Antes de arrancar se borra la caché de datos (`fetch-cache`, lo de
+# `unstable_cache`), no la de imágenes. Next anota en memoria qué etiquetas se
+# revalidaron, pero los datos quedan en el volumen: al reiniciar, el proceso
+# nuevo no sabe nada de esas revalidaciones y vuelve a servir lo viejo —un
+# precio cambiado, una foto mudada— hasta que vence la red de seguridad. Lo
+# de la caché sale de Go, que responde en milisegundos: arrancar sin ella no
+# cuesta nada.
+CMD ["sh", "-c", "rm -rf .next/cache/fetch-cache && exec node server.js"]

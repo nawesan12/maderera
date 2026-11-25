@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { CircleHelp, LayoutDashboard, Settings2 } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { listarCortes } from "@/lib/dal/admin/cortes";
@@ -8,6 +8,9 @@ import { plural } from "@/components/admin/formato";
 import { BuscadorCortes } from "@/app/admin/cortes/buscador";
 import { TableroDeCortes } from "@/app/admin/cortes/vista";
 import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
+import { Marca } from "@/components/marca";
+import { MenuDelTaller } from "./menu-taller";
+import { AvisoSinAcceso } from "@/components/admin/aviso-sin-acceso";
 
 export const metadata: Metadata = {
   title: "Taller · Cola de corte",
@@ -48,20 +51,14 @@ export default async function TallerPage({
 
   return (
     <div className="panel panel-fondo flex min-h-screen flex-col text-[17px] text-foreground">
+      <Suspense fallback={null}>
+        <AvisoSinAcceso />
+      </Suspense>
       {/* El mismo encabezado que el panel —claro, con textura—. Estaba en
           `bg-sidebar`, el color del menú lateral: acá no hay menú, así que la
           barra entera quedaba negra y el título, negro encima. */}
-      <header className="textura flex h-[60px] shrink-0 items-center gap-3.5 border-b border-linea bg-background px-[18px]">
-        <span className="flex items-center gap-2.5">
-          <Image
-            src="/cropped-icon-180x180.png"
-            alt=""
-            width={30}
-            height={30}
-            className="rounded-lg"
-          />
-          <span className="text-[17px] font-semibold">Taller</span>
-        </span>
+      <header className="textura flex h-[60px] min-w-0 shrink-0 items-center gap-3.5 border-b border-linea bg-background px-[18px]">
+        <Marca tamano="panel" etiqueta="Taller" />
 
         {pendientes.length > 0 && (
           <span
@@ -72,28 +69,36 @@ export default async function TallerPage({
           </span>
         )}
 
-        <span className="tabular ml-auto hidden text-base text-texto-2 sm:block">
+        {/* El que empuja las acciones a la derecha: si lo llevaba el m², que
+            se esconde en el teléfono, el menú y «Volver al panel» quedaban
+            pegados a la marca (revisión del comité). */}
+        <span aria-hidden className="ml-auto" />
+
+        <span className="tabular hidden text-base text-texto-2 sm:block">
           {Math.round(superficie)} m² de placa por cortar
         </span>
 
-        <span className="text-base text-texto-2">{usuario.name}</span>
+        {/* En el teléfono el nombre no entra: es lo primero que se va. */}
+        <span className="hidden min-w-0 truncate text-base text-texto-2 sm:block">{usuario.name}</span>
+
+        <MenuDelTaller />
 
         <Link
           href="/admin/cortes/formato"
-          className="inline-flex h-11 items-center gap-2 rounded-[9px] border border-linea bg-card px-3.5 text-base font-medium transition-colors hover:bg-hundida"
+          className="hidden h-11 items-center gap-2 rounded-[9px] md:inline-flex border border-linea bg-card px-3.5 text-base font-medium transition-colors hover:bg-hundida"
         >
           <Settings2 className="h-5 w-5" />
-          <span className="hidden md:inline">Formato del archivo para la máquina</span>
+          <span>Formato del archivo para la máquina</span>
         </Link>
 
         {/* La guía, acá y no solo en el menú del panel: el aserradero no tiene
             panel detrás, así que este encabezado es todo lo que tiene. */}
         <Link
           href="/admin/ayuda/cortes-y-whatsapp"
-          className="inline-flex h-11 items-center gap-2 rounded-[9px] border border-linea bg-card px-3.5 text-base font-medium transition-colors hover:bg-hundida"
+          className="hidden h-11 items-center gap-2 rounded-[9px] md:inline-flex border border-linea bg-card px-3.5 text-base font-medium transition-colors hover:bg-hundida"
         >
           <CircleHelp className="h-5 w-5" />
-          <span className="hidden md:inline">Cómo se usa</span>
+          <span>Cómo se usa</span>
         </Link>
 
         {puedeVolverAlPanel && (
@@ -124,7 +129,7 @@ export default async function TallerPage({
             Antes esta pantalla no se actualizaba nunca: quien cortaba tenía que
             recargarla para enterarse. */}
         <RefrescarEnVivo canales={["taller"]} sinConexionCadaMs={60_000} />
-        <TableroDeCortes cortes={cortes} />
+        <TableroDeCortes cortes={cortes} soloMaquina={usuario.staffRole === "aserradero"} />
       </main>
     </div>
   );

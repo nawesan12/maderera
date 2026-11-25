@@ -1,0 +1,449 @@
+[
+ {
+  "nombre": "pedido_recibido",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando entra un pedido por la web.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, recibimos tu pedido {{pedido}}. Te avisamos por acá cuando esté listo. Si tenés alguna duda, respondé este mensaje.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "pedido",
+       "example": "PED-1207"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "pedido_preparando",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando el pedido pasa a Preparando.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, ya estamos preparando tu pedido {{pedido}}. Te escribimos apenas esté listo.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "pedido",
+       "example": "PED-1207"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "pedido_listo",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando el pedido queda listo para retirar.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, tu pedido {{pedido}} ya está listo para retirar en {{sucursal}}. El horario es {{horario}}. Si lo retira otra persona, avisanos por acá.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "pedido",
+       "example": "PED-1207"
+      },
+      {
+       "param_name": "sucursal",
+       "example": "Casa Central, Av. Juan B. Justo 4153"
+      },
+      {
+       "param_name": "horario",
+       "example": "de lunes a viernes de 8 a 16 y los sábados de 8 a 12"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "pedido_en_camino",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando el pedido sale con el flete.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, tu pedido {{pedido}} salió para la dirección de entrega. Si necesitás coordinar algo con el flete, respondé este mensaje.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "pedido",
+       "example": "PED-1207"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "pedido_entregado",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando se entrega el pedido.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, entregamos tu pedido {{pedido}}. Si algo no llegó como esperabas, contanos por acá y lo resolvemos.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "pedido",
+       "example": "PED-1207"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "corte_listo",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando el aserradero termina un trabajo de corte.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, tu trabajo de corte {{corte}} está terminado y listo para retirar en {{sucursal}}. Cualquier consulta, respondé este mensaje.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "corte",
+       "example": "COR-0412"
+      },
+      {
+       "param_name": "sucursal",
+       "example": "Aserradero"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "presupuesto_enviado",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Para mandar el PDF de un presupuesto que pidió el cliente.",
+  "componentes": [
+   {
+    "type": "HEADER",
+    "format": "DOCUMENT",
+    "example": {
+     "header_handle": [
+      "<se sube al crearla>"
+     ]
+    }
+   },
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, te mandamos el presupuesto {{presupuesto}} por {{total}} que nos pediste. Vale hasta el {{vence}}. Para confirmarlo o cambiar algo, respondé este mensaje.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "presupuesto",
+       "example": "PRE-0388"
+      },
+      {
+       "param_name": "total",
+       "example": "$ 412.500"
+      },
+      {
+       "param_name": "vence",
+       "example": "24/10/2026"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "documento_adjunto",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Para mandar una factura, un remito, un recibo, el resumen de cuenta o el plano de corte.",
+  "componentes": [
+   {
+    "type": "HEADER",
+    "format": "DOCUMENT",
+    "example": {
+     "header_handle": [
+      "<se sube al crearla>"
+     ]
+    }
+   },
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, te mandamos {{documento}} de tu compra en la maderera. Si tenés alguna duda, respondé este mensaje.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "documento",
+       "example": "el remito R-0001-00000452"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "recibo_emitido",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando se registra un pago y sale el recibo.",
+  "componentes": [
+   {
+    "type": "HEADER",
+    "format": "DOCUMENT",
+    "example": {
+     "header_handle": [
+      "<se sube al crearla>"
+     ]
+    }
+   },
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, registramos tu pago de {{importe}} y te mandamos el recibo {{recibo}}. Tu saldo en cuenta corriente quedó en {{saldo}}. Gracias.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "importe",
+       "example": "$ 150.000"
+      },
+      {
+       "param_name": "recibo",
+       "example": "REC-0042"
+      },
+      {
+       "param_name": "saldo",
+       "example": "$ 0"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "cheque_rechazado",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Cuando un cheque del cliente no se toma o lo rechaza el banco.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, el cheque {{cheque}} por {{importe}} no se pudo acreditar ({{motivo}}). El importe volvió a tu cuenta corriente. Escribinos por acá para ver cómo lo resolvemos.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "cheque",
+       "example": "Banco Provincia N.º 00123456"
+      },
+      {
+       "param_name": "importe",
+       "example": "$ 230.000"
+      },
+      {
+       "param_name": "motivo",
+       "example": "sin fondos"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "recordatorio_saldo",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Para recordarle a un cliente el saldo de su cuenta corriente.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, te recordamos que tu cuenta corriente tiene un saldo de {{saldo}} al {{fecha}}. Si ya lo pagaste, no hace falta que hagas nada. Para cualquier consulta, respondé este mensaje.",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      },
+      {
+       "param_name": "saldo",
+       "example": "$ 412.500"
+      },
+      {
+       "param_name": "fecha",
+       "example": "14/10/2026"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ },
+ {
+  "nombre": "retomar_conversacion",
+  "idioma": "es_AR",
+  "categoria": "UTILITY",
+  "uso": "Para contestar una consulta cuando pasaron más de 24 horas.",
+  "componentes": [
+   {
+    "type": "BODY",
+    "text": "Hola {{nombre}}, te escribimos por la consulta que nos hiciste. ¿Seguimos por acá?",
+    "example": {
+     "body_text_named_params": [
+      {
+       "param_name": "nombre",
+       "example": "Marta"
+      }
+     ]
+    }
+   },
+   {
+    "type": "FOOTER",
+    "text": "Maderera Juan B. Justo"
+   }
+  ],
+  "metaId": null,
+  "estado": "APPROVED",
+  "motivoRechazo": null,
+  "formatoParametros": "NAMED"
+ }
+]

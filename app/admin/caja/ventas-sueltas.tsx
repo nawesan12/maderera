@@ -12,7 +12,9 @@ interface VentaSuelta {
   branchId: string;
   sucursal: string | null;
   cliente: string;
-  total: string;
+  total: number;
+  /** La parte en efectivo: lo que entra al cajón (una venta mixta, solo eso). */
+  efectivo: number;
   cobradaAt: Date | null;
 }
 
@@ -23,7 +25,8 @@ interface TurnoElegible {
 }
 
 /**
- * Las ventas en efectivo que no cayeron en ningún turno.
+ * Las ventas con efectivo que no cayeron en ningún turno. En una venta mixta
+ * (tarjeta más efectivo) al cajón va solo la parte en efectivo.
  *
  * Pasa cuando el mostrador cobró sin conexión y no había ninguna caja abierta.
  * La venta se guardó igual —rechazarla habría sido perder plata ya cobrada y
@@ -54,9 +57,9 @@ export function VentasSueltas({
             {ventas.length} venta{ventas.length > 1 ? "s" : ""} en efectivo sin
             turno
           </h2>
+          {/* Se cobraron sin conexión con la caja cerrada. */}
           <p className="text-sm">
-            Se cobraron sin conexión con la caja cerrada. La plata está en el
-            cajón; falta decir en cuál.
+            La plata está en el cajón: falta decir en qué turno.
           </p>
         </div>
       </header>
@@ -90,13 +93,20 @@ export function VentasSueltas({
                     ? new Date(v.cobradaAt).toLocaleString("es-AR", {
                         dateStyle: "short",
                         timeStyle: "short",
+                        // La hora del local: en el servidor (UTC) salía tres horas corrida.
+                        timeZone: "America/Argentina/Buenos_Aires",
                       })
                     : "sin hora"}
                 </p>
               </div>
 
-              <span className="tabular shrink-0 text-base font-semibold">
-                {formatearMonto(Number(v.total))}
+              <span className="tabular shrink-0 text-right text-base font-semibold">
+                {formatearMonto(v.efectivo)}
+                {v.efectivo !== v.total && (
+                  <span className="block text-sm font-normal text-muted-foreground">
+                    en efectivo, de {formatearMonto(v.total)}
+                  </span>
+                )}
               </span>
 
               {suyos.length === 0 ? (

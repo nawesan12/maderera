@@ -9,22 +9,11 @@ import { ArrowLeft, Download, Flame, ListChecks, Map, Tags } from "lucide-react"
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
-import { obtenerCorte } from "@/lib/dal/admin/cortes";
-import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
-import {
-  cargoPorCorte,
-  cargoPorTapacanto,
-  metrosDeTapacanto,
-  tarifaDeCorte,
-} from "@/lib/cortes/tarifa";
-import {
-  calcularPlanoDeCorteSinTrabar,
-  leerAcomodoManual,
-} from "@/lib/cortes/plano";
+import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { AcomodoDelCorte } from "../acomodo";
-import { presupuestarCorte } from "@/lib/cortes/presupuesto";
-import { fraccionDePlaca, nombreDeLaMitad } from "@/lib/cortes/placa";
+import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto } from "@/lib/formato";
+import { formatearDecimal } from "@/lib/unidades";
 import { AccionesCorte } from "../acciones";
 import { CargarPasadas } from "../pasadas";
 import { SierraDelTrabajo } from "./sierra";
@@ -37,54 +26,17 @@ export default async function FichaCortePage({
 }) {
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const corte = await obtenerCorte(id);
+  // La ficha llega armada de Go (backend/internal/cortes): la tarifa según
+  // la categoría y la lista del cliente, el plano con el disco, lo fijado a
+  // mano y el motor con que nació el trabajo, y el presupuesto placa por
+  // placa (de la que sale más de la mitad se vende entera y el corte va sin
+  // cargo).
+  const ficha = await fichaDeCorte(id);
 
-  if (!corte) notFound();
+  if (!ficha) notFound();
+  const { corte, tarifa, cargo, metrosCanto, cargoCanto, plano, cuenta } = ficha;
 
   const totalPiezas = corte.piezas.reduce((s, p) => s + p.cantidad, 0);
-
-  // La tarifa depende del material y de la lista de quien encarga: un mayorista
-  // paga $996 la pasada donde el público paga $1.200.
-  // Por categoría primero —que es como se cargan las tarifas— y por la
-  // descripción después, que es lo único que hay si el material lo trajo el
-  // cliente y no salió del catálogo.
-  const tarifa = tarifaDeCorte(
-    await tarifasDeCorte(),
-    [corte.categoria ?? "", corte.material],
-    corte.priceListId ?? null,
-  );
-  const cargo = cargoPorCorte(tarifa, corte.pasadas);
-  // Los metros de tapacanto salen del despiece, con la cuenta de la planilla
-  // del taller; el pegado se cobra aparte del corte.
-  const metrosCanto = metrosDeTapacanto(corte.piezas);
-  const cargoCanto = cargoPorTapacanto(tarifa, metrosCanto);
-  /*
-   * El plano, que es de donde sale el precio.
-   *
-   * No se puede cobrar un corte sin ver cómo entra en la placa: de una placa de
-   * la que sale más de la mitad se vende la placa entera y el corte va sin
-   * cargo. Ver `lib/cortes/presupuesto.ts`.
-   */
-  const plano = await calcularPlanoDeCorteSinTrabar({
-    piezas: corte.piezas,
-    placaLargo: corte.medida.largo,
-    placaAncho: corte.medida.ancho,
-    // El disco de **este** trabajo, guardado al crearlo: cambiar el general en
-    // /admin/calculadoras ya no redibuja los planos viejos ni su precio.
-    anchoSierra: corte.anchoSierraMm,
-    // Lo que alguien corrigió a mano cuando cargó el trabajo.
-    fijadas: leerAcomodoManual(corte.acomodoManual),
-    // Con el motor con que nació el trabajo (ver `cutting_orders.motorPlano`).
-    busqueda: corte.motorPlano >= 2,
-  });
-  const cuenta = presupuestarCorte({
-    plano,
-    tarifa,
-    precioPorPlaca: corte.precioPlaca,
-    piezas: corte.piezas,
-    // De media placa se cobra media placa.
-    fraccion: fraccionDePlaca(corte.medida.mitad, corte.precioMediaPct ?? 50),
-  });
 
   // Terminado: el cliente tiene que enterarse para venir a buscarlo.
   // Solo para quien atiende el WhatsApp de la maderera (no el aserradero ni depósito).
@@ -220,15 +172,14 @@ export default async function FichaCortePage({
               pantalla de la máquina antes de arrancar. Ver docs/PTX.md. */}
           {plano.placas.length > 0 && (
             <div className="estado-marca flex flex-wrap items-center justify-between gap-3 border-b border-linea bg-[var(--estado-fondo)] px-5 py-3">
+              {/* El programa para la seccionadora todavía no se probó en la máquina del taller. */}
               <p className="max-w-2xl text-base">
-                <strong>En prueba:</strong> el programa para la seccionadora
-                todavía no se probó en la máquina del taller. Antes de cortar,
-                el operario tiene que abrirlo en WinCut y comparar el dibujo de
-                la pantalla con la hoja de corte.
+                <strong>En prueba:</strong> antes de cortar, compará el dibujo
+                en WinCut con la hoja de corte.
               </p>
               <a
                 href={`/api/cortes/${corte.id}/ptx`}
-                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current bg-card px-3.5 text-base font-medium transition-colors hover:bg-muted"
+                className="inline-flex min-h-11 max-w-full shrink-0 items-center gap-1.5 rounded-lg border border-current bg-card px-3.5 py-2 text-base font-medium transition-colors hover:bg-muted"
               >
                 <Download className="h-4 w-4" />
                 Programa para la máquina (.PTX) — prueba
@@ -285,7 +236,7 @@ export default async function FichaCortePage({
               )}
               {cuenta.subtotalCanto > 0 && (
                 <Renglon
-                  que={`${cuenta.metrosCanto.toFixed(2).replace(".", ",")} m de tapacanto`}
+                  que={`${formatearDecimal(cuenta.metrosCanto)} m de tapacanto`}
                   cuanto={cuenta.subtotalCanto}
                 />
               )}
@@ -341,12 +292,12 @@ export default async function FichaCortePage({
                 </li>
               ))}
             </ul>
+            {/* Lo que no sale en piezas se va entre estos sobrantes y lo que se
+                lleva la sierra en cada pasada. */}
             <p className="mt-2 text-sm text-muted-foreground">
-              Del material comprado, el{" "}
-              {Math.round(plano.aprovechadoTotal * 100)}% sale en piezas; el
-              resto se va entre estos sobrantes y los {formatearSierra(plano.anchoSierra)} que
-              se lleva la sierra en cada una de las {plano.pasadas}{" "}
-              {plano.pasadas === 1 ? "pasada" : "pasadas"}.
+              {Math.round(plano.aprovechadoTotal * 100)}% del material sale en
+              piezas · sierra de {formatearSierra(plano.anchoSierra)} ·{" "}
+              {plano.pasadas} {plano.pasadas === 1 ? "pasada" : "pasadas"}
             </p>
           </div>
 
@@ -363,7 +314,7 @@ export default async function FichaCortePage({
               placaAncho={plano.placaAncho}
               anchoSierra={plano.anchoSierra}
               busqueda={corte.motorPlano >= 2}
-              inicial={leerAcomodoManual(corte.acomodoManual)}
+              inicial={ficha.fijadas}
             />
           </div>
         </section>
@@ -373,7 +324,9 @@ export default async function FichaCortePage({
         <section className="tarjeta overflow-hidden">
           <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
             <h2 className="text-base font-medium">Despiece</h2>
-            <div className="flex items-center gap-4">
+            {/* Con flex-wrap: el resumen y los dos botones en un renglón no
+                entraban a 390 px y quedaban apretados (comité final). */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <p className="text-base text-muted-foreground">
                 {plural(corte.piezas.length, "medida")} · {totalPiezas} piezas
               </p>
@@ -411,7 +364,7 @@ export default async function FichaCortePage({
                 <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                   Cantidad
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
+                <th className="hidden px-4 py-3 text-right text-sm font-medium text-muted-foreground sm:table-cell">
                   Superficie
                 </th>
                 <th className="px-5 py-3 text-sm font-medium text-muted-foreground">
@@ -428,11 +381,13 @@ export default async function FichaCortePage({
                   <td className="tabular px-4 py-3.5 text-right text-base">
                     {pieza.cantidad}
                   </td>
-                  <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
-                    {(
+                  <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
+                    {formatearDecimal(
                       (pieza.largoMm * pieza.anchoMm * pieza.cantidad) /
-                      1_000_000
-                    ).toFixed(2)}{" "}
+                        1_000_000,
+                      2,
+                      { fijo: true },
+                    )}{" "}
                     m²
                   </td>
                   <td className="px-5 py-3.5 text-base text-muted-foreground">
@@ -459,8 +414,10 @@ export default async function FichaCortePage({
                 <td className="tabular px-4 py-4 text-right text-base font-medium">
                   {totalPiezas}
                 </td>
-                <td className="tabular px-4 py-4 text-right text-base font-medium">
-                  {superficie.toFixed(2)} m²
+                {/* Como su encabezado: escondida en el teléfono, o el total
+                    quedaba debajo de otra columna. */}
+                <td className="tabular hidden px-4 py-4 text-right text-base font-medium sm:table-cell">
+                  {formatearDecimal(superficie, 2, { fijo: true })} m²
                 </td>
                 <td />
               </tr>
@@ -500,7 +457,7 @@ export default async function FichaCortePage({
               <div className="mt-3 border-t pt-3">
                 <p className="text-base">
                   <span className="tabular font-medium">
-                    {metrosCanto.toFixed(2)} m
+                    {formatearDecimal(metrosCanto)} m
                   </span>{" "}
                   de tapacanto a pegar
                 </p>
@@ -554,19 +511,35 @@ export default async function FichaCortePage({
             </section>
           )}
 
-          {corte.customerId && (
-            <section className="tarjeta p-5">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Cliente
-              </h2>
+          <section className="tarjeta p-5">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Cliente
+            </h2>
+            {corte.customerId ? (
               <Link
                 href={`/admin/clientes/${corte.customerId}`}
                 className="text-base font-medium hover:text-brand-orange"
               >
                 {corte.cliente}
               </Link>
-            </section>
-          )}
+            ) : (
+              <p className="text-base font-medium">{corte.cliente}</p>
+            )}
+            {corte.telefono && (
+              <a
+                href={`tel:${corte.telefono.replace(/[^\d+]/g, "")}`}
+                className="tabular mt-1 block text-base text-muted-foreground hover:text-foreground"
+              >
+                {corte.telefono}
+              </a>
+            )}
+            {corte.retiraEl && (
+              <p className="mt-2 text-base">
+                Lo retira el{" "}
+                <strong className="tabular">{corte.retiraEl.split("-").reverse().join("/")}</strong>
+              </p>
+            )}
+          </section>
 
           {/* De qué venta salió. Sin esto, quien está parado frente a la
               seccionadora no puede saber si el pedido ya se cobró ni qué más
@@ -585,10 +558,6 @@ export default async function FichaCortePage({
             </section>
           )}
 
-          <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-            Las medidas están en milímetros y listas para exportar al optimizador
-            cuando se conecte la máquina.
-          </p>
         </aside>
       </div>
     </div>

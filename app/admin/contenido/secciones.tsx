@@ -3,7 +3,9 @@
 import { useActionState } from "react";
 import { Check } from "lucide-react";
 import { guardarAjuste, type EstadoContenido } from "./actions";
-import type { SiteSetting } from "@/lib/db/schema";
+import type { listarAjustes } from "@/lib/dal/admin/contenido";
+
+type SiteSetting = Awaited<ReturnType<typeof listarAjustes>>[number];
 
 const inicial: EstadoContenido = {};
 
@@ -18,7 +20,7 @@ export function Ajustes({ ajustes }: { ajustes: SiteSetting[] }) {
 
           <div className="min-w-[16rem] flex-1">
             <label htmlFor={`ajuste-${a.clave}`} className="block text-base font-medium">
-              {a.descripcion ?? a.clave}
+              {a.descripcion ?? a.clave.charAt(0).toUpperCase() + a.clave.slice(1).replace(/[-_.]/g, " ")}
             </label>
             <input
               id={`ajuste-${a.clave}`}

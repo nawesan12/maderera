@@ -92,9 +92,8 @@ de seguimiento se autoriza con un token aparte (`lib/seguimiento.ts`).
 | `npm test` | Tests (vitest) |
 | `npm run lint` | ESLint |
 | `npm run build` | Compilación de producción |
-| `npm run db:generate` | Genera la migración a partir del esquema |
-| `npm run db:migrate` | Aplica las migraciones |
-| `npm run db:studio` | Explorador de la base |
+| `npm run api:dev` | La API de Go (en el 8080) |
+| `npm run db:migrate` | Aplica las migraciones (goose, `backend/db/migraciones`) |
 | `npm run db:seed` | Siembra el catálogo de demostración |
 | `npm run db:seed-negocio` | Datos reales del cliente: emisor fiscal, puntos de venta, zonas de envío, descuentos por forma de pago y tarifas de corte |
 | `npm run db:seed-ventas` | Clientes, pedidos, presupuestos y costos de demostración |

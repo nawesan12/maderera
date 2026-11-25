@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
-import { urlAbsoluta } from "@/lib/seo";
+import { svgLogotipo, NARANJA_MARCA } from "@/lib/marca/logotipo";
+import { TONOS, marcaDePlaca, tamanoDelRubroEnOg, tonoDePlaca } from "@/lib/catalogo/placa";
 
 /**
  * La tarjeta que se ve al compartir un producto, una categoría o una sucursal.
@@ -23,37 +24,16 @@ import { urlAbsoluta } from "@/lib/seo";
 
 export const TAMANO = { width: 1200, height: 630 };
 
-const NARANJA = "#E8590C";
+// El naranja de la guía de marca (antes un #E8590C escrito a mano).
+const NARANJA = NARANJA_MARCA;
+
+/** El logotipo de la guía, en vectores: la marca no se escribe con otra letra. */
+const LOGO = `data:image/svg+xml;base64,${Buffer.from(svgLogotipo()).toString("base64")}`;
+
+export { fotoParaTarjeta } from "./foto";
 const CREMA = "#FBF7F0";
 const TINTA = "#1F1B16";
 const GRIS = "#6B6259";
-
-/**
- * Trae una foto para meterla en la tarjeta, o `null` si no se puede.
- *
- * El generador solo entiende JPEG, PNG y GIF: una foto subida en WebP —el
- * panel las acepta— rompería la imagen entera, así que se descarta y la
- * tarjeta sale sin foto. Lo mismo si tarda: una tarjeta sin foto es mejor que
- * una que no llega.
- */
-export async function fotoParaTarjeta(ruta: string | null | undefined): Promise<string | null> {
-  if (!ruta) return null;
-  try {
-    const respuesta = await fetch(urlAbsoluta(ruta), {
-      headers: { accept: "image/jpeg,image/png,image/gif;q=0.9" },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!respuesta.ok) return null;
-    const tipo = respuesta.headers.get("content-type")?.split(";")[0] ?? "";
-    if (!["image/jpeg", "image/png", "image/gif"].includes(tipo)) return null;
-    const datos = Buffer.from(await respuesta.arrayBuffer());
-    // Más de 4 MB no entra en el presupuesto del generador.
-    if (datos.byteLength > 4_000_000) return null;
-    return `data:${tipo};base64,${datos.toString("base64")}`;
-  } catch {
-    return null;
-  }
-}
 
 export async function tarjeta({
   antetitulo,
@@ -61,6 +41,7 @@ export async function tarjeta({
   detalle,
   pie,
   foto,
+  placa,
 }: {
   antetitulo: string;
   titulo: string;
@@ -68,9 +49,22 @@ export async function tarjeta({
   detalle?: string | null;
   pie: string;
   foto?: string | null;
+  /**
+   * Sin foto, la misma placa que dibuja el sitio (hallazgo 25): quien recibe
+   * el enlace ve lo mismo que va a encontrar al abrirlo. Va en el lugar de la
+   * foto; la veta queda afuera, el generador no entiende filtros de SVG.
+   */
+  placa?: { rubro: string; categoria: string; marca?: string | null } | null;
 }): Promise<Response> {
   const largo = titulo.length;
-  const cuerpo = foto ? (largo > 40 ? 50 : 60) : largo > 40 ? 60 : 72;
+  const conPanel = Boolean(foto || placa);
+  const cuerpo = conPanel ? (largo > 40 ? 50 : 60) : largo > 40 ? 60 : 72;
+  const tono = placa && !foto ? TONOS[tonoDePlaca(placa.categoria)].claro : null;
+  const linea = placa && !foto ? marcaDePlaca(placa.marca) : null;
+  // Con la placa a la izquierda, el antetítulo no repite lo que ya está
+  // estampado: era «MELAMINA» dos veces en la misma imagen.
+  const ante =
+    placa && !foto && antetitulo.trim().toLowerCase() === placa.rubro.trim().toLowerCase() ? "" : antetitulo;
 
   const png = new ImageResponse(
     (
@@ -96,29 +90,62 @@ export async function tarjeta({
           />
         )}
 
+        {!foto && placa && tono && (
+          <div
+            style={{
+              width: 520,
+              height: 630,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              padding: 52,
+              background: tono.fondo,
+              color: tono.texto,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ width: 64, height: 7, borderRadius: 4, background: NARANJA, display: "flex" }} />
+              {linea && <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: 5 }}>{linea}</div>}
+            </div>
+            <div
+              style={{
+                fontSize: tamanoDelRubroEnOg(placa.rubro),
+                fontWeight: 800,
+                lineHeight: 1,
+                textTransform: "uppercase",
+                display: "flex",
+              }}
+            >
+              {placa.rubro}
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             flex: 1,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            padding: foto ? "0 56px" : "0 72px",
+            padding: conPanel ? "0 56px" : "0 72px",
           }}
         >
+          {ante && (
+            <div
+              style={{
+                fontSize: 26,
+                fontWeight: 700,
+                letterSpacing: 2,
+                color: NARANJA,
+                textTransform: "uppercase",
+                marginBottom: 18,
+              }}
+            >
+              {ante}
+            </div>
+          )}
           <div
             style={{
-              fontSize: 26,
-              fontWeight: 700,
-              letterSpacing: 2,
-              color: NARANJA,
-              textTransform: "uppercase",
-            }}
-          >
-            {antetitulo}
-          </div>
-          <div
-            style={{
-              marginTop: 18,
               fontSize: cuerpo,
               fontWeight: 700,
               color: TINTA,
@@ -143,7 +170,8 @@ export async function tarjeta({
               color: GRIS,
             }}
           >
-            <span style={{ fontWeight: 700, color: TINTA }}>Maderera Juan B. Justo</span>
+            {/* eslint-disable-next-line @next/next/no-img-element -- es el generador de imágenes, no una página */}
+            <img src={LOGO} alt="Maderera Juan B. Justo" width={192} height={37} style={{ width: 192, height: 37 }} />
             <span style={{ color: NARANJA }}>·</span>
             <span>{pie}</span>
           </div>

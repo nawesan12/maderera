@@ -55,21 +55,21 @@ export function NuevaConversacion({ onCerrar }: { onCerrar: () => void }) {
         <button
           type="submit"
           disabled={pendiente}
-          className="inline-flex h-10 shrink-0 items-center rounded-lg bg-brand-orange px-3 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          className="inline-flex h-10 shrink-0 items-center rounded-lg bg-accion px-3 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : "Abrir"}
         </button>
       </div>
 
+      {/* Se acepta con o sin 0, 15 o +54. Si nunca escribió, el primer mensaje tiene que ser uno preparado. */}
       <p className="text-sm text-muted-foreground">
-        Como lo tengas: con o sin 0, 15 o +54. Sin característica se toma la de Mar del Plata. Si nunca escribió,
-        el primer mensaje tiene que ser uno preparado.
+        Sin característica se toma la de Mar del Plata.
       </p>
 
       {estado.error && (
         <p
           role="alert"
-          className="flex items-start gap-2 text-base text-red-700"
+          className="flex items-start gap-2 text-base text-saldo-debe"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {estado.error}

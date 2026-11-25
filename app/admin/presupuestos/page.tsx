@@ -1,14 +1,19 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { CalendarClock, ClipboardList, Plus, Timer } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Button } from "@/components/ui/button";
 import {
   AcentoEstado,
   EtiquetaEstado,
-  estiloDeEstado,
 } from "@/components/admin/etiqueta-estado";
 import { FiltroEstado } from "@/components/admin/filtro-estado";
 import { GrupoListado } from "@/components/admin/grupo";
+import {
+  leerPagina,
+  Paginador,
+  POR_PAGINA,
+} from "@/components/admin/paginador";
 import {
   fechaCorta,
   haceCuanto,
@@ -19,7 +24,9 @@ import {
   listarPresupuestos,
   type PresupuestoListado,
 } from "@/lib/dal/admin/ventas";
-import { AccionesPresupuesto } from "./acciones";
+import { AccionesPresupuesto, type ZonaParaPedido } from "./acciones";
+import { zonasParaPedido } from "./zonas";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 
 const ESTADOS = {
   todos: "Todos",
@@ -31,7 +38,11 @@ const ESTADOS = {
   enviado: "Enviados",
   aceptado: "Aceptados",
   rechazado: "Rechazados",
+  cerrados: "Cerrados",
 };
+
+/** Los estados que todavía esperan algo (el «abiertos» de Go). */
+const ABIERTOS = new Set(["abiertos", "pendiente", "revision", "enviado"]);
 
 const ORIGEN: Record<string, string> = {
   sitio: "Pedido desde el sitio",
@@ -39,39 +50,95 @@ const ORIGEN: Record<string, string> = {
   mostrador: "Mostrador",
   telefono: "Por teléfono",
   express: "Express de un profesional",
+  whatsapp: "Por WhatsApp",
 };
 
-const SUCURSALES_FILTRO = {
-  todos: "Las dos sucursales",
-  "casa-central": "Casa Central",
-  aserradero: "Aserradero (Canosa)",
-};
 
+
+/**
+ * Los presupuestos, de a páginas (tanda T8): se acumulan sin tope y la
+ * pantalla los traía todos.
+ *
+ * Sin filtro de estado se piden dos listas, cada una de a 30 y con su propio
+ * parámetro de página: lo que espera respuesta (`espera`), por urgencia, y
+ * los cerrados (`pagina`), del más nuevo al más viejo. «Esperando respuesta»
+ * venía entero con el argumento de que son pocos, y no lo eran: los enviados
+ * sin contestar se juntaban para siempre (ahora la tarea diaria los vence).
+ * Con un estado elegido, una sola lista paginada. Las cantidades y la plata
+ * del encabezado son de todos, no de la página: las suma Go.
+ */
 export default async function PresupuestosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; estado?: string; sucursal?: string }>;
+  searchParams: Promise<{
+    buscar?: string;
+    estado?: string;
+    sucursal?: string;
+    pagina?: string;
+    espera?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const presupuestos = await listarPresupuestos({
-    busqueda: params.buscar,
+  const pagina = leerPagina(params.pagina);
+  const estado = params.estado && params.estado !== "todos" ? params.estado : undefined;
+  const filtros = { busqueda: params.buscar, sucursal: params.sucursal };
+  const dosListas = estado === undefined;
+  // Con las dos listas, la de «Esperando respuesta» va por `espera`.
+  const paginaAbiertos = dosListas ? leerPagina(params.espera) : pagina;
+  const de = (n: number) => ({ limite: POR_PAGINA, desplazamiento: (n - 1) * POR_PAGINA });
+
+  const [abiertos, cerrados, zonas, sucursales] = await Promise.all([
+    dosListas || ABIERTOS.has(estado)
+      ? listarPresupuestos({ ...filtros, estado: estado ?? "abiertos" }, de(paginaAbiertos))
+      : null,
+    dosListas || !ABIERTOS.has(estado)
+      ? listarPresupuestos({ ...filtros, estado: estado ?? "cerrados" }, de(pagina))
+      : null,
+    zonasParaPedido(),
+    listarSucursalesPublicas(),
+  ]);
+
+  // Una página que se pasó del final (un enlace viejo, un filtro que achicó
+  // la lista) lleva a la última que existe, en cada lista.
+  const ultima = (l: { total: number } | null) => Math.max(1, Math.ceil((l?.total ?? 0) / POR_PAGINA));
+  const deMas = (l: { total: number; filas: unknown[] } | null, n: number) =>
+    l !== null && l.filas.length === 0 && l.total > 0 && n > ultima(l);
+  const listaDePagina = cerrados ?? abiertos;
+  if (deMas(listaDePagina, pagina) || (dosListas && deMas(abiertos, paginaAbiertos))) {
+    const q = new URLSearchParams(
+      Object.entries({ buscar: params.buscar, estado: params.estado, sucursal: params.sucursal }).filter(
+        (e): e is [string, string] => Boolean(e[1]),
+      ),
+    );
+    const p = Math.min(pagina, ultima(listaDePagina));
+    if (p > 1) q.set("pagina", String(p));
+    if (dosListas) {
+      const e = Math.min(paginaAbiertos, ultima(abiertos));
+      if (e > 1) q.set("espera", String(e));
+    }
+    redirect(`/admin/presupuestos${q.size > 0 ? `?${q}` : ""}`);
+  }
+
+  const total = (abiertos?.total ?? 0) + (cerrados?.total ?? 0);
+  const vigentes = {
+    buscar: params.buscar,
     estado: params.estado,
     sucursal: params.sucursal,
-  });
-
-  // Lo que espera una respuesta va arriba y separado: es lo que hay que atender.
-  const abiertos = presupuestos.filter((p) => estiloDeEstado(p.estado).abierto);
-  const cerrados = presupuestos.filter((p) => !estiloDeEstado(p.estado).abierto);
-  const montoAbierto = abiertos.reduce((s, p) => s + p.total, 0);
+    pagina: pagina > 1 ? String(pagina) : undefined,
+    espera: dosListas && paginaAbiertos > 1 ? String(paginaAbiertos) : undefined,
+  };
+  const paginador = (
+    <Paginador pagina={pagina} total={listaDePagina?.total ?? 0} params={vigentes} />
+  );
 
   return (
     <div>
       <EncabezadoPanel
         titulo="Presupuestos"
-        detalle={
-          abiertos.length > 0
-            ? `${plural(abiertos.length, "presupuesto")} esperando respuesta por ${moneda.format(montoAbierto)}`
-            : `${plural(presupuestos.length, "presupuesto")} en total`
+        resumen={
+          abiertos && abiertos.total > 0
+            ? `${plural(abiertos.total, "presupuesto")} esperando respuesta por ${moneda.format(abiertos.monto)}`
+            : `${plural(total, "presupuesto")} en total`
         }
       >
         {/* Lo que entra por teléfono se carga acá: hasta ahora un presupuesto
@@ -91,47 +158,58 @@ export default async function PresupuestosPage({
         extra={{
           parametro: "sucursal",
           etiqueta: "Filtrar por sucursal",
-          opciones: SUCURSALES_FILTRO,
+          // De la base: una sucursal nueva aparece sola.
+          opciones: { todos: "Todas", ...Object.fromEntries(sucursales.map((x) => [x.slug, x.nombre])) },
           actual: params.sucursal ?? "todos",
         }}
       />
 
-      {presupuestos.length === 0 ? (
+      {total === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
           <ClipboardList className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-base font-medium">No hay presupuestos que mostrar</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá con otro filtro o buscá por número.
-          </p>
         </div>
       ) : (
         <>
-          <GrupoListado
-            titulo="Esperando respuesta"
-            cantidad={abiertos.length}
-            detalle={
-              abiertos.length > 0 ? moneda.format(montoAbierto) : undefined
-            }
-            destacado
-          >
-            {abiertos.map((p) => (
-              <Tarjeta key={p.id} presupuesto={p} />
-            ))}
-          </GrupoListado>
+          {abiertos && (
+            <GrupoListado
+              titulo="Esperando respuesta"
+              cantidad={abiertos.total}
+              detalle={abiertos.total > 0 ? moneda.format(abiertos.monto) : undefined}
+              destacado
+            >
+              {abiertos.filas.map((p) => (
+                <Tarjeta key={p.id} presupuesto={p} zonas={zonas} />
+              ))}
+              {cerrados ? (
+                <Paginador
+                  pagina={paginaAbiertos}
+                  total={abiertos.total}
+                  params={vigentes}
+                  nombre="espera"
+                />
+              ) : (
+                paginador
+              )}
+            </GrupoListado>
+          )}
 
-          <GrupoListado
-            titulo="Cerrados"
-            cantidad={cerrados.length}
-            vacio={
-              <p className="px-1 text-base text-texto-2">
-                Ninguno cerrado todavía.
-              </p>
-            }
-          >
-            {cerrados.map((p) => (
-              <Tarjeta key={p.id} presupuesto={p} apagado />
-            ))}
-          </GrupoListado>
+          {cerrados && (
+            <GrupoListado
+              titulo="Cerrados"
+              cantidad={cerrados.total}
+              vacio={
+                <p className="px-1 text-base text-texto-2">
+                  Ninguno cerrado todavía.
+                </p>
+              }
+            >
+              {cerrados.filas.map((p) => (
+                <Tarjeta key={p.id} presupuesto={p} zonas={zonas} apagado />
+              ))}
+              {paginador}
+            </GrupoListado>
+          )}
         </>
       )}
     </div>
@@ -140,15 +218,19 @@ export default async function PresupuestosPage({
 
 function Tarjeta({
   presupuesto: p,
+  zonas,
   apagado = false,
 }: {
   presupuesto: PresupuestoListado;
+  zonas: ZonaParaPedido[];
   apagado?: boolean;
 }) {
   return (
     <article
       className={`tarjeta tarjeta-activa relative overflow-hidden ${
-        apagado ? "opacity-75" : ""
+        // Fondo apagado y no opacidad: con opacity-75 el texto (y las
+        // insignias) caían por debajo de 4,5:1.
+        apagado ? "bg-sitio-alt shadow-none" : ""
       }`}
     >
       <AcentoEstado estado={p.estado} />
@@ -198,41 +280,61 @@ function Tarjeta({
             <p className="text-base text-muted-foreground">{p.empresa}</p>
           )}
 
+          {/* Cada dato con su «·» pegado: sueltos, a 390 px el punto
+              quedaba solo al principio o al final del renglón (comité
+              final). */}
           <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base text-muted-foreground">
-            <Link
-              href={`/admin/presupuestos/${p.id}`}
-              className="tabular font-medium text-foreground hover:text-brand-orange"
-            >
-              {p.numero}
-            </Link>
-            <span aria-hidden="true">·</span>
-            <span>{plural(p.items, "producto")}</span>
-            <span aria-hidden="true">·</span>
-            <span>{ORIGEN[p.origen] ?? p.origen}</span>
-            {/* De qué sucursal salió: la central y Canosa presupuestan las
-                dos, y la clienta pidió que se distingan. */}
-            {p.sucursal && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="font-medium text-foreground">{p.sucursal}</span>
-              </>
-            )}
-            <span aria-hidden="true">·</span>
-            <span>{haceCuanto(p.createdAt)}</span>
-            {p.validoHasta && !p.vencido && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>vale hasta {fechaCorta.format(p.validoHasta)}</span>
-              </>
-            )}
+            {[
+              <Link
+                key="numero"
+                href={`/admin/presupuestos/${p.id}`}
+                className="tabular font-medium text-foreground hover:text-brand-orange"
+              >
+                {p.numero}
+              </Link>,
+              <span key="items">{plural(p.items, "producto")}</span>,
+              <span key="origen">{ORIGEN[p.origen] ?? p.origen}</span>,
+              // De qué sucursal salió: la central y Canosa presupuestan las
+              // dos, y la clienta pidió que se distingan.
+              p.sucursal ? (
+                <span key="sucursal" className="font-medium text-foreground">
+                  {p.sucursal}
+                </span>
+              ) : null,
+              <span key="hace">{haceCuanto(p.createdAt)}</span>,
+              p.validoHasta && !p.vencido ? (
+                <span key="vale">vale hasta {fechaCorta.format(p.validoHasta)}</span>
+              ) : null,
+            ]
+              .filter((dato) => dato !== null)
+              .map((dato, i, datos) => (
+                <span key={i} className="whitespace-nowrap">
+                  {dato}
+                  {i < datos.length - 1 && (
+                    <span aria-hidden="true" className="ml-2">
+                      ·
+                    </span>
+                  )}
+                </span>
+              ))}
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        {/* Con flex-wrap: en el teléfono los botones bajan abajo del total
+            en vez de quedar cortados por el borde. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p className="tabular text-xl font-semibold">
             {moneda.format(p.total)}
           </p>
-          <AccionesPresupuesto id={p.id} estado={p.estado} />
+          <AccionesPresupuesto
+            id={p.id}
+            numero={p.numero}
+            estado={p.estado}
+            total={p.total}
+            pedido={p.pedidoId && p.numeroPedido ? { id: p.pedidoId, numero: p.numeroPedido } : null}
+            zonas={zonas}
+            conCliente={!!p.customerId}
+          />
         </div>
       </div>
     </article>

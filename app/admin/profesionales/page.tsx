@@ -1,3 +1,4 @@
+import { enlaceDeWhatsapp } from "@/lib/formato";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HardHat, Percent, Tags } from "lucide-react";
@@ -14,6 +15,7 @@ import {
   resumenProfesionales,
   type SolicitudListada,
 } from "@/lib/dal/admin/profesionales";
+import { LinkDeAcceso } from "./link-acceso";
 import { ResolverSolicitud } from "./resolver";
 
 export const metadata: Metadata = { title: "Profesionales" };
@@ -50,7 +52,6 @@ export default async function ProfesionalesAdminPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Profesionales"
-        detalle="Quién pide acceso, quién ya lo tiene y con qué precios compra."
       >
         <Link
           href="/admin/precios"
@@ -112,14 +113,8 @@ export default async function ProfesionalesAdminPage() {
           <h2 className="mt-4 text-lg font-medium">
             Todavía no pidió acceso nadie
           </h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Las solicitudes entran desde{" "}
-            <Link href="/profesionales" className="underline">
-              la página de profesionales
-            </Link>
-            . También se puede marcar a un cliente como profesional desde su
-            ficha.
-          </p>
+          {/* Las solicitudes entran desde /profesionales. También se puede marcar
+              a un cliente como profesional desde su ficha. */}
         </section>
       )}
 
@@ -179,7 +174,18 @@ function Fila({
             {solicitud.localidad ? ` · ${solicitud.localidad}` : ""}
           </p>
           <p className="text-base text-muted-foreground">
-            {solicitud.email} · {solicitud.telefono}
+            {solicitud.email} ·{" "}
+            {/* El teléfono abre WhatsApp: es por donde se le contesta. */}
+            {solicitud.telefono ? (
+              <a
+                href={enlaceDeWhatsapp(solicitud.telefono, `Hola ${solicitud.nombre}, te escribimos de Maderera Juan B. Justo por tu solicitud.`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tabular underline-offset-4 hover:text-foreground hover:underline"
+              >
+                {solicitud.telefono}
+              </a>
+            ) : null}
             {solicitud.matricula ? ` · matrícula ${solicitud.matricula}` : ""}
           </p>
 
@@ -243,6 +249,7 @@ function Fila({
               Ver ficha
             </Link>
           )}
+          {solicitud.estado === "aprobada" && <LinkDeAcceso id={solicitud.id} />}
         </div>
       </div>
 

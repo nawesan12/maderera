@@ -162,13 +162,17 @@ export function Pizarra({
         <label htmlFor="receptorDocumento" className="block font-medium">
           DNI{" "}
           <span className="font-normal text-muted-foreground">
-            {documentoSugerido ? "confirmá que es el tuyo" : "(opcional)"}
+            {/* Llega enmascarado («•••678», entregas.RemitoPorToken): el
+                enlace va por correo. Vacío conserva el del mostrador. */}
+            {documentoSugerido
+              ? `termina en ${documentoSugerido.replace(/^•+/, "")}; escribilo solo si no es el tuyo`
+              : "(opcional)"}
           </span>
         </label>
         <input
           id="receptorDocumento"
           name="receptorDocumento"
-          defaultValue={documentoSugerido ?? ""}
+          placeholder={documentoSugerido ?? undefined}
           inputMode="numeric"
           className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
         />
@@ -214,7 +218,7 @@ export function Pizarra({
       <button
         type="submit"
         disabled={enviando || !hayTrazo}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
+        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
       >
         {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
         Confirmar la entrega

@@ -128,9 +128,9 @@ export function AccionesDeOrden({
             Anular
           </button>
         </div>
+        {/* Lo ya recibido no se toca: la mercadería está en el depósito. */}
         <p className="mt-2 text-sm text-muted-foreground">
-          Lo ya recibido no se toca: la mercadería está en el depósito. Anular
-          solo saca de &quot;en camino&quot; lo que falta.
+          Anular solo saca de &quot;en camino&quot; lo que falta.
         </p>
       </details>
     </section>

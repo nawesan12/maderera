@@ -73,10 +73,10 @@ export default async function GastosPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Gastos"
-        detalle={
+        resumen={
           total > 0
-            ? `${formatearMonto(total)} en ${etiqueta}.`
-            : `Sin gastos anotados en ${etiqueta}.`
+            ? `${formatearMonto(total)} en ${etiqueta}`
+            : `Sin gastos en ${etiqueta}`
         }
       >
         <SelectorDeMes actual={periodo.clave} />
@@ -155,6 +155,7 @@ export default async function GastosPage({
           id: s.id,
           nombre: s.nombre,
           conTurno: Boolean(s.turnoAbierto),
+          deLaSesion: s.deLaSesion,
         }))}
         proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
       />
@@ -164,7 +165,6 @@ export default async function GastosPage({
           <Vacio
             icono={Receipt}
             titulo={`Sin gastos en ${etiqueta}`}
-            detalle="Los gastos de otro mes se miran cambiando el mes de arriba."
           />
         ) : (
           <div className="overflow-x-auto">

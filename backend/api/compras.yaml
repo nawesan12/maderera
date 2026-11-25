@@ -1,0 +1,1212 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Compras
+  version: "1"
+  description: |
+    El circuito de compras del panel: proveedores y su cuenta corriente,
+    órdenes de compra, recepciones de mercadería (mueven el stock y el costo
+    promedio), facturas de compra, pagos con retenciones y sus certificados,
+    el libro IVA compras, las retenciones sufridas (las lecturas), los gastos
+    y la lista de precios de cada proveedor.
+
+    Los formularios llegan como los armaba el panel (un objeto libre) y se
+    validan en Go con las mismas reglas y mensajes que los esquemas de zod de
+    las acciones: faltar, venir en null o venir con otro tipo dan el mismo
+    error que daban. Un NaN de JavaScript viaja como null.
+
+    Leer la lista de proveedores, su ficha y sus condiciones: cualquier
+    persona del panel (como el TS). Todo lo demás: quien entra a
+    /admin/compras, /admin/proveedores y /admin/recepciones (el admin).
+paths:
+  /api/v1/admin/proveedores:
+    get:
+      operationId: ListarProveedores
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: estado, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Los vivos, por nombre, con el saldo (positivo es lo que les debemos)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ProveedorListado" } }
+    post:
+      operationId: GuardarProveedor
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/proveedores/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: FichaDeProveedor
+      responses:
+        "200":
+          description: La ficha con los últimos 200 movimientos, cada uno con su saldo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Proveedor" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/proveedores/{id}/baja:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: DarDeBajaProveedor
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/proveedores/{id}/movimientos:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: RegistrarMovimientoDeProveedor
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/proveedores/{id}/condiciones:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: CondicionesDelProveedor
+      responses:
+        "200":
+          description: Las condiciones de pago, por plazo
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, modalidad, plazoDias, bonificacionPct, detalle, activo]
+                  properties:
+                    id: { type: string }
+                    modalidad: { type: string }
+                    plazoDias: { type: integer }
+                    bonificacionPct: { type: string }
+                    detalle: { type: string, nullable: true }
+                    activo: { type: boolean }
+    post:
+      operationId: GuardarCondicion
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/proveedores/{id}/condiciones/{condicion}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: condicion, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: BorrarCondicion
+      responses:
+        "204": { description: Borrada }
+  /api/v1/admin/proveedores/{id}/convenios:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    put:
+      operationId: GuardarConvenios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [convenios]
+              additionalProperties: false
+              properties:
+                convenios: { type: string }
+      responses:
+        "204": { description: Guardados }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/proveedores/{id}/perfil-lista:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: PerfilDeLista
+      responses:
+        "200":
+          description: El perfil de la planilla del proveedor, o null si todavía no hay
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PerfilDeLista" }
+  /api/v1/admin/proveedores/{id}/facturas-con-saldo:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: FacturasConSaldo
+      responses:
+        "200":
+          description: Las facturas con algo por pagar, de la más vieja a la más nueva
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, numero, tipo, fechaEmision, fechaVencimiento, total, imputado, saldo, netoSinIva]
+                  properties:
+                    id: { type: string }
+                    numero: { type: string }
+                    tipo: { type: string }
+                    fechaEmision: { type: string, format: date-time }
+                    fechaVencimiento: { type: string, format: date-time, nullable: true }
+                    total: { type: number, format: double }
+                    imputado: { type: number, format: double }
+                    saldo: { type: number, format: double }
+                    netoSinIva:
+                      type: number
+                      format: double
+                      description: neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
+  /api/v1/admin/proveedores/{id}/acumulado-del-mes:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: AcumuladoDelMes
+      responses:
+        "200":
+          description: Lo ya retenido este mes, por régimen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [codigoRegimen, base, retenido]
+                  properties:
+                    codigoRegimen: { type: string }
+                    base: { type: string }
+                    retenido: { type: string }
+  /api/v1/admin/compras/proveedores-activos:
+    get:
+      operationId: ProveedoresParaElegir
+      responses:
+        "200":
+          description: Los activos, para los selectores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, cuit, condicionIva, diasPago, condicionGanancias, exentoGananciasHasta]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    cuit: { type: string, nullable: true }
+                    condicionIva: { type: string }
+                    diasPago: { type: integer }
+                    condicionGanancias: { type: string, nullable: true, enum: [inscripto, no_inscripto, exento, null] }
+                    exentoGananciasHasta: { type: string, nullable: true, description: Último día de la exención (YYYY-MM-DD) }
+  /api/v1/admin/compras/lista-proveedor/vista-previa:
+    post:
+      operationId: VistaPreviaDeLista
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archivo: { type: string, format: binary }
+                supplierId: { type: string }
+                columnaCodigo: { type: string }
+                columnaPrecio: { type: string }
+                columnaDescripcion: { type: string }
+                precioEsNeto: { type: string }
+                margenPorcentaje: { type: string }
+      responses:
+        "200":
+          description: Qué pasaría (o el error, con las columnas del archivo)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VistaPreviaDeLista" }
+  /api/v1/admin/compras/lista-proveedor/aplicar:
+    post:
+      operationId: AplicarLista
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes:
+    get:
+      operationId: ListarOrdenesDeCompra
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 60 } }
+      responses:
+        "200":
+          description: Las últimas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OrdenListada" } }
+    post:
+      operationId: CrearOrdenDeCompra
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: OrdenDeCompra
+      responses:
+        "200":
+          description: La orden con sus renglones
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Orden" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}/enviada:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: MarcarOrdenEnviada
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularOrdenDeCompra
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/ordenes/{id}/recibir:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: RecibirDeLaOrden
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [numeroRemito]
+              additionalProperties: false
+              properties:
+                numeroRemito: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/por-llegar:
+    get:
+      operationId: LoQueEstaPorLlegar
+      parameters:
+        - { name: sucursal, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Lo pedido en órdenes vivas que todavía no llegó, por variante
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [variantId, descripcion, pendiente, proximaEntrega]
+                  properties:
+                    variantId: { type: string }
+                    descripcion: { type: string }
+                    pendiente: { type: string }
+                    proximaEntrega: { type: string, format: date-time, nullable: true }
+  /api/v1/admin/compras/mercaderia:
+    get:
+      operationId: BuscarMercaderia
+      parameters:
+        - { name: texto, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: ids, in: query, description: ids separados por coma (hasta 40), schema: { type: string } }
+      responses:
+        "200":
+          description: Las variantes con lo que cuestan hoy
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [variantId, producto, variante, sku, unidad, alicuotaIva, costoActual]
+                  properties:
+                    variantId: { type: string }
+                    producto: { type: string }
+                    variante: { type: string }
+                    sku: { type: string }
+                    unidad: { type: string }
+                    alicuotaIva: { type: string }
+                    costoActual: { type: string, nullable: true }
+  /api/v1/admin/recepciones:
+    get:
+      operationId: ListarRecepciones
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+      responses:
+        "200":
+          description: Las últimas, con el neto (líneas más flete)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/RecepcionListada" } }
+    post:
+      operationId: CrearRecepcion
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/recepciones/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: Recepcion
+      responses:
+        "200":
+          description: La recepción con la cuenta del costo de cada línea
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Recepcion" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/recepciones/{id}/confirmar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: ConfirmarRecepcion
+      responses:
+        "200":
+          description: Entró el stock, se mezcló el costo y subió la deuda
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lineas, neto]
+                properties:
+                  lineas: { type: integer }
+                  neto: { type: number, format: double }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/recepciones/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularRecepcion
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "204": { description: Anulada (el stock vuelve, el costo no se toca) }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/facturas:
+    get:
+      operationId: ListarFacturasDeCompra
+      description: |
+        «pendiente» trae todas las que falta pagar, por vencimiento;
+        «pagadas» y «todas» van de a páginas, las más nuevas primero
+        («todas» incluye las anuladas). La deuda (impago) se suma en la base
+        sobre todas las impagas vivas, con el filtro de proveedor y sin el de
+        fechas.
+      parameters:
+        - { name: estado, in: query, schema: { type: string, enum: [pendiente, pagadas, todas], default: todas } }
+        - { name: proveedor, in: query, schema: { type: string } }
+        - { name: desde, in: query, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, schema: { type: string, format: date-time } }
+        - { name: pagina, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limite, in: query, description: por página, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+      responses:
+        "200":
+          description: La página pedida y la deuda entera
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [facturas, impago, impagas, vencidas, impagoVencido, hayMas]
+                properties:
+                  facturas:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, tipo, puntoVenta, numero, fechaEmision, fechaVencimiento, proveedor, supplierId, neto, total, pagado, anuladaAt]
+                      properties:
+                        id: { type: string }
+                        tipo: { type: string }
+                        puntoVenta: { type: integer }
+                        numero: { type: integer }
+                        fechaEmision: { type: string, format: date-time }
+                        fechaVencimiento: { type: string, format: date-time, nullable: true }
+                        proveedor: { type: string }
+                        supplierId: { type: string }
+                        neto: { type: string }
+                        total: { type: string }
+                        pagado: { type: string }
+                        anuladaAt: { type: string, format: date-time, nullable: true }
+                  impago: { type: number, format: double }
+                  impagas: { type: integer }
+                  vencidas: { type: integer }
+                  impagoVencido: { type: number, format: double }
+                  hayMas: { type: boolean }
+    post:
+      operationId: CargarFacturaDeCompra
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/facturas/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: FichaDeFacturaDeCompra
+      responses:
+        "200":
+          description: La factura con sus importes, la mercadería de la recepción que cubre y los pagos que la cancelaron
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FichaDeFactura" }
+        "404": { $ref: "#/components/responses/Problema" }
+    put:
+      operationId: CorregirFacturaDeCompra
+      description: |
+        Los mismos campos que el alta, más el motivo. No cambia el proveedor
+        ni la recepción; si el total cambia, la diferencia va a la cuenta del
+        proveedor como un ajuste.
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/facturas/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularFacturaDeCompra
+      description: |
+        Devuelve lo que la factura cargó en la cuenta del proveedor, la saca
+        del libro IVA, deja a cuenta los pagos que la cancelaban y libera la
+        recepción vinculada y el número.
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/libro-iva:
+    get:
+      operationId: LibroIvaCompras
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Los comprobantes del período (las notas de crédito en negativo) y los totales
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [filas, totales]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/RenglonLibro" } }
+                  totales: { $ref: "#/components/schemas/TotalesLibro" }
+  /api/v1/admin/compras/libro-iva/csv:
+    get:
+      operationId: LibroIvaComprasCsv
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+      responses:
+        "200":
+          description: El libro en CSV para Excel en español
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/compras/pagos:
+    get:
+      operationId: ListarPagosAProveedores
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 60 } }
+      responses:
+        "200":
+          description: Los pagos, con lo retenido y las facturas que cubrieron
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PagoListado" } }
+    post:
+      operationId: PagarAProveedor
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200":
+          description: El mensaje y los certificados emitidos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, id, certificados]
+                properties:
+                  ok: { type: string }
+                  id: { type: string }
+                  aviso: { type: string, description: si el efectivo no pudo salir de una caja }
+                  certificados:
+                    type: array
+                    items:
+                      type: object
+                      required: [numero, impuesto, importe]
+                      properties:
+                        numero: { type: string }
+                        impuesto: { type: string }
+                        importe: { type: number, format: double }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/pagos/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: FichaDePagoAProveedor
+      responses:
+        "200":
+          description: El pago con las facturas que canceló, las retenciones, con qué salió la plata y de qué caja
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FichaDePago" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/pagos/{id}/pdf:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: OrdenDePagoPdf
+      responses:
+        "200":
+          description: La orden de pago en PDF, para que el proveedor firme de recibido
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/pagos/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularPagoAProveedor
+      description: |
+        Solo el admin. Devuelve la deuda con el proveedor, borra las
+        imputaciones, anula los certificados de retención y deshace los
+        cheques (los endosados vuelven a cartera, los propios se anulan). Si
+        un cheque ya se cobró o se rechazó, no se anula.
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/pagos/retenciones-csv:
+    get:
+      operationId: RetencionesPracticadasCsv
+      parameters:
+        - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+      responses:
+        "200":
+          description: Las retenciones practicadas del mes, en CSV
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/compras/certificados/{numero}:
+    parameters: [{ name: numero, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: CertificadoDeRetencion
+      responses:
+        "200":
+          description: Lo que va en el certificado impreso
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Certificado" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/certificados/{numero}/pdf:
+    parameters: [{ name: numero, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: CertificadoDeRetencionPdf
+      responses:
+        "200":
+          description: El certificado en PDF, con el cálculo de la retención
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/regimenes:
+    get:
+      operationId: RegimenesDeRetencion
+      parameters:
+        - { name: todos, in: query, description: también los apagados (por impuesto y código), schema: { type: boolean } }
+      responses:
+        "200":
+          description: Los regímenes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Regimen" } }
+    post:
+      operationId: GuardarRegimen
+      requestBody: { $ref: "#/components/requestBodies/CamposDeFormulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/retenciones-sufridas:
+    get:
+      operationId: RetencionesSufridas
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 60 } }
+      responses:
+        "200":
+          description: Los certificados que nos entregaron los clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, numero, fecha, impuesto, codigoRegimen, base, alicuota, importe, referencia, cliente, customerId, cuit]
+                  properties:
+                    id: { type: string }
+                    numero: { type: string }
+                    fecha: { type: string, format: date-time }
+                    impuesto: { type: string }
+                    codigoRegimen: { type: string, nullable: true }
+                    base: { type: string }
+                    alicuota: { type: string, nullable: true }
+                    importe: { type: string }
+                    referencia: { type: string, nullable: true }
+                    cliente: { type: string }
+                    customerId: { type: string }
+                    cuit: { type: string, nullable: true }
+  /api/v1/admin/compras/retenciones-sufridas/credito:
+    get:
+      operationId: CreditoPorRetenciones
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: El crédito del período, por impuesto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [impuesto, cantidad, total]
+                  properties:
+                    impuesto: { type: string }
+                    cantidad: { type: integer }
+                    total: { type: string }
+  /api/v1/admin/compras/gastos:
+    get:
+      operationId: ListarGastos
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 200 } }
+      responses:
+        "200":
+          description: Los gastos del período, los más nuevos primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Gasto" } }
+    post:
+      operationId: CargarGasto
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/gastos/por-categoria:
+    get:
+      operationId: GastosPorCategoria
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Cuánto se gastó en cada categoría (lo más gastado primero)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/TotalDeGastos" } }
+  /api/v1/admin/compras/gastos/por-circuito:
+    get:
+      operationId: GastosPorCircuito
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Cuánto salió por cada circuito
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/TotalDeGastos" } }
+  /api/v1/admin/compras/gastos/sucursales:
+    get:
+      operationId: SucursalesParaGasto
+      responses:
+        "200":
+          description: Las sucursales activas con su turno abierto, si hay
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, turnoAbierto, deLaSesion]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    turnoAbierto: { type: string, nullable: true }
+                    deLaSesion: { type: boolean, description: el turno abierto lo abrió quien pregunta }
+components:
+  requestBodies:
+    Formulario:
+      description: El formulario tal como lo armaba el panel; Go lo valida como zod
+      required: true
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: true }
+    CamposDeFormulario:
+      description: Los campos de un FormData, como texto
+      required: true
+      content:
+        application/json:
+          schema: { type: object, additionalProperties: { type: string } }
+    Motivo:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [motivo]
+            additionalProperties: false
+            properties:
+              motivo: { type: string }
+  responses:
+    Hecho:
+      description: Hecho, con el mensaje para mostrar
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok: { type: string }
+              id: { type: string }
+              supplierId: { type: string }
+              aviso: { type: string }
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    ProveedorListado:
+      type: object
+      required: [id, nombre, razonSocial, cuit, rubro, contacto, telefono, email, diasPago, estado, saldo, ultimoMovimiento, condicionIva,
+        condicionGanancias, exentoGananciasHasta]
+      properties:
+        condicionIva: { type: string }
+        condicionGanancias: { type: string, nullable: true, enum: [inscripto, no_inscripto, exento, null] }
+        exentoGananciasHasta: { type: string, nullable: true }
+        id: { type: string }
+        nombre: { type: string }
+        razonSocial: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        rubro: { type: string, nullable: true }
+        contacto: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        diasPago: { type: integer }
+        estado: { type: string, enum: [activo, inactivo] }
+        saldo: { type: number, format: double }
+        ultimoMovimiento: { type: string, format: date-time, nullable: true }
+    Proveedor:
+      type: object
+      required: [id, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, rubro, contacto, diasPago, cbu, aliasCbu, estado,
+        notas, codigoLegacy, active, createdAt, updatedAt, convenios, condicionGanancias, exentoGananciasHasta, saldo, movimientos]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        razonSocial: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        condicionIva: { type: string }
+        email: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        direccion: { type: string, nullable: true }
+        rubro: { type: string, nullable: true }
+        contacto: { type: string, nullable: true }
+        diasPago: { type: integer }
+        cbu: { type: string, nullable: true }
+        aliasCbu: { type: string, nullable: true }
+        estado: { type: string, enum: [activo, inactivo] }
+        notas: { type: string, nullable: true }
+        codigoLegacy: { type: string, nullable: true }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        convenios: { type: string, nullable: true }
+        condicionGanancias: { type: string, nullable: true, enum: [inscripto, no_inscripto, exento, null] }
+        exentoGananciasHasta: { type: string, nullable: true, description: Último día de la exención (YYYY-MM-DD) }
+        saldo: { type: number, format: double }
+        movimientos:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, monto, detalle, referencia, createdAt, saldo, purchaseInvoiceId, supplierPaymentId]
+            properties:
+              id: { type: string }
+              tipo: { type: string }
+              monto: { type: number, format: double }
+              detalle: { type: string, nullable: true }
+              referencia: { type: string, nullable: true }
+              createdAt: { type: string, format: date-time }
+              saldo: { type: number, format: double }
+              purchaseInvoiceId: { type: string, nullable: true, description: la factura de la que salió }
+              supplierPaymentId: { type: string, nullable: true, description: el pago del que salió }
+    PerfilDeLista:
+      type: object
+      nullable: true
+      required: [id, supplierId, nombre, columnaCodigo, columnaPrecio, columnaDescripcion, precioEsNeto, margenPorcentaje, activo, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        supplierId: { type: string }
+        nombre: { type: string }
+        columnaCodigo: { type: string }
+        columnaPrecio: { type: string }
+        columnaDescripcion: { type: string, nullable: true }
+        precioEsNeto: { type: boolean }
+        margenPorcentaje: { type: string }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    VistaPreviaDeLista:
+      type: object
+      required: [filas, problemas, apareadas, sinAparear, columnas]
+      properties:
+        filas:
+          type: array
+          items:
+            type: object
+            required: [codigo, descripcion, costo, precioSugerido, fila, variantId, nuestro, precioActual]
+            properties:
+              codigo: { type: string }
+              descripcion: { type: string }
+              costo: { type: number, format: double }
+              precioSugerido: { type: number, format: double }
+              fila: { type: integer }
+              variantId: { type: string, nullable: true }
+              nuestro: { type: string, nullable: true }
+              precioActual: { type: number, format: double, nullable: true }
+        problemas:
+          type: array
+          items:
+            type: object
+            required: [fila, motivo]
+            properties:
+              fila: { type: integer }
+              motivo: { type: string }
+        apareadas: { type: integer }
+        sinAparear: { type: integer }
+        columnas: { type: array, items: { type: string } }
+        error: { type: string }
+    OrdenListada:
+      type: object
+      required: [id, numero, estado, fechaPrometida, createdAt, proveedor, supplierId, sucursal, lineas, neto, pendientes]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        estado: { type: string }
+        fechaPrometida: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        proveedor: { type: string }
+        supplierId: { type: string }
+        sucursal: { type: string, nullable: true }
+        lineas: { type: integer }
+        neto: { type: number, format: double }
+        pendientes: { type: integer }
+    Orden:
+      type: object
+      required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, items]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        estado: { type: string }
+        fechaPrometida: { type: string, format: date-time, nullable: true }
+        notas: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        enviadaAt: { type: string, format: date-time, nullable: true }
+        supplierId: { type: string }
+        proveedor: { type: string }
+        branchId: { type: string }
+        sucursal: { type: string, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, purchaseOrderId, variantId, descripcion, cantidad, cantidadRecibida, costoUnitario, alicuotaIva, orden]
+            properties:
+              id: { type: string }
+              purchaseOrderId: { type: string }
+              variantId: { type: string }
+              descripcion: { type: string }
+              cantidad: { type: string }
+              cantidadRecibida: { type: string }
+              costoUnitario: { type: string }
+              alicuotaIva: { type: string }
+              orden: { type: integer }
+    RecepcionListada:
+      type: object
+      required: [id, numeroRemito, fecha, estado, gastos, proveedor, supplierId, sucursal, lineas, neto, facturada]
+      properties:
+        id: { type: string }
+        numeroRemito: { type: string, nullable: true }
+        fecha: { type: string, format: date-time }
+        estado: { type: string }
+        gastos: { type: string }
+        proveedor: { type: string }
+        supplierId: { type: string }
+        sucursal: { type: string, nullable: true }
+        lineas: { type: integer }
+        neto: { type: number, format: double }
+        facturada: { type: boolean, description: Si ya hay una factura de compra vinculada }
+    Recepcion:
+      type: object
+      required: [id, numeroRemito, fecha, estado, gastos, notas, confirmadaAt, supplierId, proveedor, branchId, sucursal, items]
+      properties:
+        id: { type: string }
+        numeroRemito: { type: string, nullable: true }
+        fecha: { type: string, format: date-time }
+        estado: { type: string, enum: [borrador, confirmada, anulada] }
+        gastos: { type: string }
+        notas: { type: string, nullable: true }
+        confirmadaAt: { type: string, format: date-time, nullable: true }
+        supplierId: { type: string }
+        proveedor: { type: string }
+        branchId: { type: string }
+        sucursal: { type: string, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, variantId, producto, variante, sku, cantidad, costoUnitario, alicuotaIva, costoConGastos, cantidadAnterior,
+              costoAnterior, costoResultante, orden]
+            properties:
+              id: { type: string }
+              variantId: { type: string }
+              producto: { type: string, nullable: true }
+              variante: { type: string, nullable: true }
+              sku: { type: string, nullable: true }
+              cantidad: { type: string }
+              costoUnitario: { type: string }
+              alicuotaIva: { type: string }
+              costoConGastos: { type: string, nullable: true }
+              cantidadAnterior: { type: string, nullable: true }
+              costoAnterior: { type: string, nullable: true }
+              costoResultante: { type: string, nullable: true }
+              orden: { type: integer }
+    RenglonLibro:
+      type: object
+      required: [id, fechaEmision, tipo, puntoVenta, numero, proveedor, cuit, neto, iva21, iva105, iva27, exento, percepciones, total, cae]
+      properties:
+        id: { type: string }
+        fechaEmision: { type: string, format: date-time }
+        tipo: { type: string }
+        puntoVenta: { type: integer }
+        numero: { type: integer }
+        proveedor: { type: string }
+        cuit: { type: string, nullable: true }
+        neto: { type: number, format: double }
+        iva21: { type: number, format: double }
+        iva105: { type: number, format: double }
+        iva27: { type: number, format: double }
+        exento: { type: number, format: double }
+        percepciones: { type: number, format: double }
+        total: { type: number, format: double }
+        cae: { type: string, nullable: true }
+    TotalesLibro:
+      type: object
+      required: [neto, iva21, iva105, iva27, exento, percepciones, total]
+      properties:
+        neto: { type: number, format: double }
+        iva21: { type: number, format: double }
+        iva105: { type: number, format: double }
+        iva27: { type: number, format: double }
+        exento: { type: number, format: double }
+        percepciones: { type: number, format: double }
+        total: { type: number, format: double }
+    PagoListado:
+      type: object
+      required: [id, fecha, total, neto, medio, circuito, referencia, proveedor, supplierId, retenido, certificados, numerosCertificado, facturas,
+        anuladoAt, motivoAnulacion]
+      properties:
+        id: { type: string }
+        fecha: { type: string, format: date-time }
+        total: { type: number, format: double }
+        neto: { type: number, format: double }
+        medio: { type: string }
+        circuito: { type: string, enum: [blanco, negro] }
+        referencia: { type: string, nullable: true }
+        proveedor: { type: string }
+        supplierId: { type: string }
+        retenido: { type: number, format: double }
+        anuladoAt: { type: string, format: date-time, nullable: true }
+        motivoAnulacion: { type: string, nullable: true }
+        certificados: { type: integer }
+        numerosCertificado: { type: array, items: { type: string } }
+        facturas:
+          type: array
+          items:
+            type: object
+            required: [id, numero, importe]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              importe: { type: number, format: double }
+    FichaDeFactura:
+      type: object
+      required: [id, tipo, puntoVenta, numero, fechaEmision, fechaVencimiento, cae, neto, iva21, iva105, iva27, exento, percepciones,
+        percepcionIva, percepcionIibb, total, pagado, observaciones, supplierId, proveedor, condicionIva, receiptId, numeroRemito, createdAt,
+        anuladaAt, motivoAnulacion, pagos, renglones]
+      properties:
+        id: { type: string }
+        tipo: { type: string }
+        puntoVenta: { type: integer }
+        numero: { type: integer }
+        fechaEmision: { type: string, format: date-time }
+        fechaVencimiento: { type: string, format: date-time, nullable: true }
+        cae: { type: string, nullable: true }
+        neto: { type: number, format: double }
+        iva21: { type: number, format: double }
+        iva105: { type: number, format: double }
+        iva27: { type: number, format: double }
+        exento: { type: number, format: double }
+        percepciones: { type: number, format: double }
+        percepcionIva: { type: number, format: double }
+        percepcionIibb: { type: number, format: double }
+        total: { type: number, format: double }
+        pagado: { type: number, format: double }
+        observaciones: { type: string, nullable: true }
+        supplierId: { type: string }
+        proveedor: { type: string }
+        condicionIva: { type: string }
+        receiptId: { type: string, nullable: true }
+        numeroRemito: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        anuladaAt: { type: string, format: date-time, nullable: true }
+        motivoAnulacion: { type: string, nullable: true }
+        pagos:
+          type: array
+          items:
+            type: object
+            required: [pagoId, fecha, medio, referencia, aplicado]
+            properties:
+              pagoId: { type: string }
+              fecha: { type: string, format: date-time }
+              medio: { type: string }
+              referencia: { type: string, nullable: true }
+              aplicado: { type: number, format: double }
+        renglones:
+          type: array
+          items:
+            type: object
+            required: [producto, variante, cantidad, costoUnitario, alicuotaIva]
+            properties:
+              producto: { type: string, nullable: true }
+              variante: { type: string, nullable: true }
+              cantidad: { type: number, format: double }
+              costoUnitario: { type: number, format: double }
+              alicuotaIva: { type: number, format: double }
+    FichaDePago:
+      type: object
+      required: [id, fecha, total, neto, medio, circuito, referencia, notas, supplierId, proveedor, razonSocial, cuit, anuladoAt, motivoAnulacion,
+        facturas, retenciones, partes, caja, efectivoEnCaja]
+      properties:
+        id: { type: string }
+        fecha: { type: string, format: date-time }
+        total: { type: number, format: double }
+        neto: { type: number, format: double }
+        medio: { type: string }
+        circuito: { type: string, enum: [blanco, negro] }
+        referencia: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        supplierId: { type: string }
+        proveedor: { type: string }
+        razonSocial: { type: string, nullable: true }
+        cuit: { type: string, nullable: true }
+        anuladoAt: { type: string, format: date-time, nullable: true }
+        motivoAnulacion: { type: string, nullable: true }
+        caja: { type: string, nullable: true, description: la sucursal de cuya caja salió el efectivo }
+        efectivoEnCaja: { type: number, format: double }
+        facturas:
+          type: array
+          items:
+            type: object
+            required: [id, numero, tipo, fechaEmision, fechaVencimiento, total, aplicado]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              tipo: { type: string }
+              fechaEmision: { type: string, format: date-time }
+              fechaVencimiento: { type: string, format: date-time, nullable: true }
+              total: { type: number, format: double }
+              aplicado: { type: number, format: double }
+        retenciones:
+          type: array
+          items:
+            type: object
+            required: [numero, impuesto, codigoRegimen, nombreRegimen, base, importe, anuladaAt]
+            properties:
+              numero: { type: string }
+              impuesto: { type: string }
+              codigoRegimen: { type: string }
+              nombreRegimen: { type: string, nullable: true }
+              base: { type: number, format: double }
+              importe: { type: number, format: double }
+              anuladaAt: { type: string, format: date-time, nullable: true }
+        partes:
+          type: array
+          items:
+            type: object
+            required: [medio, importe, referencia, chequeNumero, chequeBanco, chequeFechaPago]
+            properties:
+              medio: { type: string }
+              importe: { type: number, format: double }
+              referencia: { type: string, nullable: true }
+              chequeNumero: { type: string, nullable: true }
+              chequeBanco: { type: string, nullable: true }
+              chequeFechaPago: { type: string, format: date-time, nullable: true }
+    Certificado:
+      type: object
+      required: [numero, fecha, impuesto, codigoRegimen, nombreRegimen, base, alicuota, importe, proveedorNombre, proveedorRazonSocial,
+        proveedorCuit, proveedorDomicilio, pagoFecha, pagoMedio, pagoReferencia, acumulado, imponible, retenidoAntes, anuladaAt]
+      properties:
+        numero: { type: string }
+        fecha: { type: string, format: date-time }
+        impuesto: { type: string }
+        codigoRegimen: { type: string }
+        nombreRegimen: { type: string, nullable: true }
+        base: { type: string }
+        alicuota: { type: string }
+        importe: { type: string }
+        proveedorNombre: { type: string }
+        proveedorRazonSocial: { type: string, nullable: true }
+        proveedorCuit: { type: string, nullable: true }
+        proveedorDomicilio: { type: string, nullable: true }
+        pagoFecha: { type: string, format: date-time }
+        pagoMedio: { type: string }
+        pagoReferencia: { type: string, nullable: true }
+        acumulado: { type: string, nullable: true, description: las bases del mes con la de este pago (null en los de antes de la 00089) }
+        imponible: { type: string, nullable: true, description: el monto sujeto a retención (acumulado − mínimo no imponible) }
+        retenidoAntes: { type: string, nullable: true, description: lo retenido en el mes antes de este certificado }
+        anuladaAt: { type: string, format: date-time, nullable: true }
+    Regimen:
+      type: object
+      required: [id, codigo, nombre, impuesto, alicuota, alicuotaNoInscripto, minimoNoImponible, minimoRetencion, activo, createdAt, updatedAt, jurisdiccion]
+      properties:
+        id: { type: string }
+        codigo: { type: string }
+        nombre: { type: string }
+        impuesto: { type: string, enum: [ganancias, iva, suss, iibb] }
+        alicuota: { type: string }
+        alicuotaNoInscripto: { type: string }
+        minimoNoImponible: { type: string }
+        minimoRetencion: { type: string }
+        activo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        jurisdiccion: { type: string, nullable: true }
+    Gasto:
+      type: object
+      required: [id, fecha, categoria, descripcion, importe, medio, circuito, conFactura, sucursal, proveedor, supplierId, notas, enCaja]
+      properties:
+        id: { type: string }
+        fecha: { type: string, format: date-time }
+        categoria: { type: string }
+        descripcion: { type: string }
+        importe: { type: string }
+        medio: { type: string }
+        circuito: { type: string, enum: [blanco, negro] }
+        conFactura: { type: boolean }
+        sucursal: { type: string, nullable: true }
+        proveedor: { type: string, nullable: true }
+        supplierId: { type: string, nullable: true }
+        notas: { type: string, nullable: true }
+        enCaja: { type: boolean }
+    TotalDeGastos:
+      type: object
+      required: [clave, cantidad, total]
+      properties:
+        clave: { type: string, description: la categoría o el circuito }
+        cantidad: { type: integer }
+        total: { type: string }

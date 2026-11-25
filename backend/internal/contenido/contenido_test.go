@@ -1,0 +1,733 @@
+package contenido
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"mime/multipart"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"mjbj/internal/api/contenidoapi"
+	"mjbj/internal/auth"
+	"mjbj/internal/email"
+	"mjbj/internal/limites"
+	"mjbj/internal/plataforma"
+	"mjbj/internal/pruebas"
+	"mjbj/internal/sqlc"
+	"mjbj/internal/subidas"
+)
+
+var silencio = slog.New(slog.NewTextHandler(io.Discard, nil))
+
+// correoFalso guarda lo que se mandó; Simular hace de proveedor «demo».
+type correoFalso struct {
+	Simular  bool
+	Enviados []email.Mensaje
+}
+
+func (*correoFalso) Nombre() string { return "falso" }
+func (c *correoFalso) Real() bool   { return !c.Simular }
+func (c *correoFalso) Enviar(_ context.Context, m email.Mensaje) email.Resultado {
+	if c.Simular {
+		return email.Resultado{Simulado: true}
+	}
+	c.Enviados = append(c.Enviados, m)
+	return email.Resultado{Enviado: true, ID: "msg-1"}
+}
+
+type entorno struct {
+	correo  *correoFalso
+	srv     *httptest.Server
+	pool    *pgxpool.Pool
+	carpeta string
+	privada string
+	ses     *auth.Servicio
+}
+
+func armar(t *testing.T) *entorno { return armarCon(t, ConfigGoogle{}) }
+
+func armarCon(t *testing.T, google ConfigGoogle) *entorno {
+	t.Helper()
+	pool := pruebas.Base(t)
+	carpeta, privada := t.TempDir(), t.TempDir()
+	e := &entorno{correo: &correoFalso{}, privada: privada}
+	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-de-contenido-32-caracteres", URL: "http://localhost"}, pool)
+	m := http.NewServeMux()
+	api := NuevaAPI(Nuevo(pool, subidas.Nuevo(subidas.Config{Carpeta: carpeta, CarpetaPrivada: privada}), silencio), google, ConfigContacto{Casilla: "info@prueba.test", Sitio: "https://mjbj.com.ar"}, e.correo, limites.Nuevo(sqlc.New(pool), silencio))
+	api.Rutas(m)
+	contenidoapi.HandlerWithOptions(
+		contenidoapi.NewStrictHandlerWithOptions(api,
+			[]contenidoapi.StrictMiddlewareFunc{plataforma.ConPedido[contenidoapi.StrictHandlerFunc]},
+			contenidoapi.StrictHTTPServerOptions{RequestErrorHandlerFunc: plataforma.ErrorDePedido, ResponseErrorHandlerFunc: plataforma.ErrorDeRespuesta(silencio)}),
+		contenidoapi.StdHTTPServerOptions{BaseRouter: m},
+	)
+	spec, err := contenidoapi.GetSwagger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	validar, err := plataforma.ValidarContra(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec2, _ := contenidoapi.GetSwagger()
+	srv := httptest.NewServer(pruebas.ConContrato(t, spec2, ses.Middleware(validar(m))))
+	t.Cleanup(srv.Close)
+	e.srv, e.pool, e.carpeta, e.ses = srv, pool, carpeta, ses
+	return e
+}
+
+// cliente entra como alguien y devuelve un http.Client con su cookie.
+func (e *entorno) cliente(t *testing.T, correo string, rol string) *http.Client {
+	t.Helper()
+	ctx := context.Background()
+	if rol == "admin" || rol == "deposito" {
+		if _, err := e.ses.AltaDeStaff(ctx, correo, "una clave larga", "Persona", sqlc.StaffRole(rol)); err != nil {
+			t.Fatal(err)
+		}
+	} else if _, err := e.ses.AltaDeCliente(ctx, correo, "una clave larga", "Juan Cliente"); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	if _, err := e.ses.Entrar(ctx, w, correo, "una clave larga", "", "", true); err != nil {
+		t.Fatal(err)
+	}
+	jar, _ := cookiejar.New(nil)
+	u, _ := http.NewRequest("GET", e.srv.URL, nil)
+	jar.SetCookies(u.URL, w.Result().Cookies())
+	return &http.Client{Jar: jar}
+}
+
+func pedir(t *testing.T, c *http.Client, metodo, url string, cuerpo any) (int, []byte) {
+	t.Helper()
+	var r io.Reader
+	tipo := ""
+	switch b := cuerpo.(type) {
+	case nil:
+	case *multipart.Writer:
+		t.Fatal("usar formulario()")
+	case formulario:
+		r, tipo = bytes.NewReader(b.datos), b.tipo
+	default:
+		crudo, _ := json.Marshal(b)
+		r, tipo = bytes.NewReader(crudo), "application/json"
+	}
+	req, _ := http.NewRequest(metodo, url, r)
+	if tipo != "" {
+		req.Header.Set("Content-Type", tipo)
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, out
+}
+
+type formulario struct {
+	datos []byte
+	tipo  string
+}
+
+func armarFormulario(campos map[string]string, imagen []byte) formulario {
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+	for k, v := range campos {
+		_ = w.WriteField(k, v)
+	}
+	if imagen != nil {
+		h := make(map[string][]string)
+		h["Content-Disposition"] = []string{`form-data; name="imagen"; filename="foto.png"`}
+		h["Content-Type"] = []string{"image/png"}
+		p, _ := w.CreatePart(h)
+		_, _ = p.Write(imagen)
+	}
+	_ = w.Close()
+	return formulario{b.Bytes(), w.FormDataContentType()}
+}
+
+var png = append([]byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, make([]byte, 64)...)
+
+func TestBannersYPromos(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	dep := e.cliente(t, "deposito@prueba.test", "deposito")
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/"
+
+	// Solo el admin edita el contenido (ACCESO de /admin/contenido).
+	if c, _ := pedir(t, dep, "GET", u+"admin/contenido/banners", nil); c != 403 {
+		t.Errorf("depósito vio los banners del panel: %d", c)
+	}
+	if c, _ := pedir(t, anon, "GET", u+"admin/contenido/banners", nil); c != 401 {
+		t.Errorf("sin sesión: %d", c)
+	}
+
+	// Un banner con imagen, al aire desde hoy.
+	hoy := time.Now().In(argentina).Format("2006-01-02")
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/banners", armarFormulario(map[string]string{
+		"ubicacion": "portada", "titulo": "Liquidación de fenólicos", "etiqueta": "Oferta", "desde": hoy, "activo": "on", "orden": "1",
+	}, png)); c != 204 {
+		t.Fatalf("crear banner: %d %s", c, b)
+	}
+	c, b := pedir(t, anon, "GET", u+"contenido/banners?ubicacion=portada", nil)
+	var publicados []Banner
+	_ = json.Unmarshal(b, &publicados)
+	if c != 200 || len(publicados) != 1 || publicados[0].ImagenURL == nil || !strings.HasPrefix(*publicados[0].ImagenURL, "/subidas/banner-") {
+		t.Fatalf("banners publicados: %d %s", c, b)
+	}
+	foto := filepath.Join(e.carpeta, strings.TrimPrefix(*publicados[0].ImagenURL, "/subidas/"))
+	if _, err := os.Stat(foto); err != nil {
+		t.Fatal("la imagen no quedó en disco")
+	}
+	// Con fecha de fin antes del inicio: no.
+	if c, b := pedir(t, adm, "PUT", u+"admin/contenido/banners/"+publicados[0].ID, armarFormulario(map[string]string{
+		"ubicacion": "portada", "titulo": "Liquidación", "desde": hoy, "hasta": "2020-01-01", "activo": "on",
+	}, nil)); c != 422 || !strings.Contains(string(b), "anterior a la de inicio") {
+		t.Errorf("fechas al revés: %d %s", c, b)
+	}
+	// Apagarlo: sale del sitio, la imagen se conserva.
+	if c, b := pedir(t, adm, "PUT", u+"admin/contenido/banners/"+publicados[0].ID, armarFormulario(map[string]string{
+		"ubicacion": "portada", "titulo": "Liquidación de fenólicos",
+	}, nil)); c != 204 {
+		t.Fatalf("apagar: %d %s", c, b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/banners?ubicacion=portada", nil); string(b) != "[]\n" {
+		t.Errorf("un banner apagado sigue al aire: %s", b)
+	}
+	if _, err := os.Stat(foto); err != nil {
+		t.Error("editar sin imagen nueva borró la que tenía")
+	}
+	// Borrarlo borra la imagen.
+	if c, _ := pedir(t, adm, "DELETE", u+"admin/contenido/banners/"+publicados[0].ID, nil); c != 204 {
+		t.Fatal("borrar")
+	}
+	if _, err := os.Stat(foto); !os.IsNotExist(err) {
+		t.Error("la imagen quedó en disco después de borrar el banner")
+	}
+	var anotadas int
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log where entidad = 'banner'`).Scan(&anotadas)
+	if anotadas != 3 {
+		t.Errorf("la bitácora tiene %d acciones sobre banners, tenían que ser 3", anotadas)
+	}
+
+	// Una promo que vence hoy: vale todo el día, y la fecha va en hora de acá.
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/promos", armarFormulario(map[string]string{
+		"medio": "Banco Provincia", "titulo": "30 % los jueves", "quienPaga": "banco", "vigenciaHasta": hoy, "activo": "on",
+	}, nil)); c != 204 {
+		t.Fatalf("crear promo: %d %s", c, b)
+	}
+	_, b = pedir(t, anon, "GET", u+"contenido/promos", nil)
+	var promos []PromoVigente
+	_ = json.Unmarshal(b, &promos)
+	if len(promos) != 1 || promos[0].VigenciaHasta != time.Now().In(argentina).Format("02/01/06") {
+		t.Errorf("promos: %s", b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/promos", armarFormulario(map[string]string{
+		"medio": "Naranja X", "titulo": "Cuotas", "quienPaga": "el vecino",
+	}, nil)); c != 422 || !strings.Contains(string(b), "quién pone el descuento") {
+		t.Errorf("quién paga inválido: %d %s", c, b)
+	}
+}
+
+func TestAjustesYResenas(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	juan := e.cliente(t, "juan@prueba.test", "cliente")
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/"
+
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('telefono', '223 000')`)
+	if c, _ := pedir(t, adm, "PUT", u+"admin/contenido/ajustes/telefono", map[string]string{"valor": "223 590-3118"}); c != 204 {
+		t.Fatal("guardar ajuste")
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/ajustes", nil); !strings.Contains(string(b), `"telefono":"223 590-3118"`) {
+		t.Errorf("ajustes: %s", b)
+	}
+	if c, _ := pedir(t, adm, "PUT", u+"admin/contenido/ajustes/no-existe", map[string]string{"valor": "x"}); c != 404 {
+		t.Errorf("ajuste inexistente: %d", c)
+	}
+	// El tope de mensajes de WhatsApp es un número, y no sale entre los textos.
+	if c, _ := pedir(t, adm, "PUT", u+"admin/contenido/ajustes/whatsapp_tope_mensajes", map[string]string{"valor": "mil"}); c != 422 {
+		t.Errorf("tope de mensajes con letras: %d", c)
+	}
+	if c, _ := pedir(t, adm, "PUT", u+"admin/contenido/ajustes/whatsapp_tope_mensajes", map[string]string{"valor": "800"}); c != 204 {
+		t.Errorf("tope de mensajes: %d", c)
+	}
+	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_tope_mensajes") {
+		t.Errorf("el tope de mensajes tiene su pantalla: %s", b)
+	}
+
+	// Juan compró un fenólico y el pedido se entregó.
+	var producto, variante, categoria, orderID, clienteID string
+	_ = e.pool.QueryRow(ctx, `insert into categories (slug, name, description) values ('placas', 'Placas', '') returning id`).Scan(&categoria)
+	_ = e.pool.QueryRow(ctx, `insert into products (slug, name, category_id, description) values ('fenolico', 'Fenólico', $1, '') returning id`, categoria).Scan(&producto)
+	_ = e.pool.QueryRow(ctx, `insert into product_variants (product_id, sku, label) values ($1, 'FEN18', '18 mm') returning id`, producto).Scan(&variante)
+	_ = e.pool.QueryRow(ctx, `select id from customers where email = 'juan@prueba.test'`).Scan(&clienteID)
+	_ = e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, estado) values ('PED-1', 'Juan', $1, 'entregado') returning id`, clienteID).Scan(&orderID)
+	_, _ = e.pool.Exec(ctx, `insert into order_items (order_id, variant_id, descripcion, cantidad, precio_unitario, subtotal) values ($1, $2, 'Fenólico 18', 1, 100, 100)`, orderID, variante)
+
+	_, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil)
+	if !strings.Contains(string(b), `"yaResenado":false`) || !strings.Contains(string(b), `"numeroPedido":"PED-1"`) {
+		t.Fatalf("lo reseñable: %s", b)
+	}
+	resena := map[string]any{"productId": producto, "orderId": orderID, "estrellas": 5, "texto": "Excelente"}
+	if c, b := pedir(t, juan, "POST", u+"contenido/mis-resenas", resena); c != 201 || !strings.Contains(string(b), `"slug":"fenolico"`) {
+		t.Fatalf("dejar reseña: %d %s", c, b)
+	}
+	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", resena); c != 409 {
+		t.Errorf("la segunda reseña de la misma compra: %d", c)
+	}
+	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", map[string]any{"productId": producto, "orderId": orderID, "estrellas": 9}); c != 422 {
+		t.Errorf("nueve estrellas: %d", c)
+	}
+	// Pendiente: no se ve en el sitio.
+	if _, b := pedir(t, anon, "GET", u+"contenido/productos/"+producto+"/resenas", nil); string(b) != "[]\n" {
+		t.Errorf("una reseña pendiente ya se ve: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/productos/"+producto+"/resumen", nil); string(b) != "null\n" {
+		t.Errorf("resumen sin reseñas: %s", b)
+	}
+	// El admin la publica.
+	_, b = pedir(t, adm, "GET", u+"admin/contenido/resenas", nil)
+	var paraModerar []struct{ ID, Estado string }
+	_ = json.Unmarshal(b, &paraModerar)
+	if len(paraModerar) != 1 || paraModerar[0].Estado != "pendiente" {
+		t.Fatalf("para moderar: %s", b)
+	}
+	if c, _ := pedir(t, adm, "POST", u+"admin/contenido/resenas/"+paraModerar[0].ID+"/moderar", map[string]string{"estado": "publicada"}); c != 200 {
+		t.Fatal("publicar")
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/productos/"+producto+"/resumen", nil); !strings.Contains(string(b), `"promedio":5`) || !strings.Contains(string(b), `"5":1`) {
+		t.Errorf("resumen: %s", b)
+	}
+	// Alguien que no compró no puede reseñar.
+	otro := e.cliente(t, "otro@prueba.test", "cliente")
+	if c, _ := pedir(t, otro, "POST", u+"contenido/mis-resenas", resena); c != 422 {
+		t.Errorf("reseñó sin haber comprado: %d", c)
+	}
+}
+
+func TestResenasDelNegocio(t *testing.T) {
+	// Google falso: dos reseñas, una sin texto (no entra).
+	falso := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Goog-Api-Key") != "clave" || r.URL.Path != "/lugar-1" {
+			w.WriteHeader(403)
+			return
+		}
+		_, _ = w.Write([]byte(`{"reviews":[
+			{"name":"places/1/reviews/a","rating":4.6,"originalText":{"text":" Muy buena atención "},"publishTime":"2026-09-01T10:00:00Z","authorAttribution":{"displayName":"Ana","photoUri":"https://foto"}},
+			{"name":"places/1/reviews/b","rating":5,"text":{"text":""}}]}`))
+	}))
+	defer falso.Close()
+	e := armarCon(t, ConfigGoogle{Clave: "clave", Lugar: "lugar-1", URL: falso.URL + "/"})
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/"
+
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resumen", nil); string(b) != "null\n" {
+		t.Errorf("resumen vacío: %s", b)
+	}
+	for vuelta, nuevas := range []string{`"nuevas":1`, `"nuevas":0`} {
+		c, b := pedir(t, adm, "POST", u+"admin/contenido/negocio/google", nil)
+		if c != 200 || !strings.Contains(string(b), `"traidas":2`) || !strings.Contains(string(b), nuevas) {
+			t.Fatalf("vuelta %d de Google: %d %s", vuelta, c, b)
+		}
+	}
+	// Entró sin publicar.
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resenas", nil); string(b) != "[]\n" {
+		t.Errorf("una reseña de Google sin revisar ya se ve: %s", b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/negocio", map[string]any{"autor": "Carlos", "estrellas": 3, "texto": "Corto", "publicada": true}); c != 422 {
+		t.Errorf("texto corto: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/negocio", map[string]any{"autor": "Carlos", "estrellas": 5, "texto": "Excelente madera y buen precio", "fecha": "2026-10-01", "publicada": true}); c != 200 || !strings.Contains(string(b), `"publicada":true`) {
+		t.Fatalf("cargar a mano: %d %s", c, b)
+	}
+	_, b := pedir(t, adm, "GET", u+"admin/contenido/negocio", nil)
+	var todas []struct {
+		ID, Autor, Origen string
+		Estrellas         int
+		Fecha             time.Time
+	}
+	_ = json.Unmarshal(b, &todas)
+	if len(todas) != 2 {
+		t.Fatalf("todas: %s", b)
+	}
+	for _, r := range todas {
+		if r.Autor == "Ana" {
+			if r.Estrellas != 5 || r.Origen != "google" {
+				t.Errorf("la de Google: %+v", r)
+			}
+			if c, _ := pedir(t, adm, "POST", u+"admin/contenido/negocio/"+r.ID+"/publicar", map[string]bool{"publicada": true}); c != 204 {
+				t.Error("publicar")
+			}
+		} else if got := r.Fecha.In(argentina).Format("2006-01-02 15"); got != "2026-10-01 12" {
+			t.Errorf("la fecha cargada a mano quedó %s, tenía que ser el mediodía de acá", got)
+		}
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resumen", nil); !strings.Contains(string(b), `"promedio":5`) || !strings.Contains(string(b), `"cuantas":2`) {
+		t.Errorf("resumen: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"contenido/negocio/resenas", nil); !strings.Contains(string(b), `"texto":"Muy buena atención"`) {
+		t.Errorf("publicadas: %s", b)
+	}
+
+	sinClave := armar(t)
+	adm2 := sinClave.cliente(t, "admin@prueba.test", "admin")
+	if c, b := pedir(t, adm2, "POST", sinClave.srv.URL+"/api/v1/admin/contenido/negocio/google", nil); c != 422 || !strings.Contains(string(b), "GOOGLE_PLACES_API_KEY") {
+		t.Errorf("sin clave: %d %s", c, b)
+	}
+}
+
+// Con la base vacía, toda lista sale `[]` y no `null` (la pantalla hace .map).
+func TestListasVacias(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	for _, ruta := range []string{
+		"contenido/promos", "contenido/banners?ubicacion=portada", "contenido/negocio/resenas",
+		"contenido/productos/00000000-0000-0000-0000-000000000000/resenas", "contenido/mis-resenas",
+		"admin/contenido/ajustes", "admin/contenido/resenas", "admin/contenido/banners",
+		"admin/contenido/promos", "admin/contenido/negocio",
+		"contenido/sucursales", "contenido/zonas-envio", "contenido/escalas-pago",
+		"contenido/eventos", "contenido/documentos",
+	} {
+		if c, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/"+ruta, nil); c != 200 || string(b) != "[]\n" {
+			t.Errorf("%s: %d %s", ruta, c, b)
+		}
+	}
+}
+
+func TestSitio(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/contenido/"
+
+	// Documentos: los reservados solo los ve un profesional activo.
+	_, _ = e.pool.Exec(ctx, `insert into technical_documents (titulo, url, solo_profesionales, orden) values
+		('Ficha del fenólico', '/d/1.pdf', false, 1), ('Tabla de cargas', '/d/2.pdf', true, 2), ('Viejo', '/d/3.pdf', false, 0)`)
+	_, _ = e.pool.Exec(ctx, `update technical_documents set activo = false where titulo = 'Viejo'`)
+	juan := e.cliente(t, "juan@prueba.test", "cliente")
+	for _, c := range []struct {
+		quien  *http.Client
+		cuenta int
+	}{{anon, 1}, {juan, 1}} {
+		_, b := pedir(t, c.quien, "GET", u+"documentos", nil)
+		var docs []DocumentoTecnico
+		_ = json.Unmarshal(b, &docs)
+		if len(docs) != c.cuenta || docs[0].Titulo != "Ficha del fenólico" {
+			t.Errorf("documentos sin ser profesional: %s", b)
+		}
+	}
+	_, _ = e.pool.Exec(ctx, `update customers set tipo = 'profesional' where email = 'juan@prueba.test'`)
+	if _, b := pedir(t, juan, "GET", u+"documentos", nil); !strings.Contains(string(b), "Tabla de cargas") {
+		t.Errorf("el profesional no ve los reservados: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update customers set estado = 'inactivo' where email = 'juan@prueba.test'`)
+	if _, b := pedir(t, juan, "GET", u+"documentos", nil); strings.Contains(string(b), "Tabla de cargas") {
+		t.Errorf("un profesional inactivo ve los reservados: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"documentos/reservados", nil); string(b) != "1\n" {
+		t.Errorf("reservados: %s", b)
+	}
+
+	// Eventos: el borrador no existe, el que pasó no está entre los próximos.
+	var evento string
+	_ = e.pool.QueryRow(ctx, `insert into events (slug, titulo, inicia, cupo, precio, estado) values
+		('taller-de-melamina', 'Taller de melamina', now() + interval '7 days', 10, 1500.50, 'publicado') returning id`).Scan(&evento)
+	_, _ = e.pool.Exec(ctx, `insert into events (slug, titulo, inicia, estado) values
+		('borrador', 'Todavía no', now() + interval '1 day', 'borrador'), ('el-de-ayer', 'Ayer', now() - interval '1 day', 'publicado')`)
+	_, _ = e.pool.Exec(ctx, `insert into event_registrations (event_id, nombre, email, estado, user_id) values
+		($1, 'A', 'a@x.com', 'confirmada', null), ($1, 'B', 'b@x.com', 'cancelada', null),
+		($1, 'Juan', 'juan@prueba.test', 'reservada', (select id from "user" where email = 'juan@prueba.test'))`, evento)
+	_, b := pedir(t, anon, "GET", u+"eventos", nil)
+	var prox []EventoPublico
+	_ = json.Unmarshal(b, &prox)
+	if len(prox) != 1 || prox[0].Slug != "taller-de-melamina" || prox[0].Inscriptos != 2 || prox[0].Precio != 1500.5 {
+		t.Errorf("próximos: %s", b)
+	}
+	if c, _ := pedir(t, anon, "GET", u+"eventos/borrador", nil); c != 404 {
+		t.Errorf("un borrador se ve: %d", c)
+	}
+	if _, b := pedir(t, anon, "GET", u+"eventos/borrador/visible", nil); string(b) != "false\n" {
+		t.Errorf("visible borrador: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"eventos/el-de-ayer", nil); !strings.Contains(string(b), `"yaPaso":true`) || !strings.Contains(string(b), `"miInscripcion":null`) {
+		t.Errorf("el de ayer: %s", b)
+	}
+	if _, b := pedir(t, juan, "GET", u+"eventos/taller-de-melamina", nil); !strings.Contains(string(b), `"estado":"reservada"`) {
+		t.Errorf("la inscripción de quien mira: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"eventos-visibles?limite=5", nil); string(b) != `["taller-de-melamina","el-de-ayer"]`+"\n" {
+		t.Errorf("slugs: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", u+"sitemap/eventos", nil); !strings.Contains(string(b), `"ruta":"/eventos/taller-de-melamina"`) || strings.Contains(string(b), "el-de-ayer") {
+		t.Errorf("sitemap de eventos: %s", b)
+	}
+	for _, sec := range []string{"catalogo", "categorias"} {
+		if c, b := pedir(t, anon, "GET", u+"sitemap/"+sec, nil); c != 200 || string(b) != "[]\n" {
+			t.Errorf("sitemap %s vacío: %d %s", sec, c, b)
+		}
+	}
+}
+
+func TestContacto(t *testing.T) {
+	e := armar(t)
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/contenido/contacto"
+	consulta := map[string]string{"nombre": "Ana <b>", "email": "ana@cliente.com", "motivo": "presupuesto", "mensaje": "Necesito 10 placas\n<script>x</script>"}
+
+	if c, b := pedir(t, anon, "POST", u, map[string]string{"nombre": "Ana", "email": "ana@", "motivo": "presupuesto", "mensaje": "Necesito 10 placas"}); c != 422 || !strings.Contains(string(b), "es por donde te contestamos") {
+		t.Errorf("correo inválido: %d %s", c, b)
+	}
+	if c, b := pedir(t, anon, "POST", u, consulta); c != 200 || !strings.Contains(string(b), `"resultado":"enviada"`) {
+		t.Fatalf("consulta: %d %s", c, b)
+	}
+	m := e.correo.Enviados[0]
+	if m.Para != "info@prueba.test" || m.ResponderA != "ana@cliente.com" || m.Asunto != "Pedido de presupuesto — Ana <b>" {
+		t.Errorf("el correo: %+v", m)
+	}
+	if strings.Contains(m.HTML, "<script>") || !strings.Contains(m.HTML, "Necesito 10 placas<br>&lt;script&gt;") || !strings.Contains(m.HTML, "Ana &lt;b&gt;") {
+		t.Errorf("lo que escribió alguien de afuera no se escapó:\n%s", m.HTML)
+	}
+	var estado string
+	_ = e.pool.QueryRow(context.Background(), `select estado::text from notifications_log where evento = 'consulta_web'`).Scan(&estado)
+	if estado != "enviada" {
+		t.Errorf("notifications_log: %q", estado)
+	}
+	e.correo.Simular = true
+	if _, b := pedir(t, anon, "POST", u, consulta); !strings.Contains(string(b), `"resultado":"simulada"`) {
+		t.Errorf("sin correo conectado: %s", b)
+	}
+	// Tres por hora por correo; la cuarta espera.
+	_, _ = pedir(t, anon, "POST", u, consulta)
+	if c, b := pedir(t, anon, "POST", u, consulta); c != 429 || !strings.Contains(string(b), "volvé a intentar") {
+		t.Errorf("la cuarta: %d %s", c, b)
+	}
+}
+
+// Con WhatsApp y sin correo (hallazgo 47): sale, sin Responder-A de quien
+// escribió y con el botón para contestarle por WhatsApp. Sin ninguno de los
+// dos, o con un teléfono de juguete, no sale.
+func TestContactoSoloWhatsapp(t *testing.T) {
+	e := armar(t)
+	u := e.srv.URL + "/api/v1/contenido/contacto"
+	// Cada pedido desde otra IP, para probar la cuenta por teléfono sin que
+	// la de IP la tape (el servidor de prueba escucha en loopback y por eso
+	// confía en X-Forwarded-For, como detrás de Caddy).
+	desde := func(ip string, cuerpo map[string]string) (int, string) {
+		t.Helper()
+		crudo, _ := json.Marshal(cuerpo)
+		req, _ := http.NewRequest("POST", u, bytes.NewReader(crudo))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", ip)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	base := func(tel string) map[string]string {
+		return map[string]string{"nombre": "Raúl Pérez", "telefono": tel, "motivo": "presupuesto", "mensaje": "12 placas de fenólico de 18"}
+	}
+
+	if c, b := desde("10.0.0.1", map[string]string{"nombre": "Raúl", "motivo": "presupuesto", "mensaje": "12 placas de fenólico"}); c != 422 || !strings.Contains(b, `"contacto"`) || !strings.Contains(b, "WhatsApp o un correo") {
+		t.Errorf("sin WhatsApp ni correo: %d %s", c, b)
+	}
+	// Lo que no se puede contestar con un toque se rechaza, aunque tenga
+	// ocho dígitos o más: un número de Buenos Aires con uno de menos.
+	for _, tel := range []string{"1234", "12345678", "11 2345 678"} {
+		if c, b := desde("10.0.0.1", base(tel)); c != 422 || !strings.Contains(b, `"telefono"`) {
+			t.Errorf("%q pasó y no tiene a quién contestar: %d %s", tel, c, b)
+		}
+	}
+	if c, b := desde("10.0.0.2", base("0223 15-590-3118")); c != 200 || !strings.Contains(b, `"resultado":"enviada"`) {
+		t.Fatalf("solo WhatsApp: %d %s", c, b)
+	}
+	m := e.correo.Enviados[0]
+	if m.ResponderA != "" {
+		t.Errorf("sin correo no hay a quién responder, y salió con %q", m.ResponderA)
+	}
+	if !strings.Contains(m.HTML, "https://wa.me/5492235903118?text=Hola%20Ra%C3%BAl") || !strings.Contains(m.Texto, "Contestar por WhatsApp: https://wa.me/5492235903118") {
+		t.Errorf("el correo no trae el enlace para contestar:\n%s", m.Texto)
+	}
+	if strings.Contains(m.Texto, "Correo") {
+		t.Errorf("sin correo, el renglón «Correo» sobra:\n%s", m.Texto)
+	}
+
+	// La cuenta por teléfono: tres por hora, aunque cada una venga de otra
+	// IP; el mismo número escrito de otra forma es el mismo número.
+	_, _ = desde("10.0.0.3", base("223 590 3118"))
+	_, _ = desde("10.0.0.4", base("2235903118"))
+	if c, b := desde("10.0.0.5", base("(0223) 590-3118")); c != 429 {
+		t.Errorf("la cuarta del mismo teléfono: %d %s", c, b)
+	}
+	// Y la IP sigue contando aunque el teléfono cambie.
+	for _, tel := range []string{"223 111 2222", "223 111 3333"} {
+		_, _ = desde("10.0.0.9", base(tel))
+	}
+	_, _ = desde("10.0.0.9", base("223 111 4444"))
+	if c, b := desde("10.0.0.9", base("223 111 5555")); c != 429 {
+		t.Errorf("la cuarta desde la misma IP con otro teléfono: %d %s", c, b)
+	}
+}
+
+// El número local de siete dígitos, como lo dice la gente de acá, pasa: el
+// normalizador le pone el 223.
+func TestTelefonoDeLaConsulta(t *testing.T) {
+	casos := map[string]bool{
+		"590-3118":           true,
+		"15 590-3118":        true,
+		"0223 15-590-3118":   true,
+		"+54 9 11 2345-6789": true,
+		"12345678":           false,
+		"11 2345 678":        false,
+		"1234":               false,
+	}
+	for tel, vale := range casos {
+		c := Consulta{Nombre: "Raúl Pérez", Telefono: tel, Motivo: "presupuesto", Mensaje: "12 placas de fenólico de 18"}
+		if err := c.validar(); (err == nil) != vale {
+			t.Errorf("%q: se esperaba válido=%v y dio %v", tel, vale, err)
+		}
+	}
+}
+
+func TestClaveDelLimite(t *testing.T) {
+	casos := []struct {
+		c             Consulta
+		nombre, valor string
+	}{
+		{Consulta{Email: "ana@cliente.com", Telefono: "223 590-3118"}, "correo", "ana@cliente.com"},
+		{Consulta{Telefono: "+54 9 223 590-3118"}, "telefono", "5492235903118"},
+	}
+	for _, k := range casos {
+		if n, v := k.c.ClaveDelLimite(); n != k.nombre || v != k.valor {
+			t.Errorf("%+v: %s %s", k.c, n, v)
+		}
+	}
+}
+
+func TestSucursalesEnviosYEscalas(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	anon := &http.Client{}
+	u := e.srv.URL + "/api/v1/contenido/"
+	_, _ = e.pool.Exec(ctx, `insert into branches (slug, name, sort_order, active) values ('aserradero', 'Aserradero', 2, true), ('casa-central', 'Casa Central', 1, true), ('vieja', 'Vieja', 0, false)`)
+	if _, b := pedir(t, anon, "GET", u+"sucursales", nil); !strings.HasPrefix(b2s(b), `[{"id":`) || strings.Index(b2s(b), "casa-central") > strings.Index(b2s(b), "aserradero") || strings.Contains(b2s(b), "vieja") {
+		t.Errorf("sucursales: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `insert into shipping_zones (nombre, costo, envio_gratis_desde, orden, activa) values ('Mar del Plata', 5000.5, 300000, 1, true)`)
+	if _, b := pedir(t, anon, "GET", u+"zonas-envio", nil); !strings.Contains(b2s(b), `"costo":5000.5`) || !strings.Contains(b2s(b), `"envioGratisDesde":300000`) {
+		t.Errorf("zonas: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `insert into payment_discounts (medio, desde_monto, porcentaje, etiqueta, activo) values ('efectivo', 0, 10, 'Contado', true)`)
+	if _, b := pedir(t, anon, "GET", u+"escalas-pago", nil); b2s(b) != `[{"medio":"efectivo","desdeMonto":0,"porcentaje":10,"etiqueta":"Contado"}]`+"\n" {
+		t.Errorf("escalas: %s", b)
+	}
+}
+
+func b2s(b []byte) string { return string(b) }
+
+func TestPanelDeDocumentacion(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "vendedor@prueba.test", "admin")
+	dep := e.cliente(t, "deposito@prueba.test", "deposito")
+	u := e.srv.URL + "/api/v1/admin/documentos"
+	pdf := append([]byte("%PDF-1.7\n"), make([]byte, 200)...)
+	form := func(tipo string, datos []byte) formulario {
+		var b bytes.Buffer
+		w := multipart.NewWriter(&b)
+		_ = w.WriteField("titulo", "Tabla de cargas")
+		_ = w.WriteField("soloProfesionales", "on")
+		p, _ := w.CreatePart(map[string][]string{
+			"Content-Disposition": {`form-data; name="archivo"; filename="x"`}, "Content-Type": {tipo},
+		})
+		_, _ = p.Write(datos)
+		_ = w.Close()
+		return formulario{b.Bytes(), w.FormDataContentType()}
+	}
+	if c, _ := pedir(t, dep, "GET", u, nil); c != 403 {
+		t.Errorf("depósito entró al panel de documentación: %d", c)
+	}
+	// Un .exe que dice ser PDF no pasa.
+	if c, b := pedir(t, adm, "POST", u, form("application/pdf", []byte("MZ\x90\x00"))); c != 422 || !strings.Contains(string(b), "Subí un PDF") {
+		t.Errorf("un ejecutable disfrazado: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", u, form("application/pdf", pdf)); c != 204 {
+		t.Fatalf("subir: %d %s", c, b)
+	}
+	_, b := pedir(t, adm, "GET", u, nil)
+	var docs []struct {
+		ID, URL, Formato, Categoria string
+		TamanoBytes                 int
+		SoloProfesionales, Activo   bool
+	}
+	_ = json.Unmarshal(b, &docs)
+	if len(docs) != 1 || docs[0].Formato != "pdf" || docs[0].Categoria != "general" || docs[0].TamanoBytes != len(pdf) || !docs[0].SoloProfesionales || docs[0].URL != URLDelDocumento(docs[0].ID) {
+		t.Fatalf("el documento: %s", b)
+	}
+	// El archivo queda en la carpeta privada (Caddy no la sirve), no en
+	// /subidas/: un documento reservado no lo baja quien tenga el enlace.
+	var ref string
+	if err := e.pool.QueryRow(context.Background(), `select url from technical_documents`).Scan(&ref); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(ref, subidas.PrefijoPrivado) {
+		t.Fatalf("quedó en %q", ref)
+	} else if _, err := os.Stat(filepath.Join(e.privada, strings.TrimPrefix(ref, subidas.PrefijoPrivado))); err != nil {
+		t.Error("el archivo no quedó en la carpeta privada")
+	}
+	archivo := e.srv.URL + docs[0].URL
+	anon := &http.Client{}
+	cli := e.cliente(t, "cliente@prueba.test", "cliente")
+	pro := e.cliente(t, "pro@prueba.test", "cliente")
+	if _, err := e.pool.Exec(context.Background(), `update customers set tipo = 'profesional' where user_id = (select id from "user" where email = 'pro@prueba.test')`); err != nil {
+		t.Fatal(err)
+	}
+	baja := func(quien string, c *http.Client, quiero int) {
+		t.Helper()
+		code, b := pedir(t, c, "GET", archivo, nil)
+		if code != quiero || (quiero == 200 && string(b) != string(pdf)) {
+			t.Errorf("%s: %d, quería %d", quien, code, quiero)
+		}
+	}
+	// Reservado: el profesional y el panel; nadie más.
+	baja("anónimo, reservado", anon, 404)
+	baja("cliente, reservado", cli, 404)
+	baja("profesional, reservado", pro, 200)
+	baja("admin, reservado", adm, 200)
+	// Abrirlo a todos y darlo de baja: el público lo ve y después no.
+	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/visibilidad", map[string]bool{"soloProfesionales": false}); c != 204 {
+		t.Fatal("visibilidad")
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); !strings.Contains(string(b), "Tabla de cargas") {
+		t.Errorf("abierto a todos y no se ve: %s", b)
+	}
+	baja("anónimo, abierto", anon, 200)
+	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/activo", map[string]bool{"activo": false}); c != 204 {
+		t.Fatal("baja")
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); string(b) != "[]\n" {
+		t.Errorf("dado de baja y se ve: %s", b)
+	}
+	baja("anónimo, de baja", anon, 404)
+	baja("admin, de baja", adm, 200)
+	if _, b := pedir(t, adm, "GET", u+"/categorias", nil); string(b) != "[]\n" {
+		t.Errorf("categorías con todo de baja: %s", b)
+	}
+}

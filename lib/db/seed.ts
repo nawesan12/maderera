@@ -56,7 +56,12 @@ interface ProductSeed {
   brand?: string;
   unit: UnitOfSale;
   featured?: boolean;
-  image: string;
+  /**
+   * Solo si es una foto **del producto**. Las de banco que había acá (y que la
+   * 00105 cambió por la portada del rubro) mostraban otra cosa; sin foto, la
+   * tarjeta dibuja la placa del rubro (migración 00150).
+   */
+  image?: string;
   variants: VariantSeed[];
 }
 
@@ -70,9 +75,9 @@ interface CategorySeed {
 }
 
 const IMG = {
-  madera: "https://images.unsplash.com/photo-1520333789090-1afc82db536a?w=800&q=80",
-  taller: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&q=80",
-  piso: "https://images.unsplash.com/photo-1615873968403-89e068629265?w=800&q=80",
+  madera: "/fotos/photo-1422246654994-34520d5a0340.jpg",
+  taller: "/fotos/photo-1700973408133-b45276ec8feb.jpg",
+  piso: "/fotos/photo-1573869908170-64b53a60d8da.jpg",
 } as const;
 
 
@@ -92,7 +97,6 @@ const CATALOGO: CategorySeed[] = [
           "Tirante de pino tratado en autoclave, ideal para estructuras de techo. Alta resistencia y durabilidad.",
         unit: "unidad",
         featured: true,
-        image: IMG.madera,
         variants: [
           { sku: "TEC-TIR-PIN-2436", label: '2" x 4" x 3.60m', largoMm: 3600, anchoMm: 100, espesorMm: 50, material: "Pino Tratado", precio: 28500, stockCentral: 40, stockAserradero: 120, minCentral: 10, minAserradero: 25 },
           { sku: "TEC-TIR-PIN-2536", label: '2" x 5" x 3.60m', largoMm: 3600, anchoMm: 125, espesorMm: 50, material: "Pino Tratado", precio: 35200, stockCentral: 22, stockAserradero: 85, minCentral: 10, minAserradero: 25 },
@@ -106,7 +110,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Tirante de eucalipto saligna, mayor dureza y resistencia estructural para luces grandes.",
         unit: "unidad",
-        image: IMG.madera,
         variants: [
           { sku: "TEC-TIR-SAL-3642", label: '3" x 6" x 4.20m', largoMm: 4200, anchoMm: 150, espesorMm: 75, material: "Saligna", precio: 68400, stockCentral: 0, stockAserradero: 34, minCentral: 6, minAserradero: 15 },
           { sku: "TEC-TIR-SAL-3648", label: '3" x 6" x 4.80m', largoMm: 4800, anchoMm: 150, espesorMm: 75, material: "Saligna", precio: 78900, stockCentral: 0, stockAserradero: 18, minCentral: 6, minAserradero: 15 },
@@ -120,7 +123,6 @@ const CATALOGO: CategorySeed[] = [
           "Machimbre de pino cepillado para cielorrasos y techos a la vista. Se vende por metro cuadrado.",
         unit: "metro_cuadrado",
         featured: true,
-        image: IMG.madera,
         variants: [
           { sku: "TEC-MAC-PIN-1204", label: '1/2" x 4"', anchoMm: 100, espesorMm: 12, material: "Pino", precio: 18700, stockCentral: 180, stockAserradero: 450, minCentral: 50, minAserradero: 100 },
           { sku: "TEC-MAC-PIN-3406", label: '3/4" x 6"', anchoMm: 150, espesorMm: 19, material: "Pino", precio: 26400, stockCentral: 95, stockAserradero: 240, minCentral: 50, minAserradero: 100 },
@@ -133,7 +135,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Membrana asfáltica con aluminio, 4mm de espesor. Rollo de 1m x 10m para impermeabilización.",
         unit: "rollo",
-        image: IMG.madera,
         variants: [
           { sku: "TEC-MEM-ASF-4010", label: "4mm x 1m x 10m", largoMm: 10000, anchoMm: 1000, espesorMm: 4, precio: 84500, stockCentral: 26, stockAserradero: 14, minCentral: 8, minAserradero: 8 },
         ],
@@ -155,7 +156,6 @@ const CATALOGO: CategorySeed[] = [
           "Placa de aglomerado revestida en melamina blanca. Servicio de corte a medida disponible.",
         unit: "placa",
         featured: true,
-        image: IMG.madera,
         variants: [
           { sku: "PLA-MEL-BLA-18", label: "1830 x 2600mm — 18mm", largoMm: 2600, anchoMm: 1830, espesorMm: 18, color: "Blanco", precio: 96500, descuentoProfesional: 0.18, stockCentral: 64, stockAserradero: 12, minCentral: 20, minAserradero: 10 },
           { sku: "PLA-MEL-BLA-15", label: "1830 x 2600mm — 15mm", largoMm: 2600, anchoMm: 1830, espesorMm: 15, color: "Blanco", precio: 82300, descuentoProfesional: 0.18, stockCentral: 38, stockAserradero: 6, minCentral: 20, minAserradero: 10 },
@@ -168,7 +168,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Fibrofácil de densidad media, superficie lisa ideal para pintar y para trabajos de detalle.",
         unit: "placa",
-        image: IMG.madera,
         variants: [
           { sku: "PLA-MDF-003", label: "1830 x 2600mm — 3mm", largoMm: 2600, anchoMm: 1830, espesorMm: 3, precio: 31200, descuentoProfesional: 0.15, stockCentral: 120, stockAserradero: 0, minCentral: 30, minAserradero: 0 },
           { sku: "PLA-MDF-018", label: "1830 x 2600mm — 18mm", largoMm: 2600, anchoMm: 1830, espesorMm: 18, precio: 88700, descuentoProfesional: 0.15, stockCentral: 45, stockAserradero: 0, minCentral: 30, minAserradero: 0 },
@@ -182,7 +181,6 @@ const CATALOGO: CategorySeed[] = [
           "Placa fenólica para encofrados y uso exterior. Alta resistencia a la humedad.",
         unit: "placa",
         featured: true,
-        image: IMG.madera,
         variants: [
           { sku: "PLA-FEN-018", label: "1220 x 2440mm — 18mm", largoMm: 2440, anchoMm: 1220, espesorMm: 18, precio: 134000, descuentoProfesional: 0.2, stockCentral: 30, stockAserradero: 44, minCentral: 12, minAserradero: 12 },
           { sku: "PLA-FEN-015", label: "1220 x 2440mm — 15mm", largoMm: 2440, anchoMm: 1220, espesorMm: 15, precio: 118500, descuentoProfesional: 0.2, stockCentral: 18, stockAserradero: 21, minCentral: 12, minAserradero: 12 },
@@ -207,7 +205,6 @@ const CATALOGO: CategorySeed[] = [
         brand: "Decno Flooring",
         unit: "metro_cuadrado",
         featured: true,
-        image: IMG.piso,
         variants: [
           { sku: "PIS-DEC-ROB-08", label: "8mm — AC4", espesorMm: 8, color: "Roble Natural", precio: 41800, descuentoProfesional: 0.12, stockCentral: 220, stockAserradero: 0, minCentral: 60, minAserradero: 0 },
         ],
@@ -220,7 +217,6 @@ const CATALOGO: CategorySeed[] = [
           "Piso flotante melamínico tono nogal oscuro, resistente al tránsito intenso.",
         brand: "Decno Flooring",
         unit: "metro_cuadrado",
-        image: IMG.piso,
         variants: [
           { sku: "PIS-DEC-NOG-08", label: "8mm — AC4", espesorMm: 8, color: "Nogal", precio: 43600, descuentoProfesional: 0.12, stockCentral: 85, stockAserradero: 0, minCentral: 60, minAserradero: 0 },
         ],
@@ -232,7 +228,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Zócalo de MDF laqueado blanco, tira de 2.40m. Terminación para piso flotante.",
         unit: "metro_lineal",
-        image: IMG.piso,
         variants: [
           { sku: "PIS-ZOC-MDF-07", label: "7cm x 2.40m", largoMm: 2400, anchoMm: 70, color: "Blanco", precio: 8900, stockCentral: 340, stockAserradero: 60, minCentral: 80, minAserradero: 40 },
         ],
@@ -255,7 +250,6 @@ const CATALOGO: CategorySeed[] = [
         brand: "Moldava",
         unit: "metro_lineal",
         featured: true,
-        image: IMG.taller,
         variants: [
           { sku: "MOL-ZOC-070", label: "7cm x 2.40m", largoMm: 2400, anchoMm: 70, material: "Pino Finger Joint", precio: 7400, descuentoProfesional: 0.22, stockCentral: 480, stockAserradero: 120, minCentral: 100, minAserradero: 50 },
           { sku: "MOL-ZOC-100", label: "10cm x 2.40m", largoMm: 2400, anchoMm: 100, material: "Pino Finger Joint", precio: 9800, descuentoProfesional: 0.22, stockCentral: 260, stockAserradero: 80, minCentral: 100, minAserradero: 50 },
@@ -269,7 +263,6 @@ const CATALOGO: CategorySeed[] = [
           "Juego de marco para puerta en pino finger joint Moldava. Incluye las tres piezas.",
         brand: "Moldava",
         unit: "juego",
-        image: IMG.taller,
         variants: [
           { sku: "MOL-MAR-STD", label: "Juego estándar 80cm", material: "Pino Finger Joint", precio: 32500, descuentoProfesional: 0.22, stockCentral: 45, stockAserradero: 18, minCentral: 15, minAserradero: 10 },
         ],
@@ -282,7 +275,6 @@ const CATALOGO: CategorySeed[] = [
           "Cornisa decorativa de pino finger joint para unión de pared y cielorraso.",
         brand: "Moldava",
         unit: "metro_lineal",
-        image: IMG.taller,
         variants: [
           { sku: "MOL-COR-045", label: "4.5cm x 2.40m", largoMm: 2400, anchoMm: 45, material: "Pino Finger Joint", precio: 6200, descuentoProfesional: 0.22, stockCentral: 180, stockAserradero: 40, minCentral: 60, minAserradero: 30 },
         ],
@@ -303,7 +295,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Bisagra de cazoleta con cierre suave para muebles de cocina y placares.",
         unit: "unidad",
-        image: IMG.taller,
         variants: [
           { sku: "FER-BIS-035", label: "35mm codo 0", precio: 4200, descuentoProfesional: 0.25, stockCentral: 620, stockAserradero: 0, minCentral: 150, minAserradero: 0 },
         ],
@@ -315,7 +306,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Par de correderas telescópicas de acero con rulemanes, extracción total.",
         unit: "par",
-        image: IMG.taller,
         variants: [
           { sku: "FER-COR-450", label: "45cm", largoMm: 450, precio: 12800, descuentoProfesional: 0.25, stockCentral: 140, stockAserradero: 0, minCentral: 40, minAserradero: 0 },
           { sku: "FER-COR-500", label: "50cm", largoMm: 500, precio: 14200, descuentoProfesional: 0.25, stockCentral: 95, stockAserradero: 0, minCentral: 40, minAserradero: 0 },
@@ -328,7 +318,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Laca poliuretánica de dos componentes para terminación de madera. Alta resistencia.",
         unit: "litro",
-        image: IMG.taller,
         variants: [
           { sku: "FER-LAC-POL-4", label: "4 litros — Brillante", precio: 68900, stockCentral: 32, stockAserradero: 12, minCentral: 10, minAserradero: 6 },
           { sku: "FER-LAC-POL-1", label: "1 litro — Satinado", precio: 21400, stockCentral: 58, stockAserradero: 20, minCentral: 10, minAserradero: 6 },
@@ -351,7 +340,6 @@ const CATALOGO: CategorySeed[] = [
           "Tabla de deck en eucalipto grandis tratado, ranurada antideslizante. Se vende por tabla.",
         unit: "tabla",
         featured: true,
-        image: IMG.madera,
         variants: [
           { sku: "DEC-GRA-2490", label: '1" x 4" x 2.40m', largoMm: 2400, anchoMm: 100, espesorMm: 25, material: "Eucalipto Grandis", precio: 17880, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 180, minCentral: 0, minAserradero: 40 },
         ],
@@ -363,7 +351,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Deck sintético de PVC, sin mantenimiento, resistente a la intemperie marina. Se vende por tabla.",
         unit: "tabla",
-        image: IMG.madera,
         variants: [
           { sku: "DEC-PVC-GRI", label: "Gris — 2.90m", largoMm: 2900, anchoMm: 140, espesorMm: 22, color: "Gris", precio: 47900, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 65, minCentral: 0, minAserradero: 20 },
           { sku: "DEC-PVC-MAD", label: "Símil madera — 2.90m", largoMm: 2900, anchoMm: 140, espesorMm: 22, color: "Símil madera", precio: 50550, descuentoProfesional: 0.15, stockCentral: 0, stockAserradero: 28, minCentral: 0, minAserradero: 20 },
@@ -376,7 +363,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Escalera de pino fabricada a medida en el aserradero. Requiere presupuesto previo.",
         unit: "unidad",
-        image: IMG.madera,
         variants: [
           { sku: "DEC-ESC-PIN-MED", label: "A medida — consultar", material: "Pino", precio: 0, stockCentral: 0, stockAserradero: 0, minCentral: 0, minAserradero: 0 },
         ],
@@ -398,7 +384,6 @@ const CATALOGO: CategorySeed[] = [
           "Placa de yeso para tabiques y cielorrasos interiores. Versión estándar y resistente a la humedad.",
         unit: "placa",
         featured: true,
-        image: IMG.taller,
         variants: [
           { sku: "CSE-YES-STD-125", label: "Estándar 1200 x 2400mm — 12.5mm", largoMm: 2400, anchoMm: 1200, espesorMm: 12, precio: 28900, descuentoProfesional: 0.18, stockCentral: 140, stockAserradero: 60, minCentral: 40, minAserradero: 20 },
           { sku: "CSE-YES-RH-125", label: "Resistente humedad 1200 x 2400mm — 12.5mm", largoMm: 2400, anchoMm: 1200, espesorMm: 12, precio: 38400, descuentoProfesional: 0.18, stockCentral: 62, stockAserradero: 25, minCentral: 40, minAserradero: 20 },
@@ -410,7 +395,6 @@ const CATALOGO: CategorySeed[] = [
         subcategory: "Perfilería",
         description: "Perfil montante galvanizado para estructura de tabiques.",
         unit: "unidad",
-        image: IMG.taller,
         variants: [
           { sku: "CSE-PER-MON-069", label: "69mm x 2.60m", largoMm: 2600, anchoMm: 69, precio: 11200, descuentoProfesional: 0.18, stockCentral: 280, stockAserradero: 90, minCentral: 80, minAserradero: 40 },
           { sku: "CSE-PER-MON-035", label: "35mm x 2.60m", largoMm: 2600, anchoMm: 35, precio: 8600, descuentoProfesional: 0.18, stockCentral: 190, stockAserradero: 70, minCentral: 80, minAserradero: 40 },
@@ -423,7 +407,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Rollo de lana de vidrio para aislación térmica y acústica. Cubre 21.6 m².",
         unit: "rollo",
-        image: IMG.taller,
         variants: [
           { sku: "CSE-LAN-050", label: "50mm — 1.2m x 18m", largoMm: 18000, anchoMm: 1200, espesorMm: 50, precio: 92700, stockCentral: 18, stockAserradero: 30, minCentral: 6, minAserradero: 10 },
         ],
@@ -446,7 +429,6 @@ const CATALOGO: CategorySeed[] = [
         brand: "Curvin",
         unit: "metro_cuadrado",
         featured: true,
-        image: IMG.madera,
         variants: [
           { sku: "CUB-CUR-ROJ", label: "Rojo teja", color: "Rojo", precio: 46800, descuentoProfesional: 0.14, stockCentral: 0, stockAserradero: 120, minCentral: 0, minAserradero: 30 },
           { sku: "CUB-CUR-NEG", label: "Negro", color: "Negro", precio: 46800, descuentoProfesional: 0.14, stockCentral: 0, stockAserradero: 45, minCentral: 0, minAserradero: 30 },
@@ -459,7 +441,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Chapa acanalada galvanizada calibre 25, para cubiertas y cerramientos.",
         unit: "metro_cuadrado",
-        image: IMG.madera,
         variants: [
           { sku: "CUB-CHA-C25", label: "Calibre 25 — 1.10m ancho útil", anchoMm: 1100, precio: 32400, descuentoProfesional: 0.14, stockCentral: 0, stockAserradero: 210, minCentral: 0, minAserradero: 50 },
         ],
@@ -471,7 +452,6 @@ const CATALOGO: CategorySeed[] = [
         description:
           "Tornillo autoperforante con arandela de neoprene para fijación de chapa.",
         unit: "unidad",
-        image: IMG.taller,
         variants: [
           { sku: "CUB-TOR-AUT-063", label: '#12 x 2.1/2"', precio: 380, stockCentral: 2400, stockAserradero: 3800, minCentral: 500, minAserradero: 800 },
         ],
@@ -576,7 +556,9 @@ async function main() {
         name: cat.name,
         description: cat.description,
         icon: cat.icon,
-        image: PORTADA[cat.slug] ?? cat.image,
+        // Sin portada, la placa del rubro: la foto del catálogo de
+        // ejemplo (`cat.image`) es de banco.
+        image: PORTADA[cat.slug] ?? null,
         sortOrder: i,
       })
       .returning();
@@ -597,12 +579,14 @@ async function main() {
         .returning();
       totalProductos++;
 
-      await db.insert(productImages).values({
-        productId: producto.id,
-        url: prod.image,
-        alt: prod.name,
-        sortOrder: 0,
-      });
+      if (prod.image) {
+        await db.insert(productImages).values({
+          productId: producto.id,
+          url: prod.image,
+          alt: prod.name,
+          sortOrder: 0,
+        });
+      }
 
       for (const [k, v] of prod.variants.entries()) {
         const [variante] = await db

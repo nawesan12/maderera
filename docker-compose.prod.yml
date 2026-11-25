@@ -56,11 +56,13 @@ services:
       context: .
       target: runner
       # Con la red del host, para que el build llegue al puerto de loopback
-      # donde está la base.
+      # de la API de Go: con Cache Components el build arma de antemano lo
+      # público en caché (los rubros del layout, el equipaje del asistente).
+      # `desplegar.sh` levanta la API nueva antes de construir. La app ya no
+      # le habla a la base: ni el build ni la imagen llevan su URL.
       network: host
       args:
-        DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}
-        DATABASE_SSL: "off"
+        API_URL: http://127.0.0.1:8080
         APP_URL: ${APP_URL:?Falta APP_URL en .env.produccion}
         APP_ENV: ${APP_ENV:-production}
         SEO_INDEXAR: ${SEO_INDEXAR:-}
@@ -68,18 +70,14 @@ services:
     image: mjbj-app:latest
     restart: unless-stopped
     depends_on:
-      db:
+      api:
         condition: service_healthy
     env_file:
       - .env.produccion
     environment:
-      # Estas pisan lo que diga `.env.produccion`: la URL de la base la arma el
-      # compose con el nombre interno del contenedor.
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      # La base está en la misma máquina y en una red privada de Docker:
-      # cifrar ese tramo no protege de nada y el Postgres del compose ni
-      # siquiera lo admite.
-      DATABASE_SSL: "off"
+      # Sin DATABASE_URL a propósito: todo dato pasa por la API de Go. (Si
+      # `.env.produccion` la trae, no se usa: nada de la app importa lib/db,
+      # y ESLint lo frena.)
       # Las fotos van a un volumen y no adentro de la imagen: si vivieran en
       # `public/`, cada despliegue borraría lo que se subió desde el panel.
       CARPETA_SUBIDAS: /datos/subidas
@@ -87,7 +85,7 @@ services:
       # aparte y **Caddy no monta este volumen**: solo se sirven por
       # `/api/whatsapp/medios/<id>`, con sesión de la bandeja.
       CARPETA_PRIVADA: /datos/privado
-      # Hay un proceso que vive y un cron: enciende el tiempo real del panel
+      # Hay un proceso que vive: enciende el tiempo real del panel
       # (`lib/vivo`). En Vercel no está y las pantallas consultan cada tanto.
       PLATAFORMA: vps
       # El envío de los avisos y las campañas por el servidor de correo propio
@@ -98,6 +96,9 @@ services:
       SMTP_HOST: ${SMTP_HOST:-correo}
       SMTP_PUERTO: ${SMTP_PUERTO:-587}
       SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
+      # La API de Go (backend/, docs/go/PLAN.md): la sesión y, tanda por
+      # tanda, todo lo que la aplicación leía de la base. Por la red interna.
+      API_URL: http://api:8080
       # El certificado de ARCA, como archivos de solo lectura (ver el volumen
       # abajo). Si todavía no están, la facturación sigue con el proveedor
       # interno, igual que sin variables.
@@ -106,11 +107,10 @@ services:
     volumes:
       - subidas:/datos/subidas
       - privado:/datos/privado
-      # La caché de Next —las imágenes ya optimizadas y los datos de
-      # `unstable_cache`— sobrevive al despliegue. Sin esto, cada deploy
-      # arranca en frío y la primera visita a cada foto la vuelve a
-      # recomprimir. Es lo mismo que hacía Vercel con su Data Cache, que
-      # también persiste entre despliegues.
+      # Las imágenes ya optimizadas sobreviven al despliegue: sin esto, la
+      # primera visita a cada foto la vuelve a recomprimir. Los datos de
+      # `unstable_cache` no: el contenedor los borra al arrancar (ver el CMD
+      # del Dockerfile).
       - next_cache:/app/.next/cache
       # El certificado y la clave de ARCA, de `secretos/arca/` en el servidor
       # y en solo lectura. Nunca entran en la imagen: `.dockerignore` deja
@@ -137,8 +137,131 @@ services:
       start_period: 30s
       retries: 3
 
-  # Las migraciones y los scripts de mudanza. No queda corriendo: el perfil
-  # `herramientas` hace que `up` lo ignore, y se usa con `run --rm`.
+  # **El backend en Go** (backend/, docs/go/PLAN.md). Una sola imagen con un
+  # binario, `mjbj`, que cada servicio corre con su papel. Distroless: sin
+  # shell, sin paquetes, unos 20 MB.
+  #
+  # La API atiende /api/v1 (y /api/vivo, el tiempo real) detrás de Caddy, y la
+  # aplicación de Next le pide los datos por la red interna. Sin `ports`, como
+  # la aplicación: solo Caddy y Next le hablan.
+  api:
+    build:
+      context: ./backend
+    image: mjbj-go:${GIT_SHA:-local}
+    command: ["api"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.produccion
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSL: "off"
+      CARPETA_SUBIDAS: /datos/subidas
+      # Los adjuntos de WhatsApp: los sirve /api/whatsapp/medios/<id>, con sesión.
+      CARPETA_PRIVADA: /datos/privado
+      # El correo de la app (servicio `correo`), igual que en `app`: sin esto
+      # internal/email cae en el proveedor de demostración (tanda 10: avisos,
+      # campañas y reintentos salen de acá).
+      SMTP_HOST: ${SMTP_HOST:-correo}
+      SMTP_PUERTO: ${SMTP_PUERTO:-587}
+      SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
+      # El certificado de ARCA (tanda 7: el CAE lo pide Go). Los mismos archivos
+      # que `app`; ARCA_CUIT y ARCA_AMBIENTE vienen de .env.produccion.
+      ARCA_CERTIFICADO_ARCHIVO: /run/secrets/arca/arca.crt
+      ARCA_CLAVE_PRIVADA_ARCHIVO: /run/secrets/arca/arca.key
+      # Los audios de WhatsApp los transcribe el servicio `whisper`.
+      WHISPER_URL: http://whisper:8178
+    volumes:
+      - subidas:/datos/subidas
+      - privado:/datos/privado
+      # Solo lectura; el usuario de la imagen (nonroot, 65532) tiene que poder leerlos.
+      - ./secretos/arca:/run/secrets/arca:ro
+    expose:
+      - "8080"
+    # **Solo en loopback**, como la base: para que el build de la aplicación
+    # (que corre con la red del host) le pida lo público. Desde afuera no se
+    # llega; Caddy y Next le hablan por la red interna.
+    ports:
+      - "127.0.0.1:8080:8080"
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "/mjbj", "salud", "http://127.0.0.1:8080/salud"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  # La cola de trabajos y las tareas periódicas que ya son de Go. Le avisa a
+  # Next qué volver a armar (next.revalidar) por la red interna.
+  worker:
+    image: mjbj-go:${GIT_SHA:-local}
+    command: ["worker"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.produccion
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSL: "off"
+      NEXT_URL: http://app:3000
+      CARPETA_SUBIDAS: /datos/subidas
+      # El worker baja los adjuntos que mandan los clientes por WhatsApp.
+      CARPETA_PRIVADA: /datos/privado
+      # El correo de la app (servicio `correo`), igual que en `app`: sin esto
+      # internal/email cae en el proveedor de demostración (tanda 10: avisos,
+      # campañas y reintentos salen de acá).
+      SMTP_HOST: ${SMTP_HOST:-correo}
+      SMTP_PUERTO: ${SMTP_PUERTO:-587}
+      SMTP_NOMBRE_TLS: ${SMTP_NOMBRE_TLS:-mail.${CORREO_DOMINIO:-${DOMINIO}}}
+      # El worker transcribe los audios de WhatsApp (whatsapp.audio).
+      WHISPER_URL: http://whisper:8178
+    volumes:
+      - subidas:/datos/subidas
+      - privado:/datos/privado
+    stop_grace_period: 30s
+
+  # Transcribe los audios de WhatsApp para el bot (10/11/2026): whisper.cpp
+  # con el modelo small cuantizado, en la misma máquina. Gratis y el audio no
+  # sale del servidor. El modelo (190 MB) no va en la imagen ni en el repo:
+  # lo baja scripts/whisper-modelo.sh a ~/whisper-modelos.
+  # Búsqueda voraz (-bs 1 -bo 1): en la VPS de 2 núcleos baja la nota de voz
+  # a más o menos lo que dura, y para frases cortas la diferencia de calidad
+  # no se nota. Con el tope de CPU, una transcripción no frena al resto.
+  # `--convert`: el ogg/opus de WhatsApp lo pasa a wav con ffmpeg él mismo.
+  whisper:
+    image: ghcr.io/ggml-org/whisper.cpp:main
+    entrypoint: ["/app/build/bin/whisper-server"]
+    command: ["-m", "/modelos/ggml-small-q5_1.bin", "-t", "2", "-bs", "1", "-bo", "1", "-l", "es",
+      "--convert", "--host", "0.0.0.0", "--port", "8178"]
+    restart: unless-stopped
+    volumes:
+      - ${WHISPER_MODELOS:-../whisper-modelos}:/modelos:ro
+    expose:
+      - "8178"
+    cpus: 1.5
+    mem_limit: 1g
+
+  # Las migraciones, con goose (backend/db/migraciones; la primera vez adopta
+  # las 79 de drizzle). Como el migrador viejo: el perfil `herramientas` hace
+  # que `up` lo ignore, y se usa con `run --rm`.
+  migrar:
+    profiles: ["herramientas"]
+    image: mjbj-go:${GIT_SHA:-local}
+    command: ["migrar"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_SSL: "off"
+
+  # Los scripts de mudanza en TypeScript (scripts/mudar-subidas.ts). Las
+  # migraciones ya no corren acá: las hace `migrar`, con goose. No queda
+  # corriendo: el perfil `herramientas` hace que `up` lo ignore.
   migrador:
     profiles: ["herramientas"]
     build:
@@ -174,7 +297,7 @@ services:
       DOMINIO: ${DOMINIO:?Falta DOMINIO en .env.produccion}
       # Los nombres que redirigen al principal, separados por espacio.
       REDIRIGIDOS: www.${DOMINIO}${DOMINIO_ALTERNATIVO:+ ${DOMINIO_ALTERNATIVO} www.${DOMINIO_ALTERNATIVO}}
-      # El dominio de las casillas (`mail.`, `webmail.`, `autoconfig.`). Es
+      # El dominio de las casillas (`mail.`, `correo.`, `autoconfig.`). Es
       # el del sitio salvo que se diga otro: así el correo se puede montar en
       # `mjbj.com.ar` mientras el sitio sigue en una dirección de prueba.
       CORREO_DOMINIO: ${CORREO_DOMINIO:-${DOMINIO}}
@@ -207,17 +330,9 @@ services:
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
       RCLONE_DIAS: ${RCLONE_DIAS:-90}
       RCLONE_CONFIG: /config/rclone/rclone.conf
-      CORREO_RESPALDO: ${CORREO_RESPALDO:-si}
     volumes:
       - ./respaldos:/respaldos
       - ./scripts/respaldo.sh:/respaldo.sh:ro
-      # Los buzones y la configuración del correo (casillas, claves, llaves
-      # DKIM), en solo lectura: el respaldo los empaqueta junto con la base.
-      # Si el correo propio no está en uso, los volúmenes están vacíos y el
-      # respaldo lo saltea.
-      - correo_buzones:/correo/buzones:ro
-      - correo_estado:/correo/estado:ro
-      - correo_config:/correo/config:ro
       # Las fotos subidas desde el panel y los adjuntos de WhatsApp, también
       # en solo lectura. La base guarda dónde están, no los archivos: sin
       # estos dos, una base restaurada muestra fichas sin fotos y
@@ -229,86 +344,56 @@ services:
       - ./secretos/rclone:/config/rclone
     entrypoint: ["sh", "/respaldo.sh"]
 
-  # Las tareas programadas (ver `servidor/cron/crontab` y `lib/tareas`). Un
-  # crond de busybox y nada más: no guarda estado ni sabe qué hace cada tarea,
-  # solo llama a la aplicación a horario. El candado de «una vez por período»
-  # está en la base, así que reiniciar este contenedor no repite nada.
-  cron:
-    image: alpine:3.20
-    restart: unless-stopped
-    depends_on:
-      - app
-    environment:
-      # En formato POSIX y no «America/Argentina/Buenos_Aires»: alpine no trae
-      # la base de zonas, y Argentina no tiene horario de verano, así que «tres
-      # horas al oeste de UTC» es exacto todo el año.
-      TZ: ART3
-      TAREAS_SECRETO: ${TAREAS_SECRETO:?Falta TAREAS_SECRETO en .env.produccion}
-    volumes:
-      - ./servidor/cron/crontab:/etc/crontabs/root:ro
-      - ./servidor/cron/tarea.sh:/tarea.sh:ro
-    # crond no hereda el entorno: el secreto se deja en un archivo que solo
-    # vive dentro del contenedor, y `tarea.sh` lo lee de ahí.
-    entrypoint:
-      - sh
-      - -c
-      - 'umask 077; printf %s "$$TAREAS_SECRETO" > /run/secreto; exec crond -f -l 8'
+  # No hay contenedor `cron`: las tareas programadas y la cola las corre el
+  # worker de Go (servicio `worker`), con el candado de «una vez por período»
+  # en la base. El de antes le pegaba a /api/tareas de Next, que ya no existe.
 
-
-  # **Las casillas de correo propias** (docker-mailserver: Postfix, Dovecot y
-  # Rspamd). Es la pieza que más mantenimiento pide de todo el servidor —ver
-  # «Correo propio» en docs/SERVIDOR-PROPIO.md antes de encenderla—, por eso
-  # va en un perfil: solo levanta con `COMPOSE_PROFILES=correo` en
-  # `.env.produccion`. Sin eso, el resto del servidor anda igual y los avisos
-  # pueden seguir saliendo por Resend.
+  # **Las casillas de correo propias** (Stalwart: SMTP, IMAP, DKIM, filtro de
+  # spam y bloqueo de IP que prueban claves, en un solo proceso). Es la pieza
+  # que más cuidado pide de todo el servidor —ver «Correo propio» en
+  # docs/SERVIDOR-PROPIO.md antes de encenderla—, por eso va en un perfil:
+  # solo levanta con `COMPOSE_PROFILES=correo` en `.env.produccion`. Sin eso,
+  # el resto del servidor anda igual.
+  #
+  # La configuración (dominio, casillas, puertos, certificado) no está en un
+  # archivo: vive en la base de Stalwart y la escribe `scripts/correo.sh`.
   correo:
     profiles: ["correo"]
-    image: mailserver/docker-mailserver:16.0.1
+    image: stalwartlabs/stalwart:v0.16.26
     # El nombre con que se presenta a los otros servidores. Tiene que coincidir
     # con el registro A de `mail`, con el PTR de la IP (lo configura Hostinger)
     # y con el certificado: si no, Gmail lo trata como sospechoso.
     hostname: mail.${CORREO_DOMINIO:-${DOMINIO}}
+    init: true
     restart: unless-stopped
-    env_file:
-      - ./servidor/correo/correo.env
     environment:
-      POSTMASTER_ADDRESS: postmaster@${CORREO_DOMINIO:-${DOMINIO}}
-      # El certificado lo saca y lo renueva Caddy (bloque `mail.` del
-      # Caddyfile), y acá se lee de su volumen. Con `SSL_TYPE=manual` el
-      # servidor de correo vigila esos archivos y se recarga solo cuando Caddy
-      # los renueva. La ruta lleva el emisor: por eso el Caddyfile fija Let's
-      # Encrypt para ese nombre y no deja que caiga en otro.
-      SSL_CERT_PATH: ${CORREO_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${CORREO_DOMINIO:-${DOMINIO}}/mail.${CORREO_DOMINIO:-${DOMINIO}}.crt}
-      SSL_KEY_PATH: ${CORREO_CLAVE_CERTIFICADO:-/srv/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.${CORREO_DOMINIO:-${DOMINIO}}/mail.${CORREO_DOMINIO:-${DOMINIO}}.key}
+      # Solo durante `scripts/correo.sh iniciar` (la primera vez): un
+      # administrador temporal para la instalación. Después queda vacío.
+      STALWART_RECOVERY_ADMIN: ${CORREO_RECUPERACION:-}
     # **Publicados a internet, a diferencia de la aplicación.** 25 para
     # recibir de otros servidores, 465 y 587 para que las personas manden, 993
-    # para leer. No 143 ni 110: son IMAP y POP sin cifrar, y no hay ningún
-    # programa de correo de hoy que los necesite.
+    # para leer. El panel de administración (8080) solo en la máquina: se
+    # entra con un túnel SSH.
     ports:
       - "25:25"
       - "465:465"
       - "587:587"
       - "993:993"
+      - "127.0.0.1:8081:8080"
     volumes:
-      - correo_buzones:/var/mail
-      - correo_estado:/var/mail-state
-      - correo_registro:/var/log/mail
-      # Casillas, alias y llaves DKIM: lo escribe `scripts/correo.sh`. En un
-      # volumen y no en el repositorio porque tiene las claves.
-      - correo_config:/tmp/docker-mailserver
-      - ./servidor/correo/fail2ban-jail.cf:/tmp/docker-mailserver/fail2ban-jail.cf:ro
+      - correo_etc:/etc/stalwart
+      - correo_datos:/var/lib/stalwart
+      # El certificado de `mail.<dominio>` lo saca y lo renueva Caddy (bloque
+      # `mail.` del Caddyfile) y Stalwart lo lee de su volumen. Lo recarga el
+      # worker una vez por día (tarea `correo.certificado`).
       - caddy_data:/srv/caddy:ro
-    # fail2ban banea con nftables dentro del contenedor, y para eso necesita
-    # tocar la red.
-    cap_add:
-      - NET_ADMIN
-    # Postfix termina de entregar lo que tiene en curso antes de cortar.
+    # Termina de entregar lo que tiene en curso antes de cortar.
     stop_grace_period: 1m
     healthcheck:
-      test: ["CMD-SHELL", "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"]
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/healthz/live"]
       interval: 1m
       timeout: 5s
-      start_period: 2m
+      start_period: 1m
       retries: 3
     networks:
       default:
@@ -318,36 +403,36 @@ services:
         aliases:
           - mail.${CORREO_DOMINIO:-${DOMINIO}}
 
-  # El webmail: leer y mandar desde el navegador, sin configurar nada. Para
-  # el mostrador o una PC prestada; en el teléfono conviene la aplicación de
-  # correo (ver la guía). Detrás de Caddy, en `webmail.<dominio>`.
-  webmail:
+  # El webmail: leer y mandar desde el navegador, en `correo.<dominio>`. Es
+  # el binario de Go del backend (`backend/`, ver docs/go/PLAN.md) con la SPA
+  # adentro; habla con el servidor de correo de arriba por IMAP y SMTP, con la
+  # misma casilla y clave de quien entra. No tiene base propia: la sesión es
+  # una cookie sellada con CORREO_CLAVE.
+  correo-web:
     profiles: ["correo"]
-    image: roundcube/roundcubemail:1.7.4-apache-nonroot
+    build:
+      context: ./backend
+    image: mjbj-go:${GIT_SHA:-local}
+    command: ["correo"]
     restart: unless-stopped
     depends_on:
       - correo
     environment:
-      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://mail.${CORREO_DOMINIO:-${DOMINIO}}
-      ROUNDCUBEMAIL_DEFAULT_PORT: "993"
-      ROUNDCUBEMAIL_SMTP_SERVER: tls://mail.${CORREO_DOMINIO:-${DOMINIO}}
-      ROUNDCUBEMAIL_SMTP_PORT: "587"
-      # Sus propias tablas (libreta de direcciones, preferencias) en SQLite y no
-      # en la base de la tienda: no tienen nada que ver, y así un problema de
-      # una no toca a la otra.
-      ROUNDCUBEMAIL_DB_TYPE: sqlite
-      ROUNDCUBEMAIL_SKIN: elastic
-      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload
-    volumes:
-      # El volumen va en `/var/roundcube` y no en `/var/roundcube/db`: esa
-      # carpeta no existe en la imagen, Docker la crearía como root y Roundcube
-      # —que corre sin root— no podría escribir su base. La de arriba es de su
-      # usuario, y un volumen nuevo hereda el dueño de lo que tapa.
-      - webmail_db:/var/roundcube
-      - ./servidor/webmail/maderera.inc.php:/var/roundcube/config/maderera.inc.php:ro
-      - ./servidor/webmail/php.ini:/usr/local/etc/php/conf.d/zzz-maderera.ini:ro
+      CORREO_IMAP: mail.${CORREO_DOMINIO:-${DOMINIO}}:993
+      CORREO_SMTP: mail.${CORREO_DOMINIO:-${DOMINIO}}
+      CORREO_PUERTO_SMTP: "587"
+      CORREO_NOMBRE_TLS: mail.${CORREO_DOMINIO:-${DOMINIO}}
+      # 32 bytes en base64 (`openssl rand -base64 32`). Sin ella el servicio
+      # no arranca, a propósito. Cambiarla cierra todas las sesiones.
+      CORREO_CLAVE: ${CORREO_CLAVE:-}
+    healthcheck:
+      test: ["CMD", "/mjbj", "salud", "http://127.0.0.1:8090/salud"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     expose:
-      - "8000"
+      - "8090"
 
 volumes:
   pgdata:
@@ -356,8 +441,5 @@ volumes:
   next_cache:
   caddy_data:
   caddy_config:
-  correo_buzones:
-  correo_estado:
-  correo_registro:
-  correo_config:
-  webmail_db:
+  correo_etc:
+  correo_datos:

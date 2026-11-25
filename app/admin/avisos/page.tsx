@@ -9,7 +9,6 @@ import {
   listarAvisosEmail,
   ultimosAvisosEnviados,
 } from "@/lib/dal/admin/avisos";
-import { sembrarAvisosEmail } from "@/lib/notificaciones/sembrar";
 import { FilaAvisoEmail } from "./fila";
 import { Vacio } from "@/components/admin/vacio";
 
@@ -35,8 +34,6 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
  * avisamos?".
  */
 export default async function AvisosPage() {
-  await sembrarAvisosEmail();
-
   const [avisos, correo, enviados] = await Promise.all([
     listarAvisosEmail(),
     estadoCorreo(),
@@ -47,7 +44,6 @@ export default async function AvisosPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Avisos automáticos"
-        detalle="Qué se le escribe al cliente solo, y por dónde."
       >
         <Link
           href="/admin/whatsapp/configuracion"
@@ -65,11 +61,10 @@ export default async function AvisosPage() {
             <h2 className="text-base font-medium">
               Los correos todavía no salen
             </h2>
+            {/* Hasta entonces cada aviso se arma completo y queda abajo como
+                simulado, para revisar los textos sin escribirle a nadie. */}
             <p className="mt-1 text-base text-muted-foreground">
-              {correo.detalle} Hasta entonces cada aviso se arma completo y
-              queda en la bitácora de abajo marcado como{" "}
-              <strong>simulado</strong>, para poder revisar los textos sin
-              escribirle a nadie.
+              {correo.detalle} Quedan abajo como <strong>simulado</strong>.
             </p>
           </div>
         </section>
@@ -83,12 +78,12 @@ export default async function AvisosPage() {
           <BellRing className="h-5 w-5 text-muted-foreground" />
           Avisos de venta en el teléfono
         </h2>
+        {/* Cuando entra una compra por el sitio o se acredita un pago, el panel
+            avisa como cualquier aplicación. Se activa por dispositivo. */}
         <p className="mt-1 text-base text-muted-foreground">
-          Cuando entra una compra por el sitio o se acredita un pago, el panel
-          avisa como cualquier aplicación. Se activa por dispositivo, y en el
-          teléfono conviene{" "}
-          <strong className="text-foreground">instalar el panel</strong> desde el
-          menú del navegador: en iPhone, es la única forma de que funcione.
+          En iPhone solo funciona con el panel{" "}
+          <strong className="text-foreground">instalado</strong> desde el menú
+          del navegador.
         </p>
         <div className="mt-3">
           <AvisosPush />
@@ -117,16 +112,13 @@ export default async function AvisosPage() {
       <section className="tarjeta">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">
           <h2 className="text-base font-medium">Últimos avisos</h2>
-          <p className="text-base text-muted-foreground">
-            Los dos canales, del más nuevo al más viejo
-          </p>
         </div>
 
         {enviados.length === 0 ? (
           <Vacio
             icono={MessageCircle}
             titulo="Todavía no salió ningún aviso"
-            detalle="Se mandan solos cuando un pedido cambia de estado. Acá van quedando los que ya salieron, con su resultado."
+            // Se mandan solos cuando un pedido cambia de estado; acá quedan los que salieron, con su resultado.
           />
         ) : (
           <ul className="divide-y">

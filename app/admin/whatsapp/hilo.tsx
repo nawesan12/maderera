@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   BellOff,
+  Bot,
   Check,
   CheckCheck,
   CheckCircle2,
@@ -36,14 +37,16 @@ import {
   type EstadoWhatsapp,
 } from "./actions";
 import { etiquetaDia, horaMensaje, jidCorto } from "./formato-wa";
+import { devolverAlBot } from "./configuracion/acciones";
 import { CompositorPlantilla } from "./compositor-plantilla";
 import { ElegirDocumento } from "./elegir-documento";
 import type { Persona } from "./bandeja";
 import type { DetalleConversacion, MensajeDeLaBandeja } from "@/lib/dal/admin/whatsapp";
-import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
+import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import { restanteLegible } from "@/lib/whatsapp/ventana";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { ConfirmarTope } from "./confirmar-tope";
+import { formatearPeso } from "@/lib/formato";
 
 const estadoInicial: EstadoWhatsapp = {};
 
@@ -196,16 +199,18 @@ export function Hilo({
         <FormularioEstado conversacionId={detalle.id} estado={detalle.estado} />
       </header>
 
+      {detalle.botEstado === "derivada" && <AvisoDerivada conversacionId={detalle.id} />}
+
       {detalle.bajaAt && (
         <p className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
           <BellOff className="h-4 w-4 shrink-0" />
-          Pidió no recibir avisos automáticos ({detalle.bajaDetalle ?? "sin detalle"}). Las respuestas a lo que pregunte
-          salen igual.
+          {/* Las respuestas a lo que pregunte salen igual. */}
+          Pidió no recibir avisos automáticos ({detalle.bajaDetalle ?? "sin detalle"}).
         </p>
       )}
 
       {/* Mensajes */}
-      <div className="flex-1 space-y-1 overflow-y-auto bg-brand-cream/25 px-4 py-4" aria-live="polite">
+      <div tabIndex={0} role="log" aria-label="Mensajes de la conversación" className="flex-1 space-y-1 overflow-y-auto bg-brand-cream/25 px-4 py-4" aria-live="polite">
         {detalle.mensajes.length === 0 ? (
           <p className="py-10 text-center text-base text-muted-foreground">Todavía no hay mensajes en esta conversación.</p>
         ) : (
@@ -248,7 +253,7 @@ export function Hilo({
             </>
           ) : (
             <>
-              Pasaron más de 24 horas desde su último mensaje: WhatsApp solo deja mandar un mensaje preparado.
+              Pasaron más de 24 horas: solo se puede mandar un mensaje preparado.
               <button type="button" onClick={() => setModo("plantilla")} className="font-medium underline">
                 Elegir uno
               </button>
@@ -369,7 +374,8 @@ export function Hilo({
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-keyshortcuts="Alt+W"
-                title="Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra. (Alt + W)"
+                // Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra.
+                title="Alt + W"
                 className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10"
               >
                 <Smartphone className="h-5 w-5" />
@@ -380,7 +386,7 @@ export function Hilo({
             <button
               type="submit"
               disabled={enviando}
-              title="Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h."
+              // Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h.
               className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
@@ -431,7 +437,7 @@ function Burbuja({
         <div
           className={`rounded-2xl px-3.5 py-2.5 shadow-sm ${
             mensaje.estado === "fallido"
-              ? "rounded-br-sm bg-red-50 ring-1 ring-red-200"
+              ? "rounded-br-sm bg-destructive/10 ring-1 ring-destructive/30"
               : saliente
                 ? "rounded-br-sm bg-brand-green/15"
                 : "rounded-bl-sm bg-background"
@@ -513,7 +519,7 @@ function Burbuja({
                 {emoji}
               </button>
             ))}
-            {error && <span className="text-sm text-red-700">{error}</span>}
+            {error && <span className="text-sm text-saldo-debe">{error}</span>}
           </div>
         )}
       </div>
@@ -539,6 +545,12 @@ function Procedencia({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
       </span>,
     );
   else if (mensaje.origen === "sistema") partes.push("Respuesta automática");
+  else if (mensaje.origen === "bot")
+    partes.push(
+      <span key="bot" className="inline-flex items-center gap-1">
+        <Bot className="h-3.5 w-3.5" /> Bot
+      </span>,
+    );
   else if (mensaje.enviadoPor) partes.push(mensaje.enviadoPor);
   if (mensaje.plantilla) partes.push("mensaje preparado");
   // Lo del teléfono no se cobra; lo de la API sí: que se vea en la burbuja.
@@ -564,19 +576,19 @@ function FalloDeEnvio({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
   const [resultado, setResultado] = useState<EstadoWhatsapp>({});
 
   return (
-    <div className="mt-2 border-t border-red-200 pt-2 text-sm text-red-800">
+    <div className="mt-2 border-t border-destructive/30 pt-2 text-sm text-saldo-debe">
       <p className="flex items-start gap-1.5">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>
           {mensaje.errorDetalle ?? "No se envió."}
-          {mensaje.errorCodigo ? <span className="tabular text-red-700/80"> (código {mensaje.errorCodigo})</span> : null}
+          {mensaje.errorCodigo ? <span className="tabular text-saldo-debe/80"> (código {mensaje.errorCodigo})</span> : null}
         </span>
       </p>
       <button
         type="button"
         disabled={pendiente}
         onClick={() => iniciar(async () => setResultado(await reintentarMensaje(mensaje.id, Boolean(resultado.requiereConfirmacionTope))))}
-        className="mt-1.5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-300 bg-white px-2.5 font-medium hover:bg-red-50 disabled:opacity-60"
+        className="mt-1.5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/40 bg-card px-2.5 font-medium hover:bg-destructive/10 disabled:opacity-60"
       >
         {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
         {resultado.requiereConfirmacionTope ? "Reintentar igual (se cobra)" : "Reintentar"}
@@ -599,7 +611,7 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
     return (
       <div className="mb-1.5 rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         <p className="flex items-center gap-1.5">
-          {fallido ? <AlertCircle className="h-4 w-4 text-red-700" /> : <Loader2 className="h-4 w-4 animate-spin" />}
+          {fallido ? <AlertCircle className="h-4 w-4 text-saldo-debe" /> : <Loader2 className="h-4 w-4 animate-spin" />}
           {fallido
             ? "No se pudo bajar el archivo de WhatsApp."
             : reintentando
@@ -622,7 +634,7 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
             Volver a intentar
           </button>
         )}
-        {error && <p className="mt-1 text-red-700">{error}</p>}
+        {error && <p className="mt-1 text-saldo-debe">{error}</p>}
       </div>
     );
   }
@@ -643,7 +655,15 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
   }
 
   if (mensaje.mediaTipo === "audio") {
-    return <audio controls src={mensaje.mediaUrl} className="mb-1.5 w-64 max-w-full" />;
+    // La transcripción de whisper (backend/internal/whatsapp/audio.go): se lee
+    // sin tener que escuchar.
+    const transcripcion = typeof mensaje.datos?.transcripcion === "string" ? mensaje.datos.transcripcion : null;
+    return (
+      <>
+        <audio controls src={mensaje.mediaUrl} className="mb-1.5 w-64 max-w-full" />
+        {transcripcion && <p className="mb-1.5 max-w-64 text-[15px] italic leading-snug">«{transcripcion}»</p>}
+      </>
+    );
   }
 
   if (mensaje.mediaTipo === "video") {
@@ -666,16 +686,13 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
   );
 }
 
-function tamano(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+const tamano = formatearPeso;
 
 /** Los tildes de WhatsApp: uno enviado, dos entregado, dos azules leído. */
 function EstadoEntrega({ estado }: { estado: string }) {
   if (estado === "fallido") {
     return (
-      <span className="flex items-center gap-1 font-medium text-red-700">
+      <span className="flex items-center gap-1 font-medium text-saldo-debe">
         <AlertCircle className="h-4 w-4" />
         No se envió
       </span>
@@ -712,7 +729,7 @@ function AdjuntarArchivo({ conversacionId, citado }: { conversacionId: string; c
       const json = (await res.json().catch(() => ({}))) as { error?: string; requiereConfirmacionTope?: boolean };
       // Con el tope del mes pasado se pregunta antes de pagar.
       if (json.requiereConfirmacionTope && !confirmarTope) {
-        if (window.confirm(`${json.error}\n\n¿Mandarlo igual por la API?`)) return void (await mandar(archivo, true));
+        if (window.confirm(`${json.error}\n\n¿Mandarlo igual? Se paga aparte.`)) return void (await mandar(archivo, true));
         setError(json.error ?? null);
         return;
       }
@@ -750,7 +767,7 @@ function AdjuntarArchivo({ conversacionId, citado }: { conversacionId: string; c
         {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
       </button>
       {error && (
-        <p role="alert" className="absolute bottom-full left-0 mb-2 w-72 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 shadow ring-1 ring-red-200">
+        <p role="alert" className="absolute bottom-full left-0 mb-2 w-72 rounded-lg estado-problema bg-[var(--estado-fondo)] px-3 py-2 text-sm shadow ring-1 ring-destructive/30">
           {error}
         </p>
       )}
@@ -820,7 +837,7 @@ function FormularioEstado({ conversacionId, estado }: { conversacionId: string; 
         ) : resuelta ? (
           <Undo2 className="h-5 w-5" />
         ) : (
-          <CheckCircle2 className="h-5 w-5 text-green-700" />
+          <CheckCircle2 className="h-5 w-5 text-saldo-favor" />
         )}
         {resuelta ? "Reabrir" : "Resuelta"}
       </button>
@@ -863,5 +880,31 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
         Simular
       </button>
     </form>
+  );
+}
+
+/** El bot la pasó a una persona y no contesta más acá hasta que se la devuelvan. */
+function AvisoDerivada({ conversacionId }: { conversacionId: string }) {
+  const router = useRouter();
+  const [pendiente, empezar] = useTransition();
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-naranja-claro/60 px-4 py-2 text-sm font-medium text-acento-sobre-claro">
+      <UserRound className="h-4 w-4 shrink-0" />
+      El bot la pasó a una persona
+      <button
+        type="button"
+        disabled={pendiente}
+        onClick={() =>
+          empezar(async () => {
+            await devolverAlBot(conversacionId);
+            router.refresh();
+          })
+        }
+        className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border bg-card px-3 text-sm font-semibold text-foreground"
+      >
+        <Bot className="h-4 w-4" />
+        Devolver al bot
+      </button>
+    </p>
   );
 }

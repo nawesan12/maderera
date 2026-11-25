@@ -1,7 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { useId, useState, useTransition } from "react";
+import {
+  BadgeCheck,
+  Building2,
+  CircleHelp,
+  Landmark,
+  Loader2,
+  Phone,
+  ShieldCheck,
+  StickyNote,
+  Store,
+  User,
+} from "lucide-react";
+import { Opciones, Seccion } from "@/components/admin/formulario";
 import { guardarProveedor, type EstadoProveedor } from "./actions";
 
 export interface FichaProveedor {
@@ -19,6 +31,10 @@ export interface FichaProveedor {
   aliasCbu: string | null;
   diasPago: number;
   notas: string | null;
+  /** Frente a Ganancias; null es «no se sabe» y el pago con retención se frena. */
+  condicionGanancias?: "inscripto" | "no_inscripto" | "exento" | null;
+  /** Último día del certificado de exclusión (YYYY-MM-DD). */
+  exentoGananciasHasta?: string | null;
 }
 
 const VACIA: FichaProveedor = {
@@ -37,6 +53,8 @@ const VACIA: FichaProveedor = {
   aliasCbu: null,
   diasPago: 0,
   notas: null,
+  condicionGanancias: null,
+  exentoGananciasHasta: null,
 };
 
 const CONDICIONES = {
@@ -46,6 +64,26 @@ const CONDICIONES = {
   consumidor_final: "Consumidor final",
   no_categorizado: "No categorizado",
 };
+
+const OPCIONES_CONDICION = [
+  {
+    valor: "responsable_inscripto",
+    texto: CONDICIONES.responsable_inscripto,
+    icono: BadgeCheck,
+  },
+  { valor: "monotributista", texto: CONDICIONES.monotributista, icono: Store },
+  { valor: "exento", texto: CONDICIONES.exento, icono: ShieldCheck },
+  {
+    valor: "consumidor_final",
+    texto: CONDICIONES.consumidor_final,
+    icono: User,
+  },
+  {
+    valor: "no_categorizado",
+    texto: CONDICIONES.no_categorizado,
+    icono: CircleHelp,
+  },
+];
 
 /**
  * El mismo formulario para el alta y para la edición.
@@ -65,8 +103,14 @@ export function FormularioProveedor({
   const [datos, setDatos] = useState(ficha);
   const [estado, setEstado] = useState<EstadoProveedor>({});
   const [enCurso, empezar] = useTransition();
+  // Las fichas de la condición son radios sin formulario: el nombre tiene que
+  // ser único en la página por si hay dos fichas abiertas a la vez.
+  const grupoCondicion = useId();
 
-  function campo<K extends keyof FichaProveedor>(clave: K, valor: FichaProveedor[K]) {
+  function campo<K extends keyof FichaProveedor>(
+    clave: K,
+    valor: FichaProveedor[K],
+  ) {
     setDatos((prev) => ({ ...prev, [clave]: valor }));
   }
 
@@ -85,6 +129,11 @@ export function FormularioProveedor({
         cbu: datos.cbu ?? undefined,
         aliasCbu: datos.aliasCbu ?? undefined,
         notas: datos.notas ?? undefined,
+        // Al monotributista no se le retiene Ganancias: lo que tenga
+        // guardado no se toca, pero tampoco se manda.
+        condicionGanancias: datos.condicionIva === "monotributista" ? undefined : (datos.condicionGanancias ?? undefined),
+        exentoGananciasHasta:
+          datos.condicionGanancias === "exento" ? (datos.exentoGananciasHasta ?? undefined) : undefined,
       });
       setEstado(resultado);
       if (resultado.id && onListo) onListo(resultado.id);
@@ -93,97 +142,134 @@ export function FormularioProveedor({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Campo
-          etiqueta="Nombre"
-          valor={datos.nombre}
-          onCambio={(v) => campo("nombre", v)}
-          requerido
-        />
-        <Campo
-          etiqueta="Razón social"
-          valor={datos.razonSocial ?? ""}
-          onCambio={(v) => campo("razonSocial", v || null)}
-        />
-        <Campo
-          etiqueta="CUIT"
-          valor={datos.cuit ?? ""}
-          onCambio={(v) => campo("cuit", v || null)}
-        />
-        <label className="block">
-          <span className="text-sm font-medium">Condición frente al IVA</span>
-          <select
-            value={datos.condicionIva}
-            onChange={(e) => campo("condicionIva", e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {Object.entries(CONDICIONES).map(([valor, texto]) => (
-              <option key={valor} value={valor}>
-                {texto}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Campo
-          etiqueta="Con quién se habla"
-          valor={datos.contacto ?? ""}
-          onCambio={(v) => campo("contacto", v || null)}
-        />
-        <Campo
-          etiqueta="Teléfono"
-          valor={datos.telefono ?? ""}
-          onCambio={(v) => campo("telefono", v || null)}
-        />
-        <Campo
-          etiqueta="Correo"
-          valor={datos.email ?? ""}
-          onCambio={(v) => campo("email", v || null)}
-        />
-        <Campo
-          etiqueta="Rubro"
-          valor={datos.rubro ?? ""}
-          onCambio={(v) => campo("rubro", v || null)}
-        />
-        <Campo
-          etiqueta="Dirección"
-          valor={datos.direccion ?? ""}
-          onCambio={(v) => campo("direccion", v || null)}
-        />
-        <label className="block">
-          <span className="text-sm font-medium">Días de pago</span>
-          <input
-            type="number"
-            min="0"
-            max="365"
-            value={datos.diasPago}
-            onChange={(e) => campo("diasPago", Number(e.target.value))}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+      {/* Sin hoja propia: vive dentro del diálogo del alta y de la tarjeta
+          «Editar la ficha», que ya son la superficie. */}
+      <div className="divide-y divide-linea-suave">
+        <Seccion titulo="Quién es" icono={Building2}>
+          <Campo
+            etiqueta="Nombre"
+            valor={datos.nombre}
+            onCambio={(v) => campo("nombre", v)}
+            requerido
           />
-          <span className="text-sm text-muted-foreground">
-            Cero es contra entrega.
-          </span>
-        </label>
-        <Campo
-          etiqueta="CBU"
-          valor={datos.cbu ?? ""}
-          onCambio={(v) => campo("cbu", v || null)}
-        />
-        <Campo
-          etiqueta="Alias"
-          valor={datos.aliasCbu ?? ""}
-          onCambio={(v) => campo("aliasCbu", v || null)}
-        />
-      </div>
+          <Campo
+            etiqueta="Razón social"
+            valor={datos.razonSocial ?? ""}
+            onCambio={(v) => campo("razonSocial", v || null)}
+          />
+          <Campo
+            etiqueta="CUIT"
+            valor={datos.cuit ?? ""}
+            onCambio={(v) => campo("cuit", v || null)}
+          />
+          <Campo
+            etiqueta="Rubro"
+            valor={datos.rubro ?? ""}
+            onCambio={(v) => campo("rubro", v || null)}
+          />
+          <div className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium">Condición frente al IVA</span>
+            <Opciones
+              nombre={`condicion-iva-${grupoCondicion}`}
+              opciones={OPCIONES_CONDICION}
+              valor={datos.condicionIva}
+              alCambiar={(v) => campo("condicionIva", v)}
+              columnas={3}
+            />
+          </div>
+          {datos.condicionIva !== "monotributista" && (
+            <label className="block">
+              <span className="text-sm font-medium">Ganancias</span>
+              <select
+                value={datos.condicionGanancias ?? ""}
+                onChange={(e) =>
+                  campo("condicionGanancias", (e.target.value || null) as FichaProveedor["condicionGanancias"])
+                }
+                className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              >
+                <option value="">Sin cargar</option>
+                <option value="inscripto">Inscripto</option>
+                <option value="no_inscripto">No inscripto</option>
+                <option value="exento">Exento</option>
+              </select>
+            </label>
+          )}
+          {datos.condicionIva !== "monotributista" && datos.condicionGanancias === "exento" && (
+            <label className="block">
+              <span className="text-sm font-medium">Exento hasta</span>
+              <input
+                type="date"
+                value={datos.exentoGananciasHasta ?? ""}
+                onChange={(e) => campo("exentoGananciasHasta", e.target.value || null)}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+          )}
+        </Seccion>
 
-      <label className="block">
-        <span className="text-sm font-medium">Notas</span>
-        <textarea
-          value={datos.notas ?? ""}
-          onChange={(e) => campo("notas", e.target.value || null)}
-          rows={2}
-          className="mt-1 w-full rounded-lg border border-linea bg-card px-3 py-2 text-base"
-        />
-      </label>
+        <Seccion titulo="Contacto" icono={Phone}>
+          <Campo
+            etiqueta="Con quién se habla"
+            valor={datos.contacto ?? ""}
+            onCambio={(v) => campo("contacto", v || null)}
+          />
+          <Campo
+            etiqueta="Teléfono"
+            valor={datos.telefono ?? ""}
+            onCambio={(v) => campo("telefono", v || null)}
+          />
+          <Campo
+            etiqueta="Correo"
+            valor={datos.email ?? ""}
+            onCambio={(v) => campo("email", v || null)}
+          />
+          <Campo
+            etiqueta="Dirección"
+            valor={datos.direccion ?? ""}
+            onCambio={(v) => campo("direccion", v || null)}
+          />
+        </Seccion>
+
+        <Seccion titulo="Pago" icono={Landmark}>
+          <label className="block">
+            <span className="text-sm font-medium">
+              Días de pago (0 es contra entrega)
+            </span>
+            <input
+              type="number"
+              min="0"
+              max="365"
+              value={datos.diasPago}
+              onChange={(e) => campo("diasPago", Number(e.target.value))}
+              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
+          <Campo
+            etiqueta="Alias"
+            valor={datos.aliasCbu ?? ""}
+            onCambio={(v) => campo("aliasCbu", v || null)}
+          />
+          <div className="md:col-span-2">
+            <Campo
+              etiqueta="CBU"
+              valor={datos.cbu ?? ""}
+              onCambio={(v) => campo("cbu", v || null)}
+            />
+          </div>
+        </Seccion>
+
+        <Seccion titulo="Notas" icono={StickyNote} columnas={1}>
+          <label className="block">
+            <span className="sr-only">Notas</span>
+            <textarea
+              value={datos.notas ?? ""}
+              onChange={(e) => campo("notas", e.target.value || null)}
+              rows={2}
+              className="w-full rounded-lg border border-linea bg-card px-3 py-2 text-base"
+            />
+          </label>
+        </Seccion>
+      </div>
 
       {(estado.error || estado.ok) && (
         <p

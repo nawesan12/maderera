@@ -126,7 +126,7 @@ export function FormularioDatos({
       {estado.ok && (
         <p
           role="status"
-          className="flex items-center gap-2 rounded-lg bg-green-50 px-3.5 py-2.5 text-sm text-green-900"
+          className="flex items-center gap-2 estado-ok rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-sm"
         >
           <Check className="h-4 w-4 shrink-0" />
           {estado.ok}
@@ -136,7 +136,7 @@ export function FormularioDatos({
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
       >
         {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
         Guardar cambios

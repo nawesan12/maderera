@@ -123,8 +123,7 @@ export function AvisosPush() {
     return (
       <p className="text-base text-muted-foreground">
         Este navegador no admite avisos. En el teléfono, instalá el panel desde
-        el menú del navegador («Agregar a la pantalla de inicio») y activalos
-        desde ahí.
+        el menú del navegador.
       </p>
     );
   }
@@ -132,10 +131,10 @@ export function AvisosPush() {
   if (estado === "sin-claves") {
     return (
       <p className="text-base text-muted-foreground">
-        Los avisos del panel todavía no están habilitados en el servidor: faltan
-        las claves <code className="tabular">VAPID_PUBLIC_KEY</code> y{" "}
-        <code className="tabular">VAPID_PRIVATE_KEY</code>. Se generan una vez y
-        no vencen.
+        {/* Se generan una vez y no vencen. */}
+        Faltan en el servidor las claves{" "}
+        <code className="tabular">VAPID_PUBLIC_KEY</code> y{" "}
+        <code className="tabular">VAPID_PRIVATE_KEY</code>.
       </p>
     );
   }
@@ -177,7 +176,7 @@ export function AvisosPush() {
           type="button"
           onClick={() => empezar(async () => void (await prender()))}
           disabled={trabajando}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {trabajando ? (
             <Loader2 className="h-4 w-4 animate-spin" />

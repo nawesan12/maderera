@@ -52,7 +52,7 @@ export function ResolverSolicitud({
         <button
           type="button"
           onClick={() => setModo("aprobar")}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
         >
           <UserCheck className="h-5 w-5" />
           Habilitar
@@ -79,9 +79,12 @@ export function ResolverSolicitud({
         {clienteExistente && (
           <p className="flex items-start gap-2 rounded-lg bg-brand-cream/60 p-3 text-base">
             <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
-            Ya existe la ficha <strong>{clienteExistente.nombre}</strong> con ese
-            CUIT. Se marca esa como profesional en lugar de crear una nueva, para
-            no partir su cuenta corriente en dos.
+            <span>
+              {/* Si el correo coincide se usa esa; si no, se crea otra: el CUIT solo
+                  no prueba que sea la misma persona. Las fichas se unen desde la ficha. */}
+              Ya existe la ficha <strong>{clienteExistente.nombre}</strong> con ese
+              CUIT. Se usa solo si coincide el correo.
+            </span>
           </p>
         )}
 
@@ -138,7 +141,7 @@ export function ResolverSolicitud({
           <button
             type="submit"
             disabled={aprobando}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
           >
             {aprobando && <Loader2 className="h-4 w-4 animate-spin" />}
             Confirmar
@@ -150,9 +153,7 @@ export function ResolverSolicitud({
           >
             Cancelar
           </button>
-          <p className="w-full text-base text-muted-foreground">
-            Le mandamos un correo con los datos de su acceso.
-          </p>
+          {/* Le llega un correo con los datos de su acceso. */}
         </div>
       </form>
     );
@@ -173,9 +174,7 @@ export function ResolverSolicitud({
         placeholder="El CUIT no corresponde a una actividad del rubro."
         className="w-full rounded-lg border bg-background px-3 py-2 text-base"
       />
-      <p className="text-base text-muted-foreground">
-        Se lo mandamos tal cual por correo, así que conviene que se entienda solo.
-      </p>
+      <p className="text-base text-muted-foreground">Le llega tal cual por correo.</p>
 
       {estadoRechazar.error && (
         <p className="flex items-start gap-2 text-base text-destructive">

@@ -1,14 +1,13 @@
 import "server-only";
 
-import { asc, desc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { avisosEmail, notificationsLog } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { proveedorEmail } from "@/lib/email";
-import { remitenteVisible } from "@/lib/email/config";
-import { posicionDelEvento } from "@/lib/notificaciones/titulos";
+import { api, datos } from "@/lib/api/servidor";
 
-/** Lectura de la configuración de avisos. Solo personal de la empresa. */
+/**
+ * La configuración de los avisos por correo y su bitácora. Solo el admin
+ * (el ACCESO de /admin/avisos). Lo sirve la API de Go
+ * (backend/internal/avisos): siembra los avisos que falten y los devuelve en
+ * el orden del ciclo de un pedido.
+ */
 
 export interface AvisoEmailConfigurable {
   id: string;
@@ -19,24 +18,7 @@ export interface AvisoEmailConfigurable {
 }
 
 export async function listarAvisosEmail(): Promise<AvisoEmailConfigurable[]> {
-  await requireStaff();
-
-  const filas = await db
-    .select({
-      id: avisosEmail.id,
-      evento: avisosEmail.evento,
-      asunto: avisosEmail.asunto,
-      encabezado: avisosEmail.encabezado,
-      activo: avisosEmail.activo,
-    })
-    .from(avisosEmail)
-    .orderBy(asc(avisosEmail.evento));
-
-  // El orden que importa es el del ciclo de vida de un pedido, no el
-  // alfabético: la lista se lee de arriba abajo como se lee el recorrido.
-  return filas.sort(
-    (a, b) => posicionDelEvento(a.evento) - posicionDelEvento(b.evento),
-  );
+  return datos(await (await api()).GET("/api/v1/admin/avisos"));
 }
 
 export interface EstadoCorreo {
@@ -46,20 +28,7 @@ export interface EstadoCorreo {
 }
 
 export async function estadoCorreo(): Promise<EstadoCorreo> {
-  await requireStaff();
-
-  const proveedor = proveedorEmail();
-
-  return {
-    enVivo: proveedor.real,
-    remitente: remitenteVisible(),
-    detalle:
-      proveedor.nombre === "smtp"
-        ? "Los correos salen por el servidor de correo propio."
-        : proveedor.nombre === "resend"
-          ? "Los correos salen por Resend."
-          : "Falta conectar el envío (el servidor de correo propio o Resend). Los avisos se arman y quedan registrados, pero no se envían.",
-  };
+  return datos(await (await api()).GET("/api/v1/admin/avisos/correo"));
 }
 
 export interface AvisoEnviado {
@@ -81,44 +50,6 @@ export interface AvisoEnviado {
  * "¿le avisamos?".
  */
 export async function ultimosAvisosEnviados(limite = 40): Promise<AvisoEnviado[]> {
-  await requireStaff();
-
-  return db
-    .select({
-      id: notificationsLog.id,
-      canal: notificationsLog.canal,
-      evento: notificationsLog.evento,
-      destinatario: notificationsLog.destinatario,
-      asunto: notificationsLog.asunto,
-      estado: notificationsLog.estado,
-      error: notificationsLog.error,
-      createdAt: notificationsLog.createdAt,
-    })
-    .from(notificationsLog)
-    .orderBy(desc(notificationsLog.createdAt))
-    .limit(limite);
-}
-
-/** Avisos de una entidad concreta, para mostrarlos en su ficha. */
-export async function avisosDe(
-  entidadTipo: string,
-  entidadId: string,
-): Promise<AvisoEnviado[]> {
-  await requireStaff();
-
-  return db
-    .select({
-      id: notificationsLog.id,
-      canal: notificationsLog.canal,
-      evento: notificationsLog.evento,
-      destinatario: notificationsLog.destinatario,
-      asunto: notificationsLog.asunto,
-      estado: notificationsLog.estado,
-      error: notificationsLog.error,
-      createdAt: notificationsLog.createdAt,
-    })
-    .from(notificationsLog)
-    .where(eq(notificationsLog.entidadId, entidadId))
-    .orderBy(desc(notificationsLog.createdAt))
-    .limit(20);
+  const filas = datos(await (await api()).GET("/api/v1/admin/avisos/enviados", { params: { query: { limite } } }));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }

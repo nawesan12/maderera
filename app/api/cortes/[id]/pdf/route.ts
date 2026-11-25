@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/dal/session";
-import { obtenerCorte } from "@/lib/dal/admin/cortes";
+import { hojaDelCorte } from "@/lib/dal/admin/cortes";
 import { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
-import { calcularPlanoDeCorteSinTrabar, leerAcomodoManual } from "@/lib/cortes/plano";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
-import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { cortePdf } from "@/lib/pdf/corte";
 
 /**
@@ -14,9 +12,9 @@ import { cortePdf } from "@/lib/pdf/corte";
  * un cliente dice qué está construyendo y con cuánto material, y eso no se
  * publica en una dirección adivinable.
  *
- * El plano se recalcula acá y no se guarda: es geometría pura sobre el despiece
- * y la medida de la placa, así que siempre da lo mismo. Guardarlo sería tener
- * dos verdades cuando alguien corrige una medida.
+ * El plano lo rehace Go (backend/internal/cortes) con el disco y el motor del
+ * trabajo; acá solo se dibuja el PDF, hasta que se mude con los demás (tanda
+ * 12).
  */
 export async function GET(
   _request: Request,
@@ -25,20 +23,10 @@ export async function GET(
   await requireStaff();
 
   const { id } = await params;
-  const [corte, emisor] = await Promise.all([obtenerCorte(id), obtenerConfiguracionFiscal()]);
+  const [datos, emisor] = await Promise.all([hojaDelCorte(id), obtenerConfiguracionFiscal()]);
 
-  if (!corte) return new NextResponse("No encontrado", { status: 404 });
-
-  const plano = await calcularPlanoDeCorteSinTrabar({
-    piezas: corte.piezas,
-    placaLargo: corte.medida.largo,
-    placaAncho: corte.medida.ancho,
-    // El disco del trabajo, no el general de hoy.
-    anchoSierra: corte.anchoSierraMm,
-    fijadas: leerAcomodoManual(corte.acomodoManual),
-    // Con el motor con que nació el trabajo (ver `cutting_orders.motorPlano`).
-    busqueda: corte.motorPlano >= 2,
-  });
+  if (!datos) return new NextResponse("No encontrado", { status: 404 });
+  const { corte, plano } = datos;
 
   const pdf = await cortePdf(
     {
@@ -48,7 +36,8 @@ export async function GET(
       cantoDescripcion: corte.cantoDescripcion,
       deQueSale: nombreDeLaMitad(corte.medida.mitad),
       createdAt: corte.createdAt,
-      metrosCanto: metrosDeTapacanto(corte.piezas),
+      metrosCanto: datos.metrosCanto,
+      superficieSierra: datos.superficies.reduce((t, x) => t + x, 0),
     },
     plano,
     emisor,

@@ -10,6 +10,7 @@ import {
   hacerPrincipal,
   subirImagen,
 } from "@/app/admin/productos/imagenes-actions";
+import { Confirmar } from "@/components/admin/confirmar";
 
 export interface ImagenProducto {
   id: string;
@@ -39,6 +40,7 @@ export function GaleriaImagenes({
   const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(
     null,
   );
+  const [aBorrar, setABorrar] = useState<ImagenProducto | null>(null);
 
   function subir(archivos: FileList | File[]) {
     const lista = Array.from(archivos).filter((a) => a.type.startsWith("image/"));
@@ -105,7 +107,7 @@ export function GaleriaImagenes({
               </div>
 
               {i === 0 && (
-                <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-brand-orange px-2 py-0.5 text-sm font-medium text-white">
+                <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-accion px-2 py-0.5 text-sm font-medium text-white">
                   <Star className="h-3.5 w-3.5" fill="currentColor" />
                   Principal
                 </span>
@@ -132,9 +134,7 @@ export function GaleriaImagenes({
                 )}
                 <button
                   type="button"
-                  onClick={() =>
-                    accion(() => eliminarImagen(imagen.id), "Foto eliminada.")
-                  }
+                  onClick={() => setABorrar(imagen)}
                   disabled={subiendo}
                   className="flex h-9 items-center justify-center rounded-md bg-card/95 px-3 text-destructive shadow-sm backdrop-blur transition-colors hover:bg-card"
                   aria-label="Eliminar esta foto"
@@ -146,6 +146,20 @@ export function GaleriaImagenes({
           ))}
         </ul>
       )}
+
+      <Confirmar
+        abierto={aBorrar !== null}
+        alCerrar={() => setABorrar(null)}
+        titulo="Borrar esta foto"
+        detalle="Sale del producto y del sitio. Para volver a tenerla hay que subirla de nuevo."
+        confirmar="Borrar la foto"
+        peligro
+        alConfirmar={() => {
+          const imagen = aBorrar;
+          setABorrar(null);
+          if (imagen) accion(() => eliminarImagen(imagen.id), "Foto eliminada.");
+        }}
+      />
 
       <label
         onDragOver={(e) => {
@@ -202,11 +216,7 @@ export function GaleriaImagenes({
         />
       </label>
 
-      {imagenes.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          La foto marcada como principal es la que se ve en el catálogo.
-        </p>
-      )}
+      {/* La foto marcada como principal es la que se ve en el catálogo. */}
     </div>
   );
 }

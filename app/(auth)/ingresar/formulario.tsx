@@ -52,7 +52,7 @@ export function FormularioIngreso({ volver }: { volver?: string }) {
       <Button
         type="submit"
         disabled={pendiente}
-        className="w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-medium"
+        className="w-full bg-accion hover:bg-brand-orange-dark text-white font-medium"
       >
         {pendiente ? (
           <>

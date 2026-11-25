@@ -1,0 +1,7 @@
+package: portalapi
+output: ../internal/api/portalapi/portal.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

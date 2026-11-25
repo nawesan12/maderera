@@ -7,7 +7,10 @@ import { SaltarAlContenido } from "@/components/saltar-al-contenido";
 import { headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/sidebar";
+import { AvisoSinAcceso } from "@/components/admin/aviso-sin-acceso";
+import { rebote } from "@/components/admin/secciones";
 import { BuscadorGlobal } from "@/components/admin/buscador-global";
+import { TablasApilables } from "@/components/admin/tablas-apilables";
 import { MenuUsuario } from "@/components/admin/menu-usuario";
 import {
   ActivityBell,
@@ -121,7 +124,7 @@ async function PanelConSesion({
     // poder abrir una guía. La 8 —"Cortes y WhatsApp"— está escrita para él.
     !ruta.startsWith("/admin/ayuda")
   ) {
-    redirect("/taller");
+    redirect(rebote("/taller", ruta));
   }
 
   if (ruta && !puedeEntrar(ruta, usuario.staffRole)) {
@@ -135,7 +138,9 @@ async function PanelConSesion({
      * nueva no puede quedar con una regla en el menú y otra en la página,
      * porque hay una sola regla.
      */
-    redirect(inicioDelRol(usuario.staffRole));
+    // Con la ruta que no pudo abrir: el inicio avisa a qué no tiene acceso
+    // (comité final, «Permisos»: el rebote no decía por qué).
+    redirect(rebote(inicioDelRol(usuario.staffRole), ruta));
   }
 
   // El contador de conversaciones sin leer es un adorno del menú: si falla, el
@@ -154,30 +159,44 @@ async function PanelConSesion({
           las veinte pantallas y repetirla garantizaba que tres quedaran
           distintas. Ver `lib/teclado/avance.ts`. */}
       <EnterAvanza />
+      <TablasApilables />
       <AvisoDePedidosEnVivo />
+      <Suspense fallback={null}>
+        <AvisoSinAcceso />
+      </Suspense>
       <AdminSidebar whatsappSinLeer={sinLeer} rol={usuario.staffRole} />
       {/* `min-w-0` no es decorativo: sin él este hijo de flex no baja del ancho
           de su contenido, así que el `overflow-x` del tablero no recorta nada y
           el documento entero se estira. Con el menú lateral fijo y la barra
           superior pegajosa, eso se ve como que el panel se desarma. */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-4 border-b border-linea bg-background/90 px-4 backdrop-blur-lg lg:px-7">
-          <div className="flex max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
+        <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-linea bg-background/90 px-4 backdrop-blur-lg sm:gap-4 lg:px-7">
+          <div className="flex min-w-0 max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
             <BuscadorGlobal />
           </div>
-          <div className="ml-auto flex items-center gap-3.5">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3.5">
             {/* El interruptor de tema también acá: el único que había estaba en
                 el navbar público, así que quien entraba al panel en modo oscuro
                 no tenía desde dónde volver. */}
-            <ThemeToggle />
-            <Suspense fallback={<ActivityBellSkeleton />}>
-              <ActivityBell />
-            </Suspense>
-            <div className="border-l border-linea pl-3.5">
+            {/* En el teléfono el buscador necesita ese lugar: el tema se cambia
+                desde una pantalla ancha y queda guardado. */}
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
+            {/* La actividad sale de la bitácora, que es del admin: para los
+                otros roles la API da 403, y como el encabezado está en todas
+                las pantallas, ese 403 tiraba abajo el panel entero. */}
+            {puedeEntrar("/admin/bitacora", usuario.staffRole) && (
+              <Suspense fallback={<ActivityBellSkeleton />}>
+                <ActivityBell />
+              </Suspense>
+            )}
+            <div className="border-l border-linea pl-2 sm:pl-3.5">
               <MenuUsuario
                 nombre={usuario.name}
                 iniciales={iniciales(usuario.name)}
                 rol={ETIQUETA_ROL[usuario.staffRole!]}
+                esAdmin={usuario.staffRole === "admin"}
               />
             </div>
           </div>

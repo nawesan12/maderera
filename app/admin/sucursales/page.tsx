@@ -52,7 +52,6 @@ export default async function AdminSucursalesPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Sucursales"
-        detalle="Cómo viene el día en cada local, y la ficha que se publica en el sitio."
       >
         <Link
           href="/sucursales"
@@ -82,8 +81,8 @@ export default async function AdminSucursalesPage() {
           <strong className="text-foreground">{sueltos.pedidos}</strong>{" "}
           {sueltos.pedidos === 1 ? "pedido abierto" : "pedidos abiertos"} y{" "}
           <strong className="text-foreground">{sueltos.cortes}</strong>{" "}
-          {sueltos.cortes === 1 ? "corte en cola" : "cortes en cola"}. No suman a
-          ninguna de las dos columnas de arriba.
+          {sueltos.cortes === 1 ? "corte en cola" : "cortes en cola"}
+          {/* No suman a ninguna de las dos columnas de arriba. */}
         </p>
       )}
     </div>

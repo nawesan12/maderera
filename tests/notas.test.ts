@@ -5,7 +5,7 @@ import {
   prorratearTributos,
   revisarAcreditacion,
   type ItemOriginal,
-} from "@/lib/fiscal/notas";
+} from "../scripts/golden/originales/fiscal-notas";
 import { esNotaDeCredito, notaDeCredito, notaDeDebito } from "@/lib/fiscal/comprobantes";
 
 /**

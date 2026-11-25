@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { History, ShieldCheck } from "lucide-react";
+import { History } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import {
   etiquetaDeEntidad,
@@ -104,7 +104,6 @@ export default async function BitacoraPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Bitácora"
-        detalle="Quién hizo qué en el panel, y cuándo."
       />
 
       <form method="get" className="flex flex-wrap items-end gap-3">
@@ -173,7 +172,7 @@ export default async function BitacoraPage({
             href={conFiltro({ dias: String(p.dias), pagina: undefined })}
             className={`h-9 rounded-lg px-3 text-base font-medium leading-9 transition-colors ${
               dias === p.dias
-                ? "bg-brand-orange text-white"
+                ? "bg-accion text-white"
                 : "border hover:bg-muted"
             }`}
           >
@@ -272,11 +271,7 @@ export default async function BitacoraPage({
         </nav>
       )}
 
-      <p className="flex items-start gap-2 text-sm text-muted-foreground">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-        La bitácora no se edita ni se borra desde el panel. Guarda el nombre de
-        quien actuó aunque después se dé de baja su usuario.
-      </p>
+      {/* La bitácora no se edita ni se borra desde el panel, y guarda el nombre de quien actuó aunque después se dé de baja su usuario. */}
     </div>
   );
 }

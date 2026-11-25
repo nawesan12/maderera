@@ -47,6 +47,11 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   /* Brand colors - warmer, richer orange palette */
+  /* Los dos colores de la guía de marca (estudio Ranina): la «m» y el nombre.
+     Los mismos que `NARANJA_MARCA` y `GRIS_MARCA` de lib/marca/logotipo.ts,
+     que usa el generador de imágenes (no lee el CSS). */
+  --color-marca-naranja: #ec7d38;
+  --color-marca-gris: #505052;
   --color-brand-orange: oklch(0.68 0.19 48);
   --color-brand-orange-light: oklch(0.78 0.14 50);
   --color-brand-orange-dark: oklch(0.52 0.18 40);
@@ -77,6 +82,8 @@
   --color-naranja-claro: var(--naranja-claro);
   --color-naranja-tenue: var(--naranja-tenue);
   --color-verde-whatsapp: var(--verde-whatsapp);
+  --color-whatsapp-boton: var(--whatsapp-boton);
+  --color-whatsapp-boton-hover: var(--whatsapp-boton-hover);
   --color-rojo-oferta: var(--rojo-oferta);
   --color-saldo-debe: var(--saldo-debe);
   --color-saldo-favor: var(--saldo-favor);
@@ -87,14 +94,20 @@
   --color-acento-sobre-claro: var(--acento-sobre-claro);
 }
 
+/* Los controles nativos (el calendario de un campo de fecha, los select, la
+   barra de desplazamiento) se dibujan con el esquema del tema: sin esto
+   quedaban claros en oscuro y el ícono del calendario, negro sobre negro. */
 :root {
+  color-scheme: light;
   --background: oklch(0.985 0.005 80);
   --foreground: oklch(0.15 0.01 60);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.15 0.01 60);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.15 0.01 60);
-  --primary: oklch(0.68 0.19 48);
+  /* El botón por defecto lleva blanco encima: el naranja de marca daba
+     3,08:1. `--accion` es el que está calculado para eso (4,61:1). */
+  --primary: var(--accion);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.95 0.01 75);
   --secondary-foreground: oklch(0.22 0.01 60);
@@ -169,12 +182,20 @@
   /* La banda lo pide en #8a7f72, que da 3.92:1 sobre blanco y 3.67:1 sobre el
      fondo alterno — por debajo del mínimo, y no es texto decorativo: son las
      bajadas del menú, el "desde", el precio tachado y el neto legal. Este es el
-     mismo tono un escalón más oscuro: 4.52:1 en el peor de los dos fondos. */
-  --texto-3: oklch(0.552 0.022 70);
+     mismo tono un escalón más oscuro: 4.52:1 en el peor de los dos fondos.
+     Y otro escalón (31/10): sobre el fondo hundido (#efedea) del taller y los
+     cortes caía a 4.13:1. #70665b da 4.7:1 o más en todos los fondos claros. */
+  --texto-3: #70665b;
 
   --naranja-claro: #fdeada;
   --naranja-tenue: #fdf5ec;
-  --verde-whatsapp: #2f7d4f;
+  --verde-whatsapp: #2a7247; /* era #2f7d4f: 4,16:1 sobre su propio fondo claro */
+  /* El fondo de todo botón de WhatsApp, el flotante incluido (hallazgo 27,
+     18/11/2026). No es el verde de la marca de WhatsApp: #25D366 con texto
+     blanco da 1,9:1. Este da 5,8:1 y no cambia en oscuro, como `--accion`:
+     el tono que deja leer el blanco encima es uno solo. */
+  --whatsapp-boton: #2a7247;
+  --whatsapp-boton-hover: #22603b;
   --rojo-oferta: #a52a1a;
 
   /* El naranja de marca sobre blanco da 3.08:1, insuficiente para texto. Los
@@ -185,8 +206,11 @@
   --accion-hover: oklch(0.50 0.18 42);
   /* El mismo naranja cuando se usa como texto y no como fondo de botón. En
      claro coinciden; en oscuro no pueden: el tono que deja leer el blanco
-     encima del botón (4.61:1) se queda en 4.08:1 como texto sobre la tarjeta. */
-  --acento-texto: oklch(0.58 0.19 45);
+     encima del botón (4.61:1) se queda en 4.08:1 como texto sobre la tarjeta.
+     En claro iba igual que `--accion` (4.61:1 contra blanco), pero el sitio no
+     es blanco: sobre el crema (#f4f1eb, #faf7f2) caía a 4.1–4.4:1. Un punto
+     más oscuro da 4.9:1 sobre el crema y 4.86:1 sobre el naranja claro. */
+  --acento-texto: oklch(0.55 0.19 45);
   /* Y un tercero, para cuando el naranja es texto **sobre** el naranja claro.
      `--acento-texto` ahí da 3.95:1: está calculado contra blanco, y #fdeada no
      es blanco. Este es el que trae la propia banda en su paleta de estados. */
@@ -199,13 +223,16 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.13 0.01 60);
   --foreground: oklch(0.96 0.005 80);
   --card: oklch(0.18 0.01 60);
   --card-foreground: oklch(0.96 0.005 80);
   --popover: oklch(0.18 0.01 60);
   --popover-foreground: oklch(0.96 0.005 80);
-  --primary: oklch(0.68 0.19 48);
+  /* El botón por defecto lleva blanco encima: el naranja de marca daba
+     3,08:1. `--accion` es el que está calculado para eso (4,61:1). */
+  --primary: var(--accion);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.24 0.01 60);
   --secondary-foreground: oklch(0.96 0.005 80);
@@ -272,7 +299,7 @@
   --accion: oklch(0.58 0.19 45);
   --accion-hover: oklch(0.50 0.18 42);
   /* Como texto sí hace falta aclararlo, o no llega sobre el fondo oscuro. */
-  --acento-texto: oklch(0.63 0.15 48);
+  --acento-texto: oklch(0.66 0.15 48); /* era 0.63: 4,3:1 sobre la tarjeta oscura */
   --acento-sobre-claro: oklch(0.705 0.12 50);
 
   --saldo-debe: oklch(0.68 0.18 28);
@@ -409,6 +436,14 @@ input::placeholder, textarea::placeholder {
   color: var(--estado-tinta);
 }
 
+/* Y el texto secundario adentro también: el gris de `muted-foreground` está
+   calculado para el fondo neutro, y sobre el rosado o el ámbar de la familia
+   caía a 3,97:1 (axe, 31/10). La tinta da de 5 a 6:1 sobre su propio fondo. */
+:is(.estado-espera, .estado-info, .estado-marca, .estado-ok, .estado-problema, .estado-cerrado)
+  :is(.text-muted-foreground, .text-texto-2, .text-texto-3) {
+  color: var(--estado-tinta);
+}
+
 .dark .estado-espera {
   --estado-fondo: oklch(0.26 0.05 75);
   --estado-tinta: oklch(0.78 0.11 75);
@@ -471,6 +506,12 @@ input::placeholder, textarea::placeholder {
 :root {
   --sucursal-central: oklch(0.68 0.19 48);
   --sucursal-aserradero: oklch(0.48 0.13 250);
+  /* Una sucursal nueva toma el siguiente (grafico-ventas.tsx): verde
+     azulado, violeta y ocre, lejos del naranja y del azul también en
+     visión protán. */
+  --sucursal-otra-1: oklch(0.58 0.11 175);
+  --sucursal-otra-2: oklch(0.52 0.16 320);
+  --sucursal-otra-3: oklch(0.62 0.12 95);
 }
 
 .panel {
@@ -635,14 +676,16 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 
 /* ---- Niveles de superficie ------------------------------------------------ */
 
-/* Nivel 1 — contenido principal. Se levanta del fondo. */
+/* Nivel 1 — contenido principal. Se levanta del fondo.
+   Sin borde (9/11/2026, Nahuel: «sacaría el borde típico, le daría más
+   textura a todo»): la separa la sombra, como una hoja apoyada, no una línea. */
 .tarjeta {
   background-color: var(--card);
   background-image: var(--textura-superficie);
   background-size: 180px 180px;
-  border-radius: 0.5rem;
-  border: 1px solid var(--linea);
-  box-shadow: 0 1px 2px rgb(60 50 40 / 0.05);
+  border-radius: 0.875rem;
+  border: 0;
+  box-shadow: var(--sombra-hoja);
   transition:
     box-shadow 220ms ease,
     transform 220ms ease,
@@ -666,7 +709,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   background-image: var(--textura-superficie);
   background-size: 180px 180px;
   border-radius: 0.5rem;
-  box-shadow: 0 0 0 1.5px rgb(240 115 22 / 0.45);
+  box-shadow: 0 0 0 1.5px rgb(236 125 56 / 0.45);
 }
 
 .tarjeta-activa:hover {
@@ -727,7 +770,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 /* Los controles del panel crecen a 40px, el mínimo que se acierta con el dedo
    o con un pulso poco firme. */
 .panel :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
-.panel button:not([data-slot="dropdown-menu-item"]) {
+.panel button:not([data-slot="dropdown-menu-item"], [data-slot="switch"]) {
   min-height: 2.5rem;
 }
 
@@ -748,7 +791,7 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
    menos conviene achicar el blanco al que hay que apuntar—. */
 [data-slot="dialog-content"]
   :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]),
-[data-slot="dialog-content"] button:not([data-slot="dropdown-menu-item"]) {
+[data-slot="dialog-content"] button:not([data-slot="dropdown-menu-item"], [data-slot="switch"]) {
   min-height: 2.5rem;
 }
 
@@ -1421,6 +1464,553 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 /* Quien pidió menos movimiento no ve ninguno: el panel aparece y ya está. */
 @media (prefers-reduced-motion: reduce) {
   .entra-en-orden > * {
+    animation: none;
+  }
+}
+
+
+/* ---- Relieve (9/11/2026) -------------------------------------------------
+   Nahuel: «sacaría el borde típico, le daría más textura a todo, tal vez
+   pondría hasta botones inflados». Las superficies se separan por sombra y
+   grano, y los botones tienen volumen: brillo arriba, sombra abajo, y se
+   hunden al apretarlos. Un chip elegido (aria-pressed) queda hundido.
+   Sin @layer a propósito: Turbopack en desarrollo descarta las reglas de
+   @layer components aunque la compilación de producción las emita. */
+:root {
+  --sombra-hoja: 0 0 0 1px rgb(60 50 40 / 0.045), 0 1px 2px rgb(60 50 40 / 0.07),
+    0 12px 28px -18px rgb(60 50 40 / 0.28);
+  --relieve-brillo: inset 0 1px 0 rgb(255 255 255 / 0.3);
+  --relieve-sombra: 0 1px 1px rgb(60 30 10 / 0.2), 0 5px 12px -5px rgb(60 30 10 / 0.42);
+  --relieve-hundido: inset 0 2px 5px rgb(0 0 0 / 0.24), inset 0 -1px 0 rgb(255 255 255 / 0.12);
+  --relieve-suave: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 1px rgb(60 50 40 / 0.1),
+    0 3px 8px -4px rgb(60 50 40 / 0.22);
+}
+
+.dark {
+  --sombra-hoja: 0 0 0 1px rgb(255 255 255 / 0.05), 0 12px 28px -16px rgb(0 0 0 / 0.65);
+  --relieve-brillo: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  --relieve-sombra: 0 1px 1px rgb(0 0 0 / 0.4), 0 5px 12px -5px rgb(0 0 0 / 0.7);
+  --relieve-suave: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 1px rgb(0 0 0 / 0.35),
+    0 3px 8px -4px rgb(0 0 0 / 0.55);
+}
+
+/* Las tarjetas de shadcn del panel, igual que .tarjeta. */
+.panel [data-slot="card"] {
+  border-color: transparent;
+  border-radius: 0.875rem;
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
+  box-shadow: var(--sombra-hoja);
+}
+
+/* Botones de acción, inflados. */
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca) {
+  background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.17), rgb(0 0 0 / 0.07));
+  box-shadow: var(--relieve-brillo), var(--relieve-sombra);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.16);
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca):hover {
+  transform: translateY(-1px);
+}
+
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca):is(:active, [aria-pressed="true"], [aria-selected="true"]) {
+  background-image: linear-gradient(to bottom, rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.05));
+  box-shadow: var(--relieve-hundido);
+  transform: translateY(1px);
+}
+
+:is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary):disabled {
+  box-shadow: none;
+  transform: none;
+}
+
+/* Los secundarios (claros, con borde): un relieve más leve y sin la línea.
+   Los de acción y los de shadcn con borde transparente (default, ghost)
+   también llevan `.border`: sin excluirlos, el degradado claro tapaba el
+   naranja y el texto blanco quedaba ilegible. Los desplegables van hundidos,
+   como los campos. */
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca, .border-transparent, [class*="border-white"], [data-slot="select-trigger"]):not([aria-pressed="true"]) {
+  border-color: transparent;
+  background-image: linear-gradient(to bottom, var(--card), var(--hundida));
+  box-shadow: var(--relieve-suave);
+}
+
+:is(button, a).border:is([class*="h-8 "], [class*="h-9 "], [class*="h-10 "], [class*="h-11 "], [class*="h-12 "], [class*="h-[5"], [class*=" h-8"], [class*=" h-9"], [class*=" h-10"], [class*=" h-11"], [class*=" h-12"]):not(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca, .border-transparent, [class*="border-white"], [data-slot="select-trigger"]):active {
+  box-shadow: inset 0 2px 4px rgb(60 50 40 / 0.16);
+  background-image: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca),
+  :is(button, a):is(.bg-accion, .boton-accion, .bg-verde-whatsapp, .bg-whatsapp-boton, .bg-primary, .bg-oscuro-marca):hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* Las tarjetas del sitio: la misma hoja que el panel, con grano y sin borde. */
+.superficie {
+  background-color: var(--card);
+  background-image: var(--textura-superficie);
+  background-size: 180px 180px;
+  box-shadow: var(--sombra-hoja);
+}
+
+/* Los campos, hundidos: sin la línea, un plano más bajo y la sombra interior
+   desde arriba. Al enfocarlos vuelven el borde y el anillo de cada uno. Los
+   que van sobre fondo oscuro (blanco translúcido) quedan como están. */
+:is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]), select, textarea, [data-slot="select-trigger"]).border:not(:focus, :focus-visible, [aria-invalid="true"], [class*="bg-white/"], [class*="border-white"]) {
+  border-color: transparent;
+  background-color: var(--hundida);
+  box-shadow: inset 0 1.5px 3px rgb(60 50 40 / 0.11), inset 0 0 0 1px rgb(60 50 40 / 0.05);
+}
+
+.dark :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]), select, textarea, [data-slot="select-trigger"]).border:not(:focus, :focus-visible, [aria-invalid="true"], [class*="bg-white/"], [class*="border-white"]) {
+  box-shadow: inset 0 1.5px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+
+/* Un campo con lo escrito mal (un importe que no se entiende, por ejemplo)
+   se ve: borde y anillo del color de la deuda, que tiene su variante oscura. */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--saldo-debe);
+  box-shadow: 0 0 0 1px var(--saldo-debe);
+}
+
+/* ---- Piezas visuales de los formularios (10/11/2026) ----------------------
+   Nahuel: «haría todo lo más visual posible». Ícono de sección, fichas de
+   opción y tarjetas de interruptor, con el mismo relieve que los botones. */
+.ficha-icono {
+  background-image: linear-gradient(to bottom, var(--naranja-claro), color-mix(in oklab, var(--naranja-claro) 70%, var(--accion) 30%));
+  color: var(--acento-sobre-claro);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 2px 6px -2px rgb(200 90 20 / 0.35);
+}
+
+.ficha-opcion,
+.ficha-interruptor {
+  background-image: linear-gradient(to bottom, var(--card), var(--hundida));
+  box-shadow: var(--relieve-suave);
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.ficha-opcion:hover,
+.ficha-interruptor:hover {
+  transform: translateY(-1px);
+}
+
+.ficha-opcion:has(:checked),
+.ficha-interruptor:has([data-checked]) {
+  background-image: linear-gradient(to bottom, color-mix(in oklab, var(--naranja-claro) 80%, transparent), var(--naranja-claro));
+  color: var(--acento-sobre-claro);
+  box-shadow: inset 0 2px 5px rgb(200 90 20 / 0.22), inset 0 0 0 1.5px color-mix(in oklab, var(--accion) 55%, transparent);
+  transform: none;
+}
+
+.ficha-opcion:has(:focus-visible) {
+  outline: 2px solid var(--accion);
+  outline-offset: 2px;
+}
+
+.ficha-interruptor:has([data-checked]) .ficha-icono {
+  background-image: linear-gradient(to bottom, color-mix(in oklab, var(--accion) 85%, white), var(--accion));
+  color: #fff;
+}
+
+.ficha-interruptor [data-slot="switch"][data-checked] {
+  background-color: var(--accion);
+}
+
+/* En /corte (la página se marca con
+   `data-sin-flotantes`) el WhatsApp flotante sobra: cada una tiene su propio
+   botón de WhatsApp con el texto ya armado, y en el teléfono el flotante
+   tapaba el canto de la pieza o «Consultar precio por WhatsApp». Va en CSS y
+   no con `usePathname`: leer la ruta en el layout frena el prerender de
+   /corte/c/[token]. */
+/* En la ficha, solo mientras el selector se ve: lo maneja `ZonaSinFlotante`,
+   porque ahí el botón de la ficha queda arriba y al bajar hace falta el
+   flotante. */
+body:has([data-sin-flotantes]) .flotante-whatsapp,
+html[data-zona-sin-flotante] .flotante-whatsapp {
+  display: none;
+}
+
+/* En el teléfono, mientras se escribe en un campo, el flotante se va: con el
+   teclado abierto quedaba encima del campo o del botón de mandar (comité
+   final, a 390 px). Vuelve apenas se sale del campo. */
+@media (max-width: 639px) {
+  body:has(:is(input:not([type="checkbox"], [type="radio"]), textarea, select):focus) .flotante-whatsapp {
+    display: none;
+  }
+}
+
+/* --- El panel en el teléfono (18/11/2026) ---------------------------------
+   «Está horrible la UI en celular de todo el admin.» Tres reglas para todas
+   las pantallas a la vez, en lugar de arreglar cuarenta por separado. */
+
+/* Un botón no parte su texto en renglones: «Nuevo / cliente» en dos líneas
+   era lo primero que se veía roto. Si no entra, baja entero a la fila de
+   abajo (los contenedores de acciones son `flex-wrap`). */
+.panel :is(button, a):is([data-slot="button"], .inline-flex[class*="h-1"], .inline-flex[class*="h-["]):not([class*="min-h-"]) {
+  white-space: nowrap;
+}
+
+/* Nada estira la pantalla de costado: lo que es más ancho que la columna
+   se achica (los hijos de flex y grid no bajan de su contenido sin esto). */
+/* En `@layer base`: fuera de capa, Tailwind v4 la ponía por encima de sus
+   utilidades y un `min-w-64` puesto a propósito (el buscador de una lista)
+   dejaba de mandar. */
+@layer base {
+  :where(.panel main) :where(div, section, article, form, header) {
+    min-width: 0;
+  }
+}
+
+/* Ninguna tabla del panel trae un ancho mínimo para pantalla grande que la
+   haga correrse en una tablet o con el menú abierto: las columnas se
+   reparten lo que hay y el texto baja de renglón. */
+.panel main table:not([data-tabla="fija"]) {
+  min-width: 0 !important;
+}
+/* Salvo lo que pidió quedarse en una línea: importes, códigos, la píldora
+   de estado y lo que se corta con puntos suspensivos. */
+.panel main table:not([data-tabla="fija"]) :is(td, th):not(.whitespace-nowrap, .truncate, .tabular),
+.panel main table:not([data-tabla="fija"]) :is(td, th) :not(.tabular, .codigo, .whitespace-nowrap, .truncate, [class*="rounded-full"], code, kbd, button, a[class*="h-"]) {
+  white-space: normal !important;
+}
+
+/* Las tablas, apiladas debajo de 640 px: cada fila es una tarjeta y cada
+   celda un renglón «Columna: valor». Los nombres los pone
+   `components/admin/tablas-apilables.tsx` en `data-label`. */
+@media (max-width: 639px) {
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) {
+    display: block;
+    width: 100%;
+    /* Las tablas anchas traen `min-w-[820px]` para pantalla grande. */
+    min-width: 0 !important;
+  }
+  /* El contenedor que las dejaba correr de costado ya no hace falta. */
+  :is(.panel, [data-slot="dialog-content"]) :has(> table:not([data-tabla="fija"])) {
+    overflow-x: visible;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) thead {
+    display: none;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(tbody, tfoot) {
+    display: block;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) tr {
+    display: block;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--linea, rgb(0 0 0 / 0.08));
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th):not(.hidden) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    width: auto !important;
+    max-width: none !important;
+    padding: 3px 0 !important;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+    /* `break-word`, no `anywhere`: lo mismo que en `table[data-apilada]`
+       (abajo). En el teléfono la tabla se apila por esta media query y
+       `tablas-apilables.tsx` no la marca, así que sin esto «PED-1086»
+       seguía saliendo «PED-» / «1086» justo donde más se usa. */
+    overflow-wrap: break-word;
+  }
+  /* Los números y los códigos no se parten nunca: se encoge el rótulo. */
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) > :is(.tabular, .codigo),
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td.tabular, td.codigo) {
+    white-space: nowrap !important;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) :is(td, th) > * {
+    min-width: 0;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 45%;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--texto-3, #8a8178);
+  }
+  /* La primera celda suele ser el nombre de la fila: va arriba y entera. */
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) tr > td:first-child {
+    justify-content: flex-start;
+    text-align: left;
+    font-weight: 600;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) tr > td:first-child::before {
+    display: none;
+  }
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td:empty {
+    display: none;
+  }
+}
+
+/* Y en cualquier ancho, la que `tablas-apilables.tsx` marcó porque no
+   entraba en su lugar. */
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] {
+  display: block;
+  width: 100%;
+  /* Las tablas anchas traen `min-w-[820px]` para pantalla grande. */
+  min-width: 0 !important;
+}
+/* El contenedor que las dejaba correr de costado ya no hace falta. */
+:is(.panel, [data-slot="dialog-content"]) :has(> table[data-apilada]) {
+  overflow-x: visible;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] thead {
+  display: none;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(tbody, tfoot) {
+  display: block;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] tr {
+  display: block;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--linea, rgb(0 0 0 / 0.08));
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: auto !important;
+  max-width: none !important;
+  padding: 3px 0 !important;
+  border: 0;
+  text-align: right;
+  white-space: normal;
+  /* `break-word` y no `anywhere`: con `anywhere` la celda se podía achicar
+     hasta una letra y partía «PED-1086» en «PED-» / «1086» y «−10%» en «−1» /
+     «0%». Así una palabra solo se parte si no entra sola en el renglón. */
+  overflow-wrap: break-word;
+}
+/* Los números y los códigos no se parten nunca: se encoge el rótulo. */
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) > :is(.tabular, .codigo),
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td.tabular, td.codigo) {
+  /* `!important`: la regla de arriba que deja bajar el texto en las tablas
+     del panel también lo es. */
+  white-space: nowrap !important;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] :is(td, th) > * {
+  min-width: 0;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] td[data-label]:not([data-label=""])::before {
+  content: attr(data-label);
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--texto-3, #8a8178);
+}
+/* La primera celda suele ser el nombre de la fila: va arriba y entera. */
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] tr > td:first-child {
+  justify-content: flex-start;
+  text-align: left;
+  font-weight: 600;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] tr > td:first-child::before {
+  display: none;
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] td:empty {
+  display: none;
+}
+
+
+/* Una tabla del sitio público que se apila en el teléfono, con las etiquetas
+   puestas en el código (`data-label`). */
+@media (max-width: 639px) {
+  table.tabla-apilable,
+  table.tabla-apilable :is(tbody, tr) {
+    display: block;
+  }
+  table.tabla-apilable thead {
+    display: none;
+  }
+  table.tabla-apilable tr {
+    padding: 10px 16px;
+  }
+  table.tabla-apilable td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0 !important;
+    text-align: right;
+  }
+  table.tabla-apilable td[data-label]::before {
+    content: attr(data-label);
+    text-align: left;
+    color: var(--texto-3, #8a8178);
+  }
+  table.tabla-apilable td:first-child {
+    font-weight: 600;
+    text-align: left;
+  }
+}
+
+/* Una celda que abarca varias columnas (una fila desplegada con su propia
+   grilla) va entera, sin etiqueta. */
+@media (max-width: 639px) {
+  :is(.panel, [data-slot="dialog-content"]) table:not([data-tabla="fija"]) td[colspan]:not([colspan="1"]) {
+    display: block;
+    text-align: left;
+  }
+}
+:is(.panel, [data-slot="dialog-content"]) table[data-apilada] td[colspan]:not([colspan="1"]) {
+  display: block;
+  text-align: left;
+}
+
+
+/* --- La firma del panel (18/11/2026) --------------------------------------
+   «Hacé las interfaces del admin menos genéricas.» Un solo título para todas
+   las pantallas, fuerte y con la raya naranja que ya marca las secciones del
+   Resumen y de la portada pública: el mismo gesto en todo el sistema. Había
+   cinco tamaños de título distintos. Fuera de capa a propósito: le gana a los
+   `text-2xl` / `text-[26px]` sueltos de cada página. */
+.panel main h1:not(.sr-only) {
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.panel main h1:not(.sr-only)::before {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 4px;
+  margin-bottom: 10px;
+  border-radius: 2px;
+  background: var(--color-brand-orange, #e8590c);
+}
+@media (min-width: 640px) {
+  .panel main h1:not(.sr-only) {
+    font-size: 32px;
+  }
+}
+/* La línea de datos debajo del título es una frase, no una columna: en
+   monoespaciada parecía una terminal. Las cifras siguen alineadas. */
+.panel main h1 + p.tabular {
+  font-family: inherit;
+  font-weight: 500;
+}
+
+/* Los selectores del panel (18/11/2026): «Todas / Casa Central / Aserradero»,
+   «En curso / Historial», «Contado / Cuenta corriente». Eran botones naranjas
+   macizos, el mismo naranja que «Nueva factura»: el color de «hacé algo» se
+   gastaba en «esto está elegido». Ahora el grupo es un carril hundido y la
+   opción elegida una pieza en relieve; el naranja queda para las acciones.
+   Vale para todo grupo de botones que se prenden y apagan (`aria-pressed`),
+   sin tocar las pantallas una por una. */
+.panel main [role="group"]:has(> button[aria-pressed]) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--hundida);
+  box-shadow: inset 0 1px 3px rgb(60 50 40 / 0.14);
+}
+.panel main [role="group"] > button[aria-pressed] {
+  border: 0 !important;
+  border-radius: 9px;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--texto-2, var(--muted-foreground));
+}
+.panel main [role="group"] > button[aria-pressed]:hover {
+  color: var(--foreground);
+}
+.panel main [role="group"] > button[aria-pressed="true"] {
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  font-weight: 600;
+  box-shadow: var(--relieve-suave, 0 1px 2px rgb(60 50 40 / 0.18)) !important;
+}
+
+/* El número de un comprobante, como el pintado en el paquete de madera:
+   PED-1067, CRT-1, REM-0005. Es lo que se dicta por teléfono, así que va
+   igual en todas partes, estampado sobre la superficie. */
+.codigo {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--hundida);
+  box-shadow: inset 0 1px 1px rgb(60 50 40 / 0.14);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--texto-2, var(--muted-foreground));
+  white-space: nowrap;
+}
+
+/* --- La placa de producto (hallazgo 25, 18/11/2026) ----------------------
+   Lo que ocupa el lugar de la foto mientras el producto no tenga una propia.
+   Los colores los pone el componente (lib/catalogo/placa.ts, donde una prueba
+   mide el contraste); acá va el cambio de tema y la veta.
+
+   La veta es un solo SVG, escrito una vez como data-URI: el navegador lo
+   decodifica una vez para todas las tarjetas, en vez de un filtro por placa.
+   `feTurbulence` con la frecuencia muy baja a lo ancho y alta a lo alto da
+   rayas largas; la opacidad es baja a propósito (7 %): tiene que sugerir
+   madera, no parecer una foto de madera. En oscuro va al 3,5 %: rayas claras
+   sobre madera oscura se notan mucho más, y al 6 % la placa parecía chapa
+   cepillada (medido el 25/11 en las capturas: el desvío de luminancia era
+   casi el doble que en claro). */
+.placa {
+  background-color: var(--placa-fondo);
+  color: var(--placa-texto);
+}
+.dark .placa {
+  background-color: var(--placa-fondo-oscuro);
+  color: var(--placa-texto-oscuro);
+}
+.placa-veta {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' preserveAspectRatio='none'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.09' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.24 0 0 0 0 0.15 0 0 0 0 0.07 0 0 0 -1.6 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)' opacity='0.07'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+}
+.dark .placa-veta {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 400' preserveAspectRatio='none'%3E%3Cfilter id='v'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.004 0.09' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.92 0 0 0 0 0.8 0 0 0 -1.6 1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23v)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+/* El PIN equivocado tiembla (components/autorizacion/campo-pin.tsx): se ve
+   de reojo, sin leer, que hay que teclearlo otra vez. */
+@keyframes temblar {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+
+.animate-temblar {
+  animation: temblar 0.4s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-temblar {
     animation: none;
   }
 }

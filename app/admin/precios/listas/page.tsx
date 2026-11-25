@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Layers } from "lucide-react";
-import { asc, eq, sql } from "drizzle-orm";
+import { ArrowLeft } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { priceListItems, priceLists } from "@/lib/db/schema";
+import { listarListasDePrecios } from "@/lib/dal/admin/precios";
 import { requireStaffRole } from "@/lib/dal/session";
 import { EditorDeLista } from "./editor";
 
@@ -21,19 +19,16 @@ export const metadata: Metadata = { title: "Listas de precios" };
 export default async function ListasDePreciosPage() {
   await requireStaffRole("admin");
 
-  const filas = await db
-    .select({
-      id: priceLists.id,
-      nombre: priceLists.name,
-      isDefault: priceLists.isDefault,
-      porcentaje: priceLists.porcentajeSobreGeneral,
-      itemsPropios: sql<number>`count(${priceListItems.id})::int`,
-    })
-    .from(priceLists)
-    .leftJoin(priceListItems, eq(priceListItems.priceListId, priceLists.id))
-    .where(eq(priceLists.active, true))
-    .groupBy(priceLists.id)
-    .orderBy(asc(priceLists.createdAt));
+  const filas = (await listarListasDePrecios())
+    .filter((l) => l.active)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((l) => ({
+      id: l.id,
+      nombre: l.name,
+      isDefault: l.isDefault,
+      porcentaje: l.porcentajeSobreGeneral,
+      itemsPropios: l.itemsPropios,
+    }));
 
   const general = filas.find((l) => l.isDefault);
   const derivables = filas.filter((l) => !l.isDefault);
@@ -50,27 +45,18 @@ export default async function ListasDePreciosPage() {
 
       <EncabezadoPanel
         titulo="Listas de precios"
-        detalle="El porcentaje global de cada lista sobre la general, ajustable."
       />
 
-      <div className="rounded-xl border bg-card p-5">
-        <p className="flex items-start gap-2.5 text-base text-muted-foreground">
-          <Layers className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-          <span>
-            Cada producto resuelve su precio en este orden: el{" "}
-            <strong>precio propio</strong> de la lista si está cargado, si no la{" "}
-            <strong>general ± el porcentaje</strong> de acá, y sin porcentaje, la
-            general tal cual. Cambiar el porcentaje impacta en todo el catálogo
-            de esa lista al instante.
-          </span>
-        </p>
-      </div>
+      {/* Cada producto resuelve su precio en este orden: el precio propio de la
+          lista si está cargado, si no la general ± el porcentaje de acá, y sin
+          porcentaje, la general tal cual. Cambiar el porcentaje impacta en todo
+          el catálogo de esa lista al instante. */}
 
       {general && (
         <section className="tarjeta-hundida p-5">
           <p className="text-base font-semibold">{general.nombre}</p>
           <p className="text-sm text-muted-foreground">
-            La lista base: los porcentajes de las demás se calculan sobre esta.
+            Base de los porcentajes
           </p>
         </section>
       )}

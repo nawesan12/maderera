@@ -1,4 +1,16 @@
-import type { PlantillaRemota } from "./tipos";
+import type { ComponenteMeta } from "./plantillas";
+
+/** Una plantilla tal como la devuelve `GET /{waba}/message_templates`. */
+export interface PlantillaRemota {
+  metaId: string | null;
+  nombre: string;
+  idioma: string;
+  categoria: string | null;
+  estado: string;
+  motivoRechazo: string | null;
+  formatoParametros: "POSITIONAL" | "NAMED";
+  componentes: ComponenteMeta[];
+}
 
 /**
  * Las plantillas que MJBJ necesita aprobadas en Meta.

@@ -116,6 +116,11 @@ export const supplierPayments = pgTable(
     /** Por qué circuito de facturación salió el pago. Ver `circuito.ts`. */
     circuito: circuito().notNull().default("blanco"),
 
+    /* Migración 00089: el pago anulado queda (con su motivo) y deja de contar. */
+    anuladoAt: timestamp({ withTimezone: true }),
+    motivoAnulacion: text(),
+    anuladoPorUserId: text().references(() => user.id),
+
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
@@ -219,6 +224,13 @@ export const retencionesPracticadas = pgTable(
     alicuota: numeric({ precision: 6, scale: 3 }).notNull(),
     importe: numeric({ precision: 12, scale: 2 }).notNull(),
 
+    /* Migración 00089: cómo salió el importe (las de antes, en null), y el
+       certificado anulado con su pago. */
+    acumulado: numeric({ precision: 14, scale: 2 }),
+    imponible: numeric({ precision: 14, scale: 2 }),
+    retenidoAntes: numeric({ precision: 14, scale: 2 }),
+    anuladaAt: timestamp({ withTimezone: true }),
+
     fecha: timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -261,6 +273,9 @@ export const retencionesSufridas = pgTable(
 
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    anuladaAt: timestamp({ withTimezone: true }),
+    receiptId: uuid(),
   },
   (t) => [
     /*

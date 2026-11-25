@@ -144,7 +144,7 @@ export function EditorDeVendedor({
   return (
     <form
       action={guardar}
-      className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4"
+      className="flex flex-wrap items-end gap-3 tarjeta p-4"
     >
       {vendedor && <input type="hidden" name="id" value={vendedor.id} />}
 
@@ -183,7 +183,7 @@ export function EditorDeVendedor({
       <button
         type="submit"
         disabled={guardando}
-        className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
       >
         {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
         {vendedor ? "Guardar" : "Agregar"}

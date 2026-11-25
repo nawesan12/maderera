@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { listarCategorias, listarProductos } from "@/lib/dal/catalog";
 import { listarSucursalesPublicas, listarZonasDeEnvio } from "@/lib/dal/envios";
-import { entender } from "@/lib/asistente/lenguaje";
+import { apiPublica, datos as cuerpo } from "@/lib/api/servidor";
+import { responderLocal, type Entendido } from "@/lib/asistente/respuestas";
 
 /**
  * Lo que el asistente del sitio le pide al servidor.
@@ -20,6 +21,8 @@ export interface ProductoDelAsistente {
   slug: string;
   nombre: string;
   categoria: string;
+  /** El slug de la categoría: sin foto, decide el tono de la muestra de placa. */
+  categoriaSlug: string;
   medida: string | null;
   /** Todas las medidas del producto, para poder filtrar por espesor. */
   medidas: string[];
@@ -33,6 +36,7 @@ function aProducto(p: Awaited<ReturnType<typeof listarProductos>>[number]) {
     slug: p.slug,
     nombre: p.name,
     categoria: p.categoryName,
+    categoriaSlug: p.categorySlug,
     medida: p.labels[0] ?? null,
     medidas: p.labels,
     precioDesde: p.precioDesde,
@@ -50,8 +54,9 @@ export async function buscarConElAsistente(
   const consulta = z.string().trim().min(2).max(80).safeParse(texto);
   if (!consulta.success) return [];
 
-  const encontrados = await listarProductos({ busqueda: consulta.data });
-  return encontrados.slice(0, TOPE).map(aProducto);
+  // El tope lo aplica Go antes de buscar las fotos: «pino» son cientos.
+  const encontrados = await listarProductos({ busqueda: consulta.data, limite: TOPE });
+  return encontrados.map(aProducto);
 }
 
 export async function productosDelRubro(
@@ -60,8 +65,8 @@ export async function productosDelRubro(
   const categoria = z.string().trim().max(80).safeParse(slug);
   if (!categoria.success) return [];
 
-  const encontrados = await listarProductos({ categoria: categoria.data });
-  return encontrados.slice(0, TOPE).map(aProducto);
+  const encontrados = await listarProductos({ categoria: categoria.data, limite: TOPE });
+  return encontrados.map(aProducto);
 }
 
 export interface RubroDelAsistente {
@@ -100,9 +105,7 @@ export async function datosDelAsistente(
 
     return sucursales.map((s) => ({
       titulo: s.nombre,
-      detalle: [s.direccion, s.horario, s.telefono]
-        .filter(Boolean)
-        .join(" · "),
+      detalle: [s.direccion, s.horario, s.telefono].filter(Boolean).join(" · "),
     }));
   }
 
@@ -132,7 +135,10 @@ export async function datosDelAsistente(
   return [
     { titulo: "Efectivo", detalle: "Al retirar o contra entrega" },
     { titulo: "Transferencia", detalle: "Te pasamos los datos al confirmar" },
-    { titulo: "Tarjeta", detalle: "Débito y crédito, en el mostrador y online" },
+    {
+      titulo: "Tarjeta",
+      detalle: "Débito y crédito, en el mostrador y online",
+    },
     {
       titulo: "Cuenta corriente",
       detalle: "Para clientes profesionales aprobados",
@@ -194,25 +200,28 @@ export interface RespuestaDelAsistente {
   datos?: DatoDelAsistente[];
   /** Botones para seguir, según lo que se entendió. */
   sugerencias?: { texto: string; va: string }[];
-  /** Si conviene ofrecer una calculadora, cuál. */
-  calculadora?: "techos" | "placas" | "pisos" | "decks";
   /** Si la respuesta honesta es pasar a una persona. */
   aPersona?: boolean;
+  /** Un botón que lleva a una pantalla: el cortador con el despiece cargado. */
+  enlace?: { texto: string; href: string };
+  /** Lo que se entendió completado con lo anterior: es la próxima «anterior». */
+  consulta?: string;
 }
 
 /**
  * La respuesta a algo escrito con palabras propias.
  *
- * Es lo que hace que el asistente se sienta conversación y no formulario: se
- * lee la intención con `lib/asistente/lenguaje.ts`, se busca de verdad en el
- * catálogo, y se contesta con los datos del negocio.
+ * Lo que se entendió lo dice el motor de Go (`POST /api/v1/asistente/entender`,
+ * internal/asistente): el mismo que contesta el WhatsApp, así el sitio y el
+ * bot entienden igual. Lo que es igual para cualquiera se contesta con el
+ * equipaje; lo demás se busca de verdad en el catálogo.
  *
  * **Lo que no hace es inventar.** Si no reconoce nada, busca; si la búsqueda no
- * trae nada, lo dice y ofrece una persona. Un asistente que improvisa un precio
- * o un plazo hace daño en un negocio donde eso es un compromiso.
+ * trae nada, lo dice y ofrece una persona.
  */
 export async function preguntarAlAsistente(
   textoLibre: string,
+  anterior?: string | null,
 ): Promise<RespuestaDelAsistente> {
   const validado = z.string().trim().min(1).max(300).safeParse(textoLibre);
 
@@ -220,164 +229,72 @@ export async function preguntarAlAsistente(
     return { texto: "Contame qué necesitás y te ayudo." };
   }
 
-  const leido = entender(validado.data);
+  const leido: Entendido = cuerpo(
+    await apiPublica.POST("/api/v1/asistente/entender", {
+      body: {
+        texto: validado.data,
+        ...(anterior ? { anterior: anterior.slice(0, 120) } : {}),
+      },
+    }),
+  );
 
-  switch (leido.intencion) {
-    case "saludo":
-      return {
-        texto:
-          "¡Hola! Decime qué estás buscando —una placa, un machimbre, lo que sea— y te digo si lo tenemos y a cuánto.",
-        sugerencias: [
-          { texto: "Ver los rubros", va: "rubros" },
-          { texto: "Calcular material", va: "calcular" },
-        ],
-      };
+  const local = responderLocal(leido, await equipajeDelAsistente());
+  if (local) return { ...local, consulta: leido.texto };
 
-    case "gracias":
-      return {
-        texto: "De nada. Si necesitás algo más, escribime.",
-        sugerencias: [{ texto: "Buscar otra cosa", va: "buscar-texto" }],
-      };
+  let productos =
+    leido.consulta.length >= 2
+      ? await buscarConElAsistente(leido.consulta)
+      : [];
 
-    case "envios":
-      return {
-        texto: "Sí, entregamos en Mar del Plata y la zona. Estas son las zonas y lo que sale el flete:",
-        datos: await datosDelAsistente("envios"),
-      };
+  let porRubro = false;
+  const espesor = leido.medida.espesorMm;
 
-    case "horarios":
-      return {
-        texto: "Estos son los locales, con horarios y teléfono:",
-        datos: await datosDelAsistente("sucursales"),
-      };
+  if (espesor && productos.length > 0) {
+    const conEsaMedida = productos.filter((p) =>
+      p.medidas.some((m) => new RegExp(`\\b${espesor}\\s*mm`, "i").test(m)),
+    );
 
-    case "pagos":
-      return {
-        texto: "Se puede pagar así:",
-        datos: await datosDelAsistente("pagos"),
-      };
-
-    case "cortes":
-      return {
-        texto:
-          "Sí, cortamos placas a medida en el aserradero. Pasanos el despiece con las medidas en milímetros y te lo preparamos junto con el material. Si son muchas piezas conviene mandarlo por WhatsApp.",
-        sugerencias: [
-          { texto: "Calcular cuántas placas necesito", va: "calc-placas" },
-          { texto: "Mandar el despiece", va: "persona" },
-        ],
-      };
-
-    case "cuenta":
-      return {
-        texto:
-          "Si trabajás del rubro —carpintería, construcción, arquitectura— podés pedir la cuenta profesional: lista de precios propia, cuenta corriente y descuentos por cantidad. Se pide desde el portal y lo aprobamos nosotros.",
-        sugerencias: [{ texto: "Ir al portal", va: "profesionales" }],
-      };
-
-    case "calcular": {
-      // Se ofrece la calculadora del rubro que nombraron, si nombraron alguno.
-      const porRubro: Record<string, RespuestaDelAsistente["calculadora"]> = {
-        techos: "techos",
-        cubiertas: "techos",
-        placas: "placas",
-        pisos: "pisos",
-        decks: "decks",
-      };
-
-      const cual = leido.rubro ? porRubro[leido.rubro] : undefined;
-
-      return {
-        texto: cual
-          ? "Te hago la cuenta. Abrí la calculadora y cargá las medidas:"
-          : "Te hago la cuenta. ¿Qué estás por hacer?",
-        calculadora: cual,
-        sugerencias: cual
-          ? undefined
-          : [
-              { texto: "Un techo", va: "calc-techos" },
-              { texto: "Placas para un mueble", va: "calc-placas" },
-              { texto: "Un piso", va: "calc-pisos" },
-              { texto: "Un deck", va: "calc-decks" },
-            ],
-      };
-    }
-
-    case "persona":
-      return {
-        texto:
-          "Te paso con alguien del mostrador. Contales qué necesitás y te responden en el horario del local.",
-        aPersona: true,
-      };
-
-    default: {
-      /*
-       * Buscar de verdad en el catálogo.
-       *
-       * Primero con lo que escribieron; si eso no trae nada y nombraron un
-       * rubro, se muestra el rubro entero. Es lo que haría alguien del
-       * mostrador: si no tiene exactamente eso, muestra lo que hay al lado.
-       */
-      /*
-       * El espesor **no** va en la consulta de texto.
-       *
-       * La búsqueda del catálogo mira el nombre, la descripción, la marca y el
-       * rubro del producto, no las medidas de sus variantes: el «18» de
-       * «fenólico de 18» no coincide con ninguna de esas columnas y la búsqueda
-       * vuelve vacía. Pasó en la primera prueba contra producción — contestaba
-       * "no lo encontré" y abajo mostraba, primero de la lista, el fenólico de
-       * 18 mm.
-       *
-       * Así que se busca el producto por su nombre y el espesor se aplica
-       * después, contra las medidas que ya vienen en el resultado.
-       */
-      let productos =
-        leido.consulta.length >= 2
-          ? await buscarConElAsistente(leido.consulta)
-          : [];
-
-      let porRubro = false;
-      const espesor = leido.medida.espesorMm;
-
-      if (espesor && productos.length > 0) {
-        const conEsaMedida = productos.filter((p) =>
-          p.medidas.some((m) => new RegExp(`\\b${espesor}\\s*mm`, "i").test(m)),
-        );
-
-        // Si ninguno la tiene, se muestran igual los del producto: decirle "no
-        // hay" a quien preguntó por un fenólico, teniendo fenólicos en otros
-        // espesores, es perder una venta que el mostrador no perdería.
-        if (conEsaMedida.length > 0) productos = conEsaMedida;
-      }
-
-      if (productos.length === 0 && leido.rubro) {
-        productos = await productosDelRubro(leido.rubro);
-        porRubro = productos.length > 0;
-      }
-
-      if (productos.length === 0) {
-        return {
-          texto:
-            "No encontré nada con eso. Puede que lo tengamos con otro nombre: probá con otra palabra, o te paso con alguien del mostrador que lo va a saber al toque.",
-          aPersona: true,
-          sugerencias: [{ texto: "Ver los rubros", va: "rubros" }],
-        };
-      }
-
-      const cantidad = leido.cantidad
-        ? ` Si querés, con ${leido.cantidad.valor} ${leido.cantidad.unidad === "m2" ? "m²" : "m"} te calculo cuánto entra.`
-        : "";
-
-      return {
-        texto: porRubro
-          ? `Eso puntual no lo encontré, pero esto es lo que tengo en el rubro:${cantidad}`
-          : `Esto es lo que tengo:${cantidad}`,
-        productos,
-        calculadora: leido.cantidad && leido.rubro === "pisos" ? "pisos" : undefined,
-        sugerencias: [
-          { texto: "Buscar otra cosa", va: "buscar-texto" },
-          { texto: "Hablar con alguien", va: "persona" },
-        ],
-      };
-    }
+    // Si ninguno la tiene, se muestran igual los del producto: decirle "no
+    // hay" a quien preguntó por un fenólico, teniendo fenólicos en otros
+    // espesores, es perder una venta que el mostrador no perdería.
+    // Y la tarjeta muestra la medida que pidieron, no la primera del producto.
+    if (conEsaMedida.length > 0)
+      productos = conEsaMedida.map((p) => ({
+        ...p,
+        medida:
+          p.medidas.find((m) =>
+            new RegExp(`\\b${espesor}\\s*mm`, "i").test(m),
+          ) ?? p.medida,
+      }));
   }
+
+  if (productos.length === 0 && leido.rubro) {
+    productos = await productosDelRubro(leido.rubro);
+    porRubro = productos.length > 0;
+  }
+
+  if (productos.length === 0) {
+    return {
+      texto:
+        "No encontré nada con eso. Puede que lo tengamos con otro nombre: probá con otra palabra, o te paso con alguien del mostrador que lo va a saber al toque.",
+      aPersona: true,
+      sugerencias: [{ texto: "Ver los rubros", va: "rubros" }],
+    };
+  }
+
+  const cantidad = leido.cantidad
+    ? ` Si querés, con ${leido.cantidad.valor} ${leido.cantidad.unidad === "m2" ? "m²" : "m"} te calculo cuánto entra.`
+    : "";
+
+  return {
+    texto: porRubro
+      ? `Eso puntual no lo encontré, pero esto es lo que tengo en el rubro:${cantidad}`
+      : `Esto es lo que tengo:${cantidad}`,
+    productos,
+    consulta: leido.texto,
+    sugerencias: [
+      { texto: "Buscar otra cosa", va: "buscar-texto" },
+      { texto: "Hablar con alguien", va: "persona" },
+    ],
+  };
 }

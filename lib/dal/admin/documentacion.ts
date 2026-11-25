@@ -1,9 +1,12 @@
 import "server-only";
 
-import { asc, desc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { technicalDocuments } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
+
+/**
+ * Lo que lee el panel de documentación técnica. Lo sirve la API de Go
+ * (backend/internal/contenido/documentos.go), con el permiso de quien puede
+ * abrir /admin/documentacion.
+ */
 
 export interface DocumentoAdmin {
   id: string;
@@ -16,42 +19,18 @@ export interface DocumentoAdmin {
   soloProfesionales: boolean;
   activo: boolean;
   createdAt: Date;
+  /** Dónde se muestra: la ficha de estos productos y de estas categorías. */
+  productos: { id: string; nombre: string }[];
+  categorias: { id: string; nombre: string }[];
 }
 
-/** Todos los documentos, incluidos los dados de baja. */
+/** Todos, primero los activos, por categoría y título. */
 export async function listarDocumentos(): Promise<DocumentoAdmin[]> {
-  await requireStaff();
-
-  return db
-    .select({
-      id: technicalDocuments.id,
-      titulo: technicalDocuments.titulo,
-      descripcion: technicalDocuments.descripcion,
-      categoria: technicalDocuments.categoria,
-      url: technicalDocuments.url,
-      formato: technicalDocuments.formato,
-      tamanoBytes: technicalDocuments.tamanoBytes,
-      soloProfesionales: technicalDocuments.soloProfesionales,
-      activo: technicalDocuments.activo,
-      createdAt: technicalDocuments.createdAt,
-    })
-    .from(technicalDocuments)
-    .orderBy(
-      desc(technicalDocuments.activo),
-      asc(technicalDocuments.categoria),
-      asc(technicalDocuments.titulo),
-    );
+  const filas = datos(await (await api()).GET("/api/v1/admin/documentos"));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }
 
-/** Categorías ya usadas, para sugerirlas en vez de que cada uno invente la suya. */
+/** Las categorías en uso, para sugerirlas al subir. */
 export async function categoriasDeDocumentos(): Promise<string[]> {
-  await requireStaff();
-
-  const filas = await db
-    .selectDistinct({ categoria: technicalDocuments.categoria })
-    .from(technicalDocuments)
-    .where(eq(technicalDocuments.activo, true))
-    .orderBy(asc(technicalDocuments.categoria));
-
-  return filas.map((f) => f.categoria);
+  return datos(await (await api()).GET("/api/v1/admin/documentos/categorias"));
 }

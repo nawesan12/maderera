@@ -1,6 +1,9 @@
+import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
+import { ANIO_FUNDACION } from "@/lib/empresa";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd } from "@/lib/seo";
+import { Isotipo } from "@/components/marca";
 
 /**
  * Encabezado de las páginas de contenido.
@@ -21,8 +24,18 @@ export function EncabezadoPublico({
   bajada,
   migas = [],
   ruta,
+  foto,
 }: {
   titulo: string;
+  /**
+   * Foto de fondo, atenuada. Sin ella va con las rayas y la «M».
+   *
+   * Las fotos de encabezado se recortan como banda (1920×800, docs/fotos.md):
+   * a 1440×300 en la computadora solo se ve la franja del medio, y en el
+   * teléfono queda detrás de la capa al 85 %. Una página para actuar o de
+   * documentos (contacto, documentación, eventos) no gana nada con una foto.
+   */
+  foto?: string | StaticImageData;
   /** La ruta de la página: si está, emite las migas como datos estructurados. */
   ruta?: string;
   bajada?: string;
@@ -30,7 +43,7 @@ export function EncabezadoPublico({
   migas?: { nombre: string; ruta: string }[];
 }) {
   return (
-    <section className="relative overflow-hidden bg-oscuro-marca pb-[42px] pt-[38px] text-white">
+    <section className={`relative overflow-hidden bg-oscuro-marca text-white ${foto ? "pb-16 pt-12 lg:pb-20 lg:pt-14" : "pb-[42px] pt-[38px]"}`}>
       {ruta && (
         <DatosEstructurados
           datos={migasJsonLd([
@@ -40,10 +53,27 @@ export function EncabezadoPublico({
           ])}
         />
       )}
-      <div
-        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
-        aria-hidden="true"
-      />
+      {foto ? (
+        <>
+          <Image src={foto} alt="" fill preload className="object-cover" sizes="100vw" placeholder={typeof foto === "string" ? "empty" : "blur"} />
+          {/* En el teléfono el texto ocupa todo el ancho: oscuro parejo, para
+              que las migas y la bajada se lean sobre cualquier parte de la foto. */}
+          <div
+            className="absolute inset-0 bg-oscuro-marca/85 sm:bg-transparent sm:bg-[linear-gradient(to_right,rgb(38_35_31_/_0.92),rgb(38_35_31_/_0.7)_55%,rgb(38_35_31_/_0.45))]"
+            aria-hidden="true"
+          />
+        </>
+      ) : (
+        <div
+          className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.07)_0_12px,transparent_12px_24px)]"
+          aria-hidden="true"
+        />
+      )}
+      {/* La «M» del logo, grande y a un costado: la firma de la maderera en
+          cada sección (notas del 9/11/2026). */}
+      {!foto && (
+        <Isotipo className="pointer-events-none absolute -right-4 top-1/2 hidden h-[150px] -translate-y-1/2 rotate-[-8deg] text-marca-naranja opacity-[0.16] md:block" />
+      )}
       <div className="contenedor relative">
         <nav
           aria-label="Dónde estás"
@@ -64,7 +94,10 @@ export function EncabezadoPublico({
           <span className="text-white">{titulo}</span>
         </nav>
 
-        <h1 className="mt-3.5 text-[40px] font-extrabold leading-[1.08] tracking-[-0.035em]">
+        <p className="mt-4 text-[12px] font-semibold uppercase tracking-[0.32em] text-brand-orange-light">
+          Juan B. Justo · Desde {ANIO_FUNDACION}
+        </p>
+        <h1 className="mt-1.5 text-[40px] font-extrabold leading-[1.08] tracking-[-0.035em]">
           {titulo}
         </h1>
         {bajada && (

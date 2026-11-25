@@ -33,7 +33,7 @@ export default async function MisResenasPage() {
       </div>
 
       {items.length === 0 && (
-        <div className="rounded-[14px] border border-linea bg-card p-10 text-center">
+        <div className="rounded-[14px] superficie p-10 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[14px] bg-chip">
             <Star className="h-6 w-6 text-texto-3" />
           </div>

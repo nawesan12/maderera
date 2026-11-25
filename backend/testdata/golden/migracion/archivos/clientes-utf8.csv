@@ -1,0 +1,5 @@
+﻿Nro Cliente,Apellido y Nombre,CUIT,Cond. IVA,Tipo Cliente,Mail,Tel,Direccion,Limite
+101,"Fernández, Pedro",20-28345678-1,RI,Gremio,pedro@x.com,,"Rivadavia 1, 2do B",100000
+102,"Arq. Sosa, Laura",27-31234567-0,Monotributista,Arquitecto,LAURA@SOSA.COM.AR,,,"1.234,5"
+103,Cliente de mostrador,,Consumidor final,,,,,
+104,"Con ""comillas"" adentro",,cf,particular,no-es-correo,,,

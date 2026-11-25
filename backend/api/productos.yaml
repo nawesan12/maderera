@@ -1,0 +1,671 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Productos
+  version: "1"
+  description: |
+    La gestión de productos del panel: el listado (de a páginas), la ficha
+    (medidas, precios de las dos listas y stock de cada sucursal activa), las
+    etiquetas con código de barras, las imágenes, los
+    sugeridos, los rubros y los candidatos a dar de baja. Las formas son las de
+    lib/dal/admin/products.ts, para que las pantallas no cambien.
+
+    Permisos: leer el listado, las categorías y los rubros, cualquier persona
+    del panel (los usan stock, reposición y el buscador); escribir, quien
+    entra a /admin/productos; el umbral de los candidatos, el admin.
+paths:
+  /api/v1/admin/productos:
+    get:
+      operationId: ListarProductos
+      parameters:
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: categoria, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string, enum: [todos, sin-foto, sin-precio, sin-stock, ocultos] } }
+        - { name: marca, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: proveedor, in: query, schema: { type: string } }
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 36 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: Una página, los últimos tocados primero, con el total del filtro y los conteos de cada estado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [filas, total, conteos]
+                properties:
+                  filas: { type: array, items: { $ref: "#/components/schemas/ProductoAdmin" } }
+                  total: { type: integer }
+                  conteos:
+                    type: object
+                    required: [todos, sinFoto, sinPrecio, sinStock, ocultos]
+                    properties:
+                      todos: { type: integer }
+                      sinFoto: { type: integer }
+                      sinPrecio: { type: integer }
+                      sinStock: { type: integer }
+                      ocultos: { type: integer }
+    post:
+      operationId: CrearProducto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormProducto" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConID" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/productos/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: FichaDeProducto
+      responses:
+        "200":
+          description: La ficha para editar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ficha" }
+        "404": { $ref: "#/components/responses/Problema" }
+    put:
+      operationId: EditarProducto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FormProducto" }
+      responses:
+        "200":
+          description: Guardado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConID" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/productos/{id}/activo:
+    post:
+      operationId: ActivarProducto
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Activo" }
+      responses:
+        "204": { description: Hecho }
+  /api/v1/admin/productos/{id}/sugeridos:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: SugeridosDelProducto
+      responses:
+        "200":
+          description: Los cargados, por tipo y orden
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Sugerido" } }
+    post:
+      operationId: AgregarSugerido
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [relatedProductId, tipo]
+              additionalProperties: false
+              properties:
+                relatedProductId: { type: string }
+                tipo: { type: string }
+      responses:
+        "200":
+          description: Agregado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mensaje" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/productos/{id}/sugeridos/{relacion}:
+    delete:
+      operationId: QuitarSugerido
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: relacion, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Quitado }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/productos/{id}/para-sugerir:
+    get:
+      operationId: CandidatosParaSugerir
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Los activos menos el propio (el filtrado es en el navegador)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, categoria]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    categoria: { type: string, nullable: true }
+  /api/v1/admin/productos/{id}/imagenes:
+    post:
+      operationId: SubirImagen
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archivo: { type: string, format: binary }
+      responses:
+        "201":
+          description: Subida
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, url]
+                properties:
+                  id: { type: string }
+                  url: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/imagenes/{id}:
+    delete:
+      operationId: BorrarImagen
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Borrada; el producto, para revalidar su ficha
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConProducto" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/imagenes/{id}/principal:
+    post:
+      operationId: HacerPrincipal
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Hecha principal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConProducto" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/categorias:
+    get:
+      operationId: CategoriasAdmin
+      responses:
+        "200":
+          description: Todas, por orden
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, slug, name]
+                  properties:
+                    id: { type: string }
+                    slug: { type: string }
+                    name: { type: string }
+    post:
+      operationId: CrearCategoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string }
+      responses:
+        "204": { description: Creada }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/categorias/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: RenombrarCategoria
+      description: Cambia el nombre que se ve. La dirección web (slug) queda igual, para no romper los enlaces publicados.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string }
+      responses:
+        "204": { description: Renombrada }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/rubros:
+    get:
+      operationId: RubrosAdmin
+      summary: Todos, también los inactivos (la ficha tiene que poder mostrar uno dado de baja)
+      responses:
+        "200":
+          description: Por orden y nombre
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, categoryId, slug, name, active]
+                  properties:
+                    id: { type: string }
+                    categoryId: { type: string }
+                    slug: { type: string }
+                    name: { type: string }
+                    active: { type: boolean }
+    post:
+      operationId: CrearRubro
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoryId, name]
+              additionalProperties: false
+              properties:
+                categoryId: { type: string }
+                name: { type: string }
+      responses:
+        "204": { description: Creado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/rubros/por-categoria:
+    get:
+      operationId: RubrosPorCategoria
+      responses:
+        "200":
+          description: Las categorías con sus rubros y conteos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, name, rubros]
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    rubros:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, name, slug, active, productos, sueltos]
+                        properties:
+                          id: { type: string }
+                          name: { type: string }
+                          slug: { type: string }
+                          active: { type: boolean }
+                          productos: { type: integer }
+                          sueltos: { type: integer }
+  /api/v1/admin/rubros/{id}/activo:
+    post:
+      operationId: ActivarRubro
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Activo" }
+      responses:
+        "204": { description: Hecho }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/rubros/{id}/enganchar:
+    post:
+      operationId: EngancharRubro
+      summary: Asigna el rubro a los productos de su categoría que lo nombran como texto
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Qué pasó
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mensaje" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/productos-candidatos:
+    get:
+      operationId: CandidatosDeBaja
+      responses:
+        "200":
+          description: El umbral y los productos que quizá haya que dar de baja
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [meses, candidatos]
+                properties:
+                  meses: { type: integer }
+                  candidatos: { type: array, items: { $ref: "#/components/schemas/Candidato" } }
+    put:
+      operationId: GuardarMesesSinVender
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [meses]
+              additionalProperties: false
+              properties:
+                meses: { type: integer }
+      responses:
+        "200":
+          description: Guardado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mensaje" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/productos-imputaciones:
+    get:
+      operationId: ImputacionesUsadas
+      responses:
+        "200":
+          description: Las imputaciones contables ya usadas, para sugerirlas
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /api/v1/admin/productos-marcas:
+    get:
+      operationId: MarcasDeProductos
+      responses:
+        "200":
+          description: Las marcas cargadas, una vez cada una, para filtrar los listados
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+  /api/v1/admin/etiquetas:
+    get:
+      operationId: DatosDeEtiquetas
+      parameters:
+        - name: medidas
+          in: query
+          description: Ids de medidas separados por coma
+          schema: { type: string, maxLength: 8000 }
+        - name: productos
+          in: query
+          description: Ids de productos separados por coma; suma todas sus medidas activas
+          schema: { type: string, maxLength: 4000 }
+        - { name: precio, in: query, schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: Lo que va en cada etiqueta, en el orden pedido, con el código de barras ya armado
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Etiqueta" } }
+  /api/v1/admin/productos-atributos:
+    get:
+      operationId: AtributosUsados
+      responses:
+        "200":
+          description: Los materiales, colores, terminaciones y calidades ya cargados, para sugerirlos y que no aparezcan escritos de tres maneras
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [material, color, terminacion, calidad]
+                properties:
+                  material: { type: array, items: { type: string } }
+                  color: { type: array, items: { type: string } }
+                  terminacion: { type: array, items: { type: string } }
+                  calidad: { type: array, items: { type: string } }
+components:
+  responses:
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    ConID:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+    ConProducto:
+      type: object
+      required: [productId]
+      properties:
+        productId: { type: string }
+    Mensaje:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: string }
+    Activo:
+      type: object
+      required: [activo]
+      additionalProperties: false
+      properties:
+        activo: { type: boolean }
+    ProductoAdmin:
+      type: object
+      required: [id, slug, name, categoryName, brand, unit, featured, active, variantes, stockTotal, imagen, precioDesde, sinFoto]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        categoryName: { type: string }
+        brand: { type: string, nullable: true }
+        unit: { type: string }
+        featured: { type: boolean }
+        active: { type: boolean }
+        variantes: { type: integer }
+        stockTotal: { type: number, format: double }
+        imagen: { type: string, nullable: true }
+        precioDesde: { type: string, nullable: true }
+        sinFoto: { type: boolean }
+    FormProducto:
+      type: object
+      description: Todo como texto, como lo manda el formulario; lo valida la API (mismos mensajes que el esquema de zod que había).
+      required: [name, slug, categoryId, unit, variantes]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        categoryId: { type: string }
+        subcategory: { type: string }
+        subcategoryId: { type: string }
+        description: { type: string }
+        brand: { type: string }
+        unit: { type: string }
+        formaDeVenta: { type: string }
+        precioMediaPct: { type: string }
+        alicuotaIva: { type: string }
+        recargoElaboracionPct: { type: string }
+        imputacion: { type: string }
+        usos: { type: string }
+        cuidados: { type: string }
+        featured: { type: boolean }
+        aPedido: { type: boolean }
+        active: { type: boolean }
+        imagen: { type: string }
+        variantes:
+          type: array
+          items:
+            type: object
+            required: [sku, label]
+            properties:
+              id: { type: string }
+              sku: { type: string }
+              label: { type: string }
+              largoMm: { type: string }
+              anchoMm: { type: string }
+              espesorMm: { type: string }
+              material: { type: string }
+              color: { type: string }
+              terminacion: { type: string }
+              calidad: { type: string }
+              codigoBarras: { type: string, maxLength: 60 }
+              precioGeneral: { type: string }
+              precioProfesional: { type: string }
+              stockCentral: { type: string }
+              stockAserradero: { type: string }
+              minCentral: { type: string }
+              minAserradero: { type: string }
+              stockCentralVisto:
+                type: string
+                description: El stock que mostraba la ficha al abrirse. Si viene, el cambio se aplica por diferencia; si no cambió, el físico no se toca.
+              stockAserraderoVisto: { type: string }
+              stocks:
+                type: array
+                description: El stock de cada sucursal, por id de la base. Si viene, manda sobre stockCentral y compañía (el formato viejo).
+                items:
+                  type: object
+                  required: [sucursal]
+                  properties:
+                    sucursal: { type: string }
+                    stock: { type: string }
+                    minimo: { type: string }
+                    visto: { type: string, description: El stock que mostraba la ficha al abrirse }
+    Ficha:
+      type: object
+      required: [id, slug, name, categoryId, subcategory, description, brand, unit, featured, active, createdAt, updatedAt,
+        alicuotaIva, aPedido, subcategoryId, recargoElaboracionPct, imputacion, formaDeVenta, precioMediaPct, imagen, galeria, variantes,
+        usos, cuidados, sucursales]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        categoryId: { type: string }
+        subcategory: { type: string, nullable: true }
+        description: { type: string }
+        brand: { type: string, nullable: true }
+        unit: { type: string }
+        featured: { type: boolean }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        alicuotaIva: { type: string }
+        aPedido: { type: boolean }
+        subcategoryId: { type: string, nullable: true }
+        recargoElaboracionPct: { type: string, nullable: true }
+        imputacion: { type: string, nullable: true }
+        usos: { type: string, nullable: true }
+        cuidados: { type: string, nullable: true }
+        formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
+        precioMediaPct: { type: number, format: double }
+        imagen: { type: string }
+        galeria:
+          type: array
+          items:
+            type: object
+            required: [id, url, alt]
+            properties:
+              id: { type: string }
+              url: { type: string }
+              alt: { type: string, nullable: true }
+        variantes:
+          type: array
+          items:
+            type: object
+            required: [id, sku, label, largoMm, anchoMm, espesorMm, material, color, terminacion, calidad, codigoBarras,
+              precioGeneral, precioProfesional, stocks]
+            properties:
+              id: { type: string }
+              sku: { type: string }
+              label: { type: string }
+              largoMm: { type: integer, nullable: true }
+              anchoMm: { type: integer, nullable: true }
+              espesorMm: { type: integer, nullable: true }
+              material: { type: string }
+              color: { type: string }
+              terminacion: { type: string }
+              calidad: { type: string }
+              codigoBarras: { type: string }
+              precioGeneral: { type: string }
+              precioProfesional: { type: string }
+              stocks:
+                type: array
+                description: Una por cada sucursal activa, en el orden de sucursales
+                items:
+                  type: object
+                  required: [sucursal, stock, minimo]
+                  properties:
+                    sucursal: { type: string }
+                    stock: { type: number, format: double }
+                    minimo: { type: number, format: double }
+        sucursales: { type: array, items: { $ref: "#/components/schemas/SucursalDeFicha" } }
+    Etiqueta:
+      type: object
+      required: [variantId, productId, nombre, nombreCorto, medida, sku, codigo, precio, barras]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        nombre: { type: string }
+        nombreCorto: { type: string }
+        medida: { type: string }
+        sku: { type: string }
+        codigo: { type: string, description: El código de barras de la medida o, si no tiene, su SKU }
+        precio: { type: string, nullable: true, description: El de la lista general; solo si se pidió y es mayor que cero }
+        barras:
+          type: object
+          nullable: true
+          description: Null si el código no se puede dibujar (letras fuera de ASCII)
+          required: [tipo, modulos]
+          properties:
+            tipo: { type: string, enum: [ean13, code128] }
+            modulos: { type: string, description: Un carácter por módulo, 1 barra y 0 espacio, sin zona de silencio }
+    SucursalDeFicha:
+      type: object
+      required: [id, slug, nombre]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        nombre: { type: string }
+    Sugerido:
+      type: object
+      required: [id, relatedProductId, nombre, categoria, imagen, activo, tipo, orden]
+      properties:
+        id: { type: string }
+        relatedProductId: { type: string }
+        nombre: { type: string }
+        categoria: { type: string }
+        imagen: { type: string, nullable: true }
+        activo: { type: boolean }
+        tipo: { type: string, enum: [complementario, similar] }
+        orden: { type: integer }
+    Candidato:
+      type: object
+      required: [id, nombre, slug, categoria, diasSinVender, stock, variantesSinPrecio, variantes, motivos]
+      properties:
+        id: { type: string }
+        nombre: { type: string }
+        slug: { type: string }
+        categoria: { type: string }
+        diasSinVender: { type: integer, nullable: true }
+        stock: { type: number, format: double }
+        variantesSinPrecio: { type: integer }
+        variantes: { type: integer }
+        motivos: { type: array, items: { type: string } }

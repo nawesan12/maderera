@@ -1,10 +1,9 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { bankPromotions, siteSettings } from "@/lib/db/schema";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
+import { apiPublica, datos } from "@/lib/api/servidor";
+import { leerTienda, type Tienda } from "@/lib/tienda";
 
 /**
  * Los textos editables del sitio.
@@ -35,13 +34,7 @@ import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
  */
 export const ajustesDelSitio = cache(
   cachearPublico(
-    async (): Promise<Record<string, string>> => {
-      const filas = await db
-        .select({ clave: siteSettings.clave, valor: siteSettings.valor })
-        .from(siteSettings);
-
-      return Object.fromEntries(filas.map((f) => [f.clave, f.valor]));
-    },
+    async (): Promise<Record<string, string>> => datos(await apiPublica.GET("/api/v1/contenido/ajustes")),
     ["ajustes-del-sitio"],
     ETIQUETAS.ajustes,
   ),
@@ -50,6 +43,11 @@ export const ajustesDelSitio = cache(
 export async function ajuste(clave: string, porDefecto = ""): Promise<string> {
   const ajustes = await ajustesDelSitio();
   return ajustes[clave] || porDefecto;
+}
+
+/** Los interruptores de la tienda (ver `lib/tienda.ts`). */
+export async function tienda(): Promise<Tienda> {
+  return leerTienda(await ajustesDelSitio());
 }
 
 export interface PromoVigente {
@@ -80,43 +78,7 @@ export interface PromoVigente {
  * "15 % de reintegro" desaparece de la portada solo el día que vence.
  */
 export const promosVigentes = cachearPublico(
-  async (): Promise<PromoVigente[]> => {
-    const ahora = new Date();
-
-    const filas = await db
-      .select({
-        id: bankPromotions.id,
-        medio: bankPromotions.medio,
-        titulo: bankPromotions.titulo,
-        detalle: bankPromotions.detalle,
-        dias: bankPromotions.dias,
-        vigenciaHasta: bankPromotions.vigenciaHasta,
-        quienPaga: bankPromotions.quienPaga,
-        imagenUrl: bankPromotions.imagenUrl,
-      })
-      .from(bankPromotions)
-      .where(
-        and(
-          eq(bankPromotions.activo, true),
-          or(
-            isNull(bankPromotions.vigenciaHasta),
-            sql`${bankPromotions.vigenciaHasta} >= ${ahora}`,
-          ),
-        ),
-      )
-      .orderBy(asc(bankPromotions.orden), asc(bankPromotions.createdAt));
-
-    return filas.map((f) => ({
-      ...f,
-      vigenciaHasta: f.vigenciaHasta
-        ? f.vigenciaHasta.toLocaleDateString("es-AR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "2-digit",
-          })
-        : "",
-    }));
-  },
+  async (): Promise<PromoVigente[]> => datos(await apiPublica.GET("/api/v1/contenido/promos")),
   ["promos-bancarias"],
   ETIQUETAS.contenido,
 );

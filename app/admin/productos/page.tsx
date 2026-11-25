@@ -1,54 +1,87 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ImageOff, Package, PackageX, Plus, Star, Tags } from "lucide-react";
+import { Vacio } from "@/components/admin/vacio";
+import { hayFiltro } from "@/lib/formato";
+import { Barcode, FileSpreadsheet, ImageOff, Package, PackageX, Plus, Star, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { GrupoListado } from "@/components/admin/grupo";
-import { recortar, VerTodo } from "@/components/admin/ver-mas";
+import { leerPagina, Paginador } from "@/components/admin/paginador";
 import { moneda, plural } from "@/components/admin/formato";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 import {
+  estadoDeProducto,
   listarCategoriasAdmin,
   listarProductosAdmin,
+  marcasDeProductos,
+  PRODUCTOS_POR_PAGINA,
   type ProductoAdmin,
 } from "@/lib/dal/admin/products";
+import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { BuscadorProductos } from "./buscador";
+
+type Params = {
+  buscar?: string;
+  cat?: string;
+  estado?: string;
+  marca?: string;
+  prov?: string;
+  pagina?: string;
+};
 
 export default async function AdminProductosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
+  searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
-  const [productos, categorias] = await Promise.all([
-    listarProductosAdmin({ busqueda: params.buscar, categoria: params.cat }),
+  const usuario = await requireStaff();
+  // Los proveedores son de Compras: quien no entra ahí no los ve ni filtra.
+  const conProveedores = puedeEntrar("/admin/compras", usuario.staffRole);
+  const pagina = leerPagina(params.pagina);
+  const [lista, categorias, marcas, proveedores] = await Promise.all([
+    listarProductosAdmin({
+      busqueda: params.buscar,
+      categoria: params.cat,
+      estado: params.estado,
+      marca: params.marca,
+      proveedor: params.prov,
+      pagina,
+    }),
     listarCategoriasAdmin(),
+    marcasDeProductos(),
+    conProveedores ? proveedoresParaElegir() : Promise.resolve(undefined),
   ]);
-
-  // Un producto sin foto en el catálogo se vende mucho menos, así que se
-  // separan arriba en lugar de quedar perdidos entre los demás.
-  const sinFoto = productos.filter((p) => p.sinFoto && p.active);
-  const resto = productos.filter((p) => !p.sinFoto || !p.active);
+  const { filas: productos, total, conteos } = lista;
+  const estado = estadoDeProducto(params.estado) ?? "todos";
 
   return (
     <div>
       <EncabezadoPanel
         titulo="Productos"
-        detalle={
-          sinFoto.length > 0
-            ? `${plural(productos.length, "producto")} · ${sinFoto.length} sin foto`
-            : plural(productos.length, "producto")
+        resumen={
+          conteos.sinFoto > 0
+            ? `${plural(conteos.todos, "producto")} · ${conteos.sinFoto} sin foto`
+            : plural(conteos.todos, "producto")
         }
       >
-        <Link href="/admin/productos/candidatos">
+        <Link href="/admin/migracion?que=productos">
           <button className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
-            <PackageX className="h-5 w-5" />
-            Candidatos a baja
+            <FileSpreadsheet className="h-5 w-5" />
+            Cargar desde Excel
           </button>
         </Link>
         <Link href="/admin/productos/rubros">
           <button className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
             <Tags className="h-5 w-5" />
-            Rubros
+            Categorías
           </button>
+        </Link>
+        <Link
+          href="/admin/stock/etiquetas"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <Barcode className="h-5 w-5" />
+          Etiquetas
         </Link>
         <Link href="/admin/productos/nuevo">
           <button className="boton-accion inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-base font-medium">
@@ -56,49 +89,66 @@ export default async function AdminProductosPage({
             Nuevo producto
           </button>
         </Link>
+        {/* Dar de baja es lo de menos mientras se carga el catálogo: va al final. */}
+        <Link href="/admin/productos/candidatos">
+          <button className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <PackageX className="h-5 w-5" />
+            Candidatos a baja
+          </button>
+        </Link>
       </EncabezadoPanel>
 
+      {/* Un producto sin foto en el catálogo se vende mucho menos: por eso
+          «Sin foto» es el primer grupo después de todos y pide atención. */}
       <BuscadorProductos
         categorias={categorias}
         busquedaActual={params.buscar ?? ""}
         categoriaActual={params.cat ?? "todos"}
+        marcas={marcas}
+        marcaActual={params.marca ?? "todas"}
+        proveedores={proveedores?.map((p) => ({ id: p.id, nombre: p.nombre }))}
+        proveedorActual={params.prov ?? "todos"}
+        estadoActual={estado}
+        estados={[
+          { valor: "todos", texto: "Todos", cantidad: conteos.todos },
+          { valor: "sin-foto", texto: "Sin foto", cantidad: conteos.sinFoto, atencion: true },
+          { valor: "sin-precio", texto: "Sin precio", cantidad: conteos.sinPrecio, atencion: true },
+          { valor: "sin-stock", texto: "Sin stock", cantidad: conteos.sinStock, atencion: true },
+          { valor: "ocultos", texto: "Ocultos", cantidad: conteos.ocultos },
+        ]}
       />
 
-      {productos.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
-          <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-base font-medium">Ningún producto coincide</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá con otras palabras o quitá el filtro de categoría.
-          </p>
+      {productos.length === 0 && hayFiltro(params) ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Package}
+            titulo="Ningún producto coincide"
+            accion={{ texto: "Limpiar filtros", href: "/admin/productos" }}
+          />
+        </div>
+      ) : productos.length === 0 ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Package}
+            titulo="Todavía no hay productos"
+            detalle="Cargá el primero o traé el catálogo del sistema viejo."
+            accion={
+              puedeEntrar("/admin/migracion", usuario.staffRole)
+                ? { texto: "Traer del sistema viejo", href: "/admin/migracion?que=productos" }
+                : { texto: "Nuevo producto", href: "/admin/productos/nuevo" }
+            }
+          />
         </div>
       ) : (
-        <>
-          <GrupoListado
-            titulo="Les falta la foto"
-            cantidad={sinFoto.length}
-            detalle="Se ven vacíos en el catálogo"
-            destacado
-            vacio={<p className="px-1 text-base text-texto-2">Todos tienen foto.</p>}
-          >
-            <Grilla productos={recortar(sinFoto, params.ver === "todo").visibles} />
-            <VerTodo
-              ocultas={recortar(sinFoto, params.ver === "todo").ocultas}
-              params={params}
-            />
-          </GrupoListado>
-
-          <GrupoListado
-            titulo={sinFoto.length > 0 ? "El resto del catálogo" : "Catálogo"}
-            cantidad={resto.length}
-          >
-            <Grilla productos={recortar(resto, params.ver === "todo").visibles} />
-            <VerTodo
-              ocultas={recortar(resto, params.ver === "todo").ocultas}
-              params={params}
-            />
-          </GrupoListado>
-        </>
+        <div className="mt-[22px]">
+          <Grilla productos={productos} />
+          <Paginador
+            pagina={pagina}
+            total={total}
+            porPagina={PRODUCTOS_POR_PAGINA}
+            params={params}
+          />
+        </div>
       )}
     </div>
   );
@@ -141,7 +191,7 @@ function Tarjeta({ producto }: { producto: ProductoAdmin }) {
         )}
 
         {producto.featured && (
-          <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-brand-orange px-2 py-0.5 text-sm font-medium text-white">
+          <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-accion px-2 py-0.5 text-sm font-medium text-white">
             <Star className="h-3.5 w-3.5" fill="currentColor" />
             Destacado
           </span>

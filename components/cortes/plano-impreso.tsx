@@ -1,10 +1,7 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { fechaCorta } from "@/lib/formato";
-import {
-  superficieDeSierra,
-  type PlanoDeCorte,
-  type PlacaDelPlano,
-} from "@/lib/cortes/plano";
+import { formatearDecimal } from "@/lib/unidades";
+import type { PlanoDeCorte, PlacaDelPlano } from "@/lib/cortes/tipos";
 import { formatearSierra } from "@/lib/cortes/sierra";
 
 /**
@@ -25,9 +22,12 @@ import { formatearSierra } from "@/lib/cortes/sierra";
  */
 export function PlanoImpreso({
   plano,
+  superficieSierra,
   corte,
 }: {
   plano: PlanoDeCorte;
+  /** Lo que se lleva la sierra en todo el trabajo, en mm² (lo calcula Go). */
+  superficieSierra: number;
   corte: {
     /** Para enlazar la hoja de la seccionadora. */
     id?: string;
@@ -180,7 +180,7 @@ export function PlanoImpreso({
       ))}
 
       {plano.placas.length > 0 && <TablaDePiezas plano={plano} />}
-      {plano.placas.length > 0 && <TablaDeSobrantes plano={plano} />}
+      {plano.placas.length > 0 && <TablaDeSobrantes plano={plano} sierra={superficieSierra} />}
 
       <p className="plano-pie">
         Las piezas están numeradas en el orden en que salen de la máquina: las
@@ -441,12 +441,7 @@ function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
  * las dos formas en que se va el material que no es pieza —el aserrín de la
  * sierra y lo que sobra— que es lo que contesta «¿por qué no entró todo?».
  */
-function TablaDeSobrantes({ plano }: { plano: PlanoDeCorte }) {
-  const sierra = plano.placas.reduce(
-    (t, placa) => t + superficieDeSierra(placa, plano.anchoSierra),
-    0,
-  );
-
+function TablaDeSobrantes({ plano, sierra }: { plano: PlanoDeCorte; sierra: number }) {
   return (
     <>
       <table className="plano-tabla">
@@ -476,9 +471,9 @@ function TablaDeSobrantes({ plano }: { plano: PlanoDeCorte }) {
                       {r.ancho} × {r.alto} mm
                     </td>
                     <td className="num">
-                      {((r.ancho * r.alto) / 1_000_000)
-                        .toFixed(2)
-                        .replace(".", ",")}
+                      {formatearDecimal((r.ancho * r.alto) / 1_000_000, 2, {
+                        fijo: true,
+                      })}
                     </td>
                     <td>
                       {placa.seVendeEntera

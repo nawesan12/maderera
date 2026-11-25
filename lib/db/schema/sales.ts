@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   numeric,
@@ -42,6 +43,7 @@ export const origenPresupuesto = pgEnum("origen_presupuesto", [
   "mostrador",
   "telefono",
   "express",
+  "whatsapp",
 ]);
 
 export const quotes = pgTable(
@@ -124,6 +126,8 @@ export const quoteItems = pgTable(
     presentacion: text(),
     notas: text(),
     orden: integer().notNull().default(0),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    precioLista: numeric({ precision: 12, scale: 2 }),
   },
   (t) => [index("quote_items_quote_idx").on(t.quoteId)],
 );
@@ -266,6 +270,15 @@ export const orders = pgTable(
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    anulacionAutorizadaPor: text(),
+    autorizadoPor: text(),
+    bajoListaSinAutorizar: boolean().notNull().default(false),
+    creditoSinAutorizar: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    dejadoDeCobrar: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    entregarEl: date(),
+    huellaMostrador: text(),
+    mercaderiaNoVolvio: boolean().notNull().default(false),
   },
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),
@@ -337,6 +350,9 @@ export const orderItems = pgTable(
     alicuotaIva: numeric({ precision: 5, scale: 2 }),
 
     orden: integer().notNull().default(0),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    delCorte: boolean().notNull().default(false),
+    precioLista: numeric({ precision: 12, scale: 2 }),
   },
   (t) => [index("order_items_order_idx").on(t.orderId)],
 );
@@ -540,6 +556,9 @@ export const cuttingOrders = pgTable(
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    contactoTelefono: text(),
+    retiraEl: date(),
   },
   (t) => [
     uniqueIndex("cutting_orders_numero_idx").on(t.numero),

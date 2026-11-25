@@ -31,27 +31,32 @@ export function RailDeCategorias({
   /** Slug de la categoría actual, o "todos". */
   activa: string;
 }) {
-  const todas = [
+  // Moldava, la línea propia, va al lado de Molduras como un rubro más
+  // (notas del 9/11/2026), aunque es una marca y lleva a su página.
+  const todas: (CategoriaDelRail & { href?: string })[] = [
     { slug: "todos", name: "Todo el catálogo", productCount: 0 },
-    ...categorias,
+    ...categorias.flatMap((c) =>
+      c.slug === "molduras" ? [c, { slug: "moldava", name: "Moldava", productCount: 0, href: "/moldava" }] : [c],
+    ),
   ];
 
   return (
     <nav
       aria-label="Categorías"
-      className="-mx-4 mb-5 overflow-x-auto px-4 [-ms-overflow-style:none] [scrollbar-width:none] lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden"
+      className="mb-5"
     >
-      <ul className="flex snap-x gap-2 lg:flex-wrap">
+      {/* Bajan de fila en vez de correrse de costado (Nahuel, 18/11: «que no
+          haya que hacer scroll horizontal»). */}
+      <ul className="flex flex-wrap gap-2">
         {todas.map((categoria) => {
           const esActiva = categoria.slug === activa;
 
           return (
-            <li key={categoria.slug} className="snap-start">
+            <li key={categoria.slug}>
               <Link
                 href={
-                  categoria.slug === "todos"
-                    ? "/catalogo"
-                    : `/catalogo?cat=${categoria.slug}`
+                  categoria.href ??
+                  (categoria.slug === "todos" ? "/catalogo" : `/catalogo?cat=${categoria.slug}`)
                 }
                 aria-current={esActiva ? "page" : undefined}
                 className={`inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-[14.5px] font-medium transition-colors ${

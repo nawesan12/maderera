@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import {
   ArrowLeft,
+  Barcode,
+  CheckCircle2,
+  Copy,
   ExternalLink,
   ImageOff,
   Package,
@@ -17,19 +20,24 @@ import {
   listarRubrosAdmin,
   obtenerProductoAdmin,
   sugeridosDelProducto,
+  imputacionesUsadas,
+  atributosUsados,
 } from "@/lib/dal/admin/products";
-import { imputacionesUsadas } from "@/lib/dal/admin/parametros-catalogo";
 import { FormularioProducto } from "../formulario";
+import { stocksDeFicha } from "../stocks";
 import { ProductosSugeridos } from "../sugeridos";
 
 export default async function EditarProductoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ guardado?: string; pestana?: string }>;
 }) {
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const [producto, categorias, rubros, sugeridos, candidatos, imputaciones] =
+  const { guardado, pestana } = await searchParams;
+  const [producto, categorias, rubros, sugeridos, candidatos, imputaciones, atributos] =
     await Promise.all([
       obtenerProductoAdmin(id),
       listarCategoriasAdmin(),
@@ -37,6 +45,7 @@ export default async function EditarProductoPage({
       sugeridosDelProducto(id),
       candidatosParaSugerir(id),
       imputacionesUsadas(),
+      atributosUsados(),
     ]);
 
   if (!producto) notFound();
@@ -44,7 +53,7 @@ export default async function EditarProductoPage({
   // El encabezado resume lo que hay que saber antes de editar: si se ve en el
   // sitio, cuánto stock queda y en qué rango está el precio.
   const stockTotal = producto.variantes.reduce(
-    (s, v) => s + v.stockCentral + v.stockAserradero,
+    (s, v) => s + v.stocks.reduce((t, st) => t + st.stock, 0),
     0,
   );
   const precios = producto.variantes
@@ -61,6 +70,16 @@ export default async function EditarProductoPage({
         <ArrowLeft className="h-5 w-5" />
         Volver a productos
       </Link>
+
+      {guardado && (
+        <p
+          role="status"
+          className="estado-ok flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base text-[var(--estado-tinta)]"
+        >
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          {pestana === "fotos" ? "Producto creado. Ahora sus fotos." : "Guardado."}
+        </p>
+      )}
 
       {/* Encabezado con contexto */}
       <div className="tarjeta flex flex-wrap items-start gap-5 p-5">
@@ -153,11 +172,25 @@ export default async function EditarProductoPage({
             </a>
           )}
           <Link
+            href={`/admin/productos/nuevo?copiar=${producto.id}`}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <Copy className="h-4 w-4" />
+            Duplicar
+          </Link>
+          <Link
             href={`/admin/stock?buscar=${encodeURIComponent(producto.name)}`}
             className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
           >
             <Package className="h-4 w-4" />
             Stock
+          </Link>
+          <Link
+            href={`/admin/stock/etiquetas?producto=${producto.id}`}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <Barcode className="h-4 w-4" />
+            Etiquetas
           </Link>
           <Link
             href={`/admin/precios?buscar=${encodeURIComponent(producto.name)}`}
@@ -170,9 +203,12 @@ export default async function EditarProductoPage({
       </div>
 
       <FormularioProducto
+        key={guardado ?? "ficha"}
         categorias={categorias}
         rubros={rubros}
         imputaciones={imputaciones}
+        atributos={atributos}
+        pestanaInicial={pestana === "fotos" || pestana === "medidas" ? pestana : "datos"}
         galeria={producto.galeria}
         inicial={{
           id: producto.id,
@@ -191,12 +227,15 @@ export default async function EditarProductoPage({
             ? String(Number(producto.recargoElaboracionPct))
             : "",
           imputacion: producto.imputacion ?? "",
+          usos: producto.usos ?? "",
+          cuidados: producto.cuidados ?? "",
           featured: producto.featured,
           aPedido: producto.aPedido,
           active: producto.active,
           imagen: producto.imagen,
-          variantes: producto.variantes,
+          variantes: producto.variantes.map((v) => ({ ...v, stocks: stocksDeFicha(v.stocks) })),
         }}
+        sucursales={producto.sucursales}
       />
 
       <ProductosSugeridos

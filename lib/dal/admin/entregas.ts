@@ -1,274 +1,79 @@
 import "server-only";
 
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { sucursalPublicada } from "@/lib/sucursales";
-import { saldoAlRemito } from "@/lib/entregas";
-import {
-  branches,
-  deliveries,
-  deliveryItems,
-  invoices,
-  orderItems,
-  orders,
-  shipments,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
+import { api, apiInterna, datos } from "@/lib/api/servidor";
+import type { Esquemas } from "@/lib/api/tipos";
 
-/** Lectura de remitos para el panel. */
+/**
+ * Lectura de remitos. La hace la API de Go (backend/internal/entregas); acá
+ * quedan los envoltorios con los nombres y la forma de siempre (las fechas
+ * como Date).
+ */
 
-export interface RemitoListado {
-  id: string;
-  numero: string;
-  tipo: string;
-  estado: string;
-  receptorNombre: string | null;
+type ListadoCrudo = Esquemas["RemitoDelPedido"];
+
+export interface RemitoListado extends Omit<ListadoCrudo, "firmadoAt" | "createdAt"> {
   firmadoAt: Date | null;
-  firmaToken: string | null;
   createdAt: Date;
-  transportista: string | null;
-  numeroSeguimiento: string | null;
-  cantidadLineas: number;
 }
 
-export async function remitosDelPedido(
-  orderId: string,
-): Promise<RemitoListado[]> {
-  await requireStaff();
-
-  const filas = await db
-    .select({
-      id: deliveries.id,
-      numero: deliveries.numero,
-      tipo: deliveries.tipo,
-      estado: deliveries.estado,
-      receptorNombre: deliveries.receptorNombre,
-      firmadoAt: deliveries.firmadoAt,
-      firmaToken: deliveries.firmaToken,
-      createdAt: deliveries.createdAt,
-      transportista: shipments.transportista,
-      numeroSeguimiento: shipments.numeroSeguimiento,
-    })
-    .from(deliveries)
-    .leftJoin(shipments, eq(shipments.deliveryId, deliveries.id))
-    .where(eq(deliveries.orderId, orderId))
-    .orderBy(desc(deliveries.createdAt));
-
-  if (filas.length === 0) return [];
-
-  /*
-   * Acotado a los remitos de este pedido.
-   *
-   * Antes traía **todas** las filas de `delivery_items` de la base y filtraba
-   * en memoria: con un pedido de tres remitos alcanzaba, y con dos años de
-   * operación la ficha de cualquier pedido empieza a barrer la tabla entera.
-   */
-  const conteos = await db
-    .select({
-      deliveryId: deliveryItems.deliveryId,
-      cantidad: deliveryItems.cantidad,
-    })
-    .from(deliveryItems)
-    .where(
-      inArray(
-        deliveryItems.deliveryId,
-        filas.map((f) => f.id),
-      ),
-    );
-
-  const porRemito = new Map<string, number>();
-  for (const c of conteos) {
-    porRemito.set(c.deliveryId, (porRemito.get(c.deliveryId) ?? 0) + 1);
-  }
-
+/** Los remitos de un pedido, los más nuevos primero (quien entra a la ficha). */
+export async function remitosDelPedido(orderId: string): Promise<RemitoListado[]> {
+  const filas = datos(
+    await (await api()).GET("/api/v1/admin/pedidos/{id}/remitos", { params: { path: { id: orderId } } }),
+  );
   return filas.map((f) => ({
     ...f,
-    cantidadLineas: porRemito.get(f.id) ?? 0,
+    firmadoAt: f.firmadoAt ? new Date(f.firmadoAt) : null,
+    createdAt: new Date(f.createdAt),
   }));
 }
 
-export interface RemitoCompleto {
-  id: string;
-  numero: string;
-  tipo: string;
-  estado: string;
-  receptorNombre: string | null;
-  receptorDocumento: string | null;
-  firmaUrl: string | null;
-  firmadoAt: Date | null;
-  notas: string | null;
-  createdAt: Date;
-  pedidoNumero: string;
-  pedidoId: string;
-  clienteNombre: string;
-  clienteDireccion: string | null;
-  customerId: string | null;
-  /** Del pedido: si lo que sale está pago, a cuenta o pendiente. */
-  estadoPago: string;
-  medioPago: string | null;
-  sucursal: string | null;
-  sucursalDireccion: string | null;
-  transportista: string | null;
-  numeroSeguimiento: string | null;
-  lineas: {
-    descripcion: string;
-    unidad: string;
-    cantidad: number;
-  }[];
-  /**
-   * Lo que quedó en acopio en el momento de este remito.
-   *
-   * Es lo que convierte el papel en "remito completo" o "remito de acopio",
-   * que fue el pedido de la clienta: quien lo recibe tiene que poder leer si
-   * se lleva todo o si le queda mercadería en la maderera. Vacío: se entregó
-   * el pedido entero.
-   */
-  pendientes: {
-    descripcion: string;
-    unidad: string;
-    pendiente: number;
-  }[];
-  /**
-   * La factura del pedido, con su CAE, si la hay.
-   *
-   * De la clienta (30/9/2026): «agregar CAE al remito». El CAE es de la
-   * factura —ARCA autoriza comprobantes, y por WSFE no se emiten remitos—,
-   * así que el remito la nombra: con qué factura viaja esta mercadería y con
-   * qué autorización. Nulo si el pedido todavía no se facturó: no se inventa.
-   */
-  factura: {
-    etiqueta: string;
-    cae: string | null;
-    caeVencimiento: Date | null;
-  } | null;
-}
+type Crudo = Esquemas["RemitoCompleto"];
+type FacturaCruda = NonNullable<Crudo["factura"]>;
 
 /**
- * Un remito completo, para imprimirlo o mostrarlo.
- *
- * No verifica sesión: la usan tanto el panel como la página de firma —que es
- * pública a propósito, porque quien firma es el cliente en el mostrador— y la
- * hoja del portal. Cada una hace su propia verificación antes de llamarla; la
- * de firma la protege el token, que es lo único que se sabe.
+ * Un remito completo, para imprimirlo o mostrarlo: las líneas, lo que quedó
+ * en acopio **en el momento de este remito** (lo que lo hace «de entrega
+ * parcial» o «total») y la factura con su CAE, si la hay.
  */
-export async function remitoCompleto(
-  deliveryId: string,
-): Promise<RemitoCompleto | null> {
-  const [remito] = await db
-    .select({
-      id: deliveries.id,
-      numero: deliveries.numero,
-      tipo: deliveries.tipo,
-      estado: deliveries.estado,
-      receptorNombre: deliveries.receptorNombre,
-      receptorDocumento: deliveries.receptorDocumento,
-      firmaUrl: deliveries.firmaUrl,
-      firmadoAt: deliveries.firmadoAt,
-      notas: deliveries.notas,
-      createdAt: deliveries.createdAt,
-      pedidoNumero: orders.numero,
-      pedidoId: orders.id,
-      clienteNombre: orders.contactoNombre,
-      clienteDireccion: orders.direccionEntrega,
-      customerId: orders.customerId,
-      // Si la mercadería que sale está paga o no: la clienta lo pidió en el
-      // remito. Sin importes —eso va en la factura—, solo la condición.
-      estadoPago: orders.estadoPago,
-      medioPago: orders.medioPago,
-      sucursal: branches.name,
-      sucursalSlug: branches.slug,
-      transportista: shipments.transportista,
-      numeroSeguimiento: shipments.numeroSeguimiento,
-    })
-    .from(deliveries)
-    .innerJoin(orders, eq(orders.id, deliveries.orderId))
-    .leftJoin(branches, eq(branches.id, deliveries.branchId))
-    .leftJoin(shipments, eq(shipments.deliveryId, deliveries.id))
-    .where(eq(deliveries.id, deliveryId))
-    .limit(1);
+export interface RemitoCompleto extends Omit<Crudo, "firmadoAt" | "createdAt" | "factura"> {
+  firmadoAt: Date | null;
+  createdAt: Date;
+  factura: (Omit<FacturaCruda, "caeVencimiento"> & { caeVencimiento: Date | null }) | null;
+}
 
-  if (!remito) return null;
-
-  const [lineas, pendientes, facturas] = await Promise.all([
-    db
-      .select({
-        descripcion: orderItems.descripcion,
-        unidad: orderItems.unidad,
-        cantidad: deliveryItems.cantidad,
-        orden: deliveryItems.orden,
-      })
-      .from(deliveryItems)
-      .innerJoin(orderItems, eq(orderItems.id, deliveryItems.orderItemId))
-      .where(eq(deliveryItems.deliveryId, deliveryId))
-      .orderBy(deliveryItems.orden),
-    // Lo que quedaba **en ese momento**, no lo que queda hoy: un remito
-    // reimpreso tiene que decir lo mismo que dijo el día que se firmó.
-    saldoAlRemito(remito.pedidoId, deliveryId),
-    // La última factura vigente del pedido. Las notas de crédito no: anulan,
-    // no acompañan mercadería.
-    db
-      .select({
-        tipo: invoices.tipo,
-        puntoVenta: invoices.puntoVenta,
-        numero: invoices.numero,
-        cae: invoices.cae,
-        caeVencimiento: invoices.caeVencimiento,
-      })
-      .from(invoices)
-      .where(
-        and(
-          eq(invoices.orderId, remito.pedidoId),
-          ne(invoices.estado, "anulada"),
-          // Una rechazada se nombra igual: es la emitida sin certificado de
-          // ARCA, y el remito la muestra «sin CAE, sin valor fiscal».
-          ne(invoices.estado, "borrador"),
-          sql`${invoices.tipo}::text like 'factura%'`,
-        ),
-      )
-      .orderBy(desc(invoices.createdAt))
-      .limit(1),
-  ]);
-
-  const factura = facturas[0];
-
+function conFechas(r: Crudo): RemitoCompleto {
   return {
-    ...remito,
-    // La dirección de la sucursal sale de la ficha publicada, no de la fila.
-    sucursalDireccion: remito.sucursalSlug
-      ? (sucursalPublicada(remito.sucursalSlug)?.direccion ?? null)
-      : null,
-    lineas: lineas.map((l) => ({
-      descripcion: l.descripcion,
-      unidad: l.unidad,
-      cantidad: Number(l.cantidad),
-    })),
-    pendientes: pendientes.map((p) => ({
-      descripcion: p.descripcion,
-      unidad: p.unidad,
-      pendiente: p.pendiente,
-    })),
-    factura: factura
-      ? {
-          etiqueta: `${nombreComprobante(factura.tipo)} ${numeroFormateado(factura.puntoVenta, factura.numero)}`,
-          cae: factura.cae,
-          caeVencimiento: factura.caeVencimiento,
-        }
+    ...r,
+    firmadoAt: r.firmadoAt ? new Date(r.firmadoAt) : null,
+    createdAt: new Date(r.createdAt),
+    factura: r.factura
+      ? { ...r.factura, caeVencimiento: r.factura.caeVencimiento ? new Date(r.factura.caeVencimiento) : null }
       : null,
   };
 }
 
+/**
+ * Un remito completo. No verifica sesión: lo usan el panel, la hoja del
+ * portal, los avisos y WhatsApp, y cada uno decide antes quién lo ve. Por eso
+ * va con el secreto interno.
+ */
+export async function remitoCompleto(deliveryId: string): Promise<RemitoCompleto | null> {
+  const r = await apiInterna.GET("/api/v1/remitos/{id}", { params: { path: { id: deliveryId } } });
+  if (r.response.status === 404) return null;
+  return conFechas(datos(r));
+}
+
 /** Remito buscado por su token de firma. Es lo único que conoce quien firma. */
-export async function remitoPorToken(
-  token: string,
-): Promise<RemitoCompleto | null> {
-  const [fila] = await db
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(eq(deliveries.firmaToken, token))
-    .limit(1);
+export async function remitoPorToken(token: string): Promise<RemitoCompleto | null> {
+  const r = await apiInterna.GET("/api/v1/firmar/{token}", { params: { path: { token } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  return conFechas(datos(r));
+}
 
-  if (!fila) return null;
-
-  return remitoCompleto(fila.id);
+/** Lo que necesitan los avisos de entrega: el enlace de firma y a quién escribirle. */
+export async function remitoParaAvisar(deliveryId: string): Promise<Esquemas["RemitoParaAvisar"] | null> {
+  const r = await apiInterna.GET("/api/v1/remitos/{id}/aviso", { params: { path: { id: deliveryId } } });
+  if (r.response.status === 404) return null;
+  return datos(r);
 }

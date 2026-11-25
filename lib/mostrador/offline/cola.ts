@@ -11,6 +11,8 @@ import {
   type ResumenDeCola,
 } from "./cola-estado";
 import type { DocumentoTicket } from "../ticket";
+import { firmaPara } from "./firma";
+import type { CorteDeMostrador } from "../tipos";
 
 /**
  * La cola de ventas que todavía no llegaron al servidor.
@@ -35,7 +37,11 @@ export interface VentaEncolada {
     unidad: string;
     cantidad: number;
     precioUnitario: number;
+    /** El índice de su corte en `cortes`. */
+    corte?: number;
   }[];
+  /** Los despieces de la venta: el trabajo nace en el taller al subirse. */
+  cortes?: CorteDeMostrador[];
   customerId: string | null;
   contactoNombre: string;
   contactoTelefono?: string | null;
@@ -56,6 +62,8 @@ export interface VentaEncolada {
   descuentoMotivo?: string | null;
   notas?: string | null;
   usuarioId: string;
+  /** La firma de la sesión de usuarioId (firma.ts); la pone encolarVenta. */
+  firmaUsuario?: string;
   /** ISO. La hora real del mostrador. */
   cobradaAt: string;
 }
@@ -99,7 +107,13 @@ export async function encolarVenta(
   venta: VentaEncolada,
   ticket: DocumentoTicket,
 ): Promise<void> {
-  const fila: FilaDeCola = { ...nuevoItem(venta.clave), tipo: "venta", venta };
+  // La firma va con la venta desde que se encola: al drenar puede estar
+  // otra sesión, y sin ella la venta quedaría a nombre de quien la sube.
+  const firmada: VentaEncolada = {
+    ...venta,
+    firmaUsuario: venta.firmaUsuario ?? firmaPara(venta.usuarioId),
+  };
+  const fila: FilaDeCola = { ...nuevoItem(venta.clave), tipo: "venta", venta: firmada };
 
   await guardarJunto(["cola", "tickets"], (store) => {
     store("cola").put(fila);

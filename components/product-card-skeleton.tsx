@@ -9,8 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function ProductCardSkeleton() {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[14px] border border-linea bg-card shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
-      <Skeleton className="aspect-[4/3] rounded-none" />
+    // La misma forma que la tarjeta en el teléfono (foto cuadrada de borde a
+    // borde): si no, la página salta cuando llegan los productos.
+    <div className="flex h-full flex-col overflow-hidden bg-card max-sm:ml-[calc(50%-50vw)] max-sm:w-screen sm:rounded-[14px] sm:superficie sm:shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+      <Skeleton className="aspect-square rounded-none sm:aspect-[4/3]" />
       <div className="flex flex-1 flex-col gap-[13px] px-4 pb-4 pt-[15px]">
         <div className="flex flex-col gap-[3px]">
           <Skeleton className="h-[11px] w-20" />

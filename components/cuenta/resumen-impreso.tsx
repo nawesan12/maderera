@@ -1,6 +1,8 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
-import type { ConfiguracionFiscal } from "@/lib/db/schema";
+import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
+
+type ConfiguracionFiscal = Awaited<ReturnType<typeof obtenerConfiguracionFiscal>>;
 import type { ResumenDeCuenta } from "@/lib/dal/admin/resumen-cuenta";
 import { LogoEmisor } from "@/components/impresion/logo-emisor";
 

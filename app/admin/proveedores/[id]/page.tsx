@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
 import { ArrowLeft } from "lucide-react";
+import { facturasConSaldo } from "@/lib/dal/admin/pagos-proveedor";
+import { diasHasta, fechaCorta } from "@/lib/formato";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
   condicionesDelProveedor,
@@ -20,6 +22,11 @@ export const metadata: Metadata = { title: "Proveedor" };
 /**
  * La ficha del proveedor y su cuenta corriente.
  *
+ * Arriba, lo que se viene a hacer: cuánto se le debe, el botón de pagarle
+ * (abre el pago con él ya elegido) y las facturas pendientes por
+ * vencimiento, cada una con su vencimiento. Después el libro, donde cada
+ * renglón lleva a su factura o a su pago.
+ *
  * El libro está arriba y la ficha abajo, plegada, por la misma razón que en
  * sucursales: los datos de un proveedor cambian dos veces por año y el saldo se
  * mira todas las semanas. Un formulario desplegado empujaría fuera de pantalla
@@ -35,10 +42,11 @@ export default async function ProveedorPage({
   const { id } = await params;
 
   if (!esUuid(id)) notFound();
-  const [proveedor, perfil, condiciones] = await Promise.all([
+  const [proveedor, perfil, condiciones, pendientes] = await Promise.all([
     obtenerProveedor(id),
     perfilDelProveedor(id),
     condicionesDelProveedor(id),
+    facturasConSaldo(id),
   ]);
 
   if (!proveedor) notFound();
@@ -72,19 +80,27 @@ export default async function ProveedorPage({
             </p>
           </div>
 
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Se le debe</p>
-            <p
-              className={`tabular text-3xl font-bold ${
-                proveedor.saldo > 0.005
-                  ? "text-saldo-debe"
-                  : proveedor.saldo < -0.005
-                    ? "text-saldo-favor"
-                    : "text-saldo-cero"
-              }`}
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Se le debe</p>
+              <p
+                className={`tabular text-3xl font-bold ${
+                  proveedor.saldo > 0.005
+                    ? "text-saldo-debe"
+                    : proveedor.saldo < -0.005
+                      ? "text-saldo-favor"
+                      : "text-saldo-cero"
+                }`}
+              >
+                {formatearMonto(proveedor.saldo)}
+              </p>
+            </div>
+            <Link
+              href={`/admin/compras/pagos?proveedor=${proveedor.id}`}
+              className="boton-accion inline-flex h-12 items-center rounded-xl px-6 text-base font-semibold"
             >
-              {formatearMonto(proveedor.saldo)}
-            </p>
+              Pagar
+            </Link>
           </div>
         </header>
       </div>
@@ -98,6 +114,42 @@ export default async function ProveedorPage({
             valor={proveedor.cbu ?? proveedor.aliasCbu}
             mono
           />
+        </section>
+      )}
+
+      {pendientes.length > 0 && (
+        <section className="tarjeta overflow-hidden">
+          <h2 className="flex items-baseline gap-2 px-5 pt-5 text-[19px] font-bold tracking-tight">
+            Facturas por pagar
+            <span className="tabular text-base font-medium text-muted-foreground">{pendientes.length}</span>
+          </h2>
+          <ul className="mt-2 divide-y divide-linea">
+            {pendientes.map((f) => {
+              const vence = f.fechaVencimiento ? new Date(f.fechaVencimiento) : null;
+              const dias = diasHasta(vence);
+              const vencida = dias !== null && dias < 0;
+              return (
+                <li key={f.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3">
+                  <Link href={`/admin/compras/facturas/${f.id}`} className="min-w-0 flex-1 hover:underline">
+                    <span className="tabular block font-medium">{f.numero}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      del {fechaCorta.format(f.fechaEmision)}
+                    </span>
+                  </Link>
+                  <span className={`tabular text-base ${vencida ? "font-semibold text-saldo-debe" : "text-muted-foreground"}`}>
+                    {vence ? `${vencida ? "venció" : "vence"} el ${fechaCorta.format(vence)}` : "sin vencimiento"}
+                  </span>
+                  <span className="tabular w-32 text-right text-base font-semibold">{formatearMonto(f.saldo)}</span>
+                  <Link
+                    href={`/admin/compras/pagos?proveedor=${proveedor.id}&factura=${f.id}`}
+                    className="tarjeta-hundida inline-flex h-10 items-center rounded-xl px-4 text-base font-medium"
+                  >
+                    Pagar
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 
@@ -133,6 +185,8 @@ export default async function ProveedorPage({
               aliasCbu: proveedor.aliasCbu,
               diasPago: proveedor.diasPago,
               notas: proveedor.notas,
+              condicionGanancias: proveedor.condicionGanancias,
+              exentoGananciasHasta: proveedor.exentoGananciasHasta,
             }}
           />
         </div>

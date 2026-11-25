@@ -36,6 +36,8 @@ const money = (valor?: string) =>
  */
 export function DialogoImportar() {
   const router = useRouter();
+  // Decía «arrastrala acá» y soltar el archivo no hacía nada.
+  const [arrastrando, setArrastrando] = useState(false);
   const [abierto, setAbierto] = useState(false);
   const [previa, setPrevia] = useState<VistaPreviaImportacion | null>(null);
   const [leyendo, startLectura] = useTransition();
@@ -62,6 +64,10 @@ export function DialogoImportar() {
         sku: f.sku,
         generalNuevo: f.generalNuevo,
         profesionalNuevo: f.profesionalNuevo,
+        // Lo que se vio: si alguien lo cambió mientras tanto, Go rechaza la
+        // fila en vez de pisarlo. "" es «no tenía precio».
+        generalActual: f.generalActual ?? "",
+        profesionalActual: f.profesionalActual ?? "",
       }));
 
     const datos = new FormData();
@@ -73,7 +79,11 @@ export function DialogoImportar() {
         toast.error(resultado.error);
         return;
       }
-      toast.success(resultado.ok ?? "Precios actualizados.");
+      // Con filas rechazadas el mensaje dice cuántas y por qué: en amarillo,
+      // y un rato más, que se lea.
+      const ok = resultado.ok ?? "Precios actualizados.";
+      if (ok.includes("Se rechazaron")) toast.warning(ok, { duration: 15_000 });
+      else toast.success(ok);
       cerrar();
       router.refresh();
     });
@@ -101,15 +111,28 @@ export function DialogoImportar() {
 
         {!previa ? (
           <div className="space-y-4">
-            <ol className="space-y-2 text-base text-muted-foreground">
-              <li>
-                1. Descargá la planilla con el botón <strong>Exportar</strong>.
-              </li>
-              <li>2. Cambiá los precios en Excel y guardá el archivo.</li>
-              <li>3. Subilo acá: antes de aplicar nada vas a ver qué cambia.</li>
-            </ol>
+            {/* Antes de aplicar nada se ve qué cambia. */}
+            <p className="text-base text-muted-foreground">
+              La planilla sale de <strong>Exportar</strong>: cambiá los precios
+              en Excel y subila acá.
+            </p>
 
-            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center transition-colors hover:border-brand-orange/50 hover:bg-muted/40">
+            <label
+              onDragOver={(e) => {
+                e.preventDefault();
+                setArrastrando(true);
+              }}
+              onDragLeave={() => setArrastrando(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setArrastrando(false);
+                const archivo = e.dataTransfer.files?.[0];
+                if (archivo && !leyendo) elegirArchivo(archivo);
+              }}
+              className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                arrastrando ? "border-brand-orange bg-brand-orange/5" : "hover:border-brand-orange/50 hover:bg-muted/40"
+              }`}
+            >
               <Upload className="h-6 w-6 text-muted-foreground" />
               <span className="text-base font-medium">
                 Elegí la planilla o arrastrala acá

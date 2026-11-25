@@ -1,85 +1,41 @@
 import { NextResponse } from "next/server";
-import { staffOrNull } from "@/lib/dal/session";
-import { reporteDeReposicion } from "@/lib/dal/admin/reposicion";
-import { reposicionPdf } from "@/lib/pdf/reposicion";
+import { api } from "@/lib/api/servidor";
+import { cabecerasCsv } from "@/lib/csv-excel";
 
 /**
  * El reporte de reposición para llevar: CSV para trabajarlo, PDF para
- * imprimirlo y salir a comprar con la hoja. La clienta pidió los dos.
+ * imprimirlo y salir a comprar con la hoja. Los dos los arma la API de Go
+ * (backend/internal/reportes), con los mismos filtros que la pantalla.
  */
 export async function GET(request: Request) {
-  const usuario = await staffOrNull();
-  if (!usuario) return new NextResponse("No encontrado", { status: 404 });
-
-  const url = new URL(request.url);
-  const dias = Number(url.searchParams.get("dias")) || 30;
-  const objetivo = Math.min(
-    Math.max(Number(url.searchParams.get("objetivo")) || 30, 7),
-    180,
-  );
-
-  const reporte = await reporteDeReposicion({
-    diasDelPeriodo: [30, 60, 90].includes(dias) ? dias : 30,
-    coberturaObjetivo: objetivo,
-    categoria: url.searchParams.get("cat") ?? undefined,
-    // Sin esto el PDF traía todos los rubros mientras la pantalla mostraba uno.
-    rubro: url.searchParams.get("rubro") ?? undefined,
-    sucursal: url.searchParams.get("sucursal") ?? undefined,
+  const q = new URL(request.url).searchParams;
+  const formato = q.get("formato") === "pdf" ? "pdf" : "csv";
+  const query: Record<string, string> = { formato };
+  for (const clave of ["dias", "objetivo", "cat", "rubro", "sucursal"]) {
+    const v = q.get(clave);
+    if (v) query[clave] = v;
+  }
+  const r = await (await api()).GET("/api/v1/admin/reportes/reposicion/archivo", {
+    params: { query },
+    parseAs: "arrayBuffer",
   });
-
-  if (url.searchParams.get("formato") === "pdf") {
-    const pdf = await reposicionPdf(reporte);
-    return new NextResponse(pdf as BodyInit, {
+  // Como antes: a quien no es del personal, «no encontrado».
+  if (r.response.status === 401 || r.response.status === 403) {
+    return new NextResponse("No encontrado", { status: 404 });
+  }
+  if (!r.response.ok || !r.data) {
+    return new NextResponse("No se pudo armar el archivo.", { status: 500 });
+  }
+  const disposicion = r.response.headers.get("Content-Disposition") ?? "";
+  const nombre = /filename="([^"]+)"/.exec(disposicion)?.[1] ?? `reposicion.${formato}`;
+  if (formato === "pdf") {
+    return new NextResponse(r.data, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="reposicion-${dias}dias.pdf"`,
+        "Content-Disposition": `attachment; filename="${nombre}"`,
         "Cache-Control": "private, no-store",
       },
     });
   }
-
-  // `;` y coma decimal, que es lo que abre bien un Excel en español.
-  const encabezado = [
-    "Producto",
-    "Medida",
-    "Código",
-    "Categoría",
-    "Rubro",
-    "Central",
-    "Aserradero",
-    "Vendido",
-    "Cobertura (días)",
-    "Comprar",
-  ].join(";");
-
-  const filas = reporte.filas.map((f) =>
-    [
-      f.producto,
-      f.medida,
-      f.sku ?? "",
-      f.categoria,
-      f.rubro ?? "",
-      f.disponibleCentral,
-      f.disponibleAserradero,
-      f.vendido,
-      f.cobertura ?? "",
-      f.sugerido,
-    ]
-      .map((v) => {
-        const texto = String(v);
-        return /[;"\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
-      })
-      .join(";"),
-  );
-
-  // BOM para que Excel en Windows lea bien los acentos.
-  const csv = "﻿" + [encabezado, ...filas].join("\r\n");
-
-  return new NextResponse(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="reposicion-${dias}dias.csv"`,
-      "Cache-Control": "private, no-store",
-    },
-  });
+  return new NextResponse(r.data, { headers: cabecerasCsv(nombre) });
 }

@@ -1,17 +1,19 @@
 import type { LucideIcon } from "lucide-react";
-import { quienEntra, type RolStaff } from "@/lib/roles";
+import { puedeEntrar, type RolStaff } from "@/lib/roles";
 import {
   Banknote,
   BarChart3,
   BookOpen,
   Boxes,
   Building2,
-  Calculator,
   CalendarCheck,
   CalendarDays,
   ClipboardList,
+  CreditCard,
   DatabaseZap,
+  Factory,
   FileText,
+  HandCoins,
   HardHat,
   History,
   Landmark,
@@ -23,18 +25,22 @@ import {
   Newspaper,
   Package,
   PackagePlus,
+  PhoneCall,
   Receipt,
   ReceiptText,
   Scissors,
+  ShoppingBag,
+  SlidersHorizontal,
   Store,
   Tags,
   Truck,
+  UserCog,
   Users,
   Wallet,
 } from "lucide-react";
 
 /**
- * De qué se compone el panel: las seis secciones y sus destinos.
+ * De qué se compone el panel: las secciones y sus destinos.
  *
  * **Vive fuera del menú lateral a propósito.** `sidebar.tsx` es `"use client"`
  * —necesita `usePathname` para marcar dónde está uno— y desde un componente de
@@ -83,107 +89,94 @@ export interface ItemNav {
  * `seccionesPara`.
  */
 export const secciones: { titulo: string; items: ItemNav[] }[] = [
+  /*
+   * Agrupado como piensa quien atiende una maderera, por lo que se hace y no
+   * por módulo del sistema: vender, cobrar, comprar, el depósito, el
+   * catálogo, los números y lo que se configura de vez en cuando. Antes
+   * Stock estaba en Catálogo y Recepciones en Compras, Reportes en Ajustes,
+   * y la tienda se prendía desde Contenido.
+   */
   {
-    titulo: "Operación",
+    titulo: "Vender",
     items: [
       { href: "/admin", icon: LayoutDashboard, label: "Resumen" },
-      { href: "/admin/pedidos", icon: Truck, label: "Pedidos" },
+      /*
+       * El mostrador es una pantalla completa fuera del panel, como el taller.
+       * Va igual en el menú: es la única forma de llegar sin escribir la
+       * dirección, y quien atiende entra por acá cada mañana.
+       */
+      { href: "/mostrador", icon: Store, label: "Mostrador" },
+      { href: "/admin/pedidos", icon: ShoppingBag, label: "Pedidos" },
+      { href: "/admin/presupuestos", icon: ClipboardList, label: "Presupuestos" },
+      { href: "/admin/cortes", icon: Scissors, label: "Cortes" },
       {
         href: "/admin/whatsapp",
         icon: MessageCircle,
         label: "WhatsApp",
         contador: "whatsapp" as const,
       },
-      {
-        href: "/admin/presupuestos",
-        icon: ClipboardList,
-        label: "Presupuestos",
-      },
-      { href: "/admin/cortes", icon: Scissors, label: "Cortes" },
-      /*
-       * El mostrador es una pantalla completa fuera del panel, como el taller.
-       * Va igual en el menú: es la única forma de llegar sin escribir la
-       * dirección, y quien atiende entra por acá cada mañana.
-       */
-      {
-        href: "/mostrador",
-        icon: Store,
-        label: "Mostrador",
-      },
+      { href: "/admin/clientes", icon: Users, label: "Clientes" },
+      { href: "/admin/profesionales", icon: HardHat, label: "Profesionales" },
+    ],
+  },
+  {
+    titulo: "Cobrar",
+    items: [
+      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
+      { href: "/admin/pagos", icon: HandCoins, label: "Cobranzas" },
+      { href: "/admin/clientes/seguimiento", icon: PhoneCall, label: "Seguimiento" },
+      { href: "/admin/caja", icon: Banknote, label: "Caja" },
+      { href: "/admin/cheques", icon: CreditCard, label: "Cheques" },
+    ],
+  },
+  /* En el orden del circuito: se pide, llega, se factura, se paga. */
+  {
+    titulo: "Comprar",
+    items: [
+      { href: "/admin/proveedores", icon: Factory, label: "Proveedores" },
+      { href: "/admin/compras/ordenes", icon: ClipboardList, label: "Órdenes de compra" },
+      { href: "/admin/compras/facturas", icon: ReceiptText, label: "Facturas de compra" },
+      { href: "/admin/compras/pagos", icon: Wallet, label: "Pagos" },
+      { href: "/admin/compras/gastos", icon: Receipt, label: "Gastos" },
+    ],
+  },
+  {
+    titulo: "Depósito",
+    items: [
+      { href: "/admin/stock", icon: Package, label: "Stock" },
+      { href: "/admin/recepciones", icon: PackagePlus, label: "Recepciones" },
+      { href: "/admin/reparto", icon: Truck, label: "Reparto" },
     ],
   },
   {
     titulo: "Catálogo",
     items: [
       { href: "/admin/productos", icon: Boxes, label: "Productos" },
-      { href: "/admin/stock", icon: Package, label: "Stock" },
       { href: "/admin/precios", icon: Tags, label: "Precios" },
-      { href: "/admin/calculadoras", icon: Calculator, label: "Calculadoras" },
-    ],
-  },
-  {
-    titulo: "Compras",
-    items: [
-      { href: "/admin/proveedores", icon: Truck, label: "Proveedores" },
-      {
-        href: "/admin/compras/ordenes",
-        icon: ClipboardList,
-        label: "Órdenes de compra",
-      },
-      { href: "/admin/recepciones", icon: PackagePlus, label: "Recepciones" },
-      {
-        href: "/admin/compras/facturas",
-        icon: ReceiptText,
-        label: "Facturas de compra",
-      },
-      { href: "/admin/compras/pagos", icon: Wallet, label: "Pagos" },
-      { href: "/admin/cheques", icon: Banknote, label: "Cheques" },
-      { href: "/admin/compras/gastos", icon: Receipt, label: "Gastos" },
-    ],
-  },
-  /*
-   * Ventas tiene grupo propio, y antes no.
-   *
-   * "Administración" juntaba dieciséis ítems que eran cuatro cosas distintas:
-   * la cobranza, el trato con el cliente, el sitio y la configuración. La
-   * asimetría se notaba al lado de Compras, que sí tiene su grupo con los siete
-   * pasos en orden cronológico, mientras que el circuito de venta quedaba
-   * partido entre Operación (presupuesto y pedido) y ese cajón (factura y
-   * cobro).
-   *
-   * El orden de adentro es el del circuito, no el alfabético: se factura,
-   * se cobra, entra a la caja, se declara y se cierra el mes.
-   */
-  {
-    titulo: "Ventas",
-    items: [
-      { href: "/admin/clientes", icon: Users, label: "Clientes" },
-      { href: "/admin/profesionales", icon: HardHat, label: "Profesionales" },
-      { href: "/admin/facturacion", icon: FileText, label: "Facturación" },
-      { href: "/admin/pagos", icon: Wallet, label: "Cobros" },
-      { href: "/admin/caja", icon: Banknote, label: "Caja" },
-      { href: "/admin/arca", icon: Landmark, label: "ARCA" },
-      { href: "/admin/cierre", icon: CalendarCheck, label: "Cierre del mes" },
-    ],
-  },
-  {
-    titulo: "Sitio",
-    items: [
-      { href: "/admin/contenido", icon: Newspaper, label: "Contenido" },
-      { href: "/admin/eventos", icon: CalendarDays, label: "Eventos" },
       { href: "/admin/documentacion", icon: BookOpen, label: "Documentación" },
-      { href: "/admin/avisos", icon: Mail, label: "Avisos" },
-      { href: "/admin/campanas", icon: Megaphone, label: "Campañas" },
     ],
   },
-  /* Lo que se toca de vez en cuando: reglas, datos del negocio y rastros. */
   {
-    titulo: "Ajustes",
+    titulo: "Números",
     items: [
       { href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
+      { href: "/admin/cierre", icon: CalendarCheck, label: "Cierre del mes" },
+      { href: "/admin/arca", icon: Landmark, label: "ARCA e impuestos" },
       { href: "/admin/sucursales", icon: Building2, label: "Sucursales" },
-      { href: "/admin/envios", icon: MapPin, label: "Envíos" },
-      { href: "/admin/migracion", icon: DatabaseZap, label: "Migración" },
+    ],
+  },
+  /* Lo que se toca de vez en cuando: el sitio, las reglas y los rastros. */
+  {
+    titulo: "Sitio y configuración",
+    items: [
+      { href: "/admin/contenido", icon: Newspaper, label: "Tienda y contenido" },
+      { href: "/admin/eventos", icon: CalendarDays, label: "Eventos" },
+      { href: "/admin/avisos", icon: Mail, label: "Avisos" },
+      { href: "/admin/campanas", icon: Megaphone, label: "Campañas" },
+      { href: "/admin/reglas", icon: SlidersHorizontal, label: "Reglas del negocio" },
+      { href: "/admin/envios", icon: MapPin, label: "Zonas de envío" },
+      { href: "/admin/clientes/vendedores", icon: UserCog, label: "Vendedores" },
+      { href: "/admin/migracion", icon: DatabaseZap, label: "Importar planillas" },
       { href: "/admin/bitacora", icon: History, label: "Bitácora" },
     ],
   },
@@ -204,10 +197,40 @@ export function seccionesPara(rol?: RolStaff | null) {
   return secciones
     .map((seccion) => ({
       ...seccion,
-      items: seccion.items.filter((item) => {
-        const permitidos = quienEntra(item.href);
-        return !permitidos || !rol || permitidos.includes(rol);
-      }),
+      // `puedeEntrar` y no la clave exacta: el menú tiene que preguntar lo
+      // mismo que pregunta la página. Vendedores y Seguimiento no tienen
+      // clave propia y heredan la de `/admin/clientes`; con la clave exacta
+      // le aparecían al depósito y al tocarlas rebotaba.
+      items: seccion.items.filter((item) => !rol || puedeEntrar(item.href, rol)),
     }))
     .filter((seccion) => seccion.items.length > 0);
+}
+
+/**
+ * El nombre de la sección a la que pertenece una ruta (la de href más largo
+ * que la contiene), para el aviso del rebote de permisos. Null si no es de
+ * ninguna: el aviso no repite una dirección que vino en la URL.
+ */
+export function nombreDeSeccion(ruta: string): string | null {
+  let mejor: ItemNav | null = null;
+  for (const seccion of secciones) {
+    for (const item of seccion.items) {
+      const contiene = ruta === item.href || ruta.startsWith(item.href + "/");
+      if (contiene && (!mejor || item.href.length > mejor.href.length)) mejor = item;
+    }
+  }
+  return mejor && mejor.href !== "/admin" ? mejor.label : null;
+}
+
+/** El parámetro con que el panel rebota a quien no puede entrar. */
+export const PARAMETRO_SIN_ACCESO = "sin-acceso";
+
+/**
+ * El destino del rebote: el inicio del rol, con la ruta que no pudo abrir.
+ * El resumen del panel no lleva aviso: es a donde se cae por omisión (el
+ * aserradero que abre /admin va a su taller sin más).
+ */
+export function rebote(inicio: string, ruta: string): string {
+  if (!ruta || ruta === "/admin") return inicio;
+  return `${inicio}?${PARAMETRO_SIN_ACCESO}=${encodeURIComponent(ruta)}`;
 }

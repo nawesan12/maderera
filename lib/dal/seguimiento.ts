@@ -1,11 +1,7 @@
 import { cache } from "react";
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { branches, orderItems, orders } from "@/lib/db/schema";
-import { getSession } from "@/lib/dal/session";
-import { clienteDeLaSesion } from "@/lib/dal/cuenta";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
  * La página de seguimiento de un pedido.
@@ -30,121 +26,15 @@ import { clienteDeLaSesion } from "@/lib/dal/cuenta";
  * "Pedido confirmado" una pantalla de no encontrado. Sin esto serían dos
  * consultas idénticas por carga.
  */
-export const pedidoParaSeguimiento = cache(
-  async (numero: string, token?: string) => {
-    const [pedido] = await db
-      .select({
-        id: orders.id,
-        numero: orders.numero,
-        publicToken: orders.publicToken,
-        customerId: orders.customerId,
-        cliente: orders.contactoNombre,
-        telefono: orders.contactoTelefono,
-        tipoEntrega: orders.tipoEntrega,
-        direccionEntrega: orders.direccionEntrega,
-        zonaEnvio: orders.zonaEnvio,
-        costoEnvio: orders.costoEnvio,
-        subtotal: orders.subtotal,
-        total: orders.total,
-        medioPago: orders.medioPago,
-        estadoPago: orders.estadoPago,
-        estado: orders.estado,
-        sucursal: branches.name,
-        sucursalSlug: branches.slug,
-        createdAt: orders.createdAt,
-      })
-      .from(orders)
-      .leftJoin(branches, eq(branches.id, orders.branchId))
-      .where(eq(orders.numero, numero))
-      .limit(1);
+export const pedidoParaSeguimiento = cache(async (numero: string, token?: string) => {
+  // Lo decide Go (backend/internal/portal/seguimiento.go): con el token entra
+  // cualquiera; sin token, el dueño con sesión o el personal. Para el resto,
+  // 404, igual que si no existiera.
+  const r = await (await api()).GET("/api/v1/pedidos/{numero}/seguimiento", {
+    params: { path: { numero: numero.slice(0, 40) }, query: token ? { t: token.slice(0, 64) } : {} },
+  });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  const p = datos(r);
+  return { ...p, createdAt: new Date(p.createdAt) };
+});
 
-    if (!pedido) return null;
-
-    // Comparación de longitud fija sobre dos uuid. No se usa el token en el
-    // `where` para poder distinguir "no existe" de "no autorizado" y devolver lo
-    // mismo en los dos casos: un 404 distinto confirmaría qué números existen.
-    const conToken = Boolean(token) && token === pedido.publicToken;
-
-    if (!conToken) {
-      const sesion = await getSession();
-      if (!sesion) return null;
-
-      // El personal ve cualquiera: es su trabajo.
-      if (sesion.role !== "staff") {
-        const cliente = await clienteDeLaSesion();
-        if (!cliente || pedido.customerId !== cliente.id) return null;
-      }
-    }
-
-    const items = await db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, pedido.id))
-      .orderBy(orderItems.orden);
-
-    return { ...pedido, items };
-  },
-);
-
-/**
- * Un pedido, solo si quien pregunta puede tocarlo.
- *
- * La usan las acciones que salen de la página de seguimiento: abrir el pago y
- * subir el comprobante de una transferencia. Las dos recibían el número y nada
- * más, heredando la suposición de que conocer el número era prueba suficiente
- * —la misma que hacía enumerable la página—. Con eso se le podía adjuntar un
- * comprobante inventado al pedido de cualquiera y dejarlo esperando que alguien
- * lo diera por bueno en la conciliación.
- *
- * Devuelve null tanto si el pedido no existe como si no corresponde: quien
- * prueba números no puede distinguir un caso del otro.
- */
-export async function pedidoAutorizado(numero: string, token?: string) {
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      publicToken: orders.publicToken,
-      customerId: orders.customerId,
-      total: orders.total,
-      estadoPago: orders.estadoPago,
-    })
-    .from(orders)
-    .where(eq(orders.numero, numero))
-    .limit(1);
-
-  if (!pedido) return null;
-
-  if (token && token === pedido.publicToken) return pedido;
-
-  const sesion = await getSession();
-  if (!sesion) return null;
-  if (sesion.role === "staff") return pedido;
-
-  const cliente = await clienteDeLaSesion();
-  if (!cliente || pedido.customerId !== cliente.id) return null;
-
-  return pedido;
-}
-
-/** El token de un pedido, para armar el enlace desde donde solo se tiene el id. */
-export async function tokenDelPedido(orderId: string): Promise<string | null> {
-  const [fila] = await db
-    .select({ token: orders.publicToken })
-    .from(orders)
-    .where(eq(orders.id, orderId))
-    .limit(1);
-
-  return fila?.token ?? null;
-}
-
-/** Igual, pero por número: lo necesitan los avisos, que trabajan con el número. */
-export async function tokenPorNumero(numero: string): Promise<string | null> {
-  const [fila] = await db
-    .select({ token: orders.publicToken })
-    .from(orders)
-    .where(and(eq(orders.numero, numero)))
-    .limit(1);
-
-  return fila?.token ?? null;
-}

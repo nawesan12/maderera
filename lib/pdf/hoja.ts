@@ -104,7 +104,9 @@ export function limpiar(texto: string): string {
     .replace(/[–—―]/g, "-")
     .replace(/…/g, "...")
     .replace(/ /g, " ")
-    .replace(/[^\x20-\x7E¡-ÿ]/g, "");
+    // Lo de 0x80 a 0x9F de WinAnsi también se dibuja: antes «€», «•» y «™»
+    // se borraban (como en limpiar() de internal/pdf/hoja.go).
+    .replace(/[^\x20-\x7E¡-ÿ€‚ƒ„†‡ˆ‰Š‹ŒŽ•˜™š›œžŸ]/g, "");
 }
 
 export interface OpcionesTexto {

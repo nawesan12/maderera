@@ -88,7 +88,7 @@ export function Anotarse({
         </p>
         <Link
           href="/profesionales"
-          className="mt-4 inline-flex h-11 items-center rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+          className="mt-4 inline-flex h-11 items-center rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
         >
           Pedir acceso
         </Link>
@@ -164,7 +164,7 @@ export function Anotarse({
       <button
         type="submit"
         disabled={enviando}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-orange text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
       >
         {enviando ? (
           <>
@@ -206,7 +206,7 @@ function Campo({
     <div>
       <label htmlFor={nombre} className="block text-sm font-medium">
         {etiqueta}
-        {requerido && <span className="text-brand-orange" aria-label="obligatorio">
+        {requerido && <span className="text-acento-texto" aria-label="obligatorio">
             {" *"}
           </span>}
       </label>

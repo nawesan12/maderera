@@ -2,25 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, BellOff, Check, CircleAlert, ExternalLink, RefreshCw, Stethoscope } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import {
-  avisosCortadosPorTope,
-  bajasRegistradas,
-  estadoWhatsapp,
-  gastoDelMes,
-  listarAvisos,
-  ultimoDiagnostico,
-} from "@/lib/dal/admin/whatsapp";
+import { configuracionWhatsapp } from "@/lib/dal/admin/whatsapp";
 import { requireStaffRole } from "@/lib/dal/session";
-import { EVENTOS_WHATSAPP, sembrarAvisos } from "@/lib/whatsapp/avisos";
-import { plantillasGuardadas } from "@/lib/whatsapp/catalogo";
 import { PLANTILLAS_BASE } from "@/lib/whatsapp/plantillas-base";
 import { leerPlantilla, marcadores, nombreLegible } from "@/lib/whatsapp/plantillas";
 import { numeroLegible } from "@/lib/whatsapp/numeros";
 import { urlBase } from "@/lib/pagos/config";
 import { fechaCorta, fechaHora } from "@/lib/formato";
 import { CATEGORIAS_COBRO, dolares, NOMBRE_CATEGORIA, tarifaLegible } from "@/lib/whatsapp/costos";
-import type { Diagnostico } from "@/lib/whatsapp/tipos";
 import { FilaAviso } from "./aviso";
+import { ConfiguracionDelBot } from "./bot";
+import { ajuste } from "@/lib/dal/contenido";
 import { BotonAccion, FormularioTope, MensajeDePrueba } from "./controles";
 
 export const metadata: Metadata = { title: "WhatsApp · Configuración" };
@@ -35,21 +27,24 @@ export const metadata: Metadata = { title: "WhatsApp · Configuración" };
  */
 export default async function ConfiguracionWhatsappPage() {
   await requireStaffRole("admin");
-  // La primera vez deja los interruptores creados y apagados.
-  await sembrarAvisos();
-
-  const [estado, avisos, guardadas, diagnosticoGuardado, gasto, bajas, cortados] = await Promise.all([
-    estadoWhatsapp(),
-    listarAvisos(),
-    plantillasGuardadas(),
-    ultimoDiagnostico(),
-    gastoDelMes(),
-    bajasRegistradas(),
-    avisosCortadosPorTope(),
-  ]);
+  // Todo de la API de Go, que la primera vez deja los interruptores creados y apagados.
+  const {
+    estado,
+    avisos,
+    eventos: EVENTOS_WHATSAPP,
+    guardadas,
+    diagnostico: diagnosticoGuardado,
+    gasto,
+    mensajes,
+    bajas,
+    cortados,
+    webhookSecreto,
+    firmaSecreto,
+  } = await configuracionWhatsapp();
+  const [botEncendido, numeroHumano] = await Promise.all([ajuste("whatsapp_bot", "no"), ajuste("whatsapp_numero_humano")]);
 
   const enDemo = estado.proveedor === "demo";
-  const diagnostico = (diagnosticoGuardado?.diagnostico ?? null) as Diagnostico | null;
+  const diagnostico = diagnosticoGuardado?.diagnostico ?? null;
   const aprobada = (nombre: string) =>
     enDemo || guardadas.some((g) => g.nombre === nombre && g.estado === "APPROVED");
   const urlWebhook = `${urlBase()}/api/whatsapp/webhook`;
@@ -72,8 +67,9 @@ export default async function ConfiguracionWhatsappPage() {
 
       <EncabezadoPanel
         titulo="WhatsApp: configuración"
-        detalle="Si está bien conectado, qué se avisa solo, qué textos aprueba Meta y cuánto se gasta."
       />
+
+      <ConfiguracionDelBot encendido={botEncendido === "si"} numero={numeroHumano} mensajes={mensajes} />
 
       {/* 1. Conexión */}
       <section className="space-y-4">
@@ -81,10 +77,10 @@ export default async function ConfiguracionWhatsappPage() {
 
         {enDemo ? (
           <div className="tarjeta-atencion p-5">
+            {/* Para conectar el número hay que hacer el trámite en Meta (paso a paso en
+                docs/WHATSAPP.md) y cargar las variables en el servidor. */}
             <p className="text-base">
               Hoy está en <span className="font-medium">modo demostración</span>: la bandeja guarda todo pero no envía.
-              Para conectar el número hay que hacer el trámite en Meta (está paso a paso en{" "}
-              <span className="tabular">docs/WHATSAPP.md</span>) y cargar las variables en el servidor.
             </p>
           </div>
         ) : (
@@ -136,9 +132,9 @@ export default async function ConfiguracionWhatsappPage() {
           <dt className="text-muted-foreground">Dirección del webhook</dt>
           <dd className="tabular break-all">{urlWebhook}</dd>
           <dt className="text-muted-foreground">Verify token</dt>
-          <dd>{process.env.WHATSAPP_WEBHOOK_SECRET ? "cargado (WHATSAPP_WEBHOOK_SECRET)" : "falta WHATSAPP_WEBHOOK_SECRET"}</dd>
+          <dd>{webhookSecreto ? "cargado (WHATSAPP_WEBHOOK_SECRET)" : "falta WHATSAPP_WEBHOOK_SECRET"}</dd>
           <dt className="text-muted-foreground">Firma de Meta</dt>
-          <dd>{process.env.WHATSAPP_APP_SECRET ? "se valida (WHATSAPP_APP_SECRET)" : "falta WHATSAPP_APP_SECRET: se rechaza todo lo que llega"}</dd>
+          <dd>{firmaSecreto ? "se valida (WHATSAPP_APP_SECRET)" : "falta WHATSAPP_APP_SECRET: se rechaza todo lo que llega"}</dd>
           <dt className="text-muted-foreground">Último aviso de Meta</dt>
           <dd>
             {estado.ultimoWebhookAt
@@ -158,11 +154,10 @@ export default async function ConfiguracionWhatsappPage() {
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-medium">Lo que va del mes</h2>
-          <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-            Desde el 1/10/2026 Meta cobra cada mensaje que sale por la API, también las respuestas dentro de las 24 h.
-            Lo que se manda desde la app WhatsApp Business del teléfono no se cobra. Esto se cuenta con lo que Meta
-            informa en cada estado (y estima lo que acaba de salir); la factura de Meta es la que vale.
-          </p>
+          {/* Desde el 1/10/2026 Meta cobra cada mensaje que sale por la API, también
+              las respuestas dentro de las 24 h. Se cuenta con lo que Meta informa en
+              cada estado; la factura de Meta es la que vale. */}
+          <p className="mt-1 text-base text-muted-foreground">Lo que sale desde el teléfono no se cobra.</p>
         </div>
 
         <div className={gasto.alcanzado ? "tarjeta-atencion space-y-3 p-5" : "tarjeta space-y-3 p-5"}>
@@ -183,7 +178,7 @@ export default async function ConfiguracionWhatsappPage() {
           >
             <div
               className={`h-full rounded-full ${
-                gasto.alcanzado ? "bg-red-600" : gasto.umbral === 80 ? "bg-amber-500" : "bg-brand-green"
+                gasto.alcanzado ? "bg-destructive" : gasto.umbral === 80 ? "bg-amber-500" : "bg-brand-green"
               }`}
               style={{ width: `${Math.min(porcentaje, 100)}%` }}
             />
@@ -243,9 +238,10 @@ export default async function ConfiguracionWhatsappPage() {
 
         <div className="tarjeta-hundida p-5">
           <h3 className="mb-1 text-base font-medium">Tope y tarifas</h3>
+          {/* Las tarifas son las de Meta para un número argentino; Meta las revisa cada
+              trimestre, así que se cambian acá sin tocar el sistema. */}
           <p className="mb-3 max-w-2xl text-base text-muted-foreground">
-            Las tarifas son las de Meta para un número argentino; Meta las revisa cada trimestre, así que se pueden
-            cambiar acá sin tocar el sistema. Un tope de 0 es «por la API, ningún aviso automático».
+            Un tope de 0 corta todos los avisos automáticos por la API.
           </p>
           <FormularioTope tope={gasto.tope} tarifas={gasto.tarifas} />
         </div>
@@ -293,12 +289,13 @@ export default async function ConfiguracionWhatsappPage() {
       {/* 3. Avisos automáticos */}
       <section>
         <h2 className="text-lg font-medium">Avisos automáticos</h2>
-        <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-          Cuando pasa algo —un pedido queda listo, se registra un pago— el cliente recibe el mensaje sin que nadie lo
-          escriba. Empiezan todos apagados a propósito: cada uno que sale se cobra ({tarifaLegible(gasto.tarifas.utility)} a
-          un número argentino). Lo recomendado es dejarlos apagados y usar el botón «Avisar por WhatsApp» de cada
-          pedido, corte o cheque, que lo manda una persona desde el teléfono y no cuesta nada. Si el cliente escribió
-          hace menos de 24 h sale el texto de abajo; si no, la plantilla aprobada.
+        {/* Cuando pasa algo —un pedido queda listo, se registra un pago— el cliente
+            recibe el mensaje sin que nadie lo escriba. Empiezan apagados a propósito:
+            cada uno se cobra, y el botón «Avisar por WhatsApp» de cada pedido, corte o
+            cheque lo manda una persona desde el teléfono sin costo. Si el cliente
+            escribió hace menos de 24 h sale el texto de abajo; si no, la plantilla. */}
+        <p className="mt-1 text-base text-muted-foreground">
+          Cada uno se cobra ({tarifaLegible(gasto.tarifas.utility)}). Desde el teléfono, con «Avisar por WhatsApp», es gratis.
         </p>
 
         <ul className="mt-4 space-y-3">
@@ -335,9 +332,9 @@ export default async function ConfiguracionWhatsappPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-medium">Mensajes que tiene que aprobar Meta</h2>
+            {/* Se cargan en el administrador de WhatsApp de Meta. El texto exacto y los ejemplos están en docs/WHATSAPP.md. */}
             <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-              Hay que cargarlos en el administrador de WhatsApp de Meta con el mismo nombre, idioma «Spanish
-              (ARG)» y categoría «Utility». El texto exacto y los ejemplos están en docs/WHATSAPP.md.
+              Con el mismo nombre, idioma «Spanish (ARG)» y categoría «Utility».
             </p>
           </div>
           {!enDemo && <BotonAccion accion="sincronizar" texto="Traer de Meta" icono={<RefreshCw className="h-5 w-5" />} />}
@@ -379,7 +376,7 @@ export default async function ConfiguracionWhatsappPage() {
                 {leida.encabezadoMedia && <p className="mt-1.5 text-sm text-muted-foreground">Encabezado: el PDF</p>}
                 <p className="mt-1.5 text-base">{leida.cuerpo}</p>
                 {enMeta?.motivoRechazo && (
-                  <p className="mt-1 flex items-center gap-1.5 text-sm text-red-700">
+                  <p className="mt-1 flex items-center gap-1.5 text-sm text-saldo-debe">
                     <AlertCircle className="h-4 w-4" />
                     Motivo: {enMeta.motivoRechazo}
                   </p>
@@ -407,10 +404,6 @@ export default async function ConfiguracionWhatsappPage() {
           <BellOff className="h-5 w-5 text-muted-foreground" />
           Números que pidieron no recibir avisos
         </h2>
-        <p className="mt-1 max-w-2xl text-base text-muted-foreground">
-          WhatsApp obliga a respetarlo. Se registra solo cuando alguien escribe BAJA, o desde la conversación. A estos
-          números no les sale ningún aviso automático; si escriben, se les contesta igual.
-        </p>
         {bajas.length === 0 ? (
           <p className="tarjeta-hundida mt-3 p-4 text-base text-muted-foreground">Nadie pidió la baja.</p>
         ) : (

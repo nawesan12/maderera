@@ -1,0 +1,7 @@
+sku,producto,precio
+A1,"Tabla, cepillada",84500.5
+A2,"Con ""comillas"" adentro",1.234
+A3,Machimbre 1/2",84.500
+A4,"campo con
+salto",12,5
+A5,Sin cerrar,"1.000

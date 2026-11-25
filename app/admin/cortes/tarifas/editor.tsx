@@ -33,7 +33,7 @@ export function EditorDeTarifa({
   const id = useId();
 
   return (
-    <form action={guardar} className="rounded-xl border bg-card p-5">
+    <form action={guardar} className="tarjeta p-5">
       {tarifa && <input type="hidden" name="id" value={tarifa.id} />}
 
       <div className="grid gap-4 sm:grid-cols-4">
@@ -97,9 +97,6 @@ export function EditorDeTarifa({
             placeholder="0 si no se cobra"
             className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
           />
-          <p className="mt-1 text-sm text-muted-foreground">
-            El pegado, por metro lineal. Los metros salen del despiece.
-          </p>
         </div>
       </div>
 
@@ -117,7 +114,7 @@ export function EditorDeTarifa({
         <button
           type="submit"
           disabled={guardando}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
           {tarifa ? "Guardar" : "Agregar tarifa"}

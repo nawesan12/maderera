@@ -59,7 +59,7 @@ export function CreditoDelCliente({
                 setAviso(r.error ?? r.ok ?? null);
               })
             }
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-orange px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
           >
             {trabajando && <Loader2 className="h-4 w-4 animate-spin" />}
             Guardar el plazo
@@ -67,10 +67,6 @@ export function CreditoDelCliente({
         )}
       </div>
 
-      <p className="mt-1 text-sm text-muted-foreground">
-        Lo que pase de ese plazo cuenta como vencido y lo pone arriba en la lista
-        de cobranza.
-      </p>
 
       <div className="mt-4 border-t border-linea pt-4">
         {bloqueada ? (
@@ -99,11 +95,7 @@ export function CreditoDelCliente({
           </>
         ) : (
           <>
-            <p className="text-base">
-              La cuenta está habilitada. Bloquearla impide venderle a cuenta
-              hasta que alguien la vuelva a abrir —el mostrador no lo puede
-              saltear—.
-            </p>
+            <p className="text-base">Cuenta habilitada</p>
             <div className="mt-2.5 flex flex-wrap gap-2">
               <input
                 value={texto}

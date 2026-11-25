@@ -45,6 +45,9 @@ export default async function RecepcionPage({
     (t, i) => t + Number(i.cantidad) * Number(i.costoUnitario),
     0,
   );
+  // Los renglones a $0: se marcan desde que se abre la recepción y se
+  // repiten al confirmar (ver AccionesDeRecepcion).
+  const enCero = recepcion.items.filter((i) => Number(i.costoUnitario) === 0).length;
 
   return (
     <div className="space-y-6">
@@ -85,8 +88,8 @@ export default async function RecepcionPage({
 
       {recepcion.estado === "borrador" && (
         <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-base">
-          Todavía no tocó nada. Al confirmar entra el stock, se mezcla el costo
-          promedio y sube la deuda con el proveedor.{" "}
+          {/* Al confirmar entra el stock, se mezcla el costo promedio y sube la deuda con el proveedor. */}
+          Todavía no tocó nada.{" "}
           <strong>El costo promedio no se puede revertir después.</strong>
         </p>
       )}
@@ -129,7 +132,11 @@ export default async function RecepcionPage({
                   <td className="tabular px-4 py-2.5 text-right">
                     {Number(i.cantidad)}
                   </td>
-                  <td className="tabular px-4 py-2.5 text-right">
+                  <td
+                    className={`tabular px-4 py-2.5 text-right ${
+                      Number(i.costoUnitario) === 0 ? "estado-problema font-semibold" : ""
+                    }`}
+                  >
                     {formatearMonto(Number(i.costoUnitario))}
                   </td>
                   <td className="tabular px-4 py-2.5 text-right text-muted-foreground">
@@ -200,7 +207,7 @@ export default async function RecepcionPage({
         <p className="text-base text-muted-foreground">{recepcion.notas}</p>
       )}
 
-      <AccionesDeRecepcion id={recepcion.id} estado={recepcion.estado} />
+      <AccionesDeRecepcion id={recepcion.id} estado={recepcion.estado} enCero={enCero} />
     </div>
   );
 }

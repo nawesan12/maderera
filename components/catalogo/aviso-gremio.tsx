@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Tag } from "lucide-react";
 import { useEstado } from "@/lib/estado-context";
+import { useTienda } from "@/lib/tienda-context";
 
 /**
  * "Si comprás por tu cuenta, entrá para ver tu precio."
@@ -28,6 +29,9 @@ import { useEstado } from "@/lib/estado-context";
  * decía que podía tenerla.
  */
 export function AvisoGremio({ className = "" }: { className?: string }) {
+  // Habla de precios: con la tienda apagada no hay ninguno a la vista.
+  const { activa } = useTienda();
+  if (!activa) return null;
   return (
     <Suspense fallback={<Cartel className={className} />}>
       <CartelParaQuienMira className={className} />

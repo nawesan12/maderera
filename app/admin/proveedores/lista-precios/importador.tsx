@@ -96,10 +96,9 @@ export function ImportadorDeLista({
             required
             className="mt-1 block w-full text-base file:mr-3 file:rounded-lg file:border file:bg-background file:px-3 file:py-2 file:text-base"
           />
+          {/* Un PDF no: sacar una tabla de un PDF es adivinar, y adivinar precios de compra sale caro. */}
           <p className="mt-1 text-sm text-muted-foreground">
-            CSV o Excel (.xlsx). Un PDF hay que pasarlo a planilla antes: sacar
-            una tabla de un PDF es adivinar, y adivinar precios de compra sale
-            caro.
+            CSV o Excel (.xlsx). Un PDF hay que pasarlo a planilla antes.
           </p>
         </div>
 

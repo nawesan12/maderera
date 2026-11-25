@@ -16,7 +16,7 @@ import {
   serializar,
   type Hoja,
 } from "@/lib/pdf/hoja";
-import type { HojaDeCorte, OperacionDeCorte, PatronDeCorte } from "@/lib/cortes/secuencia";
+import type { HojaDeCorte, OperacionDeCorte, PatronDeCorte } from "@/lib/cortes/tipos";
 import { formatearSierra } from "@/lib/cortes/sierra";
 
 /**
@@ -57,7 +57,7 @@ export async function hojaDeCortePdf(
 
   const cabecera = () => {
     escribir(h, `HOJA DE CORTE ${corte.numero}`, { x: MARGEN, y, tamano: 15, fuente: h.negrita });
-    escribir(h, corte.createdAt.toLocaleDateString("es-AR"), {
+    escribir(h, corte.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }), {
       x: A4.ancho - MARGEN,
       y,
       tamano: 9,

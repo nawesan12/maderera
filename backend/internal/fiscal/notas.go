@@ -1,0 +1,358 @@
+package fiscal
+
+import (
+	"math"
+
+	"mjbj/internal/jsmath"
+)
+
+// ItemOriginal es un renglón del comprobante que se corrige (el subtotal es
+// final, con IVA adentro).
+type ItemOriginal struct {
+	ID          string  `json:"id"`
+	Descripcion string  `json:"descripcion"`
+	Unidad      string  `json:"unidad"`
+	Cantidad    float64 `json:"cantidad"`
+	Subtotal    float64 `json:"subtotal"`
+	AlicuotaIva float64 `json:"alicuotaIva"`
+	// Acreditado es cuánto de la cantidad ya devolvieron otras notas.
+	Acreditado float64 `json:"acreditado"`
+	// AcreditadoImporte es cuánta plata de este renglón ya devolvieron (la
+	// suma de los subtotales de esas notas): el renglón que se cierra se
+	// lleva lo que queda y no un unitario redondeado por la cantidad.
+	AcreditadoImporte float64 `json:"acreditadoImporte"`
+	// Neto es el neto del renglón del original, y AcreditadoNeto el que ya
+	// se llevaron las notas: el renglón que se cierra se lleva el neto que
+	// queda (0: no se sabe, se desagrega como siempre).
+	Neto           float64 `json:"neto,omitempty"`
+	AcreditadoNeto float64 `json:"acreditadoNeto,omitempty"`
+}
+
+// CantidadAAcreditar es cuánto de un renglón.
+type CantidadAAcreditar struct {
+	ItemID   string  `json:"itemId"`
+	Cantidad float64 `json:"cantidad"`
+}
+
+// LineaDeNota es un renglón de la nota.
+type LineaDeNota struct {
+	Descripcion         string  `json:"descripcion"`
+	Unidad              string  `json:"unidad"`
+	Cantidad            float64 `json:"cantidad"`
+	PrecioFinalUnitario float64 `json:"precioFinalUnitario"`
+	Alicuota            float64 `json:"alicuota"`
+	ItemOrigenID        string  `json:"itemOrigenId"`
+	// Neto: el del renglón que cierra el del original (lo que le queda de
+	// neto). nil, se desagrega.
+	Neto *float64 `json:"neto,omitempty"`
+}
+
+// ErrorDeNota es el `throw new Error(...)` de lineasDeLaNota: un motivo que
+// se muestra tal cual.
+type ErrorDeNota struct{ Mensaje string }
+
+func (e *ErrorDeNota) Error() string { return e.Mensaje }
+
+// LineasDeLaNota: el unitario sale del original (subtotal / cantidad de la
+// factura), no de la cantidad parcial. parciales en nil es por el total.
+func LineasDeLaNota(items []ItemOriginal, parciales []CantidadAAcreditar) ([]LineaDeNota, error) {
+	unitario := func(i ItemOriginal) float64 {
+		if i.Cantidad > 0 {
+			return Redondear(i.Subtotal / i.Cantidad)
+		}
+		return 0
+	}
+	// El renglón que se lleva todo lo que le queda devuelve el subtotal que
+	// queda, no el unitario redondeado por la cantidad: 100 en 3 da 33,33
+	// de unitario, y la nota por las 3 salía por 99,99 y el original no se
+	// cerraba nunca. El precio queda sin redondear a propósito: la cuenta
+	// del renglón (cantidad × precio, redondeado) da el resto exacto.
+	precioDelResto := func(i ItemOriginal, cantidad, importeTomado float64) float64 {
+		resto := i.Subtotal - i.AcreditadoImporte - importeTomado
+		if cantidad <= 0 || resto <= 0 {
+			return unitario(i)
+		}
+		return resto / cantidad
+	}
+	// netoDelResto es el neto que le queda al renglón que se cierra: el del
+	// original menos el de las notas anteriores y lo que esta ya tomó. Con
+	// el neto desagregado otra vez, dos notas de un mismo renglón sumaban
+	// un centavo más o menos que el original, y el libro IVA no cerraba
+	// (decisión 6 del contador: el resto exacto).
+	netoDelResto := func(i ItemOriginal, netoTomado float64) *float64 {
+		if i.Neto == 0 {
+			return nil
+		}
+		n := Redondear(i.Neto - i.AcreditadoNeto - netoTomado)
+		return &n
+	}
+	if parciales == nil {
+		// Por el total: lo que queda de cada renglón.
+		out := make([]LineaDeNota, 0, len(items))
+		for _, i := range items {
+			cantidad := i.Cantidad
+			if i.Acreditado > 0 {
+				if cantidad = i.Cantidad - i.Acreditado; cantidad <= toleranciaCantidad {
+					continue
+				}
+			}
+			out = append(out, LineaDeNota{i.Descripcion, i.Unidad, cantidad, precioDelResto(i, cantidad, 0), i.AlicuotaIva, i.ID, netoDelResto(i, 0)})
+		}
+		return out, nil
+	}
+	out := []LineaDeNota{}
+	// El tope es lo que queda de cada renglón: lo facturado menos lo que ya
+	// acreditaron otras notas y lo que esta misma nota ya tomó (el renglón
+	// puede venir repetido). El TS comparaba cada pedido contra la cantidad
+	// original: dos notas parciales de 6 sobre 10 placas pasaban, y una sola
+	// con el renglón dos veces también.
+	tomado := map[string]float64{}
+	tomadoImporte := map[string]float64{}
+	tomadoNeto := map[string]float64{}
+	for _, p := range parciales {
+		var item *ItemOriginal
+		for k := range items {
+			if items[k].ID == p.ItemID {
+				item = &items[k]
+				break
+			}
+		}
+		if item == nil {
+			continue
+		}
+		if math.IsNaN(p.Cantidad) || math.IsInf(p.Cantidad, 0) || p.Cantidad <= 0 {
+			continue
+		}
+		if p.Cantidad > item.Cantidad {
+			return nil, &ErrorDeNota{`No se puede acreditar más de lo facturado en "` + item.Descripcion + `".`}
+		}
+		queda := item.Cantidad - item.Acreditado - tomado[item.ID]
+		if p.Cantidad > queda+toleranciaCantidad {
+			return nil, &ErrorDeNota{`De "` + item.Descripcion + `" ya se acreditaron ` + jsmath.Texto(Redondear(item.Cantidad-queda)) +
+				` de ` + jsmath.Texto(item.Cantidad) + `: quedan ` + jsmath.Texto(Redondear(math.Max(0, queda))) + `.`}
+		}
+		precio := unitario(*item)
+		var neto *float64
+		if queda-p.Cantidad <= toleranciaCantidad {
+			precio = precioDelResto(*item, p.Cantidad, tomadoImporte[item.ID])
+			neto = netoDelResto(*item, tomadoNeto[item.ID])
+		}
+		tomado[item.ID] += p.Cantidad
+		importe := Redondear(float64(p.Cantidad * precio))
+		tomadoImporte[item.ID] += importe
+		tomadoNeto[item.ID] += Desagregar(importe, item.AlicuotaIva).Neto
+		out = append(out, LineaDeNota{item.Descripcion, item.Unidad, p.Cantidad, precio, item.AlicuotaIva, item.ID, neto})
+	}
+	return out, nil
+}
+
+// Tributo es una percepción u otro tributo del comprobante.
+type Tributo struct {
+	Codigo      string  `json:"codigo"`
+	Descripcion string  `json:"descripcion"`
+	Base        float64 `json:"base"`
+	Alicuota    float64 `json:"alicuota"`
+	Importe     float64 `json:"importe"`
+}
+
+// ProrratearTributos copia los del original en proporción (la alícuota no se
+// toca: es la que tuvo la factura).
+func ProrratearTributos(tributos []Tributo, proporcion float64) []Tributo {
+	if proporcion >= 1 {
+		return tributos
+	}
+	out := make([]Tributo, len(tributos))
+	for i, t := range tributos {
+		t.Base = Redondear(float64(t.Base * proporcion))
+		t.Importe = Redondear(float64(t.Importe * proporcion))
+		out[i] = t
+	}
+	return out
+}
+
+const tolerancia = 0.005
+
+// toleranciaCantidad absorbe el error de sumar cantidades con decimales
+// (0,1 + 0,2 no da 0,3 exacto).
+const toleranciaCantidad = 1e-9
+
+// RevisarAcreditacion devuelve por qué no se puede acreditar ese monto, o "".
+func RevisarAcreditacion(totalOriginal, acreditado, monto float64) string {
+	if math.IsNaN(monto) || math.IsInf(monto, 0) || monto <= 0 {
+		return "El monto a acreditar tiene que ser mayor a cero."
+	}
+	disponible := totalOriginal - acreditado
+	if monto > disponible+tolerancia {
+		return "Ya se acreditaron $" + jsmath.ToFixed(acreditado, 2) + " de $" + jsmath.ToFixed(totalOriginal, 2) +
+			": quedan $" + jsmath.ToFixed(math.Max(0, disponible), 2) + "."
+	}
+	return ""
+}
+
+// --- las cuentas de emitir.ts, separadas de la base para el golden ---
+
+// Emision son los importes que se guardan al emitir.
+type Emision struct {
+	Totales       Totales   `json:"totales"`
+	Tributos      []Tributo `json:"tributos"`
+	TotalTributos float64   `json:"totalTributos"`
+	Total         float64   `json:"total"`
+	Iva21         float64   `json:"iva21"`
+	Iva105        float64   `json:"iva105"`
+	Iva27         float64   `json:"iva27"`
+}
+
+// Importes es la parte de cuentas de emitirEnTransaccion: los totales, la
+// percepción de IIBB (o los tributos ya dados de una nota) y el total.
+func Importes(lineas []LineaEntrada, tributosDados []Tributo, percibeIibb bool, alicuotaIibb float64) Emision {
+	t := CalcularTotales(lineas)
+	tributos := []Tributo{}
+	if tributosDados != nil {
+		tributos = append(tributos, tributosDados...)
+	} else if percibeIibb && alicuotaIibb > 0 {
+		if imp := Redondear(float64(t.Neto*alicuotaIibb) / 100); imp > 0 {
+			tributos = append(tributos, Tributo{Codigo: "02", Descripcion: "Percepción Ingresos Brutos", Base: t.Neto, Alicuota: alicuotaIibb, Importe: imp})
+		}
+	}
+	suma := 0.0
+	for _, x := range tributos {
+		suma += x.Importe
+	}
+	totalTributos := Redondear(suma)
+	return Emision{Totales: t, Tributos: tributos, TotalTributos: totalTributos, Total: Redondear(t.Total + totalTributos),
+		Iva21: t.IvaDe(21), Iva105: t.IvaDe(10.5), Iva27: t.IvaDe(27)}
+}
+
+// Original son los importes guardados del comprobante que se corrige.
+type Original struct {
+	Neto, Iva21, Iva105, Iva27, Exento, Total, Acreditado float64
+	// TributosDevueltos son, por código, los tributos que ya devolvieron
+	// otras notas: la que cierra el original devuelve lo que queda.
+	TributosDevueltos map[string]Tributo
+}
+
+// CalculoDeNota es lo que emitirNotaDeCredito calcula antes de emitir.
+type CalculoDeNota struct {
+	Lineas        []LineaDeNota `json:"lineas"`
+	Neto          float64       `json:"neto"`
+	Proporcion    float64       `json:"proporcion"`
+	TributosDados []Tributo     `json:"tributosDados"`
+	Total         float64       `json:"total"`
+	Problema      string        `json:"problema"`
+}
+
+// CalcularNota arma la nota de crédito: los renglones, la proporción sobre la
+// mercadería, los tributos prorrateados y el tope de lo que queda por
+// acreditar. Problema trae el motivo si no se puede.
+func CalcularNota(o Original, items []ItemOriginal, parciales []CantidadAAcreditar, tributos []Tributo) CalculoDeNota {
+	lineas, err := LineasDeLaNota(items, parciales)
+	if err != nil {
+		return CalculoDeNota{Problema: err.Error()}
+	}
+	if len(lineas) == 0 {
+		return CalculoDeNota{Problema: "No hay nada que acreditar."}
+	}
+	suma := 0.0
+	for _, l := range lineas {
+		suma = suma + float64(l.Cantidad*l.PrecioFinalUnitario)
+	}
+	neto := Redondear(suma)
+	// Los tributos (la percepción de IIBB) se calcularon sobre el neto
+	// gravado: se devuelven en la proporción de lo gravado que se acredita.
+	// El TS usaba la mercadería entera, con lo exento contado dos veces (iba
+	// en el neto y en el exento), y una nota solo de renglones exentos
+	// devolvía percepción que nunca se cobró sobre ellos. Sin neto gravado en
+	// el original, queda la proporción de la mercadería.
+	proporcion := 1.0
+	if o.Neto > 0 {
+		entradas := make([]LineaEntrada, len(lineas))
+		for k, l := range lineas {
+			alic := l.Alicuota
+			entradas[k] = LineaEntrada{Cantidad: l.Cantidad, PrecioFinalUnitario: l.PrecioFinalUnitario, Alicuota: &alic, Neto: l.Neto}
+		}
+		proporcion = jsMin(1, CalcularTotales(entradas).Neto/o.Neto)
+	} else if base := o.Iva21 + o.Iva105 + o.Iva27 + o.Exento; base > 0 {
+		proporcion = jsMin(1, neto/base)
+	}
+	dados := ProrratearTributos(tributos, proporcion)
+	// La nota que se lleva todo lo que queda de todos los renglones cierra
+	// el original: sus tributos son lo que falta devolver, no un prorrateo.
+	// Dos parciales de una percepción de 10 prorrateadas daban 3,33 y 6,66.
+	if cierraElOriginal(items, lineas) && len(o.TributosDevueltos) > 0 {
+		dados = make([]Tributo, len(tributos))
+		for k, t := range tributos {
+			d := o.TributosDevueltos[t.Codigo]
+			t.Base = Redondear(t.Base - d.Base)
+			t.Importe = Redondear(t.Importe - d.Importe)
+			dados[k] = t
+		}
+	}
+	st := 0.0
+	for _, x := range dados {
+		st += x.Importe
+	}
+	total := Redondear(neto + st)
+	c := CalculoDeNota{Lineas: lineas, Neto: neto, Proporcion: proporcion, TributosDados: dados, Total: total}
+	c.Problema = RevisarAcreditacion(o.Total, o.Acreditado, total)
+	return c
+}
+
+// cierraElOriginal dice si, con estas líneas, a ningún renglón le queda
+// nada por acreditar.
+func cierraElOriginal(items []ItemOriginal, lineas []LineaDeNota) bool {
+	tomado := map[string]float64{}
+	for _, l := range lineas {
+		tomado[l.ItemOrigenID] += l.Cantidad
+	}
+	for _, i := range items {
+		if i.Cantidad-i.Acreditado-tomado[i.ID] > toleranciaCantidad {
+			return false
+		}
+	}
+	return true
+}
+
+// jsMin es Math.min de dos: NaN si alguno es NaN.
+func jsMin(a, b float64) float64 {
+	if math.IsNaN(a) || math.IsNaN(b) {
+		return math.NaN()
+	}
+	return math.Min(a, b)
+}
+
+// TotalDeLineas es el reduce `t + l.cantidad * l.precioFinalUnitario`
+// redondeado (lo que se suma a `debitado` en una nota de débito).
+func TotalDeLineas(lineas []LineaEntrada) float64 {
+	suma := 0.0
+	for _, l := range lineas {
+		suma = suma + float64(l.Cantidad*l.PrecioFinalUnitario)
+	}
+	return Redondear(suma)
+}
+
+// ClaveDeLock es claveDeLock de numeracion.ts: el entero del candado por
+// punto de venta y tipo, (hash % 1e6) * 1e4 + pv. Mientras convivan los dos
+// lados, tiene que dar lo mismo que el TS.
+func ClaveDeLock(puntoVenta int64, tipo string) int64 {
+	hash := int32(5381)
+	for _, u := range utf16De(tipo) {
+		// (hash * 33) ^ c en JS: el producto es un double exacto y el ^ lo
+		// pasa a int32 (módulo 2^32).
+		hash = int32(uint32(int64(hash)*33)) ^ int32(u)
+	}
+	return int64(uint32(hash)%1_000_000)*10_000 + puntoVenta%10_000
+}
+
+// utf16De es `for (const c of s) c.charCodeAt(0)`: por punto de código, su
+// primera unidad UTF-16.
+func utf16De(s string) []uint16 {
+	out := []uint16{}
+	for _, r := range s {
+		if r >= 0x10000 {
+			out = append(out, uint16(0xD800+((r-0x10000)>>10)))
+			continue
+		}
+		out = append(out, uint16(r))
+	}
+	return out
+}

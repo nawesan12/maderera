@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import { Marca } from "@/components/marca";
 
 /**
  * 404 de raíz: direcciones que no coinciden con ninguna ruta.
@@ -15,22 +15,8 @@ import Image from "next/image";
 export default function NoEncontradoRaiz() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-sitio-alt px-6 text-center">
-      <Link href="/" className="flex items-center gap-2.5">
-        <Image
-          src="/cropped-icon-180x180.png"
-          alt=""
-          width={44}
-          height={44}
-          className="rounded-[11px]"
-        />
-        <span className="text-left leading-[1.1]">
-          <span className="block text-[15px] font-bold tracking-tight">
-            Maderera
-          </span>
-          <span className="block text-[11px] uppercase tracking-[0.11em] text-texto-3">
-            Juan B. Justo
-          </span>
-        </span>
+      <Link href="/">
+        <Marca tamano="grande" />
       </Link>
 
       <p className="tabular mt-10 text-[13px] font-bold uppercase tracking-[0.12em] text-acento-texto">

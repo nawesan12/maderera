@@ -1,0 +1,5 @@
+node_modules/
+# El build lo arma el Dockerfile. LEEME.txt queda para que go:embed tenga
+# algo que embeber sin compilar la SPA (y Vite lo vuelve a copiar de public/).
+dist/*
+!dist/LEEME.txt

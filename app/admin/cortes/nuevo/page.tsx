@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Truck } from "lucide-react";
+import { ArrowLeft, Scissors, Truck } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { obtenerPedido } from "@/lib/dal/admin/ventas";
+import { pedidoParaElTaller } from "@/lib/dal/admin/ventas";
+import { obtenerCorte } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
+import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { esUuid } from "@/lib/uuid";
+import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
+import { consultaDeCorte } from "@/lib/dal/consultas-corte";
+import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
 
 export const metadata = { title: "Nuevo corte" };
 
@@ -24,16 +29,58 @@ export const metadata = { title: "Nuevo corte" };
 export default async function NuevoCortePage({
   searchParams,
 }: {
-  searchParams: Promise<{ pedido?: string }>;
+  searchParams: Promise<{ pedido?: string; consulta?: string; grupo?: string; cliente?: string }>;
 }) {
-  await requireStaff();
+  const usuario = await requireStaff();
 
-  const { pedido: pedidoId } = await searchParams;
-  const [sucursales, pedido, parametros] = await Promise.all([
+  const { pedido: pedidoId, consulta: token, grupo: grupoPedido, cliente: clienteId } = await searchParams;
+  const [sucursales, pedido, sierra, consulta, placas, cliente] = await Promise.all([
     listarSucursalesPublicas(),
-    pedidoId ? obtenerPedido(pedidoId) : Promise.resolve(null),
-    parametrosDeCalculo(),
+    // Sin plata: el aserradero también carga cortes de un pedido.
+    pedidoId ? pedidoParaElTaller(pedidoId) : Promise.resolve(null),
+    anchoDeSierra(),
+    token ? consultaDeCorte(token) : Promise.resolve(null),
+    token ? placasCortablesPublicas() : Promise.resolve([]),
+    clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
   ]);
+  if (token && !consulta) notFound();
+  // Una consulta con varias placas se pasa de a una (`?grupo=`): cada placa es
+  // su propia orden de corte. Sin grupo, la primera, como antes.
+  const orden = Number(grupoPedido ?? 0);
+  const grupo = consulta
+    ? (consulta.grupos?.find((g) => g.orden === orden) ?? (orden === 0 ? { ...consulta, orden: 0 } : undefined))
+    : undefined;
+  if (consulta && !grupo) notFound();
+  // Una consulta que ya se pasó a corte no se ofrece otra vez: el alta la
+  // rechazaría, y mostrar el formulario lleno invita a cargarla dos veces.
+  const yaPasada = grupo?.corteId ? await obtenerCorte(grupo.corteId) : null;
+  if (grupo?.corteId) {
+    return (
+      <div className="space-y-6">
+        <Link
+          href="/admin/cortes"
+          className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          Volver a cortes
+        </Link>
+        <h1 className="text-3xl font-bold text-foreground">Nuevo corte</h1>
+        <p className="tarjeta-atencion flex items-center gap-2.5 px-4 py-3 text-base">
+          <Scissors className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
+          <span>
+            Esta consulta ya se pasó a corte:{" "}
+            <Link href={`/admin/cortes/${grupo.corteId}`} className="font-semibold underline underline-offset-4">
+              {yaPasada ? `ver el ${yaPasada.numero}` : "ver el corte"}
+            </Link>
+            .
+          </span>
+        </p>
+      </div>
+    );
+  }
+  // La placa entera de la consulta: lo guardado es la medida ya partida, y el
+  // formulario parte la entera él mismo.
+  const placaDeLaConsulta = grupo?.variantId ? placas.find((p) => p.variantId === grupo.variantId) : undefined;
 
   // Un id de pedido que no existe no es lo mismo que no haber pasado ninguno:
   // seguir de largo dejaría un corte suelto creyendo que quedó atado.
@@ -51,27 +98,58 @@ export default async function NuevoCortePage({
 
       <div>
         <h1 className="text-3xl font-bold text-foreground">Nuevo corte</h1>
-        <p className="mt-1 text-base text-muted-foreground">
-          El despiece va en milímetros: son los números que después necesita el
-          optimizador de la máquina.
-        </p>
       </div>
 
       {pedido && (
         <p className="tarjeta-atencion flex items-center gap-2.5 px-4 py-3 text-base">
           <Truck className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
           <span>
+            {/* Figura en la ficha del pedido y en la del corte. */}
             Este corte queda atado al pedido{" "}
             <strong className="tabular">{pedido.numero}</strong> de{" "}
-            {pedido.cliente}. Va a figurar en la ficha del pedido y en la del
-            corte.
+            {pedido.cliente}.
           </span>
         </p>
       )}
 
       <FormularioCorte
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
-        anchoSierra={parametros.anchoSierraMm}
+        desdeConsulta={
+          consulta && grupo
+            ? {
+                token: consulta.token,
+                grupo: grupo.orden,
+                placa: placaDeLaConsulta
+                  ? {
+                      variantId: placaDeLaConsulta.variantId,
+                      descripcion: grupo.material,
+                      largoMm: placaDeLaConsulta.largoMm,
+                      anchoMm: placaDeLaConsulta.anchoMm,
+                      color: placaDeLaConsulta.color,
+                    }
+                  : null,
+                mitad: grupo.mitad === "largo" || grupo.mitad === "ancho" ? grupo.mitad : null,
+                cantoDescripcion: grupo.cantoDescripcion ?? "",
+                piezas: grupo.piezas.map((p) => ({
+                  largoMm: p.largoMm,
+                  anchoMm: p.anchoMm,
+                  cantidad: p.cantidad,
+                  respetaVeta: p.respetaVeta === 1,
+                  cantoLargo: p.cantoLargo ?? 0,
+                  cantoAncho: p.cantoAncho ?? 0,
+                  aclaracion: "",
+                  etiqueta: p.etiqueta ?? "",
+                })),
+              }
+            : undefined
+        }
+        anchoSierra={sierra}
+        sierraEditable={usuario.staffRole === "admin"}
+        clienteInicial={
+          cliente
+            ? { id: cliente.id, nombre: cliente.nombre, razonSocial: cliente.razonSocial, telefono: cliente.telefono }
+            : undefined
+        }
         desdePedido={
           pedido
             ? {

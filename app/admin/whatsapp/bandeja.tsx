@@ -9,7 +9,7 @@ import { Hilo } from "./hilo";
 import { PanelCliente } from "./panel-cliente";
 import { NuevaConversacion } from "./nueva-conversacion";
 import type { ConversacionListada, DetalleConversacion, FiltroBandeja } from "@/lib/dal/admin/whatsapp";
-import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
+import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import { useEnVivo } from "@/lib/vivo/use-en-vivo";
 import { dolares } from "@/lib/whatsapp/costos";
 
@@ -48,6 +48,7 @@ export function Bandeja({
   modoDemo,
   pantallaCompleta = false,
   gasto = null,
+  mensajes = null,
 }: {
   conversaciones: ConversacionListada[];
   detalle: DetalleConversacion | null;
@@ -60,6 +61,8 @@ export function Bandeja({
   pantallaCompleta?: boolean;
   /** Lo que va del mes en Meta contra el tope, para decirlo chico. */
   gasto?: { usd: number; tope: number; proporcion: number; alcanzado: boolean } | null;
+  /** Los mensajes del mes contra el tope (el bot ahorra desde el 80 %). */
+  mensajes?: { usados: number; tope: number; ahorro: boolean; alcanzado: boolean } | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -170,6 +173,16 @@ export function Bandeja({
               {gasto.alcanzado ? " · tope alcanzado: contestá desde el teléfono" : " · desde el teléfono es gratis"}
             </p>
           )}
+          {mensajes && (
+            <p
+              className={`text-sm ${mensajes.alcanzado ? "estado-problema font-medium text-[var(--estado-tinta)]" : mensajes.ahorro ? "estado-espera font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
+              data-mensajes-whatsapp
+            >
+              Mensajes del mes: <span className="tabular">{mensajes.usados}</span> de{" "}
+              <span className="tabular">{mensajes.tope}</span>
+              {mensajes.alcanzado ? " · el bot no contesta" : mensajes.ahorro ? " · bot en ahorro" : ""}
+            </p>
+          )}
         </div>
 
         {abriendoNueva && <NuevaConversacion onCerrar={() => setAbriendoNueva(false)} />}
@@ -224,7 +237,7 @@ export function Bandeja({
                         </span>
                         {c.noLeidos > 0 && (
                           <span
-                            className="tabular flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-brand-green px-1.5 text-sm font-semibold text-white"
+                            className="tabular flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-verde-whatsapp px-1.5 text-sm font-semibold text-white"
                             aria-label={`${c.noLeidos} sin leer`}
                           >
                             {c.noLeidos}
@@ -266,7 +279,7 @@ export function Bandeja({
         />
       ) : (
         <section className={`tarjeta hidden items-center justify-center p-10 text-center lg:flex ${alto}`}>
-          <p className="text-base text-muted-foreground">Elegí una conversación de la lista para leerla y contestar.</p>
+          <p className="text-base text-muted-foreground">Elegí una conversación.</p>
         </section>
       )}
 
@@ -284,7 +297,7 @@ function Pildora({ children, verde = false }: { children: React.ReactNode; verde
   return (
     <span
       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm ring-1 ring-inset ${
-        verde ? "text-green-800 ring-green-700/30" : "text-muted-foreground ring-border"
+        verde ? "text-saldo-favor ring-saldo-favor/30" : "text-muted-foreground ring-border"
       }`}
     >
       {children}

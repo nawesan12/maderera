@@ -1,0 +1,106 @@
+package auth
+
+import (
+	"context"
+	"net/http"
+	"strings"
+
+	"mjbj/internal/plataforma"
+	"mjbj/internal/sqlc"
+)
+
+type claveSesion struct{}
+
+// Middleware lee la sesión de cada pedido (si la hay) y la deja en el
+// contexto. No exige nada: lo exige cada ruta con Exigir.
+func (s *Servicio) Middleware(sig http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ses, err := s.Leer(w, r)
+		if err != nil {
+			// Sin base no hay sesión que valga; mejor decirlo que tratar a
+			// todos como anónimos.
+			plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusServiceUnavailable, "No pudimos verificar la sesión. Probá de nuevo en un momento."))
+			return
+		}
+		if ses != nil {
+			r = r.WithContext(context.WithValue(r.Context(), claveSesion{}, ses))
+		}
+		sig.ServeHTTP(w, r)
+	})
+}
+
+// ConSesion deja una sesión en el contexto (lo hace el middleware; los tests
+// de otros paquetes lo usan para no pasar por la cookie).
+func ConSesion(ctx context.Context, s *Sesion) context.Context {
+	return context.WithValue(ctx, claveSesion{}, s)
+}
+
+// DeContexto es la sesión del pedido, o nil.
+func DeContexto(ctx context.Context) *Sesion {
+	s, _ := ctx.Value(claveSesion{}).(*Sesion)
+	return s
+}
+
+// Exigir pide que sea personal con alguno de los roles. Devuelve el problema
+// listo para devolver desde el handler.
+//
+// Es la línea de defensa (no hay RLS en la base): toda ruta que devuelve o
+// cambia datos de alguien empieza con esto (o con ExigirSesion), y filtra por
+// ses.UserID, nunca por un id que mande el cliente.
+//
+// **Sin roles no entra nadie.** Lo normal es pasarle
+// roles.QuienEntra("/pantalla")..., y una clave mal escrita devuelve nil: si
+// eso dejara pasar a cualquier sesión, un error de tipeo abriría la ruta a
+// los clientes. Para «cualquiera que haya entrado» está ExigirSesion.
+func Exigir(ctx context.Context, roles ...sqlc.StaffRole) (*Sesion, error) {
+	ses, err := ExigirSesion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(roles) == 0 || !ses.Tiene(roles...) {
+		return nil, plataforma.NuevoProblema(http.StatusForbidden, "Tu usuario no tiene permiso para esto.")
+	}
+	return ses, nil
+}
+
+// ExigirSesion pide solo que haya entrado alguien (cliente o personal): las
+// rutas de «mi cuenta», que después filtran por ses.UserID.
+func ExigirSesion(ctx context.Context) (*Sesion, error) {
+	ses := DeContexto(ctx)
+	if ses == nil {
+		return nil, plataforma.NuevoProblema(http.StatusUnauthorized, "Tenés que entrar para hacer esto.")
+	}
+	return ses, nil
+}
+
+// ExigirStaff pide que sea personal, con cualquier rol.
+func ExigirStaff(ctx context.Context) (*Sesion, error) {
+	return Exigir(ctx, sqlc.AllStaffRoleValues()...)
+}
+
+// Panel cierra /api/v1/admin/ antes de que el pedido llegue a la validación
+// del contrato: sin sesión, 401; con una sesión que no es del personal, 403.
+// Sin esto, un anónimo que mandaba un pedido mal formado recibía un 400 que
+// le describía el esquema de la ruta (qué parámetros, qué tipos).
+//
+// Cada handler sigue exigiendo su pantalla con Exigir: esto solo adelanta lo
+// que todas las rutas del panel tienen en común. Las que Next llama con el
+// secreto interno, sin sesión, pasan.
+func Panel(interna plataforma.ConfigInterna) func(http.Handler) http.Handler {
+	return func(sig http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") && !interna.EsInterno(r) {
+				ses := DeContexto(r.Context())
+				if ses == nil {
+					plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusUnauthorized, "Tenés que entrar para hacer esto."))
+					return
+				}
+				if !ses.EsStaff() {
+					plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusForbidden, "Tu usuario no tiene permiso para esto."))
+					return
+				}
+			}
+			sig.ServeHTTP(w, r)
+		})
+	}
+}

@@ -2,18 +2,18 @@ import type { Metadata } from "next";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { metadatosDePagina, migasJsonLd } from "@/lib/seo";
 import Link from "next/link";
-import { ArrowRight, Ruler } from "lucide-react";
-import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
-import { HORARIO_CORTES } from "@/lib/sucursales";
+import { placasCortablesPublicas, tapacantosDelCatalogo } from "@/lib/dal/cortes-publico";
+import { anchoDeSierra } from "@/lib/dal/sierra";
 import { VistaDeCorteDeQuienMira } from "./vista";
 import { preciosDePlacas } from "@/lib/dal/visitante";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
     titulo: "Corte de placas a medida en Mar del Plata",
     descripcion:
-      "Armá tu despiece en milímetros, mirá cómo entra en la placa y comprá el corte hecho. Melamina, MDF, fenólicos y tableros cortados en el aserradero.",
+      `Armá tu despiece en milímetros, elegí el canto de cada pieza y mirá cómo entra en la placa. Melamina, MDF, fenólicos y tableros cortados ${DONDE_SE_CORTA.frase}.`,
     ruta: "/corte",
   }),
   keywords: [
@@ -51,9 +51,11 @@ export default async function CortePage() {
    * de precios corresponde, era pagar dos veces. El precio del profesional
    * llega aparte, en la misma respuesta: ver `VistaDeCorteDeQuienMira`.
    */
-  const [placas, parametros] = await Promise.all([
+  const [placas, sierra, sucursales, tapacantos] = await Promise.all([
     placasCortablesPublicas(),
-    parametrosDeCalculo(),
+    anchoDeSierra(),
+    listarSucursalesPublicas(),
+    tapacantosDelCatalogo(),
   ]);
 
   return (
@@ -64,28 +66,13 @@ export default async function CortePage() {
           { nombre: "Corte a medida", ruta: "/corte" },
         ])}
       />
-      <div className="contenedor py-10">
-        <div className="max-w-2xl">
-          <p className="inline-flex items-center gap-2 rounded-full bg-naranja-claro px-3 py-1 text-[13px] font-semibold text-acento-sobre-claro">
-            <Ruler className="h-4 w-4" />
-            Melamina, MDF, fenólicos y tableros
-          </p>
-          {/* El título dice lo que se busca —«corte de placas a medida»— y
-              la invitación va abajo. Antes el único título era la invitación,
-              y la página no nombraba en ningún encabezado lo que ofrece. */}
-          <h1 className="mt-3 text-[34px] font-bold leading-[1.1] tracking-[-0.03em]">
-            Corte de placas a medida
-          </h1>
-          <p className="mt-2.5 text-base leading-relaxed text-texto-2">
-            Pasá las medidas y mirá cómo entra en la placa: elegí la placa,
-            cargá el despiece en milímetros y vas a ver el dibujo, cuántas
-            placas hacen falta y cuánto sale, antes de comprar. El corte se
-            hace en el aserradero: {HORARIO_CORTES}.
-          </p>
-        </div>
-
+      {/* El armador es una herramienta de trabajo: ocupa el ancho entero y el
+          título va en su propia barra, junto a la cuenta del pedido. */}
+      <div className="mx-auto max-w-[1680px] px-4 py-5 lg:px-6">
         {placas.length === 0 ? (
-          <p className="mt-8 rounded-xl border border-linea bg-card px-5 py-6 text-base">
+          <>
+          <h1 className="text-[30px] font-bold tracking-[-0.03em]">Corte de placas a medida</h1>
+          <p className="mt-4 rounded-xl superficie px-5 py-6 text-base">
             Por ahora el corte a medida se cotiza por WhatsApp o en el
             mostrador.{" "}
             <Link href="/contacto" className="font-medium underline underline-offset-2">
@@ -93,26 +80,20 @@ export default async function CortePage() {
             </Link>{" "}
             y te pasamos el precio con tu despiece.
           </p>
+          </>
         ) : (
-          <div className="mt-8">
+          <div>
             <VistaDeCorteDeQuienMira
               // Sin esperar: la pantalla sale armada y solo el precio espera.
               precios={preciosDePlacas()}
               placas={placas}
-              anchoSierra={parametros.anchoSierraMm}
+              tapacantos={tapacantos}
+              anchoSierra={sierra}
+              sucursales={sucursales.map((s) => ({ slug: s.slug, nombre: s.nombre, whatsapp: s.whatsapp }))}
             />
           </div>
         )}
 
-        <p className="mt-8 text-sm text-texto-3">
-          El plano es una propuesta: el patrón definitivo lo arma el optimizador
-          del taller, y puede mejorarlo. Las medidas son en milímetros y el
-          precio incluye IVA.{" "}
-          <Link href="/calculadora" className="font-medium underline underline-offset-2">
-            ¿No sabés cuánto material lleva?
-            <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
-          </Link>
-        </p>
       </div>
     </div>
   );

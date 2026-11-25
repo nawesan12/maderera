@@ -2,23 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Banknote, Store } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
+import { sucursalesConCaja, turnosCerrados } from "@/lib/dal/admin/caja";
 import {
-  cierresDeTurnos,
-  sucursalesConCaja,
-  turnosCerrados,
-} from "@/lib/mostrador/caja";
-import {
+  anulacionesPorPersona,
   emitidoPorCaja,
   listarCajasFisicas,
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
-import { formatearMonto, haceCuanto } from "@/lib/formato";
+import { fechaHora, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
+import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { nombreComprobante } from "@/lib/fiscal/comprobantes";
+import { nombreComprobante, type TipoComprobante } from "@/lib/fiscal/comprobantes";
 import { CajasFisicas } from "./cajas-fisicas";
 import { FondoBase } from "./fondo-base";
 import { VentasSueltas } from "./ventas-sueltas";
@@ -36,6 +34,15 @@ export const metadata: Metadata = { title: "Caja" };
  * ese día; corregirlo después con la calculadora en la mano es exactamente
  * cómo un descuadre deja de verse.
  */
+/**
+ * La hora del negocio: Next corre en UTC y una venta de las 22 decía el día
+ * siguiente.
+ */
+const ZONA = "America/Argentina/Buenos_Aires";
+
+/** El día argentino de un instante, para comparar dos. */
+const diaArgentino = (d: Date) => d.toLocaleDateString("es-AR", { timeZone: ZONA });
+
 /** Cómo se lee cada medio en el cierre. */
 const MEDIOS: Record<string, string> = {
   efectivo: "Efectivo",
@@ -50,19 +57,25 @@ const MEDIOS: Record<string, string> = {
 export default async function CajaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ periodo?: string; pagina?: string }>;
 }) {
   await requireStaff();
 
-  const { periodo: crudo } = await searchParams;
+  const { periodo: crudo, pagina: paginaCruda } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
+  const pagina = leerPagina(paginaCruda);
 
-  const [sucursales, cerrados, cajas, sueltas, emitido] = await Promise.all([
+  // Las anulaciones del mes por quien las hizo, la que más anuló primero.
+  // Las cuenta Go por la fecha de la anulación: sumarlas acá sobre lo
+  // emitido, que llega cortado en 200 y por la fecha de la venta, perdía las
+  // de la primera quincena.
+  const [sucursales, turnosDelMes, cajas, sueltas, emitido, anulaciones] = await Promise.all([
     sucursalesConCaja(),
-    turnosCerrados(),
+    turnosCerrados(periodo.clave, pagina, POR_PAGINA),
     listarCajasFisicas(),
     ventasSinCaja(),
-    emitidoPorCaja(periodo.desde, periodo.hasta),
+    emitidoPorCaja(periodo.clave),
+    anulacionesPorPersona(periodo.clave),
   ]);
 
   /*
@@ -70,6 +83,7 @@ export default async function CajaPage({
    * las sucursales que efectivamente tienen alguna colgada: sin ventas sueltas
    * —que es lo normal— esto no consulta nada.
    */
+  const cerrados = turnosDelMes.filas;
   const conSueltas = [...new Set(sueltas.map((v) => v.branchId))];
   const turnos = (
     await Promise.all(conSueltas.map((id) => turnosParaAsignar(id)))
@@ -77,37 +91,24 @@ export default async function CajaPage({
     lista.map((t) => ({
       id: t.id,
       branchId: conSueltas[i],
-      etiqueta:
-        new Date(t.abiertaAt).toLocaleDateString("es-AR", {
-          day: "2-digit",
-          month: "2-digit",
-        }) +
-        " " +
-        new Date(t.abiertaAt).toLocaleTimeString("es-AR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }) +
-        (t.estado === "abierta" ? " (abierto)" : ""),
+      // La etiqueta la escribe Go en hora argentina («5/3 09:00 a. m.»).
+      etiqueta: t.etiqueta,
     })),
   );
-
-  // Cuánto entró por cada medio en cada turno. El arqueo cuenta efectivo
-  // —es lo único que puede faltar del cajón—, pero lo primero que se pregunta
-  // al cerrar el día es cuánto se cobró con tarjeta y cuánto quedó a cuenta.
-  const cierres = await cierresDeTurnos(cerrados.map((t) => t.id));
 
   return (
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Caja"
-        detalle="Los turnos del mostrador, lo que debería haber y lo que se contó."
       >
         <SelectorDeMes actual={periodo.clave} />
       </EncabezadoPanel>
 
       <section className="grid gap-3 sm:grid-cols-2">
         {sucursales.map((s) => (
-          <article key={s.id} className="tarjeta flex items-center gap-3.5 p-4">
+          // En el teléfono el botón baja a su propio renglón: al lado, el
+          // nombre, el turno y el cambio fijo quedaban partidos en tres.
+          <article key={s.id} className="tarjeta flex flex-wrap items-center gap-3.5 p-4 lg:flex-nowrap">
             <span
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                 s.turnoId
@@ -124,12 +125,23 @@ export default async function CajaPage({
                   ? `Abierta ${haceCuanto(new Date(s.abiertaAt))}`
                   : "Sin turno abierto"}
               </p>
+              {/* Lo que tendría que haber ahora en el cajón: la suma de los
+                  movimientos del turno, el mismo número que va a pedir el
+                  arqueo. Es la pregunta del dueño cuando pasa por la caja. */}
+              {s.esperado != null && (
+                <p className="tabular mt-1 text-2xl font-bold leading-tight">
+                  {formatearMonto(s.esperado)}
+                  <span className="ml-2 text-base font-medium text-muted-foreground">
+                    en efectivo
+                  </span>
+                </p>
+              )}
               {/* El cambio que no se retira nunca. Ver `FondoBase`. */}
               <FondoBase branchId={s.id} valor={Number(s.fondoBase)} />
             </div>
             <Link
               href="/mostrador"
-              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida"
+              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-linea px-3.5 text-sm font-medium transition-colors hover:bg-hundida lg:w-auto"
             >
               <Store className="h-4 w-4" />
               Ir al mostrador
@@ -146,13 +158,16 @@ export default async function CajaPage({
       />
 
       <section className="tarjeta overflow-hidden">
-        <header className="border-b border-linea px-5 py-3.5">
+        <header className="tarjeta-cabecera flex items-baseline justify-between gap-3 px-5 py-3.5">
           <h2 className="text-base font-semibold">Turnos cerrados</h2>
+          <span className="tabular text-base text-muted-foreground">
+            {turnosDelMes.total}
+          </span>
         </header>
 
         {cerrados.length === 0 ? (
           <p className="px-5 py-10 text-center text-base text-muted-foreground">
-            Todavía no se cerró ningún turno.
+            Ningún turno cerrado en el mes elegido.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -170,7 +185,7 @@ export default async function CajaPage({
               <tbody className="divide-y divide-linea">
                 {cerrados.map((t) => {
                   const esperado = Number(t.esperado);
-                  const cierre = cierres.get(t.id) ?? [];
+                  const cierre = t.cierre;
                   const contado = t.contado === null ? null : Number(t.contado);
                   const diferencia = contado === null ? null : contado - esperado;
                   const cuadra = diferencia !== null && Math.abs(diferencia) < 0.01;
@@ -208,16 +223,29 @@ export default async function CajaPage({
                         >
                           {diferencia === null ? "—" : formatearMonto(diferencia)}
                         </span>
-                        {/* El esperado cambió después del arqueo: entró una
-                            venta hecha sin conexión que pertenecía a este
-                            turno. La diferencia de esa noche se calculó contra
-                            otro número, y eso hay que poder verlo. */}
+                        {/* Lo que llegó de la cola después del arqueo —una
+                            venta o un retiro sin conexión de este turno— va
+                            aparte y no cambia la diferencia de esa noche. Un
+                            retiro tardío se lee en rojo: es plata que salió
+                            de una caja ya contada. */}
                         {t.tardios > 0 && (
                           <span
-                            className="mt-0.5 block text-sm text-muted-foreground"
-                            title="Entraron movimientos después del cierre, de ventas hechas sin conexión."
+                            className={`tabular mt-0.5 block text-sm ${t.tardiosMonto < 0 ? "text-saldo-debe" : "text-muted-foreground"}`}
                           >
-                            +{t.tardios} después del cierre
+                            {t.tardios} tarde · {formatearMonto(t.tardiosMonto)}
+                          </span>
+                        )}
+                        {/* Las ventas sin conexión del turno que pasaron lo
+                            libre o el límite de cuenta corriente sin PIN: ya
+                            pasaron, se ven en rojo. */}
+                        {t.bajoLista > 0 && (
+                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
+                            {t.bajoLista} sin conexión bajo la lista · {formatearMonto(t.bajoListaMonto)}
+                          </span>
+                        )}
+                        {t.creditoSinAutorizar > 0 && (
+                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
+                            {t.creditoSinAutorizar} sin conexión a cuenta pasado el límite · {formatearMonto(t.creditoSinAutorizarMonto)}
                           </span>
                         )}
                       </td>
@@ -229,11 +257,13 @@ export default async function CajaPage({
                         <div className="flex flex-wrap gap-2">
                           {cierre.map((r) => (
                             <span
-                              key={r.medioPago}
+                              key={`${r.devolucion ? "dev-" : ""}${r.medioPago}-${r.quien ?? ""}`}
                               className="inline-flex items-baseline gap-1.5 rounded-full bg-muted px-3 py-1 text-sm"
                             >
                               <span className="text-muted-foreground">
+                                {r.devolucion && "Devolución · "}
                                 {MEDIOS[r.medioPago] ?? r.medioPago}
+                                {r.quien && ` · ${r.quien}`}
                               </span>
                               <span className="tabular font-semibold">
                                 {formatearMonto(r.total)}
@@ -253,6 +283,13 @@ export default async function CajaPage({
             </table>
           </div>
         )}
+        <div className="px-4">
+          <Paginador
+            pagina={pagina}
+            total={turnosDelMes.total}
+            params={{ periodo: crudo }}
+          />
+        </div>
       </section>
 
       {/*
@@ -267,25 +304,41 @@ export default async function CajaPage({
         El número provisorio va al lado del definitivo porque es el que trae el
         cliente escrito en el ticket cuando la venta se cobró sin internet.
       */}
-      <section className="tarjeta overflow-hidden">
+      <section className="tarjeta @container overflow-hidden">
         <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4">
           <h2 className="text-base font-semibold">
             Emitido en el mostrador
           </h2>
-          <p className="text-base text-muted-foreground">
-            Para reimprimir desde cualquier equipo
-          </p>
+          {/* Quién anuló y cuánto, sin contar a ojo: cinco anulaciones por
+              semana de la misma persona se ven acá antes que en la bitácora. */}
+          {anulaciones.length > 0 && (
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-base text-muted-foreground [font-variant-numeric:tabular-nums]">
+              {anulaciones.map((a) => (
+                <li key={a.quien}>
+                  {a.quien} · {plural(a.cantidad, "anulada")} · {formatearMonto(a.total)}
+                  {a.devuelto > 0 && (
+                    <span className="estado-problema font-medium"> · {formatearMonto(a.devuelto)} del cajón</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {emitido.length === 0 ? (
           <Vacio
             icono={Store}
             titulo="No se emitió nada en el mes elegido"
-            detalle="Cambiá el mes de arriba para ver otro."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-base">
+          <>
+          {/* La tabla, donde entra entera (el ancho de la sección, no el de
+              la pantalla: el menú lateral se come 244 px); si no, dos
+              renglones por venta. Apilada era «Cuándo:», «Venta:», «Total:»
+              uno abajo del otro, y con un ancho mínimo se corría de costado
+              en una tablet, que no pasa en ningún ancho. */}
+          <div className="hidden @4xl:block">
+            <table className="w-full text-base">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Cuándo</th>
@@ -299,14 +352,16 @@ export default async function CajaPage({
               </thead>
               <tbody className="divide-y divide-linea">
                 {emitido.map((v) => (
-                  <tr key={v.orderId}>
+                  // La anulada se apaga y se tacha, y no se confunde con una
+                  // venta válida; el rojo queda para la palabra «Anulada» y la
+                  // factura que sigue viva.
+                  <tr key={v.orderId} className={v.anulada ? "bg-hundida/60 text-muted-foreground" : ""}>
                     <td className="tabular px-5 py-3 text-muted-foreground">
-                      {v.createdAt.toLocaleDateString("es-AR")}
+                      {v.createdAt.toLocaleDateString("es-AR", { timeZone: ZONA })}
                       <span className="block text-sm">
-                        {v.createdAt.toLocaleTimeString("es-AR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {/* En 24 h, como todo el panel (lib/formato): el
+                            `toLocaleTimeString` de antes decía «12:16 a. m.». */}
+                        {hora.format(v.createdAt)}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -327,40 +382,142 @@ export default async function CajaPage({
                       {v.operadora ?? "—"}
                       <span className="block text-sm">{v.sucursal ?? ""}</span>
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
-                      {formatearMonto(Number(v.total))}
+                    <td className="px-5 py-3 text-right">
+                      <span className={`tabular font-semibold ${v.anulada ? "line-through decoration-2" : ""}`}>
+                        {formatearMonto(Number(v.total))}
+                      </span>
+                      {v.medioPago && !v.anulada && (
+                        <span className="block text-sm text-muted-foreground">
+                          {MEDIOS[v.medioPago] ?? v.medioPago}
+                        </span>
+                      )}
+                      {v.anulada && (
+                        <span className="block text-sm">
+                          <span className="estado-problema font-semibold">Anulada</span>
+                          {[
+                            v.anuladaPor,
+                            // Con fecha si no es del día de la venta: una del
+                            // lunes anulada el sábado parecía anulada en el acto.
+                            v.anuladaAt &&
+                              (diaArgentino(v.anuladaAt) === diaArgentino(v.createdAt)
+                                ? hora.format(v.anuladaAt)
+                                : fechaHora.format(v.anuladaAt)),
+                            v.motivo,
+                          ]
+                            .filter(Boolean)
+                            .map((t) => ` · ${t}`)
+                            .join("")}
+                          {v.facturaViva && (
+                            <span className="estado-problema block font-semibold">factura sin nota de crédito</span>
+                          )}
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <span className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-sm">
-                        <a
-                          href={`/ticket/${v.orderId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-brand-orange hover:underline"
-                        >
-                          Ticket
-                        </a>
-                        {v.invoiceId && (
-                          <Link
-                            href={`/admin/facturacion/${v.invoiceId}`}
-                            className="hover:text-brand-orange hover:underline"
-                          >
-                            {nombreComprobante(v.invoiceTipo!)}{" "}
-                            <span className="tabular">
-                              {String(v.invoicePuntoVenta).padStart(4, "0")}-
-                              {String(v.invoiceNumero).padStart(8, "0")}
-                            </span>
-                          </Link>
-                        )}
-                      </span>
+                      <Papeles venta={v} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <ul className="divide-y divide-linea @4xl:hidden">
+            {emitido.map((v) => (
+              <li key={v.orderId} className="px-4 py-3">
+                <p className="flex items-baseline gap-3">
+                  <Link
+                    href={`/admin/pedidos/${v.orderId}`}
+                    className="tabular whitespace-nowrap font-medium hover:text-brand-orange hover:underline"
+                  >
+                    {v.numero}
+                  </Link>
+                  {/* El número que trae escrito el cliente cuando la venta
+                      se cobró sin internet: es lo que se busca con cola. */}
+                  {v.numeroProvisorio && (
+                    <span className="tabular min-w-0 truncate text-sm text-muted-foreground">
+                      ticket {v.numeroProvisorio}
+                    </span>
+                  )}
+                  <span className="tabular ml-auto whitespace-nowrap font-semibold">
+                    {formatearMonto(Number(v.total))}
+                  </span>
+                </p>
+                {/* Con qué pagó va a la vista: efectivo o transferencia es
+                    lo primero que se mira para que no falte plata. */}
+                <p className="mt-0.5 flex items-baseline gap-3 text-sm text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate">
+                    {/* Con el día: la lista es del mes entero, y la hora sola
+                        no ubica una venta del 3 frente a una del 17. */}
+                    <span className="tabular">
+                      {v.createdAt.toLocaleDateString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        timeZone: ZONA,
+                      })}{" "}
+                      {hora.format(v.createdAt)}
+                    </span>
+                    {" · "}
+                    {v.cliente}
+                    {v.operadora && ` · ${v.operadora}`}
+                    {v.sucursal && ` · ${v.sucursal}`}
+                  </span>
+                  {v.medioPago && (
+                    <span className="shrink-0 whitespace-nowrap">
+                      {MEDIOS[v.medioPago] ?? v.medioPago}
+                    </span>
+                  )}
+                </p>
+                <div className="mt-1">
+                  <Papeles venta={v} />
+                </div>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * El ticket y la factura de una venta: la usan la tabla y la lista del
+ * teléfono, para que no se desfasen.
+ */
+function Papeles({
+  venta: v,
+}: {
+  venta: {
+    orderId: string;
+    invoiceId: string | null;
+    invoiceTipo: string | null;
+    invoicePuntoVenta: number | null;
+    invoiceNumero: number | null;
+  };
+}) {
+  return (
+    <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm md:justify-end md:gap-x-3">
+      <a
+        href={`/ticket/${v.orderId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-h-11 items-center hover:text-brand-orange hover:underline md:min-h-0"
+      >
+        Ticket
+      </a>
+      {v.invoiceId && (
+        <Link
+          href={`/admin/facturacion/${v.invoiceId}`}
+          className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap hover:text-brand-orange hover:underline md:min-h-0"
+        >
+          {nombreComprobante(v.invoiceTipo as TipoComprobante)}{" "}
+          <span className="tabular">
+            {String(v.invoicePuntoVenta).padStart(4, "0")}-
+            {String(v.invoiceNumero).padStart(8, "0")}
+          </span>
+        </Link>
+      )}
+    </span>
   );
 }

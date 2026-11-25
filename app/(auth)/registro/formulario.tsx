@@ -92,7 +92,7 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
       <Button
         type="submit"
         disabled={pendiente}
-        className="w-full bg-brand-orange font-medium text-white hover:bg-brand-orange-dark"
+        className="w-full bg-accion font-medium text-white hover:bg-brand-orange-dark"
       >
         {pendiente ? (
           <>

@@ -1,4 +1,5 @@
 import { revisarNumeroDeCheque } from "@/lib/cheques/numero";
+import { admiteDecimales } from "@/lib/unidades";
 
 /**
  * Las reglas de una venta de mostrador, sin base de datos.
@@ -43,6 +44,86 @@ export interface LineaDeVenta {
    * producto (`factoresDeStock`).
    */
   presentacion?: "media_largo" | "media_ancho" | null;
+  /**
+   * El precio de lista al cargar el renglón (el del buscador, la media placa
+   * o la placa del corte). Sirve para marcar en pantalla lo que se cambió a
+   * mano y avisar antes de cobrar: el que vale es el que vuelve a buscar Go,
+   * que no le cree a este.
+   */
+  precioLista?: number | null;
+  /**
+   * El corte de la venta del que salió el renglón, en la pantalla (ver
+   * `lib/mostrador/cortes-de-la-venta.ts`). A Go viaja como `corte`, el
+   * índice del despiece en la venta.
+   */
+  corteId?: string;
+  corte?: number;
+}
+
+/**
+ * La cantidad que admite el renglón: lo que se vende por unidad va entero
+ * (comité final, M10). Media bisagra se cobraba y se descontaba del stock;
+ * Go la rechaza, y acá se redondea al tipearla para que no llegue a cobrarse.
+ * Un renglón a mano (sin variante) lleva la unidad que se tipeó y no se toca.
+ */
+export function cantidadDelRenglon(l: Pick<LineaDeVenta, "variantId" | "unidad">, cantidad: number): number {
+  if (!l.variantId || admiteDecimales(l.unidad) || !Number.isFinite(cantidad) || Number.isInteger(cantidad)) {
+    return cantidad;
+  }
+  return cantidad > 0 ? Math.max(1, Math.round(cantidad)) : cantidad;
+}
+
+/**
+ * Si la cantidad no entra en lo que se vende por unidad: «2,5*bisagra» desde
+ * el buscador. Ahí no se redondea —cobraba tres bisagras, y 0,4 cobraba una,
+ * sin decir nada—: no se agrega y se avisa (revisión del carril F).
+ */
+export function vaSinDecimales(l: Pick<LineaDeVenta, "variantId" | "unidad">, cantidad: number): boolean {
+  return cantidadDelRenglon(l, cantidad) !== cantidad;
+}
+
+/**
+ * El renglón de las pasadas del corte a medida: sin variante y en «pasada»,
+ * la misma marca que mira Go (`esPasada` en mostrador/controles.go).
+ *
+ * Su cantidad es de pasadas y su descripción nombra las piezas, así que en
+ * pantalla y en el papel no se muestra la cantidad: «6 piezas» al lado de un
+ * 14 se leía como un error, y el vendedor que «corregía» el 14 a 6 cobraba
+ * menos de la mitad del corte (T4). Se cambia volviendo a abrir el corte.
+ */
+export function esLineaDelCorte(l: { variantId?: string | null; unidad: string }): boolean {
+  return l.variantId == null && l.unidad === "pasada";
+}
+
+/**
+ * Lo que la venta deja de cobrar contra la lista, con la regla de Go
+ * (ventas.DesvioDeLaVenta): por renglón lo que quedó por debajo de su lista
+ * (uno por encima no compensa), más el descuento tipeado sobre el total. La
+ * escala automática por medio de pago no cuenta. `base` es el total a precio
+ * de lista.
+ */
+export function desvioDeLaVenta(
+  lineas: LineaDeVenta[],
+  descuentoManual: number,
+): { total: number; base: number } {
+  let base = 0;
+  let bajo = 0;
+  for (const l of lineas) {
+    if (l.precioLista != null) {
+      base += aCentavos(l.cantidad * l.precioLista);
+      const dif = l.precioLista - l.precioUnitario;
+      if (dif > 0.005) bajo += aCentavos(dif * l.cantidad);
+    } else {
+      base += aCentavos(l.cantidad * l.precioUnitario);
+    }
+  }
+  return { total: aCentavos(aCentavos(bajo) + aCentavos(descuentoManual)), base: aCentavos(base) };
+}
+
+/** Lo que pasa el porcentaje libre hay que autorizarlo (0 si no hace falta). */
+export function aAutorizar(desvio: { total: number; base: number }, porcentajeLibre: number): number {
+  if (desvio.total <= 0.005) return 0;
+  return desvio.total <= Math.round(desvio.base * porcentajeLibre) / 100 + 0.005 ? 0 : desvio.total;
 }
 
 /** Redondeo a centavos, para que la suma de líneas cierre con el total. */
@@ -78,6 +159,11 @@ export function revisarVenta(
   for (const l of lineas) {
     if (!Number.isFinite(l.cantidad) || l.cantidad <= 0) {
       return `La cantidad de "${l.descripcion}" tiene que ser mayor a cero.`;
+    }
+    // El renglón guarda la cantidad con dos decimales: con una tercera el
+    // papel diría 2,38 × precio y el subtotal sería el de 2,375.
+    if (Math.abs(l.cantidad * 100 - Math.round(l.cantidad * 100)) > 1e-6) {
+      return `La cantidad de "${l.descripcion}" va con dos decimales como mucho.`;
     }
     if (!Number.isFinite(l.precioUnitario) || l.precioUnitario < 0) {
       return `El precio de "${l.descripcion}" no puede ser negativo.`;
@@ -317,7 +403,9 @@ export function leerTipeo(texto: string): TipeoDelBuscador {
 
   if (!m) return { cantidad: 1, consulta: limpio, explicita: false };
 
-  const cantidad = Number(m[1].replace(",", "."));
+  // Dos decimales, como se guarda el renglón: "2,375 x" sería 2,38 en el
+  // papel y el servidor lo rechaza.
+  const cantidad = Math.round(Number(m[1].replace(",", ".")) * 100) / 100;
   // Cero unidades no es una venta; se lee como si no hubiera prefijo.
   if (!(cantidad > 0)) {
     return { cantidad: 1, consulta: limpio, explicita: false };

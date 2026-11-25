@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Loader2, Send, X } from "lucide-react";
 import { ConfirmarTope } from "./confirmar-tope";
 import { enviarDocumento, type EstadoWhatsapp } from "./actions";
-import type { DocumentoListado } from "@/lib/whatsapp/documentos";
+import type { DocumentoListado } from "@/lib/dal/admin/whatsapp";
 
 const estadoInicial: EstadoWhatsapp = {};
 
@@ -62,7 +62,7 @@ export function ElegirDocumento({
 
       {documentos.length === 0 ? (
         <p className="rounded-lg bg-background px-3 py-2.5 text-base text-muted-foreground">
-          Vinculá la conversación con la ficha del cliente para ver sus presupuestos, facturas y remitos.
+          Vinculá la conversación con un cliente.
         </p>
       ) : (
         <div className="space-y-2.5">
@@ -104,14 +104,14 @@ export function ElegirDocumento({
             <input
               name="epigrafe"
               maxLength={1000}
-              placeholder="Texto que acompaña (opcional), por ejemplo: «Te paso lo que me pediste»"
+              placeholder="Texto que acompaña (opcional)"
               aria-label="Texto que acompaña al documento"
               className="h-10 w-full rounded-lg border bg-background px-2.5 text-base"
             />
           ) : (
             <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm text-[var(--estado-tinta)]">
-              Pasaron más de 24 horas: el PDF sale pegado al mensaje preparado «documento adjunto», que Meta cobra
-              como de utilidad.
+              {/* Sale pegado al mensaje preparado «documento adjunto», que Meta cobra como de utilidad. */}
+              Pasaron más de 24 horas: sale con un mensaje preparado y se cobra.
             </p>
           )}
 
@@ -123,7 +123,7 @@ export function ElegirDocumento({
           )}
           {estado.requiereConfirmacionTope && <ConfirmarTope gratis={gratis} />}
           {estado.ok && (
-            <p role="status" className="flex items-center gap-2 text-base text-green-800">
+            <p role="status" className="flex items-center gap-2 text-base text-saldo-favor">
               <CheckCircle2 className="h-5 w-5" />
               {estado.ok}
             </p>
@@ -132,7 +132,7 @@ export function ElegirDocumento({
           <button
             type="submit"
             disabled={enviando || !elegido}
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
           >
             {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : documento ? <Send className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
             {documento ? `Mandar ${documento.titulo}` : "Elegí un documento"}

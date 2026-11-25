@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Scissors, Trash2 } from "lucide-react";
+import { Download, Loader2, Plus, RotateCcw, Scissors, Trash2 } from "lucide-react";
+import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto";
 import {
   Dialog,
   DialogContent,
@@ -9,22 +10,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
+import { PreguntaMm } from "@/components/cortes/pregunta-mm";
+import { medidasSospechosas } from "@/lib/cortes/armador";
+import type { PiezaFijada } from "@/lib/cortes/tipos";
+import { usePlano } from "@/lib/cortes/en-vivo";
 import {
-  calcularPlanoDeCorte,
-  type PiezaFijada,
-} from "@/lib/cortes/plano";
-import {
-  fraccionDePlaca,
   medidaDePlaca,
   nombreDeLaMitad,
   type Mitad,
 } from "@/lib/cortes/placa";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
 import { moneda } from "@/lib/formato";
-import type { CorteDeMostrador } from "@/lib/mostrador/venta";
+import { formatearDecimal } from "@/lib/unidades";
+import type { CorteDeMostrador } from "@/lib/mostrador/tipos";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
-import { presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
-import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
+import { precioDeLinea, presentacionDeMitad } from "@/lib/ventas/forma-de-venta";
 
 /**
  * Vender un corte desde el mostrador.
@@ -52,6 +52,26 @@ interface PiezaCargada {
   etiqueta: string;
 }
 
+/**
+ * Lo cargado en el diálogo, para devolverlo si se lo vuelve a abrir (ver el
+ * borrador en `vista.tsx`).
+ */
+export interface EstadoDelCorte {
+  piezas: PiezaCargada[];
+  mitad: Mitad;
+  canto: string;
+  fijadas: PiezaFijada[];
+}
+
+/** Si hay algo que valga la pena guardar: una medida, un canto, una pieza movida. */
+export function hayAlgoCargado(e: EstadoDelCorte): boolean {
+  return (
+    e.canto.trim() !== "" ||
+    e.fijadas.length > 0 ||
+    e.piezas.some((p) => p.largo.trim() !== "" || p.ancho.trim() !== "" || p.etiqueta.trim() !== "")
+  );
+}
+
 const vacia = (): PiezaCargada => ({
   largo: "",
   ancho: "",
@@ -67,8 +87,12 @@ export function CorteAMedida({
   precioPorPasada,
   precioPorMetroCanto,
   anchoSierra: anchoSierraGeneral,
+  cliente,
+  inicial,
+  focoAlCerrar,
   onCerrar,
   onAgregar,
+  corrigiendo = false,
 }: {
   /** La placa elegida del catálogo, con su medida y su precio para este cliente. */
   placa: {
@@ -88,12 +112,28 @@ export function CorteAMedida({
   anchoSierra: number;
   precioPorPasada: number;
   precioPorMetroCanto: number;
-  onCerrar: () => void;
-  onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador) => void;
+  /** El nombre del cliente de la venta, para encabezar el PDF del plano. */
+  cliente?: string | null;
+  /** Lo que quedó cargado la última vez que se cerró esta placa sin agregarla. */
+  inicial?: EstadoDelCorte;
+  /** A dónde vuelve el cursor al cerrar: al buscador, a cargar lo que sigue. */
+  focoAlCerrar?: () => HTMLElement | null;
+  /** Se cerró sin agregar, con lo que había cargado (se guarda como borrador). */
+  onCerrar: (estado: EstadoDelCorte) => void;
+  /** Con lo cargado, para poder reabrirlo y corregirlo tal cual. */
+  onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador, estado: EstadoDelCorte) => void;
+  /** Si se está corrigiendo un corte que ya está en la venta. */
+  corrigiendo?: boolean;
 }) {
-  const [piezas, setPiezas] = useState<PiezaCargada[]>([vacia()]);
-  const [canto, setCanto] = useState("");
-  const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
+  const [piezas, setPiezas] = useState<PiezaCargada[]>(() => inicial?.piezas ?? [vacia()]);
+  const [canto, setCanto] = useState(inicial?.canto ?? "");
+  const [fijadas, setFijadas] = useState<PiezaFijada[]>(() => inicial?.fijadas ?? []);
+  /*
+   * Si ya se contestó que las medidas están en milímetros. Se pregunta una
+   * sola vez por armado: preguntar en cada intento es un cartel más.
+   */
+  const [mmConfirmado, setMmConfirmado] = useState(false);
+  const [preguntaMm, setPreguntaMm] = useState(false);
 
   /*
    * De qué sale el trabajo: placa entera o media, y en qué sentido partida.
@@ -102,20 +142,26 @@ export function CorteAMedida({
    * sentido lo elige quien atiende: depende de la placa que haya y de cómo
    * corre el dibujo cuando es de color.
    */
-  const [mitad, setMitad] = useState<Mitad>(null);
+  const [mitad, setMitad] = useState<Mitad>(inicial?.mitad ?? null);
+
+  /** Cerrar nunca pierde lo cargado: vuelve como borrador. */
+  function cerrar() {
+    onCerrar({ piezas, mitad, canto, fijadas });
+  }
 
   /*
-   * El disco de este trabajo. Arranca con el de la configuración y se puede
-   * cambiar acá (nota del 30/9/2026): el plano, el precio y la hoja del taller
-   * salen con este número, y el trabajo lo guarda.
+   * El disco es el de la configuración (/admin/calculadoras). Hasta el comité
+   * final se podía cambiar acá, pero el disco lo conoce el taller y no quien
+   * vende (hallazgo 44): el plano, el precio y la hoja del taller salen con
+   * este número, y el trabajo lo guarda.
    */
-  const [sierraTexto, setSierraTexto] = useState(String(anchoSierraGeneral).replace(".", ","));
-  const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
+  const anchoSierra = anchoSierraGeneral;
 
   const medida = medidaDePlaca({
     varianteLargo: placa.largoMm,
     varianteAncho: placa.anchoMm,
     mitad,
+    sierra: anchoSierra,
   });
   const medidaSupuesta = medida.supuesta;
   const placaLargo = medida.largo;
@@ -137,17 +183,14 @@ export function CorteAMedida({
     [piezas],
   );
 
-  const plano = useMemo(
-    () =>
-      calcularPlanoDeCorte({
-        piezas: validas,
-        placaLargo,
-        placaAncho,
-        anchoSierra,
-        fijadas,
-      }),
-    [validas, placaLargo, placaAncho, anchoSierra, fijadas],
-  );
+  // El plano lo calcula Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
+  const { plano, placasACobrar, pasadasACobrar, calculando } = usePlano({
+    piezas: validas,
+    placaLargo,
+    placaAncho,
+    anchoSierra,
+    fijadas,
+  });
 
   // La misma cuenta que la ficha del corte y la planilla del taller, que ya
   // está probada: no hay dos formas de medir un metro de tapacanto.
@@ -156,15 +199,22 @@ export function CorteAMedida({
   // De media placa se cobra media placa: el plano ya trabaja sobre la medida
   // partida, así que lo único que cambia es el precio del material.
   const pctMedia = placa.precioMediaPct ?? 50;
-  const subtotalPlacas = plano.placasEnteras * placa.precio * fraccionDePlaca(mitad, pctMedia);
+  const productoDeLaPlaca = {
+    unit: placa.unidad,
+    formaDeVenta: placa.formaDeVenta ?? "entera",
+    precioMediaPct: pctMedia,
+  } as const;
+  // Lo que se cobra (placasACobrar) y no lo que se dibuja: acomodar a mano
+  // para que ninguna placa pase la mitad no saca el material.
+  const subtotalPlacas = placasACobrar * precioDeLinea(placa.precio, productoDeLaPlaca, presentacionDeMitad(mitad));
   // Solo se ofrece partir lo que se vende partido: un fenólico que se vende
   // entero no tiene media placa en ningún lado (nota de la clienta, 30/9/2026).
   const sePuedePartir = placa.formaDeVenta === "entera_o_media";
-  const subtotalCorte = plano.pasadasCobrables * precioPorPasada;
+  const subtotalCorte = pasadasACobrar * precioPorPasada;
   const subtotalCanto = Math.round(metrosCanto * precioPorMetroCanto * 100) / 100;
   const total = subtotalPlacas + subtotalCorte + subtotalCanto;
 
-  const sePuede = validas.length > 0 && plano.noEntran.length === 0;
+  const sePuede = validas.length > 0 && plano.noEntran.length === 0 && !calculando;
 
   /**
    * Suma una pieza y deja el cursor en su largo.
@@ -184,13 +234,20 @@ export function CorteAMedida({
   }
 
   function cambiar(i: number, campo: keyof PiezaCargada, valor: string | boolean | number) {
+    // Tocar una medida responde la pregunta de los milímetros mejor que el «Sí».
+    if (campo === "largo" || campo === "ancho") setPreguntaMm(false);
     setPiezas((previas) =>
       previas.map((p, j) => (j === i ? { ...p, [campo]: valor } : p)),
     );
   }
 
-  function aceptar() {
+  /** `mmOk`: se acaba de contestar que sí, en el mismo toque. */
+  function aceptar(mmOk = mmConfirmado) {
     if (!sePuede) return;
+    if (!mmOk && medidasSospechosas(piezas)) {
+      setPreguntaMm(true);
+      return;
+    }
 
     const lineas: LineaDeVenta[] = [];
 
@@ -199,7 +256,7 @@ export function CorteAMedida({
      * catálogo y tienen que descontar stock del estante. El corte y el
      * tapacanto van sin variante, que es lo que hace que no descuenten nada.
      */
-    if (plano.placasEnteras > 0) {
+    if (placasACobrar > 0) {
       /*
        * Media placa se cobra al precio de la media y descuenta **media placa**
        * del estante: la otra mitad queda en el depósito y se puede vender
@@ -213,20 +270,34 @@ export function CorteAMedida({
           ? `${placa.descripcion} — ${nombreDeLaMitad(mitad).toLowerCase()}`
           : placa.descripcion,
         unidad: placa.unidad,
-        cantidad: plano.placasEnteras,
-        precioUnitario: placa.precio * fraccionDePlaca(mitad, pctMedia),
+        cantidad: placasACobrar,
+        // El de la media al peso, como el buscador y Go (precioDeLinea): la
+        // fracción a secas daba centavos de diferencia con la lista.
+        precioUnitario: precioDeLinea(placa.precio, productoDeLaPlaca, presentacionDeMitad(mitad)),
+        precioLista: precioDeLinea(placa.precio, productoDeLaPlaca, presentacionDeMitad(mitad)),
       });
     }
 
-    if (plano.pasadasCobrables > 0 && precioPorPasada > 0) {
+    if (pasadasACobrar > 0 && precioPorPasada > 0) {
+      /*
+       * La línea nombra lo que el cliente pidió —las piezas— y no lo que hace
+       * la sierra: «pasadas» es palabra de taller y esta línea la lee el
+       * cliente en la pantalla (T4, hallazgo 44). Lo que se cobra sigue
+       * siendo por pasada, en la unidad y la cantidad, que es lo que mira Go
+       * (`esPasada`: sin variante y en «pasada»). Por eso la venta y el ticket
+       * muestran solo su importe (`esLineaDelCorte`): una cantidad de 14 al
+       * lado de «6 piezas» se «corregía» a 6.
+       */
+      const cuantas = validas.reduce((n, p) => n + p.cantidad, 0);
       lineas.push({
         variantId: null,
-        descripcion: `Corte a medida — ${plano.pasadasCobrables} ${
-          plano.pasadasCobrables === 1 ? "pasada" : "pasadas"
-        }`,
+        descripcion: `Corte a medida · ${cuantas} ${cuantas === 1 ? "pieza" : "piezas"}`,
         unidad: "pasada",
-        cantidad: plano.pasadasCobrables,
+        cantidad: pasadasACobrar,
         precioUnitario: precioPorPasada,
+        // La tarifa es su precio de lista, como en Go (conTarifaDelCorte):
+        // bajarla a mano pinta el total y, pasado lo libre, pide el PIN.
+        precioLista: precioPorPasada,
       });
     }
 
@@ -237,10 +308,11 @@ export function CorteAMedida({
         unidad: "m",
         cantidad: metrosCanto,
         precioUnitario: precioPorMetroCanto,
+        precioLista: precioPorMetroCanto,
       });
     }
 
-    onAgregar(lineas, {
+    const corte: CorteDeMostrador = {
       variantId: placa.variantId,
       materialDescripcion: placa.descripcion,
       cantoDescripcion: canto.trim() || null,
@@ -248,7 +320,7 @@ export function CorteAMedida({
       placaAnchoMm: placa.anchoMm,
       mitad,
       placas: plano.placas.length,
-      pasadas: plano.pasadasCobrables,
+      pasadas: pasadasACobrar,
       acomodoManual: fijadas.length > 0 ? JSON.stringify(fijadas) : null,
       anchoSierraMm: anchoSierra,
       piezas: validas.map((p) => ({
@@ -261,362 +333,389 @@ export function CorteAMedida({
         etiqueta: p.etiqueta,
         aclaracion: null,
       })),
-    });
+    };
+    onAgregar(lineas, corte, { piezas, mitad, canto, fijadas });
   }
 
+  /*
+   * El plano en PDF, en el momento y sin cobrar (pedido de Nahuel, 18/11):
+   * para dárselo al cliente que lo está pensando o mandarlo al taller.
+   */
+  const [bajando, setBajando] = useState(false);
+  const [errorPdf, setErrorPdf] = useState<string | null>(null);
+  async function descargarPlano() {
+    if (plano.placas.length === 0) return;
+    setBajando(true);
+    setErrorPdf(null);
+    try {
+      const r = await fetch("/api/mostrador/plano", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          material: placa.descripcion,
+          canto: canto.trim() || null,
+          deQueSale: nombreDeLaMitad(mitad),
+          metrosCanto,
+          cliente: cliente ?? null,
+          placaLargo,
+          placaAncho,
+          anchoSierra,
+          piezas: validas,
+          fijadas,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      const url = URL.createObjectURL(await r.blob());
+      // En el documento y revocado después: Firefox y Safari cortan la
+      // descarga si el enlace no está en la página o la URL ya no existe.
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "plano-de-corte.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      setErrorPdf("No se pudo armar el PDF.");
+    } finally {
+      setBajando(false);
+    }
+  }
+
+  // Según el ancho de la columna (`@container`), no el de la pantalla.
+  const columnas = "@2xl:grid @2xl:grid-cols-[minmax(110px,1fr)_84px_84px_64px_92px_64px_36px] @2xl:items-center @2xl:gap-2";
+
   return (
-    <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
-      {/* `sm:max-w-*` y no `max-w-*`: el diálogo base trae `sm:max-w-md` y, al ser
-          de otro breakpoint, no lo pisa una clase sin prefijo — el modal quedaba
-          en 448 px con los campos apilándose de a uno. */}
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[min(1100px,95vw)]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
-            <Scissors className="h-5 w-5" />
-            Corte a medida
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <p className="text-base text-muted-foreground">
-            {placa.descripcion} · {nombreDeLaMitad(mitad).toLowerCase()} de{" "}
-            <span className="tabular">
-              {placaLargo} × {placaAncho} mm
-            </span>
-            {medidaSupuesta && " (medida supuesta: la placa no la tiene cargada)"}
-          </p>
-
-          {/* Los milímetros del disco, dichos y editables. Estaban descontados
-              desde siempre y en ninguna pantalla se veían, así que en el
-              mostrador no se podía explicar por qué dos piezas de 900 no
-              entran en una placa de 1830. */}
-          <label className="flex flex-wrap items-center gap-2 text-base">
-            <span className="text-muted-foreground">La sierra se lleva</span>
-            <input
-              value={sierraTexto}
-              onChange={(e) => setSierraTexto(e.target.value)}
-              inputMode="decimal"
-              aria-label="Ancho de la sierra, en milímetros"
-              aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
-              className="tabular h-10 w-20 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
-            />
-            <span className="text-muted-foreground">mm por corte</span>
-            {leerAnchoDeSierra(sierraTexto) === null && (
-              <span className="estado-espera text-sm font-medium">
-                Entre 0,5 y 10 mm: mientras tanto se usa {formatearSierra(anchoSierraGeneral)}.
+    /* Un clic afuera no cierra: es una mesa de trabajo y el mouse pasa cerca
+       del borde todo el tiempo. Esc, la X y «Cancelar» cierran sin preguntar,
+       porque lo cargado vuelve si se abre de nuevo la misma placa. */
+    <Dialog open disablePointerDismissal onOpenChange={(abierto) => !abierto && cerrar()}>
+      {/* A pantalla casi completa: es una mesa de trabajo, no un aviso. La
+          placa y sus ajustes arriba, la planilla a la izquierda y el plano a
+          la derecha, todo a la vista a la vez (antes, en un modal de 1100 px,
+          el plano quedaba abajo de las medidas). `sm:max-w-*` porque el
+          diálogo base trae `sm:max-w-md` y una clase sin prefijo no lo pisa. */}
+      <DialogContent
+        finalFocus={focoAlCerrar}
+        className="flex h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1600px,96vw)]"
+      >
+        <DialogHeader className="m-0 border-b border-linea px-6 pb-4 pt-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 pr-12">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+              <Scissors className="h-5 w-5" />
+              Corte a medida
+            </DialogTitle>
+            <span className="text-base">
+              {placa.descripcion}
+              <span className="tabular ml-2 text-muted-foreground">
+                {placaLargo} × {placaAncho} mm{medidaSupuesta && " (supuesta)"}
               </span>
+            </span>
+
+            {sePuedePartir && (
+              <div className="flex gap-1.5" role="group" aria-label="De qué sale">
+                {([null, "largo", "ancho"] as const).map((m) => (
+                  <button
+                    key={m ?? "entera"}
+                    type="button"
+                    onClick={() => setMitad(m)}
+                    aria-pressed={mitad === m}
+                    className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
+                      mitad === m ? "boton-accion" : "border border-linea text-muted-foreground hover:bg-hundida"
+                    }`}
+                  >
+                    {m === null ? "Placa entera" : m === "largo" ? "Media a lo largo" : "Media al ancho"}
+                  </button>
+                ))}
+              </div>
             )}
-          </label>
 
-          {/* Media placa. Se vende, y no es lo mismo partirla a lo largo que
-              al ancho: cambia qué piezas entran. Solo aparece si el producto
-              se vende partido. */}
-          {sePuedePartir && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-base font-medium">De qué sale:</span>
-              {([null, "largo", "ancho"] as const).map((m) => (
-                <button
-                  key={m ?? "entera"}
-                  type="button"
-                  onClick={() => setMitad(m)}
-                  aria-pressed={mitad === m}
-                  className={`h-10 rounded-lg px-3 text-base font-medium transition-colors ${
-                    mitad === m
-                      ? "boton-accion"
-                      : "border border-linea text-muted-foreground hover:bg-hundida"
-                  }`}
-                >
-                  {m === null
-                    ? "Placa entera"
-                    : m === "largo"
-                      ? "Media a lo largo"
-                      : "Media al ancho"}
-                </button>
-              ))}
-            </div>
-          )}
-
+          </div>
           {mitad && placa.color && (
-            <p className="tarjeta-atencion px-4 py-2.5 text-base">
-              La placa es <strong>{placa.color}</strong>: fijate cómo corre el
-              dibujo antes de partirla.
+            <p className="tarjeta-atencion mt-2 px-4 py-2 text-base">
+              La placa es <strong>{placa.color}</strong>: fijate cómo corre el dibujo antes de partirla.
             </p>
           )}
+        </DialogHeader>
 
-          {/* Dos columnas en pantalla ancha: a la izquierda se carga, a la
-              derecha se ve cómo va quedando. En el mostrador se tipea mirando
-              el plano, no después. */}
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div
-              className="space-y-2"
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                // Y no sigue viaje: los atajos de la venta de atrás no tienen
-                // nada que hacer mientras se carga un despiece.
-                e.stopPropagation();
-                /*
-                 * Enter es "otra medida" y Ctrl+Enter es "listo". Se tipea
-                 * largo, ancho, cantidad y Enter, sin soltar el teclado en todo
-                 * el despiece.
-                 */
-                if (e.ctrlKey || e.metaKey) {
-                  if (sePuede) aceptar();
-                  return;
-                }
-                sumarPieza();
-              }}
-            >
-              {/* Encabezado de la grilla: una sola vez, no repetido por fila. */}
-              <div className="hidden gap-2 px-3 text-sm text-muted-foreground sm:grid sm:grid-cols-[5.5rem_5.5rem_4.5rem_1fr]">
-                <span>Largo (mm)</span>
-                <span>Ancho (mm)</span>
-                <span>Cantidad</span>
-                <span>Etiqueta</span>
-              </div>
-
-              {piezas.map((p, i) => (
-                <div
-                  key={i}
-                  className="space-y-2 rounded-lg border border-linea p-3"
-                >
-                  <div className="grid gap-2 sm:grid-cols-[5.5rem_5.5rem_4.5rem_1fr]">
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Largo (mm)
-                      </span>
-                      <input
-                        autoFocus={i === 0}
-                        data-pieza="largo"
-                        inputMode="numeric"
-                        value={p.largo}
-                        onChange={(e) => cambiar(i, "largo", e.target.value)}
-                        className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Ancho (mm)
-                      </span>
-                      <input
-                        inputMode="numeric"
-                        value={p.ancho}
-                        onChange={(e) => cambiar(i, "ancho", e.target.value)}
-                        className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Cantidad
-                      </span>
-                      <input
-                        inputMode="numeric"
-                        value={p.cantidad}
-                        onChange={(e) => cambiar(i, "cantidad", e.target.value)}
-                        className="tabular h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                    <label className="contents sm:block">
-                      <span className="text-sm text-muted-foreground sm:hidden">
-                        Etiqueta
-                      </span>
-                      <input
-                        value={p.etiqueta}
-                        onChange={(e) => cambiar(i, "etiqueta", e.target.value)}
-                        placeholder="Puerta, estante…"
-                        className="h-12 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <label className="flex items-center gap-2 text-base">
-                      <input
-                        type="checkbox"
-                        checked={p.veta}
-                        onChange={(e) => cambiar(i, "veta", e.target.checked)}
-                        className="h-5 w-5"
-                      />
-                      Respeta la veta
-                    </label>
-
-                    {/* Los dos cantos juntos bajo un rótulo: como dos
-                        etiquetas sueltas —"Canto largo", "Canto ancho"— la
-                        fila se partía en dos y quedaba el doble de alta. */}
-                    <span className="flex items-center gap-2 text-base">
-                      <span className="text-muted-foreground">Canto</span>
-                      <select
-                        aria-label="Lados con canto en el largo"
-                        value={p.cantoLargo}
-                        onChange={(e) =>
-                          cambiar(i, "cantoLargo", Number(e.target.value))
-                        }
-                        className="h-11 rounded-lg border border-linea bg-background px-2 text-base"
-                      >
-                        <option value={0}>largo: no</option>
-                        <option value={1}>largo: 1</option>
-                        <option value={2}>largo: 2</option>
-                      </select>
-                      <select
-                        aria-label="Lados con canto en el ancho"
-                        value={p.cantoAncho}
-                        onChange={(e) =>
-                          cambiar(i, "cantoAncho", Number(e.target.value))
-                        }
-                        className="h-11 rounded-lg border border-linea bg-background px-2 text-base"
-                      >
-                        <option value={0}>ancho: no</option>
-                        <option value={1}>ancho: 1</option>
-                        <option value={2}>ancho: 2</option>
-                      </select>
-                    </span>
-
-                    {piezas.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPiezas((previas) =>
-                            previas.filter((_, j) => j !== i),
-                          )
-                        }
-                        className="ml-auto inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Quitar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={sumarPieza}
-                className="inline-flex h-12 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
-              >
-                <Plus className="h-4 w-4" />
-                Agregar medida
-                <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
-                  Enter
-                </kbd>
-              </button>
-
-              <label className="block pt-1">
-                <span className="text-sm text-muted-foreground">
-                  Tapacanto del trabajo
-                </span>
+        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div
+            className="flex min-h-0 flex-col border-linea lg:border-r"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              // Enter sobre un botón (Veta, un lado del canto, Quitar) hace lo
+              // del botón: solo desde un campo agrega otra medida.
+              if (!e.ctrlKey && !e.metaKey && (e.target as HTMLElement).tagName !== "INPUT") return;
+              e.preventDefault();
+              // Y no sigue viaje: los atajos de la venta de atrás no tienen
+              // nada que hacer mientras se carga un despiece.
+              e.stopPropagation();
+              // Enter es «otra medida» y Ctrl+Enter es «listo»: se carga el
+              // despiece entero sin soltar el teclado.
+              if (e.ctrlKey || e.metaKey) {
+                if (sePuede) aceptar();
+                return;
+              }
+              sumarPieza();
+            }}
+          >
+            <div className="px-6 pt-5">
+              <label className="block">
+                <span className="sr-only">Tapacanto del trabajo</span>
                 <input
                   value={canto}
                   onChange={(e) => setCanto(e.target.value)}
-                  placeholder="Blanco 0,45 mm — vacío si no lleva"
-                  className="mt-1 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+                  placeholder="Tapacanto: blanco 0,45 mm — vacío si no lleva"
+                  className="h-11 w-full rounded-lg border border-linea bg-background px-3 text-base"
                 />
               </label>
             </div>
 
-            <div className="space-y-4">
-          {validas.length > 0 && (
-            <PlanoEditable
-              plano={plano}
-              fijadas={fijadas}
-              onFijadas={setFijadas}
-            />
-          )}
-
-          {plano.noEntran.length > 0 && (
-            <p className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base font-medium">
-              {plano.noEntran.length === 1
-                ? "Una pieza no entra en la placa"
-                : `${plano.noEntran.length} piezas no entran en la placa`}
-              . Revisá las medidas antes de cobrar.
-            </p>
-          )}
-
-          {validas.length > 0 && plano.noEntran.length === 0 && (
-            <div className="space-y-1.5 rounded-lg border border-linea bg-hundida p-4">
-              {plano.placasEnteras > 0 && (
-                <Renglon
-                  que={`${plano.placasEnteras} ${
-                    plano.placasEnteras === 1 ? "placa entera" : "placas enteras"
-                  } × ${moneda.format(placa.precio)}`}
-                  cuanto={subtotalPlacas}
-                />
-              )}
-              {plano.pasadasCobrables > 0 && precioPorPasada > 0 && (
-                <Renglon
-                  que={`${plano.pasadasCobrables} ${
-                    plano.pasadasCobrables === 1 ? "pasada" : "pasadas"
-                  } × ${moneda.format(precioPorPasada)}`}
-                  cuanto={subtotalCorte}
-                />
-              )}
-              {subtotalCanto > 0 && (
-                <Renglon
-                  que={`${metrosCanto.toFixed(2).replace(".", ",")} m de tapacanto`}
-                  cuanto={subtotalCanto}
-                />
-              )}
-              <div className="flex items-baseline justify-between gap-4 border-t border-linea pt-2">
-                <span className="text-base font-semibold">Total del corte</span>
-                <span className="tabular text-2xl font-bold">
-                  {moneda.format(total)}
-                </span>
+            <div className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-5 pt-1">
+              {/* Encabezado de la planilla: una sola vez, no repetido por fila. */}
+              <div className={`sticky top-0 z-10 hidden bg-background py-2 text-sm font-semibold text-muted-foreground ${columnas}`}>
+                <span>Pieza</span>
+                <span>Largo mm</span>
+                <span>Ancho mm</span>
+                <span>Cant.</span>
+                <span className="text-center">Canto</span>
+                <span className="text-center">Veta</span>
+                <span />
               </div>
 
-              {plano.pasadasCobrables > 0 && precioPorPasada === 0 && (
-                <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base">
-                  No hay tarifa de corte cargada para esta placa, así que las
-                  pasadas no se cobran. Se configura en Cortes → Tarifas.
-                </p>
-              )}
-            </div>
-          )}
+              <div className="divide-y divide-linea">
+                {piezas.map((p, i) => (
+                  <div key={i} className={`flex flex-wrap items-center gap-2 py-2 ${columnas}`}>
+                    <input
+                      value={p.etiqueta}
+                      onChange={(e) => cambiar(i, "etiqueta", e.target.value)}
+                      aria-label={`Nombre de la pieza ${i + 1}`}
+                      placeholder="Puerta, estante…"
+                      className="h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    <input
+                      autoFocus={i === 0}
+                      data-pieza="largo"
+                      inputMode="numeric"
+                      value={p.largo}
+                      onChange={(e) => cambiar(i, "largo", e.target.value)}
+                      aria-label={`Largo de la pieza ${i + 1}, en mm`}
+                      placeholder="Largo"
+                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    <input
+                      inputMode="numeric"
+                      value={p.ancho}
+                      onChange={(e) => cambiar(i, "ancho", e.target.value)}
+                      aria-label={`Ancho de la pieza ${i + 1}, en mm`}
+                      placeholder="Ancho"
+                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    <input
+                      inputMode="numeric"
+                      value={p.cantidad}
+                      onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                      aria-label={`Cantidad de la pieza ${i + 1}`}
+                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                    />
+                    {/* El canto se toca en el dibujo de la pieza, lado por
+                        lado, como en el sitio: dos desplegables «largo: 1»
+                        no se leían de un vistazo. */}
+                    <div className="flex justify-center">
+                      <SelectorDeCanto
+                        chico
+                        largo={Number(p.largo) || 0}
+                        ancho={Number(p.ancho) || 0}
+                        lados={{
+                          arriba: p.cantoLargo >= 1,
+                          abajo: p.cantoLargo >= 2,
+                          izquierda: p.cantoAncho >= 1,
+                          derecha: p.cantoAncho >= 2,
+                        }}
+                        alCambiar={(lados) => {
+                          const { cantoLargo, cantoAncho } = contarCanto(lados);
+                          setPiezas((previas) =>
+                            previas.map((x, j) => (j === i ? { ...x, cantoLargo, cantoAncho } : x)),
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => cambiar(i, "veta", !p.veta)}
+                        aria-pressed={p.veta}
+                        aria-label={`Respeta la veta, pieza ${i + 1}`}
+                        className={`h-10 rounded-lg px-3 text-[14.5px] font-medium ${
+                          p.veta ? "boton-accion" : "border border-linea text-muted-foreground hover:bg-hundida"
+                        }`}
+                      >
+                        Veta
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPiezas((previas) => (previas.length === 1 ? [vacia()] : previas.filter((_, j) => j !== i)))
+                      }
+                      aria-label={`Quitar la pieza ${i + 1}`}
+                      className="ml-auto flex h-10 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive @2xl:ml-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
 
-              {validas.length === 0 && (
-                <div className="rounded-xl border border-dashed px-5 py-10 text-center">
-                  <p className="text-base font-medium">
-                    El plano aparece al cargar la primera medida
-                  </p>
-                  <p className="mt-1 text-base text-muted-foreground">
-                    Vas a ver cuántas placas hacen falta, si alguna conviene
-                    venderla entera y cuánto sale.
-                  </p>
-                </div>
-              )}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={sumarPieza}
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-acento-texto hover:bg-hundida"
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar medida
+                  <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">Enter</kbd>
+                </button>
+                {/* Volvió lo de la vez anterior: la salida para arrancar limpio. */}
+                {inicial && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPiezas([vacia()]);
+                      setCanto("");
+                      setFijadas([]);
+                      setMitad(null);
+                      setMmConfirmado(false);
+                      requestAnimationFrame(() =>
+                        document.querySelector<HTMLInputElement>('[data-pieza="largo"]')?.focus(),
+                      );
+                    }}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-muted-foreground hover:bg-hundida"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Empezar de nuevo
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-linea pt-4">
-            <button
-              type="button"
-              onClick={onCerrar}
-              className="h-12 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
-            >
-              Cancelar
-            </button>
+          <div className="min-h-0 overflow-y-auto bg-hundida/40 px-6 py-5">
+            {validas.length > 0 ? (
+              <PlanoEditable
+                plano={plano}
+                fijadas={fijadas}
+                onFijadas={setFijadas}
+                sencillo
+                // Con veta, girarla la cortaría contra el dibujo.
+                girable={(indice) => !validas[indice]?.respetaVeta}
+              />
+            ) : (
+              <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed">
+                <span className="tabular text-base text-muted-foreground">
+                  {placaLargo} × {placaAncho} mm
+                </span>
+              </div>
+            )}
+
+            {plano.noEntran.length > 0 && (
+              <p className="estado-problema mt-3 rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base font-medium">
+                {plano.noEntran.length === 1
+                  ? "Una pieza no entra en la placa"
+                  : `${plano.noEntran.length} piezas no entran en la placa`}
+                : {plano.noEntran.map((x) => `${x.largoMm} × ${x.anchoMm}`).join(", ")}.
+              </p>
+            )}
+
+            {pasadasACobrar > 0 && precioPorPasada === 0 && (
+              <p className="estado-espera mt-3 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base">
+                Esta placa no tiene tarifa de corte: las pasadas no se cobran (Cortes → Tarifas).
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* La cuenta y las salidas abajo y fijas: el total se ve mientras se
+            tipea, y no hay que bajar para encontrar el botón. */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-linea bg-background px-6 py-4">
+          <dl className="tabular mr-auto flex flex-wrap gap-x-5 gap-y-1 text-base">
+            <div>
+              <dt className="inline text-muted-foreground">Placas </dt>
+              <dd className="inline font-semibold">{plano.placas.length}</dd>
+            </div>
+            {/* Acomodado a mano, lo que se cobra puede no ser lo que se dibuja:
+                se dice acá, antes de cobrar, y no como un PIN sorpresa. */}
+            {placasACobrar !== plano.placasEnteras && (
+              <div className="text-brand-orange">
+                <dt className="inline">Se cobran </dt>
+                <dd className="inline font-semibold">
+                  {placasACobrar} {placasACobrar === 1 ? "placa" : "placas"}
+                </dd>
+              </div>
+            )}
+            <div>
+              <dt className="inline text-muted-foreground">Canto </dt>
+              <dd className="inline font-semibold">{formatearDecimal(metrosCanto)} m</dd>
+            </div>
+            {validas.length > 0 && plano.noEntran.length === 0 && (
+              <div title={[
+                placasACobrar > 0 ? `Placas: ${moneda.format(subtotalPlacas)}` : "",
+                subtotalCorte > 0 ? `Corte: ${moneda.format(subtotalCorte)}` : "",
+                subtotalCanto > 0 ? `Tapacanto: ${moneda.format(subtotalCanto)}` : "",
+              ].filter(Boolean).join(" · ")}>
+                <dt className="inline text-muted-foreground">Total </dt>
+                <dd className="inline text-xl font-bold">{moneda.format(total)}</dd>
+              </div>
+            )}
+          </dl>
+
+          {errorPdf && <span className="estado-problema text-sm font-medium">{errorPdf}</span>}
+
+          <button
+            type="button"
+            onClick={descargarPlano}
+            disabled={plano.placas.length === 0 || plano.noEntran.length > 0 || calculando || bajando}
+            className="inline-flex h-12 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
+          >
+            {bajando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Descargar plano
+          </button>
+          <button
+            type="button"
+            onClick={cerrar}
+            className="h-12 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
+          >
+            Cancelar
+          </button>
+          {preguntaMm ? (
+            <PreguntaMm
+              onSi={() => {
+                setMmConfirmado(true);
+                setPreguntaMm(false);
+                // Contestado, sigue: la pregunta estaba en el camino de agregar.
+                aceptar(true);
+              }}
+              onCorregir={() => {
+                setPreguntaMm(false);
+                requestAnimationFrame(() =>
+                  document.querySelector<HTMLInputElement>('[data-pieza="largo"]')?.focus(),
+                );
+              }}
+            />
+          ) : (
             <button
               type="button"
               disabled={!sePuede}
-              onClick={aceptar}
+              onClick={() => aceptar()}
               className="inline-flex h-12 items-center gap-2 rounded-lg boton-accion px-5 text-base font-semibold disabled:opacity-50"
             >
-              Agregar a la venta
-              <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">
-                Ctrl + Enter
-              </kbd>
+              {corrigiendo ? "Guardar el corte" : "Agregar a la venta"}
+              <kbd className="rounded border border-current px-1.5 py-0.5 text-xs font-medium opacity-70">Ctrl + Enter</kbd>
             </button>
-          </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Renglon({ que, cuanto }: { que: string; cuanto: number }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <span className="text-base text-muted-foreground">{que}</span>
-      <span className="tabular text-base">{moneda.format(cuanto)}</span>
-    </div>
   );
 }

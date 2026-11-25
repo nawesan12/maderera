@@ -31,8 +31,10 @@ export function FilaAvisoEmail({ aviso }: { aviso: AvisoEmailConfigurable }) {
   );
   const [editando, setEditando] = useState(false);
 
+  // Sin título cargado, el nombre del evento legible, no como lo guarda la
+  // base («en-camino»).
   const titulo = TITULOS_EVENTO[aviso.evento] ?? {
-    titulo: aviso.evento,
+    titulo: aviso.evento.charAt(0).toUpperCase() + aviso.evento.slice(1).replace(/[-_]/g, " "),
     cuando: "",
   };
 
@@ -73,7 +75,7 @@ export function FilaAvisoEmail({ aviso }: { aviso: AvisoEmailConfigurable }) {
               aria-pressed={aviso.activo}
               className={`inline-flex h-10 min-w-[6.5rem] items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-60 ${
                 aviso.activo
-                  ? "bg-brand-green text-white hover:bg-brand-green/90"
+                  ? "bg-verde-whatsapp text-white hover:bg-brand-green/90"
                   : "border hover:bg-muted"
               }`}
             >
@@ -133,7 +135,7 @@ export function FilaAvisoEmail({ aviso }: { aviso: AvisoEmailConfigurable }) {
             <button
               type="submit"
               disabled={guardando}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
             >
               {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
               Guardar

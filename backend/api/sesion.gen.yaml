@@ -1,0 +1,7 @@
+package: sesionapi
+output: ../internal/api/sesionapi/sesion.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

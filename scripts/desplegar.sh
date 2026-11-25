@@ -97,8 +97,24 @@ fi
 # revés el riesgo es menor —la versión que sigue corriendo convive un par de
 # minutos con columnas que no conoce—, y si el build falla después de migrar,
 # la anterior sigue sirviendo.
-echo "→ Construyendo el migrador"
-"${COMPOSE[@]}" --profile herramientas build migrador
+# El secreto con que el worker de Go le avisa a Next qué revalidar. Si falta
+# se genera una vez: es entre dos servicios de esta misma máquina y nadie lo
+# tiene que tipear.
+if ! grep -Eq '^REVALIDAR_SECRETO=.+' "$ENTORNO"; then
+  echo "REVALIDAR_SECRETO=\"$(openssl rand -hex 32)\"" >> "$ENTORNO"
+  echo "→ Generé REVALIDAR_SECRETO en $ENTORNO"
+fi
+# El secreto con que Next le pide a la API lo que no va con la sesión de
+# nadie: los precios de una lista para la caché, y el recibo y el resumen de
+# cuenta que arman los PDF y los avisos de la cola. Sin él, Go contesta 403.
+# Lo leen los dos (app y api) del mismo archivo.
+if ! grep -Eq '^API_SECRETO_INTERNO=.+' "$ENTORNO"; then
+  echo "API_SECRETO_INTERNO=\"$(openssl rand -hex 32)\"" >> "$ENTORNO"
+  echo "→ Generé API_SECRETO_INTERNO en $ENTORNO"
+fi
+
+echo "→ Construyendo el backend en Go"
+"${COMPOSE[@]}" build api
 
 echo "→ Respaldando la base antes de migrar"
 mkdir -p respaldos
@@ -106,13 +122,37 @@ respaldo="respaldos/antes-de-migrar-$(date +%Y-%m-%d-%H%M).dump"
 # shellcheck disable=SC2016 # las variables las expande el shell del contenedor
 "${COMPOSE[@]}" exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -F c' < /dev/null > "$respaldo"
 echo "  $respaldo ($(du -h "$respaldo" | cut -f1))"
+# Quedan los diez últimos: uno por despliegue, sin tope, con la base real
+# llenaban el disco (los diarios los poda el contenedor de respaldo).
+ls -1t respaldos/antes-de-migrar-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
 
-echo "→ Migrando"
-if ! "${COMPOSE[@]}" --profile herramientas run --rm migrador; then
+echo "→ Migrando (goose)"
+if ! "${COMPOSE[@]}" --profile herramientas run --rm migrar; then
   echo >&2
   echo "La migración FALLÓ. No se tocó la aplicación: sigue corriendo la versión anterior." >&2
   echo "El respaldo de antes de migrar está en $respaldo." >&2
   exit 1
+fi
+
+# Go primero: la aplicación nueva le pide la sesión (y, tanda por tanda, los
+# datos), así que tiene que estar arriba antes de que Next arranque.
+echo "→ Cambiando la API y el worker por los nuevos"
+if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 120 api; then
+  echo "La API nueva no arrancó. Ver: dc logs api" >&2
+  exit 1
+fi
+# Whisper transcribe los audios del bot de WhatsApp: sin el modelo, no se
+# levanta y los audios se contestan con «¿me lo escribís?».
+if [ -f "${WHISPER_MODELOS:-../whisper-modelos}/ggml-small-q5_1.bin" ]; then
+  "${COMPOSE[@]}" up -d --no-deps whisper
+fi
+"${COMPOSE[@]}" up -d --no-deps worker
+
+# Los comprobantes de transferencia y los documentos técnicos van a la
+# carpeta privada (se sirven con sesión, no por /subidas/). Mueve lo que haya
+# quedado en la pública de antes; repetible: si no hay nada, no hace nada.
+if ! "${COMPOSE[@]}" run --rm --no-deps api privados; then
+  echo "Aviso: no se pudieron mover los archivos privados. Ver: dc run --rm api privados" >&2
 fi
 
 echo "→ Construyendo la aplicación"
@@ -139,24 +179,56 @@ if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 180 app; then
 fi
 
 echo "→ Levantando el resto"
-"${COMPOSE[@]}" up -d --no-deps web respaldo cron
+"${COMPOSE[@]}" up -d --no-deps web respaldo
+
+# El Caddyfile está montado como archivo: cuando `git pull` lo reemplaza, el
+# contenedor sigue leyendo el viejo, y un cambio de rutas no se aplicaba
+# nunca. Si cambió, se valida primero (un error tiraría el sitio entero) y
+# recién ahí se recrea Caddy.
+caddy_en_disco="$(cat Caddyfile servidor/caddy/sitio-viejo.caddy | md5sum)"
+caddy_andando="$("${COMPOSE[@]}" exec -T web cat /etc/caddy/Caddyfile /etc/caddy/sitio-viejo.caddy 2>/dev/null | md5sum)"
+if [ "$caddy_en_disco" != "$caddy_andando" ]; then
+  echo "→ El Caddyfile cambió: validando"
+  if "${COMPOSE[@]}" run --rm --no-deps -T web caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
+    "${COMPOSE[@]}" up -d --no-deps --force-recreate web
+  else
+    echo "Aviso: el Caddyfile nuevo no valida; Caddy sigue con el anterior." >&2
+  fi
+fi
+
+# El contenedor `cron` ya no existe (la cola y las tareas de Next se borraron:
+# todo lo periódico lo corre el worker de Go). Si quedó andando de un
+# despliegue anterior, le pegaría cada minuto a una ruta que ya no está.
+PROYECTO="$("${COMPOSE[@]}" config 2>/dev/null | sed -n 's/^name: //p' | head -n 1)"
+if [ -n "$PROYECTO" ]; then
+  VIEJO="$(docker ps -aq --filter "label=com.docker.compose.project=$PROYECTO" --filter label=com.docker.compose.service=cron)"
+  if [ -n "$VIEJO" ]; then
+    echo "→ Sacando el contenedor cron de antes"
+    docker rm -f $VIEJO >/dev/null
+  fi
+fi
 
 # El correo propio solo si está encendido (`COMPOSE_PROFILES=correo` en
 # $ENTORNO). Nombrarlo en `up` lo encendería aunque el perfil esté apagado: por
 # eso se pregunta antes qué servicios ve el compose.
 if "${COMPOSE[@]}" config --services | grep -qx correo; then
   echo "→ Levantando el correo"
-  "${COMPOSE[@]}" up -d --no-deps correo webmail
+  if ! grep -qE '^CORREO_CLAVE=.+' "$ENTORNO"; then
+    echo >&2
+    echo "  Falta CORREO_CLAVE en $ENTORNO (la clave de las sesiones del webmail):" >&2
+    echo "    echo \"CORREO_CLAVE=\$(openssl rand -base64 32)\" >> $ENTORNO" >&2
+    exit 1
+  fi
+  "${COMPOSE[@]}" build correo-web
+  "${COMPOSE[@]}" up -d --no-deps --remove-orphans correo correo-web
 
-  # **La primera vez, el servidor de correo se apaga si en dos minutos no
-  # tiene ninguna casilla** (y vuelve a arrancar y a esperar, en bucle). Se
-  # avisa acá, que es donde alguien está mirando.
+  # La primera vez Stalwart arranca sin configurar: lo instala
+  # `scripts/correo.sh iniciar`. Se avisa acá, que es donde alguien está mirando.
   sleep 5
-  if ! "${COMPOSE[@]}" exec -T correo test -s /tmp/docker-mailserver/postfix-accounts.cf 2>/dev/null; then
+  if ! "${COMPOSE[@]}" exec -T correo test -f /etc/stalwart/config.json 2>/dev/null; then
     echo
-    echo "  El correo no tiene casillas todavía. En los próximos dos minutos:"
-    dominio="$(grep -E '^DOMINIO=' "$ENTORNO" | tail -n1 | cut -d= -f2- | tr -d '"')"
-    echo "    scripts/correo.sh alta postmaster@${dominio}"
+    echo "  El correo todavía no está instalado:"
+    echo "    scripts/correo.sh iniciar"
     echo "  Ver «Correo propio» en docs/SERVIDOR-PROPIO.md."
   fi
 fi

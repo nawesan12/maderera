@@ -46,6 +46,42 @@ export function formatearMonto(valor: string | number | null): string {
   return moneda.format(numero);
 }
 
+const UN_DECIMAL = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/**
+ * «12,5%»: un porcentaje con coma decimal y un decimal. `toFixed` ponía el
+ * punto («12.5%») en Reportes y en la ficha del pedido (comité final).
+ */
+export function formatearPorcentaje(valor: number): string {
+  return `${UN_DECIMAL.format(valor)}%`;
+}
+
+const DECIMALES = new Map<number, Intl.NumberFormat>();
+
+/**
+ * Un número con coma decimal y una cantidad fija de decimales: «4,5»,
+ * «21,00». Es el `toFixed` para mostrar (hallazgo 32): `toFixed` pone el
+ * punto, y en pantalla «4.5» se lee como cuatro mil quinientos.
+ */
+export function formatearDecimal(valor: number, decimales: number): string {
+  let f = DECIMALES.get(decimales);
+  if (!f) {
+    f = new Intl.NumberFormat("es-AR", { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+    DECIMALES.set(decimales, f);
+  }
+  return f.format(valor);
+}
+
+/**
+ * El peso de un archivo: «340 KB», «1,5 MB». Nunca «0 KB»: un archivo chico
+ * es «1 KB». Sin tamaño, nada.
+ */
+export function formatearPeso(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${formatearDecimal(bytes / 1024 / 1024, 1)} MB`;
+}
+
 /**
  * Un importe de la base, listo para meter en un campo editable.
  *
@@ -76,19 +112,52 @@ export function importeParaEditar(valor: string | number | null): string {
 /* Fechas                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export const fechaCorta = new Intl.DateTimeFormat("es-AR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "2-digit",
-});
+/**
+ * La zona de las horas que se muestran. El contenedor de Next corre en UTC, y
+ * sin zona explícita toda hora armada en el servidor salía 3 h adelantada (y
+ * distinta de la que arma el navegador al hidratar). `fechaHora` y `hora`
+ * siempre son instantes; `fechaCorta` y `fechaLarga` distinguen los días
+ * guardados a medianoche UTC (ver `fechaSegunTipo`).
+ */
+export const ZONA = "America/Argentina/Buenos_Aires";
 
-export const fechaLarga = new Intl.DateTimeFormat("es-AR", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
+/**
+ * Un día guardado como día: medianoche UTC exacta (así guardan las fechas que
+ * se cargan en un formulario, «2026-10-15»). Un instante real no cae nunca
+ * justo ahí.
+ */
+function esDia(fecha: Date): boolean {
+  return (
+    fecha.getUTCHours() === 0 &&
+    fecha.getUTCMinutes() === 0 &&
+    fecha.getUTCSeconds() === 0 &&
+    fecha.getUTCMilliseconds() === 0
+  );
+}
+
+/**
+ * Una fecha que sale bien sea un día o un instante: el día se lee en UTC (si
+ * no, en la Argentina sale el anterior) y el instante en hora argentina (si
+ * no, el servidor, que corre en UTC, ponía mañana a todo lo de después de las
+ * 21).
+ */
+function fechaSegunTipo(opciones: Intl.DateTimeFormatOptions) {
+  const comoDia = new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone: "UTC" });
+  const comoInstante = new Intl.DateTimeFormat("es-AR", { ...opciones, timeZone: ZONA });
+  return {
+    format: (fecha: Date | number) => {
+      const d = typeof fecha === "number" ? new Date(fecha) : fecha;
+      return (esDia(d) ? comoDia : comoInstante).format(d);
+    },
+  };
+}
+
+export const fechaCorta = fechaSegunTipo({ day: "2-digit", month: "2-digit", year: "2-digit" });
+
+export const fechaLarga = fechaSegunTipo({ day: "numeric", month: "long", year: "numeric" });
 
 export const fechaHora = new Intl.DateTimeFormat("es-AR", {
+  timeZone: ZONA,
   day: "2-digit",
   month: "2-digit",
   hour: "2-digit",
@@ -97,6 +166,7 @@ export const fechaHora = new Intl.DateTimeFormat("es-AR", {
 });
 
 export const hora = new Intl.DateTimeFormat("es-AR", {
+  timeZone: ZONA,
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
@@ -196,6 +266,21 @@ export const fechaSolaCorta = new Intl.DateTimeFormat("es-AR", {
 });
 
 /**
+ * El día de hoy en Argentina, como `aaaa-mm-dd` (el valor de un `<input
+ * type="date">`). `new Date().toISOString().slice(0, 10)` da el día UTC:
+ * desde las 21 dice mañana, y un gasto cargado a la noche quedaba fechado
+ * al día siguiente.
+ */
+export function hoyEnArgentina(ahora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "America/Argentina/Buenos_Aires",
+  }).format(ahora);
+}
+
+/**
  * Convierte a número un importe tipeado por una persona.
  *
  * Hay que aceptar las formas en que se escribe un precio, porque todas llegan:
@@ -221,7 +306,12 @@ export const fechaSolaCorta = new Intl.DateTimeFormat("es-AR", {
  * de «250.000» tipeado a mano se cargó por $250 en el cobro multimedio.
  */
 export function parsearImporte(texto: string): number {
-  const limpio = texto.trim().replace(/\s/g, "");
+  // El signo y la moneda se escriben («$ 420.000,50», «ARS 20.000») y no
+  // cambian el número: se sacan antes de leer.
+  const limpio = texto
+    .replace(/\$|\bars\b/gi, "")
+    .trim()
+    .replace(/\s/g, "");
   if (!limpio) return NaN;
 
   if (limpio.includes(",")) {
@@ -235,6 +325,48 @@ export function parsearImporte(texto: string): number {
   }
 
   return Number(limpio);
+}
+
+/**
+ * Lo que vale un campo de plata (`type="text"` con `inputMode="decimal"`),
+ * leído con `parsearImporte`: «15.000» son quince mil y «1.234,56», mil
+ * doscientos treinta y cuatro con cincuenta y seis. Vacío o ilegible es 0,
+ * como el `Number(x) || 0` que reemplaza (comité final, M13: con
+ * `type="number"` y `Number()`, «15.000» se guardaba como $15).
+ */
+export function importeDelCampo(texto: string | null | undefined): number {
+  const n = parsearImporte(texto ?? "");
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Si lo escrito en un campo de plata no se entiende como importe. Vacío no es
+ * ilegible (es cero); «12,5,3» o «abc» sí. El formulario lo marca con
+ * `aria-invalid`, lo dice junto al campo y no deja mandar: antes se tomaba
+ * como $0 sin avisar.
+ */
+export function importeIlegible(texto: string | null | undefined): boolean {
+  if (!texto || !texto.trim()) return false;
+  const n = parsearImporte(texto);
+  return !Number.isFinite(n);
+}
+
+const IMPORTE_DEL_CAMPO = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+  useGrouping: true,
+});
+
+/**
+ * Un importe listo para precargar un campo de plata, como lo escribe una
+ * persona: 15000 → «15.000», 1234.5 → «1.234,5». `importeDelCampo` lo lee de
+ * vuelta igual. Antes se precargaba con `toFixed(2)` («1234.50», con punto).
+ */
+export function importeParaElCampo(valor: number | string | null | undefined): string {
+  if (valor === null || valor === undefined || valor === "") return "";
+  const n = typeof valor === "string" ? Number(valor) : valor;
+  if (!Number.isFinite(n)) return "";
+  return IMPORTE_DEL_CAMPO.format(Number(n.toFixed(2)));
 }
 
 /**
@@ -315,4 +447,25 @@ export function whatsappDestino(telefono: string): string {
 export function enlaceDeWhatsapp(telefono: string, mensaje?: string): string {
   const base = `https://wa.me/${whatsappDestino(telefono)}`;
   return mensaje ? `${base}?text=${encodeURIComponent(mensaje)}` : base;
+}
+
+/** Días enteros desde una fecha hasta hoy. */
+export function diasDesde(fecha: Date): number {
+  return Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 86_400_000));
+}
+
+/**
+ * Si la lista se está mirando con un filtro o una búsqueda (lo que no es la
+ * página ni un «todos»). Sirve para separar «ningún resultado coincide» del
+ * vacío de verdad, que tiene que decir cómo empezar.
+ */
+export function hayFiltro(params: Record<string, string | string[] | undefined>): boolean {
+  return Object.entries(params).some(
+    ([clave, valor]) =>
+      clave !== "pagina" &&
+      typeof valor === "string" &&
+      valor.trim() !== "" &&
+      valor !== "todos" &&
+      valor !== "todas",
+  );
 }

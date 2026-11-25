@@ -17,9 +17,9 @@ import {
 } from "@/components/catalogo/filtros";
 import {
   listarCategorias,
-  listarProductosPublicos,
+  resumenPublico,
   marcasDelCatalogo,
-  productosEnOferta,
+  cantidadDeOfertas,
   paginaDeProductosPublica,
   rubrosDeCategoria,
   type OrdenCatalogo,
@@ -33,6 +33,7 @@ import {
   recortar,
 } from "@/lib/seo";
 import { TEXTOS_DE_CATEGORIA, TEXTOS_DE_RUBRO } from "@/lib/textos-categorias";
+import { tienda } from "@/lib/dal/contenido";
 
 interface Params {
   cat?: string;
@@ -70,7 +71,9 @@ export async function generateMetadata({
   searchParams: Promise<Params>;
 }): Promise<Metadata> {
   const params = await searchParams;
-  const resuelto = await resolverFiltro(params);
+  const [resuelto, laTienda] = await Promise.all([resolverFiltro(params), tienda()]);
+  // Sin tienda no hay precios en el sitio: la descripción no los puede prometer.
+  const alDia = laTienda.activa ? "con precio final y stock al día" : "con medidas, fichas y asesoramiento";
 
   /*
    * Lo que no se indexa.
@@ -103,7 +106,7 @@ export async function generateMetadata({
           ? `${resuelto.categoria.name} en Mar del Plata`
           : "Catálogo de productos",
       descripcion:
-        "Maderas, placas, molduras, pisos y ferretería con precio y stock al día en Maderera Juan B. Justo, Mar del Plata.",
+        `Maderas, placas, molduras, pisos y ferretería ${alDia} en Maderera Juan B. Justo, Mar del Plata.`,
       ruta: canonica,
       indexar: false,
     });
@@ -111,23 +114,19 @@ export async function generateMetadata({
 
   if (resuelto.categoria) {
     const { categoria, rubro } = resuelto;
-    const productos = await listarProductosPublicos({
+    // Cuántos y desde cuánto, sin bajarse la categoría entera para contarla.
+    const { cantidad: total, desde } = await resumenPublico({
       categoria: categoria.slug,
       subcategoria: rubro?.slug,
     });
-    const precios = productos
-      .map((p) => Number(p.precioDesde))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    const desde = precios.length ? Math.min(...precios) : null;
     const texto = TEXTOS_DE_CATEGORIA[categoria.slug];
 
     const nombre = rubro ? rubro.name : (texto?.titulo ?? categoria.name);
-    const cantidad =
-      productos.length === 1 ? "1 producto" : `${productos.length} productos`;
+    const cantidad = total === 1 ? "1 producto" : `${total} productos`;
     const descripcion = [
       `${nombre} en Mar del Plata.`,
-      productos.length > 0
-        ? `${cantidad}${desde ? ` desde ${precioEnTexto(desde)}` : ""}, con precio final y stock al día en Casa Central y el Aserradero.`
+      total > 0
+        ? `${cantidad}${desde ? ` desde ${precioEnTexto(desde)}` : ""}, ${alDia} en Casa Central y el Aserradero.`
         : null,
       rubro ? null : (categoria.description ?? null),
     ]
@@ -151,7 +150,7 @@ export async function generateMetadata({
     ...metadatosDePagina({
       titulo: "Catálogo de maderas, placas y materiales",
       descripcion:
-        "Techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas, con precio final y stock al día en Mar del Plata.",
+        `Techos, placas, pisos, molduras, ferretería, decks, construcción en seco y cubiertas, ${alDia} en Mar del Plata.`,
       ruta: "/catalogo",
     }),
     keywords: [
@@ -223,6 +222,7 @@ async function Catalogo({
   searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
+  const laTienda = await tienda();
   const { categoria: categoriaActual, rubro: rubroActual } =
     await resolverFiltro(params);
 
@@ -248,7 +248,9 @@ async function Catalogo({
   const bajada = rubroActual
     ? (TEXTOS_DE_RUBRO[rubroActual.slug] ?? categoriaActual?.description ?? null)
     : (categoriaActual?.description ??
-      "Maderas, placas, molduras y todo lo que necesita tu obra, con precios y disponibilidad al día.");
+      (laTienda.activa
+        ? "Maderas, placas, molduras y todo lo que necesita tu obra, con precios y disponibilidad al día."
+        : "Maderas, placas, molduras y todo lo que necesita tu obra. Elegí la medida y te pasamos el precio por WhatsApp."));
 
   return (
     <div className="min-h-screen bg-sitio-alt">
@@ -302,7 +304,7 @@ function Encabezado({
   return (
     <div className="relative overflow-hidden bg-oscuro-marca pb-11 pt-10 text-white">
       <div
-        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.07)_0_12px,transparent_12px_24px)]"
+        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.07)_0_12px,transparent_12px_24px)]"
         aria-hidden="true"
       />
       <div className="contenedor relative">
@@ -362,16 +364,13 @@ async function SobreLaCategoria({
   const herramientas: { ruta: string; texto: string }[] = [
     ...(slug === "placas" ? [{ ruta: "/corte", texto: "Armar un corte a medida" }] : []),
     ...(slug === "molduras" ? [{ ruta: "/moldava", texto: "Conocer la línea Moldava" }] : []),
-    ...(["techos", "placas", "pisos", "decks-y-escaleras"].includes(slug)
-      ? [{ ruta: "/calculadora", texto: "Calcular cuánto material necesito" }]
-      : []),
     { ruta: "/sucursales", texto: "Dónde retirar: nuestras sucursales" },
   ];
 
   return (
     <section
       aria-labelledby="sobre-la-categoria"
-      className="mt-12 grid gap-8 rounded-[14px] border border-linea bg-card p-7 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+      className="mt-12 grid gap-8 rounded-[14px] superficie p-7 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
     >
       <div>
         <h2 id="sobre-la-categoria" className="text-2xl font-bold tracking-[-0.025em]">
@@ -452,7 +451,7 @@ async function SobreLaCategoria({
 async function armarPanel(params: Params) {
   const [categorias, ofertas, rubros] = await Promise.all([
     listarCategorias(),
-    productosEnOferta(),
+    cantidadDeOfertas(),
     // Los rubros son de adentro de una categoría: sin una elegida no hay qué
     // listar, y mostrar los de todas mezclados no ayuda a nadie.
     params.cat && params.cat !== "todos"
@@ -472,7 +471,7 @@ async function armarPanel(params: Params) {
       categoriaActual={params.cat ?? "todos"}
       stockActual={params.stock ?? "todos"}
       soloOfertas={params.ofertas === "1"}
-      cantidadOfertas={ofertas.length}
+      cantidadOfertas={ofertas}
       hayBusqueda={Boolean(params.buscar)}
     />
   );
@@ -558,7 +557,7 @@ async function Resultados({ params }: { params: Params }) {
 
   if (productos.length === 0) {
     return (
-      <div className="rounded-[14px] border border-linea bg-card p-16 text-center shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
+      <div className="rounded-[14px] superficie p-16 text-center shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
         <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[14px] bg-chip">
           <Search className="h-7 w-7 text-texto-3" />
         </div>
@@ -674,6 +673,7 @@ async function Resultados({ params }: { params: Params }) {
             key={producto.id}
             product={producto}
             whatsapp={whatsapp}
+            filtro={{ cat: params.cat, rubro: params.rubro }}
           />
         ))}
       </div>

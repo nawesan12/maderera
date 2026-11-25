@@ -1,11 +1,6 @@
 "use server";
 
-import { z } from "zod";
-import { db } from "@/lib/db";
-import { notificationsLog } from "@/lib/db/schema";
-import { proveedorEmail } from "@/lib/email";
-import { envolver, escapar } from "@/lib/email/plantillas";
-import { avisoDeEspera, permitidoPorAmbos } from "@/lib/limites";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 /**
  * La consulta del formulario de contacto.
@@ -14,144 +9,72 @@ import { avisoDeEspera, permitidoPorAmbos } from "@/lib/limites";
  * mandaba nada a ningún lado. Los campos ni siquiera tenían `name`.
  *
  * La regla que gobierna todo el archivo: **solo se confirma lo que salió**. Si
- * el correo no está conectado —hoy no lo está, falta la casilla con dominio
- * verificado— la acción lo dice y ofrece WhatsApp, que sí funciona. Decirle a
- * alguien que su consulta llegó cuando se perdió es peor que no tener
- * formulario.
+ * el correo no está conectado la acción lo dice y ofrece WhatsApp, que sí
+ * funciona. Decirle a alguien que su consulta llegó cuando se perdió es peor
+ * que no tener formulario.
+ *
+ * La valida, la frena (3 por hora por IP y por correo o teléfono) y la manda la API de
+ * Go (backend/internal/contenido/sitio.go), con el texto escapado: lo escribe
+ * cualquiera y termina en la bandeja de quien atiende.
  */
 
 export interface EstadoConsulta {
   error?: string;
+  /**
+   * El campo del error, para mostrarlo al lado del campo y no arriba de todo.
+   * «contacto» es el par WhatsApp/correo: falta uno de los dos.
+   */
+  campo?: string;
   ok?: string;
-  /** Verdadero cuando el envío no está conectado todavía. */
   usarWhatsapp?: boolean;
+  /** Lo que se había escrito, para no perderlo cuando vuelve con un error. */
+  valores?: Record<string, string>;
 }
 
-const MOTIVOS = {
-  presupuesto: "Pedido de presupuesto",
-  stock: "Consulta de stock",
-  envio: "Envíos y entregas",
-  corte: "Servicio de corte",
-  profesional: "Cuenta de profesional",
-  otro: "Otra consulta",
-} as const;
-
-const esquema = z.object({
-  nombre: z.string().trim().min(3, "Escribí tu nombre.").max(120),
-  email: z.string().trim().email("Revisá el correo: es por donde te contestamos."),
-  telefono: z.string().trim().max(40).optional(),
-  motivo: z.enum(
-    Object.keys(MOTIVOS) as [keyof typeof MOTIVOS, ...(keyof typeof MOTIVOS)[]],
-  ),
-  mensaje: z
-    .string()
-    .trim()
-    .min(10, "Contanos un poco más para poder ayudarte.")
-    .max(2000),
-});
-
-/** A dónde llega la consulta. */
-const CASILLA = process.env.EMAIL_CONTACTO ?? "info@mjbj.com.ar";
-
-export async function enviarConsulta(
-  _previo: EstadoConsulta,
-  datos: FormData,
-): Promise<EstadoConsulta> {
-  const leido = esquema.safeParse({
-    nombre: datos.get("nombre"),
-    email: datos.get("email"),
-    telefono: datos.get("telefono") || undefined,
-    motivo: datos.get("motivo"),
-    mensaje: datos.get("mensaje"),
+export async function enviarConsulta(_previo: EstadoConsulta, datos: FormData): Promise<EstadoConsulta> {
+  const leer = (campo: string) => String(datos.get(campo) ?? "").trim();
+  const valores = Object.fromEntries(
+    ["nombre", "telefono", "email", "motivo", "mensaje"].map((c) => [c, leer(c)]),
+  );
+  const { telefono, email } = valores;
+  // WhatsApp o correo: alguno de los dos, y el que esté vacío no viaja. Lo
+  // controla Go; acá solo se arma el pedido.
+  const r = await (await api()).POST("/api/v1/contenido/contacto", {
+    body: {
+      nombre: valores.nombre,
+      motivo: valores.motivo,
+      mensaje: valores.mensaje,
+      ...(telefono ? { telefono } : {}),
+      ...(email ? { email } : {}),
+    },
   });
-
-  if (!leido.success) {
-    return { error: leido.error.issues[0]?.message ?? "Revisá los datos." };
+  if (!r.data) {
+    const problema = r.error as Problema | undefined;
+    return {
+      error: mensajeDe(problema, "Revisá los datos."),
+      campo: problema?.errores ? Object.keys(problema.errores)[0] : undefined,
+      valores,
+    };
   }
 
-  const consulta = leido.data;
-
-  /*
-   * El freno.
-   *
-   * Cada envío es **un correo real** que sale del dominio del negocio, con el
-   * «responder a» que escribió quien completó el formulario. Sin límite es un
-   * relay abierto: además del costo, quema la reputación del dominio recién
-   * verificado, y eso después no se arregla con un despliegue.
-   *
-   * Tres por hora por IP y tres por correo. Nadie manda tres consultas
-   * distintas en una hora; quien lo hace, no es una persona.
-   */
-  const puede = await permitidoPorAmbos("contacto", {
-    nombre: "correo",
-    valor: consulta.email,
-  });
-
-  if (!puede.permitido) return { error: avisoDeEspera(puede) };
-
-  const asunto = `${MOTIVOS[consulta.motivo]} — ${consulta.nombre}`;
-
-  const { html, texto } = envolver({
-    titulo: "Consulta desde el sitio",
-    adelanto: `${consulta.nombre}: ${consulta.mensaje.slice(0, 90)}`,
-    saludo: MOTIVOS[consulta.motivo],
-    // El mensaje lo escribe cualquiera: se escapa antes de que entre al HTML
-    // del correo, y recién ahí se respetan los saltos de línea.
-    parrafos: [escapar(consulta.mensaje).replace(/\n/g, "<br>")],
-    datos: [
-      { etiqueta: "Nombre", valor: consulta.nombre },
-      { etiqueta: "Correo", valor: consulta.email },
-      ...(consulta.telefono
-        ? [{ etiqueta: "Teléfono", valor: consulta.telefono }]
-        : []),
-    ],
-  });
-
-  const resultado = await proveedorEmail().enviar({
-    para: CASILLA,
-    asunto,
-    html,
-    texto,
-    // Responder al correo lleva directo a quien consultó, sin copiar y pegar
-    // la dirección. Es la diferencia entre contestar en el momento o después.
-    responderA: consulta.email,
-  });
-
-  await db.insert(notificationsLog).values({
-    canal: "email",
-    evento: "consulta_web",
-    destinatario: CASILLA,
-    asunto,
-    // `simulado` se pregunta primero: el proveedor de demostración devuelve
-    // `enviado: false` porque efectivamente no mandó nada, pero eso no es una
-    // falla —es que no hay credenciales—, y confundirlas llenaría la bitácora
-    // de errores que no existen.
-    estado: resultado.simulado
-      ? "simulada"
-      : resultado.enviado
-        ? "enviada"
-        : "fallida",
-    proveedorMensajeId: resultado.id,
-    error: resultado.error,
-  });
-
-  if (resultado.simulado) {
+  if (r.data.resultado === "simulada") {
     return {
       usarWhatsapp: true,
+      valores,
       error:
         "Todavía no tenemos conectado el envío de correo, así que este mensaje no llegaría. Escribinos por WhatsApp y te contestamos ahora.",
     };
   }
-
-  if (!resultado.enviado) {
+  if (r.data.resultado === "fallida") {
     return {
       usarWhatsapp: true,
-      error:
-        "No pudimos enviar la consulta. Probá por WhatsApp o llamanos y lo resolvemos al toque.",
+      valores,
+      error: "No pudimos enviar la consulta. Probá por WhatsApp o llamanos y lo resolvemos al toque.",
     };
   }
-
   return {
-    ok: "Recibimos tu consulta. Te contestamos al correo que dejaste.",
+    ok: telefono
+      ? "Recibimos tu consulta. Te contestamos por WhatsApp."
+      : "Recibimos tu consulta. Te contestamos al correo que dejaste.",
   };
 }

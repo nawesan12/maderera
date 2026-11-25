@@ -1,15 +1,11 @@
 import "server-only";
 
 import { cache } from "react";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { inicioDelRol, type RolStaff } from "@/lib/roles";
+import { api } from "@/lib/api/servidor";
 
 export { inicioDelRol, type RolStaff };
-import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { profiles } from "@/lib/db/schema";
 
 /**
  * Capa de acceso a datos.
@@ -34,28 +30,25 @@ export interface SessionUser {
   priceListId: string | null;
 }
 
-/** Devuelve la sesión o null. No redirige: sirve para UI que cambia si hay login. */
+/**
+ * Devuelve la sesión o null. No redirige: sirve para UI que cambia si hay login.
+ *
+ * La sesión es de la API de Go (backend/internal/auth): valida la cookie,
+ * renueva la sesión si corresponde y trae el rol del perfil, todo en una
+ * consulta. Sin sesión contesta 401; cualquier otra cosa es un error de
+ * verdad y se propaga (no se trata como «anónimo» a alguien que sí entró).
+ */
 export const getSession = cache(async (): Promise<SessionUser | null> => {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return null;
-
-  const [profile] = await db
-    .select({
-      role: profiles.role,
-      staffRole: profiles.staffRole,
-      priceListId: profiles.priceListId,
-    })
-    .from(profiles)
-    .where(eq(profiles.userId, session.user.id))
-    .limit(1);
-
+  const { data, response } = await (await api()).GET("/api/v1/sesion");
+  if (response.status === 401) return null;
+  if (!data) throw new Error(`La API de sesión respondió ${response.status}`);
   return {
-    userId: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-    role: profile?.role ?? "cliente",
-    staffRole: profile?.staffRole ?? null,
-    priceListId: profile?.priceListId ?? null,
+    userId: data.userId,
+    name: data.nombre,
+    email: data.correo,
+    role: data.rol,
+    staffRole: data.rolStaff,
+    priceListId: data.listaDePrecios,
   };
 });
 

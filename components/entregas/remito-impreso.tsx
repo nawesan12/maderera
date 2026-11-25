@@ -1,6 +1,9 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
-import { fechaCorta, fechaHora, formatearUnidad } from "@/lib/formato";
-import type { ConfiguracionFiscal } from "@/lib/db/schema";
+import { formatearUnidad } from "@/lib/formato";
+import { fechaDelRemito, fechaHoraDeFirma } from "@/lib/entregas/fecha";
+import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
+
+type ConfiguracionFiscal = Awaited<ReturnType<typeof obtenerConfiguracionFiscal>>;
 import type { RemitoCompleto } from "@/lib/dal/admin/entregas";
 import { LogoEmisor } from "@/components/impresion/logo-emisor";
 import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";
@@ -81,7 +84,7 @@ export function RemitoImpreso({
             </p>
             <p className="numero">{remito.numero}</p>
             <div className="datos">
-              <div>Fecha {fechaCorta.format(remito.createdAt)}</div>
+              <div>Fecha {fechaDelRemito.format(remito.createdAt)}</div>
               <div>Pedido {remito.pedidoNumero}</div>
               {/* La factura con su CAE: el CAE es de la factura, y el remito
                   dice con cuál viaja la mercadería. */}
@@ -217,7 +220,7 @@ export function RemitoImpreso({
                 />
                 <p className="chico">
                   Firmado el{" "}
-                  {remito.firmadoAt ? fechaHora.format(remito.firmadoAt) : "—"}
+                  {remito.firmadoAt ? fechaHoraDeFirma.format(remito.firmadoAt) : "—"}
                   {remito.receptorNombre ? ` por ${remito.receptorNombre}` : ""}
                 </p>
               </>

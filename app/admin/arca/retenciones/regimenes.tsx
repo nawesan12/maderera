@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
+import { CampoImporte } from "@/components/admin/campo-importe";
 import { guardarRegimen, type EstadoRegimen } from "./actions";
 
 const inicial: EstadoRegimen = {};
@@ -27,7 +29,7 @@ const IMPUESTOS: Record<string, string> = {
 };
 
 /**
- * Las alícuotas con las que se retiene, editables.
+ * Las alícuotas y los mínimos con los que se retiene, editables.
  *
  * **Por qué hacía falta.** La tabla se sembraba con un script y no se podía
  * tocar desde ninguna pantalla: cambiar una alícuota —que ARCA actualiza por
@@ -45,11 +47,7 @@ export function Regimenes({ regimenes }: { regimenes: RegimenEditable[] }) {
     <section className="tarjeta overflow-hidden">
       <header className="border-b border-linea px-5 py-4">
         <h2 className="text-base font-medium">Con qué se retiene</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Las alícuotas y los mínimos de cada régimen. Las actualiza ARCA por
-          resolución: acá se cambian sin tocar el sistema. Una alícuota en cero
-          deja el régimen cargado pero sin retener.
-        </p>
+        {/* Las alícuotas y mínimos los actualiza ARCA por resolución: se cambian acá sin tocar el sistema. Una alícuota en cero deja el régimen cargado sin retener. */}
       </header>
 
       <ul className="divide-y divide-linea">
@@ -68,10 +66,18 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
     String(regimen.alicuotaNoInscripto),
   );
   const [activo, setActivo] = useState(regimen.activo);
+  const [minimoNoImponible, setMinimoNoImponible] = useState(
+    importeParaElCampo(regimen.minimoNoImponible),
+  );
+  const [minimoRetencion, setMinimoRetencion] = useState(
+    importeParaElCampo(regimen.minimoRetencion),
+  );
 
   const cambio =
     Number(alicuota) !== regimen.alicuota ||
     Number(noInscripto) !== regimen.alicuotaNoInscripto ||
+    importeDelCampo(minimoNoImponible) !== regimen.minimoNoImponible ||
+    importeDelCampo(minimoRetencion) !== regimen.minimoRetencion ||
     activo !== regimen.activo;
 
   return (
@@ -92,8 +98,6 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
             <span className="tabular">{regimen.codigo}</span> ·{" "}
             {IMPUESTOS[regimen.impuesto] ?? regimen.impuesto}
             {regimen.jurisdiccion && ` · ${regimen.jurisdiccion}`}
-            {regimen.minimoNoImponible > 0 &&
-              ` · mínimo no imponible $${regimen.minimoNoImponible.toLocaleString("es-AR")}`}
           </p>
         </div>
 
@@ -125,6 +129,38 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
           />
         </label>
 
+        {/* Los dos mínimos, en pesos. El no imponible se descuenta del
+            acumulado del mes antes de aplicar la alícuota (solo al
+            inscripto); por debajo del de retención no se retiene. Antes se
+            cambiaban solo entrando a la base. */}
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            Mín. no imponible $
+          </span>
+          {/* Lo escrito se lee como se escribe en Argentina («224.000»); a
+              Go le llega el número ya leído. */}
+          <input type="hidden" name="minimoNoImponible" value={String(importeDelCampo(minimoNoImponible))} />
+          <CampoImporte
+            valor={minimoNoImponible}
+            alCambiar={setMinimoNoImponible}
+            className="tabular mt-1 h-10 w-36 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-muted-foreground">
+            Mín. de retención $
+          </span>
+          {/* Lo escrito se lee como se escribe en Argentina («224.000»); a
+              Go le llega el número ya leído. */}
+          <input type="hidden" name="minimoRetencion" value={String(importeDelCampo(minimoRetencion))} />
+          <CampoImporte
+            valor={minimoRetencion}
+            alCambiar={setMinimoRetencion}
+            className="tabular mt-1 h-10 w-32 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+          />
+        </label>
+
         <label className="flex h-10 items-center gap-2 text-base">
           <input
             type="checkbox"
@@ -139,8 +175,8 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
         {cambio && (
           <button
             type="submit"
-            disabled={guardando}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-orange px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+            disabled={guardando || importeIlegible(minimoNoImponible) || importeIlegible(minimoRetencion)}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
           >
             {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
             Guardar

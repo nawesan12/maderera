@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { envolver, escapar } from "@/lib/email/plantillas";
+import { envolver, escapar } from "../scripts/golden/originales/email/plantillas";
 
 /**
  * El cuerpo de los correos se arma con HTML concatenado, y `parrafos` entra

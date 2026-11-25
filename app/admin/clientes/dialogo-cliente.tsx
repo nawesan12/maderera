@@ -1,7 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import {
+  BadgeCheck,
+  Briefcase,
+  Building2,
+  CircleSlash,
+  Loader2,
+  Pencil,
+  Phone,
+  Plus,
+  ShieldCheck,
+  ShoppingBag,
+  StickyNote,
+  UserRound,
+} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useAccionDeDialogo } from "@/components/admin/usar-accion";
 import {
@@ -22,15 +36,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { guardarCliente, type EstadoCliente } from "./actions";
+import { buscarClientes } from "@/app/mostrador/actions";
+import Link from "next/link";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
+import { Opciones, Seccion, sinReiniciar } from "@/components/admin/formulario";
 
-const CONDICIONES = {
-  consumidor_final: "Consumidor final",
-  responsable_inscripto: "Responsable inscripto",
-  monotributista: "Monotributista",
-  exento: "Exento",
-  no_categorizado: "No categorizado",
-};
+const CONDICIONES = [
+  { valor: "consumidor_final", texto: "Consumidor final", icono: UserRound },
+  {
+    valor: "responsable_inscripto",
+    texto: "Responsable inscripto",
+    icono: BadgeCheck,
+  },
+  { valor: "monotributista", texto: "Monotributista", icono: Briefcase },
+  { valor: "exento", texto: "Exento", icono: ShieldCheck },
+  { valor: "no_categorizado", texto: "No categorizado", icono: CircleSlash },
+];
 
 /**
  * El rubro reemplazó al «tipo de cliente» como campo principal.
@@ -45,10 +66,30 @@ const RUBROS = Object.fromEntries(
   RUBROS_CLIENTE.map((r) => [r.valor, r.etiqueta]),
 );
 
+/** Lo que ya tiene cargado el cliente, para editarlo. */
+export interface ClienteParaEditar {
+  id: string;
+  nombre: string;
+  razonSocial: string | null;
+  cuit: string | null;
+  condicionIva: string;
+  email: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  rubro: string | null;
+  tipo: string;
+  priceListId: string | null;
+  sellerId: string | null;
+  limiteCredito: string;
+  asesor: string | null;
+  notas: string | null;
+}
+
 export function DialogoCliente({
   listas,
   vendedores = [],
   abrirDeEntrada = false,
+  cliente,
 }: {
   listas: { id: string; name: string; isDefault: boolean }[];
   vendedores?: { id: string; nombre: string; tipo: "salon" | "calle" }[];
@@ -59,6 +100,11 @@ export function DialogoCliente({
    * lista, el botón prometería un alta y entregaría una búsqueda.
    */
   abrirDeEntrada?: boolean;
+  /**
+   * Con un cliente, el mismo diálogo corrige sus datos. Antes no había cómo:
+   * un CUIT o un teléfono mal cargado quedaba así para siempre.
+   */
+  cliente?: ClienteParaEditar;
 }) {
   const [abierto, setAbierto] = useState(abrirDeEntrada);
   const [, accion, pendiente] = useAccionDeDialogo(
@@ -67,11 +113,24 @@ export function DialogoCliente({
     () => setAbierto(false),
   );
 
-  const [tipo, setTipo] = useState("particular");
-  const [rubro, setRubro] = useState("particular");
-  const [condicion, setCondicion] = useState("consumidor_final");
-  const [lista, setLista] = useState("");
-  const [vendedor, setVendedor] = useState("");
+  /*
+   * ¿Ya existe? Al salir del teléfono o del CUIT se busca por los dígitos.
+   * Con tres fichas del mismo cliente, la deuda queda repartida y nadie la
+   * ve entera.
+   */
+  const [parecido, setParecido] = useState<{ id: string; nombre: string } | null>(null);
+  async function revisarSiExiste(valor: string) {
+    if (cliente || valor.replace(/\D/g, "").length < 6) return;
+    const encontrados = await buscarClientes(valor);
+    const otro = encontrados[0];
+    setParecido(otro ? { id: otro.id, nombre: otro.razonSocial ?? otro.nombre } : null);
+  }
+
+  const [tipo, setTipo] = useState(cliente?.tipo ?? "particular");
+  const [rubro, setRubro] = useState(cliente?.rubro ?? "particular");
+  const [condicion, setCondicion] = useState(cliente?.condicionIva ?? "consumidor_final");
+  const [lista, setLista] = useState(cliente?.priceListId ?? "");
+  const [vendedor, setVendedor] = useState(cliente?.sellerId ?? "");
 
   // El vendedor asignado dejó de ser texto libre: "Gabriela" y "GABRIELA" eran
   // dos personas para el reporte. La opción vacía es "sin asignar".
@@ -84,7 +143,6 @@ export function DialogoCliente({
       ]),
     ),
   };
-
 
   // La lista de precios se elegía en ningún lado: el diálogo ya recibía
   // `listas` y nunca las mostraba, así que un cliente con precio especial había
@@ -123,175 +181,190 @@ export function DialogoCliente({
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
-      <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors">
-        <Plus className="h-5 w-5" />
-        Nuevo cliente
-      </DialogTrigger>
+      {cliente ? (
+        <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted">
+          <Pencil className="h-5 w-5" />
+          Editar datos
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors">
+          <Plus className="h-5 w-5" />
+          Nuevo cliente
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nuevo cliente</DialogTitle>
+          <DialogTitle>{cliente ? cliente.nombre : "Nuevo cliente"}</DialogTitle>
         </DialogHeader>
 
-        <form action={accion} className="space-y-4">
+        <form {...sinReiniciar(accion)} className="space-y-4">
+          {cliente && <input type="hidden" name="id" value={cliente.id} />}
+          {/* El asesor del sistema viejo no se edita acá, pero guardar sin él lo borraba. */}
+          {cliente?.asesor && <input type="hidden" name="asesor" value={cliente.asesor} />}
           <input type="hidden" name="tipo" value={tipo} />
           <input type="hidden" name="condicionIva" value={condicion} />
           <input type="hidden" name="priceListId" value={lista} />
           <input type="hidden" name="sellerId" value={vendedor} />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="nombre">Nombre y apellido</Label>
-              <Input id="nombre" name="nombre" required autoFocus />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="razonSocial">Empresa</Label>
-              <Input id="razonSocial" name="razonSocial" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-rubro">A qué se dedica</Label>
-              <input type="hidden" name="rubro" value={rubro} />
-              <Select
-                value={rubro}
-                onValueChange={(v) => v && cambiarRubro(v)}
-                items={RUBROS}
-              >
-                <SelectTrigger id="cliente-rubro" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(RUBROS).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Es por donde se corta la lista y los reportes.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-profesional">Cuenta profesional</Label>
-              <label
-                htmlFor="cliente-profesional"
-                className="flex h-10 items-center gap-2.5 text-base"
-              >
-                <input
-                  id="cliente-profesional"
-                  type="checkbox"
-                  checked={tipo === "profesional"}
-                  onChange={(e) =>
-                    setTipo(e.target.checked ? "profesional" : "particular")
-                  }
-                  className="h-4 w-4 accent-brand-orange"
+          <div className="divide-y divide-linea-suave">
+            <Seccion titulo="Quién es" icono={UserRound}>
+              <div className="space-y-2">
+                <Label htmlFor="nombre">Nombre y apellido</Label>
+                <Input id="nombre" name="nombre" required autoFocus defaultValue={cliente?.nombre} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="razonSocial">Empresa</Label>
+                <Input id="razonSocial" name="razonSocial" defaultValue={cliente?.razonSocial ?? ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cliente-rubro">A qué se dedica</Label>
+                <input type="hidden" name="rubro" value={rubro} />
+                <Select
+                  value={rubro}
+                  onValueChange={(v) => v && cambiarRubro(v)}
+                  items={RUBROS}
+                >
+                  <SelectTrigger id="cliente-rubro" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(RUBROS).map(([valor, texto]) => (
+                      <SelectItem key={valor} value={valor}>
+                        {texto}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cuit">CUIT</Label>
+                <Input
+                  id="cuit"
+                  name="cuit"
+                  placeholder="20-12345678-9"
+                  inputMode="numeric"
+                  defaultValue={cliente?.cuit ?? ""}
+                  onBlur={(e) => revisarSiExiste(e.target.value)}
                 />
-                Tiene precio y cuenta corriente propios
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Condición frente al IVA</Label>
+                <Opciones
+                  nombre="condicionIva-opcion"
+                  opciones={CONDICIONES}
+                  valor={condicion}
+                  alCambiar={setCondicion}
+                  columnas={3}
+                />
+              </div>
+            </Seccion>
+
+            <Seccion titulo="Contacto" icono={Phone}>
+              <div className="space-y-2">
+                <Label htmlFor="email">Correo</Label>
+                <Input id="email" name="email" type="email" defaultValue={cliente?.email ?? ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="telefono">Teléfono</Label>
+                <Input
+                  id="telefono"
+                  name="telefono"
+                  inputMode="tel"
+                  defaultValue={cliente?.telefono ?? ""}
+                  onBlur={(e) => revisarSiExiste(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="direccion">Domicilio</Label>
+                <Input id="direccion" name="direccion" defaultValue={cliente?.direccion ?? ""} />
+              </div>
+            </Seccion>
+
+            <Seccion titulo="Cómo compra" icono={ShoppingBag}>
+              {/* Controlado: el rubro la propone y se puede desmarcar, así que
+                  no es el `Interruptor` del molde (que va sin estado). El tipo
+                  viaja en el campo oculto `tipo`. */}
+              <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5 md:col-span-2">
+                <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                  <Building2 className="h-5 w-5" />
+                </span>
+                <span className="flex-1 text-[15px] font-semibold leading-tight">
+                  Cuenta profesional
+                </span>
+                <Switch
+                  id="cliente-profesional"
+                  checked={tipo === "profesional"}
+                  onCheckedChange={(marcado) =>
+                    setTipo(marcado ? "profesional" : "particular")
+                  }
+                />
               </label>
-              <p className="text-sm text-muted-foreground">
-                Es lo que decide qué paga. Se propone solo al elegir un rubro
-                del gremio.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cuit">CUIT</Label>
-              <Input id="cuit" name="cuit" placeholder="20-12345678-9" inputMode="numeric" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-condicion">Condición frente al IVA</Label>
-              <Select
-                value={condicion}
-                onValueChange={(v) => v && setCondicion(v)}
-                items={CONDICIONES}
-              >
-                <SelectTrigger id="cliente-condicion" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CONDICIONES).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                ARCA la exige en cada factura, así que conviene cargarla ahora.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Correo</Label>
-              <Input id="email" name="email" type="email" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="telefono">Teléfono</Label>
-              <Input id="telefono" name="telefono" inputMode="tel" />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="direccion">Domicilio</Label>
-              <Input id="direccion" name="direccion" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-vendedor">Vendedor asignado</Label>
-              <Select
-                value={vendedor}
-                onValueChange={(v) => setVendedor(v ?? "")}
-                items={opcionesDeVendedor}
-              >
-                <SelectTrigger id="cliente-vendedor" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(opcionesDeVendedor).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Quién lo atiende. Se administran en Clientes → Vendedores.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cliente-lista">Lista de precios</Label>
-              <Select
-                value={lista}
-                onValueChange={(v) => setLista(v ?? "")}
-                items={opcionesDeLista}
-              >
-                <SelectTrigger id="cliente-lista" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(opcionesDeLista).map(([valor, texto]) => (
-                    <SelectItem key={valor} value={valor}>
-                      {texto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                Sin elegir, paga la lista general.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="limiteCredito">Límite de cuenta corriente</Label>
-              <Input
-                id="limiteCredito"
-                name="limiteCredito"
-                defaultValue="0"
-                inputMode="decimal"
-              />
-              <p className="text-sm text-muted-foreground">
-                Cero significa que no opera a cuenta.
-              </p>
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="cliente-vendedor">Vendedor asignado</Label>
+                <Select
+                  value={vendedor}
+                  onValueChange={(v) => setVendedor(v ?? "")}
+                  items={opcionesDeVendedor}
+                >
+                  <SelectTrigger id="cliente-vendedor" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(opcionesDeVendedor).map(
+                      ([valor, texto]) => (
+                        <SelectItem key={valor} value={valor}>
+                          {texto}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cliente-lista">Lista de precios</Label>
+                <Select
+                  value={lista}
+                  onValueChange={(v) => setLista(v ?? "")}
+                  items={opcionesDeLista}
+                >
+                  <SelectTrigger id="cliente-lista" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(opcionesDeLista).map(([valor, texto]) => (
+                      <SelectItem key={valor} value={valor}>
+                        {texto}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="limiteCredito">
+                  Límite de cuenta corriente
+                </Label>
+                <Input
+                  id="limiteCredito"
+                  name="limiteCredito"
+                  defaultValue={cliente ? String(Number(cliente.limiteCredito)) : "0"}
+                  inputMode="decimal"
+                />
+              </div>
+            </Seccion>
+
+            <Seccion titulo="Notas" icono={StickyNote} columnas={1}>
+              <Textarea id="notas" name="notas" rows={2} aria-label="Notas" defaultValue={cliente?.notas ?? ""} />
+            </Seccion>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notas">Notas</Label>
-            <Textarea id="notas" name="notas" rows={2} />
-          </div>
+          {parecido && (
+            <p role="status" className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base text-[var(--estado-tinta)]">
+              Ya hay una ficha con ese dato:{" "}
+              <Link href={`/admin/clientes/${parecido.id}`} className="font-semibold underline underline-offset-4">
+                {parecido.nombre}
+              </Link>
+            </p>
+          )}
 
           <Button
             type="submit"
@@ -304,7 +377,7 @@ export function DialogoCliente({
                 Guardando…
               </>
             ) : (
-              "Guardar cliente"
+              cliente ? "Guardar los cambios" : "Guardar cliente"
             )}
           </Button>
         </form>

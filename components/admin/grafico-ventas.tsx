@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Ventas por sucursal, mes a mes.
@@ -9,7 +9,7 @@ import { useState } from "react";
  * viene una sucursal contra la otra, y apiladas solo la de abajo arranca en una
  * base común, así que la de arriba no se puede comparar entre meses.
  *
- * Un solo eje de valores. Los importes de ambas sucursales están en la misma
+ * Un solo eje de valores. Los importes de las sucursales están en la misma
  * escala, así que comparten escala: dos ejes distintos harían que dos barras de
  * la misma altura significaran cosas distintas.
  *
@@ -19,7 +19,7 @@ import { useState } from "react";
  * peor que uno que no está, porque el panel decía "$3.615.426 este mes" al lado
  * de un recuadro vacío.
  *
- * Seis meses por dos series es geometría de tres líneas. Hacerla acá la vuelve
+ * Seis meses por una serie por sucursal es geometría de tres líneas. Hacerla acá la vuelve
  * determinista —no depende de medir el DOM, así que sale igual en el servidor y
  * en el navegador—, saca media tonelada de dependencia, y permite dar el dato
  * también como tabla para quien usa lector de pantalla.
@@ -27,18 +27,31 @@ import { useState } from "react";
 
 interface Punto {
   mes: string;
-  central: number;
-  aserradero: number;
+  /** Cada sucursal activa, en el orden de `branches` (hallazgo 35). */
+  sucursales: { sucursal: string; nombre: string; total: number }[];
 }
 
-const SERIES = [
-  { clave: "central", nombre: "Casa Central", color: "var(--sucursal-central)" },
-  {
-    clave: "aserradero",
-    nombre: "Aserradero",
-    color: "var(--sucursal-aserradero)",
-  },
-] as const;
+/**
+ * El color de cada sucursal. Las dos de siempre tienen el suyo; una nueva
+ * toma el siguiente de la lista, en el orden en que aparece.
+ */
+const COLOR_DE_SUCURSAL: Record<string, string> = {
+  "casa-central": "var(--sucursal-central)",
+  aserradero: "var(--sucursal-aserradero)",
+};
+const COLORES_DE_MAS = ["var(--sucursal-otra-1)", "var(--sucursal-otra-2)", "var(--sucursal-otra-3)"];
+
+function seriesDe(datos: Punto[]) {
+  let libres = 0;
+  return (datos[0]?.sucursales ?? []).map((s, i) => ({
+    indice: i,
+    clave: s.sucursal,
+    nombre: s.nombre,
+    color: COLOR_DE_SUCURSAL[s.sucursal] ?? COLORES_DE_MAS[libres++ % COLORES_DE_MAS.length]!,
+  }));
+}
+
+const totalDe = (p: Punto, i: number) => p.sucursales[i]?.total ?? 0;
 
 const moneda = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -54,12 +67,31 @@ function abreviar(valor: number) {
   return `$${valor}`;
 }
 
-/* Coordenadas del dibujo. El SVG se escala solo con el ancho disponible. */
-const ANCHO = 720;
-const ALTO = 260;
+/*
+ * Coordenadas del dibujo. El ancho del viewBox es el ancho medido de la
+ * tarjeta, así un px del dibujo es un px de la pantalla: con un viewBox fijo
+ * de 720 escalado a los 310 px del teléfono, las etiquetas quedaban en 5,6 px
+ * y sobraban bandas vacías (comité del 25/11). Antes de medir (el servidor),
+ * el de escritorio.
+ */
+const ANCHO_INICIAL = 720;
 const MARGEN = { arriba: 12, derecha: 8, abajo: 28, izquierda: 60 };
-const AREA_ANCHO = ANCHO - MARGEN.izquierda - MARGEN.derecha;
-const AREA_ALTO = ALTO - MARGEN.arriba - MARGEN.abajo;
+
+function useAncho(): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [ancho, setAncho] = useState(ANCHO_INICIAL);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([e]) => {
+      const w = Math.round(e.contentRect.width);
+      if (w > 0) setAncho(w);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return [ref, ancho];
+}
 
 /**
  * Un techo redondo por encima del máximo, para que la marca de arriba sea un
@@ -73,6 +105,13 @@ function techo(maximo: number): number {
 
 export function GraficoVentas({ datos }: { datos: Punto[] }) {
   const [activo, setActivo] = useState<number | null>(null);
+  const [caja, ANCHO] = useAncho();
+  const SERIES = seriesDe(datos);
+  // En el teléfono, más bajo: con 260 de alto y 310 de ancho las barras
+  // quedaban finitas en una caja casi cuadrada.
+  const ALTO = ANCHO < 480 ? 200 : 260;
+  const AREA_ANCHO = ANCHO - MARGEN.izquierda - MARGEN.derecha;
+  const AREA_ALTO = ALTO - MARGEN.arriba - MARGEN.abajo;
 
   if (datos.length === 0) {
     return (
@@ -83,12 +122,14 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
   }
 
   const maximo = Math.max(
-    ...datos.flatMap((d) => [d.central, d.aserradero]),
+    ...datos.flatMap((d) => d.sucursales.map((s) => s.total)),
     0,
   );
   const tope = techo(maximo);
 
   const anchoGrupo = AREA_ANCHO / datos.length;
+  // Si los meses no entran (doce en un teléfono), se nombra uno de cada dos.
+  const saltoDeMes = anchoGrupo < 34 ? 2 : 1;
   // 26 es el ancho de barra que ya tenía el gráfico; se achica si no entra.
   const anchoBarra = Math.min(26, (anchoGrupo * 0.62) / SERIES.length);
   const separacion = 2;
@@ -101,7 +142,7 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
   const punto = activo !== null ? datos[activo] : null;
 
   return (
-    <div className="relative">
+    <div ref={caja} className="relative">
       <svg
         viewBox={`0 0 ${ANCHO} ${ALTO}`}
         width="100%"
@@ -159,7 +200,7 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
               />
 
               {SERIES.map((serie, s) => {
-                const valor = d[serie.clave];
+                const valor = totalDe(d, serie.indice);
                 const alto = Math.max(0, MARGEN.arriba + AREA_ALTO - y(valor));
 
                 return (
@@ -176,16 +217,18 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
                 );
               })}
 
-              <text
-                x={centroGrupo}
-                y={ALTO - 8}
-                textAnchor="middle"
-                fontSize={14}
-                fill="var(--muted-foreground)"
-                pointerEvents="none"
-              >
-                {d.mes}
-              </text>
+              {(datos.length - 1 - i) % saltoDeMes === 0 && (
+                <text
+                  x={centroGrupo}
+                  y={ALTO - 8}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fill="var(--muted-foreground)"
+                  pointerEvents="none"
+                >
+                  {d.mes}
+                </text>
+              )}
             </g>
           );
         })}
@@ -216,14 +259,14 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
                   />
                   {serie.nombre}
                 </span>
-                <span className="tabular">{moneda.format(punto[serie.clave])}</span>
+                <span className="tabular">{moneda.format(totalDe(punto, serie.indice))}</span>
               </li>
             ))}
           </ul>
           <div className="mt-2 flex items-center justify-between gap-4 border-t pt-2 text-base">
             <span className="text-muted-foreground">Total</span>
             <span className="tabular font-medium">
-              {moneda.format(punto.central + punto.aserradero)}
+              {moneda.format(punto.sucursales.reduce((a, s) => a + s.total, 0))}
             </span>
           </div>
         </div>
@@ -264,7 +307,7 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
             <tr key={d.mes}>
               <th scope="row">{d.mes}</th>
               {SERIES.map((s) => (
-                <td key={s.clave}>{moneda.format(d[s.clave])}</td>
+                <td key={s.clave}>{moneda.format(totalDe(d, s.indice))}</td>
               ))}
             </tr>
           ))}

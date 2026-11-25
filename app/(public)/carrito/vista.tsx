@@ -107,13 +107,7 @@ export function VistaDelCarrito({
                 Tu carrito está vacío
               </h2>
               <p className="mb-6 text-muted-foreground">
-                Agregá los productos que necesites del catálogo y te pasamos el
-                precio y la disponibilidad. Si no sabés cuánto material lleva,
-                la{" "}
-                <Link href="/calculadora" className="font-medium underline underline-offset-2">
-                  calculadora
-                </Link>{" "}
-                lo estima con las medidas y deja todo acá.
+                Agregá los productos que necesites del catálogo.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button

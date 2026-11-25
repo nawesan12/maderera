@@ -1,0 +1,7 @@
+package: existenciaapi
+output: ../internal/api/existenciaapi/existencia.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

@@ -2,8 +2,21 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Search, Trash2 } from "lucide-react";
-import { formatearMonto, importeParaEditar } from "@/lib/formato";
+import { sucursalPropuesta } from "../../sucursal-propuesta";
+import { ClipboardList, Loader2, Search, Store, Trash2 } from "lucide-react";
+import {
+  BarraGuardar,
+  Hoja,
+  Opciones,
+  Seccion,
+} from "@/components/admin/formulario";
+import {
+  formatearMonto,
+  importeDelCampo,
+  importeIlegible,
+  importeParaElCampo,
+} from "@/lib/formato";
+import { CampoImporte } from "@/components/admin/campo-importe";
 import {
   buscarParaPedir,
   crearOrdenDeCompra,
@@ -40,7 +53,7 @@ export function FormularioOrden({
   renglonesIniciales,
 }: {
   proveedores: { id: string; nombre: string }[];
-  sucursales: { id: string; nombre: string }[];
+  sucursales: { id: string; nombre: string; deLaSesion?: boolean }[];
   /**
    * Con qué arranca la orden, cuando se llega desde el reporte de reposición.
    *
@@ -54,8 +67,10 @@ export function FormularioOrden({
   const [estado, setEstado] = useState<EstadoOrden>({});
   const [enCurso, empezar] = useTransition();
 
-  const [supplierId, setSupplierId] = useState(proveedores[0]?.id ?? "");
-  const [branchId, setBranchId] = useState(sucursales[0]?.id ?? "");
+  // Ningún proveedor de entrada (el primero alfabético casi nunca es el que
+  // se quiere) y la sucursal de quien carga, si se sabe (sucursalPropuesta).
+  const [supplierId, setSupplierId] = useState("");
+  const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
   const [fechaPrometida, setFecha] = useState("");
   const [notas, setNotas] = useState("");
   const [lineas, setLineas] = useState<Linea[]>(renglonesIniciales ?? []);
@@ -84,7 +99,7 @@ export function FormularioOrden({
               variantId: h.variantId,
               descripcion: [h.producto, h.variante].filter(Boolean).join(" "),
               cantidad: "1",
-              costoUnitario: importeParaEditar(h.costoActual),
+              costoUnitario: importeParaElCampo(h.costoActual),
               alicuotaIva: h.alicuotaIva,
             },
           ],
@@ -94,11 +109,13 @@ export function FormularioOrden({
   }
 
   function cambiar(i: number, campo: keyof Linea, valor: string) {
-    setLineas((prev) => prev.map((l, j) => (i === j ? { ...l, [campo]: valor } : l)));
+    setLineas((prev) =>
+      prev.map((l, j) => (i === j ? { ...l, [campo]: valor } : l)),
+    );
   }
 
   const neto = lineas.reduce(
-    (t, l) => t + Number(l.cantidad || 0) * Number(l.costoUnitario || 0),
+    (t, l) => t + Number(l.cantidad || 0) * importeDelCampo(l.costoUnitario),
     0,
   );
 
@@ -106,60 +123,89 @@ export function FormularioOrden({
     supplierId !== "" &&
     branchId !== "" &&
     lineas.length > 0 &&
-    lineas.every((l) => Number(l.cantidad) > 0 && l.costoUnitario !== "");
+    lineas.every(
+      (l) =>
+        Number(l.cantidad) > 0 &&
+        l.costoUnitario !== "" &&
+        !importeIlegible(l.costoUnitario),
+    );
 
   return (
     <div className="space-y-4">
-      <section className="tarjeta grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block">
-          <span className="text-sm font-medium">Proveedor</span>
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
+      <Hoja>
+        <Seccion titulo="Orden" icono={ClipboardList}>
+          <label className="block md:col-span-2">
+            <span className="text-sm font-medium">Proveedor</span>
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            >
+              <option value="" disabled>
+                Elegí el proveedor
               </option>
-            ))}
-          </select>
-        </label>
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Entrega en</span>
-          <select
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          >
-            {sucursales.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="space-y-1 md:col-span-2">
+            <span className="text-sm font-medium">Entrega en</span>
+            {/* Las sucursales son pocas: fichas. Si algún día son muchas,
+              vuelve el desplegable. */}
+            {sucursales.length <= 6 ? (
+              <Opciones
+                nombre="orden-sucursal"
+                opciones={sucursales.map((s) => ({
+                  valor: s.id,
+                  texto: s.nombre,
+                  icono: Store,
+                }))}
+                valor={branchId}
+                alCambiar={setBranchId}
+                columnas={sucursales.length <= 2 ? 2 : 3}
+              />
+            ) : (
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              >
+                <option value="" disabled>
+                  Elegí la sucursal
+                </option>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
-        <label className="block">
-          <span className="text-sm font-medium">Fecha prometida</span>
-          <input
-            type="date"
-            value={fechaPrometida}
-            onChange={(e) => setFecha(e.target.value)}
-            className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
+          <label className="block">
+            <span className="text-sm font-medium">Fecha prometida</span>
+            <input
+              type="date"
+              value={fechaPrometida}
+              onChange={(e) => setFecha(e.target.value)}
+              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
 
-        <label className="block">
-          <span className="text-sm font-medium">Notas</span>
-          <input
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
-      </section>
+          <label className="block">
+            <span className="text-sm font-medium">Notas</span>
+            <input
+              value={notas}
+              onChange={(e) => setNotas(e.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
+        </Seccion>
+      </Hoja>
 
       <section className="tarjeta overflow-hidden">
         <div className="border-b border-linea p-4">
@@ -212,7 +258,9 @@ export function FormularioOrden({
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-2.5 font-semibold">Mercadería</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">Cantidad</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">
+                    Cantidad
+                  </th>
                   <th className="px-4 py-2.5 text-right font-semibold">
                     Costo neto
                   </th>
@@ -237,20 +285,16 @@ export function FormularioOrden({
                       />
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.0001"
-                        value={l.costoUnitario}
-                        onChange={(e) =>
-                          cambiar(i, "costoUnitario", e.target.value)
-                        }
+                      <CampoImporte
+                        valor={l.costoUnitario}
+                        alCambiar={(v) => cambiar(i, "costoUnitario", v)}
+                        aria-label={`Costo de ${l.descripcion}`}
                         className="tabular h-10 w-32 rounded-lg border border-linea bg-background px-2 text-right text-base"
                       />
                     </td>
                     <td className="tabular px-4 py-2.5 text-right font-semibold">
                       {formatearMonto(
-                        Number(l.cantidad || 0) * Number(l.costoUnitario || 0),
+                        Number(l.cantidad || 0) * importeDelCampo(l.costoUnitario),
                       )}
                     </td>
                     <td className="px-2 py-2.5">
@@ -273,8 +317,8 @@ export function FormularioOrden({
         )}
       </section>
 
-      <section className="tarjeta flex flex-wrap items-center justify-between gap-3 p-5">
-        <div>
+      <BarraGuardar error={estado.error}>
+        <div className="mr-auto">
           <p className="text-sm text-muted-foreground">Neto de la orden</p>
           <p className="tabular text-2xl font-bold">{formatearMonto(neto)}</p>
         </div>
@@ -292,7 +336,7 @@ export function FormularioOrden({
                   variantId: l.variantId,
                   descripcion: l.descripcion,
                   cantidad: Number(l.cantidad),
-                  costoUnitario: Number(l.costoUnitario),
+                  costoUnitario: importeDelCampo(l.costoUnitario),
                   alicuotaIva: Number(l.alicuotaIva),
                 })),
               });
@@ -306,11 +350,7 @@ export function FormularioOrden({
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
           Crear la orden
         </button>
-
-        {estado.error && (
-          <p className="w-full text-sm text-saldo-debe">{estado.error}</p>
-        )}
-      </section>
+      </BarraGuardar>
     </div>
   );
 }

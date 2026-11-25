@@ -1,3 +1,4 @@
+import { motivosDeRechazo } from "@/lib/fiscal/rechazos-arca";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
@@ -14,8 +15,8 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, fechaLarga, moneda, plural } from "@/lib/formato";
-import { obtenerComprobante } from "@/lib/dal/admin/facturacion";
+import { fechaCorta, fechaLarga, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
+import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
   nombreComprobante,
@@ -24,9 +25,31 @@ import {
 import {
   AnularComprobante,
   BotonAutorizar,
+  CorregirReceptor,
   FormularioCobro,
 } from "./acciones";
 import { NotasSobreElComprobante } from "./notas";
+import { DarDeBaja } from "./baja";
+
+const MES = new Intl.DateTimeFormat("es-AR", { month: "long", timeZone: ZONA });
+
+/**
+ * Lo que cambia al mandar a ARCA un comprobante sin CAE: sale con la fecha de
+ * hoy si es de otro día (ARCA acepta pocos días para atrás) y, si cambia el
+ * mes, la venta pasa al mes de hoy en el libro IVA; antes salen los
+ * anteriores de la serie que tampoco tienen CAE.
+ */
+function consecuenciasDelEnvio(fecha: Date, anteriores: number): string[] {
+  const out: string[] = [];
+  const dia = hoyEnArgentina(fecha);
+  const hoy = hoyEnArgentina();
+  if (dia < hoy) {
+    out.push("Sale con fecha de hoy");
+    if (dia.slice(0, 7) !== hoy.slice(0, 7)) out.push(`pasa a ${MES.format(new Date())}`);
+  }
+  if (anteriores > 0) out.push(`antes ${anteriores === 1 ? "sale" : "salen"} ${plural(anteriores, "anterior", "anteriores")}`);
+  return out;
+}
 
 const CONDICIONES: Record<string, string> = {
   responsable_inscripto: "Responsable inscripto",
@@ -63,10 +86,16 @@ export async function generateMetadata({
 
 export default async function FichaComprobantePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ aviso?: string }>;
 }) {
   const { id } = await params;
+  // Lo deja la factura manual de contado cuando el efectivo no pudo entrar a
+  // ninguna caja. Es un código y no el texto, para que un enlace armado no
+  // pueda poner cualquier cosa en la pantalla.
+  const sinArqueo = (await searchParams).aviso === "caja";
   if (!esUuid(id)) notFound();
   const comprobante = await obtenerComprobante(id);
 
@@ -81,6 +110,18 @@ export default async function FichaComprobantePage({
     Number(comprobante.iva105) +
     Number(comprobante.iva27);
   const anulada = comprobante.estado === "anulada";
+  // La serie solo importa sin CAE: el reintento y la baja.
+  const serie = comprobante.cae ? null : await serieDelComprobante(id);
+  // La factura de una venta, ya autorizada, se corrige con una devolución, y
+  // no se anula sola: se anula la venta, que devuelve el stock y la plata.
+  // Con la venta anulada queda solo anular la factura.
+  const deLaVenta =
+    comprobante.orderId && comprobante.cae && comprobante.tipo.startsWith("factura") && comprobante.estado !== "anulada"
+      ? await datosDeDevolucion(id)
+      : null;
+  const devolucion = deLaVenta && !deLaVenta.ventaAnulada ? deLaVenta : null;
+  // Devuelta entera, ya no hay venta que anular: falta cerrar la factura.
+  const devueltaEntera = devolucion?.renglones.every((r) => r.queda <= 0) ?? false;
 
   return (
     <div className="space-y-6">
@@ -105,11 +146,13 @@ export default async function FichaComprobantePage({
           </div>
           <p className="mt-0.5 text-base text-muted-foreground">
             Emitida el {fechaLarga.format(comprobante.fechaEmision)}
+            {comprobante.fechaEmisionOriginal &&
+              ` · antes ${fechaCorta.format(comprobante.fechaEmisionOriginal)}`}
             {comprobante.sucursal ? ` · ${comprobante.sucursal}` : ""}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Dos salidas distintas y las dos hacen falta: la hoja se abre para
               mirarla o mandarla a la impresora, y el PDF se descarga para
               adjuntarlo a un correo o dárselo al contador. */}
@@ -132,15 +175,33 @@ export default async function FichaComprobantePage({
         </div>
       </div>
 
+      {sinArqueo && (
+        <p
+          role="status"
+          className="estado-espera flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base text-[var(--estado-tinta)]"
+        >
+          <ShieldAlert className="h-5 w-5 shrink-0" />
+          El efectivo no entró a ningún arqueo: registralo a mano desde el mostrador.
+        </p>
+      )}
+
       {/* Estado fiscal: es lo primero que hay que saber del comprobante */}
-      {comprobante.cae ? (
+      {comprobante.cae && comprobante.caeAmbiente === "homologacion" ? (
+        // Un CAE de prueba no es una autorización: no va al libro IVA.
+        <section className="tarjeta-atencion flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5">
+          <ShieldAlert className="h-5 w-5 shrink-0 text-brand-orange" />
+          <p className="text-base">
+            De prueba · <span className="tabular">CAE {comprobante.cae}</span>
+          </p>
+        </section>
+      ) : comprobante.cae ? (
         <section className="estado-ok flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[var(--estado-tinta)]/30 bg-[var(--estado-fondo)] px-5 py-3.5">
-          <ShieldCheck className="h-5 w-5 shrink-0 text-green-700" />
-          <p className="text-base text-green-900">
+          <ShieldCheck className="h-5 w-5 shrink-0" />
+          <p className="text-base">
             Autorizada por ARCA · <span className="tabular">CAE {comprobante.cae}</span>
           </p>
           {comprobante.caeVencimiento && (
-            <p className="text-base text-green-900/70">
+            <p className="text-base opacity-80">
               vence el {fechaCorta.format(comprobante.caeVencimiento)}
             </p>
           )}
@@ -151,15 +212,70 @@ export default async function FichaComprobantePage({
             <ShieldAlert className="h-5 w-5 text-brand-orange" />
             Sin autorización de ARCA
           </h2>
-          <p className="mt-1 text-base text-muted-foreground">
-            {comprobante.observacionesArca ??
-              "Este comprobante todavía no tiene CAE, así que no tiene valor fiscal. Se puede imprimir para uso interno."}
-          </p>
-          {!anulada && (
+          {/* El motivo de ARCA viene crudo («[10016] El numero o fecha…»):
+              se muestra qué hay que hacer y el texto original queda plegado
+              para el contador o para quien mantiene el sistema
+              (lib/fiscal/rechazos-arca.ts). */}
+          {motivosDeRechazo(comprobante.observacionesArca).map((m, i) => (
+            <div key={i} className="mt-2">
+              <p className="text-base font-medium">{m.queHacer}</p>
+              <details className="mt-1 text-base text-muted-foreground">
+                <summary className="cursor-pointer">Lo que dijo ARCA</summary>
+                <p className="mt-1">{m.original}</p>
+              </details>
+            </div>
+          ))}
+          {!anulada && serie?.tramo && (
+            // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
+            // se pide desde acá: la serie se autoriza de a 15, desde el que
+            // tiene justo 15 atrás.
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Link
+                href={`/admin/facturacion/${serie.tramo.invoiceId}`}
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
+              >
+                Autorizar la serie desde el {numeroFormateado(comprobante.puntoVenta, serie.tramo.numero)}
+              </Link>
+              <span className="text-sm text-muted-foreground">
+                {plural(serie.anterioresSinCae, "anterior", "anteriores")} sin CAE
+              </span>
+            </div>
+          )}
+          {!anulada && !serie?.tramo && (
             <div className="mt-3">
               <BotonAutorizar
                 id={comprobante.id}
                 rechazado={comprobante.estado === "rechazada"}
+                consecuencias={consecuenciasDelEnvio(
+                  comprobante.fechaEmision,
+                  serie?.anterioresSinCae ?? 0,
+                )}
+              />
+            </div>
+          )}
+          {!anulada && comprobante.estado === "rechazada" && (
+            <div className="mt-3">
+              <CorregirReceptor
+                id={comprobante.id}
+                nombre={comprobante.receptorNombre}
+                cuit={comprobante.receptorCuit}
+                condicion={comprobante.receptorCondicionIva}
+                domicilio={comprobante.receptorDomicilio}
+              />
+            </div>
+          )}
+          {/* La salida de una serie trabada: irreversible, así que va última
+              y plegada. Un borrador no tiene número que liberar. */}
+          {serie && comprobante.estado !== "borrador" && (
+            <div className="mt-3">
+              <DarDeBaja
+                id={comprobante.id}
+                puntoVenta={comprobante.puntoVenta}
+                numero={comprobante.numero}
+                corren={serie.corren}
+                deuda={serie.deuda}
+                receptor={comprobante.receptorNombre}
+                bloqueo={serie.bloqueo}
               />
             </div>
           )}
@@ -273,8 +389,8 @@ export default async function FichaComprobantePage({
 
               {!discrimina && totalIva > 0 && (
                 <p className="pt-1 text-sm text-muted-foreground">
-                  IVA contenido: {moneda.format(totalIva)}. En esta factura no se
-                  discrimina, pero se informa a ARCA igual.
+                  {/* En esta factura no se discrimina, pero se informa a ARCA igual. */}
+                  IVA contenido: {moneda.format(totalIva)}
                 </p>
               )}
             </dl>
@@ -286,7 +402,7 @@ export default async function FichaComprobantePage({
               Cobros
               <span
                 className={`tabular text-base font-normal ${
-                  comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-green-700"
+                  comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
                 }`}
               >
                 {comprobante.saldo > 0
@@ -404,28 +520,40 @@ export default async function FichaComprobantePage({
             </Link>
           )}
 
-          {!anulada && comprobante.estado !== "borrador" && (
+          {/* Sin CAE no hay nada que anular ni que corregir con una nota:
+              ARCA rechazaría la nota, y anularlo dejaba el número trabando la
+              serie. Lo que no tiene CAE se da de baja, arriba. */}
+          {!anulada && comprobante.estado !== "borrador" && comprobante.cae && (
             <>
               {/* Las notas van antes que anular a propósito: acreditar dos
                   placas falladas es lo frecuente y anular la factura entera es
                   la excepción. El orden empuja hacia la corrección más chica. */}
-              <section className="tarjeta p-5">
-                <NotasSobreElComprobante
-                  invoiceId={comprobante.id}
-                  items={comprobante.items.map((i) => ({
-                    id: i.id,
-                    descripcion: i.descripcion,
-                    cantidad: Number(i.cantidad),
-                    subtotal: Number(i.subtotal),
-                  }))}
-                  total={Number(comprobante.total)}
-                  acreditado={Number(comprobante.acreditado)}
-                />
-              </section>
+              {!deLaVenta?.ventaAnulada && (
+                <section className="tarjeta p-5">
+                  <NotasSobreElComprobante
+                    invoiceId={comprobante.id}
+                    items={comprobante.items.map((i) => ({
+                      id: i.id,
+                      descripcion: i.descripcion,
+                      cantidad: Number(i.cantidad),
+                      subtotal: Number(i.subtotal),
+                    }))}
+                    total={Number(comprobante.total)}
+                    acreditado={Number(comprobante.acreditado)}
+                    revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                    devolucion={devolucion}
+                  />
+                </section>
+              )}
 
-              <section className="tarjeta p-5">
-                <AnularComprobante id={comprobante.id} />
-              </section>
+              {(!devolucion || devueltaEntera) && (
+                <section className="tarjeta p-5">
+                  <AnularComprobante
+                    id={comprobante.id}
+                    revierteConDebito={comprobante.tipo.startsWith("nota_credito")}
+                  />
+                </section>
+              )}
             </>
           )}
         </div>

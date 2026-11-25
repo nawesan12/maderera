@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { ImageOff } from "lucide-react";
+import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
+import { useMedidaElegida } from "@/components/catalogo/medida-elegida";
 
 /**
  * Galería de la ficha pública.
@@ -10,32 +11,53 @@ import { ImageOff } from "lucide-react";
  * Para comprar madera hace falta ver el material: la veta, el color real, la
  * terminación. Una sola foto chica no alcanza, y en una maderera es lo que más
  * define si alguien se decide o llama para preguntar.
+ *
+ * Sin «Destacado» sobre la foto (hallazgo 26): salió de la tarjeta porque lo
+ * tenía un tercio del catálogo, y en la ficha quedaba una marca que la grilla
+ * ya no mostraba. `featured` solo ordena.
  */
 export function GaleriaProducto({
   imagenes,
+  fotoDeMedida = {},
   nombre,
-  destacado = false,
+  rubro,
+  categoria,
+  marca,
 }: {
   imagenes: string[];
+  /** Por id de medida, la posición de su foto en `imagenes`. */
+  fotoDeMedida?: Record<string, number>;
   nombre: string;
-  destacado?: boolean;
+  /** Para la placa, cuando no hay foto: lo que se estampa y el tono. */
+  rubro: string;
+  categoria: string;
+  marca?: string | null;
 }) {
   const [activa, setActiva] = useState(0);
+  const medida = useMedidaElegida()?.id ?? null;
+  const [medidaVista, setMedidaVista] = useState(medida);
+  // Se ajusta al dibujar, no en un efecto: así no se pinta un cuadro con la
+  // foto de la medida anterior.
+  if (medida !== medidaVista) {
+    setMedidaVista(medida);
+    const indice = medida ? fotoDeMedida[medida] : undefined;
+    if (indice !== undefined && indice < imagenes.length) setActiva(indice);
+  }
 
+  // Sin foto, la placa del rubro (hallazgo 25): «Sin foto todavía» con un
+  // ícono de imagen rota era lo primero que se veía de la ficha. Es una
+  // imagen para el lector de pantalla, con el nombre del producto.
   if (imagenes.length === 0) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-brand-wood-light/30">
-        <span className="flex flex-col items-center gap-2 text-muted-foreground">
-          <ImageOff className="h-8 w-8" />
-          <span className="text-sm">Sin foto todavía</span>
-        </span>
+      <div role="img" aria-label={nombre} className="relative -mx-6 aspect-[4/3] overflow-hidden shadow-sm sm:mx-0 sm:rounded-2xl">
+        <PlacaDeProducto rubro={rubro} categoria={categoria} marca={marca} tamano="ficha" />
       </div>
     );
   }
 
   return (
     <div>
-      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-card shadow-sm">
+      <div className="relative -mx-6 aspect-[4/3] overflow-hidden bg-card sm:mx-0 sm:rounded-2xl sm:shadow-sm">
         <Image
           src={imagenes[activa]}
           alt={`${nombre}${activa > 0 ? ` — foto ${activa + 1}` : ""}`}
@@ -50,11 +72,6 @@ export function GaleriaProducto({
           className="object-cover"
           sizes="(max-width: 1024px) 100vw, 50vw"
         />
-        {destacado && (
-          <span className="absolute left-4 top-4 rounded-full bg-brand-orange px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
-            Destacado
-          </span>
-        )}
       </div>
 
       {imagenes.length > 1 && (

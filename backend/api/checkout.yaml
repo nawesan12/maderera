@@ -1,0 +1,245 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Carrito y compra
+  version: "1"
+  description: |
+    El carrito del sitio (tanda 6): leerlo, agregar, cambiar, quitar,
+    vaciar, actualizar precios, los cortes a medida, pedir el presupuesto y
+    confirmar la compra.
+
+    El carrito es el de la sesión o, sin sesión, el de la cookie
+    `mjbj_carrito`, que Go pone cuando lo crea (Set-Cookie en la respuesta:
+    Next la copia al navegador). Leer no crea nada.
+
+    Los formularios llegan como objeto libre: se validan como los esquemas
+    de zod del TS, con el mismo primer mensaje. Las acciones del carrito
+    contestan { ok } o { error } (lo que devolvían las server actions);
+    pedir el presupuesto y confirmar, un problema con el mensaje para
+    mostrar tal cual.
+paths:
+  /api/v1/carrito:
+    get:
+      operationId: MiCarrito
+      responses:
+        "200":
+          description: El carrito de quien pide (vacío si no tiene)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Carrito" }
+    delete:
+      operationId: VaciarCarrito
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+  /api/v1/carrito/items:
+    post:
+      operationId: AgregarAlCarrito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+  /api/v1/carrito/items/varios:
+    post:
+      operationId: AgregarVariosAlCarrito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items: { type: array, items: {} }
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+  /api/v1/carrito/items/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    patch:
+      operationId: CambiarCantidadDelCarrito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cantidad: { type: number, format: double, nullable: true }
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+    delete:
+      operationId: QuitarDelCarrito
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+  /api/v1/carrito/precios:
+    post:
+      operationId: ActualizarPreciosDelCarrito
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+  /api/v1/carrito/sin-precio:
+    post:
+      operationId: QuitarLosQueSeCotizan
+      responses:
+        "204": { description: Hecho }
+  /api/v1/carrito/cortes:
+    post:
+      operationId: AgregarCorteAlCarrito
+      description: Recalcula el corte con la lista de quien compra (freno «corte» por IP) y lo guarda.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/carrito/cortes/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }]
+    delete:
+      operationId: QuitarCorteDelCarrito
+      responses:
+        "200": { $ref: "#/components/responses/RespuestaCarrito" }
+  /api/v1/carrito/presupuesto:
+    post:
+      operationId: PedirPresupuesto
+      description: El carrito pasa a ser un presupuesto con número (no se vacía). Freno «presupuesto» por IP y correo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: El presupuesto creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PresupuestoPedido" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/carrito/confirmar:
+    post:
+      operationId: ConfirmarCompra
+      description: |
+        Crea el pedido (números, costos congelados, cortes al taller, deuda a
+        cuenta corriente, mercadería reservada) y desactiva el carrito, en
+        una transacción. Freno «comprar» por IP y correo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: El pedido creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompraConfirmada" }
+        "422": { $ref: "#/components/responses/Problema" }
+        "429": { $ref: "#/components/responses/Problema" }
+  /api/v1/interno/carrito/adoptar:
+    post:
+      operationId: AdoptarCarrito
+      description: Pasa el carrito armado sin sesión a quien acaba de entrar. Solo el servidor de Next (secreto interno).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, token]
+              properties:
+                userId: { type: string }
+                token: { type: string, maxLength: 64 }
+      responses:
+        "204": { description: Hecho }
+        "403": { $ref: "#/components/responses/Problema" }
+components:
+  responses:
+    RespuestaCarrito:
+      description: "{ ok } o { error }, para mostrar"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ResultadoCarrito" }
+    Problema:
+      description: Error (RFC 9457)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problema" }
+  schemas:
+    Problema:
+      type: object
+      required: [title, status]
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errores: { type: object, additionalProperties: { type: string } }
+    ResultadoCarrito:
+      type: object
+      properties:
+        ok: { type: string }
+        error: { type: string }
+    ItemCarrito:
+      type: object
+      required: [id, variantId, descripcion, unidad, cantidad, presentacion, precioUnitario, precioActual, descuento,
+        precioSinDescuento, subtotal, origen, notas, slug, imagen]
+      properties:
+        id: { type: string }
+        variantId: { type: string, nullable: true }
+        descripcion: { type: string }
+        unidad: { type: string }
+        cantidad: { type: number, format: double }
+        presentacion: { type: string, nullable: true, enum: [media_largo, media_ancho, null] }
+        precioUnitario: { type: number, format: double, nullable: true }
+        precioActual: { type: number, format: double, nullable: true }
+        descuento: { type: number, format: double }
+        precioSinDescuento: { type: number, format: double, nullable: true }
+        subtotal: { type: number, format: double }
+        origen: { type: string }
+        notas: { type: string, nullable: true }
+        slug: { type: string, nullable: true }
+        imagen: { type: string, nullable: true }
+    CorteEnCarrito:
+      type: object
+      required: [id, variantId, material, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, placas, pasadas, total]
+      properties:
+        id: { type: string }
+        variantId: { type: string, nullable: true }
+        material: { type: string }
+        placaLargoMm: { type: integer }
+        placaAnchoMm: { type: integer }
+        mitad: { type: string, nullable: true, enum: [largo, ancho, null] }
+        cantoDescripcion: { type: string, nullable: true }
+        piezas: { type: number, format: double }
+        placas: { type: integer }
+        pasadas: { type: integer }
+        total: { type: number, format: double }
+    Carrito:
+      type: object
+      required: [id, items, cortes, cantidadItems, subtotal, conPrecioDesactualizado, ahorroPorVolumen, listaDiferenciada]
+      properties:
+        id: { type: string, nullable: true }
+        items: { type: array, items: { $ref: "#/components/schemas/ItemCarrito" } }
+        cortes: { type: array, items: { $ref: "#/components/schemas/CorteEnCarrito" } }
+        cantidadItems: { type: integer }
+        subtotal: { type: number, format: double }
+        conPrecioDesactualizado: { type: integer }
+        ahorroPorVolumen: { type: number, format: double }
+        listaDiferenciada: { type: string, nullable: true }
+    PresupuestoPedido:
+      type: object
+      required: [ok, numero, express, quoteId]
+      properties:
+        ok: { type: string }
+        numero: { type: string }
+        express: { type: boolean }
+        quoteId: { type: string }
+    CompraConfirmada:
+      type: object
+      required: [pedidoId, numero, token]
+      properties:
+        pedidoId: { type: string }
+        numero: { type: string }
+        token: { type: string }

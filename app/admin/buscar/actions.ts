@@ -35,13 +35,13 @@ export async function buscarEnPanel(
   const [delNegocio, productos] = await Promise.all([
     buscarEnElPanel(texto),
     puedeEntrar("/admin/productos", staffRole)
-      ? listarProductosAdmin({ busqueda: texto })
+      ? listarProductosAdmin({ busqueda: texto }, 4).then((l) => l.filas)
       : Promise.resolve([]),
   ]);
 
   return [
     ...delNegocio,
-    ...productos.slice(0, 4).map((p) => ({
+    ...productos.map((p) => ({
       id: p.id,
       tipo: "Producto",
       titulo: p.name,

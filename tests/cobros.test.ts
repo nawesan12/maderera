@@ -11,7 +11,7 @@ import {
   revisarNumeroDeCheque,
 } from "@/lib/cheques/numero";
 import { importeEnLetras, revisarPartes, totalDePartes } from "@/lib/cobros/partes";
-import { leerPartes } from "@/lib/cobros/leer";
+import { leerPartes } from "../scripts/golden/originales/tanda6/leer";
 import { lineasDeLaFactura } from "@/lib/entregas/factura-del-remito";
 
 /**
@@ -132,6 +132,12 @@ describe("el importe en letras del recibo", () => {
     expect(importeEnLetras(345_678.9)).toBe(
       "trescientos cuarenta y cinco mil seiscientos setenta y ocho con 90/100",
     );
+  });
+
+  it("escribe los miles de millones (antes mil millones salía «millones»)", () => {
+    expect(importeEnLetras(1_000_000_000)).toBe("mil millones con 00/100");
+    expect(importeEnLetras(1_001_000_000)).toBe("mil un millones con 00/100");
+    expect(importeEnLetras(1_521_000_300)).toBe("mil quinientos veintiún millones trescientos con 00/100");
   });
 });
 

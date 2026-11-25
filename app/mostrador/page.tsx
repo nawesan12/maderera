@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
 import { promosVigentes } from "@/lib/dal/contenido";
 import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
-import { parametrosDeCalculo } from "@/lib/dal/calculadora-parametros";
+import { anchoDeSierra } from "@/lib/dal/sierra";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { inicioDelRol, puedeEntrar } from "@/lib/roles";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { listaDelCliente } from "@/lib/mostrador/buscar";
-import {
-  cierreDelTurno,
-  fondoBaseDeSucursal,
-  movimientosDelTurno,
-  turnoAbierto,
-  ventasDeHoy,
-} from "@/lib/mostrador/caja";
+import { api, datos } from "@/lib/api/servidor";
 import { VistaMostrador } from "./vista";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
 
 export const metadata: Metadata = {
   title: "Mostrador",
@@ -63,36 +57,41 @@ export default async function MostradorPage({
   const elegida =
     sucursales.find((s) => s.slug === sucursal) ?? sucursales[0];
 
-  const [turno, ventas, listaGeneral, tarifas, promos, parametros, fondoBase] =
-    await Promise.all([
-      turnoAbierto(elegida.id),
-      ventasDeHoy(elegida.id),
-      // Cuál es la lista general: con eso la pantalla sabe si el cliente
-      // elegido compra con precio de profesional, que es de contado y no
-      // admite crédito.
-      listaDelCliente(null).then((l) => l.generalId),
-      // Las tarifas de corte, para poder cotizar un corte sin salir del
-      // mostrador: hasta ahora había que ir al panel y volver con el número.
-      tarifasDeCorte(),
-      // Las promociones vigentes: están para contarlas, no para descontarlas.
-      // Ver `PromosDelBanco`.
-      promosVigentes(),
-      // El espesor del disco, que el plano descuenta entre pieza y pieza y
-      // ahora además se dice en pantalla.
-      parametrosDeCalculo(),
-      // El cambio que tiene que quedar en el cajón: se dice al abrir, al
-      // retirar y al cerrar.
-      fondoBaseDeSucursal(elegida.id),
-    ]);
-  const movimientos = turno ? await movimientosDelTurno(turno.id) : [];
-  // El cierre Z: cuánto entró por cada medio en el turno. El arqueo cuenta
-  // efectivo, que es lo único que puede faltar del cajón; esto es lo otro que
-  // se pregunta al cerrar el día.
-  const cierre = turno ? await cierreDelTurno(turno.id) : [];
+  /*
+   * El turno con sus totales, sus movimientos y el cierre Z (cuánto entró por
+   * cada medio), las ventas de hoy, la lista general (con ella la pantalla
+   * sabe si el cliente compra con precio de profesional, que es de contado) y
+   * el cambio que tiene que quedar en el cajón: todo de Go, en un pedido.
+   */
+  const [pantalla, tarifas, promos, sierra, escalas] = await Promise.all([
+    (async () =>
+      datos(
+        await (await api()).GET("/api/v1/mostrador/pantalla", {
+          params: { query: { sucursal: elegida.id } },
+        }),
+      ))(),
+    // Las tarifas de corte, para poder cotizar un corte sin salir del
+    // mostrador: hasta ahora había que ir al panel y volver con el número.
+    tarifasDeCorte(),
+    // Las promociones vigentes: están para contarlas, no para descontarlas.
+    // Ver `PromosDelBanco`.
+    promosVigentes(),
+    // El espesor del disco, que el plano descuenta entre pieza y pieza y
+    // ahora además se dice en pantalla.
+    anchoDeSierra(),
+    // El descuento por forma de pago, para que el total de la pantalla sea
+    // el que va a registrar el servidor.
+    escalasDePago(),
+  ]);
+  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct } = pantalla;
 
   return (
     <VistaMostrador
-      usuario={{ nombre: usuario.name, userId: usuario.userId }}
+      usuario={{
+        nombre: usuario.name,
+        userId: usuario.userId,
+        administraCaja: puedeEntrar("/admin/caja", usuario.staffRole),
+      }}
       listaGeneral={listaGeneral}
       sucursales={sucursales.map((s) => ({
         id: s.id,
@@ -100,22 +99,16 @@ export default async function MostradorPage({
         nombre: s.nombre,
       }))}
       sucursal={{ id: elegida.id, slug: elegida.slug, nombre: elegida.nombre }}
-      turno={turno}
+      turno={turno ? { ...turno, abiertaAt: new Date(turno.abiertaAt) } : null}
       cierre={cierre}
-      movimientos={movimientos.map((m) => ({
-        ...m,
-        monto: Number(m.monto),
-        createdAt: m.createdAt.toISOString(),
-      }))}
+      movimientos={movimientos}
       tarifasDeCorte={tarifas}
-      anchoSierra={parametros.anchoSierraMm}
+      anchoSierra={sierra}
       fondoBase={fondoBase}
+      descuentoLibrePct={descuentoLibrePct}
       promos={promos}
-      ventas={ventas.map((v) => ({
-        ...v,
-        total: Number(v.total),
-        createdAt: v.createdAt.toISOString(),
-      }))}
+      escalasDePago={escalas}
+      ventas={ventas}
     />
   );
 }

@@ -8,6 +8,7 @@ import {
   documentosVisibles,
   estadoProfesional,
 } from "@/lib/dal/profesionales";
+import { formatearPeso } from "@/lib/formato";
 
 export const metadata: Metadata = {
   ...metadatosDePagina({
@@ -19,11 +20,7 @@ export const metadata: Metadata = {
 };
 
 /** Peso legible. Avisar antes de que alguien baje 40 MB con datos móviles. */
-function peso(bytes: number | null): string {
-  if (!bytes) return "";
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+const peso = formatearPeso;
 
 /**
  * Biblioteca técnica (cláusula 1.7).
@@ -68,7 +65,7 @@ export default async function DocumentacionPage() {
             </p>
             <Link
               href="/profesionales"
-              className="inline-flex h-11 items-center rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+              className="inline-flex h-11 items-center rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
             >
               Pedir acceso
             </Link>

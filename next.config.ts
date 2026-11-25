@@ -17,7 +17,46 @@ const idDeBuild =
   (process.env.GIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA)?.slice(0, 12) ||
   `local-${Date.now()}`;
 
+/*
+ * Qué puede cargar el navegador, y de dónde.
+ *
+ * Lo que cierra: un script inyectado no puede mandar datos a otro servidor
+ * (`connect-src 'self'`), ni traer código de afuera, ni meter `<object>`,
+ * ni cambiar la base de los enlaces relativos, ni el sitio puede ir adentro
+ * del iframe de otro.
+ *
+ * Lo que no cierra, a propósito:
+ * - `'unsafe-inline'` en scripts: Next escribe sus propios scripts en línea.
+ *   Sacarlo pide un nonce por pedido, y un nonce vuelve dinámica cada página,
+ *   incluido lo público que hoy sale armado de antemano.
+ * - Imágenes de cualquier `https:`: las fotos vienen de Unsplash, de Vercel
+ *   Blob y de lo que se cargue mañana; una imagen no ejecuta nada.
+ * - Sin `form-action`: pagar es una server action que redirige a Mercado
+ *   Pago, y sin JavaScript eso es un formulario que termina en otro dominio.
+ *   Chrome aplica `form-action` también a esa redirección.
+ *
+ * Solo en producción: el modo desarrollo de Next necesita `eval`.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  // El mapa de la ficha de cada sucursal.
+  "frame-src 'self' https://www.google.com https://maps.google.com",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "media-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'self'",
+].join("; ");
+
 const nextConfig: NextConfig = {
+  // Sin la cabecera `x-powered-by: Next.js`: no le dice a nadie qué corre.
+  poweredByHeader: false,
   cacheComponents: true,
   /**
    * El prefetch de siempre, por enlace.
@@ -29,6 +68,21 @@ const nextConfig: NextConfig = {
    * `true` es una decisión aparte, para probar con el panel y el mostrador.
    */
   partialPrefetching: false,
+  /**
+   * Lo que puede pesar lo que se manda por una server action.
+   *
+   * De fábrica es 1 MB, y por server actions pasan los documentos técnicos
+   * (el catálogo de Moldava, unos 5 MB), las fotos de producto (el panel dice
+   * «hasta 8 MB») y la planilla del importador de ISIS, que con el catálogo
+   * entero pasa del mega: todo eso daba 413 sin explicación. 20 MB cubre el
+   * tope de cada uno (16 MB el de adjuntos en Go) con margen, y queda abajo de
+   * los 25 MB de Caddy. `proxyClientMaxBodySize` es el mismo tope para lo que
+   * pasa por `proxy.ts` (todo /admin), que de fábrica corta a 10 MB.
+   */
+  experimental: {
+    serverActions: { bodySizeLimit: "20mb" },
+    proxyClientMaxBodySize: "20mb",
+  },
   /**
    * Empaquetado para servidor propio.
    *
@@ -84,6 +138,8 @@ const nextConfig: NextConfig = {
       { source: "/blog", destination: "/", permanent: true },
       { source: "/blog/:slug", destination: "/", permanent: true },
       { source: "/presupuesto", destination: "/carrito", permanent: true },
+      // Las calculadoras salieron el 9/11/2026: el corte a medida queda solo.
+      { source: "/calculadora", destination: "/corte", permanent: true },
       {
         source: "/checkout",
         destination: "/carrito/confirmar",
@@ -123,7 +179,36 @@ const nextConfig: NextConfig = {
    */
   async rewrites() {
     return {
-      beforeFiles: [],
+      /*
+       * La API de Go (backend/, docs/go/PLAN.md). En el servidor Caddy manda
+       * /api/v1 derecho a Go y esto no se usa; en desarrollo, sin Caddy, es lo
+       * que hace que el navegador llegue a la API por el mismo origen (con la
+       * misma cookie).
+       */
+      beforeFiles: [
+        { source: "/api/v1/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/v1/:ruta*` },
+        // El tiempo real del panel también es de Go (backend/internal/vivo).
+        { source: "/api/vivo", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/vivo` },
+        // Las rutas de siempre del agente del taller y la lista/PTX del panel,
+        // ahora de Go (backend/internal/cortes); el PDF y la hoja siguen en Next.
+        { source: "/api/cortes/pendientes", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/pendientes` },
+        { source: "/api/cortes/:id/lista", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/lista` },
+        { source: "/api/cortes/:id/ptx", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/cortes/:id/ptx` },
+        // Los errores de hidratación del navegador los anota Go.
+        { source: "/api/diagnostico", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/diagnostico` },
+        // WhatsApp también: el webhook de Meta, los adjuntos y el envío de archivos.
+        { source: "/api/whatsapp/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/whatsapp/:ruta*` },
+        // La baja con un clic de las campañas (RFC 8058), de Go (backend/internal/campanas).
+        { source: "/api/baja", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/baja` },
+        // La copia local del mostrador (backend/internal/mostrador): las rutas de
+        // siempre, con su forma de siempre. /config y /ventas siguen en Next.
+        { source: "/api/mostrador/latido", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/latido` },
+        { source: "/api/mostrador/catalogo", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/catalogo` },
+        { source: "/api/mostrador/clientes", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/clientes` },
+        { source: "/api/mostrador/caja/:ruta*", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/mostrador/caja/:ruta*` },
+        // El webhook de Mercado Pago (backend/internal/pagos, tanda 6), en su dirección de siempre.
+        { source: "/api/pagos/webhook", destination: `${process.env.API_URL ?? "http://127.0.0.1:8080"}/api/pagos/webhook` },
+      ],
       afterFiles: [],
       fallback: [
         { source: "/subidas/:archivo", destination: "/api/subidas/:archivo" },
@@ -200,6 +285,9 @@ const nextConfig: NextConfig = {
             value: "camera=(), microphone=(), geolocation=(), payment=()",
           },
           { key: "Strict-Transport-Security", value: "max-age=63072000" },
+          ...(process.env.NODE_ENV === "production"
+            ? [{ key: "Content-Security-Policy", value: CSP }]
+            : []),
         ],
       },
 
@@ -233,36 +321,21 @@ const nextConfig: NextConfig = {
      * tamaños que usan los avatares y las miniaturas.
      *
      * `minimumCacheTTL` sube de cuatro horas a treinta días: las URLs de las
-     * fotos son inmutables —Blob las guarda con nombre único y Unsplash tiene
-     * su propio identificador—, así que revalidar seguido no descubre nada
+     * fotos son inmutables —las subidas llevan nombre único y las de muestra
+     * no cambian—, así que revalidar seguido no descubre nada
      * nuevo y vuelve a pagar la transformación.
      */
     deviceSizes: [640, 828, 1200, 1920],
     imageSizes: [96, 256, 384],
     minimumCacheTTL: 2592000,
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
-      },
-      // Las fotos "plus" de Unsplash salen por otro host. Sin declararlo,
-      // `next/image` no las sirve y la portada rompe en tiempo de pedido.
-      {
-        protocol: "https",
-        hostname: "plus.unsplash.com",
-      },
-      /*
-       * Las fotos que se suben desde el panel, en Vercel Blob. Faltaba: la
-       * primera foto de producto cargada en producción iba a salir rota en
-       * `next/image`, que rechaza todo host que no esté acá (1/10/2026). En el
-       * servidor propio las muda `scripts/mudar-subidas.ts`; hasta que se
-       * corra, sus URLs siguen apuntando acá.
-       */
-      {
-        protocol: "https",
-        hostname: "*.public.blob.vercel-storage.com",
-      },
-    ],
+    /*
+     * Ninguna foto se sirve desde otro servidor (31/10/2026). Las de muestra,
+     * que eran de Unsplash, están en `public/fotos/`; lo que se sube desde el
+     * panel va a `/subidas/`, y lo que quedó en Vercel Blob ya se mudó. Que la
+     * lista esté vacía es lo que impide que vuelva a aparecer una dependencia
+     * de afuera: `next/image` rechaza cualquier host que no esté acá.
+     */
+    remotePatterns: [],
   },
 };
 

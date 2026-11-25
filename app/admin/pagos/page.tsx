@@ -1,12 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  Banknote,
-  CircleAlert,
-  FlaskConical,
-  Landmark,
-  Wallet,
-} from "lucide-react";
+import { FlaskConical, Landmark, Wallet } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { FiltroPeriodo } from "@/components/admin/filtro-periodo";
 import { leerPeriodo, resolverPeriodo } from "@/lib/periodos";
@@ -16,14 +10,13 @@ import {
 } from "@/components/admin/etiqueta-estado";
 import { fechaHora, moneda, plural } from "@/lib/formato";
 import {
-  listarPagos,
-  obtenerDatosBancarios,
-  resumenPagos,
-  ultimosAvisos,
+  cobranzasDelPeriodo,
+  panelDePagos,
   type PagoListado,
 } from "@/lib/dal/admin/pagos";
+import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { AccionesCobro } from "./acciones";
-import { FormularioBanco } from "./banco";
+import { DatosBancarios } from "./banco";
 
 export const metadata: Metadata = { title: "Cobros" };
 
@@ -39,193 +32,269 @@ const TIPOS: Record<string, string> = {
   inscripcion: "Inscripción",
 };
 
+/** Cómo se lee cada medio de cobro. */
+const MEDIOS: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  deposito: "Depósito",
+  cheque: "Cheque",
+  echeq: "e-Cheq",
+  tarjeta_debito: "Débito",
+  tarjeta_credito: "Crédito",
+  mercado_pago: "Mercado Pago",
+  retencion: "Retención",
+};
+
+const ORIGENES: Record<string, string> = {
+  panel: "Cuenta corriente",
+  mostrador: "Mostrador",
+  portal: "Mi cuenta",
+  mercado_pago: "En línea",
+  factura: "Factura",
+  transferencia: "En línea",
+};
+
 /**
- * Los cobros, ordenados por lo que necesita una decisión.
+ * Las cobranzas: toda la plata que entró de clientes en el período.
  *
- * Arriba las transferencias a verificar: son las únicas que esperan que alguien
- * mire el extracto y decida. Después los rechazos del mes, que son clientes que
- * quisieron pagar y no pudieron —y a los que conviene llamar—. El resto es
- * historial.
+ * Se llamaba «Cobros» y mostraba solo los cobros en línea: lo cobrado en el
+ * mostrador, desde la ficha de un cliente o con un cheque no aparecía, y el
+ * «acreditado este mes» no era el de nadie. Ahora el listado son todos los
+ * recibos del período, de cualquier origen y medio, más los pedidos pagados
+ * en el sitio (que no emiten recibo), con el total por medio sumado en el
+ * servidor (backend/internal/reportes/cobranzas.go).
+ *
+ * Arriba, lo que espera una decisión: las transferencias a verificar contra
+ * el extracto. Después los rechazos del período, que son clientes que
+ * quisieron pagar y no pudieron. Los datos bancarios se tocan una vez:
+ * están detrás de un botón del encabezado.
+ *
+ * Fuera quedaron la variable de entorno de Mercado Pago y los avisos crudos
+ * del webhook: son cosas de quien mantiene el sistema, no de quien cobra.
  */
 export default async function PagosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>;
+  searchParams: Promise<{ periodo?: string; pagina?: string }>;
 }) {
-  const periodo = resolverPeriodo(leerPeriodo((await searchParams).periodo));
+  const params = await searchParams;
+  const periodo = resolverPeriodo(leerPeriodo(params.periodo));
+  const pagina = leerPagina(params.pagina);
 
-  const [pagos, resumen, avisos, banco] = await Promise.all([
-    listarPagos(periodo.desde ? { desde: periodo.desde } : {}),
-    resumenPagos(periodo),
-    ultimosAvisos(8),
-    obtenerDatosBancarios(),
+  const [{ pagos, resumen, datosBancarios: banco, mercadoPago }, cobranzas] = await Promise.all([
+    panelDePagos(periodo.clave),
+    cobranzasDelPeriodo(periodo.clave, pagina, POR_PAGINA),
   ]);
 
   const aVerificar = pagos.filter((p) => p.estado === "en_revision");
   const rechazados = pagos.filter((p) => p.estado === "rechazado");
-  const resto = pagos.filter(
-    (p) => p.estado !== "en_revision" && p.estado !== "rechazado",
+  const sinConfirmar = pagos.filter(
+    (p) =>
+      p.proveedor === "mercado_pago" &&
+      (p.estado === "iniciado" || p.estado === "pendiente"),
   );
 
   return (
     <div className="space-y-6">
-      <EncabezadoPanel
-        titulo="Cobros"
-        detalle={`La plata que entró, la que está por entrar y la que no pudo · ${periodo.etiqueta.toLowerCase()}`}
-      >
+      <EncabezadoPanel titulo="Cobros" resumen={periodo.etiqueta}>
         <FiltroPeriodo actual={periodo.clave} />
+        {/* Sin token, o con token y sin el secreto del webhook (los avisos se
+            descartarían): el checkout no se ofrece. */}
+        {(mercadoPago === "apagado" || mercadoPago === "sin_secreto") && (
+          <span className="estado-problema inline-flex h-11 items-center rounded-full bg-[var(--estado-fondo)] px-4 text-base font-medium text-[var(--estado-tinta)]">
+            Mercado Pago apagado
+          </span>
+        )}
+        <DatosBancarios datos={banco} />
         <Link
           href="/admin/facturacion"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+          className="tarjeta inline-flex h-11 items-center gap-2 px-3.5 text-base font-medium transition-colors hover:text-acento-texto"
         >
           <Landmark className="h-5 w-5" />
           Facturación
         </Link>
       </EncabezadoPanel>
 
-      {!resumen.enVivo && (
-        <section className="tarjeta-atencion flex flex-wrap items-start gap-x-4 gap-y-2 p-5">
-          <FlaskConical className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-          <div className="min-w-[18rem] flex-1">
-            <h2 className="text-base font-medium">
-              Los cobros online están en modo de prueba
-            </h2>
-            <p className="mt-1 text-base text-muted-foreground">
-              Falta cargar <code className="tabular">MP_ACCESS_TOKEN</code> con
-              las credenciales de Mercado Pago del negocio. Hasta entonces, todo
-              el circuito funciona pero no se mueve plata: los pagos se aprueban
-              desde una pantalla de simulación.
-            </p>
-          </div>
+      {mercadoPago === "demo" && !resumen.enVivo && (
+        <section className="tarjeta-atencion flex items-center gap-3 p-4">
+          <FlaskConical className="h-5 w-5 shrink-0 text-brand-orange" />
+          <h2 className="text-base font-medium">
+            Mercado Pago en modo de prueba
+          </h2>
         </section>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Indicador
-          titulo="Acreditado este mes"
-          valor={moneda.format(resumen.acreditadoMes)}
-          detalle={plural(resumen.cantidadMes, "cobro")}
-        />
-        <Indicador
-          titulo="A verificar"
-          valor={moneda.format(resumen.montoEnRevision)}
-          detalle={
-            resumen.enRevision > 0
-              ? plural(resumen.enRevision, "cobro")
-              : "Nada pendiente"
-          }
-          atencion={resumen.enRevision > 0}
-        />
-        <Indicador
-          titulo="Rechazados del mes"
-          valor={String(resumen.rechazadosMes)}
-          detalle={
-            resumen.rechazadosMes > 0
-              ? "Vale la pena llamarlos"
-              : "Ninguno"
-          }
-          atencion={resumen.rechazadosMes > 0}
-        />
-      </div>
+      {aVerificar.length > 0 && (
+        <Grupo titulo="A verificar" pagos={aVerificar} atencion />
+      )}
 
-      {pagos.length === 0 ? (
-        <section className="tarjeta px-6 py-16 text-center">
-          <Wallet className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <h2 className="mt-4 text-lg font-medium">Todavía no hay cobros</h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Aparecen acá apenas alguien pague un pedido desde la tienda o
-            cancele deuda de su cuenta corriente.
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="tarjeta p-5">
+          <p className="text-base font-semibold text-texto-2">Cobrado</p>
+          <p className="tabular mt-1 text-[34px] font-bold leading-none tracking-[-0.03em]">
+            {moneda.format(cobranzas.cobrado)}
           </p>
-        </section>
-      ) : (
-        <div className="space-y-6">
-          {aVerificar.length > 0 && (
-            <Grupo
-              titulo="Cobros a verificar"
-              detalle="Transferencias informadas y avisos que no cuadran"
-              pagos={aVerificar}
-              atencion
-            />
-          )}
-          {rechazados.length > 0 && (
-            <Grupo
-              titulo="Rechazados"
-              detalle="Quisieron pagar y no pudieron"
-              pagos={rechazados}
-            />
-          )}
-          {resto.length > 0 && (
-            <Grupo titulo="Movimientos" pagos={resto} />
+          <p className="mt-2 text-base text-texto-2">
+            {plural(cobranzas.total, "cobro")}
+          </p>
+        </div>
+        <div className="tarjeta-hundida grid grid-cols-2 gap-x-6 gap-y-3 p-5 sm:grid-cols-3">
+          {cobranzas.porMedio.length === 0 ? (
+            <p className="text-base text-texto-2">Sin cobros en el período.</p>
+          ) : (
+            cobranzas.porMedio.map((m) => (
+              <div key={m.medio}>
+                <p className="text-base text-texto-2">
+                  {MEDIOS[m.medio] ?? m.medio}
+                </p>
+                <p className="tabular text-xl font-semibold">
+                  {moneda.format(m.total)}
+                </p>
+              </div>
+            ))
           )}
         </div>
+      </div>
+
+      {rechazados.length > 0 && (
+        <Grupo titulo="Rechazados" pagos={rechazados} />
+      )}
+      {sinConfirmar.length > 0 && (
+        <Grupo titulo="En línea sin confirmar" pagos={sinConfirmar} />
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <FormularioBanco datos={banco} />
-
-        <section className="tarjeta p-5">
-          <h2 className="text-base font-medium">Últimos avisos recibidos</h2>
-          <p className="mt-0.5 text-base text-muted-foreground">
-            Si un cliente dice que pagó y el pedido sigue pendiente, la respuesta
-            está acá: o el aviso no llegó, o llegó y falló.
-          </p>
-
-          {avisos.length === 0 ? (
-            <p className="mt-4 text-base text-muted-foreground">
-              Todavía no llegó ningún aviso.
+      <section className="tarjeta overflow-hidden">
+        <header className="tarjeta-cabecera flex items-baseline justify-between gap-3 px-5 py-3.5">
+          <h2 className="text-base font-semibold">Recibos y cobros</h2>
+          <span className="tabular text-base text-muted-foreground">
+            {cobranzas.total}
+          </span>
+        </header>
+        {cobranzas.filas.length === 0 ? (
+          <div className="px-6 py-14 text-center">
+            <Wallet className="mx-auto h-10 w-10 text-muted-foreground/60" />
+            <p className="mt-3 text-base text-muted-foreground">
+              Sin cobros en el período.
             </p>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {avisos.map((aviso) => (
-                <li
-                  key={aviso.id}
-                  className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-base"
-                >
-                  <span className="tabular text-muted-foreground">
-                    {fechaHora.format(aviso.createdAt)}
-                  </span>
-                  <span className="flex-1">
-                    {PROVEEDORES[aviso.proveedor] ?? aviso.proveedor} ·{" "}
-                    {aviso.tipo ?? "aviso"}
-                  </span>
-                  {aviso.error ? (
-                    <span className="flex items-center gap-1.5 text-brand-orange-dark">
-                      <CircleAlert className="h-4 w-4 shrink-0" />
-                      {aviso.error}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {aviso.procesadoAt ? "Procesado" : "Sin procesar"}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-base">
+              <thead>
+                <tr className="text-left text-sm uppercase tracking-wide text-muted-foreground">
+                  <th className="px-5 py-2.5 font-semibold">Cuándo</th>
+                  <th className="px-5 py-2.5 font-semibold">De quién</th>
+                  <th className="px-5 py-2.5 font-semibold">Comprobante</th>
+                  <th className="px-5 py-2.5 font-semibold">Medios</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-linea-suave">
+                {cobranzas.filas.map((c) => (
+                  <tr key={c.id} className={c.anulado ? "opacity-60" : ""}>
+                    <td className="tabular px-5 py-3 text-muted-foreground">
+                      {fechaHora.format(c.fecha)}
+                    </td>
+                    <td className="px-5 py-3">
+                      {c.customerId ? (
+                        <Link
+                          href={`/admin/clientes/${c.customerId}`}
+                          className="hover:text-brand-orange hover:underline"
+                        >
+                          {c.cliente}
+                        </Link>
+                      ) : (
+                        c.cliente
+                      )}
+                      <span className="block text-sm text-muted-foreground">
+                        {ORIGENES[c.origen] ?? c.origen}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {c.tipo === "recibo" ? (
+                        <a
+                          href={`/api/recibos/${c.id}/pdf`}
+                          target="_blank"
+                          rel="noopener"
+                          className="tabular font-medium hover:text-brand-orange hover:underline"
+                        >
+                          Recibo {c.numero}
+                        </a>
+                      ) : c.orderId ? (
+                        <Link
+                          href={`/admin/pedidos/${c.orderId}`}
+                          className="font-medium hover:text-brand-orange hover:underline"
+                        >
+                          Pedido en línea
+                        </Link>
+                      ) : (
+                        "En línea"
+                      )}
+                      {c.anulado && (
+                        <span className="estado-problema block text-sm font-medium">
+                          Anulado
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="flex flex-wrap gap-1.5">
+                        {c.partes.map((p, i) =>
+                          p.chequeId ? (
+                            <Link
+                              key={i}
+                              href="/admin/cheques"
+                              className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm hover:text-brand-orange hover:underline"
+                            >
+                              {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
+                            </Link>
+                          ) : (
+                            <span
+                              key={i}
+                              className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm"
+                            >
+                              {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
+                            </span>
+                          ),
+                        )}
+                      </span>
+                    </td>
+                    <td className="tabular px-5 py-3 text-right font-semibold">
+                      {moneda.format(c.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="px-4">
+          <Paginador
+            pagina={pagina}
+            total={cobranzas.total}
+            params={{ periodo: params.periodo }}
+          />
+        </div>
+      </section>
     </div>
   );
 }
 
 function Grupo({
   titulo,
-  detalle,
   pagos,
   atencion = false,
 }: {
   titulo: string;
-  detalle?: string;
   pagos: PagoListado[];
   atencion?: boolean;
 }) {
   return (
     <section className={atencion ? "tarjeta-atencion" : "tarjeta"}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">
+      <div className="tarjeta-cabecera flex flex-wrap items-baseline justify-between gap-2 px-5 py-4">
         <h2 className="text-base font-medium">{titulo}</h2>
-        {detalle && (
-          <p className="text-base text-muted-foreground">{detalle}</p>
-        )}
+        <span className="tabular text-base text-muted-foreground">
+          {pagos.length}
+        </span>
       </div>
 
       <ul className="divide-y">
@@ -276,35 +345,12 @@ function Grupo({
               estado={pago.estado}
               proveedor={pago.proveedor}
               comprobanteUrl={pago.comprobanteUrl}
+              cliente={pago.cliente}
+              monto={moneda.format(pago.monto)}
             />
           </li>
         ))}
       </ul>
     </section>
-  );
-}
-
-function Indicador({
-  titulo,
-  valor,
-  detalle,
-  atencion = false,
-}: {
-  titulo: string;
-  valor: string;
-  detalle: string;
-  atencion?: boolean;
-}) {
-  return (
-    <div className={atencion ? "tarjeta-atencion p-5" : "tarjeta p-5"}>
-      <p className="text-base text-muted-foreground">{titulo}</p>
-      <p className="tabular mt-1 text-3xl font-semibold tracking-tight">
-        {valor}
-      </p>
-      <p className="mt-0.5 flex items-center gap-1.5 text-base text-muted-foreground">
-        {atencion && <Banknote className="h-4 w-4 text-brand-orange" />}
-        {detalle}
-      </p>
-    </div>
   );
 }

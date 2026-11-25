@@ -12,10 +12,11 @@ import {
   Scissors,
 } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { ajuste } from "@/lib/dal/contenido";
+import { ajuste, tienda } from "@/lib/dal/contenido";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { FormularioContacto } from "./formulario";
+import { DONDE_SE_CORTA } from "@/lib/sucursales";
 
 /**
  * Contacto.
@@ -49,10 +50,12 @@ const ATAJOS = [
     detalle: "Armá la lista y te pasamos el precio con validez.",
   },
   {
-    href: "/carrito",
+    // A la herramienta de corte, no al carrito: ahí se carga el despiece, se
+    // ve el plano y se compra el corte hecho.
+    href: "/corte",
     icono: Scissors,
     titulo: "Pedir un corte a medida",
-    detalle: "Mandanos el despiece y lo cortamos en el aserradero.",
+    detalle: `Cargá el despiece, mirá el plano y lo cortamos ${DONDE_SE_CORTA.frase}.`,
   },
   {
     href: "/stock",
@@ -63,10 +66,15 @@ const ATAJOS = [
 ];
 
 export default async function ContactoPage() {
-  const [sucursales, whatsapp] = await Promise.all([
+  const [sucursales, whatsapp, laTienda] = await Promise.all([
     listarSucursalesPublicas(),
     ajuste("whatsapp_principal", "5492235903118"),
+    tienda(),
   ]);
+  // Sin tienda no hay carrito, y el stock no se muestra hasta que se cargue.
+  const atajos = ATAJOS.filter(
+    (a) => (a.href !== "/carrito" || laTienda.activa) && (a.href !== "/stock" || laTienda.stockVisible),
+  );
 
   return (
     <div className="min-h-screen bg-sitio-alt">
@@ -87,9 +95,9 @@ export default async function ContactoPage() {
 
         <aside className="space-y-6">
           <div className="space-y-3">
-            {ATAJOS.map((atajo) => (
+            {atajos.map((atajo) => (
               <Link
-                key={atajo.href}
+                key={atajo.titulo}
                 href={atajo.href}
                 className="flex items-start gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-brand-orange/50 hover:bg-muted/40"
               >

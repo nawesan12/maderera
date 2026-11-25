@@ -1,21 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Download, FileText, ImageOff, Percent, Tags } from "lucide-react";
+import { CreditCard, Download, FileText, ImageOff, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { GrupoListado } from "@/components/admin/grupo";
-import { recortar, VerTodo } from "@/components/admin/ver-mas";
+import { leerPagina, Paginador } from "@/components/admin/paginador";
 import { fechaHora, haceCuanto, moneda, plural } from "@/components/admin/formato";
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
-import { listarCategoriasAdmin } from "@/lib/dal/admin/products";
+import { listarCategoriasAdmin, marcasDeProductos } from "@/lib/dal/admin/products";
 import {
-  DIAS_PARA_REVISAR,
+  estadoDePrecio,
   historialDePrecios,
   listarListasDePrecios,
   listarPrecios,
+  PRECIOS_POR_PAGINA,
   rubrosParaAjuste,
+  ultimoAjuste,
   type FilaPrecio,
 } from "@/lib/dal/admin/precios";
 import { DialogoAjuste } from "./dialogo-ajuste";
+import { DeshacerAjuste } from "./deshacer-ajuste";
+import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { DialogoImportar } from "./dialogo-importar";
 import { PrecioEditable } from "./precio-editable";
 
@@ -25,37 +28,54 @@ const origenTexto: Record<string, string> = {
   importacion: "Importación",
 };
 
-/** Un precio que no se toca hace más de dos meses probablemente quedó viejo. */
+type Params = {
+  buscar?: string;
+  cat?: string;
+  estado?: string;
+  marca?: string;
+  prov?: string;
+  pagina?: string;
+};
 
 export default async function PreciosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ buscar?: string; cat?: string; ver?: string }>;
+  searchParams: Promise<Params>;
 }) {
   const params = await searchParams;
+  const pagina = leerPagina(params.pagina);
 
-  const [filas, categorias, listas, historial, rubros] = await Promise.all([
-    listarPrecios({ busqueda: params.buscar, categoria: params.cat }),
+  // Precios es solo del admin, que también entra a Compras: el filtro por
+  // proveedor va siempre.
+  const [grilla, categorias, marcas, listas, historial, rubros, proveedores, ultimo] = await Promise.all([
+    listarPrecios({
+      busqueda: params.buscar,
+      categoria: params.cat,
+      estado: params.estado,
+      marca: params.marca,
+      proveedor: params.prov,
+      pagina,
+    }),
     listarCategoriasAdmin(),
+    marcasDeProductos(),
     listarListasDePrecios(),
     historialDePrecios(10),
     rubrosParaAjuste(),
+    proveedoresParaElegir(),
+    ultimoAjuste(),
   ]);
+  const { filas, total, conteos } = grilla;
+  const estado = estadoDePrecio(params.estado) ?? "todos";
 
   const general = listas.find((l) => l.isDefault);
   const profesional = listas.find((l) => l.slug === "profesional");
 
-  // El criterio de "quedó viejo" lo resuelve el DAL: depende de la hora actual,
-  // y leerla durante el render de un Server Component es una impureza.
-  const sinPrecio = filas.filter((f) => Number(f.precioGeneral) <= 0);
-  const desactualizados = filas.filter((f) => f.desactualizado);
-  const alDia = filas.filter(
-    (f) => !sinPrecio.includes(f) && !desactualizados.includes(f),
-  );
-
   const consulta = new URLSearchParams();
   if (params.buscar) consulta.set("buscar", params.buscar);
   if (params.cat) consulta.set("cat", params.cat);
+  if (params.estado) consulta.set("estado", params.estado);
+  if (params.marca) consulta.set("marca", params.marca);
+  if (params.prov) consulta.set("prov", params.prov);
   const urlExportar = `/admin/precios/exportar${
     consulta.size > 0 ? `?${consulta}` : ""
   }`;
@@ -64,10 +84,10 @@ export default async function PreciosPage({
     <div>
       <EncabezadoPanel
         titulo="Precios"
-        detalle={
-          sinPrecio.length > 0
-            ? `${plural(filas.length, "medida")} · ${sinPrecio.length} sin precio`
-            : plural(filas.length, "medida con precio", "medidas con precio")
+        resumen={
+          conteos.sinPrecio > 0
+            ? `${plural(conteos.todas, "medida")} · ${conteos.sinPrecio} sin precio`
+            : plural(conteos.todas, "medida con precio", "medidas con precio")
         }
       >
         <a
@@ -89,31 +109,58 @@ export default async function PreciosPage({
           Lista en PDF
         </a>
         <DialogoImportar />
+        {/* Formas de pago y Listas son ajustes, no acciones de todos los
+            días: van sin borde, un escalón abajo de Exportar e Importar, y
+            «Ajustar precios» manda (comité final). */}
         <Link
           href="/admin/precios/formas-de-pago"
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium text-texto-2 transition-colors hover:bg-muted hover:text-foreground"
         >
-          <Percent className="h-5 w-5" />
+          {/* La tarjeta y no el %: el % es de «Ajustar precios», a dos
+              botones, y el mismo ícono para dos cosas hacía dudar. */}
+          <CreditCard className="h-5 w-5" />
           Formas de pago
         </Link>
         <Link
           href="/admin/precios/listas"
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium text-texto-2 transition-colors hover:bg-muted hover:text-foreground"
         >
           <Tags className="h-5 w-5" />
           Listas
         </Link>
+        {ultimo && ultimo.deshacibles > 0 && (
+          <DeshacerAjuste
+            cuando={fechaHora.format(ultimo.cuando)}
+            motivo={ultimo.motivo}
+            deshacibles={ultimo.deshacibles}
+          />
+        )}
         <DialogoAjuste
           categorias={categorias.map((c) => ({ slug: c.slug, name: c.name }))}
           categoriaActual={params.cat ?? "todos"}
           rubros={rubros}
+          proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
         />
       </EncabezadoPanel>
 
+      {/* «Para revisar» son los que no se tocan hace más de DIAS_PARA_REVISAR
+          días: lo decide Go, porque depende de la hora y Next no la lee
+          durante el render. */}
       <BuscadorProductos
         categorias={categorias}
         busquedaActual={params.buscar ?? ""}
         categoriaActual={params.cat ?? "todos"}
+        marcas={marcas}
+        marcaActual={params.marca ?? "todas"}
+        proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
+        proveedorActual={params.prov ?? "todos"}
+        estadoActual={estado}
+        estados={[
+          { valor: "todos", texto: "Todas", cantidad: conteos.todas },
+          { valor: "sin-precio", texto: "Sin precio", cantidad: conteos.sinPrecio, atencion: true },
+          { valor: "para-revisar", texto: "Para revisar", cantidad: conteos.paraRevisar, atencion: true },
+          { valor: "al-dia", texto: "Actualizados", cantidad: conteos.alDia },
+        ]}
       />
 
       {filas.length === 0 ? (
@@ -127,51 +174,13 @@ export default async function PreciosPage({
       ) : (
         <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_320px]">
           <div>
-            <GrupoListado
-              titulo="Sin precio cargado"
-              cantidad={sinPrecio.length}
-              detalle="No se pueden vender por la tienda"
-              destacado
-            >
-              <Grilla
-                filas={recortar(sinPrecio, params.ver === "todo").visibles}
-                generalId={general?.id}
-                profesionalId={profesional?.id}
-              />
-              <VerTodo
-                ocultas={recortar(sinPrecio, params.ver === "todo").ocultas}
-                params={params}
-              />
-            </GrupoListado>
-
-            <GrupoListado
-              titulo="Para revisar"
-              cantidad={desactualizados.length}
-              detalle={`Sin cambios hace más de ${DIAS_PARA_REVISAR} días`}
-              destacado
-            >
-              <Grilla
-                filas={recortar(desactualizados, params.ver === "todo").visibles}
-                generalId={general?.id}
-                profesionalId={profesional?.id}
-              />
-              <VerTodo
-                ocultas={recortar(desactualizados, params.ver === "todo").ocultas}
-                params={params}
-              />
-            </GrupoListado>
-
-            <GrupoListado titulo="Actualizados" cantidad={alDia.length}>
-              <Grilla
-                filas={recortar(alDia, params.ver === "todo").visibles}
-                generalId={general?.id}
-                profesionalId={profesional?.id}
-              />
-              <VerTodo
-                ocultas={recortar(alDia, params.ver === "todo").ocultas}
-                params={params}
-              />
-            </GrupoListado>
+            <Grilla filas={filas} generalId={general?.id} profesionalId={profesional?.id} />
+            <Paginador
+              pagina={pagina}
+              total={total}
+              porPagina={PRECIOS_POR_PAGINA}
+              params={params}
+            />
           </div>
 
           <aside className="2xl:sticky 2xl:top-24 2xl:self-start">
@@ -206,7 +215,7 @@ export default async function PreciosPage({
                         </span>
                         <span
                           className={`tabular font-medium ${
-                            subio ? "text-brand-orange" : "text-green-700"
+                            subio ? "text-brand-orange" : "text-saldo-favor"
                           }`}
                         >
                           {moneda.format(nuevo)}
@@ -228,6 +237,21 @@ export default async function PreciosPage({
   );
 }
 
+/**
+ * Los precios en tabla: es lo que se compara columna contra columna (la
+ * lista contra la profesional, una medida contra la siguiente). En tarjetas
+ * de dos columnas con foto de 80 px entraban seis por pantalla y había que
+ * leer cada una para ver dos números.
+ *
+ * En el teléfono la tabla apilada era una tarjeta de 260 px por medida, con
+ * «Código:», «Lista:», «Cambió:» uno abajo del otro: 13.000 px de página.
+ * Donde la tabla no entra entera va una lista propia de dos renglones por
+ * medida, sin foto ni «Cambió», que en el teléfono no se miran. Lo decide el
+ * ancho del bloque (`@container`, 896 px: lo que piden las columnas fijas más
+ * el nombre) y no el de la pantalla, porque el menú lateral se come 244 px:
+ * con `md` y un ancho mínimo, una tablet o una notebook con el menú abierto
+ * corrían la tabla de costado, y eso no pasa en ningún ancho.
+ */
 function Grilla({
   filas,
   generalId,
@@ -237,21 +261,73 @@ function Grilla({
   generalId?: string;
   profesionalId?: string;
 }) {
+  if (filas.length === 0) return null;
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      {filas.map((fila) => (
-        <TarjetaPrecio
-          key={fila.variantId}
-          fila={fila}
-          generalId={generalId}
-          profesionalId={profesionalId}
-        />
-      ))}
+    <div className="@container">
+      <div className="tarjeta hidden overflow-hidden @4xl:block">
+        {/* Anchos fijos: las tablas de los tres grupos quedan alineadas. */}
+        <table className="w-full table-fixed text-base">
+          <thead>
+            <tr className="border-b text-left text-sm text-muted-foreground">
+              <th className="w-14 px-3 py-2.5" />
+              <th className="px-3 py-2.5 font-medium">Producto</th>
+              <th className="w-48 px-3 py-2.5 font-medium">Código</th>
+              <th className="w-36 px-3 py-2.5 text-right font-medium">Lista</th>
+              <th className="w-40 px-3 py-2.5 text-right font-medium">Profesional</th>
+              <th className="w-32 px-3 py-2.5 text-right font-medium">Cambió</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((fila) => (
+              <FilaDePrecio key={fila.variantId} fila={fila} generalId={generalId} profesionalId={profesionalId} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="tarjeta overflow-hidden @4xl:hidden">
+        {/* Un solo encabezado arriba y no un rótulo por renglón: los dos
+            precios quedan en la misma columna en toda la lista. */}
+        <div
+          className="grid grid-cols-[1fr_3.25rem_1fr] gap-1.5 border-b px-3 py-2 text-sm font-medium text-muted-foreground"
+          aria-hidden="true"
+        >
+          <span className="text-right">Lista</span>
+          <span />
+          <span className="text-right">Profesional</span>
+        </div>
+        <ul className="divide-y divide-border/60">
+          {filas.map((fila) => (
+            <RenglonDePrecio key={fila.variantId} fila={fila} generalId={generalId} profesionalId={profesionalId} />
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
 
-function TarjetaPrecio({
+/**
+ * La brecha es cuánto más barato le sale al profesional. Negativa es un
+ * precio profesional por encima del de lista: casi seguro un error de carga,
+ * y se marca en rojo en vez de decir «−-107%». La usan la tabla y la lista
+ * del teléfono: escrita dos veces, se desfasaban.
+ */
+function Brecha({ brecha }: { brecha: number | null }) {
+  if (brecha === null) return null;
+  const texto = Math.abs(brecha).toString().replace(".", ",");
+  return brecha >= 0 ? (
+    <span className="tabular whitespace-nowrap text-sm text-brand-orange">−{texto}%</span>
+  ) : (
+    <span
+      className="tabular estado-problema whitespace-nowrap text-sm font-semibold"
+      title="El precio profesional es más alto que el de lista"
+    >
+      +{texto}%
+    </span>
+  );
+}
+
+function RenglonDePrecio({
   fila,
   generalId,
   profesionalId,
@@ -260,75 +336,93 @@ function TarjetaPrecio({
   generalId?: string;
   profesionalId?: string;
 }) {
-  const sinPrecio = Number(fila.precioGeneral) <= 0;
-
   return (
-    <article className={`flex gap-4 p-4 ${sinPrecio ? "tarjeta-atencion" : "tarjeta"}`}>
-      <Link
-        href={`/admin/productos/${fila.productId}`}
-        className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted"
-      >
-        {fila.imagen ? (
-          <Image
-            src={fila.imagen}
-            alt={fila.producto}
-            fill
-            className="object-cover"
-            sizes="80px"
-          />
-        ) : (
-          <span className="flex h-full items-center justify-center text-muted-foreground">
-            <ImageOff className="h-5 w-5" />
-          </span>
-        )}
-      </Link>
-
-      <div className="min-w-0 flex-1">
+    <li className="px-3 py-2">
+      {/* Lo que separa una medida de otra es la medida: entera, y se corta
+          el nombre. */}
+      <p className="flex min-w-0 items-baseline gap-2 px-2">
         <Link
           href={`/admin/productos/${fila.productId}`}
-          className="text-base font-medium leading-snug hover:text-brand-orange"
+          className="min-w-0 flex-1 truncate font-medium hover:text-brand-orange"
         >
           {fila.producto}
         </Link>
-        <p className="text-sm text-muted-foreground">{fila.medida}</p>
-        <p className="tabular text-sm text-muted-foreground">
-          {fila.sku}
-          {fila.actualizado && ` · ${haceCuanto(fila.actualizado)}`}
-        </p>
-
-        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t pt-3">
-          <dt className="self-center text-sm text-muted-foreground">
-            Lista general
-          </dt>
-          <dd>
-            {generalId && (
-              <PrecioEditable
-                variantId={fila.variantId}
-                priceListId={generalId}
-                valor={fila.precioGeneral}
-              />
-            )}
-          </dd>
-
-          <dt className="self-center text-sm text-muted-foreground">
-            Profesional
-            {fila.brecha !== null && (
-              <span className="tabular ml-1 text-brand-orange">
-                −{fila.brecha}%
-              </span>
-            )}
-          </dt>
-          <dd>
-            {profesionalId && (
-              <PrecioEditable
-                variantId={fila.variantId}
-                priceListId={profesionalId}
-                valor={fila.precioProfesional}
-              />
-            )}
-          </dd>
-        </dl>
+        <span className="shrink-0 whitespace-nowrap text-sm text-muted-foreground">{fila.medida}</span>
+      </p>
+      <div className="mt-0.5 grid grid-cols-[1fr_3.25rem_1fr] items-center gap-1.5">
+        <div>
+          {generalId && (
+            <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" tactil />
+          )}
+        </div>
+        <div className="text-center">
+          <Brecha brecha={fila.brecha} />
+        </div>
+        <div>
+          {profesionalId && (
+            <PrecioEditable
+              variantId={fila.variantId}
+              priceListId={profesionalId}
+              valor={fila.precioProfesional}
+              rotulo="Profesional"
+              tactil
+            />
+          )}
+        </div>
       </div>
-    </article>
+    </li>
+  );
+}
+
+function FilaDePrecio({
+  fila,
+  generalId,
+  profesionalId,
+}: {
+  fila: FilaPrecio;
+  generalId?: string;
+  profesionalId?: string;
+}) {
+  return (
+    <tr className="border-b border-border/60 last:border-0">
+      <td className="px-3 py-1.5">
+        <Link
+          href={`/admin/productos/${fila.productId}`}
+          className="relative block h-10 w-10 overflow-hidden rounded-md bg-muted"
+          tabIndex={-1}
+        >
+          {fila.imagen ? (
+            <Image src={fila.imagen} alt="" fill className="object-cover" sizes="40px" />
+          ) : (
+            <span className="flex h-full items-center justify-center text-muted-foreground">
+              <ImageOff className="h-4 w-4" />
+            </span>
+          )}
+        </Link>
+      </td>
+      <td className="px-3 py-1.5">
+        <Link href={`/admin/productos/${fila.productId}`} className="font-medium leading-snug hover:text-brand-orange">
+          {fila.producto}
+        </Link>
+        <span className="block text-sm text-muted-foreground">{fila.medida}</span>
+      </td>
+      <td className="tabular px-3 py-1.5 text-sm text-muted-foreground">{fila.sku}</td>
+      <td className="px-3 py-1.5">
+        {generalId && (
+          <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" />
+        )}
+      </td>
+      <td className="px-3 py-1.5">
+        <div className="flex items-center justify-end gap-1.5">
+          <Brecha brecha={fila.brecha} />
+          {profesionalId && (
+            <PrecioEditable variantId={fila.variantId} priceListId={profesionalId} valor={fila.precioProfesional} rotulo="Profesional" />
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-1.5 text-right text-sm text-muted-foreground">
+        {fila.actualizado ? haceCuanto(fila.actualizado) : "—"}
+      </td>
+    </tr>
   );
 }

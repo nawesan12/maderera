@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
@@ -10,20 +13,27 @@ import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda } from "@/components/admin/formato";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
 import { AccionesPresupuesto } from "../acciones";
+import { zonasParaPedido } from "../zonas";
 
 export default async function FichaPresupuestoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ pasar?: string }>;
 }) {
   const { id } = await params;
+  const { pasar } = await searchParams;
   if (!esUuid(id)) notFound();
-  const [p, aviso] = await Promise.all([
+  const [usuario, p, aviso, zonas] = await Promise.all([
+    requireStaff(),
     obtenerPresupuesto(id),
     avisoManual("presupuesto_listo", { tipo: "quote", id }),
+    zonasParaPedido(),
   ]);
 
   if (!p) notFound();
+  const verCliente = puedeEntrar("/admin/clientes", usuario.staffRole);
 
   return (
     <div className="space-y-6">
@@ -51,7 +61,18 @@ export default async function FichaPresupuestoPage({
               Descargar PDF
             </a>
             <MandarPorWhatsapp tipo="presupuesto" id={p.id} />
-            <AccionesPresupuesto id={p.id} estado={p.estado} />
+            <AccionesPresupuesto
+              id={p.id}
+              numero={p.numero}
+              estado={p.estado}
+              total={Number(p.total)}
+              pedido={p.pedidoId && p.numeroPedido ? { id: p.pedidoId, numero: p.numeroPedido } : null}
+              zonas={zonas}
+              conCliente={!!p.customerId}
+              direccion={p.clienteDireccion}
+              vencido={p.vencido ? { totalDeHoy: Number(p.totalDeHoy ?? p.total) } : null}
+              abrirPasar={pasar === "1"}
+            />
           </>
         }
       />
@@ -77,7 +98,8 @@ export default async function FichaPresupuestoPage({
                 <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                   Cantidad
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
+                {/* En el teléfono no entra: el subtotal quedaba cortado. */}
+                <th className="hidden px-4 py-3 text-right text-sm font-medium text-muted-foreground sm:table-cell">
                   Unitario
                 </th>
                 <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">
@@ -92,7 +114,7 @@ export default async function FichaPresupuestoPage({
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {Number(item.cantidad)} {item.unidad.replace("_", " ")}
                   </td>
-                  <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
+                  <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
                     {moneda.format(Number(item.precioUnitario))}
                   </td>
                   <td className="tabular px-5 py-3.5 text-right text-base">
@@ -103,9 +125,10 @@ export default async function FichaPresupuestoPage({
             </tbody>
             <tfoot>
               <tr className="border-t bg-muted/40">
-                <td colSpan={3} className="px-5 py-4 text-base font-medium">
+                <td colSpan={2} className="px-5 py-4 text-base font-medium">
                   Total
                 </td>
+                <td className="hidden sm:table-cell" />
                 <td className="tabular px-5 py-4 text-right text-xl font-semibold">
                   {moneda.format(Number(p.total))}
                 </td>
@@ -128,6 +151,18 @@ export default async function FichaPresupuestoPage({
               </Link>
             ) : (
               <p className="text-base font-medium">{p.cliente}</p>
+            )}
+            {/* Como en el pedido: solo quien entra a Clientes (Go lo exige
+                igual y el botón daba 403). */}
+            {p.fichaPorCorreo && verCliente && (
+              <UnirAFicha
+                que="presupuesto"
+                id={p.id}
+                numero={p.numero}
+                total={Number(p.total)}
+                contacto={{ nombre: p.cliente, telefono: p.telefono }}
+                ficha={p.fichaPorCorreo}
+              />
             )}
             {p.empresa && (
               <p className="text-base text-muted-foreground">{p.empresa}</p>

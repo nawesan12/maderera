@@ -11,6 +11,7 @@ export {
   fechaLarga,
   formatearCuit,
   formatearMonto,
+  formatearPorcentaje,
   haceCuanto,
   hora,
   moneda,

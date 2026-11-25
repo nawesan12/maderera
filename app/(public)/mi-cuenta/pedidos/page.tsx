@@ -32,7 +32,7 @@ export default async function MisPedidosPage() {
         </p>
         <Link
           href="/catalogo"
-          className="mt-5 inline-flex h-11 items-center rounded-lg bg-brand-orange px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+          className="mt-5 inline-flex h-11 items-center rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
         >
           Ver el catálogo
         </Link>

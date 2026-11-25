@@ -1,0 +1,10 @@
+proveedores-go   req/s=  164.6  p50=  110.7ms  p95=  217.3ms  p99=  284.6ms  fallos=0.00%  memoria_max=89MB  cpu_media=41%
+proveedores-ts   req/s=  108.7  p50=  157.3ms  p95=  372.3ms  p99=  495.1ms  fallos=0.00%  memoria_max=164MB  cpu_media=30%
+ficha-go         req/s=  265.0  p50=   59.4ms  p95=  185.4ms  p99=  230.6ms  fallos=0.00%  memoria_max=90MB  cpu_media=54%
+ficha-ts         req/s=  212.5  p50=   88.9ms  p95=  178.4ms  p99=  219.8ms  fallos=0.00%  memoria_max=176MB  cpu_media=43%
+pagos-go         req/s=  495.2  p50=   35.4ms  p95=   79.4ms  p99=  109.4ms  fallos=0.00%  memoria_max=90MB  cpu_media=96%
+pagos-ts         req/s=   76.7  p50=  243.4ms  p95=  438.6ms  p99=  619.6ms  fallos=0.00%  memoria_max=164MB  cpu_media=16%
+libro-go         req/s=  258.2  p50=   72.2ms  p95=  137.3ms  p99=  170.0ms  fallos=0.00%  memoria_max=91MB  cpu_media=423%
+libro-ts         req/s=   93.2  p50=  170.6ms  p95=  618.5ms  p99=  872.7ms  fallos=0.00%  memoria_max=245MB  cpu_media=99%
+pagar-go         req/s=   60.5  p50=   78.3ms  p95=  114.0ms  p99=  138.5ms  fallos=0.00%  memoria_max=91MB  cpu_media=11%
+pagar-ts         req/s=  173.4  p50=   27.2ms  p95=   41.0ms  p99=   46.3ms  fallos=79.75%  memoria_max=231MB  cpu_media=33%

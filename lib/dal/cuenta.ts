@@ -1,23 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  accountMovements,
-  addresses,
-  branches,
-  customers,
-  deliveries,
-  invoices,
-  orderItems,
-  orderStatusHistory,
-  orders,
-  quoteItems,
-  quotes,
-} from "@/lib/db/schema";
-import { getSession } from "@/lib/dal/session";
-import { saldoDeAcopio } from "@/lib/entregas";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
  * Portal del cliente.
@@ -49,37 +33,9 @@ export interface ClienteDeSesion {
  * Devuelve null si esa persona todavía no tiene ficha: pasa con el personal, y
  * con cuentas creadas antes de que existiera el portal.
  */
-export const clienteDeLaSesion = cache(
-  async (): Promise<ClienteDeSesion | null> => {
-    // `getSession()` y no `verifySession()`: el carrito también pregunta por la
-    // ficha y ahí no hay que redirigir a nadie, porque se puede comprar sin
-    // cuenta. Las pantallas del portal ya exigen la sesión en su layout.
-    const sesion = await getSession();
-    if (!sesion) return null;
-
-    const [cliente] = await db
-      .select({
-        id: customers.id,
-        nombre: customers.nombre,
-        razonSocial: customers.razonSocial,
-        cuit: customers.cuit,
-        condicionIva: customers.condicionIva,
-        email: customers.email,
-        telefono: customers.telefono,
-        direccion: customers.direccion,
-        tipo: customers.tipo,
-        estado: customers.estado,
-        limiteCredito: customers.limiteCredito,
-      })
-      .from(customers)
-      .where(and(eq(customers.userId, sesion.userId), eq(customers.active, true)))
-      .limit(1);
-
-    if (!cliente) return null;
-
-    return { ...cliente, limiteCredito: Number(cliente.limiteCredito) };
-  },
-);
+export const clienteDeLaSesion = cache(async (): Promise<ClienteDeSesion | null> => {
+  return datos(await (await api()).GET("/api/v1/cuenta/ficha")).cliente;
+});
 
 export interface ResumenCuenta {
   /** Pedidos que todavía están en movimiento. */
@@ -98,43 +54,7 @@ export interface ResumenCuenta {
  * navegación.
  */
 export const resumenCuenta = cache(async (): Promise<ResumenCuenta> => {
-  const cliente = await clienteDeLaSesion();
-
-  if (!cliente) {
-    return {
-      pedidosEnCurso: 0,
-      presupuestosAResponder: 0,
-      saldo: 0,
-      limiteCredito: 0,
-    };
-  }
-
-  const [pedidos, presupuestos, saldo] = await Promise.all([
-    db
-      .select({ total: sql<number>`count(*)` })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.customerId, cliente.id),
-          sql`${orders.estado} not in ('entregado', 'cancelado')`,
-        ),
-      ),
-    db
-      .select({ total: sql<number>`count(*)` })
-      .from(quotes)
-      .where(and(eq(quotes.customerId, cliente.id), eq(quotes.estado, "enviado"))),
-    db
-      .select({ saldo: sql<string>`coalesce(sum(${accountMovements.monto}), 0)` })
-      .from(accountMovements)
-      .where(eq(accountMovements.customerId, cliente.id)),
-  ]);
-
-  return {
-    pedidosEnCurso: Number(pedidos[0]?.total ?? 0),
-    presupuestosAResponder: Number(presupuestos[0]?.total ?? 0),
-    saldo: Number(saldo[0]?.saldo ?? 0),
-    limiteCredito: cliente.limiteCredito,
-  };
+  return datos(await (await api()).GET("/api/v1/cuenta/resumen"));
 });
 
 /* -------------------------------------------------------------------------- */
@@ -154,114 +74,36 @@ export interface PedidoPropio {
 }
 
 export async function misPedidos(): Promise<PedidoPropio[]> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  const cantidadItems = db
-    .select({
-      orderId: orderItems.orderId,
-      items: sql<number>`count(*)`.as("items"),
-    })
-    .from(orderItems)
-    .groupBy(orderItems.orderId)
-    .as("cantidad_items");
-
-  const filas = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      estado: orders.estado,
-      estadoPago: orders.estadoPago,
-      tipoEntrega: orders.tipoEntrega,
-      total: orders.total,
-      items: cantidadItems.items,
-      sucursal: branches.name,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(cantidadItems, eq(cantidadItems.orderId, orders.id))
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    .where(eq(orders.customerId, cliente.id))
-    .orderBy(desc(orders.createdAt));
-
-  return filas.map((f) => ({
-    ...f,
-    total: Number(f.total),
-    items: Number(f.items ?? 0),
-  }));
+  const filas = datos(await (await api()).GET("/api/v1/cuenta/pedidos"));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }
 
 /** Detalle de un pedido propio. Devuelve null si el número no es suyo. */
 export async function miPedido(numero: string) {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return null;
+  // El pedido, sus renglones (sin costo) y su historial los da Go
+  // (backend/internal/portal), que busca por número y dueño juntos.
+  const r = await (await api()).GET("/api/v1/cuenta/pedidos/{numero}", { params: { path: { numero: numero.slice(0, 40) } } });
+  if (r.response.status === 404) return null;
+  const p = datos(r);
+  const pedido = { ...p, createdAt: new Date(p.createdAt) };
+  const historial = p.historial.map((h) => ({ ...h, createdAt: new Date(h.createdAt) }));
 
-  const [pedido] = await db
-    .select({
-      id: orders.id,
-      numero: orders.numero,
-      estado: orders.estado,
-      estadoPago: orders.estadoPago,
-      medioPago: orders.medioPago,
-      tipoEntrega: orders.tipoEntrega,
-      direccionEntrega: orders.direccionEntrega,
-      zonaEnvio: orders.zonaEnvio,
-      costoEnvio: orders.costoEnvio,
-      subtotal: orders.subtotal,
-      total: orders.total,
-      notas: orders.notas,
-      sucursal: branches.name,
-      sucursalSlug: branches.slug,
-      createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(branches.id, orders.branchId))
-    // El filtro por dueño va acá, junto al número: si estuviera después del
-    // select ya habríamos leído el pedido de otra persona.
-    .where(and(eq(orders.numero, numero), eq(orders.customerId, cliente.id)))
-    .limit(1);
-
-  if (!pedido) return null;
-
-  const [items, historial, entregas] = await Promise.all([
-    db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, pedido.id))
-      .orderBy(asc(orderItems.orden)),
-    db
-      .select({
-        id: orderStatusHistory.id,
-        estado: orderStatusHistory.estado,
-        nota: orderStatusHistory.nota,
-        createdAt: orderStatusHistory.createdAt,
-      })
-      .from(orderStatusHistory)
-      .where(eq(orderStatusHistory.orderId, pedido.id))
-      .orderBy(desc(orderStatusHistory.createdAt)),
-    // Los retiros ya hechos. El pedido está filtrado por dueño, así que sus
-    // remitos también lo están.
-    db
-      .select({
-        id: deliveries.id,
-        numero: deliveries.numero,
-        tipo: deliveries.tipo,
-        estado: deliveries.estado,
-        receptorNombre: deliveries.receptorNombre,
-        firmadoAt: deliveries.firmadoAt,
-        createdAt: deliveries.createdAt,
-      })
-      .from(deliveries)
-      .where(eq(deliveries.orderId, pedido.id))
-      .orderBy(desc(deliveries.createdAt)),
-  ]);
-
-  // Lo que queda en acopio, renglón por renglón. Es la pregunta que un cliente
-  // de maderera se hace todo el tiempo: "¿cuánto me falta retirar?".
-  const acopio = await saldoDeAcopio(pedido.id);
+  // Los retiros ya hechos y lo que queda en acopio, renglón por renglón (la
+  // pregunta que un cliente de maderera se hace todo el tiempo: "¿cuánto me
+  // falta retirar?"). Los da Go (backend/internal/entregas), que vuelve a
+  // mirar que el pedido sea del cliente de la sesión.
+  const retiros = datos(
+    await (await api()).GET("/api/v1/mi-cuenta/pedidos/{id}/entregas", { params: { path: { id: p.id } } }),
+  );
+  const entregas = retiros.entregas.map((e) => ({
+    ...e,
+    firmadoAt: e.firmadoAt ? new Date(e.firmadoAt) : null,
+    createdAt: new Date(e.createdAt),
+  }));
+  const acopio = retiros.acopio;
   const enAcopio = acopio.filter((a) => a.pendiente > 0.01);
 
-  return { ...pedido, items, historial, entregas, acopio, enAcopio };
+  return { ...pedido, items: p.items, historial, entregas, acopio, enAcopio };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -279,71 +121,21 @@ export interface PresupuestoPropio {
 }
 
 export async function misPresupuestos(): Promise<PresupuestoPropio[]> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  const cantidadItems = db
-    .select({
-      quoteId: quoteItems.quoteId,
-      items: sql<number>`count(*)`.as("items"),
-    })
-    .from(quoteItems)
-    .groupBy(quoteItems.quoteId)
-    .as("cantidad_items_presu");
-
-  const filas = await db
-    .select({
-      id: quotes.id,
-      numero: quotes.numero,
-      estado: quotes.estado,
-      total: quotes.total,
-      items: cantidadItems.items,
-      validoHasta: quotes.validoHasta,
-      createdAt: quotes.createdAt,
-    })
-    .from(quotes)
-    .leftJoin(cantidadItems, eq(cantidadItems.quoteId, quotes.id))
-    .where(eq(quotes.customerId, cliente.id))
-    .orderBy(desc(quotes.createdAt));
-
+  const filas = datos(await (await api()).GET("/api/v1/cuenta/presupuestos"));
   return filas.map((f) => ({
     ...f,
-    total: Number(f.total),
-    items: Number(f.items ?? 0),
+    validoHasta: f.validoHasta ? new Date(f.validoHasta) : null,
+    createdAt: new Date(f.createdAt),
   }));
 }
 
 export async function miPresupuesto(numero: string) {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return null;
-
-  const [presupuesto] = await db
-    .select({
-      id: quotes.id,
-      numero: quotes.numero,
-      estado: quotes.estado,
-      subtotal: quotes.subtotal,
-      total: quotes.total,
-      notas: quotes.notas,
-      asesor: quotes.asesor,
-      validoHasta: quotes.validoHasta,
-      sucursal: branches.name,
-      createdAt: quotes.createdAt,
-    })
-    .from(quotes)
-    .leftJoin(branches, eq(branches.id, quotes.branchId))
-    .where(and(eq(quotes.numero, numero), eq(quotes.customerId, cliente.id)))
-    .limit(1);
-
-  if (!presupuesto) return null;
-
-  const items = await db
-    .select()
-    .from(quoteItems)
-    .where(eq(quoteItems.quoteId, presupuesto.id))
-    .orderBy(asc(quoteItems.orden));
-
-  return { ...presupuesto, items };
+  const r = await (await api()).GET("/api/v1/cuenta/presupuestos/{numero}", {
+    params: { path: { numero: numero.slice(0, 40) } },
+  });
+  if (r.response.status === 404) return null;
+  const p = datos(r);
+  return { ...p, validoHasta: p.validoHasta ? new Date(p.validoHasta) : null, createdAt: new Date(p.createdAt) };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -379,60 +171,20 @@ export interface CuentaCorriente {
  * nuevo y mostrado al revés.
  */
 export async function miCuentaCorriente(): Promise<CuentaCorriente> {
-  const cliente = await clienteDeLaSesion();
-
-  if (!cliente) {
-    return { saldo: 0, limiteCredito: 0, disponible: 0, movimientos: [] };
-  }
-
-  const filas = await db
-    .select()
-    .from(accountMovements)
-    .where(eq(accountMovements.customerId, cliente.id))
-    .orderBy(asc(accountMovements.createdAt));
-
-  let corrido = 0;
-  const movimientos = filas.map((m) => {
-    corrido += Number(m.monto);
-    return {
+  const c = datos(await (await api()).GET("/api/v1/cuenta/corriente"));
+  return {
+    ...c,
+    movimientos: c.movimientos.map((m) => ({
       id: m.id,
-      tipo: m.tipo as string,
-      monto: Number(m.monto),
+      tipo: m.tipo,
+      monto: m.monto,
       detalle: m.detalle,
       referencia: m.referencia,
       receiptId: m.receiptId,
-      saldoDespues: corrido,
-      createdAt: m.createdAt,
-    };
-  });
-
-  movimientos.reverse();
-
-  return {
-    saldo: corrido,
-    limiteCredito: cliente.limiteCredito,
-    disponible: Math.max(cliente.limiteCredito - corrido, 0),
-    movimientos,
+      saldoDespues: m.saldo,
+      createdAt: new Date(m.fecha),
+    })),
   };
-}
-
-/**
- * Saldo actual del cliente, sumado en la base.
- *
- * Lo usa el carrito para decidir si la compra entra en el límite de crédito.
- * Va por separado de `miCuentaCorriente()` para no traerse todos los
- * movimientos cuando solo hace falta el número.
- */
-export async function miSaldo(): Promise<number> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return 0;
-
-  const [fila] = await db
-    .select({ saldo: sql<string>`coalesce(sum(${accountMovements.monto}), 0)` })
-    .from(accountMovements)
-    .where(eq(accountMovements.customerId, cliente.id));
-
-  return Number(fila?.saldo ?? 0);
 }
 
 export interface CreditoDisponible {
@@ -462,63 +214,7 @@ export interface CreditoDisponible {
 export async function creditoDisponible(
   monto = 0,
 ): Promise<CreditoDisponible> {
-  const cliente = await clienteDeLaSesion();
-
-  const vacio = {
-    habilitado: false,
-    saldo: 0,
-    limiteCredito: 0,
-    disponible: 0,
-  };
-
-  if (!cliente) {
-    return { ...vacio, motivo: "Necesitás iniciar sesión con tu cuenta." };
-  }
-
-  const saldo = await miSaldo();
-
-  if (cliente.limiteCredito <= 0) {
-    // Sin crédito, el saldo a favor se puede usar para comprar hasta ese
-    // importe. Ver `estadoDeCredito` en `lib/dal/credito.ts`, la misma regla
-    // para el personal.
-    const aFavor = Math.max(-saldo, 0);
-    if (aFavor > 0 && cliente.estado !== "moroso") {
-      const alcanza = monto <= aFavor + 0.005;
-      return {
-        habilitado: alcanza,
-        saldo,
-        limiteCredito: 0,
-        disponible: aFavor,
-        soloSaldoAFavor: true,
-        motivo: alcanza ? null : "Tu saldo a favor no alcanza para esta compra.",
-      };
-    }
-    return { ...vacio, motivo: "Tu cuenta no tiene cuenta corriente habilitada." };
-  }
-  const disponible = Math.max(cliente.limiteCredito - saldo, 0);
-  const base = {
-    saldo,
-    limiteCredito: cliente.limiteCredito,
-    disponible,
-  };
-
-  if (cliente.estado === "moroso") {
-    return {
-      ...base,
-      habilitado: false,
-      motivo: "Tu cuenta está con pagos pendientes. Escribinos y lo vemos.",
-    };
-  }
-
-  if (monto > 0 && saldo + monto > cliente.limiteCredito) {
-    return {
-      ...base,
-      habilitado: false,
-      motivo: `Esta compra supera tu límite de crédito. Tenés ${disponible.toLocaleString("es-AR")} disponibles.`,
-    };
-  }
-
-  return { ...base, habilitado: true, motivo: null };
+  return datos(await (await api()).GET("/api/v1/cuenta/credito", { params: { query: { monto } } }));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -537,36 +233,14 @@ export interface ComprobantePropio {
 }
 
 /**
- * Facturas y notas de crédito del cliente.
- *
- * Se muestran solo las que ya se emitieron: un borrador es trabajo interno del
- * mostrador y todavía puede cambiar, así que no tiene por qué verlo el cliente.
+ * Facturas y notas de crédito del cliente. Las lee Go con la cookie
+ * (backend/internal/facturacion): solo las de su ficha y sin borradores (un
+ * borrador es trabajo interno del mostrador y todavía puede cambiar).
  */
 export async function misComprobantes(): Promise<ComprobantePropio[]> {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  const filas = await db
-    .select({
-      id: invoices.id,
-      tipo: invoices.tipo,
-      puntoVenta: invoices.puntoVenta,
-      numero: invoices.numero,
-      estado: invoices.estado,
-      total: invoices.total,
-      cae: invoices.cae,
-      fechaEmision: invoices.fechaEmision,
-    })
-    .from(invoices)
-    .where(
-      and(
-        eq(invoices.customerId, cliente.id),
-        sql`${invoices.estado} <> 'borrador'`,
-      ),
-    )
-    .orderBy(desc(invoices.fechaEmision));
-
-  return filas.map((f) => ({ ...f, total: Number(f.total) }));
+  const r = await (await api()).GET("/api/v1/cuenta/comprobantes");
+  if (r.response.status === 401) return [];
+  return datos(r).map((f) => ({ ...f, fechaEmision: new Date(f.fechaEmision) }));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -574,12 +248,6 @@ export async function misComprobantes(): Promise<ComprobantePropio[]> {
 /* -------------------------------------------------------------------------- */
 
 export async function misDirecciones() {
-  const cliente = await clienteDeLaSesion();
-  if (!cliente) return [];
-
-  return db
-    .select()
-    .from(addresses)
-    .where(eq(addresses.customerId, cliente.id))
-    .orderBy(desc(addresses.predeterminada), asc(addresses.etiqueta));
+  const filas = datos(await (await api()).GET("/api/v1/cuenta/direcciones"));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }

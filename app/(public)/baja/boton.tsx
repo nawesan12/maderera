@@ -37,7 +37,7 @@ export function BotonDeBaja({ e, t, dadoDeBaja }: { e: string; t: string; dadoDe
             type="button"
             onClick={() => cambiar(false)}
             disabled={pendiente}
-            className="inline-flex h-12 items-center gap-2 rounded-full bg-brand-orange px-6 text-base font-semibold text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+            className="inline-flex h-12 items-center gap-2 rounded-full bg-accion px-6 text-base font-semibold text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
           >
             {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
             Darme de baja

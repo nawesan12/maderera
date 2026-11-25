@@ -1,101 +1,40 @@
 import "server-only";
 
-import { desc, isNotNull, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  accountMovements,
-  customers,
-  inventory,
-  migrationRuns,
-  productVariants,
-  type MigrationRun,
-  type RechazoMigracion,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
+import { api, datos } from "@/lib/api/servidor";
+import type { Esquemas } from "@/lib/api/tipos";
+import type { DefinicionesDeMigracion } from "@/lib/migracion/tipos";
 
-export interface CorridaMigracion {
-  id: string;
-  entidad: MigrationRun["entidad"];
-  archivo: string;
-  estado: MigrationRun["estado"];
-  filasTotales: number;
-  creados: number;
-  actualizados: number;
-  omitidos: number;
-  conError: number;
-  rechazos: RechazoMigracion[];
+/*
+ * La migración del sistema anterior: lo lee la API de Go
+ * (backend/internal/migracion).
+ */
+
+export type CorridaMigracion = Omit<Esquemas["CorridaDeMigracion"], "createdAt" | "finishedAt"> & {
   createdAt: Date;
   finishedAt: Date | null;
-}
+};
 
 /** Últimas corridas, para saber qué se migró y qué quedó por el camino. */
-export async function historialDeMigraciones(
-  limite = 20,
-): Promise<CorridaMigracion[]> {
-  await requireStaff();
-
-  const filas = await db
-    .select()
-    .from(migrationRuns)
-    .orderBy(desc(migrationRuns.createdAt))
-    .limit(limite);
-
+export async function historialDeMigraciones(limite = 20): Promise<CorridaMigracion[]> {
+  const filas = datos(await (await api()).GET("/api/v1/admin/migracion/corridas", { params: { query: { limite } } }));
   return filas.map((fila) => ({
-    id: fila.id,
-    entidad: fila.entidad,
-    archivo: fila.archivo,
-    estado: fila.estado,
-    filasTotales: fila.filasTotales,
-    creados: fila.creados,
-    actualizados: fila.actualizados,
-    omitidos: fila.omitidos,
-    conError: fila.conError,
-    rechazos: (fila.rechazos as RechazoMigracion[]) ?? [],
-    createdAt: fila.createdAt,
-    finishedAt: fila.finishedAt,
+    ...fila,
+    createdAt: new Date(fila.createdAt),
+    finishedAt: fila.finishedAt ? new Date(fila.finishedAt) : null,
   }));
 }
 
-export interface EstadoDelSistema {
-  clientes: number;
-  clientesMigrados: number;
-  medidas: number;
-  conExistencia: number;
-  saldosMigrados: number;
-}
+export type EstadoDelSistema = Esquemas["EstadoDeMigracion"];
 
 /**
- * Lo que ya hay cargado, para poder mirar antes de subir nada.
- *
- * En una migración la pregunta previa siempre es la misma: "¿esto ya lo corrí?".
- * Los contadores de fichas con código del sistema anterior y de saldos
- * iniciales la contestan sin abrir el historial.
+ * Lo que ya hay cargado, para poder mirar antes de subir nada: contesta
+ * «¿esto ya lo corrí?» sin abrir el historial.
  */
 export async function estadoDelSistema(): Promise<EstadoDelSistema> {
-  await requireStaff();
+  return datos(await (await api()).GET("/api/v1/admin/migracion/estado"));
+}
 
-  const contar = sql<number>`count(*)::int`;
-
-  const [[clientes], [migrados], [medidas], [existencias], [saldos]] =
-    await Promise.all([
-      db.select({ n: contar }).from(customers),
-      db
-        .select({ n: contar })
-        .from(customers)
-        .where(isNotNull(customers.codigoLegacy)),
-      db.select({ n: contar }).from(productVariants),
-      db.select({ n: contar }).from(inventory).where(sql`${inventory.qty} > 0`),
-      db
-        .select({ n: contar })
-        .from(accountMovements)
-        .where(sql`${accountMovements.referencia} = 'SALDO-INICIAL'`),
-    ]);
-
-  return {
-    clientes: clientes?.n ?? 0,
-    clientesMigrados: migrados?.n ?? 0,
-    medidas: medidas?.n ?? 0,
-    conExistencia: existencias?.n ?? 0,
-    saldosMigrados: saldos?.n ?? 0,
-  };
+/** Las siete entidades, con sus campos, y el tamaño del lote. */
+export async function definicionesDeMigracion(): Promise<DefinicionesDeMigracion> {
+  return datos(await (await api()).GET("/api/v1/admin/migracion/entidades"));
 }

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+// El costo promedio y el prorrateo se mudaron a Go (backend/internal/compras)
+// y el margen también (backend/internal/pedidos, tanda 5): estas pruebas
+// corren la copia que usan los golden.
 import {
+  margenDeLinea,
   mezclarCosto,
   prorratearGastos,
-  margenDeLinea,
   type EstadoDeCosto,
-} from "@/lib/compras/costo";
+} from "../scripts/golden/originales/costo";
 
 /**
  * El costo promedio ponderado.

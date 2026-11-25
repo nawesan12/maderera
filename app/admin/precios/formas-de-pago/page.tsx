@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { asc } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { paymentDiscounts } from "@/lib/db/schema";
+import { descuentosDePago } from "@/lib/dal/admin/precios";
 import { requireStaffRole } from "@/lib/dal/session";
 import { EditorDeDescuento } from "./editor";
 import { MEDIOS } from "./medios";
@@ -21,10 +19,7 @@ export const metadata: Metadata = { title: "Descuentos por forma de pago" };
 export default async function FormasDePagoPage() {
   await requireStaffRole("admin");
 
-  const escalones = await db
-    .select()
-    .from(paymentDiscounts)
-    .orderBy(asc(paymentDiscounts.medio), asc(paymentDiscounts.desdeMonto));
+  const escalones = await descuentosDePago();
 
   const nombreDeMedio = (valor: string) =>
     MEDIOS.find((m) => m.valor === valor)?.etiqueta ?? valor;
@@ -41,26 +36,16 @@ export default async function FormasDePagoPage() {
 
       <EncabezadoPanel
         titulo="Descuentos por forma de pago"
-        detalle="Lo que se descuenta según cómo paga el cliente, en la tienda y en el mostrador."
       />
 
-      <div className="rounded-xl border bg-muted/40 p-5 text-base">
-        <p>
-          <strong>Es una escala, no un porcentaje único.</strong> Gana el
-          escalón de monto más alto que la compra alcanza: con uno desde cero al
-          10 % y otro desde $500.000 al 15 %, una compra de $600.000 lleva el
-          15 %.
-        </p>
-        <p className="mt-2">
-          El descuento va sobre la mercadería, <strong>no sobre el flete</strong>
-          : descontarle un 10 % al envío sería regalar plata que se le paga a un
-          tercero.
-        </p>
-        <p className="mt-2 text-muted-foreground">
-          En el mostrador, si el vendedor escribe un descuento a mano, ese gana.
-          Nunca se suman los dos.
-        </p>
-      </div>
+      {/* Es una escala: con uno desde cero al 10 % y otro desde $500.000 al 15 %,
+          una compra de $600.000 lleva el 15 %. No va sobre el flete: descontarle
+          al envío sería regalar plata que se le paga a un tercero. En el
+          mostrador, si el vendedor escribe un descuento a mano, ese gana; nunca
+          se suman los dos. */}
+      <p className="text-base text-muted-foreground">
+        Gana el escalón más alto que alcanza la compra. No descuenta el flete.
+      </p>
 
       <div className="space-y-4">
         {escalones.map((escalon) => (

@@ -15,15 +15,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  ENTIDADES,
-  LOTE,
-  definicionDe,
   faltantes,
   type ClaveEntidad,
+  type Control,
+  type DefinicionesDeMigracion,
   type Mapeo,
-} from "@/lib/migracion/entidades";
-import type { Control } from "@/lib/migracion/ejecutar";
-import type { RechazoMigracion } from "@/lib/db/schema";
+  type RechazoMigracion,
+} from "@/lib/migracion/tipos";
 import {
   analizarArchivo,
   cerrarCorrida,
@@ -103,12 +101,25 @@ function descargarRechazos(entidad: ClaveEntidad, rechazos: RechazoMigracion[]) 
   URL.revokeObjectURL(url);
 }
 
-export function AsistenteMigracion() {
+export function AsistenteMigracion({
+  definiciones,
+  entidadInicial,
+}: {
+  /** Las entidades con sus campos y el tamaño del lote, de la API de Go. */
+  definiciones: DefinicionesDeMigracion;
+  /**
+   * Llegar ya con la entidad elegida: «Cargar desde Excel» en Productos o en
+   * Stock abre directo el paso del archivo.
+   */
+  entidadInicial?: ClaveEntidad;
+}) {
+  const { entidades: ENTIDADES, lote: LOTE } = definiciones;
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [paso, setPaso] = useState<Paso>("entidad");
-  const [entidad, setEntidad] = useState<ClaveEntidad>("clientes");
+  const [paso, setPaso] = useState<Paso>(entidadInicial ? "archivo" : "entidad");
+  const [entidad, setEntidad] = useState<ClaveEntidad>(entidadInicial ?? "clientes");
+  const [arrastrando, setArrastrando] = useState(false);
   const [analisis, setAnalisis] = useState<ArchivoAnalizado | null>(null);
   const [mapeo, setMapeo] = useState<Mapeo>({});
   const [previa, setPrevia] = useState<VistaPrevia | null>(null);
@@ -120,7 +131,10 @@ export function AsistenteMigracion() {
   const [leyendo, startLectura] = useTransition();
   const [validando, startValidacion] = useTransition();
 
-  const definicion = useMemo(() => definicionDe(entidad), [entidad]);
+  const definicion = useMemo(
+    () => ENTIDADES.find((e) => e.clave === entidad) ?? ENTIDADES[0],
+    [ENTIDADES, entidad],
+  );
   const filas = analisis?.filas ?? [];
   const sinMapear = faltantes(definicion, mapeo);
 
@@ -240,7 +254,7 @@ export function AsistenteMigracion() {
               setEntidad(item.clave);
               setPaso("archivo");
             }}
-            className="rounded-xl border bg-card p-5 text-left transition-colors hover:border-brand-orange/50 hover:bg-muted/40"
+            className="tarjeta p-5 text-left transition-colors hover:border-brand-orange/50 hover:bg-muted/40"
           >
             <p className="text-lg font-semibold">{item.titulo}</p>
             <p className="mt-1 text-base text-muted-foreground">{item.resumen}</p>
@@ -282,7 +296,22 @@ export function AsistenteMigracion() {
           {INSTRUCCIONES[entidad]}
         </p>
 
-        <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center transition-colors hover:border-brand-orange/50 hover:bg-muted/40">
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setArrastrando(true);
+          }}
+          onDragLeave={() => setArrastrando(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setArrastrando(false);
+            const archivo = e.dataTransfer.files?.[0];
+            if (archivo && !leyendo) elegirArchivo(archivo);
+          }}
+          className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
+            arrastrando ? "border-brand-orange bg-brand-orange/5" : "hover:border-brand-orange/50 hover:bg-muted/40"
+          }`}
+        >
           {leyendo ? (
             <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
           ) : (
@@ -292,7 +321,7 @@ export function AsistenteMigracion() {
             {leyendo ? "Leyendo el archivo…" : "Elegí el archivo o arrastralo acá"}
           </span>
           <span className="text-sm text-muted-foreground">
-            Planilla exportada del sistema anterior (.xlsx o .csv) · hasta 8 MB
+            Excel (.xlsx) o .csv · hasta 8 MB
           </span>
           <input
             ref={inputRef}
@@ -307,10 +336,6 @@ export function AsistenteMigracion() {
           />
         </label>
 
-        <p className="mt-4 text-sm text-muted-foreground">
-          No hace falta que las columnas se llamen de ninguna forma en
-          particular: en el paso siguiente se indica qué es cada una.
-        </p>
       </div>
     );
   }
@@ -403,7 +428,7 @@ export function AsistenteMigracion() {
             {previa.muestra?.map((fila) => (
               <div
                 key={fila.linea}
-                className={`rounded-xl border bg-card p-3 ${
+                className={`tarjeta p-3 ${
                   fila.errores.length > 0 ? "border-brand-orange/60" : ""
                 }`}
               >
@@ -471,7 +496,7 @@ export function AsistenteMigracion() {
     const porcentaje = filas.length ? Math.round((avance / filas.length) * 100) : 0;
 
     return (
-      <div className="rounded-xl border bg-card p-6">
+      <div className="tarjeta p-6">
         <p className="flex items-center gap-2 text-lg font-semibold">
           <Loader2 className="h-5 w-5 animate-spin text-brand-orange" />
           Migrando {definicion.titulo.toLowerCase()}…
@@ -539,7 +564,7 @@ export function AsistenteMigracion() {
         <div className="mt-5 space-y-2">
           <p className="text-base font-semibold">Control de integridad</p>
           {controles.map((control) => (
-            <div key={control.titulo} className="rounded-xl border bg-card p-4">
+            <div key={control.titulo} className="tarjeta p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="text-base font-medium">
                   {control.ok ? (
@@ -622,7 +647,7 @@ function Indicador({
   }[tono];
 
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="tarjeta p-4">
       <p className="text-base text-muted-foreground">{titulo}</p>
       <p className={`tabular text-3xl font-semibold ${color}`}>
         {valor.toLocaleString("es-AR")}

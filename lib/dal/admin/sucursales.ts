@@ -1,26 +1,13 @@
 import "server-only";
 
-import { and, asc, eq, gte, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  branches,
-  cuttingOrders,
-  inventory,
-  orders,
-  priceListItems,
-  priceLists,
-  productVariants,
-  products,
-} from "@/lib/db/schema";
+import { api, datos } from "@/lib/api/servidor";
 import { sucursalPublicada } from "@/lib/sucursales";
-import { requireStaff } from "@/lib/dal/session";
 
-/** Medianoche de hoy, para separar "hoy" de "ayer" en hora local. */
-function inicioDelDia() {
-  const fecha = new Date();
-  fecha.setHours(0, 0, 0, 0);
-  return fecha;
-}
+/*
+ * Los números de cada sucursal los da la API de Go (backend/internal/stock/
+ * sucursales.go); la dirección, el teléfono y el horario son datos fijos del
+ * sitio (lib/sucursales.ts) y se suman acá.
+ */
 
 export interface SucursalConMetricas {
   id: string;
@@ -58,129 +45,16 @@ export interface SucursalConMetricas {
  * `group by` por cada métrica igual.
  */
 export async function sucursalesConMetricas(): Promise<SucursalConMetricas[]> {
-  await requireStaff();
-
-  const hoy = inicioDelDia();
-  const noCancelado = sql`${orders.estado} <> 'cancelado'`;
-
-  const [
-    fichas,
-    ventas,
-    abiertos,
-    cortes,
-    valorStock,
-    reponer,
-  ] = await Promise.all([
-    db.select().from(branches).orderBy(asc(branches.sortOrder)),
-    db
-      .select({
-        branchId: orders.branchId,
-        total: sql<string>`coalesce(sum(${orders.total}), 0)`,
-        pedidos: sql<number>`count(*)::int`,
-        clientes: sql<number>`count(distinct coalesce(${orders.customerId}::text, ${orders.contactoEmail}, ${orders.id}::text))::int`,
-      })
-      .from(orders)
-      .where(and(gte(orders.createdAt, hoy), noCancelado))
-      .groupBy(orders.branchId),
-    db
-      .select({
-        branchId: orders.branchId,
-        n: sql<number>`count(*)::int`,
-      })
-      .from(orders)
-      .where(sql`${orders.estado} not in ('entregado', 'cancelado')`)
-      .groupBy(orders.branchId),
-    db
-      .select({
-        branchId: cuttingOrders.branchId,
-        n: sql<number>`count(*)::int`,
-      })
-      .from(cuttingOrders)
-      .where(sql`${cuttingOrders.estado} in ('en-cola', 'en-proceso')`)
-      .groupBy(cuttingOrders.branchId),
-    db
-      .select({
-        branchId: inventory.branchId,
-        total: sql<string>`coalesce(sum(${inventory.qty} * ${priceListItems.price}), 0)`,
-      })
-      .from(inventory)
-      .innerJoin(priceListItems, eq(priceListItems.variantId, inventory.variantId))
-      .innerJoin(priceLists, eq(priceLists.id, priceListItems.priceListId))
-      .where(eq(priceLists.isDefault, true))
-      .groupBy(inventory.branchId),
-    db
-      .select({
-        branchId: inventory.branchId,
-        n: sql<number>`count(*)::int`,
-      })
-      .from(inventory)
-      .innerJoin(productVariants, eq(productVariants.id, inventory.variantId))
-      .innerJoin(products, eq(products.id, productVariants.productId))
-      .where(
-        and(
-          eq(products.active, true),
-          eq(productVariants.active, true),
-          sql`${inventory.minQty} > 0`,
-          sql`${inventory.qty} <= ${inventory.minQty}`,
-        ),
-      )
-      .groupBy(inventory.branchId),
-  ]);
-
-  return fichas.map((f) => ({
-    id: f.id,
-    slug: f.slug,
-    nombre: f.name,
-    // La ficha publicada sale de `lib/sucursales.ts`, no de la fila: acá se
-    // muestra para que quien mira los números vea de qué local se trata.
+  const filas = datos(await (await api()).GET("/api/v1/admin/sucursales/metricas"));
+  return filas.map((f) => ({
+    ...f,
     direccion: sucursalPublicada(f.slug)?.direccion ?? "",
     telefono: sucursalPublicada(f.slug)?.telefono ?? null,
     horario: sucursalPublicada(f.slug)?.horario ?? null,
-    sortOrder: f.sortOrder,
-    active: f.active,
-    ventasHoy: Number(ventas.find((v) => v.branchId === f.id)?.total ?? 0),
-    pedidosHoy: ventas.find((v) => v.branchId === f.id)?.pedidos ?? 0,
-    clientesAtendidos: ventas.find((v) => v.branchId === f.id)?.clientes ?? 0,
-    pedidosAbiertos: abiertos.find((a) => a.branchId === f.id)?.n ?? 0,
-    cortesEnCola: cortes.find((c) => c.branchId === f.id)?.n ?? 0,
-    stockValor: Number(valorStock.find((s) => s.branchId === f.id)?.total ?? 0),
-    productosStockBajo: reponer.find((r) => r.branchId === f.id)?.n ?? 0,
   }));
 }
 
-/**
- * Lo que no está asignado a ninguna sucursal.
- *
- * Los pedidos de la tienda con envío a domicilio pueden quedar sin `branchId`
- * hasta que alguien los toma. Si no se muestran en algún lado, la suma de las
- * dos sucursales no da el total del panel y parecen números rotos.
- */
+/** Pedidos abiertos y cortes en cola que no tienen sucursal asignada. */
 export async function sinSucursalAsignada() {
-  await requireStaff();
-
-  const [pedidos, cortes] = await Promise.all([
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(orders)
-      .where(
-        and(
-          sql`${orders.branchId} is null`,
-          sql`${orders.estado} not in ('entregado', 'cancelado')`,
-        ),
-      ),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(cuttingOrders)
-      .where(
-        and(
-          sql`${cuttingOrders.branchId} is null`,
-          sql`${cuttingOrders.estado} in ('en-cola', 'en-proceso')`,
-        ),
-      ),
-  ]);
-
-  return {
-    pedidos: pedidos[0]?.n ?? 0,
-    cortes: cortes[0]?.n ?? 0,
-  };
+  return datos(await (await api()).GET("/api/v1/admin/sucursales/sin-asignar"));
 }

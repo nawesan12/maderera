@@ -17,11 +17,17 @@ export function AccionesCorte({
   estado,
   urgente,
   compacto = false,
+  soloMaquina = false,
 }: {
   id: string;
   estado: string;
   urgente: boolean;
   compacto?: boolean;
+  /**
+   * En el taller, el aserradero empieza y termina. Marcar urgente y entregar
+   * son decisiones del mostrador.
+   */
+  soloMaquina?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -30,18 +36,18 @@ export function AccionesCorte({
     startTransition(async () => {
       const resultado = await fn();
       if (resultado.error) toast.error(resultado.error);
-      else {
-        toast.success(resultado.ok ?? "Listo.");
-        router.refresh();
-      }
+      else toast.success(resultado.ok ?? "Listo.");
+      // También con error: si fue un 409 («ya estaba en la máquina»), la
+      // pantalla tiene que mostrar el estado de verdad.
+      router.refresh();
     });
   }
 
-  const etiqueta = SIGUIENTE[estado];
+  const etiqueta = soloMaquina && estado === "terminado" ? undefined : SIGUIENTE[estado];
 
   return (
     <div className={`flex items-center gap-2 ${compacto ? "w-full" : ""}`}>
-      {estado !== "retirado" && (
+      {estado !== "retirado" && !soloMaquina && (
         <button
           onClick={() => accion(() => alternarUrgente(id))}
           disabled={pendiente}
@@ -62,7 +68,7 @@ export function AccionesCorte({
 
       {etiqueta && (
         <button
-          onClick={() => accion(() => avanzarCorte(id))}
+          onClick={() => accion(() => avanzarCorte(id, estado))}
           disabled={pendiente}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >

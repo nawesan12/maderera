@@ -1,9 +1,7 @@
 import "server-only";
 
-import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { banners } from "@/lib/db/schema";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
+import { apiPublica, datos } from "@/lib/api/servidor";
 
 export interface BannerPublicado {
   id: string;
@@ -46,53 +44,15 @@ type BannerGuardado = Omit<BannerPublicado, "actualizado"> & {
   actualizado: string;
 };
 
+// Los arma la API de Go (backend/internal/contenido): los de la ubicación,
+// activos y dentro de sus fechas.
 const bannersCacheados = cachearPublico(
-  async (
-    ubicacion: "franja" | "portada" | "catalogo",
-  ): Promise<BannerGuardado[]> => {
-    const ahora = new Date();
-
-    const filas = await db
-      .select({
-        id: banners.id,
-        etiqueta: banners.etiqueta,
-        titulo: banners.titulo,
-        bajada: banners.bajada,
-        enlace: banners.enlace,
-        textoEnlace: banners.textoEnlace,
-        imagenUrl: banners.imagenUrl,
-        actualizado: banners.updatedAt,
-      })
-      .from(banners)
-      .where(
-        and(
-          eq(banners.ubicacion, ubicacion),
-          eq(banners.activo, true),
-          or(isNull(banners.desde), sql`${banners.desde} <= ${ahora}`),
-          or(isNull(banners.hasta), sql`${banners.hasta} >= ${ahora}`),
-        ),
-      )
-      .orderBy(asc(banners.orden), asc(banners.createdAt));
-
-    return filas.map((f) => ({
-      ...f,
-      actualizado: f.actualizado.toISOString(),
-    }));
-  },
+  async (ubicacion: "franja" | "portada" | "catalogo"): Promise<BannerGuardado[]> =>
+    datos(await apiPublica.GET("/api/v1/contenido/banners", { params: { query: { ubicacion } } })),
   ["banners"],
   ETIQUETAS.contenido,
 );
 
-/**
- * Los banners de una ubicación, con la fecha rearmada.
- *
- * **Esto rompió un despliegue y conviene saber por qué.** El layout público usa
- * `actualizado.getTime()` para armar la clave del aviso de bienvenida, y el
- * `Date` volvía del caché convertido en texto. No se notaba en desarrollo: la
- * primera llamada devuelve el objeto tal cual, y recién la segunda —ya
- * serializada— explota. En el build, donde cada página arranca limpia, el sitio
- * entero dejó de compilar apenas hubo un banner activo en la base.
- */
 export async function bannersDe(
   ubicacion: "franja" | "portada" | "catalogo",
 ): Promise<BannerPublicado[]> {

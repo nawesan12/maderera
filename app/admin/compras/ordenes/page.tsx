@@ -38,11 +38,12 @@ export default async function OrdenesDeCompraPage() {
           <h1 className="text-[26px] font-bold tracking-tight">
             Órdenes de compra
           </h1>
-          <p className="mt-1 text-base text-muted-foreground">
-            {enCamino.length > 0
-              ? `${enCamino.length} en camino por ${formatearMonto(enCamino.reduce((s, o) => s + o.neto, 0))}.`
-              : "Lo que se le pidió a cada proveedor y qué falta que llegue."}
-          </p>
+          {/* Sin nada en camino no hay bajada: decía «lo que se le pidió a cada proveedor y qué falta que llegue». */}
+          {enCamino.length > 0 && (
+            <p className="mt-1 text-base text-muted-foreground">
+              {`${enCamino.length} en camino por ${formatearMonto(enCamino.reduce((s, o) => s + o.neto, 0))}.`}
+            </p>
+          )}
         </div>
         <Link
           href="/admin/compras/ordenes/nueva"
@@ -58,7 +59,7 @@ export default async function OrdenesDeCompraPage() {
           <Vacio
             icono={ClipboardList}
             titulo="Todavía no hay órdenes de compra"
-            detalle="Una orden deja por escrito qué se le pidió a cada proveedor, y después la recepción se compara contra ella."
+            // Una orden deja por escrito qué se le pidió a cada proveedor, y después la recepción se compara contra ella.
             accion={{ texto: "Nueva orden", href: "/admin/compras/ordenes/nueva" }}
           />
         ) : (

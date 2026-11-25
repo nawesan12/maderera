@@ -1,0 +1,7 @@
+package: preciosapi
+output: ../internal/api/preciosapi/precios.gen.go
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+  embedded-spec: true

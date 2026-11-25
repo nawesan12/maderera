@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { seccionesPara } from "./secciones";
+import { Marca } from "@/components/marca";
 
 /**
  * Navegación del panel.
@@ -59,17 +59,7 @@ export function AdminSidebar({
         className="flex items-center gap-2.5 px-[18px] pb-4 pt-[18px]"
         onClick={() => setAbierto(false)}
       >
-        <Image
-          src="/cropped-icon-180x180.png"
-          alt=""
-          width={34}
-          height={34}
-          className="rounded-lg"
-        />
-        <div className="leading-[1.25]">
-          <p className="text-[15px] font-semibold">Maderera JBJ</p>
-          <p className="text-[13px] text-sidebar-foreground/65">Panel de gestión</p>
-        </div>
+        <Marca tamano="panel" tono="oscuro" etiqueta="Panel" />
       </Link>
 
       <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-2.5 pb-3 pt-1">

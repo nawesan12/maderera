@@ -1,0 +1,488 @@
+{
+ "clientes": [
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0"
+   },
+   "datos": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0"
+   }
+  },
+  {
+   "entrada": {
+    "nombre": " J ",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0"
+   },
+   "error": "El nombre es obligatorio.",
+   "campo": "nombre"
+  },
+  {
+   "entrada": {
+    "nombre": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0"
+   },
+   "error": "Too big: expected string to have <=160 characters",
+   "campo": "nombre"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "cuit": "30-58944525-9"
+   },
+   "datos": {
+    "nombre": "Juan Pérez",
+    "cuit": "30-58944525-9",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0"
+   }
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "cuit": "30589445259"
+   },
+   "datos": {
+    "nombre": "Juan Pérez",
+    "cuit": "30589445259",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0"
+   }
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "cuit": "30 58944525 9"
+   },
+   "error": "El CUIT tiene que tener 11 dígitos, con o sin guiones.",
+   "campo": "cuit"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "cuit": "3058944525"
+   },
+   "error": "El CUIT tiene que tener 11 dígitos, con o sin guiones.",
+   "campo": "cuit"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "cuit": "30-58944525-9-1"
+   },
+   "error": "El CUIT tiene que tener 11 dígitos, con o sin guiones.",
+   "campo": "cuit"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "cuit": "xxxxxxxxxxxxxxxxxxxxx"
+   },
+   "error": "Too big: expected string to have <=20 characters",
+   "campo": "cuit"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "otro",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0"
+   },
+   "error": "Invalid option: expected one of \"responsable_inscripto\"|\"monotributista\"|\"exento\"|\"consumidor_final\"|\"no_categorizado\"",
+   "campo": "condicionIva"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "empresa",
+    "email": "",
+    "limiteCredito": "0"
+   },
+   "error": "Invalid option: expected one of \"particular\"|\"profesional\"",
+   "campo": "tipo"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "juan@x",
+    "limiteCredito": "0"
+   },
+   "error": "Revisá el correo.",
+   "campo": "email"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "  juan@mjbj.com.ar  ",
+    "limiteCredito": "0"
+   },
+   "datos": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "juan@mjbj.com.ar",
+    "limiteCredito": "0"
+   }
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "Juan <j@x.com>",
+    "limiteCredito": "0"
+   },
+   "error": "Revisá el correo.",
+   "campo": "email"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "telefono": "11111111111111111111111111111111111111111"
+   },
+   "error": "Too big: expected string to have <=40 characters",
+   "campo": "telefono"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "sellerId": "no"
+   },
+   "error": "Invalid UUID",
+   "campo": "sellerId"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "sellerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "razonSocial": " Pérez SRL ",
+    "rubro": "Carpintero",
+    "asesor": "Ana",
+    "notas": "  ok  "
+   },
+   "datos": {
+    "id": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "nombre": "Juan Pérez",
+    "razonSocial": "Pérez SRL",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "rubro": "Carpintero",
+    "asesor": "Ana",
+    "sellerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "limiteCredito": "0",
+    "priceListId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "notas": "ok"
+   }
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "id": "x"
+   },
+   "error": "Invalid UUID",
+   "campo": "id"
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "$ 1.500.000,50"
+   },
+   "datos": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "$ 1.500.000,50"
+   }
+  },
+  {
+   "entrada": {
+    "nombre": "Juan Pérez",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "notas": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+   },
+   "error": "Too big: expected string to have <=1000 characters",
+   "campo": "notas"
+  },
+  {
+   "entrada": {
+    "nombre": "",
+    "condicionIva": "consumidor_final",
+    "tipo": "particular",
+    "email": "",
+    "limiteCredito": "0",
+    "cuit": "1"
+   },
+   "error": "El nombre es obligatorio.",
+   "campo": "nombre"
+  }
+ ],
+ "limites": [
+  {
+   "t": "0",
+   "r": "0.00"
+  },
+  {
+   "t": "",
+   "r": "0.00"
+  },
+  {
+   "t": "1500000",
+   "r": "1500000.00"
+  },
+  {
+   "t": "$ 1.500.000,50",
+   "r": "0.00"
+  },
+  {
+   "t": "1.500.000",
+   "r": "0.00"
+  },
+  {
+   "t": "1500000.5",
+   "r": "1500000.50"
+  },
+  {
+   "t": "-200",
+   "r": "-200.00"
+  },
+  {
+   "t": "abc",
+   "r": "0.00"
+  },
+  {
+   "t": "1.2.3",
+   "r": "0.00"
+  },
+  {
+   "t": "250.000,99",
+   "r": "250.00"
+  },
+  {
+   "t": "1e3",
+   "r": "13.00"
+  }
+ ],
+ "movimientos": [
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "tipo": "compra",
+    "monto": "1000"
+   },
+   "datos": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "tipo": "compra",
+    "monto": "1000"
+   }
+  },
+  {
+   "entrada": {
+    "customerId": "x",
+    "tipo": "compra",
+    "monto": "1000"
+   },
+   "error": "Invalid UUID",
+   "campo": "customerId"
+  },
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "tipo": "pago",
+    "monto": "1000"
+   },
+   "error": "Invalid option: expected one of \"compra\"|\"nota_credito\"|\"nota_debito\"|\"ajuste\"",
+   "campo": "tipo"
+  },
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "tipo": "ajuste",
+    "monto": "-1.234,5",
+    "detalle": "  corrección  "
+   },
+   "datos": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "tipo": "ajuste",
+    "monto": "-1.234,5",
+    "detalle": "corrección"
+   }
+  },
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "tipo": "nota_credito",
+    "monto": "10",
+    "detalle": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+   },
+   "error": "Too big: expected string to have <=200 characters",
+   "campo": "detalle"
+  }
+ ],
+ "vendedores": [
+  {
+   "entrada": {
+    "nombre": "Ana",
+    "tipo": "salon"
+   },
+   "datos": {
+    "nombre": "Ana",
+    "tipo": "salon"
+   }
+  },
+  {
+   "entrada": {
+    "nombre": "A",
+    "tipo": "salon"
+   },
+   "error": "Poné el nombre.",
+   "campo": "nombre"
+  },
+  {
+   "entrada": {
+    "nombre": "Ana",
+    "tipo": "moto"
+   },
+   "error": "Invalid option: expected one of \"salon\"|\"calle\"",
+   "campo": "tipo"
+  },
+  {
+   "entrada": {
+    "id": "x",
+    "nombre": "Ana",
+    "tipo": "calle"
+   },
+   "error": "Invalid UUID",
+   "campo": "id"
+  },
+  {
+   "entrada": {
+    "nombre": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+    "tipo": "calle"
+   },
+   "error": "Too big: expected string to have <=80 characters",
+   "campo": "nombre"
+  }
+ ],
+ "gestiones": [
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "asunto": "Llamar por la deuda"
+   },
+   "datos": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "asunto": "Llamar por la deuda"
+   }
+  },
+  {
+   "entrada": {
+    "customerId": "",
+    "asunto": "Llamar"
+   },
+   "error": "Elegí el cliente.",
+   "campo": "customerId"
+  },
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "asunto": "ab"
+   },
+   "error": "Escribí de qué se trata, aunque sea en tres palabras.",
+   "campo": "asunto"
+  },
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "asunto": "Cobrar",
+    "notas": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+   },
+   "error": "Too big: expected string to have <=2000 characters",
+   "campo": "notas"
+  },
+  {
+   "entrada": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "asunto": "Cobrar",
+    "proximaAccion": " 2026-11-05 "
+   },
+   "datos": {
+    "customerId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "asunto": "Cobrar",
+    "proximaAccion": "2026-11-05"
+   }
+  }
+ ]
+}

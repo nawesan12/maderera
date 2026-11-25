@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
-import { BellOff, BellRing, Link2, Loader2, Search, UserPlus, Wallet } from "lucide-react";
+import { BellOff, BellRing, ClipboardList, Link2, Loader2, Scissors, Search, UserPlus, Wallet } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda } from "@/lib/formato";
 import {
@@ -52,6 +52,24 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
         >
           Abrir ficha completa
         </Link>
+        {/* Lo que se pide por WhatsApp se arma desde acá, con el cliente
+            ya puesto. */}
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Link
+            href={`/admin/presupuestos/nuevo?cliente=${detalle.customerId}`}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida text-base font-medium hover:bg-muted"
+          >
+            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+            Presupuesto
+          </Link>
+          <Link
+            href={`/admin/cortes/nuevo?cliente=${detalle.customerId}`}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida text-base font-medium hover:bg-muted"
+          >
+            <Scissors className="h-4 w-4" aria-hidden="true" />
+            Corte
+          </Link>
+        </div>
       </section>
 
       <section className="tarjeta p-4">
@@ -61,7 +79,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
         </h3>
         <p
           className={`tabular mt-1.5 text-2xl font-semibold ${
-            excedido ? "text-red-700" : detalle.saldo > 0 ? "text-brand-orange-dark" : "text-green-700"
+            excedido ? "text-saldo-debe" : detalle.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
           }`}
         >
           {moneda.format(Math.abs(detalle.saldo))}
@@ -70,12 +88,8 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
           {detalle.saldo > 0 ? "Debe" : detalle.saldo < 0 ? "A favor" : "Sin deuda"}
           {detalle.limiteCredito > 0 && <> · límite {moneda.format(detalle.limiteCredito)}</>}
         </p>
-        {excedido && <p className="mt-1.5 text-base text-red-700">Supera el límite. No debería llevarse más a cuenta.</p>}
-        {detalle.saldo > 0 && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Para recordárselo: «Mensaje preparado» → Recordatorio saldo, o mandale el resumen de cuenta con «Documento».
-          </p>
-        )}
+        {excedido && <p className="mt-1.5 text-base text-saldo-debe">Supera el límite. No debería llevarse más a cuenta.</p>}
+
       </section>
 
       <section className="tarjeta overflow-hidden">
@@ -137,11 +151,11 @@ function Avisos({ detalle }: { detalle: DetalleConversacion }) {
         </button>
       </form>
       {estado.ok && (
-        <p role="status" className="mt-1.5 text-sm text-green-800">
+        <p role="status" className="mt-1.5 text-sm text-saldo-favor">
           {estado.ok}
         </p>
       )}
-      <p className="mt-2 text-sm text-muted-foreground">Si escribe BAJA se registra solo; con ALTA vuelve.</p>
+      {/* Si escribe BAJA se registra solo; con ALTA vuelve. */}
     </section>
   );
 }
@@ -176,9 +190,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
         <UserPlus className="h-5 w-5 text-muted-foreground" />
         Sin ficha de cliente
       </h2>
-      <p className="mt-1.5 text-base text-muted-foreground">
-        El número no coincide con ningún cliente. Si ya es cliente, buscalo; si no, creale la ficha.
-      </p>
+      {/* El número no coincide con ningún cliente: si ya es cliente se lo busca; si no, se le crea la ficha. */}
 
       <label className="mt-3 block">
         <span className="sr-only">Buscar cliente</span>
@@ -221,7 +233,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
       {texto.trim().length >= 2 && !buscando && resultados.length === 0 && (
         <p className="mt-2 text-sm text-muted-foreground">No hay clientes con eso.</p>
       )}
-      {vinculo.error && <p role="alert" className="mt-2 text-base text-red-700">{vinculo.error}</p>}
+      {vinculo.error && <p role="alert" className="mt-2 text-base text-saldo-debe">{vinculo.error}</p>}
 
       {!creandoFicha ? (
         <button
@@ -258,12 +270,12 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
           <button
             type="submit"
             disabled={creando}
-            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-brand-green text-base font-medium text-white hover:bg-brand-green/90 disabled:opacity-60"
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-verde-whatsapp text-base font-medium text-white hover:bg-brand-green/90 disabled:opacity-60"
           >
             {creando && <Loader2 className="h-4 w-4 animate-spin" />}
             Guardar ficha
           </button>
-          {alta.error && <p role="alert" className="text-base text-red-700">{alta.error}</p>}
+          {alta.error && <p role="alert" className="text-base text-saldo-debe">{alta.error}</p>}
         </form>
       )}
     </section>

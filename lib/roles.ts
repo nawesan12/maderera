@@ -96,13 +96,6 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/productos": ["admin", "vendedor"],
   "/admin/stock": ["admin", "vendedor", "deposito"],
   "/admin/precios": ["admin"],
-  /*
-   * Los parámetros de las calculadoras solo los toca el admin, por el mismo
-   * motivo que los precios: un desperdicio mal cargado le hace comprar de menos
-   * a alguien que está por techar una casa, y eso se descubre con el techo a
-   * medio hacer.
-   */
-  "/admin/calculadoras": ["admin"],
   "/admin/clientes": ["admin", "vendedor"],
   "/admin/profesionales": ["admin", "vendedor"],
   "/admin/documentacion": ["admin", "vendedor"],
@@ -146,6 +139,9 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/sucursales": ["admin"],
   // Una tarifa de envío es un precio: no la cambia quien atiende el mostrador.
   "/admin/envios": ["admin"],
+  /* El reparto lo arma el depósito con quien vende: qué sale y adónde. */
+  "/admin/reparto": ["admin", "vendedor", "deposito"],
+  "/admin/reglas": ["admin"],
   // Las dos reglas que fijan cuánto entra por caja: tarifa de corte y
   // descuento por forma de pago. Son precios, no operación.
   "/admin/cortes/tarifas": ["admin"],
@@ -163,6 +159,14 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
    */
   "/admin/ayuda": ["admin", "vendedor", "deposito", "aserradero"],
 };
+
+/**
+ * Quién mueve plata desde la ficha de un pedido: cobrarlo, emitirle el recibo,
+ * facturarlo (T3, 18/11/2026). Pedidos lo abre también el depósito, que
+ * prepara y entrega, y hasta ahora podía marcar un pedido como cobrado sin
+ * recibo ni caja. La ficha se le sigue mostrando; los botones de plata, no.
+ */
+export const MANEJAN_PLATA: readonly RolStaff[] = ["admin", "vendedor"];
 
 /** Los roles que pueden entrar a una ruta, o `null` si la ve todo el personal. */
 export function quienEntra(ruta: string): readonly RolStaff[] | null {

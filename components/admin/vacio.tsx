@@ -32,34 +32,27 @@ export function Vacio({
     typeof accion === "object" &&
     "href" in accion;
 
+  // Un renglón hundido, no una tarjeta de 200 px con un ícono al medio: un
+  // hueco se ve hundido, y el vacío no es el contenido de la pantalla
+  // (revisión de diseño, 18/11/2026).
   return (
-    <div className="px-5 py-12 text-center">
-      {Icono && (
-        <Icono
-          className="mx-auto h-8 w-8 text-muted-foreground"
-          aria-hidden="true"
-        />
-      )}
-      <p className="mt-3 text-base font-medium">{titulo}</p>
-      {detalle && (
-        <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-          {detalle}
-        </p>
-      )}
-      {accion !== undefined && accion !== null && (
-        <div className="mt-4 flex justify-center">
-          {esEnlace ? (
-            <Link
-              href={(accion as { href: string }).href}
-              className="inline-flex h-11 items-center rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
-            >
-              {(accion as { texto: string }).texto}
-            </Link>
-          ) : (
-            (accion as React.ReactNode)
-          )}
-        </div>
-      )}
+    <div className="tarjeta-hundida m-3 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl px-4 py-4">
+      {Icono && <Icono className="h-5 w-5 shrink-0 text-texto-3" aria-hidden="true" />}
+      <div className="min-w-0 flex-1">
+        <p className="text-base font-medium">{titulo}</p>
+        {detalle && <p className="text-sm text-muted-foreground">{detalle}</p>}
+      </div>
+      {accion !== undefined && accion !== null &&
+        (esEnlace ? (
+          <Link
+            href={(accion as { href: string }).href}
+            className="inline-flex h-11 items-center rounded-lg bg-accion px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
+          >
+            {(accion as { texto: string }).texto}
+          </Link>
+        ) : (
+          (accion as React.ReactNode)
+        ))}
     </div>
   );
 }

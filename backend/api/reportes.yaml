@@ -1,0 +1,655 @@
+openapi: 3.0.3
+info:
+  title: MJBJ · Reportes, cierre del mes e inicio del panel
+  version: "1"
+  description: |
+    Los números del panel que leen ventas y caja: el reporte de ventas (con
+    su PDF y su CSV), la reposición (con su PDF y su CSV), el cierre del mes
+    (asientos, pendientes, resumen y el CSV para el estudio) y el inicio del
+    panel (las métricas del admin y lo pendiente de cada rol).
+
+    Los períodos de los reportes y del inicio van en hora argentina; el del
+    cierre, en UTC (ver internal/reportes/cierre.go). Los archivos salen como
+    application/octet-stream o application/pdf: Next les pone las cabeceras.
+
+    Permisos: el reporte, la reposición y el cierre, quien entra a su
+    pantalla (/admin/reportes, /admin/cierre: el admin). El inicio, quien
+    entra a /admin; las métricas, solo el admin (como la pantalla). Lo
+    pendiente es el del rol de la sesión, o el del rol pedido con el secreto
+    interno (la tarea del parte del día corre sin nadie logueado).
+paths:
+  /api/v1/admin/reportes/ventas:
+    get:
+      operationId: ReporteDeVentas
+      parameters:
+        - $ref: "#/components/parameters/Corte"
+        - $ref: "#/components/parameters/Periodo"
+        - $ref: "#/components/parameters/Rubro"
+        - $ref: "#/components/parameters/Sucursal"
+      responses:
+        "200":
+          description: Las filas del corte pedido (hasta 50 en producto, rubro y cliente), sin las canceladas, y los totales del período entero
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReporteDeVentas" }
+  /api/v1/admin/reportes/ventas/meses:
+    get:
+      operationId: VentasPorMes
+      parameters:
+        - $ref: "#/components/parameters/Periodo"
+        - $ref: "#/components/parameters/Rubro"
+        - $ref: "#/components/parameters/Sucursal"
+        - { name: meses, in: query, schema: { type: integer, minimum: 1, maximum: 24 } }
+      responses:
+        "200":
+          description: Lo vendido mes a mes (meses argentinos), con los meses sin ventas en cero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ReporteMes" } }
+  /api/v1/admin/reportes/ventas/archivo:
+    get:
+      operationId: ReporteDeVentasArchivo
+      parameters:
+        - $ref: "#/components/parameters/Corte"
+        - $ref: "#/components/parameters/Periodo"
+        - $ref: "#/components/parameters/Rubro"
+        - $ref: "#/components/parameters/Sucursal"
+        - $ref: "#/components/parameters/Formato"
+      responses:
+        "200":
+          description: El reporte en CSV (para Excel en español) o en PDF
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+  /api/v1/admin/reportes/reposicion:
+    get:
+      operationId: ReporteDeReposicion
+      parameters:
+        - $ref: "#/components/parameters/Dias"
+        - $ref: "#/components/parameters/Objetivo"
+        - $ref: "#/components/parameters/Categoria"
+        - $ref: "#/components/parameters/RubroProducto"
+        - $ref: "#/components/parameters/SucursalSlug"
+      responses:
+        "200":
+          description: El stock de cada medida activa cruzado con lo vendido y lo que convendría comprar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reposicion" }
+  /api/v1/admin/reportes/reposicion/archivo:
+    get:
+      operationId: ReporteDeReposicionArchivo
+      parameters:
+        - $ref: "#/components/parameters/Dias"
+        - $ref: "#/components/parameters/Objetivo"
+        - $ref: "#/components/parameters/Categoria"
+        - $ref: "#/components/parameters/RubroProducto"
+        - $ref: "#/components/parameters/SucursalSlug"
+        - $ref: "#/components/parameters/Formato"
+      responses:
+        "200":
+          description: La reposición en CSV o en PDF (la hoja para salir a comprar)
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+  /api/v1/admin/cierre/asientos:
+    get:
+      operationId: AsientosDelPeriodo
+      parameters: [{ $ref: "#/components/parameters/Mes" }, { $ref: "#/components/parameters/Circuito" }]
+      responses:
+        "200":
+          description: Los asientos del mes en orden de fecha, cada uno con si balancea
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CierreAsiento" } }
+  /api/v1/admin/cierre/asientos-csv:
+    get:
+      operationId: AsientosCsv
+      parameters: [{ $ref: "#/components/parameters/Mes" }, { $ref: "#/components/parameters/Circuito" }]
+      responses:
+        "200":
+          description: Los asientos del mes en CSV, un renglón por línea
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/contador/deudores-csv:
+    get:
+      operationId: DeudoresCsv
+      responses:
+        "200":
+          description: La deuda de cada cliente por antigüedad, en CSV
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/contador/cuentas-a-pagar-csv:
+    get:
+      operationId: CuentasAPagarCsv
+      responses:
+        "200":
+          description: Las facturas de compra con saldo, por vencimiento, en CSV
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /api/v1/admin/cierre/pendientes:
+    get:
+      operationId: PendientesDelCierre
+      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      responses:
+        "200":
+          description: Lo que conviene resolver antes de cerrar
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CierrePendiente" } }
+  /api/v1/admin/cierre/resumen:
+    get:
+      operationId: ResumenDelMes
+      parameters: [{ $ref: "#/components/parameters/Mes" }]
+      responses:
+        "200":
+          description: Los números del mes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CierreResumen" }
+  /api/v1/admin/inicio/metricas:
+    get:
+      operationId: MetricasDelResumen
+      parameters: [{ $ref: "#/components/parameters/Periodo" }]
+      responses:
+        "200":
+          description: Las ventas del período contra el anterior y los conteos del momento
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InicioMetricas" }
+  /api/v1/admin/cobranzas:
+    get:
+      operationId: CobranzasDelPeriodo
+      parameters:
+        - $ref: "#/components/parameters/Periodo"
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Los recibos del período (de cualquier origen) y los cobros en línea sin recibo, lo último primero, con el total por medio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cobranzas" }
+  /api/v1/admin/inicio/dueno:
+    get:
+      operationId: NumerosDelDueno
+      responses:
+        "200":
+          description: Me deben, debo, cheques de la semana, plata de hoy y ganancia del mes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NumerosDelDueno" }
+  /api/v1/admin/inicio/ventas-por-sucursal:
+    get:
+      operationId: InicioVentasPorSucursal
+      responses:
+        "200":
+          description: Los últimos seis meses, por sucursal
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/InicioMes" } }
+  /api/v1/admin/inicio/reponer:
+    get:
+      operationId: StockParaReponer
+      parameters:
+        - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: Lo que quedó en el mínimo o por debajo, lo más urgente primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/InicioReponer" } }
+  /api/v1/admin/inicio/actividad:
+    get:
+      operationId: ActividadReciente
+      responses:
+        "200":
+          description: Los últimos presupuestos, los pedidos en curso y los cortes en cola
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InicioActividad" }
+  /api/v1/admin/inicio/pendientes:
+    get:
+      operationId: PendientesDelRol
+      parameters:
+        - { name: rol, in: query, description: Solo con el secreto interno, schema: { type: string, enum: [admin, vendedor, deposito, aserradero] } }
+      responses:
+        "200":
+          description: Lo que hay que hacer hoy, lo urgente arriba
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PendienteDelRol" } }
+components:
+  parameters:
+    Corte: { name: corte, in: query, schema: { type: string } }
+    Periodo: { name: periodo, in: query, description: mes, mes-pasado, trimestre, anio o todo, schema: { type: string } }
+    Rubro: { name: rubro, in: query, description: El rubro del cliente, schema: { type: string } }
+    Sucursal: { name: sucursal, in: query, description: El id de la sucursal, schema: { type: string } }
+    Formato: { name: formato, in: query, schema: { type: string, enum: [csv, pdf] } }
+    Dias: { name: dias, in: query, schema: { type: string } }
+    Objetivo: { name: objetivo, in: query, schema: { type: string } }
+    Categoria: { name: cat, in: query, schema: { type: string } }
+    RubroProducto: { name: rubro, in: query, description: El slug de la subcategoría, schema: { type: string } }
+    SucursalSlug: { name: sucursal, in: query, description: casa-central, aserradero o todos, schema: { type: string } }
+    Mes: { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+    Circuito:
+      name: circuito
+      in: query
+      description: >-
+        blanco (si falta) son los asientos del estudio; negro, los del circuito B: los gastos y pagos marcados así y la
+        parte de los recibos que paga ventas sin factura. El CSV del B se llama asientos-B-aaaa-mm.csv.
+      schema: { type: string, enum: [blanco, negro] }
+  schemas:
+    ReporteFila:
+      type: object
+      required: [clave, etiqueta, detalle, cantidad, total, netoVenta, costo, lineasSinCosto, netoCosteado]
+      properties:
+        clave: { type: string }
+        etiqueta: { type: string }
+        detalle: { type: string, nullable: true }
+        cantidad: { type: number, format: double }
+        total: { type: number, format: double }
+        netoVenta: { type: number, format: double, description: Sin IVA, renglón por renglón }
+        costo: { type: number, format: double, nullable: true, description: null si ningún renglón tiene costo }
+        lineasSinCosto: { type: number, format: double, description: Renglones sin costo o con costo en cero }
+        netoCosteado: { type: number, format: double, description: Sin IVA, solo los renglones con costo; el margen es netoCosteado − costo }
+    ReporteDeVentas:
+      type: object
+      required: [filas, totales]
+      properties:
+        filas: { type: array, items: { $ref: "#/components/schemas/ReporteFila" } }
+        totales: { $ref: "#/components/schemas/ReporteTotales" }
+    ReporteTotales:
+      type: object
+      description: El período entero con los mismos filtros, sin el tope de filas del corte
+      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas]
+      properties:
+        total: { type: number, format: double, description: Con IVA; subtotales de renglones o total de los pedidos, según el corte }
+        cantidad: { type: number, format: double, description: Unidades o operaciones, según el corte }
+        netoVenta: { type: number, format: double }
+        netoCosteado: { type: number, format: double }
+        costo: { type: number, format: double, nullable: true }
+        lineasSinCosto: { type: number, format: double }
+        filas: { type: integer, description: Cuántas filas tiene el corte entero }
+    ReporteMes:
+      type: object
+      required: [clave, etiqueta, total]
+      properties:
+        clave: { type: string }
+        etiqueta: { type: string }
+        total: { type: number, format: double }
+    ReposicionFila:
+      type: object
+      required: [variantId, productId, producto, medida, sku, unidad, categoria, categoriaSlug, rubro, disponibleCentral, disponibleAserradero, disponible, vendido, cobertura, sugerido]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        producto: { type: string }
+        medida: { type: string }
+        sku: { type: string, nullable: true }
+        unidad: { type: string }
+        categoria: { type: string }
+        categoriaSlug: { type: string }
+        rubro: { type: string, nullable: true }
+        disponibleCentral: { type: number, format: double }
+        disponibleAserradero: { type: number, format: double }
+        disponible: { type: number, format: double }
+        vendido: { type: number, format: double }
+        cobertura: { type: number, format: double, nullable: true }
+        sugerido: { type: number, format: double }
+    Reposicion:
+      type: object
+      required: [filas, porCategoria, diasDelPeriodo, coberturaObjetivo]
+      properties:
+        filas: { type: array, items: { $ref: "#/components/schemas/ReposicionFila" } }
+        porCategoria:
+          type: array
+          items:
+            type: object
+            required: [nombre, vendido]
+            properties:
+              nombre: { type: string }
+              vendido: { type: number, format: double }
+        diasDelPeriodo: { type: number, format: double }
+        coberturaObjetivo: { type: number, format: double }
+    CierreAsiento:
+      type: object
+      required: [fecha, concepto, renglones, balancea]
+      properties:
+        fecha: { type: string, format: date-time }
+        concepto: { type: string }
+        balancea: { type: boolean }
+        circuito: { type: string, enum: [negro], description: "Solo en los del circuito B" }
+        renglones:
+          type: array
+          items:
+            type: object
+            required: [cuenta, nombre, debe, haber]
+            properties:
+              cuenta: { type: string }
+              nombre: { type: string }
+              debe: { type: number, format: double }
+              haber: { type: number, format: double }
+    CierrePendiente:
+      type: object
+      required: [clave, titulo, detalle, cantidad, donde]
+      properties:
+        clave: { type: string }
+        titulo: { type: string }
+        detalle: { type: string }
+        cantidad: { type: integer }
+        donde: { type: string }
+    CierreTotales:
+      type: object
+      required: [total, cantidad]
+      properties:
+        total: { type: number, format: double }
+        cantidad: { type: integer }
+    CierreTotalesConIva:
+      type: object
+      required: [neto, iva, total, cantidad]
+      properties:
+        neto: { type: number, format: double }
+        iva: { type: number, format: double }
+        total: { type: number, format: double }
+        cantidad: { type: integer }
+    CierreVendido:
+      type: object
+      description: facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado
+      required: [total, facturado, interno, sinFactura]
+      properties:
+        total: { type: number, format: double }
+        facturado: { $ref: "#/components/schemas/CierreTotales" }
+        interno: { $ref: "#/components/schemas/CierreTotales" }
+        sinFactura: { $ref: "#/components/schemas/CierreTotales" }
+    CierreResumen:
+      type: object
+      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, iva, resultado]
+      properties:
+        ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        # Lo vendido en el mes sin IVA (el «Vendido sin IVA» del resultado) partido según su factura. No entra
+        # en los asientos ni en ningún archivo.
+        vendido: { $ref: "#/components/schemas/CierreVendido" }
+        compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        gastos: { $ref: "#/components/schemas/CierreTotales" }
+        retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
+        retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
+        posicionIva: { type: number, format: double, description: Débito menos crédito del mes, sin percepciones ni saldos }
+        iva:
+          type: object
+          description: La posición de IVA con percepciones, retenciones y los saldos técnico y de libre disponibilidad que se arrastran
+          required: [debito, credito, saldoTecnicoAnterior, percepciones, retenciones, saldoLibreAnterior, aDepositar, saldoTecnico, saldoLibre, sinArranque]
+          properties:
+            debito: { type: number, format: double }
+            credito: { type: number, format: double }
+            saldoTecnicoAnterior: { type: number, format: double }
+            percepciones: { type: number, format: double }
+            retenciones: { type: number, format: double }
+            saldoLibreAnterior: { type: number, format: double }
+            aDepositar: { type: number, format: double }
+            saldoTecnico: { type: number, format: double }
+            saldoLibre: { type: number, format: double }
+            sinArranque: { type: boolean, description: Sin el mes y los saldos de la última DDJJ presentada }
+        resultado: { $ref: "#/components/schemas/ResultadoComparado" }
+    InicioMetricas:
+      type: object
+      required: [ventasMes, variacionVentas, presupuestosPendientes, presupuestosRevision, clientesActivos, reponer, reponerPorSucursal, reponerCentral, reponerAserradero, pedidosSinEntregar, clientesConPedido]
+      properties:
+        ventasMes: { type: number, format: double }
+        variacionVentas: { type: number, format: double, nullable: true }
+        presupuestosPendientes: { type: integer }
+        presupuestosRevision: { type: integer }
+        clientesActivos: { type: integer }
+        reponer: { type: integer }
+        reponerPorSucursal:
+          description: cada sucursal activa, en el orden de branches
+          type: array
+          items: { $ref: "#/components/schemas/CantidadDeSucursal" }
+        reponerCentral: { type: integer }
+        reponerAserradero: { type: integer }
+        pedidosSinEntregar: { type: integer }
+        clientesConPedido: { type: integer }
+    CantidadDeSucursal:
+      type: object
+      required: [sucursal, nombre, cantidad]
+      properties:
+        sucursal: { type: string, description: el slug de branches }
+        nombre: { type: string }
+        cantidad: { type: integer }
+    VentaDeSucursal:
+      type: object
+      required: [sucursal, nombre, total]
+      properties:
+        sucursal: { type: string, description: el slug de branches }
+        nombre: { type: string }
+        total: { type: number, format: double }
+    InicioMes:
+      type: object
+      required: [mes, sucursales, central, aserradero]
+      properties:
+        mes: { type: string }
+        sucursales:
+          description: cada sucursal activa, en el orden de branches
+          type: array
+          items: { $ref: "#/components/schemas/VentaDeSucursal" }
+        central: { type: number, format: double }
+        aserradero: { type: number, format: double }
+    InicioReponer:
+      type: object
+      required: [variantId, productId, producto, medida, sucursal, qty, minQty]
+      properties:
+        variantId: { type: string }
+        productId: { type: string }
+        producto: { type: string }
+        medida: { type: string }
+        sucursal: { type: string }
+        qty: { type: number, format: double }
+        minQty: { type: number, format: double }
+    InicioActividad:
+      type: object
+      required: [presupuestos, pedidos, cortesEnCola]
+      properties:
+        cortesEnCola: { type: integer }
+        presupuestos:
+          type: array
+          items:
+            type: object
+            required: [id, numero, cliente, estado, total, createdAt]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              cliente: { type: string }
+              estado: { type: string }
+              total: { type: number, format: double }
+              createdAt: { type: string, format: date-time }
+        pedidos:
+          type: array
+          items:
+            type: object
+            required: [id, numero, cliente, estado, tipoEntrega, total, createdAt]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              cliente: { type: string }
+              estado: { type: string }
+              tipoEntrega: { type: string }
+              total: { type: number, format: double }
+              createdAt: { type: string, format: date-time }
+    PendienteDelRol:
+      type: object
+      required: [clave, cantidad, texto, href]
+      properties:
+        clave: { type: string }
+        cantidad: { type: integer }
+        texto: { type: string }
+        detalle: { type: string }
+        href: { type: string }
+        urgente: { type: boolean }
+        vencido: { type: boolean }
+    Monto:
+      type: object
+      required: [total, cantidad]
+      properties:
+        total: { type: number, format: double }
+        cantidad: { type: integer }
+    Resultado:
+      type: object
+      required: [ventasNetas, ventasSinCosto, costo, gastos, resultado, lineasSinCosto, conDescuento, sinCostosCargados]
+      properties:
+        ventasNetas: { type: number, format: double, description: Sin IVA }
+        ventasSinCosto: { type: number, format: double, description: La parte de ventasNetas sin costo cargado; queda afuera del resultado }
+        conDescuento: { type: boolean, description: ventasNetas lleva restado el descuento del pedido (regla del negocio) }
+        costo: { type: number, format: double }
+        gastos: { type: number, format: double }
+        resultado: { type: number, format: double }
+        lineasSinCosto: { type: integer, description: Renglones vendidos sin costo cargado o con costo en cero }
+        sinCostosCargados: { type: boolean, description: Más de la mitad de ventasNetas no tiene costo; el resultado no es la ganancia }
+    ResultadoComparado:
+      type: object
+      required: [actual, anterior, variacion]
+      properties:
+        actual: { $ref: "#/components/schemas/Resultado" }
+        anterior: { $ref: "#/components/schemas/Resultado" }
+        variacion: { type: number, format: double, nullable: true }
+    NumerosDelDueno:
+      type: object
+      required: [meDeben, debo, cheques, plataHoy, ganancia, devoluciones, anuladas, controles]
+      properties:
+        devoluciones:
+          type: object
+          description: Las devoluciones parciales del mes en curso.
+          required: [total, cantidad]
+          properties:
+            total: { type: number, format: double }
+            cantidad: { type: integer }
+        controles:
+          type: object
+          description: Los controles sobre la plata del personal, de los últimos siete días
+          required: [sinPin, personas]
+          properties:
+            sinPin: { type: boolean, description: ningún admin cargó su PIN de autorización }
+            personas:
+              type: array
+              items:
+                type: object
+                required: [nombre, dejadoDeCobrar, autorizado, sinConexion, creditoSinAutorizar, anuladas, anuladasSinFirma, sinDevolver, retiros, firmo, aMano, recibosAnulados, recibosAnuladosConEfectivo]
+                properties:
+                  nombre: { type: string }
+                  dejadoDeCobrar: { type: number, format: double, description: bajo la lista más los descuentos tipeados }
+                  autorizado: { type: number, format: double, description: la parte que firmó un admin }
+                  sinConexion: { $ref: "#/components/schemas/Monto" }
+                  creditoSinAutorizar: { $ref: "#/components/schemas/Monto" }
+                  anuladas: { $ref: "#/components/schemas/Monto" }
+                  anuladasSinFirma: { $ref: "#/components/schemas/Monto" }
+                  firmo: { $ref: "#/components/schemas/Monto" }
+                  sinDevolver: { type: integer, description: anuladas en que la mercadería no volvió }
+                  retiros: { $ref: "#/components/schemas/Monto" }
+                  aMano: { $ref: "#/components/schemas/Monto", description: "renglones de sus ventas cargados a mano, sin producto del catálogo" }
+                  recibosAnulados: { $ref: "#/components/schemas/Monto", description: "recibos que anuló desde el panel (no los del reintegro de Mercado Pago)" }
+                  recibosAnuladosConEfectivo: { type: integer, description: de esos, cuántos tenían efectivo }
+        meDeben:
+          type: object
+          required: [total, vencido, clientes, clientesConVencido, pedidosSinCobrar]
+          properties:
+            total: { type: number, format: double, description: La cuenta corriente más los pedidos entregados sin cobrar }
+            vencido: { type: number, format: double, description: Solo de la cuenta corriente }
+            clientes: { type: integer }
+            clientesConVencido: { type: integer }
+            pedidosSinCobrar: { $ref: "#/components/schemas/Monto" }
+        anuladas:
+          type: object
+          description: Las ventas del mostrador anuladas en los últimos siete días
+          required: [cantidad, total, devuelto, conFacturaViva]
+          properties:
+            cantidad: { type: integer }
+            total: { type: number, format: double }
+            devuelto: { type: number, format: double, description: El efectivo que salió de la caja por esas anulaciones }
+            conFacturaViva: { type: integer, description: Las que siguen con factura autorizada y sin nota de crédito }
+        debo:
+          type: object
+          description: >-
+            El libro de cada proveedor (supplier_movements), como Pagos a proveedores, con los inactivos que deben.
+            Lo vencido y lo de esta semana salen de las facturas, sin pasar el libro de cada uno.
+          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana, sinFactura, proveedores]
+          properties:
+            total: { type: number, format: double }
+            facturas: { type: integer }
+            vencido: { type: number, format: double }
+            facturasVencidas: { type: integer }
+            estaSemana: { type: number, format: double }
+            facturasEstaSemana: { type: integer }
+            sinFactura: { type: number, format: double, description: "Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)" }
+            proveedores: { type: integer }
+        cheques:
+          type: object
+          required: [aCobrar, aCubrir]
+          properties:
+            aCobrar: { $ref: "#/components/schemas/Monto" }
+            aCubrir: { $ref: "#/components/schemas/Monto" }
+        plataHoy:
+          type: object
+          required: [cajas, efectivo, banco, mercadoPago, tarjetas, cheques, total]
+          properties:
+            cajas:
+              type: array
+              items:
+                type: object
+                required: [branchId, sucursal, esperado]
+                properties:
+                  branchId: { type: string }
+                  sucursal: { type: string }
+                  esperado: { type: number, format: double }
+            efectivo: { type: number, format: double }
+            banco: { type: number, format: double }
+            mercadoPago: { type: number, format: double }
+            tarjetas: { type: number, format: double }
+            cheques: { $ref: "#/components/schemas/Monto" }
+            total: { type: number, format: double }
+        ganancia: { $ref: "#/components/schemas/ResultadoComparado" }
+    Cobranzas:
+      type: object
+      required: [filas, total, cobrado, porMedio]
+      properties:
+        total: { type: integer, description: Cuántos renglones hay en el período }
+        cobrado: { type: number, format: double, description: Lo cobrado en el período, sin los recibos anulados }
+        porMedio:
+          type: array
+          items:
+            type: object
+            required: [medio, total, cantidad]
+            properties:
+              medio: { type: string }
+              total: { type: number, format: double }
+              cantidad: { type: integer }
+        filas:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, numero, fecha, cliente, customerId, orderId, origen, anulado, total, partes]
+            properties:
+              id: { type: string }
+              tipo: { type: string, enum: [recibo, en-linea] }
+              numero: { type: string, nullable: true }
+              fecha: { type: string, format: date-time }
+              cliente: { type: string }
+              customerId: { type: string, nullable: true }
+              orderId: { type: string, nullable: true }
+              origen: { type: string }
+              anulado: { type: boolean }
+              total: { type: number, format: double }
+              partes:
+                type: array
+                items:
+                  type: object
+                  required: [medio, importe, chequeId]
+                  properties:
+                    medio: { type: string }
+                    importe: { type: number, format: double }
+                    chequeId: { type: string, nullable: true }

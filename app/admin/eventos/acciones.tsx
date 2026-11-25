@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { startTransition, useActionState, useState } from "react";
+import { Confirmar } from "@/components/admin/confirmar";
 import { BellRing, Loader2 } from "lucide-react";
 import {
   cambiarEstadoEvento,
@@ -52,7 +53,7 @@ export function AccionesEvento({
             disabled={cambiando}
             className={`inline-flex h-10 items-center gap-2 rounded-lg px-3.5 text-base font-medium transition-colors disabled:opacity-60 ${
               opcion.principal
-                ? "bg-brand-orange text-white hover:bg-brand-orange-dark"
+                ? "bg-accion text-white hover:bg-brand-orange-dark"
                 : "border hover:bg-muted"
             }`}
           >
@@ -82,14 +83,27 @@ export function Recordatorios() {
     mandarRecordatorios,
     inicial,
   );
+  const [confirmando, setConfirmando] = useState(false);
 
   return (
-    <form action={mandar} className="flex items-center gap-3">
+    <div className="flex items-center gap-3">
       {estado.ok && (
         <span className="text-base text-muted-foreground">{estado.ok}</span>
       )}
+      <Confirmar
+        abierto={confirmando}
+        alCerrar={() => setConfirmando(false)}
+        titulo="Recordarles a los inscriptos de mañana"
+        detalle="Les llega un mensaje a todos los anotados en los eventos de mañana. Una vez enviado no se puede retirar."
+        confirmar="Mandar el recordatorio"
+        alConfirmar={() => {
+          setConfirmando(false);
+          startTransition(() => mandar());
+        }}
+      />
       <button
-        type="submit"
+        type="button"
+        onClick={() => setConfirmando(true)}
         disabled={mandando}
         className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
       >
@@ -100,6 +114,6 @@ export function Recordatorios() {
         )}
         Recordar los de mañana
       </button>
-    </form>
+    </div>
   );
 }

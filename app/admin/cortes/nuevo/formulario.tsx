@@ -1,26 +1,48 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import {
+  Columns2,
+  Layers,
+  LayoutGrid,
+  ListOrdered,
+  Loader2,
+  Plus,
+  Rows2,
+  Scissors,
+  Search,
+  Siren,
+  Square,
+  Trash2,
+  UserRound,
+  Wrench,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crearCorte } from "../actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
 import { medidaDePlaca, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
-import {
-  calcularPlanoDeCorte,
-  type PiezaFijada,
-} from "@/lib/cortes/plano";
+import type { PiezaFijada } from "@/lib/cortes/tipos";
+import { usePlano } from "@/lib/cortes/en-vivo";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
 import { metrosDeTapacanto } from "@/lib/cortes/tarifa";
+import { formatearDecimal } from "@/lib/unidades";
 import { formatearSierra, leerAnchoDeSierra } from "@/lib/cortes/sierra";
+import {
+  BarraGuardar,
+  Hoja,
+  Opciones,
+  Seccion,
+  sinReiniciar,
+} from "@/components/admin/formulario";
 
 /** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
-interface PlacaElegida {
+export interface PlacaElegida {
   variantId: string;
   descripcion: string;
   largoMm: number | null;
@@ -29,7 +51,7 @@ interface PlacaElegida {
   color: string | null;
 }
 
-interface Pieza {
+export interface Pieza {
   largoMm: number;
   anchoMm: number;
   cantidad: number;
@@ -55,14 +77,31 @@ const piezaVacia = (): Pieza => ({
 
 const estadoInicial = {} as { error?: string; ok?: string };
 
+/** De qué sale el trabajo. La placa entera viaja como `mitad` vacía. */
+const MITADES = [
+  { valor: "", texto: "Placa entera", icono: Square },
+  { valor: "largo", texto: "Media a lo largo", icono: Rows2 },
+  { valor: "ancho", texto: "Media al ancho", icono: Columns2 },
+];
+
 export function FormularioCorte({
   sucursales,
   desdePedido,
+  desdeConsulta,
   anchoSierra: anchoSierraGeneral,
+  clienteInicial,
+  sierraEditable = false,
 }: {
+  /** Desde la ficha del cliente: llega con el cliente ya elegido. */
+  clienteInicial?: { id: string; nombre: string; razonSocial: string | null; telefono: string | null };
+  /**
+   * La sierra es un dato del taller: la cambia el admin. A quien vende le
+   * sobraba un campo técnico que no sabe completar.
+   */
+  sierraEditable?: boolean;
   sucursales: { id: string; nombre: string }[];
   /**
-   * Lo que se lleva el disco en cada pasada, de /admin/calculadoras.
+   * Lo que se lleva el disco en cada pasada, de /admin/cortes/tarifas.
    *
    * Viaja como prop porque esta pantalla es de cliente —el plano se rehace con
    * cada tecla— y el valor vive en la base. Antes el motor usaba su constante
@@ -85,6 +124,19 @@ export function FormularioCorte({
     cliente: { id: string; nombre: string; razonSocial: string | null } | null;
     contactoNombre: string;
   };
+  /**
+   * El corte que alguien mandó por WhatsApp desde el sitio (`?consulta=`):
+   * arranca cargado con su placa, su mitad, su canto y sus piezas.
+   */
+  desdeConsulta?: {
+    token: string;
+    /** Cuál de las placas de la consulta; 0 es la primera. */
+    grupo: number;
+    placa: PlacaElegida | null;
+    mitad: Mitad;
+    cantoDescripcion: string;
+    piezas: Pieza[];
+  };
 }) {
   const [estado, accion, pendiente] = useActionState(crearCorte, estadoInicial);
 
@@ -98,25 +150,38 @@ export function FormularioCorte({
    * donde corresponde; sale del pedido, o de la primera sucursal.
    */
   const sucursal = desdePedido?.branchId ?? sucursales[0]?.id ?? "";
-  const [cliente, setCliente] = useState<{ id: string; nombre: string; razonSocial: string | null } | null>(
-    desdePedido?.cliente ?? null,
+  const [cliente, setCliente] = useState<{
+    id: string;
+    nombre: string;
+    razonSocial: string | null;
+  } | null>(desdePedido?.cliente ?? clienteInicial ?? null);
+  const [nombre, setNombre] = useState(
+    desdePedido?.contactoNombre ?? (clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : ""),
   );
-  const [nombre, setNombre] = useState(desdePedido?.contactoNombre ?? "");
-  const [placa, setPlaca] = useState<PlacaElegida | null>(null);
+  const [telefono, setTelefono] = useState(clienteInicial?.telefono ?? "");
+  const [placa, setPlaca] = useState<PlacaElegida | null>(
+    desdeConsulta?.placa ?? null,
+  );
   /** La medida de la placa, en milímetros, como está en pantalla. */
   const [largoPlaca, setLargoPlaca] = useState("");
   const [anchoPlaca, setAnchoPlaca] = useState("");
   /** Si sale de media placa, y en qué sentido se parte. */
-  const [mitad, setMitad] = useState<Mitad>(null);
-  const [material, setMaterial] = useState("");
-  const [piezas, setPiezas] = useState<Pieza[]>([piezaVacia()]);
+  const [mitad, setMitad] = useState<Mitad>(desdeConsulta?.mitad ?? null);
+  const [material, setMaterial] = useState(
+    desdeConsulta?.placa?.descripcion ?? "",
+  );
+  const [piezas, setPiezas] = useState<Pieza[]>(
+    desdeConsulta?.piezas.length ? desdeConsulta.piezas : [piezaVacia()],
+  );
   const [placas, setPlacas] = useState(1);
   /** Las piezas que alguien mandó a mano a una placa. */
   const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
   /** Si alguien lo pisó a mano, el plano deja de moverlo solo. */
   const [placasTocado, setPlacasTocado] = useState(false);
 
-  const validas = piezas.filter((p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0);
+  const validas = piezas.filter(
+    (p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0,
+  );
   const totalPiezas = validas.reduce((s, p) => s + p.cantidad, 0);
   // Los metros cuadrados del despiece: no reemplazan al optimizador, pero
   // permiten ver de un vistazo si el número de placas tiene sentido.
@@ -137,14 +202,6 @@ export function FormularioCorte({
    * común y **se avisa en pantalla**: un plano hecho sobre una medida supuesta
    * no sirve para cobrar. Ver `lib/cortes/placa.ts`.
    */
-  const medidaPlaca = medidaDePlaca({
-    propiaLargo: Number(largoPlaca) || null,
-    propiaAncho: Number(anchoPlaca) || null,
-    varianteLargo: placa?.largoMm,
-    varianteAncho: placa?.anchoMm,
-    mitad,
-  });
-
   const claveDeLasPiezas = JSON.stringify(validas);
   const paraElPlano = useMemo(
     () =>
@@ -166,24 +223,33 @@ export function FormularioCorte({
 
   // El disco de este trabajo: arranca con el general y se puede cambiar. El
   // trabajo lo guarda, así su plano no cambia si después se toca el general.
-  const [sierraTexto, setSierraTexto] = useState(String(anchoSierraGeneral).replace(".", ","));
+  const [sierraTexto, setSierraTexto] = useState(
+    String(anchoSierraGeneral).replace(".", ","),
+  );
   const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
 
+  const medidaPlaca = medidaDePlaca({
+    propiaLargo: Number(largoPlaca) || null,
+    propiaAncho: Number(anchoPlaca) || null,
+    varianteLargo: placa?.largoMm,
+    varianteAncho: placa?.anchoMm,
+    mitad,
+    // La media placa sale de partirla con este disco.
+    sierra: anchoSierra,
+  });
+
   /*
-   * El plano se calcula acá y no adentro del dibujo porque el formulario lo
-   * necesita para dos cosas: mostrarlo y proponer cuántas placas.
+   * El plano se pide acá y no adentro del dibujo porque el formulario lo
+   * necesita para dos cosas: mostrarlo y proponer cuántas placas. Lo calcula
+   * Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
    */
-  const plano = useMemo(
-    () =>
-      calcularPlanoDeCorte({
-        piezas: paraElPlano,
-        placaLargo: medidaPlaca.largo,
-        placaAncho: medidaPlaca.ancho,
-        anchoSierra,
-        fijadas,
-      }),
-    [paraElPlano, medidaPlaca.largo, medidaPlaca.ancho, anchoSierra, fijadas],
-  );
+  const { plano } = usePlano({
+    piezas: paraElPlano,
+    placaLargo: medidaPlaca.largo,
+    placaAncho: medidaPlaca.ancho,
+    anchoSierra,
+    fijadas,
+  });
 
   const placasDelPlano = Math.max(1, plano.placas.length);
 
@@ -215,13 +281,21 @@ export function FormularioCorte({
   }
 
   return (
-    <form action={accion} className="space-y-5">
+    <form {...sinReiniciar(accion)} className="space-y-5">
       <input type="hidden" name="branchId" value={sucursal} />
       {desdePedido && (
         <input type="hidden" name="orderId" value={desdePedido.id} />
       )}
+      {desdeConsulta && (
+        <input type="hidden" name="consulta" value={desdeConsulta.token} />
+      )}
+      {desdeConsulta && desdeConsulta.grupo > 0 && (
+        <input type="hidden" name="consultaGrupo" value={desdeConsulta.grupo} />
+      )}
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
-      {placa && <input type="hidden" name="variantId" value={placa.variantId} />}
+      {placa && (
+        <input type="hidden" name="variantId" value={placa.variantId} />
+      )}
       {/* El acomodo corregido a mano viaja con el formulario: sin esto, mover
           una pieza y apretar Guardar la devolvía al automático sin avisar. */}
       {fijadas.length > 0 && (
@@ -235,49 +309,67 @@ export function FormularioCorte({
         <input key={i} type="hidden" name="pieza" value={JSON.stringify(p)} />
       ))}
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <h2 className="text-base font-semibold">Para quién y qué se corta</h2>
-
-          <BuscadorDeCliente
-            elegido={cliente}
-            onElegir={(c) => {
-              setCliente(c);
-              if (c) setNombre(c.razonSocial ?? c.nombre);
-            }}
-          />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="contactoNombre">Nombre</Label>
-              <Input
-                id="contactoNombre"
-                name="contactoNombre"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                required
-              />
-            </div>
-
+      <Hoja>
+        <Seccion titulo="Para quién" icono={UserRound}>
+          <div className="md:col-span-2">
+            <BuscadorDeCliente
+              elegido={cliente}
+              onElegir={(c) => {
+                setCliente(c);
+                if (c) setNombre(c.razonSocial ?? c.nombre);
+              }}
+            />
           </div>
 
-          <BuscadorDePlaca
-            branchId={sucursal}
-            elegida={placa}
-            onElegir={(p) => {
-              setPlaca(p);
-              if (p) {
-                setMaterial(p.descripcion);
-                // La medida de la variante entra en los campos, donde se puede
-                // corregir: la placa que hay en el depósito no siempre mide lo
-                // que dice el catálogo.
-                setLargoPlaca(p.largoMm ? String(p.largoMm) : "");
-                setAnchoPlaca(p.anchoMm ? String(p.anchoMm) : "");
-              }
-            }}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="contactoNombre">Nombre</Label>
+            <Input
+              id="contactoNombre"
+              name="contactoNombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              required
+            />
+          </div>
+          {/* Sin ficha de cliente, es el único lugar del que sale a quién
+              avisarle que el corte está listo. */}
+          <div className="space-y-2">
+            <Label htmlFor="contactoTelefono">Teléfono</Label>
+            <Input
+              id="contactoTelefono"
+              name="contactoTelefono"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              inputMode="tel"
+              maxLength={40}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="retiraEl">Lo retira el</Label>
+            <Input id="retiraEl" name="retiraEl" type="date" />
+          </div>
+        </Seccion>
 
-          <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
+        <Seccion titulo="La placa" icono={Layers}>
+          <div className="md:col-span-2">
+            <BuscadorDePlaca
+              branchId={sucursal}
+              elegida={placa}
+              onElegir={(p) => {
+                setPlaca(p);
+                if (p) {
+                  setMaterial(p.descripcion);
+                  // La medida de la variante entra en los campos, donde se
+                  // puede corregir: la placa que hay en el depósito no siempre
+                  // mide lo que dice el catálogo.
+                  setLargoPlaca(p.largoMm ? String(p.largoMm) : "");
+                  setAnchoPlaca(p.anchoMm ? String(p.anchoMm) : "");
+                }
+              }}
+            />
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-[1fr_140px] md:col-span-2">
             <div className="space-y-2">
               <Label htmlFor="materialDescripcion">Placa</Label>
               <Input
@@ -329,128 +421,111 @@ export function FormularioCorte({
               si no había, el plano se armaba sobre 1830 × 2750 avisando
               «medida supuesta» sin dejar corregirla. Con material del cliente
               —que es la mitad de los trabajos— eso volvía inútil el plano. */}
-          <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto]">
-            <div className="space-y-2">
-              <Label htmlFor="placaLargoMm">Largo de la placa (mm)</Label>
-              <Input
-                id="placaLargoMm"
-                name="placaLargoMm"
-                type="number"
-                min="1"
-                inputMode="numeric"
-                value={largoPlaca}
-                onChange={(e) => setLargoPlaca(e.target.value)}
-                placeholder={String(medidaPlaca.largo)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="placaAnchoMm">Ancho de la placa (mm)</Label>
-              <Input
-                id="placaAnchoMm"
-                name="placaAnchoMm"
-                type="number"
-                min="1"
-                inputMode="numeric"
-                value={anchoPlaca}
-                onChange={(e) => setAnchoPlaca(e.target.value)}
-                placeholder={String(medidaPlaca.ancho)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>De qué sale</Label>
-              <input type="hidden" name="mitad" value={mitad ?? ""} />
-              <div className="flex gap-1.5" role="group" aria-label="De qué sale">
-                {([null, "largo", "ancho"] as const).map((m) => (
-                  <button
-                    key={m ?? "entera"}
-                    type="button"
-                    onClick={() => setMitad(m)}
-                    aria-pressed={mitad === m}
-                    className={`h-10 rounded-md px-3 text-base font-medium transition-colors ${
-                      mitad === m
-                        ? "bg-brand-orange text-white"
-                        : "border border-input text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {m === null
-                      ? "Placa entera"
-                      : m === "largo"
-                        ? "Media a lo largo"
-                        : "Media al ancho"}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="placaLargoMm">Largo de la placa (mm)</Label>
+            <Input
+              id="placaLargoMm"
+              name="placaLargoMm"
+              type="number"
+              min="1"
+              inputMode="numeric"
+              value={largoPlaca}
+              onChange={(e) => setLargoPlaca(e.target.value)}
+              placeholder={String(medidaPlaca.largo)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="placaAnchoMm">Ancho de la placa (mm)</Label>
+            <Input
+              id="placaAnchoMm"
+              name="placaAnchoMm"
+              type="number"
+              min="1"
+              inputMode="numeric"
+              value={anchoPlaca}
+              onChange={(e) => setAnchoPlaca(e.target.value)}
+              placeholder={String(medidaPlaca.ancho)}
+            />
           </div>
 
-          <p className="text-sm text-muted-foreground">
-            {nombreDeLaMitad(mitad)} de {medidaPlaca.largo} × {medidaPlaca.ancho}{" "}
-            mm
-            {medidaPlaca.supuesta
-              ? " · medida supuesta: elegí la placa del catálogo o escribí la medida"
-              : ""}
-          </p>
-
-          <label className="flex flex-wrap items-center gap-2 text-base">
-            <span className="text-muted-foreground">La sierra se lleva</span>
-            <input
-              name="anchoSierraMm"
-              value={sierraTexto}
-              onChange={(e) => setSierraTexto(e.target.value)}
-              inputMode="decimal"
-              aria-label="Ancho de la sierra, en milímetros"
-              aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
-              className="tabular h-10 w-20 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+          <div className="space-y-2 md:col-span-2">
+            <Label>De qué sale</Label>
+            <input type="hidden" name="mitad" value={mitad ?? ""} />
+            <Opciones
+              nombre="mitad-opcion"
+              opciones={MITADES}
+              valor={mitad ?? ""}
+              alCambiar={(v) => setMitad(v === "" ? null : (v as Mitad))}
+              columnas={3}
             />
-            <span className="text-muted-foreground">mm por corte</span>
-            {leerAnchoDeSierra(sierraTexto) === null && (
-              <span className="estado-espera text-sm font-medium">
-                Entre 0,5 y 10 mm: mientras tanto se usa {formatearSierra(anchoSierraGeneral)}.
-              </span>
-            )}
-          </label>
+            {/* La medida con la que se arma el plano. Si es supuesta se avisa:
+                un plano sobre una medida inventada no sirve para cobrar. */}
+            <p className="text-sm text-muted-foreground">
+              {nombreDeLaMitad(mitad)} de {medidaPlaca.largo} ×{" "}
+              {medidaPlaca.ancho} mm
+              {medidaPlaca.supuesta
+                ? " · medida supuesta: elegí la placa del catálogo o escribí la medida"
+                : ""}
+            </p>
+          </div>
 
           {/* Partir una placa de color no es lo mismo que partir una blanca:
               el dibujo corre en un sentido y la mitad cortada al ancho puede
               quedar con la veta cruzada. No se bloquea —quien atiende sabe qué
               placa tiene en la mano—, se avisa. */}
           {mitad && placa?.color && (
-            <p className="tarjeta-atencion px-4 py-3 text-base">
+            <p className="tarjeta-atencion px-4 py-3 text-base md:col-span-2">
               La placa es <strong>{placa.color}</strong>: fijate cómo corre el
-              dibujo antes de partirla. Al ancho, las dos mitades quedan con la
-              veta cruzada.
+              dibujo antes de partirla.
             </p>
           )}
+        </Seccion>
 
+        <Seccion titulo="Corte" icono={Scissors}>
           <div className="space-y-2">
             <Label htmlFor="cantoDescripcion">Tapacanto del trabajo</Label>
             <Input
               id="cantoDescripcion"
               name="cantoDescripcion"
+              defaultValue={desdeConsulta?.cantoDescripcion}
               placeholder="Blanco 0,45 mm — vacío si no lleva"
             />
-            <p className="text-sm text-muted-foreground">
-              El color y el espesor del canto, una vez para todo el despiece. La
-              excepción de una pieza va en su aclaración.
-            </p>
           </div>
-        </CardContent>
-      </Card>
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="text-base font-semibold">Despiece</h2>
-            {totalPiezas > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {totalPiezas} {totalPiezas === 1 ? "pieza" : "piezas"} ·{" "}
-                {m2.toFixed(2)} m²
-                {metrosCanto > 0 &&
-                  ` · ${metrosCanto.toFixed(2)} m de tapacanto`}
+          {sierraEditable ? (
+          <div className="space-y-2">
+            <Label htmlFor="anchoSierraMm">Sierra (mm por corte)</Label>
+            <Input
+              id="anchoSierraMm"
+              name="anchoSierraMm"
+              value={sierraTexto}
+              onChange={(e) => setSierraTexto(e.target.value)}
+              inputMode="decimal"
+              aria-invalid={leerAnchoDeSierra(sierraTexto) === null}
+              className="tabular"
+            />
+            {leerAnchoDeSierra(sierraTexto) === null && (
+              <p className="estado-espera text-sm font-medium">
+                Entre 0,5 y 10 mm: mientras tanto se usa{" "}
+                {formatearSierra(anchoSierraGeneral)}.
               </p>
             )}
           </div>
+          ) : (
+            <input type="hidden" name="anchoSierraMm" value={sierraTexto} />
+          )}
+        </Seccion>
+      </Hoja>
+
+      <Hoja>
+        <Seccion titulo="Despiece" icono={ListOrdered} columnas={1}>
+          {totalPiezas > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {totalPiezas} {totalPiezas === 1 ? "pieza" : "piezas"} ·{" "}
+              {formatearDecimal(m2)} m²
+              {metrosCanto > 0 && ` · ${formatearDecimal(metrosCanto)} m de tapacanto`}
+            </p>
+          )}
 
           <div className="space-y-3">
             {piezas.map((p, i) => (
@@ -494,7 +569,9 @@ export function FormularioCorte({
                       type="number"
                       min="1"
                       value={p.cantidad}
-                      onChange={(e) => actualizar(i, "cantidad", e.target.value)}
+                      onChange={(e) =>
+                        actualizar(i, "cantidad", e.target.value)
+                      }
                     />
                   </div>
 
@@ -505,7 +582,9 @@ export function FormularioCorte({
                     <Input
                       id={`etiqueta-${i}`}
                       value={p.etiqueta}
-                      onChange={(e) => actualizar(i, "etiqueta", e.target.value)}
+                      onChange={(e) =>
+                        actualizar(i, "etiqueta", e.target.value)
+                      }
                       placeholder="Puerta, estante…"
                     />
                   </div>
@@ -515,7 +594,9 @@ export function FormularioCorte({
                       type="button"
                       variant="ghost"
                       onClick={() =>
-                        setPiezas((previas) => previas.filter((_, j) => j !== i))
+                        setPiezas((previas) =>
+                          previas.filter((_, j) => j !== i),
+                        )
                       }
                       className="h-11 gap-1.5 text-base text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
@@ -542,7 +623,9 @@ export function FormularioCorte({
                     Canto en el largo
                     <select
                       value={p.cantoLargo}
-                      onChange={(e) => actualizar(i, "cantoLargo", e.target.value)}
+                      onChange={(e) =>
+                        actualizar(i, "cantoLargo", e.target.value)
+                      }
                       className="h-11 rounded-md border border-input bg-transparent px-2.5 text-base"
                       aria-label="Lados con canto en el largo"
                     >
@@ -555,7 +638,9 @@ export function FormularioCorte({
                     Canto en el ancho
                     <select
                       value={p.cantoAncho}
-                      onChange={(e) => actualizar(i, "cantoAncho", e.target.value)}
+                      onChange={(e) =>
+                        actualizar(i, "cantoAncho", e.target.value)
+                      }
                       className="h-11 rounded-md border border-input bg-transparent px-2.5 text-base"
                       aria-label="Lados con canto en el ancho"
                     >
@@ -585,43 +670,43 @@ export function FormularioCorte({
             ))}
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPiezas((previas) => [...previas, piezaVacia()])}
-          >
-            <Plus className="h-4 w-4" />
-            Agregar pieza
-          </Button>
-        </CardContent>
-      </Card>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPiezas((previas) => [...previas, piezaVacia()])}
+            >
+              <Plus className="h-4 w-4" />
+              Agregar pieza
+            </Button>
+          </div>
+        </Seccion>
+      </Hoja>
 
       {/* El plano, acá y no después de guardar.
           No se puede vender un corte sin ver cómo queda adentro de la placa: de
           este acomodo salen las placas que hacen falta, si conviene vender la
           placa entera y cuántas pasadas se cobran. Se recalcula con cada medida
           que se tipea porque el cálculo corre en el navegador. */}
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <div className="space-y-1">
-            <h2 className="text-base font-semibold">Cómo entra en la placa</h2>
-            <p className="text-base text-muted-foreground">
-              Se rehace solo a medida que cargás las piezas.
-            </p>
-          </div>
+      <section className="tarjeta space-y-5 px-5 py-8 sm:px-8">
+        <h2 className="flex items-center gap-3 text-[19px] font-bold tracking-tight">
+          <span className="ficha-icono flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+            <LayoutGrid className="h-6 w-6" />
+          </span>
+          Cómo entra en la placa
+        </h2>
 
-          <PlanoEnVivo
-            plano={plano}
-            medidaSupuesta={medidaPlaca.supuesta}
-            fijadas={fijadas}
-            onFijadas={setFijadas}
-          />
-        </CardContent>
-      </Card>
+        <PlanoEnVivo
+          plano={plano}
+          medidaSupuesta={medidaPlaca.supuesta}
+          fijadas={fijadas}
+          onFijadas={setFijadas}
+        />
+      </section>
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-4 p-6">
-          <div className="space-y-2">
+      <Hoja>
+        <Seccion titulo="Para el taller" icono={Wrench}>
+          <div className="space-y-2 md:col-span-2">
             <Label htmlFor="notas">Notas para el taller</Label>
             <Textarea
               id="notas"
@@ -631,12 +716,19 @@ export function FormularioCorte({
             />
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox name="urgente" value="si" />
-            Urgente: va primero en la cola del taller
+          {/* Como el `Interruptor` del molde, pero el valor es «si»: es lo que
+              lee `crearCorte` (el del molde manda «on»). */}
+          <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5">
+            <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+              <Siren className="h-5 w-5" />
+            </span>
+            <span className="flex-1 text-[15px] font-semibold leading-tight">
+              Urgente
+            </span>
+            <Switch name="urgente" value="si" />
           </label>
-        </CardContent>
-      </Card>
+        </Seccion>
+      </Hoja>
 
       {estado.error && (
         <p
@@ -653,14 +745,16 @@ export function FormularioCorte({
         </p>
       )}
 
-      <Button
-        type="submit"
-        disabled={pendiente || validas.length === 0}
-        className="h-11 px-6"
-      >
-        {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-        Mandar a la cola del taller
-      </Button>
+      <BarraGuardar>
+        <Button
+          type="submit"
+          disabled={pendiente || validas.length === 0}
+          className="h-11 px-6"
+        >
+          {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+          Mandar a la cola del taller
+        </Button>
+      </BarraGuardar>
     </form>
   );
 }
@@ -670,7 +764,9 @@ function BuscadorDeCliente({
   onElegir,
 }: {
   elegido: { id: string; nombre: string; razonSocial: string | null } | null;
-  onElegir: (c: { id: string; nombre: string; razonSocial: string | null } | null) => void;
+  onElegir: (
+    c: { id: string; nombre: string; razonSocial: string | null } | null,
+  ) => void;
 }) {
   const [texto, setTexto] = useState("");
   const [traidos, setTraidos] = useState<{
@@ -858,10 +954,6 @@ function BuscadorDePlaca({
           ))}
         </ul>
       )}
-
-      <p className="text-sm text-muted-foreground">
-        Opcional: si la placa no está en el catálogo, escribila abajo a mano.
-      </p>
     </div>
   );
 }

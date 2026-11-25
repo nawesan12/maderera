@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { requireStaffRole } from "@/lib/dal/session";
-import { registrarEnBitacora } from "@/lib/dal/admin/auditoria";
-import { registrarGasto } from "@/lib/dal/admin/gastos";
-import { formatearMonto } from "@/lib/formato";
-import { etiquetaDeCircuito } from "@/lib/circuito";
+import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+
+/*
+ * Los gastos del negocio. Los anota la API de Go (backend/internal/compras):
+ * si es efectivo, también sale de la caja del turno que lo contiene.
+ */
 
 export interface EstadoGasto {
   error?: string;
@@ -14,83 +14,22 @@ export interface EstadoGasto {
   aviso?: string;
 }
 
-const esquema = z.object({
-  fecha: z.string(),
-  categoria: z.enum([
-    "flete",
-    "combustible",
-    "servicios",
-    "alquiler",
-    "sueldos",
-    "mantenimiento",
-    "impuestos",
-    "librería",
-    "publicidad",
-    "otros",
-  ]),
-  descripcion: z.string().trim().min(2, "Poné en qué se gastó.").max(200),
-  importe: z.coerce.number().positive("El importe tiene que ser mayor a cero."),
-  medio: z.enum(["efectivo", "transferencia", "debito", "credito", "cheque"]),
-  /* Por omisión "blanco": es la mayoría, y quien no elija nada tiene que caer
-     en el caso normal y no en el excepcional. */
-  circuito: z.enum(["blanco", "negro"]).default("blanco"),
-  branchId: z
-    .string()
-    .optional()
-    .transform((v) => (v ? v : null)),
-  supplierId: z
-    .string()
-    .optional()
-    .transform((v) => (v ? v : null)),
-  notas: z
-    .string()
-    .trim()
-    .max(500)
-    .optional()
-    .transform((v) => (v ? v : null)),
-});
+export interface DatosGasto {
+  fecha: string;
+  categoria: string;
+  descripcion: string;
+  importe: number;
+  medio: "efectivo" | "transferencia" | "debito" | "credito" | "cheque";
+  circuito?: "blanco" | "negro";
+  branchId?: string;
+  supplierId?: string;
+  notas?: string;
+}
 
-export async function cargarGasto(
-  datos: z.input<typeof esquema>,
-): Promise<EstadoGasto> {
-  const usuario = await requireStaffRole("admin");
-
-  const leido = esquema.safeParse(datos);
-  if (!leido.success) {
-    return { error: leido.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const d = leido.data;
-
-  const resultado = await registrarGasto({
-    fecha: new Date(d.fecha),
-    categoria: d.categoria,
-    descripcion: d.descripcion,
-    importe: d.importe,
-    medio: d.medio,
-    circuito: d.circuito,
-    branchId: d.branchId,
-    supplierId: d.supplierId,
-    notas: d.notas,
-    usuarioId: usuario.userId,
-  });
-
-  if (!resultado.ok) return { error: resultado.error };
-
-  await registrarEnBitacora({
-    sesion: usuario,
-    accion: "crear",
-    entidad: "gasto",
-    descripcion: `Anotó un gasto de ${formatearMonto(d.importe)} en ${d.categoria} (${etiquetaDeCircuito(d.circuito)}): ${d.descripcion}`,
-  });
-
+export async function cargarGasto(datos: DatosGasto): Promise<EstadoGasto> {
+  const r = await (await api()).POST("/api/v1/admin/compras/gastos", { body: { ...datos } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   revalidatePath("/admin/compras/gastos");
   revalidatePath("/admin/caja");
-
-  return {
-    ok: `Gasto anotado por ${formatearMonto(d.importe)}.`,
-    aviso: resultado.sinCaja
-      ? "No había caja abierta en ese momento, así que no salió del turno. La plata igual se fue: el arqueo va a mostrar la diferencia."
-      : undefined,
-  };
+  return { ok: r.data.ok, aviso: r.data.aviso };
 }

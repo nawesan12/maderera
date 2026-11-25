@@ -1,6 +1,6 @@
 "use client";
 
-import type { PiezaFijada, PlanoDeCorte } from "@/lib/cortes/plano";
+import type { PiezaFijada, PlanoDeCorte } from "@/lib/cortes/tipos";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
 
 /**
@@ -37,10 +37,6 @@ export function PlanoEnVivo({
       <div className="rounded-xl border border-dashed px-5 py-8 text-center">
         <p className="text-base font-medium">
           El plano aparece al cargar la primera medida
-        </p>
-        <p className="mt-1 text-base text-muted-foreground">
-          Cargá largo, ancho y cantidad y vas a ver cómo entran las piezas en la
-          placa, cuántas hacen falta y si conviene vender la placa entera.
         </p>
       </div>
     );

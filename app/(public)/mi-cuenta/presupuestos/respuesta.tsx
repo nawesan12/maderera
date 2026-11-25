@@ -27,7 +27,7 @@ export function RespuestaPresupuesto({ numero }: { numero: string }) {
 
   if (estado.ok) {
     return (
-      <p className="flex items-center gap-2 rounded-lg bg-green-50 px-3.5 py-2.5 text-sm text-green-900">
+      <p className="flex items-center gap-2 estado-ok rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-sm">
         <Check className="h-4 w-4 shrink-0" />
         {estado.ok}
       </p>
@@ -44,7 +44,10 @@ export function RespuestaPresupuesto({ numero }: { numero: string }) {
           name="respuesta"
           value="aceptado"
           disabled={pendiente}
-          className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-60"
+          // El naranja de la acción principal y no el verde de WhatsApp:
+          // aceptar no abre WhatsApp, y el verde quedó solo para eso
+          // (hallazgo 27; comité final).
+          className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-accion-hover disabled:opacity-60"
         >
           {pendiente ? (
             <Loader2 className="h-4 w-4 animate-spin" />

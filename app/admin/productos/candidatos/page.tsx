@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowLeft, PackageX } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { candidatosDeBaja } from "@/lib/dal/admin/products";
-import { mesesSinVenderParaBaja } from "@/lib/dal/admin/parametros-catalogo";
 import { AlternarBaja } from "./alternar";
 import { UmbralDeBaja } from "./umbral";
 
@@ -23,8 +22,7 @@ export const metadata = { title: "Candidatos a dar de baja" };
  * cambia lo que ve todo el equipo en esta pantalla.
  */
 export default async function CandidatosPage() {
-  const meses = await mesesSinVenderParaBaja();
-  const candidatos = await candidatosDeBaja({ mesesSinVender: meses });
+  const { meses, candidatos } = await candidatosDeBaja();
 
   return (
     <div className="space-y-6">
@@ -38,7 +36,6 @@ export default async function CandidatosPage() {
 
       <EncabezadoPanel
         titulo="Candidatos a dar de baja"
-        detalle="Sin ventas en el período de abajo, sin stock, o sin precio cargado. Nada se da de baja solo."
       >
         <UmbralDeBaja meses={meses} />
       </EncabezadoPanel>
@@ -48,11 +45,8 @@ export default async function CandidatosPage() {
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
             <PackageX className="h-6 w-6 text-muted-foreground" />
           </div>
+          {/* Todos los productos activos se vendieron hace poco, tienen stock y tienen precio. */}
           <p className="text-base font-medium">No hay nada para revisar</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Todos los productos activos se vendieron hace poco, tienen stock y
-            tienen precio.
-          </p>
         </section>
       ) : (
         <section className="tarjeta">
@@ -61,9 +55,6 @@ export default async function CandidatosPage() {
               {candidatos.length}{" "}
               {candidatos.length === 1 ? "producto" : "productos"} para revisar
             </h2>
-            <p className="text-base text-muted-foreground">
-              Dar de baja solo lo saca del sitio; el histórico queda
-            </p>
           </div>
 
           <ul className="divide-y">

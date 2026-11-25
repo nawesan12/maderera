@@ -75,7 +75,7 @@ export function FiltrosStock({
           ...Object.fromEntries(categorias.map((c) => [c.slug, c.name])),
         }}
       >
-        <SelectTrigger className="w-48">
+        <SelectTrigger className="w-48" aria-label="Categoría">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

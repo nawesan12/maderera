@@ -36,92 +36,11 @@ export interface RegimenDeRetencion {
   minimoRetencion: number;
 }
 
-export interface EntradaDeRetencion {
-  /** La base del pago de ahora. Qué es depende del régimen: neto, IVA, total. */
-  base: number;
-  /** Lo ya pagado a este proveedor en el mes, por el mismo régimen. */
-  acumuladoMes: number;
-  /** Lo ya retenido en el mes por este régimen. */
-  retenidoMes: number;
-  regimen: RegimenDeRetencion;
-  /** Si el proveedor está inscripto en el régimen. */
-  inscripto: boolean;
-}
-
-export interface ResultadoRetencion {
-  /** Sobre cuánto se calculó, ya descontado el mínimo no imponible. */
-  imponible: number;
-  alicuota: number;
-  /** Lo que hay que retener en **este** pago. Nunca negativo. */
-  retencion: number;
-  /** Por qué no se retuvo, cuando la retención dio cero. */
-  motivo: string | null;
-}
-
-function aCentavos(valor: number): number {
-  return Math.round(valor * 100) / 100;
-}
-
-export function calcularRetencion(
-  entrada: EntradaDeRetencion,
-): ResultadoRetencion {
-  const { regimen, inscripto } = entrada;
-
-  const alicuota = inscripto ? regimen.alicuota : regimen.alicuotaNoInscripto;
-
-  /*
-   * Al no inscripto no se le aplica el mínimo no imponible: se le retiene sobre
-   * el total y a la alícuota agravada. Aplicarle el mínimo del inscripto es de
-   * los errores que ARCA reclama con intereses.
-   */
-  const minimo = inscripto ? regimen.minimoNoImponible : 0;
-
-  const acumulado = Math.max(0, entrada.acumuladoMes + entrada.base);
-  const imponible = aCentavos(Math.max(0, acumulado - minimo));
-
-  if (imponible === 0) {
-    return {
-      imponible: 0,
-      alicuota,
-      retencion: 0,
-      motivo:
-        minimo > 0
-          ? "No llega al mínimo no imponible del régimen."
-          : "No hay base sobre la que retener.",
-    };
-  }
-
-  /*
-   * La retención se calcula sobre **todo el acumulado** y después se resta lo
-   * ya retenido. Sin esa resta, el segundo pago del mes vuelve a retener sobre
-   * la misma base y el proveedor cobra de menos.
-   */
-  const acumuladaDelMes = aCentavos((imponible * alicuota) / 100);
-  const aRetener = aCentavos(acumuladaDelMes - entrada.retenidoMes);
-
-  // Puede dar negativo si una nota de crédito bajó el acumulado por debajo de
-  // lo ya retenido. No se devuelve plata: la corrección la hace el proveedor en
-  // su declaración.
-  if (aRetener <= 0) {
-    return {
-      imponible,
-      alicuota,
-      retencion: 0,
-      motivo: "Ya se retuvo lo que correspondía este mes.",
-    };
-  }
-
-  if (aRetener < regimen.minimoRetencion) {
-    return {
-      imponible,
-      alicuota,
-      retencion: 0,
-      motivo: "No llega al mínimo de retención del régimen.",
-    };
-  }
-
-  return { imponible, alicuota, retencion: aRetener, motivo: null };
-}
+/*
+ * El cálculo (calcularRetencion) se mudó a Go con los pagos a proveedores
+ * (backend/internal/compras/cuentas.go). Acá quedan la forma de un régimen y
+ * los valores con los que se siembra la tabla.
+ */
 
 /**
  * Los regímenes que usa una maderera, con los valores vigentes al arranque.

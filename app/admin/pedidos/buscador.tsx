@@ -40,7 +40,7 @@ export function BuscadorPedidos({
         actual={sucursalActual}
         alElegir={(v) => actualizar({ sucursal: v })}
         opciones={[
-          { valor: "todas", texto: "Las dos sucursales" },
+          { valor: "todas", texto: "Todas" },
           ...sucursales.map((s) => ({ valor: s.slug, texto: s.nombre })),
         ]}
       />

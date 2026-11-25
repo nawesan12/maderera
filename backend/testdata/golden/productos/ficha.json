@@ -1,0 +1,2868 @@
+{
+ "validacion": [
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": true,
+    "aPedido": true,
+    "active": false,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "id": "8f2b5c1e-1d2a-4c3b-9a8e-222222222222",
+    "subcategoryId": "8f2b5c1e-1d2a-4c3b-9a8e-333333333333",
+    "subcategory": "  Fenólicos ",
+    "brand": " Faplac ",
+    "imputacion": "Placas",
+    "recargoElaboracionPct": "12.5"
+   },
+   "datos": {
+    "id": "8f2b5c1e-1d2a-4c3b-9a8e-222222222222",
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "subcategory": "Fenólicos",
+    "subcategoryId": "8f2b5c1e-1d2a-4c3b-9a8e-333333333333",
+    "description": "",
+    "brand": "Faplac",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "recargoElaboracionPct": 12.5,
+    "imputacion": "Placas",
+    "featured": true,
+    "aPedido": true,
+    "active": false,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": " F ",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "El nombre es obligatorio.",
+   "campo": "name"
+  },
+  {
+   "entrada": {
+    "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Too big: expected string to have <=160 characters",
+   "campo": "name"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "Fenólico 18",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Solo se pueden usar minúsculas, números y guiones (sin espacios ni acentos).",
+   "campo": "slug"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "a",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Too small: expected string to have >=2 characters",
+   "campo": "slug"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico--18",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Solo se pueden usar minúsculas, números y guiones (sin espacios ni acentos).",
+   "campo": "slug"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Elegí una categoría.",
+   "campo": "categoryId"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "no-es-uuid",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Elegí una categoría.",
+   "campo": "categoryId"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "subcategoryId": ""
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "subcategoryId": "",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "subcategoryId": "xx"
+   },
+   "error": "Invalid UUID",
+   "campo": "subcategoryId"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "id": "no-uuid"
+   },
+   "error": "Invalid UUID",
+   "campo": "id"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Too big: expected string to have <=2000 characters",
+   "campo": "description"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "barril",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Invalid option: expected one of \"unidad\"|\"metro_lineal\"|\"metro_cuadrado\"|\"tabla\"|\"placa\"|\"rollo\"|\"par\"|\"juego\"|\"kg\"|\"litro\"",
+   "campo": "unit"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "unidad",
+    "formaDeVenta": "metro_cuadrado",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "unidad",
+    "formaDeVenta": "metro_cuadrado",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "por-kilo",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Invalid option: expected one of \"entera\"|\"entera_o_media\"|\"metro_cuadrado\"",
+   "campo": "formaDeVenta"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "0",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "El precio de la media tiene que ser mayor a cero.",
+   "campo": "precioMediaPct"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "El precio de la media tiene que ser mayor a cero.",
+   "campo": "precioMediaPct"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "101",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "La media no puede costar más que la entera.",
+   "campo": "precioMediaPct"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "62.5",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 62.5,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "abc",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Invalid input: expected number, received NaN",
+   "campo": "precioMediaPct"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "10.5",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "10.5",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "27",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Invalid option: expected one of \"0\"|\"21\"|\"10.5\"",
+   "campo": "alicuotaIva"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "recargoElaboracionPct": "-1"
+   },
+   "error": "Too small: expected number to be >=0",
+   "campo": "recargoElaboracionPct"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "recargoElaboracionPct": "501"
+   },
+   "error": "Too big: expected number to be <=500",
+   "campo": "recargoElaboracionPct"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "recargoElaboracionPct": "0"
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "recargoElaboracionPct": 0,
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ],
+    "recargoElaboracionPct": "abc"
+   },
+   "error": "Invalid input: expected number, received NaN",
+   "campo": "recargoElaboracionPct"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "foto.png",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Pegá la dirección completa de la foto; tiene que empezar con https://",
+   "campo": "imagen"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "https://x.com/a.png",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "https://x.com/a.png",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "  ",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Pegá la dirección completa de la foto; tiene que empezar con https://",
+   "campo": "imagen"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": []
+   },
+   "error": "Cargá al menos una medida o presentación.",
+   "campo": "variantes"
+  },
+  {
+   "entrada": {
+    "name": "",
+    "slug": "",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "El nombre es obligatorio.",
+   "campo": "name"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "F",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "El código tiene que tener al menos 2 letras o números.",
+   "campo": "variantes.0.sku"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": " ",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "El código tiene que tener al menos 2 letras o números.",
+   "campo": "variantes.0.sku"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Poné cómo se muestra la medida.",
+   "campo": "variantes.0.label"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "",
+      "anchoMm": " ",
+      "espesorMm": "",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": null,
+      "anchoMm": null,
+      "espesorMm": null,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "-5",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Tiene que ser un número positivo.",
+   "campo": "variantes.0.largoMm"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "abc",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Tiene que ser un número positivo.",
+   "campo": "variantes.0.largoMm"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "1e3",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 1000,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84.500,50",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Revisá el precio.",
+   "campo": "variantes.0.precioGeneral"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500,5",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500.5",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "-1",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Revisá el precio.",
+   "campo": "variantes.0.precioGeneral"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": " 1200 ",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "1200",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "2,5",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 2.5,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "metro_lineal",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "2.5",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "metro_lineal",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 2.5,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "metro_lineal",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "2,12345",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "metro_lineal",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 2.123,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": null,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "-3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Tiene que ser un número positivo.",
+   "campo": "variantes.0.stockCentral"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0.5"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0.5
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "metro_cuadrado",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "",
+      "anchoMm": "",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Para vender por m², «18 mm» necesita largo y ancho de la placa.",
+   "campo": "variantes.0.largoMm"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "metro_cuadrado",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "",
+      "largoMm": "2440",
+      "anchoMm": "",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Poné cómo se muestra la medida.",
+   "campo": "variantes.0.label"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "metro_cuadrado",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "metro_cuadrado",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0",
+      "id": "malo"
+     }
+    ]
+   },
+   "error": "Invalid UUID",
+   "campo": "variantes.0.id"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "Too big: expected string to have <=80 characters",
+   "campo": "variantes.0.material"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "  Pino  ",
+      "color": "Blanco",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "Pino",
+      "color": "Blanco",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 3,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "placa",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     },
+     {
+      "sku": "X",
+      "label": "",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "3",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     },
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "1,5",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "error": "El código tiene que tener al menos 2 letras o números.",
+   "campo": "variantes.1.sku"
+  },
+  {
+   "entrada": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "kg",
+    "formaDeVenta": "entera",
+    "precioMediaPct": "50",
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": "2440",
+      "anchoMm": "1220",
+      "espesorMm": "18",
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "",
+      "stockCentral": "0,333",
+      "stockAserradero": "0",
+      "minCentral": "1",
+      "minAserradero": "0"
+     }
+    ]
+   },
+   "datos": {
+    "name": "Fenólico",
+    "slug": "fenolico",
+    "categoryId": "8f2b5c1e-1d2a-4c3b-9a8e-111111111111",
+    "description": "",
+    "unit": "kg",
+    "formaDeVenta": "entera",
+    "precioMediaPct": 50,
+    "alicuotaIva": "21",
+    "featured": false,
+    "aPedido": false,
+    "active": true,
+    "imagen": "",
+    "variantes": [
+     {
+      "sku": "FEN18",
+      "label": "18 mm",
+      "largoMm": 2440,
+      "anchoMm": 1220,
+      "espesorMm": 18,
+      "material": "",
+      "color": "",
+      "terminacion": "",
+      "calidad": "",
+      "precioGeneral": "84500",
+      "precioProfesional": "0",
+      "stockCentral": 0.333,
+      "stockAserradero": 0,
+      "minCentral": 1,
+      "minAserradero": 0
+     }
+    ]
+   }
+  }
+ ],
+ "cantidades": [
+  {
+   "v": 0,
+   "redondeado": 0,
+   "texto": "0"
+  },
+  {
+   "v": 1,
+   "redondeado": 1,
+   "texto": "1"
+  },
+  {
+   "v": 1.5,
+   "redondeado": 1.5,
+   "texto": "1,5"
+  },
+  {
+   "v": 2.25,
+   "redondeado": 2.25,
+   "texto": "2,25"
+  },
+  {
+   "v": 0.3333333,
+   "redondeado": 0.333,
+   "texto": "0,333"
+  },
+  {
+   "v": 1234.5678,
+   "redondeado": 1234.568,
+   "texto": "1.234,568"
+  },
+  {
+   "v": 1000000,
+   "redondeado": 1000000,
+   "texto": "1.000.000"
+  },
+  {
+   "v": -2.5,
+   "redondeado": -2.5,
+   "texto": "-2,5"
+  },
+  {
+   "v": 0.0005,
+   "redondeado": 0.001,
+   "texto": "0,001"
+  },
+  {
+   "v": 0.0004,
+   "redondeado": 0,
+   "texto": "0"
+  },
+  {
+   "v": 1.0005,
+   "redondeado": 1.001,
+   "texto": "1,001"
+  },
+  {
+   "v": 12.3456,
+   "redondeado": 12.346,
+   "texto": "12,346"
+  },
+  {
+   "v": 999999.9995,
+   "redondeado": 1000000,
+   "texto": "1.000.000"
+  }
+ ],
+ "slugs": [
+  {
+   "t": "Fenólico 18 mm",
+   "slug": "fenolico-18-mm"
+  },
+  {
+   "t": "  Ñandubay  ",
+   "slug": "nandubay"
+  },
+  {
+   "t": "MDF/Blanco -- 2,5",
+   "slug": "mdf-blanco-2-5"
+  },
+  {
+   "t": "Árbol & Co.",
+   "slug": "arbol-co"
+  },
+  {
+   "t": "",
+   "slug": ""
+  },
+  {
+   "t": "---",
+   "slug": ""
+  },
+  {
+   "t": "Placa 18\"x2",
+   "slug": "placa-18-x2"
+  }
+ ]
+}

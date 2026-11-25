@@ -4,23 +4,28 @@ import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
-import { ArrowLeft, Download, MessageCircle, Printer } from "lucide-react";
+import { ArrowLeft, ClipboardList, Download, MessageCircle, Printer, Scissors } from "lucide-react";
+import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { enlaceDeWhatsapp } from "@/lib/formato";
+import { enlaceDeWhatsapp, fechaSolaCorta } from "@/lib/formato";
 import {
   fechaCorta,
   formatearCuit,
   moneda,
 } from "@/components/admin/formato";
-import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { obtenerCliente, type FichaDeCliente } from "@/lib/dal/admin/clientes";
 import { AvisoCuentaWeb } from "./aviso-cuenta-web";
 import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
+import { AnularRecibo } from "@/components/cobros/anular-recibo";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
-import { desdeDelPeriodo, historialDelCliente } from "@/lib/dal/historial-cliente";
+import { historialDelCliente } from "@/lib/dal/historial-cliente";
 import { requireStaff } from "@/lib/dal/session";
+import { DialogoCliente } from "../dialogo-cliente";
+import { listarListasParaClientes } from "@/lib/dal/admin/clientes";
+import { vendedoresActivos } from "@/lib/dal/admin/vendedores";
 
 const CONDICIONES: Record<string, string> = {
   consumidor_final: "Consumidor final",
@@ -42,14 +47,17 @@ export default async function FichaClientePage({
   const { periodo = "12m", ver } = await searchParams;
   const filtro = esFiltro(ver) ? ver : "todo";
 
-  const [cliente, historial, usuario] = await Promise.all([
+  const [cliente, historial, usuario, listas, vendedores] = await Promise.all([
     obtenerCliente(id),
-    historialDelCliente(id, { desde: desdeDelPeriodo(periodo), filtro }),
+    historialDelCliente(id, { periodo, filtro }),
     requireStaff(),
+    listarListasParaClientes(),
+    vendedoresActivos(),
   ]);
 
   if (!cliente) notFound();
   const esAdmin = usuario.staffRole === "admin";
+  const manejaPlata = usuario.staffRole != null && MANEJAN_PLATA.includes(usuario.staffRole);
 
   const [recordatorio, resumenCuenta, recibo] = await Promise.all([
     cliente.saldo > 0
@@ -98,7 +106,8 @@ export default async function FichaClientePage({
               "Cliente particular"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DialogoCliente listas={listas} vendedores={vendedores} cliente={cliente} />
           {whatsapp && (
             <a
               href={whatsapp}
@@ -122,6 +131,29 @@ export default async function FichaClientePage({
         </div>
       </div>
 
+      {/* Lo que se hace con un cliente, ya con el cliente puesto: armarle un
+          presupuesto o tomarle un corte sin volver a buscarlo. */}
+      <nav aria-label="Hacer para este cliente" className="flex flex-wrap gap-2">
+        {puedeEntrar("/admin/presupuestos", usuario.staffRole) && (
+          <Link
+            href={`/admin/presupuestos/nuevo?cliente=${cliente.id}`}
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-4 text-base font-medium hover:bg-muted"
+          >
+            <ClipboardList className="h-5 w-5" aria-hidden="true" />
+            Presupuesto
+          </Link>
+        )}
+        {puedeEntrar("/admin/cortes", usuario.staffRole) && (
+          <Link
+            href={`/admin/cortes/nuevo?cliente=${cliente.id}`}
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-4 text-base font-medium hover:bg-muted"
+          >
+            <Scissors className="h-5 w-5" aria-hidden="true" />
+            Corte
+          </Link>
+        )}
+      </nav>
+
       {cliente.cuentaWebSinVincular && (
         <AvisoCuentaWeb
           customerId={cliente.id}
@@ -139,7 +171,7 @@ export default async function FichaClientePage({
             </h2>
             <p
               className={`tabular text-3xl font-semibold ${
-                excedido ? "text-red-700" : ""
+                excedido ? "text-saldo-debe" : ""
               }`}
             >
               {moneda.format(cliente.saldo)}
@@ -165,13 +197,13 @@ export default async function FichaClientePage({
                 >
                   <div
                     className={`h-full rounded-full ${
-                      excedido ? "bg-red-600" : "bg-brand-orange"
+                      excedido ? "bg-destructive" : "bg-brand-orange"
                     }`}
                     style={{ width: `${Math.max(usoLimite, 2)}%` }}
                   />
                 </div>
                 {excedido && (
-                  <p className="mt-1.5 text-sm text-red-700">
+                  <p className="mt-1.5 text-sm text-saldo-debe">
                     Supera el límite en{" "}
                     <span className="tabular">
                       {moneda.format(cliente.saldo - limite)}
@@ -290,10 +322,25 @@ export default async function FichaClientePage({
             <LineaDeTiempo
               movimientos={historial.movimientos}
               enlacePedido={(p) => `/admin/pedidos/${p.id}`}
+              accionDelRecibo={
+                manejaPlata
+                  ? // El cobro de Mercado Pago se devuelve desde MP y su aviso
+                    // anula el recibo: a mano, el cliente pagaría dos veces.
+                    (r, m) =>
+                      r.porMercadoPago ? null : (
+                        <AnularRecibo
+                          id={r.id}
+                          numero={r.numero}
+                          importe={Math.abs(m.importe ?? m.importeInformativo ?? 0)}
+                          cliente={cliente.nombre}
+                        />
+                      )
+                  : undefined
+              }
             />
             {historial.hayMas && (
               <p className="border-t border-linea px-5 py-3 text-sm text-muted-foreground">
-                Se muestran los últimos 200. Achicá el período o filtrá para ver el resto.
+                Se muestran los últimos 200.
               </p>
             )}
           </section>
@@ -323,7 +370,35 @@ export default async function FichaClientePage({
                 href: `/admin/presupuestos/${p.id}`,
               }))}
             />
+            <Listado
+              titulo="Cortes"
+              vacio="Sin cortes todavía."
+              filas={cliente.cortes.map((c) => ({
+                id: c.id,
+                numero: c.numero,
+                estado: c.estado,
+                fecha: c.createdAt,
+                href: `/admin/cortes/${c.id}`,
+                detalle: `${Number(c.total)} ${Number(c.total) === 1 ? "placa" : "placas"}`,
+              }))}
+            />
+            {puedeEntrar("/admin/facturacion", usuario.staffRole) && (
+              <Listado
+                titulo="Facturas"
+                vacio="Sin facturas todavía."
+                filas={cliente.facturas.map((f) => ({
+                  id: f.id,
+                  numero: f.numero,
+                  estado: f.estado,
+                  total: f.total,
+                  fecha: f.createdAt,
+                  href: `/admin/facturacion/${f.id}`,
+                }))}
+              />
+            )}
           </div>
+
+          <DelSistemaAnterior anterior={cliente.anterior} />
         </div>
       </div>
     </div>
@@ -359,6 +434,85 @@ function Dato({
 }
 
 /**
+ * Lo que la migración trajo de ISIS para este cliente: sus ventas y sus
+ * comprobantes de antes. Antes solo lo escribía la migración y no se veía en
+ * ningún lado, justo cuando el cliente pregunta «¿qué me llevé la otra vez?».
+ * Sin nada migrado, la sección no aparece. Las fechas son días guardados a
+ * medianoche UTC: se leen en UTC, si no salen un día antes.
+ */
+function DelSistemaAnterior({ anterior }: { anterior: FichaDeCliente["anterior"] }) {
+  if (anterior.cantidadVentas === 0 && anterior.cantidadComprobantes === 0) return null;
+  const mas = (cantidad: number, mostradas: number) =>
+    cantidad > mostradas ? ` · se muestran las últimas ${mostradas}` : "";
+  return (
+    <section className="tarjeta overflow-hidden">
+      <header className="px-4 py-3.5">
+        <h2 className="text-base font-medium">Del sistema anterior</h2>
+      </header>
+      <div className="grid gap-px border-t bg-linea sm:grid-cols-2">
+        {anterior.cantidadVentas > 0 && (
+          <div className="bg-card">
+            <p className="px-4 pt-3 text-sm text-muted-foreground">
+              {anterior.cantidadVentas} {anterior.cantidadVentas === 1 ? "venta" : "ventas"} por{" "}
+              <span className="tabular">{moneda.format(Number(anterior.totalVentas))}</span>
+              {mas(anterior.cantidadVentas, anterior.ventas.length)}
+            </p>
+            <ul className="divide-y">
+              {anterior.ventas.map((v) => (
+                <li key={v.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="tabular block text-base">{v.comprobante}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {fechaSolaCorta.format(new Date(v.fecha))}
+                      {v.sucursal && ` · ${v.sucursal}`}
+                    </span>
+                    {v.detalle && (
+                      <span className="block truncate text-sm text-muted-foreground">{v.detalle}</span>
+                    )}
+                  </span>
+                  <span className="tabular text-base">{moneda.format(Number(v.total))}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {anterior.cantidadComprobantes > 0 && (
+          <div className="bg-card">
+            <p className="px-4 pt-3 text-sm text-muted-foreground">
+              {anterior.cantidadComprobantes}{" "}
+              {anterior.cantidadComprobantes === 1 ? "comprobante" : "comprobantes"} por{" "}
+              <span className="tabular">{moneda.format(Number(anterior.totalComprobantes))}</span>
+              {mas(anterior.cantidadComprobantes, anterior.comprobantes.length)}
+            </p>
+            <ul className="divide-y">
+              {anterior.comprobantes.map((c) => (
+                <li key={c.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base">
+                      {c.tipo}{" "}
+                      <span className="tabular">
+                        {String(c.puntoVenta).padStart(4, "0")}-{String(c.numero).padStart(8, "0")}
+                      </span>
+                    </span>
+                    <span className="block text-sm text-muted-foreground">
+                      {fechaSolaCorta.format(new Date(c.fecha))}
+                    </span>
+                    {c.cae && (
+                      <span className="tabular block text-sm text-muted-foreground">CAE {c.cae}</span>
+                    )}
+                  </span>
+                  <span className="tabular text-base">{moneda.format(Number(c.total))}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
  * Los pedidos y presupuestos del cliente.
  *
  * **Cada fila es un enlace.** Era la pantalla que más se abre —el cliente está
@@ -377,7 +531,9 @@ function Listado({
     id: string;
     numero: string;
     estado: string;
-    total: string;
+    total?: string;
+    /** En vez del importe, cuando la fila no es plata (las placas del corte). */
+    detalle?: string;
     fecha: Date;
     href: string;
   }[];
@@ -404,7 +560,7 @@ function Listado({
                   </span>
                 </span>
                 <span className="tabular text-base">
-                  {moneda.format(Number(fila.total))}
+                  {fila.total !== undefined ? moneda.format(Number(fila.total)) : fila.detalle}
                 </span>
                 <EtiquetaEstado estado={fila.estado} />
               </Link>

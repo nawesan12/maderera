@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
 import { FileText, Lock, Unlock } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { fechaCorta } from "@/lib/formato";
+import { fechaCorta, formatearPeso } from "@/lib/formato";
 import {
   categoriasDeDocumentos,
   listarDocumentos,
 } from "@/lib/dal/admin/documentacion";
 import { SubirDocumento } from "./subir";
 import { AccionesDocumento, RestaurarDocumento } from "./acciones";
+import { DestinosDocumento } from "./destinos";
+import { listarCategorias } from "@/lib/dal/catalog";
 
 export const metadata: Metadata = { title: "Documentación técnica" };
 
-function peso(bytes: number | null): string {
-  if (!bytes) return "";
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+const peso = formatearPeso;
 
 /**
  * Biblioteca técnica (cláusula 1.7).
@@ -25,10 +23,12 @@ function peso(bytes: number | null): string {
  * como parte del acceso profesional.
  */
 export default async function DocumentacionAdminPage() {
-  const [documentos, categorias] = await Promise.all([
+  const [documentos, categorias, delCatalogo] = await Promise.all([
     listarDocumentos(),
     categoriasDeDocumentos(),
+    listarCategorias(),
   ]);
+  const todasLasCategorias = delCatalogo.map((c) => ({ id: c.id, nombre: c.name }));
 
   const activos = documentos.filter((d) => d.activo);
   const reservados = activos.filter((d) => d.soloProfesionales);
@@ -39,7 +39,6 @@ export default async function DocumentacionAdminPage() {
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Documentación técnica"
-        detalle="Fichas, tablas de carga e instructivos. Lo que más piden los profesionales."
       />
 
       <SubirDocumento categorias={categorias} />
@@ -50,29 +49,27 @@ export default async function DocumentacionAdminPage() {
           <h2 className="mt-4 text-lg font-medium">
             Todavía no hay documentos cargados
           </h2>
-          <p className="mx-auto mt-1 max-w-md text-base text-muted-foreground">
-            Los que el cliente entregue en digital se suben acá y quedan
-            disponibles en el portal.
-          </p>
         </section>
       ) : (
         <>
           {reservados.length > 0 && (
             <Grupo
               titulo="Solo para profesionales"
-              detalle="Parte del valor del acceso"
+              // Parte del valor del acceso.
               icono={Lock}
               documentos={reservados}
               peso={peso}
+              todasLasCategorias={todasLasCategorias}
             />
           )}
           {publicos.length > 0 && (
             <Grupo
               titulo="Visibles para cualquiera"
-              detalle="Sirven para posicionar el sitio"
+              // Sirven para posicionar el sitio.
               icono={Unlock}
               documentos={publicos}
               peso={peso}
+              todasLasCategorias={todasLasCategorias}
             />
           )}
         </>
@@ -82,10 +79,6 @@ export default async function DocumentacionAdminPage() {
         <section className="tarjeta">
           <div className="border-b px-5 py-4">
             <h2 className="text-base font-medium">Dados de baja</h2>
-            <p className="text-base text-muted-foreground">
-              El archivo sigue existiendo: un enlace roto en el pliego de otro es
-              peor que un documento viejo.
-            </p>
           </div>
           <ul className="divide-y">
             {bajas.map((doc) => (
@@ -116,16 +109,16 @@ export default async function DocumentacionAdminPage() {
 
 function Grupo({
   titulo,
-  detalle,
   icono: Icono,
   documentos,
   peso,
+  todasLasCategorias,
 }: {
   titulo: string;
-  detalle: string;
   icono: React.ComponentType<{ className?: string }>;
   documentos: Awaited<ReturnType<typeof listarDocumentos>>;
   peso: (bytes: number | null) => string;
+  todasLasCategorias: { id: string; nombre: string }[];
 }) {
   return (
     <section className="tarjeta">
@@ -134,7 +127,6 @@ function Grupo({
           <Icono className="h-5 w-5 text-muted-foreground" />
           {titulo}
         </h2>
-        <p className="text-base text-muted-foreground">{detalle}</p>
       </div>
 
       <ul className="divide-y">
@@ -164,6 +156,13 @@ function Grupo({
               </p>
             </div>
 
+            <DestinosDocumento
+              id={doc.id}
+              titulo={doc.titulo}
+              productos={doc.productos}
+              categorias={doc.categorias}
+              todasLasCategorias={todasLasCategorias}
+            />
             <AccionesDocumento
               id={doc.id}
               titulo={doc.titulo}

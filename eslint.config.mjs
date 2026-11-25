@@ -12,6 +12,15 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Las copias del repo de los agentes (worktrees) y lo de Go.
+    ".claude/**",
+    "backend/**",
+    // Copias congeladas del TS viejo para los benchmarks, y los guiones del
+    // navegador de los agentes (no van al repo).
+    "bench/*/ts/**",
+    ".playwright-mcp/**",
+    // Los paquetes de diseño que llegan de afuera.
+    "docs/diseno/**",
   ]),
   {
     rules: {
@@ -27,6 +36,31 @@ const eslintConfig = defineConfig([
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
           caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },  {
+    /**
+     * **Next no le habla a la base.** Todo dato pasa por la API de Go
+     * (docs/go/progreso.md); los tipos salen del contrato (lib/api/tipos).
+     * Quedan afuera solo las herramientas: las semillas de la base de
+     * desarrollo (lib/db), los scripts y los golden que leen el TS viejo.
+     */
+    ignores: ["lib/db/**", "scripts/**", "bench/**", "tests/**", "backend/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            { name: "@/lib/db", message: "Next no le habla a la base: pedíselo a la API de Go (lib/api/servidor)." },
+            { name: "drizzle-orm", message: "Next no le habla a la base: pedíselo a la API de Go (lib/api/servidor)." },
+          ],
+          patterns: [
+            {
+              group: ["@/lib/db/*", "drizzle-orm/*"],
+              message: "Next no le habla a la base: pedíselo a la API de Go (lib/api/servidor).",
+            },
+          ],
         },
       ],
     },

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
-import { MessageCircle, Printer, Receipt } from "lucide-react";
+import { Printer, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { clienteDeLaSesion, miCuentaCorriente } from "@/lib/dal/cuenta";
 import { datosParaTransferir } from "@/lib/dal/pagos";
 import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 export const metadata: Metadata = { title: "Cuenta corriente" };
 
@@ -35,15 +36,9 @@ export default async function CuentaCorrientePage({
           después, dentro de un límite acordado. Si te interesa, escribinos y lo
           vemos.
         </p>
-        <a
-          href={whatsapp}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-5 inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-5 font-medium text-white transition-colors hover:bg-brand-green/90"
-        >
-          <MessageCircle className="h-4 w-4" />
+        <BotonWhatsapp enlace={whatsapp} className="mt-5">
           Consultar por cuenta corriente
-        </a>
+        </BotonWhatsapp>
       </div>
     );
   }
@@ -137,7 +132,7 @@ export default async function CuentaCorrientePage({
               <div
                 className={`h-full rounded-full ${
                   excedido
-                    ? "bg-red-600"
+                    ? "bg-destructive"
                     : porcentaje > 80
                       ? "bg-amber-500"
                       : "bg-brand-orange"
@@ -147,7 +142,7 @@ export default async function CuentaCorrientePage({
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               {excedido ? (
-                <span className="text-red-700">
+                <span className="text-saldo-debe">
                   Superás tu límite en{" "}
                   <span className="tabular">
                     {formatearMonto(usado - cuenta.limiteCredito)}
@@ -168,7 +163,7 @@ export default async function CuentaCorrientePage({
           nada. */}
       {pago === "aprobado" && (
         <p className="flex items-start gap-2 rounded-xl border border-brand-green/30 bg-brand-green/5 p-4">
-          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green text-white">
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-verde-whatsapp text-white">
             ✓
           </span>
           Recibimos tu pago. El saldo de arriba ya lo tiene descontado.
@@ -188,7 +183,7 @@ export default async function CuentaCorrientePage({
           debe. Donde sirve es al comprar, y conviene decirlo, porque si no el
           cliente lo pide por WhatsApp. */}
       {cuenta.saldo < 0 && (
-        <p className="rounded-xl border border-linea bg-card p-4 text-[15px]">
+        <p className="rounded-xl superficie p-4 text-[15px]">
           Tenés <strong className="tabular">{formatearMonto(-cuenta.saldo)}</strong> a favor. Se
           descuenta solo de tu próxima compra: en el carrito elegí «Con mi saldo a favor», o
           avisá en el mostrador.
@@ -203,7 +198,7 @@ export default async function CuentaCorrientePage({
           {/* Acá va solo lo que mueve el saldo. Las compras de contado, las
               transferencias en revisión y los cheques por recibir están en
               Movimientos. */}
-          <Link href="/mi-cuenta/movimientos" className="text-sm font-medium text-brand-orange hover:underline">
+          <Link href="/mi-cuenta/movimientos" className="text-sm font-medium text-acento-texto hover:underline">
             Ver todos tus movimientos
           </Link>
         </div>
@@ -252,7 +247,7 @@ export default async function CuentaCorrientePage({
                           href={`/api/recibos/${m.receiptId}/pdf`}
                           target="_blank"
                           rel="noopener"
-                          className="tabular mt-0.5 block text-sm text-brand-orange hover:underline"
+                          className="tabular mt-0.5 block text-sm text-acento-texto hover:underline"
                         >
                           Recibo {m.referencia}
                         </a>
@@ -260,7 +255,7 @@ export default async function CuentaCorrientePage({
                     </td>
                     <td
                       className={`tabular whitespace-nowrap px-3 py-3.5 text-right font-medium ${
-                        m.monto > 0 ? "" : "text-green-700"
+                        m.monto > 0 ? "" : "text-saldo-favor"
                       }`}
                     >
                       {m.monto > 0 ? "+" : ""}
@@ -283,7 +278,7 @@ export default async function CuentaCorrientePage({
           href={whatsapp}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-brand-orange hover:underline"
+          className="font-medium text-acento-texto hover:underline"
         >
           Escribinos
         </a>{" "}
@@ -312,7 +307,7 @@ function PedidoRelacionado({ referencia }: { referencia: string }) {
   return (
     <Link
       href={`/mi-cuenta/pedidos/${referencia}`}
-      className="tabular mt-0.5 block text-sm text-brand-orange hover:underline"
+      className="tabular mt-0.5 block text-sm text-acento-texto hover:underline"
     >
       {referencia}
     </Link>

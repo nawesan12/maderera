@@ -1,249 +1,64 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db";
-import {
-  branches,
-  cuttingItems,
-  cuttingOrders,
-  customers,
-  orders,
-  productVariants,
-  products,
-  categories,
-} from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { coincideBusqueda } from "@/lib/busqueda";
-import { preciosPara } from "@/lib/mostrador/buscar";
-import { medidaDePlaca } from "@/lib/cortes/placa";
-
-export interface CorteListado {
-  id: string;
-  numero: string;
-  cliente: string;
-  material: string;
-  placas: number;
-  /** Pasadas de sierra medidas al optimizar. Cero es «todavía no se midió». */
-  pasadas: number;
-  estado: string;
-  urgente: boolean;
-  sucursal: string | null;
-  notas: string | null;
-  piezas: number;
-  /** Metros cuadrados a cortar, para dimensionar el trabajo de un vistazo. */
-  metrosCuadrados: number;
-  createdAt: Date;
-}
-
-export async function listarCortes(
-  filtros: { busqueda?: string; estado?: string } = {},
-  /**
-   * Quién ya validó el acceso, cuando no es una sesión del panel.
-   *
-   * Lo usa el agente del taller, que se autentica con un token compartido y no
-   * tiene cookie: sin esto `requireStaff()` lo redirigiría a `/ingresar` en vez
-   * de responderle. Va como parámetro explícito y no como una variante suelta
-   * de la consulta, para que quien lea la firma vea que hay un segundo camino
-   * de autorización y dónde está.
-   */
-  autorizadoPor?: "agente-del-taller",
-): Promise<CorteListado[]> {
-  if (!autorizadoPor) await requireStaff();
-
-  const condiciones = [];
-  if (filtros.estado && filtros.estado !== "todos") {
-    condiciones.push(eq(cuttingOrders.estado, filtros.estado as never));
-  }
-  if (filtros.busqueda) {
-    const coincidencia = coincideBusqueda(filtros.busqueda, [
-      cuttingOrders.numero,
-      cuttingOrders.contactoNombre,
-      cuttingOrders.materialDescripcion,
-    ]);
-    if (coincidencia) condiciones.push(coincidencia);
-  }
-
-  const resumen = db
-    .select({
-      cuttingOrderId: cuttingItems.cuttingOrderId,
-      piezas: sql<number>`sum(${cuttingItems.cantidad})::int`.as("piezas"),
-      superficie:
-        sql<string>`sum(${cuttingItems.largoMm} * ${cuttingItems.anchoMm} * ${cuttingItems.cantidad} / 1000000.0)`.as(
-          "superficie",
-        ),
-    })
-    .from(cuttingItems)
-    .groupBy(cuttingItems.cuttingOrderId)
-    .as("resumen");
-
-  const filas = await db
-    .select({
-      id: cuttingOrders.id,
-      numero: cuttingOrders.numero,
-      cliente: cuttingOrders.contactoNombre,
-      material: cuttingOrders.materialDescripcion,
-      placas: cuttingOrders.placas,
-      pasadas: cuttingOrders.pasadas,
-      estado: cuttingOrders.estado,
-      urgente: cuttingOrders.urgente,
-      notas: cuttingOrders.notas,
-      sucursal: branches.name,
-      createdAt: cuttingOrders.createdAt,
-      piezas: resumen.piezas,
-      superficie: resumen.superficie,
-    })
-    .from(cuttingOrders)
-    .leftJoin(branches, eq(branches.id, cuttingOrders.branchId))
-    .leftJoin(resumen, eq(resumen.cuttingOrderId, cuttingOrders.id))
-    .where(condiciones.length > 0 ? and(...condiciones) : undefined)
-    // Primero lo urgente, después por antigüedad: así se lee como la cola real.
-    .orderBy(desc(cuttingOrders.urgente), asc(cuttingOrders.createdAt));
-
-  return filas.map((f) => ({
-    ...f,
-    urgente: f.urgente === 1,
-    piezas: f.piezas ?? 0,
-    metrosCuadrados: Math.round(Number(f.superficie ?? 0) * 100) / 100,
-  }));
-}
-
-export async function obtenerCorte(
-  id: string,
-  autorizadoPor?: "agente-del-taller",
-) {
-  if (!autorizadoPor) await requireStaff();
-
-  const [corte] = await db
-    .select({
-      id: cuttingOrders.id,
-      numero: cuttingOrders.numero,
-      cliente: cuttingOrders.contactoNombre,
-      customerId: cuttingOrders.customerId,
-      // De qué pedido salió, si salió de uno. Lo que permite volver desde la
-      // ficha del corte a la venta que lo pidió.
-      orderId: cuttingOrders.orderId,
-      pedidoNumero: orders.numero,
-      empresa: customers.razonSocial,
-      // La lista del cliente decide la tarifa del corte: un mayorista paga
-      // $996 la pasada donde el público paga $1.200.
-      priceListId: customers.priceListId,
-      material: cuttingOrders.materialDescripcion,
-      variantId: cuttingOrders.variantId,
-      /*
-       * La medida de la placa que se va a cortar.
-       *
-       * Sale de dos lados y se resuelve abajo con `medidaDePlaca`: lo que se
-       * cargó a mano en el trabajo manda sobre lo que dice la variante del
-       * catálogo. El plano necesita los dos números para acomodar las piezas, y
-       * puede no haber ninguno —un corte sobre material que trajo el cliente no
-       * tiene variante—: ahí se usa la medida de plaza y la pantalla avisa que
-       * es un supuesto.
-       */
-      varianteLargoMm: productVariants.largoMm,
-      varianteAnchoMm: productVariants.anchoMm,
-      propiaLargoMm: cuttingOrders.placaLargoMm,
-      propiaAnchoMm: cuttingOrders.placaAnchoMm,
-      mitad: cuttingOrders.mitad,
-      /**
-       * El color de la placa, si la variante lo declara.
-       *
-       * Lo mira quien parte una placa al medio: en una placa de color el
-       * dibujo corre en un sentido, y partirla al ancho puede dejar las dos
-       * mitades con la veta cruzada. La pantalla lo avisa; la decisión es de
-       * quien carga el trabajo.
-       */
-      color: productVariants.color,
-      /*
-       * La categoría del producto: es por donde se busca la tarifa de corte.
-       * Las tarifas se cargan por familia ("Placas") y el corte guarda el
-       * nombre completo, así que comparar contra la descripción nunca daba.
-       */
-      categoria: categories.name,
-      precioMediaPct: products.precioMediaPct,
-      placas: cuttingOrders.placas,
-      pasadas: cuttingOrders.pasadas,
-      cantoDescripcion: cuttingOrders.cantoDescripcion,
-      acomodoManual: cuttingOrders.acomodoManual,
-      anchoSierraMm: cuttingOrders.anchoSierraMm,
-      motorPlano: cuttingOrders.motorPlano,
-      estado: cuttingOrders.estado,
-      urgente: cuttingOrders.urgente,
-      notas: cuttingOrders.notas,
-      sucursal: branches.name,
-      createdAt: cuttingOrders.createdAt,
-    })
-    .from(cuttingOrders)
-    .leftJoin(productVariants, eq(productVariants.id, cuttingOrders.variantId))
-    .leftJoin(products, eq(products.id, productVariants.productId))
-    .leftJoin(categories, eq(categories.id, products.categoryId))
-    .leftJoin(customers, eq(customers.id, cuttingOrders.customerId))
-    .leftJoin(orders, eq(orders.id, cuttingOrders.orderId))
-    .leftJoin(branches, eq(branches.id, cuttingOrders.branchId))
-    .where(eq(cuttingOrders.id, id))
-    .limit(1);
-
-  if (!corte) return null;
-
-  const piezas = await db
-    .select()
-    .from(cuttingItems)
-    .where(eq(cuttingItems.cuttingOrderId, id))
-    .orderBy(asc(cuttingItems.orden));
-
-  /*
-   * El precio de la placa, en la lista que le toca a este cliente.
-   *
-   * Hace falta para presupuestar: de una placa de la que sale más de la mitad
-   * se vende la placa entera, y ahí lo que se cobra es el material, no las
-   * pasadas. Se reusa `preciosPara`, que es la misma resolución de lista que
-   * usa el mostrador —propia, o la general por el factor derivado—, para que un
-   * mayorista no vea el precio de público.
-   */
-  const precios = corte.variantId
-    ? await preciosPara([corte.variantId], corte.customerId)
-    : {};
-  const precioPlaca = corte.variantId
-    ? (precios[corte.variantId] ?? null)
-    : null;
-
-  return {
-    ...corte,
-    urgente: corte.urgente === 1,
-    piezas,
-    precioPlaca,
-    // La medida con la que se arma el plano, resuelta una sola vez acá y no en
-    // cada pantalla. Ver `lib/cortes/placa.ts`.
-    medida: medidaDePlaca({
-      propiaLargo: corte.propiaLargoMm,
-      propiaAncho: corte.propiaAnchoMm,
-      varianteLargo: corte.varianteLargoMm,
-      varianteAncho: corte.varianteAnchoMm,
-      mitad: corte.mitad,
-    }),
-  };
-}
+import { api, datos } from "@/lib/api/servidor";
+import type { Esquemas } from "@/lib/api/tipos";
+import type { CorteListado } from "@/lib/cortes/tipos";
 
 /**
- * Los cortes que salieron de un pedido.
- *
- * Es la mitad que faltaba del puente: desde el pedido, saber si hay algo
- * esperando la seccionadora. Sin esto, un pedido podía figurar "listo" con el
- * corte todavía sin hacer, y nadie se enteraba hasta que el cliente venía a
- * retirarlo.
+ * La cola del taller y la ficha de cada corte. Lo sirve la API de Go
+ * (backend/internal/cortes): el plano, el presupuesto y la tarifa vienen ya
+ * resueltos, con el disco y el motor con que nació cada trabajo.
  */
-export async function cortesDelPedido(orderId: string) {
-  await requireStaff();
 
-  return db
-    .select({
-      id: cuttingOrders.id,
-      numero: cuttingOrders.numero,
-      material: cuttingOrders.materialDescripcion,
-      estado: cuttingOrders.estado,
-      urgente: cuttingOrders.urgente,
-      createdAt: cuttingOrders.createdAt,
-    })
-    .from(cuttingOrders)
-    .where(eq(cuttingOrders.orderId, orderId))
-    .orderBy(desc(cuttingOrders.createdAt));
+export type { CorteListado };
+
+export async function listarCortes(filtros: { busqueda?: string; estado?: string } = {}): Promise<CorteListado[]> {
+  const query = {
+    ...(filtros.busqueda ? { busqueda: filtros.busqueda.slice(0, 200) } : {}),
+    ...(filtros.estado ? { estado: filtros.estado.slice(0, 40) } : {}),
+  };
+  const filas = datos(await (await api()).GET("/api/v1/admin/cortes", { params: { query } }));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
+}
+
+type CorteDeGo = Esquemas["Corte"];
+type Mitad = "largo" | "ancho" | null;
+export type Corte = Omit<CorteDeGo, "createdAt" | "mitad" | "medida"> & {
+  createdAt: Date;
+  mitad: Mitad;
+  medida: Omit<CorteDeGo["medida"], "mitad"> & { mitad: Mitad };
+};
+export type FichaDeCorte = Omit<Esquemas["FichaCorte"], "corte"> & { corte: Corte };
+
+const conFecha = (c: CorteDeGo): Corte => ({
+  ...c,
+  createdAt: new Date(c.createdAt),
+  mitad: c.mitad as Mitad,
+  medida: { ...c.medida, mitad: c.medida.mitad as Mitad },
+});
+
+/** La ficha: el trabajo, su plano, el presupuesto y lo que se cobra. Nulo si no existe. */
+export async function fichaDeCorte(id: string): Promise<FichaDeCorte | null> {
+  const r = await (await api()).GET("/api/v1/admin/cortes/{id}", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  const f = datos(r);
+  return { ...f, corte: conFecha(f.corte) };
+}
+
+export async function obtenerCorte(id: string): Promise<Corte | null> {
+  return (await fichaDeCorte(id))?.corte ?? null;
+}
+
+/** El trabajo con su plano y la hoja de corte en el orden de la máquina. */
+export async function hojaDelCorte(id: string) {
+  const r = await (await api()).GET("/api/v1/admin/cortes/{id}/hoja", { params: { path: { id } } });
+  if (r.response.status === 404 || r.response.status === 400) return null;
+  const h = datos(r);
+  return { ...h, corte: conFecha(h.corte) };
+}
+
+/** Los cortes que salieron de un pedido, el más nuevo primero. */
+export async function cortesDelPedido(orderId: string) {
+  const filas = datos(await (await api()).GET("/api/v1/admin/pedidos/{id}/cortes", { params: { path: { id: orderId } } }));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
 }

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatedCounter } from "@/components/animated-counter";
+import galpon from "@/lib/sitio/galpon.webp";
 
 /**
  * Portada.
@@ -15,50 +16,59 @@ import { AnimatedCounter } from "@/components/animated-counter";
  * sangre completa había que taparla con un degradado para que el título se
  * leyera, y eso dejaba la foto oscurecida y el texto igual peleando contra lo
  * que hubiera detrás. Partida en dos, cada mitad hace una sola cosa.
+ *
+ * La foto es el galpón propio (Drive de la clienta, docs/fotos.md), no una de
+ * banco, y recortada por debajo de las cajas «LP Mult-Plac» de un proveedor:
+ * la primera foto del sitio no es una publicidad de nadie.
  */
 export function Hero({
-  productos,
   sucursales,
   anios,
 }: {
-  productos: number;
   sucursales: number;
   anios: number;
 }) {
+  // Sin «29+ productos» (hallazgo 47, 18/11/2026): mientras el catálogo no
+  // esté completo, el número juega en contra —una maderera con veintinueve
+  // productos parece un kiosco—. Vuelve cuando el número diga lo que hay.
   const contadores = [
     { target: anios, suffix: "+", label: "Años" },
     { target: sucursales, suffix: "", label: "Sucursales" },
-    { target: productos, suffix: "+", label: "Productos" },
   ];
 
   return (
     <section className="relative overflow-hidden bg-oscuro-marca text-white">
       <div
-        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(240_115_22_/_0.05)_0_12px,transparent_12px_24px)]"
+        className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,rgb(236_125_56_/_0.05)_0_12px,transparent_12px_24px)]"
         aria-hidden="true"
       />
 
-      <div className="absolute inset-y-0 right-0 hidden w-[46%] lg:block">
+      {/* En el teléfono la foto va de fondo, atenuada: sin ella lo primero que
+          se veía era texto sobre rayas. */}
+      <div className="absolute inset-0 lg:left-auto lg:w-[46%]">
         <Image
-          src="https://plus.unsplash.com/premium_photo-1663133630972-d9b620dfea27?q=80&w=1600&auto=format&fit=crop"
-          alt="Corte de madera con sierra en el aserradero"
+          src={galpon}
+          alt="El depósito de la maderera, con un tablero de eucalipto en primer plano"
           fill
+          placeholder="blur"
           className="object-cover object-center"
           preload
           fetchPriority="high"
-          // En el teléfono este panel está oculto (`hidden lg:block`), pero el
-          // preload se baja igual: con `46vw` el navegador elegía una foto de
-          // 640 px que nadie veía, compitiendo con el texto del hero. Con
-          // `1px` debajo de `lg` se baja la más chica de la lista.
-          sizes="(min-width: 1024px) 46vw, 1px"
+          // En el teléfono cubre todo el ancho: con 60vw un teléfono de 390 px
+          // a 3× pedía la de 828 y la primera foto del sitio salía blanda.
+          sizes="(min-width: 1024px) 46vw, 100vw"
         />
         {/* El degradado solo funde el borde contra el fondo del texto. Antes
-            cubría el 38% del panel y se comía justo la sierra, que es lo que
-            hay que ver. */}
+            cubría el 38% del panel y se comía las cabezas de las tablas, que
+            son lo que hay que ver. La foto es oscura de por sí y se funde con
+            el fondo sin taparla más. Antes era una foto de Unsplash+ con la
+            marca de agua encima: ninguna foto `premium_` vuelve a entrar
+            (tests/fotos.test.ts). */}
         <div
-          className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-oscuro-marca),rgb(38_35_31_/_0.45)_14%,transparent_34%)]"
+          className="absolute inset-0 hidden bg-[linear-gradient(to_right,var(--color-oscuro-marca),rgb(38_35_31_/_0.45)_14%,transparent_34%)] lg:block"
           aria-hidden="true"
         />
+        <div className="absolute inset-0 bg-oscuro-marca/80 lg:hidden" aria-hidden="true" />
       </div>
 
       <div className="contenedor relative pb-[76px] pt-[88px]">
@@ -97,12 +107,12 @@ export function Hero({
           <div className="mt-[30px] flex animate-in flex-wrap gap-3 duration-700 fade-in slide-in-from-bottom-8 fill-mode-backwards [animation-delay:300ms] motion-reduce:animate-none">
             <Link
               href="/catalogo"
-              className="flex h-[52px] items-center rounded-[10px] bg-brand-orange px-6 text-base font-semibold text-white transition-colors hover:bg-accion-hover"
+              className="flex h-[52px] items-center rounded-[10px] bg-accion px-6 text-base font-semibold text-white transition-colors hover:bg-accion-hover"
             >
               Ver el catálogo
             </Link>
             <Link
-              href="/carrito"
+              href="/corte"
               className="flex h-[52px] items-center rounded-[10px] border border-white/25 px-6 text-base font-semibold text-white transition-colors hover:bg-white/10"
             >
               Pedir un corte a medida

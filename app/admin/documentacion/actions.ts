@@ -1,26 +1,19 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
-import { db } from "@/lib/db";
-import { technicalDocuments } from "@/lib/db/schema";
-import { requireStaff } from "@/lib/dal/session";
-import { guardarAdjunto } from "@/lib/almacenamiento";
+import { revalidatePath, updateTag } from "next/cache";
+import { ETIQUETAS } from "@/lib/cache-publico";
+import { api, comoFormulario, mensajeDe, soloCampos, type Problema } from "@/lib/api/servidor";
+
+/*
+ * La documentación técnica. La guarda la API de Go
+ * (backend/internal/contenido/documentos.go): valida el tipo y la firma del
+ * archivo, lo sube y deja la línea en la bitácora. Acá queda revalidar.
+ */
 
 export interface EstadoDocumento {
   error?: string;
   ok?: string;
 }
-
-/** Formatos que tiene sentido publicar como documentación técnica. */
-const TIPOS = new Map([
-  ["application/pdf", "pdf"],
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"],
-  ["text/csv", "csv"],
-]);
 
 function refrescar() {
   revalidatePath("/admin/documentacion");
@@ -28,155 +21,72 @@ function refrescar() {
   revalidatePath("/profesionales");
 }
 
-/**
- * Sube un documento técnico.
- *
- * `soloProfesionales` viene marcado por defecto: la documentación detallada es
- * parte del valor del acceso profesional, y publicarla entera de entrada le
- * saca sentido a pedirlo. Se destilda a conciencia para lo que sirve como
- * material de posicionamiento.
- */
-export async function subirDocumento(
-  _previo: EstadoDocumento,
-  formData: FormData,
-): Promise<EstadoDocumento> {
-  await requireStaff();
-
-  const parsed = z
-    .object({
-      titulo: z.string().trim().min(3, "Poné un título.").max(160),
-      descripcion: z.string().trim().max(400).optional(),
-      categoria: z.string().trim().min(2).max(60),
-      soloProfesionales: z.boolean(),
-    })
-    .safeParse({
-      titulo: formData.get("titulo"),
-      descripcion: (formData.get("descripcion") as string) || undefined,
-      categoria: (formData.get("categoria") as string) || "general",
-      soloProfesionales: formData.get("soloProfesionales") === "on",
-    });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
-  }
-
-  const archivo = formData.get("archivo");
-
-  if (!(archivo instanceof File) || archivo.size === 0) {
-    return { error: "Adjuntá el archivo." };
-  }
-
-  const formato = TIPOS.get(archivo.type);
-
-  if (!formato) {
-    return { error: "Subí un PDF, una planilla o una imagen." };
-  }
-
-  const bytes = new Uint8Array(await archivo.arrayBuffer());
-  const guardado = await guardarAdjunto(bytes, archivo.type, "tecnica");
-
-  if (!guardado.url) {
-    return { error: guardado.error ?? "No pudimos guardar el archivo." };
-  }
-
-  await db.insert(technicalDocuments).values({
-    ...parsed.data,
-    descripcion: parsed.data.descripcion ?? null,
-    url: guardado.url,
-    formato,
-    tamanoBytes: archivo.size,
+export async function subirDocumento(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {
+  const r = await (await api()).POST("/api/v1/admin/documentos", {
+    body: soloCampos(formData) as never,
+    ...comoFormulario,
   });
-
+  if (r.error) return { error: mensajeDe(r.error as Problema, "Revisá los datos.") };
   refrescar();
-
   return { ok: "Documento publicado." };
 }
 
-export async function cambiarVisibilidad(
-  _previo: EstadoDocumento,
-  formData: FormData,
-): Promise<EstadoDocumento> {
-  await requireStaff();
-
-  const parsed = z
-    .object({ id: z.string().uuid(), soloProfesionales: z.enum(["si", "no"]) })
-    .safeParse({
-      id: formData.get("id"),
-      soloProfesionales: formData.get("soloProfesionales"),
-    });
-
-  if (!parsed.success)
-    return {
-      error: "No pudimos identificar ese documento. Recargá la pantalla y probá de nuevo.",
-    };
-
-  await db
-    .update(technicalDocuments)
-    .set({
-      soloProfesionales: parsed.data.soloProfesionales === "si",
-      updatedAt: new Date(),
-    })
-    .where(eq(technicalDocuments.id, parsed.data.id));
-
+export async function cambiarVisibilidad(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {
+  const soloProfesionales = formData.get("soloProfesionales") === "si";
+  const r = await (await api()).POST("/api/v1/admin/documentos/{id}/visibilidad", {
+    params: { path: { id: String(formData.get("id") ?? "") } },
+    body: { soloProfesionales },
+  });
+  if (r.error) {
+    return { error: mensajeDe(r.error as Problema, "No pudimos identificar ese documento. Recargá la pantalla y probá de nuevo.") };
+  }
   refrescar();
-
-  return {
-    ok:
-      parsed.data.soloProfesionales === "si"
-        ? "Ahora solo lo ven los profesionales."
-        : "Ahora lo ve cualquiera.",
-  };
+  return { ok: soloProfesionales ? "Ahora solo lo ven los profesionales." : "Ahora lo ve cualquiera." };
 }
 
-export async function borrarDocumento(
-  _previo: EstadoDocumento,
-  formData: FormData,
-): Promise<EstadoDocumento> {
-  await requireStaff();
-
-  const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success)
-    return {
-      error: "No encontramos ese documento. Puede que ya lo hayan dado de baja.",
-    };
-
-  // Se da de baja en vez de borrarse: el archivo puede estar enlazado desde un
-  // pliego o un correo, y una URL que deja de existir es un enlace roto en el
-  // documento de otro.
-  await db
-    .update(technicalDocuments)
-    .set({ activo: false, updatedAt: new Date() })
-    .where(eq(technicalDocuments.id, id.data));
-
+async function activar(formData: FormData, activo: boolean, ok: string): Promise<EstadoDocumento> {
+  const r = await (await api()).POST("/api/v1/admin/documentos/{id}/activo", {
+    params: { path: { id: String(formData.get("id") ?? "") } },
+    body: { activo },
+  });
+  if (r.error) {
+    return { error: mensajeDe(r.error as Problema, "No encontramos ese documento. Puede que ya lo hayan dado de baja.") };
+  }
   refrescar();
+  return { ok };
+}
 
-  return { ok: "Documento dado de baja." };
+export async function borrarDocumento(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {
+  return activar(formData, false, "Documento dado de baja.");
+}
+
+export async function restaurarDocumento(_previo: EstadoDocumento, formData: FormData): Promise<EstadoDocumento> {
+  return activar(formData, true, "El documento vuelve a estar en línea.");
 }
 
 /**
- * Vuelve a poner en línea un documento dado de baja.
- *
- * Existe porque la baja no tenía vuelta: la lista de "dados de baja" ofrecía un
- * único botón, "Ver archivo", y recuperar un documento bajado por error pedía
- * volver a subirlo —con otra dirección, que es justo lo que la baja blanda
- * evita—.
+ * A qué productos y categorías se ata un documento: la ficha de cada uno lo
+ * muestra. La ficha sale de la caché del catálogo, así que se invalida.
  */
-export async function restaurarDocumento(
-  _previo: EstadoDocumento,
-  formData: FormData,
+export async function guardarDestinos(
+  id: string,
+  productos: string[],
+  categorias: string[],
 ): Promise<EstadoDocumento> {
-  await requireStaff();
-
-  const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success)
-    return { error: "No encontramos ese documento." };
-
-  await db
-    .update(technicalDocuments)
-    .set({ activo: true, updatedAt: new Date() })
-    .where(eq(technicalDocuments.id, id.data));
-
+  const r = await (await api()).PUT("/api/v1/admin/documentos/{id}/destinos", {
+    params: { path: { id } },
+    body: { productos, categorias },
+  });
+  if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo guardar.") };
   refrescar();
+  updateTag(ETIQUETAS.catalogo);
+  return { ok: "Guardado." };
+}
 
-  return { ok: "El documento vuelve a estar en línea." };
+/** Productos por nombre, para atarles un documento. */
+export async function buscarProductosParaDocumento(consulta: string): Promise<{ id: string; nombre: string }[]> {
+  const q = consulta.trim().slice(0, 80);
+  if (q.length < 2) return [];
+  const r = await (await api()).GET("/api/v1/admin/productos", { params: { query: { busqueda: q, limite: 12 } } });
+  return (r.data?.filas ?? []).map((p) => ({ id: p.id, nombre: p.name }));
 }

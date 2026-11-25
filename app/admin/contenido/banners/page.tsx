@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Megaphone } from "lucide-react";
-import { asc, desc } from "drizzle-orm";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { db } from "@/lib/db";
-import { banners } from "@/lib/db/schema";
 import { requireStaff } from "@/lib/dal/session";
+import { fechaParaInput, listarBannersDelPanel } from "@/lib/dal/admin/contenido";
 import { EditorDeBanner } from "./editor";
 import { UBICACIONES } from "./ubicaciones";
 
 export const metadata: Metadata = { title: "Avisos y promociones" };
 
 /** "2026-09-05", que es lo que espera un input de fecha. */
-function paraInput(fecha: Date | null): string {
-  return fecha ? fecha.toISOString().slice(0, 10) : "";
-}
+const paraInput = fechaParaInput;
 
 /**
  * Los avisos y promociones del sitio.
@@ -31,10 +27,7 @@ function paraInput(fecha: Date | null): string {
 export default async function BannersPage() {
   await requireStaff();
 
-  const filas = await db
-    .select()
-    .from(banners)
-    .orderBy(asc(banners.ubicacion), asc(banners.orden), desc(banners.createdAt));
+  const filas = await listarBannersDelPanel();
 
   const ahora = new Date();
   const alAire = (b: (typeof filas)[number]) =>
@@ -56,25 +49,22 @@ export default async function BannersPage() {
 
       <EncabezadoPanel
         titulo="Avisos y promociones"
-        detalle="Los banners del sitio, con la fecha en que empiezan y terminan."
       />
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="tarjeta p-5">
         <p className="flex items-start gap-2.5 text-base text-muted-foreground">
           <Megaphone className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           <span>
+            {/* Una promoción, un descuento por transferencia, una semana temática.
+                La fecha de fin importa: un banner vencido que sigue anunciando
+                un descuento termina en un reclamo en el mostrador. */}
             {enVivo === 0 ? (
-              <>
-                No hay ningún aviso al aire. Este es el lugar para anunciar una
-                promoción, un descuento por transferencia o una semana temática.
-              </>
+              <>No hay ningún aviso al aire.</>
             ) : (
               <>
                 Hay <strong className="text-foreground">{enVivo}</strong>{" "}
                 {enVivo === 1 ? "aviso" : "avisos"} al aire.{" "}
-                <strong>Poné siempre la fecha de fin</strong>: un banner vencido
-                que sigue anunciando un descuento termina en un reclamo en el
-                mostrador.
+                <strong>Poné siempre la fecha de fin.</strong>
               </>
             )}
           </span>
@@ -88,7 +78,6 @@ export default async function BannersPage() {
           <section key={ubicacion.valor} className="space-y-3">
             <div>
               <h2 className="text-base font-semibold">{ubicacion.etiqueta}</h2>
-              <p className="text-sm text-muted-foreground">{ubicacion.ayuda}</p>
             </div>
 
             {deAca.length === 0 ? (

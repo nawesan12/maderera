@@ -4,14 +4,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ChevronRight,
-  MessageCircle,
-  Ruler,
+  FileText,
+  Lock,
   Store,
   Truck,
 } from "lucide-react";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
+import { MedidaElegida } from "@/components/catalogo/medida-elegida";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
+import { tienda } from "@/lib/dal/contenido";
 import { preciosDeFicha } from "@/lib/dal/visitante";
 import {
   obtenerProductoPublico,
@@ -33,6 +37,9 @@ import {
 import { rutasDelCatalogo } from "@/lib/dal/sitemap";
 import { degradar } from "@/lib/degradar";
 import { hoyEnCurso } from "@/lib/reloj";
+import { markdownAHtml } from "@/lib/markdown";
+import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
+import type { ProductoDetalle, VarianteDetalle } from "@/lib/dal/catalog";
 
 /**
  * Unas pocas fichas se arman en el build; el resto, en la primera visita.
@@ -141,7 +148,7 @@ export default async function ProductoPage({
     producto.slug,
   );
 
-  const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy] =
+  const [whatsapp, numeroDelNegocio, resenas, resumenResenas, hoy, laTienda, placas] =
     await Promise.all([
       // Con el enlace a la ficha: quien atiende ve de qué producto se habla
       // sin preguntar, y WhatsApp lo muestra como tarjeta con la foto.
@@ -152,7 +159,13 @@ export default async function ProductoPage({
       resenasDelProducto(producto.id),
       resumenDeResenas(producto.id),
       hoyEnCurso(),
+      tienda(),
+      degradar("las placas cortables", placasCortablesPublicas, []),
     ]);
+  // Las medidas de este producto que el aserradero corta: «Pedila cortada».
+  const cortables = placas
+    .filter((p) => producto.variantes.some((v) => v.id === p.variantId))
+    .map((p) => p.variantId);
 
   // Las medidas se arman de las variantes: si ninguna las tiene cargadas, la
   // ficha técnica no se muestra en lugar de quedar con guiones.
@@ -176,7 +189,7 @@ export default async function ProductoPage({
         sku: v.sku,
         label: v.label,
         precio: v.precio,
-        disponibilidad: combinedStockLevel([v.stockCentral, v.stockAserradero]),
+        disponibilidad: combinedStockLevel(v.stock.map((s) => s.nivel)),
         color: v.color,
         conMedidas: Boolean(v.largoMm || v.anchoMm || v.espesorMm),
       })),
@@ -251,11 +264,18 @@ export default async function ProductoPage({
             dentro de una pista de 342 y empujaba el ancho del documento entero:
             en el teléfono la página quedaba corrida y se podía arrastrar de
             costado. Medido: 403 px de scroll en una pantalla de 390. */}
-        <div className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
+        {/* El WhatsApp flotante tapaba «Consultar precio por WhatsApp», que
+            acá ya está con la medida escrita (hallazgo 27): se va mientras
+            esto se ve y vuelve al bajar a la ficha técnica. */}
+        <MedidaElegida>
+        <ZonaSinFlotante className="grid gap-9 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
           <GaleriaProducto
             imagenes={producto.imagenes}
+            fotoDeMedida={producto.fotoDeMedida}
             nombre={producto.name}
-            destacado={producto.featured}
+            rubro={producto.subcategory ?? producto.categoryName}
+            categoria={producto.categorySlug}
+            marca={producto.brand}
           />
 
           <div>
@@ -285,6 +305,8 @@ export default async function ProductoPage({
                 unit={producto.unit}
                 variantes={producto.variantes}
                 whatsapp={whatsapp}
+                numeroWhatsapp={numeroDelNegocio}
+                cortables={cortables}
                 alicuota={Number(producto.alicuotaIva) || 21}
                 aPedido={producto.aPedido}
                 formaDeVenta={producto.formaDeVenta}
@@ -298,93 +320,48 @@ export default async function ProductoPage({
 
             {/* Cómo lo recibe */}
             <ul className="mt-3.5 grid gap-3 sm:grid-cols-2">
-              <li className="rounded-xl border border-linea bg-card px-4 py-3.5">
+              <li className="rounded-xl superficie px-4 py-3.5">
                 <span className="flex items-center gap-2 text-[14.5px] font-semibold">
                   <Store className="h-[18px] w-[18px] shrink-0 text-acento-texto" />
                   Retiro sin cargo
                 </span>
                 <p className="mt-1.5 text-[13.5px] leading-snug text-texto-2">
-                  En Casa Central o en el Aserradero, con el número de pedido.
+                  {laTienda.activa
+                    ? "En Casa Central o en el Aserradero, con el número de pedido."
+                    : "En Casa Central o en el Aserradero."}
                 </p>
               </li>
-              <li className="rounded-xl border border-linea bg-card px-4 py-3.5">
+              <li className="rounded-xl superficie px-4 py-3.5">
                 <span className="flex items-center gap-2 text-[14.5px] font-semibold">
                   <Truck className="h-[18px] w-[18px] shrink-0 text-acento-texto" />
                   Envío a domicilio
                 </span>
                 <p className="mt-1.5 text-[13.5px] leading-snug text-texto-2">
-                  En Mar del Plata y zona. El costo se calcula al finalizar.
+                  {laTienda.activa
+                    ? "En Mar del Plata y zona. El costo se calcula al finalizar."
+                    : "En Mar del Plata y zona. Te lo cotizamos junto con el pedido."}
                 </p>
               </li>
             </ul>
 
-            <a
-              href={whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex h-[50px] items-center justify-center gap-2.5 rounded-[10px] border border-verde-whatsapp/35 bg-verde-whatsapp/10 text-[15.5px] font-semibold text-verde-whatsapp transition-colors hover:bg-verde-whatsapp/20"
-            >
-              <MessageCircle className="h-[18px] w-[18px]" />
-              Consultar por WhatsApp
-            </a>
+            {/* Con la tienda apagada el WhatsApp ya es el botón principal del
+                selector, con la medida escrita: otro igual acá abajo sobra. */}
+            {laTienda.activa && (
+              <BotonWhatsapp enlace={whatsapp} variante="secundario" tamano="grande" className="mt-3 w-full">
+                Consultar por WhatsApp
+              </BotonWhatsapp>
+            )}
           </div>
-        </div>
+        </ZonaSinFlotante>
+        </MedidaElegida>
 
-        {/* Ficha técnica */}
-        {conMedidas.length > 0 && (
-          <section className="mt-11">
-            <h2 className="mb-3.5 flex items-center gap-2 text-2xl font-bold tracking-[-0.025em]">
-              <Ruler className="h-5 w-5 text-acento-texto" />
-              Medidas disponibles
-            </h2>
-            {/* Cinco columnas no entran en un teléfono: la tabla scrollea sola
-                en su caja en vez de cortarse contra el borde de la pantalla. El
-                fondo sale del token y no de `bg-white`, que en tema oscuro
-                dejaba texto claro sobre blanco. */}
-            <div className="overflow-x-auto rounded-2xl border border-linea bg-card shadow-sm">
-              <table className="w-full min-w-[560px]">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-left">
-                    <th className="px-5 py-3 text-sm font-semibold">Medida</th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold">
-                      Largo
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold">
-                      Ancho
-                    </th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold">
-                      Espesor
-                    </th>
-                    <th className="px-5 py-3 text-sm font-semibold">Material</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {conMedidas.map((v) => (
-                    <tr key={v.id} className="border-b last:border-0">
-                      <td className="px-5 py-3 text-sm font-medium">
-                        {v.label}
-                      </td>
-                      <td className="tabular px-4 py-3 text-right text-sm text-muted-foreground">
-                        {v.largoMm ? `${v.largoMm} mm` : "—"}
-                      </td>
-                      <td className="tabular px-4 py-3 text-right text-sm text-muted-foreground">
-                        {v.anchoMm ? `${v.anchoMm} mm` : "—"}
-                      </td>
-                      <td className="tabular px-4 py-3 text-right text-sm text-muted-foreground">
-                        {v.espesorMm ? `${v.espesorMm} mm` : "—"}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-muted-foreground">
-                        {v.material ?? v.color ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+        <FichaTecnica producto={producto} medidas={conMedidas} />
+
+        {/* «Solo de quien compró» con la tienda apagada no tiene a nadie que
+            opine: sin opiniones cargadas el bloque no aparece. */}
+        {(laTienda.activa || resenas.length > 0) && (
+          <ResenasDelProducto resenas={resenas} resumen={resumenResenas} />
         )}
-
-        <ResenasDelProducto resenas={resenas} resumen={resumenResenas} />
 
         {/*
           Sugeridos. Los complementarios van primero y solo si alguien los
@@ -417,7 +394,7 @@ export default async function ProductoPage({
               </h2>
               <Link
                 href={`/catalogo?cat=${producto.categorySlug}`}
-                className="text-sm font-medium text-brand-orange hover:underline"
+                className="text-sm font-medium text-acento-texto hover:underline"
               >
                 Ver todos
               </Link>
@@ -431,5 +408,136 @@ export default async function ProductoPage({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * La ficha técnica: la tabla de medidas con solo las columnas que tienen algo,
+ * y al lado para qué sirve, cómo se cuida y los documentos.
+ */
+function FichaTecnica({
+  producto,
+  medidas,
+}: {
+  producto: ProductoDetalle;
+  medidas: VarianteDetalle[];
+}) {
+  const columnas = (
+    [
+      ["Largo", (v) => (v.largoMm ? `${v.largoMm} mm` : null), true],
+      ["Ancho", (v) => (v.anchoMm ? `${v.anchoMm} mm` : null), true],
+      ["Espesor", (v) => (v.espesorMm ? `${v.espesorMm} mm` : null), true],
+      ["Material", (v) => v.material, false],
+      ["Color", (v) => v.color, false],
+      ["Terminación", (v) => v.terminacion, false],
+      ["Calidad", (v) => v.calidad, false],
+    ] as [string, (v: VarianteDetalle) => string | number | null, boolean][]
+  ).filter(([, valor]) => medidas.some((v) => valor(v)));
+
+  const textos = [
+    ["Usos", producto.usos],
+    ["Cuidados", producto.cuidados],
+  ].filter((t): t is [string, string] => Boolean(t[1]));
+  const hayLado = textos.length > 0 || producto.documentos.length > 0 || producto.documentosReservados > 0;
+
+  if (medidas.length === 0 && !hayLado) return null;
+
+  return (
+    <section className={`mt-11 grid gap-8 ${hayLado && medidas.length > 0 ? "lg:grid-cols-[1.4fr_1fr]" : ""}`}>
+      {medidas.length > 0 && (
+        <div className="min-w-0">
+          <h2 className="mb-3.5 text-2xl font-bold tracking-[-0.025em]">Ficha técnica</h2>
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Ficha técnica"
+            className="overflow-x-auto rounded-2xl superficie focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-texto"
+          >
+            {/* En el teléfono cada medida es una tarjeta (`.tabla-apilable` en
+                globals.css): con seis columnas, la tabla se corría de costado. */}
+            <table className="tabla-apilable w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-left">
+                  <th className="px-5 py-3 font-semibold">Medida</th>
+                  {columnas.map(([nombre, , numero]) => (
+                    <th key={nombre} className={`px-4 py-3 font-semibold ${numero ? "text-right" : ""}`}>
+                      {nombre}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {medidas.map((v) => (
+                  <tr key={v.id} className="border-b last:border-0">
+                    <td className="px-5 py-3 font-medium">{v.label}</td>
+                    {columnas.map(([nombre, valor, numero]) => (
+                      <td
+                        key={nombre}
+                        data-label={nombre}
+                        className={`px-4 py-3 text-muted-foreground ${numero ? "tabular text-right" : ""}`}
+                      >
+                        {valor(v) ?? "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {hayLado && (
+        <div className="space-y-7">
+          {textos.map(([titulo, texto]) => (
+            <div key={titulo}>
+              <h2 className="mb-2 text-xl font-bold tracking-[-0.02em]">{titulo}</h2>
+              <div
+                className="nota-cuerpo text-base leading-relaxed text-texto-2"
+                // markdownAHtml escapa todo antes de dar formato.
+                dangerouslySetInnerHTML={{ __html: markdownAHtml(texto) }}
+              />
+            </div>
+          ))}
+
+          {(producto.documentos.length > 0 || producto.documentosReservados > 0) && (
+            <div>
+              <h2 className="mb-2 text-xl font-bold tracking-[-0.02em]">Documentación</h2>
+              <ul className="divide-y divide-linea-tenue rounded-xl superficie">
+                {producto.documentos.map((d) => (
+                  <li key={d.id}>
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-sitio-alt"
+                    >
+                      <FileText className="h-5 w-5 shrink-0 text-acento-texto" />
+                      <span className="min-w-0 flex-1 font-medium">{d.titulo}</span>
+                      <span className="text-sm uppercase text-texto-3">{d.formato}</span>
+                    </a>
+                  </li>
+                ))}
+                {producto.documentosReservados > 0 && (
+                  <li>
+                    <Link
+                      href="/profesionales"
+                      className="flex items-center gap-3 px-4 py-3 text-texto-2 transition-colors hover:bg-sitio-alt"
+                    >
+                      <Lock className="h-5 w-5 shrink-0" />
+                      <span className="flex-1">
+                        {producto.documentosReservados === 1
+                          ? "1 documento para profesionales"
+                          : `${producto.documentosReservados} documentos para profesionales`}
+                      </span>
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

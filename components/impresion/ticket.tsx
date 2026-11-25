@@ -1,4 +1,5 @@
 import { formatearMonto } from "@/lib/formato";
+import { esLineaDelCorte } from "@/lib/mostrador/importes";
 import type { DocumentoTicket } from "@/lib/mostrador/ticket";
 import { BotonImprimir } from "@/app/(impresion)/ticket/[id]/boton";
 
@@ -85,10 +86,14 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
               <tr key={i}>
                 <td colSpan={2} className="descripcion">
                   {item.descripcion}
-                  <span className="detalle">
-                    {item.cantidad} {item.unidad} ×{" "}
-                    {formatearMonto(item.precioUnitario)}
-                  </span>
+                  {/* Las pasadas del corte van por su importe: «6 piezas» con
+                      «14 pasada ×» abajo se leía como un cobro de más. */}
+                  {!esLineaDelCorte(item) && (
+                    <span className="detalle">
+                      {item.cantidad} {item.unidad} ×{" "}
+                      {formatearMonto(item.precioUnitario)}
+                    </span>
+                  )}
                 </td>
                 <td className="importe">{formatearMonto(item.subtotal)}</td>
               </tr>

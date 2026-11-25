@@ -4,6 +4,7 @@ import { Suspense, useState, useSyncExternalStore, type ComponentProps } from "r
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { FondoDeRubro } from "@/components/catalogo/fondo-de-rubro";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Menu,
@@ -23,27 +24,45 @@ import {
   UserRound,
   LayoutDashboard,
   Scissors,
-  Calculator,
   Warehouse,
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { PersonajeAsistente } from "@/components/asistente/personaje";
+import { ETIQUETA_ASISTENTE, abrirAsistente } from "@/lib/asistente/abrir";
 import { useCarrito } from "@/lib/carrito-context";
+import { useTienda } from "@/lib/tienda-context";
 import { useEstado } from "@/lib/estado-context";
 import { primerNombre, telefonoParaMarcar } from "@/lib/formato";
+import { Marca } from "@/components/marca";
 
-const productLinks = [
+const productLinks: {
+  name: string;
+  slug: string;
+  icon: typeof Home;
+  desc: string;
+  /** Para lo que no es una categoría del catálogo: Moldava. */
+  href?: string;
+  /** De qué rubro toma el tono de la placa, cuando no es una categoría. */
+  tonoDe?: string;
+  propia?: boolean;
+}[] = [
   { name: "Techos", slug: "techos", icon: Home, desc: "Tirantes, machimbres, aislantes" },
   { name: "Placas", slug: "placas", icon: Layers, desc: "Melaminas, MDF, fenólicos" },
   { name: "Pisos", slug: "pisos", icon: Grid3X3, desc: "Melamínicos Decno Flooring" },
+  { name: "Molduras", slug: "molduras", icon: Minus, desc: "Finger Joint y otras marcas" },
   {
-    name: "Molduras",
-    slug: "molduras",
+    // La línea propia, como un rubro más (notas del 9/11/2026). No es una
+    // categoría de la base sino una marca: lleva a su página. Sin la foto de
+    // las molduras, que repetida al lado parecía el mismo rubro dos veces
+    // (comité final, M18): va con la placa del pino.
+    name: "Moldava",
+    slug: "moldava",
+    href: "/moldava",
+    tonoDe: "molduras",
     icon: Minus,
-    desc: "Finger Joint, fabricadas acá",
-    // La única línea que sale del aserradero propio. La clienta pidió que
-    // Moldava se note; acá se nota sin ocupar un renglón más.
+    desc: "Molduras de fabricación propia",
     propia: true,
   },
   { name: "Ferretería", slug: "ferreteria", icon: Wrench, desc: "Herrajes y accesorios" },
@@ -68,12 +87,6 @@ const herramientas = [
     desc: "Cargá el despiece y mirá cómo entra",
   },
   {
-    name: "Calculadora",
-    href: "/calculadora",
-    icon: Calculator,
-    desc: "Cuánto material lleva tu obra",
-  },
-  {
     name: "Stock en sucursal",
     href: "/stock",
     icon: Warehouse,
@@ -89,10 +102,13 @@ const herramientas = [
  * qué quedaba a la vista y qué se escondía en "Más". Ahora cada grupo se
  * declara.
  *
- * Calculadora y Stock salieron del chrome por pedido del cliente. Las rutas
- * siguen existiendo y enlazadas desde el inicio y el presupuesto.
+ * Stock salió del chrome por pedido del cliente; las calculadoras salieron
+ * del sitio el 9/11/2026.
  */
 const enlacesDirectos = [
+  // El corte a medida es la herramienta del sitio desde que salieron las
+  // calculadoras (9/11/2026): va primero y a la vista.
+  { name: "Cortes", href: "/corte" },
   // Moldava salió de "Más" a la barra: es la marca propia, y la clienta pidió
   // darle mucha más presencia. Escondida detrás de un desplegable no la
   // encontraba nadie.
@@ -101,8 +117,15 @@ const enlacesDirectos = [
   // barra superior, que en el teléfono ni existe, y la clienta pidió que la
   // cuenta profesional se encuentre sin buscarla.
   { name: "Profesionales", href: "/profesionales" },
-  { name: "Sucursales", href: "/sucursales" },
 ];
+
+/*
+ * Sucursales va en la barra de arriba, con el teléfono y el horario: es dónde
+ * encontrarnos, lo mismo que esa barra. En la de abajo no entraba: medida
+ * (revisión del comité), a 1024, 1280 y desde 1536 px la barra se pasaba del
+ * ancho y «Ingresar» quedaba cortado. En el teléfono sigue en el cajón.
+ */
+const enlaceSucursales = { name: "Sucursales", href: "/sucursales" };
 
 /*
  * "Catálogo" no está en esta lista y no es un olvido.
@@ -116,9 +139,6 @@ const enlacesMas = [
   { name: "Nosotros", href: "/nosotros" },
   { name: "Documentación", href: "/documentacion" },
   { name: "Eventos", href: "/eventos" },
-  // La calculadora vuelve a tener lugar en el menú, sin ocupar la barra: salió
-  // de ahí a pedido de la clienta y quedó sin ninguna puerta de entrada.
-  { name: "Calculadora", href: "/calculadora" },
 ];
 
 /**
@@ -166,6 +186,17 @@ export function Navbar({
   const [masOpen, setMasOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Con la tienda apagada no hay carrito: «Pedir presupuesto» abre WhatsApp
+  // con el pedido ya empezado, y el stock no se ofrece hasta que se cargue.
+  const tienda = useTienda();
+  const presupuesto = tienda.activa
+    ? "/carrito"
+    : whatsapp
+      ? `${whatsapp}?text=${encodeURIComponent("Hola! Quería pedir un presupuesto de...")}`
+      : "/contacto";
+  const externo = presupuesto.startsWith("http");
+  const lasHerramientas = herramientas.filter((h) => h.href !== "/stock" || tienda.stockVisible);
+
   return (
     <>
       {/* Barra superior. Siempre oscura, en los dos temas. */}
@@ -195,6 +226,13 @@ export function Navbar({
           */}
           <div className="ml-auto flex items-center gap-3.5">
             <Link
+              href={enlaceSucursales.href}
+              className="uppercase tracking-[0.07em] transition-colors hover:text-white"
+            >
+              {enlaceSucursales.name}
+            </Link>
+            <span className="text-white/20">|</span>
+            <Link
               href="/contacto"
               className="uppercase tracking-[0.07em] transition-colors hover:text-white"
             >
@@ -219,21 +257,11 @@ export function Navbar({
 
       {/* Barra principal */}
       <nav className="sticky top-0 z-50 border-b border-linea-suave bg-[var(--chrome-fondo)] backdrop-blur-[12px]">
-        <div className="contenedor flex h-[72px] items-center gap-6">
+        <div className="contenedor flex h-[72px] items-center gap-5 xl:gap-6">
           {/* El logo, más grande y con el nombre siempre a la vista: la
               clienta pidió que tenga más presencia y que nunca se pierda. */}
-          <Link href="/" className="group flex items-center gap-3">
-            <Image
-              src="/cropped-icon-180x180.png"
-              alt="Maderera Juan B. Justo"
-              width={54}
-              height={54}
-              className="rounded-[13px] transition-transform duration-300 group-hover:scale-105"
-            />
-            <span className="leading-[1.1]">
-              <span className="block text-[17px] font-extrabold tracking-tight text-foreground">Maderera</span>
-              <span className="block text-[12px] font-semibold uppercase tracking-[0.11em] text-texto-3">Juan B. Justo</span>
-            </span>
+          <Link href="/" className="shrink-0">
+            <Marca />
           </Link>
 
           <div className="hidden items-center gap-0.5 lg:flex">
@@ -270,13 +298,13 @@ export function Navbar({
               <EnlaceDeSeccion
                 href="/catalogo"
                 clase={(activa) =>
-                  `relative flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                  `relative flex h-10 items-center gap-1.5 rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                     productsOpen || activa
                       ? "bg-sitio-alt text-acento-texto"
                       : "text-foreground"
                   } ${
                     activa
-                      ? "after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      ? "after:absolute after:inset-x-[9px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : ""
                   }`
                 }
@@ -297,20 +325,27 @@ export function Navbar({
                 <div className="absolute left-0 top-full z-[60] mt-2 flex w-[760px] max-w-[calc(100vw-2rem)] animate-in overflow-hidden rounded-2xl border border-linea-suave bg-popover shadow-[0_24px_50px_-20px_rgb(60_50_40_/_0.4)] duration-200 fade-in slide-in-from-top-2 motion-reduce:animate-none">
                   {/* Lo que se vende */}
                   <div className="min-w-0 flex-1 p-3">
-                    <p className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">
-                      Rubros
-                    </p>
+                    <div className="flex items-center justify-between px-3 pb-2 pt-1">
+                      <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-texto-3">Rubros</p>
+                      <Link
+                        href="/catalogo"
+                        className="group/todo inline-flex items-center gap-1 text-[12.5px] font-semibold text-acento-texto hover:underline"
+                      >
+                        Ver todo el catálogo
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover/todo:translate-x-0.5" />
+                      </Link>
+                    </div>
                     <div className="entra-en-orden grid grid-cols-3 gap-2">
                       {productLinks.map((link, i) => {
                         const rubro = rubros[link.slug];
                         return (
                           <Link
                             key={link.slug}
-                            href={`/catalogo?cat=${link.slug}`}
+                            href={link.href ?? `/catalogo?cat=${link.slug}`}
                             style={{ "--i": i } as React.CSSProperties}
                             className="group/item relative flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-xl bg-oscuro-marca text-white"
                           >
-                            {rubro?.imagen && (
+                            {rubro?.imagen ? (
                               <Image
                                 src={rubro.imagen}
                                 alt=""
@@ -318,6 +353,8 @@ export function Navbar({
                                 sizes="160px"
                                 className="object-cover transition-transform duration-300 group-hover/item:scale-[1.07]"
                               />
+                            ) : (
+                              <FondoDeRubro rubro={link.tonoDe ?? link.slug} />
                             )}
                             {/* El velo: sin él, un nombre blanco sobre una foto
                                 clara no se lee. Se oscurece al pasar, que es lo
@@ -334,9 +371,9 @@ export function Navbar({
                                 </span>
                                 {/* La línea propia, dicha una sola vez y donde
                                     corresponde. */}
-                                {"propia" in link && link.propia && (
+                                {link.propia && (
                                   <span className="rounded-full bg-naranja-claro px-1.5 py-px text-[9.5px] font-bold uppercase tracking-[0.06em] text-acento-sobre-claro">
-                                    Moldava
+                                    Propia
                                   </span>
                                 )}
                               </span>
@@ -368,19 +405,6 @@ export function Navbar({
                         );
                       })}
 
-                      {/* La novena celda cierra la grilla. Ocho rubros en tres
-                          columnas dejaban un hueco, y este enlace estaba al pie
-                          ocupando una fila entera para él solo. */}
-                      <Link
-                        href="/catalogo"
-                        style={{ "--i": productLinks.length } as React.CSSProperties}
-                        className="group/todo flex aspect-[4/3] flex-col justify-end gap-0.5 rounded-xl border border-transparent bg-naranja-claro p-2.5 text-acento-sobre-claro transition-colors hover:border-accion"
-                      >
-                        <span className="text-balance text-[11.5px] font-extrabold uppercase leading-tight tracking-[0.04em]">
-                          Ver todo el catálogo
-                        </span>
-                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/todo:translate-x-1" />
-                      </Link>
                     </div>
                   </div>
 
@@ -395,7 +419,7 @@ export function Navbar({
                       Y además
                     </p>
                     <div className="entra-en-orden space-y-0.5">
-                      {herramientas.map((h, i) => (
+                      {lasHerramientas.map((h, i) => (
                         <Link
                           key={h.href}
                           href={h.href}
@@ -428,7 +452,7 @@ export function Navbar({
                         rel="noopener noreferrer"
                         className="group/ayuda mt-auto flex items-center gap-3 rounded-xl border border-linea-suave bg-card px-3 py-3 transition-colors hover:border-accion/40"
                       >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#25D366]/12 text-[#128C4A]">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-whatsapp-boton text-white">
                           <MessageCircle className="h-[17px] w-[17px]" />
                         </span>
                         <span className="min-w-0">
@@ -453,9 +477,9 @@ export function Navbar({
                 key={link.href}
                 href={link.href}
                 clase={(activa) =>
-                  `relative flex h-10 items-center rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
+                  `relative flex h-10 items-center whitespace-nowrap rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors hover:bg-sitio-alt hover:text-acento-texto ${
                     activa
-                      ? "text-acento-texto after:absolute after:inset-x-[11px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
+                      ? "text-acento-texto after:absolute after:inset-x-[9px] after:-bottom-[1px] after:h-[2px] after:rounded-full after:bg-accion"
                       : "text-foreground"
                   }`
                 }
@@ -482,7 +506,7 @@ export function Navbar({
               onMouseLeave={() => setMasOpen(false)}
             >
               <button
-                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[11px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
+                className={`flex h-10 items-center gap-1.5 rounded-[9px] px-[9px] text-[13.5px] font-bold uppercase tracking-[0.04em] transition-colors ${
                   masOpen ? "bg-sitio-alt text-acento-texto" : "text-texto-2"
                 }`}
                 aria-expanded={masOpen}
@@ -515,6 +539,27 @@ export function Navbar({
 
           {/* Acciones */}
           <div className="ml-auto flex items-center gap-2">
+            {/* El asistente en la barra de escritorio (corrección de T5):
+                sin el flotante, en una computadora solo se abría desde el
+                catálogo y el 404, y quien estaba en la portada, una ficha o
+                el corte no tenía cómo llamarlo ni retomar la charla. En el
+                celular vive en el menú. El personaje solo no decía qué era
+                (comité final), y la etiqueta entera no entra: medida, desde
+                2xl dejaba la barra justa al píxel. Va «Ayuda» en todos los
+                anchos, y sin aria-label: el nombre es el texto que se ve, así
+                quien dice «clic en Ayuda» por voz lo encuentra. */}
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              onClick={abrirAsistente}
+              className="hidden h-10 items-center gap-2 rounded-[11px] px-2 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto lg:flex"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-naranja-claro">
+                <PersonajeAsistente className="h-4 w-4 text-acento-sobre-claro" />
+              </span>
+              <span className="whitespace-nowrap text-[13px] font-bold uppercase tracking-[0.045em]">Ayuda</span>
+            </button>
+
             <ThemeToggle />
 
             <Suspense fallback={<SesionDeEscritorio sesion={undefined} />}>
@@ -528,13 +573,20 @@ export function Navbar({
                 cualquier otra tienda —/carrito y /carrito/confirmar—, y pedir
                 un presupuesto por escrito pasó a ser una de las salidas del
                 carrito, que es lo que siempre fue. */}
-            <Suspense fallback={<EnlaceAlCarrito cantidad={0} />}>
-              <EnlaceAlCarritoVigente />
-            </Suspense>
+            {tienda.activa && (
+              <Suspense fallback={<EnlaceAlCarrito cantidad={0} />}>
+                <EnlaceAlCarritoVigente />
+              </Suspense>
+            )}
 
             <Link
-              href="/carrito"
-              className="hidden h-11 items-center whitespace-nowrap rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex"
+              href={presupuesto}
+              {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              // De lg a xl no entra: lleva al mismo carrito que el ícono de al
+              // lado, que en ese rango queda solo. Con la tienda apagada no
+              // hay ícono, y en ese rango queda el WhatsApp de la barra de
+              // arriba.
+              className="hidden h-11 items-center whitespace-nowrap rounded-full bg-accion px-5 text-[15px] font-semibold text-white shadow-[0_4px_14px_-6px_rgb(194_87_15_/_0.6)] transition-colors hover:bg-accion-hover md:flex lg:hidden xl:flex"
             >
               Pedir Presupuesto
             </Link>
@@ -572,7 +624,7 @@ export function Navbar({
                     return (
                       <Link
                         key={link.slug}
-                        href={`/catalogo?cat=${link.slug}`}
+                        href={link.href ?? `/catalogo?cat=${link.slug}`}
                         onClick={() => setMobileMenuOpen(false)}
                         className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sitio-alt"
                       >
@@ -616,7 +668,26 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Y además
                   </p>
-                  {herramientas.map((h) => (
+                  {/* El asistente, como una fila más. Se abre recién cuando el
+                      cajón terminó de irse (200 ms): el cajón le devuelve el
+                      foco a la hamburguesa al desmontarse, y si el asistente
+                      ya estaba abierto le sacaba el foco del campo. Así, al
+                      cerrar el asistente el foco vuelve a la hamburguesa. */}
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setTimeout(abrirAsistente, 220);
+                    }}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-bold uppercase tracking-[0.045em] hover:bg-sitio-alt"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-naranja-claro">
+                      <PersonajeAsistente className="h-[18px] w-[18px] text-acento-sobre-claro" />
+                    </span>
+                    {ETIQUETA_ASISTENTE}
+                  </button>
+                  {lasHerramientas.map((h) => (
                     <Link
                       key={h.href}
                       href={h.href}
@@ -634,7 +705,7 @@ export function Navbar({
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Navegación
                   </p>
-                  {[...enlacesDirectos, ...enlacesMas].map((link) => (
+                  {[...enlacesDirectos, enlaceSucursales, ...enlacesMas].map((link) => (
                     <EnlaceDeSeccion
                       key={link.href}
                       href={link.href}
@@ -650,7 +721,11 @@ export function Navbar({
                   ))}
 
                   <div className="my-3 border-t border-linea-tenue" />
-                  <Link href="/carrito" onClick={() => setMobileMenuOpen(false)}>
+                  <Link
+                    href={presupuesto}
+                    {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
                     <Button className="w-full rounded-full bg-accion font-semibold text-white hover:bg-accion-hover">
                       Pedir Presupuesto
                     </Button>
@@ -716,18 +791,21 @@ function SesionDeEscritorio({ sesion }: { sesion: SesionConocida }) {
         <Icono className="h-[18px] w-[18px]" />
         {/* El ancho de «Ingresar» queda reservado mientras no se sabe, para
             que el botón no cambie de tamaño cuando llega el nombre. */}
-        <span className={sinSaber ? "invisible" : undefined}>{texto}</span>
+        {/* Entre lg y 2xl la barra no da para todo: queda el ícono, y el
+            texto sigue ahí para los lectores de pantalla. */}
+        <span className={`lg:sr-only 2xl:not-sr-only ${sinSaber ? "invisible" : ""}`}>{texto}</span>
       </Link>
 
       {/* Crear cuenta, solo a quien no entró. La clienta pidió promover
           más el registro: en el escritorio no había ni un enlace, solo
           "Ingresar", que a quien todavía no tiene cuenta no le dice que
-          pueda hacerse una. Desde `xl` y no `lg`: con Profesionales en la
-          barra, en 1024 px ya no entran las dos cosas. */}
+          pueda hacerse una. Desde `2xl`: con Cortes en la barra y la marca
+          más grande (9/11/2026), en 1280 px ya no entra. Abajo de eso sigue
+          en el cajón del teléfono y detrás de «Ingresar». */}
       {sesion === null && (
         <Link
           href="/registro"
-          className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt xl:flex"
+          className="hidden h-11 items-center whitespace-nowrap rounded-[11px] px-[13px] text-[14.5px] font-semibold text-acento-texto transition-colors hover:bg-sitio-alt 2xl:flex"
         >
           Crear cuenta
         </Link>
@@ -759,7 +837,9 @@ function EnlaceAlCarrito({ cantidad }: { cantidad: number }) {
       className="relative flex h-10 items-center gap-2 rounded-[11px] px-2.5 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
     >
       <ShoppingCart className="h-[19px] w-[19px] shrink-0" />
-      <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline">
+      {/* Entre lg y 2xl no entra todo en la barra (desde xl se suma «Crear
+          cuenta»): el carrito queda en ícono, con su aria-label. */}
+      <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline lg:hidden 2xl:inline">
         Carrito
       </span>
       {cantidad > 0 && (

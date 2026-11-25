@@ -41,22 +41,21 @@ export default async function ResenasDelNegocioPage() {
 
       <EncabezadoPanel
         titulo="Reseñas del negocio"
-        detalle={
+        resumen={
           resenas.length > 0
             ? `${resenas.filter((r) => r.publicada).length} publicadas de ${resenas.length} cargadas`
-            : "Todavía no hay ninguna cargada"
+            : "Ninguna cargada"
         }
       />
 
       {!hayGoogle && (
         <p className="tarjeta-atencion flex items-start gap-2.5 p-4 text-base">
           <Star className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
+          {/* Cuando lleguen GOOGLE_PLACES_API_KEY y GOOGLE_PLACE_ID aparece el
+              botón para traerlas solas, y lo cargado sigue funcionando igual. */}
           <span>
-            Todavía no está conectada la cuenta de Google, así que las reseñas se
-            copian a mano de la ficha del negocio. Cuando lleguen las claves
-            —<code className="tabular">GOOGLE_PLACES_API_KEY</code> y{" "}
-            <code className="tabular">GOOGLE_PLACE_ID</code>— aparece el botón
-            para traerlas solas y lo cargado sigue funcionando igual.
+            Sin la cuenta de Google conectada: las reseñas se copian a mano de la
+            ficha del negocio.
           </span>
         </p>
       )}

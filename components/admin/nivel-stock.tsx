@@ -53,7 +53,7 @@ export function NivelStock({
         ? "bg-brand-orange"
         : nivel === "medio"
           ? "bg-amber-400"
-          : "bg-green-600";
+          : "bg-saldo-favor";
 
   const texto =
     nivel === "sin-stock"

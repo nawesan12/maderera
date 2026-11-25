@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { puedeEntrar } from "@/lib/roles";
 import { notFound } from "next/navigation";
 import { Hoja, MUESTRA_DEL_BUILD } from "../../preparando";
 import { getSession } from "@/lib/dal/session";
@@ -43,6 +44,9 @@ async function Contenido({
   const sesion = await getSession();
 
   if (!sesion) notFound();
+  // El remito tiene precios y datos del cliente: del personal, quien entra a
+  // los pedidos (el aserradero no), igual que en Go.
+  if (sesion.role === "staff" && !puedeEntrar("/admin/pedidos", sesion.staffRole)) notFound();
 
   const [remito, emisor] = await Promise.all([
     remitoCompleto(id),

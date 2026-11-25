@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BookOpen, LifeBuoy, Search } from "lucide-react";
+import { BookOpen, Search } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { buscarEnGuias, listarGuias } from "@/lib/guias";
 import { requireStaff } from "@/lib/dal/session";
@@ -36,7 +36,6 @@ export default async function AyudaPage({
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Ayuda"
-        detalle="Cómo se hace cada cosa en el panel, explicado paso a paso."
       />
 
       <form method="get" className="flex gap-2">
@@ -70,11 +69,7 @@ export default async function AyudaPage({
               : `${resultados.length} ${resultados.length === 1 ? "guía habla" : "guías hablan"} de «${termino}»`}
           </h2>
 
-          {resultados.length === 0 ? (
-            <p className="mt-2 text-base text-muted-foreground">
-              Probá con una palabra sola, o mirá el listado de abajo.
-            </p>
-          ) : (
+          {resultados.length > 0 && (
             <ul className="mt-3 space-y-3">
               {resultados.map(({ guia, contexto }) => (
                 <li key={guia.slug}>
@@ -131,13 +126,7 @@ export default async function AyudaPage({
         )}
       </section>
 
-      <p className="flex items-start gap-2 rounded-lg border bg-muted/40 px-4 py-3 text-base text-muted-foreground">
-        <LifeBuoy className="mt-0.5 h-5 w-5 shrink-0" />
-        <span>
-          Si algo no está acá o quedó desactualizado, avisá: las guías se
-          corrigen junto con las pantallas que describen.
-        </span>
-      </p>
+      {/* Las guías se corrigen junto con las pantallas que describen. */}
     </div>
   );
 }

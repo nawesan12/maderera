@@ -1,34 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { APIError } from "better-auth/api";
-import { z } from "zod";
 import { renovarSenal } from "@/lib/senal-cliente";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { customers } from "@/lib/db/schema";
 import { adoptarCarritoAnonimo } from "@/lib/dal/carrito";
-import { avisoDeEspera, ipDelPedido, permitido } from "@/lib/limites";
-
-const registroSchema = z
-  .object({
-    nombre: z.string().trim().min(2, "Escribí tu nombre.").max(120),
-    email: z.email({ message: "Revisá el correo, no parece válido." }),
-    telefono: z
-      .string()
-      .trim()
-      .min(6, "Dejanos un teléfono para coordinar las entregas.")
-      .max(40),
-    // Ocho caracteres es lo que exige Better Auth en `lib/auth-options.ts`;
-    // pedir menos acá haría que el formulario acepte lo que el alta rechaza.
-    password: z.string().min(8, "La contraseña necesita 8 caracteres o más."),
-    repetir: z.string(),
-    volver: z.string().optional(),
-  })
-  .refine((d) => d.password === d.repetir, {
-    message: "Las dos contraseñas tienen que coincidir.",
-    path: ["repetir"],
-  });
+import { api, copiarCookies, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 export interface EstadoRegistro {
   error?: string;
@@ -37,90 +12,45 @@ export interface EstadoRegistro {
 /**
  * Alta de una cuenta de cliente.
  *
+ * La hace la API de Go (backend/internal/auth): usuario, perfil de cliente y
+ * ficha comercial en una sola transacción, con el freno de cuántas cuentas
+ * crea una IP por hora (el alta no verifica el correo todavía).
+ *
  * Deliberadamente NO se busca un cliente existente con el mismo correo para
- * vincularlo. Como el alta no verifica el mail (ver `lib/auth-options.ts`),
- * hacerlo permitiría registrarse con la dirección de un tercero y quedarse con
- * su historial y su cuenta corriente. Cada registro nace con su propia ficha, y
- * unificarla con la del mostrador es una decisión que toma el vendedor desde el
- * panel, que sabe con quién está hablando.
+ * vincularlo: sin verificar el mail, permitiría registrarse con la dirección
+ * de un tercero y quedarse con su historial y su cuenta corriente. Unificar la
+ * ficha con la del mostrador lo decide el vendedor desde el panel.
  */
 export async function registrarse(
   _previo: EstadoRegistro,
   formData: FormData,
 ): Promise<EstadoRegistro> {
-  const parsed = registroSchema.safeParse({
-    nombre: formData.get("nombre"),
-    email: formData.get("email"),
-    telefono: formData.get("telefono"),
-    password: formData.get("password"),
-    repetir: formData.get("repetir"),
-    volver: formData.get("volver") ?? undefined,
-  });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Revisá los datos." };
+  const texto = (k: string) => String(formData.get(k) ?? "");
+  const clave = texto("password");
+  // Que las dos coincidan es cosa del formulario: Go recibe una sola.
+  if (clave !== texto("repetir")) {
+    return { error: "Las dos contraseñas tienen que coincidir." };
   }
 
-  const datos = parsed.data;
-
-  /*
-   * El freno.
-   *
-   * El registro no pide confirmar el correo —hoy no puede: el remitente propio
-   * todavía no está habilitado— así que con una casilla inventada se crea una
-   * cuenta, y cada cuenta nueva escribe en cuatro tablas. Eso es lo que hace
-   * escalable el abuso de todo lo demás: inscripciones a eventos, presupuestos,
-   * la lista de precios en PDF. Mientras no haya verificación, el freno es
-   * cuántas cuentas puede crear una misma IP por hora.
-   */
-  const puede = await permitido("registrarse", `ip:${await ipDelPedido()}`);
-
-  if (!puede.permitido) return { error: avisoDeEspera(puede) };
-
+  let respuesta;
   try {
-    const alta = await auth.api.signUpEmail({
-      body: {
-        name: datos.nombre,
-        email: datos.email,
-        password: datos.password,
-      },
-      asResponse: false,
-      headers: new Headers(),
+    respuesta = await (await api()).POST("/api/v1/registro", {
+      body: { nombre: texto("nombre"), correo: texto("email"), telefono: texto("telefono"), clave },
     });
-
-    // El perfil con rol "cliente" lo crea el hook de Better Auth. Acá se suma la
-    // ficha comercial, que es lo que después cuelga pedidos y presupuestos.
-    await db.insert(customers).values({
-      userId: alta.user.id,
-      nombre: datos.nombre,
-      email: datos.email,
-      telefono: datos.telefono,
-      tipo: "particular",
-      limiteCredito: "0",
-      notas: "Cuenta creada desde el sitio.",
-    });
-
-    // El presupuesto que venía armando sin sesión se le pasa a la cuenta nueva.
-    await adoptarCarritoAnonimo(alta.user.id);
-    // El encabezado se dibuja en el navegador porque el HTML viene del CDN:
-    // sin la señal prendida, no sabría que ahora hay un nombre que mostrar.
-    await renovarSenal();
-  } catch (error) {
-    if (error instanceof APIError) {
-      // Better Auth avisa cuando el correo ya existe. Acá sí conviene decirlo:
-      // quien se está registrando necesita saber que tiene que ingresar en vez
-      // de crear otra cuenta, y el dato no revela nada que un intento de alta
-      // no revele igual.
-      return {
-        error:
-          error.body?.code === "USER_ALREADY_EXISTS"
-            ? "Ya hay una cuenta con ese correo. Probá ingresando."
-            : "No pudimos crear la cuenta. Intentá de nuevo en un momento.",
-      };
-    }
-    throw error;
+  } catch {
+    return { error: "No pudimos crear la cuenta. Intentá de nuevo en un momento." };
+  }
+  if (!respuesta.data) {
+    return { error: mensajeDe(respuesta.error as Problema | undefined, "No pudimos crear la cuenta. Intentá de nuevo en un momento.") };
   }
 
-  const destino = datos.volver;
-  redirect(destino && destino.startsWith("/") ? destino : "/mi-cuenta");
+  await copiarCookies(respuesta.response);
+  // El presupuesto que venía armando sin sesión se le pasa a la cuenta nueva.
+  await adoptarCarritoAnonimo(respuesta.data.userId);
+  // El encabezado se dibuja en el navegador porque el HTML viene del CDN: sin
+  // la señal prendida, no sabría que ahora hay un nombre que mostrar.
+  await renovarSenal();
+
+  const destino = formData.get("volver");
+  redirect(typeof destino === "string" && destino.startsWith("/") && !destino.startsWith("//") ? destino : "/mi-cuenta");
 }

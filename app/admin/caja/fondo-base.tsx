@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeParaElCampo, importeIlegible } from "@/lib/formato";
 import { guardarFondoBase } from "./actions";
 
 /**
@@ -24,21 +24,22 @@ export function FondoBase({
   branchId: string;
   valor: number;
 }) {
-  const [texto, setTexto] = useState(valor ? String(valor) : "");
+  const [texto, setTexto] = useState(valor ? importeParaElCampo(valor) : "");
   const [guardando, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
 
-  const cambio = Number(texto || 0) !== valor;
+  const ilegible = importeIlegible(texto);
+  const cambio = !ilegible && importeDelCampo(texto) !== valor;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
         Cambio fijo
         <input
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={texto}
+          aria-invalid={importeIlegible(texto) || undefined}
           onChange={(e) => {
             setTexto(e.target.value);
             setAviso(null);
@@ -55,18 +56,22 @@ export function FondoBase({
           disabled={guardando}
           onClick={() =>
             empezar(async () => {
-              const r = await guardarFondoBase(branchId, Number(texto || 0));
+              const r = await guardarFondoBase(branchId, importeDelCampo(texto));
               setAviso(r.error ?? r.ok ?? null);
             })
           }
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-orange px-3.5 text-sm font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accion px-3.5 text-sm font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
         >
           {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
           Guardar
         </button>
       )}
 
-      {aviso ? (
+      {ilegible ? (
+        <span role="alert" className="text-sm text-saldo-debe">
+          No se entiende el importe
+        </span>
+      ) : aviso ? (
         <span className="text-sm text-muted-foreground">{aviso}</span>
       ) : (
         valor > 0 && (

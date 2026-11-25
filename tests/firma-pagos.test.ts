@@ -4,7 +4,7 @@ import {
   firmaValida,
   leerCabeceraFirma,
   manifiestoFirma,
-} from "@/lib/pagos/firma";
+} from "../scripts/golden/originales/tanda6/firma";
 
 /**
  * La firma del webhook es la única defensa contra alguien que descubra la URL y

@@ -1,0 +1,427 @@
+package mostrador
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"mjbj/internal/auth"
+	"mjbj/internal/caja"
+	"mjbj/internal/clientes"
+	"mjbj/internal/cobros"
+	"mjbj/internal/cola"
+	"mjbj/internal/cuit"
+	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
+	"mjbj/internal/numeracion"
+	"mjbj/internal/pedidos"
+	"mjbj/internal/plataforma"
+	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas"
+	"mjbj/internal/zodjs"
+)
+
+// diasDeValidez de un presupuesto de mostrador, igual que los del panel.
+const diasDeValidez = 15
+
+// Presupuesto es emitirPresupuestoDeMostrador: lo cargado, sin cobrar, en la
+// cola de presupuestos con origen «mostrador». Devuelve el id y el número.
+func (s *Servicio) Presupuesto(ctx context.Context, ses *auth.Sesion, p PresupuestoPedido) (string, string, error) {
+	subtotal := 0.0
+	for _, l := range p.Lineas {
+		subtotal += jsmath.Round(float64(float64(l.Cantidad*l.PrecioUnitario)*100)) / 100
+	}
+	var vendedor *string
+	if p.CustomerID != nil {
+		err := s.pool.QueryRow(ctx, `SELECT seller_id FROM customers WHERE id = $1`, *p.CustomerID).Scan(&vendedor)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return "", "", err
+		}
+	}
+	ahora := s.ahora()
+	// setDate(getDate() + 15): quince días de calendario argentino, a la misma hora.
+	a := ahora.In(caja.Argentina)
+	valido := time.Date(a.Year(), a.Month(), a.Day()+diasDeValidez, a.Hour(), a.Minute(), a.Second(), a.Nanosecond(), caja.Argentina)
+	var id, numero string
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		if numero, err = numeracion.Presupuesto(ctx, tx, ahora.In(caja.Argentina)); err != nil {
+			return err
+		}
+		asesor := ses.Nombre
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO quotes (numero, customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen,
+			                    subtotal, total, notas, asesor, seller_id, valido_hasta, created_by_user_id)
+			VALUES ($1, $2, $3, $4, $5, 'enviado', 'mostrador', $6::numeric, $6::numeric, $7, $8, $9, $10, $11) RETURNING id`,
+			numero, p.CustomerID, p.ContactoNombre, p.ContactoTelefono, p.BranchID, jsmath.Fijo2(subtotal), p.Notas,
+			asesor, vendedor, valido, ses.UserID).Scan(&id); err != nil {
+			return err
+		}
+		// El precio del navegador se guarda como lo que se presupuestó, pero
+		// al lado queda el de la lista: pasar el presupuesto a pedido mide
+		// contra él lo que se deja de cobrar y, pasado lo libre, pide el PIN.
+		// Sin eso, «Presupuesto» en vez de «Cobrar» esquivaba el control.
+		lista, err := ListaDelCliente(ctx, tx, p.CustomerID)
+		if err != nil {
+			return err
+		}
+		if err := conPrecioDeLista(ctx, tx, p.Lineas, lista); err != nil {
+			return err
+		}
+		for i, l := range p.Lineas {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, presentacion, orden, precio_lista)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9, $10::numeric)`,
+				id, l.VariantID, l.Descripcion, l.Unidad, jsmath.Fijo2(l.Cantidad), jsmath.Fijo2(l.PrecioUnitario),
+				jsmath.Fijo2(jsmath.Round(float64(float64(l.Cantidad*l.PrecioUnitario)*100))/100), l.Presentacion, i, fijo2ONulo(l.PrecioLista)); err != nil {
+				return err
+			}
+		}
+		// Nace «enviado»: el cliente recibe el aviso del presupuesto armado
+		// (el WhatsApp con el PDF, y el correo si lo tiene), igual que uno
+		// del panel que pasa a enviado. Apagado en /admin/avisos, no sale.
+		return pedidos.EncolarPresupuestoEnviado(ctx, tx, id)
+	})
+	if err != nil {
+		return "", "", err
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "presupuesto", numero, "Presupuesto "+numero+" emitido desde el mostrador para "+p.ContactoNombre, nil)
+	return id, numero, nil
+}
+
+// ClienteNuevo es lo que devuelve el alta rápida.
+type ClienteNuevo struct {
+	ID           string  `json:"id"`
+	Nombre       string  `json:"nombre"`
+	RazonSocial  *string `json:"razonSocial"`
+	Cuit         *string `json:"cuit"`
+	CondicionIva string  `json:"condicionIva"`
+	Estado       string  `json:"estado"`
+	PriceListID  *string `json:"priceListId"`
+	Direccion    *string `json:"direccion"`
+}
+
+// ResultadoAlta es crearClienteEnMostrador.
+type ResultadoAlta struct {
+	Ok        bool          `json:"ok"`
+	Cliente   *ClienteNuevo `json:"cliente,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Existente *struct {
+		ID     string `json:"id"`
+		Nombre string `json:"nombre"`
+	} `json:"existente,omitempty"`
+}
+
+// AltaRapida da de alta un cliente sin salir de la venta. Si el documento ya
+// es de otra ficha, no la crea: ofrece la que existe.
+func (s *Servicio) AltaRapida(ctx context.Context, ses *auth.Sesion, a AltaRapida) (ResultadoAlta, error) {
+	doc, e := clientes.LeerDocumento(a.Documento)
+	if e != "" {
+		return ResultadoAlta{Error: e}, nil
+	}
+	if a.CondicionIva == "responsable_inscripto" && doc.Tipo != "cuit" {
+		return ResultadoAlta{Error: "Un responsable inscripto necesita el CUIT para la factura A."}, nil
+	}
+	if doc.Tipo != "ninguno" {
+		formas := []string{doc.Digitos}
+		if doc.Tipo == "cuit" {
+			formas = append(formas, cuit.FormatearLargo(doc.Digitos))
+		}
+		var ex struct{ ID, Nombre string }
+		err := s.pool.QueryRow(ctx, `SELECT id, nombre FROM customers WHERE active = true AND cuit = ANY($1) LIMIT 1`, formas).Scan(&ex.ID, &ex.Nombre)
+		if err == nil {
+			r := ResultadoAlta{Error: "Ese documento ya es de " + ex.Nombre + "."}
+			r.Existente = &struct {
+				ID     string `json:"id"`
+				Nombre string `json:"nombre"`
+			}{ex.ID, ex.Nombre}
+			return r, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return ResultadoAlta{}, err
+		}
+	}
+	nombre := zodjs.TrimJS(a.Nombre)
+	var razon, cuitDoc, tel, rubro *string
+	if a.CondicionIva == "responsable_inscripto" {
+		razon = &nombre
+	}
+	if doc.Tipo != "ninguno" {
+		cuitDoc = &doc.Digitos
+	}
+	if a.Telefono != nil {
+		if t := zodjs.TrimJS(*a.Telefono); t != "" {
+			tel = &t
+		}
+	}
+	if a.Rubro != nil && *a.Rubro != "" {
+		rubro = a.Rubro
+	}
+	tipo := "particular"
+	if rubro != nil && *rubro != "particular" {
+		tipo = "profesional"
+	}
+	var c ClienteNuevo
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO customers (nombre, razon_social, cuit, condicion_iva, telefono, rubro, tipo, direccion, notas)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, 'Ficha creada en el mostrador.')
+		RETURNING id, nombre, razon_social, cuit, condicion_iva::text, estado::text, price_list_id, direccion`,
+		nombre, razon, cuitDoc, a.CondicionIva, tel, rubro, tipo).
+		Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Estado, &c.PriceListID, &c.Direccion)
+	if err != nil {
+		return ResultadoAlta{}, err
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "cliente", c.ID, "Dio de alta a "+c.Nombre+" desde el mostrador", nil)
+	return ResultadoAlta{Ok: true, Cliente: &c}, nil
+}
+
+// CobroDeCuenta es lo que devuelve cobrarCuentaEnMostrador.
+type CobroDeCuenta struct {
+	Ok        string `json:"ok"`
+	ReceiptID string `json:"receiptId"`
+	Numero    string `json:"numero"`
+}
+
+// CobrarCuenta cobra la cuenta corriente de un cliente en el mostrador con
+// cobros.EmitirRecibo (la única forma de registrar un pago): el efectivo
+// entra al turno abierto de la sucursal; sin turno, no se cobra efectivo.
+// La clave del intento hace repetible el cobro (cobros.Cobro.Clave).
+func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, sucursal, partesCrudas, clave string) (CobroDeCuenta, error) {
+	if !plataforma.UUIDValido(cliente) || !plataforma.UUIDValido(sucursal) {
+		return CobroDeCuenta{}, rechazo("Falta el cliente.")
+	}
+	partes, e := cobros.LeerPartes(partesCrudas)
+	if e != "" {
+		return CobroDeCuenta{}, rechazo(e)
+	}
+	if cobros.ConRetencion(partes) {
+		return CobroDeCuenta{}, rechazo("Una retención se carga en el panel con su certificado, no desde el mostrador.")
+	}
+	var r cobros.ReciboEmitido
+	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
+		hayEfectivo := false
+		for _, p := range partes {
+			if p.Medio == "efectivo" {
+				hayEfectivo = true
+			}
+		}
+		turno, hay, err := caja.TurnoAbiertoDe(ctx, tx, sucursal)
+		if err != nil {
+			return err
+		}
+		if hayEfectivo && !hay {
+			return &cobros.ErrorDeCobro{Mensaje: "No hay caja abierta: abrila para cobrar en efectivo."}
+		}
+		var c *cobros.Caja
+		if hay {
+			c = &cobros.Caja{TurnoID: turno}
+		}
+		concepto := "Pago de cuenta corriente"
+		if r, err = cobros.EmitirRecibo(ctx, tx, cobros.Cobro{
+			CustomerID: &cliente, BranchID: &sucursal, Origen: "mostrador", Concepto: &concepto,
+			Partes: partes, Caja: c, UsuarioID: &ses.UserID, Clave: clave,
+		}); err != nil {
+			return err
+		}
+		if r.Repetido {
+			return nil
+		}
+		_, err = cola.Encolar(ctx, sqlc.New(tx), cobros.TrabajoAvisoDeRecibo, map[string]string{"receiptId": r.ReceiptID}, time.Time{})
+		return err
+	})
+	var ec *cobros.ErrorDeCobro
+	if errors.As(err, &ec) {
+		return CobroDeCuenta{}, rechazo(ec.Mensaje)
+	}
+	if err != nil {
+		return CobroDeCuenta{}, err
+	}
+	if !r.Repetido {
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCobrar, "cliente", cliente,
+			"Cobró la cuenta en el mostrador con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+	}
+	return CobroDeCuenta{Ok: "Recibo " + r.Numero + " por " + formato.MonedaEntera(r.Total) + ".", ReceiptID: r.ReceiptID, Numero: r.Numero}, nil
+}
+
+// CajaFisica es una caja física para elegir al vincular la máquina.
+type CajaFisica struct {
+	ID          string     `json:"id"`
+	Codigo      string     `json:"codigo"`
+	Nombre      *string    `json:"nombre"`
+	UltimaVezAt *time.Time `json:"-"`
+}
+
+// CajasParaVincular son las cajas activas de la sucursal.
+func (s *Servicio) CajasParaVincular(ctx context.Context, sucursal string) ([]map[string]any, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT id, codigo, nombre, ultima_vez_at FROM pos_devices
+		WHERE branch_id::text = $1 AND activo = true ORDER BY codigo`, sucursal)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	out := []map[string]any{}
+	for filas.Next() {
+		var c CajaFisica
+		if err := filas.Scan(&c.ID, &c.Codigo, &c.Nombre, &c.UltimaVezAt); err != nil {
+			return nil, err
+		}
+		var ultima any
+		if c.UltimaVezAt != nil {
+			ultima = FechaJS(*c.UltimaVezAt)
+		}
+		out = append(out, map[string]any{"id": c.ID, "codigo": c.Codigo, "nombre": c.Nombre, "ultimaVezAt": ultima})
+	}
+	return out, filas.Err()
+}
+
+// enUsoHace es cuánto sin latido tiene que pasar para que otra PC tome una
+// caja sin un admin. La PC vinculada late cada 20 s (use-conexion.ts): dos
+// minutos son seis latidos perdidos, una PC apagada o sin red.
+const enUsoHace = 2 * time.Minute
+
+// Vincular entrega la caja a esta PC con un secreto nuevo (o el error para
+// mostrar). Antes devolvía el secreto vigente sin mirar nada: dos PCs
+// quedaban con la misma caja, los números provisorios se repetían y el
+// latido de una pisaba los pendientes de la otra. Ahora:
+//   - con ventas sin subir no se entrega (como Desvincular): esa plata la
+//     cuenta el cierre por los pendientes que manda la otra PC;
+//   - si latió hace menos de enUsoHace, está en uso: solo un admin la toma;
+//   - el secreto se rota, así la PC que la tenía deja de reconocerse
+//     (cajaVigente en el latido) y pide vincularse otra vez.
+func (s *Servicio) Vincular(ctx context.Context, ses *auth.Sesion, id string) (map[string]any, error) {
+	if !plataforma.UUIDValido(id) {
+		return map[string]any{"error": "Esa caja no existe o está dada de baja."}, nil
+	}
+	crudo := make([]byte, 24)
+	if _, err := rand.Read(crudo); err != nil {
+		return nil, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var codigo string
+	var pendientes int
+	var ultima *time.Time
+	var enUso bool
+	err = tx.QueryRow(ctx, `SELECT codigo, pendientes, ultima_vez_at, coalesce(ultima_vez_at > now() - make_interval(secs => $2), false)
+		FROM pos_devices WHERE id = $1 AND activo = true FOR UPDATE`, id, enUsoHace.Seconds()).Scan(&codigo, &pendientes, &ultima, &enUso)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return map[string]any{"error": "Esa caja no existe o está dada de baja."}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if pendientes > 0 {
+		ventas, verbo := "ventas cobradas", "subieron"
+		if pendientes == 1 {
+			ventas, verbo = "venta cobrada", "subió"
+		}
+		return map[string]any{"error": fmt.Sprintf("%s tiene %d %s en otra PC que todavía no %s. Esperá a que suban.", codigo, pendientes, ventas, verbo)}, nil
+	}
+	admin := ses != nil && ses.RolStaff != nil && *ses.RolStaff == sqlc.StaffRoleAdmin
+	if enUso && !admin {
+		return map[string]any{"error": codigo + " se está usando en otra PC. Elegí otra caja, o pedile a un admin que la pase a esta."}, nil
+	}
+	secreto := base64.RawURLEncoding.EncodeToString(crudo)
+	if _, err := tx.Exec(ctx, `UPDATE pos_devices SET secreto = $2, ultima_vez_at = now(), pendientes = 0 WHERE id = $1`, id, secreto); err != nil {
+		return nil, err
+	}
+	proximo, err := proximoProvisorio(ctx, tx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	desc := "Vinculó la terminal " + codigo + " a una PC"
+	var datos any
+	if ultima != nil {
+		datos = map[string]any{"ultimoLatido": ultima.UTC().Format(time.RFC3339)}
+		if enUso {
+			desc = "Pasó la terminal " + codigo + " a otra PC (la anterior seguía en uso)"
+		}
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "caja", id, desc, datos)
+	return map[string]any{"caja": map[string]any{"id": id, "codigo": codigo, "secreto": secreto, "proximoNumero": proximo}}, nil
+}
+
+// proximoProvisorio es el siguiente al último número provisorio de esa caja
+// que ya está en la base, venga de la PC que venga. El contador vive en el
+// navegador de cada PC: sin esto, una PC nueva que vinculaba CAJA1 arrancaba
+// en CAJA1-001, un número que ya existía (dos papeles iguales y la venta que
+// no subía por el índice único). El guion es parte del prefijo, así CAJA1 no
+// cuenta los de CAJA10; se leen solo las cifras que siguen, así el sufijo de
+// un número repetido (desambiguarProvisorio) no las cambia.
+func proximoProvisorio(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, codigo string) (int, error) {
+	var n int
+	err := q.QueryRow(ctx, `
+		SELECT coalesce(max(substring(substr(numero_provisorio, length($1) + 2) FROM '^[0-9]+')::bigint), 0) + 1
+		FROM orders
+		WHERE numero_provisorio LIKE replace(replace(replace($1, '\', '\\'), '%', '\%'), '_', '\_') || '-%'
+		  AND substring(substr(numero_provisorio, length($1) + 2) FROM '^[0-9]+') IS NOT NULL`, codigo).Scan(&n)
+	return n, err
+}
+
+// Latido dice quién es, si sigue abierta la caja y la hora del servidor, y
+// anota los pendientes de la caja física si viene con su secreto.
+func (s *Servicio) Latido(ctx context.Context, ses *auth.Sesion, cuerpo map[string]any) (map[string]any, error) {
+	sucursal, _ := cuerpo["branchId"].(string)
+	// Si la máquina dice ser una caja física y el secreto ya no es el suyo
+	// (la desvincularon, ver terminal.go), se le avisa para que pida
+	// vincularse otra vez. Un sw.js viejo lo ignora.
+	var cajaVigente *bool
+	if c, ok := cuerpo["caja"].(map[string]any); ok {
+		id, ok1 := c["id"].(string)
+		secreto, ok2 := c["secreto"].(string)
+		pendientes, ok3 := cuerpo["pendientes"].(float64)
+		if ok1 && ok2 && ok3 {
+			vigente, err := caja.AnotarLatido(ctx, s.pool, id, secreto, pendientes)
+			if err != nil {
+				return nil, err
+			}
+			cajaVigente = &vigente
+		}
+	}
+	var turno any
+	if sucursal != "" && plataforma.UUIDValido(sucursal) {
+		t, err := caja.Abierto(ctx, s.pool, sucursal)
+		if err != nil {
+			return nil, err
+		}
+		if t != nil {
+			turno = map[string]any{"id": t.ID, "abiertaAt": FechaJS(t.AbiertaAt)}
+		}
+	}
+	var rol any
+	if ses.RolStaff != nil {
+		rol = string(*ses.RolStaff)
+	}
+	out := map[string]any{
+		"sesion":     map[string]any{"userId": ses.UserID, "nombre": ses.Nombre, "staffRole": rol},
+		"turno":      turno,
+		"servidorAt": FechaJS(s.ahora()),
+	}
+	if cajaVigente != nil {
+		out["cajaVigente"] = *cajaVigente
+	}
+	// La firma con que esta sesión deja sus ventas en la cola (firma.go). Un
+	// sw.js viejo la ignora.
+	if firma, vence := s.FirmaDeCola(ses.UserID, s.ahora()); firma != "" {
+		out["firmaCola"] = map[string]any{"usuarioId": ses.UserID, "firma": firma, "vence": FechaJS(vence)}
+	}
+	return out, nil
+}
+
+var _ = strings.TrimSpace
+var _ = ventas.Efectivo

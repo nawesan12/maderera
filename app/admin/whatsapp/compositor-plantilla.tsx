@@ -6,8 +6,8 @@ import { enviarPlantilla, type EstadoWhatsapp } from "./actions";
 import { ConfirmarTope } from "./confirmar-tope";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { camposFaltantes, nombreLegible, sugerirValores, vistaPrevia } from "@/lib/whatsapp/plantillas";
-import type { PlantillaDisponible } from "@/lib/whatsapp/catalogo";
-import type { DocumentoListado } from "@/lib/whatsapp/documentos";
+import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
+import type { DocumentoListado } from "@/lib/dal/admin/whatsapp";
 import { primerNombre } from "@/lib/formato";
 
 const estadoInicial: EstadoWhatsapp = {};
@@ -129,15 +129,15 @@ export function CompositorPlantilla({
 
       {!ventanaAbierta && (
         <p className="estado-espera mb-2.5 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm text-[var(--estado-tinta)]">
-          Pasaron más de 24 horas desde su último mensaje: WhatsApp solo deja mandar un mensaje preparado. Cuando
-          conteste, se vuelve a poder escribir libremente.
+          {/* Cuando conteste, se vuelve a poder escribir libremente. */}
+          Pasaron más de 24 horas: solo se puede mandar un mensaje preparado.
         </p>
       )}
 
       {plantillas.length === 0 ? (
         <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
-          No hay mensajes preparados aprobados todavía. Hay que cargarlos en Meta, esperar la aprobación y
-          sincronizarlos desde la configuración.
+          {/* Se cargan en Meta, se espera la aprobación y se sincronizan desde la configuración. */}
+          No hay mensajes preparados aprobados.
         </p>
       ) : (
         <div className="space-y-2.5">
@@ -220,7 +220,7 @@ export function CompositorPlantilla({
           )}
           {estado.requiereConfirmacionTope && <ConfirmarTope gratis={gratis} />}
           {estado.ok && (
-            <p role="status" className="flex items-center gap-2 text-base text-green-800">
+            <p role="status" className="flex items-center gap-2 text-base text-saldo-favor">
               <CheckCircle2 className="h-5 w-5" />
               {estado.ok}
             </p>
@@ -246,7 +246,7 @@ export function CompositorPlantilla({
           <button
             type="submit"
             disabled={enviando || faltan.length > 0 || faltaDocumento || !plantilla}
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
           >
             {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             {faltan.length > 0 ? "Faltan datos" : faltaDocumento ? "Elegí el documento" : "Enviar mensaje preparado"}

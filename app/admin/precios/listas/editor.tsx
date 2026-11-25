@@ -27,7 +27,7 @@ export function EditorDeLista({
   return (
     <form
       action={guardar}
-      className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-5"
+      className="flex flex-wrap items-end gap-3 tarjeta p-5"
     >
       <input type="hidden" name="id" value={lista.id} />
 
@@ -35,8 +35,8 @@ export function EditorDeLista({
         <p className="text-base font-semibold">{lista.nombre}</p>
         <p className="text-sm text-muted-foreground">
           {lista.itemsPropios > 0
-            ? `${lista.itemsPropios} precios propios cargados, que pisan al porcentaje`
-            : "Sin precios propios: todo sale del porcentaje sobre la general"}
+            ? `${lista.itemsPropios} precios propios, pisan al porcentaje`
+            : "Sin precios propios"}
         </p>
       </div>
 
@@ -59,7 +59,7 @@ export function EditorDeLista({
       <button
         type="submit"
         disabled={guardando}
-        className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-orange px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
+        className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
       >
         {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
         Guardar

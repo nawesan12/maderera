@@ -89,7 +89,7 @@ export function RegistroDelAyudante() {
   if (!hayVersionNueva) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-linea bg-card px-4 py-2.5 shadow-lg">
+    <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full superficie px-4 py-2.5 shadow-lg">
       <RefreshCw className="h-4 w-4 text-acento-texto" />
       <span className="text-sm">Hay una versión nueva.</span>
       <button

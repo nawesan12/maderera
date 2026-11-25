@@ -5,7 +5,6 @@ import {
   AtSign,
   CheckCircle,
   Loader2,
-  MessageCircle,
   Phone,
   Send,
   TriangleAlert,
@@ -15,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { enlaceDeConsulta } from "@/lib/catalogo/consulta";
+import { MOTIVOS, textoDeContacto } from "@/lib/contacto/consulta";
 import { enviarConsulta, type EstadoConsulta } from "./actions";
 
 /**
@@ -24,15 +26,6 @@ import { enviarConsulta, type EstadoConsulta } from "./actions";
  * que baja al navegador: el resto —los datos de cada sucursal, los accesos
  * directos, el texto— se arma en el servidor.
  */
-
-const MOTIVOS = [
-  { valor: "presupuesto", etiqueta: "Pedido de presupuesto" },
-  { valor: "stock", etiqueta: "Consulta de stock" },
-  { valor: "envio", etiqueta: "Envíos y entregas" },
-  { valor: "corte", etiqueta: "Servicio de corte" },
-  { valor: "profesional", etiqueta: "Cuenta de profesional" },
-  { valor: "otro", etiqueta: "Otra consulta" },
-];
 
 export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
   const [estado, accion, enviando] = useActionState<EstadoConsulta, FormData>(
@@ -52,13 +45,26 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
     );
   }
 
+  // El error de Go va al lado de su campo. El de «contacto» es del par
+  // WhatsApp/correo —falta uno de los dos— y va una sola vez, debajo de los
+  // dos, enlazado a ambos con `aria-describedby`.
+  const errorDe = (campo: string) => (estado.campo === campo ? estado.error : undefined);
+  const errorDelPar = errorDe("contacto");
+  const errorGeneral =
+    estado.error && !["nombre", "telefono", "email", "contacto", "motivo", "mensaje"].includes(estado.campo ?? "")
+      ? estado.error
+      : undefined;
+  const valor = (campo: string) => estado.valores?.[campo];
+  const describe = (campo: string) =>
+    [errorDe(campo) ? `error-${campo}` : null, errorDelPar ? "error-contacto" : null].filter(Boolean).join(" ") ||
+    undefined;
+
   return (
-    <form action={accion} className="space-y-5 rounded-2xl border bg-card p-6 sm:p-8">
+    // `key`: con cada respuesta el formulario se arma de nuevo con lo que se
+    // había escrito; React vacía los campos sin control al terminar la acción.
+    <form key={JSON.stringify(estado.valores ?? {})} action={accion} className="space-y-5 rounded-2xl border bg-card p-6 sm:p-8">
       <div>
         <h2 className="text-2xl font-bold">Escribinos</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Contestamos en el día durante el horario de atención.
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -69,7 +75,7 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
           id="motivo"
           name="motivo"
           required
-          defaultValue="presupuesto"
+          defaultValue={valor("motivo") || "presupuesto"}
           className="h-12 w-full rounded-xl border border-border/60 bg-background px-3 text-base focus:border-brand-orange focus:outline-none"
         >
           {MOTIVOS.map((motivo) => (
@@ -80,56 +86,72 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
         </select>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="nombre">Nombre completo</Label>
-          <div className="relative">
-            <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-            <Input
-              id="nombre"
-              name="nombre"
-              required
-              autoComplete="name"
-              placeholder="Tu nombre"
-              className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="email">Correo</Label>
-          <div className="relative">
-            <AtSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="tu@correo.com"
-              className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
-            />
-          </div>
-        </div>
-      </div>
-
       <div className="space-y-2">
-        <Label htmlFor="telefono">
-          Teléfono o WhatsApp{" "}
-          <span className="font-normal text-muted-foreground">(opcional)</span>
-        </Label>
+        <Label htmlFor="nombre">Nombre completo</Label>
         <div className="relative">
-          <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+          <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
-            id="telefono"
-            name="telefono"
-            type="tel"
-            autoComplete="tel"
-            placeholder="223 ..."
+            id="nombre"
+            name="nombre"
+            required
+            autoComplete="name"
+            placeholder="Tu nombre"
+            defaultValue={valor("nombre")}
+            aria-invalid={errorDe("nombre") ? true : undefined}
+            aria-describedby={errorDe("nombre") ? "error-nombre" : undefined}
             className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
           />
         </div>
+        <ErrorDeCampo id="error-nombre" mensaje={errorDe("nombre")} />
       </div>
+
+      {/* WhatsApp primero (hallazgo 47): es por donde contesta la gente de
+          acá. Ninguno de los dos es obligatorio solo; alguno sí, y eso lo
+          controla Go. */}
+      <fieldset className="space-y-2">
+        <legend className="sr-only">Cómo te contestamos</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="telefono">WhatsApp</Label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                id="telefono"
+                name="telefono"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="223 15 123-4567"
+                defaultValue={valor("telefono")}
+                aria-invalid={errorDe("telefono") || errorDelPar ? true : undefined}
+                aria-describedby={describe("telefono")}
+                className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
+              />
+            </div>
+            <ErrorDeCampo id="error-telefono" mensaje={errorDe("telefono")} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Correo</Label>
+            <div className="relative">
+              <AtSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="tu@correo.com"
+                defaultValue={valor("email")}
+                aria-invalid={errorDe("email") || errorDelPar ? true : undefined}
+                aria-describedby={describe("email")}
+                className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
+              />
+            </div>
+            <ErrorDeCampo id="error-email" mensaje={errorDe("email")} />
+          </div>
+        </div>
+        <ErrorDeCampo id="error-contacto" mensaje={errorDelPar} />
+      </fieldset>
 
       <div className="space-y-2">
         <Label htmlFor="mensaje">Mensaje</Label>
@@ -138,18 +160,22 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
           name="mensaje"
           required
           rows={5}
-          placeholder="Contanos en qué podemos ayudarte. Si ya sabés medidas, cantidades o el tipo de proyecto, mejor."
+          placeholder="Medidas, cantidades o el tipo de proyecto."
+          defaultValue={valor("mensaje")}
+          aria-invalid={errorDe("mensaje") ? true : undefined}
+          aria-describedby={errorDe("mensaje") ? "error-mensaje" : undefined}
           className="resize-none rounded-xl border-border/60 focus:border-brand-orange"
         />
+        <ErrorDeCampo id="error-mensaje" mensaje={errorDe("mensaje")} />
       </div>
 
-      {estado.error && (
+      {errorGeneral && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-xl bg-brand-orange/10 p-3 text-sm text-brand-orange-dark"
+          className="flex items-start gap-2 rounded-xl bg-naranja-claro p-3 text-sm text-acento-sobre-claro"
         >
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          {estado.error}
+          {errorGeneral}
         </p>
       )}
 
@@ -162,7 +188,7 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
         <Button
           type="submit"
           disabled={enviando}
-          className="h-12 rounded-full bg-brand-orange font-semibold text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange-dark sm:flex-1"
+          className="h-11 rounded-[10px] bg-accion text-[15px] font-semibold text-white hover:bg-accion-hover sm:flex-1"
         >
           {enviando ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -172,18 +198,30 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
           {enviando ? "Enviando…" : "Enviar consulta"}
         </Button>
 
-        <a
-          href={`https://wa.me/${whatsapp}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`inline-flex h-12 items-center justify-center rounded-full border font-medium transition-colors hover:bg-muted sm:flex-1 ${
-            estado.usarWhatsapp ? "border-brand-green text-brand-green" : ""
-          }`}
+        {/* Si el correo no salió, WhatsApp pasa a ser la acción principal y
+            se abre con lo que ya escribió: no tiene que tipearlo de nuevo. */}
+        <BotonWhatsapp
+          enlace={(() => {
+            const texto = estado.usarWhatsapp ? textoDeContacto(estado.valores) : null;
+            return texto ? enlaceDeConsulta(whatsapp, texto) : `https://wa.me/${whatsapp}`;
+          })()}
+          variante={estado.usarWhatsapp ? "lleno" : "secundario"}
+          className="sm:flex-1"
         >
-          <MessageCircle className="mr-2 h-4 w-4" />
           Prefiero WhatsApp
-        </a>
+        </BotonWhatsapp>
       </div>
     </form>
+  );
+}
+
+/** El error de un campo, debajo de él. `role="alert"` para que se anuncie al volver. */
+function ErrorDeCampo({ id, mensaje }: { id: string; mensaje?: string }) {
+  if (!mensaje) return null;
+  return (
+    <p id={id} role="alert" className="flex items-start gap-1.5 text-sm text-acento-texto">
+      <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      {mensaje}
+    </p>
   );
 }

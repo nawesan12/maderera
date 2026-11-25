@@ -4,7 +4,8 @@ import { Suspense } from "react";
 import { existe } from "@/lib/dal/existencia";
 import { Check, PackageCheck } from "lucide-react";
 import { remitoPorToken } from "@/lib/dal/admin/entregas";
-import { fechaHora, formatearUnidad } from "@/lib/formato";
+import { formatearUnidad } from "@/lib/formato";
+import { fechaHoraDeFirma } from "@/lib/entregas/fecha";
 import { Pizarra } from "./pizarra";
 
 export const metadata: Metadata = {
@@ -116,7 +117,7 @@ async function Firma({ token }: { token: string }) {
               <p className="mt-1 text-muted-foreground">
                 Firmado
                 {remito.firmadoAt
-                  ? ` el ${fechaHora.format(remito.firmadoAt)}`
+                  ? ` el ${fechaHoraDeFirma.format(remito.firmadoAt)}`
                   : ""}
                 {remito.receptorNombre ? ` por ${remito.receptorNombre}` : ""}.
               </p>

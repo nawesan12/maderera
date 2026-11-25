@@ -7,12 +7,9 @@ import {
   creditoPorRetenciones,
   listarRetencionesSufridas,
 } from "@/lib/dal/admin/retenciones-sufridas";
-import { listarClientes } from "@/lib/dal/admin/clientes";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { formatearMonto } from "@/lib/formato";
-import { asc } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { regimenesRetencion } from "@/lib/db/schema";
+import { todosLosRegimenes } from "@/lib/dal/admin/pagos-proveedor";
 import { CargarSufrida } from "./cargar";
 import { Regimenes } from "./regimenes";
 import { Vacio } from "@/components/admin/vacio";
@@ -43,17 +40,13 @@ export default async function RetencionesSufridasPage({
   const { periodo: crudo } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
 
-  const [sufridas, credito, clientes, regimenes] = await Promise.all([
+  const [sufridas, credito, regimenes] = await Promise.all([
     listarRetencionesSufridas(),
     creditoPorRetenciones(periodo.desde, periodo.hasta),
-    listarClientes({}),
     // Con qué se retiene. Va en esta misma pantalla porque es la única que
     // habla de retenciones, y hasta ahora las alícuotas solo se podían cambiar
     // entrando a la base.
-    db
-      .select()
-      .from(regimenesRetencion)
-      .orderBy(asc(regimenesRetencion.impuesto), asc(regimenesRetencion.codigo)),
+    todosLosRegimenes(),
   ]);
 
   const etiqueta = new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString(
@@ -65,7 +58,7 @@ export default async function RetencionesSufridasPage({
     <div className="space-y-6">
       <div>
         <Link
-          href="/admin/arca"
+          href={`/admin/arca?periodo=${periodo.clave}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -76,10 +69,7 @@ export default async function RetencionesSufridasPage({
             <h1 className="text-[26px] font-bold tracking-tight">
               Retenciones
             </h1>
-            <p className="mt-1 text-base text-muted-foreground">
-              Los certificados que nos entregan los clientes. Bajan lo que deben
-              y se computan como crédito contra el impuesto.
-            </p>
+            {/* Los certificados que entregan los clientes: bajan lo que deben y se computan como crédito contra el impuesto. */}
           </div>
           {/* El mes se leía del URL y se escribía en las tarjetas de crédito,
               pero no había con qué cambiarlo: para ver el mes anterior había
@@ -123,13 +113,7 @@ export default async function RetencionesSufridasPage({
         }))}
       />
 
-      <CargarSufrida
-        clientes={clientes.map((c) => ({
-          id: c.id,
-          nombre: c.razonSocial ?? c.nombre,
-          cuit: c.cuit,
-        }))}
-      />
+      <CargarSufrida />
 
       <section className="tarjeta overflow-hidden">
         {sufridas.length === 0 ? (

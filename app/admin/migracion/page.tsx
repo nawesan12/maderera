@@ -3,14 +3,15 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { fechaHora } from "@/components/admin/formato";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
+  definicionesDeMigracion,
   estadoDelSistema,
   historialDeMigraciones,
 } from "@/lib/dal/admin/migracion";
 import { AsistenteMigracion } from "./asistente";
 
-import type { ClaveEntidad } from "@/lib/migracion/entidades";
+import type { ClaveEntidad } from "@/lib/migracion/tipos";
 
-export const metadata = { title: "Migración de datos · Panel" };
+export const metadata = { title: "Importar planillas · Panel" };
 
 const ETIQUETA_ENTIDAD: Record<ClaveEntidad, string> = {
   clientes: "Clientes",
@@ -28,22 +29,27 @@ const ETIQUETA_ESTADO = {
   interrumpida: "Se interrumpió",
 } as const;
 
-export default async function MigracionPage() {
+export default async function MigracionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ que?: string }>;
+}) {
+  const { que } = await searchParams;
   // La migración reescribe cartera, catálogo y saldos: es de administración.
   // Se verifica acá y de nuevo en cada acción, porque el que escribe es el
   // servidor y no esta pantalla.
   await requireStaffRole("admin");
 
-  const [estado, historial] = await Promise.all([
+  const [estado, historial, definiciones] = await Promise.all([
     estadoDelSistema(),
     historialDeMigraciones(),
+    definicionesDeMigracion(),
   ]);
 
   return (
     <div>
       <EncabezadoPanel
-        titulo="Migración de datos"
-        detalle="Traer clientes, catálogo, stock y saldos desde el sistema anterior"
+        titulo="Importar planillas"
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -70,8 +76,11 @@ export default async function MigracionPage() {
       </div>
 
       <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_360px]">
-        <div className="rounded-xl border bg-card p-5">
-          <AsistenteMigracion />
+        <div className="tarjeta p-5">
+          <AsistenteMigracion
+            definiciones={definiciones}
+            entidadInicial={que && que in ETIQUETA_ENTIDAD ? (que as ClaveEntidad) : undefined}
+          />
         </div>
 
         <aside>
@@ -81,15 +90,12 @@ export default async function MigracionPage() {
             <div className="rounded-xl border border-dashed py-10 text-center">
               <DatabaseZap className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
               <p className="text-base font-medium">Todavía no se migró nada</p>
-              <p className="mt-1 px-6 text-base text-muted-foreground">
-                Cada corrida queda registrada acá con lo que entró y lo que
-                quedó afuera.
-              </p>
+
             </div>
           ) : (
             <div className="space-y-2">
               {historial.map((corrida) => (
-                <div key={corrida.id} className="rounded-xl border bg-card p-4">
+                <div key={corrida.id} className="tarjeta p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <p className="text-base font-medium">
                       {ETIQUETA_ENTIDAD[corrida.entidad]}
@@ -143,7 +149,7 @@ function Dato({
   detalle: string;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="tarjeta p-4">
       <p className="text-base text-muted-foreground">{titulo}</p>
       <p className="tabular text-3xl font-semibold">
         {valor.toLocaleString("es-AR")}

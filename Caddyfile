@@ -10,6 +10,36 @@
 # forma de que un día digan cosas distintas. La única excepción es
 # `/subidas/`, que Caddy sirve del disco sin pasar por Next (ver abajo).
 
+# **Cloudflare, cuando se encienda.** Hoy el dominio resuelve directo a la
+# VPS y esto no cambia nada: las conexiones no vienen de esos rangos. Con el
+# proxy de Cloudflare prendido, cada pedido llega desde un servidor de
+# Cloudflare, y sin esto los límites de frecuencia y la bitácora verían a todo
+# el mundo con la IP de Cloudflare. fail2ban no se arregla con esto: lee la IP
+# correcta, pero su ban en el cortafuegos no frena una conexión que viene de
+# Cloudflare (docs/SERVIDOR-PROPIO.md, paso 9). Solo de esos rangos se cree
+# CF-Connecting-IP (de otro lado la puede escribir cualquiera), y el
+# `client_ip` del registro y de `{client_ip}` es el del visitante. La lista
+# es la de https://www.cloudflare.com/ips/ (20/11/2026) y es la misma que
+# `rangosDeCloudflare` en backend/internal/plataforma/servidor.go: una
+# prueba de Go compara las dos.
+{
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+		trusted_proxies_strict
+	}
+}
+
+# Lo que todos los `reverse_proxy` le pasan a quien atiende: la IP del
+# visitante como único X-Forwarded-For (Go toma el último valor; Next, el
+# primero) y en X-Real-IP. `{client_ip}` es la conexión, salvo que venga de
+# Cloudflare. Sin esto, con un proxy de confianza Caddy conserva el
+# X-Forwarded-For que llega, que el visitante puede escribir.
+(ip_del_cliente) {
+	header_up X-Forwarded-For {client_ip}
+	header_up X-Real-IP {client_ip}
+}
+
 # El `www` lleva al dominio sin `www`, y lo mismo el dominio alternativo
 # (`mjbj.ar`, con y sin `www`, cuando el principal es `mjbj.com.ar`): un 301
 # conserva lo que Google ya tiene indexado y los enlaces viejos. La lista la
@@ -44,25 +74,36 @@ mail.{$CORREO_DOMINIO} {
 	tls {
 		ca https://acme-v02.api.letsencrypt.org/directory
 	}
-	respond "Servidor de correo de {$CORREO_DOMINIO}. Para leer el correo: https://webmail.{$CORREO_DOMINIO}" 200
+	respond "Servidor de correo de {$CORREO_DOMINIO}. Para leer el correo: https://correo.{$CORREO_DOMINIO}" 200
 }
 
-# El webmail (Roundcube, servicio `webmail`, solo con el perfil `correo`).
-webmail.{$CORREO_DOMINIO} {
+# El webmail (servicio `correo-web`, el binario de Go; solo con el perfil
+# `correo`). Las cabeceras de seguridad y la CSP las pone el propio servicio.
+correo.{$CORREO_DOMINIO} {
 	log {
 		output file /var/log/caddy/webmail.log {
 			roll_size 10MiB
 			roll_keep 5
 		}
-		format json {
-			time_format iso8601
+		# El token del link mágico (/entrar/<token>) no queda escrito: un link
+		# de activación sin usar vale 7 días para quien lea este archivo. Ni
+		# el del enlace de firma de un remito (/firmar/<token>, con el nombre
+		# y el DNI de quien retira) ni el de la consulta de corte (/corte/c/<token>): son
+		# una llave (comité del 25/11). $1 es el tramo de la ruta.
+		format filter {
+			request>uri regexp ^/(entrar|firmar|corte/c|api/v1/firmar|api/v1/cortes/consulta)/[^/?]+ /$1/oculto
+			wrap json {
+				time_format iso8601
+			}
 		}
 	}
 	# Adjuntos de hasta 25 MB más lo que agrega la codificación.
 	request_body {
 		max_size 40MB
 	}
-	reverse_proxy webmail:8000
+	reverse_proxy correo-web:8090 {
+		import ip_del_cliente
+	}
 	encode zstd gzip
 }
 
@@ -108,8 +149,16 @@ autoconfig.{$CORREO_DOMINIO} {
 			roll_size 20MiB
 			roll_keep 10
 		}
-		format json {
-			time_format iso8601
+		# El token del link mágico (/entrar/<token>) no queda escrito: un link
+		# de activación sin usar vale 7 días para quien lea este archivo. Ni
+		# el del enlace de firma de un remito (/firmar/<token>, con el nombre
+		# y el DNI de quien retira) ni el de la consulta de corte (/corte/c/<token>): son
+		# una llave (comité del 25/11). $1 es el tramo de la ruta.
+		format filter {
+			request>uri regexp ^/(entrar|firmar|corte/c|api/v1/firmar|api/v1/cortes/consulta)/[^/?]+ /$1/oculto
+			wrap json {
+				time_format iso8601
+			}
 		}
 	}
 
@@ -140,6 +189,109 @@ autoconfig.{$CORREO_DOMINIO} {
 		file_server
 	}
 
+	# La API de Go (servicio `api`). /api/vivo es el tiempo real del panel:
+	# la dirección que ya usan las pantallas, ahora servida por Go. Sin buffer
+	# (flush_interval -1) para que los eventos lleguen al instante.
+	# El padrón mensual de ARBA (unos 200 MB) sube directo a Go, con su
+	# propio tope: con el de 25 MB de abajo Caddy lo rechazaba, y pasando por
+	# Next el proxy le daba a Go solo los primeros 10 MB, sin error.
+	@padron path /api/v1/admin/facturacion/padron-iibb
+	handle @padron {
+		request_body {
+			max_size 450MB
+		}
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	@go path /api/v1/* /api/vivo
+	handle @go {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			flush_interval -1
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	# Las rutas del agente del taller (y la lista y el PTX del panel), con la
+	# misma dirección de siempre: ahora las atiende Go. El PDF y la hoja de
+	# corte (/api/cortes/<id>/pdf y /hoja) siguen en Next hasta la tanda 12.
+	@cortesGo path_regexp ^/api/cortes/(pendientes|[^/]+/(lista|ptx))$
+	handle @cortesGo {
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	# La copia local del mostrador es de Go (backend/internal/mostrador): las
+	# rutas de siempre del sw.js y la cola, con su forma de siempre.
+	# /api/mostrador/config y /api/mostrador/ventas siguen en Next (lo fiscal).
+	@mostradorGo path /api/mostrador/latido /api/mostrador/catalogo /api/mostrador/clientes /api/mostrador/caja/*
+	handle @mostradorGo {
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	# WhatsApp es de Go (backend/internal/whatsapp): el webhook de Meta (la
+	# URL dada de alta en Meta no cambia), los adjuntos privados y el envío
+	# de archivos desde la bandeja (hasta 25 MB).
+	# Los errores de hidratación que reporta el navegador: los anota Go.
+	@diagnosticoGo path /api/diagnostico
+	handle @diagnosticoGo {
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	@whatsapp path /api/whatsapp/*
+	handle @whatsapp {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	# La baja con un clic de las campañas (RFC 8058, el botón de Gmail): la
+	# URL de los correos que ya salieron no cambia; ahora la atiende Go
+	# (backend/internal/campanas). La página /baja sigue en Next.
+	@baja path /api/baja
+	handle @baja {
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
+	# El webhook de Mercado Pago es de Go (backend/internal/pagos, tanda 6):
+	# la URL dada de alta en Mercado Pago no cambia.
+	@pagosGo path /api/pagos/webhook
+	handle @pagosGo {
+		reverse_proxy api:8080 {
+			import ip_del_cliente
+			lb_try_duration 30s
+			lb_try_interval 250ms
+		}
+	}
+
 	# Todo lo demás va a la aplicación.
 	handle {
 		# Lo que Next ya marca como inmutable —los JS y CSS con hash en el
@@ -158,19 +310,38 @@ autoconfig.{$CORREO_DOMINIO} {
 		request_body {
 			max_size 25MB
 		}
+		# Las server actions llegan a Next con hasta 20 MB (next.config.ts),
+		# pero solo tres lugares mandan archivos: el panel (/admin) y el
+		# comprobante de la transferencia (/pedido/… y /mi-cuenta/…, hasta
+		# 16 MB). Las demás —contacto, carrito, asistente, corte, baja— son
+		# de cualquiera sin sesión, y Next guarda el cuerpo en memoria: veinte
+		# POST anónimos de 20 MB a la vez eran 400 MB en la VPS. Para esas, el
+		# tope de antes, 1 MB.
+		@accionSinArchivos {
+			header Next-Action *
+			not path /admin /admin/* /pedido/* /mi-cuenta/*
+		}
+		request_body @accionSinArchivos {
+			max_size 1MB
+		}
 
 		reverse_proxy app:3000 {
-			# **La IP del cliente, sin que el cliente la pueda inventar.** Caddy
-			# no confía en el `X-Forwarded-For` que llega de afuera —no hay
-			# `trusted_proxies` declarados— y lo reemplaza por la IP real de la
-			# conexión, así que el primer valor que lee `lib/limites` es
-			# siempre el verdadero. `X-Real-IP` se pisa por lo mismo.
-			header_up X-Real-IP {remote_host}
+			import ip_del_cliente
+			# **La IP del cliente, sin que el cliente la pueda inventar**: la
+			# pone `ip_del_cliente` (arriba), así que el primer valor que lee
+			# `lib/limites` es siempre el verdadero.
 
 			# Que las respuestas en streaming —las páginas con Suspense, el
 			# asistente— lleguen a medida que se arman y no todas juntas al
 			# final.
 			flush_interval -1
+
+			# Mientras se cambia la app en un despliegue no hay a quién
+			# conectarse: en vez de un 502 al instante, Caddy espera y
+			# reintenta. Solo reintenta lo que no llegó a conectar, así que
+			# un POST no se manda dos veces.
+			lb_try_duration 30s
+			lb_try_interval 250ms
 		}
 	}
 

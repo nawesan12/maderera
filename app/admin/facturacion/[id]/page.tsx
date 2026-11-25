@@ -152,7 +152,7 @@ export default async function FichaComprobantePage({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Dos salidas distintas y las dos hacen falta: la hoja se abre para
               mirarla o mandarla a la impresora, y el PDF se descarga para
               adjuntarlo a un correo o dárselo al contador. */}

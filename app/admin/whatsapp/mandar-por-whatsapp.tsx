@@ -61,7 +61,7 @@ export function MandarPorWhatsapp({
         name="telefono"
         inputMode="tel"
         placeholder="El de la ficha, u otro"
-        className={`${alto} w-48 rounded-lg border bg-background px-2.5 text-base`}
+        className={`${alto} w-48 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-base`}
       />
       <button
         type="submit"

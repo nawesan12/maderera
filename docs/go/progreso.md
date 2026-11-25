@@ -2674,6 +2674,15 @@ resolvió carril-i; el reparto con el volumen de ISIS, carril-j (abajo).
   `TestVolumenDeLaCuentaPesada` contra una copia: el límite es 0,5 s.
 - «Sucursales como lista» (hallazgo 35) y Sucursales en la barra de arriba:
   los confirma la clienta.
+- ~~Los rebotes de permisos no dicen por qué~~ (comité final, «Permisos»).
+  Hecho (carril-l): el panel rebota con `?sin-acceso=<ruta>`
+  (`rebote` en `components/admin/secciones.ts`) y el inicio del rol —el
+  resumen o `/taller`— muestra «No tenés acceso a Precios» en un aviso que se
+  va solo a los 4 s y saca el parámetro de la dirección, así que recargar no
+  lo repite. El nombre sale del menú; una ruta que no es del menú dice «esa
+  pantalla» y no repite lo que vino en la URL. `tests/sin-acceso.test.ts` y
+  `e2e/permisos.spec.ts` (vendedor en /admin/precios, aserradero en
+  /admin/clientes).
 
 ## 19/11/2026: los pendientes del despliegue (carril-i)
 

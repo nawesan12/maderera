@@ -126,7 +126,7 @@ export function useCaja(): EstadoCaja {
 /**
  * Lo que una PC que deja de ser terminal no tiene por qué guardar (comité
  * del 25/11, Ley 25.326): el padrón de clientes con CUIT y teléfono, los
- * precios, los tickets y las ventas ya confirmadas de la cola. Quedaban en el
+ * precios y las ventas ya confirmadas de la cola, con sus tickets. Quedaban en el
  * IndexedDB y se leían sin sesión. Se conservan los contadores (la
  * numeración no se reinicia) y lo que todavía no subió (Go no deja
  * desvincular con ventas pendientes, pero si una quedara, es plata). Sin la
@@ -134,11 +134,19 @@ export function useCaja(): EstadoCaja {
  */
 export async function limpiarDatosDeLaCaja(): Promise<void> {
   try {
-    await Promise.all([vaciar("clientes"), vaciar("tickets"), vaciar("precios")]);
+    await Promise.all([vaciar("clientes"), vaciar("precios")]);
     const cola = await leerTodo<{ clave: string; estado: string }>("cola");
     await borrarVarios(
       "cola",
       cola.filter((f) => f.estado === "confirmada").map((f) => f.clave),
+    );
+    // El ticket de una venta que todavía no subió es el único papel que la
+    // reimprime: se queda con ella. Los de las ya confirmadas se van.
+    const sinSubir = new Set(cola.filter((f) => f.estado !== "confirmada").map((f) => f.clave));
+    const tickets = await leerTodo<{ clave: string }>("tickets");
+    await borrarVarios(
+      "tickets",
+      tickets.filter((t) => !sinSubir.has(t.clave)).map((t) => t.clave),
     );
     await borrar("meta", "catalogo");
   } catch {

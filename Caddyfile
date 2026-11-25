@@ -13,8 +13,10 @@
 # **Cloudflare, cuando se encienda.** Hoy el dominio resuelve directo a la
 # VPS y esto no cambia nada: las conexiones no vienen de esos rangos. Con el
 # proxy de Cloudflare prendido, cada pedido llega desde un servidor de
-# Cloudflare, y sin esto los límites de frecuencia, fail2ban y la bitácora
-# verían a todo el mundo con la IP de Cloudflare. Solo de esos rangos se cree
+# Cloudflare, y sin esto los límites de frecuencia y la bitácora verían a todo
+# el mundo con la IP de Cloudflare. fail2ban no se arregla con esto: lee la IP
+# correcta, pero su ban en el cortafuegos no frena una conexión que viene de
+# Cloudflare (docs/SERVIDOR-PROPIO.md, paso 9). Solo de esos rangos se cree
 # CF-Connecting-IP (de otro lado la puede escribir cualquiera), y el
 # `client_ip` del registro y de `{client_ip}` es el del visitante. La lista
 # es la de https://www.cloudflare.com/ips/ (20/11/2026) y es la misma que

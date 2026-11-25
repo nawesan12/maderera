@@ -361,6 +361,29 @@ El ban va a la cadena `DOCKER-USER` y no a `INPUT` —el comentario en
 `mjbj.local` explica por qué—. Para comprobar el filtro contra el registro
 real: `sudo fail2ban-regex /var/log/caddy/acceso.log caddy-sondas`.
 
+**Esto vale mientras Cloudflare sea sólo DNS** (nube gris), que es como se usa
+Cloudflare en los proyectos de Nahuel. El `Caddyfile` ya cree `CF-Connecting-IP`
+de los rangos de Cloudflare, así que si alguien prende el proxy (nube naranja)
+el registro sigue anotando la IP del visitante y fail2ban la detecta bien, pero
+**el ban no sirve**: la conexión TCP que llega a la VPS es la del servidor de
+Cloudflare, no la del robot, y una regla en `DOCKER-USER` contra la IP del
+robot no corta nada. Nada avisa: `fail2ban-client status` muestra baneados y
+los pedidos siguen entrando.
+
+Si se prende el proxy, antes o el mismo día:
+
+- **Cambiar la acción de `caddy-sondas`** por una que bloquee en Cloudflare:
+  fail2ban trae `cloudflare-token`, que crea una regla de acceso por IP con la
+  API (un token con permiso «Zone → Firewall Services → Edit» sólo de esa zona,
+  guardado en `/etc/fail2ban/action.d/cloudflare-token.local`, nunca en el
+  repo). O, más simple, sacar la cárcel y bloquear las mismas rutas
+  (`/wp-*`, `/.env`, `/.git`, `*.php`…) con una regla del WAF de Cloudflare,
+  que las corta antes de que lleguen a la VPS.
+- **Cerrar el 80 y el 443 a todo lo que no sea Cloudflare** en `DOCKER-USER`,
+  con la misma lista de rangos del `Caddyfile`. Si no, quien conozca la IP de
+  la VPS se saltea Cloudflare y su WAF.
+- `sshd` no cambia: el 22 no pasa por Cloudflare.
+
 ## 10. Mudar los datos
 
 **Con el sitio viejo quieto.** Todo lo que se venda en Vercel después del

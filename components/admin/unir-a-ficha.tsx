@@ -92,8 +92,9 @@ export function UnirAFicha({
               Unir <span className="tabular whitespace-nowrap">{numero}</span> a {ficha.nombre}
             </DialogTitle>
             <DialogDescription className="text-base">
-              {elPedido} de {formatearMonto(total)} pasa a su cuenta y lo ve en su portal. Fijate que sea
-              la misma persona: no se puede deshacer desde acá.
+              {elPedido} de {formatearMonto(total)} pasa a su ficha
+              {que === "pedido" ? ", con sus pagos y sus cortes" : ""}. Fijate que sea la misma persona: no
+              se puede deshacer desde acá.
             </DialogDescription>
           </DialogHeader>
 

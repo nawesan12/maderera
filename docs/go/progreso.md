@@ -1528,8 +1528,11 @@ en paralelo).
         `.env.example`, ni el compose, ni `scripts/` la nombran; se fueron
         también `pendientesDelRol` y los comentarios que hablaban del
         contenedor `cron` y de `/api/tareas`).
-  - [ ] Sacarla del `.env.produccion` de la VPS (el compose ya no la pide):
-        va por ssh, con las claves VAPID.
+  - [x] ~~Sacarla del `.env.produccion` de la VPS~~ (25/11: hecho por ssh
+        junto con las claves VAPID de `scripts/claves-push.sh`; api, worker y
+        app reiniciados y sanos; respaldo del archivo anterior en
+        `~/env-produccion-antes-vapid-20261125.bak` de la VPS. Falta que
+        Nahuel active los avisos desde el teléfono y confirme que llega uno).
   - [x] `notificarPresupuestoEnviado` no lo llamaba nadie (se borró con
         `presupuestos.ts`): el presupuesto armado no se avisaba por correo
         ni por WhatsApp al pasar a «enviado». Era así antes de la mudanza.
@@ -2843,6 +2846,8 @@ Después, lo que encontraron la revisión contable y la adversarial:
   noche dejaba Deudores debitado en octubre. Vale también para los de caja.
 
 ### Antes de desplegar
+
+**Corridas en producción el 25/11/2026:** goose en 00190, 0 índices inválidos, devoluciones «afuera» sin tramo = 0 y cheques B del mostrador asentados como blanco = 0 filas. No cambia ningún mes entregado: no hay que avisarle nada al contador. La base de producción está vacía desde el 1/11 (1 cliente, 0 pedidos), así que la medición del cierre en la VPS queda para cuando se cargue ISIS; jit on (jit_above_cost 100000), shared_buffers 128MB, work_mem 4MB.
 
 Los datos viejos no se migran. Correr en producción:
 

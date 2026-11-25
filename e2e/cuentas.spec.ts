@@ -99,7 +99,8 @@ test("anular un recibo desde la ficha: la deuda vuelve y queda en la bitácora",
   await page.getByLabel(`Motivo para anular el recibo ${numero}`).fill("Prueba de punta a punta");
   await page.getByRole("button", { name: "Anular el recibo", exact: true }).click();
   await expect(page.getByText(`Recibo ${numero} anulado. La deuda volvió a la cuenta.`)).toBeVisible();
-  await expect(page.getByText(`Recibo ${numero} (anulado)`).first()).toBeVisible();
+  const anulada = page.locator("li", { hasText: `Recibo ${numero}` }).first();
+  await expect(anulada.getByText("Anulado", { exact: true })).toBeVisible();
   await page.reload();
   expect(await saldo()).toBe(antes);
 

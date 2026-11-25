@@ -105,7 +105,14 @@ func migrarPlantilla(ctx context.Context, servidor, nombre string, migraciones f
 	} else if len(ajenas) > 0 {
 		return fmt.Errorf("la plantilla tiene migraciones que esta rama no tiene: %v", ajenas)
 	}
-	_, err = migrar.Correr(ctx, sqlDB, migraciones, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if _, err = migrar.Correr(ctx, sqlDB, migraciones, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+		return err
+	}
+	// Las pruebas arman sus propias sucursales (casa-central, aserradero y
+	// las que necesiten, con sus ids y su orden): las dos que siembra la
+	// 00204 para una base nueva chocarían con el slug único. La 00204 se
+	// prueba aparte (migrar.TestLasDosSucursales).
+	_, err = sqlDB.ExecContext(ctx, `DELETE FROM branches`)
 	return err
 }
 

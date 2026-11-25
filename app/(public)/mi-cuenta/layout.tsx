@@ -76,8 +76,8 @@ async function CuentaConSesion({
           </p>
         )}
 
-        <div className="grid gap-[26px] lg:grid-cols-[236px_minmax(0,1fr)]">
-          <aside className="lg:sticky lg:top-[88px] lg:self-start">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-[26px] lg:grid-cols-[236px_minmax(0,1fr)]">
+          <aside className="min-w-0 lg:sticky lg:top-[88px] lg:self-start">
             <NavegacionCuenta
               pedidosEnCurso={resumen.pedidosEnCurso}
               presupuestosAResponder={resumen.presupuestosAResponder}

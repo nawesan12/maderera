@@ -57,3 +57,20 @@ test("el seguimiento de un pedido no se abre con el número solo", async ({ page
     expect((await page.goto(`/pedido/${numero}`))?.status()).toBe(404);
   }
 });
+
+test("en el teléfono ninguna pestaña de Mi cuenta se corre de costado", async ({ page }) => {
+  test.skip(test.info().project.name !== "telefono", "es el control del ancho del teléfono");
+  await entrar(page);
+  for (const ruta of [
+    "/mi-cuenta",
+    "/mi-cuenta/pedidos",
+    "/mi-cuenta/presupuestos",
+    "/mi-cuenta/movimientos",
+    "/mi-cuenta/direcciones",
+    "/mi-cuenta/datos",
+  ]) {
+    await page.goto(ruta);
+    const ancho = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(ancho, ruta).toBeLessThanOrEqual(page.viewportSize()!.width);
+  }
+});

@@ -539,7 +539,7 @@ components:
               type: array
               items:
                 type: object
-                required: [nombre, dejadoDeCobrar, autorizado, sinConexion, creditoSinAutorizar, anuladas, anuladasSinFirma, sinDevolver, retiros, firmo, aMano]
+                required: [nombre, dejadoDeCobrar, autorizado, sinConexion, creditoSinAutorizar, anuladas, anuladasSinFirma, sinDevolver, retiros, firmo, aMano, recibosAnulados, recibosAnuladosConEfectivo]
                 properties:
                   nombre: { type: string }
                   dejadoDeCobrar: { type: number, format: double, description: bajo la lista más los descuentos tipeados }
@@ -552,6 +552,8 @@ components:
                   sinDevolver: { type: integer, description: anuladas en que la mercadería no volvió }
                   retiros: { $ref: "#/components/schemas/Monto" }
                   aMano: { $ref: "#/components/schemas/Monto", description: "renglones de sus ventas cargados a mano, sin producto del catálogo" }
+                  recibosAnulados: { $ref: "#/components/schemas/Monto", description: "recibos que anuló desde el panel (no los del reintegro de Mercado Pago)" }
+                  recibosAnuladosConEfectivo: { type: integer, description: de esos, cuántos tenían efectivo }
         meDeben:
           type: object
           required: [total, vencido, clientes, clientesConVencido, pedidosSinCobrar]

@@ -628,6 +628,10 @@ export interface components {
                     retiros: components["schemas"]["Monto"];
                     /** @description renglones de sus ventas cargados a mano, sin producto del catálogo */
                     aMano: components["schemas"]["Monto"];
+                    /** @description recibos que anuló desde el panel (no los del reintegro de Mercado Pago) */
+                    recibosAnulados: components["schemas"]["Monto"];
+                    /** @description de esos */
+                    recibosAnuladosConEfectivo: number;
                 }[];
             };
             meDeben: {

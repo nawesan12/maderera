@@ -36,6 +36,13 @@ type ControlDePersona struct {
 	SinDevolver      int   `json:"sinDevolver"`
 	// Retiros que llegaron con la caja cerrada o dejaron el cajón bajo la base.
 	Retiros Monto `json:"retiros"`
+	// RecibosAnulados por esta persona desde el panel (comité del 25/11): la
+	// deuda vuelve a la cuenta y el efectivo que entró a la caja no se saca
+	// solo, así que un recibo anulado puede tapar un faltante. ConEfectivo,
+	// cuántos tenían efectivo: esos van en rojo. Los que anula el reintegro de
+	// Mercado Pago (sin usuario) no cuentan.
+	RecibosAnulados         Monto `json:"recibosAnulados"`
+	RecibosAnuladosEfectivo int   `json:"recibosAnuladosConEfectivo"`
 	// AMano: los renglones de sus ventas del mostrador cargados a mano, sin
 	// producto del catálogo (ni pasadas ni tapacanto de un corte). Entran a
 	// su propio precio y no tienen lista contra la cual medirse: es el
@@ -189,6 +196,31 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 	if err := filas.Err(); err != nil {
 		return c, err
 	}
+	// Los recibos anulados a mano: de quien los anuló.
+	filas, err = s.pool.Query(ctx, `
+		SELECT r.anulado_por_user_id, coalesce(u.name, 'Sin nombre'), count(*)::int, coalesce(sum(r.total), 0),
+		       (count(*) FILTER (WHERE EXISTS (SELECT 1 FROM receipt_parts x WHERE x.receipt_id = r.id AND x.medio = 'efectivo')))::int
+		FROM receipts r LEFT JOIN "user" u ON u.id = r.anulado_por_user_id
+		WHERE r.estado = 'anulado' AND r.anulado_por_user_id IS NOT NULL AND r.anulado_at >= $1 AND r.anulado_at < $2
+		GROUP BY 1, 2`, desde, hasta)
+	if err != nil {
+		return c, err
+	}
+	for filas.Next() {
+		var id, nombre string
+		var n, conEfectivo int
+		var total jsmath.Num
+		if err := filas.Scan(&id, &nombre, &n, &total, &conEfectivo); err != nil {
+			filas.Close()
+			return c, err
+		}
+		p := de(id, nombre)
+		p.RecibosAnulados, p.RecibosAnuladosEfectivo = Monto{Total: total.F(), Cantidad: n}, conEfectivo
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return c, err
+	}
 	// Las firmas de cada admin: las ventas que autorizó (lo dejado de cobrar)
 	// y las anulaciones que firmó (su total), sin contar las propias.
 	filas, err = s.pool.Query(ctx, `
@@ -229,8 +261,8 @@ func (s *Servicio) ControlesDelPersonal(ctx context.Context, ahora time.Time) (C
 	// llevó», retiros.
 	sort.Slice(c.Personas, func(i, j int) bool {
 		a, b := c.Personas[i], c.Personas[j]
-		pa := a.SinConexion.Total + a.CreditoSinAutorizar.Total + a.Retiros.Total + float64(a.SinDevolver)*1e9 + (a.DejadoDeCobrar - a.Autorizado)
-		pb := b.SinConexion.Total + b.CreditoSinAutorizar.Total + b.Retiros.Total + float64(b.SinDevolver)*1e9 + (b.DejadoDeCobrar - b.Autorizado)
+		pa := a.SinConexion.Total + a.CreditoSinAutorizar.Total + a.Retiros.Total + float64(a.SinDevolver+a.RecibosAnuladosEfectivo)*1e9 + (a.DejadoDeCobrar - a.Autorizado)
+		pb := b.SinConexion.Total + b.CreditoSinAutorizar.Total + b.Retiros.Total + float64(b.SinDevolver+b.RecibosAnuladosEfectivo)*1e9 + (b.DejadoDeCobrar - b.Autorizado)
 		if pa != pb {
 			return pa > pb
 		}

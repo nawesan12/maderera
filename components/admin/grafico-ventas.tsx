@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Ventas por sucursal, mes a mes.
@@ -67,12 +67,31 @@ function abreviar(valor: number) {
   return `$${valor}`;
 }
 
-/* Coordenadas del dibujo. El SVG se escala solo con el ancho disponible. */
-const ANCHO = 720;
-const ALTO = 260;
+/*
+ * Coordenadas del dibujo. El ancho del viewBox es el ancho medido de la
+ * tarjeta, así un px del dibujo es un px de la pantalla: con un viewBox fijo
+ * de 720 escalado a los 310 px del teléfono, las etiquetas quedaban en 5,6 px
+ * y sobraban bandas vacías (comité del 25/11). Antes de medir (el servidor),
+ * el de escritorio.
+ */
+const ANCHO_INICIAL = 720;
 const MARGEN = { arriba: 12, derecha: 8, abajo: 28, izquierda: 60 };
-const AREA_ANCHO = ANCHO - MARGEN.izquierda - MARGEN.derecha;
-const AREA_ALTO = ALTO - MARGEN.arriba - MARGEN.abajo;
+
+function useAncho(): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [ancho, setAncho] = useState(ANCHO_INICIAL);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([e]) => {
+      const w = Math.round(e.contentRect.width);
+      if (w > 0) setAncho(w);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return [ref, ancho];
+}
 
 /**
  * Un techo redondo por encima del máximo, para que la marca de arriba sea un
@@ -86,7 +105,13 @@ function techo(maximo: number): number {
 
 export function GraficoVentas({ datos }: { datos: Punto[] }) {
   const [activo, setActivo] = useState<number | null>(null);
+  const [caja, ANCHO] = useAncho();
   const SERIES = seriesDe(datos);
+  // En el teléfono, más bajo: con 260 de alto y 310 de ancho las barras
+  // quedaban finitas en una caja casi cuadrada.
+  const ALTO = ANCHO < 480 ? 200 : 260;
+  const AREA_ANCHO = ANCHO - MARGEN.izquierda - MARGEN.derecha;
+  const AREA_ALTO = ALTO - MARGEN.arriba - MARGEN.abajo;
 
   if (datos.length === 0) {
     return (
@@ -103,6 +128,8 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
   const tope = techo(maximo);
 
   const anchoGrupo = AREA_ANCHO / datos.length;
+  // Si los meses no entran (doce en un teléfono), se nombra uno de cada dos.
+  const saltoDeMes = anchoGrupo < 34 ? 2 : 1;
   // 26 es el ancho de barra que ya tenía el gráfico; se achica si no entra.
   const anchoBarra = Math.min(26, (anchoGrupo * 0.62) / SERIES.length);
   const separacion = 2;
@@ -115,7 +142,7 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
   const punto = activo !== null ? datos[activo] : null;
 
   return (
-    <div className="relative">
+    <div ref={caja} className="relative">
       <svg
         viewBox={`0 0 ${ANCHO} ${ALTO}`}
         width="100%"
@@ -190,16 +217,18 @@ export function GraficoVentas({ datos }: { datos: Punto[] }) {
                 );
               })}
 
-              <text
-                x={centroGrupo}
-                y={ALTO - 8}
-                textAnchor="middle"
-                fontSize={14}
-                fill="var(--muted-foreground)"
-                pointerEvents="none"
-              >
-                {d.mes}
-              </text>
+              {(datos.length - 1 - i) % saltoDeMes === 0 && (
+                <text
+                  x={centroGrupo}
+                  y={ALTO - 8}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fill="var(--muted-foreground)"
+                  pointerEvents="none"
+                >
+                  {d.mes}
+                </text>
+              )}
             </g>
           );
         })}

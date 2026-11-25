@@ -1569,6 +1569,13 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   box-shadow: inset 0 1.5px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.05);
 }
 
+/* Un campo con lo escrito mal (un importe que no se entiende, por ejemplo)
+   se ve: borde y anillo del color de la deuda, que tiene su variante oscura. */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--saldo-debe);
+  box-shadow: 0 0 0 1px var(--saldo-debe);
+}
+
 /* ---- Piezas visuales de los formularios (10/11/2026) ----------------------
    Nahuel: «haría todo lo más visual posible». Ícono de sección, fichas de
    opción y tarjetas de interruptor, con el mismo relieve que los botones. */

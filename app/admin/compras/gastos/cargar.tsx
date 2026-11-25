@@ -25,7 +25,7 @@ import {
   Zap,
 } from "lucide-react";
 import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
-import { hoyEnArgentina, importeDelCampo } from "@/lib/formato";
+import { hoyEnArgentina, importeDelCampo, importeIlegible } from "@/lib/formato";
 import { Hoja, Opciones, Seccion } from "@/components/admin/formulario";
 import { cargarGasto, type EstadoGasto } from "./actions";
 
@@ -130,6 +130,7 @@ export function CargarGasto({
             type="text"
             inputMode="decimal"
             value={importe}
+            aria-invalid={importeIlegible(importe) || undefined}
             onChange={(e) => setImporte(e.target.value)}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
           />
@@ -284,6 +285,7 @@ export function CargarGasto({
             disabled={
               enCurso ||
               !descripcion.trim() ||
+              importeIlegible(importe) ||
               importeDelCampo(importe) <= 0 ||
               // Sin sucursal, el efectivo no saldría de ninguna caja (y Go no avisa).
               (enEfectivo && sucursales.length > 0 && !branchId)

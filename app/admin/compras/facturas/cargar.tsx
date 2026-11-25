@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calculator, FileText, Loader2, Plus } from "lucide-react";
 import { BarraGuardar, Hoja, Seccion } from "@/components/admin/formulario";
-import { fechaCorta, formatearMonto, hoyEnArgentina, importeDelCampo, importeParaElCampo } from "@/lib/formato";
+import { fechaCorta, formatearMonto, hoyEnArgentina, importeDelCampo, importeParaElCampo, importeIlegible } from "@/lib/formato";
 import { COMPROBANTES_DE_COMPRA } from "@/lib/fiscal/comprobantes-compra";
 import {
   cargarFacturaDeCompra,
@@ -319,6 +319,7 @@ export function CargarFactura({
               type="text"
               inputMode="decimal"
               value={neto}
+              aria-invalid={importeIlegible(neto) || undefined}
               onChange={(e) => setNeto(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
             />
@@ -352,6 +353,7 @@ export function CargarFactura({
               type="text"
               inputMode="decimal"
               value={totalPapel}
+              aria-invalid={importeIlegible(totalPapel) || undefined}
               onChange={(e) => setTotalPapel(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
             />
@@ -381,6 +383,8 @@ export function CargarFactura({
           disabled={
             enCurso ||
             total <= 0 ||
+            importeIlegible(neto) ||
+            importeIlegible(totalPapel) ||
             !supplierId ||
             (corregir !== undefined && motivo.trim() === "")
           }

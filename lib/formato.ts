@@ -306,7 +306,12 @@ export function hoyEnArgentina(ahora: Date = new Date()): string {
  * de «250.000» tipeado a mano se cargó por $250 en el cobro multimedio.
  */
 export function parsearImporte(texto: string): number {
-  const limpio = texto.trim().replace(/\s/g, "");
+  // El signo y la moneda se escriben («$ 420.000,50», «ARS 20.000») y no
+  // cambian el número: se sacan antes de leer.
+  const limpio = texto
+    .replace(/\$|\bars\b/gi, "")
+    .trim()
+    .replace(/\s/g, "");
   if (!limpio) return NaN;
 
   if (limpio.includes(",")) {
@@ -332,6 +337,18 @@ export function parsearImporte(texto: string): number {
 export function importeDelCampo(texto: string | null | undefined): number {
   const n = parsearImporte(texto ?? "");
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Si lo escrito en un campo de plata no se entiende como importe. Vacío no es
+ * ilegible (es cero); «12,5,3» o «abc» sí. El formulario lo marca con
+ * `aria-invalid`, lo dice junto al campo y no deja mandar: antes se tomaba
+ * como $0 sin avisar.
+ */
+export function importeIlegible(texto: string | null | undefined): boolean {
+  if (!texto || !texto.trim()) return false;
+  const n = parsearImporte(texto);
+  return !Number.isFinite(n);
 }
 
 const IMPORTE_DEL_CAMPO = new Intl.NumberFormat("es-AR", {

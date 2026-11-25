@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2, MinusCircle, PlusCircle, Undo2 } from "lucide-react";
-import { formatearMonto, importeDelCampo } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeIlegible } from "@/lib/formato";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { acreditarParcial, debitar, type EstadoFactura } from "../actions";
 import { Confirmar } from "@/components/admin/confirmar";
@@ -160,6 +160,7 @@ export function NotasSobreElComprobante({
               type="text"
               inputMode="decimal"
               value={importe}
+              aria-invalid={importeIlegible(importe) || undefined}
               onChange={(e) => setImporte(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-background px-3 text-right text-base"
             />
@@ -231,7 +232,7 @@ export function NotasSobreElComprobante({
         <button
           type="button"
           onClick={() => setConfirmando(true)}
-          disabled={enCurso || motivo.trim().length < 4 || importeDeLaNota <= 0}
+          disabled={enCurso || motivo.trim().length < 4 || importeIlegible(importe) || importeDeLaNota <= 0}
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -24,26 +24,47 @@ import (
 type FichaParaUnir struct {
 	ID     string `json:"id"`
 	Nombre string `json:"nombre"`
+	// Telefono, para comparar con el del contacto antes de unir.
+	Telefono *string `json:"telefono"`
 	// Unible: si se puede unir desde acá. Un pedido con recibos o
 	// comprobantes no: esos papeles ya salieron sin cliente.
 	Unible bool `json:"unible"`
 }
 
-// fichaConElCorreo es la ficha activa con ese correo (la más vieja), o nil.
+// fichaConElCorreo es la única ficha activa con ese correo que no es de otra
+// cuenta web, o nil (comité del 25/11):
+//   - una ficha con cuenta web es de alguien que entra al portal: lo que se
+//     una ahí lo ve esa persona, y un pedido anónimo con su correo lo pudo
+//     hacer cualquiera (el mismo filtro que checkout.clientePorCorreo);
+//   - con dos o más fichas con ese correo no se elige ninguna: elegir la más
+//     vieja era adivinar, y el error deja datos de una persona en la ficha de
+//     otra. Se busca a mano.
 func (s *Servicio) fichaConElCorreo(ctx context.Context, correo *string) (*FichaParaUnir, error) {
 	if correo == nil || *correo == "" {
 		return nil, nil
 	}
-	var f FichaParaUnir
-	err := s.pool.QueryRow(ctx, `SELECT id, nombre FROM customers WHERE lower(trim(email)) = lower(trim($1)) AND active
-		ORDER BY created_at, id LIMIT 1`, *correo).Scan(&f.ID, &f.Nombre)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
+	filas, err := s.pool.Query(ctx, `SELECT id, nombre, nullif(trim(telefono), '') FROM customers
+		WHERE lower(trim(email)) = lower(trim($1)) AND active AND user_id IS NULL
+		ORDER BY created_at, id LIMIT 2`, *correo)
 	if err != nil {
 		return nil, err
 	}
-	return &f, nil
+	defer filas.Close()
+	var halladas []FichaParaUnir
+	for filas.Next() {
+		var f FichaParaUnir
+		if err := filas.Scan(&f.ID, &f.Nombre, &f.Telefono); err != nil {
+			return nil, err
+		}
+		halladas = append(halladas, f)
+	}
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	if len(halladas) != 1 {
+		return nil, nil
+	}
+	return &halladas[0], nil
 }
 
 // pedidoConPapeles: tiene recibos o comprobantes.
@@ -93,8 +114,12 @@ func (s *Servicio) UnirAFicha(ctx context.Context, ses *auth.Sesion, tabla, id, 
 			return noSeUne(msjYaTiene)
 		}
 		var vendedor *string
-		err = tx.QueryRow(ctx, `SELECT nombre, seller_id::text FROM customers
-			WHERE id = $1 AND active AND $2::text IS NOT NULL AND lower(trim(email)) = lower(trim($2))`, cliente, correo).Scan(&ficha, &vendedor)
+		// La misma regla que fichaConElCorreo: sin cuenta web y la única con
+		// ese correo.
+		err = tx.QueryRow(ctx, `SELECT nombre, seller_id::text FROM customers c
+			WHERE id = $1 AND active AND user_id IS NULL AND $2::text IS NOT NULL AND lower(trim(email)) = lower(trim($2))
+			  AND NOT EXISTS (SELECT 1 FROM customers o WHERE o.id <> c.id AND o.active AND o.user_id IS NULL
+			                  AND lower(trim(o.email)) = lower(trim($2)))`, cliente, correo).Scan(&ficha, &vendedor)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return noSeUne(msjFichaAjena)
 		}

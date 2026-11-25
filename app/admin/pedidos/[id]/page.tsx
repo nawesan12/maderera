@@ -456,7 +456,14 @@ export default async function FichaPedidoPage({
               <p className="text-base font-medium">{pedido.cliente}</p>
             )}
             {pedido.fichaPorCorreo && verCliente && (
-              <UnirAFicha que="pedido" id={pedido.id} ficha={pedido.fichaPorCorreo} />
+              <UnirAFicha
+                que="pedido"
+                id={pedido.id}
+                numero={pedido.numero}
+                total={Number(pedido.total)}
+                contacto={{ nombre: pedido.cliente, telefono: pedido.telefono }}
+                ficha={pedido.fichaPorCorreo}
+              />
             )}
             {pedido.telefono && (
               <div className="mt-2 flex flex-wrap items-center gap-2">

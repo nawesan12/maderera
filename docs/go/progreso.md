@@ -2063,6 +2063,17 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   la consulta nueva devuelve las mismas filas que la ventana (400 y 4.894,
   `EXCEPT ALL` vacío en los dos sentidos). Escribir un
   movimiento cuesta ~2 ms más en el peor caso (fecha vieja, 62 movimientos).
+
+  **Migración 00202** (revisión del comité, 25/11): en una cuenta que nunca
+  llegó a cero, «lo posterior al cero» era la cuenta entera, con la ficha
+  bloqueada: 25 ms por venta con 20.000 movimientos, y creciendo. Ahora
+  `customers.cuenta_saldo`, `cuenta_ultimo_at` y `_id` guardan el saldo y el
+  último movimiento; un alta al final parte de ahí y lee solo lo nuevo
+  (2,3 a 2,6 ms con 20.000 movimientos, lo mismo que con una cuenta vacía, y
+  1,7 ms sin trigger). Un alta con fecha vieja, una baja o un cambio recorren
+  desde el cero o la cuenta entera, como antes. Prueba:
+  `TestCuentaEnCeroNoRecorreLaCuenta` (cuenta las filas que lee la
+  transacción), y `mismaCartera` compara también el saldo y el último.
 - **Revisión del comité (corrector)**: con lock_timeout, un candado ocupado
   ya no es un 500: `plataforma.EnTransaccion` reintenta dos veces (venta,
   cobros, caja, anulación, pedidos) y `ErrorDeRespuesta` contesta 503 a

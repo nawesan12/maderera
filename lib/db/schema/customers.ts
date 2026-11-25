@@ -126,6 +126,13 @@ export const customers = pgTable(
      */
     cuentaEnCeroAt: timestamp({ withTimezone: true }),
     cuentaEnCeroId: uuid(),
+    /**
+     * Migración 00202: el saldo de la cuenta y su último movimiento, para
+     * que el trigger parta de ahí y no recorra la cuenta. También del trigger.
+     */
+    cuentaSaldo: numeric().notNull().default("0"),
+    cuentaUltimoAt: timestamp({ withTimezone: true }),
+    cuentaUltimoId: uuid(),
   },
   (t) => [
     index("customers_nombre_idx").on(t.nombre),

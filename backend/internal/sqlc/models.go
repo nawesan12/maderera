@@ -5232,6 +5232,9 @@ type Customer struct {
 	MotivoBloqueo   *string       `json:"motivoBloqueo"`
 	CuentaEnCeroAt  *time.Time    `json:"cuentaEnCeroAt"`
 	CuentaEnCeroID  *string       `json:"cuentaEnCeroId"`
+	CuentaSaldo     jsmath.Num    `json:"cuentaSaldo"`
+	CuentaUltimoAt  *time.Time    `json:"cuentaUltimoAt"`
+	CuentaUltimoID  *string       `json:"cuentaUltimoId"`
 }
 
 type CustomerFollowUp struct {

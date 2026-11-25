@@ -72,7 +72,7 @@ export function BarraSuperior({
       {cola.sinSubir > 0 && (
         // Se suben solas cuando vuelve la conexión.
         <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-semibold estado-espera">
-          {cola.sinSubir} ventas sin enviar
+          {cola.sinSubir === 1 ? "1 venta sin enviar" : `${cola.sinSubir} ventas sin enviar`}
         </span>
       )}
 

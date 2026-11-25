@@ -57,11 +57,11 @@ func (s *Servicio) Desvincular(ctx context.Context, ses *auth.Sesion, id string,
 		pendientes = locales
 	}
 	if pendientes > 0 {
-		ventas, verbo := "ventas cobradas", "subieron"
+		ventas, verbo, espera := "ventas cobradas", "subieron", "suban"
 		if pendientes == 1 {
-			ventas, verbo = "venta cobrada", "subió"
+			ventas, verbo, espera = "venta cobrada", "subió", "suba"
 		}
-		return "", rechazo(fmt.Sprintf("%s tiene %d %s que todavía no %s. Esperá a que suban antes de desvincularla.", codigo, pendientes, ventas, verbo))
+		return "", rechazo(fmt.Sprintf("%s tiene %d %s que todavía no %s. Esperá a que %s antes de desvincularla.", codigo, pendientes, ventas, verbo, espera))
 	}
 	if _, err := tx.Exec(ctx, `UPDATE pos_devices SET secreto = $2, ultima_vez_at = NULL, pendientes = 0 WHERE id = $1`,
 		id, base64.RawURLEncoding.EncodeToString(crudo)); err != nil {

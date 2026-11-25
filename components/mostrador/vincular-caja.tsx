@@ -201,7 +201,9 @@ export function VincularCaja({
               </DialogTitle>
               <DialogDescription className="text-base">
                 {pendientesLocales > 0
-                  ? `${pendientesLocales === 1 ? "Queda 1 venta" : `Quedan ${pendientesLocales} ventas`} sin subir: esperá a que suban.`
+                  ? pendientesLocales === 1
+                    ? "Queda 1 venta sin subir: esperá a que suba."
+                    : `Quedan ${pendientesLocales} ventas sin subir: esperá a que suban.`
                   : `Esta PC deja de ser ${vinculada.codigo}: sin conexión no va a poder cobrar hasta vincularla otra vez. La numeración de ${vinculada.codigo} sigue donde quedó.`}
               </DialogDescription>
             </DialogHeader>

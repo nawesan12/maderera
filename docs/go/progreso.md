@@ -1523,8 +1523,12 @@ en paralelo).
         `originales/tanda10`), vitest (`tests/correo*.test.ts`) y el bench de
         la tanda 10. Se puede mover a `scripts/golden/originales` y sacar
         `nodemailer`, `resend` y `web-push` del `package.json`.
-  - [ ] Sacar `TAREAS_SECRETO` de `.env.example` y del `.env.produccion` de
-        la VPS (el compose ya no la pide).
+  - [x] ~~Sacar `TAREAS_SECRETO` de `.env.example`~~ (25/11, carril-m: ni
+        `.env.example`, ni el compose, ni `scripts/` la nombran; se fueron
+        también `pendientesDelRol` y los comentarios que hablaban del
+        contenedor `cron` y de `/api/tareas`).
+  - [ ] Sacarla del `.env.produccion` de la VPS (el compose ya no la pide):
+        va por ssh, con las claves VAPID.
   - [x] `notificarPresupuestoEnviado` no lo llamaba nadie (se borró con
         `presupuestos.ts`): el presupuesto armado no se avisaba por correo
         ni por WhatsApp al pasar a «enviado». Era así antes de la mudanza.

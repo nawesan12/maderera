@@ -12,8 +12,8 @@ import { esEtiquetaValida } from "@/lib/cache-publico";
  * offline—: Go encola el aviso en la misma transacción del cambio y su
  * worker lo manda acá, con `Authorization: Bearer <REVALIDAR_SECRETO>`.
  *
- * Como /api/tareas: sin secreto configurado la ruta no existe (404), y se
- * compara en tiempo constante.
+ * Sin secreto configurado la ruta no existe (404), y se compara en tiempo
+ * constante.
  */
 export async function POST(request: NextRequest) {
   const secreto = process.env.REVALIDAR_SECRETO?.trim();

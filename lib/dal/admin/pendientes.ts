@@ -1,7 +1,6 @@
 import "server-only";
 
-import { api, apiInterna, datos } from "@/lib/api/servidor";
-import type { RolStaff } from "@/lib/roles";
+import { api, datos } from "@/lib/api/servidor";
 
 /**
  * Qué hay que hacer hoy: lo que contesta «qué tengo que hacer», que es la
@@ -31,11 +30,3 @@ export async function trabajoPendiente(): Promise<Pendiente[]> {
   return datos(await (await api()).GET("/api/v1/admin/inicio/pendientes"));
 }
 
-/**
- * Lo mismo, para un rol dado, **sin mirar la sesión**: solo para las tareas
- * programadas (`lib/tareas`), que corren sin nadie logueado. Va con el secreto
- * interno; una página nunca importa esto.
- */
-export async function pendientesDelRol(staffRole: RolStaff): Promise<Pendiente[]> {
-  return datos(await apiInterna.GET("/api/v1/admin/inicio/pendientes", { params: { query: { rol: staffRole } } }));
-}

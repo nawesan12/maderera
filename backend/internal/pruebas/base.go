@@ -159,18 +159,18 @@ func Base(t testing.TB) *pgxpool.Pool {
 	defer admin.Close(ctx)
 
 	// Un candado para que dos paquetes de tests no armen la plantilla a la vez.
-	if _, err := admin.Exec(ctx, `select pg_advisory_lock(candadoDePlantilla)`); err != nil {
+	if _, err := admin.Exec(ctx, `select pg_advisory_lock($1)`, candadoDePlantilla); err != nil {
 		t.Fatal(err)
 	}
 	if err := PrepararPlantilla(ctx, admin, servidor, plantilla, db.Migraciones); err != nil {
-		_, _ = admin.Exec(ctx, `select pg_advisory_unlock(candadoDePlantilla)`)
+		_, _ = admin.Exec(ctx, `select pg_advisory_unlock($1)`, candadoDePlantilla)
 		t.Fatalf("migrando la plantilla: %v", err)
 	}
 	var b [6]byte
 	_, _ = rand.Read(b[:])
 	nombre := "t_" + hex.EncodeToString(b[:])
 	_, err = admin.Exec(ctx, `create database `+nombre+` template `+plantilla)
-	_, _ = admin.Exec(ctx, `select pg_advisory_unlock(candadoDePlantilla)`)
+	_, _ = admin.Exec(ctx, `select pg_advisory_unlock($1)`, candadoDePlantilla)
 	if err != nil {
 		t.Fatal(err)
 	}

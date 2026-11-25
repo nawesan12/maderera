@@ -119,8 +119,9 @@ test("entregar un retiro desde el tablero pide el documento de quien retira", as
   await dialogo.locator('input[name="receptorNombre"]').fill("Prueba de punta a punta");
   await dialogo.locator('input[name="receptorDocumento"]').fill("30111222");
   await expect(dialogo.getByText("Falta el documento de quien retira.")).toHaveCount(0);
-  // Enter entrega.
-  await dialogo.locator('input[name="receptorDocumento"]').press("Enter");
+  // El pedido se debe: Enter haría lo principal (cobrar y entregar); acá se
+  // entrega sin cobrar.
+  await entregar.click();
   await expect(page.getByText(/quedó entregado/)).toBeVisible();
 
   // El remito que salió lleva a quien retiró; se anula y el pedido se cancela.

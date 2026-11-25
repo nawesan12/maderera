@@ -11,8 +11,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { formatearMonto } from "@/lib/formato";
 import { anularReciboDesdeElPanel } from "@/app/admin/cobros-actions";
+
+// Con centavos: es lo que vuelve a deber, y redondeado no coincide con el recibo.
+const PESOS = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
 
 /**
  * «Anular» un recibo vivo, con motivo obligatorio. Lo muestra la ficha a
@@ -67,7 +69,7 @@ export function AnularRecibo({
 
   const consecuencia =
     importe && importe > 0
-      ? `${formatearMonto(importe)} vuelven a la cuenta${cliente ? ` de ${cliente}` : ""}. No se puede deshacer.`
+      ? `${PESOS.format(importe)} vuelven a la cuenta${cliente ? ` de ${cliente}` : ""}. No se puede deshacer.`
       : "Lo que pagó vuelve a la cuenta. No se puede deshacer.";
 
   return (

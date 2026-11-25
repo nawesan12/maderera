@@ -142,7 +142,7 @@ export function DarDeBaja({
         <button
           type="submit"
           disabled={pendiente}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-red-700 px-4 text-base font-medium text-white transition-colors hover:bg-red-800 disabled:opacity-60"
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-60"
         >
           {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
           {corren.length > 0

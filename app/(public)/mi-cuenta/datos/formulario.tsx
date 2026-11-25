@@ -126,7 +126,7 @@ export function FormularioDatos({
       {estado.ok && (
         <p
           role="status"
-          className="flex items-center gap-2 rounded-lg bg-green-50 px-3.5 py-2.5 text-sm text-green-900"
+          className="flex items-center gap-2 estado-ok rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-sm"
         >
           <Check className="h-4 w-4 shrink-0" />
           {estado.ok}

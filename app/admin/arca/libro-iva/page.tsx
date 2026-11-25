@@ -180,7 +180,7 @@ function Importe({
   return (
     <td
       className={`tabular whitespace-nowrap px-3 py-3 text-right text-base ${
-        destacado ? "" : valor < 0 ? "text-green-700" : "text-muted-foreground"
+        destacado ? "" : valor < 0 ? "text-saldo-favor" : "text-muted-foreground"
       }`}
     >
       {valor === 0 ? "—" : moneda.format(valor)}

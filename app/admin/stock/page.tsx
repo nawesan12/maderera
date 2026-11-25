@@ -201,7 +201,7 @@ export default async function AdminStockPage({
                     </div>
                     <span
                       className={`tabular shrink-0 text-base font-medium ${
-                        m.qty > 0 ? "text-green-700" : "text-muted-foreground"
+                        m.qty > 0 ? "text-saldo-favor" : "text-muted-foreground"
                       }`}
                     >
                       {m.qty > 0 ? `+${formatearCantidad(m.qty)}` : formatearCantidad(m.qty)}

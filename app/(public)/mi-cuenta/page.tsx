@@ -257,7 +257,7 @@ function MedidorCredito({ saldo, limite }: { saldo: number; limite: number }) {
         <div
           className={`h-full rounded-full ${
             excedido
-              ? "bg-red-600"
+              ? "bg-destructive"
               : porcentaje > 80
                 ? "bg-amber-500"
                 : "bg-brand-orange"

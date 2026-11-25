@@ -53,7 +53,7 @@ export function AnularRecibo({ id, numero }: { id: string; numero: string }) {
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-10 items-center gap-2 rounded-lg bg-red-700 px-4 text-base font-medium text-white transition-colors hover:bg-red-800 disabled:opacity-60"
+        className="inline-flex h-10 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-60"
       >
         {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
         Anular el recibo
@@ -66,7 +66,7 @@ export function AnularRecibo({ id, numero }: { id: string; numero: string }) {
         Cancelar
       </button>
       {estado.error && (
-        <p role="alert" className="w-full text-base text-red-700">
+        <p role="alert" className="w-full text-base text-saldo-debe">
           {estado.error}
         </p>
       )}

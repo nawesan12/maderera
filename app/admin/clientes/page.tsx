@@ -349,7 +349,7 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           <dt className="text-sm text-muted-foreground">Saldo</dt>
           <dd
             className={`tabular text-base font-medium ${
-              excedido ? "text-red-700" : cliente.saldo > 0 ? "" : "text-muted-foreground"
+              excedido ? "text-saldo-debe" : cliente.saldo > 0 ? "" : "text-muted-foreground"
             }`}
           >
             {cliente.saldo > 0 ? moneda.format(cliente.saldo) : "Al día"}
@@ -374,7 +374,7 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           >
             <div
               className={`h-full rounded-full ${
-                excedido ? "bg-red-600" : "bg-brand-orange"
+                excedido ? "bg-destructive" : "bg-brand-orange"
               }`}
               style={{ width: `${Math.max(usoLimite, 3)}%` }}
             />

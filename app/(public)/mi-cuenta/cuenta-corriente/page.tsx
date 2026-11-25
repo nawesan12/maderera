@@ -132,7 +132,7 @@ export default async function CuentaCorrientePage({
               <div
                 className={`h-full rounded-full ${
                   excedido
-                    ? "bg-red-600"
+                    ? "bg-destructive"
                     : porcentaje > 80
                       ? "bg-amber-500"
                       : "bg-brand-orange"
@@ -142,7 +142,7 @@ export default async function CuentaCorrientePage({
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               {excedido ? (
-                <span className="text-red-700">
+                <span className="text-saldo-debe">
                   Superás tu límite en{" "}
                   <span className="tabular">
                     {formatearMonto(usado - cuenta.limiteCredito)}
@@ -255,7 +255,7 @@ export default async function CuentaCorrientePage({
                     </td>
                     <td
                       className={`tabular whitespace-nowrap px-3 py-3.5 text-right font-medium ${
-                        m.monto > 0 ? "" : "text-green-700"
+                        m.monto > 0 ? "" : "text-saldo-favor"
                       }`}
                     >
                       {m.monto > 0 ? "+" : ""}

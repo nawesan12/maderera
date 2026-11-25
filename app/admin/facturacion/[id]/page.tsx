@@ -196,12 +196,12 @@ export default async function FichaComprobantePage({
         </section>
       ) : comprobante.cae ? (
         <section className="estado-ok flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[var(--estado-tinta)]/30 bg-[var(--estado-fondo)] px-5 py-3.5">
-          <ShieldCheck className="h-5 w-5 shrink-0 text-green-700" />
-          <p className="text-base text-green-900">
+          <ShieldCheck className="h-5 w-5 shrink-0" />
+          <p className="text-base">
             Autorizada por ARCA · <span className="tabular">CAE {comprobante.cae}</span>
           </p>
           {comprobante.caeVencimiento && (
-            <p className="text-base text-green-900/70">
+            <p className="text-base opacity-80">
               vence el {fechaCorta.format(comprobante.caeVencimiento)}
             </p>
           )}
@@ -402,7 +402,7 @@ export default async function FichaComprobantePage({
               Cobros
               <span
                 className={`tabular text-base font-normal ${
-                  comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-green-700"
+                  comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
                 }`}
               >
                 {comprobante.saldo > 0

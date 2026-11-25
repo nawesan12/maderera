@@ -80,7 +80,7 @@ export function MandarPorWhatsapp({
         <X className="h-4 w-4" />
       </button>
       {estado.error && (
-        <p role="alert" className="w-full text-base text-red-700">
+        <p role="alert" className="w-full text-base text-saldo-debe">
           {estado.error}
         </p>
       )}
@@ -90,7 +90,7 @@ export function MandarPorWhatsapp({
         </div>
       )}
       {estado.ok && (
-        <p role="status" className="flex w-full items-center gap-1.5 text-base text-green-800">
+        <p role="status" className="flex w-full items-center gap-1.5 text-base text-saldo-favor">
           <CheckCircle2 className="h-4 w-4" />
           {estado.ok}
           {estado.conversacionId && (

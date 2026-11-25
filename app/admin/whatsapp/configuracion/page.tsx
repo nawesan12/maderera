@@ -178,7 +178,7 @@ export default async function ConfiguracionWhatsappPage() {
           >
             <div
               className={`h-full rounded-full ${
-                gasto.alcanzado ? "bg-red-600" : gasto.umbral === 80 ? "bg-amber-500" : "bg-brand-green"
+                gasto.alcanzado ? "bg-destructive" : gasto.umbral === 80 ? "bg-amber-500" : "bg-brand-green"
               }`}
               style={{ width: `${Math.min(porcentaje, 100)}%` }}
             />
@@ -376,7 +376,7 @@ export default async function ConfiguracionWhatsappPage() {
                 {leida.encabezadoMedia && <p className="mt-1.5 text-sm text-muted-foreground">Encabezado: el PDF</p>}
                 <p className="mt-1.5 text-base">{leida.cuerpo}</p>
                 {enMeta?.motivoRechazo && (
-                  <p className="mt-1 flex items-center gap-1.5 text-sm text-red-700">
+                  <p className="mt-1 flex items-center gap-1.5 text-sm text-saldo-debe">
                     <AlertCircle className="h-4 w-4" />
                     Motivo: {enMeta.motivoRechazo}
                   </p>

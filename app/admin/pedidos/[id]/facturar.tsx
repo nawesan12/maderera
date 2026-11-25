@@ -55,7 +55,7 @@ export function BotonFacturar({
       {estado.error && (
         <p
           role="alert"
-          className="mt-2 flex items-start gap-2 text-base text-red-700"
+          className="mt-2 flex items-start gap-2 text-base text-saldo-debe"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
           {estado.error}

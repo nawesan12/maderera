@@ -134,7 +134,7 @@ export function AvisarPorWhatsapp({
 
       <ul className="space-y-0.5 text-sm">
         {recien && !aviso.yaAvisado && (
-          <li className="flex items-center gap-1.5 text-green-800">
+          <li className="flex items-center gap-1.5 text-saldo-favor">
             <CheckCircle2 className="h-4 w-4" />
             Quedó registrado que avisaste a mano.
           </li>
@@ -154,7 +154,7 @@ export function AvisarPorWhatsapp({
           </li>
         )}
         {error && (
-          <li role="alert" className="text-red-700">
+          <li role="alert" className="text-saldo-debe">
             {error}
           </li>
         )}

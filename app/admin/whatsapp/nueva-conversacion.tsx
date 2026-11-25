@@ -69,7 +69,7 @@ export function NuevaConversacion({ onCerrar }: { onCerrar: () => void }) {
       {estado.error && (
         <p
           role="alert"
-          className="flex items-start gap-2 text-base text-red-700"
+          className="flex items-start gap-2 text-base text-saldo-debe"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {estado.error}

@@ -27,7 +27,7 @@ export function RespuestaPresupuesto({ numero }: { numero: string }) {
 
   if (estado.ok) {
     return (
-      <p className="flex items-center gap-2 rounded-lg bg-green-50 px-3.5 py-2.5 text-sm text-green-900">
+      <p className="flex items-center gap-2 estado-ok rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-sm">
         <Check className="h-4 w-4 shrink-0" />
         {estado.ok}
       </p>

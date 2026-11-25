@@ -79,7 +79,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
         </h3>
         <p
           className={`tabular mt-1.5 text-2xl font-semibold ${
-            excedido ? "text-red-700" : detalle.saldo > 0 ? "text-brand-orange-dark" : "text-green-700"
+            excedido ? "text-saldo-debe" : detalle.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
           }`}
         >
           {moneda.format(Math.abs(detalle.saldo))}
@@ -88,7 +88,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
           {detalle.saldo > 0 ? "Debe" : detalle.saldo < 0 ? "A favor" : "Sin deuda"}
           {detalle.limiteCredito > 0 && <> · límite {moneda.format(detalle.limiteCredito)}</>}
         </p>
-        {excedido && <p className="mt-1.5 text-base text-red-700">Supera el límite. No debería llevarse más a cuenta.</p>}
+        {excedido && <p className="mt-1.5 text-base text-saldo-debe">Supera el límite. No debería llevarse más a cuenta.</p>}
 
       </section>
 
@@ -151,7 +151,7 @@ function Avisos({ detalle }: { detalle: DetalleConversacion }) {
         </button>
       </form>
       {estado.ok && (
-        <p role="status" className="mt-1.5 text-sm text-green-800">
+        <p role="status" className="mt-1.5 text-sm text-saldo-favor">
           {estado.ok}
         </p>
       )}
@@ -233,7 +233,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
       {texto.trim().length >= 2 && !buscando && resultados.length === 0 && (
         <p className="mt-2 text-sm text-muted-foreground">No hay clientes con eso.</p>
       )}
-      {vinculo.error && <p role="alert" className="mt-2 text-base text-red-700">{vinculo.error}</p>}
+      {vinculo.error && <p role="alert" className="mt-2 text-base text-saldo-debe">{vinculo.error}</p>}
 
       {!creandoFicha ? (
         <button
@@ -275,7 +275,7 @@ function SinFicha({ detalle }: { detalle: DetalleConversacion }) {
             {creando && <Loader2 className="h-4 w-4 animate-spin" />}
             Guardar ficha
           </button>
-          {alta.error && <p role="alert" className="text-base text-red-700">{alta.error}</p>}
+          {alta.error && <p role="alert" className="text-base text-saldo-debe">{alta.error}</p>}
         </form>
       )}
     </section>

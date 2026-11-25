@@ -215,7 +215,7 @@ export default async function PreciosPage({
                         </span>
                         <span
                           className={`tabular font-medium ${
-                            subio ? "text-brand-orange" : "text-green-700"
+                            subio ? "text-brand-orange" : "text-saldo-favor"
                           }`}
                         >
                           {moneda.format(nuevo)}

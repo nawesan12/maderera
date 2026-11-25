@@ -177,4 +177,14 @@ describe("proximoAlVincular: desvincular no reinicia la numeración", () => {
   it("otra caja arranca en lo suyo, no en lo de la anterior", () => {
     expect(proximoAlVincular("CAJA2", { codigo: "CAJA1", proximoNumero: 17 }, { CAJA1: 17 })).toBe(1);
   });
+  it("una PC nueva sigue desde lo que numeró la anterior (lo dice el servidor)", () => {
+    expect(proximoAlVincular("CAJA1", null, null, 24)).toBe(24);
+  });
+  it("si esta PC ya iba más adelante, gana la PC", () => {
+    expect(proximoAlVincular("CAJA1", { codigo: "CAJA1", proximoNumero: 30 }, null, 24)).toBe(30);
+  });
+  it("sin dato del servidor, como antes", () => {
+    expect(proximoAlVincular("CAJA1", null, null, undefined)).toBe(1);
+    expect(proximoAlVincular("CAJA1", null, null, Number.NaN)).toBe(1);
+  });
 });

@@ -335,6 +335,10 @@ func (s *Servicio) Vincular(ctx context.Context, ses *auth.Sesion, id string) (m
 	if _, err := tx.Exec(ctx, `UPDATE pos_devices SET secreto = $2, ultima_vez_at = now(), pendientes = 0 WHERE id = $1`, id, secreto); err != nil {
 		return nil, err
 	}
+	proximo, err := proximoProvisorio(ctx, tx, codigo)
+	if err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
@@ -347,7 +351,26 @@ func (s *Servicio) Vincular(ctx context.Context, ses *auth.Sesion, id string) (m
 		}
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "caja", id, desc, datos)
-	return map[string]any{"caja": map[string]any{"id": id, "codigo": codigo, "secreto": secreto}}, nil
+	return map[string]any{"caja": map[string]any{"id": id, "codigo": codigo, "secreto": secreto, "proximoNumero": proximo}}, nil
+}
+
+// proximoProvisorio es el siguiente al último número provisorio de esa caja
+// que ya está en la base, venga de la PC que venga. El contador vive en el
+// navegador de cada PC: sin esto, una PC nueva que vinculaba CAJA1 arrancaba
+// en CAJA1-001, un número que ya existía (dos papeles iguales y la venta que
+// no subía por el índice único). El guion es parte del prefijo, así CAJA1 no
+// cuenta los de CAJA10; se leen solo las cifras que siguen, así el sufijo de
+// un número repetido (desambiguarProvisorio) no las cambia.
+func proximoProvisorio(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, codigo string) (int, error) {
+	var n int
+	err := q.QueryRow(ctx, `
+		SELECT coalesce(max(substring(substr(numero_provisorio, length($1) + 2) FROM '^[0-9]+')::bigint), 0) + 1
+		FROM orders
+		WHERE numero_provisorio LIKE replace(replace(replace($1, '\', '\\'), '%', '\%'), '_', '\_') || '-%'
+		  AND substring(substr(numero_provisorio, length($1) + 2) FROM '^[0-9]+') IS NOT NULL`, codigo).Scan(&n)
+	return n, err
 }
 
 // Latido dice quién es, si sigue abierta la caja y la hora del servidor, y

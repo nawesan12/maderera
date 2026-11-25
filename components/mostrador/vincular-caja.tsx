@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Monitor, MonitorOff } from "lucide-react";
-import type { CajaVinculada } from "@/lib/mostrador/offline/use-caja";
+import type { CajaDelServidor } from "@/lib/mostrador/offline/use-caja";
 import { desvincularTerminal } from "@/app/mostrador/actions";
 
 interface CajaDisponible {
@@ -60,7 +60,7 @@ export function VincularCaja({
   administra?: boolean;
   /** La caja de esta máquina, si ya está vinculada. */
   vinculada: { id: string; codigo: string } | null;
-  onVincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
+  onVincular: (caja: CajaDelServidor) => Promise<void>;
   /** Suelta la caja local, después de que Go la desvinculó. */
   onDesvincular?: () => Promise<void>;
   /**

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -536,6 +537,26 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		}
 	}
 
+	// El número provisorio lo pone el navegador y la venta ya pasó: si otro
+	// pedido ya lo tiene (una PC nueva con la caja de otra, dos PCs con la
+	// misma), el INSERT chocaba con el índice único, la cola reintentaba para
+	// siempre y la plata cobrada nunca entraba. Entra igual, con el número
+	// desambiguado y marcada para el dueño, como las otras rarezas sin
+	// conexión; el papel del cliente se encuentra por el número de siempre.
+	if v.NumeroProvisorio != nil {
+		nuevo, repetido, err := desambiguarProvisorio(ctx, tx, *v.NumeroProvisorio, v.Clave)
+		if err != nil {
+			return ResultadoVenta{}, err
+		}
+		if repetido {
+			nota := "Número provisorio repetido: el papel del cliente dice " + *v.NumeroProvisorio + "."
+			if v.Notas != nil && strings.TrimSpace(*v.Notas) != "" {
+				nota = *v.Notas + "\n" + nota
+			}
+			v.NumeroProvisorio, v.Notas, c.bajoLista = &nuevo, &nota, true
+		}
+	}
+
 	numero, err := numeracion.Pedido(ctx, tx)
 	if err != nil {
 		return ResultadoVenta{}, err
@@ -869,3 +890,29 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMost
 }
 
 var _ = fmt.Sprintf
+
+// desambiguarProvisorio devuelve el número con que se guarda una venta sin
+// conexión: el mismo si nadie lo tiene, o con un sufijo de su clave si ya
+// existe (y `repetido`). Toma un candado por el número, así dos ventas con el
+// mismo número que suben a la vez no chocan en el índice único.
+func desambiguarProvisorio(ctx context.Context, tx pgx.Tx, numero, clave string) (string, bool, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('provisorio:' || $1::text))`, numero); err != nil {
+		return "", false, err
+	}
+	corta := strings.ToUpper(strings.ReplaceAll(clave, "-", ""))
+	candidatos := []string{numero}
+	if len(corta) >= 4 {
+		candidatos = append(candidatos, numero+"-R"+corta[:4])
+	}
+	candidatos = append(candidatos, numero+"-R"+corta)
+	for i, c := range candidatos {
+		var existe bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM orders WHERE numero_provisorio = $1)`, c).Scan(&existe); err != nil {
+			return "", false, err
+		}
+		if !existe {
+			return c, i > 0, nil
+		}
+	}
+	return "", false, fmt.Errorf("número provisorio %s repetido sin salida", numero)
+}

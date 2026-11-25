@@ -106,6 +106,13 @@ export const receipts = pgTable(
     anuladoPorUserId: text().references(() => user.id),
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    clave: text(),
+    huella: text(),
+    orderId: uuid(),
+    repartoAnticipo: numeric({ precision: 12, scale: 2 }),
+    repartoB: numeric({ precision: 12, scale: 2 }),
+    repartoDeudores: numeric({ precision: 12, scale: 2 }),
   },
   (t) => [
     uniqueIndex("receipts_numero_idx").on(t.numero),

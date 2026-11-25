@@ -98,6 +98,13 @@ export const payments = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     acreditadoAt: timestamp({ withTimezone: true }),
+    /**
+     * Migración 00200: lo que Mercado Pago se quedó y lo que acreditó. Nulas
+     * en lo de antes, la transferencia, el mostrador y el simulador; el
+     * cierre asienta Banco por el neto y la comisión como gasto.
+     */
+    comision: numeric({ precision: 12, scale: 2 }),
+    netoAcreditado: numeric({ precision: 12, scale: 2 }),
   },
   (t) => [
     uniqueIndex("payments_proveedor_pago_idx").on(

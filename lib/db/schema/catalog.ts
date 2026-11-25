@@ -197,6 +197,9 @@ export const products = pgTable(
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    cuidados: text(),
+    usos: text(),
   },
   (t) => [
     uniqueIndex("products_slug_idx").on(t.slug),
@@ -244,6 +247,8 @@ export const productVariants = pgTable(
     active: boolean().notNull().default(true),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    codigoBarras: text(),
   },
   (t) => [
     uniqueIndex("product_variants_sku_idx").on(t.sku),
@@ -262,6 +267,9 @@ export const productImages = pgTable(
     alt: text(),
     sortOrder: integer().notNull().default(0),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    origenBiblioteca: text(),
+    variantId: uuid(),
   },
   (t) => [index("product_images_product_idx").on(t.productId)],
 );

@@ -18,6 +18,9 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
   al de hoy. `float64(x*y)+z`, nunca `x*y+z` (FMA en arm64).
 - Las URLs que llama alguien de afuera (webhooks, mostrador offline, agente
   del taller, `/baja`, `/api/tareas`) no cambian.
+- Una migración que suma columnas o tablas: `npm run db:espejo` contra una
+  base migrada, y el espejo drizzle (`lib/db/schema`) al día en el mismo
+  commit.
 - Al terminar una sesión: actualizar la tabla de abajo y anotar lo aprendido.
 - **Al cerrar cada tanda, un benchmark TypeScript contra Go** (pedido de
   Nahuel, 24/10/2026): el mismo trabajo medido de los dos lados, en la misma
@@ -1718,8 +1721,14 @@ Pendiente:
       golden (`scripts/golden/pdf/certificado-retencion.ts`): se puede mover a
       `scripts/golden/originales`.
       Hecho: se borró.
-- [ ] `lib/db/schema/retenciones.ts` (drizzle, solo para las semillas) no
+- [x] `lib/db/schema/retenciones.ts` (drizzle, solo para las semillas) no
       tiene las columnas nuevas.
+      Hecho (5551e92), y el 25/11 el espejo entero: le faltaban 61 columnas
+      de goose (las de la 00200 y la 00201 entre ellas). `npm run db:espejo`
+      lo compara con una base migrada y falla si falta o sobra una columna o
+      aparece una tabla que no está ni espejada ni en `SOLO_EN_GO`
+      (`scripts/espejo-drizzle.ts`, 19 tablas que solo usa Go). Correrlo
+      después de cada migración nueva.
 
 ## Errores de stock de la auditoría (30/10, sobre `go-cuentas`)
 

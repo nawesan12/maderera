@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   numeric,
@@ -102,6 +103,9 @@ export const suppliers = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    condicionGanancias: text(),
+    exentoGananciasHasta: date(),
   },
   (t) => [
     index("suppliers_nombre_idx").on(t.nombre),
@@ -202,6 +206,10 @@ export const supplierMovements = pgTable(
 
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    goodsReceiptId: uuid(),
+    purchaseInvoiceId: uuid(),
+    supplierPaymentId: uuid(),
   },
   (t) => [
     index("supplier_movements_supplier_idx").on(t.supplierId),
@@ -568,6 +576,12 @@ export const purchaseInvoices = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    anuladaAt: timestamp({ withTimezone: true }),
+    anuladaPorUserId: text(),
+    motivoAnulacion: text(),
+    percepcionIibb: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    percepcionIva: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
   },
   (t) => [
     uniqueIndex("purchase_invoices_numeracion_idx").on(

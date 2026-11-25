@@ -24,6 +24,8 @@ export const user = pgTable(
     image: text(),
     createdAt: timestamp().notNull().defaultNow(),
     updatedAt: timestamp().notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    pinAutorizacion: text(),
   },
   (t) => [uniqueIndex("user_email_idx").on(t.email)],
 );

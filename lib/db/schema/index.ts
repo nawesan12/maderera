@@ -1,3 +1,12 @@
+/**
+ * El espejo drizzle de la base.
+ *
+ * Las migraciones son las de goose (`backend/db/migraciones`); esto queda
+ * para las semillas y los scripts del frente, y no genera nada. Tiene todas
+ * las columnas de cada tabla espejada; las tablas que solo usa Go están
+ * listadas en `scripts/espejo-drizzle.ts`. Después de una migración nueva,
+ * `npm run db:espejo` contra una base migrada dice qué falta.
+ */
 export * from "./auditoria";
 export * from "./auth";
 export * from "./cart";

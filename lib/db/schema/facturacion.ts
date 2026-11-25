@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   numeric,
@@ -87,6 +88,12 @@ export const configuracionFiscal = pgTable("configuracion_fiscal", {
   /** Pie de página de los comprobantes: leyendas, condiciones de venta. */
   leyenda: text(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+  alicuotaIibbSinPadron: numeric({ precision: 6, scale: 3 }),
+  ivaAncladoAt: timestamp({ withTimezone: true }),
+  ivaDesde: date(),
+  ivaSaldoLibre: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+  ivaSaldoTecnico: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
 });
 
 /**
@@ -241,6 +248,9 @@ export const invoices = pgTable(
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    caeAmbiente: text(),
+    fechaEmisionOriginal: timestamp({ withTimezone: true }),
   },
   (t) => [
     // Dos comprobantes del mismo tipo no pueden compartir número en un punto de
@@ -283,6 +293,8 @@ export const invoiceItems = pgTable(
     invoiceItemOrigenId: uuid(),
 
     orden: integer().notNull().default(0),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    orderItemId: uuid(),
   },
   (t) => [
     index("invoice_items_invoice_idx").on(t.invoiceId),

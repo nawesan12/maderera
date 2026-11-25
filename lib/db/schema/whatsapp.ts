@@ -119,6 +119,13 @@ export const conversaciones = pgTable(
     resueltaAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    botCerradoHasta: timestamp({ withTimezone: true }),
+    botConsulta: text(),
+    botDerivadaAt: timestamp({ withTimezone: true }),
+    botEstado: text().notNull().default("activo"),
+    botFallos: integer().notNull().default(0),
+    botPendiente: jsonb(),
   },
   (t) => [
     uniqueIndex("whatsapp_conversaciones_jid_idx").on(t.waJid),
@@ -267,6 +274,9 @@ export const sesionWhatsapp = pgTable("whatsapp_sesion", {
   topeAviso80: text(),
   topeAviso100: text(),
   updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+  mensajesAviso80: text(),
+  mensajesAviso100: text(),
 });
 
 /**

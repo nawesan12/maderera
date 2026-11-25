@@ -704,22 +704,42 @@ export function VistaMostrador({
     // cada corte cobre lo de su plano.
     const conLosCortes = paraCobrar(lineas, cortes);
     empezar(async () => {
-      const r = await cobrarVenta({
-        clave,
-        branchId: sucursal.id,
-        lineas: conLosCortes.lineas,
-        customerId: cliente?.id ?? null,
-        contactoNombre: cliente?.nombre ?? "Consumidor final",
-        medioPago: medio,
-        pagos: pagosDeLaVenta(),
-        acopio,
-        ...(conLosCortes.cortes.length > 0 ? { cortes: conLosCortes.cortes } : {}),
-        comprobante,
-        cuit: cuit || null,
-        descuento: descuentoManual,
-        descuentoMotivo: motivoDesc || null,
-        ...(pin ? { pin } : ficha ? { ficha } : {}),
-      });
+      /*
+       * Internet se puede cortar entre un latido y el otro (cada 20 s): la
+       * pantalla todavía cree que hay conexión y la acción del servidor tira
+       * un error de red. Sin esto, ese error tumbaba el mostrador entero
+       * («Se nos rompió algo») con la venta cargada y la plata en el cajón
+       * (recorrido del comité, 25/11). Ahora se pregunta si hay servidor: si
+       * no hay, la venta va a la cola con la misma clave —si la primera había
+       * llegado, Go la reconoce por `clave_mostrador` y no la repite—; si hay,
+       * queda cargada para volver a cobrar.
+       */
+      let r: Awaited<ReturnType<typeof cobrarVenta>>;
+      try {
+        r = await cobrarVenta({
+          clave,
+          branchId: sucursal.id,
+          lineas: conLosCortes.lineas,
+          customerId: cliente?.id ?? null,
+          contactoNombre: cliente?.nombre ?? "Consumidor final",
+          medioPago: medio,
+          pagos: pagosDeLaVenta(),
+          acopio,
+          ...(conLosCortes.cortes.length > 0 ? { cortes: conLosCortes.cortes } : {}),
+          comprobante,
+          cuit: cuit || null,
+          descuento: descuentoManual,
+          descuentoMotivo: motivoDesc || null,
+          ...(pin ? { pin } : ficha ? { ficha } : {}),
+        });
+      } catch {
+        if (!(await conexion.latir())) {
+          await cobrarSinConexion();
+          return;
+        }
+        setAviso({ tipo: "error", texto: "No se pudo cobrar. Probá de nuevo: la venta sigue cargada." });
+        return;
+      }
 
       if (r.ficha) setFicha(r.ficha);
       if (r.autorizacion) {

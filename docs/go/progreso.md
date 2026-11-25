@@ -1641,6 +1641,15 @@ Pendiente:
       `Cuentas.Comisiones`. **Para Mercado Pago real**: confirmar con un pago
       de prueba que `net_received_amount` viene en la respuesta de
       `GET /v1/payments` de la cuenta de la clienta.
+      **Reserva de la revisión (25/11)**: la comisión es todo lo que separa
+      el importe del neto, así que si Mercado Pago descuenta en el pago una
+      retención (IIBB por SIRTAC: MJBJ vende a otras provincias) o una
+      percepción, cae entera en 5.1.11 como gasto, cuando es un crédito
+      fiscal (Retenciones sufridas). Lo mismo el IVA de la tarifa, que MP
+      factura y es crédito fiscal. Con un pago real a la vista, ver si
+      `charges_details` / `fee_details` separan la tarifa de los impuestos y,
+      si es así, mandar los impuestos a `CuentaDeRetencionSufrida`. Que el
+      contador diga si lo quiere separado.
 - [x] El efectivo de un recibo emitido sin caja abierta va a Caja en el
       asiento aunque no haya entrado al arqueo.
       No se toca: el asiento a Caja es correcto (la plata entró); lo que falta es el arqueo, y el recibo avisa que se cargue a mano. El cierre no asienta los ingresos manuales de caja, así que no cuenta dos veces.

@@ -26,6 +26,19 @@ func TestComisionDeMercadoPago(t *testing.T) {
 		{"sin dato", `{"id": 1, "status": "approved", "transaction_amount": 1000}`, 0, 0, true},
 		{"un neto que no tiene sentido", `{"id": 1, "status": "approved", "transaction_amount": 1000,
 			"transaction_details": {"net_received_amount": 1500}}`, 0, 0, true},
+		// Comité del 25/11: un neto en 0 era una comisión del 100 % y Banco
+		// en cero.
+		{"un neto en cero", `{"id": 1, "status": "approved", "transaction_amount": 1000,
+			"transaction_details": {"net_received_amount": 0}}`, 0, 0, true},
+		{"un neto en cero con cargos: valen los cargos", `{"id": 1, "status": "approved", "transaction_amount": 1000,
+			"transaction_details": {"net_received_amount": 0},
+			"fee_details": [{"amount": 60, "fee_payer": "collector"}]}`, 60, 940, false},
+		{"una comisión de más de la mitad", `{"id": 1, "status": "approved", "transaction_amount": 1000,
+			"transaction_details": {"net_received_amount": 300}}`, 0, 0, true},
+		{"cuotas que absorbe el vendedor", `{"id": 1, "status": "approved", "transaction_amount": 1000,
+			"transaction_details": {"net_received_amount": 680}}`, 320, 680, false},
+		{"cargos de más de la mitad", `{"id": 1, "status": "approved", "transaction_amount": 1000,
+			"fee_details": [{"amount": 600, "fee_payer": "collector"}]}`, 0, 0, true},
 		{"cargos mayores al pago", `{"id": 1, "status": "approved", "transaction_amount": 10,
 			"fee_details": [{"amount": 11, "fee_payer": "collector"}]}`, 0, 0, true},
 	}

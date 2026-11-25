@@ -79,9 +79,18 @@ test("anular un recibo desde la ficha: la deuda vuelve y queda en la bitácora",
     );
   expect(href, "hay al menos un cliente en la cartera").toBeTruthy();
   await page.goto(`${href}?ver=pagos`);
+  // El saldo de la tarjeta «Cuenta corriente» (el importe grande). Antes se
+  // buscaba un «Debe/A favor/Al día» que la ficha no tiene, y la espera sin
+  // tope se comía el minuto de la prueba.
   const saldo = async () =>
-    (await page.getByText(/^(Debe|A favor|Al día)/).first().textContent().catch(() => "")) ?? "";
+    (await page
+      .locator("section", { has: page.getByRole("heading", { name: "Cuenta corriente", level: 2 }) })
+      .first()
+      .locator("p.tabular")
+      .first()
+      .textContent({ timeout: 10_000 })) ?? "";
   const antes = await saldo();
+  expect(antes).toMatch(/\$/);
 
   // Un cobro por transferencia: no pide caja.
   await page.getByRole("button", { name: "Registrar cobro" }).first().click();

@@ -101,13 +101,17 @@ export default async function SucursalesPage() {
           viene a buscar es la dirección, el horario y cómo comunicarse, y
           con más sucursales la página no se vuelve un scroll de fotos. Las
           filas salen de `branches`: una sucursal activa nueva aparece sola. */}
-      <div className="contenedor space-y-10 py-10 md:py-14">
+      {/* Abajo, lugar para el botón flotante de WhatsApp: tapaba «Cómo llegar»
+          de la última sucursal en el teléfono. */}
+      <div className="contenedor space-y-10 pt-10 pb-24 md:py-14">
         <ul className="superficie divide-y divide-linea-suave overflow-hidden rounded-2xl">
           {sucursales.map((sucursal) => {
             const comoLlegar =
               sucursal.mapUrl ??
               `https://maps.google.com/?q=${encodeURIComponent(sucursal.direccion)}`;
             const boton = "h-11 w-full rounded-[10px] px-4 text-[15px] md:w-auto";
+            // Si falta el teléfono o el WhatsApp, el que queda va a lo ancho.
+            const unoSolo = !sucursal.telefono || !sucursal.whatsapp;
 
             return (
               <li
@@ -132,21 +136,24 @@ export default async function SucursalesPage() {
                     <p className="flex items-start gap-2 text-[15px] text-texto-2">
                       <Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" aria-hidden="true" />
                       <span className="sr-only">Horario: </span>
-                      {sucursal.horario}
+                      {/* «8:00‑12:00» no se parte en el guion. */}
+                      {sucursal.horario.replace(/(\d)-(\d)/g, "$1\u2011$2")}
                     </p>
                   )}
                 </div>
 
                 {/* Anclas con estilo de botón: un <button> adentro de un <a>
                     es HTML inválido, y acá lo que se hace es navegar. En el
-                    teléfono, las tres del mismo ancho y en una fila. */}
-                <div className="grid grid-cols-3 gap-2 md:flex md:flex-wrap md:justify-end">
+                    teléfono, «Cómo llegar» —lo que más se busca ahí— arriba
+                    y a lo ancho, y Llamar y WhatsApp abajo, de a dos: en tres
+                    columnas quedaba «Có…». */}
+                <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
                   {sucursal.telefono && (
                     <a
                       href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
                       aria-label={`Llamar a ${sucursal.nombre}`}
                       className={buttonVariants({
-                        className: `${boton} bg-accion font-semibold text-white hover:bg-accion-hover`,
+                        className: `${boton} bg-accion font-semibold text-white hover:bg-accion-hover ${unoSolo ? "col-span-2" : ""}`,
                       })}
                     >
                       <Phone className="h-4 w-4" aria-hidden="true" />
@@ -157,7 +164,7 @@ export default async function SucursalesPage() {
                     <BotonWhatsapp
                       enlace={`https://wa.me/${sucursal.whatsapp.replace(/\D/g, "")}`}
                       variante="secundario"
-                      className="w-full px-4 md:w-auto"
+                      className={`w-full border-verde-whatsapp/40 px-4 md:w-auto ${unoSolo ? "col-span-2" : ""}`}
                       aria-label={`WhatsApp de ${sucursal.nombre}`}
                     >
                       WhatsApp
@@ -168,10 +175,13 @@ export default async function SucursalesPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`Cómo llegar a ${sucursal.nombre}`}
-                    className={buttonVariants({ variant: "outline", className: boton })}
+                    className={buttonVariants({
+                      variant: "outline",
+                      className: `${boton} order-first col-span-2 md:order-none`,
+                    })}
                   >
                     <Navigation className="h-4 w-4" aria-hidden="true" />
-                    <span className="truncate">Cómo llegar</span>
+                    Cómo llegar
                   </a>
                 </div>
               </li>

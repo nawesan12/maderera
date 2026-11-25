@@ -1618,8 +1618,29 @@ Pendiente:
       parcial devuelve la deuda entera más el tramo: habría que restar los
       tramos en `AnularRecibo` (o frenarlo).
       Hecho: `AnularRecibo` resta los reintegros parciales.
-- [ ] Las comisiones de Mercado Pago siguen sin asiento (Banco recibe el
+- [x] Las comisiones de Mercado Pago siguen sin asiento (Banco recibe el
       bruto).
+      Hecho (25/11, carril-k): **migración 00200** (`payments.comision` y
+      `neto_acreditado`). El aviso que acredita el pago guarda el neto de
+      `transaction_details.net_received_amount` y la comisión como la
+      diferencia con el importe; sin neto, la suma de `fee_details` que paga
+      el vendedor (`fee_payer` distinto de «payer»). Un aviso posterior sin el
+      dato no lo borra. El cierre asienta Banco por el neto y la comisión en
+      la cuenta nueva **5.1.11 «Comisiones y gastos bancarios»**, en el
+      recibo (repartida entre blanco y B como la parte) y en el pedido en
+      línea sin recibo. El reintegro entero de una vez y la anulación del
+      recibo son el cobro al revés, con la comisión; los tramos parciales
+      salen enteros del banco, como antes (el aviso no dice cuánto de la
+      comisión devolvió MP en cada uno). Sin el dato —todo lo de antes, la
+      transferencia, el mostrador— el asiento es el de siempre: la foto del
+      volumen (`mjbj_volumen_j`, 13 archivos) da igual byte a byte.
+      Pruebas: `TestComisionDeMercadoPagoEnElCierre` ($1000 con $60: Banco
+      $940 y Comisiones $60 contra Deudores $1000), `TestComisionEnUnReciboRepartido`,
+      `TestComisionDeMercadoPago`, `TestAcreditarGuardaLaComision`.
+      **Para el contador**: si la cuenta de comisiones es otra, se cambia en
+      `Cuentas.Comisiones`. **Para Mercado Pago real**: confirmar con un pago
+      de prueba que `net_received_amount` viene en la respuesta de
+      `GET /v1/payments` de la cuenta de la clienta.
 - [x] El efectivo de un recibo emitido sin caja abierta va a Caja en el
       asiento aunque no haya entrado al arqueo.
       No se toca: el asiento a Caja es correcto (la plata entró); lo que falta es el arqueo, y el recibo avisa que se cargue a mano. El cierre no asienta los ingresos manuales de caja, así que no cuenta dos veces.
@@ -1980,12 +2001,40 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   contra la cuenta de antes. «Al día» corta la página antes de buscar saldo y
   compras: un LATERAL debajo de `count(*) OVER ()` y del ORDER BY se corre
   para cada fila antes del LIMIT, no para las 30.
-- **Pendiente de la cartera**: el aging se sigue calculando para todos los
+- ~~**Pendiente de la cartera**: el aging se sigue calculando para todos los
   deudores en cada carga, porque el orden por urgencia sale de ahí; la
   ventana lee toda la cuenta de cada deudor para encontrar su último cero.
   Si con el padrón real pesa, el paso es guardar en `customers` la fecha del
   último saldo cero, mantenida por trigger sobre `account_movements`, y
-  filtrar `created_at >` esa fecha con el índice de la 00168.
+  filtrar `created_at >` esa fecha con el índice de la 00168.~~
+  Hecho (25/11, carril-k): **migración 00201**. `customers.cuenta_en_cero_at`
+  y `_id` son el último movimiento, en el orden de la cuenta (created_at,
+  id), en el que el saldo corrido quedó exactamente en cero (numeric). Lo
+  mantienen tres triggers de sentencia sobre `account_movements` (alta,
+  baja y cambio de monto, fecha o cliente; cambiar el detalle no recalcula):
+  lo normal, un movimiento al final, recorre solo lo posterior al cero; uno
+  con fecha vieja, un borrado o la unión de fichas recorre la cuenta entera
+  de ese cliente. Cada uno toma la fila del cliente (FOR NO KEY UPDATE) antes
+  de mirar la cuenta, así dos cobros a la vez no dejan un cero que no
+  existe. No toca `customers.updated_at`. La migración llena lo de hoy en la
+  misma transacción (7 s con 300.000 movimientos). La cartera lee con un
+  LATERAL por deudor: con un JOIN, Postgres recorría la tabla entera con un
+  hash. Pruebas: `TestCuentaEnCeroSeMantiene` (cada forma de escribir la
+  cuenta, contra el cero calculado de cero y la cartera contra la cuenta de
+  antes), `TestCuentaEnCeroConDosALaVez`, y las de la cartera de siempre.
+  **Medido** (EXPLAIN ANALYZE de la consulta del aging, mediana de 5, la Mac
+  con el Postgres de Docker):
+
+  | Base | Deudores | Movimientos | Antes (ventana) | Después |
+  |---|---|---|---|---|
+  | `mjbj_volumen_j` (5.000 clientes) | 50 | 400 | 5,4 ms | 1,4 ms |
+  | la misma + 60 movimientos por cliente (sintética) | 978 | 302.274 | 836 ms | 32 ms |
+
+  El volumen de ISIS tiene poca cuenta corriente (400 movimientos de 50
+  clientes): la diferencia de verdad se ve con historia. En las dos bases
+  la consulta nueva devuelve las mismas filas que la ventana (400 y 4.894,
+  `EXCEPT ALL` vacío en los dos sentidos). Escribir un
+  movimiento cuesta ~2 ms más en el peor caso (fecha vieja, 62 movimientos).
 - **Revisión del comité (corrector)**: con lock_timeout, un candado ocupado
   ya no es un 500: `plataforma.EnTransaccion` reintenta dos veces (venta,
   cobros, caja, anulación, pedidos) y `ErrorDeRespuesta` contesta 503 a

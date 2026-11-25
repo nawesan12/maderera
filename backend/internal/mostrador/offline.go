@@ -97,12 +97,12 @@ func (s *Servicio) Rutas(m *http.ServeMux) {
 		cajas, err := s.CajasParaVincular(r.Context(), sucursal)
 		return map[string]any{"cajas": cajas}, err
 	}))
-	m.Handle("POST /api/mostrador/caja/vincular", conStaff(s.log, func(_ http.ResponseWriter, r *http.Request, _ *auth.Sesion) (any, error) {
+	m.Handle("POST /api/mostrador/caja/vincular", conStaff(s.log, func(_ http.ResponseWriter, r *http.Request, ses *auth.Sesion) (any, error) {
 		cuerpo, _ := cuerpoJSON(r, map[string]any{}).(map[string]any)
 		id, _ := cuerpo["cajaId"].(string)
 		if id == "" {
 			return map[string]string{"error": "Elegí una caja."}, nil
 		}
-		return s.Vincular(r.Context(), id)
+		return s.Vincular(r.Context(), ses, id)
 	}))
 }

@@ -2,7 +2,10 @@ package mostrador
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -278,19 +281,73 @@ func (s *Servicio) CajasParaVincular(ctx context.Context, sucursal string) ([]ma
 	return out, filas.Err()
 }
 
-// Vincular devuelve la caja con su secreto (o el error para mostrar).
-func (s *Servicio) Vincular(ctx context.Context, id string) (map[string]any, error) {
-	var c struct{ ID, Codigo, Secreto string }
-	err := s.pool.QueryRow(ctx, `
-		UPDATE pos_devices SET ultima_vez_at = now() WHERE id::text = $1 AND activo = true
-		RETURNING id, codigo, secreto`, id).Scan(&c.ID, &c.Codigo, &c.Secreto)
+// enUsoHace es cuánto sin latido tiene que pasar para que otra PC tome una
+// caja sin un admin. La PC vinculada late cada 20 s (use-conexion.ts): dos
+// minutos son seis latidos perdidos, una PC apagada o sin red.
+const enUsoHace = 2 * time.Minute
+
+// Vincular entrega la caja a esta PC con un secreto nuevo (o el error para
+// mostrar). Antes devolvía el secreto vigente sin mirar nada: dos PCs
+// quedaban con la misma caja, los números provisorios se repetían y el
+// latido de una pisaba los pendientes de la otra. Ahora:
+//   - con ventas sin subir no se entrega (como Desvincular): esa plata la
+//     cuenta el cierre por los pendientes que manda la otra PC;
+//   - si latió hace menos de enUsoHace, está en uso: solo un admin la toma;
+//   - el secreto se rota, así la PC que la tenía deja de reconocerse
+//     (cajaVigente en el latido) y pide vincularse otra vez.
+func (s *Servicio) Vincular(ctx context.Context, ses *auth.Sesion, id string) (map[string]any, error) {
+	if !plataforma.UUIDValido(id) {
+		return map[string]any{"error": "Esa caja no existe o está dada de baja."}, nil
+	}
+	crudo := make([]byte, 24)
+	if _, err := rand.Read(crudo); err != nil {
+		return nil, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var codigo string
+	var pendientes int
+	var ultima *time.Time
+	var enUso bool
+	err = tx.QueryRow(ctx, `SELECT codigo, pendientes, ultima_vez_at, coalesce(ultima_vez_at > now() - make_interval(secs => $2), false)
+		FROM pos_devices WHERE id = $1 AND activo = true FOR UPDATE`, id, enUsoHace.Seconds()).Scan(&codigo, &pendientes, &ultima, &enUso)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return map[string]any{"error": "Esa caja no existe o está dada de baja."}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"caja": map[string]any{"id": c.ID, "codigo": c.Codigo, "secreto": c.Secreto}}, nil
+	if pendientes > 0 {
+		ventas := "ventas cobradas"
+		if pendientes == 1 {
+			ventas = "venta cobrada"
+		}
+		return map[string]any{"error": fmt.Sprintf("%s tiene %d %s en otra PC que todavía no subieron. Esperá a que suban.", codigo, pendientes, ventas)}, nil
+	}
+	admin := ses != nil && ses.RolStaff != nil && *ses.RolStaff == sqlc.StaffRoleAdmin
+	if enUso && !admin {
+		return map[string]any{"error": codigo + " se está usando en otra PC. Elegí otra caja, o pedile a un admin que la pase a esta."}, nil
+	}
+	secreto := base64.RawURLEncoding.EncodeToString(crudo)
+	if _, err := tx.Exec(ctx, `UPDATE pos_devices SET secreto = $2, ultima_vez_at = now(), pendientes = 0 WHERE id = $1`, id, secreto); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	desc := "Vinculó la terminal " + codigo + " a una PC"
+	var datos any
+	if ultima != nil {
+		datos = map[string]any{"ultimoLatido": ultima.UTC().Format(time.RFC3339)}
+		if enUso {
+			desc = "Pasó la terminal " + codigo + " a otra PC (la anterior seguía en uso)"
+		}
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "caja", id, desc, datos)
+	return map[string]any{"caja": map[string]any{"id": id, "codigo": codigo, "secreto": secreto}}, nil
 }
 
 // Latido dice quién es, si sigue abierta la caja y la hora del servidor, y

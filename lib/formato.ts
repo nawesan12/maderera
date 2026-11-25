@@ -453,3 +453,19 @@ export function enlaceDeWhatsapp(telefono: string, mensaje?: string): string {
 export function diasDesde(fecha: Date): number {
   return Math.max(0, Math.floor((Date.now() - fecha.getTime()) / 86_400_000));
 }
+
+/**
+ * Si la lista se está mirando con un filtro o una búsqueda (lo que no es la
+ * página ni un «todos»). Sirve para separar «ningún resultado coincide» del
+ * vacío de verdad, que tiene que decir cómo empezar.
+ */
+export function hayFiltro(params: Record<string, string | string[] | undefined>): boolean {
+  return Object.entries(params).some(
+    ([clave, valor]) =>
+      clave !== "pagina" &&
+      typeof valor === "string" &&
+      valor.trim() !== "" &&
+      valor !== "todos" &&
+      valor !== "todas",
+  );
+}

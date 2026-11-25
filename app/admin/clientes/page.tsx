@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { Vacio } from "@/components/admin/vacio";
+import { puedeEntrar } from "@/lib/roles";
+import { requireStaff } from "@/lib/dal/session";
+import { hayFiltro } from "@/lib/formato";
 import { redirect } from "next/navigation";
 import {
   Building2,
@@ -50,7 +54,7 @@ export default async function ClientesPage({
     cobrar?: string;
   }>;
 }) {
-  const params = await searchParams;
+  const [params, usuario] = await Promise.all([searchParams, requireStaff()]);
   const pagina = leerPagina(params.pagina);
   const paginaDeudores = leerPagina(params.cobrar);
   const filtros = {
@@ -145,10 +149,28 @@ export default async function ClientesPage({
         rubroActual={params.rubro ?? "todos"}
       />
 
-      {total === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
-          <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-base font-medium">Ningún cliente coincide</p>
+      {/* Sin filtro y en cero no es «ningún cliente coincide»: es la cartera
+          vacía, y dice cómo empezar (comité del 25/11). */}
+      {total === 0 && hayFiltro(filtros) ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Users}
+            titulo="Ningún cliente coincide"
+            accion={{ texto: "Limpiar filtros", href: "/admin/clientes" }}
+          />
+        </div>
+      ) : total === 0 ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Users}
+            titulo="Todavía no hay clientes"
+            detalle="Cargá el primero con «Nuevo cliente» o traé la cartera del sistema viejo."
+            accion={
+              puedeEntrar("/admin/migracion", usuario.staffRole)
+                ? { texto: "Traer del sistema viejo", href: "/admin/migracion?que=clientes" }
+                : undefined
+            }
+          />
         </div>
       ) : (
         <>

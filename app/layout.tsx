@@ -96,8 +96,13 @@ export const metadata: Metadata = {
  * propósito: un efecto corre después de que el navegador ya dibujó, así que
  * quien eligió modo oscuro veía un destello blanco en cada navegación. Es la
  * única excepción a "nada de scripts inline", y la paga bien.
+ *
+ * Sin una elección guardada manda el sistema (comité del 25/11): un teléfono
+ * en oscuro que llegaba por primera vez desde WhatsApp veía todo en claro. Y
+ * mientras nadie elija, sigue al sistema si cambia (el teléfono que pasa a
+ * oscuro a la noche). El interruptor guarda solo la elección explícita.
  */
-const APLICAR_TEMA = `try{if(localStorage.getItem("theme")==="dark")document.documentElement.classList.add("dark")}catch(e){}`;
+const APLICAR_TEMA = `try{var d=document.documentElement,m=window.matchMedia("(prefers-color-scheme: dark)"),e=function(){var t=null;try{t=localStorage.getItem("theme")}catch(x){}return t==="dark"||t==="light"?t:null},a=function(){var t=e();d.classList.toggle("dark",t?t==="dark":m.matches)};a();m.addEventListener("change",function(){if(!e())a()})}catch(x){}`;
 
 export default function RootLayout({
   children,

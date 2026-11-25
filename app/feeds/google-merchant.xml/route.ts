@@ -44,7 +44,7 @@ const feedCacheado = cachearPublico(
             sku: v.sku,
             medida: v.label,
             precio: v.precio,
-            disponibilidad: combinedStockLevel([v.stockCentral, v.stockAserradero]),
+            disponibilidad: combinedStockLevel(v.stock.map((s) => s.nivel)),
             color: v.color,
             conMedidas: Boolean(v.largoMm || v.anchoMm || v.espesorMm),
           })),

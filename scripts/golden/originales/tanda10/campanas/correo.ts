@@ -1,6 +1,6 @@
 import "server-only";
 
-import { envolver } from "@/lib/email/plantillas";
+import { envolver } from "../../email/plantillas";
 import { urlBase } from "@/lib/pagos/config";
 import { primerNombre } from "@/lib/formato";
 import type { Campana } from "@/lib/db/schema";

@@ -16,15 +16,14 @@ import {
  *
  * Mientras el sitio vivió en Vercel no había ningún proceso periódico: lo que
  * tenía que pasar «todos los días» era un botón (los recordatorios de eventos)
- * o no pasaba (la tabla de límites crecía sin fin). En el servidor propio un
- * contenedor `cron` llama a `/api/tareas/<tarea>` y estas filas son lo que
- * hace que **llamarla dos veces no haga nada dos veces**: la clave única
- * `(tarea, periodo)` es el candado. Un cron que se reinicia a mitad de la
- * mañana, o alguien que la dispara a mano para probar, no manda dos veces el
- * parte del día.
+ * o no pasaba (la tabla de límites crecía sin fin). En el servidor propio las
+ * corre el worker de Go (backend/cmd/mjbj/worker.go, internal/tareas) y estas
+ * filas son lo que hace que **correrla dos veces no haga nada dos veces**: la
+ * clave única `(tarea, periodo)` es el candado. Un worker que se reinicia a
+ * mitad de la mañana no manda dos veces el parte del día.
  *
  * Una corrida que falló se puede repetir en el mismo período; una que quedó
- * «corriendo» porque el contenedor se cayó, también, pasada media hora.
+ * «corriendo» porque el worker se cayó, también, pasada media hora.
  */
 export const estadoTarea = pgEnum("estado_tarea", ["corriendo", "ok", "error"]);
 

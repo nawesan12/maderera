@@ -40,8 +40,10 @@ type ProductoBot struct {
 	Nombre  string
 	Slug    string
 	Medidas []string
-	Central bool
-	Aserr   bool
+	// ConStock son los nombres de las sucursales activas que tienen, en el
+	// orden de branches; Sucursales, cuántas activas hay.
+	ConStock   []string
+	Sucursales int
 }
 
 // Buscador busca en el catálogo. Lo pone cmd/mjbj: el paquete no conoce el
@@ -580,18 +582,43 @@ func listarProductos(ps []ProductoBot, sitio string, stock bool) string {
 			b.WriteString("\n" + strings.Join(ms, " · "))
 		}
 		if stock {
-			switch {
-			case p.Central && p.Aserr:
-				b.WriteString("\nHay en las dos sucursales")
-			case p.Central:
-				b.WriteString("\nHay en Casa Central")
-			case p.Aserr:
-				b.WriteString("\nHay en el Aserradero")
+			if d := dondeHay(p); d != "" {
+				b.WriteString("\nHay en " + d)
 			}
 		}
 		b.WriteString("\n" + sitio + "/catalogo/" + p.Slug + "\n")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// dondeHay es «las dos sucursales», «todas las sucursales» o las que tienen,
+// con el artículo de cada una («el Aserradero»).
+func dondeHay(p ProductoBot) string {
+	n := len(p.ConStock)
+	switch {
+	case n == 0:
+		return ""
+	case n == p.Sucursales && n == 2:
+		return "las dos sucursales"
+	case n == p.Sucursales && n > 2:
+		return "todas las sucursales"
+	}
+	nombres := make([]string, n)
+	for i, x := range p.ConStock {
+		nombres[i] = conArticulo(x)
+	}
+	if n == 1 {
+		return nombres[0]
+	}
+	return strings.Join(nombres[:n-1], ", ") + " y " + nombres[n-1]
+}
+
+// conArticulo: «el Aserradero» se dice con artículo; Casa Central, no.
+func conArticulo(nombre string) string {
+	if strings.EqualFold(nombre, "Aserradero") {
+		return "el " + nombre
+	}
+	return nombre
 }
 
 func plural(n int, uno, varios string) string {

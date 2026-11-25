@@ -264,7 +264,11 @@ components:
     filtro_categoria: { name: categoria, in: query, schema: { type: string } }
     filtro_subcategoria: { name: subcategoria, in: query, schema: { type: string } }
     filtro_busqueda: { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
-    filtro_stock: { name: stock, in: query, schema: { type: string, enum: [todos, en-stock, casa-central, aserradero] } }
+    filtro_stock:
+      name: stock
+      in: query
+      description: todos, en-stock o el slug de una sucursal activa (solo lo que hay en esa)
+      schema: { type: string, maxLength: 60, pattern: "^[a-z0-9-]+$" }
     filtro_orden: { name: orden, in: query, schema: { type: string, enum: [relevancia, precio-asc, precio-desc, nombre] } }
     filtro_soloOfertas: { name: soloOfertas, in: query, schema: { type: boolean } }
     filtro_marca: { name: marca, in: query, schema: { type: string } }
@@ -346,6 +350,13 @@ components:
         detail: { type: string }
         errores: { type: object, additionalProperties: { type: string } }
     NivelStock: { type: string, enum: [alto, medio, bajo, sin-stock] }
+    StockDeSucursal:
+      type: object
+      required: [sucursal, nombre, nivel]
+      properties:
+        sucursal: { type: string, description: el slug de branches }
+        nombre: { type: string }
+        nivel: { $ref: "#/components/schemas/NivelStock" }
     ListaYVista:
       type: object
       required: [lista, vista]
@@ -386,7 +397,7 @@ components:
         productCount: { type: integer }
     ProductoListado:
       type: object
-      required: [id, slug, name, description, subcategory, subcategorySlug, subcategoryName, brand, unit, alicuotaIva, aPedido, formaDeVenta, precioMediaPct, featured, categorySlug, categoryName, image, precioDesde, precioAnterior, descuento, labels, stockCentral, stockAserradero, hayStock]
+      required: [id, slug, name, description, subcategory, subcategorySlug, subcategoryName, brand, unit, alicuotaIva, aPedido, formaDeVenta, precioMediaPct, featured, categorySlug, categoryName, image, precioDesde, precioAnterior, descuento, labels, stock, stockCentral, stockAserradero, hayStock]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -409,6 +420,10 @@ components:
         precioAnterior: { type: string, nullable: true }
         descuento: { type: number, format: double, nullable: true }
         labels: { type: array, items: { type: string } }
+        stock:
+          description: el nivel en cada sucursal activa, en el orden de branches
+          type: array
+          items: { $ref: "#/components/schemas/StockDeSucursal" }
         stockCentral: { $ref: "#/components/schemas/NivelStock" }
         stockAserradero: { $ref: "#/components/schemas/NivelStock" }
         hayStock: { type: boolean }
@@ -433,7 +448,7 @@ components:
         topeAlcanzado: { type: boolean }
     VarianteDetalle:
       type: object
-      required: [id, sku, label, material, color, terminacion, calidad, largoMm, anchoMm, espesorMm, precio, stockCentral, stockAserradero, disponibles]
+      required: [id, sku, label, material, color, terminacion, calidad, largoMm, anchoMm, espesorMm, precio, stock, stockCentral, stockAserradero, disponibles]
       properties:
         id: { type: string }
         sku: { type: string }
@@ -446,6 +461,9 @@ components:
         anchoMm: { type: integer, nullable: true }
         espesorMm: { type: integer, nullable: true }
         precio: { type: string, nullable: true }
+        stock:
+          type: array
+          items: { $ref: "#/components/schemas/StockDeSucursal" }
         stockCentral: { $ref: "#/components/schemas/NivelStock" }
         stockAserradero: { $ref: "#/components/schemas/NivelStock" }
         disponibles: { type: number, format: double }

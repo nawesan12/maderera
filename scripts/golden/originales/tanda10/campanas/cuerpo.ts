@@ -1,4 +1,4 @@
-import { escapar } from "@/lib/email/plantillas";
+import { escapar } from "../../email/plantillas";
 
 /**
  * El cuerpo de una campaña, de texto a HTML de correo.

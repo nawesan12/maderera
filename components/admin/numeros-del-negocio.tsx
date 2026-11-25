@@ -377,18 +377,15 @@ function Tarjeta({
   );
 }
 
-/** El mes en curso de cada sucursal, en dos cifras. */
+/** El mes en curso de cada sucursal activa, una cifra por sucursal. */
 function MesPorSucursal({
   mes,
 }: {
-  mes?: { mes: string; central: number; aserradero: number };
+  mes?: { mes: string; sucursales: { sucursal: string; nombre: string; total: number }[] };
 }) {
-  const filas = [
-    { nombre: "Casa Central", valor: mes?.central ?? 0 },
-    { nombre: "Aserradero", valor: mes?.aserradero ?? 0 },
-  ];
+  const filas = (mes?.sucursales ?? []).map((s) => ({ nombre: s.nombre, valor: s.total }));
   return (
-    <dl className="grid gap-4 sm:grid-cols-2">
+    <dl className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))]">
       {filas.map((f) => (
         <div key={f.nombre} className="flex flex-col gap-1.5">
           <dt className="text-base font-semibold text-texto-2">

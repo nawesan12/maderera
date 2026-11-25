@@ -40,8 +40,13 @@ describe("partirPendientes", () => {
 });
 
 describe("mesesConVentas", () => {
-  const mes = (central: number, aserradero: number) => ({ mes: "x", central, aserradero });
+  const mes = (...totales: number[]) => ({
+    mes: "x",
+    sucursales: totales.map((total, i) => ({ sucursal: `s${i}`, nombre: `S${i}`, total })),
+  });
   it("cuenta los meses con ventas en alguna sucursal", () => {
+    // Una tercera sucursal cuenta igual que las otras dos (hallazgo 35).
+    expect(mesesConVentas([mes(0, 0, 7), mes(0, 0, 0)])).toBe(1);
     expect(mesesConVentas([mes(0, 0), mes(0, 0)])).toBe(0);
     expect(mesesConVentas([mes(0, 0), mes(100, 0)])).toBe(1);
     expect(mesesConVentas([mes(100, 0), mes(0, 0), mes(0, 50)])).toBe(2);

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Star } from "lucide-react";
 import type { ResenaPublicada, ResumenDeResenas } from "@/lib/dal/resenas";
+import { formatearDecimal } from "@/lib/formato";
 
 /**
  * Las reseñas de un producto.
@@ -32,7 +33,7 @@ export function ResenasDelProducto({
           <p className="flex items-center gap-2">
             <Estrellas cantidad={resumen.promedio} />
             <span className="tabular text-[15px] font-semibold">
-              {resumen.promedio.toFixed(1)}
+              {formatearDecimal(resumen.promedio, 1)}
             </span>
             <span className="text-sm text-texto-3">
               ({resumen.cantidad}{" "}

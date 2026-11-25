@@ -25,7 +25,7 @@ func LineaDeCorreo(descripcion string, cantidad float64, unidad, importe *string
 }
 
 // Las plantillas de los avisos de pedidos, pagos, presupuestos y entregas
-// (lib/email/plantillas.ts: pedidoRecibido, pedidoCambioDeEstado,
+// (scripts/golden/originales/email/plantillas.ts: pedidoRecibido, pedidoCambioDeEstado,
 // pagoAcreditado, presupuestoListo, pedidoParaFirmar, remitoFirmado, y el acuse del
 // presupuesto de lib/notificaciones/presupuestos.ts), comparadas con el TS en
 // el golden de avisos (testdata/golden/avisos/pedidos.json).

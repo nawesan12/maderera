@@ -487,13 +487,30 @@ export interface components {
             presupuestosRevision: number;
             clientesActivos: number;
             reponer: number;
+            /** @description cada sucursal activa, en el orden de branches */
+            reponerPorSucursal: components["schemas"]["CantidadDeSucursal"][];
             reponerCentral: number;
             reponerAserradero: number;
             pedidosSinEntregar: number;
             clientesConPedido: number;
         };
+        CantidadDeSucursal: {
+            /** @description el slug de branches */
+            sucursal: string;
+            nombre: string;
+            cantidad: number;
+        };
+        VentaDeSucursal: {
+            /** @description el slug de branches */
+            sucursal: string;
+            nombre: string;
+            /** Format: double */
+            total: number;
+        };
         InicioMes: {
             mes: string;
+            /** @description cada sucursal activa, en el orden de branches */
+            sucursales: components["schemas"]["VentaDeSucursal"][];
             /** Format: double */
             central: number;
             /** Format: double */

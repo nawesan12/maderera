@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"mjbj/internal/jsmath"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -22,10 +24,13 @@ type Metricas struct {
 	PresupuestosRevision   int      `json:"presupuestosRevision"`
 	ClientesActivos        int      `json:"clientesActivos"`
 	Reponer                int      `json:"reponer"`
-	ReponerCentral         int      `json:"reponerCentral"`
-	ReponerAserradero      int      `json:"reponerAserradero"`
-	PedidosSinEntregar     int      `json:"pedidosSinEntregar"`
-	ClientesConPedido      int      `json:"clientesConPedido"`
+	// ReponerPorSucursal es cada sucursal activa, en el orden de branches
+	// (hallazgo 35); los dos de abajo son los de antes, leídos de acá.
+	ReponerPorSucursal []CantidadDeSucursal `json:"reponerPorSucursal"`
+	ReponerCentral     int                  `json:"reponerCentral"`
+	ReponerAserradero  int                  `json:"reponerAserradero"`
+	PedidosSinEntregar int                  `json:"pedidosSinEntregar"`
+	ClientesConPedido  int                  `json:"clientesConPedido"`
 }
 
 // consultaDeMetricas son las ventas del período y del anterior, y los
@@ -66,34 +71,84 @@ func (s *Servicio) MetricasDelResumen(ctx context.Context, p Periodo) (Metricas,
 		SELECT
 		  (SELECT (count(*) FILTER (WHERE estado IN ('pendiente', 'revision', 'enviado')))::int FROM quotes),
 		  (SELECT (count(*) FILTER (WHERE estado = 'revision'))::int FROM quotes),
-		  (SELECT count(*)::int FROM customers WHERE active = true),
-		  (SELECT count(*)::int FROM inventory i JOIN product_variants v ON v.id = i.variant_id JOIN products p ON p.id = v.product_id
-		     JOIN branches b ON b.id = i.branch_id
-		     WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty <= i.min_qty AND b.slug = 'casa-central'),
-		  (SELECT count(*)::int FROM inventory i JOIN product_variants v ON v.id = i.variant_id JOIN products p ON p.id = v.product_id
-		     JOIN branches b ON b.id = i.branch_id
-		     WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty <= i.min_qty AND b.slug = 'aserradero')`).
-		Scan(&m.PresupuestosPendientes, &m.PresupuestosRevision, &m.ClientesActivos, &m.ReponerCentral, &m.ReponerAserradero)
+		  (SELECT count(*)::int FROM customers WHERE active = true)`).
+		Scan(&m.PresupuestosPendientes, &m.PresupuestosRevision, &m.ClientesActivos)
 	if err != nil {
+		return m, err
+	}
+	rs, err := s.pool.Query(ctx, `
+		SELECT b.slug, b.name, count(i.variant_id) FILTER (WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty <= i.min_qty)::int
+		FROM branches b
+		LEFT JOIN inventory i ON i.branch_id = b.id
+		LEFT JOIN product_variants v ON v.id = i.variant_id
+		LEFT JOIN products p ON p.id = v.product_id
+		WHERE b.active
+		GROUP BY b.id, b.slug, b.name, b.sort_order
+		ORDER BY b.sort_order, b.name, b.id`)
+	if err != nil {
+		return m, err
+	}
+	m.ReponerPorSucursal = []CantidadDeSucursal{}
+	var c CantidadDeSucursal
+	if _, err := pgx.ForEachRow(rs, []any{&c.Sucursal, &c.Nombre, &c.Cantidad}, func() error {
+		m.ReponerPorSucursal = append(m.ReponerPorSucursal, c)
+		m.Reponer += c.Cantidad
+		switch c.Sucursal {
+		case "casa-central":
+			m.ReponerCentral = c.Cantidad
+		case "aserradero":
+			m.ReponerAserradero = c.Cantidad
+		}
+		return nil
+	}); err != nil {
 		return m, err
 	}
 	m.VentasMes = actual.F()
 	m.VariacionVentas = Variacion(actual.F(), previo.F())
-	m.Reponer = m.ReponerCentral + m.ReponerAserradero
 	return m, nil
+}
+
+// CantidadDeSucursal es un conteo de una sucursal activa.
+type CantidadDeSucursal struct {
+	Sucursal string `json:"sucursal"`
+	Nombre   string `json:"nombre"`
+	Cantidad int    `json:"cantidad"`
+}
+
+// VentaDeSucursal es lo vendido en un mes por una sucursal activa.
+type VentaDeSucursal struct {
+	Sucursal string  `json:"sucursal"`
+	Nombre   string  `json:"nombre"`
+	Total    float64 `json:"total"`
 }
 
 // VentasDelMes es un mes del gráfico del resumen, por sucursal.
 type VentasDelMes struct {
-	Mes        string  `json:"mes"`
-	Central    float64 `json:"central"`
-	Aserradero float64 `json:"aserradero"`
+	Mes string `json:"mes"`
+	// Sucursales es cada sucursal activa, en el orden de branches; Central y
+	// Aserradero son las dos de antes.
+	Sucursales []VentaDeSucursal `json:"sucursales"`
+	Central    float64           `json:"central"`
+	Aserradero float64           `json:"aserradero"`
 }
 
 // VentasPorSucursal es ventasPorSucursal del resumen: los últimos seis meses
 // (argentinos), con los meses sin ventas en cero.
 func (s *Servicio) VentasPorSucursal(ctx context.Context) ([]VentasDelMes, error) {
 	ahora := s.ahora()
+	type sucursal struct{ slug, nombre string }
+	var sucursales []sucursal
+	bs, err := s.pool.Query(ctx, `SELECT slug, name FROM branches WHERE active ORDER BY sort_order, name, id`)
+	if err != nil {
+		return nil, err
+	}
+	var b sucursal
+	if _, err := pgx.ForEachRow(bs, []any{&b.slug, &b.nombre}, func() error {
+		sucursales = append(sucursales, b)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 	rs, err := s.pool.Query(ctx, `
 		SELECT to_char(o.fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM'), b.slug, sum(o.monto)
 		FROM `+hechosDeVenta+` o LEFT JOIN branches b ON b.id = o.branch_id
@@ -103,7 +158,8 @@ func (s *Servicio) VentasPorSucursal(ctx context.Context) ([]VentasDelMes, error
 		return nil, err
 	}
 	defer rs.Close()
-	central, aserradero := map[string]float64{}, map[string]float64{}
+	// por mes y slug
+	vendido := map[string]map[string]float64{}
 	for rs.Next() {
 		var mes string
 		var slug *string
@@ -111,12 +167,13 @@ func (s *Servicio) VentasPorSucursal(ctx context.Context) ([]VentasDelMes, error
 		if err := rs.Scan(&mes, &slug, &total); err != nil {
 			return nil, err
 		}
-		if slug != nil && *slug == "casa-central" {
-			central[mes] = total.F()
+		if slug == nil {
+			continue
 		}
-		if slug != nil && *slug == "aserradero" {
-			aserradero[mes] = total.F()
+		if vendido[mes] == nil {
+			vendido[mes] = map[string]float64{}
 		}
+		vendido[mes][*slug] = total.F()
 	}
 	if err := rs.Err(); err != nil {
 		return nil, err
@@ -125,7 +182,12 @@ func (s *Servicio) VentasPorSucursal(ctx context.Context) ([]VentasDelMes, error
 	for i := 5; i >= 0; i-- {
 		d := InicioDeMes(ahora, i)
 		clave := claveDeMes(d)
-		out = append(out, VentasDelMes{Mes: mesesDelResumen[d.Month()-1], Central: central[clave], Aserradero: aserradero[clave]})
+		m := VentasDelMes{Mes: mesesDelResumen[d.Month()-1], Sucursales: make([]VentaDeSucursal, 0, len(sucursales)),
+			Central: vendido[clave]["casa-central"], Aserradero: vendido[clave]["aserradero"]}
+		for _, b := range sucursales {
+			m.Sucursales = append(m.Sucursales, VentaDeSucursal{Sucursal: b.slug, Nombre: b.nombre, Total: vendido[clave][b.slug]})
+		}
+		out = append(out, m)
 	}
 	return out, nil
 }

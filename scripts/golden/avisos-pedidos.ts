@@ -1,6 +1,6 @@
 /**
  * Golden de los correos de pedidos, pagos, presupuestos y entregas
- * (lib/email/plantillas.ts: pedidoRecibido, pedidoCambioDeEstado,
+ * (scripts/golden/originales/email/plantillas.ts: pedidoRecibido, pedidoCambioDeEstado,
  * pagoAcreditado, presupuestoListo, pedidoParaFirmar, remitoFirmado; y el acuse del
  * presupuesto, que vivía sin exportar en lib/notificaciones/presupuestos.ts
  * —copia textual de 7c087bb, abajo—). El Go
@@ -21,7 +21,7 @@ async function main() {
   if (new Date("2026-06-01T12:00:00Z").getTimezoneOffset() !== 180) {
     throw new Error("Correlo con TZ=America/Argentina/Buenos_Aires");
   }
-  const p = await import("../../lib/email/plantillas");
+  const p = await import("./originales/email/plantillas");
   const { fechaHora } = await import("../../lib/formato");
 
   // --- copia textual de acuse() (lib/notificaciones/presupuestos.ts, 7c087bb) ---

@@ -1524,8 +1524,12 @@ en paralelo).
         `originales/tanda10`), vitest (`tests/correo*.test.ts`) y el bench de
         la tanda 10. Se puede mover a `scripts/golden/originales` y sacar
         `nodemailer`, `resend` y `web-push` del `package.json`.
-  - [ ] Sacar `TAREAS_SECRETO` de `.env.example` y del `.env.produccion` de
-        la VPS (el compose ya no la pide).
+  - [x] ~~Sacar `TAREAS_SECRETO` de `.env.example`~~ (25/11, carril-m: ni
+        `.env.example`, ni el compose, ni `scripts/` la nombran; se fueron
+        también `pendientesDelRol` y los comentarios que hablaban del
+        contenedor `cron` y de `/api/tareas`).
+  - [ ] Sacarla del `.env.produccion` de la VPS (el compose ya no la pide):
+        va por ssh, con las claves VAPID.
   - [x] `notificarPresupuestoEnviado` no lo llamaba nadie (se borró con
         `presupuestos.ts`): el presupuesto armado no se avisaba por correo
         ni por WhatsApp al pasar a «enviado». Era así antes de la mudanza.
@@ -2080,9 +2084,21 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   limitador cuenta por IP y por correo o por el `wa_id` del teléfono.
 - **Pendiente de la clienta**: dónde se cortan las placas
   (`DONDE_SE_CORTA` en `lib/sucursales.ts`).
-- **Sin verificar a ojo** (no hay servidor en el carril): la placa en
-  celular y escritorio, en claro y en oscuro; la veta al 7 %; la hoja del
-  asistente en el celular. Va para el carril que verifica.
+- ~~**Sin verificar a ojo**: la placa en celular y escritorio, en claro y en
+  oscuro; la veta al 7 %; la hoja del asistente en el celular.~~ Verificado
+  el 25/11 (carril-m) en local con Playwright, a 1440 y 390, claro y oscuro:
+  portada, catálogo y cuatro fichas (placas, construcción en seco, Moldava,
+  ferretería) y la hoja del asistente con una búsqueda. Sin scroll de costado
+  ni rubros que se salgan de la placa; el contraste de texto ya lo mide la
+  prueba de `lib/catalogo/placa.ts`. Capturas en
+  `docs/comite/2026-11-25-placa/`. Se arregló: la veta en oscuro baja del 6
+  al 3,5 % (se veía como chapa cepillada: el doble de desvío de luminancia
+  que en claro); en el asistente, el producto sin foto muestra la muestra de
+  placa de su rubro en vez de un cuadrado vacío, los botones no repiten
+  destino («Hablar con alguien» y «Quiero hablar con alguien») y el fondo de
+  la hoja en oscuro es más denso. Ojo: el tema oscuro sale de
+  `localStorage.theme`, no de `prefers-color-scheme`; para capturas hay que
+  fijarlo antes de cargar.
 
 ## T1 del comité: lo que no podía esperar (18/11, rama `carril-a`)
 

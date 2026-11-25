@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { FileText, Lock, Unlock } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { fechaCorta } from "@/lib/formato";
+import { fechaCorta, formatearPeso } from "@/lib/formato";
 import {
   categoriasDeDocumentos,
   listarDocumentos,
@@ -13,11 +13,7 @@ import { listarCategorias } from "@/lib/dal/catalog";
 
 export const metadata: Metadata = { title: "Documentación técnica" };
 
-function peso(bytes: number | null): string {
-  if (!bytes) return "";
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+const peso = formatearPeso;
 
 /**
  * Biblioteca técnica (cláusula 1.7).

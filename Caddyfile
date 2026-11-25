@@ -10,6 +10,34 @@
 # forma de que un día digan cosas distintas. La única excepción es
 # `/subidas/`, que Caddy sirve del disco sin pasar por Next (ver abajo).
 
+# **Cloudflare, cuando se encienda.** Hoy el dominio resuelve directo a la
+# VPS y esto no cambia nada: las conexiones no vienen de esos rangos. Con el
+# proxy de Cloudflare prendido, cada pedido llega desde un servidor de
+# Cloudflare, y sin esto los límites de frecuencia, fail2ban y la bitácora
+# verían a todo el mundo con la IP de Cloudflare. Solo de esos rangos se cree
+# CF-Connecting-IP (de otro lado la puede escribir cualquiera), y el
+# `client_ip` del registro y de `{client_ip}` es el del visitante. La lista
+# es la de https://www.cloudflare.com/ips/ (20/11/2026) y es la misma que
+# `rangosDeCloudflare` en backend/internal/plataforma/servidor.go: una
+# prueba de Go compara las dos.
+{
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+		trusted_proxies_strict
+	}
+}
+
+# Lo que todos los `reverse_proxy` le pasan a quien atiende: la IP del
+# visitante como único X-Forwarded-For (Go toma el último valor; Next, el
+# primero) y en X-Real-IP. `{client_ip}` es la conexión, salvo que venga de
+# Cloudflare. Sin esto, con un proxy de confianza Caddy conserva el
+# X-Forwarded-For que llega, que el visitante puede escribir.
+(ip_del_cliente) {
+	header_up X-Forwarded-For {client_ip}
+	header_up X-Real-IP {client_ip}
+}
+
 # El `www` lleva al dominio sin `www`, y lo mismo el dominio alternativo
 # (`mjbj.ar`, con y sin `www`, cuando el principal es `mjbj.com.ar`): un 301
 # conserva lo que Google ya tiene indexado y los enlaces viejos. La lista la
@@ -68,7 +96,9 @@ correo.{$CORREO_DOMINIO} {
 	request_body {
 		max_size 40MB
 	}
-	reverse_proxy correo-web:8090
+	reverse_proxy correo-web:8090 {
+		import ip_del_cliente
+	}
 	encode zstd gzip
 }
 
@@ -163,6 +193,7 @@ autoconfig.{$CORREO_DOMINIO} {
 			max_size 450MB
 		}
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
@@ -174,6 +205,7 @@ autoconfig.{$CORREO_DOMINIO} {
 			max_size 25MB
 		}
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			flush_interval -1
 			lb_try_duration 30s
 			lb_try_interval 250ms
@@ -186,6 +218,7 @@ autoconfig.{$CORREO_DOMINIO} {
 	@cortesGo path_regexp ^/api/cortes/(pendientes|[^/]+/(lista|ptx))$
 	handle @cortesGo {
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
@@ -197,6 +230,7 @@ autoconfig.{$CORREO_DOMINIO} {
 	@mostradorGo path /api/mostrador/latido /api/mostrador/catalogo /api/mostrador/clientes /api/mostrador/caja/*
 	handle @mostradorGo {
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
@@ -209,6 +243,7 @@ autoconfig.{$CORREO_DOMINIO} {
 	@diagnosticoGo path /api/diagnostico
 	handle @diagnosticoGo {
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
@@ -220,6 +255,7 @@ autoconfig.{$CORREO_DOMINIO} {
 			max_size 25MB
 		}
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
@@ -231,6 +267,7 @@ autoconfig.{$CORREO_DOMINIO} {
 	@baja path /api/baja
 	handle @baja {
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
@@ -241,6 +278,7 @@ autoconfig.{$CORREO_DOMINIO} {
 	@pagosGo path /api/pagos/webhook
 	handle @pagosGo {
 		reverse_proxy api:8080 {
+			import ip_del_cliente
 			lb_try_duration 30s
 			lb_try_interval 250ms
 		}
@@ -280,12 +318,10 @@ autoconfig.{$CORREO_DOMINIO} {
 		}
 
 		reverse_proxy app:3000 {
-			# **La IP del cliente, sin que el cliente la pueda inventar.** Caddy
-			# no confía en el `X-Forwarded-For` que llega de afuera —no hay
-			# `trusted_proxies` declarados— y lo reemplaza por la IP real de la
-			# conexión, así que el primer valor que lee `lib/limites` es
-			# siempre el verdadero. `X-Real-IP` se pisa por lo mismo.
-			header_up X-Real-IP {remote_host}
+			import ip_del_cliente
+			# **La IP del cliente, sin que el cliente la pueda inventar**: la
+			# pone `ip_del_cliente` (arriba), así que el primer valor que lee
+			# `lib/limites` es siempre el verdadero.
 
 			# Que las respuestas en streaming —las páginas con Suspense, el
 			# asistente— lleguen a medida que se arman y no todas juntas al

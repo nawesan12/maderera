@@ -62,30 +62,97 @@ func Combinado(niveles []NivelStock) NivelStock {
 
 // ProductoListado es la tarjeta del catálogo (mismos campos que el TS).
 type ProductoListado struct {
-	ID              string     `json:"id"`
-	Slug            string     `json:"slug"`
-	Name            string     `json:"name"`
-	Description     string     `json:"description"`
-	Subcategory     *string    `json:"subcategory"`
-	SubcategorySlug *string    `json:"subcategorySlug"`
-	SubcategoryName *string    `json:"subcategoryName"`
-	Brand           *string    `json:"brand"`
-	Unit            string     `json:"unit"`
-	AlicuotaIva     string     `json:"alicuotaIva"`
-	APedido         bool       `json:"aPedido"`
-	FormaDeVenta    string     `json:"formaDeVenta"`
-	PrecioMediaPct  float64    `json:"precioMediaPct"`
-	Featured        bool       `json:"featured"`
-	CategorySlug    string     `json:"categorySlug"`
-	CategoryName    string     `json:"categoryName"`
-	Image           *string    `json:"image"`
-	PrecioDesde     *string    `json:"precioDesde"`
-	PrecioAnterior  *string    `json:"precioAnterior"`
-	Descuento       *float64   `json:"descuento"`
-	Labels          []string   `json:"labels"`
-	StockCentral    NivelStock `json:"stockCentral"`
-	StockAserradero NivelStock `json:"stockAserradero"`
-	HayStock        bool       `json:"hayStock"`
+	ID              string   `json:"id"`
+	Slug            string   `json:"slug"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description"`
+	Subcategory     *string  `json:"subcategory"`
+	SubcategorySlug *string  `json:"subcategorySlug"`
+	SubcategoryName *string  `json:"subcategoryName"`
+	Brand           *string  `json:"brand"`
+	Unit            string   `json:"unit"`
+	AlicuotaIva     string   `json:"alicuotaIva"`
+	APedido         bool     `json:"aPedido"`
+	FormaDeVenta    string   `json:"formaDeVenta"`
+	PrecioMediaPct  float64  `json:"precioMediaPct"`
+	Featured        bool     `json:"featured"`
+	CategorySlug    string   `json:"categorySlug"`
+	CategoryName    string   `json:"categoryName"`
+	Image           *string  `json:"image"`
+	PrecioDesde     *string  `json:"precioDesde"`
+	PrecioAnterior  *string  `json:"precioAnterior"`
+	Descuento       *float64 `json:"descuento"`
+	Labels          []string `json:"labels"`
+	// Stock es el nivel en cada sucursal activa, en el orden de branches
+	// (sort_order): una sucursal nueva aparece sin tocar código (hallazgo
+	// 35). StockCentral y StockAserradero son las dos de antes, leídas de
+	// esta lista por slug, mientras quede quien las lea.
+	Stock           []StockDeSucursal `json:"stock"`
+	StockCentral    NivelStock        `json:"stockCentral"`
+	StockAserradero NivelStock        `json:"stockAserradero"`
+	HayStock        bool              `json:"hayStock"`
+}
+
+// StockDeSucursal es el nivel de stock de una sucursal activa.
+type StockDeSucursal struct {
+	Sucursal string     `json:"sucursal"`
+	Nombre   string     `json:"nombre"`
+	Nivel    NivelStock `json:"nivel"`
+}
+
+// Las dos sucursales de los campos viejos.
+const (
+	slugCentral    = "casa-central"
+	slugAserradero = "aserradero"
+)
+
+// sucursalActiva es una fila de branches que el sitio muestra.
+type sucursalActiva struct{ slug, nombre string }
+
+// sucursalesActivas son las de branches con active, por sort_order, como la
+// grilla de stock del panel.
+func (s *Servicio) sucursalesActivas(ctx context.Context) ([]sucursalActiva, error) {
+	filas, err := s.pool.Query(ctx, `SELECT slug, name FROM branches WHERE active ORDER BY sort_order, name, id`)
+	if err != nil {
+		return nil, err
+	}
+	var out []sucursalActiva
+	var b sucursalActiva
+	_, err = pgx.ForEachRow(filas, []any{&b.slug, &b.nombre}, func() error {
+		out = append(out, b)
+		return nil
+	})
+	return out, err
+}
+
+// stockPorSucursal arma la lista en el orden de las sucursales, con lo que
+// no tiene fila en sin stock.
+func stockPorSucursal(sucursales []sucursalActiva, nivel func(slug string) NivelStock) []StockDeSucursal {
+	out := make([]StockDeSucursal, len(sucursales))
+	for i, b := range sucursales {
+		out[i] = StockDeSucursal{Sucursal: b.slug, Nombre: b.nombre, Nivel: nivel(b.slug)}
+	}
+	return out
+}
+
+// NivelEn es el nivel de una sucursal de la lista; si no está, sin stock.
+func NivelEn(stock []StockDeSucursal, slug string) NivelStock {
+	for _, x := range stock {
+		if x.Sucursal == slug {
+			return x.Nivel
+		}
+	}
+	return SinStock
+}
+
+// HayEnAlguna dice si alguna sucursal de la lista tiene.
+func HayEnAlguna(stock []StockDeSucursal) bool {
+	for _, x := range stock {
+		if x.Nivel != SinStock {
+			return true
+		}
+	}
+	return false
 }
 
 // Filtros son los del catálogo (FiltrosCatalogo del TS).
@@ -150,12 +217,12 @@ func (l Lista) paraConsulta() listaParaConsulta {
 }
 
 type varianteListado struct {
-	productID       string
-	label           string
-	precio          *string
-	precioAnterior  *string
-	stockCentral    NivelStock
-	stockAserradero NivelStock
+	productID      string
+	label          string
+	precio         *string
+	precioAnterior *string
+	// stock es el nivel por slug de sucursal; la que no está, sin stock.
+	stock map[string]NivelStock
 }
 
 // variantesConStockYPrecio es la del TS: una fila por variante y sucursal, que
@@ -193,7 +260,7 @@ func (s *Servicio) variantesConStockYPrecio(ctx context.Context, ids []string, l
 		}
 		v, ok := porVariante[variantID]
 		if !ok {
-			v = &varianteListado{productID: productID, label: label, precio: precio, stockCentral: SinStock, stockAserradero: SinStock}
+			v = &varianteListado{productID: productID, label: label, precio: precio, stock: map[string]NivelStock{}}
 			porVariante[variantID] = v
 			orden = append(orden, v)
 		}
@@ -209,13 +276,7 @@ func (s *Servicio) variantesConStockYPrecio(ctx context.Context, ids []string, l
 			if reservado != nil {
 				res = float64(*reservado)
 			}
-			nivel := Nivel(Disponible(float64(*qty), res), float64(*minQty))
-			switch *sucursal {
-			case "casa-central":
-				v.stockCentral = nivel
-			case "aserradero":
-				v.stockAserradero = nivel
-			}
+			v.stock[*sucursal] = Nivel(Disponible(float64(*qty), res), float64(*minQty))
 		}
 	}
 	return orden, filas.Err()
@@ -307,6 +368,10 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 	if err != nil {
 		return nil, err
 	}
+	sucursales, err := s.sucursalesActivas(ctx)
+	if err != nil {
+		return nil, err
+	}
 	porProducto := map[string][]*varianteListado{}
 	for _, v := range variantes {
 		porProducto[v.productID] = append(porProducto[v.productID], v)
@@ -320,12 +385,9 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 			precio, anterior float64
 			hayAnterior      bool
 		}
-		var niveles struct{ central, aserradero []NivelStock }
 		p.Labels = []string{}
 		for _, v := range propias {
 			p.Labels = append(p.Labels, v.label)
-			niveles.central = append(niveles.central, v.stockCentral)
-			niveles.aserradero = append(niveles.aserradero, v.stockAserradero)
 			precio := 0.0
 			if v.precio != nil {
 				precio = numero(*v.precio)
@@ -356,26 +418,32 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 				p.Descuento = &d
 			}
 		}
-		p.StockCentral = Combinado(niveles.central)
-		p.StockAserradero = Combinado(niveles.aserradero)
-		p.HayStock = p.StockCentral != SinStock || p.StockAserradero != SinStock
+		// Por sucursal, el mejor nivel entre las variantes.
+		p.Stock = stockPorSucursal(sucursales, func(slug string) NivelStock {
+			niveles := make([]NivelStock, 0, len(propias))
+			for _, v := range propias {
+				if n, ok := v.stock[slug]; ok {
+					niveles = append(niveles, n)
+				}
+			}
+			return Combinado(niveles)
+		})
+		p.StockCentral = NivelEn(p.Stock, slugCentral)
+		p.StockAserradero = NivelEn(p.Stock, slugAserradero)
+		p.HayStock = HayEnAlguna(p.Stock)
 	}
 
 	resultado := listado[:0:0]
 	marca := strings.ToLower(f.Marca)
 	for _, p := range listado {
 		switch f.Stock {
-		case "casa-central":
-			if p.StockCentral == SinStock {
-				continue
-			}
-		case "aserradero":
-			if p.StockAserradero == SinStock {
-				continue
-			}
 		case "", "todos":
-		default: // en-stock
+		case "en-stock":
 			if !p.HayStock {
+				continue
+			}
+		default: // el slug de una sucursal
+			if NivelEn(p.Stock, f.Stock) == SinStock {
 				continue
 			}
 		}
@@ -616,20 +684,22 @@ func Recortar(todos []ProductoListado, pagina int) Pagina {
 
 // VarianteDetalle es la de la ficha.
 type VarianteDetalle struct {
-	ID              string     `json:"id"`
-	Sku             string     `json:"sku"`
-	Label           string     `json:"label"`
-	Material        *string    `json:"material"`
-	Color           *string    `json:"color"`
-	Terminacion     *string    `json:"terminacion"`
-	Calidad         *string    `json:"calidad"`
-	LargoMm         *int32     `json:"largoMm"`
-	AnchoMm         *int32     `json:"anchoMm"`
-	EspesorMm       *int32     `json:"espesorMm"`
-	Precio          *string    `json:"precio"`
-	StockCentral    NivelStock `json:"stockCentral"`
-	StockAserradero NivelStock `json:"stockAserradero"`
-	Disponibles     float64    `json:"disponibles"`
+	ID          string  `json:"id"`
+	Sku         string  `json:"sku"`
+	Label       string  `json:"label"`
+	Material    *string `json:"material"`
+	Color       *string `json:"color"`
+	Terminacion *string `json:"terminacion"`
+	Calidad     *string `json:"calidad"`
+	LargoMm     *int32  `json:"largoMm"`
+	AnchoMm     *int32  `json:"anchoMm"`
+	EspesorMm   *int32  `json:"espesorMm"`
+	Precio      *string `json:"precio"`
+	// Stock es el nivel en cada sucursal activa, como en ProductoListado.
+	Stock           []StockDeSucursal `json:"stock"`
+	StockCentral    NivelStock        `json:"stockCentral"`
+	StockAserradero NivelStock        `json:"stockAserradero"`
+	Disponibles     float64           `json:"disponibles"`
 }
 
 // ProductoDetalle es la ficha.
@@ -732,6 +802,14 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		return nil, err
 	}
 
+	sucursales, err := s.sucursalesActivas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	activa := make(map[string]bool, len(sucursales))
+	for _, b := range sucursales {
+		activa[b.slug] = true
+	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT v.id, v.sku, v.label, v.material, v.color, v.terminacion, v.calidad,
 		       v.largo_mm, v.ancho_mm, v.espesor_mm,
@@ -750,6 +828,7 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 	defer filas.Close()
 	p.Variantes = []VarianteDetalle{}
 	indice := map[string]int{}
+	niveles := map[string]map[string]NivelStock{}
 	for filas.Next() {
 		var v VarianteDetalle
 		var precio, sucursal *string
@@ -760,7 +839,7 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		}
 		i, ok := indice[v.ID]
 		if !ok {
-			v.StockCentral, v.StockAserradero = SinStock, SinStock
+			niveles[v.ID] = map[string]NivelStock{}
 			p.Variantes = append(p.Variantes, v)
 			i = len(p.Variantes) - 1
 			indice[v.ID] = i
@@ -769,24 +848,33 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		if precio != nil {
 			actual.Precio = precio
 		}
-		if sucursal != nil && qty != nil && minQty != nil {
+		if sucursal != nil && activa[*sucursal] && qty != nil && minQty != nil {
 			res := 0.0
 			if reservado != nil {
 				res = float64(*reservado)
 			}
 			libre := Disponible(float64(*qty), res)
-			nivel := Nivel(libre, float64(*minQty))
-			switch *sucursal {
-			case "casa-central":
-				actual.StockCentral = nivel
-			case "aserradero":
-				actual.StockAserradero = nivel
-			}
-			// Suma de las dos sucursales: lo que se puede llevar hoy.
+			niveles[actual.ID][*sucursal] = Nivel(libre, float64(*minQty))
+			// Suma de las sucursales activas: lo que se puede llevar hoy.
 			actual.Disponibles = float64(actual.Disponibles + libre)
 		}
 	}
-	return &p, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	for i := range p.Variantes {
+		v := &p.Variantes[i]
+		propios := niveles[v.ID]
+		v.Stock = stockPorSucursal(sucursales, func(slug string) NivelStock {
+			if n, ok := propios[slug]; ok {
+				return n
+			}
+			return SinStock
+		})
+		v.StockCentral = NivelEn(v.Stock, slugCentral)
+		v.StockAserradero = NivelEn(v.Stock, slugAserradero)
+	}
+	return &p, nil
 }
 
 // PreciosPorVariante es preciosPropiosPorVariante: el precio de cada

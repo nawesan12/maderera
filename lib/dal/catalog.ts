@@ -65,9 +65,21 @@ export interface ProductoListado {
   /** Descuento en porcentaje, ya redondeado. */
   descuento: number | null;
   labels: string[];
+  /** El nivel en cada sucursal activa, en el orden de `branches`. */
+  stock: StockDeSucursal[];
+  /** La de antes, por el slug; lo nuevo lee `stock`. */
   stockCentral: StockLevel;
+  /** La de antes, por el slug; lo nuevo lee `stock`. */
   stockAserradero: StockLevel;
   hayStock: boolean;
+}
+
+/** El stock de una sucursal activa, como lo manda Go. */
+export interface StockDeSucursal {
+  /** El slug de `branches`. */
+  sucursal: string;
+  nombre: string;
+  nivel: StockLevel;
 }
 
 export type OrdenCatalogo = "relevancia" | "precio-asc" | "precio-desc" | "nombre";
@@ -77,7 +89,8 @@ export interface FiltrosCatalogo {
   /** El rubro dentro de la categoría, por slug. */
   subcategoria?: string;
   busqueda?: string;
-  stock?: "todos" | "en-stock" | "casa-central" | "aserradero";
+  /** Todos, con stock en alguna, o el slug de una sucursal. */
+  stock?: "todos" | "en-stock" | (string & {});
   orden?: OrdenCatalogo;
   /** Solo los que están en oferta. */
   soloOfertas?: boolean;
@@ -103,7 +116,11 @@ export interface VarianteDetalle {
   anchoMm: number | null;
   espesorMm: number | null;
   precio: string | null;
+  /** El nivel en cada sucursal activa, en el orden de `branches`. */
+  stock: StockDeSucursal[];
+  /** La de antes, por el slug; lo nuevo lee `stock`. */
   stockCentral: StockLevel;
+  /** La de antes, por el slug; lo nuevo lee `stock`. */
   stockAserradero: StockLevel;
   /**
    * Cuántas unidades quedan entre las dos sucursales. La ficha lo muestra

@@ -21,6 +21,8 @@ export interface ProductoDelAsistente {
   slug: string;
   nombre: string;
   categoria: string;
+  /** El slug de la categoría: sin foto, decide el tono de la muestra de placa. */
+  categoriaSlug: string;
   medida: string | null;
   /** Todas las medidas del producto, para poder filtrar por espesor. */
   medidas: string[];
@@ -34,6 +36,7 @@ function aProducto(p: Awaited<ReturnType<typeof listarProductos>>[number]) {
     slug: p.slug,
     nombre: p.name,
     categoria: p.categoryName,
+    categoriaSlug: p.categorySlug,
     medida: p.labels[0] ?? null,
     medidas: p.labels,
     precioDesde: p.precioDesde,

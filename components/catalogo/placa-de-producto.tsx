@@ -79,3 +79,27 @@ export function PlacaDeProducto({
     </span>
   );
 }
+
+/**
+ * La placa en miniatura, sin texto: para las listas chicas (el asistente),
+ * donde el rubro no entra en 48 px pero el tono de madera sí dice qué es. En
+ * vez del cuadrado vacío que parecía una foto que no cargó.
+ */
+export function MuestraDePlaca({ categoria, className }: { categoria: string; className?: string }) {
+  const tono = TONOS[tonoDePlaca(categoria)];
+  const estilo = {
+    "--placa-fondo": tono.claro.fondo,
+    "--placa-texto": tono.claro.texto,
+    "--placa-fondo-oscuro": tono.oscuro.fondo,
+    "--placa-texto-oscuro": tono.oscuro.texto,
+  } as CSSProperties;
+  return (
+    <span
+      aria-hidden
+      style={estilo}
+      className={cn("placa relative block overflow-hidden", tono.veta && "placa-veta", className)}
+    >
+      <span className="absolute left-2 top-2 block h-[2px] w-3.5 rounded-full bg-accion" />
+    </span>
+  );
+}

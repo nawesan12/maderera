@@ -165,12 +165,7 @@ func (s *smtp) Enviar(ctx context.Context, m Mensaje) Resultado {
 		_ = msg.AttachReader(a.Nombre, bytes.NewReader(a.Contenido), gomail.WithFileContentType(gomail.ContentType(a.Tipo)))
 	}
 	host := strings.TrimSpace(s.c.SMTPHost)
-	tlsCfg := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
-	// SMTP_NOMBRE_TLS solo vale para un host sin punto (el contenedor del
-	// correo): con un servidor público se valida contra su propio nombre.
-	if !strings.Contains(host, ".") && s.c.SMTPNombreTL != "" {
-		tlsCfg.ServerName = s.c.SMTPNombreTL
-	}
+	tlsCfg := &tls.Config{ServerName: nombreTLS(host, s.c.SMTPNombreTL), MinVersion: tls.VersionTLS12}
 	opciones := []gomail.Option{
 		gomail.WithPort(s.c.SMTPPuerto),
 		gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
@@ -269,4 +264,16 @@ func firstNonEmpty(v ...string) string {
 		}
 	}
 	return ""
+}
+
+// nombreTLS es contra qué nombre se valida el certificado del servidor de
+// correo. SMTP_NOMBRE_TLS solo vale para un host sin punto (el contenedor
+// `correo`, cuyo certificado es de mail.<dominio>): el compose lo pone
+// siempre, y con un servidor público (Hostinger) haría fallar la validación
+// y no saldría ningún aviso. Era configSmtp del TS (tests/correo-smtp.test.ts).
+func nombreTLS(host, nombre string) string {
+	if !strings.Contains(host, ".") && nombre != "" {
+		return nombre
+	}
+	return host
 }

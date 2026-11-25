@@ -15,16 +15,21 @@ package pruebas
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 
 	"mjbj/db"
 	"mjbj/internal/migrar"
@@ -51,6 +56,94 @@ func conBase(servidor, base string) string {
 	return u.String()
 }
 
+// candadoDePlantilla es el pg_advisory_lock bajo el que se arma la
+// plantilla y se copia.
+const candadoDePlantilla = 7210426
+
+// PrepararPlantilla deja la plantilla al día; quien llama tiene tomado el
+// candado. Si no existe, la crea; si migrarla falla —una migración que quedó
+// salteada y ya no se puede aplicar encima, como la 00090 aplicada antes que
+// la 00089— o trae versiones que esta rama no tiene (las migró otra rama con
+// la misma plantilla, y sus columnas confundirían a las pruebas), la borra y
+// la arma de nuevo desde cero. Es una base de pruebas: rearmarla cuesta lo
+// que tardan las migraciones y no pierde nada.
+func PrepararPlantilla(ctx context.Context, admin *pgx.Conn, servidor, nombre string, migraciones fs.FS) error {
+	var existe bool
+	if err := admin.QueryRow(ctx, `select exists(select 1 from pg_database where datname = $1)`, nombre).Scan(&existe); err != nil {
+		return err
+	}
+	if !existe {
+		if _, err := admin.Exec(ctx, `create database `+pgx.Identifier{nombre}.Sanitize()); err != nil {
+			return err
+		}
+	}
+	// Migrar siempre: si apareció una migración nueva, la plantilla se pone al día.
+	err := migrarPlantilla(ctx, servidor, nombre, migraciones)
+	if err == nil || !existe {
+		return err
+	}
+	if _, err := admin.Exec(ctx, `drop database `+pgx.Identifier{nombre}.Sanitize()+` with (force)`); err != nil {
+		return err
+	}
+	if _, err := admin.Exec(ctx, `create database `+pgx.Identifier{nombre}.Sanitize()); err != nil {
+		return err
+	}
+	return migrarPlantilla(ctx, servidor, nombre, migraciones)
+}
+
+// migrarPlantilla corre las migraciones, y falla si la plantilla tiene
+// alguna aplicada que esta rama no conoce.
+func migrarPlantilla(ctx context.Context, servidor, nombre string, migraciones fs.FS) error {
+	cfg, err := pgx.ParseConfig(conBase(servidor, nombre))
+	if err != nil {
+		return err
+	}
+	sqlDB := stdlib.OpenDB(*cfg)
+	defer sqlDB.Close()
+	if ajenas, err := versionesAjenas(ctx, sqlDB, migraciones); err != nil {
+		return err
+	} else if len(ajenas) > 0 {
+		return fmt.Errorf("la plantilla tiene migraciones que esta rama no tiene: %v", ajenas)
+	}
+	_, err = migrar.Correr(ctx, sqlDB, migraciones, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return err
+}
+
+// versionesAjenas son las versiones aplicadas en la base que no están entre
+// los archivos (las de drizzle, de antes de goose, no cuentan).
+func versionesAjenas(ctx context.Context, base *sql.DB, migraciones fs.FS) ([]int64, error) {
+	var hay bool
+	if err := base.QueryRowContext(ctx, `select to_regclass('goose_db_version') is not null`).Scan(&hay); err != nil || !hay {
+		return nil, err
+	}
+	archivos, err := fs.Glob(migraciones, "migraciones/*.sql")
+	if err != nil {
+		return nil, err
+	}
+	propias := map[int64]bool{0: true}
+	for _, a := range archivos {
+		if v, err := goose.NumericComponent(path.Base(a)); err == nil {
+			propias[v] = true
+		}
+	}
+	filas, err := base.QueryContext(ctx, `select distinct version_id from goose_db_version where is_applied order by 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	var ajenas []int64
+	for filas.Next() {
+		var v int64
+		if err := filas.Scan(&v); err != nil {
+			return nil, err
+		}
+		if !propias[v] {
+			ajenas = append(ajenas, v)
+		}
+	}
+	return ajenas, filas.Err()
+}
+
 // Base devuelve un pool contra una base nueva, migrada y vacía.
 func Base(t testing.TB) *pgxpool.Pool {
 	t.Helper()
@@ -66,30 +159,18 @@ func Base(t testing.TB) *pgxpool.Pool {
 	defer admin.Close(ctx)
 
 	// Un candado para que dos paquetes de tests no armen la plantilla a la vez.
-	if _, err := admin.Exec(ctx, `select pg_advisory_lock(7210426)`); err != nil {
+	if _, err := admin.Exec(ctx, `select pg_advisory_lock(candadoDePlantilla)`); err != nil {
 		t.Fatal(err)
 	}
-	var existe bool
-	_ = admin.QueryRow(ctx, `select exists(select 1 from pg_database where datname = $1)`, plantilla).Scan(&existe)
-	if !existe {
-		if _, err := admin.Exec(ctx, `create database `+plantilla); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// Migrar siempre: si apareció una migración nueva, la plantilla se pone al día.
-	cfg, _ := pgx.ParseConfig(conBase(servidor, plantilla))
-	sqlDB := stdlib.OpenDB(*cfg)
-	_, err = migrar.Correr(ctx, sqlDB, db.Migraciones, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	_ = sqlDB.Close()
-	if err != nil {
-		_, _ = admin.Exec(ctx, `select pg_advisory_unlock(7210426)`)
+	if err := PrepararPlantilla(ctx, admin, servidor, plantilla, db.Migraciones); err != nil {
+		_, _ = admin.Exec(ctx, `select pg_advisory_unlock(candadoDePlantilla)`)
 		t.Fatalf("migrando la plantilla: %v", err)
 	}
 	var b [6]byte
 	_, _ = rand.Read(b[:])
 	nombre := "t_" + hex.EncodeToString(b[:])
 	_, err = admin.Exec(ctx, `create database `+nombre+` template `+plantilla)
-	_, _ = admin.Exec(ctx, `select pg_advisory_unlock(7210426)`)
+	_, _ = admin.Exec(ctx, `select pg_advisory_unlock(candadoDePlantilla)`)
 	if err != nil {
 		t.Fatal(err)
 	}

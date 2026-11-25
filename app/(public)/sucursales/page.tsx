@@ -1,16 +1,9 @@
 import { tienda } from "@/lib/dal/contenido";
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { telefonoParaMarcar } from "@/lib/formato";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
-import {
-  Clock,
-  Mail,
-  MapPin,
-  Navigation,
-  Phone,
-} from "lucide-react";
+import { Clock, MapPin, Navigation, Phone } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { DatosEstructurados } from "@/components/datos-estructurados";
@@ -65,14 +58,6 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-/** "a\nb\nc" -> ["a", "b", "c"], sin renglones vacíos. */
-function renglones(texto: string): string[] {
-  return texto
-    .split("\n")
-    .map((linea) => linea.trim())
-    .filter(Boolean);
-}
-
 export default async function SucursalesPage() {
   const [sucursales, laTienda] = await Promise.all([listarSucursalesPublicas(), tienda()]);
 
@@ -108,184 +93,91 @@ export default async function SucursalesPage() {
         bajada={
           sucursales.length === 1
             ? "Nuestra ubicación en Mar del Plata."
-            : "Casa Central sobre Juan B. Justo y el Aserradero, con stock y corte propio."
+            : `${sucursales.length} locales en Mar del Plata.`
         }
       />
 
-      <div className="contenedor space-y-16 py-12">
-        {sucursales.map((sucursal) => {
-          const destacados = renglones(sucursal.destacados);
-          const comoLlegar =
-            sucursal.mapUrl ??
-            `https://maps.google.com/?q=${encodeURIComponent(sucursal.direccion)}`;
+      {/* Una lista y no una tarjeta grande por local (hallazgo 35): lo que se
+          viene a buscar es la dirección, el horario y cómo comunicarse, y
+          con más sucursales la página no se vuelve un scroll de fotos. Las
+          filas salen de `branches`: una sucursal activa nueva aparece sola. */}
+      <div className="contenedor space-y-10 py-10 md:py-14">
+        <ul className="superficie divide-y divide-linea-suave overflow-hidden rounded-2xl">
+          {sucursales.map((sucursal) => {
+            const comoLlegar =
+              sucursal.mapUrl ??
+              `https://maps.google.com/?q=${encodeURIComponent(sucursal.direccion)}`;
+            const boton = "h-11 w-full rounded-[10px] px-4 text-[15px] md:w-auto";
 
-          return (
-            <section
-              key={sucursal.id}
-              id={sucursal.slug}
-              className="superficie overflow-hidden rounded-2xl"
-            >
-              <div className="grid lg:grid-cols-2">
-                {/* Sin foto real del local se muestra una placa de marca. Una
-                    foto de archivo de otro aserradero es peor que ninguna: el
-                    visitante llega esperando algo que no va a encontrar. */}
-                <div className="relative flex h-56 items-end bg-brand-gray lg:h-auto lg:min-h-[22rem]">
-                  {sucursal.imagenUrl ? (
-                    <>
-                      <Image
-                        src={sucursal.imagenUrl}
-                        alt={`Sucursal ${sucursal.nombre}`}
-                        fill
-                        sizes="(min-width: 1024px) 50vw, 100vw"
-                        className="object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    </>
-                  ) : (
-                    <div
-                      aria-hidden
-                      className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(232,89,12,0.35),transparent_60%)]"
-                    />
-                  )}
-
-                  <div className="relative p-6 lg:p-8">
-                    {/* La tinta cambia con la sucursal porque el color de fondo
-                        cambia: sobre el naranja de Casa Central el blanco da
-                        3.08:1 y el texto oscuro 5.07:1; sobre la madera del
-                        Aserradero es al revés.
-
-                        El Aserradero era azul (`--sucursal-aserradero`): es el
-                        color del gráfico de ventas del panel, elegido para que
-                        se distinga del naranja en visión protán, y en el sitio
-                        era el único azul de toda la paleta (hallazgo 48). Acá
-                        va el marrón madera de la marca (`--color-brand-wood`,
-                        5,8:1 con el blanco); el gráfico sigue con su azul. */}
-                    <Link
-                      href={`/sucursales/${sucursal.slug}`}
-                      className="inline-block rounded-full px-4 py-2 text-lg font-bold tracking-[-0.01em] hover:underline"
-                      style={{
-                        backgroundColor:
-                          sucursal.slug === "aserradero"
-                            ? "var(--color-brand-wood)"
-                            : "var(--sucursal-central)",
-                        color:
-                          sucursal.slug === "aserradero" ? "#fff" : "#26231f",
-                      }}
-                    >
+            return (
+              <li
+                key={sucursal.id}
+                id={sucursal.slug}
+                className="grid scroll-mt-24 gap-4 p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-8 md:px-7 md:py-6"
+              >
+                <div className="min-w-0 space-y-1.5">
+                  <h2 className="text-xl font-bold tracking-[-0.01em]">
+                    <Link href={`/sucursales/${sucursal.slug}`} className="hover:text-acento-texto">
                       {sucursal.nombre}
                     </Link>
-                    <p className="mt-3 text-sm font-medium uppercase tracking-wider text-white/60">
-                      Maderera Juan B. Justo
+                  </h2>
+                  {sucursal.direccion && (
+                    <p className="flex items-start gap-2 text-[15px] text-texto-2">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" aria-hidden="true" />
+                      <span className="sr-only">Dirección: </span>
+                      {sucursal.direccion}
                     </p>
-                  </div>
-                </div>
-
-                <div className="space-y-6 p-6 lg:p-8">
-                  {destacados.length > 0 && (
-                    <ul className="flex flex-wrap gap-2">
-                      {destacados.map((destacado) => (
-                        <li
-                          key={destacado}
-                          className="rounded-full bg-naranja-claro px-3 py-1 text-sm font-medium text-acento-sobre-claro"
-                        >
-                          {destacado}
-                        </li>
-                      ))}
-                    </ul>
                   )}
-
-                  <dl className="space-y-3 text-sm">
-                    <div className="flex items-start gap-3">
-                      <dt className="shrink-0">
-                        <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
-                        <span className="sr-only">Dirección</span>
-                      </dt>
-                      <dd>{sucursal.direccion}</dd>
-                    </div>
-
-                    {sucursal.telefono && (
-                      <div className="flex items-center gap-3">
-                        <dt className="shrink-0">
-                          <Phone className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
-                          <span className="sr-only">Teléfono</span>
-                        </dt>
-                        <dd>
-                          <a
-                            href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
-                            className="hover:text-brand-orange"
-                          >
-                            {sucursal.telefono}
-                          </a>
-                        </dd>
-                      </div>
-                    )}
-
-                    {sucursal.email && (
-                      <div className="flex items-center gap-3">
-                        <dt className="shrink-0">
-                          <Mail className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
-                          <span className="sr-only">Correo</span>
-                        </dt>
-                        <dd>
-                          <a
-                            href={`mailto:${sucursal.email}`}
-                            className="hover:text-brand-orange"
-                          >
-                            {sucursal.email}
-                          </a>
-                        </dd>
-                      </div>
-                    )}
-
-                    {sucursal.horario && (
-                      <div className="flex items-center gap-3">
-                        <dt className="shrink-0">
-                          <Clock className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
-                          <span className="sr-only">Horario</span>
-                        </dt>
-                        <dd>{sucursal.horario}</dd>
-                      </div>
-                    )}
-                  </dl>
-
-
-                  {/* Anclas con estilo de botón: un <button> adentro de un <a>
-                      es HTML inválido, y acá lo que se hace es navegar. */}
-                  <div className="flex flex-wrap gap-3">
-                    {sucursal.telefono && (
-                      <a
-                        href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
-                        className={buttonVariants({
-                          className:
-                            "h-11 rounded-[10px] bg-accion px-5 text-[15px] font-semibold text-white hover:bg-accion-hover",
-                        })}
-                      >
-                        <Phone className="mr-2 h-4 w-4" />
-                        Llamar
-                      </a>
-                    )}
-
-                    <a
-                      href={comoLlegar}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={buttonVariants({ variant: "outline", className: "h-11 rounded-[10px] px-5 text-[15px]" })}
-                    >
-                      <Navigation className="mr-2 h-4 w-4" />
-                      Cómo llegar
-                    </a>
-
-                    {sucursal.whatsapp && (
-                      <BotonWhatsapp enlace={`https://wa.me/${sucursal.whatsapp.replace(/\D/g, "")}`}>
-                        Escribir por WhatsApp
-                      </BotonWhatsapp>
-                    )}
-                  </div>
+                  {sucursal.horario && (
+                    <p className="flex items-start gap-2 text-[15px] text-texto-2">
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" aria-hidden="true" />
+                      <span className="sr-only">Horario: </span>
+                      {sucursal.horario}
+                    </p>
+                  )}
                 </div>
-              </div>
-            </section>
-          );
-        })}
+
+                {/* Anclas con estilo de botón: un <button> adentro de un <a>
+                    es HTML inválido, y acá lo que se hace es navegar. En el
+                    teléfono, las tres del mismo ancho y en una fila. */}
+                <div className="grid grid-cols-3 gap-2 md:flex md:flex-wrap md:justify-end">
+                  {sucursal.telefono && (
+                    <a
+                      href={`tel:${telefonoParaMarcar(sucursal.telefono)}`}
+                      aria-label={`Llamar a ${sucursal.nombre}`}
+                      className={buttonVariants({
+                        className: `${boton} bg-accion font-semibold text-white hover:bg-accion-hover`,
+                      })}
+                    >
+                      <Phone className="h-4 w-4" aria-hidden="true" />
+                      Llamar
+                    </a>
+                  )}
+                  {sucursal.whatsapp && (
+                    <BotonWhatsapp
+                      enlace={`https://wa.me/${sucursal.whatsapp.replace(/\D/g, "")}`}
+                      variante="secundario"
+                      className="w-full px-4 md:w-auto"
+                      aria-label={`WhatsApp de ${sucursal.nombre}`}
+                    >
+                      WhatsApp
+                    </BotonWhatsapp>
+                  )}
+                  <a
+                    href={comoLlegar}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Cómo llegar a ${sucursal.nombre}`}
+                    className={buttonVariants({ variant: "outline", className: boton })}
+                  >
+                    <Navigation className="h-4 w-4" aria-hidden="true" />
+                    <span className="truncate">Cómo llegar</span>
+                  </a>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
 
         {laTienda.stockVisible && (
         <p className="text-center text-base text-muted-foreground">

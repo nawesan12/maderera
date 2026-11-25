@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { importeDelCampo, importeParaElCampo } from "@/lib/formato";
+import { importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 
 /*
  * Los campos de plata del panel y del mostrador (gastos, pagos a proveedores,
@@ -18,6 +18,12 @@ describe("importeDelCampo", () => {
     ["250", 250],
     [" 15.000 ", 15000],
     ["0,5", 0.5],
+    ["$ 420.000,50", 420000.5],
+    ["$ 20.000", 20000],
+    ["$20.000", 20000],
+    ["ARS 15.000", 15000],
+    ["44.992,56", 44992.56],
+    ["1.2345", 1.2345],
   ])("«%s» es %d", (texto, n) => {
     expect(importeDelCampo(texto)).toBe(n);
   });
@@ -49,5 +55,47 @@ describe("importeParaElCampo", () => {
   it("nada es vacío", () => {
     expect(importeParaElCampo(null)).toBe("");
     expect(importeParaElCampo("")).toBe("");
+  });
+});
+
+describe("importeIlegible", () => {
+  it("vacío no es ilegible: es cero", () => {
+    expect(importeIlegible("")).toBe(false);
+    expect(importeIlegible("  ")).toBe(false);
+    expect(importeIlegible(null)).toBe(false);
+  });
+
+  it.each(["abc", "12,5,3", "1.2.3,4,5", "$ abc"])("«%s» no se entiende", (t) => {
+    expect(importeIlegible(t)).toBe(true);
+  });
+
+  it.each(["15.000", "$ 420.000,50", "0", "1234.56"])("«%s» se entiende", (t) => {
+    expect(importeIlegible(t)).toBe(false);
+  });
+});
+
+/*
+ * Ningún campo de plata vuelve a `type="number"`: el navegador lee «15.000»
+ * como 15. Se controla en los archivos que tuvieron el problema (comité del
+ * 25/11): el precio a mano del mostrador, el costo de compras y recepciones,
+ * la base de una retención y los mínimos de los regímenes.
+ */
+describe("los campos de plata no son type=number", () => {
+  it.each([
+    "app/admin/arca/retenciones/cargar.tsx",
+    "app/admin/arca/retenciones/regimenes.tsx",
+    "app/admin/recepciones/nueva/formulario.tsx",
+    "app/admin/compras/ordenes/nueva/formulario.tsx",
+    "app/admin/presupuestos/nuevo/formulario.tsx",
+    "app/mostrador/alta-a-mano.tsx",
+    "app/mostrador/lineas.tsx",
+  ])("%s", async (archivo) => {
+    const { readFileSync } = await import("node:fs");
+    const texto = readFileSync(archivo, "utf8");
+    // Cada `type="number"` que quede tiene que ser de una cantidad, días o
+    // porcentaje, nunca de precio, costo, base, importe o mínimo.
+    for (const m of texto.matchAll(/type="number"[\s\S]{0,240}?value=\{([^}]+)\}/g)) {
+      expect(m[1]).not.toMatch(/precio|costo|base|importe|gastos|minimo/i);
+    }
   });
 });

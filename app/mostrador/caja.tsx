@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeIlegible } from "@/lib/formato";
 import { importeDeCaja, nombreDeLaDiferencia, TOLERANCIA_ARQUEO } from "@/lib/mostrador/arqueo";
 import { encolarMovimiento } from "@/lib/mostrador/offline/cola";
 import type { RenglonDelCierre } from "@/lib/mostrador/tipos";
@@ -129,6 +129,7 @@ export function PanelDeCaja({
                   // Se abre para cargar el fondo: el cursor arranca acá.
                   autoFocus
                   value={fondo}
+                  aria-invalid={importeIlegible(fondo) || undefined}
                   onChange={(e) => setFondo(e.target.value)}
                   onKeyDown={(e) => {
                     // Es el único dato: Enter (o Ctrl+Enter) abre la caja.
@@ -226,6 +227,7 @@ export function PanelDeCaja({
                     type="text"
                     inputMode="decimal"
                     value={monto}
+                    aria-invalid={importeIlegible(monto) || undefined}
                     onChange={(e) => setMonto(e.target.value)}
                     placeholder="Monto"
                     className="tabular h-12 w-32 rounded-lg border border-linea bg-background px-3 text-right text-base"
@@ -328,6 +330,7 @@ export function PanelDeCaja({
                     type="text"
                     inputMode="decimal"
                     value={contado}
+                    aria-invalid={importeIlegible(contado) || undefined}
                     onChange={(e) => setContado(e.target.value)}
                     className="tabular mt-1.5 h-14 w-full rounded-xl border border-linea bg-background px-3.5 text-right text-2xl font-semibold"
                   />

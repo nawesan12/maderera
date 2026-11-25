@@ -13,8 +13,10 @@
 # **Cloudflare, cuando se encienda.** Hoy el dominio resuelve directo a la
 # VPS y esto no cambia nada: las conexiones no vienen de esos rangos. Con el
 # proxy de Cloudflare prendido, cada pedido llega desde un servidor de
-# Cloudflare, y sin esto los límites de frecuencia, fail2ban y la bitácora
-# verían a todo el mundo con la IP de Cloudflare. Solo de esos rangos se cree
+# Cloudflare, y sin esto los límites de frecuencia y la bitácora verían a todo
+# el mundo con la IP de Cloudflare. fail2ban no se arregla con esto: lee la IP
+# correcta, pero su ban en el cortafuegos no frena una conexión que viene de
+# Cloudflare (docs/SERVIDOR-PROPIO.md, paso 9). Solo de esos rangos se cree
 # CF-Connecting-IP (de otro lado la puede escribir cualquiera), y el
 # `client_ip` del registro y de `{client_ip}` es el del visitante. La lista
 # es la de https://www.cloudflare.com/ips/ (20/11/2026) y es la misma que
@@ -84,9 +86,12 @@ correo.{$CORREO_DOMINIO} {
 			roll_keep 5
 		}
 		# El token del link mágico (/entrar/<token>) no queda escrito: un link
-		# de activación sin usar vale 7 días para quien lea este archivo.
+		# de activación sin usar vale 7 días para quien lea este archivo. Ni
+		# el del enlace de firma de un remito (/firmar/<token>, con el nombre
+		# y el DNI de quien retira) ni el de la consulta de corte (/corte/c/<token>): son
+		# una llave (comité del 25/11). $1 es el tramo de la ruta.
 		format filter {
-			request>uri regexp ^/entrar/[^/?]+ /entrar/oculto
+			request>uri regexp ^/(entrar|firmar|corte/c|api/v1/firmar|api/v1/cortes/consulta)/[^/?]+ /$1/oculto
 			wrap json {
 				time_format iso8601
 			}
@@ -145,9 +150,12 @@ autoconfig.{$CORREO_DOMINIO} {
 			roll_keep 10
 		}
 		# El token del link mágico (/entrar/<token>) no queda escrito: un link
-		# de activación sin usar vale 7 días para quien lea este archivo.
+		# de activación sin usar vale 7 días para quien lea este archivo. Ni
+		# el del enlace de firma de un remito (/firmar/<token>, con el nombre
+		# y el DNI de quien retira) ni el de la consulta de corte (/corte/c/<token>): son
+		# una llave (comité del 25/11). $1 es el tramo de la ruta.
 		format filter {
-			request>uri regexp ^/entrar/[^/?]+ /entrar/oculto
+			request>uri regexp ^/(entrar|firmar|corte/c|api/v1/firmar|api/v1/cortes/consulta)/[^/?]+ /$1/oculto
 			wrap json {
 				time_format iso8601
 			}

@@ -418,10 +418,13 @@ components:
         alicuotaIva: { type: string, nullable: true }
     FichaParaUnir:
       type: object
-      required: [id, nombre, unible]
+      description: >-
+        La única ficha activa sin cuenta web con el correo del contacto. Con dos o más, ninguna: se busca a mano.
+      required: [id, nombre, telefono, unible]
       properties:
         id: { type: string }
         nombre: { type: string }
+        telefono: { type: string, nullable: true, description: "para comparar con el del contacto antes de unir" }
         unible: { type: boolean, description: "un pedido con recibos o comprobantes no se une desde acá" }
     FichaDePresupuesto:
       type: object

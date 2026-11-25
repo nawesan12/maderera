@@ -437,7 +437,7 @@ function Burbuja({
         <div
           className={`rounded-2xl px-3.5 py-2.5 shadow-sm ${
             mensaje.estado === "fallido"
-              ? "rounded-br-sm bg-red-50 ring-1 ring-red-200"
+              ? "rounded-br-sm bg-destructive/10 ring-1 ring-destructive/30"
               : saliente
                 ? "rounded-br-sm bg-brand-green/15"
                 : "rounded-bl-sm bg-background"
@@ -519,7 +519,7 @@ function Burbuja({
                 {emoji}
               </button>
             ))}
-            {error && <span className="text-sm text-red-700">{error}</span>}
+            {error && <span className="text-sm text-saldo-debe">{error}</span>}
           </div>
         )}
       </div>
@@ -576,19 +576,19 @@ function FalloDeEnvio({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
   const [resultado, setResultado] = useState<EstadoWhatsapp>({});
 
   return (
-    <div className="mt-2 border-t border-red-200 pt-2 text-sm text-red-800">
+    <div className="mt-2 border-t border-destructive/30 pt-2 text-sm text-saldo-debe">
       <p className="flex items-start gap-1.5">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>
           {mensaje.errorDetalle ?? "No se envió."}
-          {mensaje.errorCodigo ? <span className="tabular text-red-700/80"> (código {mensaje.errorCodigo})</span> : null}
+          {mensaje.errorCodigo ? <span className="tabular text-saldo-debe/80"> (código {mensaje.errorCodigo})</span> : null}
         </span>
       </p>
       <button
         type="button"
         disabled={pendiente}
         onClick={() => iniciar(async () => setResultado(await reintentarMensaje(mensaje.id, Boolean(resultado.requiereConfirmacionTope))))}
-        className="mt-1.5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-300 bg-white px-2.5 font-medium hover:bg-red-50 disabled:opacity-60"
+        className="mt-1.5 inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/40 bg-card px-2.5 font-medium hover:bg-destructive/10 disabled:opacity-60"
       >
         {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
         {resultado.requiereConfirmacionTope ? "Reintentar igual (se cobra)" : "Reintentar"}
@@ -611,7 +611,7 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
     return (
       <div className="mb-1.5 rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         <p className="flex items-center gap-1.5">
-          {fallido ? <AlertCircle className="h-4 w-4 text-red-700" /> : <Loader2 className="h-4 w-4 animate-spin" />}
+          {fallido ? <AlertCircle className="h-4 w-4 text-saldo-debe" /> : <Loader2 className="h-4 w-4 animate-spin" />}
           {fallido
             ? "No se pudo bajar el archivo de WhatsApp."
             : reintentando
@@ -634,7 +634,7 @@ function Adjunto({ mensaje }: { mensaje: MensajeDeLaBandeja }) {
             Volver a intentar
           </button>
         )}
-        {error && <p className="mt-1 text-red-700">{error}</p>}
+        {error && <p className="mt-1 text-saldo-debe">{error}</p>}
       </div>
     );
   }
@@ -692,7 +692,7 @@ const tamano = formatearPeso;
 function EstadoEntrega({ estado }: { estado: string }) {
   if (estado === "fallido") {
     return (
-      <span className="flex items-center gap-1 font-medium text-red-700">
+      <span className="flex items-center gap-1 font-medium text-saldo-debe">
         <AlertCircle className="h-4 w-4" />
         No se envió
       </span>
@@ -767,7 +767,7 @@ function AdjuntarArchivo({ conversacionId, citado }: { conversacionId: string; c
         {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
       </button>
       {error && (
-        <p role="alert" className="absolute bottom-full left-0 mb-2 w-72 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 shadow ring-1 ring-red-200">
+        <p role="alert" className="absolute bottom-full left-0 mb-2 w-72 rounded-lg estado-problema bg-[var(--estado-fondo)] px-3 py-2 text-sm shadow ring-1 ring-destructive/30">
           {error}
         </p>
       )}
@@ -837,7 +837,7 @@ function FormularioEstado({ conversacionId, estado }: { conversacionId: string; 
         ) : resuelta ? (
           <Undo2 className="h-5 w-5" />
         ) : (
-          <CheckCircle2 className="h-5 w-5 text-green-700" />
+          <CheckCircle2 className="h-5 w-5 text-saldo-favor" />
         )}
         {resuelta ? "Reabrir" : "Resuelta"}
       </button>

@@ -11,7 +11,14 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { formatearMonto, hoyEnArgentina, formatearDecimal } from "@/lib/formato";
+import {
+  formatearMonto,
+  hoyEnArgentina,
+  formatearDecimal,
+  importeDelCampo,
+  importeIlegible,
+} from "@/lib/formato";
+import { CampoImporte } from "@/components/admin/campo-importe";
 import { Hoja, Opciones, Seccion } from "@/components/admin/formulario";
 import {
   ElegirCliente,
@@ -57,7 +64,8 @@ export function CargarSufrida() {
   const [fecha, setFecha] = useState(hoyEnArgentina);
   const [referencia, setReferencia] = useState("");
 
-  const n = (v: string) => Number(v || 0);
+  const n = importeDelCampo;
+  const ilegible = importeIlegible(base) || importeIlegible(importe);
 
   // La alícuota se deriva para mostrarla: es la verificación rápida de que los
   // tres números del papel son coherentes entre sí.
@@ -123,24 +131,20 @@ export function CargarSufrida() {
 
         <label className="block">
           <span className="text-sm font-medium">Base</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={base}
-            onChange={(e) => setBase(e.target.value)}
+          <CampoImporte
+            valor={base}
+            alCambiar={setBase}
+            placeholder="0"
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
           />
         </label>
 
         <label className="block">
           <span className="text-sm font-medium">Retenido</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={importe}
-            onChange={(e) => setImporte(e.target.value)}
+          <CampoImporte
+            valor={importe}
+            alCambiar={setImporte}
+            placeholder="0"
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
           />
           {alicuota !== null && n(importe) > 0 && (
@@ -192,7 +196,7 @@ export function CargarSufrida() {
                 }
               })
             }
-            disabled={enCurso || !cliente || !numero.trim() || n(importe) <= 0}
+            disabled={enCurso || ilegible || !cliente || !numero.trim() || n(importe) <= 0}
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

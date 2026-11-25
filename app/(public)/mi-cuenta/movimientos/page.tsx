@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { misMovimientos } from "@/lib/dal/historial-cliente";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
-import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
+import {
+  FiltrosDeMovimientos,
+  esFiltro,
+} from "@/components/cuenta/filtros-de-movimientos";
 import { formatearMonto } from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Movimientos" };
@@ -31,6 +34,15 @@ export default async function MovimientosPage({
 
   const historial = await misMovimientos({ periodo, filtro });
   const saldo = historial.saldo;
+  // Sin nada en todo el historial no hay qué filtrar: ni los filtros de
+  // cheques ni «en este período», que invitaba a cambiar el período en vano.
+  const sinHistoria =
+    historial.movimientos.length === 0 &&
+    saldo === 0 &&
+    (periodo === "todo" && filtro === "todo"
+      ? true
+      : (await misMovimientos({ periodo: "todo", filtro: "todo" })).movimientos
+          .length === 0);
 
   const pendientes = historial.movimientos.filter(
     (m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir",
@@ -70,19 +82,41 @@ export default async function MovimientosPage({
         </p>
       )}
 
-      <section className="overflow-hidden rounded-xl border bg-card">
-        <FiltrosDeMovimientos base="/mi-cuenta/movimientos" periodo={periodo} filtro={filtro} />
-        <LineaDeTiempo
-          movimientos={historial.movimientos}
-          enlacePedido={(p) => `/mi-cuenta/pedidos/${p.numero}`}
-          vacio="No hay movimientos en este período."
-        />
-      </section>
+      {sinHistoria ? (
+        <div className="rounded-2xl border border-dashed bg-card/60 px-6 py-14 text-center">
+          <h2 className="text-xl font-semibold">Todavía no hay movimientos</h2>
+          <p className="mx-auto mt-1.5 max-w-sm text-muted-foreground">
+            Acá vas a ver lo que compres y lo que pagues.
+          </p>
+          <Link
+            href="/catalogo"
+            className="mt-5 inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"
+          >
+            Ver el catálogo
+          </Link>
+        </div>
+      ) : (
+        <section className="overflow-hidden rounded-xl border bg-card">
+          <FiltrosDeMovimientos
+            base="/mi-cuenta/movimientos"
+            periodo={periodo}
+            filtro={filtro}
+          />
+          <LineaDeTiempo
+            movimientos={historial.movimientos}
+            enlacePedido={(p) => `/mi-cuenta/pedidos/${p.numero}`}
+            vacio="No hay movimientos en este período."
+          />
+        </section>
+      )}
 
       {saldo > 0 && (
         <p className="text-[15px] text-muted-foreground">
           Para pagar tu cuenta con transferencia, depósito o cheque, entrá a{" "}
-          <Link href="/mi-cuenta/cuenta-corriente" className="font-medium text-acento-texto hover:underline">
+          <Link
+            href="/mi-cuenta/cuenta-corriente"
+            className="font-medium text-acento-texto hover:underline"
+          >
             Cuenta corriente
           </Link>
           .

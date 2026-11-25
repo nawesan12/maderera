@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Vacio } from "@/components/admin/vacio";
+import { hayFiltro } from "@/lib/formato";
 import { Barcode, FileSpreadsheet, ImageOff, Package } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
@@ -146,13 +148,27 @@ export default async function AdminStockPage({
         ]}
       />
 
-      {filas.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
-          <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-base font-medium">Ninguna medida coincide</p>
-          <p className="mt-1 text-base text-muted-foreground">
-            Probá con otro nombre, código o categoría.
-          </p>
+      {filas.length === 0 && hayFiltro(params) ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Package}
+            titulo="Ninguna medida coincide"
+            detalle="Probá con otro nombre, código o categoría."
+            accion={{ texto: "Limpiar filtros", href: "/admin/stock" }}
+          />
+        </div>
+      ) : filas.length === 0 ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Package}
+            titulo="Todavía no hay mercadería"
+            detalle="El stock aparece cuando hay productos cargados."
+            accion={
+              puedeEntrar("/admin/migracion", usuario.staffRole)
+                ? { texto: "Cargar desde Excel", href: "/admin/migracion?que=stock" }
+                : undefined
+            }
+          />
         </div>
       ) : (
         <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_320px]">
@@ -201,7 +217,7 @@ export default async function AdminStockPage({
                     </div>
                     <span
                       className={`tabular shrink-0 text-base font-medium ${
-                        m.qty > 0 ? "text-green-700" : "text-muted-foreground"
+                        m.qty > 0 ? "text-saldo-favor" : "text-muted-foreground"
                       }`}
                     >
                       {m.qty > 0 ? `+${formatearCantidad(m.qty)}` : formatearCantidad(m.qty)}

@@ -73,7 +73,7 @@ export function AvisoConexion({
     return (
       <section className="tarjeta-atencion flex flex-wrap items-center gap-x-4 gap-y-2 p-5">
         <div className="min-w-[16rem] flex-1">
-          <h2 className="text-base font-medium text-red-700">
+          <h2 className="text-base font-medium text-saldo-debe">
             WhatsApp desconectado
           </h2>
           <p className="mt-0.5 text-base text-muted-foreground">
@@ -95,7 +95,7 @@ export function AvisoConexion({
 
   return (
     <section className="flex flex-wrap items-center gap-x-3 gap-y-1 tarjeta px-5 py-3.5">
-      <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+      <CheckCircle2 className="h-5 w-5 shrink-0 text-saldo-favor" />
       <p className="text-base">
         Conectado
         {estado.telefono && (
@@ -169,7 +169,7 @@ function AvisoCompacto({ estado }: { estado: EstadoConexion }) {
 
   return (
     <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-card px-3.5 py-2 text-base">
-      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+      <CheckCircle2 className="h-4 w-4 shrink-0 text-saldo-favor" />
       Conectado
       {estado.telefono && (
         <span className="tabular text-muted-foreground">{estado.telefono}</span>

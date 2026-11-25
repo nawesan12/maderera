@@ -273,6 +273,9 @@ export const retencionesSufridas = pgTable(
 
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    anuladaAt: timestamp({ withTimezone: true }),
+    receiptId: uuid(),
   },
   (t) => [
     /*

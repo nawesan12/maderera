@@ -18,6 +18,9 @@ y qué aprendimos. **Leelo antes de tocar `backend/`.**
   al de hoy. `float64(x*y)+z`, nunca `x*y+z` (FMA en arm64).
 - Las URLs que llama alguien de afuera (webhooks, mostrador offline, agente
   del taller, `/baja`, `/api/tareas`) no cambian.
+- Una migración que suma columnas o tablas: `npm run db:espejo` contra una
+  base migrada, y el espejo drizzle (`lib/db/schema`) al día en el mismo
+  commit.
 - Al terminar una sesión: actualizar la tabla de abajo y anotar lo aprendido.
 - **Al cerrar cada tanda, un benchmark TypeScript contra Go** (pedido de
   Nahuel, 24/10/2026): el mismo trabajo medido de los dos lados, en la misma
@@ -1718,8 +1721,14 @@ Pendiente:
       golden (`scripts/golden/pdf/certificado-retencion.ts`): se puede mover a
       `scripts/golden/originales`.
       Hecho: se borró.
-- [ ] `lib/db/schema/retenciones.ts` (drizzle, solo para las semillas) no
+- [x] `lib/db/schema/retenciones.ts` (drizzle, solo para las semillas) no
       tiene las columnas nuevas.
+      Hecho (5551e92), y el 25/11 el espejo entero: le faltaban 61 columnas
+      de goose (las de la 00200 y la 00201 entre ellas). `npm run db:espejo`
+      lo compara con una base migrada y falla si falta o sobra una columna o
+      aparece una tabla que no está ni espejada ni en `SOLO_EN_GO`
+      (`scripts/espejo-drizzle.ts`, 19 tablas que solo usa Go). Correrlo
+      después de cada migración nueva.
 
 ## Errores de stock de la auditoría (30/10, sobre `go-cuentas`)
 
@@ -2054,6 +2063,17 @@ Cada arreglo con su prueba, vista fallar sin él (`cortes/revision_test.go`,
   la consulta nueva devuelve las mismas filas que la ventana (400 y 4.894,
   `EXCEPT ALL` vacío en los dos sentidos). Escribir un
   movimiento cuesta ~2 ms más en el peor caso (fecha vieja, 62 movimientos).
+
+  **Migración 00202** (revisión del comité, 25/11): en una cuenta que nunca
+  llegó a cero, «lo posterior al cero» era la cuenta entera, con la ficha
+  bloqueada: 25 ms por venta con 20.000 movimientos, y creciendo. Ahora
+  `customers.cuenta_saldo`, `cuenta_ultimo_at` y `_id` guardan el saldo y el
+  último movimiento; un alta al final parte de ahí y lee solo lo nuevo
+  (2,3 a 2,6 ms con 20.000 movimientos, lo mismo que con una cuenta vacía, y
+  1,7 ms sin trigger). Un alta con fecha vieja, una baja o un cambio recorren
+  desde el cero o la cuenta entera, como antes. Prueba:
+  `TestCuentaEnCeroNoRecorreLaCuenta` (cuenta las filas que lee la
+  transacción), y `mismaCartera` compara también el saldo y el último.
 - **Revisión del comité (corrector)**: con lock_timeout, un candado ocupado
   ya no es un 500: `plataforma.EnTransaccion` reintenta dos veces (venta,
   cobros, caja, anulación, pedidos) y `ErrorDeRespuesta` contesta 503 a
@@ -2560,11 +2580,24 @@ quedan confirmados:
 - Devolución de un pedido cobrado con recibo.
 - CSV de Deudores sin el circuito B.
 - El centavo de las notas de crédito parciales.
-- Cómo se autoriza la serie trabada de más de 50 comprobantes sin CAE.
-  Default aplicado (20/11, carril-k): de a 50 desde Facturación. El error
+- Cómo se autoriza la serie trabada de muchos comprobantes sin CAE.
+  Default aplicado (20/11, carril-k): por tramos desde Facturación. El error
   dice cuántos faltan y desde qué número, y la ficha de un comprobante con
-  más de 50 atrás muestra «Autorizar la serie desde el …» en lugar del botón
-  (`SerieDelComprobante.tramo`; `TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie`).
+  más de un tramo atrás muestra «Autorizar la serie desde el …» en lugar del
+  botón (`SerieDelComprobante.tramo`; `TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie`).
+  El comité del 25/11 bajó el tramo de 50 a 15 (`maxAnteriores`) y le puso un
+  tope de 60 s por pedido (`presupuestoDeLaSerie`): con el candado de CAE
+  tomado, 51 llamadas a ARCA frenaban la facturación de todo el negocio y
+  pasaban los 100 s de Cloudflare. Si ARCA tarda, corta con lo hecho
+  guardado y dice cuántos faltan (`TestLaSerieCortaConElTiempoYSigue`).
+- La comisión de Mercado Pago en un reintegro por tramos (comité del 25/11).
+  El aviso no dice cuánto de su comisión devuelve MP en cada tramo: los
+  parciales salen del Banco por su importe y la comisión queda como gasto
+  (cobro de $1000 con $60, devuelto en $400 + $600: Banco −$60, Comisiones
+  $60). El reintegro entero de una vez sí la revierte. Fijado en
+  `TestComisionEnUnReintegroPorTramos`. Con un reintegro parcial real a la
+  vista, ver si MP informa la comisión devuelta (`fee_details` del refund)
+  para guardarla en payment_refunds y asentarla.
 - Anular una venta con cheque devuelto en parte por afuera (hoy, prohibido;
   ver abajo, «Los pendientes del 19/11»).
 - Facturar una venta del mostrador cuyo cheque ya se endosó en un pago B

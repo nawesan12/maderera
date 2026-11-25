@@ -211,7 +211,8 @@ type Persona = Awaited<ReturnType<typeof numerosDelDueno>>["controles"]["persona
  * La plata del personal en los últimos siete días (T3): lo que cada uno dejó
  * de cobrar —y cuánto de eso firmó un admin—, sus ventas sin conexión bajo la
  * lista o a cuenta pasado el límite, lo que anuló (y cuánto sin PIN), sus
- * retiros tardíos o bajo la base y, de cada admin, cuántas autorizaciones
+ * retiros tardíos o bajo la base, los recibos que anuló (en rojo si tenían
+ * efectivo) y, de cada admin, cuántas autorizaciones
  * lleva firmadas: un PIN aprendido firma a su nombre, y así se ve. Estaba
  * solo en la bitácora, que el dueño no lee. En rojo lo que no firmó nadie;
  * cada nombre lleva a su bitácora.
@@ -255,6 +256,18 @@ function ElPersonal({ personas }: { personas: Persona[] }) {
             p.retiros.cantidad > 0 && {
               texto: `${plural(p.retiros.cantidad, "retiro")} tarde o bajo la base · ${moneda.format(p.retiros.total)}`,
               problema: true,
+            },
+            // El efectivo de un recibo anulado sigue en el cajón: anularlo
+            // puede tapar un faltante. Esos van en rojo.
+            p.recibosAnulados.cantidad > 0 && {
+              texto:
+                `Anuló ${plural(p.recibosAnulados.cantidad, "recibo")} · ${moneda.format(p.recibosAnulados.total)}` +
+                (p.recibosAnuladosConEfectivo > 0
+                  ? p.recibosAnuladosConEfectivo === p.recibosAnulados.cantidad
+                    ? " · con efectivo"
+                    : ` · ${p.recibosAnuladosConEfectivo} con efectivo`
+                  : ""),
+              problema: p.recibosAnuladosConEfectivo > 0,
             },
           ];
           const visibles = renglones.flatMap((r) => (!r ? [] : typeof r === "string" ? [{ texto: r }] : [r]));

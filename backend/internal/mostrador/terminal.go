@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -24,7 +25,12 @@ import (
 // Con ventas sin subir no se suelta, por la misma razón que no se da de baja
 // (caja/panel.go, DarDeBajaCaja): esa plata está en el cajón y el cierre del
 // turno la cuenta por los pendientes que manda la máquina con su secreto.
-func (s *Servicio) Desvincular(ctx context.Context, ses *auth.Sesion, id string) (string, error) {
+// Los del último latido pueden estar viejos (la PC cobró sin conexión y
+// todavía no latió): por eso cuentan también los que la PC informa de su
+// cola local, `locales`. El botón solo existe en la misma PC y en línea. La
+// bitácora guarda el último latido y los pendientes que se borran, para que
+// quede el rastro de cómo estaba la PC.
+func (s *Servicio) Desvincular(ctx context.Context, ses *auth.Sesion, id string, locales int) (string, error) {
 	if !plataforma.UUIDValido(id) {
 		return "", rechazo("Esa terminal no existe.")
 	}
@@ -39,19 +45,23 @@ func (s *Servicio) Desvincular(ctx context.Context, ses *auth.Sesion, id string)
 	defer tx.Rollback(ctx)
 	var codigo string
 	var pendientes int
-	err = tx.QueryRow(ctx, `SELECT codigo, pendientes FROM pos_devices WHERE id = $1 FOR UPDATE`, id).Scan(&codigo, &pendientes)
+	var ultima *time.Time
+	err = tx.QueryRow(ctx, `SELECT codigo, pendientes, ultima_vez_at FROM pos_devices WHERE id = $1 FOR UPDATE`, id).Scan(&codigo, &pendientes, &ultima)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", rechazo("Esa terminal no existe.")
 	}
 	if err != nil {
 		return "", err
 	}
+	if locales > pendientes {
+		pendientes = locales
+	}
 	if pendientes > 0 {
-		ventas := "ventas cobradas"
+		ventas, verbo, espera := "ventas cobradas", "subieron", "suban"
 		if pendientes == 1 {
-			ventas = "venta cobrada"
+			ventas, verbo, espera = "venta cobrada", "subió", "suba"
 		}
-		return "", rechazo(fmt.Sprintf("%s tiene %d %s que todavía no subieron. Esperá a que suban antes de desvincularla.", codigo, pendientes, ventas))
+		return "", rechazo(fmt.Sprintf("%s tiene %d %s que todavía no %s. Esperá a que %s antes de desvincularla.", codigo, pendientes, ventas, verbo, espera))
 	}
 	if _, err := tx.Exec(ctx, `UPDATE pos_devices SET secreto = $2, ultima_vez_at = NULL, pendientes = 0 WHERE id = $1`,
 		id, base64.RawURLEncoding.EncodeToString(crudo)); err != nil {
@@ -60,6 +70,11 @@ func (s *Servicio) Desvincular(ctx context.Context, ses *auth.Sesion, id string)
 	if err := tx.Commit(ctx); err != nil {
 		return "", err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "caja", id, "Desvinculó la terminal "+codigo, nil)
+	var latido any
+	if ultima != nil {
+		latido = ultima.UTC().Format(time.RFC3339)
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "caja", id, "Desvinculó la terminal "+codigo,
+		map[string]any{"ultimoLatido": latido, "pendientes": pendientes})
 	return "Esta PC ya no es " + codigo + ".", nil
 }

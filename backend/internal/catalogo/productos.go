@@ -135,6 +135,23 @@ func stockPorSucursal(sucursales []sucursalActiva, nivel func(slug string) Nivel
 	return out
 }
 
+// filtroDeStock es el filtro que vale: «todos», «en-stock» o el slug de una
+// sucursal activa. Un valor que no es ninguno (una sucursal dada de baja, un
+// enlace viejo o escrito a mano) dejaba el catálogo vacío, porque NivelEn de
+// una sucursal que no está es sin stock: se toma como «en-stock».
+func filtroDeStock(pedido string, sucursales []sucursalActiva) string {
+	switch pedido {
+	case "", "todos", "en-stock":
+		return pedido
+	}
+	for _, b := range sucursales {
+		if b.slug == pedido {
+			return pedido
+		}
+	}
+	return "en-stock"
+}
+
 // NivelEn es el nivel de una sucursal de la lista; si no está, sin stock.
 func NivelEn(stock []StockDeSucursal, slug string) NivelStock {
 	for _, x := range stock {
@@ -435,15 +452,16 @@ func (s *Servicio) claves(ctx context.Context, f Filtros, l listaParaConsulta) (
 
 	resultado := listado[:0:0]
 	marca := strings.ToLower(f.Marca)
+	filtroStock := filtroDeStock(f.Stock, sucursales)
 	for _, p := range listado {
-		switch f.Stock {
+		switch filtroStock {
 		case "", "todos":
 		case "en-stock":
 			if !p.HayStock {
 				continue
 			}
 		default: // el slug de una sucursal
-			if NivelEn(p.Stock, f.Stock) == SinStock {
+			if NivelEn(p.Stock, filtroStock) == SinStock {
 				continue
 			}
 		}

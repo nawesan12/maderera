@@ -136,3 +136,13 @@ describe("formatearDecimal y formatearPeso (hallazgo 32)", () => {
     expect(formatearPeso(40 * 1024 * 1024)).toBe("40,0 MB");
   });
 });
+
+describe("hayFiltro", () => {
+  it("la página y los «todos» no son filtro", async () => {
+    const { hayFiltro } = await import("@/lib/formato");
+    expect(hayFiltro({})).toBe(false);
+    expect(hayFiltro({ pagina: "2", estado: "todos", cat: "todas", buscar: "  " })).toBe(false);
+    expect(hayFiltro({ buscar: "fenólico" })).toBe(true);
+    expect(hayFiltro({ estado: "sin-stock" })).toBe(true);
+  });
+});

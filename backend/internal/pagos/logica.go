@@ -314,6 +314,13 @@ func finito(v any, esta bool) (float64, bool) {
 	return n, !math.IsNaN(n) && !math.IsInf(n, 0)
 }
 
+// topeDeComision es la parte del cobro que Mercado Pago puede quedarse para
+// que el dato se tome. La tarifa con IVA ronda el 4 al 8 %; con las cuotas sin
+// interés que absorbe el vendedor y los impuestos que MP retiene puede pasar
+// del 30 %. Más de la mitad no es una comisión: es un dato roto (un neto en 0
+// o sin llenar), y asentarlo dejaría Banco casi en cero.
+const topeDeComision = 0.5
+
 // ComisionDeMercadoPago es cuánto se queda Mercado Pago de un cobro de
 // `monto` y cuánto acredita. El neto sale de
 // transaction_details.net_received_amount y la comisión es la diferencia con
@@ -321,14 +328,17 @@ func finito(v any, esta bool) (float64, bool) {
 // cuotas que absorbe el vendedor o un impuesto que MP descuenta. Sin el
 // neto, la suma de fee_details que paga el vendedor (fee_payer «collector»;
 // lo que paga el comprador no sale de lo nuestro). Nil, nil si la respuesta
-// no trae ninguno de los dos o no tiene sentido (un neto negativo o mayor al
-// importe): ahí el cierre asienta el bruto, como antes.
+// no trae ninguno de los dos o no tiene sentido (un neto negativo, mayor al
+// importe o una comisión de más de topeDeComision): ahí el cierre asienta el
+// bruto, como antes. Un neto en 0 (comité del 25/11) se asentaba como una
+// comisión del 100 % con Banco en cero, y el dato ya no se volvía a pisar.
 func ComisionDeMercadoPago(p map[string]any, monto float64) (comision, neto *float64) {
 	if !(monto > 0) {
 		return nil, nil
 	}
+	plausible := func(c float64) bool { return c >= 0 && c <= monto*topeDeComision }
 	v, esta := objeto(p["transaction_details"])["net_received_amount"]
-	if n, ok := finito(v, esta); ok && n >= 0 && n <= monto {
+	if n, ok := finito(v, esta); ok && n > 0 && n <= monto && plausible(monto-n) {
 		n = jsmath.Round(float64(n*100)) / 100
 		c := jsmath.Round(float64(float64(monto-n)*100)) / 100
 		return &c, &n
@@ -349,7 +359,7 @@ func ComisionDeMercadoPago(p map[string]any, monto float64) (comision, neto *flo
 		}
 	}
 	c := jsmath.Round(float64(total*100)) / 100
-	if c > monto {
+	if !plausible(c) {
 		return nil, nil
 	}
 	n := jsmath.Round(float64(float64(monto-c)*100)) / 100

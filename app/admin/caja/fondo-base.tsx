@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
-import { formatearMonto, importeDelCampo, importeParaElCampo } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeParaElCampo, importeIlegible } from "@/lib/formato";
 import { guardarFondoBase } from "./actions";
 
 /**
@@ -28,7 +28,8 @@ export function FondoBase({
   const [guardando, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
 
-  const cambio = importeDelCampo(texto) !== valor;
+  const ilegible = importeIlegible(texto);
+  const cambio = !ilegible && importeDelCampo(texto) !== valor;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -38,6 +39,7 @@ export function FondoBase({
           type="text"
           inputMode="decimal"
           value={texto}
+          aria-invalid={importeIlegible(texto) || undefined}
           onChange={(e) => {
             setTexto(e.target.value);
             setAviso(null);
@@ -65,7 +67,11 @@ export function FondoBase({
         </button>
       )}
 
-      {aviso ? (
+      {ilegible ? (
+        <span role="alert" className="text-sm text-saldo-debe">
+          No se entiende el importe
+        </span>
+      ) : aviso ? (
         <span className="text-sm text-muted-foreground">{aviso}</span>
       ) : (
         valor > 0 && (

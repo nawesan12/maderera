@@ -1,6 +1,6 @@
 "use client";
 
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeIlegible } from "@/lib/formato";
 import { revisarChequeDePago, type MedioDeMostrador } from "@/lib/mostrador/importes";
 import {
   MEDIOS,
@@ -220,6 +220,7 @@ export function PagoPartido({
               inputMode="decimal"
               aria-label={`Importe del medio ${i + 1}`}
               value={parte.importe}
+              aria-invalid={importeIlegible(parte.importe) || undefined}
               onChange={(e) =>
                 onPartes(
                   partes.map((p, j) =>

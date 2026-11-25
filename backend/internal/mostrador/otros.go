@@ -2,7 +2,10 @@ package mostrador
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -278,19 +281,96 @@ func (s *Servicio) CajasParaVincular(ctx context.Context, sucursal string) ([]ma
 	return out, filas.Err()
 }
 
-// Vincular devuelve la caja con su secreto (o el error para mostrar).
-func (s *Servicio) Vincular(ctx context.Context, id string) (map[string]any, error) {
-	var c struct{ ID, Codigo, Secreto string }
-	err := s.pool.QueryRow(ctx, `
-		UPDATE pos_devices SET ultima_vez_at = now() WHERE id::text = $1 AND activo = true
-		RETURNING id, codigo, secreto`, id).Scan(&c.ID, &c.Codigo, &c.Secreto)
+// enUsoHace es cuánto sin latido tiene que pasar para que otra PC tome una
+// caja sin un admin. La PC vinculada late cada 20 s (use-conexion.ts): dos
+// minutos son seis latidos perdidos, una PC apagada o sin red.
+const enUsoHace = 2 * time.Minute
+
+// Vincular entrega la caja a esta PC con un secreto nuevo (o el error para
+// mostrar). Antes devolvía el secreto vigente sin mirar nada: dos PCs
+// quedaban con la misma caja, los números provisorios se repetían y el
+// latido de una pisaba los pendientes de la otra. Ahora:
+//   - con ventas sin subir no se entrega (como Desvincular): esa plata la
+//     cuenta el cierre por los pendientes que manda la otra PC;
+//   - si latió hace menos de enUsoHace, está en uso: solo un admin la toma;
+//   - el secreto se rota, así la PC que la tenía deja de reconocerse
+//     (cajaVigente en el latido) y pide vincularse otra vez.
+func (s *Servicio) Vincular(ctx context.Context, ses *auth.Sesion, id string) (map[string]any, error) {
+	if !plataforma.UUIDValido(id) {
+		return map[string]any{"error": "Esa caja no existe o está dada de baja."}, nil
+	}
+	crudo := make([]byte, 24)
+	if _, err := rand.Read(crudo); err != nil {
+		return nil, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var codigo string
+	var pendientes int
+	var ultima *time.Time
+	var enUso bool
+	err = tx.QueryRow(ctx, `SELECT codigo, pendientes, ultima_vez_at, coalesce(ultima_vez_at > now() - make_interval(secs => $2), false)
+		FROM pos_devices WHERE id = $1 AND activo = true FOR UPDATE`, id, enUsoHace.Seconds()).Scan(&codigo, &pendientes, &ultima, &enUso)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return map[string]any{"error": "Esa caja no existe o está dada de baja."}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"caja": map[string]any{"id": c.ID, "codigo": c.Codigo, "secreto": c.Secreto}}, nil
+	if pendientes > 0 {
+		ventas, verbo := "ventas cobradas", "subieron"
+		if pendientes == 1 {
+			ventas, verbo = "venta cobrada", "subió"
+		}
+		return map[string]any{"error": fmt.Sprintf("%s tiene %d %s en otra PC que todavía no %s. Esperá a que suban.", codigo, pendientes, ventas, verbo)}, nil
+	}
+	admin := ses != nil && ses.RolStaff != nil && *ses.RolStaff == sqlc.StaffRoleAdmin
+	if enUso && !admin {
+		return map[string]any{"error": codigo + " se está usando en otra PC. Elegí otra caja, o pedile a un admin que la pase a esta."}, nil
+	}
+	secreto := base64.RawURLEncoding.EncodeToString(crudo)
+	if _, err := tx.Exec(ctx, `UPDATE pos_devices SET secreto = $2, ultima_vez_at = now(), pendientes = 0 WHERE id = $1`, id, secreto); err != nil {
+		return nil, err
+	}
+	proximo, err := proximoProvisorio(ctx, tx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	desc := "Vinculó la terminal " + codigo + " a una PC"
+	var datos any
+	if ultima != nil {
+		datos = map[string]any{"ultimoLatido": ultima.UTC().Format(time.RFC3339)}
+		if enUso {
+			desc = "Pasó la terminal " + codigo + " a otra PC (la anterior seguía en uso)"
+		}
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "caja", id, desc, datos)
+	return map[string]any{"caja": map[string]any{"id": id, "codigo": codigo, "secreto": secreto, "proximoNumero": proximo}}, nil
+}
+
+// proximoProvisorio es el siguiente al último número provisorio de esa caja
+// que ya está en la base, venga de la PC que venga. El contador vive en el
+// navegador de cada PC: sin esto, una PC nueva que vinculaba CAJA1 arrancaba
+// en CAJA1-001, un número que ya existía (dos papeles iguales y la venta que
+// no subía por el índice único). El guion es parte del prefijo, así CAJA1 no
+// cuenta los de CAJA10; se leen solo las cifras que siguen, así el sufijo de
+// un número repetido (desambiguarProvisorio) no las cambia.
+func proximoProvisorio(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, codigo string) (int, error) {
+	var n int
+	err := q.QueryRow(ctx, `
+		SELECT coalesce(max(substring(substr(numero_provisorio, length($1) + 2) FROM '^[0-9]+')::bigint), 0) + 1
+		FROM orders
+		WHERE numero_provisorio LIKE replace(replace(replace($1, '\', '\\'), '%', '\%'), '_', '\_') || '-%'
+		  AND substring(substr(numero_provisorio, length($1) + 2) FROM '^[0-9]+') IS NOT NULL`, codigo).Scan(&n)
+	return n, err
 }
 
 // Latido dice quién es, si sigue abierta la caja y la hora del servidor, y

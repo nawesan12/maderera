@@ -254,6 +254,11 @@ func TestRetiroParcialFirmaYAnulacion(t *testing.T) {
 	if c != 200 || !strings.Contains(b, `"numero":"REM-0001"`) {
 		t.Fatalf("remito por token: %d %s", c, b)
 	}
+	// El DNI de quien retira no sale entero por el enlace, que va por correo
+	// (comité del 25/11): solo lo que alcanza para reconocerlo.
+	if !strings.Contains(b, `"receptorDocumento":"•••222"`) || strings.Contains(b, "30111222") {
+		t.Fatalf("el enlace de firma muestra el DNI: %s", b)
+	}
 	if c, _ := pedir(t, http.DefaultClient, "GET", u+"firmar/no-existe-este-token", nil); c != 404 {
 		t.Errorf("token inventado: %d", c)
 	}

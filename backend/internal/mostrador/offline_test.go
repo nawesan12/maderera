@@ -125,8 +125,48 @@ func TestLatidoYVincular(t *testing.T) {
 	igualJSON(t, "vincular sin caja", b, `{"error":"Elegí una caja."}`)
 	_, _, b = crudo(t, ven, "POST", e.u+"/api/mostrador/caja/vincular", `{"cajaId":"no-existe"}`)
 	igualJSON(t, "vincular caja que no existe", b, `{"error":"Esa caja no existe o está dada de baja."}`)
+	// Comité del 25/11: vincular entregaba el secreto vigente sin mirar nada
+	// y dos PCs quedaban con la misma caja.
+	//
+	// Con ventas sin subir en la otra PC, no se entrega.
 	_, _, b = crudo(t, ven, "POST", e.u+"/api/mostrador/caja/vincular", `{"cajaId":"`+caja+`"}`)
-	igualJSON(t, "vincular", b, `{"caja":{"id":"`+caja+`","codigo":"CAJA1","secreto":"secreto-1"}}`)
+	igualJSON(t, "vincular con pendientes", b, `{"error":"CAJA1 tiene 3 ventas cobradas en otra PC que todavía no subieron. Esperá a que suban."}`)
+	// Latió hace nada: está en uso, el vendedor no la toma.
+	latido := `{"branchId":"` + e.central + `","caja":{"id":"` + caja + `","secreto":"` + secreto + `"},"pendientes":0}`
+	crudo(t, ven, "POST", e.u+"/api/mostrador/latido", latido)
+	_, _, b = crudo(t, ven, "POST", e.u+"/api/mostrador/caja/vincular", `{"cajaId":"`+caja+`"}`)
+	igualJSON(t, "vincular en uso", b, `{"error":"CAJA1 se está usando en otra PC. Elegí otra caja, o pedile a un admin que la pase a esta."}`)
+	if s := e.txt(t, `select secreto from pos_devices where id = $1`, caja); s != secreto {
+		t.Fatalf("el rechazo cambió el secreto: %q", s)
+	}
+	// Un admin sí, con un secreto nuevo: la PC anterior deja de reconocerse.
+	adm := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
+	_, _, b = crudo(t, adm, "POST", e.u+"/api/mostrador/caja/vincular", `{"cajaId":"`+caja+`"}`)
+	var vin map[string]map[string]string
+	_ = json.Unmarshal([]byte(b), &vin)
+	nuevo := vin["caja"]["secreto"]
+	if vin["caja"]["codigo"] != "CAJA1" || nuevo == "" || nuevo == secreto {
+		t.Fatalf("vincular del admin: %s", b)
+	}
+	_, _, b = crudo(t, ven, "POST", e.u+"/api/mostrador/latido", latido)
+	l = nil
+	_ = json.Unmarshal([]byte(b), &l)
+	if l["cajaVigente"] != false {
+		t.Fatalf("la PC anterior sigue vigente: %s", b)
+	}
+	if n := e.num(t, `select count(*)::float8 from audit_log where entidad = 'caja' and entidad_id = $1 and descripcion like 'Pasó la terminal CAJA1 a otra PC%'`, caja); n != 1 {
+		t.Fatalf("bitácora: %v", n)
+	}
+	// Sin latido hace rato (la PC se apagó), cualquiera del mostrador la toma.
+	if _, err := e.pool.Exec(ctx, `update pos_devices set ultima_vez_at = now() - interval '3 minutes' where id = $1`, caja); err != nil {
+		t.Fatal(err)
+	}
+	_, _, b = crudo(t, ven, "POST", e.u+"/api/mostrador/caja/vincular", `{"cajaId":"`+caja+`"}`)
+	vin = nil
+	_ = json.Unmarshal([]byte(b), &vin)
+	if vin["caja"]["secreto"] == "" || vin["caja"]["secreto"] == nuevo {
+		t.Fatalf("vincular una caja libre: %s", b)
+	}
 }
 
 func TestMovimientoDiferidoRepetible(t *testing.T) {

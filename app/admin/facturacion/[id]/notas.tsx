@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { Loader2, MinusCircle, PlusCircle, Undo2 } from "lucide-react";
-import { formatearMonto, importeDelCampo } from "@/lib/formato";
+import { formatearCantidad, leerCantidad } from "@/lib/unidades";
+import { formatearMonto, importeDelCampo, importeIlegible } from "@/lib/formato";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { acreditarParcial, debitar, type EstadoFactura } from "../actions";
 import { Confirmar } from "@/components/admin/confirmar";
@@ -59,11 +60,24 @@ export function NotasSobreElComprobante({
   const [alicuota, setAlicuota] = useState("21");
 
   const disponible = total - acreditado;
+  // Las cantidades se leen como cantidades y no como importes: «0.125» m³ es
+  // un octavo, no 125 (con importeDelCampo, «x.yyy» son miles).
+  const cantidadDe = (id: string) => {
+    const n = leerCantidad(cantidades[id]);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const cantidadMala = (i: { id: string; cantidad: number }) => {
+    const t = cantidades[i.id];
+    if (!t || !t.trim()) return false;
+    const n = leerCantidad(t);
+    return !Number.isFinite(n) || n < 0 || n > i.cantidad + 1e-9;
+  };
+  const algunaMala = modo === "credito" && items.some(cantidadMala);
   const [confirmando, setConfirmando] = useState(false);
   // Lo que va a salir, para decirlo antes de emitir: es un comprobante fiscal.
   const importeDeLaNota =
     modo === "credito"
-      ? items.reduce((s, i) => s + (i.cantidad > 0 ? (importeDelCampo(cantidades[i.id]) / i.cantidad) * i.subtotal : 0), 0)
+      ? items.reduce((s, i) => s + (i.cantidad > 0 ? (cantidadDe(i.id) / i.cantidad) * i.subtotal : 0), 0)
       : importeDelCampo(importe);
 
   if (modo === null) {
@@ -125,20 +139,30 @@ export function NotasSobreElComprobante({
                 <span className="min-w-0 flex-1">
                   <span className="block text-base">{i.descripcion}</span>
                   <span className="tabular block text-sm text-muted-foreground">
-                    {i.cantidad} × {formatearMonto(i.subtotal / i.cantidad)}
+                    {formatearCantidad(i.cantidad)} × {formatearMonto(i.subtotal / i.cantidad)}
                   </span>
                 </span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  aria-label={`Cuánto se acredita de ${i.descripcion}`}
-                  value={cantidades[i.id] ?? ""}
-                  onChange={(e) =>
-                    setCantidades((prev) => ({ ...prev, [i.id]: e.target.value }))
-                  }
-                  placeholder="0"
-                  className="tabular h-10 w-24 shrink-0 rounded-lg border border-linea bg-background px-2 text-right text-base"
-                />
+                <span className="shrink-0 text-right">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    aria-label={`Cuánto se acredita de ${i.descripcion}`}
+                    value={cantidades[i.id] ?? ""}
+                    onChange={(e) =>
+                      setCantidades((prev) => ({ ...prev, [i.id]: e.target.value }))
+                    }
+                    aria-invalid={cantidadMala(i) || undefined}
+                    aria-describedby={`maximo-${i.id}`}
+                    placeholder="0"
+                    className="tabular h-10 w-24 rounded-lg border border-linea bg-background px-2 text-right text-base"
+                  />
+                  <span
+                    id={`maximo-${i.id}`}
+                    className={`tabular mt-0.5 block text-xs ${cantidadMala(i) ? "text-saldo-debe" : "text-muted-foreground"}`}
+                  >
+                    Máximo {formatearCantidad(i.cantidad)}
+                  </span>
+                </span>
               </li>
             ))}
           </ul>
@@ -160,6 +184,7 @@ export function NotasSobreElComprobante({
               type="text"
               inputMode="decimal"
               value={importe}
+              aria-invalid={importeIlegible(importe) || undefined}
               onChange={(e) => setImporte(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-background px-3 text-right text-base"
             />
@@ -213,7 +238,7 @@ export function NotasSobreElComprobante({
                       motivo,
                       items.map((i) => ({
                         itemId: i.id,
-                        cantidad: importeDelCampo(cantidades[i.id]),
+                        cantidad: cantidadDe(i.id),
                       })),
                     )
                   : await debitar(
@@ -231,7 +256,13 @@ export function NotasSobreElComprobante({
         <button
           type="button"
           onClick={() => setConfirmando(true)}
-          disabled={enCurso || motivo.trim().length < 4 || importeDeLaNota <= 0}
+          disabled={
+            enCurso ||
+            motivo.trim().length < 4 ||
+            (modo === "debito" && importeIlegible(importe)) ||
+            algunaMala ||
+            importeDeLaNota <= 0
+          }
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

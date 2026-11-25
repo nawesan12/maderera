@@ -653,6 +653,8 @@ export interface components {
                 id: string;
                 numero: string;
                 anulado: boolean;
+                /** @description Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel */
+                porMercadoPago: boolean;
             } | null;
         };
         Historial: {

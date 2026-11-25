@@ -24,6 +24,7 @@ import {
   hoyEnArgentina,
   importeDelCampo,
   importeParaElCampo,
+  importeIlegible,
 } from "@/lib/formato";
 import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import { type ChequeDeCartera, chequesParaEndosar, sinEndososDelOtroCircuito } from "./endoso";
@@ -397,6 +398,7 @@ export function FormularioPago({
                           type="text"
                           inputMode="decimal"
                           value={aplicado[f.id]}
+                          aria-invalid={importeIlegible(aplicado[f.id]) || undefined}
                           aria-label={`Cuánto se paga de la ${f.numero}`}
                           onChange={(e) => {
                             setTotalTocado(null);
@@ -418,6 +420,7 @@ export function FormularioPago({
                   type="text"
                   inputMode="decimal"
                   value={totalTocado ?? (sumaAplicada ? importeParaElCampo(sumaAplicada) : "")}
+                  aria-invalid={importeIlegible(totalTocado) || undefined}
                   onChange={(e) => escribirTotal(e.target.value)}
                   className="tabular mt-1 h-12 w-full rounded-lg border border-linea bg-card px-3 text-right text-xl font-semibold"
                 />
@@ -525,6 +528,7 @@ export function FormularioPago({
                         type="text"
                         inputMode="decimal"
                         value={parte.importe}
+                        aria-invalid={importeIlegible(parte.importe) || undefined}
                         onChange={(e) => actualizarParte(i, { importe: e.target.value })}
                         placeholder="Importe"
                         aria-label="Importe"
@@ -701,6 +705,7 @@ export function FormularioPago({
                             type="text"
                             inputMode="decimal"
                             value={basesAMano[r.id] ?? ""}
+                            aria-invalid={importeIlegible(basesAMano[r.id] ?? "") || undefined}
                             onChange={(e) => setBasesAMano((prev) => ({ ...prev, [r.id]: e.target.value }))}
                             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
                           />
@@ -821,7 +826,17 @@ export function FormularioPago({
               }
             })
           }
-          disabled={enCurso || !supplierId || total <= 0 || aCuenta < -0.01 || basePasada}
+          disabled={
+            enCurso ||
+            !supplierId ||
+            total <= 0 ||
+            aCuenta < -0.01 ||
+            basePasada ||
+            importeIlegible(totalTocado) ||
+            Object.values(aplicado).some(importeIlegible) ||
+            Object.values(basesAMano).some(importeIlegible) ||
+            (partes ?? []).some((p) => importeIlegible(p.importe))
+          }
           className="boton-accion inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

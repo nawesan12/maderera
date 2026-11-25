@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Monitor, MonitorOff } from "lucide-react";
-import type { CajaVinculada } from "@/lib/mostrador/offline/use-caja";
+import { Loader2, Monitor, MonitorOff, Unlink } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { CajaDelServidor } from "@/lib/mostrador/offline/use-caja";
 import { desvincularTerminal } from "@/app/mostrador/actions";
 
 interface CajaDisponible {
@@ -52,6 +60,7 @@ export function VincularCaja({
   onVincular,
   onDesvincular,
   administra = false,
+  pendientesLocales = 0,
 }: {
   branchId: string;
   enLinea: boolean;
@@ -59,9 +68,15 @@ export function VincularCaja({
   administra?: boolean;
   /** La caja de esta máquina, si ya está vinculada. */
   vinculada: { id: string; codigo: string } | null;
-  onVincular: (caja: Omit<CajaVinculada, "proximoNumero">) => Promise<void>;
+  onVincular: (caja: CajaDelServidor) => Promise<void>;
   /** Suelta la caja local, después de que Go la desvinculó. */
   onDesvincular?: () => Promise<void>;
+  /**
+   * Las ventas de la cola local sin subir. El latido puede estar viejo si se
+   * cobró sin conexión: con ventas en la cola no se suelta, y Go también lo
+   * controla con este número.
+   */
+  pendientesLocales?: number;
 }) {
   const [cajas, setCajas] = useState<CajaDisponible[] | null>(null);
   const [enCurso, setEnCurso] = useState(false);
@@ -122,13 +137,14 @@ export function VincularCaja({
     setEnCurso(true);
     setError(null);
     try {
-      const r = await desvincularTerminal(cajaId);
+      const r = await desvincularTerminal(cajaId, pendientesLocales);
       if (r.error) {
         setError(r.error);
         return;
       }
       setSoltando(false);
       await onDesvincular?.();
+      toast.success(r.ok ?? "Esta PC ya no es una terminal.");
     } catch {
       setError("No se pudo desvincular.");
     } finally {
@@ -151,45 +167,77 @@ export function VincularCaja({
         </span>
       );
     }
-    if (soltando) {
-      return (
-        <span role="group" aria-label="Desvincular esta PC" className="inline-flex items-center gap-2 text-sm">
-          <span className="font-semibold">¿Esta PC deja de ser {vinculada.codigo}?</span>
-          <button
-            type="button"
-            disabled={enCurso}
-            onClick={() => void desvincular(vinculada.id)}
-            className="boton-accion inline-flex h-9 items-center gap-1.5 rounded-lg px-3 font-semibold disabled:opacity-50"
-          >
-            {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-            Sí
-          </button>
-          <button
-            type="button"
-            autoFocus
-            disabled={enCurso}
-            onClick={() => {
-              setSoltando(false);
-              setError(null);
-            }}
-            className="h-9 rounded-lg border border-linea px-3 font-medium hover:bg-hundida"
-          >
-            No
-          </button>
-          {error && <span className="text-sm font-medium text-saldo-debe">{error}</span>}
-        </span>
-      );
-    }
+    /* El código se ve siempre (es el que va en el papel del cliente) y al
+       lado, a la vista, «Desvincular»: antes la única forma era tocar el
+       código gris, sin ícono. La pregunta va en un diálogo que dice la
+       consecuencia, con el rechazo de Go adentro, y no en la barra. */
     return (
-      <button
-        type="button"
-        onClick={() => setSoltando(true)}
-        title="Esta PC"
-        aria-label={`Esta PC es ${vinculada.codigo}. Desvincular`}
-        className="inline-flex h-9 items-center gap-1.5 rounded-lg px-1.5 text-sm text-muted-foreground hover:bg-hundida"
-      >
-        {codigo}
-      </button>
+      <span className="inline-flex items-center gap-1">
+        <span className="inline-flex h-9 items-center gap-1.5 px-1 text-sm text-muted-foreground" title="Esta PC">
+          {codigo}
+        </span>
+        <button
+          type="button"
+          onClick={() => setSoltando(true)}
+          aria-label={`Desvincular esta PC de ${vinculada.codigo}`}
+          className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm font-medium text-muted-foreground ring-1 ring-linea hover:bg-hundida hover:text-foreground"
+        >
+          <Unlink className="h-3.5 w-3.5" />
+          Desvincular
+        </button>
+
+        <Dialog
+          open={soltando}
+          onOpenChange={(v) => {
+            if (enCurso) return;
+            setSoltando(v);
+            if (!v) setError(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                Desvincular <span className="tabular">{vinculada.codigo}</span> de esta PC
+              </DialogTitle>
+              <DialogDescription className="text-base">
+                {pendientesLocales > 0
+                  ? pendientesLocales === 1
+                    ? "Queda 1 venta sin subir: esperá a que suba."
+                    : `Quedan ${pendientesLocales} ventas sin subir: esperá a que suban.`
+                  : `Esta PC deja de ser ${vinculada.codigo}: sin conexión no va a poder cobrar hasta vincularla otra vez. La numeración de ${vinculada.codigo} sigue donde quedó.`}
+              </DialogDescription>
+            </DialogHeader>
+            {error && (
+              <p role="alert" className="text-base text-saldo-debe">
+                {error}
+              </p>
+            )}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <button
+                type="button"
+                autoFocus
+                disabled={enCurso}
+                onClick={() => {
+                  setSoltando(false);
+                  setError(null);
+                }}
+                className="h-11 rounded-lg border border-linea px-4 text-base font-medium hover:bg-hundida"
+              >
+                Mejor no
+              </button>
+              <button
+                type="button"
+                disabled={enCurso || pendientesLocales > 0}
+                onClick={() => void desvincular(vinculada.id)}
+                className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
+              >
+                {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+                Desvincular
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </span>
     );
   }
 

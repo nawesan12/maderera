@@ -94,7 +94,11 @@
   --color-acento-sobre-claro: var(--acento-sobre-claro);
 }
 
+/* Los controles nativos (el calendario de un campo de fecha, los select, la
+   barra de desplazamiento) se dibujan con el esquema del tema: sin esto
+   quedaban claros en oscuro y el ícono del calendario, negro sobre negro. */
 :root {
+  color-scheme: light;
   --background: oklch(0.985 0.005 80);
   --foreground: oklch(0.15 0.01 60);
   --card: oklch(1 0 0);
@@ -219,6 +223,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.13 0.01 60);
   --foreground: oklch(0.96 0.005 80);
   --card: oklch(0.18 0.01 60);
@@ -1567,6 +1572,13 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 
 .dark :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]), select, textarea, [data-slot="select-trigger"]).border:not(:focus, :focus-visible, [aria-invalid="true"], [class*="bg-white/"], [class*="border-white"]) {
   box-shadow: inset 0 1.5px 3px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+
+/* Un campo con lo escrito mal (un importe que no se entiende, por ejemplo)
+   se ve: borde y anillo del color de la deuda, que tiene su variante oscura. */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--saldo-debe);
+  box-shadow: 0 0 0 1px var(--saldo-debe);
 }
 
 /* ---- Piezas visuales de los formularios (10/11/2026) ----------------------

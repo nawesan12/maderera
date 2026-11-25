@@ -29,4 +29,8 @@ bantime  = 1d
 # Docker, y Docker arma sus propias reglas antes que las del sistema: un ban
 # puesto en INPUT —que es lo que hace fail2ban por omisión— no frena nada que
 # vaya a un contenedor. DOCKER-USER es la cadena que Docker deja para esto.
+#
+# **Sólo con Cloudflare en «Solo DNS».** Con el proxy prendido, la conexión
+# llega desde Cloudflare y este ban no corta nada: hay que cambiar esta acción
+# por una que bloquee en Cloudflare (docs/SERVIDOR-PROPIO.md, paso 9).
 action   = iptables-allports[name=caddy-sondas, chain=DOCKER-USER, protocol=all]

@@ -66,7 +66,7 @@ export default async function ConfiguracionArcaPage() {
       >
         <div className="flex gap-3">
           {estado.operativo ? (
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-saldo-favor" />
           ) : (
             <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           )}

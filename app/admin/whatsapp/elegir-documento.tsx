@@ -123,7 +123,7 @@ export function ElegirDocumento({
           )}
           {estado.requiereConfirmacionTope && <ConfirmarTope gratis={gratis} />}
           {estado.ok && (
-            <p role="status" className="flex items-center gap-2 text-base text-green-800">
+            <p role="status" className="flex items-center gap-2 text-base text-saldo-favor">
               <CheckCircle2 className="h-5 w-5" />
               {estado.ok}
             </p>

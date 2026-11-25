@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Vacio } from "@/components/admin/vacio";
+import { hayFiltro } from "@/lib/formato";
 import { Barcode, FileSpreadsheet, ImageOff, Package, PackageX, Plus, Star, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { leerPagina, Paginador } from "@/components/admin/paginador";
@@ -116,10 +118,26 @@ export default async function AdminProductosPage({
         ]}
       />
 
-      {productos.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
-          <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-base font-medium">Ningún producto coincide</p>
+      {productos.length === 0 && hayFiltro(params) ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Package}
+            titulo="Ningún producto coincide"
+            accion={{ texto: "Limpiar filtros", href: "/admin/productos" }}
+          />
+        </div>
+      ) : productos.length === 0 ? (
+        <div className="mt-6">
+          <Vacio
+            icono={Package}
+            titulo="Todavía no hay productos"
+            detalle="Cargá el primero o traé el catálogo del sistema viejo."
+            accion={
+              puedeEntrar("/admin/migracion", usuario.staffRole)
+                ? { texto: "Traer del sistema viejo", href: "/admin/migracion?que=productos" }
+                : { texto: "Nuevo producto", href: "/admin/productos/nuevo" }
+            }
+          />
         </div>
       ) : (
         <div className="mt-[22px]">

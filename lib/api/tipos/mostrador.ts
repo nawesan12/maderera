@@ -264,7 +264,8 @@ export interface paths {
         /**
          * @description Suelta la caja física de la PC que la tiene: le cambia el secreto, así
          *     esa PC deja de reconocerse en el latido y vuelve a pedir que se la
-         *     vincule. Solo admin. Con ventas sin subir, no.
+         *     vincule. Solo admin. Con ventas sin subir, no: ni las del último
+         *     latido ni las que la PC tiene en su cola local (pendientes).
          */
         post: operations["DesvincularTerminal"];
         delete?: never;
@@ -959,6 +960,8 @@ export interface operations {
             content: {
                 "application/json": {
                     cajaId: string;
+                    /** @description Las ventas que esta PC tiene en su cola sin subir (sinSubir + atascadas). */
+                    pendientes?: number;
                 };
             };
         };

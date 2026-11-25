@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, SlidersHorizontal } from "lucide-react";
-import { formatearMonto, importeDelCampo } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeIlegible } from "@/lib/formato";
 import { Opciones } from "@/components/admin/formulario";
 import {
   registrarMovimientoDeProveedor,
@@ -125,6 +125,7 @@ export function CuentaDelProveedor({
               type="text"
               inputMode="decimal"
               value={monto}
+              aria-invalid={importeIlegible(monto) || undefined}
               onChange={(e) => setMonto(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
             />
@@ -149,7 +150,7 @@ export function CuentaDelProveedor({
             <button
               type="button"
               onClick={anotar}
-              disabled={enCurso || !(importeDelCampo(monto) > 0) || detalle.trim() === ""}
+              disabled={enCurso || importeIlegible(monto) || !(importeDelCampo(monto) > 0) || detalle.trim() === ""}
               className="boton-accion inline-flex h-11 items-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
             >
               {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

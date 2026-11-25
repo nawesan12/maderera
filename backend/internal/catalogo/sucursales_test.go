@@ -40,8 +40,10 @@ func TestUnaSucursalNuevaApareceSola(t *testing.T) {
 		t.Errorf("listado del fenólico: %s", b)
 	}
 
-	// El filtro por sucursal toma cualquier slug activo.
-	for filtro, slugs := range map[string][]string{"puerto": {"fenolico"}, "casa-central": {"melamina"}, "aserradero": {}, "cerrada": {}, "en-stock": {"fenolico", "melamina"}} {
+	// El filtro por sucursal toma cualquier slug activo. Uno que no lo es (la
+	// cerrada, un enlace viejo) vale como «en-stock» y no deja el catálogo
+	// vacío (comité del 25/11).
+	for filtro, slugs := range map[string][]string{"puerto": {"fenolico"}, "casa-central": {"melamina"}, "aserradero": {}, "cerrada": {"fenolico", "melamina"}, "no-existe": {"fenolico", "melamina"}, "en-stock": {"fenolico", "melamina"}} {
 		_, b := pedir(t, &http.Client{}, u+"?publico=true&stock="+filtro)
 		var ps []ProductoListado
 		_ = json.Unmarshal([]byte(b), &ps)

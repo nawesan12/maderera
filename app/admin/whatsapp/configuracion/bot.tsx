@@ -90,7 +90,7 @@ export function ConfiguracionDelBot({
             className="h-3 overflow-hidden rounded-full bg-muted"
           >
             <div
-              className={`h-full rounded-full ${mensajes.alcanzado ? "bg-red-600" : mensajes.ahorro ? "bg-amber-500" : "bg-brand-green"}`}
+              className={`h-full rounded-full ${mensajes.alcanzado ? "bg-destructive" : mensajes.ahorro ? "bg-amber-500" : "bg-brand-green"}`}
               style={{ width: `${Math.min(porcentaje, 100)}%` }}
             />
           </div>

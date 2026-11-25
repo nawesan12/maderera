@@ -152,7 +152,7 @@ export default async function FichaComprobantePage({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Dos salidas distintas y las dos hacen falta: la hoja se abre para
               mirarla o mandarla a la impresora, y el PDF se descarga para
               adjuntarlo a un correo o dárselo al contador. */}
@@ -196,12 +196,12 @@ export default async function FichaComprobantePage({
         </section>
       ) : comprobante.cae ? (
         <section className="estado-ok flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-[var(--estado-tinta)]/30 bg-[var(--estado-fondo)] px-5 py-3.5">
-          <ShieldCheck className="h-5 w-5 shrink-0 text-green-700" />
-          <p className="text-base text-green-900">
+          <ShieldCheck className="h-5 w-5 shrink-0" />
+          <p className="text-base">
             Autorizada por ARCA · <span className="tabular">CAE {comprobante.cae}</span>
           </p>
           {comprobante.caeVencimiento && (
-            <p className="text-base text-green-900/70">
+            <p className="text-base opacity-80">
               vence el {fechaCorta.format(comprobante.caeVencimiento)}
             </p>
           )}
@@ -226,8 +226,9 @@ export default async function FichaComprobantePage({
             </div>
           ))}
           {!anulada && serie?.tramo && (
-            // Con más de 50 sin CAE atrás, ARCA no se pide desde acá: la serie
-            // se autoriza de a 50, desde el que tiene justo 50 atrás.
+            // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
+            // se pide desde acá: la serie se autoriza de a 15, desde el que
+            // tiene justo 15 atrás.
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
               <Link
                 href={`/admin/facturacion/${serie.tramo.invoiceId}`}
@@ -401,7 +402,7 @@ export default async function FichaComprobantePage({
               Cobros
               <span
                 className={`tabular text-base font-normal ${
-                  comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-green-700"
+                  comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
                 }`}
               >
                 {comprobante.saldo > 0

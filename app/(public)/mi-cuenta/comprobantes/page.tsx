@@ -71,7 +71,7 @@ export default async function MisComprobantesPage() {
                     </span>
                     {comprobante.cae && (
                       <span
-                        className="inline-flex items-center gap-1 text-sm font-normal text-green-700"
+                        className="inline-flex items-center gap-1 text-sm font-normal text-saldo-favor"
                         title="Autorizada por ARCA"
                       >
                         <ShieldCheck className="h-3.5 w-3.5" />
@@ -88,7 +88,7 @@ export default async function MisComprobantesPage() {
                 <div className="flex items-center gap-3">
                   <span
                     className={`tabular text-xl font-semibold ${
-                      esNota ? "text-green-700" : ""
+                      esNota ? "text-saldo-favor" : ""
                     }`}
                   >
                     {esNota ? "−" : ""}

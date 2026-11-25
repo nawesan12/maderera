@@ -71,7 +71,7 @@ export function AvisoCuentaWeb({
       {estado.error && (
         <p
           role="alert"
-          className="mt-2.5 flex items-center gap-2 text-base text-red-700"
+          className="mt-2.5 flex items-center gap-2 text-base text-saldo-debe"
         >
           <AlertCircle className="h-5 w-5 shrink-0" />
           {estado.error}

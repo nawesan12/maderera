@@ -331,9 +331,12 @@ export interface components {
             orden: number;
             alicuotaIva: string | null;
         };
+        /** @description La única ficha activa sin cuenta web con el correo del contacto. Con dos o más, ninguna: se busca a mano. */
         FichaParaUnir: {
             id: string;
             nombre: string;
+            /** @description para comparar con el del contacto antes de unir */
+            telefono: string | null;
             /** @description un pedido con recibos o comprobantes no se une desde acá */
             unible: boolean;
         };

@@ -19,6 +19,9 @@ func TestUnirALaFichaDelCorreo(t *testing.T) {
 	pedido := e.id(t, `insert into orders (numero, contacto_nombre, contacto_email, origen) values ('PED-1', 'Juan', 'juan@prueba.test', 'tienda') returning id`)
 	pagado := e.id(t, `insert into orders (numero, contacto_nombre, contacto_email, origen) values ('PED-2', 'Juan', 'juan@prueba.test', 'tienda') returning id`)
 	e.exec(t, `insert into receipts (numero, recibido_de, total, origen, order_id) values ('R-1', 'Juan', 100, 'mercado_pago', $1)`, pagado)
+	// Lo que la compra anónima dejó sin cliente: un pago y un corte.
+	e.exec(t, `insert into payments (order_id, tipo, proveedor, monto, estado) values ($1, 'pedido', 'mercado_pago', 100, 'iniciado')`, pedido)
+	e.exec(t, `insert into cutting_orders (numero, contacto_nombre, material_descripcion, estado, order_id) values ('C-1', 'Juan', 'MDF', 'terminado', $1)`, pedido)
 	presu := e.id(t, `insert into quotes (numero, contacto_nombre, contacto_email, origen) values ('P-1', 'Juan', 'juan@prueba.test', 'sitio') returning id`)
 	u := e.srv.URL + "/api/v1/admin/"
 
@@ -54,6 +57,12 @@ func TestUnirALaFichaDelCorreo(t *testing.T) {
 	if n := e.numero(t, `select count(*) from orders where id = $1 and customer_id = $2`, pedido, ficha); n != 1 {
 		t.Fatal("no quedó unido")
 	}
+	if n := e.numero(t, `select count(*) from payments where order_id = $1 and customer_id = $2`, pedido, ficha); n != 1 {
+		t.Error("el pago del pedido quedó sin cliente")
+	}
+	if n := e.numero(t, `select count(*) from cutting_orders where order_id = $1 and customer_id = $2`, pedido, ficha); n != 1 {
+		t.Error("el corte del pedido quedó sin cliente")
+	}
 	if c, b := pedir(t, ven, "POST", u+"pedidos/"+pedido+"/ficha", map[string]any{"customerId": ficha}); c != 422 || !strings.Contains(b, msjYaTiene) {
 		t.Fatalf("dos veces: %d %s", c, b)
 	}
@@ -66,5 +75,42 @@ func TestUnirALaFichaDelCorreo(t *testing.T) {
 	}
 	if n := e.numero(t, `select count(*) from audit_log where descripcion like 'Unió % a la ficha de Juan de verdad%'`); n != 2 {
 		t.Fatalf("bitácora: %v", n)
+	}
+}
+
+// Comité del 25/11: unir a mano no puede volver a hacer lo que hacía la unión
+// automática. Una ficha con cuenta web no se ofrece (lo unido lo vería esa
+// persona en su portal) y, con dos fichas con el mismo correo, ninguna.
+func TestUnirNoOfreceFichasDudosas(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	u := e.srv.URL + "/api/v1/admin/"
+
+	// Con cuenta web: no se ofrece y no se une.
+	e.exec(t, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('u-web', 'Web', 'web@prueba.test', true, now(), now())`)
+	conCuenta := e.id(t, `insert into customers (nombre, email, user_id) values ('Con cuenta', 'web@prueba.test', 'u-web') returning id`)
+	p1 := e.id(t, `insert into orders (numero, contacto_nombre, contacto_email, origen) values ('PED-10', 'X', 'web@prueba.test', 'tienda') returning id`)
+	_, b := pedir(t, ven, "GET", u+"pedidos/"+p1, nil)
+	if f := leer[FichaDePedido](t, b).FichaPorCorreo; f != nil {
+		t.Fatalf("ofreció una ficha con cuenta web: %s", b)
+	}
+	if c, b := pedir(t, ven, "POST", u+"pedidos/"+p1+"/ficha", map[string]any{"customerId": conCuenta}); c != 422 || !strings.Contains(b, msjFichaAjena) {
+		t.Fatalf("unió a una ficha con cuenta web: %d %s", c, b)
+	}
+
+	// Dos fichas con el mismo correo: ninguna.
+	a := e.id(t, `insert into customers (nombre, email, telefono) values ('Ana Uno', 'ana@prueba.test', '223 111') returning id`)
+	p2 := e.id(t, `insert into orders (numero, contacto_nombre, contacto_email, origen) values ('PED-11', 'Ana', 'ana@prueba.test', 'tienda') returning id`)
+	_, b = pedir(t, ven, "GET", u+"pedidos/"+p2, nil)
+	if f := leer[FichaDePedido](t, b).FichaPorCorreo; f == nil || f.ID != a || f.Telefono == nil || *f.Telefono != "223 111" {
+		t.Fatalf("con una sola, la ofrece con su teléfono: %s", b)
+	}
+	e.id(t, `insert into customers (nombre, email) values ('Ana Dos', 'ANA@prueba.test') returning id`)
+	_, b = pedir(t, ven, "GET", u+"pedidos/"+p2, nil)
+	if f := leer[FichaDePedido](t, b).FichaPorCorreo; f != nil {
+		t.Fatalf("con dos fichas ofreció una: %s", b)
+	}
+	if c, b := pedir(t, ven, "POST", u+"pedidos/"+p2+"/ficha", map[string]any{"customerId": a}); c != 422 {
+		t.Fatalf("con dos fichas unió: %d %s", c, b)
 	}
 }

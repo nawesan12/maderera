@@ -171,7 +171,7 @@ export default async function FichaClientePage({
             </h2>
             <p
               className={`tabular text-3xl font-semibold ${
-                excedido ? "text-red-700" : ""
+                excedido ? "text-saldo-debe" : ""
               }`}
             >
               {moneda.format(cliente.saldo)}
@@ -197,13 +197,13 @@ export default async function FichaClientePage({
                 >
                   <div
                     className={`h-full rounded-full ${
-                      excedido ? "bg-red-600" : "bg-brand-orange"
+                      excedido ? "bg-destructive" : "bg-brand-orange"
                     }`}
                     style={{ width: `${Math.max(usoLimite, 2)}%` }}
                   />
                 </div>
                 {excedido && (
-                  <p className="mt-1.5 text-sm text-red-700">
+                  <p className="mt-1.5 text-sm text-saldo-debe">
                     Supera el límite en{" "}
                     <span className="tabular">
                       {moneda.format(cliente.saldo - limite)}
@@ -322,7 +322,21 @@ export default async function FichaClientePage({
             <LineaDeTiempo
               movimientos={historial.movimientos}
               enlacePedido={(p) => `/admin/pedidos/${p.id}`}
-              accionDelRecibo={manejaPlata ? (r) => <AnularRecibo id={r.id} numero={r.numero} /> : undefined}
+              accionDelRecibo={
+                manejaPlata
+                  ? // El cobro de Mercado Pago se devuelve desde MP y su aviso
+                    // anula el recibo: a mano, el cliente pagaría dos veces.
+                    (r, m) =>
+                      r.porMercadoPago ? null : (
+                        <AnularRecibo
+                          id={r.id}
+                          numero={r.numero}
+                          importe={Math.abs(m.importe ?? m.importeInformativo ?? 0)}
+                          cliente={cliente.nombre}
+                        />
+                      )
+                  : undefined
+              }
             />
             {historial.hayMas && (
               <p className="border-t border-linea px-5 py-3 text-sm text-muted-foreground">

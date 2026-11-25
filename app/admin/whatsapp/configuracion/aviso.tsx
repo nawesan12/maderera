@@ -154,7 +154,7 @@ export function FilaAviso({ aviso }: { aviso: AvisoConfigurable }) {
         )}
 
         {(estadoCambio.error || estadoTexto.error) && (
-          <p role="alert" className="mt-2 text-base text-red-700">
+          <p role="alert" className="mt-2 text-base text-saldo-debe">
             {estadoCambio.error ?? estadoTexto.error}
           </p>
         )}

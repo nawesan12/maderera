@@ -12,7 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
-import { formatearMonto, parsearImporte } from "@/lib/formato";
+import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import {
   cobrarPedido,
   registrarCobroDeCliente,
@@ -136,7 +136,7 @@ export function DialogoCobro({
   const dondeAbrir = estado.sinCaja || (elegida && !elegida.abierta ? elegida.id : "");
   const fondoDeCambio = estado.sinCaja ? estado.fondoBase : elegida?.fondo;
   const pideAbrir = Boolean(dondeAbrir) && abierta !== dondeAbrir;
-  const fondoVisto = fondo === "" && fondoDeCambio != null && fondoDeCambio > 0 ? String(fondoDeCambio) : fondo;
+  const fondoVisto = fondo === "" && fondoDeCambio != null && fondoDeCambio > 0 ? importeParaElCampo(fondoDeCambio) : fondo;
 
   function abrirLaCaja() {
     if (!dondeAbrir) return;

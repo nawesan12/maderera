@@ -63,6 +63,19 @@ func TestControlesDelPersonal(t *testing.T) {
 		($1, 'Corte a medida · 3 piezas', 'pasada', 3, 100, 300, true), ($1, 'Tapacanto pegado', 'm', 4, 100, 400, true),
 		($1, 'Tapacanto blanco', 'pasada', 1, 50, 50, false)`, aMano)
 
+	// Los recibos que anuló (comité del 25/11): uno con efectivo, que pudo
+	// tapar un faltante del cajón, y uno con transferencia. El que anuló el
+	// reintegro de Mercado Pago no tiene usuario y no cuenta, ni el de hace
+	// diez días.
+	var conEfectivo, conTransferencia string
+	_ = pool.QueryRow(ctx, `insert into receipts (numero, recibido_de, total, origen, estado, anulado_por_user_id, anulado_at)
+		values ('R-1', 'A', 1500, 'panel', 'anulado', 'juan', now()) returning id`).Scan(&conEfectivo)
+	_ = pool.QueryRow(ctx, `insert into receipts (numero, recibido_de, total, origen, estado, anulado_por_user_id, anulado_at)
+		values ('R-2', 'B', 2500, 'panel', 'anulado', 'juan', now()) returning id`).Scan(&conTransferencia)
+	exec(`insert into receipt_parts (receipt_id, medio, importe, orden) values ($1, 'efectivo', 1000, 0), ($1, 'transferencia', 500, 1), ($2, 'transferencia', 2500, 0)`, conEfectivo, conTransferencia)
+	exec(`insert into receipts (numero, recibido_de, total, origen, estado, anulado_at) values ('R-3', 'C', 9000, 'mercado_pago', 'anulado', now())`)
+	exec(`insert into receipts (numero, recibido_de, total, origen, estado, anulado_por_user_id, anulado_at) values ('R-4', 'D', 9000, 'panel', 'anulado', 'juan', now() - interval '10 days')`)
+
 	c, err = s.ControlesDelPersonal(ctx, ahora)
 	if err != nil || c.SinPIN || len(c.Personas) != 2 {
 		t.Fatalf("con datos: %+v %v", c, err)
@@ -71,7 +84,8 @@ func TestControlesDelPersonal(t *testing.T) {
 	p := c.Personas[0]
 	if p.Nombre != "Juan" || p.DejadoDeCobrar != 590 || p.Autorizado != 300 || p.SinConexion != (Monto{250, 1}) ||
 		p.CreditoSinAutorizar != (Monto{90000, 1}) || p.Anuladas != (Monto{5000, 1}) || p.AnuladasSinFirma != (Monto{5000, 1}) ||
-		p.SinDevolver != 1 || p.Retiros != (Monto{800, 1}) || p.AMano != (Monto{3050, 3}) {
+		p.SinDevolver != 1 || p.Retiros != (Monto{800, 1}) || p.AMano != (Monto{3050, 3}) ||
+		p.RecibosAnulados != (Monto{4000, 2}) || p.RecibosAnuladosEfectivo != 1 {
 		t.Fatalf("Juan: %+v", p)
 	}
 	// Y Marta, con lo que firmó: un PIN aprendido firma a su nombre.

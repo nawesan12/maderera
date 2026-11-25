@@ -26,6 +26,7 @@ export function AccionesPedido({
   compacto = false,
   cobro,
   sinCobrar,
+  pedido,
 }: {
   id: string;
   estado: string;
@@ -49,6 +50,11 @@ export function AccionesPedido({
    * historial igual.
    */
   sinCobrar?: { numero: string; monto: number } | null;
+  /**
+   * El número (para el título de la confirmación) y quién figura como
+   * contacto: precarga «quién retira», que casi siempre es el mismo.
+   */
+  pedido?: { numero: string; nombre?: string | null };
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -57,7 +63,7 @@ export function AccionesPedido({
   const [cobrandoParaEntregar, setCobrandoParaEntregar] = useState(false);
   // Quién retira: el remito que sale al entregar un retiro lo lleva, y el
   // documento es obligatorio como en el remito a mano.
-  const [receptorNombre, setReceptorNombre] = useState("");
+  const [receptorNombre, setReceptorNombre] = useState(pedido?.nombre ?? "");
   const [receptorDocumento, setReceptorDocumento] = useState("");
 
   // Un pedido de retiro no se despacha: el cliente lo busca.
@@ -82,7 +88,10 @@ export function AccionesPedido({
 
   const entregaUnRetiro = estado === "listo" && tipoEntrega === "retiro";
   const debe = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
-  const preguntar = debe || entregaUnRetiro;
+  // «Marcar entregado» emite el remito y no tiene vuelta: siempre pregunta,
+  // también cuando no hay nada que cobrar ni documento que pedir.
+  const preguntar = debe || entregaUnRetiro || etiqueta === "Marcar entregado";
+  const numero = pedido?.numero ?? sinCobrar?.numero ?? cobro?.numero;
   const faltaDocumento = entregaUnRetiro && receptorDocumento.trim() === "";
 
   function avanzar() {
@@ -130,53 +139,80 @@ export function AccionesPedido({
                   <>
                     {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
                   </>
-                ) : (
+                ) : entregaUnRetiro ? (
                   "Quién retira"
+                ) : (
+                  <>Entregar {numero && <span className="tabular whitespace-nowrap">{numero}</span>}</>
                 )}
               </DialogTitle>
             </DialogHeader>
+            {!debe && !entregaUnRetiro && (
+              <p className="text-base text-muted-foreground">Sale el remito. No se puede deshacer.</p>
+            )}
+            {/* Un <form>: Enter hace lo principal (entregar, o cobrar y
+                entregar si se debe). */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (pendiente || faltaDocumento) return;
+                if (debe && sinCobrar && cobro) {
+                  setConfirmando(false);
+                  setCobrandoParaEntregar(true);
+                } else accion(avanzar);
+              }}
+              className="space-y-3"
+            >
             {entregaUnRetiro && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1.5 text-base font-medium">
-                  Quién retira
+                  Nombre
                   <Input
                     name="receptorNombre"
                     value={receptorNombre}
                     onChange={(e) => setReceptorNombre(e.target.value)}
                     maxLength={120}
                     autoComplete="off"
+                    // Vacío, se empieza por el nombre; precargado con el del
+                    // contacto, lo que falta es el documento.
+                    autoFocus={!receptorNombre}
                   />
                 </label>
                 <label className="grid gap-1.5 text-base font-medium">
                   Documento
+                  {/* Texto y sin teclado numérico: un pasaporte o una cédula
+                      extranjera llevan letras. */}
                   <Input
                     name="receptorDocumento"
                     value={receptorDocumento}
                     onChange={(e) => setReceptorDocumento(e.target.value)}
                     maxLength={30}
                     required
-                    autoFocus
+                    autoFocus={Boolean(receptorNombre)}
                     autoComplete="off"
-                    inputMode="numeric"
+                    aria-describedby="falta-documento"
                   />
                 </label>
+                {faltaDocumento && (
+                  <p id="falta-documento" className="text-sm text-muted-foreground sm:col-span-2">
+                    Falta el documento de quien retira.
+                  </p>
+                )}
               </div>
             )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
               {debe ? (
                 <button
-                  type="button"
+                  type={cobro ? "button" : "submit"}
                   disabled={pendiente || faltaDocumento}
-                  onClick={() => accion(avanzar)}
+                  onClick={cobro ? () => accion(avanzar) : undefined}
                   className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
                 >
                   Entregar sin cobrar
                 </button>
               ) : (
                 <button
-                  type="button"
+                  type="submit"
                   disabled={pendiente || faltaDocumento}
-                  onClick={() => accion(avanzar)}
                   className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
                 >
                   {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -188,19 +224,16 @@ export function AccionesPedido({
                   ve el cobro. */}
               {debe && sinCobrar && cobro && (
                 <button
-                  type="button"
+                  type="submit"
                   autoFocus={!entregaUnRetiro}
                   disabled={pendiente || faltaDocumento}
-                  onClick={() => {
-                    setConfirmando(false);
-                    setCobrandoParaEntregar(true);
-                  }}
                   className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
                 >
                   Cobrar <span className="tabular">{moneda.format(sinCobrar.monto)}</span> y entregar
                 </button>
               )}
             </div>
+            </form>
           </DialogContent>
         </Dialog>
       )}

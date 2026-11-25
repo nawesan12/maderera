@@ -140,7 +140,7 @@ function Tarjeta({
             <button
               type="submit"
               disabled={pendiente}
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-saldo-debe disabled:opacity-60"
             >
               {pendiente ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

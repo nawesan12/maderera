@@ -168,6 +168,12 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 
 // RemitoPorToken es el remito del enlace de firma: el token es lo único que
 // sabe quien firma.
+//
+// El DNI de quien retira sale enmascarado (comité del 25/11): el enlace va
+// por correo al contacto del pedido, que nadie verificó, y quien retira
+// puede ser otra persona. Basta con los últimos tres números para que lo
+// reconozca; firmar sin escribirlo conserva el que se cargó en el mostrador
+// (Firmar: coalesce(nullif(...), receptor_documento)).
 func (s *Servicio) RemitoPorToken(ctx context.Context, token string) (*RemitoCompleto, error) {
 	var id string
 	err := s.pool.QueryRow(ctx, `SELECT id FROM deliveries WHERE firma_token = $1 LIMIT 1`, token).Scan(&id)
@@ -177,7 +183,27 @@ func (s *Servicio) RemitoPorToken(ctx context.Context, token string) (*RemitoCom
 	if err != nil {
 		return nil, err
 	}
-	return s.RemitoCompleto(ctx, id)
+	r, err := s.RemitoCompleto(ctx, id)
+	if err != nil || r == nil {
+		return r, err
+	}
+	r.ReceptorDocumento = DocumentoEnmascarado(r.ReceptorDocumento)
+	return r, nil
+}
+
+// DocumentoEnmascarado deja a la vista solo los últimos tres caracteres:
+// «•••678». Nil o vacío queda igual; uno de tres o menos se tapa entero.
+func DocumentoEnmascarado(d *string) *string {
+	if d == nil || strings.TrimSpace(*d) == "" {
+		return d
+	}
+	r := []rune(strings.TrimSpace(*d))
+	if len(r) <= 3 {
+		m := "•••"
+		return &m
+	}
+	m := "•••" + string(r[len(r)-3:])
+	return &m
 }
 
 // ParaAvisar es lo que necesitan los avisos de entrega (lib/notificaciones/

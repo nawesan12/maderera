@@ -105,7 +105,14 @@ func migrarPlantilla(ctx context.Context, servidor, nombre string, migraciones f
 	} else if len(ajenas) > 0 {
 		return fmt.Errorf("la plantilla tiene migraciones que esta rama no tiene: %v", ajenas)
 	}
-	_, err = migrar.Correr(ctx, sqlDB, migraciones, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if _, err = migrar.Correr(ctx, sqlDB, migraciones, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+		return err
+	}
+	// Las pruebas arman sus propias sucursales (casa-central, aserradero y
+	// las que necesiten, con sus ids y su orden): las dos que siembra la
+	// 00204 para una base nueva chocarían con el slug único. La 00204 se
+	// prueba aparte (migrar.TestLasDosSucursales).
+	_, err = sqlDB.ExecContext(ctx, `DELETE FROM branches`)
 	return err
 }
 
@@ -159,18 +166,18 @@ func Base(t testing.TB) *pgxpool.Pool {
 	defer admin.Close(ctx)
 
 	// Un candado para que dos paquetes de tests no armen la plantilla a la vez.
-	if _, err := admin.Exec(ctx, `select pg_advisory_lock(candadoDePlantilla)`); err != nil {
+	if _, err := admin.Exec(ctx, `select pg_advisory_lock($1)`, candadoDePlantilla); err != nil {
 		t.Fatal(err)
 	}
 	if err := PrepararPlantilla(ctx, admin, servidor, plantilla, db.Migraciones); err != nil {
-		_, _ = admin.Exec(ctx, `select pg_advisory_unlock(candadoDePlantilla)`)
+		_, _ = admin.Exec(ctx, `select pg_advisory_unlock($1)`, candadoDePlantilla)
 		t.Fatalf("migrando la plantilla: %v", err)
 	}
 	var b [6]byte
 	_, _ = rand.Read(b[:])
 	nombre := "t_" + hex.EncodeToString(b[:])
 	_, err = admin.Exec(ctx, `create database `+nombre+` template `+plantilla)
-	_, _ = admin.Exec(ctx, `select pg_advisory_unlock(candadoDePlantilla)`)
+	_, _ = admin.Exec(ctx, `select pg_advisory_unlock($1)`, candadoDePlantilla)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -145,6 +145,10 @@ export const cashMovements = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    bajoLaBase: boolean().notNull().default(false),
+    declaradoAt: timestamp({ withTimezone: true }),
+    supplierPaymentId: uuid(),
   },
   (t) => [
     index("cash_movements_sesion_idx").on(t.sessionId),

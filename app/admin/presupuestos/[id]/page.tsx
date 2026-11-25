@@ -2,6 +2,8 @@ import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
+import { requireStaff } from "@/lib/dal/session";
+import { puedeEntrar } from "@/lib/roles";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
@@ -23,13 +25,15 @@ export default async function FichaPresupuestoPage({
   const { id } = await params;
   const { pasar } = await searchParams;
   if (!esUuid(id)) notFound();
-  const [p, aviso, zonas] = await Promise.all([
+  const [usuario, p, aviso, zonas] = await Promise.all([
+    requireStaff(),
     obtenerPresupuesto(id),
     avisoManual("presupuesto_listo", { tipo: "quote", id }),
     zonasParaPedido(),
   ]);
 
   if (!p) notFound();
+  const verCliente = puedeEntrar("/admin/clientes", usuario.staffRole);
 
   return (
     <div className="space-y-6">
@@ -148,7 +152,18 @@ export default async function FichaPresupuestoPage({
             ) : (
               <p className="text-base font-medium">{p.cliente}</p>
             )}
-            {p.fichaPorCorreo && <UnirAFicha que="presupuesto" id={p.id} ficha={p.fichaPorCorreo} />}
+            {/* Como en el pedido: solo quien entra a Clientes (Go lo exige
+                igual y el botón daba 403). */}
+            {p.fichaPorCorreo && verCliente && (
+              <UnirAFicha
+                que="presupuesto"
+                id={p.id}
+                numero={p.numero}
+                total={Number(p.total)}
+                contacto={{ nombre: p.cliente, telefono: p.telefono }}
+                ficha={p.fichaPorCorreo}
+              />
+            )}
             {p.empresa && (
               <p className="text-base text-muted-foreground">{p.empresa}</p>
             )}

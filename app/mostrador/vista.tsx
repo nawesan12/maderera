@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { VincularCaja } from "@/components/mostrador/vincular-caja";
@@ -703,22 +704,42 @@ export function VistaMostrador({
     // cada corte cobre lo de su plano.
     const conLosCortes = paraCobrar(lineas, cortes);
     empezar(async () => {
-      const r = await cobrarVenta({
-        clave,
-        branchId: sucursal.id,
-        lineas: conLosCortes.lineas,
-        customerId: cliente?.id ?? null,
-        contactoNombre: cliente?.nombre ?? "Consumidor final",
-        medioPago: medio,
-        pagos: pagosDeLaVenta(),
-        acopio,
-        ...(conLosCortes.cortes.length > 0 ? { cortes: conLosCortes.cortes } : {}),
-        comprobante,
-        cuit: cuit || null,
-        descuento: descuentoManual,
-        descuentoMotivo: motivoDesc || null,
-        ...(pin ? { pin } : ficha ? { ficha } : {}),
-      });
+      /*
+       * Internet se puede cortar entre un latido y el otro (cada 20 s): la
+       * pantalla todavía cree que hay conexión y la acción del servidor tira
+       * un error de red. Sin esto, ese error tumbaba el mostrador entero
+       * («Se nos rompió algo») con la venta cargada y la plata en el cajón
+       * (recorrido del comité, 25/11). Ahora se pregunta si hay servidor: si
+       * no hay, la venta va a la cola con la misma clave —si la primera había
+       * llegado, Go la reconoce por `clave_mostrador` y no la repite—; si hay,
+       * queda cargada para volver a cobrar.
+       */
+      let r: Awaited<ReturnType<typeof cobrarVenta>>;
+      try {
+        r = await cobrarVenta({
+          clave,
+          branchId: sucursal.id,
+          lineas: conLosCortes.lineas,
+          customerId: cliente?.id ?? null,
+          contactoNombre: cliente?.nombre ?? "Consumidor final",
+          medioPago: medio,
+          pagos: pagosDeLaVenta(),
+          acopio,
+          ...(conLosCortes.cortes.length > 0 ? { cortes: conLosCortes.cortes } : {}),
+          comprobante,
+          cuit: cuit || null,
+          descuento: descuentoManual,
+          descuentoMotivo: motivoDesc || null,
+          ...(pin ? { pin } : ficha ? { ficha } : {}),
+        });
+      } catch {
+        if (!(await conexion.latir())) {
+          await cobrarSinConexion();
+          return;
+        }
+        setAviso({ tipo: "error", texto: "No se pudo cobrar. Probá de nuevo: la venta sigue cargada." });
+        return;
+      }
 
       if (r.ficha) setFicha(r.ficha);
       if (r.autorizacion) {
@@ -904,8 +925,15 @@ export function VistaMostrador({
       {/* En el teléfono no se vende (decisión 2 del comité final): no entran el
           buscador, la venta y el cobro, y armar otra pantalla para eso no vale
           lo que cuesta. La tablet vertical sí: abajo de `lg` se apila. */}
-      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center text-foreground sm:hidden">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background p-6 text-center text-foreground sm:hidden">
         <p className="text-xl font-semibold">Usalo en la computadora o la tablet.</p>
+        {/* No es un callejón: el panel sí anda en el teléfono. */}
+        <Link
+          href="/admin"
+          className="boton-accion inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-semibold"
+        >
+          Volver al panel
+        </Link>
       </div>
       {/* Abajo de `lg` (la tablet vertical) la venta y el cobro van uno abajo
           del otro, la página scrollea y el total con «Cobrar» queda fijo abajo
@@ -936,6 +964,7 @@ export function VistaMostrador({
               onVincular={vincularCaja}
               onDesvincular={() => desvincularCaja()}
               administra={usuario.administraCaja}
+              pendientesLocales={cola.sinSubir + cola.atascadas}
             />
           }
         />

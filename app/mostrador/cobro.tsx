@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Banknote, ClipboardList, Loader2, Plus, FileText, Printer } from "lucide-react";
 import type { PromoVigente } from "@/lib/dal/contenido";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeIlegible } from "@/lib/formato";
 import type { TipoDescuento, MedioDeMostrador } from "@/lib/mostrador/importes";
 import { medioPermitido } from "@/lib/precios/medio-pago";
 import { BuscadorDeCliente, CuitSuelto } from "./cliente";
@@ -323,6 +323,7 @@ export function Cobro({
                   inputMode="decimal"
                   aria-label="Con cuánto paga"
                   value={recibido}
+                  aria-invalid={importeIlegible(recibido) || undefined}
                   onChange={(e) => onRecibido(e.target.value)}
                   data-foco="recibido"
                   onKeyDown={(e) => {
@@ -372,6 +373,7 @@ export function Cobro({
                 inputMode="decimal"
                 aria-label="Descuento"
                 value={valorDesc}
+                aria-invalid={importeIlegible(valorDesc) || undefined}
                 onChange={(e) => onValorDesc(e.target.value)}
                 data-foco="descuento"
                 placeholder="0"

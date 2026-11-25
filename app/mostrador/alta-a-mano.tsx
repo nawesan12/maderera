@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeIlegible } from "@/lib/formato";
+import { CampoImporte } from "@/components/admin/campo-importe";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
 
 /**
@@ -34,7 +35,7 @@ export function AltaAMano({
   const [precio, setPrecio] = useState("");
 
   const valido =
-    descripcion.trim().length > 0 && Number(cantidad) > 0 && precio !== "" && Number(precio) >= 0;
+    descripcion.trim().length > 0 && Number(cantidad) > 0 && precio !== "" && !importeIlegible(precio) && importeDelCampo(precio) >= 0;
 
   function agregar() {
     if (!valido) return;
@@ -43,7 +44,7 @@ export function AltaAMano({
       descripcion: descripcion.trim(),
       unidad: unidad.trim() || "unidad",
       cantidad: Number(cantidad),
-      precioUnitario: Number(precio),
+      precioUnitario: importeDelCampo(precio),
     });
   }
 
@@ -106,12 +107,9 @@ export function AltaAMano({
             <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Precio por unidad
             </span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
+            <CampoImporte
+              valor={precio}
+              alCambiar={setPrecio}
               placeholder="0"
               className="tabular mt-1.5 h-14 w-full rounded-lg border border-linea bg-background px-3 text-right text-2xl font-semibold"
             />
@@ -121,7 +119,7 @@ export function AltaAMano({
             <p className="flex items-baseline justify-between text-lg">
               <span className="text-muted-foreground">Subtotal</span>
               <span className="tabular font-bold">
-                {formatearMonto(Number(cantidad) * Number(precio))}
+                {formatearMonto(Number(cantidad) * importeDelCampo(precio))}
               </span>
             </p>
           )}

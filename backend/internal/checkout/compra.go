@@ -46,12 +46,19 @@ func espera(v limites.Veredicto) error {
 // el correo de un cliente le metía pedidos en su historial (y en su portal).
 // El panel los muestra para unirlos a mano (pedidos.UnirAFicha). Una ficha
 // que ya es de otra cuenta web tampoco se toma.
+//
+// El correo se compara como en el panel (pedidos.fichaConElCorreo): sin
+// mayúsculas ni espacios, y con varias fichas, primero la de esta cuenta y
+// después la más vieja. Antes era `email = $1` exacto y sin orden: «Juan@…»
+// no se ataba a «juan@…» y, con dos fichas, la elegida cambiaba.
 func (s *Servicio) clientePorCorreo(ctx context.Context, ses *auth.Sesion, email string) (*string, error) {
 	if ses == nil || ses.Correo == "" || !strings.EqualFold(strings.TrimSpace(ses.Correo), strings.TrimSpace(email)) {
 		return nil, nil
 	}
 	var id string
-	err := s.pool.QueryRow(ctx, `SELECT id FROM customers WHERE email = $1 AND (user_id IS NULL OR user_id = $2) LIMIT 1`,
+	err := s.pool.QueryRow(ctx, `SELECT id FROM customers
+		WHERE lower(trim(email)) = lower(trim($1)) AND active AND (user_id IS NULL OR user_id = $2)
+		ORDER BY (user_id IS NOT DISTINCT FROM $2) DESC, created_at, id LIMIT 1`,
 		email, ses.UserID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

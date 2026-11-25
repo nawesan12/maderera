@@ -297,7 +297,7 @@ function Pildora({ children, verde = false }: { children: React.ReactNode; verde
   return (
     <span
       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm ring-1 ring-inset ${
-        verde ? "text-green-800 ring-green-700/30" : "text-muted-foreground ring-border"
+        verde ? "text-saldo-favor ring-saldo-favor/30" : "text-muted-foreground ring-border"
       }`}
     >
       {children}

@@ -8,6 +8,8 @@ import {
 import { misPresupuestos, type PresupuestoPropio } from "@/lib/dal/cuenta";
 import { diasHasta, fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { RespuestaPresupuesto } from "./respuesta";
+import { tienda } from "@/lib/dal/contenido";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 
 export const metadata: Metadata = { title: "Presupuestos" };
 
@@ -26,6 +28,8 @@ export default async function MisPresupuestosPage() {
   );
 
   if (presupuestos.length === 0) {
+    // Con la tienda apagada no se arma desde el catálogo: se pide por WhatsApp.
+    const [laTienda, whatsapp] = await Promise.all([tienda(), enlaceWhatsapp()]);
     return (
       <div className="rounded-2xl border border-dashed bg-card/60 px-6 py-16 text-center">
         <ScrollText className="mx-auto h-10 w-10 text-muted-foreground/60" />
@@ -33,9 +37,21 @@ export default async function MisPresupuestosPage() {
           Todavía no hay presupuestos
         </h1>
         <p className="mx-auto mt-1.5 max-w-sm text-muted-foreground">
-          Armá uno desde el catálogo y te pasamos el precio cerrado.
+          {laTienda.activa
+            ? "Armá uno desde el catálogo y te pasamos el precio cerrado."
+            : "Pedilo por WhatsApp y te pasamos el precio cerrado."}
         </p>
         <div className="mt-5 flex flex-wrap justify-center gap-3">
+          {!laTienda.activa && (
+            <a
+              href={whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center rounded-lg bg-whatsapp-boton px-5 font-medium text-white transition-colors hover:bg-whatsapp-boton-hover"
+            >
+              Consultar por WhatsApp
+            </a>
+          )}
           <Link
             href="/catalogo"
             className="inline-flex h-11 items-center rounded-lg border bg-card px-5 font-medium transition-colors hover:bg-muted"

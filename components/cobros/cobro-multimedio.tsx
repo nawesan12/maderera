@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { formatearMonto, importeParaEditar, parsearImporte } from "@/lib/formato";
+import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import { NOMBRE_DEL_MEDIO, esCheque, type MedioDeCobro } from "@/lib/cobros/partes";
 
 /**
@@ -58,7 +58,7 @@ function renglonNuevo(medio: MedioDeCobro, importe: number): Renglon {
   return {
     clave: siguienteClave++,
     medio,
-    importe: importe > 0 ? importeParaEditar(importe) : "",
+    importe: importe > 0 ? importeParaElCampo(importe) : "",
     referencia: "",
     banco: "",
     numero: "",

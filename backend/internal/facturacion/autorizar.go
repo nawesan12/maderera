@@ -75,9 +75,19 @@ func etiqueta(tipo string, pv, n int64) string {
 
 const sinValorFiscal = "Emitido sin autorización de ARCA. El comprobante no tiene valor fiscal hasta que se cargue el certificado y se lo reenvíe."
 
-// maxAnteriores es cuántos comprobantes anteriores sin CAE se autorizan de
-// una vez antes de pedir que alguien mire qué pasó.
-const maxAnteriores = 50
+// maxAnteriores es cuántos comprobantes anteriores sin CAE se autorizan en un
+// solo pedido antes de mandar a autorizar la serie por tramos. Era 50: con el
+// mutex de s.cae y el candado de CAE tomados, un pedido podía hacer 51
+// llamadas a ARCA (de hasta tiempoWsfe cada una), frenar la facturación de
+// todo el negocio y llegar al límite de 100 s de Cloudflare (un 524). Con 15
+// son 16 llamadas, y además lo corta presupuestoDeLaSerie.
+const maxAnteriores = 15
+
+// presupuestoDeLaSerie es cuánto puede tardar un pedido autorizando los
+// anteriores: pasado eso (o si el pedido se cancela) corta, con lo ya
+// autorizado guardado, y dice cuántos faltan para seguir con otro toque.
+// Queda lejos de los 100 s de Cloudflare. Variable para las pruebas.
+var presupuestoDeLaSerie = 60 * time.Second
 
 // FechaMovida es un comprobante que salió a ARCA con la fecha del día en vez
 // de la suya (arca.alDia).
@@ -244,7 +254,18 @@ func (a *arca) largo(ctx context.Context, c *comprobanteArca) (string, error) {
 				strconv.Itoa(maxAnteriores) + ": autorizá la serie desde el " +
 				fiscal.NumeroFormateado(c.puntoVenta, ultimo+1+maxAnteriores) + " en Facturación.")
 		}
+		inicio := time.Now()
 		for n := ultimo + 1; n < c.numero; n++ {
+			if n > ultimo+1 && (ctx.Err() != nil || time.Since(inicio) > presupuestoDeLaSerie) {
+				hechos, faltan := n-ultimo-1, c.numero-n
+				verbo := "Se autorizaron "
+				if hechos == 1 {
+					verbo = "Se autorizó "
+				}
+				return "", errEmision(verbo + strconv.FormatInt(hechos, 10) + " de los anteriores sin CAE y faltan " +
+					strconv.FormatInt(faltan, 10) + " (desde el " + fiscal.NumeroFormateado(c.puntoVenta, n) +
+					"): ARCA está tardando. Tocá Autorizar otra vez para seguir.")
+			}
 			if err := a.anterior(ctx, c, n); err != nil {
 				return "", err
 			}

@@ -226,8 +226,9 @@ export default async function FichaComprobantePage({
             </div>
           ))}
           {!anulada && serie?.tramo && (
-            // Con más de 50 sin CAE atrás, ARCA no se pide desde acá: la serie
-            // se autoriza de a 50, desde el que tiene justo 50 atrás.
+            // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
+            // se pide desde acá: la serie se autoriza de a 15, desde el que
+            // tiene justo 15 atrás.
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
               <Link
                 href={`/admin/facturacion/${serie.tramo.invoiceId}`}

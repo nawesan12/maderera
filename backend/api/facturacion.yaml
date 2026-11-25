@@ -606,7 +606,7 @@ components:
       properties:
         anterioresSinCae: { type: integer }
         tramo:
-          description: Con más de 50 anteriores sin CAE, el comprobante desde el que se autoriza la serie (de a 50).
+          description: Con más de 15 anteriores sin CAE, el comprobante desde el que se autoriza la serie (de a 15).
           type: object
           nullable: true
           required: [invoiceId, numero]

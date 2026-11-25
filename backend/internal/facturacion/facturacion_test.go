@@ -774,9 +774,12 @@ func TestEmisorYPuntosDeVenta(t *testing.T) {
 	}
 }
 
-// Con más de 50 sin CAE atrás, el pedido no dice que se revise el número
-// inicial en ARCA: dice cuántos faltan y desde cuál se autoriza la serie, y
-// la ficha lo muestra (Serie.Tramo). Desde ahí, de a 50, sale todo.
+// Con más de maxAnteriores (15) sin CAE atrás, el pedido no dice que se
+// revise el número inicial en ARCA: dice cuántos faltan y desde cuál se
+// autoriza la serie, y la ficha lo muestra (Serie.Tramo). Desde ahí, de a 15,
+// sale todo. Era de a 50 (comité del 25/11): 51 llamadas a ARCA en un pedido
+// con el candado tomado frenaban la facturación y pasaban los 100 s de
+// Cloudflare.
 func TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie(t *testing.T) {
 	e := armar(t, true)
 	ctx := context.Background()
@@ -790,28 +793,64 @@ func TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie(t *testing.T) {
 		ids = append(ids, id)
 	}
 	_, err := e.s.Autorizar(ctx, ids[60])
-	if m := Mensaje(err); m != "Faltan 60 comprobantes sin CAE antes de este y se autorizan de a 50: autorizá la serie desde el 0003-00000051 en Facturación." {
+	if m := Mensaje(err); m != "Faltan 60 comprobantes sin CAE antes de este y se autorizan de a 15: autorizá la serie desde el 0003-00000016 en Facturación." {
 		t.Fatalf("mensaje: %q", m)
 	}
 	serie, err := e.s.Serie(ctx, ids[60])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if serie.AnterioresSinCae != 60 || serie.Tramo == nil || serie.Tramo.InvoiceID != ids[50] || serie.Tramo.Numero != 51 {
+	if serie.AnterioresSinCae != 60 || serie.Tramo == nil || serie.Tramo.InvoiceID != ids[15] || serie.Tramo.Numero != 16 {
 		t.Fatalf("serie: %+v %+v", serie, serie.Tramo)
 	}
-	if s, _ := e.s.Serie(ctx, ids[50]); s.Tramo != nil {
-		t.Fatalf("el 51 tiene justo 50 atrás: %+v", s.Tramo)
+	if s, _ := e.s.Serie(ctx, ids[15]); s.Tramo != nil {
+		t.Fatalf("el 16 tiene justo 15 atrás: %+v", s.Tramo)
 	}
-	if _, _, err := e.s.AutorizarConFechas(ctx, ids[50]); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := e.s.AutorizarConFechas(ctx, ids[60]); err != nil {
-		t.Fatal(err)
+	for _, i := range []int{15, 31, 47, 60} {
+		if _, _, err := e.s.AutorizarConFechas(ctx, ids[i]); err != nil {
+			t.Fatalf("tramo hasta el %d: %v", i+1, err)
+		}
 	}
 	var n int
 	e.uno(t, `SELECT count(*) FROM invoices WHERE cae IS NOT NULL`, &n)
 	if n != 61 {
+		t.Fatalf("autorizados: %d", n)
+	}
+}
+
+// La serie corta cuando se le acaba el tiempo del pedido (presupuestoDeLaSerie)
+// con lo ya autorizado guardado, y dice cuántos faltan: otro toque sigue
+// desde ahí (comité del 25/11).
+func TestLaSerieCortaConElTiempoYSigue(t *testing.T) {
+	e := armar(t, true)
+	ctx := context.Background()
+	var ids []string
+	for i := 0; i < 6; i++ {
+		id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "CF", ReceptorCondicionIva: "consumidor_final",
+			Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 1000}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	antes := presupuestoDeLaSerie
+	presupuestoDeLaSerie = 0
+	t.Cleanup(func() { presupuestoDeLaSerie = antes })
+	_, _, err := e.s.AutorizarConFechas(ctx, ids[5])
+	if m := Mensaje(err); m != "Se autorizó 1 de los anteriores sin CAE y faltan 4 (desde el 0003-00000002): ARCA está tardando. Tocá Autorizar otra vez para seguir." {
+		t.Fatalf("mensaje: %q", m)
+	}
+	var n int
+	e.uno(t, `SELECT count(*) FROM invoices WHERE cae IS NOT NULL`, &n)
+	if n != 1 {
+		t.Fatalf("autorizados después del corte: %d", n)
+	}
+	presupuestoDeLaSerie = antes
+	if _, _, err := e.s.AutorizarConFechas(ctx, ids[5]); err != nil {
+		t.Fatal(err)
+	}
+	e.uno(t, `SELECT count(*) FROM invoices WHERE cae IS NOT NULL`, &n)
+	if n != 6 {
 		t.Fatalf("autorizados: %d", n)
 	}
 }

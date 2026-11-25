@@ -572,7 +572,7 @@ export interface components {
         };
         SerieDelComprobante: {
             anterioresSinCae: number;
-            /** @description Con más de 50 anteriores sin CAE, el comprobante desde el que se autoriza la serie (de a 50). */
+            /** @description Con más de 15 anteriores sin CAE, el comprobante desde el que se autoriza la serie (de a 15). */
             tramo: {
                 invoiceId: string;
                 /** Format: int64 */

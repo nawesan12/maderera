@@ -110,8 +110,21 @@ func (s *Servicio) UnirAFicha(ctx context.Context, ses *auth.Sesion, tabla, id, 
 				return noSeUne(msjConPapeles)
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE `+tabla+` SET customer_id = $2, seller_id = coalesce(seller_id, $3::uuid), updated_at = now() WHERE id = $1`,
-			id, cliente, vendedor)
+		if _, err := tx.Exec(ctx, `UPDATE `+tabla+` SET customer_id = $2, seller_id = coalesce(seller_id, $3::uuid), updated_at = now() WHERE id = $1`,
+			id, cliente, vendedor); err != nil {
+			return err
+		}
+		if tabla != "orders" {
+			return nil
+		}
+		// Lo que la compra anónima insertó sin cliente (checkout.compra) va
+		// con el pedido: sus pagos (Cobranzas, la lista de Pagos y los
+		// filtros por cliente) y sus cortes (la bandeja de WhatsApp los
+		// lista por cliente). Solo los que no tenían cliente.
+		if _, err := tx.Exec(ctx, `UPDATE payments SET customer_id = $2, updated_at = now() WHERE order_id = $1 AND customer_id IS NULL`, id, cliente); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE cutting_orders SET customer_id = $2, updated_at = now() WHERE order_id = $1 AND customer_id IS NULL`, id, cliente)
 		return err
 	})
 	if err != nil {

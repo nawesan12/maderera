@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { borrar, guardarMeta, leerMeta } from "./db";
+import { borrar, borrarVarios, guardarMeta, leerMeta, leerTodo, vaciar } from "./db";
 
 /**
  * La caja física de esta máquina y su contador de números provisorios.
@@ -107,6 +107,7 @@ export function useCaja(): EstadoCaja {
     contadores[actual.codigo] = Math.max(contadores[actual.codigo] ?? 1, actual.proximoNumero);
     await guardarMeta("contadores", contadores);
     await borrar("meta", "caja");
+    await limpiarDatosDeLaCaja();
     setCaja(null);
   }, []);
 
@@ -120,4 +121,27 @@ export function useCaja(): EstadoCaja {
   }, []);
 
   return { caja, vincular, desvincular, avanzar };
+}
+
+/**
+ * Lo que una PC que deja de ser terminal no tiene por qué guardar (comité
+ * del 25/11, Ley 25.326): el padrón de clientes con CUIT y teléfono, los
+ * precios, los tickets y las ventas ya confirmadas de la cola. Quedaban en el
+ * IndexedDB y se leían sin sesión. Se conservan los contadores (la
+ * numeración no se reinicia) y lo que todavía no subió (Go no deja
+ * desvincular con ventas pendientes, pero si una quedara, es plata). Sin la
+ * marca del catálogo, la próxima copia es completa.
+ */
+export async function limpiarDatosDeLaCaja(): Promise<void> {
+  try {
+    await Promise.all([vaciar("clientes"), vaciar("tickets"), vaciar("precios")]);
+    const cola = await leerTodo<{ clave: string; estado: string }>("cola");
+    await borrarVarios(
+      "cola",
+      cola.filter((f) => f.estado === "confirmada").map((f) => f.clave),
+    );
+    await borrar("meta", "catalogo");
+  } catch {
+    // Sin almacén local (modo privado), no hay nada que limpiar.
+  }
 }

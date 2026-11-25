@@ -113,6 +113,22 @@ func (r *respuestaRegistrada) Flush() {
 
 func (r *respuestaRegistrada) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
+// conToken son las rutas cuyo último tramo es un token que vale como una
+// llave: el enlace de firma de un remito y la consulta de corte. No quedan
+// escritos en el registro (comité del 25/11), como el link mágico en el de
+// Caddy.
+var conToken = []string{"/api/v1/firmar/", "/api/v1/cortes/consulta/"}
+
+// RutaParaElLog es la ruta con el token tapado.
+func RutaParaElLog(ruta string) string {
+	for _, p := range conToken {
+		if strings.HasPrefix(ruta, p) && len(ruta) > len(p) {
+			return p + "oculto"
+		}
+	}
+	return ruta
+}
+
 func registrar(h http.Handler, log *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var b [8]byte
@@ -126,7 +142,7 @@ func registrar(h http.Handler, log *slog.Logger) http.Handler {
 		log.Info("pedido",
 			"id", id,
 			"metodo", r.Method,
-			"ruta", r.URL.Path,
+			"ruta", RutaParaElLog(r.URL.Path),
 			"estado", rr.estado,
 			"ms", time.Since(inicio).Milliseconds(),
 			"ip", IPDelCliente(r),

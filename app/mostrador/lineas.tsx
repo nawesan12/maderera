@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Scissors, Trash2, X } from "lucide-react";
-import { formatearMonto, formatearUnidad } from "@/lib/formato";
+import {
+  formatearMonto,
+  formatearUnidad,
+  importeDelCampo,
+  importeIlegible,
+  importeParaElCampo,
+} from "@/lib/formato";
 import { admiteDecimales, formatearCantidad, pasoDeCantidad } from "@/lib/unidades";
 import { cantidadDelRenglon, esLineaDelCorte, type LineaDeVenta } from "@/lib/mostrador/importes";
 import { enfocar } from "./atajos";
@@ -170,14 +176,9 @@ export function Lineas({
 
                   <label className="relative shrink-0">
                     <span className="sr-only">Precio de {l.descripcion}</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={l.precioUnitario}
-                      onChange={(e) => cambiar(i, "precioUnitario", Number(e.target.value))}
-                      onWheel={(e) => e.currentTarget.blur()}
+                    <PrecioDelRenglon
+                      valor={l.precioUnitario}
+                      alCambiar={(n) => cambiar(i, "precioUnitario", n)}
                       aria-describedby={tocado ? `lista-${i}` : undefined}
                       className={`tabular h-11 w-32 rounded-lg border bg-background px-2.5 text-right text-base ${
                         tocado ? "border-brand-orange font-semibold text-brand-orange" : "border-linea"
@@ -358,5 +359,55 @@ function Vaciar({ onVaciar, onNoVaciar }: { onVaciar: () => void; onNoVaciar: ()
         No
       </button>
     </div>
+  );
+}
+
+/**
+ * El precio a mano de un renglón. Texto y no `type="number"`: con number,
+ * «15.000» se leía como $15 (se tipea como se escribe en Argentina). Lo que se
+ * escribe se guarda aparte del número del renglón para no reformatearlo
+ * mientras se tipea; si viene otro precio de afuera (la lista, el cliente que
+ * cambió) se vuelve a mostrar ese. Lo que no se entiende queda marcado y, al
+ * salir del campo, vuelve al último precio bueno: nunca pasa como $0.
+ */
+function PrecioDelRenglon({
+  valor,
+  alCambiar,
+  className,
+  ...resto
+}: {
+  valor: number;
+  alCambiar: (n: number) => void;
+  className: string;
+  "aria-describedby"?: string;
+}) {
+  const [texto, setTexto] = useState(() => importeParaElCampo(valor));
+  const [visto, setVisto] = useState(valor);
+  if (valor !== visto) {
+    setVisto(valor);
+    setTexto(importeParaElCampo(valor));
+  }
+  const malo = importeIlegible(texto);
+  return (
+    <input
+      {...resto}
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      value={texto}
+      aria-invalid={malo || undefined}
+      onChange={(e) => {
+        const t = e.target.value;
+        setTexto(t);
+        if (importeIlegible(t)) return;
+        const n = importeDelCampo(t);
+        setVisto(n);
+        alCambiar(n);
+      }}
+      onBlur={() => {
+        if (malo) setTexto(importeParaElCampo(valor));
+      }}
+      className={className}
+    />
   );
 }

@@ -10,7 +10,13 @@ import {
   Opciones,
   Seccion,
 } from "@/components/admin/formulario";
-import { formatearMonto, importeParaEditar } from "@/lib/formato";
+import {
+  formatearMonto,
+  importeDelCampo,
+  importeIlegible,
+  importeParaElCampo,
+} from "@/lib/formato";
+import { CampoImporte } from "@/components/admin/campo-importe";
 import {
   buscarParaPedir,
   crearOrdenDeCompra,
@@ -93,7 +99,7 @@ export function FormularioOrden({
               variantId: h.variantId,
               descripcion: [h.producto, h.variante].filter(Boolean).join(" "),
               cantidad: "1",
-              costoUnitario: importeParaEditar(h.costoActual),
+              costoUnitario: importeParaElCampo(h.costoActual),
               alicuotaIva: h.alicuotaIva,
             },
           ],
@@ -109,7 +115,7 @@ export function FormularioOrden({
   }
 
   const neto = lineas.reduce(
-    (t, l) => t + Number(l.cantidad || 0) * Number(l.costoUnitario || 0),
+    (t, l) => t + Number(l.cantidad || 0) * importeDelCampo(l.costoUnitario),
     0,
   );
 
@@ -117,7 +123,12 @@ export function FormularioOrden({
     supplierId !== "" &&
     branchId !== "" &&
     lineas.length > 0 &&
-    lineas.every((l) => Number(l.cantidad) > 0 && l.costoUnitario !== "");
+    lineas.every(
+      (l) =>
+        Number(l.cantidad) > 0 &&
+        l.costoUnitario !== "" &&
+        !importeIlegible(l.costoUnitario),
+    );
 
   return (
     <div className="space-y-4">
@@ -274,20 +285,16 @@ export function FormularioOrden({
                       />
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.0001"
-                        value={l.costoUnitario}
-                        onChange={(e) =>
-                          cambiar(i, "costoUnitario", e.target.value)
-                        }
+                      <CampoImporte
+                        valor={l.costoUnitario}
+                        alCambiar={(v) => cambiar(i, "costoUnitario", v)}
+                        aria-label={`Costo de ${l.descripcion}`}
                         className="tabular h-10 w-32 rounded-lg border border-linea bg-background px-2 text-right text-base"
                       />
                     </td>
                     <td className="tabular px-4 py-2.5 text-right font-semibold">
                       {formatearMonto(
-                        Number(l.cantidad || 0) * Number(l.costoUnitario || 0),
+                        Number(l.cantidad || 0) * importeDelCampo(l.costoUnitario),
                       )}
                     </td>
                     <td className="px-2 py-2.5">
@@ -329,7 +336,7 @@ export function FormularioOrden({
                   variantId: l.variantId,
                   descripcion: l.descripcion,
                   cantidad: Number(l.cantidad),
-                  costoUnitario: Number(l.costoUnitario),
+                  costoUnitario: importeDelCampo(l.costoUnitario),
                   alicuotaIva: Number(l.alicuotaIva),
                 })),
               });

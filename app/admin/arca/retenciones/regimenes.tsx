@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
+import { CampoImporte } from "@/components/admin/campo-importe";
 import { guardarRegimen, type EstadoRegimen } from "./actions";
 
 const inicial: EstadoRegimen = {};
@@ -65,17 +67,17 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
   );
   const [activo, setActivo] = useState(regimen.activo);
   const [minimoNoImponible, setMinimoNoImponible] = useState(
-    String(regimen.minimoNoImponible),
+    importeParaElCampo(regimen.minimoNoImponible),
   );
   const [minimoRetencion, setMinimoRetencion] = useState(
-    String(regimen.minimoRetencion),
+    importeParaElCampo(regimen.minimoRetencion),
   );
 
   const cambio =
     Number(alicuota) !== regimen.alicuota ||
     Number(noInscripto) !== regimen.alicuotaNoInscripto ||
-    Number(minimoNoImponible) !== regimen.minimoNoImponible ||
-    Number(minimoRetencion) !== regimen.minimoRetencion ||
+    importeDelCampo(minimoNoImponible) !== regimen.minimoNoImponible ||
+    importeDelCampo(minimoRetencion) !== regimen.minimoRetencion ||
     activo !== regimen.activo;
 
   return (
@@ -135,13 +137,12 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
           <span className="text-sm text-muted-foreground">
             Mín. no imponible $
           </span>
-          <input
-            name="minimoNoImponible"
-            type="number"
-            min="0"
-            step="0.01"
-            value={minimoNoImponible}
-            onChange={(e) => setMinimoNoImponible(e.target.value)}
+          {/* Lo escrito se lee como se escribe en Argentina («224.000»); a
+              Go le llega el número ya leído. */}
+          <input type="hidden" name="minimoNoImponible" value={String(importeDelCampo(minimoNoImponible))} />
+          <CampoImporte
+            valor={minimoNoImponible}
+            alCambiar={setMinimoNoImponible}
             className="tabular mt-1 h-10 w-36 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
           />
         </label>
@@ -150,13 +151,12 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
           <span className="text-sm text-muted-foreground">
             Mín. de retención $
           </span>
-          <input
-            name="minimoRetencion"
-            type="number"
-            min="0"
-            step="0.01"
-            value={minimoRetencion}
-            onChange={(e) => setMinimoRetencion(e.target.value)}
+          {/* Lo escrito se lee como se escribe en Argentina («224.000»); a
+              Go le llega el número ya leído. */}
+          <input type="hidden" name="minimoRetencion" value={String(importeDelCampo(minimoRetencion))} />
+          <CampoImporte
+            valor={minimoRetencion}
+            alCambiar={setMinimoRetencion}
             className="tabular mt-1 h-10 w-32 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
           />
         </label>
@@ -175,7 +175,7 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
         {cambio && (
           <button
             type="submit"
-            disabled={guardando}
+            disabled={guardando || importeIlegible(minimoNoImponible) || importeIlegible(minimoRetencion)}
             className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accion px-3.5 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-60"
           >
             {guardando && <Loader2 className="h-4 w-4 animate-spin" />}

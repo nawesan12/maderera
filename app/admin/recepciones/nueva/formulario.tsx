@@ -13,8 +13,11 @@ import {
 import {
   formatearMonto,
   hoyEnArgentina,
-  importeParaEditar,
+  importeDelCampo,
+  importeIlegible,
+  importeParaElCampo,
 } from "@/lib/formato";
+import { CampoImporte } from "@/components/admin/campo-importe";
 import {
   buscarMercaderia,
   crearRecepcion,
@@ -106,7 +109,7 @@ export function FormularioRecepcion({
               // Arranca en el costo que ya tenía: la mayoría de las veces el
               // remito repite el costo anterior, y lo que se corrige es la
               // excepción.
-              costoUnitario: importeParaEditar(h.costoActual),
+              costoUnitario: importeParaElCampo(h.costoActual),
               alicuotaIva: h.alicuotaIva,
               costoActual:
                 h.costoActual === null ? null : Number(h.costoActual),
@@ -124,10 +127,10 @@ export function FormularioRecepcion({
   }
 
   const neto = lineas.reduce(
-    (t, l) => t + Number(l.cantidad || 0) * Number(l.costoUnitario || 0),
+    (t, l) => t + Number(l.cantidad || 0) * importeDelCampo(l.costoUnitario),
     0,
   );
-  const total = neto + Number(gastos || 0);
+  const total = neto + importeDelCampo(gastos);
 
   function guardar() {
     empezar(async () => {
@@ -136,12 +139,12 @@ export function FormularioRecepcion({
         branchId,
         numeroRemito,
         fecha,
-        gastos: Number(gastos || 0),
+        gastos: importeDelCampo(gastos),
         notas,
         lineas: lineas.map((l) => ({
           variantId: l.variantId,
           cantidad: Number(l.cantidad),
-          costoUnitario: Number(l.costoUnitario),
+          costoUnitario: importeDelCampo(l.costoUnitario),
           alicuotaIva: Number(l.alicuotaIva),
         })),
       });
@@ -154,11 +157,13 @@ export function FormularioRecepcion({
     supplierId !== "" &&
     branchId !== "" &&
     lineas.length > 0 &&
+    !importeIlegible(gastos) &&
     lineas.every(
       (l) =>
         Number(l.cantidad) > 0 &&
         l.costoUnitario !== "" &&
-        Number(l.costoUnitario) >= 0,
+        !importeIlegible(l.costoUnitario) &&
+        importeDelCampo(l.costoUnitario) >= 0,
     );
 
   return (
@@ -305,7 +310,7 @@ export function FormularioRecepcion({
               </thead>
               <tbody className="divide-y divide-linea">
                 {lineas.map((l, i) => {
-                  const nuevo = Number(l.costoUnitario || 0);
+                  const nuevo = importeDelCampo(l.costoUnitario);
                   /*
                    * Un salto grande contra el costo anterior casi siempre es un
                    * error de tipeo o una unidad distinta. Avisarlo acá cuesta
@@ -350,14 +355,9 @@ export function FormularioRecepcion({
                         />
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.0001"
-                          value={l.costoUnitario}
-                          onChange={(e) =>
-                            cambiar(i, "costoUnitario", e.target.value)
-                          }
+                        <CampoImporte
+                          valor={l.costoUnitario}
+                          alCambiar={(v) => cambiar(i, "costoUnitario", v)}
                           aria-label={`Costo de ${l.descripcion}`}
                           className={`tabular h-10 w-32 rounded-lg border bg-background px-2 text-right text-base ${
                             enCero ? "estado-problema border-[var(--estado-acento)] font-semibold" : "border-linea"
@@ -382,7 +382,7 @@ export function FormularioRecepcion({
                       <td className="tabular px-4 py-2.5 text-right font-semibold">
                         {formatearMonto(
                           Number(l.cantidad || 0) *
-                            Number(l.costoUnitario || 0),
+                            importeDelCampo(l.costoUnitario),
                         )}
                       </td>
                       <td className="px-2 py-2.5">
@@ -412,12 +412,10 @@ export function FormularioRecepcion({
             <span className="text-sm font-medium">
               Flete y otros gastos, netos
             </span>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={gastos}
-              onChange={(e) => setGastos(e.target.value)}
+            <CampoImporte
+              valor={gastos}
+              alCambiar={setGastos}
+              placeholder="0"
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
             />
           </label>

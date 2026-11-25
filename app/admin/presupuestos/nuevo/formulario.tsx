@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { crearPresupuesto } from "@/app/admin/ventas-actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
 import { formatearMonto } from "@/components/admin/formato";
+import { importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import {
   BarraGuardar,
   Hoja,
@@ -33,6 +34,8 @@ interface Linea {
   unidad: string;
   cantidad: number;
   precioUnitario: number;
+  /** Lo que se está tipeando en el precio («15.000»); no viaja al servidor. */
+  precioTexto?: string;
 }
 
 interface ClienteElegido {
@@ -110,6 +113,18 @@ export function FormularioPresupuesto({
     });
   }
 
+  const precioIlegible = lineas.some((l) => importeIlegible(l.precioTexto));
+
+  function cambiarPrecio(indice: number, texto: string) {
+    setLineas((previas) =>
+      previas.map((l, i) =>
+        i === indice
+          ? { ...l, precioTexto: texto, precioUnitario: importeDelCampo(texto) }
+          : l,
+      ),
+    );
+  }
+
   function actualizar(indice: number, campo: keyof Linea, valor: string) {
     setLineas((previas) =>
       previas.map((l, i) =>
@@ -135,7 +150,7 @@ export function FormularioPresupuesto({
           key={i}
           type="hidden"
           name="linea"
-          value={JSON.stringify(linea)}
+          value={JSON.stringify({ ...linea, precioTexto: undefined })}
         />
       ))}
 
@@ -252,15 +267,16 @@ export function FormularioPresupuesto({
                     <Label htmlFor={`precio-${i}`} className="text-base">
                       Precio por unidad
                     </Label>
+                    {/* Texto y no number: «15.000» son quince mil, no 15. */}
                     <Input
                       id={`precio-${i}`}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={linea.precioUnitario}
-                      onChange={(e) =>
-                        actualizar(i, "precioUnitario", e.target.value)
-                      }
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      className="text-right tabular"
+                      value={linea.precioTexto ?? importeParaElCampo(linea.precioUnitario)}
+                      aria-invalid={importeIlegible(linea.precioTexto) || undefined}
+                      onChange={(e) => cambiarPrecio(i, e.target.value)}
                     />
                   </div>
 
@@ -343,7 +359,7 @@ export function FormularioPresupuesto({
       <BarraGuardar>
         <Button
           type="submit"
-          disabled={pendiente || lineas.length === 0}
+          disabled={pendiente || precioIlegible || lineas.length === 0}
           className="h-11 px-6"
         >
           {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -359,7 +375,7 @@ export function FormularioPresupuesto({
           name="convertir"
           value="si"
           variant="outline"
-          disabled={pendiente || lineas.length === 0}
+          disabled={pendiente || precioIlegible || lineas.length === 0}
           className="h-11 px-6"
         >
           Guardar y pasar a pedido

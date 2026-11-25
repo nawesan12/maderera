@@ -73,3 +73,36 @@ func TestElCorreoDeOtroNoAtaLaCompraASuFicha(t *testing.T) {
 		t.Fatal("el presupuesto con la sesión de Juan no quedó en su ficha")
 	}
 }
+
+// Comité del 25/11: la compra buscaba la ficha con `email = $1` exacto y sin
+// orden, distinto del panel (lower y la más vieja). «Pedro@…» no se ataba a
+// «pedro@…», y con dos fichas con el mismo correo la elegida cambiaba. Ahora
+// el criterio es el mismo, y primero va la ficha de la cuenta que compra.
+func TestLaFichaPorCorreoSinMayusculasYLaPropiaPrimero(t *testing.T) {
+	e := armar(t)
+	u := e.srv.URL + "/api/v1/carrito"
+	comprar := func(cl *http.Client) Compra {
+		t.Helper()
+		pedir(t, cl, "POST", u+"/items", map[string]any{"variantId": e.placa, "descripcion": "Fenólico", "cantidad": 1})
+		code, b := pedir(t, cl, "POST", u+"/confirmar", e.compra(map[string]any{"email": "pedro@prueba.test"}))
+		if code != 200 {
+			t.Fatalf("confirmar: %d %s", code, b)
+		}
+		return leer[Compra](t, b)
+	}
+	pedro, ses := e.web(t, "pedro@prueba.test")
+	e.exec(t, `delete from customers where email ilike 'pedro@prueba.test'`)
+	vieja := e.id(t, `insert into customers (nombre, email, created_at) values ('Pedro (ficha del mostrador)', ' Pedro@Prueba.TEST', now() - interval '1 year') returning id`)
+
+	c := comprar(pedro)
+	if n := e.numero(t, `select count(*) from orders where id = $1 and customer_id = $2`, c.PedidoID, vieja); n != 1 {
+		t.Fatal("con mayúsculas y espacios en la ficha, la compra no se ató")
+	}
+
+	// La ficha de su cuenta web va antes que la más vieja sin cuenta.
+	propia := e.id(t, `insert into customers (nombre, email, user_id) values ('Pedro web', 'pedro@prueba.test', $1) returning id`, ses.UserID)
+	c = comprar(pedro)
+	if n := e.numero(t, `select count(*) from orders where id = $1 and customer_id = $2`, c.PedidoID, propia); n != 1 {
+		t.Fatal("con dos fichas, la compra no fue a la de su cuenta")
+	}
+}

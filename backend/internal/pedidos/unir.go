@@ -35,7 +35,7 @@ func (s *Servicio) fichaConElCorreo(ctx context.Context, correo *string) (*Ficha
 		return nil, nil
 	}
 	var f FichaParaUnir
-	err := s.pool.QueryRow(ctx, `SELECT id, nombre FROM customers WHERE lower(email) = lower($1) AND active
+	err := s.pool.QueryRow(ctx, `SELECT id, nombre FROM customers WHERE lower(trim(email)) = lower(trim($1)) AND active
 		ORDER BY created_at, id LIMIT 1`, *correo).Scan(&f.ID, &f.Nombre)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -94,7 +94,7 @@ func (s *Servicio) UnirAFicha(ctx context.Context, ses *auth.Sesion, tabla, id, 
 		}
 		var vendedor *string
 		err = tx.QueryRow(ctx, `SELECT nombre, seller_id::text FROM customers
-			WHERE id = $1 AND active AND $2::text IS NOT NULL AND lower(email) = lower($2)`, cliente, correo).Scan(&ficha, &vendedor)
+			WHERE id = $1 AND active AND $2::text IS NOT NULL AND lower(trim(email)) = lower(trim($2))`, cliente, correo).Scan(&ficha, &vendedor)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return noSeUne(msjFichaAjena)
 		}

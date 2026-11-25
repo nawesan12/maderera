@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2, MinusCircle, PlusCircle, Undo2 } from "lucide-react";
-import { leerCantidad } from "@/lib/unidades";
+import { formatearCantidad, leerCantidad } from "@/lib/unidades";
 import { formatearMonto, importeDelCampo, importeIlegible } from "@/lib/formato";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { acreditarParcial, debitar, type EstadoFactura } from "../actions";
@@ -139,7 +139,7 @@ export function NotasSobreElComprobante({
                 <span className="min-w-0 flex-1">
                   <span className="block text-base">{i.descripcion}</span>
                   <span className="tabular block text-sm text-muted-foreground">
-                    {i.cantidad} × {formatearMonto(i.subtotal / i.cantidad)}
+                    {formatearCantidad(i.cantidad)} × {formatearMonto(i.subtotal / i.cantidad)}
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
@@ -160,7 +160,7 @@ export function NotasSobreElComprobante({
                     id={`maximo-${i.id}`}
                     className={`tabular mt-0.5 block text-xs ${cantidadMala(i) ? "text-saldo-debe" : "text-muted-foreground"}`}
                   >
-                    Máximo {i.cantidad}
+                    Máximo {formatearCantidad(i.cantidad)}
                   </span>
                 </span>
               </li>
@@ -259,7 +259,7 @@ export function NotasSobreElComprobante({
           disabled={
             enCurso ||
             motivo.trim().length < 4 ||
-            importeIlegible(importe) ||
+            (modo === "debito" && importeIlegible(importe)) ||
             algunaMala ||
             importeDeLaNota <= 0
           }

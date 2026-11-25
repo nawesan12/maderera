@@ -289,8 +289,10 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 
 	// 2. Los recibos emitidos o anulados en el período.
 	rs, err = s.lectura.Query(ctx, `
-		SELECT r.id, r.numero, r.recibido_de, r.created_at, r.anulado_at, p.medio::text, p.importe, coalesce(ch.circuito = 'negro', false)
+		SELECT r.id, r.numero, r.recibido_de, r.created_at, r.anulado_at, p.medio::text, p.importe, coalesce(ch.circuito = 'negro', false),
+		       coalesce(pg.comision, 0)::float8
 		FROM receipts r JOIN receipt_parts p ON p.receipt_id = r.id LEFT JOIN cheques ch ON ch.id = p.cheque_id
+		LEFT JOIN payments pg ON pg.id = p.payment_id
 		WHERE (r.created_at >= $1 AND r.created_at <= $2) OR (r.anulado_at >= $1 AND r.anulado_at <= $2)
 		ORDER BY r.created_at, r.id, p.orden`, idesde, ihasta)
 	if err != nil {
@@ -304,7 +306,8 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		var anulado *time.Time
 		var importe jsmath.Num
 		var negro bool
-		if err := rs.Scan(&id, &numero, &cliente, &emitido, &anulado, &medio, &importe, &negro); err != nil {
+		var comision float64
+		if err := rs.Scan(&id, &numero, &cliente, &emitido, &anulado, &medio, &importe, &negro, &comision); err != nil {
 			rs.Close()
 			return nil, err
 		}
@@ -314,7 +317,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			porID[id] = r
 			recibos = append(recibos, r)
 		}
-		r.partes = append(r.partes, ParteDeRecibo{Medio: medio, Importe: importe.F(), Negro: negro})
+		r.partes = append(r.partes, ParteDeRecibo{Medio: medio, Importe: importe.F(), Negro: negro, Comision: comision})
 	}
 	rs.Close()
 	if err := rs.Err(); err != nil {
@@ -433,7 +436,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	// período (el cobro, el reintegro o un tramo) se decide en Go, con la
 	// fecha corrida a la de la factura.
 	rs, err = s.lectura.Query(ctx, `
-		SELECT p.id, p.tipo::text, coalesce(p.medio, ''), p.monto, p.estado::text, p.updated_at,
+		SELECT p.id, p.tipo::text, coalesce(p.medio, ''), p.monto, coalesce(p.comision, 0)::float8, p.estado::text, p.updated_at,
 		       coalesce(p.acreditado_at, CASE WHEN p.proveedor = 'mostrador' THEN coalesce(o.cobrada_at, o.created_at) END,
 		                p.conciliado_at, p.created_at),
 		       f.fecha_emision, f.tipo, f.punto_venta, f.numero, o.numero,
@@ -461,6 +464,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 	for rs.Next() {
 		var id, tipo, medio, estado, cliente string
 		var monto jsmath.Num
+		var comision float64
 		var actualizado, cobrado time.Time
 		var factura *time.Time
 		var tipoFactura, pedido *string
@@ -472,7 +476,7 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			// aviso de Mercado Pago.
 			Devolucion bool `json:"devolucion"`
 		}
-		if err := rs.Scan(&id, &tipo, &medio, &monto, &estado, &actualizado, &cobrado, &factura, &tipoFactura, &pv, &nro, &pedido,
+		if err := rs.Scan(&id, &tipo, &medio, &monto, &comision, &estado, &actualizado, &cobrado, &factura, &tipoFactura, &pv, &nro, &pedido,
 			&cliente, &tramos); err != nil {
 			rs.Close()
 			return nil, err
@@ -487,7 +491,10 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		c := CobroAAsentar{Comprobante: comprobante, Cliente: cliente, Medio: medio, Importe: monto.F()}
 		if f := mayorFecha(cobrado, factura); entre(f, idesde, ihasta) {
 			c.Fecha = f
-			asientos = append(asientos, AsientoDeCobro(c))
+			// Banco por lo que acreditó Mercado Pago, la comisión aparte.
+			cobro := c
+			cobro.Comision = comision
+			asientos = append(asientos, AsientoDeCobro(cobro))
 		}
 		devuelto := 0.0
 		for _, t := range tramos {
@@ -509,6 +516,13 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			if f := mayorFecha(actualizado, factura); entre(f, idesde, ihasta) {
 				r := c
 				r.Fecha, r.Importe = f, resto
+				// Devuelto entero de una vez: el cobro al revés, con su
+				// comisión. Después de tramos parciales, lo que falta sale
+				// del banco como los tramos (cuánto de la comisión devolvió
+				// Mercado Pago en cada uno no lo dice el aviso).
+				if devuelto == 0 {
+					r.Comision = comision
+				}
 				asientos = append(asientos, AsientoDeReintegro(r))
 			}
 		}

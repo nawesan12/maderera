@@ -238,8 +238,12 @@ type PagoRemoto struct {
 	MotivoRechazo *string      `json:"motivoRechazo"`
 	// Reintegrado es lo devuelto hasta ahora (transaction_amount_refunded de
 	// Mercado Pago): con el pago aprobado, es un reintegro parcial.
-	Reintegrado float64         `json:"reintegrado,omitempty"`
-	Crudo       json.RawMessage `json:"crudo"`
+	Reintegrado float64 `json:"reintegrado,omitempty"`
+	// Comision y Neto: lo que Mercado Pago se queda del cobro y lo que
+	// acredita (ComisionDeMercadoPago). Nil si la respuesta no lo dice.
+	Comision *float64        `json:"comision,omitempty"`
+	Neto     *float64        `json:"neto,omitempty"`
+	Crudo    json.RawMessage `json:"crudo"`
 }
 
 func cadena(v any) (string, bool) {
@@ -297,7 +301,59 @@ func PagoDeMercadoPago(crudo json.RawMessage) *PagoRemoto {
 			r.Reintegrado = n
 		}
 	}
+	r.Comision, r.Neto = ComisionDeMercadoPago(p, monto)
 	return r
+}
+
+// finito lee un número de la respuesta; false si no está o no es un número.
+func finito(v any, esta bool) (float64, bool) {
+	if !esta || v == nil {
+		return 0, false
+	}
+	n := zodjs.NumeroJS(v, true)
+	return n, !math.IsNaN(n) && !math.IsInf(n, 0)
+}
+
+// ComisionDeMercadoPago es cuánto se queda Mercado Pago de un cobro de
+// `monto` y cuánto acredita. El neto sale de
+// transaction_details.net_received_amount y la comisión es la diferencia con
+// el importe: lo que no llega al banco, sea la tarifa, el costo de las
+// cuotas que absorbe el vendedor o un impuesto que MP descuenta. Sin el
+// neto, la suma de fee_details que paga el vendedor (fee_payer «collector»;
+// lo que paga el comprador no sale de lo nuestro). Nil, nil si la respuesta
+// no trae ninguno de los dos o no tiene sentido (un neto negativo o mayor al
+// importe): ahí el cierre asienta el bruto, como antes.
+func ComisionDeMercadoPago(p map[string]any, monto float64) (comision, neto *float64) {
+	if !(monto > 0) {
+		return nil, nil
+	}
+	v, esta := objeto(p["transaction_details"])["net_received_amount"]
+	if n, ok := finito(v, esta); ok && n >= 0 && n <= monto {
+		n = jsmath.Round(float64(n*100)) / 100
+		c := jsmath.Round(float64(float64(monto-n)*100)) / 100
+		return &c, &n
+	}
+	cargos, ok := p["fee_details"].([]any)
+	if !ok || len(cargos) == 0 {
+		return nil, nil
+	}
+	total := 0.0
+	for _, x := range cargos {
+		cargo := objeto(x)
+		if quien, _ := cadena(cargo["fee_payer"]); quien == "payer" {
+			continue
+		}
+		v, esta := cargo["amount"]
+		if n, ok := finito(v, esta); ok && n > 0 {
+			total = float64(total + n)
+		}
+	}
+	c := jsmath.Round(float64(total*100)) / 100
+	if c > monto {
+		return nil, nil
+	}
+	n := jsmath.Round(float64(float64(monto-c)*100)) / 100
+	return &c, &n
 }
 
 // ReintegroParcial es cuánto de un reintegro parcial falta devolver: Mercado

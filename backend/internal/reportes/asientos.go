@@ -40,11 +40,14 @@ var Cuentas = struct {
 	ChequesDiferidos string
 	// Lo que retuvimos como agentes, por impuesto (deudas con el fisco).
 	RetADepositarIva, RetADepositarGanancias, RetADepositarIibb, RetADepositarSuss string
+	// Comisiones: lo que Mercado Pago se queda de un cobro (payments.comision).
+	Comisiones string
 }{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
 	"2.1.06", "4.1.02",
 	"1.1.07", "1.1.08", "1.1.09", "1.1.10", "1.1.11", "1.1.12",
 	"2.1.07",
-	"2.1.08", "2.1.09", "2.1.10", "2.1.11"}
+	"2.1.08", "2.1.09", "2.1.10", "2.1.11",
+	"5.1.11"}
 
 // CuentaDeRetencionSufrida es la cuenta del crédito por una retención que
 // nos practicaron, según el impuesto ("" o desconocido: 1.1.06).
@@ -95,7 +98,7 @@ var nombresDeCuenta = map[string]string{
 	"2.1.10": "Retenciones IIBB a depositar", "2.1.11": "Retenciones SUSS a depositar",
 	"5.1.01": "Gastos varios", "5.1.02": "Fletes", "5.1.03": "Combustible", "5.1.04": "Servicios", "5.1.05": "Alquileres",
 	"5.1.06": "Sueldos y cargas", "5.1.07": "Mantenimiento", "5.1.08": "Impuestos y tasas", "5.1.09": "Librería y oficina",
-	"5.1.10": "Publicidad",
+	"5.1.10": "Publicidad", "5.1.11": "Comisiones y gastos bancarios",
 }
 
 // RenglonDeAsiento es RenglonDeAsiento.
@@ -199,6 +202,9 @@ type CobroAAsentar struct {
 	Fecha                       time.Time
 	Comprobante, Cliente, Medio string
 	Importe                     float64
+	// Comision: lo que Mercado Pago se quedó del cobro. Banco recibe el
+	// neto y la comisión va a su cuenta (renglonesDeEntrada).
+	Comision float64
 }
 
 func cuentaDeMedio(medio string) string {
@@ -225,15 +231,30 @@ func cuentaDeCobro(medio string) string {
 // es un cobro (no entra plata: la deuda sigue en Deudores), así que no se
 // asienta: AsientosDelPeriodo la saltea.
 func AsientoDeCobro(c CobroAAsentar) Asiento {
-	return asiento(c.Fecha, "Cobro "+c.Comprobante+" · "+c.Cliente, []RenglonDeAsiento{
-		renglon(cuentaDeCobro(c.Medio), c.Importe, 0), renglon(Cuentas.Deudores, 0, c.Importe)})
+	return asiento(c.Fecha, "Cobro "+c.Comprobante+" · "+c.Cliente, append(
+		renglonesDeEntrada(cuentaDeCobro(c.Medio), c.Importe, c.Comision), renglon(Cuentas.Deudores, 0, c.Importe)))
+}
+
+// renglonesDeEntrada es el debe de lo que entró en `cuenta`: un renglón por
+// el importe o, si es plata que pasó por Mercado Pago y se quedó una
+// comisión, Banco por el neto y la comisión a Comisiones y gastos
+// bancarios. Sin comisión (todo lo de antes, el efectivo, el cheque) es el
+// renglón de siempre, byte a byte.
+func renglonesDeEntrada(cuenta string, importe, comision float64) []RenglonDeAsiento {
+	if comision <= toleranciaAsiento || cuenta != Cuentas.Banco || comision > importe {
+		return []RenglonDeAsiento{renglon(cuenta, importe, 0)}
+	}
+	return []RenglonDeAsiento{renglon(cuenta, float64(importe-comision), 0), renglon(Cuentas.Comisiones, comision, 0)}
 }
 
 // AsientoDeReintegro es el cobro al revés: la plata vuelve al cliente (o
 // el cheque se anula con la venta) y la deuda vuelve a Deudores.
+//
+// Con Comision (el reintegro entero de un cobro de Mercado Pago), es el
+// cobro exactamente al revés: la comisión vuelve con el pago.
 func AsientoDeReintegro(c CobroAAsentar) Asiento {
-	return asiento(c.Fecha, "Reintegro "+c.Comprobante+" · "+c.Cliente, []RenglonDeAsiento{
-		renglon(Cuentas.Deudores, c.Importe, 0), renglon(cuentaDeCobro(c.Medio), 0, c.Importe)})
+	return asiento(c.Fecha, "Reintegro "+c.Comprobante+" · "+c.Cliente, append([]RenglonDeAsiento{
+		renglon(Cuentas.Deudores, c.Importe, 0)}, invertir(renglonesDeEntrada(cuentaDeCobro(c.Medio), c.Importe, c.Comision))...))
 }
 
 // ParteDeRecibo es con qué se pagó una parte del recibo.
@@ -245,6 +266,9 @@ type ParteDeRecibo struct {
 	// Impuesto de una parte «retencion» (retenciones_sufridas del recibo):
 	// va a la cuenta de ese impuesto. Vacío: a Retenciones sufridas.
 	Impuesto string
+	// Comision: lo que Mercado Pago se quedó de esta parte (el pago que
+	// nombra, payments.comision).
+	Comision float64
 }
 
 // cuentaDeParte es cuentaDeCobro con el impuesto de la retención.
@@ -307,11 +331,18 @@ func PartesPorCircuito(partes []ParteDeRecibo, rep cobros.Reparto) (blanco, b []
 		}
 	}
 	for i, p := range partes {
+		// La comisión se reparte como la parte: cada circuito asienta la
+		// suya, Banco por su neto.
+		comisionBlanca := 0.0
+		if p.Comision > 0 && p.Importe > 0 {
+			comisionBlanca = redondear(float64(p.Comision*asignado[i]) / p.Importe)
+		}
 		if bl := asignado[i]; bl > toleranciaAsiento {
-			blanco = append(blanco, ParteDeRecibo{Medio: p.Medio, Importe: bl, Negro: p.Negro, Impuesto: p.Impuesto})
+			blanco = append(blanco, ParteDeRecibo{Medio: p.Medio, Importe: bl, Negro: p.Negro, Impuesto: p.Impuesto, Comision: comisionBlanca})
 		}
 		if resto := redondear(p.Importe - asignado[i]); resto > toleranciaAsiento {
-			b = append(b, ParteDeRecibo{Medio: p.Medio, Importe: resto, Negro: p.Negro, Impuesto: p.Impuesto})
+			b = append(b, ParteDeRecibo{Medio: p.Medio, Importe: resto, Negro: p.Negro, Impuesto: p.Impuesto,
+				Comision: redondear(p.Comision - comisionBlanca)})
 		}
 	}
 	return blanco, b
@@ -346,7 +377,7 @@ func AsientosDeRecibo(r ReciboAAsentar) []Asiento {
 	if rep.Blanco() > toleranciaAsiento {
 		renglones := []RenglonDeAsiento{}
 		for _, p := range blanco {
-			renglones = append(renglones, renglon(cuentaDeParte(p), p.Importe, 0))
+			renglones = append(renglones, renglonesDeEntrada(cuentaDeParte(p), p.Importe, p.Comision)...)
 		}
 		if rep.Deudores > toleranciaAsiento {
 			renglones = append(renglones, renglon(Cuentas.Deudores, 0, rep.Deudores))
@@ -362,7 +393,7 @@ func AsientosDeRecibo(r ReciboAAsentar) []Asiento {
 	if rep.B > toleranciaAsiento {
 		renglones := []RenglonDeAsiento{}
 		for _, p := range b {
-			renglones = append(renglones, renglon(cuentaDeParte(p), p.Importe, 0))
+			renglones = append(renglones, renglonesDeEntrada(cuentaDeParte(p), p.Importe, p.Comision)...)
 		}
 		renglones = append(renglones, renglon(Cuentas.VentasSinFactura, 0, rep.B))
 		if r.Anulacion {
@@ -418,7 +449,7 @@ func AsientoDeRecibo(r ReciboAAsentar) Asiento {
 	renglones := []RenglonDeAsiento{}
 	total := 0.0
 	for _, p := range r.Partes {
-		renglones = append(renglones, renglon(cuentaDeParte(p), p.Importe, 0))
+		renglones = append(renglones, renglonesDeEntrada(cuentaDeParte(p), p.Importe, p.Comision)...)
 		total = float64(total + p.Importe)
 	}
 	renglones = append(renglones, renglon(Cuentas.Deudores, 0, total))

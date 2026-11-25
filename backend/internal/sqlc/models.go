@@ -5780,6 +5780,8 @@ type Payment struct {
 	CreatedAt          time.Time       `json:"createdAt"`
 	UpdatedAt          time.Time       `json:"updatedAt"`
 	AcreditadoAt       *time.Time      `json:"acreditadoAt"`
+	Comision           *jsmath.Num     `json:"comision"`
+	NetoAcreditado     *jsmath.Num     `json:"netoAcreditado"`
 }
 
 type PaymentDiscount struct {

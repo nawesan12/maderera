@@ -914,10 +914,15 @@ func AsientosDelCobroAntesDeLaFactura(c CobroAntesDeLaFactura) []Asiento {
 				invertir(renglonesDeEntrada(cuentaDeCobro(medio), t.Importe, comision))...)), c.Circuito))
 			continue
 		}
+		// Después de la factura es el reintegro de siempre, contra Deudores y
+		// con el nombre de la factura.
 		r := c.CobroAAsentar
-		r.Fecha, r.Importe, r.Medio, r.Comision = t.Fecha, t.Importe, medio, comision
+		r.Fecha, r.Importe, r.Medio, r.Comision, r.Comprobante = t.Fecha, t.Importe, medio, comision, c.DeLaFactura
+		if !t.Entero {
+			r.Comprobante = "parcial " + c.DeLaFactura
+		}
 		a := AsientoDeReintegro(r)
-		a.Concepto, a.Instante = concepto, true
+		a.Instante = true
 		out = append(out, a)
 	}
 	if c.Factura == nil {

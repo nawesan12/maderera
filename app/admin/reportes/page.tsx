@@ -87,6 +87,11 @@ export default async function ReportesPage({
   const vendidoSinCosto = vendido - conCosto;
   const sinCosto = totales.lineasSinCosto;
 
+  // Los cortes por renglón suman subtotales y unidades, sin el envío del
+  // pedido: el encabezado dice unidades (no operaciones) y el envío aparte,
+  // que es la diferencia con el «Vendido con IVA» del inicio (H138).
+  const porRenglon = corte === "producto" || corte === "rubro" || corte === "elaboracion";
+
   const etiquetaCorte =
     CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Por producto";
 
@@ -101,7 +106,11 @@ export default async function ReportesPage({
         titulo="Reportes"
         resumen={
           filas.length > 0
-            ? `${etiquetaCorte.toLowerCase()} · ${formatearMonto(total)} en ${plural(operaciones, "operación", "operaciones")}`
+            ? `${etiquetaCorte.toLowerCase()} · ${formatearMonto(total)} en ${
+                porRenglon
+                  ? plural(operaciones, "unidad", "unidades")
+                  : plural(operaciones, "operación", "operaciones")
+              }${porRenglon && totales.envios > 0 ? ` · ${formatearMonto(totales.envios)} de envíos` : ""}`
             : "Sin ventas en el período elegido"
         }
       >
@@ -274,19 +283,22 @@ export default async function ReportesPage({
                               return (
                                 <>
                                   <span
-                                    className={`tabular font-semibold ${
+                                    className={`tabular whitespace-nowrap font-semibold ${
                                       margen < 0
                                         ? "text-saldo-debe"
                                         : "text-saldo-favor"
                                     }`}
                                   >
                                     {formatearMonto(margen)}
+                                    {/* Con su separador: en la tarjeta del
+                                        teléfono se leía «$ 221.2499,2%». */}
+                                    {pct !== null && (
+                                      <span className="text-sm font-normal text-muted-foreground">
+                                        {" · "}
+                                        {formatearPorcentaje(pct)}
+                                      </span>
+                                    )}
                                   </span>
-                                  {pct !== null && (
-                                    <span className="tabular ml-2 text-sm text-muted-foreground">
-                                      {formatearPorcentaje(pct)}
-                                    </span>
-                                  )}
                                   {f.lineasSinCosto > 0 && (
                                     <span className="estado-problema block text-sm font-medium">
                                       {f.lineasSinCosto} sin costo

@@ -10,6 +10,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/stock"
 )
 
 // El inicio del panel (lib/dal/admin/resumen.ts y lib/dal/admin/pendientes.ts):
@@ -364,9 +365,8 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		  (SELECT por_vencer FROM compras),
 		  CASE WHEN $5 THEN (SELECT count(*)::int FROM professional_applications WHERE estado = 'pendiente') ELSE 0 END,
 		  CASE WHEN $6 THEN (SELECT count(*)::int FROM product_reviews WHERE estado = 'pendiente') ELSE 0 END,
-		  CASE WHEN $7 THEN (SELECT count(*)::int FROM inventory i JOIN product_variants v ON v.id = i.variant_id
-		                     JOIN products p ON p.id = v.product_id
-		                     WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty <= i.min_qty) ELSE 0 END,
+		  CASE WHEN $7 THEN (SELECT count(*)::int FROM product_variants v JOIN products p ON p.id = v.product_id
+		                     WHERE p.active AND v.active AND `+stock.BajoElMinimo+`) ELSE 0 END,
 		  CASE WHEN $8 THEN (SELECT count(*)::int FROM customer_follow_ups
 		                     WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at <= $10) ELSE 0 END,
 		  CASE WHEN $9 THEN (SELECT count(*)::int FROM quotes WHERE estado = 'enviado'
@@ -419,7 +419,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	agregar(c.solicitudes, Pendiente{Clave: "profesionales", Texto: uno(c.solicitudes, "profesional esperando respuesta", "profesionales esperando respuesta"),
 		Detalle: detalle("Pidieron la cuenta con precio de gremio"), Href: "/admin/profesionales"})
 	agregar(c.reponer, Pendiente{Clave: "reponer", Texto: uno(c.reponer, "producto bajo el mínimo", "productos bajo el mínimo"),
-		Detalle: detalle("Quedó en el mínimo o por debajo: hay que reponerlo"), Href: "/admin/stock"})
+		Detalle: detalle("Quedó en el mínimo o por debajo: hay que reponerlo"), Href: "/admin/stock?estado=reponer"})
 	agregar(c.resenas, Pendiente{Clave: "resenas", Texto: uno(c.resenas, "reseña sin moderar", "reseñas sin moderar"),
 		Detalle: detalle("No se publican hasta que alguien las mire"), Href: "/admin/contenido"})
 	agregar(o.whatsapp, Pendiente{Clave: "whatsapp", Texto: uno(o.whatsapp, "conversación de WhatsApp sin contestar", "conversaciones de WhatsApp sin contestar"),

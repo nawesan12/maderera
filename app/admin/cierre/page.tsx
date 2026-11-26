@@ -243,6 +243,9 @@ export default async function CierrePage({
               />
             )}
             <Linea titulo="Costo de lo vendido" valor={-resultado.actual.costo} />
+            {resultado.actual.envios > 0 && (
+              <Linea titulo="Envíos cobrados sin IVA" valor={resultado.actual.envios} />
+            )}
             <Linea titulo="Gastos" valor={-resultado.actual.gastos} />
             {resultado.actual.sinCostosCargados && (
               <Linea titulo="Resultado" valor={resultado.actual.resultado} />

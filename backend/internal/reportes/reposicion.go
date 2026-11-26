@@ -3,6 +3,8 @@ package reportes
 import (
 	"context"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,7 +57,12 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 	rs, err := s.lectura.Query(ctx, `
 		SELECT v.id, p.id, p.name, v.label, v.sku, p.unit, c.name, c.slug, sc.name,
 		       coalesce(sum(CASE WHEN b.slug = 'casa-central' THEN i.qty - coalesce(i.reservado, 0) END), 0),
-		       coalesce(sum(CASE WHEN b.slug = 'aserradero' THEN i.qty - coalesce(i.reservado, 0) END), 0)
+		       coalesce(sum(CASE WHEN b.slug = 'aserradero' THEN i.qty - coalesce(i.reservado, 0) END), 0),
+		       coalesce(sum(CASE WHEN b.slug = 'casa-central' THEN i.min_qty END), 0),
+		       coalesce(sum(CASE WHEN b.slug = 'aserradero' THEN i.min_qty END), 0),
+		       (SELECT sc.supplier_id::text FROM supplier_variant_codes sc WHERE sc.variant_id = v.id ORDER BY sc.created_at DESC LIMIT 1),
+		       (SELECT su.nombre FROM supplier_variant_codes sc JOIN suppliers su ON su.id = sc.supplier_id
+		        WHERE sc.variant_id = v.id ORDER BY sc.created_at DESC LIMIT 1)
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
@@ -69,15 +76,17 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 	}
 	stock := []StockDeVariante{}
 	ids := []string{}
+	minimos := map[string][2]float64{}
 	for rs.Next() {
 		var x StockDeVariante
-		var central, aserradero jsmath.Num
+		var central, aserradero, minCentral, minAserradero jsmath.Num
 		if err := rs.Scan(&x.VariantID, &x.ProductID, &x.Producto, &x.Medida, &x.Sku, &x.Unidad, &x.Categoria, &x.CategoriaSlug,
-			&x.Rubro, &central, &aserradero); err != nil {
+			&x.Rubro, &central, &aserradero, &minCentral, &minAserradero, &x.ProveedorID, &x.Proveedor); err != nil {
 			rs.Close()
 			return ReporteDeReposicion{}, err
 		}
 		x.DisponibleCentral, x.DisponibleAserradero = central.F(), aserradero.F()
+		minimos[x.VariantID] = [2]float64{minCentral.F(), minAserradero.F()}
 		stock = append(stock, x)
 		ids = append(ids, x.VariantID)
 	}
@@ -129,5 +138,60 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 	if err := rs.Err(); err != nil {
 		return ReporteDeReposicion{}, err
 	}
-	return ArmarReposicion(stock, vendido, o.DiasDelPeriodo, o.CoberturaObjetivo, o.Sucursal), nil
+	return HastaElMinimo(ArmarReposicion(stock, vendido, o.DiasDelPeriodo, o.CoberturaObjetivo, o.Sucursal), minimos, o.Sucursal), nil
+}
+
+// HastaElMinimo suma a la sugerencia lo que falta para llegar al mínimo de
+// cada sucursal. La sugerencia salía solo de lo vendido: lo que estaba bajo
+// el mínimo y no se había vendido en el período decía «Para comprar 0 ·
+// Nada por acá» mientras Stock pedía reponerlo y el inicio lo contaba
+// (simulación del mes, H062). Lo que falta en una sucursal no lo tapa el
+// sobrante de la otra (es otro local), con la regla de Stock: la sucursal
+// en cero con la otra con stock no es «reponer» (stock.BajoElMinimo); sin
+// stock en ninguna, sí. Va después de ArmarReposicion, que sigue siendo la
+// del TS.
+func HastaElMinimo(r ReporteDeReposicion, minimos map[string][2]float64, sucursal string) ReporteDeReposicion {
+	cambio := false
+	for i := range r.Filas {
+		f := &r.Filas[i]
+		m := minimos[f.VariantID]
+		sinNada := f.DisponibleCentral <= 0 && f.DisponibleAserradero <= 0
+		falta := func(disponible, minimo float64) float64 {
+			if minimo > 0 && disponible <= minimo && (disponible > 0 || sinNada) {
+				return math.Ceil(minimo - max(disponible, 0))
+			}
+			return 0
+		}
+		var n float64
+		switch sucursal {
+		case "casa-central":
+			n = falta(f.DisponibleCentral, m[0])
+		case "aserradero":
+			n = falta(f.DisponibleAserradero, m[1])
+		default:
+			n = float64(falta(f.DisponibleCentral, m[0]) + falta(f.DisponibleAserradero, m[1]))
+		}
+		if n > f.Sugerido {
+			f.Sugerido, cambio = n, true
+		}
+	}
+	if cambio {
+		cero := func(p *float64) float64 {
+			if p == nil {
+				return 0
+			}
+			return *p
+		}
+		sort.SliceStable(r.Filas, func(i, j int) bool {
+			a, b := r.Filas[i], r.Filas[j]
+			if (a.Sugerido > 0) != (b.Sugerido > 0) {
+				return a.Sugerido > 0
+			}
+			if a.Sugerido > 0 && b.Sugerido > 0 {
+				return cero(a.Cobertura)-cero(b.Cobertura) < 0
+			}
+			return b.Vendido-a.Vendido < 0
+		})
+	}
+	return r
 }

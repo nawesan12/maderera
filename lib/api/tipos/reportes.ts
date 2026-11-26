@@ -351,6 +351,11 @@ export interface components {
             lineasSinCosto: number;
             /** @description Cuántas filas tiene el corte entero */
             filas: number;
+            /**
+             * Format: double
+             * @description Flete cobrado del período
+             */
+            envios: number;
         };
         ReporteMes: {
             clave: string;
@@ -372,6 +377,9 @@ export interface components {
             disponibleCentral: number;
             /** Format: double */
             disponibleAserradero: number;
+            /** @description El proveedor habitual (el último con el que se cargó un código) */
+            proveedorId?: string | null;
+            proveedor?: string | null;
             /** Format: double */
             disponible: number;
             /** Format: double */
@@ -584,6 +592,11 @@ export interface components {
             costo: number;
             /** Format: double */
             gastos: number;
+            /**
+             * Format: double
+             * @description Flete cobrado sin IVA; suma al resultado
+             */
+            envios: number;
             /** Format: double */
             resultado: number;
             /** @description Renglones vendidos sin costo cargado o con costo en cero */

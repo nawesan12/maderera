@@ -111,7 +111,13 @@ type Resultado struct {
 	VentasSinCosto float64 `json:"ventasSinCosto"`
 	Costo          float64 `json:"costo"`
 	Gastos         float64 `json:"gastos"`
-	Resultado      float64 `json:"resultado"`
+	// Envios es el flete cobrado en los pedidos del período, sin IVA. Es
+	// ingreso: los fletes pagados restan como gasto, y dejar afuera los
+	// cobrados hacía que el resultado no contara $ 176 mil del mes y que
+	// Reportes no cuadrara con el inicio sin decir por qué (simulación del
+	// mes, H360).
+	Envios    float64 `json:"envios"`
+	Resultado float64 `json:"resultado"`
 	// LineasSinCosto: cuántos renglones forman VentasSinCosto.
 	LineasSinCosto int `json:"lineasSinCosto"`
 	// ConDescuento: la regla del negocio resta el descuento del pedido de
@@ -505,7 +511,7 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 // se les resta el descuento del pedido (prorrateado en sus renglones).
 func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, dhasta time.Time) (Resultado, error) {
 	var r Resultado
-	var neto, sinCosto, costo, gastos jsmath.Num
+	var neto, sinCosto, costo, gastos, envios jsmath.Num
 	sinIva := s.ajuste(ctx, "ganancia_gastos", "con_iva") == "sin_iva"
 	r.ConDescuento = s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	gasto := "e.importe"
@@ -518,19 +524,24 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 		  `+ventasNetas(r.ConDescuento, "(margenes.neto - coalesce(margenes.neto_costeado, 0))")+`,
 		  coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
 		  (SELECT coalesce(sum(`+gasto+`), 0) FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
-		   WHERE e.fecha >= $3 AND e.fecha < $4)
+		   WHERE e.fecha >= $3 AND e.fecha < $4),
+		  coalesce(sum(`+envioSinIva+`) FILTER (WHERE o.operaciones = 1), 0)
 		FROM `+hechosDeVenta+` o `+margenesDe(delPeriodo)+`
 		WHERE `+delPeriodo, idesde, ihasta, ddesde, dhasta).
-		Scan(&neto, &sinCosto, &costo, &r.LineasSinCosto, &gastos)
+		Scan(&neto, &sinCosto, &costo, &r.LineasSinCosto, &gastos, &envios)
 	if err != nil {
 		return r, err
 	}
 	r.VentasNetas, r.VentasSinCosto = jsmath.Redondear2(neto.F()), jsmath.Redondear2(sinCosto.F())
 	r.Costo, r.Gastos = jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
-	r.Resultado = jsmath.Redondear2(float64(float64(r.VentasNetas-r.VentasSinCosto)-r.Costo) - r.Gastos)
+	r.Envios = jsmath.Redondear2(envios.F())
+	r.Resultado = jsmath.Redondear2(float64(float64(float64(r.VentasNetas-r.VentasSinCosto)-r.Costo)-r.Gastos) + r.Envios)
 	r.SinCostosCargados = r.VentasNetas > 0 && r.VentasSinCosto > float64(r.VentasNetas*UmbralSinCostos)
 	return r, nil
 }
+
+// envioSinIva es el flete cobrado de la fila `o`, sin el IVA (21 %).
+const envioSinIva = `coalesce(o.costo_envio, 0) / 1.21`
 
 // ventasNetas suma `neto` (una expresión sobre margenes) de los pedidos `o`,
 // con el descuento del pedido prorrateado si la regla lo pide. La usan el

@@ -237,6 +237,10 @@ type TotalesDelReporte struct {
 	LineasSinCosto float64  `json:"lineasSinCosto"`
 	// Filas es cuántas tiene el corte entero; la lista trae hasta 50.
 	Filas int `json:"filas"`
+	// Envios es el flete cobrado del período, con IVA: los cortes por
+	// renglón no lo llevan, y es la diferencia con «Vendido con IVA» del
+	// inicio (H138).
+	Envios float64 `json:"envios"`
 }
 
 // MargenDelTotal es NetoCosteado − Costo; nil si nada tiene costo.
@@ -257,11 +261,11 @@ func porRenglon(corte string) bool {
 // corte (las listas con tope cuentan las suyas aparte).
 func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, args []any) (TotalesDelReporte, error) {
 	var t TotalesDelReporte
-	var total, cantidad, neto, costeado jsmath.Num
+	var total, cantidad, neto, costeado, envios jsmath.Num
 	var costo *jsmath.Num
 	var sinCosto int
 	grupo := map[string]string{
-		"producto": "coalesce(p.id::text, oi.descripcion)",
+		"producto": "coalesce(v.id::text, p.id::text, oi.descripcion)",
 		"rubro":    "coalesce(c.id::text, 'sin-categoria')",
 	}[corte]
 	filas := "0"
@@ -280,13 +284,15 @@ func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, a
 	}
 	err := s.pool.QueryRow(ctx, `
 		SELECT `+montos+`, `+cuantos+`, coalesce(sum(margenes.neto), 0), sum(margenes.costo),
-		       coalesce(sum(margenes.sin_costo), 0)::int, coalesce(sum(margenes.neto_costeado), 0), `+filas+`::int
+		       coalesce(sum(margenes.sin_costo), 0)::int, coalesce(sum(margenes.neto_costeado), 0), `+filas+`::int,
+		       coalesce(sum(o.costo_envio) FILTER (WHERE o.operaciones = 1), 0)
 		FROM `+hechosDeVenta+` o `+margenesDe(where)+` WHERE `+where, args...).
-		Scan(&total, &cantidad, &neto, &costo, &sinCosto, &costeado, &t.Filas)
+		Scan(&total, &cantidad, &neto, &costo, &sinCosto, &costeado, &t.Filas, &envios)
 	if err != nil {
 		return t, err
 	}
 	t.Total, t.Cantidad, t.NetoVenta, t.NetoCosteado, t.LineasSinCosto = total.F(), cantidad.F(), neto.F(), costeado.F(), float64(sinCosto)
+	t.Envios = envios.F()
 	if costo != nil {
 		c := costo.F()
 		t.Costo = &c
@@ -363,13 +369,16 @@ func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args 
 			FROM `+hechosDeVenta+` o `+margenesDe(where)+`
 			WHERE `+where+` GROUP BY o.origen ORDER BY sum(o.monto) DESC`, args, false)
 	}
+	// Una fila por variante (la medida): juntas por producto y con la medida
+	// de una sola, «MDF 3mm · 18» incluía las de 18 mm y «Placa de Yeso RH»
+	// las estándar (simulación del mes, H163).
 	return s.filas(ctx, `
-		SELECT coalesce(p.id::text, oi.descripcion), coalesce(p.name, oi.descripcion), max(v.label),
+		SELECT coalesce(v.id::text, p.id::text, oi.descripcion), coalesce(p.name, oi.descripcion), v.label,
 		       sum(oi.cantidad), sum(oi.subtotal), `+margenPorRenglon+`
 		FROM `+deLosRenglones+`
 		LEFT JOIN product_variants v ON v.id = oi.variant_id
 		LEFT JOIN products p ON p.id = v.product_id
-		WHERE `+where+` GROUP BY 1, 2 ORDER BY sum(oi.subtotal) DESC LIMIT 50`, args, false)
+		WHERE `+where+` GROUP BY 1, 2, 3 ORDER BY sum(oi.subtotal) DESC LIMIT 50`, args, false)
 }
 
 // VentasPorMes es ventasPorMes: lo vendido mes a mes (meses argentinos) con

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Download } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
-import { libroIvaVentas } from "@/lib/dal/admin/facturacion";
-import { fechaCorta, formatearCuit, moneda } from "@/lib/formato";
+import { libroIvaVentas, listarComprobantesPagina } from "@/lib/dal/admin/facturacion";
+import { fechaCorta, formatearCuit, moneda, plural } from "@/lib/formato";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { nombreComprobante, numeroFormateado } from "@/lib/fiscal/comprobantes";
@@ -36,9 +36,18 @@ export default async function LibroIvaPage({
 
   // El mes lo corta Go en hora argentina (una factura de las 22 del último
   // día es de ese mes, no del siguiente).
-  const libro = await libroIvaVentas(`${anio}-${String(mes).padStart(2, "0")}`);
-
   const actual = `${anio}-${String(mes).padStart(2, "0")}`;
+  // Lo emitido en el mes que espera el CAE no entra al libro: se cuenta y se
+  // lleva a Facturación. Antes decía «No hay comprobantes emitidos» con 133
+  // emitidos sin CAE (simulación del mes, H421).
+  const desde = new Date(`${actual}-01T00:00:00-03:00`);
+  const hasta = new Date(new Date(`${anio + (mes === 12 ? 1 : 0)}-${String((mes % 12) + 1).padStart(2, "0")}-01T00:00:00-03:00`).getTime() - 1);
+  const [libro, sinCae, rechazados] = await Promise.all([
+    libroIvaVentas(actual),
+    listarComprobantesPagina({ estado: "emitida", desde, hasta }, 1, 1),
+    listarComprobantesPagina({ estado: "rechazada", desde, hasta }, 1, 1),
+  ]);
+  const sinAutorizar = sinCae.total + rechazados.total;
 
   return (
     <div className="space-y-5">
@@ -74,12 +83,20 @@ export default async function LibroIvaPage({
           <Download className="h-5 w-5" />
           Libro IVA Digital
         </a>
+        {sinAutorizar > 0 && (
+          <Link
+            href="/admin/facturacion?estado=emitida"
+            className="tarjeta-atencion inline-flex h-10 items-center rounded-lg px-3.5 text-base font-medium"
+          >
+            {plural(sinAutorizar, "comprobante")} sin CAE
+          </Link>
+        )}
       </EncabezadoPanel>
 
       {libro.filas.length === 0 ? (
         <section className="tarjeta px-6 py-14 text-center">
           <p className="text-base text-muted-foreground">
-            No hay comprobantes emitidos en {MESES[mes - 1]} de {anio}.
+            Sin comprobantes autorizados en {MESES[mes - 1]} de {anio}.
           </p>
         </section>
       ) : (

@@ -68,6 +68,7 @@ func (o respuesta) VisitGuardarClienteResponse(w http.ResponseWriter) error     
 func (o respuesta) VisitFichaDeClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitBloquearCuentaResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCobrarAClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitCajaDelCobroACuentaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCreditoDeClienteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitVincularCuentaWebResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitHistorialDeClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
@@ -271,6 +272,29 @@ func (a *API) CobrarACliente(ctx context.Context, r cuentasapi.CobrarAClienteReq
 	}
 	v, err := a.cobros.CobrarAClienteEn(ctx, ses, r.Id, texto(r.Body.OrderId), texto(r.Body.Concepto), r.Body.Partes, texto(r.Body.Clave), texto(r.Body.BranchId))
 	return ok(v), err
+}
+
+// CajaDelCobroACuenta: lo que contestaría el cobro en efectivo desde la
+// ficha, antes de cobrar (quien mueve plata, como el cobro).
+func (a *API) CajaDelCobroACuenta(ctx context.Context, _ cuentasapi.CajaDelCobroACuentaRequestObject) (cuentasapi.CajaDelCobroACuentaResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	falta, err := a.cobros.CajaDelCobroACuenta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if falta != nil {
+		if falta.Sucursal != "" {
+			out["sinCaja"] = falta.Sucursal
+			out["fondoBase"] = falta.FondoBase
+		}
+		if len(falta.Sucursales) > 0 {
+			out["sucursales"] = falta.Sucursales
+		}
+	}
+	return ok(out), nil
 }
 
 // AnularRecibo: quien mueve plata (roles.ManejanPlata), como el cobro.

@@ -22,6 +22,11 @@ func TestElEfectivoSinCajaAbiertaNoSeCobraDesdeLaFicha(t *testing.T) {
 	ses := &auth.Sesion{UserID: "admin", Rol: sqlc.UserRoleStaff, RolStaff: &admin}
 	s := Nuevo(b.pool, silencio)
 
+	// El diálogo lo sabe al abrirse, antes de registrar nada.
+	if falta, err := s.CajaDelCobroACuenta(ctx); err != nil || falta == nil || len(falta.Sucursales) == 0 {
+		t.Fatalf("al abrir el cobro no dijo qué caja abrir: %v %v", falta, err)
+	}
+
 	_, err := s.CobrarAClienteEn(ctx, ses, b.cliente, "", "", `[{"medio":"transferencia","importe":"1000"},{"medio":"efectivo","importe":"300"}]`, "c-1", "")
 	var p *plataforma.Problema
 	if !errors.As(err, &p) || p.Errores["sinCaja"] == "" && p.Errores["sucursales"] == "" {
@@ -36,6 +41,9 @@ func TestElEfectivoSinCajaAbiertaNoSeCobraDesdeLaFicha(t *testing.T) {
 	// Con la caja abierta, el mismo cobro sale y el efectivo entra al turno.
 	var turno string
 	_ = b.pool.QueryRow(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, 'admin', now()) returning id`, b.sucursal).Scan(&turno)
+	if falta, err := s.CajaDelCobroACuenta(ctx); err != nil || falta != nil {
+		t.Fatalf("con la única caja abierta pidió abrir otra: %v %v", falta, err)
+	}
 	r, err := s.CobrarAClienteEn(ctx, ses, b.cliente, "", "", `[{"medio":"transferencia","importe":"1000"},{"medio":"efectivo","importe":"300"}]`, "c-1", b.sucursal)
 	if err != nil {
 		t.Fatal(err)

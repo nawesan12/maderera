@@ -115,8 +115,12 @@ export async function cobrarPedido(_previo: EstadoCobro, formData: FormData): Pr
  * entre cuáles elegir. El diálogo lo pide al abrirse: la elección aparecía
  * recién después del primer «Registrar» (mes simulado).
  */
-export async function cajaDelCobro(pedidoId: string): Promise<Pick<EstadoCobro, "sinCaja" | "fondoBase" | "sucursales">> {
-  const r = await (await api()).GET("/api/v1/admin/pedidos/{id}/cobro", { params: { path: { id: pedidoId } } });
+export async function cajaDelCobro(pedidoId: string | null): Promise<Pick<EstadoCobro, "sinCaja" | "fondoBase" | "sucursales">> {
+  // Sin pedido (el cobro a cuenta desde la ficha), la regla del cobro sin
+  // sucursal: la única caja abierta, o elegir (H132).
+  const r = pedidoId
+    ? await (await api()).GET("/api/v1/admin/pedidos/{id}/cobro", { params: { path: { id: pedidoId } } })
+    : await (await api()).GET("/api/v1/admin/cobros/caja");
   if (!r.data) return {};
   return { sinCaja: r.data.sinCaja, fondoBase: r.data.fondoBase, sucursales: r.data.sucursales };
 }

@@ -108,9 +108,9 @@ export function DialogoCobro({
       setPrevia({});
     }
   }
-  const pedidoId = pedido?.id;
+  const pedidoId = pedido?.id ?? orderId ?? null;
   useEffect(() => {
-    if (!abierto || !pedidoId) return;
+    if (!abierto) return;
     let vigente = true;
     cajaDelCobro(pedidoId).then(
       (r) => vigente && setPrevia(r),

@@ -182,6 +182,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cobros/caja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Si el efectivo de un cobro a cuenta (sin pedido) tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro) */
+        get: operations["CajaDelCobroACuenta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/recibos/{id}/anular": {
         parameters: {
             query?: never;
@@ -1150,6 +1167,40 @@ export interface operations {
         responses: {
             200: components["responses"]["Ok"];
             422: components["responses"]["Problema"];
+        };
+    };
+    CajaDelCobroACuenta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vacío si hay caja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description la sucursal cuya caja hay que abrir */
+                        sinCaja?: string;
+                        /** Format: double */
+                        fondoBase?: number;
+                        sucursales?: {
+                            id: string;
+                            nombre: string;
+                            abierta: boolean;
+                            /** Format: double */
+                            fondo: number;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
         };
     };
     AnularRecibo: {

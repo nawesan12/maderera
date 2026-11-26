@@ -221,6 +221,25 @@ func (s *Servicio) CajaDelCobro(ctx context.Context, pedido string) (*ErrSinCaja
 	return falta, err
 }
 
+// CajaDelCobroACuenta es lo mismo para el cobro desde la ficha, sin pedido:
+// la regla de CobrarAClienteEn sin sucursal (la única caja abierta, o
+// elegir). El diálogo de la ficha lo muestra al abrirse, como el del pedido
+// (mes simulado, H132: sin caja, el aviso aparecía recién al registrar).
+func (s *Servicio) CajaDelCobroACuenta(ctx context.Context) (*ErrSinCaja, error) {
+	var falta *ErrSinCaja
+	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		turno, err := turnoDelPedido(ctx, s.q.WithTx(tx), nil)
+		if err != nil || turno != "" {
+			return err
+		}
+		if err := sinCaja(ctx, tx, nil); !errors.As(err, &falta) {
+			return err
+		}
+		return nil
+	})
+	return falta, err
+}
+
 func hayEfectivo(partes []Parte) bool {
 	for _, p := range partes {
 		if p.Medio == "efectivo" {

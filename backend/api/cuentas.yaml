@@ -190,6 +190,32 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cobros/caja:
+    get:
+      operationId: CajaDelCobroACuenta
+      summary: Si el efectivo de un cobro a cuenta (sin pedido) tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro)
+      responses:
+        "200":
+          description: Vacío si hay caja
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sinCaja: { type: string, description: la sucursal cuya caja hay que abrir }
+                  fondoBase: { type: number, format: double }
+                  sucursales:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, nombre, abierta, fondo]
+                      properties:
+                        id: { type: string }
+                        nombre: { type: string }
+                        abierta: { type: boolean }
+                        fondo: { type: number, format: double }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/recibos/{id}/anular:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

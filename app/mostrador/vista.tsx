@@ -126,7 +126,10 @@ export function VistaMostrador({
   promos,
   escalasDePago,
   corteACobrar = null,
+  reglas = REGLAS_DE_ARRANQUE,
 }: {
+  /** Las reglas del negocio que cambian la cuenta de la pantalla (/admin/reglas), las mismas que lee Go. */
+  reglas?: ReglasDelMostrador;
   /**
    * `administraCaja`: si puede dar de alta terminales (/admin/caja).
    * `factura`: si entra a Facturación; si no, el «Facturar» de la venta
@@ -472,9 +475,10 @@ export function VistaMostrador({
   // La base es lo del catálogo y el corte: un renglón a mano (el flete) va al
   // precio tipeado, como en Go (`EsElegibleParaLaEscala`; H168).
   const partidoEnMedios = partes !== null && partes.some((p) => p.medio !== medio);
+  // Con la regla descuento_al_flete en «si», el renglón a mano también entra.
   const baseEscala = useMemo(
-    () => totalDeLaVenta(lineas.filter((l) => l.variantId || l.corteId)),
-    [lineas],
+    () => totalDeLaVenta(lineas.filter((l) => reglas.descuentoAlFlete || l.variantId || l.corteId)),
+    [lineas, reglas.descuentoAlFlete],
   );
   const escalaDePago = useMemo(() => {
     const unSoloMedio =
@@ -573,8 +577,8 @@ export function VistaMostrador({
     !(partes !== null && Math.abs(restanteDePartes) > 0.01) &&
     // La tarjeta, con lote y cupón: sin ellos no se concilia con el posnet
     // (mes simulado, H032). Sin conexión se cobra igual.
-    !(conexion.enLinea && partes === null && (medio === "debito" || medio === "credito") && (!tarjeta.nroLote.trim() || !tarjeta.nroCupon.trim())) &&
-    !(conexion.enLinea && (partes?.some((p) => (p.medio === "debito" || p.medio === "credito") && importeDelCampo(p.importe) > 0 && (!p.nroLote.trim() || !p.nroCupon.trim())) ?? false)) &&
+    !(reglas.loteObligatorio && conexion.enLinea && partes === null && (medio === "debito" || medio === "credito") && (!tarjeta.nroLote.trim() || !tarjeta.nroCupon.trim())) &&
+    !(reglas.loteObligatorio && conexion.enLinea && (partes?.some((p) => (p.medio === "debito" || p.medio === "credito") && importeDelCampo(p.importe) > 0 && (!p.nroLote.trim() || !p.nroCupon.trim())) ?? false)) &&
     // El cheque se cobra con sus datos: sin número no se lo encuentra en el banco.
     !(partes === null && medio === "cheque" && revisarChequeDePago(aChequeDePago(cheque)) !== null) &&
     !(partes?.some((p) => p.medio === "cheque" && revisarChequeDePago(aChequeDePago(p.cheque)) !== null) ?? false);
@@ -923,8 +927,12 @@ export function VistaMostrador({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claveDeVentaja, conexion.enLinea]);
   // Sin renglones todavía, o sin saber, se aplica la regla: es de contado.
+  // Con la regla contado_por_lista en «siempre», la lista propia es de contado
+  // aunque no dé ventaja.
   const listaDeContado =
-    conListaPropia && !aLista && !(ventajaDeLista?.clave === claveDeVentaja && !ventajaDeLista.hay && idsDeLaVenta.length > 0);
+    conListaPropia &&
+    !aLista &&
+    (reglas.contadoSiempre || !(ventajaDeLista?.clave === claveDeVentaja && !ventajaDeLista.hay && idsDeLaVenta.length > 0));
 
   /** Pasa la venta a la lista general (y vuelve), con los precios de esa lista. */
   async function alternarALista() {
@@ -1337,6 +1345,7 @@ export function VistaMostrador({
               buscarClienteLocal={buscarClienteLocal}
               sinFicha={cliente ? null : presupuesto?.contacto}
               listaDeContado={listaDeContado}
+              loteObligatorio={reglas.loteObligatorio}
               aLista={aLista}
               onALista={conListaPropia ? () => void alternarALista() : undefined}
               subtotal={subtotal}
@@ -1560,3 +1569,15 @@ export function VistaMostrador({
     </>
   );
 }
+
+/** Las reglas de /admin/reglas que cambian lo que calcula el mostrador. */
+export interface ReglasDelMostrador {
+  /** contado_por_lista = «siempre». */
+  contadoSiempre: boolean;
+  /** descuento_al_flete = «si». */
+  descuentoAlFlete: boolean;
+  /** lote_y_cupon = «obligatorio». */
+  loteObligatorio: boolean;
+}
+
+const REGLAS_DE_ARRANQUE: ReglasDelMostrador = { contadoSiempre: false, descuentoAlFlete: false, loteObligatorio: true };

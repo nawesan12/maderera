@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { promosVigentes } from "@/lib/dal/contenido";
+import { ajustesDelSitio, promosVigentes } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { redirect } from "next/navigation";
@@ -65,7 +66,7 @@ export default async function MostradorPage({
    * sabe si el cliente compra con precio de profesional, que es de contado) y
    * el cambio que tiene que quedar en el cajón: todo de Go, en un pedido.
    */
-  const [pantalla, tarifas, promos, sierra, escalas] = await Promise.all([
+  const [pantalla, tarifas, promos, sierra, escalas, ajustes] = await Promise.all([
     (async () =>
       datos(
         await (await api()).GET("/api/v1/mostrador/pantalla", {
@@ -84,6 +85,8 @@ export default async function MostradorPage({
     // El descuento por forma de pago, para que el total de la pantalla sea
     // el que va a registrar el servidor.
     escalasDePago(),
+    // Las reglas que cambian la cuenta (/admin/reglas): las mismas que lee Go.
+    ajustesDelSitio(),
   ]);
   const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct, ultimoContado } = pantalla;
 
@@ -159,6 +162,11 @@ export default async function MostradorPage({
       escalasDePago={escalas}
       ventas={ventas}
       corteACobrar={corteACobrar}
+      reglas={{
+        contadoSiempre: valorDeRegla(ajustes, "contado_por_lista") === "siempre",
+        descuentoAlFlete: valorDeRegla(ajustes, "descuento_al_flete") === "si",
+        loteObligatorio: valorDeRegla(ajustes, "lote_y_cupon") === "obligatorio",
+      }}
     />
   );
 }

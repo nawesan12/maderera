@@ -650,12 +650,13 @@ components:
         quien: { type: string, nullable: true }
     MostradorVentaDeHoy:
       type: object
-      required: [id, numero, cliente, total, medioPago, medios, conFactura, estado, createdAt]
+      required: [id, numero, cliente, total, devuelto, medioPago, medios, conFactura, estado, createdAt]
       properties:
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
         total: { type: number, format: double }
+        devuelto: { type: number, format: double, description: "lo que se devolvió en devoluciones parciales" }
         medioPago: { type: string, nullable: true }
         medios: { type: array, items: { type: string }, description: "todos los medios de un pago partido, del más grande al más chico" }
         conFactura: { type: boolean, description: "tiene factura viva: se puede devolver una parte" }

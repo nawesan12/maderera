@@ -101,6 +101,7 @@ export function VentasDeHoy({
       <ul className="mt-2 divide-y divide-linea">
         {ventas.map((v) => {
           const anulada = v.estado === "cancelado";
+          const devuelto = v.devuelto ?? 0;
           return (
             <li key={v.id} className="flex items-center gap-3 py-2.5">
               <span className="min-w-0 flex-1">
@@ -123,10 +124,19 @@ export function VentasDeHoy({
                 </span>
               </span>
 
-              <span
-                className={`tabular shrink-0 font-semibold ${anulada ? "text-muted-foreground line-through" : ""}`}
-              >
-                {formatearImporte(v.total)}
+              {/* Con una devolución parcial vale lo que quedó, y abajo, lo
+                  devuelto: el total original solo no decía nada (PED-1202). */}
+              <span className="shrink-0 text-right">
+                <span
+                  className={`tabular block font-semibold ${anulada ? "text-muted-foreground line-through" : ""}`}
+                >
+                  {formatearImporte(devuelto > 0 && !anulada ? v.total - devuelto : v.total)}
+                </span>
+                {devuelto > 0 && !anulada && (
+                  <span className="tabular estado-espera block text-sm text-[var(--estado-tinta)]">
+                    −{formatearImporte(devuelto)} devuelto
+                  </span>
+                )}
               </span>
 
               <Link

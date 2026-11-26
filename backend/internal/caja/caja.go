@@ -189,10 +189,13 @@ func FondoBase(ctx context.Context, c Consultador, sucursal string) (float64, er
 
 // VentaDeHoy es una venta de mostrador del día.
 type VentaDeHoy struct {
-	ID        string  `json:"id"`
-	Numero    string  `json:"numero"`
-	Cliente   string  `json:"cliente"`
-	Total     float64 `json:"total"`
+	ID      string  `json:"id"`
+	Numero  string  `json:"numero"`
+	Cliente string  `json:"cliente"`
+	Total   float64 `json:"total"`
+	// Devuelto es lo de las devoluciones parciales: la venta seguía diciendo
+	// el total original, sin ninguna marca (mes simulado, PED-1202).
+	Devuelto  float64 `json:"devuelto"`
 	MedioPago *string `json:"medioPago"`
 	// Medios son todos los de un pago partido, del más grande al más chico:
 	// «Efectivo + Débito» y no solo el principal (mes simulado, H025).
@@ -223,7 +226,9 @@ func InicioDelDia(ahora time.Time) time.Time {
 // now()) en la zona de la conexión.
 func VentasDeHoy(ctx context.Context, c Consultador, sucursal string, ahora time.Time) ([]VentaDeHoy, error) {
 	filas, err := c.Query(ctx, `
-		SELECT id, numero, contacto_nombre, total, medio_pago::text,
+		SELECT id, numero, contacto_nombre, total,
+		       coalesce((SELECT sum(d.importe) FROM devoluciones d WHERE d.order_id = orders.id), 0),
+		       medio_pago::text,
 		       coalesce((SELECT array_agg(p.medio::text ORDER BY p.importe DESC) FROM order_payments p WHERE p.order_id = orders.id), '{}'),
 		       EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = orders.id AND i.tipo::text NOT LIKE 'nota%' AND i.estado <> 'anulada'),
 		       estado::text, created_at
@@ -237,11 +242,11 @@ func VentasDeHoy(ctx context.Context, c Consultador, sucursal string, ahora time
 	out := []VentaDeHoy{}
 	for filas.Next() {
 		var v VentaDeHoy
-		var total jsmath.Num
-		if err := filas.Scan(&v.ID, &v.Numero, &v.Cliente, &total, &v.MedioPago, &v.Medios, &v.ConFactura, &v.Estado, &v.CreatedAt); err != nil {
+		var total, devuelto jsmath.Num
+		if err := filas.Scan(&v.ID, &v.Numero, &v.Cliente, &total, &devuelto, &v.MedioPago, &v.Medios, &v.ConFactura, &v.Estado, &v.CreatedAt); err != nil {
 			return nil, err
 		}
-		v.Total = total.F()
+		v.Total, v.Devuelto = total.F(), devuelto.F()
 		out = append(out, v)
 	}
 	return out, filas.Err()

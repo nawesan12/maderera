@@ -554,6 +554,11 @@ export interface components {
             cliente: string;
             /** Format: double */
             total: number;
+            /**
+             * Format: double
+             * @description lo que se devolvió en devoluciones parciales
+             */
+            devuelto: number;
             medioPago: string | null;
             /** @description todos los medios de un pago partido, del más grande al más chico */
             medios: string[];

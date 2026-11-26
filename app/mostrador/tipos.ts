@@ -40,6 +40,8 @@ export interface VentaDeHoy {
   numero: string;
   cliente: string;
   total: number;
+  /** Lo devuelto en devoluciones parciales. */
+  devuelto?: number;
   medioPago: string | null;
   /** Todos los medios de un pago partido. */
   medios?: string[];

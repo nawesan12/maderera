@@ -376,9 +376,13 @@ export function Devolucion({
             Devolver
           </button>
         )}
-        <button type="button" onClick={alCancelar} className="h-11 rounded-lg bg-hundida px-4 text-base">
-          Cancelar
-        </button>
+        {/* Con el PIN pedido, su X vuelve atrás: «Cancelar» quedaba solo en
+            un renglón abajo del campo. */}
+        {!pidePin && (
+          <button type="button" onClick={alCancelar} className="h-11 rounded-lg bg-hundida px-4 text-base">
+            Cancelar
+          </button>
+        )}
       </div>
     </form>
   );

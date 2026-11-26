@@ -484,11 +484,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [saldo, limiteCredito, disponible, movimientos]
+                required: [saldo, limiteCredito, disponible, movimientos, sinEntregar]
                 properties:
                   saldo: { type: number, format: double }
                   limiteCredito: { type: number, format: double }
                   disponible: { type: number, format: double }
+                  sinEntregar: { type: number, format: double }
                   movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelResumen" } }
         "401": { $ref: "#/components/responses/Problema" }
   /api/v1/cuenta/movimientos:
@@ -740,7 +741,8 @@ components:
           nullable: true
           required: [id, numero, anulado, porMercadoPago]
           properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean },
-            porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel } }
+            porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel },
+            chequeRechazado: { type: boolean } }
     Historial:
       type: object
       required: [movimientos, hayMas, saldo]
@@ -758,6 +760,7 @@ components:
         detalle: { type: string, nullable: true }
         referencia: { type: string, nullable: true }
         receiptId: { type: string, nullable: true }
+        reciboNumero: { type: string, nullable: true }
         monto: { type: number, format: double }
         saldo: { type: number, format: double }
     Tramo:

@@ -511,7 +511,25 @@ func (a *API) MiCuentaCorriente(ctx context.Context, _ cuentasapi.MiCuentaCorrie
 		return ok(cobros.CuentaCorriente{Movimientos: []cobros.MovimientoDelResumen{}}), nil
 	}
 	v, err := cobros.DelCliente(ctx, a.pool, c.id, c.limite)
-	return ok(v), err
+	if err != nil {
+		return nil, err
+	}
+	// Lo cargado a la cuenta de pedidos que todavía no se entregaron: la
+	// deuda nace con el pedido (así se reserva el crédito), y el cliente veía
+	// una deuda sin comprobante (H082). Se distingue, no se descuenta.
+	var sinEntregar float64
+	if err := a.pool.QueryRow(ctx, `SELECT coalesce(sum(m.monto), 0)::float8 FROM account_movements m
+		JOIN orders o ON o.numero = m.referencia AND o.customer_id = m.customer_id
+		WHERE m.customer_id = $1 AND m.tipo = 'compra' AND o.estado NOT IN ('entregado', 'cancelado')
+		  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.estado <> 'borrador')`, c.id).Scan(&sinEntregar); err != nil {
+		return nil, err
+	}
+	return ok(miCuenta{v, sinEntregar}), nil
+}
+
+type miCuenta struct {
+	cobros.CuentaCorriente
+	SinEntregar float64 `json:"sinEntregar"`
 }
 
 func (a *API) MisMovimientos(ctx context.Context, r cuentasapi.MisMovimientosRequestObject) (cuentasapi.MisMovimientosResponseObject, error) {
@@ -523,6 +541,7 @@ func (a *API) MisMovimientos(ctx context.Context, r cuentasapi.MisMovimientosReq
 		return ok(historial{Movimientos: []cobros.MovimientoDelCliente{}}), nil
 	}
 	h, err := a.historial(ctx, c.id, (*string)(r.Params.Periodo), r.Params.Filtro)
+	h.Movimientos = cobros.HistorialParaElCliente(h.Movimientos)
 	return ok(h), err
 }
 

@@ -143,6 +143,10 @@ type MovimientoDelResumen struct {
 	ReceiptID  *string   `json:"receiptId"`
 	Monto      float64   `json:"monto"`
 	Saldo      float64   `json:"saldo"`
+	// ReciboNumero es el número del recibo de ReceiptID: la referencia de
+	// una nota de débito por un cheque rechazado es el número del cheque, y
+	// el portal decía «Recibo 55500321» (H303).
+	ReciboNumero *string `json:"reciboNumero,omitempty"`
 }
 
 // ClienteDelResumen es el encabezado del resumen.
@@ -186,6 +190,7 @@ func Resumen(ctx context.Context, pool *pgxpool.Pool, cliente string, hoy time.T
 	r.Movimientos, err = pgx.CollectRows(filas, func(f pgx.CollectableRow) (MovimientoDelResumen, error) {
 		var m MovimientoDelResumen
 		err := f.Scan(&m.ID, &m.Fecha, &m.Tipo, &m.Detalle, &m.Referencia, &m.ReceiptID, &m.Monto)
+		m.Detalle = DetalleParaElCliente(m.Detalle)
 		acumulado += m.Monto
 		m.Saldo = redondear2(acumulado)
 		return m, err
@@ -215,14 +220,15 @@ type CuentaCorriente struct {
 // DelCliente es la cuenta corriente para el portal.
 func DelCliente(ctx context.Context, pool *pgxpool.Pool, cliente string, limite float64) (CuentaCorriente, error) {
 	c := CuentaCorriente{LimiteCredito: limite, Movimientos: []MovimientoDelResumen{}}
-	filas, err := pool.Query(ctx, `SELECT id, created_at, tipo::text, detalle, referencia, receipt_id, monto::float8
-		FROM account_movements WHERE customer_id = $1 ORDER BY created_at`, cliente)
+	filas, err := pool.Query(ctx, `SELECT m.id, m.created_at, m.tipo::text, m.detalle, m.referencia, m.receipt_id, m.monto::float8, r.numero
+		FROM account_movements m LEFT JOIN receipts r ON r.id = m.receipt_id WHERE m.customer_id = $1 ORDER BY m.created_at`, cliente)
 	if err != nil {
 		return c, err
 	}
 	movs, err := pgx.CollectRows(filas, func(f pgx.CollectableRow) (MovimientoDelResumen, error) {
 		var m MovimientoDelResumen
-		err := f.Scan(&m.ID, &m.Fecha, &m.Tipo, &m.Detalle, &m.Referencia, &m.ReceiptID, &m.Monto)
+		err := f.Scan(&m.ID, &m.Fecha, &m.Tipo, &m.Detalle, &m.Referencia, &m.ReceiptID, &m.Monto, &m.ReciboNumero)
+		m.Detalle = DetalleParaElCliente(m.Detalle)
 		c.Saldo += m.Monto
 		m.Saldo = c.Saldo
 		return m, err

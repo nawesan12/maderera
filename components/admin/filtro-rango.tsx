@@ -79,6 +79,19 @@ function aIso(texto: string): string | null {
 }
 
 /**
+ * Los dígitos hasta el primero que hace imposible la fecha: un día después
+ * del 31 o un mes después del 12 no se llegan a escribir. Antes
+ * «31/13/2026» quedaba escrito y no filtraba (simulación del mes).
+ */
+function sinImposibles(digitos: string): string {
+  const dia = Number(digitos.slice(0, 2));
+  if (digitos.length >= 2 && (dia < 1 || dia > 31)) return digitos.slice(0, 1);
+  const mes = Number(digitos.slice(2, 4));
+  if (digitos.length >= 4 && (mes < 1 || mes > 12)) return digitos.slice(0, 3);
+  return digitos;
+}
+
+/**
  * Una fecha escrita como se escribe acá, dd/mm/aaaa.
  *
  * El `<input type="date">` la muestra en el formato del navegador: en uno en
@@ -128,7 +141,7 @@ function CampoFecha({
         aria-invalid={(marcar && invalido) || undefined}
         onChange={(e) => {
           setMarcar(false);
-          const digitos = e.target.value.replace(/\D/g, "").slice(0, 8);
+          const digitos = sinImposibles(e.target.value.replace(/\D/g, "").slice(0, 8));
           const partes = [digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4)].filter(Boolean);
           setTexto(partes.join("/"));
         }}
@@ -140,7 +153,11 @@ function CampoFecha({
           aplicar();
           if (invalido) e.currentTarget.select();
         }}
-        className="tabular h-10 w-[8.5rem] rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50 aria-[invalid]:border-[var(--estado-tinta)] aria-[invalid]:bg-[var(--estado-fondo)] aria-[invalid]:text-[var(--estado-tinta)] aria-[invalid]:ring-2 aria-[invalid]:ring-[var(--estado-tinta)]/30 estado-problema"
+        // La familia del problema va solo con la fecha marcada: también pinta
+        // el texto, y puesta siempre dejaba toda fecha en rojo.
+        className={`tabular h-10 w-[8.5rem] rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50 aria-[invalid]:border-[var(--estado-tinta)] aria-[invalid]:bg-[var(--estado-fondo)] aria-[invalid]:text-[var(--estado-tinta)] aria-[invalid]:ring-2 aria-[invalid]:ring-[var(--estado-tinta)]/30 ${
+          marcar && invalido ? "estado-problema" : ""
+        }`}
       />
     </label>
   );

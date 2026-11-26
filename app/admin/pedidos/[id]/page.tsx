@@ -497,7 +497,9 @@ export default async function FichaPedidoPage({
                   <dd className="tabular">{moneda.format(pedido.cobrado)}</dd>
                 </div>
               )}
-              {pedido.sinCobrar != null && !cancelado ? (
+              {/* Cancelado no se cobra: ni «Falta cobrar» ni «Sin cobrar»
+                  (mes simulado, H281). Lo cobrado, si hubo, sigue arriba. */}
+              {cancelado ? null : pedido.sinCobrar != null ? (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Falta cobrar</dt>
                   <dd className="tabular estado-problema font-semibold">{moneda.format(pedido.sinCobrar)}</dd>

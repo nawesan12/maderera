@@ -5,8 +5,8 @@ import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { variantesParaPedir } from "@/lib/dal/admin/recepciones";
 import { sucursalesParaGasto } from "@/lib/dal/admin/gastos";
-import { importeParaElCampo } from "@/lib/formato";
 import { FormularioOrden } from "./formulario";
+import { costoPropuesto } from "../costos";
 
 export const metadata: Metadata = { title: "Nueva orden de compra" };
 
@@ -51,8 +51,9 @@ export default async function NuevaOrdenPage({
         variantId: v.variantId,
         descripcion: [v.producto, v.variante].filter(Boolean).join(" "),
         cantidad: String(p.cantidad),
-        costoUnitario: importeParaElCampo(v.costoActual),
+        costoUnitario: costoPropuesto(v.costoActual),
         alicuotaIva: v.alicuotaIva,
+        ultimo: v.costoActual ? Number(v.costoActual) : null,
       },
     ];
   });

@@ -44,18 +44,21 @@ export function CreditoDelCliente({
           <label htmlFor={`plazo-${customerId}`} className="text-base">
             Paga a
           </label>
+          {/* Texto con teclado numérico y no `type=number`, como los campos
+              de plata: en las pruebas se leía «Paga a | días» (mes simulado,
+              H149), y un campo numérico vacía lo que no entiende. Solo
+              dígitos, y sin número no se ofrece guardar. */}
           <input
             id={`plazo-${customerId}`}
-            type="number"
+            type="text"
             inputMode="numeric"
-            min="0"
-            max="365"
+            maxLength={3}
             value={dias}
-            onChange={(e) => setDias(e.target.value)}
+            onChange={(e) => setDias(e.target.value.replace(/\D/g, ""))}
             className="tabular h-10 w-20 rounded-lg bg-hundida px-2.5 text-right text-base"
           />
           <span className="text-base">días</span>
-          {Number(dias) !== diasCredito && (
+          {dias !== "" && Number(dias) !== diasCredito && (
             <button
               type="button"
               disabled={trabajando}

@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -340,6 +341,43 @@ func (s *Servicio) ClientePorID(ctx context.Context, id string) (*ClienteDelMost
 	c := cs[0]
 	c.LimiteCredito = nil // clientePorId no lo trae
 	return &c, nil
+}
+
+// PedidoSinCobrar es un pedido del cliente con mercadería que salió y algo
+// sin cobrar (la cifra de «Me deben»).
+type PedidoSinCobrar struct {
+	ID     string  `json:"id"`
+	Numero string  `json:"numero"`
+	Monto  float64 `json:"monto"`
+}
+
+// PedidosSinCobrar son los del cliente, del más viejo al más nuevo (hasta
+// diez): el mostrador los muestra junto al «Debe» para cobrarlos donde se
+// cobra la cuenta (mes simulado, H367).
+func (s *Servicio) PedidosSinCobrar(ctx context.Context, cliente string) ([]PedidoSinCobrar, error) {
+	out := []PedidoSinCobrar{}
+	if !plataforma.UUIDValido(cliente) {
+		return out, nil
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT id, numero, monto FROM (
+		  SELECT o.id::text AS id, o.numero, `+fragmentos.SinCobrarDeLoQueSalio+` AS monto, o.created_at
+		  FROM orders o WHERE o.customer_id = $1 AND `+fragmentos.SalioMercaderia+`
+		) x WHERE monto > 0.009 ORDER BY created_at LIMIT 10`, cliente)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var p PedidoSinCobrar
+		var m jsmath.Num
+		if err := filas.Scan(&p.ID, &p.Numero, &m); err != nil {
+			return nil, err
+		}
+		p.Monto = m.F()
+		out = append(out, p)
+	}
+	return out, filas.Err()
 }
 
 // SaldoDeCuenta es lo que debe un cliente (positivo: debe).

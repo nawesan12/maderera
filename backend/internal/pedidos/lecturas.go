@@ -423,7 +423,12 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	orden := "o.created_at DESC"
 	switch v.Vista {
 	case "tablero":
-		cond = append(cond, "(o.estado NOT IN ('entregado', 'cancelado') OR o.updated_at >= now() - interval '7 days')")
+		// El entregado sin cobrar sigue en curso hasta que se cobre: a la
+		// semana desaparecía de Pedidos, del mostrador y de la deuda del
+		// cliente, y para cobrarlo había que entrar por Clientes (mes
+		// simulado, H367).
+		cond = append(cond, "(o.estado NOT IN ('entregado', 'cancelado') OR o.updated_at >= now() - interval '7 days' OR (o.estado = 'entregado' AND "+
+			fragmentos.SinCobrarDeLoQueSalio+" > 0.009))")
 	case "historial":
 		if f.Estado == "" || f.Estado == "todos" {
 			cond = append(cond, "o.estado IN ('entregado', 'cancelado')")

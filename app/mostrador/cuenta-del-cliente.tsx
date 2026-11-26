@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatearMonto } from "@/lib/formato";
 import {
   cobrarCuentaEnMostrador,
-  saldoDeCuenta,
+  cuentaDelCliente,
   type EstadoCobroDeCuenta,
 } from "./actions";
 import { enfocar } from "./atajos";
@@ -33,14 +33,18 @@ export function SaldoDelCliente({
   /** Lo que la venta de ahora carga a cuenta corriente (0 si no carga). */
   aCuenta?: number;
 }) {
-  const [saldo, setSaldo] = useState<{ de: string; monto: number } | null>(null);
+  const [saldo, setSaldo] = useState<{
+    de: string;
+    monto: number;
+    sinCobrar: { id: string; numero: string; monto: number }[];
+  } | null>(null);
   const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
     if (!enLinea) return;
     let vigente = true;
-    saldoDeCuenta(cliente.id).then((monto) => {
-      if (vigente) setSaldo({ de: cliente.id, monto });
+    cuentaDelCliente(cliente.id).then((c) => {
+      if (vigente) setSaldo({ de: cliente.id, monto: c.saldo, sinCobrar: c.sinCobrar });
     });
     return () => {
       vigente = false;
@@ -65,20 +69,57 @@ export function SaldoDelCliente({
       </span>
     ) : null;
   if (monto === null) return null;
+  /*
+   * Los pedidos entregados sin cobrar no están en la cuenta: se ven acá, con
+   * el enlace a su ficha, que es donde se cobran. Antes el pedido
+   * desaparecía para el vendedor (mes simulado, H367).
+   */
+  const pendientes = saldo?.de === cliente.id ? saldo.sinCobrar : [];
+  const sinCobrar =
+    pendientes.length > 0 ? (
+      <ul className="space-y-1 px-1">
+        {pendientes.map((p) => (
+          <li key={p.id} className="flex items-center justify-between gap-3 text-sm">
+            <span className="estado-problema">
+              <span className="codigo">{p.numero}</span> sin cobrar{" "}
+              <strong className="tabular">{formatearMonto(p.monto)}</strong>
+            </span>
+            <a
+              href={`/admin/pedidos/${p.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-hundida"
+            >
+              Cobrar
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : null;
   if (Math.abs(monto) < 0.01) {
-    return quedan !== null && aCuenta > 0 ? <p className="px-1 text-sm">Sin deuda{lineaDelLimite}</p> : null;
+    if (!sinCobrar && !(quedan !== null && aCuenta > 0)) return null;
+    return (
+      <div className="space-y-1.5">
+        {quedan !== null && aCuenta > 0 && <p className="px-1 text-sm">Sin deuda{lineaDelLimite}</p>}
+        {sinCobrar}
+      </div>
+    );
   }
 
   if (monto < 0) {
     return (
-      <p className="px-1 text-sm text-muted-foreground">
-        Tiene <strong className="tabular text-saldo-favor">{formatearMonto(-monto)}</strong> a
-        favor: se usa cobrando con «Cuenta corriente».
-      </p>
+      <div className="space-y-1.5">
+        <p className="px-1 text-sm text-muted-foreground">
+          Tiene <strong className="tabular text-saldo-favor">{formatearMonto(-monto)}</strong> a
+          favor: se usa cobrando con «Cuenta corriente».
+        </p>
+        {sinCobrar}
+      </div>
     );
   }
 
   return (
+    <div className="space-y-1.5">
     <div className="flex items-center justify-between gap-3 px-1">
       <p className="min-w-0 text-sm">
         Debe <strong className="tabular text-saldo-debe">{formatearMonto(monto)}</strong>
@@ -104,6 +145,8 @@ export function SaldoDelCliente({
           }}
         />
       )}
+    </div>
+    {sinCobrar}
     </div>
   );
 }

@@ -208,6 +208,16 @@ paths:
                 required: [saldo]
                 properties:
                   saldo: { type: number, format: double }
+                  sinCobrar:
+                    type: array
+                    description: "pedidos del cliente con mercadería que salió y algo sin cobrar"
+                    items:
+                      type: object
+                      required: [id, numero, monto]
+                      properties:
+                        id: { type: string }
+                        numero: { type: string }
+                        monto: { type: number, format: double }
   /api/v1/mostrador/clientes/{id}/cobro:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

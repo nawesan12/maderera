@@ -846,6 +846,13 @@ export interface operations {
                     "application/json": {
                         /** Format: double */
                         saldo: number;
+                        /** @description pedidos del cliente con mercadería que salió y algo sin cobrar */
+                        sinCobrar?: {
+                            id: string;
+                            numero: string;
+                            /** Format: double */
+                            monto: number;
+                        }[];
                     };
                 };
             };

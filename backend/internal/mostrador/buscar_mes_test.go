@@ -48,3 +48,19 @@ func TestBuscarDelMesSimulado(t *testing.T) {
 		}
 	}
 }
+
+// Un pedido entregado sin cobrar se ve junto al «Debe» del cliente: no está
+// en la cuenta, y para el vendedor desaparecía (mes simulado, H367).
+func TestPedidosSinCobrarDelCliente(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	pedido := e.txt(t, `insert into orders (numero, contacto_nombre, customer_id, branch_id, origen, estado, estado_pago, subtotal, total, medio_pago)
+		values ('PED-1107', 'Elena Paz', $1, $2, 'telefono', 'entregado', 'pendiente', 824440, 824440, 'transferencia') returning id::text`, e.cliente, e.central)
+	if _, err := e.pool.Exec(ctx, `insert into order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal) values ($1, $2, 'Fenólico', 'placa', 1, 824440, 824440)`, pedido, e.placa); err != nil {
+		t.Fatal(err)
+	}
+	ps, err := e.svc.PedidosSinCobrar(ctx, e.cliente)
+	if err != nil || len(ps) != 1 || ps[0].Numero != "PED-1107" || ps[0].Monto != 824440 {
+		t.Fatalf("sin cobrar: %+v %v", ps, err)
+	}
+}

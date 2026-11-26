@@ -355,8 +355,18 @@ export async function anularVenta(
 
 /** Lo que debe un cliente, para ofrecer cobrarle la cuenta en el mostrador. */
 export async function saldoDeCuenta(customerId: string): Promise<number> {
-  const r = await (await api()).GET("/api/v1/mostrador/clientes/{id}/saldo", { params: { path: { id: customerId } } });
-  return datos(r).saldo;
+  return (await cuentaDelCliente(customerId)).saldo;
+}
+
+/**
+ * Lo que debe el cliente y sus pedidos entregados sin cobrar, que no están
+ * en la cuenta: se ven junto al «Debe» (mes simulado, H367).
+ */
+export async function cuentaDelCliente(
+  customerId: string,
+): Promise<{ saldo: number; sinCobrar: { id: string; numero: string; monto: number }[] }> {
+  const r = datos(await (await api()).GET("/api/v1/mostrador/clientes/{id}/saldo", { params: { path: { id: customerId } } }));
+  return { saldo: r.saldo, sinCobrar: r.sinCobrar ?? [] };
 }
 
 export interface EstadoCobroDeCuenta {

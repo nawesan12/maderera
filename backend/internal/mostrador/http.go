@@ -298,7 +298,11 @@ func (a *API) SaldoDeCuentaEnMostrador(ctx context.Context, r mostradorapi.Saldo
 		return nil, err
 	}
 	s, err := a.s.SaldoDeCuenta(ctx, r.Id)
-	return ok(map[string]float64{"saldo": s}), err
+	if err != nil {
+		return nil, err
+	}
+	pendientes, err := a.s.PedidosSinCobrar(ctx, r.Id)
+	return ok(map[string]any{"saldo": s, "sinCobrar": pendientes}), err
 }
 
 func (a *API) CobrarCuentaEnMostrador(ctx context.Context, r mostradorapi.CobrarCuentaEnMostradorRequestObject) (mostradorapi.CobrarCuentaEnMostradorResponseObject, error) {

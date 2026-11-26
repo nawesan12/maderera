@@ -256,8 +256,9 @@ components:
         enteros: { type: boolean, description: El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso }
     RemitoDelPedido:
       type: object
-      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, firmaToken, createdAt, transportista, numeroSeguimiento, cantidadLineas]
+      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, firmaToken, createdAt, transportista, numeroSeguimiento, cantidadLineas, parcial]
       properties:
+        parcial: { type: boolean, description: Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF) }
         id: { type: string }
         numero: { type: string }
         tipo: { type: string, enum: [retiro, envio] }
@@ -293,11 +294,12 @@ components:
         numero: { type: string }
     LineaDelRemito:
       type: object
-      required: [descripcion, unidad, cantidad]
+      required: [descripcion, unidad, cantidad, corte]
       properties:
         descripcion: { type: string }
         unidad: { type: string }
         cantidad: { type: number, format: double }
+        corte: { type: string, nullable: true, description: "Qué parte sale cortada y según qué corte («Cortado según CRT-13: 14 piezas de 2 placas · 1 entera»)" }
     PendienteDelRemito:
       type: object
       required: [descripcion, unidad, pendiente]
@@ -316,8 +318,9 @@ components:
       type: object
       required: [id, numero, tipo, estado, receptorNombre, receptorDocumento, firmaUrl, firmadoAt, notas, createdAt, pedidoNumero, pedidoId,
         clienteNombre, clienteDireccion, customerId, estadoPago, medioPago, sucursal, sucursalDireccion, transportista, numeroSeguimiento,
-        lineas, pendientes, factura]
+        lineas, pendientes, factura, sinCobrar]
       properties:
+        sinCobrar: { type: number, format: double, nullable: true, description: Lo que falta cobrar del pedido fuera de la cuenta corriente }
         id: { type: string }
         numero: { type: string }
         tipo: { type: string, enum: [retiro, envio] }

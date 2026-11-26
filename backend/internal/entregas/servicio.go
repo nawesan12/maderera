@@ -744,6 +744,10 @@ type RemitoListado struct {
 	Transportista     *string    `json:"transportista"`
 	NumeroSeguimiento *string    `json:"numeroSeguimiento"`
 	CantidadLineas    int        `json:"cantidadLineas"`
+	// Parcial: cuando se hizo, quedaba algo por entregar (SaldoAlRemito, lo
+	// mismo que imprime el PDF). La ficha lo deducía y decía «Entrega
+	// parcial» de un remito que se llevó todo.
+	Parcial bool `json:"parcial"`
 }
 
 // RemitosDelPedido son los remitos de un pedido, los más nuevos primero.
@@ -770,7 +774,18 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 		}
 		out = append(out, r)
 	}
-	return out, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	filas.Close()
+	for i := range out {
+		quedaba, err := SaldoAlRemito(ctx, s.pool, pedido, out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Parcial = len(quedaba) > 0
+	}
+	return out, nil
 }
 
 // RemitoDelPortal es un retiro en «mi pedido».

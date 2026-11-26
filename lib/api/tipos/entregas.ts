@@ -75,7 +75,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Anula el remito y devuelve la mercadería al stock. Anular uno ya anulado no hace nada. */
+        /**
+         * @description Anula el remito y devuelve la mercadería al stock. Anular uno ya
+         *     anulado no hace nada. Uno que ya firmó quien recibió pide el motivo y
+         *     el PIN de un administrador (422 en `motivo` o en `pin`).
+         */
         post: operations["AnularRemito"];
         delete?: never;
         options?: never;
@@ -265,6 +269,8 @@ export interface components {
             enteros?: boolean;
         };
         RemitoDelPedido: {
+            /** @description Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF) */
+            parcial: boolean;
             id: string;
             numero: string;
             /** @enum {string} */
@@ -302,6 +308,8 @@ export interface components {
             unidad: string;
             /** Format: double */
             cantidad: number;
+            /** @description Qué parte sale cortada y según qué corte («Cortado según CRT-13: 14 piezas de 2 placas · 1 entera») */
+            corte: string | null;
         };
         PendienteDelRemito: {
             descripcion: string;
@@ -316,6 +324,11 @@ export interface components {
             caeVencimiento: string | null;
         };
         RemitoCompleto: {
+            /**
+             * Format: double
+             * @description Lo que falta cobrar del pedido fuera de la cuenta corriente
+             */
+            sinCobrar: number | null;
             id: string;
             numero: string;
             /** @enum {string} */
@@ -501,11 +514,20 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    motivo?: string;
+                    pin?: string;
+                    ficha?: string;
+                };
+            };
+        };
         responses: {
             200: components["responses"]["HechoEntrega"];
             401: components["responses"]["Problema"];
             403: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     RemitoDeConstancia: {

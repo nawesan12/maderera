@@ -168,3 +168,38 @@ func TestAnularUnRemitoFirmadoPideMotivoYPin(t *testing.T) {
 		t.Errorf("el motivo no quedó en el historial: %s", n)
 	}
 }
+
+// La ficha decía «Entrega parcial» de un remito que se llevó todo: lo
+// calcula Go con lo que quedaba al hacerlo, como el PDF. Y el remito dice
+// qué parte del renglón sale cortada, y cuánto cobrar en un envío.
+func TestElRemitoDiceSiFueParcialYQueSeCorto(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	pedido, r1, r2 := e.pedido(t, "PED-2006", "listo", nil)
+	e.exec(t, `insert into cutting_orders (numero, order_id, contacto_nombre, material_descripcion, estado, variant_id, placas)
+		values ('CRT-13', $1, 'Marta', 'Tirante', 'terminado', $2, 8)`, pedido, e.variante)
+	u := e.srv.URL + "/api/v1/admin/remitos"
+	for _, c := range [][]map[string]string{cantidades(r2, "4"), cantidades(r1, "10")} {
+		if st, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "retiro", "receptorDocumento": "1", "cantidades": c}); st != 200 {
+			t.Fatalf("%d %s", st, b)
+		}
+	}
+	remitos, err := e.s.RemitosDelPedido(context.Background(), pedido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Del más nuevo al más viejo: el último se llevó todo.
+	if len(remitos) != 2 || remitos[0].Parcial || !remitos[1].Parcial {
+		t.Fatalf("parciales: %+v", remitos)
+	}
+	completo, err := e.s.RemitoCompleto(context.Background(), remitos[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := completo.Lineas[0].Corte; c == nil || *c != "Cortado según CRT-13: 0 piezas de 8 placas · 2 enteras" {
+		t.Errorf("el corte del renglón: %v", c)
+	}
+	if completo.SinCobrar == nil || *completo.SinCobrar != 100 {
+		t.Errorf("sin cobrar: %v", completo.SinCobrar)
+	}
+}

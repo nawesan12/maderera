@@ -24,6 +24,8 @@ type LineaDelRemito struct {
 	Descripcion string  `json:"descripcion"`
 	Unidad      string  `json:"unidad"`
 	Cantidad    float64 `json:"cantidad"`
+	// Corte: qué parte sale cortada y según qué corte (vacío: nada).
+	Corte string `json:"corte"`
 }
 
 // PendienteDelRemito es lo que queda en acopio.
@@ -58,6 +60,67 @@ type RemitoCompleto struct {
 	Lineas            []LineaDelRemito     `json:"lineas"`
 	Pendientes        []PendienteDelRemito `json:"pendientes"`
 	Factura           *FacturaDelRemito    `json:"factura"`
+	// SinCobrar: lo que el chofer de un envío tiene que cobrar (0: nada).
+	SinCobrar float64 `json:"sinCobrar"`
+}
+
+// medioDelPedido es el medio de pago del pedido como lo lee el chofer.
+var medioDelPedido = map[string]string{
+	"efectivo": "Efectivo", "transferencia": "Transferencia", "debito": "Débito", "credito": "Crédito",
+	"mercado_pago": "Mercado Pago", "cheque": "Cheque",
+}
+
+// CondicionDePago es lo que dice el remito del pago: en un envío con algo
+// por cobrar, cuánto y cómo (el chofer vuelve con la plata; decía solo
+// «Pendiente de pago»). Gemelo de condicionDePago en
+// components/entregas/remito-impreso.tsx.
+func CondicionDePago(r RemitoCompleto) string {
+	if r.Tipo == "envio" && r.SinCobrar > 0.009 && r.MedioPago != "cuenta_corriente" {
+		t := "A cobrar " + Moneda2(r.SinCobrar)
+		if m := medioDelPedido[r.MedioPago]; m != "" {
+			t += " · " + m
+		}
+		return t
+	}
+	pendiente := "Pendiente de pago"
+	if r.MedioPago == "cuenta_corriente" {
+		pendiente = "Cuenta corriente"
+	}
+	condicion, ok := map[string]string{
+		"pagado":      "Pagado",
+		"parcial":     "Pagado en parte · resto en cuenta corriente",
+		"pendiente":   pendiente,
+		"reintegrado": "Reintegrado",
+		"rechazado":   "Pago rechazado",
+	}[r.EstadoPago]
+	if !ok {
+		return "—"
+	}
+	return condicion
+}
+
+// LeyendaDelRemito es el pie: sin factura, no se manda a buscar los
+// importes a un comprobante que no existe (mes simulado: decía «Sin factura
+// asociada» arriba y «los importes se detallan en el comprobante fiscal»
+// abajo).
+func LeyendaDelRemito(f *FacturaDelRemito) string {
+	if f == nil {
+		return "Documento no válido como factura."
+	}
+	return "Documento no válido como factura. Los importes se detallan en el comprobante fiscal correspondiente."
+}
+
+// UnidadPara es la unidad concordada con la cantidad: «placas», «rollos»;
+// lo abreviado no cambia. Gemelo de unidadEnPlural en lib/formato.ts.
+func UnidadPara(u string, cantidad float64) string {
+	a := Unidad(u)
+	if cantidad == 1 || strings.ContainsAny(a, ". ²") || len([]rune(a)) <= 2 || strings.HasSuffix(a, "s") {
+		return a
+	}
+	if strings.ContainsAny(a[len(a)-1:], "aeiou") {
+		return a + "s"
+	}
+	return a + "es"
 }
 
 // DatosRemito son los dos argumentos de remitoPdf(remito, emisor).
@@ -151,9 +214,13 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	if r.Tipo == "envio" {
 		domicilio = "Domicilio de entrega"
 	}
+	quien := "Retira"
+	if r.Tipo == "envio" {
+		quien = "Recibe"
+	}
 	datos := []Dato{
 		{"Cliente", r.ClienteNombre},
-		{"Retira", oGuion(r.ReceptorNombre)},
+		{quien, oGuion(r.ReceptorNombre)},
 		{domicilio, oGuion(r.ClienteDireccion)},
 		{"Documento", oGuion(r.ReceptorDocumento)},
 	}
@@ -165,21 +232,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		datos = append(datos, Dato{"Transporte", t})
 	}
 
-	pendiente := "Pendiente de pago"
-	if r.MedioPago == "cuenta_corriente" {
-		pendiente = "Cuenta corriente"
-	}
-	condicion, ok := map[string]string{
-		"pagado":      "Pagado",
-		"parcial":     "Pagado en parte · resto en cuenta corriente",
-		"pendiente":   pendiente,
-		"reintegrado": "Reintegrado",
-		"rechazado":   "Pago rechazado",
-	}[r.EstadoPago]
-	if !ok {
-		condicion = "—"
-	}
-	datos = append(datos, Dato{"Condición de pago", condicion})
+	datos = append(datos, Dato{"Condición de pago", CondicionDePago(r)})
 
 	altoCaja2 := h.CuadroDeDatos("DESTINATARIO", datos, cursor, 2)
 
@@ -225,29 +278,45 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	espacio := func(necesario float64, detalle bool) { espacioHasta(necesario, limite, detalle) }
 
 	for _, item := range r.Lineas {
-		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion)))*9*1.35, 12)+4, true)
+		altoCorte := 0.0
+		if item.Corte != "" {
+			altoCorte = float64(len(Renglones(item.Corte, Helvetica, 7.5, anchoDescripcion)))*7.5*1.35 + 2
+		}
+		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion)))*9*1.35, 12)+4+altoCorte, true)
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion})
 		h.EscribirNumero(numeroJS(item.Cantidad), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, Mm(16))
-		h.EscribirEnAncho(Unidad(item.Unidad), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true}, Mm(26))
+		h.EscribirEnAncho(UnidadPara(item.Unidad, item.Cantidad), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true}, Mm(26))
+		if item.Corte != "" {
+			alto += 2 + h.EscribirParrafo(item.Corte, Parrafo{Opciones: Opciones{X: Margen, Y: cursor - maximo(alto, 12) + 1, Tamano: 7.5, Color: TintaSuave},
+				Ancho: anchoDescripcion})
+		}
 		cursor -= maximo(alto, 12) + 4
 		h.Raya(cursor+8, 0, Color{})
 	}
 
-	// Lo que queda en acopio, renglón por renglón.
+	// Lo que queda en acopio, renglón por renglón. En un envío no es acopio:
+	// es lo que falta llevar (lo que no había, o el segundo viaje), y la
+	// línea de «queda guardada» no corresponde.
 	if deAcopio {
 		espacio(Mm(7)+12+11+20, false)
 		cursor -= Mm(7)
-		h.Escribir("QUEDA EN ACOPIO", Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
+		etiqueta := "QUEDA EN ACOPIO"
+		if r.Tipo == "envio" {
+			etiqueta = "FALTA ENTREGAR"
+		}
+		h.Escribir(etiqueta, Opciones{X: Margen, Y: cursor, Tamano: 6, Fuente: Negrita, Color: TintaSuave})
 		cursor -= 12
 		anchoUtil := AnchoA4 - Margen*2
 		for _, p := range r.Pendientes {
-			texto := numeroJS(p.Pendiente) + " " + p.Unidad + " · " + p.Descripcion
+			texto := numeroJS(p.Pendiente) + " " + UnidadPara(p.Unidad, p.Pendiente) + " · " + p.Descripcion
 			espacio(float64(len(Renglones(texto, Helvetica, 8, anchoUtil)))*8*1.35, false)
 			cursor -= h.EscribirParrafo(texto, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8}, Ancho: anchoUtil, Interlineado: 11})
 		}
 		cursor -= 2
-		h.Escribir("Esta mercadería queda guardada en la maderera a nombre del cliente y se retira contra este remito.",
-			Opciones{X: Margen, Y: cursor, Tamano: 7, Color: TintaSuave})
+		if r.Tipo != "envio" {
+			h.Escribir("Esta mercadería queda guardada en la maderera a nombre del cliente y se retira contra este remito.",
+				Opciones{X: Margen, Y: cursor, Tamano: 7, Color: TintaSuave})
+		}
 		cursor -= 6
 	}
 
@@ -287,8 +356,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	h.Escribir("ACLARACIÓN Y DOCUMENTO", Opciones{X: xSegunda, Y: yFirma + Mm(26), Tamano: 6, Fuente: Negrita, Color: TintaSuave})
 	h.Pagina.DibujarLinea(Linea{X1: xSegunda, Y1: yFirma, X2: derecha, Y2: yFirma, Grosor: 0.5, Color: ColorLinea})
 
-	h.EscribirCentrado("Documento no válido como factura. Los importes se detallan en el comprobante fiscal correspondiente.",
-		AnchoA4/2, Opciones{Y: Margen + Mm(4), Tamano: 7, Color: TintaSuave})
+	h.EscribirCentrado(LeyendaDelRemito(r.Factura), AnchoA4/2, Opciones{Y: Margen + Mm(4), Tamano: 7, Color: TintaSuave})
 
 	return h.Bytes()
 }

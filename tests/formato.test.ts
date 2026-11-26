@@ -4,6 +4,7 @@ import {
   formatearDecimal,
   formatearPeso,
   ABREVIATURA_UNIDAD,
+  cantidadConUnidad,
   formatearUnidad,
   primerNombre,
   whatsappDestino,
@@ -144,5 +145,18 @@ describe("hayFiltro", () => {
     expect(hayFiltro({ pagina: "2", estado: "todos", cat: "todas", buscar: "  " })).toBe(false);
     expect(hayFiltro({ buscar: "fenólico" })).toBe(true);
     expect(hayFiltro({ estado: "sin-stock" })).toBe(true);
+  });
+});
+
+describe("cantidadConUnidad", () => {
+  // El mes simulado leyó «Quedan 25 placa», «4 rollo» y «20 u.».
+  it("concuerda la unidad con la cantidad", () => {
+    expect(cantidadConUnidad(1, "placa")).toBe("1 placa");
+    expect(cantidadConUnidad(25, "placa")).toBe("25 placas");
+    expect(cantidadConUnidad(6, "rollo")).toBe("6 rollos");
+    expect(cantidadConUnidad(2, "par")).toBe("2 pares");
+    expect(cantidadConUnidad(20, "unidad")).toBe("20 u.");
+    expect(cantidadConUnidad(2.5, "metro_cuadrado")).toBe("2,5 m²");
+    expect(cantidadConUnidad(3, "pasada")).toBe("3 pasadas");
   });
 });

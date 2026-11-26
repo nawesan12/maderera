@@ -241,6 +241,24 @@ export function formatearUnidad(unidad: string | null): string {
   return ABREVIATURA_UNIDAD[unidad] ?? unidad.replace(/_/g, " ");
 }
 
+/** La unidad en plural: «placas», «rollos», «pares»; lo abreviado no cambia. */
+export function unidadEnPlural(unidad: string): string {
+  if (/[.²\s]/.test(unidad) || unidad.length <= 2 || /s$/i.test(unidad)) return unidad;
+  return /[aeiouáéíóú]$/i.test(unidad) ? `${unidad}s` : `${unidad}es`;
+}
+
+const cifraDeCantidad = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 });
+
+/**
+ * La cantidad con su unidad, concordada: «1 placa», «25 placas», «20 u.»,
+ * «2,5 m²». Se leía «Quedan 25 placa» y «4 rollo» en las entregas y en la
+ * constancia de firma (mes simulado). Gemelo de pdf.CantidadConUnidad.
+ */
+export function cantidadConUnidad(cantidad: number, unidad: string | null): string {
+  const u = formatearUnidad(unidad);
+  return `${cifraDeCantidad.format(cantidad)} ${cantidad === 1 ? u : unidadEnPlural(u)}`;
+}
+
 /** Pluraliza sin que quede "1 ítems". */
 export function plural(
   cantidad: number,

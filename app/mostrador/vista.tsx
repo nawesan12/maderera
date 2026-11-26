@@ -53,6 +53,7 @@ import { sumar, Lineas } from "./lineas";
 import { cobrarSinConexion as guardarSinConexion, useColaDelMostrador } from "./sin-conexion";
 import { faltaIdentificarComprador } from "@/lib/fiscal/umbral";
 import {
+  MEDIOS,
   MEDIOS_DE_CONTADO,
   type TipoDeOperacion,
   TIPOS_DE_OPERACION,
@@ -1417,8 +1418,17 @@ export function VistaMostrador({
             fondoBase={fondoBase}
             ultimoContado={ultimoContado}
             cajaId={cajaFisica?.id ?? null}
-            onRehacer={(renglones, conCorte) => {
+            onRehacer={(renglones, conCorte, venta) => {
               setLineas((prev) => [...prev, ...renglones]);
+              /* La venta rehecha sale como la anulada: a cuenta sigue a
+                 cuenta, y no vuelve a contado con el descuento de efectivo
+                 (mes simulado, H269). Un pago partido se vuelve a partir. */
+              const medioAnterior = venta.medios && venta.medios.length > 1 ? null : MEDIOS.find((m) => m.valor === venta.medioPago);
+              if (medioAnterior) {
+                setPartes(null);
+                setMedio(medioAnterior.valor);
+              }
+              setAcopio(venta.estado === "listo");
               setCaja(false);
               setCajaParaCobrar(false);
               if (conCorte) setAviso({ tipo: "error", texto: "El corte de esa venta se vuelve a armar." });

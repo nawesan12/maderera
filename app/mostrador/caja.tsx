@@ -61,7 +61,7 @@ export function PanelDeCaja({
   ventas: VentaDeHoy[];
   enLinea: boolean;
   /** «Anular y rehacer» una venta de hoy: sus renglones vuelven a la venta. */
-  onRehacer?: (renglones: LineaDeVenta[], conCorte: boolean) => void;
+  onRehacer?: (renglones: LineaDeVenta[], conCorte: boolean, venta: VentaDeHoy) => void;
   onEncolado: () => void;
   /** Se abrió el turno, con el mensaje de Go. */
   onAbierta?: (mensaje: string) => void;

@@ -32,7 +32,7 @@ export function VentasDeHoy({
    * cliente. Antes había que anular con «Se la llevó» y volver a venderla, y
    * el stock salía dos veces (mes simulado, H269).
    */
-  onRehacer?: (renglones: LineaDeVenta[], conCorte: boolean) => void;
+  onRehacer?: (renglones: LineaDeVenta[], conCorte: boolean, venta: VentaDeHoy) => void;
 }) {
   const router = useRouter();
   const [trabajando, empezar] = useTransition();
@@ -83,7 +83,7 @@ export function VentasDeHoy({
       if (!r.error) {
         setAnulando(null);
         router.refresh();
-        if (rehacer && r.renglones) onRehacer?.(r.renglones, Boolean(r.conCorte));
+        if (rehacer && r.renglones) onRehacer?.(r.renglones, Boolean(r.conCorte), venta);
       }
     });
   }

@@ -631,7 +631,10 @@ const ESTILOS = `
   @media screen and (max-width: 640px) {
     .hoja-corte { padding: 16px; font-size: 16px; }
     .hc-barra, .hc-acciones { width: 100%; }
-    .hc-acciones > * { flex: 1 1 0; justify-content: center; }
+    /* Del ancho de su texto y en un renglón: con \`flex: 1 1 0\` los tres
+       repartían 375 px y «Imprimir o guardar como PDF» salía en cuatro
+       renglones (tercera prueba del mes). Lo que no entra baja de fila. */
+    .hc-acciones > * { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
     .hc-numeros { gap: 12px 20px; }
     .hc-pasos, .hc-pasos tbody { display: block; }
     .hc-pasos tr { display: grid; grid-template-columns: 40px 40px minmax(0, 1fr) auto; align-items: center; column-gap: 8px; padding: 8px 0; border-bottom: 1px solid #e3e0dc; }

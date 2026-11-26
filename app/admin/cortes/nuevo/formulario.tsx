@@ -203,7 +203,11 @@ export function FormularioCorte({
     const r = await crearCorte(previo, datos);
     if (r.ok && r.id) {
       toast.success(r.ok);
-      router.push(`/admin/cortes/${r.id}`);
+      // Arriba de todo a mano: el desplazamiento de Next llevaba la ficha
+      // hasta su primer elemento y el título quedaba debajo del encabezado
+      // fijo (tercera prueba del mes).
+      window.scrollTo({ top: 0 });
+      router.push(`/admin/cortes/${r.id}`, { scroll: false });
     }
     return r;
   }, estadoInicial);

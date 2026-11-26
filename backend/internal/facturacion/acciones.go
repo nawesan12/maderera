@@ -536,6 +536,12 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 			m = "error desconocido"
 			s.log.Error("autorizando la venta", "invoiceId", id, "error", err)
 		}
+		// Sin certificado no hubo envío: el mostrador lo dice en una línea y
+		// sin la jerga del certificado, que el vendedor no maneja y que antes
+		// repetía la misma idea dos veces (mes simulado, H020).
+		if m == sinValorFiscal {
+			return ResultadoComprobante{InvoiceID: &id, Aviso: AvisoSinARCA}, nil
+		}
 		return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante creado, pero sin autorizar en ARCA: " + m}, nil
 	}
 	return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante autorizado.", Autorizado: true}, nil

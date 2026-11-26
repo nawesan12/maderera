@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Flame, ListChecks, Scissors } from "lucide-react";
+import { Download, Flame, ListChecks, Scissors, SearchX } from "lucide-react";
 import {
   ColumnaTablero,
   TarjetaTablero,
@@ -8,13 +8,13 @@ import {
 import { haceCuanto } from "@/components/admin/formato";
 import { diasDesde } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
-
-/** Más de esto en el tablero, el corte se marca como demorado. */
-const DIAS_DE_DEMORA = 3;
 import type { CorteListado } from "@/lib/dal/admin/cortes";
 import { AccionesCorte } from "./acciones";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import type { AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
+
+/** Más de esto en el tablero, el corte se marca como demorado. */
+const DIAS_DE_DEMORA = 3;
 
 /**
  * La cola de corte.
@@ -24,6 +24,11 @@ import type { AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
  * aserradero. Duplicarla habría hecho que las dos se separaran en el primer
  * cambio, que es justo lo que no se quiere en la pantalla que decide qué se
  * corta primero.
+ *
+ * En el taller la pantalla es del trabajo (mes simulado, H404): la cola y la
+ * máquina se llevan el ancho, los terminados se pliegan a los últimos tres y
+ * los retirados no están, porque el operario no tiene nada que hacer con
+ * ellos.
  */
 const COLUMNAS = [
   { estado: "en-cola", titulo: "En cola" },
@@ -32,63 +37,96 @@ const COLUMNAS = [
   { estado: "retirado", titulo: "Retirados" },
 ] as const;
 
+/** Lo que ya salió de la máquina, lo más reciente primero (H328). */
+function recientePrimero(a: CorteListado, b: CorteListado) {
+  return (b.salioAt?.getTime() ?? b.createdAt.getTime()) - (a.salioAt?.getTime() ?? a.createdAt.getTime());
+}
+
 export function TableroDeCortes({
   cortes,
   avisos = {},
   soloMaquina = false,
+  taller = false,
+  busqueda = "",
+  limpiar,
+  verSucursal = true,
 }: {
   cortes: CorteListado[];
   /** El tablero del aserradero: solo empezar y terminar. */
   soloMaquina?: boolean;
+  /** La pantalla de /taller: sin retirados y con los terminados plegados. */
+  taller?: boolean;
   /** El aviso gratis de «corte terminado», por id de corte. */
   avisos?: Record<string, AvisoManualListo>;
+  /** Lo que se buscó: el vacío dice que no coincide, no que no hay cortes. */
+  busqueda?: string;
+  /** Adónde vuelve «Limpiar la búsqueda». */
+  limpiar?: string;
+  /** Con la cola filtrada por taller, la sucursal de cada tarjeta sobra. */
+  verSucursal?: boolean;
 }) {
-  return (
-    <>
-    {cortes.length === 0 ? (
-      <div className="mt-6 rounded-xl border border-dashed py-16 text-center">
-        <Scissors className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-        <p className="text-base font-medium">La cola está vacía</p>
-        <p className="mt-1 text-base text-muted-foreground">
-          No hay trabajos de corte cargados.
-        </p>
+  const columnas = taller ? COLUMNAS.filter((c) => c.estado !== "retirado") : COLUMNAS;
+  const visibles = cortes.filter((c) => columnas.some((col) => col.estado === c.estado));
+
+  if (visibles.length === 0) {
+    return busqueda ? (
+      <div className="tarjeta-hundida mt-6 rounded-xl px-5 py-12 text-center">
+        <SearchX className="mx-auto mb-3 h-8 w-8 text-muted-foreground" aria-hidden />
+        <p className="text-base font-medium">Ningún corte coincide con «{busqueda}»</p>
+        {limpiar && (
+          <Link
+            href={limpiar}
+            className="mt-4 inline-flex h-12 items-center rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted"
+          >
+            Limpiar la búsqueda
+          </Link>
+        )}
       </div>
     ) : (
-      <Tablero>
-        {COLUMNAS.map((columna) => {
-          const enColumna = cortes.filter((c) => c.estado === columna.estado);
-          const metros = enColumna.reduce((s, c) => s + c.metrosCuadrados, 0);
+      <div className="tarjeta-hundida mt-6 rounded-xl px-5 py-12 text-center">
+        <Scissors className="mx-auto mb-3 h-8 w-8 text-muted-foreground" aria-hidden />
+        <p className="text-base font-medium">La cola está vacía</p>
+      </div>
+    );
+  }
 
-          return (
-            <ColumnaTablero
-              key={columna.estado}
-              titulo={columna.titulo}
-              cantidad={enColumna.length}
-              // Con la misma función que las tarjetas: si el encabezado
-              // dice 4 y las tarjetas suman 4,32, parece que falta algo. Sin
-              // decimales fijos: es una sola cifra, no una columna que alinear.
-              detalle={
-                enColumna.length > 0
-                  ? `${formatearDecimal(metros)} m²`
-                  : undefined
-              }
-              estado={columna.estado}
-            >
-              {enColumna.map((corte, i) => (
-                <TarjetaCorte
-                  key={corte.id}
-                  corte={corte}
-                  posicion={columna.estado === "en-cola" ? i + 1 : undefined}
-                  aviso={avisos[corte.id] ?? null}
-                  soloMaquina={soloMaquina}
-                />
-              ))}
-            </ColumnaTablero>
-          );
-        })}
-      </Tablero>
-    )}
-    </>
+  return (
+    <Tablero>
+      {columnas.map((columna) => {
+        const enColumna = cortes.filter((c) => c.estado === columna.estado);
+        if (columna.estado === "terminado" || columna.estado === "retirado") enColumna.sort(recientePrimero);
+        const metros = enColumna.reduce((s, c) => s + c.metrosCuadrados, 0);
+
+        return (
+          <ColumnaTablero
+            key={columna.estado}
+            titulo={columna.titulo}
+            cantidad={enColumna.length}
+            // Con la misma función que las tarjetas: si el encabezado
+            // dice 4 y las tarjetas suman 4,32, parece que falta algo. Sin
+            // decimales fijos: es una sola cifra, no una columna que alinear.
+            detalle={
+              enColumna.length > 0 && columna.estado !== "terminado" && columna.estado !== "retirado"
+                ? `${formatearDecimal(metros)} m²`
+                : undefined
+            }
+            estado={columna.estado}
+            tope={taller && columna.estado === "terminado" ? 3 : undefined}
+          >
+            {enColumna.map((corte, i) => (
+              <TarjetaCorte
+                key={corte.id}
+                corte={corte}
+                posicion={columna.estado === "en-cola" ? i + 1 : undefined}
+                aviso={avisos[corte.id] ?? null}
+                soloMaquina={soloMaquina}
+                verSucursal={verSucursal}
+              />
+            ))}
+          </ColumnaTablero>
+        );
+      })}
+    </Tablero>
   );
 }
 
@@ -97,16 +135,27 @@ function TarjetaCorte({
   posicion,
   aviso,
   soloMaquina = false,
+  verSucursal,
 }: {
   corte: CorteListado;
   posicion?: number;
   aviso: AvisoManualListo | null;
   soloMaquina?: boolean;
+  verSucursal: boolean;
 }) {
   // Un trabajo que lleva más de tres días sin terminar avisa solo: en la
   // pizarra uno de hace dos meses se veía igual que uno de hoy.
   const dias = diasDesde(corte.createdAt);
-  const demorado = corte.estado !== "retirado" && dias > DIAS_DE_DEMORA;
+  const pendiente = corte.estado === "en-cola" || corte.estado === "en-proceso";
+  const demorado = pendiente && dias > DIAS_DE_DEMORA;
+  // Lo que ya salió cuenta desde que salió, no desde el alta (H128).
+  const desde = pendiente ? corte.createdAt : (corte.salioAt ?? corte.createdAt);
+  // El taller termina y ahí se le acaban los botones: sin pie vacío (H128).
+  const hayAcciones = !(soloMaquina && corte.estado === "terminado") && corte.estado !== "retirado";
+  const unidad = corte.mitad
+    ? corte.placas === 1 ? "media" : "medias"
+    : corte.placas === 1 ? "placa" : "placas";
+
   return (
     <TarjetaTablero destacada={corte.urgente || demorado}>
       <div className="flex items-start justify-between gap-2">
@@ -120,10 +169,11 @@ function TarjetaCorte({
             </span>
           )}
           {/* Dos renglones antes de cortar: con el ancho solo, los nombres
-              largos de cliente se perdían. */}
+              largos de cliente se perdían. Toda la línea abre la ficha: era
+              un enlace de 24 px. */}
           <Link
             href={`/admin/cortes/${corte.id}`}
-            className="line-clamp-2 break-words text-base font-medium hover:text-brand-orange"
+            className="-my-2 line-clamp-2 break-words py-2 text-base font-medium hover:text-brand-orange"
           >
             {corte.cliente}
           </Link>
@@ -133,18 +183,29 @@ function TarjetaCorte({
         </span>
       </div>
 
-      {corte.urgente && (
-        <p className="mt-1.5 inline-flex self-start items-center gap-1 rounded-full bg-brand-orange/15 px-2 py-0.5 text-sm font-medium text-brand-orange-dark">
-          <Flame className="h-3.5 w-3.5" />
-          Urgente
-        </p>
+      {(corte.urgente || (verSucursal && corte.sucursal)) && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {corte.urgente && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/15 px-2 py-0.5 text-sm font-medium text-brand-orange-dark">
+              <Flame className="h-3.5 w-3.5" />
+              Urgente
+            </span>
+          )}
+          {/* De qué taller y de qué depósito sale la placa (H122). */}
+          {verSucursal && corte.sucursal && (
+            <span className="inline-flex items-center rounded-full bg-hundida px-2 py-0.5 text-sm font-medium text-texto-2">
+              {corte.sucursal}
+            </span>
+          )}
+        </div>
       )}
 
       <p className="mt-2 text-base">{corte.material}</p>
 
-      {/* Las tres cifras que define el trabajo del operario. */}
+      {/* Las tres cifras que define el trabajo del operario: las placas son
+          las del plano, que es lo que se baja del depósito. */}
       <dl className="mt-2.5 grid grid-cols-3 gap-2 rounded-md bg-muted/60 px-2.5 py-2">
-        <Cifra valor={corte.placas} etiqueta={corte.placas === 1 ? "placa" : "placas"} />
+        <Cifra valor={corte.placas} etiqueta={unidad} />
         <Cifra valor={corte.piezas} etiqueta={corte.piezas === 1 ? "pieza" : "piezas"} />
         <Cifra
           valor={formatearDecimal(corte.metrosCuadrados, 2, { fijo: true })}
@@ -157,7 +218,7 @@ function TarjetaCorte({
       )}
 
       <p className={`mt-2 text-sm ${demorado ? "estado-problema font-medium" : "text-muted-foreground"}`}>
-        {corte.sucursal} · {haceCuanto(corte.createdAt)}
+        {haceCuanto(desde)}
       </p>
 
       {aviso && (
@@ -166,28 +227,42 @@ function TarjetaCorte({
         </div>
       )}
 
-      {/* La hoja de la seccionadora, a un toque desde la tarjeta: en /taller
-          es lo primero que se abre antes de cargar la placa. */}
-      {corte.piezas > 0 && (
-        <Link
-          href={`/hoja-de-corte/${corte.id}`}
-          target="_blank"
-          className="mt-2.5 inline-flex h-10 items-center gap-1.5 self-start rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-        >
-          <ListChecks className="h-4 w-4" />
-          Hoja de corte
-        </Link>
+      {/* Lo que se abre antes de cargar la placa, a un toque: la hoja y el
+          archivo de la máquina, juntos (H327). */}
+      {corte.piezas > 0 && pendiente && (
+        <div className="mt-2.5 grid grid-cols-2 gap-2">
+          <Link
+            href={`/hoja-de-corte/${corte.id}`}
+            target="_blank"
+            className="inline-flex h-12 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <ListChecks className="h-5 w-5 shrink-0" />
+            <span className="truncate">Hoja de corte</span>
+          </Link>
+          <a
+            href={`/api/cortes/${corte.id}/lista`}
+            title="Archivo para la máquina"
+            aria-label="Archivo para la máquina"
+            className="inline-flex h-12 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-base font-medium transition-colors hover:bg-muted"
+          >
+            <Download className="h-5 w-5 shrink-0" />
+            <span className="truncate">Archivo</span>
+          </a>
+        </div>
       )}
 
-      <div className="mt-auto border-t pt-3">
-        <AccionesCorte
-          id={corte.id}
-          estado={corte.estado}
-          urgente={corte.urgente}
-          compacto
-          soloMaquina={soloMaquina}
-        />
-      </div>
+      {hayAcciones && (
+        <div className="mt-auto border-t pt-3">
+          <AccionesCorte
+            id={corte.id}
+            estado={corte.estado}
+            urgente={corte.urgente}
+            pasadas={corte.pasadas}
+            compacto
+            soloMaquina={soloMaquina}
+          />
+        </div>
+      )}
     </TarjetaTablero>
   );
 }

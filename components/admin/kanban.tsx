@@ -44,11 +44,14 @@ export function ColumnaTablero({
   cantidad,
   detalle,
   estado,
+  tope = TOPE_VISIBLE,
   children,
 }: {
   titulo: string;
   cantidad: number;
   detalle?: string;
+  /** Cuántas tarjetas se ven antes de «Ver N más». */
+  tope?: number;
   /**
    * El estado que representa la columna. La franja de color sale de acá y no
    * como clase suelta: quien llama dice qué es la columna, no de qué color
@@ -60,9 +63,9 @@ export function ColumnaTablero({
   const [expandida, setExpandida] = useState(false);
 
   const tarjetas = Array.isArray(children) ? children.flat() : [children];
-  const hayDeMas = tarjetas.length > TOPE_VISIBLE;
+  const hayDeMas = tarjetas.length > tope;
   const visibles =
-    hayDeMas && !expandida ? tarjetas.slice(0, TOPE_VISIBLE) : tarjetas;
+    hayDeMas && !expandida ? tarjetas.slice(0, tope) : tarjetas;
   const ocultas = tarjetas.length - visibles.length;
 
   return (
@@ -109,13 +112,15 @@ export function ColumnaTablero({
       </header>
 
       {/*
-        La columna scrollea sola en lugar de estirar la página: con cincuenta
-        pedidos en una etapa, una columna infinita obliga a bajar hasta el fondo
-        para ver qué hay en las otras, que es justo lo que el tablero venía a
-        resolver.
+        En una fila (escritorio ancho) la columna scrollea sola en lugar de
+        estirar la página: con cincuenta pedidos en una etapa, una columna
+        infinita obliga a bajar hasta el fondo para ver qué hay en las otras.
+        Apiladas (teléfono y tablet) no: un scroll dentro de otro mostraba una
+        tarjeta y media y escondía «Ver N más» (mes simulado, H121 y H329).
+        Para lo largo está el pliegue.
       */}
       {cantidad > 0 && (
-        <div className="flex max-h-[calc(100vh-300px)] flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
+        <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 @5xl:max-h-[calc(100vh-300px)] @5xl:overflow-y-auto">
           {visibles}
 
           {hayDeMas && !expandida && (

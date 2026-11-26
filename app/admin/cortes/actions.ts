@@ -14,6 +14,10 @@ import type { PiezaFijada } from "@/lib/cortes/tipos";
 export interface EstadoCorte {
   error?: string;
   ok?: string;
+  /** El corte nuevo, para ir a su ficha. */
+  id?: string;
+  /** El campo al que apunta el error (la placa que el pedido no vende). */
+  campo?: string;
 }
 
 function fallo(r: { error?: unknown }, porDefecto?: string): EstadoCorte {
@@ -25,14 +29,57 @@ function fallo(r: { error?: unknown }, porDefecto?: string): EstadoCorte {
  * veía en la pantalla: si ya cambió, Go contesta 409 en vez de dar un paso de
  * más.
  */
-export async function avanzarCorte(id: string, desde?: string): Promise<EstadoCorte> {
+export async function avanzarCorte(id: string, desde?: string, pasadas?: number): Promise<EstadoCorte> {
+  const n = Number(pasadas);
   const r = await (await api()).POST("/api/v1/admin/cortes/{id}/avanzar", {
-    params: { path: { id }, query: desde ? { desde } : {} },
+    params: {
+      path: { id },
+      query: {
+        ...(desde ? { desde } : {}),
+        // Al terminar, las que confirma el taller en la tarjeta.
+        ...(pasadas !== undefined && Number.isFinite(n) && n >= 0 ? { pasadas: Math.floor(n) } : {}),
+      },
+    },
   });
   if (!r.data) return fallo(r, "No se encontró el corte.");
   revalidatePath("/admin/cortes");
+  revalidatePath("/taller");
   revalidatePath("/admin");
   return { ok: r.data.ok };
+}
+
+/** Deshace el último paso del taller: un toque equivocado en la tablet. */
+export async function volverCorte(id: string, desde: string): Promise<EstadoCorte> {
+  const r = await (await api()).POST("/api/v1/admin/cortes/{id}/volver", {
+    params: { path: { id }, query: { desde } },
+  });
+  if (!r.data) return fallo(r, "No se encontró el corte.");
+  revalidatePath("/admin/cortes");
+  revalidatePath("/taller");
+  revalidatePath("/admin");
+  return { ok: r.data.ok };
+}
+
+/** Saca de la cola un corte cargado mal, con su motivo. */
+export async function anularCorte(id: string, motivo: string): Promise<EstadoCorte> {
+  const r = await (await api()).POST("/api/v1/admin/cortes/{id}/anular", {
+    params: { path: { id } },
+    body: { motivo: String(motivo).slice(0, 400) },
+  });
+  if (!r.data) return fallo(r, "No se encontró el corte.");
+  revalidatePath("/admin/cortes");
+  revalidatePath(`/admin/cortes/${id}`);
+  revalidatePath("/taller");
+  return { ok: r.data.ok };
+}
+
+/** El corte suelto con algo para cobrar nace como pedido y se cobra ahí. */
+export async function pasarCorteAPedido(id: string): Promise<EstadoCorte> {
+  const r = await (await api()).POST("/api/v1/admin/cortes/{id}/pedido", { params: { path: { id } } });
+  if (!r.data) return fallo(r, "No se encontró el corte.");
+  revalidatePath(`/admin/cortes/${id}`);
+  revalidatePath("/admin/pedidos");
+  return { ok: `Quedó en el pedido ${r.data.numero}.`, id: r.data.id };
 }
 
 /** Marca o desmarca el corte como urgente, que es lo que ordena la cola. */
@@ -80,13 +127,19 @@ export async function crearCorte(_previo: EstadoCorte, formData: FormData): Prom
       consulta: campo("consulta"),
       consultaGrupo: campo("consultaGrupo"),
       anchoSierraMm: campo("anchoSierraMm"),
+      reemplaza: campo("reemplaza"),
+      sinCargo: formData.get("sinCargo") === "si",
+      otraPlaca: formData.get("otraPlaca") === "si",
       piezas,
     },
   });
-  if (!r.data) return fallo(r, "Revisá los datos.");
+  if (!r.data) {
+    const p = r.error as Problema | undefined;
+    return { ...fallo(r, "Revisá los datos."), ...(p?.errores?.otraPlaca ? { campo: "otraPlaca" } : {}) };
+  }
   revalidatePath("/admin/cortes");
   revalidatePath("/taller");
-  return { ok: `Se cargó el corte ${r.data.numero}.` };
+  return { ok: `Se cargó el corte ${r.data.numero}.`, id: r.data.id };
 }
 
 /** Carga las pasadas de sierra de un trabajo, que es lo que lo hace cobrable. */

@@ -279,18 +279,20 @@ export default async function FichaCortePage({
                 {pedido.lineas.map((l, i) => (
                   <Renglon key={i} que={l.descripcion} cuanto={l.subtotal} />
                 ))}
-                {/* «Cobrado en PED-1158 … Sin cobrar» se contradecía (H173):
-                    sin cobrar, el total es el de la venta. */}
+                {/* «Cobrado en PED-1155 … Sin cobrar» se contradecía (H173,
+                    H232): «Cobrado» lo dice el estado de pago del pedido, el
+                    mismo que va al lado, y no que no quede nada para el
+                    mostrador (un pedido a cuenta no está cobrado). */}
                 <Total
                   texto={
                     <>
-                      {corte.cobrado ? "Cobrado en " : "Venta "}
+                      {pedido.estadoPago === "pagado" ? "Cobrado en " : "Venta "}
                       <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
                         {pedido.numero}
                       </Link>
                     </>
                   }
-                  monto={corte.cobrado ? pedido.cobrado : pedido.lineas.reduce((s, l) => s + l.subtotal, 0)}
+                  monto={pedido.cobrado}
                 >
                   <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
                 </Total>

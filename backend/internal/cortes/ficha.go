@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas"
 )
 
 // Ficha es todo lo que muestra /admin/cortes/[id]: el trabajo, su plano, el
@@ -209,10 +210,9 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 		return nil, false, nil
 	}
 	p := &PedidoDelCorte{Lineas: []RenglonDelPedido{}}
-	var subtotal, descuento jsmath.Num
 	err := s.pool.QueryRow(ctx, `
-		SELECT numero, estado::text, estado_pago::text, subtotal, coalesce(descuento, 0)
-		FROM orders WHERE id = $1`, *c.OrderID).Scan(&p.Numero, &p.Estado, &p.EstadoPago, &subtotal, &descuento)
+		SELECT numero, estado::text, estado_pago::text
+		FROM orders WHERE id = $1`, *c.OrderID).Scan(&p.Numero, &p.Estado, &p.EstadoPago)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, nil
 	}
@@ -257,13 +257,13 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 		for _, r := range delCorte {
 			suma += r.Subtotal
 		}
-		// El descuento de la venta (la escala por medio de pago, el que
-		// tipeó el vendedor) se reparte: CRT-8 se cobró $4.320 y la ficha
-		// decía $4.800 (H114).
-		if st := subtotal.F(); st > 0 && descuento.F() > 0 {
-			suma = float64(suma - float64(descuento.F()*(suma/st)))
-		}
-		p.Cobrado = redondear(suma)
+		// Los renglones ya vienen netos: el mostrador reparte el descuento
+		// de la venta (la escala por medio de pago, el que tipeó el
+		// vendedor) en el precio de cada renglón (ventas.AplicarDescuento),
+		// y orders.descuento queda solo como constancia. Volver a
+		// descontarlo daba $1.944 de un corte cobrado $2.160 (mes simulado,
+		// H114 y H232).
+		p.Cobrado = ventas.ACentavos(suma)
 	} else if deLaPlaca != nil {
 		p.Lineas = deLaPlaca
 	}

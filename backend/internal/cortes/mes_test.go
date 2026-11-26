@@ -324,10 +324,12 @@ func TestLaFichaSabeDeSuPedido(t *testing.T) {
 		t.Errorf("los retales de placas pagadas van al stock")
 	}
 
-	// Vendido en el mostrador con 10 % de descuento: se cobró eso.
+	// Vendido en el mostrador con 10 % de descuento: se cobró eso. El
+	// mostrador deja los renglones netos (el precio ya rebajado) y el
+	// descuento en el pedido como constancia: no se descuenta dos veces.
 	venta := e.pedido(t, "PED-1026",
-		map[string]any{"descripcion": "Corte a medida · 3 piezas", "unidad": "pasada", "cantidad": 4, "precio": 1200, "delCorte": true})
-	if _, err := e.pool.Exec(context.Background(), `update orders set descuento = 480, total = 4320, estado_pago = 'pagado' where id = $1`, venta); err != nil {
+		map[string]any{"descripcion": "Corte a medida · 3 piezas", "unidad": "pasada", "cantidad": 4, "precio": 1080, "delCorte": true})
+	if _, err := e.pool.Exec(context.Background(), `update orders set subtotal = 4800, descuento = 480, total = 4320, estado_pago = 'pagado' where id = $1`, venta); err != nil {
 		t.Fatal(err)
 	}
 	vendido := alta(t, e, ven, melamina(e, "orderId", venta, "piezas", []any{pieza(600, 300, 3)}))

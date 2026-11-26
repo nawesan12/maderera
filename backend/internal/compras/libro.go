@@ -166,7 +166,8 @@ func SaldosCorrientes(montos []float64) ([]float64, float64) {
 	saldos := make([]float64, len(montos))
 	acumulado := 0.0
 	for i := len(montos) - 1; i >= 0; i-- {
-		acumulado += montos[i]
+		// A centavos en cada paso: sumar floats dejaba 625570.0000000005.
+		acumulado = jsmath.Redondear2(float64(acumulado + montos[i]))
 		saldos[i] = acumulado
 	}
 	return saldos, acumulado

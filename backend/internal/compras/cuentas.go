@@ -178,10 +178,66 @@ func CuentaDeRecepcion(lineas []LineaRecibida, gastos float64, estado func(varia
 			return 0, 0, err
 		}
 	}
-	for i, l := range lineas {
-		deuda += AgregarIva(float64(l.Cantidad*conGastos[i]), l.AlicuotaIva)
+	return neto, DeudaDeRecepcion(lineas, gastos), nil
+}
+
+// DeudaDeRecepcion es lo que la recepción le carga al proveedor: el neto
+// de cada alícuota con su parte del flete, más el IVA, como lo factura el
+// proveedor.
+//
+// Antes se sumaba línea por línea con el costo por unidad del prorrateo,
+// que tiene cuatro decimales: 1.152.000 netos daban $ 1.393.920,03 en vez
+// de 1.393.920, y la factura cargaba la diferencia de 3 centavos en
+// negativo. El flete se reparte entre alícuotas a centavos (el resto, a la
+// de más peso) y el neto de cada una se cuenta con el costo sin redondear.
+func DeudaDeRecepcion(lineas []LineaRecibida, gastos float64) float64 {
+	type grupo struct{ alicuota, neto, cantidad float64 }
+	var grupos []*grupo
+	por := map[float64]*grupo{}
+	total, cantidades := 0.0, 0.0
+	for _, l := range lineas {
+		a := l.AlicuotaIva
+		if math.IsNaN(a) {
+			a = 0
+		}
+		g := por[a]
+		if g == nil {
+			g = &grupo{alicuota: a}
+			por[a] = g
+			grupos = append(grupos, g)
+		}
+		v := float64(l.Cantidad * l.CostoUnitario)
+		g.neto += v
+		g.cantidad += l.Cantidad
+		total += v
+		cantidades += l.Cantidad
 	}
-	return neto, deuda, nil
+	partes := make([]float64, len(grupos))
+	if finito(gastos) && gastos > 0 && len(grupos) > 0 && (total > 0 || cantidades > 0) {
+		mayor, peso := 0, math.Inf(-1)
+		for i, g := range grupos {
+			p := g.cantidad / cantidades
+			if total > 0 {
+				p = g.neto / total
+			}
+			partes[i] = jsmath.Redondear2(float64(p * gastos))
+			if p > peso {
+				mayor, peso = i, p
+			}
+		}
+		resto := 0.0
+		for i, p := range partes {
+			if i != mayor {
+				resto += p
+			}
+		}
+		partes[mayor] = jsmath.Redondear2(gastos - resto)
+	}
+	deuda := 0.0
+	for i, g := range grupos {
+		deuda += AgregarIva(float64(g.neto+partes[i]), g.alicuota)
+	}
+	return jsmath.Redondear2(deuda)
 }
 
 // --- las retenciones ---

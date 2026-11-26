@@ -577,6 +577,7 @@ func (s *Servicio) AnularRecepcion(ctx context.Context, ses *auth.Sesion, id, mo
 			if err != nil {
 				return err
 			}
+			deuda = jsmath.Redondear2(deuda)
 			switch {
 			case facturada != "":
 				deuda = 0

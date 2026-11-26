@@ -98,7 +98,9 @@ var pantallaDeCadaRuta = map[string]string{
 	"BuscarMercaderia":               "/admin/compras",                // GET /api/v1/admin/compras/mercaderia
 	"AnularOrdenDeCompra":            "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/anular
 	"MarcarOrdenEnviada":             "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/enviada
-	"RecibirDeLaOrden":               "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/recibir
+	"RecibirDeLaOrden":               "/admin/recepciones",            // POST /api/v1/admin/compras/ordenes/{id}/recibir
+	"EditarOrdenDeCompra":            "/admin/compras",                // PUT /api/v1/admin/compras/ordenes/{id}
+	"AplicarNotaDeCredito":           "/admin/compras",                // POST /api/v1/admin/compras/facturas/{id}/aplicar
 	"OrdenDeCompra":                  "/admin/compras",                // GET /api/v1/admin/compras/ordenes/{id}
 	"ListarOrdenesDeCompra":          "/admin/compras",                // GET /api/v1/admin/compras/ordenes
 	"CrearOrdenDeCompra":             "/admin/compras",                // POST /api/v1/admin/compras/ordenes
@@ -285,11 +287,13 @@ var pantallaDeCadaRuta = map[string]string{
 	"DesactivarPush":                 "personal",                      // DELETE /api/v1/admin/push
 	"ClaveDePush":                    "personal",                      // GET /api/v1/admin/push
 	"ActivarPush":                    "personal",                      // POST /api/v1/admin/push
-	"AnularRecepcion":                "/admin/recepciones",            // POST /api/v1/admin/recepciones/{id}/anular
+	"AnularRecepcion":                "/admin/recepciones/nueva",      // POST /api/v1/admin/recepciones/{id}/anular
+	"EditarRecepcion":                "/admin/recepciones",            // PUT /api/v1/admin/recepciones/{id}
+	"OrdenesPorRecibir":              "/admin/recepciones",            // GET /api/v1/admin/recepciones/por-recibir
 	"ConfirmarRecepcion":             "/admin/recepciones",            // POST /api/v1/admin/recepciones/{id}/confirmar
 	"Recepcion":                      "/admin/recepciones",            // GET /api/v1/admin/recepciones/{id}
 	"ListarRecepciones":              "/admin/recepciones",            // GET /api/v1/admin/recepciones
-	"CrearRecepcion":                 "/admin/recepciones",            // POST /api/v1/admin/recepciones
+	"CrearRecepcion":                 "/admin/recepciones/nueva",      // POST /api/v1/admin/recepciones
 	"AnularRecibo":                   "plata",                         // POST /api/v1/admin/recibos/{id}/anular
 	"AnularRemito":                   "/admin/pedidos",                // POST /api/v1/admin/remitos/{id}/anular
 	"PrepararRemito":                 "/admin/pedidos",                // POST /api/v1/admin/remitos

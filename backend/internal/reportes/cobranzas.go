@@ -39,20 +39,20 @@ type ParteDeCobranza struct {
 
 // Cobranza es un renglón: un recibo o un cobro en línea sin recibo.
 type Cobranza struct {
-	ID         string            `json:"id"`
-	Tipo       string            `json:"tipo"` // «recibo» o «en-linea»
-	Numero     *string           `json:"numero"`
-	Fecha      time.Time         `json:"fecha"`
-	Cliente    string            `json:"cliente"`
-	CustomerID *string           `json:"customerId"`
-	OrderID    *string           `json:"orderId"`
+	ID         string    `json:"id"`
+	Tipo       string    `json:"tipo"` // «recibo» o «en-linea»
+	Numero     *string   `json:"numero"`
+	Fecha      time.Time `json:"fecha"`
+	Cliente    string    `json:"cliente"`
+	CustomerID *string   `json:"customerId"`
+	OrderID    *string   `json:"orderId"`
 	// Pedido es el número del pedido que cobró (un recibo de un pedido
 	// puntual no es de la cuenta corriente: mes simulado, H268).
-	Pedido *string `json:"pedido"`
-	Origen string  `json:"origen"`
-	Anulado    bool              `json:"anulado"`
-	Total      float64           `json:"total"`
-	Partes     []ParteDeCobranza `json:"partes"`
+	Pedido  *string           `json:"pedido"`
+	Origen  string            `json:"origen"`
+	Anulado bool              `json:"anulado"`
+	Total   float64           `json:"total"`
+	Partes  []ParteDeCobranza `json:"partes"`
 }
 
 // TotalPorMedio es lo cobrado por un medio en el período.

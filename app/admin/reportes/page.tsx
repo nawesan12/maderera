@@ -220,21 +220,21 @@ export default async function ReportesPage({
                 <th className="px-5 py-2.5 font-semibold">
                   {etiquetaCorte.replace("Por ", "")}
                 </th>
-                <th className="px-5 py-2.5 text-right font-semibold">
+                <th className="px-3 py-2.5 text-right font-semibold">
                   {corte === "producto" ? "Unidades" : "Operaciones"}
                 </th>
-                <th className="px-5 py-2.5 text-right font-semibold">Total</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Total</th>
                 {hayMargen && (
                   <>
-                    <th className="px-5 py-2.5 text-right font-semibold">
+                    <th className="px-3 py-2.5 text-right font-semibold">
                       Costo
                     </th>
-                    <th className="px-5 py-2.5 text-right font-semibold">
+                    <th className="px-3 py-2.5 text-right font-semibold">
                       Margen
                     </th>
                   </>
                 )}
-                <th className="px-5 py-2.5 text-right font-semibold">
+                <th className="px-3 py-2.5 text-right font-semibold">
                   Participación
                 </th>
               </tr>
@@ -245,26 +245,29 @@ export default async function ReportesPage({
 
                 return (
                   <tr key={f.clave}>
-                    <td className="px-5 py-3">
+                    {/* El nombre puede partirse y el detalle va debajo: con
+                        un nombre largo la tabla no entraba a 1280 px y se
+                        apilaba en tarjetas (mes simulado). */}
+                    <td className="px-5 py-3 [overflow-wrap:anywhere]">
                       {f.etiqueta}
                       {f.detalle && (
-                        <span className="ml-2 text-sm text-muted-foreground">
+                        <span className="block text-sm text-muted-foreground">
                           {f.detalle}
                         </span>
                       )}
                     </td>
-                    <td className="tabular px-5 py-3 text-right">
+                    <td className="tabular px-3 py-3 text-right">
                       {f.cantidad.toLocaleString("es-AR")}
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
+                    <td className="tabular px-3 py-3 text-right font-semibold">
                       {formatearMonto(f.total)}
                     </td>
                     {hayMargen && (
                       <>
-                        <td className="tabular px-5 py-3 text-right text-muted-foreground">
+                        <td className="tabular px-3 py-3 text-right text-muted-foreground">
                           {f.costo === null ? "—" : formatearMonto(f.costo)}
                         </td>
-                        <td className="px-5 py-3 text-right">
+                        <td className="px-3 py-3 text-right">
                           {f.costo === null ? (
                             <span className="estado-problema text-sm font-medium">
                               sin costo
@@ -311,11 +314,11 @@ export default async function ReportesPage({
                         </td>
                       </>
                     )}
-                    <td className="px-5 py-3">
+                    <td className="py-3 pl-3 pr-5">
                       {/* La barra vale más que el porcentaje solo: el ojo
                           encuentra al que se lleva la mitad sin leer números. */}
                       <div className="flex items-center justify-end gap-2">
-                        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                           <div
                             className="h-full rounded-full bg-primary"
                             style={{ width: `${parte}%` }}
@@ -342,13 +345,13 @@ export default async function ReportesPage({
                     </span>
                   )}
                 </td>
-                <td className="tabular px-5 py-3 text-right">{totales.cantidad.toLocaleString("es-AR")}</td>
-                <td className="tabular px-5 py-3 text-right">{formatearMonto(totales.total)}</td>
+                <td className="tabular px-3 py-3 text-right">{totales.cantidad.toLocaleString("es-AR")}</td>
+                <td className="tabular px-3 py-3 text-right">{formatearMonto(totales.total)}</td>
                 {hayMargen && (
                   <>
-                    <td className="tabular px-5 py-3 text-right">{formatearMonto(costoTotal)}</td>
+                    <td className="tabular px-3 py-3 text-right">{formatearMonto(costoTotal)}</td>
                     <td
-                      className={`tabular px-5 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}
+                      className={`tabular px-3 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}
                     >
                       {formatearMonto(margenTotal)}
                     </td>

@@ -42,7 +42,7 @@ export default async function AtencionPage({
 
   return (
     <div className="panel textura flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b px-3 sm:h-14 sm:px-4">
         <Link href="/admin">
           <Marca tamano="panel" etiqueta="Atención" />
         </Link>
@@ -53,7 +53,7 @@ export default async function AtencionPage({
           </span>
         )}
 
-        <span className="ml-auto text-base text-muted-foreground">
+        <span className="ml-auto truncate text-base text-muted-foreground">
           {usuario.name}
         </span>
 
@@ -66,7 +66,7 @@ export default async function AtencionPage({
         </Link>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+      <main className="flex min-h-0 flex-1 flex-col gap-2 p-2 sm:gap-3 sm:p-3">
         <VistaWhatsapp chat={chat} filtro={filtro} pantallaCompleta />
       </main>
     </div>

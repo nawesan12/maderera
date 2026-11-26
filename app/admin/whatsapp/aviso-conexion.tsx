@@ -137,9 +137,16 @@ function AvisoCompacto({ estado, esAdmin }: { estado: EstadoConexion; esAdmin: b
     return (
       <p className="flex shrink-0 items-center gap-2 rounded-lg border border-brand-orange/35 bg-brand-orange/[0.07] px-3 py-1.5 text-sm sm:text-base">
         <FlaskConical className="h-4 w-4 shrink-0 text-brand-orange" />
+        {/* En el teléfono, corto para que entre entero sin elipsis. */}
         <span className="min-w-0 truncate">
-          <span className="font-medium">Modo demostración:</span>{" "}
-          <span className="text-muted-foreground">los mensajes no salen a WhatsApp.</span>
+          <span className="font-medium">
+            <span className="hidden sm:inline">Modo demostración</span>
+            <span className="sm:hidden">Demostración</span>:
+          </span>{" "}
+          <span className="text-muted-foreground">
+            <span className="hidden sm:inline">los mensajes no salen a WhatsApp.</span>
+            <span className="sm:hidden">no sale nada a WhatsApp.</span>
+          </span>
         </span>
         {esAdmin && (
           <Link

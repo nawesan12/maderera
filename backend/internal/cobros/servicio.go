@@ -338,8 +338,10 @@ func reabrirDeudaConElProveedor(ctx context.Context, tx pgx.Tx, cheque sqlc.Cheq
 	if motivo != "" {
 		detalle += ": " + motivo
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
-		VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5)`, proveedor, jsmath.Fijo2(float64(cheque.Importe)), cheque.Numero, detalle, usuario)
+	// Atado al cheque: es la deuda que Pagos ofrece reponer (mes simulado,
+	// H293: los $400.000 subían la cuenta y no había dónde pagarlos).
+	_, err = tx.Exec(ctx, `INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, cheque_id)
+		VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5, $6)`, proveedor, jsmath.Fijo2(float64(cheque.Importe)), cheque.Numero, detalle, usuario, cheque.ID)
 	return err
 }
 
@@ -412,6 +414,14 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 			if err == nil && estado != "cancelado" {
 				return errCobro("Este cheque pagó la venta " + numero + " del mostrador: anulá la venta " + numero +
 					" desde el mostrador, que devuelve la plata o la deuda y anula el cheque.")
+			}
+		}
+		// Un diferido no se deposita antes de su fecha: el banco lo rechaza
+		// (mes simulado, H405: el 55500901 del 20/12 se depositó y acreditó
+		// el 26/11 con dos clics).
+		if hacia == "depositado" {
+			if m := RevisarDeposito(cheque.FechaPago, time.Now()); m != "" {
+				return errCobro(m)
 			}
 		}
 		efecto := "nada"

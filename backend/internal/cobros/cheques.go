@@ -140,3 +140,12 @@ func RevisarFechasDeCheques(partes []Parte, ahora time.Time) string {
 	}
 	return ""
 }
+
+// RevisarDeposito: un cheque se deposita desde el día de su fecha de pago
+// (en hora argentina), no antes. "" si se puede.
+func RevisarDeposito(fechaPago, ahora time.Time) string {
+	if fechaPago.In(argentina).Format("2006-01-02") > ahora.In(argentina).Format("2006-01-02") {
+		return "Este cheque es para el " + fechaCorta(fechaPago) + ": se deposita desde ese día."
+	}
+	return ""
+}

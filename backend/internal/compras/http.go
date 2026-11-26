@@ -467,7 +467,8 @@ func (a *API) AnularOrdenDeCompra(ctx context.Context, r comprasapi.AnularOrdenD
 }
 
 func (a *API) RecibirDeLaOrden(ctx context.Context, r comprasapi.RecibirDeLaOrdenRequestObject) (comprasapi.RecibirDeLaOrdenResponseObject, error) {
-	ses, err := compras(ctx)
+	// Lo hace quien recibe el camión: también el depósito (mes simulado, H097).
+	ses, err := recepciones(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -511,15 +512,21 @@ func (a *API) BuscarMercaderia(ctx context.Context, r comprasapi.BuscarMercaderi
 // --- recepciones ---
 
 func (a *API) ListarRecepciones(ctx context.Context, r comprasapi.ListarRecepcionesRequestObject) (comprasapi.ListarRecepcionesResponseObject, error) {
-	if _, err := recepciones(ctx); err != nil {
+	ses, err := recepciones(ctx)
+	if err != nil {
 		return nil, err
 	}
 	v, err := a.s.ListarRecepciones(ctx, limite(r.Params.Limite, 50))
+	if err == nil && !veCostos(ses) {
+		for i := range v {
+			v[i].Neto, v[i].Gastos = 0, ""
+		}
+	}
 	return ok(v), err
 }
 
 func (a *API) CrearRecepcion(ctx context.Context, r comprasapi.CrearRecepcionRequestObject) (comprasapi.CrearRecepcionResponseObject, error) {
-	ses, err := recepciones(ctx)
+	ses, err := recepcionesConCostos(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +538,8 @@ func (a *API) CrearRecepcion(ctx context.Context, r comprasapi.CrearRecepcionReq
 }
 
 func (a *API) Recepcion(ctx context.Context, r comprasapi.RecepcionRequestObject) (comprasapi.RecepcionResponseObject, error) {
-	if _, err := recepciones(ctx); err != nil {
+	ses, err := recepciones(ctx)
+	if err != nil {
 		return nil, err
 	}
 	v, err := a.s.ObtenerRecepcion(ctx, r.Id)
@@ -540,6 +548,9 @@ func (a *API) Recepcion(ctx context.Context, r comprasapi.RecepcionRequestObject
 	}
 	if v == nil {
 		return nil, noEncontrado("Esa recepción no existe.")
+	}
+	if !veCostos(ses) {
+		sinCostos(v)
 	}
 	return ok(v), nil
 }
@@ -560,7 +571,7 @@ func (a *API) ConfirmarRecepcion(ctx context.Context, r comprasapi.ConfirmarRece
 }
 
 func (a *API) AnularRecepcion(ctx context.Context, r comprasapi.AnularRecepcionRequestObject) (comprasapi.AnularRecepcionResponseObject, error) {
-	ses, err := recepciones(ctx)
+	ses, err := recepcionesConCostos(ctx)
 	if err != nil {
 		return nil, err
 	}

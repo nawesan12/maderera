@@ -160,7 +160,11 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento,
 		  coalesce(f.percepcion_iva, 0), coalesce(f.percepcion_iibb, 0)
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
-		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 AND f.anulada_at IS NULL ORDER BY f.fecha_emision`, desde, hasta)
+		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 AND f.anulada_at IS NULL
+		  -- La factura de un gasto pagado en el acto va con el asiento del
+		  -- gasto (gasto e IVA contra la caja), no contra Proveedores.
+		  AND NOT EXISTS (SELECT 1 FROM expenses e WHERE e.purchase_invoice_id = f.id)
+		ORDER BY f.fecha_emision`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
@@ -256,20 +260,25 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	asientos = append(asientos, cheques...)
 
 	rs, err = s.lectura.Query(ctx, `
-		SELECT fecha, descripcion, categoria::text, importe, medio::text, circuito::text
-		FROM expenses WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha`, desde, hasta)
+		SELECT e.fecha, e.descripcion, e.categoria::text, e.importe, e.medio::text, e.circuito::text,
+		  coalesce(f.tipo::text, ''), coalesce(f.iva21 + f.iva105 + f.iva27, 0), coalesce(f.percepciones, 0)
+		FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id AND f.anulada_at IS NULL
+		WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
 	for rs.Next() {
 		var g GastoAAsentar
-		var importe jsmath.Num
-		var circuito string
-		if err := rs.Scan(&g.Fecha, &g.Descripcion, &g.Categoria, &importe, &g.Medio, &circuito); err != nil {
+		var importe, iva, percepciones jsmath.Num
+		var circuito, tipo string
+		if err := rs.Scan(&g.Fecha, &g.Descripcion, &g.Categoria, &importe, &g.Medio, &circuito, &tipo, &iva, &percepciones); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		g.Importe = importe.F()
+		if tipo != "" && compras.DaCreditoFiscal(tipo) {
+			g.Iva, g.Percepciones = iva.F(), percepciones.F()
+		}
 		gasto := AsientoDeGasto(g)
 		if circuito == CircuitoNegro {
 			gasto.Circuito = CircuitoNegro
@@ -343,7 +352,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		  (SELECT count(*)::int FROM goods_receipts WHERE estado = 'borrador' AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
 		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2
-		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)),
+		     AND NOT EXISTS (SELECT 1 FROM purchase_invoice_receipts x WHERE x.goods_receipt_id = g.id)),
 		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND `+fragmentos.FacturaViva+`)`, desde, hasta, ihasta).
 		Scan(&borradores, &cajas, &sinFactura, &facturasVivas)
 	if err != nil {

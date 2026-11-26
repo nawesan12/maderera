@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/cobros"
+	"mjbj/internal/compras"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -305,9 +306,10 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 	return a, err
 }
 
-// saldoDeCompra es el saldo de cada factura de compra (las notas de crédito
-// no son deuda: restan aparte en la cuenta del proveedor).
-const saldoDeCompra = `(f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0))`
+// saldoDeCompra es el saldo de cada factura de compra, con la regla de
+// compras.AplicadoA (las notas de crédito sin aplicar no son deuda: restan
+// aparte en la cuenta del proveedor).
+var saldoDeCompra = `(f.total - ` + compras.AplicadoA("f") + `)`
 
 // Debo suma, proveedor por proveedor, lo que dice su libro.
 //

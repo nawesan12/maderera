@@ -282,9 +282,30 @@ type Certificado struct {
 	RetenidoAntes *string `json:"retenidoAntes"`
 }
 
+// FacturaConSaldo Una factura con saldo, una nota de crédito a favor (tipo nota_credito_*,
+// el saldo es lo que resta) o un cheque que se le dio y rebotó (tipo
+// cheque_rechazado, el id es el del cheque).
+type FacturaConSaldo struct {
+	FechaEmision     time.Time  `json:"fechaEmision"`
+	FechaVencimiento *time.Time `json:"fechaVencimiento"`
+	Id               string     `json:"id"`
+	Imputado         float64    `json:"imputado"`
+
+	// NetoSinIva neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
+	NetoSinIva float64 `json:"netoSinIva"`
+	Numero     string  `json:"numero"`
+	Proveedor  *string `json:"proveedor,omitempty"`
+	Saldo      float64 `json:"saldo"`
+	SupplierId *string `json:"supplierId,omitempty"`
+	Tipo       string  `json:"tipo"`
+	Total      float64 `json:"total"`
+}
+
 // FichaDeFactura defines model for FichaDeFactura.
 type FichaDeFactura struct {
 	AnuladaAt        *time.Time `json:"anuladaAt"`
+	AplicaA          *string    `json:"aplicaA"`
+	AplicaAId        *string    `json:"aplicaAId"`
 	Cae              *string    `json:"cae"`
 	CondicionIva     string     `json:"condicionIva"`
 	CreatedAt        time.Time  `json:"createdAt"`
@@ -379,19 +400,21 @@ type FichaDePagoCircuito string
 
 // Gasto defines model for Gasto.
 type Gasto struct {
-	Categoria   string        `json:"categoria"`
-	Circuito    GastoCircuito `json:"circuito"`
-	ConFactura  bool          `json:"conFactura"`
-	Descripcion string        `json:"descripcion"`
-	EnCaja      bool          `json:"enCaja"`
-	Fecha       time.Time     `json:"fecha"`
-	Id          string        `json:"id"`
-	Importe     string        `json:"importe"`
-	Medio       string        `json:"medio"`
-	Notas       *string       `json:"notas"`
-	Proveedor   *string       `json:"proveedor"`
-	Sucursal    *string       `json:"sucursal"`
-	SupplierId  *string       `json:"supplierId"`
+	Categoria         string        `json:"categoria"`
+	Circuito          GastoCircuito `json:"circuito"`
+	ConFactura        bool          `json:"conFactura"`
+	Descripcion       string        `json:"descripcion"`
+	EnCaja            bool          `json:"enCaja"`
+	Factura           *string       `json:"factura"`
+	Fecha             time.Time     `json:"fecha"`
+	Id                string        `json:"id"`
+	Importe           string        `json:"importe"`
+	Medio             string        `json:"medio"`
+	Notas             *string       `json:"notas"`
+	Proveedor         *string       `json:"proveedor"`
+	PurchaseInvoiceId *string       `json:"purchaseInvoiceId"`
+	Sucursal          *string       `json:"sucursal"`
+	SupplierId        *string       `json:"supplierId"`
 }
 
 // GastoCircuito defines model for Gasto.Circuito.
@@ -454,11 +477,18 @@ type PagoListado struct {
 	MotivoAnulacion    *string   `json:"motivoAnulacion"`
 	Neto               float64   `json:"neto"`
 	NumerosCertificado []string  `json:"numerosCertificado"`
-	Proveedor          string    `json:"proveedor"`
-	Referencia         *string   `json:"referencia"`
-	Retenido           float64   `json:"retenido"`
-	SupplierId         string    `json:"supplierId"`
-	Total              float64   `json:"total"`
+
+	// Partes con qué salió la plata, renglón por renglón
+	Partes []struct {
+		Importe    float64 `json:"importe"`
+		Medio      string  `json:"medio"`
+		Referencia *string `json:"referencia"`
+	} `json:"partes"`
+	Proveedor  string  `json:"proveedor"`
+	Referencia *string `json:"referencia"`
+	Retenido   float64 `json:"retenido"`
+	SupplierId string  `json:"supplierId"`
+	Total      float64 `json:"total"`
 }
 
 // PagoListadoCircuito defines model for PagoListado.Circuito.
@@ -506,12 +536,28 @@ type Proveedor struct {
 
 	// ExentoGananciasHasta Último día de la exención (YYYY-MM-DD)
 	ExentoGananciasHasta *string `json:"exentoGananciasHasta"`
-	Id                   string  `json:"id"`
-	Movimientos          []struct {
+
+	// Gastos los gastos pagados en el acto a este proveedor
+	Gastos []struct {
+		Descripcion string    `json:"descripcion"`
+		Factura     *string   `json:"factura"`
+		Fecha       time.Time `json:"fecha"`
+		Id          string    `json:"id"`
+		Importe     float64   `json:"importe"`
+		Medio       string    `json:"medio"`
+	} `json:"gastos"`
+	Id          string `json:"id"`
+	Movimientos []struct {
 		CreatedAt time.Time `json:"createdAt"`
 		Detalle   *string   `json:"detalle"`
-		Id        string    `json:"id"`
-		Monto     float64   `json:"monto"`
+
+		// FacturaDelRemito la factura que cubrió ese remito
+		FacturaDelRemito *string `json:"facturaDelRemito"`
+
+		// GoodsReceiptId la recepción (el remito) que lo cargó
+		GoodsReceiptId *string `json:"goodsReceiptId"`
+		Id             string  `json:"id"`
+		Monto          float64 `json:"monto"`
 
 		// PurchaseInvoiceId la factura de la que salió
 		PurchaseInvoiceId *string `json:"purchaseInvoiceId"`
@@ -737,6 +783,11 @@ type AnularFacturaDeCompraJSONBody struct {
 	Motivo string `json:"motivo"`
 }
 
+// AplicarNotaDeCreditoJSONBody defines parameters for AplicarNotaDeCredito.
+type AplicarNotaDeCreditoJSONBody struct {
+	FacturaId string `json:"facturaId"`
+}
+
 // ListarGastosParams defines parameters for ListarGastos.
 type ListarGastosParams struct {
 	Desde  time.Time `form:"desde" json:"desde"`
@@ -800,6 +851,9 @@ type ListarOrdenesDeCompraParams struct {
 
 // CrearOrdenDeCompraJSONBody defines parameters for CrearOrdenDeCompra.
 type CrearOrdenDeCompraJSONBody map[string]interface{}
+
+// EditarOrdenDeCompraJSONBody defines parameters for EditarOrdenDeCompra.
+type EditarOrdenDeCompraJSONBody map[string]interface{}
 
 // AnularOrdenDeCompraJSONBody defines parameters for AnularOrdenDeCompra.
 type AnularOrdenDeCompraJSONBody struct {
@@ -886,6 +940,9 @@ type ListarRecepcionesParams struct {
 // CrearRecepcionJSONBody defines parameters for CrearRecepcion.
 type CrearRecepcionJSONBody map[string]interface{}
 
+// EditarRecepcionJSONBody defines parameters for EditarRecepcion.
+type EditarRecepcionJSONBody map[string]interface{}
+
 // AnularRecepcionJSONBody defines parameters for AnularRecepcion.
 type AnularRecepcionJSONBody struct {
 	Motivo string `json:"motivo"`
@@ -900,6 +957,9 @@ type CorregirFacturaDeCompraJSONRequestBody CorregirFacturaDeCompraJSONBody
 // AnularFacturaDeCompraJSONRequestBody defines body for AnularFacturaDeCompra for application/json ContentType.
 type AnularFacturaDeCompraJSONRequestBody AnularFacturaDeCompraJSONBody
 
+// AplicarNotaDeCreditoJSONRequestBody defines body for AplicarNotaDeCredito for application/json ContentType.
+type AplicarNotaDeCreditoJSONRequestBody AplicarNotaDeCreditoJSONBody
+
 // CargarGastoJSONRequestBody defines body for CargarGasto for application/json ContentType.
 type CargarGastoJSONRequestBody CargarGastoJSONBody
 
@@ -911,6 +971,9 @@ type VistaPreviaDeListaMultipartRequestBody VistaPreviaDeListaMultipartBody
 
 // CrearOrdenDeCompraJSONRequestBody defines body for CrearOrdenDeCompra for application/json ContentType.
 type CrearOrdenDeCompraJSONRequestBody CrearOrdenDeCompraJSONBody
+
+// EditarOrdenDeCompraJSONRequestBody defines body for EditarOrdenDeCompra for application/json ContentType.
+type EditarOrdenDeCompraJSONRequestBody EditarOrdenDeCompraJSONBody
 
 // AnularOrdenDeCompraJSONRequestBody defines body for AnularOrdenDeCompra for application/json ContentType.
 type AnularOrdenDeCompraJSONRequestBody AnularOrdenDeCompraJSONBody
@@ -942,6 +1005,9 @@ type RegistrarMovimientoDeProveedorJSONRequestBody RegistrarMovimientoDeProveedo
 // CrearRecepcionJSONRequestBody defines body for CrearRecepcion for application/json ContentType.
 type CrearRecepcionJSONRequestBody CrearRecepcionJSONBody
 
+// EditarRecepcionJSONRequestBody defines body for EditarRecepcion for application/json ContentType.
+type EditarRecepcionJSONRequestBody EditarRecepcionJSONBody
+
 // AnularRecepcionJSONRequestBody defines body for AnularRecepcion for application/json ContentType.
 type AnularRecepcionJSONRequestBody AnularRecepcionJSONBody
 
@@ -968,6 +1034,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/admin/compras/facturas/{id}/anular)
 	AnularFacturaDeCompra(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/v1/admin/compras/facturas/{id}/aplicar)
+	AplicarNotaDeCredito(w http.ResponseWriter, r *http.Request, id string)
 
 	// (GET /api/v1/admin/compras/gastos)
 	ListarGastos(w http.ResponseWriter, r *http.Request, params ListarGastosParams)
@@ -1007,6 +1076,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/compras/ordenes/{id})
 	OrdenDeCompra(w http.ResponseWriter, r *http.Request, id string)
+
+	// (PUT /api/v1/admin/compras/ordenes/{id})
+	EditarOrdenDeCompra(w http.ResponseWriter, r *http.Request, id string)
 
 	// (POST /api/v1/admin/compras/ordenes/{id}/anular)
 	AnularOrdenDeCompra(w http.ResponseWriter, r *http.Request, id string)
@@ -1095,8 +1167,14 @@ type ServerInterface interface {
 	// (POST /api/v1/admin/recepciones)
 	CrearRecepcion(w http.ResponseWriter, r *http.Request)
 
+	// (GET /api/v1/admin/recepciones/por-recibir)
+	OrdenesPorRecibir(w http.ResponseWriter, r *http.Request)
+
 	// (GET /api/v1/admin/recepciones/{id})
 	Recepcion(w http.ResponseWriter, r *http.Request, id string)
+
+	// (PUT /api/v1/admin/recepciones/{id})
+	EditarRecepcion(w http.ResponseWriter, r *http.Request, id string)
 
 	// (POST /api/v1/admin/recepciones/{id}/anular)
 	AnularRecepcion(w http.ResponseWriter, r *http.Request, id string)
@@ -1347,6 +1425,32 @@ func (siw *ServerInterfaceWrapper) AnularFacturaDeCompra(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AnularFacturaDeCompra(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AplicarNotaDeCredito operation middleware
+func (siw *ServerInterfaceWrapper) AplicarNotaDeCredito(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AplicarNotaDeCredito(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1752,6 +1856,32 @@ func (siw *ServerInterfaceWrapper) OrdenDeCompra(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.OrdenDeCompra(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditarOrdenDeCompra operation middleware
+func (siw *ServerInterfaceWrapper) EditarOrdenDeCompra(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditarOrdenDeCompra(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2546,6 +2676,20 @@ func (siw *ServerInterfaceWrapper) CrearRecepcion(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// OrdenesPorRecibir operation middleware
+func (siw *ServerInterfaceWrapper) OrdenesPorRecibir(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OrdenesPorRecibir(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Recepcion operation middleware
 func (siw *ServerInterfaceWrapper) Recepcion(w http.ResponseWriter, r *http.Request) {
 
@@ -2563,6 +2707,32 @@ func (siw *ServerInterfaceWrapper) Recepcion(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Recepcion(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditarRecepcion operation middleware
+func (siw *ServerInterfaceWrapper) EditarRecepcion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditarRecepcion(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2762,6 +2932,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/compras/ordenes", wrapper.ListarOrdenesDeCompra)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/compras/ordenes", wrapper.CrearOrdenDeCompra)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/compras/ordenes/{id}", wrapper.OrdenDeCompra)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/compras/ordenes/{id}", wrapper.EditarOrdenDeCompra)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/compras/ordenes/{id}/enviada", wrapper.MarcarOrdenEnviada)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/compras/ordenes/{id}/anular", wrapper.AnularOrdenDeCompra)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/compras/ordenes/{id}/recibir", wrapper.RecibirDeLaOrden)
@@ -2769,13 +2940,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/compras/mercaderia", wrapper.BuscarMercaderia)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/recepciones", wrapper.ListarRecepciones)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/recepciones", wrapper.CrearRecepcion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/recepciones/por-recibir", wrapper.OrdenesPorRecibir)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/recepciones/{id}", wrapper.Recepcion)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/recepciones/{id}", wrapper.EditarRecepcion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/recepciones/{id}/confirmar", wrapper.ConfirmarRecepcion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/recepciones/{id}/anular", wrapper.AnularRecepcion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/compras/facturas", wrapper.ListarFacturasDeCompra)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/compras/facturas", wrapper.CargarFacturaDeCompra)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/compras/facturas/{id}", wrapper.FichaDeFacturaDeCompra)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/compras/facturas/{id}", wrapper.CorregirFacturaDeCompra)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/compras/facturas/{id}/aplicar", wrapper.AplicarNotaDeCredito)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/compras/facturas/{id}/anular", wrapper.AnularFacturaDeCompra)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/compras/libro-iva", wrapper.LibroIvaCompras)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/compras/libro-iva/csv", wrapper.LibroIvaComprasCsv)
@@ -2900,8 +3074,12 @@ type ListarFacturasDeCompraResponseObject interface {
 }
 
 type ListarFacturasDeCompra200JSONResponse struct {
-	Facturas []struct {
-		AnuladaAt        *time.Time `json:"anuladaAt"`
+	ChequesAReponer []FacturaConSaldo `json:"chequesAReponer"`
+	Facturas        []struct {
+		AnuladaAt *time.Time `json:"anuladaAt"`
+
+		// AplicaA de una nota de crédito
+		AplicaA          *string    `json:"aplicaA,omitempty"`
 		FechaEmision     time.Time  `json:"fechaEmision"`
 		FechaVencimiento *time.Time `json:"fechaVencimiento"`
 		Id               string     `json:"id"`
@@ -3076,6 +3254,45 @@ type AnularFacturaDeCompra422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AnularFacturaDeCompra422ApplicationProblemPlusJSONResponse) VisitAnularFacturaDeCompraResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AplicarNotaDeCreditoRequestObject struct {
+	Id   string `json:"id"`
+	Body *AplicarNotaDeCreditoJSONRequestBody
+}
+
+type AplicarNotaDeCreditoResponseObject interface {
+	VisitAplicarNotaDeCreditoResponse(w http.ResponseWriter) error
+}
+
+type AplicarNotaDeCredito200JSONResponse struct{ HechoJSONResponse }
+
+func (response AplicarNotaDeCredito200JSONResponse) VisitAplicarNotaDeCreditoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AplicarNotaDeCredito422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response AplicarNotaDeCredito422ApplicationProblemPlusJSONResponse) VisitAplicarNotaDeCreditoResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3455,6 +3672,45 @@ func (response OrdenDeCompra404ApplicationProblemPlusJSONResponse) VisitOrdenDeC
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarOrdenDeCompraRequestObject struct {
+	Id   string `json:"id"`
+	Body *EditarOrdenDeCompraJSONRequestBody
+}
+
+type EditarOrdenDeCompraResponseObject interface {
+	VisitEditarOrdenDeCompraResponse(w http.ResponseWriter) error
+}
+
+type EditarOrdenDeCompra200JSONResponse struct{ HechoJSONResponse }
+
+func (response EditarOrdenDeCompra200JSONResponse) VisitEditarOrdenDeCompraResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarOrdenDeCompra422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EditarOrdenDeCompra422ApplicationProblemPlusJSONResponse) VisitEditarOrdenDeCompraResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -4261,19 +4517,7 @@ type FacturasConSaldoResponseObject interface {
 	VisitFacturasConSaldoResponse(w http.ResponseWriter) error
 }
 
-type FacturasConSaldo200JSONResponse []struct {
-	FechaEmision     time.Time  `json:"fechaEmision"`
-	FechaVencimiento *time.Time `json:"fechaVencimiento"`
-	Id               string     `json:"id"`
-	Imputado         float64    `json:"imputado"`
-
-	// NetoSinIva neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
-	NetoSinIva float64 `json:"netoSinIva"`
-	Numero     string  `json:"numero"`
-	Saldo      float64 `json:"saldo"`
-	Tipo       string  `json:"tipo"`
-	Total      float64 `json:"total"`
-}
+type FacturasConSaldo200JSONResponse []FacturaConSaldo
 
 func (response FacturasConSaldo200JSONResponse) VisitFacturasConSaldoResponse(w http.ResponseWriter) error {
 
@@ -4408,6 +4652,36 @@ func (response CrearRecepcion422ApplicationProblemPlusJSONResponse) VisitCrearRe
 	return err
 }
 
+type OrdenesPorRecibirRequestObject struct {
+}
+
+type OrdenesPorRecibirResponseObject interface {
+	VisitOrdenesPorRecibirResponse(w http.ResponseWriter) error
+}
+
+type OrdenesPorRecibir200JSONResponse []struct {
+	Estado         string     `json:"estado"`
+	FechaPrometida *time.Time `json:"fechaPrometida"`
+	Id             string     `json:"id"`
+	Lineas         int        `json:"lineas"`
+	Numero         string     `json:"numero"`
+	Pendientes     int        `json:"pendientes"`
+	Proveedor      string     `json:"proveedor"`
+	Sucursal       *string    `json:"sucursal"`
+}
+
+func (response OrdenesPorRecibir200JSONResponse) VisitOrdenesPorRecibirResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RecepcionRequestObject struct {
 	Id string `json:"id"`
 }
@@ -4442,6 +4716,45 @@ func (response Recepcion404ApplicationProblemPlusJSONResponse) VisitRecepcionRes
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarRecepcionRequestObject struct {
+	Id   string `json:"id"`
+	Body *EditarRecepcionJSONRequestBody
+}
+
+type EditarRecepcionResponseObject interface {
+	VisitEditarRecepcionResponse(w http.ResponseWriter) error
+}
+
+type EditarRecepcion200JSONResponse struct{ HechoJSONResponse }
+
+func (response EditarRecepcion200JSONResponse) VisitEditarRecepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarRecepcion422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EditarRecepcion422ApplicationProblemPlusJSONResponse) VisitEditarRecepcionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -4544,6 +4857,9 @@ type StrictServerInterface interface {
 	// (POST /api/v1/admin/compras/facturas/{id}/anular)
 	AnularFacturaDeCompra(ctx context.Context, request AnularFacturaDeCompraRequestObject) (AnularFacturaDeCompraResponseObject, error)
 
+	// (POST /api/v1/admin/compras/facturas/{id}/aplicar)
+	AplicarNotaDeCredito(ctx context.Context, request AplicarNotaDeCreditoRequestObject) (AplicarNotaDeCreditoResponseObject, error)
+
 	// (GET /api/v1/admin/compras/gastos)
 	ListarGastos(ctx context.Context, request ListarGastosRequestObject) (ListarGastosResponseObject, error)
 
@@ -4582,6 +4898,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/admin/compras/ordenes/{id})
 	OrdenDeCompra(ctx context.Context, request OrdenDeCompraRequestObject) (OrdenDeCompraResponseObject, error)
+
+	// (PUT /api/v1/admin/compras/ordenes/{id})
+	EditarOrdenDeCompra(ctx context.Context, request EditarOrdenDeCompraRequestObject) (EditarOrdenDeCompraResponseObject, error)
 
 	// (POST /api/v1/admin/compras/ordenes/{id}/anular)
 	AnularOrdenDeCompra(ctx context.Context, request AnularOrdenDeCompraRequestObject) (AnularOrdenDeCompraResponseObject, error)
@@ -4670,8 +4989,14 @@ type StrictServerInterface interface {
 	// (POST /api/v1/admin/recepciones)
 	CrearRecepcion(ctx context.Context, request CrearRecepcionRequestObject) (CrearRecepcionResponseObject, error)
 
+	// (GET /api/v1/admin/recepciones/por-recibir)
+	OrdenesPorRecibir(ctx context.Context, request OrdenesPorRecibirRequestObject) (OrdenesPorRecibirResponseObject, error)
+
 	// (GET /api/v1/admin/recepciones/{id})
 	Recepcion(ctx context.Context, request RecepcionRequestObject) (RecepcionResponseObject, error)
+
+	// (PUT /api/v1/admin/recepciones/{id})
+	EditarRecepcion(ctx context.Context, request EditarRecepcionRequestObject) (EditarRecepcionResponseObject, error)
 
 	// (POST /api/v1/admin/recepciones/{id}/anular)
 	AnularRecepcion(ctx context.Context, request AnularRecepcionRequestObject) (AnularRecepcionResponseObject, error)
@@ -4913,6 +5238,39 @@ func (sh *strictHandler) AnularFacturaDeCompra(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AnularFacturaDeCompraResponseObject); ok {
 		if err := validResponse.VisitAnularFacturaDeCompraResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AplicarNotaDeCredito operation middleware
+func (sh *strictHandler) AplicarNotaDeCredito(w http.ResponseWriter, r *http.Request, id string) {
+	var request AplicarNotaDeCreditoRequestObject
+
+	request.Id = id
+
+	var body AplicarNotaDeCreditoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AplicarNotaDeCredito(ctx, request.(AplicarNotaDeCreditoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AplicarNotaDeCredito")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AplicarNotaDeCreditoResponseObject); ok {
+		if err := validResponse.VisitAplicarNotaDeCreditoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -5269,6 +5627,39 @@ func (sh *strictHandler) OrdenDeCompra(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(OrdenDeCompraResponseObject); ok {
 		if err := validResponse.VisitOrdenDeCompraResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditarOrdenDeCompra operation middleware
+func (sh *strictHandler) EditarOrdenDeCompra(w http.ResponseWriter, r *http.Request, id string) {
+	var request EditarOrdenDeCompraRequestObject
+
+	request.Id = id
+
+	var body EditarOrdenDeCompraJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditarOrdenDeCompra(ctx, request.(EditarOrdenDeCompraRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditarOrdenDeCompra")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditarOrdenDeCompraResponseObject); ok {
+		if err := validResponse.VisitEditarOrdenDeCompraResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -6091,6 +6482,30 @@ func (sh *strictHandler) CrearRecepcion(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// OrdenesPorRecibir operation middleware
+func (sh *strictHandler) OrdenesPorRecibir(w http.ResponseWriter, r *http.Request) {
+	var request OrdenesPorRecibirRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OrdenesPorRecibir(ctx, request.(OrdenesPorRecibirRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OrdenesPorRecibir")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OrdenesPorRecibirResponseObject); ok {
+		if err := validResponse.VisitOrdenesPorRecibirResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Recepcion operation middleware
 func (sh *strictHandler) Recepcion(w http.ResponseWriter, r *http.Request, id string) {
 	var request RecepcionRequestObject
@@ -6110,6 +6525,39 @@ func (sh *strictHandler) Recepcion(w http.ResponseWriter, r *http.Request, id st
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RecepcionResponseObject); ok {
 		if err := validResponse.VisitRecepcionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditarRecepcion operation middleware
+func (sh *strictHandler) EditarRecepcion(w http.ResponseWriter, r *http.Request, id string) {
+	var request EditarRecepcionRequestObject
+
+	request.Id = id
+
+	var body EditarRecepcionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditarRecepcion(ctx, request.(EditarRecepcionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditarRecepcion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditarRecepcionResponseObject); ok {
+		if err := validResponse.VisitEditarRecepcionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -6181,116 +6629,126 @@ func (sh *strictHandler) ConfirmarRecepcion(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

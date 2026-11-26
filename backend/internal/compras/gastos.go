@@ -47,17 +47,30 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 		}
 	}
 	descripcion := trimJS(d.Descripcion)
-	sinCaja := false
+	// El efectivo sale de una caja (mes simulado, H264/H351): sin decir de
+	// cuál, o sin turno que lo contenga, el gasto salía «de la Caja» del CSV
+	// del contador y de ningún arqueo. Ahora se frena y se dice por qué.
+	if d.Medio == "efectivo" && d.BranchID == nil {
+		return "", "", plataforma.Invalido(map[string]string{"branchId": "Elegí de qué caja salió el efectivo."})
+	}
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var factura *string
+		if d.Factura != nil {
+			id, err := facturaDelGasto(ctx, tx, ses, d, fecha)
+			if err != nil {
+				return err
+			}
+			factura = &id
+		}
 		var gasto string
 		if err := tx.QueryRow(ctx, `
-			INSERT INTO expenses (fecha, categoria, descripcion, importe, medio, circuito, branch_id, supplier_id, notas, created_by_user_id)
-			VALUES ($1, $2::categoria_gasto, $3, $4::numeric, $5::medio_gasto, $6::circuito, $7, $8, $9, $10) RETURNING id`,
-			fecha, d.Categoria, descripcion, jsmath.Fijo2(d.Importe), d.Medio, d.Circuito, d.BranchID, d.SupplierID, d.Notas, ses.UserID).Scan(&gasto); err != nil {
+			INSERT INTO expenses (fecha, categoria, descripcion, importe, medio, circuito, branch_id, supplier_id, notas, created_by_user_id, purchase_invoice_id)
+			VALUES ($1, $2::categoria_gasto, $3, $4::numeric, $5::medio_gasto, $6::circuito, $7, $8, $9, $10, $11) RETURNING id`,
+			fecha, d.Categoria, descripcion, jsmath.Fijo2(d.Importe), d.Medio, d.Circuito, d.BranchID, d.SupplierID, d.Notas, ses.UserID, factura).Scan(&gasto); err != nil {
 			return err
 		}
 		// Solo el efectivo toca la caja.
-		if d.Medio != "efectivo" || d.BranchID == nil {
+		if d.Medio != "efectivo" {
 			return nil
 		}
 		turno, momento, hay, err := turnoDelGasto(ctx, tx, *d.BranchID, d.Fecha, time.Now())
@@ -65,8 +78,21 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 			return err
 		}
 		if !hay {
-			sinCaja = true
-			return nil
+			var nombre string
+			_ = tx.QueryRow(ctx, `SELECT name FROM branches WHERE id = $1`, *d.BranchID).Scan(&nombre)
+			return fallo("No había caja abierta en " + nombre + " ese día: el efectivo no sale de ningún turno. Anotalo con el medio con que se pagó, o con la caja abierta.")
+		}
+		// Como un retiro: el cajón no queda por debajo del cambio fijo
+		// (mes simulado, H376: un flete de $48.000 dejó $2.000 con un cambio
+		// de $50.000, sin ningún aviso).
+		var base, enCaja jsmath.Num
+		if err := tx.QueryRow(ctx, `
+			SELECT b.fondo_base, coalesce((SELECT sum(m.monto) FROM cash_movements m WHERE m.session_id = s.id), 0)
+			FROM cash_sessions s JOIN branches b ON b.id = s.branch_id WHERE s.id = $1 FOR UPDATE OF s`, turno).Scan(&base, &enCaja); err != nil {
+			return err
+		}
+		if ok, motivo := AlcanzaElCajon(enCaja.F(), base.F(), d.Importe); !ok {
+			return fallo(motivo)
 		}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO cash_movements (session_id, tipo, monto, motivo, expense_id, creado_por, created_at)
@@ -74,15 +100,44 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 		return err
 	})
 	if err != nil {
-		return "", "", err
+		return "", "", errorDeFactura(err)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "gasto", "",
 		"Anotó un gasto de "+Monto(d.Importe)+" en "+d.Categoria+" ("+etiquetaDeCircuito(d.Circuito)+"): "+d.Descripcion, nil)
-	aviso := ""
-	if sinCaja {
-		aviso = "No había caja abierta en ese momento, así que no salió del turno. La plata igual se fue: el arqueo va a mostrar la diferencia."
+	return "Gasto anotado por " + Monto(d.Importe) + ".", "", nil
+}
+
+// AlcanzaElCajon dice si de un cajón con `enCaja` se pueden sacar `importe`
+// sin bajar del cambio fijo `base` (la regla del retiro del mostrador), y si
+// no, por qué.
+func AlcanzaElCajon(enCaja, base, importe float64) (bool, string) {
+	if base > 0 && float64(enCaja-importe)-base < -0.009 {
+		disponible := max(0, jsmath.Redondear2(enCaja-base))
+		if disponible > 0 {
+			return false, "Deja el cajón sin el cambio fijo (" + Monto(base) + "): de esa caja salen hasta " + Monto(disponible) + "."
+		}
+		return false, "En el cajón hay " + Monto(enCaja) + " y el cambio fijo es " + Monto(base) + ": de esa caja no sale."
 	}
-	return "Gasto anotado por " + Monto(d.Importe) + ".", aviso, nil
+	return true, ""
+}
+
+// facturaDelGasto carga la factura de compra del gasto: entra al libro IVA
+// compras con su crédito fiscal y nace pagada (el gasto es el pago, así que
+// no suma deuda en la cuenta del proveedor ni aparece en lo que hay que
+// pagar: compras.AplicadoA la da por cancelada).
+func facturaDelGasto(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, d FormGasto, fecha time.Time) (string, error) {
+	x := d.Factura
+	iva := jsmath.Redondear2(float64(x.Iva21+x.Iva105) + x.Iva27)
+	neto := jsmath.Redondear2(float64(d.Importe-iva) - x.Percepciones)
+	var id string
+	err := tx.QueryRow(ctx, `
+		INSERT INTO purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, fecha_vencimiento, neto, iva21, iva105, iva27,
+		  exento, percepciones, total, observaciones, created_by_user_id)
+		VALUES ($1, $2::tipo_comprobante_compra, $3, $4, $5, $5, $6::numeric, $7::numeric, $8::numeric, $9::numeric, 0, $10::numeric, $11::numeric,
+		  $12, $13) RETURNING id`,
+		*d.SupplierID, x.Tipo, int64(x.PuntoVenta), int64(x.Numero), fecha, jsmath.Fijo2(neto), jsmath.Fijo2(x.Iva21), jsmath.Fijo2(x.Iva105),
+		jsmath.Fijo2(x.Iva27), jsmath.Fijo2(x.Percepciones), jsmath.Fijo2(d.Importe), "Gasto: "+trimJS(d.Descripcion), ses.UserID).Scan(&id)
+	return id, err
 }
 
 // turnoDelGasto es el turno de la sucursal del que sale un gasto en efectivo
@@ -146,14 +201,19 @@ type Gasto struct {
 	SupplierID  *string   `json:"supplierId"`
 	Notas       *string   `json:"notas"`
 	EnCaja      bool      `json:"enCaja"`
+	// La factura del gasto, si se cargó con una.
+	PurchaseInvoiceID *string `json:"purchaseInvoiceId"`
+	Factura           *string `json:"factura"`
 }
 
 // ListarGastos es listarGastos: los del período, los más nuevos primero.
 func (s *Servicio) ListarGastos(ctx context.Context, desde, hasta time.Time, limite int) ([]Gasto, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT e.id, e.fecha, e.categoria::text, e.descripcion, e.importe::text, e.medio::text, e.circuito::text, e.purchase_invoice_id IS NOT NULL,
-		  b.name, s.nombre, e.supplier_id, e.notas, EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id)
+		  b.name, s.nombre, e.supplier_id, e.notas, EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id),
+		  e.purchase_invoice_id, CASE WHEN f.id IS NOT NULL THEN f.punto_venta || '-' || f.numero END
 		FROM expenses e LEFT JOIN branches b ON b.id = e.branch_id LEFT JOIN suppliers s ON s.id = e.supplier_id
+		LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
 		WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC LIMIT $3`, desde, hasta, limite)
 	if err != nil {
 		return nil, err

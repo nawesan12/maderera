@@ -392,3 +392,39 @@ func TestLaColaPorSucursal(t *testing.T) {
 		t.Errorf("la cola del aserradero: %s", b)
 	}
 }
+
+// Ítem 7 del mes simulado: el aserradero no cambia lo que se cobra (las
+// pasadas, el acomodo, el disco) ni el formato del archivo de la máquina;
+// confirma sus pasadas al terminar.
+func TestElTallerNoCambiaLoQueSeCobra(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	ase := e.staff(t, "aserradero@prueba.test", "aserradero")
+	id := alta(t, e, ven, melamina(e))
+	u := e.srv.URL + "/api/v1/admin/cortes/" + id
+	if code, _ := pedir(t, ase, "POST", u+"/pasadas", map[string]any{"pasadas": 9}); code != 403 {
+		t.Errorf("pasadas desde el taller: %d", code)
+	}
+	if code, _ := pedir(t, ase, "PUT", u+"/acomodo", map[string]any{"fijadas": []any{}}); code != 403 {
+		t.Errorf("acomodo desde el taller: %d", code)
+	}
+	if code, _ := pedir(t, ase, "PUT", u+"/sierra", map[string]any{"valor": "3,2"}); code != 403 {
+		t.Errorf("disco desde el taller: %d", code)
+	}
+	if code, _ := pedir(t, ase, "POST", e.srv.URL+"/api/v1/admin/cortes/perfiles", map[string]any{
+		"nombre": "Cutty", "separador": "tab", "conEncabezado": false, "unidad": "cm", "decimal": ".",
+		"finDeLinea": "lf", "porDefecto": true, "columnas": []any{map[string]any{"clave": "largo", "encabezado": "L"}},
+	}); code != 403 {
+		t.Errorf("formato desde el taller: %d", code)
+	}
+	if code, b := pedir(t, ven, "POST", u+"/pasadas", map[string]any{"pasadas": 9}); code != 204 {
+		t.Errorf("pasadas desde el mostrador: %d %s", code, b)
+	}
+	pedir(t, ase, "POST", u+"/avanzar?desde=en-cola", nil)
+	if code, b := pedir(t, ase, "POST", u+"/avanzar?desde=en-proceso&pasadas=3", nil); code != 200 {
+		t.Errorf("terminar con sus pasadas: %d %s", code, b)
+	}
+	if n := e.txt(t, `select pasadas::text from cutting_orders where id = $1`, id); n != "3" {
+		t.Errorf("las pasadas del taller: %s", n)
+	}
+}

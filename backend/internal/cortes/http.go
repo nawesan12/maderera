@@ -120,6 +120,10 @@ func (a *API) ListarCortes(ctx context.Context, r cortesapi.ListarCortesRequestO
 // mostrador: quien atiende la cola desde el panel (todos los de
 // /admin/cortes menos el aserradero). Urgencias, entregas, anular y cobrar
 // son decisiones del mostrador, no del taller (mes simulado, H115).
+//
+// Las pasadas que se cobran, el acomodo y el disco también: cambian lo que
+// se cobra, y el aserradero las cambiaba con el corte en la cola (mes
+// simulado, ítem 7). El taller confirma las suyas al terminar (Avanzar).
 func mostrador(ctx context.Context) (*auth.Sesion, error) {
 	return auth.Exigir(ctx, roles.DecidenEnLaCola...)
 }
@@ -299,7 +303,7 @@ func (a *API) AlternarUrgente(ctx context.Context, r cortesapi.AlternarUrgenteRe
 }
 
 func (a *API) CargarPasadas(ctx context.Context, r cortesapi.CargarPasadasRequestObject) (cortesapi.CargarPasadasResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := mostrador(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +326,7 @@ func aFijadas(xs []cortesapi.PiezaFijada) []PiezaFijada {
 }
 
 func (a *API) GuardarAcomodo(ctx context.Context, r cortesapi.GuardarAcomodoRequestObject) (cortesapi.GuardarAcomodoResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := mostrador(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +338,7 @@ func (a *API) GuardarAcomodo(ctx context.Context, r cortesapi.GuardarAcomodoRequ
 }
 
 func (a *API) CambiarSierra(ctx context.Context, r cortesapi.CambiarSierraRequestObject) (cortesapi.CambiarSierraResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := mostrador(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +368,7 @@ func (a *API) ListarPerfiles(ctx context.Context, _ cortesapi.ListarPerfilesRequ
 }
 
 func (a *API) GuardarPerfil(ctx context.Context, r cortesapi.GuardarPerfilRequestObject) (cortesapi.GuardarPerfilResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cortes/formato")...)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +388,7 @@ func (a *API) GuardarPerfil(ctx context.Context, r cortesapi.GuardarPerfilReques
 }
 
 func (a *API) BorrarPerfil(ctx context.Context, r cortesapi.BorrarPerfilRequestObject) (cortesapi.BorrarPerfilResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cortes/formato")...)
 	if err != nil {
 		return nil, err
 	}

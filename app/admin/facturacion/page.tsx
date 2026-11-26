@@ -309,7 +309,12 @@ function Grupo({
                         </span>
                         <span className="block text-sm text-muted-foreground">
                           {nombreComprobante(c.tipo)}
-                          {c.pedido && <span className="codigo"> · {c.pedido}</span>}
+                          {c.pedido && (
+                            <>
+                              {" · "}
+                              <span className="codigo">{c.pedido}</span>
+                            </>
+                          )}
                         </span>
                       </Link>
                     </td>

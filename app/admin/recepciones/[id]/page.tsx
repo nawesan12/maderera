@@ -105,7 +105,14 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
                   <p className="tabular text-base text-muted-foreground">
                     {cantidad(Number(i.cantidad))}
                     {veCostos && ` × ${formatearMonto(Number(i.costoUnitario))} · IVA ${Number(i.alicuotaIva)}%`}
-                    {i.sku && <span className="codigo"> · {i.sku}</span>}
+                    {/* El separador va afuera del código: adentro quedaba
+                        en la pastilla y pegado al dato anterior. */}
+                    {i.sku && (
+                      <>
+                        {" · "}
+                        <span className="codigo">{i.sku}</span>
+                      </>
+                    )}
                   </p>
                 </div>
                 {veCostos && recepcion.estado === "confirmada" && (

@@ -731,3 +731,26 @@ func TestFacturaDeUnaRecepcionNoDuplicaLaDeuda(t *testing.T) {
 		t.Errorf("factura suelta: %v", s)
 	}
 }
+
+// Una recepción cuya sucursal ya no existe se frena con un mensaje que dice
+// qué hacer, no con «Algo falló de nuestro lado» (mes simulado, tercera
+// prueba: la OC sembrada apuntaba a una sucursal borrada).
+func TestRecepcionDeUnaSucursalQueNoExiste(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	linea := map[string]any{"variantId": e.placa, "descripcion": "Fenólico 18 mm", "cantidad": 2, "costoUnitario": 100, "alicuotaIva": 21}
+	_, b := pedir(t, adm, "POST", e.u+"compras/ordenes", map[string]any{"supplierId": e.proveedor, "branchId": e.central, "lineas": []any{linea}})
+	orden := idDe(t, b)
+	pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/enviada", nil)
+	_, b = pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/recibir", map[string]string{"numeroRemito": "R-9"})
+	recepcion := idDe(t, b)
+	if _, err := e.pool.Exec(context.Background(), `update goods_receipts set branch_id = '77439015-0000-4000-8000-000000000000' where id = $1`, recepcion); err != nil {
+		t.Fatal(err)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+recepcion+"/confirmar", nil); c != 422 || !strings.Contains(b, "La sucursal de esta recepción ya no existe") {
+		t.Fatalf("confirmar: %d %s", c, b)
+	}
+	if q := e.numero(t, `select count(*)::float8 from inventory where branch_id = '77439015-0000-4000-8000-000000000000'`); q != 0 {
+		t.Errorf("stock en una sucursal que no existe: %v", q)
+	}
+}

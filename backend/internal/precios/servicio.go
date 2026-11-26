@@ -16,6 +16,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
@@ -835,7 +836,7 @@ func (s *Servicio) GuardarDescuento(ctx context.Context, ses *auth.Sesion, f For
 		accion = sqlc.AccionAuditoriaEditar
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "descuento_pago", f.ID,
-		f.Medio+": "+jsmath.Texto(pct)+"% desde $"+d,
+		f.Medio+": "+jsmath.Texto(pct)+"% desde "+formato.Importe(desde),
 		map[string]any{"medio": f.Medio, "desdeMonto": d, "porcentaje": p, "etiqueta": etiqueta, "activo": f.Activo})
 	return nil
 }

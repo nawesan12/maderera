@@ -17,6 +17,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
@@ -784,7 +785,7 @@ func (s *Servicio) GuardarTarifa(ctx context.Context, ses *auth.Sesion, f FormTa
 		"material": material, "priceListId": lista, "precioPorPasada": pp, "precioPorMetroCanto": pc,
 		"activo": f.Activo, "updatedAt": ahora.Format("2006-01-02T15:04:05.000Z"),
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "tarifa_corte", f.ID, "Corte de "+material+": $"+pp+" por pasada", detalleOrdenado(detalle))
+	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "tarifa_corte", f.ID, "Corte de "+material+": "+formato.Importe(precio)+" por pasada", detalleOrdenado(detalle))
 	return nil
 }
 

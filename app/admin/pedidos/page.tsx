@@ -443,7 +443,7 @@ function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso:
         </p>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">
-          Retira en {pedido.sucursal}
+          {pedido.sucursal ? `Retira en ${pedido.sucursal}` : "Retira en el local"}
         </p>
       )}
 

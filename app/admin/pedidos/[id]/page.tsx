@@ -467,7 +467,7 @@ export default async function FichaPedidoPage({
             ) : (
               <p className="flex items-center gap-2 text-base">
                 <Store className="h-5 w-5 shrink-0 text-muted-foreground" />
-                Retira en {pedido.sucursal}
+                {pedido.sucursal ? `Retira en ${pedido.sucursal}` : "Retira en el local"}
               </p>
             )}
             {!["entregado", "cancelado"].includes(pedido.estado) && (

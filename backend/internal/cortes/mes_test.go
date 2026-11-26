@@ -244,6 +244,12 @@ func TestCorteSueltoSeCobraEnUnPedido(t *testing.T) {
 		t.Fatalf("modo: %v", f["modo"])
 	}
 	total := f["cuenta"].(map[string]any)["total"].(float64)
+	// Cargado sin sucursal, se retira donde se corta: el pedido decía
+	// «Retira en» y nada más (mes simulado, PED-1158).
+	aserradero := e.txt(t, `insert into branches (slug, name, sort_order) values ('aserradero', 'Aserradero', 2) returning id::text`)
+	if _, err := e.pool.Exec(context.Background(), `update cutting_orders set branch_id = null where id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
 	code, b := pedir(t, ven, "POST", u+"/pedido", nil)
 	if code != 200 || !strings.Contains(b, `"numero":"PED-`) {
 		t.Fatalf("pasar a pedido: %d %s", code, b)
@@ -260,6 +266,9 @@ func TestCorteSueltoSeCobraEnUnPedido(t *testing.T) {
 	}
 	if s := e.txt(t, `select contacto_telefono || ' ' || to_char(retira_el, 'YYYY-MM-DD') from cutting_orders where id = $1`, id); s != "223 555-0388 2026-12-04" {
 		t.Errorf("el alta perdió el teléfono o el retiro: %s", s)
+	}
+	if s := e.txt(t, `select coalesce(branch_id::text, '-') from orders where id = $1`, p["id"]); s != aserradero {
+		t.Errorf("la sucursal del pedido: %s", s)
 	}
 	if s := e.txt(t, `select order_id::text from cutting_orders where id = $1`, id); s != p["id"] {
 		t.Errorf("el corte no quedó atado: %s", s)

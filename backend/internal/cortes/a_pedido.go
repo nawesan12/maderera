@@ -110,10 +110,15 @@ func (s *Servicio) PasarAPedido(ctx context.Context, ses *auth.Sesion, id string
 			total += ventas.ACentavos(float64(l.cantidad * l.precio))
 		}
 		total = ventas.ACentavos(total)
+		// Un corte cargado sin sucursal se retira donde se corta: el
+		// aserradero (Casa Central no corta; decisión del 19/11). El pedido
+		// sin sucursal decía «Retira en» y nada más, y su efectivo no sabía a
+		// qué caja entrar (mes simulado, PED-1158).
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO orders (numero, customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen,
 			                    subtotal, total, created_by_user_id, tipo_entrega, entregar_el)
-			VALUES ($1, $2, $3, $4, $5, 'pendiente', 'telefono', $6::numeric, $6::numeric, $7, 'retiro', $8::date)
+			VALUES ($1, $2, $3, $4, coalesce($5::uuid, (SELECT id FROM branches WHERE slug = 'aserradero' AND active)),
+			        'pendiente', 'telefono', $6::numeric, $6::numeric, $7, 'retiro', $8::date)
 			RETURNING id::text`,
 			numero, c.CustomerID, c.Cliente, c.Telefono, c.BranchID, jsmath.Fijo2(total), ses.UserID, c.RetiraEl).Scan(&pedido); err != nil {
 			return err

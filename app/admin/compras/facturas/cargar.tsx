@@ -387,16 +387,21 @@ export function CargarFactura({
         </Seccion>
 
         <Seccion titulo="Importes" icono={Calculator} columnas={3}>
-          <label className="block">
-            <span className="text-base font-medium">Neto gravado</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={neto}
-              aria-invalid={importeIlegible(neto) || undefined}
-              onChange={(e) => setNeto(e.target.value)}
-              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
-            />
+          {/* El campo con su rótulo; la sugerencia del IVA y «Pasar al costo»
+              van afuera del label: adentro, tocar el texto de la casilla no
+              la tildaba. */}
+          <div>
+            <label className="block">
+              <span className="text-base font-medium">Neto gravado</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={neto}
+                aria-invalid={importeIlegible(neto) || undefined}
+                onChange={(e) => setNeto(e.target.value)}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
+              />
+            </label>
             {sugerido > 0 && n(iva21) === 0 && (
               <button
                 type="button"
@@ -414,7 +419,7 @@ export function CargarFactura({
                   {contraRecibido > 0 ? "+" : "−"}
                   {formatearMonto(Math.abs(contraRecibido))} contra lo recibido
                 </span>
-                <span className="flex items-center gap-2 text-base">
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 text-base">
                   <input
                     type="checkbox"
                     checked={ajustarCosto}
@@ -422,10 +427,10 @@ export function CargarFactura({
                     className="h-5 w-5 accent-[var(--accion)]"
                   />
                   Pasar al costo
-                </span>
+                </label>
               </span>
             )}
-          </label>
+          </div>
           <Campo etiqueta="IVA 21%" valor={iva21} onCambio={setIva21} numerico />
           <Campo etiqueta="IVA 10,5%" valor={iva105} onCambio={setIva105} numerico />
           <Campo etiqueta="IVA 27%" valor={iva27} onCambio={setIva27} numerico />

@@ -710,7 +710,7 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 		if err := revisarSumas(d.Total, neto, importes, montos); err != nil {
 			return err
 		}
-		var desglose []string
+		var desglose, sinMonto []string
 		for _, parte := range partes {
 			ref, err := s.registrarParte(ctx, tx, ses, pagoID, nombre, d.Circuito, parte)
 			if err != nil {
@@ -721,6 +721,7 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 				renglon += " " + ref
 			}
 			desglose = append(desglose, renglon+" "+Monto(parte.Importe))
+			sinMonto = append(sinMonto, renglon)
 		}
 		// La referencia de la cabecera, si no vino: las de los renglones.
 		if d.Referencia == nil && len(partes) > 0 {
@@ -759,6 +760,10 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 		medio := d.Medio
 		if len(desglose) > 1 {
 			medio = strings.Join(desglose, " + ")
+		} else if len(sinMonto) == 1 {
+			// Una sola parte: con su número. «Pago cheque» no decía cuál
+			// era el endosado (mes simulado).
+			medio = sinMonto[0]
 		}
 		detalle := "Pago " + medio
 		if retenido > 0 {

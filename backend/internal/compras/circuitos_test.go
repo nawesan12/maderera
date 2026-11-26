@@ -38,6 +38,12 @@ func TestElEndosoNoCruzaDeCircuito(t *testing.T) {
 	if c, b := pagar("blanco", blanco); c != 200 {
 		t.Errorf("el cheque blanco en un pago blanco: %d %s", c, b)
 	}
+	// El pago con un solo cheque dice cuál en la cuenta del proveedor.
+	var detalle string
+	if err := e.pool.QueryRow(ctx, `select detalle from supplier_movements where tipo = 'pago' order by created_at desc limit 1`).Scan(&detalle); err != nil ||
+		detalle != "Pago cheque 22222222" {
+		t.Errorf("detalle del pago: %q %v", detalle, err)
+	}
 	estado := func(id string) string {
 		var s string
 		if err := e.pool.QueryRow(ctx, `select estado::text from cheques where id = $1`, id).Scan(&s); err != nil {

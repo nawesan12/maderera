@@ -224,8 +224,9 @@ func TestIdaYVueltaConElSimulador(t *testing.T) {
 		t.Errorf("no se vinculó con la ficha: %s", got)
 	}
 
-	// 3. La vendedora abre la bandeja: ve la conversación, con la ventana abierta.
-	c, b = pedir(t, vendedora, "GET", u+"bandeja", nil)
+	// 3. La vendedora abre la conversación: la ve con la ventana abierta.
+	// (Sin ?chat= no se abre ninguna sola: ver TestElPresupuestoPorWhatsapp.)
+	c, b = pedir(t, vendedora, "GET", u+"bandeja?chat="+conv, nil)
 	if c != 200 {
 		t.Fatalf("bandeja: %d %s", c, b)
 	}

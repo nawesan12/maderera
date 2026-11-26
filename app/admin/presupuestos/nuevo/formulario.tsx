@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CalendarClock,
@@ -85,7 +86,28 @@ const bajoCosto = (l: Linea) => l.piso != null && l.piso > 0 && l.precioUnitario
  * con fecha, y recalcularlo del lado del servidor lo cambiaría en silencio si
  * alguien tocó la lista en el medio.
  */
-export function FormularioPresupuesto({
+type PropsFormulario = Parameters<typeof Formulario>[0];
+
+/*
+ * Con Cache Components, Next esconde la página en vez de desmontarla y el
+ * formulario de /presupuestos/nuevo conservaba los renglones de la vez
+ * anterior: «Corregir» justo después de guardar abría el formulario vacío o
+ * con los renglones de otro presupuesto (mes simulado). La clave arma uno
+ * nuevo en cada navegación y en cada presupuesto de origen; atrás y adelante
+ * siguen devolviendo el borrador.
+ */
+export function FormularioPresupuesto(props: PropsFormulario & { origen?: string }) {
+  const { bfcacheId } = useRouter();
+  const { origen, ...resto } = props;
+  return (
+    <Formulario
+      key={`${bfcacheId}|${origen ?? ""}|${props.clienteInicial?.id ?? ""}`}
+      {...resto}
+    />
+  );
+}
+
+function Formulario({
   sucursales,
   clienteInicial,
   inicial,
@@ -182,29 +204,33 @@ export function FormularioPresupuesto({
   /*
    * Con renglones por debajo del costo, guardar pide confirmar una vez, en
    * una línea al lado del botón: es un error caro y se ve antes de mandárselo
-   * al cliente. El botón que se apretó (guardar, o guardar y pasar a pedido)
-   * es el que se reenvía al confirmar.
+   * al cliente. Se recuerda si se había pedido pasar a pedido y, al confirmar,
+   * el formulario se manda armando los datos a mano: reenviarlo con el botón
+   * original fallaba porque ese botón ya no está montado (mes simulado: «Guardar
+   * igual» no guardaba nada). La barra de confirmación queda puesta mientras se
+   * guarda, para que un segundo clic no caiga en «Guardar y pasar a pedido».
    */
   const formulario = useRef<HTMLFormElement>(null);
-  const [pideConfirmar, setPideConfirmar] = useState<HTMLElement | null>(null);
-  const confirmado = useRef(false);
+  // Atada a la respuesta vigente: si el servidor rechaza, la barra vuelve a la
+  // normal con el error a la vista.
+  const [confirmacion, setPideConfirmar] = useState<{ convertir: boolean; estado: typeof estado } | null>(null);
+  const pideConfirmar = confirmacion?.estado === estado ? confirmacion : null;
   const enviar = sinReiniciar(accion);
   function alEnviar(e: FormEvent<HTMLFormElement>) {
-    if (bajos.length > 0 && !confirmado.current) {
+    if (bajos.length > 0) {
       e.preventDefault();
-      setPideConfirmar(((e.nativeEvent as SubmitEvent).submitter as HTMLElement | null) ?? null);
+      const boton = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+      setPideConfirmar({ convertir: boton?.name === "convertir", estado });
       return;
     }
-    confirmado.current = false;
     enviar.onSubmit(e);
   }
   function guardarIgual() {
-    confirmado.current = true;
-    const boton = pideConfirmar;
-    setPideConfirmar(null);
-    formulario.current?.requestSubmit(boton instanceof HTMLButtonElement ? boton : undefined);
+    if (!formulario.current || !pideConfirmar || pendiente) return;
+    const datos = new FormData(formulario.current);
+    if (pideConfirmar.convertir) datos.set("convertir", "si");
+    startTransition(() => accion(datos));
   }
-
   const bloqueado = pendiente || precioIlegible || sinPrecio || lineas.length === 0;
 
   return (
@@ -444,10 +470,17 @@ export function FormularioPresupuesto({
               <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
               {bajos.length === 1 ? "Un renglón queda" : `${bajos.length} renglones quedan`} por debajo del costo
             </p>
-            <Button type="button" onClick={guardarIgual} className="h-11 px-5">
+            <Button type="button" onClick={guardarIgual} disabled={pendiente} className="h-11 px-5">
+              {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
               Guardar igual
             </Button>
-            <Button type="button" variant="outline" onClick={() => setPideConfirmar(null)} className="h-11 px-5">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pendiente}
+              onClick={() => setPideConfirmar(null)}
+              className="h-11 px-5"
+            >
               Revisar
             </Button>
           </div>

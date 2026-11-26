@@ -80,6 +80,7 @@ export default async function NuevoPresupuestoPage({
         asesor={usuario.name}
         inicial={inicial}
         editar={editar}
+        origen={origenId}
         tarifas={tarifas}
         clienteInicial={
           cliente

@@ -10,7 +10,7 @@ import (
 )
 
 // pendientesDe pide los pendientes de un cliente y los indexa por clave.
-func pendientesDe(t *testing.T, c *http.Client, url string) (map[string]Pendiente, []Pendiente) {
+func pendientesDelInicio(t *testing.T, c *http.Client, url string) (map[string]Pendiente, []Pendiente) {
 	t.Helper()
 	_, cuerpo, _ := pedir(t, c, url)
 	var lista []Pendiente
@@ -85,7 +85,7 @@ func TestParaHoyDelMesSimulado(t *testing.T) {
 	// Una medida sin foto (tienda apagada): va al final aunque sean muchas.
 	pruebas.TiendaApagada(t, e.pool)
 
-	por, lista := pendientesDe(t, adm, e.u+"inicio/pendientes")
+	por, lista := pendientesDelInicio(t, adm, e.u+"inicio/pendientes")
 	quiere := map[string]int{"entregar": 1, "reponer": 1, "cheques-rechazados": 1, "cheques-por-recibir": 1, "transferencias": 1,
 		"ordenes-atrasadas": 1, "ordenes-por-llegar": 1, "recepciones-sin-factura": 1, "sin-cae": 1, "presupuestos-enviados": 1,
 		"presupuestos-aceptados": 1, "whatsapp-sin-asignar": 1, "cortes": 1, "cortes-hoy": 1, "pin": 1}
@@ -111,7 +111,7 @@ func TestParaHoyDelMesSimulado(t *testing.T) {
 
 	// Quien atiende: los presupuestos que esperan respuesta son de hoy; la
 	// cola del taller, no. No ve compras, cheques ni el PIN.
-	por, _ = pendientesDe(t, ven, e.u+"inicio/pendientes")
+	por, _ = pendientesDelInicio(t, ven, e.u+"inicio/pendientes")
 	if !por["presupuestos-enviados"].Urgente || por["cortes"].Urgente || !por["cortes-hoy"].Urgente {
 		t.Errorf("vendedor: %+v", por)
 	}
@@ -121,14 +121,14 @@ func TestParaHoyDelMesSimulado(t *testing.T) {
 		}
 	}
 	// El depósito: entregar es lo de hoy.
-	por, _ = pendientesDe(t, dep, e.u+"inicio/pendientes")
+	por, _ = pendientesDelInicio(t, dep, e.u+"inicio/pendientes")
 	if !por["entregar"].Urgente || !por["cortes"].Urgente {
 		t.Errorf("depósito: %+v", por)
 	}
 
 	// Con un PIN cargado, el pendiente se va.
 	e.exec(t, `update "user" set pin_autorizacion = 'x' where email = 'admin@prueba.test'`)
-	if por, _ = pendientesDe(t, adm, e.u+"inicio/pendientes"); por["pin"].Cantidad != 0 {
+	if por, _ = pendientesDelInicio(t, adm, e.u+"inicio/pendientes"); por["pin"].Cantidad != 0 {
 		t.Errorf("con PIN: %+v", por["pin"])
 	}
 }

@@ -7,7 +7,7 @@ import (
 
 // H375: dos transferencias iguales informadas en el mismo minuto: la segunda
 // sale marcada como repetida, y las dos con lo que debe hoy el cliente.
-func TestTransferenciaInformadaDosVeces(t *testing.T) {
+func TestTransferenciaRepetidaEnAVerificar(t *testing.T) {
 	e := armar(t, false)
 	ctx := context.Background()
 	cliente := e.id(t, `insert into customers (nombre) values ('Mueblería') returning id`)

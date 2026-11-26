@@ -49,6 +49,7 @@ export function useColaDelMostrador(branchId: string) {
   const conexion = useConexion(branchId, informe, alPerderLaCaja);
   const {
     caja: cajaFisica,
+    leida: cajaLeida,
     vincular: vincularCaja,
     desvincular: desvincularCaja,
     avanzar: avanzarContador,
@@ -75,7 +76,7 @@ export function useColaDelMostrador(branchId: string) {
     };
   }, [cajaFisica, cola.sinSubir, cola.atascadas]);
 
-  return { conexion, cajaFisica, vincularCaja, desvincularCaja, avanzarContador, cola };
+  return { conexion, cajaFisica, cajaLeida, vincularCaja, desvincularCaja, avanzarContador, cola };
 }
 
 type CajaFisica = ReturnType<typeof useCaja>["caja"];

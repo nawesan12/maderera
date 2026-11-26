@@ -188,7 +188,7 @@ export function VistaMostrador({
    * La conexión, la caja de esta máquina y la cola de ventas sin subir. Todo
    * lo de vender sin servidor está en `sin-conexion.ts`.
    */
-  const { conexion, cajaFisica, vincularCaja, desvincularCaja, avanzarContador, cola } =
+  const { conexion, cajaFisica, cajaLeida, vincularCaja, desvincularCaja, avanzarContador, cola } =
     useColaDelMostrador(sucursal.id);
 
   // Cuando la cola baja, lo que subió ya está en el servidor: la copia se
@@ -1258,6 +1258,7 @@ export function VistaMostrador({
           // arriba, a mano, y no escondido en la configuración.
           terminal={
             <VincularCaja
+              leida={cajaLeida}
               branchId={sucursal.id}
               enLinea={conexion.enLinea}
               vinculada={cajaFisica ? { id: cajaFisica.id, codigo: cajaFisica.codigo } : null}

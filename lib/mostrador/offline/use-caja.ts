@@ -25,6 +25,12 @@ export interface CajaVinculada {
 export interface EstadoCaja {
   caja: CajaVinculada | null;
   /**
+   * Si ya se leyó la caja guardada en esta máquina. Antes de eso `caja` es
+   * null aunque esté vinculada, y la barra ofrecía «Esta PC…» como si no lo
+   * estuviera (simulación del mes).
+   */
+  leida: boolean;
+  /**
    * `proximoNumero`, si viene, es el que dice el servidor: el siguiente al
    * último provisorio que subió con ese código, desde cualquier PC.
    */
@@ -69,12 +75,17 @@ export function proximoAlVincular(
 
 export function useCaja(): EstadoCaja {
   const [caja, setCaja] = useState<CajaVinculada | null>(null);
+  const [leida, setLeida] = useState(false);
 
   useEffect(() => {
     let vivo = true;
-    void leerMeta<CajaVinculada>("caja").then((guardada) => {
-      if (vivo && guardada) setCaja(guardada);
-    });
+    void leerMeta<CajaVinculada>("caja")
+      .then((guardada) => {
+        if (vivo && guardada) setCaja(guardada);
+      })
+      .finally(() => {
+        if (vivo) setLeida(true);
+      });
     return () => {
       vivo = false;
     };
@@ -120,7 +131,7 @@ export function useCaja(): EstadoCaja {
     setCaja(siguiente);
   }, []);
 
-  return { caja, vincular, desvincular, avanzar };
+  return { caja, leida, vincular, desvincular, avanzar };
 }
 
 /**

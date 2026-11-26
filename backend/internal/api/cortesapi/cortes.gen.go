@@ -2772,7 +2772,7 @@ type CortesDelPedido200JSONResponse []struct {
 	Id            string    `json:"id"`
 	Material      string    `json:"material"`
 	Numero        string    `json:"numero"`
-	PlacasEnteras float32   `json:"placasEnteras"`
+	PlacasEnteras float64   `json:"placasEnteras"`
 	SinCargo      bool      `json:"sinCargo"`
 	Urgente       int       `json:"urgente"`
 	VariantId     *string   `json:"variantId"`
@@ -4107,20 +4107,20 @@ var swaggerSpec = []string{
 	"gZiS89o/aYZDDzKdooMKLDLIsfZYClxhsYEcHipfZWP/mBj/9faXodxXFGOk/unK1vr+3Jzx/kPzDULb",
 	"OPzvTCGdcauemcQ0rw7sl8kcdI2OGB2xlxisen1ZRuWhN9grtj9ihlKJBQPxQ9PwgKf4S9AsZ9Cz4XSD",
 	"J+yxc1xpKwlTtP2VSlJwaw61eZRdmY/AJn2mShto9P+co05S6cMhQ/1Rg/L57ajX90nr96/1G47dbP9M",
-	"nqPeDO/pqs8h4cYi/J/9icrZd8aGNwO9W3STDyoOXwjxkvH3KI3ffVHRi1wEHk306zi1Uw7vhbqVRNSQ",
-	"C+arNQmn2u0MlGDBmffqtHbgKM+L0TH8vDWPtL305qOyTV8eo+tQhdk79MyHphtBRgli+9G0tY8sdZLt",
-	"dYquwk62/ZSTNVdeMMbRNdygK6JewOnhxbB6//2nMJ9vryPoPP7GpquU/mEDAgWw3CjE/34NsjotyxP1",
-	"Z5NliG5eMZvMrnqaVHcFKGYUMvwIKc8epuhKYMbRb/+hZ/vtv/V4365M1nswEmDf/mjDLofVp4KvIN11",
-	"woZGT8RtTN0s1krvoXwHcaE67G5894jt6IOG6HZCuvR3dj6Dw2AkMoHjLhLOp31O3QWNpZabVh13yr6a",
-	"ncO9eoRc7HTOUySw4zWosZDNzZccN553BZKAV0xb1+bkC2pHyUAIIvkOR928nS5+1wd81hnpHogPsn7L",
-	"ZRt22sHo5zrJbaWNsBTVn22ppsiLMGWtr4fNBhJCfTUxdno6xa+utW7zWa6XdCtWRSYpNE8nZs175Lm+",
-	"bYIzohyrJiHDXdBDD4YHsSACUsTVEV1jhgVQPVSD3X9VBP1wB/NyhAoYn/KfapYhVo3T+T5yh+aq9ngl",
-	"zmYKW7p7WUE9/E5j/G1ooksdLzht3JeKM0u4utLhMndp07e1/YQNSvFG29jGp6XZbVP0zQTSop6KXPKQ",
-	"WPRLkQeorTpXJmjZYN2KNEuyPpaVnomp5DJfOsC9JbwgVarv8u8XS3ELmc9uttWDxuoQ3X++806v1u8Q",
-	"CBw+Ch9g5KaNMVl1ZKyTQDVainFmVCMesDGzO0OyE8Pq9bYgk0+lIQBlovEU0Q40lFwKbVlvuH1FttCv",
-	"EaM1VNJkNUxAuQKREaC4moQzvHibb6BQZOItREJ+0iRY6BdsWdq2rmrkXvoOQfMFRFhtZLW7gwNCiQ2e",
-	"mCS8m34aXkUUUkqSk+2nfZ1+LsezqZEyld5pm6hYP0igfM3vKcuzmTnWZdSuxvhCQG4/KmhTfW3Z8LrU",
-	"ylC8JqLRp5siBRpFt7f/OwA=",
+	"nqPeDO/pqs8h4cYi/J/9icrZd8a8m4Ex9+omn1gcvhnipefvUSy/+8aiF8sIPKPoV3ZqpxzeFHUriagq",
+	"F8xga1JQtSMaKMGCM+8dau3SUb4Yo3X4mWwesXsJz0dlm9A8RumhmrN36KsPTTeCjBLE9qNpa59d6qTf",
+	"66RdhZ1s+ykna678Yoyja7hBV0S9idPDi2H+/otQYc7fXlDQmf2NlVcpjcSGCApguVGR//0aZHValifq",
+	"zybvEN28Yja9XfU0ye8KUMwoZPgRUr4+TNGVwIyj3/5Dz/bbf+vxvl2ZPPhgbMC+BtIGYg6rYQXfRbrr",
+	"FA6Nnoj7mbpZrN3eQ/kOAkR12N0c7xHb0QcN0e2EvOnv7HxOh8FIZErHXaSgT3uhugsaSzY3rToOln11",
+	"PYd79Sy52Omcp0hgx2tQYzObuzA5bnzxCiQBr5i2t83JF9SOkoEQRPIdjrp5TV38rg/4rHvSPRkfZP2W",
+	"yzbstIPRz3WS29obYSmqP9viTZFXY8paXxibDS2E+mpi7PR0mlZda93ms1w46dawikxbaB5TzJoXynN9",
+	"/wRnRLlaTYqGu7KHHgwPYkEEpIirI7rGDAugeqgGu/+qCPrhDgbnCBUwPuVR1SxDrBo39H1kE83V8fGK",
+	"ns2UunQ3tYJ6+J1G/dtgRZc6XnDaODQVZ5ZwdaUDaO4ap299+ykclOKNtrqNl0uz26YMnAmtRT0eueRp",
+	"sei3Iw9QbXWucNCywbo1apbkgSwrRhNT22W+mIB7XXhB8lQ/CNAvn+IWMp/vbOsJjVUmuv8M6J3esd8h",
+	"NDh8Jj7AyE0bY7LqWFknpWq0OOPMqEY8YGNmd4ZkJ4bV621BJsNKQwDKROMpoh1oKLkU2rLecPuubKHf",
+	"J0ZrqKTJc5iAcgUiI0BxNQlnePE2A0GhyERgiIT8pEm50G/asrRtXdXIvf0dguYLiLnaWGt3BweEEhtO",
+	"MWl5N/3EvIoopJQkJ9tP+7oBXdZnUzVlKuHTNlHRf5BA+ZrfU95nM3Osy6hdjfGFgNx+VNCm+iKz4XWp",
+	"laF4TUSjTzdlCzSKbm//dwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

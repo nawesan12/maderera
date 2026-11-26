@@ -17,7 +17,8 @@ package main
 //     acción puntual dentro de ella: bloquear una cuenta, anular un recibo).
 //   - "plata": quien mueve plata desde la ficha de un pedido (cobrar,
 //     facturar): roles.ManejanPlata. El depósito abre Pedidos pero no cobra.
-//   - "cola": lo que se decide en la cola de corte (urgente, anular):
+//   - "cola": lo que se decide en la cola de corte (urgente, anular, pasadas,
+//     acomodo, disco y el alta):
 //     roles.DecidenEnLaCola, todo /admin/cortes menos el aserradero.
 //   - "personal": todo el personal, a propósito. Hoy: el push (cada uno
 //     activa el suyo), el buscador del encabezado (filtra adentro según el
@@ -95,6 +96,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"SucursalesParaGasto":            "/admin/compras",                // GET /api/v1/admin/compras/gastos/sucursales
 	"ListarGastos":                   "/admin/compras",                // GET /api/v1/admin/compras/gastos
 	"CargarGasto":                    "/admin/compras",                // POST /api/v1/admin/compras/gastos
+	"AnularGasto":                    "admin",                         // POST /api/v1/admin/compras/gastos/{id}/anular
 	"LibroIvaComprasCsv":             "/admin/compras",                // GET /api/v1/admin/compras/libro-iva/csv
 	"LibroIvaCompras":                "/admin/compras",                // GET /api/v1/admin/compras/libro-iva
 	"AplicarLista":                   "/admin/compras",                // POST /api/v1/admin/compras/lista-proveedor/aplicar
@@ -148,18 +150,18 @@ var pantallaDeCadaRuta = map[string]string{
 	"TarifasActivas":                 "/mostrador",                    // GET /api/v1/admin/cortes/tarifas/activas
 	"ListarTarifas":                  "/admin/cortes/tarifas",         // GET /api/v1/admin/cortes/tarifas
 	"GuardarTarifa":                  "/admin/cortes/tarifas",         // POST /api/v1/admin/cortes/tarifas
-	"GuardarAcomodo":                 "/admin/cortes",                 // PUT /api/v1/admin/cortes/{id}/acomodo
+	"GuardarAcomodo":                 "cola",                          // PUT /api/v1/admin/cortes/{id}/acomodo
 	"AvanzarCorte":                   "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/avanzar
 	"HojaDelCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}/hoja
-	"CargarPasadas":                  "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/pasadas
-	"CambiarSierra":                  "/admin/cortes",                 // PUT /api/v1/admin/cortes/{id}/sierra
+	"CargarPasadas":                  "cola",                          // POST /api/v1/admin/cortes/{id}/pasadas
+	"CambiarSierra":                  "cola",                          // PUT /api/v1/admin/cortes/{id}/sierra
 	"AlternarUrgente":                "cola",                          // POST /api/v1/admin/cortes/{id}/urgente
 	"AnularCorte":                    "cola",                          // POST /api/v1/admin/cortes/{id}/anular
 	"VolverCorte":                    "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/volver
 	"PasarCorteAPedido":              "plata",                         // POST /api/v1/admin/cortes/{id}/pedido
 	"FichaDeCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}
 	"ListarCortes":                   "/admin/cortes",                 // GET /api/v1/admin/cortes
-	"CrearCorte":                     "/admin/cortes",                 // POST /api/v1/admin/cortes
+	"CrearCorte":                     "cola",                          // POST /api/v1/admin/cortes
 	"CategoriasDeDocumentos":         "/admin/documentacion",          // GET /api/v1/admin/documentos/categorias
 	"ActivarDocumento":               "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/activo
 	"VisibilidadDocumento":           "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/visibilidad
@@ -225,6 +227,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"AvanzarPedido":                  "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/avanzar
 	"CancelarPedido":                 "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/cancelar
 	"CobrarPedido":                   "plata",                         // POST /api/v1/admin/pedidos/{id}/cobro
+	"CajaDelCobro":                   "plata",                         // GET /api/v1/admin/pedidos/{id}/cobro
+	"CajaDelCobroACuenta":            "plata",                         // GET /api/v1/admin/cobros/caja
 	"DevolverPedido":                 "plata",                         // POST /api/v1/admin/pedidos/{id}/devolucion
 	"CorregirPedido":                 "plata",                         // POST /api/v1/admin/pedidos/{id}/correccion
 	"CambiarEntregaDelPedido":        "/admin/presupuestos",           // PUT /api/v1/admin/pedidos/{id}/entrega

@@ -1539,6 +1539,7 @@ export interface operations {
                         /** Format: date-time */
                         createdAt: string;
                         variantId: string | null;
+                        /** Format: double */
                         placasEnteras: number;
                         sinCargo: boolean;
                     }[];

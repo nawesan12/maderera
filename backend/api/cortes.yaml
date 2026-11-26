@@ -337,7 +337,7 @@ paths:
                     urgente: { type: integer }
                     createdAt: { type: string, format: date-time }
                     variantId: { type: string, nullable: true }
-                    placasEnteras: { type: number }
+                    placasEnteras: { type: number, format: double }
                     sinCargo: { type: boolean }
   /api/v1/admin/calculadoras:
     put:

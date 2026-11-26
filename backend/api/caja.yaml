@@ -236,7 +236,7 @@ components:
       type: object
       required: [tipo, id, detalle, sucursal, monto, fecha]
       properties:
-        tipo: { type: string, enum: [recibo, gasto] }
+        tipo: { type: string, enum: [recibo, gasto, pago] }
         id: { type: string }
         detalle: { type: string }
         sucursal: { type: string, nullable: true }

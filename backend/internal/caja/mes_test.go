@@ -85,6 +85,25 @@ func TestLaCajaDelMesSimulado(t *testing.T) {
 	if suma != 255000 {
 		t.Errorf("neto fuera de caja: %v (%s)", suma, b)
 	}
+	// El pago a un proveedor en efectivo sin caja también queda afuera, por
+	// lo que fue en efectivo: Compras lo registra igual y avisa.
+	prov := e.id(t, `insert into suppliers (nombre) values ('Placas del Sur') returning id`)
+	pago := e.id(t, `insert into supplier_payments (supplier_id, fecha, total, neto, medio) values ($1, now() - interval '1 hour', 80000, 80000, 'efectivo + transferencia') returning id`, prov)
+	e.id(t, `insert into supplier_payment_parts (payment_id, medio, importe) values ($1, 'efectivo', 30000) returning id`, pago)
+	e.id(t, `insert into supplier_payment_parts (payment_id, medio, importe) values ($1, 'transferencia', 50000) returning id`, pago)
+	_, b = pedir(t, adm, "GET", e.u+"fuera-de-caja", nil)
+	if err := json.Unmarshal([]byte(b), &fuera); err != nil || len(fuera) != 3 {
+		t.Fatalf("fuera de caja con el pago: %s", b)
+	}
+	if !strings.Contains(b, `"tipo":"pago"`) || !strings.Contains(b, `"monto":-30000`) || !strings.Contains(b, "Placas del Sur") {
+		t.Errorf("el pago en efectivo sin caja: %s", b)
+	}
+	e.id(t, `insert into cash_movements (session_id, tipo, monto, motivo, supplier_payment_id) values ($1, 'gasto', -30000, 'Pago a Placas del Sur', $2) returning id`, turno, pago)
+	_, b = pedir(t, adm, "GET", e.u+"fuera-de-caja", nil)
+	if strings.Contains(b, `"tipo":"pago"`) {
+		t.Errorf("el pago que salió de un turno sigue afuera: %s", b)
+	}
+
 	// Un recibo cuyo efectivo sí entró a un turno no aparece.
 	e.id(t, `insert into cash_movements (session_id, tipo, monto, motivo) values ($1, 'ingreso', 300000, 'Recibo REC-0002 — Constructora del Sur') returning id`, turno)
 	_, b = pedir(t, adm, "GET", e.u+"fuera-de-caja", nil)

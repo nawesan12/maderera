@@ -25,7 +25,8 @@ export async function listarCajasFisicas() {
 
 /**
  * El efectivo del mes que no pasó por ningún turno: recibos cobrados en
- * efectivo desde el panel y gastos en efectivo cargados sin caja abierta. El
+ * efectivo desde el panel, gastos en efectivo cargados sin caja abierta y
+ * pagos a proveedores en efectivo sin caja. El
  * asiento mueve la cuenta Caja, pero ningún arqueo lo incluía (H157).
  */
 export async function efectivoFueraDeCaja(periodo: string) {

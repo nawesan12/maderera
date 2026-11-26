@@ -453,14 +453,16 @@ func (p *Panel) VentasSinCaja(ctx context.Context) ([]VentaSuelta, error) {
 }
 
 // FueraDeCaja es efectivo que entró o salió sin pasar por ningún turno: un
-// recibo cobrado en efectivo desde el panel, o un gasto en efectivo cargado
-// sin caja abierta. Los asientos sí mueven la cuenta Caja, pero ningún arqueo
+// recibo cobrado en efectivo desde el panel, un gasto en efectivo cargado
+// sin caja abierta, o un pago a proveedor en efectivo sin caja (Compras lo
+// registra igual y avisa; no figuraba acá, y era la única forma que quedaba
+// de sacar efectivo por fuera de un turno: el gasto ya se rechaza). Los asientos sí mueven la cuenta Caja, pero ningún arqueo
 // los incluía y no se veían en ninguna pantalla: $255.000 netos en una semana
 // que existían solo en el libro (mes simulado, H157).
 type FueraDeCaja struct {
-	Tipo string `json:"tipo"` // recibo | gasto
+	Tipo string `json:"tipo"` // recibo | gasto | pago
 	ID   string `json:"id"`
-	// Numero del recibo, o la descripción del gasto.
+	// Numero del recibo, la descripción del gasto o el proveedor del pago.
 	Detalle  string  `json:"detalle"`
 	Sucursal *string `json:"sucursal"`
 	// Monto con signo: el recibo entra (+), el gasto sale (−).
@@ -489,6 +491,15 @@ func (p *Panel) EfectivoFueraDeCaja(ctx context.Context, desde, hasta time.Time)
 		  LEFT JOIN branches b ON b.id = e.branch_id
 		  WHERE e.medio = 'efectivo' AND e.fecha >= $1 AND e.fecha <= $2
 		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id)
+		  UNION ALL
+		  SELECT 'pago', sp.id::text, su.nombre, NULL, -ef.efectivo, sp.fecha
+		  FROM supplier_payments sp
+		  JOIN suppliers su ON su.id = sp.supplier_id
+		  CROSS JOIN LATERAL (SELECT CASE WHEN EXISTS (SELECT 1 FROM supplier_payment_parts pp WHERE pp.payment_id = sp.id)
+		      THEN (SELECT coalesce(sum(pp.importe), 0) FROM supplier_payment_parts pp WHERE pp.payment_id = sp.id AND pp.medio = 'efectivo')
+		      WHEN sp.medio = 'efectivo' THEN sp.neto ELSE 0 END AS efectivo) ef
+		  WHERE sp.anulado_at IS NULL AND ef.efectivo > 0 AND sp.fecha >= $1 AND sp.fecha <= $2
+		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.supplier_payment_id = sp.id)
 		) x
 		ORDER BY fecha DESC
 		LIMIT 100`, desde, hasta)

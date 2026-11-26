@@ -305,7 +305,7 @@ export interface components {
         };
         CajaFueraDeCaja: {
             /** @enum {string} */
-            tipo: "recibo" | "gasto";
+            tipo: "recibo" | "gasto" | "pago";
             id: string;
             detalle: string;
             sucursal: string | null;

@@ -435,7 +435,8 @@ function PrecioDelRenglon({
  * Lo que distingue una placa de otra es la medida y el espesor, y van al
  * final del nombre («Placa de Yeso — Resistente humedad 1200 x 2400mm —
  * 12.5mm»). Con el nombre en dos renglones recortados, a 1280 se perdía el
- * espesor (mes simulado, H274). El producto se recorta si hace falta; lo que
+ * espesor (mes simulado, H274). El producto va entero y baja de renglón si
+ * no entra —recortado con «…», a 1280 no se sabía qué tornillo era—; lo que
  * sigue a la primera raya va entero, en su propio renglón.
  */
 function NombreDelRenglon({ descripcion }: { descripcion: string }) {
@@ -443,7 +444,7 @@ function NombreDelRenglon({ descripcion }: { descripcion: string }) {
   if (corte < 0) return <span className="block break-words text-base font-medium">{descripcion}</span>;
   return (
     <>
-      <span className="block truncate text-base font-medium" title={descripcion}>
+      <span className="block break-words text-base font-medium">
         {descripcion.slice(0, corte)}
       </span>
       <span className="block break-words text-base">{descripcion.slice(corte + 3).replaceAll(" — ", " · ")}</span>

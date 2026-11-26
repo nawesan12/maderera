@@ -447,7 +447,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * @description Si el formulario de contacto manda de verdad. Sin correo conectado la
+         *     página no ofrece «Enviar»: lo principal es WhatsApp (mes simulado, H211).
+         */
+        get: operations["EstadoDelContacto"];
         put?: never;
         post: operations["EnviarConsulta"];
         delete?: never;
@@ -1640,6 +1644,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RutaSitemap"][];
+                };
+            };
+        };
+    };
+    EstadoDelContacto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Si hay correo conectado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        correo: boolean;
+                    };
                 };
             };
         };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, type FormEvent } from "react";
 import {
   AtSign,
   CheckCircle,
@@ -27,11 +27,45 @@ import { enviarConsulta, type EstadoConsulta } from "./actions";
  * directos, el texto— se arma en el servidor.
  */
 
-export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
+export interface QuienEscribe {
+  nombre: string;
+  telefono: string;
+  email: string;
+}
+
+export function FormularioContacto({
+  whatsapp,
+  correo,
+  quien,
+}: {
+  whatsapp: string;
+  /** Si hay correo conectado. Sin él, lo principal es WhatsApp (H211). */
+  correo: boolean;
+  /** Con sesión, quién escribe: sus datos no se vuelven a pedir (H392). */
+  quien: QuienEscribe | null;
+}) {
   const [estado, accion, enviando] = useActionState<EstadoConsulta, FormData>(
     enviarConsulta,
     {},
   );
+  // Lo escrito hasta ahora, para que «WhatsApp» abra el chat con eso y no
+  // vacío (H211).
+  const [escrito, setEscrito] = useState<Record<string, string>>({});
+  function anotar(e: FormEvent<HTMLFormElement>) {
+    const datos = new FormData(e.currentTarget);
+    setEscrito(
+      Object.fromEntries(["nombre", "motivo", "mensaje"].map((c) => [c, String(datos.get(c) ?? "")])),
+    );
+  }
+  const textoWhatsapp = textoDeContacto({
+    nombre: quien?.nombre ?? "",
+    motivo: "presupuesto",
+    ...(estado.valores ?? {}),
+    ...escrito,
+  });
+  const enlaceWhatsapp = textoWhatsapp ? enlaceDeConsulta(whatsapp, textoWhatsapp) : `https://wa.me/${whatsapp}`;
+  const conNombre = Boolean(quien?.nombre);
+  const conContacto = Boolean(quien && (quien.telefono || quien.email));
 
   if (estado.ok) {
     return (
@@ -62,7 +96,27 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
   return (
     // `key`: con cada respuesta el formulario se arma de nuevo con lo que se
     // había escrito; React vacía los campos sin control al terminar la acción.
-    <form key={JSON.stringify(estado.valores ?? {})} action={accion} className="space-y-5 rounded-2xl border bg-card p-6 sm:p-8">
+    <form
+      key={JSON.stringify(estado.valores ?? {})}
+      action={accion}
+      onInput={anotar}
+      onSubmit={(e) => {
+        // Sin correo no hay a dónde mandarlo: Enter abre WhatsApp con lo escrito.
+        if (!correo) {
+          e.preventDefault();
+          window.open(enlaceWhatsapp, "_blank", "noopener");
+        }
+      }}
+      className="space-y-5 rounded-2xl border bg-card p-6 sm:p-8"
+    >
+      {/* Con sesión, los datos salen de la ficha y no se vuelven a tipear. */}
+      {conNombre && <input type="hidden" name="nombre" value={quien!.nombre} />}
+      {conContacto && (
+        <>
+          <input type="hidden" name="telefono" value={quien!.telefono} />
+          <input type="hidden" name="email" value={quien!.email} />
+        </>
+      )}
       <div>
         <h2 className="text-2xl font-bold">Escribinos</h2>
       </div>
@@ -86,72 +140,78 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
         </select>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="nombre">Nombre completo</Label>
-        <div className="relative">
-          <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-          <Input
-            id="nombre"
-            name="nombre"
-            required
-            autoComplete="name"
-            placeholder="Tu nombre"
-            defaultValue={valor("nombre")}
-            aria-invalid={errorDe("nombre") ? true : undefined}
-            aria-describedby={errorDe("nombre") ? "error-nombre" : undefined}
-            className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
-          />
+      {!conNombre && (
+        <div className="space-y-2">
+          <Label htmlFor="nombre">Nombre completo</Label>
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <Input
+              id="nombre"
+              name="nombre"
+              required
+              autoComplete="name"
+              placeholder="Tu nombre"
+              defaultValue={valor("nombre")}
+              aria-invalid={errorDe("nombre") ? true : undefined}
+              aria-describedby={errorDe("nombre") ? "error-nombre" : undefined}
+              className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
+            />
+          </div>
+          <ErrorDeCampo id="error-nombre" mensaje={errorDe("nombre")} />
         </div>
-        <ErrorDeCampo id="error-nombre" mensaje={errorDe("nombre")} />
-      </div>
+      )}
 
       {/* WhatsApp primero (hallazgo 47): es por donde contesta la gente de
           acá. Ninguno de los dos es obligatorio solo; alguno sí, y eso lo
           controla Go. */}
-      <fieldset className="space-y-2">
-        <legend className="sr-only">Cómo te contestamos</legend>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="telefono">WhatsApp</Label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-              <Input
-                id="telefono"
-                name="telefono"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                placeholder="223 15 123-4567"
-                defaultValue={valor("telefono")}
-                aria-invalid={errorDe("telefono") || errorDelPar ? true : undefined}
-                aria-describedby={describe("telefono")}
-                className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
-              />
+      {/* Sin correo, la consulta va por WhatsApp: el número ya viaja con
+          el mensaje. */}
+      {correo && !conContacto && (
+        <fieldset className="space-y-2">
+          <legend className="sr-only">Cómo te contestamos</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="telefono">WhatsApp</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+                <Input
+                  id="telefono"
+                  name="telefono"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="223 15 123-4567"
+                  defaultValue={valor("telefono")}
+                  aria-invalid={errorDe("telefono") || errorDelPar ? true : undefined}
+                  aria-describedby={describe("telefono")}
+                  className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
+                />
+              </div>
+              <ErrorDeCampo id="error-telefono" mensaje={errorDe("telefono")} />
             </div>
-            <ErrorDeCampo id="error-telefono" mensaje={errorDe("telefono")} />
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Correo</Label>
-            <div className="relative">
-              <AtSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="tu@correo.com"
-                defaultValue={valor("email")}
-                aria-invalid={errorDe("email") || errorDelPar ? true : undefined}
-                aria-describedby={describe("email")}
-                className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
-              />
+            <div className="space-y-2">
+              <Label htmlFor="email">Correo</Label>
+              <div className="relative">
+                <AtSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="tu@correo.com"
+                  defaultValue={valor("email")}
+                  aria-invalid={errorDe("email") || errorDelPar ? true : undefined}
+                  aria-describedby={describe("email")}
+                  className="h-12 rounded-xl border-border/60 pl-10 focus:border-brand-orange"
+                />
+              </div>
+              <ErrorDeCampo id="error-email" mensaje={errorDe("email")} />
             </div>
-            <ErrorDeCampo id="error-email" mensaje={errorDe("email")} />
           </div>
-        </div>
-        <ErrorDeCampo id="error-contacto" mensaje={errorDelPar} />
-      </fieldset>
+          <ErrorDeCampo id="error-contacto" mensaje={errorDelPar} />
+        </fieldset>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="mensaje">Mensaje</Label>
@@ -185,30 +245,29 @@ export function FormularioContacto({ whatsapp }: { whatsapp: string }) {
           perdía y el botón de enviar quedaba en 22px de alto en el celular. En
           columna el ancho ya lo da el estirado del eje cruzado. */}
       <div className="flex flex-col gap-3 pt-1 sm:flex-row">
-        <Button
-          type="submit"
-          disabled={enviando}
-          className="h-11 rounded-[10px] bg-accion text-[15px] font-semibold text-white hover:bg-accion-hover sm:flex-1"
-        >
-          {enviando ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="mr-2 h-4 w-4" />
-          )}
-          {enviando ? "Enviando…" : "Enviar consulta"}
-        </Button>
+        {correo && (
+          <Button
+            type="submit"
+            disabled={enviando}
+            className="h-11 rounded-[10px] bg-accion text-[15px] font-semibold text-white hover:bg-accion-hover sm:flex-1"
+          >
+            {enviando ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="mr-2 h-4 w-4" />
+            )}
+            {enviando ? "Enviando…" : "Enviar consulta"}
+          </Button>
+        )}
 
-        {/* Si el correo no salió, WhatsApp pasa a ser la acción principal y
-            se abre con lo que ya escribió: no tiene que tipearlo de nuevo. */}
+        {/* WhatsApp se abre con lo que ya se escribió. Sin correo (o si el
+            correo no salió) es la acción principal. */}
         <BotonWhatsapp
-          enlace={(() => {
-            const texto = estado.usarWhatsapp ? textoDeContacto(estado.valores) : null;
-            return texto ? enlaceDeConsulta(whatsapp, texto) : `https://wa.me/${whatsapp}`;
-          })()}
-          variante={estado.usarWhatsapp ? "lleno" : "secundario"}
+          enlace={enlaceWhatsapp}
+          variante={!correo || estado.usarWhatsapp ? "lleno" : "secundario"}
           className="sm:flex-1"
         >
-          Prefiero WhatsApp
+          {correo ? "Prefiero WhatsApp" : "Mandar por WhatsApp"}
         </BotonWhatsapp>
       </div>
     </form>

@@ -40,6 +40,20 @@ export const ajustesDelSitio = cache(
   ),
 );
 
+/**
+ * Si el formulario de contacto manda de verdad (hay correo conectado). Sin
+ * eso, Contacto ofrece WhatsApp como lo principal en vez de dejar escribir
+ * todo para avisar al final que no iba a llegar (mes simulado, H211). Cambia
+ * solo con el entorno de la API, así que se comparte como los ajustes.
+ */
+export const correoDelContacto = cache(
+  cachearPublico(
+    async (): Promise<boolean> => datos(await apiPublica.GET("/api/v1/contenido/contacto")).correo,
+    ["correo-del-contacto"],
+    ETIQUETAS.ajustes,
+  ),
+);
+
 export async function ajuste(clave: string, porDefecto = ""): Promise<string> {
   const ajustes = await ajustesDelSitio();
   return ajustes[clave] || porDefecto;

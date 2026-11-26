@@ -103,6 +103,14 @@ func (o respuesta) VisitEventoPorSlugResponse(w http.ResponseWriter) error     {
 func (o respuesta) VisitEventoVisibleResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitSitemapResponse(w http.ResponseWriter) error           { return o.escribir(w) }
 func (o respuesta) VisitEnviarConsultaResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitEstadoDelContactoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// EstadoDelContacto dice si la consulta sale por correo de verdad (H211):
+// sin eso, la página dejaba escribir todo y recién al enviar avisaba que no
+// iba a llegar.
+func (a *API) EstadoDelContacto(context.Context, contenidoapi.EstadoDelContactoRequestObject) (contenidoapi.EstadoDelContactoResponseObject, error) {
+	return ok(map[string]bool{"correo": a.envio != nil && a.envio.Real() && a.contacto.Casilla != ""}), nil
+}
 func (o respuesta) VisitResenasDelNegocioResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitResumenDelNegocioResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAdminResenasDelNegocioResponse(w http.ResponseWriter) error {

@@ -12,7 +12,10 @@ import {
   Scissors,
 } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
-import { ajuste, tienda } from "@/lib/dal/contenido";
+import { ajuste, correoDelContacto, tienda } from "@/lib/dal/contenido";
+import { Suspense } from "react";
+import { getSession } from "@/lib/dal/session";
+import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 import { DatosEstructurados } from "@/components/datos-estructurados";
 import { migasJsonLd, metadatosDePagina } from "@/lib/seo";
 import { FormularioContacto } from "./formulario";
@@ -66,11 +69,13 @@ const ATAJOS = [
 ];
 
 export default async function ContactoPage() {
-  const [sucursales, whatsapp, laTienda] = await Promise.all([
+  const [sucursales, whatsapp, laTienda, correo] = await Promise.all([
     listarSucursalesPublicas(),
     ajuste("whatsapp_principal", "5492235903118"),
     tienda(),
+    correoDelContacto(),
   ]);
+  const numero = whatsapp.replace(/\D/g, "");
   // Sin tienda no hay carrito, y el stock no se muestra hasta que se cargue.
   const atajos = ATAJOS.filter(
     (a) => (a.href !== "/carrito" || laTienda.activa) && (a.href !== "/stock" || laTienda.stockVisible),
@@ -91,7 +96,12 @@ export default async function ContactoPage() {
       />
 
       <div className="contenedor grid gap-8 py-12 lg:grid-cols-[1fr_380px]">
-        <FormularioContacto whatsapp={whatsapp.replace(/\D/g, "")} />
+        {/* La sesión se lee aparte, detrás de un Suspense: la página sigue
+            saliendo del caché y, con sesión, el formulario ya trae quién
+            escribe (H211, H392). */}
+        <Suspense fallback={<FormularioContacto whatsapp={numero} correo={correo} quien={null} />}>
+          <FormularioConSesion whatsapp={numero} correo={correo} />
+        </Suspense>
 
         <aside className="space-y-6">
           <div className="space-y-3">
@@ -181,4 +191,14 @@ export default async function ContactoPage() {
       </div>
     </div>
   );
+}
+
+/** El formulario con los datos de quien tiene la sesión abierta. */
+async function FormularioConSesion({ whatsapp, correo }: { whatsapp: string; correo: boolean }) {
+  const sesion = await getSession();
+  const cliente = sesion && sesion.role !== "staff" ? await clienteDeLaSesion() : null;
+  const quien = cliente
+    ? { nombre: cliente.nombre, telefono: cliente.telefono ?? "", email: cliente.email ?? sesion?.email ?? "" }
+    : null;
+  return <FormularioContacto whatsapp={whatsapp} correo={correo} quien={quien} />;
 }

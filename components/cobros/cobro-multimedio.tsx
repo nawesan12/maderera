@@ -74,6 +74,7 @@ export function CobroMultimedio({
   medioInicial = "efectivo",
   circuito = "blanco",
   onTotal,
+  onEfectivo,
   delCliente = false,
 }: {
   /** Lo que se espera cobrar. Es lo que se propone en el primer renglón. */
@@ -85,6 +86,8 @@ export function CobroMultimedio({
   circuito?: "blanco" | "negro";
   /** Lo que suman los renglones, cada vez que cambia. */
   onTotal?: (total: number) => void;
+  /** Si algún renglón es efectivo, cada vez que cambia: el efectivo pide caja. */
+  onEfectivo?: (hay: boolean) => void;
   /** Lo llena el cliente en Mi cuenta: las etiquetas le hablan a él (H217). */
   delCliente?: boolean;
 }) {
@@ -101,6 +104,10 @@ export function CobroMultimedio({
   useEffect(() => {
     onTotal?.(total);
   }, [total, onTotal]);
+  const hayEfectivo = renglones.some((r) => r.medio === "efectivo");
+  useEffect(() => {
+    onEfectivo?.(hayEfectivo);
+  }, [hayEfectivo, onEfectivo]);
 
   function cambiar(clave: number, campo: keyof Renglon, valor: string) {
     setRenglones((prev) => prev.map((r) => (r.clave === clave ? { ...r, [campo]: valor } : r)));

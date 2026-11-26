@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Wallet } from "lucide-react";
@@ -14,6 +14,7 @@ import {
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import {
+  cajaDelCobro,
   cobrarPedido,
   registrarCobroDeCliente,
   type EstadoCobro,
@@ -78,6 +79,13 @@ export function DialogoCobro({
   const [abierta, setAbierta] = useState<string | null>(null);
   const [abriendo, empezarAApertura] = useTransition();
   const formulario = useRef<HTMLFormElement>(null);
+  /*
+   * La caja se sabe al abrir, no después del primer «Registrar» (mes
+   * simulado): sin caja abierta, la elección o el «Abrir caja» aparecen en
+   * cuanto el cobro lleva efectivo, que es el medio que propone.
+   */
+  const [previa, setPrevia] = useState<Pick<EstadoCobro, "sinCaja" | "fondoBase" | "sucursales">>({});
+  const [conEfectivo, setConEfectivo] = useState(true);
 
   // Cada vez que se abre, de su botón o de afuera («Cobrar y entregar»),
   // nace una clave nueva y se olvida la caja del cobro anterior.
@@ -90,8 +98,21 @@ export function DialogoCobro({
       setSucursal(null);
       setAbierta(null);
       setFondo("");
+      setPrevia({});
     }
   }
+  const pedidoId = pedido?.id;
+  useEffect(() => {
+    if (!abierto || !pedidoId) return;
+    let vigente = true;
+    cajaDelCobro(pedidoId).then(
+      (r) => vigente && setPrevia(r),
+      () => undefined,
+    );
+    return () => {
+      vigente = false;
+    };
+  }, [abierto, clave, pedidoId]);
 
   function cambiar(a: boolean) {
     setAbiertoAdentro(a);
@@ -131,10 +152,14 @@ export function DialogoCobro({
    * sale solo con la misma clave, que es repetible: abrir y cobrar es un
    * paso, y nadie se queda dudando si cobró.
    */
-  const opciones = estado.sucursales ?? [];
+  // Lo que contestó el último «Registrar» manda; antes, lo que se supo al
+  // abrir, si el cobro lleva efectivo.
+  const respondio = Boolean(estado.sinCaja || estado.sucursales);
+  const caja = respondio ? estado : conEfectivo ? previa : {};
+  const opciones = caja.sucursales ?? [];
   const elegida = opciones.find((o) => o.id === sucursal) ?? null;
-  const dondeAbrir = estado.sinCaja || (elegida && !elegida.abierta ? elegida.id : "");
-  const fondoDeCambio = estado.sinCaja ? estado.fondoBase : elegida?.fondo;
+  const dondeAbrir = caja.sinCaja || (elegida && !elegida.abierta ? elegida.id : "");
+  const fondoDeCambio = caja.sinCaja ? caja.fondoBase : elegida?.fondo;
   const pideAbrir = Boolean(dondeAbrir) && abierta !== dondeAbrir;
   const fondoVisto = fondo === "" && fondoDeCambio != null && fondoDeCambio > 0 ? importeParaElCampo(fondoDeCambio) : fondo;
 
@@ -197,7 +222,7 @@ export function DialogoCobro({
           {pedido && <input type="hidden" name="pedidoId" value={pedido.id} />}
           {orderId && <input type="hidden" name="orderId" value={orderId} />}
 
-          <CobroMultimedio aCobrar={Math.max(aCobrar, 0)} />
+          <CobroMultimedio aCobrar={Math.max(aCobrar, 0)} onEfectivo={setConEfectivo} />
 
           {!orderId && !pedido && (
             <label className="block text-sm text-muted-foreground">

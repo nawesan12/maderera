@@ -110,6 +110,18 @@ export async function cobrarPedido(_previo: EstadoCobro, formData: FormData): Pr
 }
 
 /**
+ * Lo que diría el cobro en efectivo del pedido antes de cobrarlo (GET
+ * /admin/pedidos/{id}/cobro): vacío con la caja abierta; si no, cuál abrir o
+ * entre cuáles elegir. El diálogo lo pide al abrirse: la elección aparecía
+ * recién después del primer «Registrar» (mes simulado).
+ */
+export async function cajaDelCobro(pedidoId: string): Promise<Pick<EstadoCobro, "sinCaja" | "fondoBase" | "sucursales">> {
+  const r = await (await api()).GET("/api/v1/admin/pedidos/{id}/cobro", { params: { path: { id: pedidoId } } });
+  if (!r.data) return {};
+  return { sinCaja: r.data.sinCaja, fondoBase: r.data.fondoBase, sucursales: r.data.sucursales };
+}
+
+/**
  * Anula un recibo, con motivo (quien maneja plata): la deuda vuelve a la
  * cuenta. Go lo frena si una devolución ya le reintegró plata o si un cheque
  * suyo ya salió de la cartera, y el mensaje se muestra tal cual.

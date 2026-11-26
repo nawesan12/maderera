@@ -60,6 +60,7 @@ func (o respuesta) VisitPedidoParaElTallerResponse(w http.ResponseWriter) error 
 func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCobrarPedidoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitCajaDelCobroResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error { return o.escribir(w) }
@@ -197,6 +198,29 @@ func (a *API) CobrarPedido(ctx context.Context, r ventasapi.CobrarPedidoRequestO
 		return nil, err
 	}
 	return ok(v), nil
+}
+
+// CajaDelCobro: lo mismo que contestaría el cobro en efectivo, antes de
+// cobrar (quien mueve plata).
+func (a *API) CajaDelCobro(ctx context.Context, r ventasapi.CajaDelCobroRequestObject) (ventasapi.CajaDelCobroResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	falta, err := cobros.Nuevo(a.s.pool, a.s.log).CajaDelCobro(ctx, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if falta != nil {
+		if falta.Sucursal != "" {
+			out["sinCaja"] = falta.Sucursal
+			out["fondoBase"] = falta.FondoBase
+		}
+		if len(falta.Sucursales) > 0 {
+			out["sucursales"] = falta.Sucursales
+		}
+	}
+	return ok(out), nil
 }
 
 func (o respuesta) VisitDevolverPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }

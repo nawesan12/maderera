@@ -244,6 +244,32 @@ paths:
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/cobro:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: CajaDelCobro
+      summary: Si el efectivo del pedido tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro)
+      responses:
+        "200":
+          description: Vacío si hay caja
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sinCaja: { type: string, description: la sucursal cuya caja hay que abrir }
+                  fondoBase: { type: number, format: double }
+                  sucursales:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, nombre, abierta, fondo]
+                      properties:
+                        id: { type: string }
+                        nombre: { type: string }
+                        abierta: { type: boolean }
+                        fondo: { type: number, format: double }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
     post:
       operationId: CobrarPedido
       summary: Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal

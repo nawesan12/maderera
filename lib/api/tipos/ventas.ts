@@ -179,7 +179,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** Si el efectivo del pedido tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro) */
+        get: operations["CajaDelCobro"];
         put?: never;
         /** Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal */
         post: operations["CobrarPedido"];
@@ -909,6 +910,43 @@ export interface operations {
             401: components["responses"]["Problema"];
             403: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
+        };
+    };
+    CajaDelCobro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vacío si hay caja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description la sucursal cuya caja hay que abrir */
+                        sinCaja?: string;
+                        /** Format: double */
+                        fondoBase?: number;
+                        sucursales?: {
+                            id: string;
+                            nombre: string;
+                            abierta: boolean;
+                            /** Format: double */
+                            fondo: number;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
         };
     };
     CobrarPedido: {

@@ -89,6 +89,11 @@ func TestPresupuestoAPedidoConEnvioYACuenta(t *testing.T) {
 		t.Fatal("el retiro quedó sin sucursal")
 	}
 
+	// Sin caja abierta, el diálogo sabe antes de cobrar qué caja abrir.
+	if c, b := pedir(t, ven, "GET", u+"pedidos/"+retiro.ID+"/cobro", nil); c != 200 || !strings.Contains(b, `"sinCaja"`) {
+		t.Fatalf("la caja del cobro: %d %s", c, b)
+	}
+
 	// Cobrarlo con recibo: queda pagado por la suma de lo cobrado.
 	total = e.texto(t, `select total::text from orders where id = $1`, retiro.ID)
 	if c, b := pedir(t, ven, "POST", u+"pedidos/"+retiro.ID+"/cobro", map[string]any{"partes": `[{"medio":"transferencia","importe":"` + total + `"}]`}); c != 200 {

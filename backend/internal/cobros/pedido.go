@@ -124,22 +124,9 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 		}
 		var c *Caja
 		if hayEfectivo(partes) {
-			donde := p.sucursal
-			if plataforma.UUIDValido(sucursal) {
-				donde = &sucursal
-			}
-			turno, err := turnoDelPedido(ctx, q, donde)
+			turno, err := turnoParaElEfectivo(ctx, tx, q, p.sucursal, sucursal)
 			if err != nil {
 				return err
-			}
-			if turno == "" && donde != nil && donde == p.sucursal {
-				// La del pedido está cerrada: si hay otra abierta, se elige.
-				if err := otrasCajas(ctx, tx, *donde); err != nil {
-					return err
-				}
-			}
-			if turno == "" {
-				return sinCaja(ctx, tx, donde)
 			}
 			c = &Caja{TurnoID: turno}
 		}
@@ -181,6 +168,57 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 			"Cobró "+numero+" con el recibo "+r.Numero+" por "+formato.Importe(r.Total), map[string]any{"receiptId": r.ReceiptID})
 	}
 	return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", Aviso: r.Aviso, ReceiptID: &r.ReceiptID}, nil
+}
+
+// turnoParaElEfectivo es el turno donde entra el efectivo de un pedido de
+// la sucursal `delPedido`: el de la elegida (`elegida`) o el de la suya. Sin
+// turno devuelve el ErrSinCaja con lo que hay que abrir o elegir.
+func turnoParaElEfectivo(ctx context.Context, tx pgx.Tx, q *sqlc.Queries, delPedido *string, elegida string) (string, error) {
+	donde := delPedido
+	if plataforma.UUIDValido(elegida) {
+		donde = &elegida
+	}
+	turno, err := turnoDelPedido(ctx, q, donde)
+	if err != nil {
+		return "", err
+	}
+	if turno == "" && donde != nil && donde == delPedido {
+		// La del pedido está cerrada: si hay otra abierta, se elige.
+		if err := otrasCajas(ctx, tx, *donde); err != nil {
+			return "", err
+		}
+	}
+	if turno == "" {
+		return "", sinCaja(ctx, tx, donde)
+	}
+	return turno, nil
+}
+
+// CajaDelCobro es lo que diría el cobro en efectivo del pedido antes de
+// cobrarlo: nil si hay caja, o el ErrSinCaja con lo que hay que abrir o
+// elegir. El diálogo lo muestra al abrirse (mes simulado: la caja aparecía
+// recién después del primer «Registrar»).
+func (s *Servicio) CajaDelCobro(ctx context.Context, pedido string) (*ErrSinCaja, error) {
+	if !plataforma.UUIDValido(pedido) {
+		return nil, plataforma.NuevoProblema(404, "No se encontró el pedido.")
+	}
+	var falta *ErrSinCaja
+	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		var sucursal *string
+		err := tx.QueryRow(ctx, `SELECT branch_id::text FROM orders WHERE id = $1`, pedido).Scan(&sucursal)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return plataforma.NuevoProblema(404, "No se encontró el pedido.")
+		}
+		if err != nil {
+			return err
+		}
+		_, err = turnoParaElEfectivo(ctx, tx, s.q.WithTx(tx), sucursal, "")
+		if errors.As(err, &falta) {
+			return nil
+		}
+		return err
+	})
+	return falta, err
 }
 
 func hayEfectivo(partes []Parte) bool {

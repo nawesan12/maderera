@@ -53,9 +53,12 @@ type RefRecibo struct {
 // DetalleParaElCliente saca de un asiento lo que se escribió para la casa.
 // La anulación de una venta guarda su motivo («…: se cargó a la Mueblería y
 // era de la Constructora»), y el cliente se enteraba de lo que había
-// comprado otro (H386). El motivo sigue en el pedido y en la bitácora.
+// comprado otro (H386). La cancelación de un pedido desde el panel lo
+// guarda igual («Cancelación del pedido PED-1219: se cargó a la
+// Constructora…», tercera prueba). El motivo sigue en el pedido y en la
+// bitácora.
 func DetalleParaElCliente(detalle *string) *string {
-	if detalle == nil || !strings.HasPrefix(*detalle, "Anulación de la venta ") {
+	if detalle == nil || !(strings.HasPrefix(*detalle, "Anulación de la venta ") || strings.HasPrefix(*detalle, "Cancelación del pedido ")) {
 		return detalle
 	}
 	if i := strings.Index(*detalle, ": "); i > 0 {

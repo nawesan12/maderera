@@ -16,6 +16,11 @@ func TestDetalleParaElCliente(t *testing.T) {
 	if v := DetalleParaElCliente(&d); v == nil || *v != "Anulación de la venta PED-1121" {
 		t.Errorf("anulación: %v", v)
 	}
+	// Tercera prueba: la cancelación desde el panel guarda el motivo igual.
+	c := "Cancelación del pedido PED-1219: Se cargó a la Constructora y era de la Mueblería Sur"
+	if v := DetalleParaElCliente(&c); v == nil || *v != "Cancelación del pedido PED-1219" {
+		t.Errorf("cancelación: %v", v)
+	}
 	otro := "Cheque Banco Nación N° 1 rechazado por el banco: sin fondos"
 	if v := DetalleParaElCliente(&otro); v != &otro {
 		t.Errorf("el motivo del rechazo es para el cliente: %v", *v)

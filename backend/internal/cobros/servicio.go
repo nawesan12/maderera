@@ -240,6 +240,18 @@ func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, m
 	if strings.TrimSpace(motivo) == "" {
 		return "", plataforma.Invalido(map[string]string{"motivo": "Poné el motivo de la anulación."})
 	}
+	// El cobro de Mercado Pago no se anula desde el panel, ni con PIN: se dice
+	// eso antes de pedir el PIN de algo que igual no se puede.
+	var porMP bool
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) (err error) {
+		porMP, err = cobradoPorMercadoPago(ctx, tx, recibo)
+		return err
+	}); err != nil {
+		return "", err
+	}
+	if porMP {
+		return "", comoProblema(errCobro("Este cobro entró por Mercado Pago: devolvelo desde Mercado Pago y el recibo se anula solo cuando llega el aviso."))
+	}
 	if !ses.Tiene(sqlc.StaffRoleAdmin) {
 		var total float64
 		err := s.pool.QueryRow(ctx, `SELECT total::float8 FROM receipts WHERE id::text = $1`, recibo).Scan(&total)

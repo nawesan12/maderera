@@ -501,6 +501,13 @@ func ConceptoDe(tipo, nota, documento string) (concepto, referencia string) {
 		return "Existencia inicial", ""
 	}
 	if antes, _, ok := strings.Cut(nota, " desde Stock"); ok && (tipo == "ingreso" || tipo == "egreso") {
+		// La reposición dice a quién: la nota termina en «· PED-1098 ·
+		// Ferreyra» (decía solo el pedido, tercera prueba).
+		if documento == "pedido" && ref != "" {
+			if _, cliente, ok := strings.Cut(nota, ref+" · "); ok && strings.TrimSpace(cliente) != "" {
+				return "Reposición a " + strings.TrimSpace(cliente), ref
+			}
+		}
 		if c, ok := conceptoDeAjuste[antes]; ok {
 			return c, ref
 		}

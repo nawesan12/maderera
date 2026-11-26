@@ -157,7 +157,8 @@ func TestConceptoDe(t *testing.T) {
 		{"egreso", "Ajuste rápido desde Stock (3 → 2)", "", "Ajuste", ""},
 		{"ingreso", "Devolución de cliente desde Stock (1 → 2)", "", "Devolución", ""},
 		{"egreso", "Consumo del taller desde Stock (69 → 67,5)", "", "Consumo del taller", ""},
-		{"egreso", "Reposición a cliente desde Stock (115 → 114) · PED-1098 · Ferreyra", "pedido", "Reposición a cliente", "PED-1098"},
+		{"egreso", "Reposición a cliente desde Stock (115 → 114) · PED-1098 · Ferreyra", "pedido", "Reposición a Ferreyra", "PED-1098"},
+		{"egreso", "Reposición a cliente desde Stock (115 → 114) · PED-1098", "pedido", "Reposición a cliente", "PED-1098"},
 		{"venta", "Remito REM-0020", "", "Entrega", "REM-0020"},
 		{"venta", "Mostrador PED-1121", "", "Venta", "PED-1121"},
 		{"devolucion", "Anulación PED-1121", "", "Anulación", "PED-1121"},
@@ -252,7 +253,7 @@ func TestMotivosNuevos(t *testing.T) {
 		t.Errorf("historial del pedido: %q", nota)
 	}
 	m := movimientos(t, e, dep, "?busqueda=TOR")
-	if m[0].Concepto != "Reposición a cliente" || m[0].Referencia == nil || *m[0].Referencia != "PED-1098" || m[2].Concepto != "Rotura" {
+	if m[0].Concepto != "Reposición a Sim Carpintería Ferreyra" || m[0].Referencia == nil || *m[0].Referencia != "PED-1098" || m[2].Concepto != "Rotura" {
 		t.Errorf("libro: %+v", m)
 	}
 }

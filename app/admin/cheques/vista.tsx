@@ -252,14 +252,14 @@ export function AccionesDeCheque({
               Motivo que lee el cliente
             </label>
             {estado !== "informado" && sentido === "recibido" && (
-              <div className="flex flex-wrap gap-2">
+              <div role="group" aria-label="Motivos del banco" className="flex flex-wrap gap-2">
                 {["Sin fondos", "Firma no coincide", "Cuenta cerrada", "Defecto de forma"].map((m) => (
                   <button
                     key={m}
                     type="button"
                     onClick={() => setMotivo(m)}
                     aria-pressed={motivo === m}
-                    className="h-10 rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-hundida aria-pressed:bg-hundida"
+                    className="h-11 rounded-lg border border-linea px-3.5 text-base font-medium transition-colors hover:bg-hundida aria-pressed:border-foreground aria-pressed:bg-hundida"
                   >
                     {m}
                   </button>

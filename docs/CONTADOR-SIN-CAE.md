@@ -83,7 +83,14 @@ circuito B»**: el extracto no va a conciliar.
 
 El cierre también marca las **«Señas del mes sin factura»** y los
 **«Anticipos sin aplicar»** (de pedidos que se entregaron o cancelaron sin
-factura con CAE), con el importe.
+factura con CAE), con el importe. Y como el reparto no se recalcula, marca
+los recibos que mandaron plata al B y conviene mirar: **«Cobros en el B de
+ventas facturadas después»** (el pedido se cobró entregado y sin factura, y
+se facturó más tarde: la factura queda en su archivo sin el cobro) y
+**«Recibos partidos entre los dos archivos»** (una parte a su archivo y el
+resto al B).
+
+**A decidir:** en esos dos casos, ¿el cobro tiene que pasar a su archivo?
 
 **A decidir:** ¿las señas congelan precio? Si es así, el cobro de la seña
 perfecciona el hecho imponible (art. 5, inc. b, Ley de IVA): hay que

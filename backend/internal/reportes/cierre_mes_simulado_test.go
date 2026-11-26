@@ -274,3 +274,41 @@ func TestElDepositoDeLaCajaVaAlBanco(t *testing.T) {
 		t.Fatalf("la caja fuerte no mueve Caja: %v", n)
 	}
 }
+
+// Los recibos que mandan plata al B y el contador tiene que mirar: el cobro
+// de un pedido entregado sin factura que después se factura (H374) y el
+// recibo que queda partido entre los dos archivos (H407). El reparto no se
+// recalcula: el cierre los dice, con la ficha del cliente.
+func TestCierreRecibosConParteEnB(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+
+	// Paz: el pedido entregado y sin factura se cobra; va entero al B. Al
+	// día siguiente se factura.
+	paz := e.id(t, `insert into customers (nombre) values ('Paz') returning id`)
+	pedido := e.pedido(t, "PED-1107", e.central, "entregado", "mostrador", time.Date(2026, 10, 3, 12, 0, 0, 0, Argentina), &paz)
+	e.exec(t, `update orders set total = 824440 where id = $1`, pedido)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'entregado', '2026-10-03T15:00:00Z')`, pedido)
+	rec := e.recibir(t, &paz, "REC-0037", "2026-10-04T15:00:00Z", [2]any{"transferencia", 824440.0})
+	e.exec(t, `update receipts set order_id = $2 where id = $1`, rec, pedido)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado,
+		fecha_emision, created_at, customer_id, order_id) values ('factura_b', 15, 71, 'Paz', 681355.37, 143084.63, 0, 0, 0, 824440, 'emitida',
+		'2026-10-05T15:00:00Z', '2026-10-05T15:00:00Z', $1, $2)`, paz, pedido)
+
+	// Constructora: una factura A esperando el CAE por 755.000 y un cobro de
+	// 768.000; los 13.000 de más van al B.
+	cons := e.id(t, `insert into customers (nombre) values ('Constructora') returning id`)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado,
+		fecha_emision, created_at, customer_id) values ('factura_a', 15, 9, 'Constructora', 623966.94, 131033.06, 0, 0, 0, 755000, 'emitida',
+		'2026-10-05T15:00:00Z', '2026-10-05T15:00:00Z', $1)`, cons)
+	e.recibir(t, &cons, "REC-0040", "2026-10-06T15:00:00Z", [2]any{"transferencia", 500000.0}, [2]any{"efectivo", 268000.0})
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	p := pendientesDe(t, cuerpo)
+	if f, ok := p["b-facturadas-despues"]; !ok || f.Cantidad != 1 || !strings.Contains(f.Detalle, "824.440") || f.Donde != "/admin/clientes/"+paz {
+		t.Fatalf("cobro en el B de una venta facturada después: %s", cuerpo)
+	}
+	if f, ok := p["recibos-partidos"]; !ok || f.Cantidad != 1 || !strings.Contains(f.Detalle, "13.000") || f.Donde != "/admin/clientes/"+cons {
+		t.Fatalf("recibo partido: %s", cuerpo)
+	}
+}

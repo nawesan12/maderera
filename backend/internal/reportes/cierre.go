@@ -776,6 +776,12 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 			fichaOClientes(clientes)})
 	}
 
+	mas, err := s.pendientesDeRecibosEnB(ctx, idesde, ihasta, reparto)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, mas...)
+
 	// Lo bancarizado en el B: los recibos del período, y los pagos y gastos en
 	// negro que no fueron en efectivo.
 	rs, err := s.pool.Query(ctx, `SELECT r.id, p.medio::text, p.importe::float8, coalesce(ch.circuito = 'negro', false)
@@ -831,6 +837,70 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		}
 		out = append(out, PendienteDelCierre{"banco-b", "Movimientos bancarios en el circuito B",
 			formato.Moneda(total) + " por banco o Mercado Pago van al archivo B: el extracto no va a conciliar.", cuantos + nPagos, donde})
+	}
+	return out, nil
+}
+
+// pendientesDeRecibosEnB son los recibos del período que mandaron plata al
+// circuito B y que el contador tiene que mirar, porque el reparto se fija al
+// emitir el recibo y no se recalcula (docs/CONTADOR-SIN-CAE.md):
+//
+//   - **Cobros en el B de ventas facturadas después**: el pedido estaba
+//     entregado y sin factura al cobrarse, así que el cobro fue al B como
+//     venta sin factura; después se facturó, y la factura queda en el
+//     archivo del estudio sin su cobro (simulación del mes, H374).
+//   - **Recibos partidos entre los dos archivos**: una parte al estudio y el
+//     resto al B. El recibo y la ficha no lo dicen, y la caja del estudio no
+//     da con el arqueo por esa parte (H407).
+//
+// Cómo se corrige —mover el cobro al estudio, una nota de crédito, dejarlo—
+// lo decide el contador: el cierre lo dice con el cliente a un toque.
+func (s *Servicio) pendientesDeRecibosEnB(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
+	rs, err := s.pool.Query(ctx, `SELECT r.id::text, coalesce(r.customer_id::text, ''), coalesce(r.order_id::text, ''),
+		r.order_id IS NOT NULL AND EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = r.order_id AND i.tipo::text LIKE 'factura%'
+		  AND i.estado NOT IN ('borrador', 'anulada') AND i.created_at > r.created_at)
+		FROM receipts r WHERE r.created_at >= $1 AND r.created_at <= $2 AND r.anulado_at IS NULL`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var facturadoDespues, partido float64
+	deFacturadas, partidos := map[string]bool{}, map[string]bool{}
+	nFacturadas, nPartidos := 0, 0
+	var id, cliente, pedido string
+	var despues bool
+	if _, err := pgx.ForEachRow(rs, []any{&id, &cliente, &pedido, &despues}, func() error {
+		rep, ok := reparto.Recibos[id]
+		if !ok || rep.B < 0.005 {
+			return nil
+		}
+		clave := "p:" + pedido
+		if cliente != "" {
+			clave = "c:" + cliente
+		}
+		switch {
+		case despues:
+			facturadoDespues = float64(facturadoDespues + rep.B)
+			deFacturadas[clave] = true
+			nFacturadas++
+		case rep.Deudores+rep.Anticipo >= 0.005:
+			partido = float64(partido + rep.B)
+			partidos[clave] = true
+			nPartidos++
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	out := []PendienteDelCierre{}
+	if nFacturadas > 0 {
+		out = append(out, PendienteDelCierre{"b-facturadas-despues", "Cobros en el B de ventas facturadas después",
+			formato.Moneda(jsmath.Redondear2(facturadoDespues)) + " en el archivo B: la factura queda en el del estudio sin su cobro.", nFacturadas,
+			fichaOClientes(deFacturadas)})
+	}
+	if nPartidos > 0 {
+		out = append(out, PendienteDelCierre{"recibos-partidos", "Recibos partidos entre los dos archivos",
+			formato.Moneda(jsmath.Redondear2(partido)) + " de esos recibos van al archivo B.", nPartidos,
+			fichaOClientes(partidos)})
 	}
 	return out, nil
 }

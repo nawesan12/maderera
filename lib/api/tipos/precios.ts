@@ -328,7 +328,7 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 categoria?: string;
-                estado?: "todas" | "sin-precio" | "para-revisar" | "al-dia" | "bajo-costo";
+                estado?: "todas" | "sin-precio" | "para-revisar" | "al-dia" | "bajo-costo" | "profesional-caro";
                 marca?: string;
                 proveedor?: string;
                 limite?: number;
@@ -353,6 +353,7 @@ export interface operations {
                             todas: number;
                             sinPrecio: number;
                             bajoCosto: number;
+                            profesionalCaro: number;
                             paraRevisar: number;
                             alDia: number;
                         };

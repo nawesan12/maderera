@@ -98,6 +98,11 @@ type ConteosDePrecios struct {
 	// BajoCosto: el precio de lista, sin IVA, no llega al costo. Es un grupo
 	// que cruza los otros (un precio al día puede estar bajo el costo).
 	BajoCosto int `json:"bajoCosto"`
+	// ProfesionalCaro: el precio profesional cargado es más alto que el de
+	// lista. Al profesional se le cobra lo de su lista, así que es plata de
+	// más que nadie veía hasta que el cliente se quejaba (mes simulado: los
+	// tirantes TEC-TIR-PIN). La grilla ya lo marcaba fila por fila.
+	ProfesionalCaro int `json:"profesionalCaro"`
 }
 
 // BajoCostoDe es, sobre las filas `v` y `p`, que el precio dado (con IVA) sin
@@ -147,11 +152,16 @@ func (s *Servicio) grilla(ctx context.Context, f listado.Filtros, ahora time.Tim
 	precio := `coalesce((SELECT pli.price FROM price_list_items pli WHERE pli.variant_id = v.id AND pli.price_list_id = ` + c.Arg(general) + `::uuid), 0)`
 	tocado := `(SELECT max(pli.updated_at) FROM price_list_items pli WHERE pli.variant_id = v.id)`
 	viejo := precio + ` > 0 AND (` + tocado + ` IS NULL OR ` + tocado + ` < ` + c.Arg(ahora.Add(-DiasParaRevisar*24*time.Hour)) + `::timestamptz)`
+	// Por el slug y no con un argumento: la consulta de las filas no lo usa
+	// cuando no se filtra por esto, y Postgres no acepta un parámetro suelto.
+	precioProfesional := `coalesce((SELECT pli.price FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
+		WHERE pli.variant_id = v.id AND pl.slug = 'profesional' LIMIT 1), 0)`
 	estados := map[string]string{
-		"sin-precio":   precio + ` <= 0`,
-		"para-revisar": viejo,
-		"al-dia":       precio + ` > 0 AND NOT (` + viejo + `)`,
-		"bajo-costo":   BajoCostoDe(precio),
+		"sin-precio":       precio + ` <= 0`,
+		"para-revisar":     viejo,
+		"al-dia":           precio + ` > 0 AND NOT (` + viejo + `)`,
+		"bajo-costo":       BajoCostoDe(precio),
+		"profesional-caro": precio + ` > 0 AND ` + precioProfesional + ` > ` + precio,
 	}
 	desde := ` FROM product_variants v
 		JOIN products p ON p.id = v.product_id
@@ -159,11 +169,12 @@ func (s *Servicio) grilla(ctx context.Context, f listado.Filtros, ahora time.Tim
 	k := &out.Conteos
 	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estados["sin-precio"]+`),
 		count(*) FILTER (WHERE `+estados["para-revisar"]+`), count(*) FILTER (WHERE `+estados["al-dia"]+`),
-		count(*) FILTER (WHERE `+estados["bajo-costo"]+`)`+desde+c.Donde(),
-		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia, &k.BajoCosto); err != nil {
+		count(*) FILTER (WHERE `+estados["bajo-costo"]+`), count(*) FILTER (WHERE `+estados["profesional-caro"]+`)`+desde+c.Donde(),
+		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia, &k.BajoCosto, &k.ProfesionalCaro); err != nil {
 		return out, err
 	}
-	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia, "bajo-costo": k.BajoCosto}[f.Estado]
+	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia, "bajo-costo": k.BajoCosto,
+		"profesional-caro": k.ProfesionalCaro}[f.Estado]
 	if cond, ok := estados[f.Estado]; ok {
 		c.Y(cond)
 	} else {

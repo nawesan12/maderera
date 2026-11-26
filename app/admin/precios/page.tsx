@@ -163,6 +163,9 @@ export default async function PreciosPage({
           ...(conteos.bajoCosto > 0 || estado === "bajo-costo"
             ? [{ valor: "bajo-costo", texto: "Bajo el costo", cantidad: conteos.bajoCosto, atencion: true }]
             : []),
+          ...(conteos.profesionalCaro > 0 || estado === "profesional-caro"
+            ? [{ valor: "profesional-caro", texto: "Profesional más caro", cantidad: conteos.profesionalCaro, atencion: true }]
+            : []),
         ]}
       />
 

@@ -72,11 +72,12 @@ func (e VistaPreviaFilasEstado) Valid() bool {
 
 // Defines values for GrillaDePreciosParamsEstado.
 const (
-	AlDia       GrillaDePreciosParamsEstado = "al-dia"
-	BajoCosto   GrillaDePreciosParamsEstado = "bajo-costo"
-	ParaRevisar GrillaDePreciosParamsEstado = "para-revisar"
-	SinPrecio   GrillaDePreciosParamsEstado = "sin-precio"
-	Todas       GrillaDePreciosParamsEstado = "todas"
+	AlDia           GrillaDePreciosParamsEstado = "al-dia"
+	BajoCosto       GrillaDePreciosParamsEstado = "bajo-costo"
+	ParaRevisar     GrillaDePreciosParamsEstado = "para-revisar"
+	ProfesionalCaro GrillaDePreciosParamsEstado = "profesional-caro"
+	SinPrecio       GrillaDePreciosParamsEstado = "sin-precio"
+	Todas           GrillaDePreciosParamsEstado = "todas"
 )
 
 // Valid indicates whether the value is a known member of the GrillaDePreciosParamsEstado enum.
@@ -87,6 +88,8 @@ func (e GrillaDePreciosParamsEstado) Valid() bool {
 	case BajoCosto:
 		return true
 	case ParaRevisar:
+		return true
+	case ProfesionalCaro:
 		return true
 	case SinPrecio:
 		return true
@@ -848,11 +851,12 @@ type GrillaDePreciosResponseObject interface {
 
 type GrillaDePrecios200JSONResponse struct {
 	Conteos struct {
-		AlDia       int `json:"alDia"`
-		BajoCosto   int `json:"bajoCosto"`
-		ParaRevisar int `json:"paraRevisar"`
-		SinPrecio   int `json:"sinPrecio"`
-		Todas       int `json:"todas"`
+		AlDia           int `json:"alDia"`
+		BajoCosto       int `json:"bajoCosto"`
+		ParaRevisar     int `json:"paraRevisar"`
+		ProfesionalCaro int `json:"profesionalCaro"`
+		SinPrecio       int `json:"sinPrecio"`
+		Todas           int `json:"todas"`
 	} `json:"conteos"`
 	Filas []FilaPrecio `json:"filas"`
 	Total int          `json:"total"`
@@ -1782,26 +1786,26 @@ var swaggerSpec = []string{
 	"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",
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

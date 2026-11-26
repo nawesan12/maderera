@@ -54,6 +54,7 @@ import {
   MEDIOS_DE_CONTADO,
   type TipoDeOperacion,
   TIPOS_DE_OPERACION,
+  notaDelPresupuesto,
   esElTipo,
   type ParteDePago,
   type ChequeEnPantalla,
@@ -935,11 +936,20 @@ export function VistaMostrador({
     if (lineas.length === 0) return;
 
     empezar(async () => {
+      /*
+       * El presupuesto va a precio de lista, y el total con el descuento de la
+       * pantalla queda escrito en sus notas: se le decía al cliente un número
+       * (con el 10 % en efectivo) y el PDF y la ficha decían otro (mes
+       * simulado, H021). Va en las notas y no en el total porque el
+       * descuento depende de cómo pague.
+       */
+      const notas = notaDelPresupuesto({ descuento, descuentoManual, medio, motivo: motivoDelDescuento, total });
       const r = await emitirPresupuestoDeMostrador({
         branchId: sucursal.id,
         lineas,
         customerId: cliente?.id ?? null,
         contactoNombre: cliente?.nombre ?? "Consumidor final",
+        notas,
       });
       if (r.error) {
         setAviso({ tipo: "error", texto: r.error });

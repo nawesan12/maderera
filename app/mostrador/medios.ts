@@ -1,4 +1,5 @@
 import { Banknote, CreditCard, Landmark, NotebookPen, ScrollText } from "lucide-react";
+import { formatearMonto } from "@/lib/formato";
 import type { ChequeDePago, MedioDeMostrador } from "@/lib/mostrador/importes";
 
 export const MEDIOS: { valor: MedioDeMostrador; texto: string; Icono: typeof Banknote }[] = [
@@ -110,3 +111,26 @@ export function aChequeDePago(c: ChequeEnPantalla | undefined): ChequeDePago | n
  * ofrece cualquier número porque tipear "7 cuotas" no le sirve a nadie.
  */
 export const CUOTAS = [1, 3, 6, 9, 12, 18, 24] as const;
+
+/**
+ * La nota del presupuesto del mostrador con el total de la pantalla: el
+ * presupuesto va a precio de lista y el descuento depende de cómo pague, así
+ * que se escribe aparte. Sin ella se le decía al cliente un número (con el
+ * 10 % en efectivo) y el PDF y la ficha decían otro (mes simulado, H021).
+ */
+export function notaDelPresupuesto(v: {
+  descuento: number;
+  descuentoManual: number;
+  medio: MedioDeMostrador;
+  motivo: string;
+  total: number;
+}): string | null {
+  if (!(v.descuento > 0)) return null;
+  const como =
+    v.descuentoManual > 0
+      ? "Con descuento"
+      : v.medio === "efectivo"
+        ? "Pagando en efectivo"
+        : `Pagando con ${(NOMBRE_DEL_MEDIO[v.medio] ?? v.medio).toLowerCase()}`;
+  return `${como}${v.motivo ? ` (${v.motivo})` : ""}: ${formatearMonto(v.total)}.`;
+}

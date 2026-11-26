@@ -3099,3 +3099,18 @@ Quedó para decidir: dejar una parte del pedido a cuenta corriente y el resto
 por otro medio (hoy se ve el disponible antes de crear, y si no alcanza no
 se crea), y que la vendedora registre el rechazo de un cheque desde la
 ficha (hoy es de /admin/cheques, del admin).
+
+## 26/11/2026: el mes simulado, arreglos del depósito (rama `mes-simulado-arreglos`)
+
+- **Acopio sin servicios** (`entregas.SaldoDeAcopio`): las pasadas y el
+  tapacanto de un corte (sin producto, `del_corte`) no quedan por retirar ni
+  salen en el remito; la devolución usa `SaldoConServicios`. Un pedido sin
+  mercadería por retirar no es acopio en el listado.
+- **Caja antes de cobrar**: `GET /admin/pedidos/{id}/cobro`
+  (`cobros.CajaDelCobro`) contesta lo mismo que el cobro en efectivo sin
+  caja, con la misma regla (`turnoParaElEfectivo`).
+- **Retiro sin sucursal**: el pedido de un presupuesto sin sucursal toma la
+  primera activa, la misma de donde reserva.
+- **Remito en PDF**: la unidad de venta (`pdf.UnidadDeVenta`: la lata de 4
+  litros es «u.») y la aclaración con quien firmó (golden del remito
+  rehechos con Go).

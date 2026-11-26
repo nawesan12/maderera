@@ -11,7 +11,9 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -352,6 +354,9 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 	if err := filas.Err(); err != nil {
 		return nil, err
 	}
+	for id, rs := range por {
+		por[id] = juntarDevoluciones(rs)
+	}
 	// Primero las ventas, de la más grande a la más chica; después los
 	// cobros de cuenta y al final las devoluciones, igual.
 	for _, rs := range por {
@@ -369,6 +374,44 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		})
 	}
 	return por, nil
+}
+
+// juntarDevoluciones deja una sola fila de devoluciones por medio: las de
+// las anulaciones (sin quién) y las parciales (una por quien las hizo) salían
+// en filas separadas, «Efectivo» y «Efectivo · Prueba vendedor», y el
+// vendedor rendía dos veces el mismo cajón (mes simulado). Quién las hizo
+// sigue a la vista, junto al medio.
+func juntarDevoluciones(rs []RenglonDelCierre) []RenglonDelCierre {
+	out := make([]RenglonDelCierre, 0, len(rs))
+	donde := map[string]int{}
+	quienes := map[string][]string{}
+	for _, r := range rs {
+		if !r.Devolucion {
+			out = append(out, r)
+			continue
+		}
+		i, ya := donde[r.MedioPago]
+		if !ya {
+			donde[r.MedioPago] = len(out)
+			r2 := r
+			r2.Quien = nil
+			out = append(out, r2)
+			i = len(out) - 1
+		} else {
+			out[i].Cantidad += r.Cantidad
+			out[i].Total = jsmath.Redondear2(float64(out[i].Total + r.Total))
+		}
+		if r.Quien != nil && !slices.Contains(quienes[r.MedioPago], *r.Quien) {
+			quienes[r.MedioPago] = append(quienes[r.MedioPago], *r.Quien)
+		}
+	}
+	for medio, i := range donde {
+		if q := quienes[medio]; len(q) > 0 {
+			t := strings.Join(q, ", ")
+			out[i].Quien = &t
+		}
+	}
+	return out
 }
 
 // CierreDelTurno es el cierre Z de un turno solo.

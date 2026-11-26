@@ -586,6 +586,7 @@ export function FormularioPago({
                           value={parte.referencia}
                           onChange={(e) => actualizarParte(i, { referencia: e.target.value })}
                           placeholder="N.º de operación"
+                          aria-label="Referencia de la transferencia"
                           className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
                         />
                       )}
@@ -644,17 +645,19 @@ export function FormularioPago({
                         })()}
 
                         {!parte.chequeId && (
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                             <input
                               value={parte.numero}
                               onChange={(e) => actualizarParte(i, { numero: e.target.value })}
                               placeholder="N.º de cheque"
+                              aria-label="Número de cheque"
                               className="tabular h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
                             />
                             <input
                               value={parte.banco}
                               onChange={(e) => actualizarParte(i, { banco: e.target.value })}
                               placeholder="Banco"
+                              aria-label="Banco del cheque"
                               className="h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
                             />
                             <input
@@ -662,7 +665,7 @@ export function FormularioPago({
                               value={parte.fechaPago}
                               onChange={(e) => actualizarParte(i, { fechaPago: e.target.value })}
                               aria-label="Fecha de pago del cheque"
-                              className="tabular h-11 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                              className="tabular col-span-2 h-11 w-full sm:col-span-1 rounded-lg border border-linea bg-card px-2.5 text-base"
                             />
                           </div>
                         )}

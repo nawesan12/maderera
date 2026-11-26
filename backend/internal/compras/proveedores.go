@@ -222,7 +222,7 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 	filas, err = s.pool.Query(ctx, `
 		SELECT e.id, e.fecha, e.descripcion, e.importe, e.medio::text, CASE WHEN f.id IS NOT NULL THEN lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') END
 		FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
-		WHERE e.supplier_id = $1 ORDER BY e.fecha DESC LIMIT 50`, id)
+		WHERE e.supplier_id = $1 AND e.anulado_at IS NULL ORDER BY e.fecha DESC LIMIT 50`, id)
 	if err != nil {
 		return nil, err
 	}

@@ -724,6 +724,18 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/gastos/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularGasto
+      description: |
+        Solo el admin. El gasto queda anulado con su motivo y deja de contar;
+        el efectivo vuelve al turno abierto de su sucursal y la factura que
+        se cargó con él se anula.
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/gastos/por-categoria:
     get:
       operationId: GastosPorCategoria
@@ -1286,7 +1298,7 @@ components:
     Gasto:
       type: object
       required: [id, fecha, categoria, descripcion, importe, medio, circuito, conFactura, sucursal, proveedor, supplierId, notas, enCaja,
-        purchaseInvoiceId, factura]
+        purchaseInvoiceId, factura, anuladoAt, motivoAnulacion]
       properties:
         id: { type: string }
         fecha: { type: string, format: date-time }
@@ -1303,6 +1315,8 @@ components:
         enCaja: { type: boolean }
         purchaseInvoiceId: { type: string, nullable: true }
         factura: { type: string, nullable: true }
+        anuladoAt: { type: string, format: date-time, nullable: true }
+        motivoAnulacion: { type: string, nullable: true }
     TotalDeGastos:
       type: object
       required: [clave, cantidad, total]

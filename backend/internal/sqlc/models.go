@@ -5439,19 +5439,22 @@ type EventRegistration struct {
 }
 
 type Expense struct {
-	ID                string         `json:"id"`
-	Fecha             time.Time      `json:"fecha"`
-	Categoria         CategoriaGasto `json:"categoria"`
-	Descripcion       string         `json:"descripcion"`
-	Importe           jsmath.Num     `json:"importe"`
-	Medio             MedioGasto     `json:"medio"`
-	BranchID          *string        `json:"branchId"`
-	SupplierID        *string        `json:"supplierId"`
-	PurchaseInvoiceID *string        `json:"purchaseInvoiceId"`
-	Notas             *string        `json:"notas"`
-	CreatedByUserID   *string        `json:"createdByUserId"`
-	CreatedAt         time.Time      `json:"createdAt"`
-	Circuito          Circuito       `json:"circuito"`
+	ID                string             `json:"id"`
+	Fecha             time.Time          `json:"fecha"`
+	Categoria         CategoriaGasto     `json:"categoria"`
+	Descripcion       string             `json:"descripcion"`
+	Importe           jsmath.Num         `json:"importe"`
+	Medio             MedioGasto         `json:"medio"`
+	BranchID          *string            `json:"branchId"`
+	SupplierID        *string            `json:"supplierId"`
+	PurchaseInvoiceID *string            `json:"purchaseInvoiceId"`
+	Notas             *string            `json:"notas"`
+	CreatedByUserID   *string            `json:"createdByUserId"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	Circuito          Circuito           `json:"circuito"`
+	AnuladoAt         pgtype.Timestamptz `json:"anuladoAt"`
+	MotivoAnulacion   *string            `json:"motivoAnulacion"`
+	AnuladoPorUserID  *string            `json:"anuladoPorUserId"`
 }
 
 type FotosBibliotecaDescartada struct {

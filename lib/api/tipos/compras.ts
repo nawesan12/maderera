@@ -756,6 +756,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/compras/gastos/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Solo el admin. El gasto queda anulado con su motivo y deja de contar;
+         *     el efectivo vuelve al turno abierto de su sucursal y la factura que
+         *     se cargó con él se anula.
+         */
+        post: operations["AnularGasto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/compras/gastos/por-categoria": {
         parameters: {
             query?: never;
@@ -1317,6 +1340,9 @@ export interface components {
             enCaja: boolean;
             purchaseInvoiceId: string | null;
             factura: string | null;
+            /** Format: date-time */
+            anuladoAt: string | null;
+            motivoAnulacion: string | null;
         };
         TotalDeGastos: {
             /** @description la categoría o el circuito */
@@ -2550,6 +2576,21 @@ export interface operations {
             cookie?: never;
         };
         requestBody: components["requestBodies"]["Formulario"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    AnularGasto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Motivo"];
         responses: {
             200: components["responses"]["Hecho"];
             422: components["responses"]["Problema"];

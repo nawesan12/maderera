@@ -17,6 +17,7 @@ import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 import { CargarGasto } from "./cargar";
+import { AnularGasto } from "./anular";
 
 export const metadata: Metadata = { title: "Gastos" };
 
@@ -175,15 +176,19 @@ export default async function GastosPage({
                   <th className="px-5 py-2.5 font-semibold">Pago</th>
                   <th className="px-5 py-2.5 font-semibold">Circuito</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Importe</th>
+                  <th className="w-14 px-2 py-2.5">
+                    <span className="sr-only">Anular</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-linea">
                 {gastos.map((g) => (
-                  <tr key={g.id}>
+                  <tr key={g.id} className={g.anuladoAt ? "opacity-60" : undefined}>
                     <td className="tabular px-5 py-3 text-muted-foreground">{fechaCorta.format(g.fecha)}</td>
                     <td className="px-5 py-3">
                       <span className="block">{g.descripcion}</span>
                       <DeQuien g={g} />
+                      <Anulado g={g} />
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       <Medio g={g} />
@@ -191,7 +196,12 @@ export default async function GastosPage({
                     <td className="px-5 py-3">
                       <Circuito g={g} />
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(Number(g.importe))}</td>
+                    <td className={`tabular px-5 py-3 text-right font-semibold ${g.anuladoAt ? "line-through" : ""}`}>
+                      {formatearMonto(Number(g.importe))}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      <Anular g={g} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -201,18 +211,24 @@ export default async function GastosPage({
                 proveedor y la sucursal iban en tres columnitas de una palabra. */}
             <ul className="divide-y divide-linea @4xl:hidden">
               {gastos.map((g) => (
-                <li key={g.id} className="space-y-1 px-4 py-3">
+                <li key={g.id} className={`space-y-1 px-4 py-3 ${g.anuladoAt ? "opacity-60" : ""}`}>
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="min-w-0 text-base font-semibold">{g.descripcion}</span>
-                    <span className="tabular shrink-0 text-base font-semibold">{formatearMonto(Number(g.importe))}</span>
+                    <span className="min-w-0 break-words text-base font-semibold">{g.descripcion}</span>
+                    <span className={`tabular shrink-0 text-base font-semibold ${g.anuladoAt ? "line-through" : ""}`}>
+                      {formatearMonto(Number(g.importe))}
+                    </span>
                   </div>
                   <DeQuien g={g} />
-                  <p className="tabular flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                    <span>{fechaCorta.format(g.fecha)}</span>
-                    <span>·</span>
-                    <Medio g={g} />
-                    <Circuito g={g} />
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="tabular flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                      <span>{fechaCorta.format(g.fecha)}</span>
+                      <span>·</span>
+                      <Medio g={g} />
+                      <Circuito g={g} />
+                    </p>
+                    <Anular g={g} />
+                  </div>
+                  <Anulado g={g} />
                 </li>
               ))}
             </ul>
@@ -248,6 +264,34 @@ function DeQuien({ g }: { g: Gasto }) {
       )}
       {g.sucursal && ` · ${g.sucursal}`}
     </span>
+  );
+}
+
+/** El motivo de la anulación, donde se lee el gasto. */
+function Anulado({ g }: { g: Gasto }) {
+  if (!g.anuladoAt) return null;
+  return (
+    <span className="block text-sm font-medium text-saldo-debe">
+      Anulado{g.motivoAnulacion && ` · ${g.motivoAnulacion}`}
+    </span>
+  );
+}
+
+/** Anular, con lo que vuelve: el efectivo a la caja y la factura que vino con él. */
+function Anular({ g }: { g: Gasto }) {
+  if (g.anuladoAt) return null;
+  return (
+    <AnularGasto
+      id={g.id}
+      titulo={`Anular el gasto de ${formatearMonto(Number(g.importe))}: ${g.descripcion}`}
+      detalle={[
+        "Deja de contar en los gastos del mes.",
+        g.enCaja ? `Los ${formatearMonto(Number(g.importe))} en efectivo vuelven a la caja${g.sucursal ? ` de ${g.sucursal}` : ""}.` : "",
+        g.factura ? `La factura ${g.factura} queda anulada.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    />
   );
 }
 

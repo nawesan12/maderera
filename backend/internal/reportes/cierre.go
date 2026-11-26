@@ -302,7 +302,7 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		SELECT e.fecha, e.descripcion, e.categoria::text, e.importe, e.medio::text, e.circuito::text,
 		  coalesce(f.tipo::text, ''), coalesce(f.iva21 + f.iva105 + f.iva27, 0), coalesce(f.percepciones, 0)
 		FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id AND f.anulada_at IS NULL
-		WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha`, desde, hasta)
+		WHERE e.fecha >= $1 AND e.fecha <= $2 AND e.anulado_at IS NULL ORDER BY e.fecha`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +487,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 // ejemplo es el primer par, con sus importes.
 func (s *Servicio) gastosRepetidos(ctx context.Context, desde, hasta time.Time) (int, string, error) {
 	rs, err := s.lectura.Query(ctx, `SELECT categoria::text, coalesce(branch_id::text, ''), coalesce(supplier_id::text, ''), descripcion, importe::float8
-		FROM expenses WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha, created_at`, desde, hasta)
+		FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL ORDER BY fecha, created_at`, desde, hasta)
 	if err != nil {
 		return 0, "", err
 	}
@@ -790,6 +790,7 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		    AND p.fecha >= $1 AND p.fecha <= $2 AND p.medio::text <> 'efectivo' AND p.medio::text NOT LIKE '%tercero%'
 		  UNION ALL
 		  SELECT g.importe FROM expenses g WHERE g.circuito = 'negro' AND g.fecha >= $1 AND g.fecha <= $2 AND g.medio::text <> 'efectivo'
+		    AND g.anulado_at IS NULL
 		) x`, idesde, ihasta).Scan(&pagos, &nPagos); err != nil {
 		return nil, err
 	}
@@ -933,8 +934,8 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	practicadas := " AND anulada_at IS NULL"
 	err = s.lectura.QueryRow(ctx, `
 		SELECT
-		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $1 AND fecha <= $2),
-		  (SELECT count(*)::int FROM expenses WHERE fecha >= $1 AND fecha <= $2),
+		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL),
+		  (SELECT count(*)::int FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL),
 		  (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4`+practicadas+`),
 		  (SELECT count(*)::int FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4`+practicadas+`),
 		  (SELECT coalesce(sum(importe), 0) FROM retenciones_sufridas WHERE anulada_at IS NULL AND fecha >= $1 AND fecha <= $2),

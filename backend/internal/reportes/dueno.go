@@ -549,7 +549,7 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		      WHEN p.medio IN ('efectivo', 'cheque', 'echeq') THEN 0 ELSE p.neto END), 0)
 		    FROM supplier_payments p WHERE p.anulado_at IS NULL AND p.fecha >= $1 AND p.fecha < $2),
 		  (SELECT coalesce(sum(importe), 0) FROM expenses
-		    WHERE medio IN ('transferencia', 'debito') AND fecha >= $3 AND fecha < $4),
+		    WHERE medio IN ('transferencia', 'debito') AND fecha >= $3 AND fecha < $4 AND anulado_at IS NULL),
 		  (SELECT coalesce(sum(c.importe), 0) FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		    WHERE c.sentido = 'entregado' AND e.hacia = 'acreditado' AND e.at >= $1 AND e.at < $2)
 		FROM cobrado`, hoy, manana, diaDeGasto(hoy), diaDeGasto(hoy).AddDate(0, 0, 1)).
@@ -614,7 +614,7 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 		  `+ventasNetas(r.ConDescuento, "(margenes.neto - coalesce(margenes.neto_costeado, 0))")+`,
 		  coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
 		  (SELECT coalesce(sum(`+gasto+`), 0) FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
-		   WHERE e.fecha >= $3 AND e.fecha < $4),
+		   WHERE e.fecha >= $3 AND e.fecha < $4 AND e.anulado_at IS NULL),
 		  coalesce(sum(`+envioSinIva+`) FILTER (WHERE o.operaciones = 1), 0)
 		FROM `+hechosDeVenta+` o `+margenesDe(delPeriodo)+`
 		WHERE `+delPeriodo, idesde, ihasta, ddesde, dhasta).

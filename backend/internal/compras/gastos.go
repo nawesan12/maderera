@@ -212,6 +212,9 @@ type Gasto struct {
 	// La factura del gasto, si se cargó con una.
 	PurchaseInvoiceID *string `json:"purchaseInvoiceId"`
 	Factura           *string `json:"factura"`
+	// Anulado: sigue en el listado, apagado, y no cuenta en ningún total.
+	AnuladoAt       *time.Time `json:"anuladoAt"`
+	MotivoAnulacion *string    `json:"motivoAnulacion"`
 }
 
 // ListarGastos es listarGastos: los del período, los más nuevos primero.
@@ -219,7 +222,8 @@ func (s *Servicio) ListarGastos(ctx context.Context, desde, hasta time.Time, lim
 	filas, err := s.pool.Query(ctx, `
 		SELECT e.id, e.fecha, e.categoria::text, e.descripcion, e.importe::text, e.medio::text, e.circuito::text, e.purchase_invoice_id IS NOT NULL,
 		  b.name, s.nombre, e.supplier_id, e.notas, EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id),
-		  e.purchase_invoice_id, CASE WHEN f.id IS NOT NULL THEN lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') END
+		  e.purchase_invoice_id, CASE WHEN f.id IS NOT NULL THEN lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') END,
+		  e.anulado_at, e.motivo_anulacion
 		FROM expenses e LEFT JOIN branches b ON b.id = e.branch_id LEFT JOIN suppliers s ON s.id = e.supplier_id
 		LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
 		WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC LIMIT $3`, desde, hasta, limite)
@@ -239,7 +243,7 @@ type TotalDeGastos struct {
 // GastosPorCategoria es gastosPorCategoria (lo más gastado primero).
 func (s *Servicio) GastosPorCategoria(ctx context.Context, desde, hasta time.Time) ([]TotalDeGastos, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT categoria::text, count(*)::int, sum(importe)::text FROM expenses WHERE fecha >= $1 AND fecha <= $2
+		SELECT categoria::text, count(*)::int, sum(importe)::text FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL
 		GROUP BY categoria ORDER BY sum(importe) DESC`, desde, hasta)
 	if err != nil {
 		return nil, err
@@ -250,7 +254,7 @@ func (s *Servicio) GastosPorCategoria(ctx context.Context, desde, hasta time.Tim
 // GastosPorCircuito es gastosPorCircuito.
 func (s *Servicio) GastosPorCircuito(ctx context.Context, desde, hasta time.Time) ([]TotalDeGastos, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT circuito::text, count(*)::int, sum(importe)::text FROM expenses WHERE fecha >= $1 AND fecha <= $2 GROUP BY circuito`, desde, hasta)
+		SELECT circuito::text, count(*)::int, sum(importe)::text FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL GROUP BY circuito`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}

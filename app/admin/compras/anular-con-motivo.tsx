@@ -28,10 +28,13 @@ export function AnularConMotivo({
   titulo,
   detalle,
   boton = "Anular",
+  compacto = false,
   confirmar,
   anular,
   alTerminar,
 }: {
+  /** Solo el ícono, para un renglón de un listado: el título es su rótulo. */
+  compacto?: boolean;
   /** «Anular el pago de $ 120.000 a Maderas del Sur». */
   titulo: string;
   detalle: string;
@@ -48,14 +51,26 @@ export function AnularConMotivo({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        className="tarjeta-hundida inline-flex h-11 items-center gap-2 rounded-xl px-4 text-base font-medium text-saldo-debe"
-      >
-        <Ban className="h-4 w-4" aria-hidden="true" />
-        {boton}
-      </button>
+      {compacto ? (
+        <button
+          type="button"
+          onClick={() => setAbierto(true)}
+          aria-label={titulo}
+          title={boton}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-hundida hover:text-saldo-debe"
+        >
+          <Ban className="h-4 w-4" aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAbierto(true)}
+          className="tarjeta-hundida inline-flex h-11 items-center gap-2 rounded-xl px-4 text-base font-medium text-saldo-debe"
+        >
+          <Ban className="h-4 w-4" aria-hidden="true" />
+          {boton}
+        </button>
+      )}
 
       <Dialog open={abierto} onOpenChange={(v) => !v && setAbierto(false)}>
         <DialogContent className="sm:max-w-md">

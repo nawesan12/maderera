@@ -88,6 +88,11 @@ export const expenses = pgTable(
     notas: text(),
     createdByUserId: text().references(() => user.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+
+    /** Un gasto mal cargado se anula (00280): queda, pero no cuenta. */
+    anuladoAt: timestamp({ withTimezone: true }),
+    motivoAnulacion: text(),
+    anuladoPorUserId: text().references(() => user.id),
   },
   (t) => [
     index("expenses_fecha_idx").on(t.fecha),

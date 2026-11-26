@@ -71,6 +71,7 @@ func (o respuesta) VisitCargarFacturaDeCompraResponse(w http.ResponseWriter) err
 }
 func (o respuesta) VisitListarGastosResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitCargarGastoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitAnularGastoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitGastosPorCategoriaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitGastosPorCircuitoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitSucursalesParaGastoResponse(w http.ResponseWriter) error {
@@ -860,6 +861,19 @@ func (a *API) CargarGasto(ctx context.Context, r comprasapi.CargarGastoRequestOb
 		out["aviso"] = aviso
 	}
 	return ok(out), nil
+}
+
+// AnularGasto es solo del admin, como el pago: deshace plata que ya salió.
+func (a *API) AnularGasto(ctx context.Context, r comprasapi.AnularGastoRequestObject) (comprasapi.AnularGastoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.AnularGasto(ctx, ses, r.Id, r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
 }
 
 func (a *API) GastosPorCategoria(ctx context.Context, r comprasapi.GastosPorCategoriaRequestObject) (comprasapi.GastosPorCategoriaResponseObject, error) {

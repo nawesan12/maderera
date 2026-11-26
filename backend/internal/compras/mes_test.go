@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"mjbj/internal/caja"
 )
 
 // Las pruebas de lo que encontró el mes simulado en producción (noviembre
@@ -448,5 +450,46 @@ func TestElGastoNoDejaElCajonEnNegativo(t *testing.T) {
 		if ok != c.ok || motivo != c.motivo {
 			t.Errorf("AlcanzaElCajon(%v, %v, %v) = %v %q", c.enCaja, c.base, c.importe, ok, motivo)
 		}
+	}
+}
+
+// Un gasto mal cargado se anula (mes simulado): el efectivo vuelve al
+// turno abierto, la factura que vino con él se anula y deja de contar.
+func TestAnularUnGasto(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	var usuario string
+	_ = e.pool.QueryRow(ctx, `select id from "user" limit 1`).Scan(&usuario)
+	e.exec(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, now() - interval '1 hour')`, e.central, usuario)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, created_at) select id, 'apertura', 50000, abierta_at from cash_sessions`)
+	hoy := time.Now().In(caja.Argentina).Format("2006-01-02")
+	gasto := map[string]any{"fecha": hoy, "categoria": "flete", "descripcion": "Flete del puerto", "importe": 12000, "medio": "efectivo", "branchId": e.central}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 200 {
+		t.Fatalf("gasto: %d %s", c, b)
+	}
+	var id string
+	_ = e.pool.QueryRow(ctx, `select id from expenses`).Scan(&id)
+	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos/"+id+"/anular", map[string]any{"motivo": " "}); c != 422 || !strings.Contains(b, "Poné el motivo") {
+		t.Errorf("sin motivo: %d %s", c, b)
+	}
+	c, b := pedir(t, adm, "POST", e.u+"compras/gastos/"+id+"/anular", map[string]any{"motivo": "Se cargó en efectivo y fue transferencia"})
+	if c != 200 || !strings.Contains(b, "volvieron a la caja") {
+		t.Fatalf("anular: %d %s", c, b)
+	}
+	if m := e.numero(t, `select sum(monto)::float8 from cash_movements`); m != 50000 {
+		t.Errorf("el cajón vuelve a lo que tenía: %v", m)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos/"+id+"/anular", map[string]any{"motivo": "otra vez"}); c != 422 || !strings.Contains(b, "ya estaba anulado") {
+		t.Errorf("dos veces: %d %s", c, b)
+	}
+	desde := time.Now().AddDate(0, 0, -2).UTC().Format(time.RFC3339)
+	hasta := time.Now().AddDate(0, 0, 2).UTC().Format(time.RFC3339)
+	q := "?desde=" + desde + "&hasta=" + hasta
+	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/por-categoria"+q, nil); strings.Contains(b, "flete") {
+		t.Errorf("el anulado no suma: %s", b)
+	}
+	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos"+q, nil); !strings.Contains(b, `"motivoAnulacion":"Se cargó en efectivo y fue transferencia"`) {
+		t.Errorf("listado: %s", b)
 	}
 }

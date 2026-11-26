@@ -489,7 +489,7 @@ func (p *Panel) EfectivoFueraDeCaja(ctx context.Context, desde, hasta time.Time)
 		  SELECT 'gasto', e.id::text, e.descripcion, b.name, -e.importe, e.fecha
 		  FROM expenses e
 		  LEFT JOIN branches b ON b.id = e.branch_id
-		  WHERE e.medio = 'efectivo' AND e.fecha >= $1 AND e.fecha <= $2
+		  WHERE e.medio = 'efectivo' AND e.fecha >= $1 AND e.fecha <= $2 AND e.anulado_at IS NULL
 		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id)
 		  UNION ALL
 		  SELECT 'pago', sp.id::text, su.nombre, NULL, -ef.efectivo, sp.fecha

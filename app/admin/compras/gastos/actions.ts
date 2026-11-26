@@ -37,3 +37,20 @@ export async function cargarGasto(datos: DatosGasto): Promise<EstadoGasto> {
   if (datos.supplierId) revalidatePath(`/admin/proveedores/${datos.supplierId}`);
   return { ok: r.data.ok, aviso: r.data.aviso };
 }
+
+/**
+ * Anula un gasto mal cargado. Go lo deja con su motivo, devuelve el efectivo
+ * al turno abierto de su sucursal y anula la factura que vino con él.
+ */
+export async function anularGasto(id: string, motivo: string): Promise<{ error?: string; ok?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/compras/gastos/{id}/anular", {
+    params: { path: { id } },
+    body: { motivo },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo anular el gasto.") };
+  revalidatePath("/admin/compras/gastos");
+  revalidatePath("/admin/caja");
+  revalidatePath("/admin/arca/libro-iva-compras");
+  revalidatePath("/admin/compras/facturas");
+  return { ok: r.data.ok };
+}

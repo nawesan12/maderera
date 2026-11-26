@@ -26,7 +26,8 @@ import {
   importeParaElCampo,
   importeIlegible,
 } from "@/lib/formato";
-import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { CIRCUITOS } from "@/lib/circuito";
+import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 import { type ChequeDeCartera, chequesParaEndosar, sinEndososDelOtroCircuito } from "./endoso";
 import {
   BarraGuardar,
@@ -43,6 +44,7 @@ import {
   verFacturasConSaldo,
   type EstadoPago,
 } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 interface Proveedor {
   id: string;
@@ -89,6 +91,12 @@ interface Sucursal {
 interface FacturaConSaldo {
   id: string;
   numero: string;
+  /**
+   * El tipo del comprobante. Además de las facturas vienen las notas de
+   * crédito a favor (restan: se aplican a una factura del pago) y los
+   * cheques que le dimos y rebotaron («cheque_rechazado»: se reponen).
+   */
+  tipo: string;
   fechaEmision: Date | string;
   fechaVencimiento: Date | string | null;
   total: number;
@@ -115,11 +123,6 @@ const MEDIOS = [
   { valor: "cheque", texto: "Cheque", icono: FileText },
   { valor: "echeq", texto: "e-Cheq", icono: FileDigit },
 ];
-
-const OPCIONES_CIRCUITO = CIRCUITOS.map((c) => ({
-  valor: c,
-  texto: ETIQUETA_CIRCUITO[c],
-}));
 
 const parteVacia = (medio: ParteUI["medio"] = "transferencia"): ParteUI => ({
   medio,
@@ -163,6 +166,7 @@ export function FormularioPago({
   sucursales,
   proveedorInicial,
   facturaInicial,
+  chequeInicial,
 }: {
   proveedores: Proveedor[];
   regimenes: Regimen[];
@@ -171,7 +175,11 @@ export function FormularioPago({
   proveedorInicial?: string;
   /** Qué factura viene a pagarse: se tilda sola al cargar las del proveedor. */
   facturaInicial?: string;
+  /** El cheque rechazado que viene a reponerse, igual que una factura. */
+  chequeInicial?: string;
 }) {
+  const etiquetasCircuito = useEtiquetasDelCircuito();
+  const opcionesCircuito = CIRCUITOS.map((c) => ({ valor: c, texto: etiquetasCircuito[c] }));
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoPago>({});
   const [enCurso, empezar] = useTransition();
@@ -219,7 +227,7 @@ export function FormularioPago({
       if (!vivo) return;
       setFacturas(filas);
       // Si se llegó desde una factura, viene tildada por su saldo entero.
-      const objetivo = filas.find((f) => f.id === facturaInicial);
+      const objetivo = filas.find((f) => f.id === facturaInicial || f.id === chequeInicial);
       setAplicado(objetivo ? { [objetivo.id]: importeParaElCampo(objetivo.saldo) } : {});
       // El total que ya se escribió no se borra: si las facturas tardaban en
       // llegar, el importe tipeado desaparecía y «Pagar» quedaba apagado sin
@@ -243,9 +251,28 @@ export function FormularioPago({
     };
   }, []);
 
-  const tildadas = facturas.filter((f) => f.id in aplicado);
+  const esNota = (f: FacturaConSaldo) => f.tipo.startsWith("nota_credito");
+  const esCheque = (f: FacturaConSaldo) => f.tipo === "cheque_rechazado";
+  // Lo que se paga (facturas y cheques a reponer) y las notas que restan.
+  const tildadas = facturas.filter((f) => f.id in aplicado && !esNota(f));
+  const notas = facturas.filter((f) => f.id in aplicado && esNota(f));
+  const sumaNotas = redondear(notas.reduce((s, f) => s + f.saldo, 0));
+  /*
+   * Cada nota se aplica a la primera factura tildada a la que le entra (la
+   * misma regla que Go): lo que se imputa de esa factura baja en lo que la
+   * nota cubre. Una nota que no entra en ninguna queda marcada.
+   */
+  const imputado: Record<string, number> = Object.fromEntries(
+    tildadas.map((f) => [f.id, importeDelCampo(aplicado[f.id])]),
+  );
+  const notasSinLugar: string[] = [];
+  for (const nota of notas) {
+    const destino = tildadas.find((f) => !esCheque(f) && imputado[f.id] - nota.saldo > -0.009);
+    if (destino) imputado[destino.id] = redondear(imputado[destino.id] - nota.saldo);
+    else notasSinLugar.push(nota.id);
+  }
   const sumaAplicada = redondear(
-    tildadas.reduce((s, f) => s + importeDelCampo(aplicado[f.id]), 0),
+    tildadas.reduce((s, f) => s + importeDelCampo(aplicado[f.id]), 0) - sumaNotas,
   );
   const total = totalTocado === null ? sumaAplicada : importeDelCampo(totalTocado);
   const aCuenta = redondear(total - sumaAplicada);
@@ -282,7 +309,7 @@ export function FormularioPago({
       : partes.some((p) => p.medio === "efectivo" && importeDelCampo(p.importe) > 0);
   const sucursal = sucursales.find((s) => s.id === branchId);
 
-  /** Tilda o destilda una factura; tildada, se paga entera. */
+  /** Tilda o destilda una factura; tildada, se paga entera (la nota resta entera). */
   function tildar(f: FacturaConSaldo, si: boolean) {
     setTotalTocado(null);
     setAplicado((prev) => {
@@ -300,14 +327,16 @@ export function FormularioPago({
   function escribirTotal(valor: string) {
     setTotalTocado(valor);
     if (tildadas.length === 0) return;
-    let resto = importeDelCampo(valor);
+    // Lo que se escribe es lo que sale: las notas tildadas se suman a lo
+    // que cubren las facturas.
+    let resto = redondear(importeDelCampo(valor) + sumaNotas);
     const nuevo: Record<string, string> = {};
     for (const f of tildadas) {
       const cubre = Math.max(0, Math.min(f.saldo, resto));
       nuevo[f.id] = importeParaElCampo(cubre);
       resto = redondear(resto - cubre);
     }
-    setAplicado(nuevo);
+    setAplicado({ ...nuevo, ...Object.fromEntries(notas.map((n) => [n.id, aplicado[n.id]])) });
   }
 
   function actualizarParte(i: number, cambios: Partial<ParteUI>) {
@@ -361,12 +390,15 @@ export function FormularioPago({
                   const tildada = f.id in aplicado;
                   const vence = f.fechaVencimiento ? fecha(f.fechaVencimiento) : null;
                   const dias = diasHasta(vence);
+                  const nota = esNota(f);
+                  const sinLugar = notasSinLugar.includes(f.id);
                   return (
                     <li
                       key={f.id}
+                      data-sin-lugar={sinLugar || undefined}
                       className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl px-4 py-3 ${
                         tildada ? "tarjeta-hundida" : ""
-                      }`}
+                      } ${sinLugar ? "ring-2 ring-saldo-debe" : ""}`}
                     >
                       <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
                         <input
@@ -376,10 +408,18 @@ export function FormularioPago({
                           className="h-5 w-5 shrink-0 accent-[var(--accion)]"
                         />
                         <span className="min-w-0">
-                          <span className="tabular block text-base font-medium">{f.numero}</span>
+                          <span className="tabular block text-base font-medium">
+                            {nota ? `Nota de crédito ${f.numero}` : f.numero}
+                          </span>
                           <span className="block text-sm text-muted-foreground">
-                            del {fechaCorta.format(fecha(f.fechaEmision))}
-                            {vence && (
+                            {esCheque(f) ? (
+                              <span className="font-semibold text-saldo-debe">Rechazado</span>
+                            ) : (
+                              <>del {fechaCorta.format(fecha(f.fechaEmision))}</>
+                            )}
+                            {vence && dias === 0 ? (
+                              <span className="font-semibold text-brand-orange-dark"> · vence hoy</span>
+                            ) : vence && (
                               <span className={dias !== null && dias < 0 ? "font-semibold text-saldo-debe" : undefined}>
                                 {" · "}
                                 {dias !== null && dias < 0 ? "venció" : "vence"} el {fechaCorta.format(vence)}
@@ -388,12 +428,14 @@ export function FormularioPago({
                           </span>
                         </span>
                       </label>
-                      <span className="tabular text-base text-muted-foreground">
-                        {f.saldo < f.total
-                          ? `quedan ${formatearMonto(f.saldo)} de ${formatearMonto(f.total)}`
-                          : formatearMonto(f.saldo)}
+                      <span className={`tabular text-base ${nota ? "font-medium text-saldo-favor" : "text-muted-foreground"}`}>
+                        {nota
+                          ? `−${formatearMonto(f.saldo)}`
+                          : f.saldo < f.total
+                            ? `quedan ${formatearMonto(f.saldo)} de ${formatearMonto(f.total)}`
+                            : formatearMonto(f.saldo)}
                       </span>
-                      {tildada && (
+                      {tildada && !nota && (
                         <input
                           type="text"
                           inputMode="decimal"
@@ -434,8 +476,7 @@ export function FormularioPago({
                 <span className="text-base font-medium">Fecha del pago</span>
                 <span className="relative mt-1 block">
                   <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="date"
+                  <CampoFecha
                     value={fechaPago}
                     max={hoyEnArgentina()}
                     onChange={(e) => setFechaPago(e.target.value)}
@@ -449,6 +490,7 @@ export function FormularioPago({
 
         {supplierId && (
           <Seccion titulo="Con qué sale" icono={Wallet}>
+            {partes === null && (
             <div className="space-y-1 md:col-span-2">
               <span className="text-base font-medium">Forma de pago</span>
               <Opciones
@@ -467,6 +509,7 @@ export function FormularioPago({
                 }}
               />
             </div>
+            )}
 
             {/* Por qué circuito sale el pago. Los cheques que se emitan en él lo
               heredan: salen con esa plata y por esa vía. */}
@@ -474,7 +517,7 @@ export function FormularioPago({
               <span className="text-base font-medium">Circuito</span>
               <Opciones
                 nombre="pago-circuito"
-                opciones={OPCIONES_CIRCUITO}
+                opciones={opcionesCircuito}
                 valor={circuito}
                 columnas={2}
                 alCambiar={(v) => {
@@ -496,15 +539,17 @@ export function FormularioPago({
               />
             </div>
 
-            <label className="block">
-              <span className="text-base font-medium">Referencia</span>
-              <input
-                value={referencia}
-                onChange={(e) => setReferencia(e.target.value)}
-                placeholder="N.º de operación"
-                className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-              />
-            </label>
+            {partes === null && (
+              <label className="block">
+                <span className="text-base font-medium">Referencia</span>
+                <input
+                  value={referencia}
+                  onChange={(e) => setReferencia(e.target.value)}
+                  placeholder="N.º de operación"
+                  className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+                />
+              </label>
+            )}
 
             {partes !== null && (
               <div className="space-y-3 md:col-span-2">
@@ -539,7 +584,10 @@ export function FormularioPago({
                           value={parte.referencia}
                           onChange={(e) => actualizarParte(i, { referencia: e.target.value })}
                           placeholder="N.º de operación"
-                          className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
+                          aria-label="Referencia de la transferencia"
+                          // Con un mínimo baja a su renglón: a 375 quedaba en
+                          // 50 px al lado del importe y cortaba «V3-TRF».
+                          className="h-11 min-w-[12rem] flex-1 rounded-lg border border-linea bg-card px-3 text-base"
                         />
                       )}
                       {partes.length > 1 && (
@@ -584,7 +632,7 @@ export function FormularioPago({
                               </option>
                             ))}
                             {delOtroCircuito.length > 0 && (
-                              <optgroup label={ETIQUETA_CIRCUITO[circuito === "negro" ? "blanco" : "negro"]}>
+                              <optgroup label={etiquetasCircuito[circuito === "negro" ? "blanco" : "negro"]}>
                                 {delOtroCircuito.map((c) => (
                                   <option key={c.id} value={c.id} disabled>
                                     {textoDelEndoso(c)}
@@ -597,25 +645,26 @@ export function FormularioPago({
                         })()}
 
                         {!parte.chequeId && (
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                             <input
                               value={parte.numero}
                               onChange={(e) => actualizarParte(i, { numero: e.target.value })}
                               placeholder="N.º de cheque"
+                              aria-label="Número de cheque"
                               className="tabular h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
                             />
                             <input
                               value={parte.banco}
                               onChange={(e) => actualizarParte(i, { banco: e.target.value })}
                               placeholder="Banco"
+                              aria-label="Banco del cheque"
                               className="h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
                             />
-                            <input
-                              type="date"
+                            <CampoFecha
                               value={parte.fechaPago}
                               onChange={(e) => actualizarParte(i, { fechaPago: e.target.value })}
                               aria-label="Fecha de pago del cheque"
-                              className="tabular h-11 w-full rounded-lg border border-linea bg-card px-2.5 text-base"
+                              className="tabular col-span-2 h-11 w-full sm:col-span-1 rounded-lg border border-linea bg-card px-2.5 text-base"
                             />
                           </div>
                         )}
@@ -777,11 +826,17 @@ export function FormularioPago({
                 branchId: hayEfectivo && branchId ? branchId : undefined,
                 medio: medio as "transferencia",
                 circuito,
-                referencia,
+                referencia: partes === null ? referencia : "",
                 retenciones,
                 imputaciones: tildadas
-                  .map((f) => ({ purchaseInvoiceId: f.id, importe: importeDelCampo(aplicado[f.id]) }))
+                  .filter((f) => !esCheque(f))
+                  .map((f) => ({ purchaseInvoiceId: f.id, importe: imputado[f.id] }))
                   .filter((x) => x.importe > 0),
+                cheques: tildadas
+                  .filter(esCheque)
+                  .map((f) => ({ chequeId: f.id, importe: importeDelCampo(aplicado[f.id]) }))
+                  .filter((x) => x.importe > 0),
+                notasDeCredito: notas.map((n) => n.id),
                 partes:
                   partes === null
                     ? undefined
@@ -831,6 +886,7 @@ export function FormularioPago({
             !supplierId ||
             total <= 0 ||
             aCuenta < -0.01 ||
+            notasSinLugar.length > 0 ||
             basePasada ||
             importeIlegible(totalTocado) ||
             Object.values(aplicado).some(importeIlegible) ||

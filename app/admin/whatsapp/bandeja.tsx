@@ -108,13 +108,21 @@ export function Bandeja({
   }
 
   const alto = pantallaCompleta ? "min-h-0 flex-1" : "max-h-[calc(100vh-16rem)] min-h-[32rem]";
+  /*
+   * La tercera columna (el cliente) va solo con una conversación abierta y
+   * cuando entra: en el panel, con el menú lateral, recién a 2xl; en el
+   * puesto de atención, a xl. Por debajo se abre desde la cabecera de la
+   * conversación (mes simulado: a 1280 el compositor quedaba cortado).
+   */
+  const clienteAlCostado = pantallaCompleta ? "xl" : "2xl";
+  const columnas = detalle
+    ? pantallaCompleta
+      ? "lg:grid-cols-[21rem_1fr] xl:grid-cols-[21rem_1fr_20rem]"
+      : "lg:grid-cols-[21rem_1fr] 2xl:grid-cols-[21rem_1fr_20rem]"
+    : "lg:grid-cols-[21rem_1fr]";
 
   return (
-    <div
-      className={`grid gap-3 lg:grid-cols-[21rem_1fr] xl:grid-cols-[21rem_1fr_20rem] ${
-        pantallaCompleta ? "min-h-0 flex-1" : "gap-4"
-      }`}
-    >
+    <div className={`grid gap-3 ${columnas} ${pantallaCompleta ? "min-h-0 flex-1" : "gap-4"}`}>
       {/* Lista */}
       <section className={`tarjeta flex flex-col overflow-hidden ${alto} ${detalle ? "hidden lg:flex" : "flex"}`}>
         <div className="space-y-2.5 border-b p-3">
@@ -276,6 +284,7 @@ export function Bandeja({
           usuarioId={usuarioId}
           modoDemo={modoDemo}
           alto={alto}
+          clienteAlCostado={clienteAlCostado}
         />
       ) : (
         <section className={`tarjeta hidden items-center justify-center p-10 text-center lg:flex ${alto}`}>
@@ -285,7 +294,11 @@ export function Bandeja({
 
       {/* Ficha del cliente */}
       {detalle && (
-        <div className={`hidden xl:block ${pantallaCompleta ? "min-h-0 overflow-y-auto" : ""}`}>
+        <div
+          className={`hidden self-start ${clienteAlCostado === "xl" ? "xl:block" : "2xl:block"} ${
+            pantallaCompleta ? "min-h-0 overflow-y-auto" : ""
+          }`}
+        >
           <PanelCliente detalle={detalle} />
         </div>
       )}

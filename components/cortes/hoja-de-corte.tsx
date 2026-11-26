@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
+import { CasillasRecordadas } from "./casillas-recordadas";
 import { fechaCorta } from "@/lib/formato";
 import { formatearSierra } from "@/lib/cortes/sierra";
+import { queSeHaceConLaPlaca, sobraDelCliente } from "@/lib/cortes/de-quien";
 import type {
   HojaDeCorte,
   OperacionDeCorte,
@@ -30,6 +32,21 @@ import type {
 const numero = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1, useGrouping: false });
 const mm = (n: number) => numero.format(n);
 
+/** El canto de una pieza, como lo dicen la etiqueta y el plano (H233). */
+export interface CantoDePieza {
+  largo: number;
+  ancho: number;
+}
+
+function textoDelCanto(c: CantoDePieza | undefined): string | null {
+  if (!c || (c.largo <= 0 && c.ancho <= 0)) return null;
+  const lados = [
+    c.largo > 0 ? `${c.largo} ${c.largo === 1 ? "largo" : "largos"}` : null,
+    c.ancho > 0 ? `${c.ancho} ${c.ancho === 1 ? "ancho" : "anchos"}` : null,
+  ].filter(Boolean);
+  return `canto ${lados.join(" y ")}`;
+}
+
 export function HojaDeCorteImpresa({
   hoja,
   corte,
@@ -43,11 +60,32 @@ export function HojaDeCorteImpresa({
     createdAt: Date;
     deQueSale: string;
     notas: string | null;
+    /** El tapacanto del trabajo, si lleva. */
+    canto?: string | null;
+    /** El canto de cada renglón del despiece (P1 es el 0). */
+    cantos?: CantoDePieza[];
+    /**
+     * Si sale de media placa: la entera y en qué sentido se parte. La hoja
+     * arrancaba en la media, como si llegara cortada, y la otra mitad no
+     * figuraba en ningún lado (H402).
+     */
+    mitad?: { sentido: "largo" | "ancho"; enteraLargo: number; enteraAncho: number } | null;
+    /** Una reposición sin cargo: el retal queda en la maderera. */
+    sinCargo?: boolean;
   };
 }) {
+  const media = Boolean(corte.mitad);
+  const rotuloPlacas = media
+    ? hoja.placas === 1 ? "media placa" : "medias placas"
+    : hoja.placas === 1 ? "placa" : "placas";
+  // Cuántas enteras se parten y si sobra una media (vuelve al stock).
+  const enteras = Math.ceil(hoja.placas / 2);
+  const sobraUnaMedia = hoja.placas % 2 === 1;
   return (
     <div className="hoja-corte">
       <style>{ESTILOS}</style>
+      {/* Lo tildado queda en el dispositivo mientras dura el corte (H117). */}
+      <CasillasRecordadas clave={`hoja-corte:${corte.id}`} />
 
       <div className="hc-barra">
         <div>
@@ -57,6 +95,7 @@ export function HojaDeCorteImpresa({
           <p className="hc-sub">
             {corte.material} · {corte.deQueSale} de {mm(hoja.placaLargo)} ×{" "}
             {mm(hoja.placaAncho)} mm · {fechaCorta.format(corte.createdAt)}
+            {corte.canto ? ` · canto ${corte.canto}` : ""}
           </p>
         </div>
         <div className="no-imprimir hc-acciones">
@@ -71,8 +110,8 @@ export function HojaDeCorteImpresa({
       </div>
 
       <div className="hc-numeros">
-        <Numero valor={String(hoja.placas)} rotulo={hoja.placas === 1 ? "placa" : "placas"} />
-        <Numero valor={String(hoja.totalPiezas)} rotulo="piezas" />
+        <Numero valor={String(hoja.placas)} rotulo={rotuloPlacas} />
+        <Numero valor={String(hoja.totalPiezas)} rotulo={hoja.totalPiezas === 1 ? "pieza" : "piezas"} />
         <Numero valor={formatearSierra(hoja.anchoSierra)} rotulo="de sierra por corte" />
         <Numero
           valor={String(hoja.patrones.length)}
@@ -89,7 +128,7 @@ export function HojaDeCorteImpresa({
           plano no sirve tal cual: avisá antes de cortar.
         </p>
         <p>
-          <strong>Sin refilado.</strong> El plano usa la placa entera de{" "}
+          <strong>Sin refilado.</strong> El plano usa {media ? "la media" : "la placa entera"} de{" "}
           {mm(hoja.placaLargo)} × {mm(hoja.placaAncho)} mm. Si hay que refilar un
           borde golpeado, fijate en «queda» de cada corte cuánto margen hay.
         </p>
@@ -102,6 +141,46 @@ export function HojaDeCorteImpresa({
       </div>
 
       {corte.notas && <p className="hc-aviso">Indicaciones: {corte.notas}</p>}
+
+      {/* El primer corte de una media placa es partir la entera. */}
+      {corte.mitad && (
+        <section className="hc-partir">
+          <h2 className="hc-patron-titulo">
+            Partir {enteras === 1 ? "la placa" : `las ${enteras} placas`}
+            <span className="hc-patron-datos">
+              {mm(corte.mitad.enteraLargo)} × {mm(corte.mitad.enteraAncho)}
+            </span>
+          </h2>
+          <table className="hc-pasos">
+            <tbody>
+              <tr>
+                <td className="hc-casilla">
+                  <input type="checkbox" data-paso="partir" aria-label="Placa partida" />
+                </td>
+                <td className="hc-num">
+                  <span>0</span>
+                </td>
+                <td className="hc-medida">{mm(corte.mitad.sentido === "largo" ? hoja.placaAncho : hoja.placaLargo)}</td>
+                <td className="hc-veces">×{enteras}</td>
+                <td className="hc-sale">
+                  <p>
+                    <strong>
+                      {hoja.placas} {hoja.placas === 1 ? "media" : "medias"}
+                    </strong>{" "}
+                    de {mm(hoja.placaLargo)} × {mm(hoja.placaAncho)}
+                    {corte.mitad.sentido === "largo" ? " (a lo largo)" : " (al ancho)"}
+                  </p>
+                  {sobraUnaMedia && (
+                    <p>
+                      1 media de {mm(hoja.placaLargo)} × {mm(hoja.placaAncho)} <strong>vuelve al stock</strong>
+                    </p>
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {hoja.noEntran.length > 0 && (
         <p className="hc-aviso">
@@ -124,7 +203,7 @@ export function HojaDeCorteImpresa({
       )}
 
       {hoja.patrones.map((patron, i) => (
-        <Patron key={i} patron={patron} hoja={hoja} indice={i} />
+        <Patron key={i} patron={patron} hoja={hoja} indice={i} cantos={corte.cantos ?? []} media={media} sinCargo={Boolean(corte.sinCargo)} />
       ))}
 
       <p className="hc-pie">
@@ -149,22 +228,30 @@ function Patron({
   patron,
   hoja,
   indice,
+  cantos,
+  media,
+  sinCargo,
 }: {
   patron: PatronDeCorte;
   hoja: HojaDeCorte;
   indice: number;
+  cantos: CantoDePieza[];
+  media: boolean;
+  sinCargo: boolean;
 }) {
+  const delCliente = sobraDelCliente(patron.seVendeEntera, { sinCargo });
   const cuantas = patron.placas.length;
+  const nombre = media ? "Media" : "Placa";
   const placas =
     cuantas === 1
-      ? `Placa ${patron.placas[0]}`
-      : `Placas ${patron.placas.slice(0, -1).join(", ")} y ${patron.placas.at(-1)}`;
+      ? `${nombre} ${patron.placas[0]}`
+      : `${media ? "Medias" : "Placas"} ${patron.placas.slice(0, -1).join(", ")} y ${patron.placas.at(-1)}`;
 
   return (
     <section className="hc-patron">
       <h2 className="hc-patron-titulo">
         {placas}
-        {cuantas > 1 && <span className="hc-repetida">×{cuantas} placas iguales</span>}
+        {cuantas > 1 && <span className="hc-repetida">×{cuantas} {media ? "medias iguales" : "placas iguales"}</span>}
         <span className="hc-patron-datos">
           {patron.piezasPorPlaca} {patron.piezasPorPlaca === 1 ? "pieza" : "piezas"} ·{" "}
           {patron.pasadasPorPlaca} {patron.pasadasPorPlaca === 1 ? "corte" : "cortes"}
@@ -172,30 +259,50 @@ function Patron({
         </span>
       </h2>
       <p className="hc-duenio">
-        {patron.seVendeEntera
-          ? "Se vende entera: los retales son del cliente y se van con él."
-          : "Se cobra el corte: los retales quedan en la maderera."}
+        {queSeHaceConLaPlaca(patron.seVendeEntera, { sinCargo, media })}
+        {delCliente ? ": los retales son del cliente y se van con él." : ": los retales quedan en la maderera."}
       </p>
 
       <Dibujo patron={patron} hoja={hoja} indice={indice} />
+      {/* En el teléfono las medidas de adentro del dibujo no se leen: van
+          debajo, pieza por pieza (H125). */}
+      <p className="hc-leyenda">
+        {[...new Map(patron.dibujo.piezas.map(({ rect, pieza }) => [pieza.indice, `P${pieza.indice + 1} ${mm(rect.ancho)} × ${mm(rect.alto)}`])).values()].join(" · ")}
+      </p>
 
       {patron.operaciones.length === 0 ? (
         <p className="hc-aviso">La pieza es la placa entera: no lleva cortes.</p>
       ) : (
         patron.operaciones.map((op) => (
-          <Operacion key={op.numero} op={op} patron={patron} />
+          <Operacion key={op.numero} op={op} patron={patron} indice={indice} cantos={cantos} media={media} delCliente={delCliente} />
         ))
       )}
     </section>
   );
 }
 
-function Operacion({ op, patron }: { op: OperacionDeCorte; patron: PatronDeCorte }) {
+function Operacion({
+  op,
+  patron,
+  indice,
+  cantos,
+  media,
+  delCliente,
+}: {
+  op: OperacionDeCorte;
+  patron: PatronDeCorte;
+  indice: number;
+  cantos: CantoDePieza[];
+  media: boolean;
+  delCliente: boolean;
+}) {
   const multiplicador = patron.placas.length;
   const veces = op.repeticiones * multiplicador;
   const queEs =
     op.delPaso === null
-      ? "La placa"
+      ? media
+        ? "La media"
+        : "La placa"
       : `${op.repeticiones === 1 ? "El trozo" : `Los ${op.repeticiones} trozos`}${op.letra ? ` ${op.letra}` : ""} del paso ${op.delPaso}`;
 
   return (
@@ -231,6 +338,7 @@ function Operacion({ op, patron }: { op: OperacionDeCorte; patron: PatronDeCorte
                   <td className="hc-casilla">
                     <input
                       type="checkbox"
+                      data-paso={`${indice}-${paso.numero}`}
                       aria-label={`Paso ${paso.numero} hecho`}
                     />
                   </td>
@@ -250,7 +358,7 @@ function Operacion({ op, patron }: { op: OperacionDeCorte; patron: PatronDeCorte
                   </td>
                   <td className="hc-sale">
                     {paso.sale.map((s, k) => (
-                      <SaleDe key={k} salida={s} paso={paso.numero} />
+                      <SaleDe key={k} salida={s} paso={paso.numero} cantos={cantos} />
                     ))}
                   </td>
                 </tr>
@@ -267,11 +375,13 @@ function Operacion({ op, patron }: { op: OperacionDeCorte; patron: PatronDeCorte
             <strong>
               {mm(op.sobra.largo)} × {mm(op.sobra.ancho)}
             </strong>{" "}
-            {op.sobra.tipo === "retal"
-              ? patron.seVendeEntera
-                ? "· retal para el cliente"
-                : "· retal al stock"
-              : "· desperdicio"}
+            {/* De la placa que se vende entera, todo lo que sobra es del
+                cliente, también lo que no llega a retal (H402). */}
+            {delCliente
+              ? "· del cliente"
+              : op.sobra.tipo === "retal"
+                ? "· retal al stock"
+                : "· desperdicio"}
           </>
         ) : (
           "nada: la última tira llega al borde"
@@ -281,8 +391,9 @@ function Operacion({ op, patron }: { op: OperacionDeCorte; patron: PatronDeCorte
   );
 }
 
-function SaleDe({ salida, paso }: { salida: Salida; paso: number }) {
+function SaleDe({ salida, paso, cantos }: { salida: Salida; paso: number; cantos: CantoDePieza[] }) {
   if (salida.tipo === "pieza") {
+    const canto = textoDelCanto(cantos[(salida.renglon ?? 1) - 1]);
     return (
       <p>
         <strong>
@@ -291,6 +402,7 @@ function SaleDe({ salida, paso }: { salida: Salida; paso: number }) {
         {mm(salida.largo)} × {mm(salida.ancho)}
         {salida.girada ? " (girada)" : ""}
         {salida.etiqueta ? ` · ${salida.etiqueta}` : ""}
+        {canto && <span className="hc-canto"> · {canto}</span>}
       </p>
     );
   }
@@ -362,6 +474,7 @@ function Dibujo({
               fontSize={Math.min(40 * escala, s.rect.alto * 0.3, (s.rect.ancho * 1.4) / 14)}
               textAnchor="middle"
               fill="#6b635a"
+              className="hc-txt-medida"
             >
               retal {mm(s.rect.ancho)} × {mm(s.rect.alto)}
             </text>
@@ -371,29 +484,40 @@ function Dibujo({
 
       {patron.dibujo.piezas.map(({ rect, pieza }, i) => {
         const medida = `${mm(rect.ancho)} × ${mm(rect.alto)}`;
-        const cuerpo = Math.min(46 * escala, rect.alto * 0.3, (rect.ancho * 1.6) / medida.length);
         const cuerpoP = Math.min(60 * escala, rect.alto * 0.42, rect.ancho * 0.3);
-        const entranDos = rect.alto > cuerpoP + cuerpo + 20;
+        // Una pieza angosta y alta lleva la medida parada, debajo de su
+        // número: acostada se pisaba con la de al lado (H194). Un dígito
+        // ocupa ~0,6 del cuerpo.
+        const parada = rect.alto > rect.ancho * 1.4;
+        const disponible = parada ? rect.alto - cuerpoP * 2.4 : rect.ancho;
+        const cuerpo = Math.min(
+          46 * escala,
+          parada ? rect.ancho * 0.55 : rect.alto * 0.3,
+          (disponible * 0.9) / (medida.length * 0.6),
+        );
+        const entranDos = parada ? disponible > 0 : rect.alto > cuerpoP + cuerpo + 20;
+        const cx = rect.x + rect.ancho / 2;
+        const yP = parada
+          ? rect.y + cuerpoP * 1.15
+          : entranDos
+            ? rect.y + rect.alto / 2 - 4
+            : rect.y + rect.alto / 2 + cuerpoP * 0.35;
+        const cyMedida = parada ? rect.y + cuerpoP * 2.4 + disponible / 2 : rect.y + rect.alto / 2 + cuerpo + 4;
         return (
           <g key={`p${i}`}>
             <rect x={rect.x} y={rect.y} width={rect.ancho} height={rect.alto} fill="#ffffff" stroke="#1a1a1a" strokeWidth={3} />
-            <text
-              x={rect.x + rect.ancho / 2}
-              y={entranDos ? rect.y + rect.alto / 2 - 4 : rect.y + rect.alto / 2 + cuerpoP * 0.35}
-              fontSize={cuerpoP}
-              fontWeight={700}
-              textAnchor="middle"
-              fill="#1a1a1a"
-            >
+            <text x={cx} y={yP} fontSize={cuerpoP} fontWeight={700} textAnchor="middle" fill="#1a1a1a">
               P{pieza.indice + 1}
             </text>
             {entranDos && cuerpo >= 12 && (
               <text
-                x={rect.x + rect.ancho / 2}
-                y={rect.y + rect.alto / 2 + cuerpo + 4}
+                className="hc-txt-medida"
+                x={cx}
+                y={parada ? cyMedida + cuerpo * 0.35 : cyMedida}
                 fontSize={cuerpo}
                 textAnchor="middle"
                 fill="#444"
+                transform={parada ? `rotate(-90 ${cx} ${cyMedida})` : undefined}
               >
                 {medida}
               </text>
@@ -492,9 +616,33 @@ const ESTILOS = `
   .hc-sigue { color: #555; }
   .hc-queda { margin-top: 1.5mm; font-size: 11.5pt; color: #333; }
   .hc-pie { margin-top: 6mm; font-size: 10pt; color: #555; }
+  .hc-canto { font-weight: 600; }
+  .hc-partir { margin-top: 6mm; padding-top: 4mm; border-top: 2px solid #1a1a1a; }
+  .hc-partir .hc-sale p + p { margin-top: 1mm; }
+  .hc-leyenda { display: none; margin: -2mm 0 3mm; font-size: 12pt; font-variant-numeric: tabular-nums; color: #333; }
   @media print {
     .no-imprimir { display: none !important; }
     .hoja-corte { padding: 0; max-width: none; }
     @page { size: A4; margin: 10mm; }
+  }
+  /* En el teléfono cada paso es una fila de dos renglones: arriba la casilla,
+     el número, la medida y las veces; abajo, de borde a borde, qué sale. Era
+     una columna de tres palabras por renglón (H125). */
+  @media screen and (max-width: 640px) {
+    .hoja-corte { padding: 16px; font-size: 16px; }
+    .hc-barra, .hc-acciones { width: 100%; }
+    /* Del ancho de su texto y en un renglón: con \`flex: 1 1 0\` los tres
+       repartían 375 px y «Imprimir o guardar como PDF» salía en cuatro
+       renglones (tercera prueba del mes). Lo que no entra baja de fila. */
+    .hc-acciones > * { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+    .hc-numeros { gap: 12px 20px; }
+    .hc-pasos, .hc-pasos tbody { display: block; }
+    .hc-pasos tr { display: grid; grid-template-columns: 40px 40px minmax(0, 1fr) auto; align-items: center; column-gap: 8px; padding: 8px 0; border-bottom: 1px solid #e3e0dc; }
+    .hc-pasos td { display: block; width: auto; padding: 0; border: 0; }
+    .hc-medida { text-align: left; font-size: 24px; }
+    .hc-veces { font-size: 18px; }
+    .hc-sale { grid-column: 1 / -1; padding-top: 6px !important; font-size: 16px; }
+    .hc-txt-medida { display: none; }
+    .hc-leyenda { display: block; margin: 0 0 12px; font-size: 16px; }
   }
 `;

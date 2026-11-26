@@ -16,6 +16,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/listado"
 	"mjbj/internal/plataforma"
@@ -84,6 +85,9 @@ type FilaPrecio struct {
 	Brecha            *float64   `json:"brecha"`
 	Actualizado       *time.Time `json:"actualizado"`
 	Desactualizado    bool       `json:"desactualizado"`
+	// Piso es el precio final que apenas cubre el costo (PisoDeCosto); nil
+	// sin costo cargado. La grilla marca la lista que queda por debajo.
+	Piso *float64 `json:"piso"`
 }
 
 // ConteosDePrecios son los totales de cada estado con los mismos filtros.
@@ -92,6 +96,23 @@ type ConteosDePrecios struct {
 	SinPrecio   int `json:"sinPrecio"`
 	ParaRevisar int `json:"paraRevisar"`
 	AlDia       int `json:"alDia"`
+	// BajoCosto: el precio de lista, sin IVA, no llega al costo. Es un grupo
+	// que cruza los otros (un precio al día puede estar bajo el costo).
+	BajoCosto int `json:"bajoCosto"`
+	// ProfesionalCaro: el precio profesional cargado es más alto que el de
+	// lista. Al profesional se le cobra lo de su lista, así que es plata de
+	// más que nadie veía hasta que el cliente se quejaba (mes simulado: los
+	// tirantes TEC-TIR-PIN). La grilla ya lo marcaba fila por fila.
+	ProfesionalCaro int `json:"profesionalCaro"`
+}
+
+// BajoCostoDe es, sobre las filas `v` y `p`, que el precio dado (con IVA) sin
+// el IVA del producto no llega al costo promedio. El Fenólico de 18 mm a $100
+// con un costo de $75.500 se vendió dos veces sin que nada lo marcara
+// (simulación del mes, H159); lo cuenta también el inicio.
+func BajoCostoDe(precio string) string {
+	return `(` + precio + ` > 0 AND ` + precio + ` / (1 + p.alicuota_iva / 100) <
+		coalesce((SELECT vc.costo_promedio FROM variant_costs vc WHERE vc.variant_id = v.id), 0))`
 }
 
 // GrillaDePrecios es una página de la grilla, con el total del filtro.
@@ -132,21 +153,29 @@ func (s *Servicio) grilla(ctx context.Context, f listado.Filtros, ahora time.Tim
 	precio := `coalesce((SELECT pli.price FROM price_list_items pli WHERE pli.variant_id = v.id AND pli.price_list_id = ` + c.Arg(general) + `::uuid), 0)`
 	tocado := `(SELECT max(pli.updated_at) FROM price_list_items pli WHERE pli.variant_id = v.id)`
 	viejo := precio + ` > 0 AND (` + tocado + ` IS NULL OR ` + tocado + ` < ` + c.Arg(ahora.Add(-DiasParaRevisar*24*time.Hour)) + `::timestamptz)`
+	// Por el slug y no con un argumento: la consulta de las filas no lo usa
+	// cuando no se filtra por esto, y Postgres no acepta un parámetro suelto.
+	precioProfesional := `coalesce((SELECT pli.price FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id
+		WHERE pli.variant_id = v.id AND pl.slug = 'profesional' LIMIT 1), 0)`
 	estados := map[string]string{
-		"sin-precio":   precio + ` <= 0`,
-		"para-revisar": viejo,
-		"al-dia":       precio + ` > 0 AND NOT (` + viejo + `)`,
+		"sin-precio":       precio + ` <= 0`,
+		"para-revisar":     viejo,
+		"al-dia":           precio + ` > 0 AND NOT (` + viejo + `)`,
+		"bajo-costo":       BajoCostoDe(precio),
+		"profesional-caro": precio + ` > 0 AND ` + precioProfesional + ` > ` + precio,
 	}
 	desde := ` FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id `
 	k := &out.Conteos
 	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estados["sin-precio"]+`),
-		count(*) FILTER (WHERE `+estados["para-revisar"]+`), count(*) FILTER (WHERE `+estados["al-dia"]+`)`+desde+c.Donde(),
-		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia); err != nil {
+		count(*) FILTER (WHERE `+estados["para-revisar"]+`), count(*) FILTER (WHERE `+estados["al-dia"]+`),
+		count(*) FILTER (WHERE `+estados["bajo-costo"]+`), count(*) FILTER (WHERE `+estados["profesional-caro"]+`)`+desde+c.Donde(),
+		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia, &k.BajoCosto, &k.ProfesionalCaro); err != nil {
 		return out, err
 	}
-	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia}[f.Estado]
+	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia, "bajo-costo": k.BajoCosto,
+		"profesional-caro": k.ProfesionalCaro}[f.Estado]
 	if cond, ok := estados[f.Estado]; ok {
 		c.Y(cond)
 	} else {
@@ -224,6 +253,10 @@ func (s *Servicio) completar(ctx context.Context, ls listas, out []FilaPrecio) (
 			ultima[p.VariantID] = p.UpdatedAt
 		}
 	}
+	pisos, err := PisosDeCosto(ctx, s.pool, variantes)
+	if err != nil {
+		return nil, err
+	}
 	buscar := func(v string, l *sqlc.PriceList) string {
 		if l != nil {
 			if x, ok := precio[precioDe{v, l.ID}]; ok {
@@ -240,6 +273,9 @@ func (s *Servicio) completar(ctx context.Context, ls listas, out []FilaPrecio) (
 		f.PrecioGeneral, f.PrecioProfesional = buscar(f.VariantID, ls.general), buscar(f.VariantID, ls.profesional)
 		g, p := jsmath.Numero(f.PrecioGeneral), jsmath.Numero(f.PrecioProfesional)
 		f.Brecha = Brecha(g, p)
+		if piso, ok := pisos[f.VariantID]; ok {
+			f.Piso = &piso
+		}
 		if u, ok := ultima[f.VariantID]; ok {
 			f.Actualizado = &u
 		}
@@ -800,7 +836,7 @@ func (s *Servicio) GuardarDescuento(ctx context.Context, ses *auth.Sesion, f For
 		accion = sqlc.AccionAuditoriaEditar
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "descuento_pago", f.ID,
-		f.Medio+": "+jsmath.Texto(pct)+"% desde $"+d,
+		f.Medio+": "+jsmath.Texto(pct)+"% desde "+formato.Importe(desde),
 		map[string]any{"medio": f.Medio, "desdeMonto": d, "porcentaje": p, "etiqueta": etiqueta, "activo": f.Activo})
 	return nil
 }

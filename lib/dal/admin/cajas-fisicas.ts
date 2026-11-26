@@ -16,7 +16,22 @@ import { api, datos } from "@/lib/api/servidor";
 
 export async function listarCajasFisicas() {
   const filas = datos(await (await api()).GET("/api/v1/admin/caja/cajas-fisicas"));
-  return filas.map((c) => ({ ...c, ultimaVezAt: c.ultimaVezAt ? new Date(c.ultimaVezAt) : null }));
+  return filas.map((c) => ({
+    ...c,
+    ultimaVezAt: c.ultimaVezAt ? new Date(c.ultimaVezAt) : null,
+    ultimoTurnoAt: c.ultimoTurnoAt ? new Date(c.ultimoTurnoAt) : null,
+  }));
+}
+
+/**
+ * El efectivo del mes que no pasó por ningún turno: recibos cobrados en
+ * efectivo desde el panel, gastos en efectivo cargados sin caja abierta y
+ * pagos a proveedores en efectivo sin caja. El
+ * asiento mueve la cuenta Caja, pero ningún arqueo lo incluía (H157).
+ */
+export async function efectivoFueraDeCaja(periodo: string) {
+  const filas = datos(await (await api()).GET("/api/v1/admin/caja/fuera-de-caja", { params: { query: { periodo } } }));
+  return filas.map((f) => ({ ...f, fecha: new Date(f.fecha) }));
 }
 
 /**

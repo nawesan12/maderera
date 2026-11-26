@@ -253,6 +253,11 @@ export interface components {
             /** Format: date-time */
             actualizado: string | null;
             desactualizado: boolean;
+            /**
+             * Format: double
+             * @description el precio final que apenas cubre el costo (sin costo cargado, null)
+             */
+            piso?: number | null;
         };
         CambioDePrecio: {
             id: string;
@@ -323,7 +328,7 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 categoria?: string;
-                estado?: "todas" | "sin-precio" | "para-revisar" | "al-dia";
+                estado?: "todas" | "sin-precio" | "para-revisar" | "al-dia" | "bajo-costo" | "profesional-caro";
                 marca?: string;
                 proveedor?: string;
                 limite?: number;
@@ -347,6 +352,8 @@ export interface operations {
                         conteos: {
                             todas: number;
                             sinPrecio: number;
+                            bajoCosto: number;
+                            profesionalCaro: number;
                             paraRevisar: number;
                             alDia: number;
                         };

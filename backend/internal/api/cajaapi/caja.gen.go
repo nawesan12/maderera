@@ -23,6 +23,27 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for CajaFueraDeCajaTipo.
+const (
+	Gasto  CajaFueraDeCajaTipo = "gasto"
+	Pago   CajaFueraDeCajaTipo = "pago"
+	Recibo CajaFueraDeCajaTipo = "recibo"
+)
+
+// Valid indicates whether the value is a known member of the CajaFueraDeCajaTipo enum.
+func (e CajaFueraDeCajaTipo) Valid() bool {
+	switch e {
+	case Gasto:
+		return true
+	case Pago:
+		return true
+	case Recibo:
+		return true
+	default:
+		return false
+	}
+}
+
 // CajaAnulaciones defines model for CajaAnulaciones.
 type CajaAnulaciones struct {
 	Cantidad int `json:"cantidad"`
@@ -69,11 +90,32 @@ type CajaFisica struct {
 	Pendientes  int        `json:"pendientes"`
 	Sucursal    *string    `json:"sucursal"`
 	UltimaVezAt *time.Time `json:"ultimaVezAt"`
+
+	// UltimoTurnoAt El último turno que se abrió desde esta caja
+	UltimoTurnoAt *time.Time `json:"ultimoTurnoAt"`
 }
+
+// CajaFueraDeCaja defines model for CajaFueraDeCaja.
+type CajaFueraDeCaja struct {
+	Detalle string    `json:"detalle"`
+	Fecha   time.Time `json:"fecha"`
+	Id      string    `json:"id"`
+
+	// Monto con signo: el recibo entra, el gasto sale
+	Monto    float64             `json:"monto"`
+	Sucursal *string             `json:"sucursal"`
+	Tipo     CajaFueraDeCajaTipo `json:"tipo"`
+}
+
+// CajaFueraDeCajaTipo defines model for CajaFueraDeCaja.Tipo.
+type CajaFueraDeCajaTipo string
 
 // CajaRenglonDelCierre defines model for CajaRenglonDelCierre.
 type CajaRenglonDelCierre struct {
 	Cantidad int `json:"cantidad"`
+
+	// Cobranza lo cobrado por recibos de cuenta en el mostrador durante el turno
+	Cobranza bool `json:"cobranza"`
 
 	// Devolucion Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno)
 	Devolucion bool   `json:"devolucion"`
@@ -142,10 +184,24 @@ type TurnoCerrado struct {
 	// CreditoSinAutorizarMonto Lo que cargaron a cuenta
 	CreditoSinAutorizarMonto float64 `json:"creditoSinAutorizarMonto"`
 
+	// Devoluciones En negativo
+	Devoluciones float64 `json:"devoluciones"`
+
 	// Esperado Lo que entró hasta el arqueo
 	Esperado float64 `json:"esperado"`
-	Id       string  `json:"id"`
-	Notas    *string `json:"notas"`
+	Fondo    float64 `json:"fondo"`
+
+	// Gastos En negativo
+	Gastos        float64 `json:"gastos"`
+	Id            string  `json:"id"`
+	Notas         *string `json:"notas"`
+	OtrosIngresos float64 `json:"otrosIngresos"`
+
+	// Puesto La caja física desde la que se abrió
+	Puesto *string `json:"puesto"`
+
+	// Retiros En negativo
+	Retiros  float64 `json:"retiros"`
 	Sucursal string  `json:"sucursal"`
 
 	// Tardios Movimientos que entraron después del arqueo
@@ -153,6 +209,9 @@ type TurnoCerrado struct {
 
 	// TardiosMonto Su suma; no cambia la diferencia del cierre
 	TardiosMonto float64 `json:"tardiosMonto"`
+
+	// Ventas Ventas en efectivo hasta el arqueo
+	Ventas float64 `json:"ventas"`
 }
 
 // TurnoParaAsignar defines model for TurnoParaAsignar.
@@ -183,6 +242,11 @@ type CrearCajaFisicaJSONBody map[string]interface{}
 // EmitidoPorCajaParams defines parameters for EmitidoPorCaja.
 type EmitidoPorCajaParams struct {
 	// Periodo aaaa-mm (si falta
+	Periodo *string `form:"periodo,omitempty" json:"periodo,omitempty"`
+}
+
+// EfectivoFueraDeCajaParams defines parameters for EfectivoFueraDeCaja.
+type EfectivoFueraDeCajaParams struct {
 	Periodo *string `form:"periodo,omitempty" json:"periodo,omitempty"`
 }
 
@@ -236,6 +300,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/caja/emitido)
 	EmitidoPorCaja(w http.ResponseWriter, r *http.Request, params EmitidoPorCajaParams)
+
+	// (GET /api/v1/admin/caja/fuera-de-caja)
+	EfectivoFueraDeCaja(w http.ResponseWriter, r *http.Request, params EfectivoFueraDeCajaParams)
 
 	// (GET /api/v1/admin/caja/sucursales)
 	SucursalesConCaja(w http.ResponseWriter, r *http.Request)
@@ -376,6 +443,39 @@ func (siw *ServerInterfaceWrapper) EmitidoPorCaja(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EmitidoPorCaja(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EfectivoFueraDeCaja operation middleware
+func (siw *ServerInterfaceWrapper) EfectivoFueraDeCaja(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EfectivoFueraDeCajaParams
+
+	// ------------- Optional query parameter "periodo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "periodo", r.URL.Query(), &params.Periodo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "periodo"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "periodo", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EfectivoFueraDeCaja(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -684,6 +784,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/cajas-fisicas", wrapper.CrearCajaFisica)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/cajas-fisicas/{id}/baja", wrapper.DarDeBajaCajaFisica)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/ventas-sueltas", wrapper.VentasSinCaja)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/fuera-de-caja", wrapper.EfectivoFueraDeCaja)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/caja/ventas-sueltas/{id}/asignar", wrapper.AsignarVentaAlTurno)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/turnos-para-asignar", wrapper.TurnosParaAsignar)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/caja/emitido", wrapper.EmitidoPorCaja)
@@ -830,6 +931,28 @@ type EmitidoPorCajaResponseObject interface {
 type EmitidoPorCaja200JSONResponse []CajaEmitido
 
 func (response EmitidoPorCaja200JSONResponse) VisitEmitidoPorCajaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EfectivoFueraDeCajaRequestObject struct {
+	Params EfectivoFueraDeCajaParams
+}
+
+type EfectivoFueraDeCajaResponseObject interface {
+	VisitEfectivoFueraDeCajaResponse(w http.ResponseWriter) error
+}
+
+type EfectivoFueraDeCaja200JSONResponse []CajaFueraDeCaja
+
+func (response EfectivoFueraDeCaja200JSONResponse) VisitEfectivoFueraDeCajaResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1026,6 +1149,9 @@ type StrictServerInterface interface {
 	// (GET /api/v1/admin/caja/emitido)
 	EmitidoPorCaja(ctx context.Context, request EmitidoPorCajaRequestObject) (EmitidoPorCajaResponseObject, error)
 
+	// (GET /api/v1/admin/caja/fuera-de-caja)
+	EfectivoFueraDeCaja(ctx context.Context, request EfectivoFueraDeCajaRequestObject) (EfectivoFueraDeCajaResponseObject, error)
+
 	// (GET /api/v1/admin/caja/sucursales)
 	SucursalesConCaja(ctx context.Context, request SucursalesConCajaRequestObject) (SucursalesConCajaResponseObject, error)
 
@@ -1217,6 +1343,32 @@ func (sh *strictHandler) EmitidoPorCaja(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// EfectivoFueraDeCaja operation middleware
+func (sh *strictHandler) EfectivoFueraDeCaja(w http.ResponseWriter, r *http.Request, params EfectivoFueraDeCajaParams) {
+	var request EfectivoFueraDeCajaRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EfectivoFueraDeCaja(ctx, request.(EfectivoFueraDeCajaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EfectivoFueraDeCaja")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EfectivoFueraDeCajaResponseObject); ok {
+		if err := validResponse.VisitEfectivoFueraDeCajaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SucursalesConCaja operation middleware
 func (sh *strictHandler) SucursalesConCaja(w http.ResponseWriter, r *http.Request) {
 	var request SucursalesConCajaRequestObject
@@ -1388,47 +1540,52 @@ func (sh *strictHandler) AsignarVentaAlTurno(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"PU+yNmhMJcR9M7Z26c+faEK+ufnfAA==",
+	"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",
+	"3c126cfPFJCvr/83AA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"mjbj/internal/pruebas"
+	reglasdel "mjbj/internal/reglas"
 )
 
 // Los interruptores de la tienda solo valen «si» o «no», y prenderlos o
@@ -73,5 +74,53 @@ func TestDestinosDeDocumento(t *testing.T) {
 	}
 	if c, _ := pedir(t, adm, "PUT", u+"00000000-0000-0000-0000-000000000000/destinos", map[string]any{"productos": []string{}, "categorias": []string{}}); c != 404 {
 		t.Errorf("documento inexistente: %d", c)
+	}
+}
+
+// Las reglas que esperan al contador (00290): solo aceptan sus opciones,
+// arrancan con el comportamiento de antes y cada cambio queda en la
+// bitácora con el antes y el después. El depósito no las toca.
+func TestReglasQueEsperanAlContador(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	ven := e.cliente(t, "deposito@prueba.test", "deposito")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/"
+
+	for clave, opciones := range reglasdel.Opciones {
+		var v string
+		if err := e.pool.QueryRow(ctx, `select valor from site_settings where clave = $1`, clave).Scan(&v); err != nil {
+			t.Fatalf("%s sin fila: %v", clave, err)
+		}
+		if v != opciones[0] {
+			t.Errorf("%s arranca en %q, no en %q", clave, v, opciones[0])
+		}
+	}
+	if c, b := pedir(t, adm, "PUT", u+"venta_reconocida", map[string]string{"valor": "cuando_quiera"}); c != 422 {
+		t.Errorf("valor inválido: %d %s", c, b)
+	}
+	if c, _ := pedir(t, ven, "PUT", u+"venta_reconocida", map[string]string{"valor": "tomar"}); c != 403 {
+		t.Errorf("el depósito cambió una regla: %d", c)
+	}
+	if c, b := pedir(t, adm, "PUT", u+"venta_reconocida", map[string]string{"valor": "tomar"}); c != 204 {
+		t.Fatalf("guardar: %d %s", c, b)
+	}
+	// Guardar lo mismo otra vez no anota nada.
+	pedir(t, adm, "PUT", u+"venta_reconocida", map[string]string{"valor": "tomar"})
+	var desc string
+	var n int
+	if err := e.pool.QueryRow(ctx, `select max(descripcion), count(*) from audit_log where entidad = 'regla' and entidad_id = 'venta_reconocida'`).Scan(&desc, &n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || desc != "Regla «venta_reconocida»: entregar_o_facturar → tomar" {
+		t.Errorf("bitácora: %d %q", n, desc)
+	}
+	if !reglasdel.Es(ctx, e.pool, reglasdel.VentaReconocida, "tomar") {
+		t.Error("reglas.Es no lee lo guardado")
+	}
+	// Una fila con basura se lee como el de arranque.
+	_, _ = e.pool.Exec(ctx, `update site_settings set valor = 'x' where clave = 'venta_reconocida'`)
+	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.VentaReconocida); v != "entregar_o_facturar" {
+		t.Errorf("basura: %q", v)
 	}
 }

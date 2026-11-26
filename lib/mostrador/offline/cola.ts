@@ -75,6 +75,8 @@ export interface MovimientoEncolado {
   tipo: "ingreso" | "retiro";
   monto: number;
   motivo: string;
+  /** A dónde fue un retiro (00310). Las filas encoladas antes no lo traen. */
+  destino?: "banco" | "caja_fuerte" | "otro";
   /** ISO. El momento real, que es el que decide a qué turno pertenece. */
   hechoAt: string;
 }

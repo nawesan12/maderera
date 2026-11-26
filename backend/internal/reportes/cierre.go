@@ -2,16 +2,21 @@ package reportes
 
 import (
 	"context"
+	"errors"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/compras"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/ventas/fragmentos"
 )
 
@@ -160,7 +165,11 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, f.neto, f.iva21, f.iva105, f.iva27, f.percepciones, f.total, f.exento,
 		  coalesce(f.percepcion_iva, 0), coalesce(f.percepcion_iibb, 0)
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
-		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 AND f.anulada_at IS NULL ORDER BY f.fecha_emision`, desde, hasta)
+		WHERE f.fecha_emision >= $1 AND f.fecha_emision <= $2 AND f.anulada_at IS NULL
+		  -- La factura de un gasto pagado en el acto va con el asiento del
+		  -- gasto (gasto e IVA contra la caja), no contra Proveedores.
+		  AND NOT EXISTS (SELECT 1 FROM expenses e WHERE e.purchase_invoice_id = f.id)
+		ORDER BY f.fecha_emision`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
@@ -255,21 +264,72 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	}
 	asientos = append(asientos, cheques...)
 
+	// Los retiros de la caja que fueron al banco (el motivo lo dice): de Caja
+	// a Banco. Sin esto el mayor de Caja y el de Banco no se podían conciliar
+	// con los arqueos ni con el extracto (simulación del mes, H160). Los que
+	// van a la caja fuerte no mueven cuentas (es la misma Caja).
+	rs, err = s.lectura.Query(ctx, `SELECT m.created_at, -m.monto::float8, coalesce(m.motivo, ''), coalesce(b.name, '')
+		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
+		WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at <= $2 AND `+retiroAlBanco+`
+		ORDER BY m.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	for rs.Next() {
+		var fecha time.Time
+		var importe float64
+		var motivo, sucursal string
+		if err := rs.Scan(&fecha, &importe, &motivo, &sucursal); err != nil {
+			rs.Close()
+			return nil, err
+		}
+		if importe < 0 {
+			importe = -importe
+		}
+		concepto := "Depósito de la caja"
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		d := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Banco, importe, 0), renglon(Cuentas.Caja, 0, importe)})
+		d.Instante = true
+		asientos = append(asientos, d)
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, err
+	}
+
+	caja, err := s.asientosDeCaja(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, caja...)
+	costo, err := s.asientosDeCosto(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, costo...)
+
 	rs, err = s.lectura.Query(ctx, `
-		SELECT fecha, descripcion, categoria::text, importe, medio::text, circuito::text
-		FROM expenses WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha`, desde, hasta)
+		SELECT e.fecha, e.descripcion, e.categoria::text, e.importe, e.medio::text, e.circuito::text,
+		  coalesce(f.tipo::text, ''), coalesce(f.iva21 + f.iva105 + f.iva27, 0), coalesce(f.percepciones, 0)
+		FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id AND f.anulada_at IS NULL
+		WHERE e.fecha >= $1 AND e.fecha <= $2 AND e.anulado_at IS NULL ORDER BY e.fecha`, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
 	for rs.Next() {
 		var g GastoAAsentar
-		var importe jsmath.Num
-		var circuito string
-		if err := rs.Scan(&g.Fecha, &g.Descripcion, &g.Categoria, &importe, &g.Medio, &circuito); err != nil {
+		var importe, iva, percepciones jsmath.Num
+		var circuito, tipo string
+		if err := rs.Scan(&g.Fecha, &g.Descripcion, &g.Categoria, &importe, &g.Medio, &circuito, &tipo, &iva, &percepciones); err != nil {
 			rs.Close()
 			return nil, err
 		}
 		g.Importe = importe.F()
+		if tipo != "" && compras.DaCreditoFiscal(tipo) {
+			g.Iva, g.Percepciones = iva.F(), percepciones.F()
+		}
 		gasto := AsientoDeGasto(g)
 		if circuito == CircuitoNegro {
 			gasto.Circuito = CircuitoNegro
@@ -285,6 +345,124 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	return asientos, nil
 }
 
+// retiroAlBanco: el retiro de caja `m` fue al banco (su destino, o el motivo
+// en los de antes de la 00310). Es la misma regla de «Plata hoy».
+const retiroAlBanco = RetiroAlBanco
+
+// ingresoDelBanco: el ingreso de caja `m` vino del banco (una extracción, lo
+// dice el motivo). Los demás ingresos vienen de la caja fuerte (la misma
+// Caja) o devuelven un gasto o un pago anulado (que ya no se asientan).
+const ingresoDelBanco = `(m.motivo ~* '(banco|extracci)')`
+
+// asientosDeCaja son los movimientos de las cajas que no salen de una venta,
+// un cobro o un gasto (H160): la extracción del banco que entra a la caja
+// (Banco a Caja) y la diferencia de cada arqueo cerrado en el período,
+// contra Diferencias de caja hasta que el contador diga a qué cuenta va.
+// El esperado del arqueo es el mismo que el del panel de cajas
+// (caja.consultaDeTurnos).
+func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	var out []Asiento
+	rs, err := s.lectura.Query(ctx, `SELECT m.created_at, m.monto::float8, coalesce(b.name, '')
+		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
+		WHERE m.tipo = 'ingreso' AND m.monto > 0 AND m.created_at >= $1 AND m.created_at <= $2 AND `+ingresoDelBanco+`
+		ORDER BY m.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var fecha time.Time
+	var importe float64
+	var sucursal string
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &sucursal}, func() error {
+		concepto := "Extracción del banco a la caja"
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		a := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Caja, importe, 0), renglon(Cuentas.Banco, 0, importe)})
+		a.Instante = true
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	rs, err = s.lectura.Query(ctx, `SELECT s.cerrada_at, coalesce(b.name, ''), (s.contado - coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at
+		  OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at)), 0))::float8
+		FROM cash_sessions s LEFT JOIN branches b ON b.id = s.branch_id LEFT JOIN cash_movements m ON m.session_id = s.id
+		WHERE s.estado = 'cerrada' AND s.contado IS NOT NULL AND s.cerrada_at >= $1 AND s.cerrada_at <= $2
+		GROUP BY s.id, s.cerrada_at, b.name, s.contado ORDER BY s.cerrada_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var diferencia float64
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &sucursal, &diferencia}, func() error {
+		diferencia = jsmath.Redondear2(diferencia)
+		if math.Abs(diferencia) < toleranciaAsiento {
+			return nil
+		}
+		concepto := "Sobrante del arqueo"
+		if diferencia < 0 {
+			concepto = "Faltante del arqueo"
+		}
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		a := AsientoDeDiferenciaDeCaja(fecha, concepto, diferencia)
+		a.Instante = true
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// asientosDeCosto son el costo de lo vendido de cada hecho de venta del
+// período (hechosDeVenta: la venta en la fecha de la regla, la devolución y
+// la cancelación en la suya), con el costo congelado de cada renglón (H160).
+// Va con la venta: al archivo del estudio si el pedido ya estaba facturado
+// en el mes del hecho, al B si no. Facturar después no lo mueve, así un mes
+// cerrado no cambia.
+func (s *Servicio) asientosDeCosto(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	var out []Asiento
+	rs, err := s.lectura.Query(ctx, `
+		SELECT o.fecha, o.numero, coalesce(nullif(o.contacto_nombre, ''), ''), o.operaciones = 0 AND o.hecho <> o.id,
+		  o.facturado_at IS NOT NULL AND mes_de_instante(o.facturado_at) <= mes_de_instante(o.fecha),
+		  coalesce(sum(`+costoDelRenglon+`) FILTER (WHERE `+costoConocido+`), 0)::float8
+		FROM `+hechosDeVenta+` o JOIN `+renglonesVendidos+` oi ON oi.hecho = o.hecho
+		WHERE o.fecha >= $1 AND o.fecha <= $2
+		GROUP BY o.hecho, o.fecha, o.numero, o.contacto_nombre, o.operaciones, o.id, o.facturado_at
+		ORDER BY o.fecha, o.numero`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var fecha time.Time
+	var numero, cliente string
+	var vuelta, facturado bool
+	var costo float64
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &numero, &cliente, &vuelta, &facturado, &costo}, func() error {
+		costo = jsmath.Redondear2(costo)
+		if math.Abs(costo) < toleranciaAsiento {
+			return nil
+		}
+		concepto := numero
+		if vuelta {
+			concepto = "vuelve " + numero
+		}
+		if cliente != "" {
+			concepto += " · " + cliente
+		}
+		a := AsientoDeCosto(fecha, concepto, costo)
+		a.Instante = true
+		if !facturado {
+			a.Circuito = CircuitoNegro
+		}
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // asientosDeCheques son los cambios de estado de los cheques del período
 // (cheque_estados, que anota el trigger de la base en cada cambio):
 // AsientoDeCheque decide cuáles mueven cuentas.
@@ -298,7 +476,8 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		  c.importe::float8, `+fragmentos.CircuitoDelCheque("c")+`,
 		  c.fecha_pago, (SELECT p.fecha FROM supplier_payment_parts x JOIN supplier_payments p ON p.id = x.payment_id
 		    WHERE x.cheque_id = c.id ORDER BY p.fecha LIMIT 1),
-		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito')
+		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito'),
+		  c.order_payment_id IS NOT NULL
 		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')) x
 		WHERE x.asentado >= $1 AND x.asentado <= $2 ORDER BY x.asentado`, idesde, ihasta)
@@ -312,7 +491,7 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		var vence time.Time
 		var pagado *time.Time
 		if err := rs.Scan(&c.Fecha, &c.Numero, &c.Banco, &c.Sentido, &c.Desde, &c.Hacia, &c.Importe, &c.Circuito, &vence, &pagado,
-			&c.ADeudores); err != nil {
+			&c.ADeudores, &c.DelMostradorEnB); err != nil {
 			return nil, err
 		}
 		c.Diferido = c.Sentido == "entregado" && pagado != nil && ChequeDiferido(vence, *pagado)
@@ -343,8 +522,9 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		  (SELECT count(*)::int FROM goods_receipts WHERE estado = 'borrador' AND fecha >= $1 AND fecha <= $2),
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
 		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2
-		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)),
-		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND `+fragmentos.FacturaViva+`)`, desde, hasta, ihasta).
+		     AND NOT EXISTS (SELECT 1 FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
+		       WHERE x.goods_receipt_id = g.id AND f.anulada_at IS NULL)),
+		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND (`+fragmentos.FacturaViva+` OR `+fragmentos.FacturaSinBaja+`))`, desde, hasta, ihasta).
 		Scan(&borradores, &cajas, &sinFactura, &facturasVivas)
 	if err != nil {
 		return nil, err
@@ -367,14 +547,17 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	// (mostrador.Anular no toca el comprobante, lo avisa).
 	if facturasVivas > 0 {
 		out = append(out, PendienteDelCierre{"facturas-vivas", "Ventas anuladas con factura viva",
-			"Falta la nota de crédito: su IVA sigue como débito.", facturasVivas, "/admin/facturacion?estado=" + facturacion.EstadoAnuladaViva})
+			"Falta la nota de crédito, o la baja si no tiene CAE.", facturasVivas, "/admin/facturacion?estado=" + facturacion.EstadoAnuladaViva})
 	}
 	// Los emitidos hasta el fin del mes (argentino) que ARCA todavía no
 	// autorizó: no están en el libro ni en el CSV, y si se autorizan el mes
 	// que viene salen con la fecha de ese día. Sin los borradores (no se
-	// emitieron) ni los dados de baja (ya no están en invoices).
+	// emitieron) ni los dados de baja (ya no están en invoices). Por el
+	// estado, como Facturación y el libro IVA: una B emitida con un CAE de
+	// homologación tampoco está autorizada, y acá contaba uno menos (mes
+	// simulado: 32 contra 33).
 	var sinCAE int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE cae IS NULL AND estado IN ('emitida', 'rechazada')
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE estado IN ('emitida', 'rechazada')
 		AND fecha_emision <= $1`, ihasta).Scan(&sinCAE); err != nil {
 		return nil, err
 	}
@@ -408,11 +591,87 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		out = append(out, PendienteDelCierre{"percepcion-apagada", "Percepción de IIBB apagada",
 			"Se apagó hasta cargar el padrón de ARBA: la alícuota única ya no se usa.", 1, "/admin/arca"})
 	}
+	repetidos, ejemplo, err := s.gastosRepetidos(ctx, desde, hasta)
+	if err != nil {
+		return nil, err
+	}
+	if repetidos > 0 {
+		out = append(out, PendienteDelCierre{"gastos-repetidos", "Gastos que parecen repetidos", ejemplo, repetidos,
+			"/admin/compras/gastos?periodo=" + desde.UTC().Format("2006-01")})
+	}
 	mas, err := s.pendientesDeLosCircuitos(ctx, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
 	return append(out, mas...), nil
+}
+
+// gastosRepetidos cuenta los pares de gastos del mes que parecen el mismo:
+// misma categoría, sucursal y proveedor, y las palabras de uno contenidas en
+// las del otro (sin mayúsculas, tildes, números ni palabras de relleno). Dos
+// luces de EDEA de Casa Central «octubre» y «período octubre» entraron las
+// dos al resultado sin que nada avisara (simulación del mes, H426). El
+// ejemplo es el primer par, con sus importes.
+func (s *Servicio) gastosRepetidos(ctx context.Context, desde, hasta time.Time) (int, string, error) {
+	rs, err := s.lectura.Query(ctx, `SELECT categoria::text, coalesce(branch_id::text, ''), coalesce(supplier_id::text, ''), descripcion, importe::float8
+		FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL ORDER BY fecha, created_at`, desde, hasta)
+	if err != nil {
+		return 0, "", err
+	}
+	type gasto struct {
+		clave, descripcion string
+		palabras           map[string]bool
+		importe            float64
+	}
+	var gastos []gasto
+	var cat, suc, prov, desc string
+	var imp float64
+	if _, err := pgx.ForEachRow(rs, []any{&cat, &suc, &prov, &desc, &imp}, func() error {
+		gastos = append(gastos, gasto{cat + "|" + suc + "|" + prov, desc, PalabrasDelGasto(desc), imp})
+		return nil
+	}); err != nil {
+		return 0, "", err
+	}
+	contenidas := func(a, b map[string]bool) bool {
+		for w := range a {
+			if !b[w] {
+				return false
+			}
+		}
+		return true
+	}
+	pares, ejemplo := 0, ""
+	for i := range gastos {
+		for j := i + 1; j < len(gastos); j++ {
+			a, b := gastos[i], gastos[j]
+			if a.clave != b.clave || len(a.palabras) < 2 || len(b.palabras) < 2 {
+				continue
+			}
+			if contenidas(a.palabras, b.palabras) || contenidas(b.palabras, a.palabras) {
+				pares++
+				if ejemplo == "" {
+					ejemplo = "«" + a.descripcion + "» (" + formato.Moneda(a.importe) + ") y «" + b.descripcion + "» (" + formato.Moneda(b.importe) + ")."
+				}
+			}
+		}
+	}
+	return pares, ejemplo, nil
+}
+
+var rellenoDelGasto = map[string]bool{"de": true, "del": true, "la": true, "el": true, "los": true, "las": true, "y": true, "a": true,
+	"en": true, "por": true, "para": true, "periodo": true, "mes": true, "pago": true, "factura": true}
+
+// PalabrasDelGasto son las palabras que identifican un gasto: en minúscula,
+// sin tildes, sin números ni palabras de relleno.
+func PalabrasDelGasto(texto string) map[string]bool {
+	sinTildes := strings.NewReplacer("á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ü", "u", "ñ", "n").Replace(strings.ToLower(texto))
+	out := map[string]bool{}
+	for _, w := range strings.FieldsFunc(sinTildes, func(r rune) bool { return !(r >= 'a' && r <= 'z') }) {
+		if len(w) > 1 && !rellenoDelGasto[w] {
+			out[w] = true
+		}
+	}
+	return out
 }
 
 // pendientesDeLosCircuitos son los que dejó la separación de los circuitos
@@ -520,13 +779,66 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 //     gasto en negro por transferencia): el extracto no va a conciliar.
 func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
 	out := []PendienteDelCierre{}
-	var delMes float64
-	recibosDelMes := 0
-	destinos := map[string]bool{}
+	// La bolsa que espera facturas ya emitidas (destinos «i:») no es una
+	// seña: es la cobranza de una factura que espera el CAE, y queda en
+	// Anticipos hasta que ARCA la autorice. Con el aviso de la seña y su
+	// consejo de IVA, el contador leía anticipos donde hubo cobranza de deuda
+	// (simulación del mes, H131): van aparte, a Facturación.
+	//
+	// Los destinos son todo lo que el cliente tenía pendiente ese día, así
+	// que el cobro de una factura de un cliente con otro pedido abierto
+	// también lleva «o:». Es seña solo si el recibo es de un pedido que
+	// seguía abierto (su «o:» está entre los destinos) y no cobra una
+	// factura; el cobro desde la ficha de la factura o de la cuenta del
+	// cliente, sin pedido, es cobranza.
+	recibosDelPeriodo := []string{}
 	for _, b := range reparto.Bolsas {
 		if entre(b.Fecha, idesde, ihasta) {
-			delMes = float64(delMes + b.Monto)
-			recibosDelMes++
+			recibosDelPeriodo = append(recibosDelPeriodo, b.Recibo)
+		}
+	}
+	pedidoDe, cobraFactura := map[string]string{}, map[string]bool{}
+	if len(recibosDelPeriodo) > 0 {
+		rs, err := s.pool.Query(ctx, `SELECT r.id::text, coalesce(r.order_id::text, ''),
+			EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.receipt_id = r.id)
+			FROM receipts r WHERE r.id = ANY($1::uuid[])`, recibosDelPeriodo)
+		if err != nil {
+			return nil, err
+		}
+		var id, pedido string
+		var cobra bool
+		if _, err := pgx.ForEachRow(rs, []any{&id, &pedido, &cobra}, func() error {
+			pedidoDe[id], cobraFactura[id] = pedido, cobra
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	soloFacturas := func(b cobros.Bolsa) bool {
+		deFactura, delPedido := false, false
+		for _, d := range b.Destinos {
+			deFactura = deFactura || strings.HasPrefix(d, "i:")
+			delPedido = delPedido || (pedidoDe[b.Recibo] != "" && d == "o:"+pedidoDe[b.Recibo])
+		}
+		return deFactura && (cobraFactura[b.Recibo] || !delPedido)
+	}
+	var delMes, deFacturas float64
+	recibosDelMes, recibosDeFacturas := 0, 0
+	destinos := map[string]bool{}
+	clientesDeSenas := map[string]bool{}
+	for _, b := range reparto.Bolsas {
+		if b.PorRegla && len(b.Destinos) == 0 {
+			continue // un saldo a favor, no una seña (abajo)
+		}
+		if entre(b.Fecha, idesde, ihasta) {
+			if soloFacturas(b) {
+				deFacturas = float64(deFacturas + b.Monto)
+				recibosDeFacturas++
+			} else {
+				delMes = float64(delMes + b.Monto)
+				recibosDelMes++
+				clientesDeSenas[b.Clave] = true
+			}
 		}
 		for _, d := range b.Destinos {
 			destinos[d] = false
@@ -534,7 +846,13 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 	}
 	if recibosDelMes > 0 {
 		out = append(out, PendienteDelCierre{"senas-del-mes", "Señas del mes sin factura",
-			formato.Moneda(jsmath.Redondear2(delMes)) + " en Anticipos de clientes. Si congelan precio, el IVA es de este mes.", recibosDelMes, "/admin/clientes"})
+			formato.Moneda(jsmath.Redondear2(delMes)) + " en Anticipos de clientes. Si congelan precio, el IVA es de este mes.", recibosDelMes,
+			fichaOClientes(clientesDeSenas)})
+	}
+	if recibosDeFacturas > 0 {
+		out = append(out, PendienteDelCierre{"cobros-sin-cae", "Cobros de facturas sin CAE",
+			formato.Moneda(jsmath.Redondear2(deFacturas)) + " en Anticipos de clientes hasta que ARCA autorice sus facturas.", recibosDeFacturas,
+			"/admin/facturacion?estado=emitida"})
 	}
 	// Qué destinos siguen vivos hoy: el pedido abierto sin factura con CAE,
 	// la factura que espera el CAE.
@@ -543,9 +861,15 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		for d := range destinos {
 			lista = append(lista, d)
 		}
+		// El pedido entregado cuya factura espera el CAE también sigue vivo:
+		// la seña se le aplica cuando llegue. Antes el de Herrera (entregado,
+		// con su B esperando) salía «sin aplicar» y el de Benítez, igual, no
+		// (simulación del mes, H353).
 		rs, err := s.pool.Query(ctx, `SELECT d FROM unnest($1::text[]) d WHERE
-			(d LIKE 'o:%' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = substr(d, 3)::uuid AND o.estado NOT IN ('cancelado', 'entregado')
-			  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion')))
+			(d LIKE 'o:%' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = substr(d, 3)::uuid AND o.estado <> 'cancelado'
+			  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion')
+			  AND (o.estado <> 'entregado' OR EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NULL
+			    AND i.estado IN ('emitida', 'rechazada') AND i.tipo::text NOT LIKE 'nota_credito%'))))
 			OR (d LIKE 'i:%' AND EXISTS (SELECT 1 FROM invoices i WHERE i.id = substr(d, 3)::uuid AND i.cae IS NULL
 			  AND i.estado IN ('emitida', 'rechazada')))`, lista)
 		if err != nil {
@@ -564,9 +888,17 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 			return nil, err
 		}
 	}
-	var varados float64
-	clientes := map[string]bool{}
+	var varados, aFavor float64
+	clientes, conSaldo := map[string]bool{}, map[string]bool{}
 	for _, b := range reparto.Bolsas {
+		// Lo que la regla mandó a Anticipos sin ningún pedido (lo que sobró de
+		// un cobro a cuenta) es un saldo a favor que espera la próxima
+		// factura del cliente, no una seña varada.
+		if b.PorRegla && len(b.Destinos) == 0 {
+			aFavor = float64(aFavor + b.Monto)
+			conSaldo[b.Clave] = true
+			continue
+		}
 		vivo := false
 		for _, d := range b.Destinos {
 			vivo = vivo || destinos[d]
@@ -578,8 +910,20 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 	}
 	if len(clientes) > 0 {
 		out = append(out, PendienteDelCierre{"anticipos-sin-aplicar", "Anticipos sin aplicar",
-			formato.Moneda(jsmath.Redondear2(varados)) + " de pedidos entregados o cancelados sin factura con CAE.", len(clientes), "/admin/clientes"})
+			formato.Moneda(jsmath.Redondear2(varados)) + " de pedidos entregados o cancelados sin factura con CAE.", len(clientes),
+			fichaOClientes(clientes)})
 	}
+	if len(conSaldo) > 0 {
+		out = append(out, PendienteDelCierre{"saldos-a-favor", "Saldos a favor en Anticipos",
+			formato.Moneda(jsmath.Redondear2(aFavor)) + " cobrados de más, a imputar a la próxima factura.", len(conSaldo),
+			fichaOClientes(conSaldo)})
+	}
+
+	mas, err := s.pendientesDeRecibosEnB(ctx, idesde, ihasta, reparto)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, mas...)
 
 	// Lo bancarizado en el B: los recibos del período, y los pagos y gastos en
 	// negro que no fueron en efectivo.
@@ -622,14 +966,104 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		    AND p.fecha >= $1 AND p.fecha <= $2 AND p.medio::text <> 'efectivo' AND p.medio::text NOT LIKE '%tercero%'
 		  UNION ALL
 		  SELECT g.importe FROM expenses g WHERE g.circuito = 'negro' AND g.fecha >= $1 AND g.fecha <= $2 AND g.medio::text <> 'efectivo'
+		    AND g.anulado_at IS NULL
 		) x`, idesde, ihasta).Scan(&pagos, &nPagos); err != nil {
 		return nil, err
 	}
 	if total := jsmath.Redondear2(float64(enBanco + pagos)); cuantos+nPagos > 0 {
+		// «Resolver» lleva a lo que lo genera: los cobros del mes (los recibos)
+		// o, si son solo pagos y gastos, a los pagos. Antes llevaba a esta
+		// misma pantalla (H378).
+		donde := "/admin/pagos"
+		if cuantos == 0 {
+			donde = "/admin/compras/pagos"
+		}
+		// Cobranzas abre en el mes en curso: el cierre del mes pasado lleva
+		// al mes pasado, no a uno sin esos recibos.
+		if cuantos > 0 && idesde.Equal(InicioDeMes(s.ahora(), 1)) {
+			donde += "?periodo=mes-pasado"
+		}
 		out = append(out, PendienteDelCierre{"banco-b", "Movimientos bancarios en el circuito B",
-			formato.Moneda(total) + " por banco o Mercado Pago van al archivo B: el extracto no va a conciliar.", cuantos + nPagos, "/admin/cierre"})
+			formato.Moneda(total) + " por banco o Mercado Pago van al archivo B: el extracto no va a conciliar.", cuantos + nPagos, donde})
 	}
 	return out, nil
+}
+
+// pendientesDeRecibosEnB son los recibos del período que mandaron plata al
+// circuito B y que el contador tiene que mirar, porque el reparto se fija al
+// emitir el recibo y no se recalcula (docs/CONTADOR-SIN-CAE.md):
+//
+//   - **Cobros en el B de ventas facturadas después**: el pedido estaba
+//     entregado y sin factura al cobrarse, así que el cobro fue al B como
+//     venta sin factura; después se facturó, y la factura queda en el
+//     archivo del estudio sin su cobro (simulación del mes, H374).
+//   - **Recibos partidos entre los dos archivos**: una parte al estudio y el
+//     resto al B. El recibo y la ficha no lo dicen, y la caja del estudio no
+//     da con el arqueo por esa parte (H407).
+//
+// Cómo se corrige —mover el cobro al estudio, una nota de crédito, dejarlo—
+// lo decide el contador: el cierre lo dice con el cliente a un toque.
+func (s *Servicio) pendientesDeRecibosEnB(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
+	rs, err := s.pool.Query(ctx, `SELECT r.id::text, coalesce(r.customer_id::text, ''), coalesce(r.order_id::text, ''),
+		r.order_id IS NOT NULL AND EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = r.order_id AND i.tipo::text LIKE 'factura%'
+		  AND i.estado NOT IN ('borrador', 'anulada') AND i.created_at > r.created_at)
+		FROM receipts r WHERE r.created_at >= $1 AND r.created_at <= $2 AND r.anulado_at IS NULL`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var facturadoDespues, partido float64
+	deFacturadas, partidos := map[string]bool{}, map[string]bool{}
+	nFacturadas, nPartidos := 0, 0
+	var id, cliente, pedido string
+	var despues bool
+	if _, err := pgx.ForEachRow(rs, []any{&id, &cliente, &pedido, &despues}, func() error {
+		rep, ok := reparto.Recibos[id]
+		if !ok || rep.B < 0.005 {
+			return nil
+		}
+		clave := "p:" + pedido
+		if cliente != "" {
+			clave = "c:" + cliente
+		}
+		switch {
+		case despues:
+			facturadoDespues = float64(facturadoDespues + rep.B)
+			deFacturadas[clave] = true
+			nFacturadas++
+		case rep.Deudores+rep.Anticipo >= 0.005:
+			partido = float64(partido + rep.B)
+			partidos[clave] = true
+			nPartidos++
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	out := []PendienteDelCierre{}
+	if nFacturadas > 0 {
+		out = append(out, PendienteDelCierre{"b-facturadas-despues", "Cobros en el B de ventas facturadas después",
+			formato.Moneda(jsmath.Redondear2(facturadoDespues)) + " en el archivo B: la factura queda en el del estudio sin su cobro.", nFacturadas,
+			fichaOClientes(deFacturadas)})
+	}
+	if nPartidos > 0 {
+		out = append(out, PendienteDelCierre{"recibos-partidos", "Recibos partidos entre los dos archivos",
+			formato.Moneda(jsmath.Redondear2(partido)) + " de esos recibos van al archivo B.", nPartidos,
+			fichaOClientes(partidos)})
+	}
+	return out, nil
+}
+
+// fichaOClientes es a dónde lleva «Resolver» de un aviso por cliente: con un
+// solo cliente, a su ficha; si no, a la lista (H378).
+func fichaOClientes(claves map[string]bool) string {
+	if len(claves) == 1 {
+		for c := range claves {
+			if id, ok := strings.CutPrefix(c, "c:"); ok {
+				return "/admin/clientes/" + id
+			}
+		}
+	}
+	return "/admin/clientes"
 }
 
 // Totales es un total con su cantidad.
@@ -657,6 +1091,11 @@ type ResumenDelMes struct {
 	Gastos                 Totales       `json:"gastos"`
 	RetencionesPracticadas Totales       `json:"retencionesPracticadas"`
 	RetencionesSufridas    Totales       `json:"retencionesSufridas"`
+	// PercepcionesIibb: las percepciones de Ingresos Brutos que nos hicieron
+	// los proveedores en sus facturas del mes, a computar en la DDJJ de IIBB.
+	// Estaban en el asiento de la compra y en el CSV del libro, y no en
+	// «Impuestos del período» (simulación del mes, H165).
+	PercepcionesIibb Totales `json:"percepcionesIibb"`
 	// PosicionIva: débito − crédito del mes, sin más (lo de antes).
 	PosicionIva float64 `json:"posicionIva"`
 	// Iva es la posición entera: con percepciones, retenciones y los dos
@@ -665,6 +1104,46 @@ type ResumenDelMes struct {
 	// Resultado: ventas netas − costo − gastos, contra el mes anterior (lo
 	// llena la API con ResultadoDelMes).
 	Resultado ResultadoComparado `json:"resultado"`
+	// Cerrado: si el mes está cerrado (lo llena la API con EstadoDelMes).
+	Cerrado MesCerrado `json:"cerrado"`
+}
+
+// MesCerrado es si un mes está cerrado, desde cuándo y quién lo cerró.
+type MesCerrado struct {
+	Cerrado bool       `json:"cerrado"`
+	At      *time.Time `json:"at"`
+	Por     *string    `json:"por"`
+}
+
+// EstadoDelMes lee meses_cerrados.
+func (s *Servicio) EstadoDelMes(ctx context.Context, mes string) (MesCerrado, error) {
+	var m MesCerrado
+	err := s.pool.QueryRow(ctx, `SELECT cerrado_at, cerrado_por_nombre FROM meses_cerrados WHERE mes = $1`, mes).Scan(&m.At, &m.Por)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return MesCerrado{}, nil
+	}
+	m.Cerrado = err == nil
+	return m, err
+}
+
+// CerrarElMes cierra o reabre un mes (meses_cerrados, 00221). Cerrado, los
+// triggers de la base no dejan cargar ni cambiar nada con fecha de ese mes:
+// lo que el estudio ya tiene no cambia (simulación del mes, H408). Un mes que
+// todavía no terminó no se cierra.
+func (s *Servicio) CerrarElMes(ctx context.Context, mes string, cerrar bool, usuario, nombre string) (MesCerrado, error) {
+	if cerrar {
+		hoy := s.ahora().In(Argentina).Format("2006-01")
+		if mes >= hoy {
+			return MesCerrado{}, plataforma.NuevoProblema(422, "Un mes se cierra cuando terminó.")
+		}
+		if _, err := s.pool.Exec(ctx, `INSERT INTO meses_cerrados (mes, cerrado_por, cerrado_por_nombre) VALUES ($1, $2, $3)
+			ON CONFLICT (mes) DO NOTHING`, mes, usuario, nombre); err != nil {
+			return MesCerrado{}, err
+		}
+	} else if _, err := s.pool.Exec(ctx, `DELETE FROM meses_cerrados WHERE mes = $1`, mes); err != nil {
+		return MesCerrado{}, err
+	}
+	return s.EstadoDelMes(ctx, mes)
 }
 
 // ResumenDelMes es resumenDelMes: las notas de crédito restan, y en las
@@ -700,8 +1179,8 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	practicadas := " AND anulada_at IS NULL"
 	err = s.lectura.QueryRow(ctx, `
 		SELECT
-		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $1 AND fecha <= $2),
-		  (SELECT count(*)::int FROM expenses WHERE fecha >= $1 AND fecha <= $2),
+		  (SELECT coalesce(sum(importe), 0) FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL),
+		  (SELECT count(*)::int FROM expenses WHERE fecha >= $1 AND fecha <= $2 AND anulado_at IS NULL),
 		  (SELECT coalesce(sum(importe), 0) FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4`+practicadas+`),
 		  (SELECT count(*)::int FROM retenciones_practicadas WHERE fecha >= $3 AND fecha <= $4`+practicadas+`),
 		  (SELECT coalesce(sum(importe), 0) FROM retenciones_sufridas WHERE anulada_at IS NULL AND fecha >= $1 AND fecha <= $2),
@@ -710,6 +1189,14 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	if err != nil {
 		return r, err
 	}
+	var pi jsmath.Num
+	if err := s.lectura.QueryRow(ctx, `SELECT coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * percepcion_iibb), 0),
+		count(*) FILTER (WHERE coalesce(percepcion_iibb, 0) <> 0)::int
+		FROM purchase_invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND anulada_at IS NULL`, desde, hasta).
+		Scan(&pi, &r.PercepcionesIibb.Cantidad); err != nil {
+		return r, err
+	}
+	r.PercepcionesIibb.Total = numero(pi)
 	r.Ventas.Neto, r.Ventas.Iva, r.Ventas.Total = numero(vn), numero(vi), numero(vt)
 	r.Compras.Neto, r.Compras.Iva, r.Compras.Total = numero(cn), numero(ci), numero(ct)
 	r.Gastos.Total, r.RetencionesPracticadas.Total, r.RetencionesSufridas.Total = numero(g), numero(rp), numero(rs)
@@ -744,30 +1231,40 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 // la resta, así el redondeo no deja un centavo suelto. «Facturado neto», la
 // tarjeta de los comprobantes, sigue siendo lo fiscal: se corta por la
 // fecha de la factura y lleva el envío.
+//
+// **Sin CAE no es sin factura.** Lo que tiene su comprobante numerado y
+// espera el CAE (emitido o rechazado) va aparte, como SinCae: el contador
+// leía «sin factura $ 42 M» como ventas en negro cuando las 133 tenían
+// factura (simulación del mes, H422).
 type VendidoDelMes struct {
 	Total      float64 `json:"total"`
 	Facturado  Totales `json:"facturado"`
+	SinCae     Totales `json:"sinCae"`
 	Interno    Totales `json:"interno"`
 	SinFactura Totales `json:"sinFactura"`
 }
 
 func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) (VendidoDelMes, error) {
 	var v VendidoDelMes
-	var total, facturado, interno jsmath.Num
+	var total, facturado, sinCae, interno jsmath.Num
 	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	err := s.lectura.QueryRow(ctx, `
 		SELECT `+ventasNetas(conDescuento, "margenes.neto")+`,
 		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'facturado'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'facturado'), 0)::int,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'sin-cae'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'sin-cae'), 0)::int,
 		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'interno'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'interno'), 0)::int,
 		  coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'sin-factura'), 0)::int
 		FROM (SELECT o.id, o.hecho, o.operaciones, o.total, o.subtotal, o.costo_envio,
 		        CASE WHEN EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.`+conCae+` AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'facturado'
+		             WHEN EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.cae IS NULL AND f.estado IN ('emitida', 'rechazada')
+		               AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'sin-cae'
 		             WHEN o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id) THEN 'interno'
 		             ELSE 'sin-factura' END AS papel
-		      FROM `+hechosDeVenta+` o WHERE o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2"),
-		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
+		      FROM `+hechosDeVenta+` o WHERE o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.fecha >= $1 AND o.fecha < $2"),
+		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &sinCae, &v.SinCae.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
 	v.Total = jsmath.Redondear2(total.F())
 	v.Facturado.Total, v.Interno.Total = jsmath.Redondear2(facturado.F()), jsmath.Redondear2(interno.F())
-	v.SinFactura.Total = jsmath.Redondear2(float64(v.Total-v.Facturado.Total) - v.Interno.Total)
+	v.SinCae.Total = jsmath.Redondear2(sinCae.F())
+	v.SinFactura.Total = jsmath.Redondear2(float64(float64(v.Total-v.Facturado.Total)-v.SinCae.Total) - v.Interno.Total)
 	return v, err
 }

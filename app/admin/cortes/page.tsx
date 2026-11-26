@@ -6,6 +6,7 @@ import { listarCortes } from "@/lib/dal/admin/cortes";
 import { BuscadorCortes } from "./buscador";
 import { TableroDeCortes } from "./vista";
 import { avisosManuales } from "@/lib/whatsapp/aviso-manual-datos";
+import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
@@ -16,11 +17,20 @@ export default async function CortesPage({
   searchParams: Promise<{ buscar?: string }>;
 }) {
   const params = await searchParams;
+  const usuario = await requireStaff();
+  // El aserradero tiene su pantalla: acá le aparecían «Marcar retirado»,
+  // «Nuevo corte» y «Tarifas», que no son suyos (mes simulado, H127 y H401).
+  if (usuario.staffRole === "aserradero") {
+    redirect(params.buscar ? `/taller?buscar=${encodeURIComponent(params.buscar)}` : "/taller");
+  }
   const cortes = await listarCortes({ busqueda: params.buscar });
   // Los terminados esperan que el cliente venga a buscarlos: el aviso gratis
   // va en su tarjeta. En `/taller` no, que es la pantalla de la máquina.
   // Y solo para quien atiende el WhatsApp de la maderera.
-  const atiende = puedeEntrar("/admin/whatsapp", (await requireStaff()).staffRole);
+  const atiende = puedeEntrar("/admin/whatsapp", usuario.staffRole);
+  // La configuración de la máquina y los precios del corte son del admin:
+  // «Tarifas» llevaba a una pantalla que rebotaba a los demás.
+  const configura = puedeEntrar("/admin/cortes/tarifas", usuario.staffRole);
   const avisos = atiende
     ? await avisosManuales(
         "corte_listo",
@@ -57,21 +67,25 @@ export default async function CortesPage({
           Nuevo corte
         </Link>
 
-        <Link
-          href="/admin/cortes/formato"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-        >
-          <Settings2 className="h-5 w-5" />
-          Formato para la máquina
-        </Link>
+        {configura && (
+          <>
+            <Link
+              href="/admin/cortes/formato"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            >
+              <Settings2 className="h-5 w-5" />
+              Formato para la máquina
+            </Link>
 
-        <Link
-          href="/admin/cortes/tarifas"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-        >
-          <DollarSign className="h-5 w-5" />
-          Tarifas
-        </Link>
+            <Link
+              href="/admin/cortes/tarifas"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            >
+              <DollarSign className="h-5 w-5" />
+              Tarifas
+            </Link>
+          </>
+        )}
 
         {/* La pantalla del aserradero no estaba enlazada desde ningún lado: el
             rol aserradero cae ahí al entrar, pero cualquier otro tenía que
@@ -92,7 +106,12 @@ export default async function CortesPage({
           Antes esta pantalla no se actualizaba nunca: quien cortaba tenía que
           recargarla para enterarse. */}
       <RefrescarEnVivo canales={["taller"]} sinConexionCadaMs={60_000} />
-      <TableroDeCortes cortes={cortes} avisos={avisos} />
+      <TableroDeCortes
+        cortes={cortes}
+        avisos={avisos}
+        busqueda={params.buscar?.trim() ?? ""}
+        limpiar="/admin/cortes"
+      />
     </div>
   );
 }

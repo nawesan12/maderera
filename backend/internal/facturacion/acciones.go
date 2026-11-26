@@ -16,8 +16,10 @@ import (
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -39,6 +41,32 @@ func (s *Servicio) AvisarFactura(ctx context.Context, id string) error {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// devueltoSinFactura es lo que las devoluciones sin factura del pedido se
+// llevaron de cada renglón, y su importe.
+func (s *Servicio) devueltoSinFactura(ctx context.Context, pedido string) (map[string]float64, float64, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT di.order_item_id::text, sum(di.cantidad)::float8, sum(di.importe)::float8
+		FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+		WHERE d.order_id = $1 AND d.invoice_id IS NULL AND di.order_item_id IS NOT NULL
+		GROUP BY di.order_item_id`, pedido)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer filas.Close()
+	out := map[string]float64{}
+	total := 0.0
+	for filas.Next() {
+		var id string
+		var cantidad, importe float64
+		if err := filas.Scan(&id, &cantidad, &importe); err != nil {
+			return nil, 0, err
+		}
+		out[id] = cantidad
+		total = jsmath.Redondear2(total + importe)
+	}
+	return out, total, filas.Err()
+}
 
 // FacturarPedido es facturarPedido: los renglones y la condición frente al
 // IVA salen del pedido y de la ficha, no de lo que se tipee; el envío entra
@@ -62,15 +90,31 @@ func (s *Servicio) FacturarPedido(ctx context.Context, ses *auth.Sesion, orderID
 		return "", yaFacturado(datos.YaFacturado.Numero)
 	}
 	p := datos.Pedido
+	// Lo que se devolvió antes de facturar (la devolución de un pedido sin
+	// factura, pedidos.DevolverSinFactura) no se factura: ni la cantidad ni
+	// su plata, que ya bajó lo que había que cobrar.
+	devueltos, importeDevuelto, err := s.devueltoSinFactura(ctx, orderID)
+	if err != nil {
+		return "", err
+	}
 	lineas := make([]Linea, 0, len(datos.Items)+1)
 	for _, i := range datos.Items {
 		alic := 21.0
 		if i.Alicuota != nil && *i.Alicuota != "" {
 			alic = jsmath.Numero(*i.Alicuota)
 		}
+		cantidad := jsmath.Numero(i.Cantidad)
+		if d := devueltos[i.ID]; d > 0 {
+			if cantidad = jsmath.Round(float64((cantidad-d)*1000)) / 1000; cantidad <= 0 {
+				continue
+			}
+		}
 		unidad, renglon := i.Unidad, i.ID
 		lineas = append(lineas, Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: i.Descripcion, Unidad: &unidad,
-			Cantidad: jsmath.Numero(i.Cantidad), PrecioFinalUnitario: jsmath.Numero(i.PrecioUnitario), Alicuota: &alic}, OrderItemID: &renglon})
+			Cantidad: cantidad, PrecioFinalUnitario: jsmath.Numero(i.PrecioUnitario), Alicuota: &alic}, OrderItemID: &renglon})
+	}
+	if len(lineas) == 0 {
+		return "", errEmision("Se devolvió todo: no queda nada para facturar.")
 	}
 	// Lo que se cobró manda. La tienda guarda los renglones a precio lleno y
 	// el descuento (el de la forma de pago) aparte, en el pedido: sin esto la
@@ -81,7 +125,7 @@ func (s *Servicio) FacturarPedido(ctx context.Context, ses *auth.Sesion, orderID
 	for _, l := range lineas {
 		mercaderia = float64(l.Cantidad*l.PrecioFinalUnitario) + mercaderia
 	}
-	if cobrado := jsmath.Numero(p.Total) - jsmath.Numero(p.CostoEnvio); mercaderia > 0 && cobrado > 0 && math.Abs(cobrado-mercaderia) > 0.005 {
+	if cobrado := jsmath.Numero(p.Total) - jsmath.Numero(p.CostoEnvio) - importeDevuelto; mercaderia > 0 && cobrado > 0 && math.Abs(cobrado-mercaderia) > 0.005 {
 		factor := cobrado / mercaderia
 		for i := range lineas {
 			lineas[i].PrecioFinalUnitario = jsmath.Round(float64(lineas[i].PrecioFinalUnitario*factor*100)) / 100
@@ -199,8 +243,11 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 			return "", nil, errEmision(msj)
 		}
 	}
-	if m := faltaCuitParaLaA(condicion, &cuit); m != "" {
-		return "", nil, errEmision(m)
+	// Con la regla en «b», al monotributista le sale B: no hace falta su CUIT.
+	if condicion != fiscal.Monotributista || !reglas.Es(ctx, s.pool, reglas.FacturaAlMonotributista, "b") {
+		if m := faltaCuitParaLaA(condicion, &cuit); m != "" {
+			return "", nil, errEmision(m)
+		}
 	}
 
 	var lineas []Linea
@@ -312,7 +359,7 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura", id, "Emitió un comprobante manual a "+nombre, nil)
 	if recibo != nil {
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", id,
-			"Cobró de contado con el recibo "+recibo.Numero+" por "+jsmath.Fijo2(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
+			"Cobró de contado con el recibo "+recibo.Numero+" por "+formato.Importe(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
 		if recibo.Aviso != nil && *recibo.Aviso != "" {
 			aviso = recibo.Aviso
 		}
@@ -444,7 +491,8 @@ func (s *Servicio) LetraQueSaldria(ctx context.Context, customerID, cuitTipeado 
 			receptor = clientes.SugerirCondicionIva(doc)
 		}
 	}
-	return fiscal.LetraQueCorresponde(config.CondicionIva, receptor), receptor, nil
+	letra, err = letraPara(ctx, s.pool, config.CondicionIva, receptor)
+	return letra, receptor, err
 }
 
 // EmitirParaLaVenta es emitirParaLaVenta: el comprobante de una venta de
@@ -536,6 +584,12 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 			m = "error desconocido"
 			s.log.Error("autorizando la venta", "invoiceId", id, "error", err)
 		}
+		// Sin certificado no hubo envío: el mostrador lo dice en una línea y
+		// sin la jerga del certificado, que el vendedor no maneja y que antes
+		// repetía la misma idea dos veces (mes simulado, H020).
+		if m == sinValorFiscal {
+			return ResultadoComprobante{InvoiceID: &id, Aviso: AvisoSinARCA}, nil
+		}
 		return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante creado, pero sin autorizar en ARCA: " + m}, nil
 	}
 	return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante autorizado.", Autorizado: true}, nil
@@ -595,18 +649,18 @@ func (s *Servicio) alicuotasDeLaVenta(ctx context.Context, orderID string, linea
 // responsable inscripto, o "": la factura A informa el CUIT del receptor
 // (DocTipo 80), y sin uno válido ARCA la rechaza.
 func faltaCuitParaLaA(condicion string, cuit *string) string {
-	if condicion != fiscal.ResponsableInscripto {
+	if condicion != fiscal.ResponsableInscripto && condicion != fiscal.Monotributista {
 		return ""
 	}
 	if cuit == nil || strings.TrimSpace(*cuit) == "" {
-		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT."
+		return "Para hacer una factura A hace falta el CUIT del cliente."
 	}
 	doc, msj := clientes.LeerDocumento(*cuit)
 	if msj != "" {
 		return msj
 	}
 	if doc.Tipo != "cuit" {
-		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT, no el DNI."
+		return "Para hacer una factura A hace falta el CUIT del cliente, no el DNI."
 	}
 	return ""
 }

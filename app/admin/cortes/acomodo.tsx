@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Save } from "lucide-react";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
 import type { PiezaAcortar, PiezaFijada } from "@/lib/cortes/tipos";
+import type { QuienSeQueda } from "@/lib/cortes/de-quien";
 import { piezasParaElPlano, usePlano } from "@/lib/cortes/en-vivo";
 import { guardarAcomodoManual } from "./actions";
 
@@ -28,6 +29,7 @@ export function AcomodoDelCorte({
   anchoSierra,
   busqueda,
   inicial,
+  quien,
 }: {
   id: string;
   piezas: PiezaAcortar[];
@@ -38,6 +40,8 @@ export function AcomodoDelCorte({
   /** Si el trabajo se armó con el motor que busca (ver `motorPlano`). */
   busqueda: boolean;
   inicial: PiezaFijada[];
+  /** Cómo se rotula cada placa (ver PlanoEditable). */
+  quien?: QuienSeQueda & { todasDelCliente?: boolean };
 }) {
   const [fijadas, setFijadas] = useState<PiezaFijada[]>(inicial);
   const [guardando, empezar] = useTransition();
@@ -66,6 +70,8 @@ export function AcomodoDelCorte({
       <PlanoEditable
         plano={plano}
         fijadas={fijadas}
+        quien={quien}
+        sinPasadas
         onFijadas={(f) => {
           setFijadas(f);
           setAviso(null);

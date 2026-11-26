@@ -168,7 +168,7 @@ func TestVentaSinConexionBajoLista(t *testing.T) {
 	if s := e.txt(t, `select bajo_lista_sin_autorizar::text || ' ' || dejado_de_cobrar::text from orders where id = $1`, r0["orderId"]); s != "true 15000.50" {
 		t.Errorf("marcada: %s", s)
 	}
-	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like '%bajo lista sin autorizar ($15000.50)%'`); n != 1 {
+	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like '%bajo lista sin autorizar ($%15.000,50)%'`); n != 1 {
 		t.Errorf("bitácora: %v", n)
 	}
 }
@@ -457,7 +457,7 @@ func TestVentaSinConexionPasadaDelLimite(t *testing.T) {
 	if s := e.txt(t, `select credito_sin_autorizar::text || ' ' || bajo_lista_sin_autorizar::text from orders where id = $1`, r0["orderId"]); s != "45000.50 false" {
 		t.Errorf("marcada: %s", s)
 	}
-	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like '%a cuenta pasado el límite sin autorizar ($45000.50)%'`); n != 1 {
+	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like '%a cuenta pasado el límite sin autorizar ($%45.000,50)%'`); n != 1 {
 		t.Errorf("bitácora: %v", n)
 	}
 }

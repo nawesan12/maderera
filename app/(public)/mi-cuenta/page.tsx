@@ -11,10 +11,14 @@ import {
 import { TarjetaPedido } from "@/components/cuenta/tarjeta-pedido";
 import {
   clienteDeLaSesion,
+  miCuentaCorriente,
   misPedidos,
   misPresupuestos,
   resumenCuenta,
+  type MovimientoConSaldo,
 } from "@/lib/dal/cuenta";
+import { pedidosEnCurso, saludoDelCliente } from "@/lib/cuenta/portal";
+import { estiloDeEstado } from "@/components/admin/etiqueta-estado";
 import { diasHasta, fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { RespuestaPresupuesto } from "./presupuestos/respuesta";
 import { DONDE_SE_CORTA } from "@/lib/sucursales";
@@ -31,14 +35,24 @@ export default async function ResumenCuentaPage() {
   const enCurso = pedidos.filter(
     (p) => p.estado !== "entregado" && p.estado !== "cancelado",
   );
-  const aResponder = presupuestos.filter((p) => p.estado === "enviado");
+  const aResponder = presupuestos.filter((p) => p.aResponder);
   const operaACuenta = resumen.limiteCredito > 0 || resumen.saldo !== 0;
 
   // Cuenta recién creada y sin actividad: en vez de tres tarjetas vacías, se
   // muestra por dónde empezar.
   if (pedidos.length === 0 && presupuestos.length === 0 && !operaACuenta) {
-    return <Bienvenida nombre={cliente?.nombre ?? ""} />;
+    return (
+      <Bienvenida
+        nombre={cliente ? saludoDelCliente(cliente.nombre, cliente.cuit) : ""}
+        vinculada={cliente?.vinculada ?? false}
+      />
+    );
   }
+
+  // Lo último que movió el saldo y cuánto es de pedidos sin entregar: sin
+  // eso el saldo subía o bajaba sin decir por qué (H303, H082).
+  const cuenta = operaACuenta ? await miCuentaCorriente() : null;
+  const ultimo = cuenta?.movimientos[0];
 
   return (
     <div className="space-y-8">
@@ -92,7 +106,7 @@ export default async function ResumenCuentaPage() {
                   </div>
 
                   <div className="mt-4">
-                    <RespuestaPresupuesto numero={presupuesto.numero} />
+                    <RespuestaPresupuesto numero={presupuesto.numero} desde="resumen" />
                   </div>
                 </article>
               );
@@ -126,7 +140,17 @@ export default async function ResumenCuentaPage() {
                   : resumen.saldo < 0
                     ? "A tu favor"
                     : "Estás al día"}
+                {cuenta && cuenta.sinEntregar > 0 && (
+                  <>
+                    {" · "}
+                    <span className="tabular">
+                      {formatearMonto(cuenta.sinEntregar)}
+                    </span>{" "}
+                    de pedidos sin entregar
+                  </>
+                )}
               </p>
+              {ultimo && <UltimoMovimiento movimiento={ultimo} />}
             </div>
 
             <Link
@@ -152,7 +176,7 @@ export default async function ResumenCuentaPage() {
         <EncabezadoSeccion
           titulo={enCurso.length > 0 ? "Pedidos en curso" : "Tus pedidos"}
           detalle={
-            enCurso.length > 0 ? plural(enCurso.length, "en camino") : undefined
+            enCurso.length > 0 ? pedidosEnCurso(enCurso.length) : undefined
           }
           verMas={pedidos.length > 0 ? "/mi-cuenta/pedidos" : undefined}
         />
@@ -253,7 +277,7 @@ function MedidorCredito({ saldo, limite }: { saldo: number; limite: number }) {
       <div
         className="h-2 overflow-hidden rounded-full bg-black/10"
         role="img"
-        aria-label={`Usás el ${Math.round(porcentaje)} por ciento de tu límite de crédito`}
+        aria-label={`Usás el ${Math.floor(porcentaje)} por ciento de tu límite de crédito`}
       >
         <div
           className={`h-full rounded-full ${
@@ -309,8 +333,38 @@ function AccesosRapidos() {
   );
 }
 
+/** Lo último que movió la cuenta, en un renglón. */
+function UltimoMovimiento({
+  movimiento: m,
+}: {
+  movimiento: MovimientoConSaldo;
+}) {
+  const chequeRechazado =
+    m.tipo === "nota_debito" && /rechazado/i.test(m.detalle ?? "");
+  return (
+    <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-sm">
+      <span className="text-muted-foreground">
+        {fechaCorta.format(m.createdAt)}
+      </span>
+      <span className="font-medium">
+        {chequeRechazado ? "Cheque rechazado" : estiloDeEstado(m.tipo).etiqueta}
+      </span>
+      <span className={`tabular ${m.monto < 0 ? "text-saldo-favor" : ""}`}>
+        {m.monto > 0 ? "+" : "−"}
+        {formatearMonto(Math.abs(m.monto))}
+      </span>
+    </p>
+  );
+}
+
 /** Primera visita: qué hacer, no un vacío con un ícono gris. */
-async function Bienvenida({ nombre }: { nombre: string }) {
+async function Bienvenida({
+  nombre,
+  vinculada,
+}: {
+  nombre: string;
+  vinculada: boolean;
+}) {
   const [whatsapp, laTienda] = await Promise.all([enlaceWhatsapp(), tienda()]);
   // Con la tienda apagada no hay carrito (redirige al catálogo): los pasos son
   // los de verdad, y la consulta por WhatsApp es lo principal (comité del 25/11).
@@ -320,7 +374,9 @@ async function Bienvenida({ nombre }: { nombre: string }) {
       <section className="overflow-hidden rounded-2xl border bg-card">
         <div className="bg-brand-gray p-8 text-white">
           <h2 className="text-2xl font-bold">
-            {nombre ? `Bienvenido, ${nombre.split(" ")[0]}` : "Bienvenido"}
+            {nombre
+              ? `Te damos la bienvenida, ${nombre}`
+              : "Te damos la bienvenida"}
           </h2>
         </div>
 
@@ -397,25 +453,29 @@ async function Bienvenida({ nombre }: { nombre: string }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-dashed p-5">
-        <h3 className="flex items-center gap-2 font-medium">
-          <Receipt className="h-4 w-4 text-muted-foreground" />
-          ¿Ya comprás en el mostrador?
-        </h3>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Si tenés cuenta corriente con nosotros, escribinos y la vinculamos con
-          esta cuenta web para que veas tu saldo y tu historial acá.
-        </p>
-        <a
-          href={whatsapp}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-brand-green hover:underline"
-        >
-          <MessageCircle className="h-4 w-4" />
-          Escribirnos por WhatsApp
-        </a>
-      </section>
+      {/* A quien ya tiene la ficha del mostrador vinculada no se le ofrece
+          vincularla (H090). */}
+      {!vinculada && (
+        <section className="rounded-xl border border-dashed p-5">
+          <h3 className="flex items-center gap-2 font-medium">
+            <Receipt className="h-4 w-4 text-muted-foreground" />
+            ¿Ya comprás en el mostrador?
+          </h3>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Si tenés cuenta corriente con nosotros, escribinos y la vinculamos
+            con esta cuenta web para que veas tu saldo y tu historial acá.
+          </p>
+          <a
+            href={whatsapp}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-brand-green hover:underline"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Escribirnos por WhatsApp
+          </a>
+        </section>
+      )}
     </div>
   );
 }

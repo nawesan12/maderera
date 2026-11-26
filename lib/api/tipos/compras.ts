@@ -257,7 +257,8 @@ export interface paths {
             cookie?: never;
         };
         get: operations["OrdenDeCompra"];
-        put?: never;
+        /** @description Corrige una orden en borrador (los mismos campos que el alta). */
+        put: operations["EditarOrdenDeCompra"];
         post?: never;
         delete?: never;
         options?: never;
@@ -367,6 +368,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/recepciones/por-recibir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Las órdenes enviadas o con parte recibida, sin importes (las ve el depósito). */
+        get: operations["OrdenesPorRecibir"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/recepciones/{id}": {
         parameters: {
             query?: never;
@@ -377,7 +395,12 @@ export interface paths {
             cookie?: never;
         };
         get: operations["Recepcion"];
-        put?: never;
+        /**
+         * @description Corrige el borrador con lo que de verdad llegó: la cantidad de cada
+         *     renglón (en cero, sale), su costo y el flete. El costo y el flete solo
+         *     los cambia quien ve los precios.
+         */
+        put: operations["EditarRecepcion"];
         post?: never;
         delete?: never;
         options?: never;
@@ -461,6 +484,25 @@ export interface paths {
          */
         put: operations["CorregirFacturaDeCompra"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/compras/facturas/{id}/aplicar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Aplica una nota de crédito que había quedado a favor a una factura del mismo proveedor. */
+        post: operations["AplicarNotaDeCredito"];
         delete?: never;
         options?: never;
         head?: never;
@@ -714,6 +756,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/compras/gastos/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Solo el admin. El gasto queda anulado con su motivo y deja de contar;
+         *     el efectivo vuelve al turno abierto de su sucursal y la factura que
+         *     se cargó con él se anula.
+         */
+        post: operations["AnularGasto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/compras/gastos/por-categoria": {
         parameters: {
             query?: never;
@@ -840,6 +905,21 @@ export interface components {
                 purchaseInvoiceId: string | null;
                 /** @description el pago del que salió */
                 supplierPaymentId: string | null;
+                /** @description la recepción (el remito) que lo cargó */
+                goodsReceiptId: string | null;
+                /** @description la factura que cubrió ese remito */
+                facturaDelRemito: string | null;
+            }[];
+            /** @description los gastos pagados en el acto a este proveedor */
+            gastos: {
+                id: string;
+                /** Format: date-time */
+                fecha: string;
+                descripcion: string;
+                /** Format: double */
+                importe: number;
+                medio: string;
+                factura: string | null;
             }[];
         };
         PerfilDeLista: {
@@ -895,6 +975,8 @@ export interface components {
             /** Format: double */
             neto: number;
             pendientes: number;
+            /** Format: double */
+            porLlegar: number;
         };
         Orden: {
             id: string;
@@ -911,6 +993,11 @@ export interface components {
             proveedor: string;
             branchId: string;
             sucursal: string | null;
+            /** @description La recepción en borrador de esta orden, si hay una (se corrige esa en vez de hacer otra). */
+            borradorAbierto: {
+                id: string;
+                numeroRemito: string | null;
+            } | null;
             items: {
                 id: string;
                 purchaseOrderId: string;
@@ -1011,6 +1098,33 @@ export interface components {
             /** Format: double */
             total: number;
         };
+        /**
+         * @description Una factura con saldo, una nota de crédito a favor (tipo nota_credito_*,
+         *     el saldo es lo que resta) o un cheque que se le dio y rebotó (tipo
+         *     cheque_rechazado, el id es el del cheque).
+         */
+        FacturaConSaldo: {
+            id: string;
+            numero: string;
+            tipo: string;
+            /** Format: date-time */
+            fechaEmision: string;
+            /** Format: date-time */
+            fechaVencimiento: string | null;
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            imputado: number;
+            /** Format: double */
+            saldo: number;
+            /**
+             * Format: double
+             * @description neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
+             */
+            netoSinIva: number;
+            proveedor?: string;
+            supplierId?: string;
+        };
         PagoListado: {
             id: string;
             /** Format: date-time */
@@ -1032,6 +1146,13 @@ export interface components {
             motivoAnulacion: string | null;
             certificados: number;
             numerosCertificado: string[];
+            /** @description con qué salió la plata, renglón por renglón */
+            partes: {
+                medio: string;
+                /** Format: double */
+                importe: number;
+                referencia: string | null;
+            }[];
             facturas: {
                 id: string;
                 numero: string;
@@ -1080,14 +1201,27 @@ export interface components {
             /** Format: date-time */
             anuladaAt: string | null;
             motivoAnulacion: string | null;
+            aplicaA: string | null;
+            aplicaAId: string | null;
             pagos: {
                 pagoId: string;
                 /** Format: date-time */
                 fecha: string;
                 medio: string;
+                /** @description Los medios con que salió el pago, del de más plata al de menos (un pago puede ir en transferencia y cheque). */
+                medios: string[];
                 referencia: string | null;
                 /** Format: double */
                 aplicado: number;
+            }[];
+            /** @description Las notas de crédito vigentes aplicadas a esta factura. */
+            creditos: {
+                id: string;
+                numero: string;
+                /** Format: date-time */
+                fecha: string;
+                /** Format: double */
+                total: number;
             }[];
             renglones: {
                 producto: string | null;
@@ -1220,6 +1354,11 @@ export interface components {
             supplierId: string | null;
             notas: string | null;
             enCaja: boolean;
+            purchaseInvoiceId: string | null;
+            factura: string | null;
+            /** Format: date-time */
+            anuladoAt: string | null;
+            motivoAnulacion: string | null;
         };
         TotalDeGastos: {
             /** @description la categoría o el circuito */
@@ -1504,26 +1643,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        id: string;
-                        numero: string;
-                        tipo: string;
-                        /** Format: date-time */
-                        fechaEmision: string;
-                        /** Format: date-time */
-                        fechaVencimiento: string | null;
-                        /** Format: double */
-                        total: number;
-                        /** Format: double */
-                        imputado: number;
-                        /** Format: double */
-                        saldo: number;
-                        /**
-                         * Format: double
-                         * @description neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
-                         */
-                        netoSinIva: number;
-                    }[];
+                    "application/json": components["schemas"]["FacturaConSaldo"][];
                 };
             };
         };
@@ -1688,6 +1808,21 @@ export interface operations {
             404: components["responses"]["Problema"];
         };
     };
+    EditarOrdenDeCompra: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Formulario"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
     MarcarOrdenEnviada: {
         parameters: {
             query?: never;
@@ -1834,6 +1969,36 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    OrdenesPorRecibir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que se espera que llegue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        numero: string;
+                        estado: string;
+                        proveedor: string;
+                        sucursal: string | null;
+                        /** Format: date-time */
+                        fechaPrometida: string | null;
+                        pendientes: number;
+                        lineas: number;
+                    }[];
+                };
+            };
+        };
+    };
     Recepcion: {
         parameters: {
             query?: never;
@@ -1855,6 +2020,21 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problema"];
+        };
+    };
+    EditarRecepcion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Formulario"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
         };
     };
     ConfirmarRecepcion: {
@@ -1945,6 +2125,8 @@ export interface operations {
                             pagado: string;
                             /** Format: date-time */
                             anuladaAt: string | null;
+                            /** @description de una nota de crédito */
+                            aplicaA?: string | null;
                         }[];
                         /** Format: double */
                         impago: number;
@@ -1953,6 +2135,7 @@ export interface operations {
                         /** Format: double */
                         impagoVencido: number;
                         hayMas: boolean;
+                        chequesAReponer: components["schemas"]["FacturaConSaldo"][];
                     };
                 };
             };
@@ -2004,6 +2187,27 @@ export interface operations {
             cookie?: never;
         };
         requestBody: components["requestBodies"]["Formulario"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    AplicarNotaDeCredito: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    facturaId: string;
+                };
+            };
+        };
         responses: {
             200: components["responses"]["Hecho"];
             422: components["responses"]["Problema"];
@@ -2393,6 +2597,21 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    AnularGasto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Motivo"];
+        responses: {
+            200: components["responses"]["Hecho"];
+            422: components["responses"]["Problema"];
+        };
+    };
     GastosPorCategoria: {
         parameters: {
             query: {
@@ -2460,6 +2679,13 @@ export interface operations {
                         turnoAbierto: string | null;
                         /** @description el turno abierto lo abrió quien pregunta */
                         deLaSesion: boolean;
+                        /**
+                         * Format: double
+                         * @description el efectivo del turno abierto
+                         */
+                        enCaja: number | null;
+                        /** Format: double */
+                        cambioFijo: number;
                     }[];
                 };
             };

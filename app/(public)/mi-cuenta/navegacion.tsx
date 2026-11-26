@@ -21,8 +21,10 @@ import {
  * un cero dibujado en gris ocupa lugar y no dice nada. Así la barra contesta
  * "¿tengo algo pendiente?" antes de entrar a ninguna pantalla.
  *
- * En escritorio es una columna al costado; en el teléfono, una fila de píldoras
- * que se desliza, que es lo que se puede tocar con el pulgar.
+ * En escritorio es una columna al costado; en el teléfono, píldoras que bajan
+ * de renglón. Antes era una fila que se deslizaba de costado y la sección en
+ * la que uno estaba quedaba fuera de la vista (mes simulado, H093): en el
+ * sitio nada se corre de costado.
  */
 const SECCIONES = [
   { href: "/mi-cuenta", titulo: "Resumen", icono: LayoutGrid, exacto: true },
@@ -65,7 +67,7 @@ export function NavegacionCuenta({
 
   return (
     <nav aria-label="Secciones de mi cuenta">
-      <ul className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-2 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
+      <ul className="flex flex-wrap gap-1.5 lg:flex-col lg:flex-nowrap">
         {visibles.map((seccion) => {
           const activa =
             "exacto" in seccion && seccion.exacto
@@ -74,7 +76,7 @@ export function NavegacionCuenta({
           const contador = contadores[seccion.href] ?? 0;
 
           return (
-            <li key={seccion.href} className="shrink-0 lg:shrink">
+            <li key={seccion.href} className="lg:shrink">
               <Link
                 href={seccion.href}
                 aria-current={activa ? "page" : undefined}
@@ -86,10 +88,10 @@ export function NavegacionCuenta({
                  * por ella una librería que baja todo el que entra a cualquier
                  * página salía mucho más caro de lo que valía.
                  */
-                className={`relative flex items-center gap-[11px] rounded-[10px] px-3 py-[11px] text-[15px] transition-colors lg:w-full ${
+                className={`relative flex min-h-11 items-center gap-2 rounded-[10px] px-3 py-2 text-[15px] transition-colors lg:w-full lg:gap-[11px] lg:py-[11px] ${
                   activa
-                    ? "bg-card font-semibold text-foreground shadow-[inset_3px_0_0_0_var(--color-accion),0_1px_2px_rgb(60_50_40_/_0.06)]"
-                    : "text-texto-2 hover:bg-black/[0.03] hover:text-foreground"
+                    ? "bg-card font-semibold text-foreground shadow-[inset_0_-3px_0_0_var(--color-accion),0_1px_2px_rgb(60_50_40_/_0.06)] lg:shadow-[inset_3px_0_0_0_var(--color-accion),0_1px_2px_rgb(60_50_40_/_0.06)]"
+                    : "bg-hundida text-texto-2 hover:text-foreground lg:bg-transparent lg:hover:bg-black/[0.03]"
                 }`}
               >
                 <seccion.icono
@@ -101,7 +103,7 @@ export function NavegacionCuenta({
 
                 {contador > 0 && (
                   <span
-                    className="tabular ml-auto flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-naranja-claro px-1.5 text-[12.5px] font-semibold text-acento-sobre-claro"
+                    className="tabular flex h-[22px] lg:ml-auto min-w-[22px] items-center justify-center rounded-full bg-naranja-claro px-1.5 text-[12.5px] font-semibold text-acento-sobre-claro"
                     aria-label={`${contador} pendiente${contador === 1 ? "" : "s"}`}
                   >
                     {contador}

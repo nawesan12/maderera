@@ -1,6 +1,7 @@
 "use client";
 
 import type { PiezaFijada, PlanoDeCorte } from "@/lib/cortes/tipos";
+import type { QuienSeQueda } from "@/lib/cortes/de-quien";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
 
 /**
@@ -22,6 +23,7 @@ export function PlanoEnVivo({
   medidaSupuesta,
   fijadas,
   onFijadas,
+  quien = {},
 }: {
   plano: PlanoDeCorte;
   /** Si la medida no salió del catálogo y se está asumiendo una de plaza. */
@@ -29,6 +31,13 @@ export function PlanoEnVivo({
   /** Las piezas mandadas a mano a una placa. */
   fijadas: PiezaFijada[];
   onFijadas: (f: PiezaFijada[]) => void;
+  /**
+   * Lo mismo que va a decir la ficha: la reposición no cobra pasadas y el
+   * pedido que vende todas las placas las vende enteras (mes simulado: con
+   * «Reposición sin cargo» prendido decía «Se cobra el corte · 2 pasadas a
+   * cobrar»).
+   */
+  quien?: QuienSeQueda & { todasDelCliente?: boolean };
 }) {
   const { placaLargo, placaAncho } = plano;
 
@@ -44,7 +53,7 @@ export function PlanoEnVivo({
 
   return (
     <div className="space-y-4">
-      <Numeros plano={plano} />
+      <Numeros plano={plano} quien={quien} />
 
       {medidaSupuesta && (
         <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base">
@@ -70,30 +79,41 @@ export function PlanoEnVivo({
         </p>
       )}
 
-      <PlanoEditable plano={plano} fijadas={fijadas} onFijadas={onFijadas} />
+      <PlanoEditable plano={plano} fijadas={fijadas} onFijadas={onFijadas} quien={quien} />
     </div>
   );
 }
 
-function Numeros({ plano }: { plano: PlanoDeCorte }) {
+function Numeros({
+  plano,
+  quien,
+}: {
+  plano: PlanoDeCorte;
+  quien: QuienSeQueda & { todasDelCliente?: boolean };
+}) {
+  const n = plano.placas.length;
+  const enteras = quien.todasDelCliente ? n : plano.placasEnteras;
+  const pasadas = quien.todasDelCliente ? 0 : plano.pasadasCobrables;
+  const placas = quien.media ? (n === 1 ? "media placa" : "medias placas") : n === 1 ? "placa" : "placas";
+  const seVenden = quien.media
+    ? enteras === 1 ? "media se vende" : "medias se venden"
+    : enteras === 1 ? "se vende entera" : "se venden enteras";
   return (
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-linea bg-linea sm:grid-cols-4">
+      <Celda valor={String(n)} rotulo={placas} />
+      {/* La reposición no vende nada: sin la cifra de lo que se vende. */}
+      {quien.sinCargo ? (
+        <Celda valor="Sin cargo" rotulo="reposición" destacada />
+      ) : (
+        <Celda valor={String(enteras)} rotulo={seVenden} destacada={enteras > 0} />
+      )}
       <Celda
-        valor={String(plano.placas.length)}
-        rotulo={plano.placas.length === 1 ? "placa" : "placas"}
-      />
-      <Celda
-        valor={String(plano.placasEnteras)}
+        valor={String(quien.sinCargo ? plano.pasadasCobrables : pasadas)}
         rotulo={
-          plano.placasEnteras === 1
-            ? "se vende entera"
-            : "se venden enteras"
+          quien.sinCargo
+            ? plano.pasadasCobrables === 1 ? "pasada" : "pasadas"
+            : pasadas === 1 ? "pasada a cobrar" : "pasadas a cobrar"
         }
-        destacada={plano.placasEnteras > 0}
-      />
-      <Celda
-        valor={String(plano.pasadasCobrables)}
-        rotulo="pasadas a cobrar"
       />
       <Celda
         valor={

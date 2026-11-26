@@ -16,10 +16,16 @@ import { useTransition } from "react";
  */
 export function SelectorDeRubro({
   actual,
-  rubros,
+  grupos,
 }: {
   actual: string;
-  rubros: { slug: string; name: string }[];
+  /**
+   * Los rubros de cada categoría. Van agrupados y en orden alfabético: el
+   * mismo nombre vive en varias categorías («Accesorios» en tres) y en una
+   * lista plana se veía repetido sin saber cuál era cuál (simulación del
+   * mes, H069).
+   */
+  grupos: { categoria: string; rubros: { id: string; slug: string; name: string }[] }[];
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
@@ -43,10 +49,16 @@ export function SelectorDeRubro({
         className="h-11 rounded-lg border border-linea bg-card px-3 text-base outline-none transition-colors focus:border-accion/50"
       >
         <option value="todos">Todos los rubros</option>
-        {rubros.map((r) => (
-          <option key={r.slug} value={r.slug}>
-            {r.name}
-          </option>
+        {grupos.map((g) => (
+          <optgroup key={g.categoria} label={g.categoria}>
+            {/* Por id: el slug se repite entre categorías y elegir
+                «Accesorios» de Placas traía los de las tres (H069). */}
+            {g.rubros.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
     </label>

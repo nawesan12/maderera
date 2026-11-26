@@ -526,3 +526,29 @@ func TestCorteDelCarritoConTope(t *testing.T) {
 		t.Fatalf("se abrieron %v cortes", n)
 	}
 }
+
+// Los renglones del corte comprado en la tienda son del corte (del_corte),
+// como en el mostrador: sin la marca, la ficha del corte cobraba «Fuera del
+// pedido» las pasadas que la compra ya cobró (mes simulado, CRT-3).
+func TestLaCompraMarcaLosRenglonesDelCorte(t *testing.T) {
+	e := armar(t)
+	c := e.anonimo()
+	u := e.srv.URL + "/api/v1/carrito"
+	pedir(t, c, "POST", u+"/items", map[string]any{"variantId": e.tirante, "descripcion": "Tirante", "cantidad": 1})
+	cart := e.id(t, `select id::text from carts limit 1`)
+	e.exec(t, `update product_variants set largo_mm = 2440, ancho_mm = 1220 where id = $1`, e.placa)
+	e.exec(t, `insert into cutting_rates (material, precio_por_pasada) values ('Placas', 1000)`)
+	e.exec(t, `insert into cart_cortes (cart_id, variant_id, material_descripcion, placa_largo_mm, placa_ancho_mm, piezas, placas, pasadas, total)
+		values ($1, $2, 'Fenólico', 2440, 1220, '[{"largoMm":600,"anchoMm":300,"cantidad":2,"respetaVeta":0}]', 1, 2, '2000')`, cart, e.placa)
+	code, b := pedir(t, c, "POST", u+"/confirmar", e.compra(nil))
+	if code != 200 {
+		t.Fatalf("confirmar: %d %s", code, b)
+	}
+	compra := leer[Compra](t, b)
+	if n := e.numero(t, `select count(*) from order_items where order_id = $1 and unidad = 'pasada' and del_corte`, compra.PedidoID); n != 1 {
+		t.Fatalf("pasadas del corte marcadas: %v", n)
+	}
+	if n := e.numero(t, `select count(*) from order_items where order_id = $1 and variant_id = $2 and del_corte`, compra.PedidoID, e.tirante); n != 0 {
+		t.Fatalf("el tirante del carrito quedó como del corte")
+	}
+}

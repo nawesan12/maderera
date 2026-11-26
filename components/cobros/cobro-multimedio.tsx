@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import { NOMBRE_DEL_MEDIO, esCheque, type MedioDeCobro } from "@/lib/cobros/partes";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /**
  * Con qué paga el cliente, renglón por renglón.
@@ -73,6 +74,9 @@ export function CobroMultimedio({
   medios = MEDIOS_POR_OMISION,
   medioInicial = "efectivo",
   circuito = "blanco",
+  onTotal,
+  onEfectivo,
+  delCliente = false,
 }: {
   /** Lo que se espera cobrar. Es lo que se propone en el primer renglón. */
   aCobrar: number;
@@ -81,6 +85,12 @@ export function CobroMultimedio({
   medioInicial?: MedioDeCobro;
   /** En el circuito B no se ofrece el e-Cheq: queda a nombre de la empresa. */
   circuito?: "blanco" | "negro";
+  /** Lo que suman los renglones, cada vez que cambia. */
+  onTotal?: (total: number) => void;
+  /** Si algún renglón es efectivo, cada vez que cambia: el efectivo pide caja. */
+  onEfectivo?: (hay: boolean) => void;
+  /** Lo llena el cliente en Mi cuenta: las etiquetas le hablan a él (H217). */
+  delCliente?: boolean;
 }) {
   const id = useId();
   const [renglones, setRenglones] = useState<Renglon[]>(() => [
@@ -92,6 +102,13 @@ export function CobroMultimedio({
   const disponibles = medios.filter((m) => !(m === "echeq" && circuito === "negro"));
   const total = renglones.reduce((s, r) => s + (parsearImporte(r.importe) || 0), 0);
   const diferencia = Math.round((aCobrar - total) * 100) / 100;
+  useEffect(() => {
+    onTotal?.(total);
+  }, [total, onTotal]);
+  const hayEfectivo = renglones.some((r) => r.medio === "efectivo");
+  useEffect(() => {
+    onEfectivo?.(hayEfectivo);
+  }, [hayEfectivo, onEfectivo]);
 
   function cambiar(clave: number, campo: keyof Renglon, valor: string) {
     setRenglones((prev) => prev.map((r) => (r.clave === clave ? { ...r, [campo]: valor } : r)));
@@ -135,7 +152,7 @@ export function CobroMultimedio({
             <li key={r.clave} className="tarjeta-hundida space-y-2.5 rounded-xl p-3">
               <div className="flex flex-wrap items-end gap-2.5">
                 <label className="min-w-40 flex-1 text-sm text-muted-foreground">
-                  {renglones.length > 1 ? `Medio ${i + 1}` : "Con qué paga"}
+                  {renglones.length > 1 ? `Medio ${i + 1}` : delCliente ? "¿Con qué pagás?" : "Con qué paga"}
                   <select
                     autoFocus={r.clave === recienAgregado}
                     value={r.medio}
@@ -198,8 +215,7 @@ export function CobroMultimedio({
                   </label>
                   <label className="text-sm text-muted-foreground">
                     Fecha de pago
-                    <input
-                      type="date"
+                    <CampoFecha
                       value={r.fechaPago}
                       onChange={(e) => cambiar(r.clave, "fechaPago", e.target.value)}
                       required
@@ -207,7 +223,7 @@ export function CobroMultimedio({
                     />
                   </label>
                   <label className="text-sm text-muted-foreground sm:col-span-3">
-                    Librador <span className="font-normal">(si no es el cliente)</span>
+                    Librador <span className="font-normal">{delCliente ? "(si no sos vos)" : "(si no es el cliente)"}</span>
                     <input
                       value={r.librador}
                       onChange={(e) => cambiar(r.clave, "librador", e.target.value)}
@@ -250,10 +266,11 @@ export function CobroMultimedio({
         <p className="tabular text-base" aria-live="polite">
           Suma <strong>{formatearMonto(total)}</strong>
           {aCobrar > 0 && Math.abs(diferencia) >= 0.01 && (
-            <span className={diferencia > 0 ? "text-muted-foreground" : "estado-espera"}>
+            <span className={diferencia > 0 ? "text-muted-foreground" : "estado-problema font-semibold"}>
               {" · "}
               {diferencia > 0
-                ? `faltan ${formatearMonto(diferencia)}`
+                ? // Un pago a cuenta es válido: lo que no se cobra queda debiendo, no «falta».
+                  `quedan ${formatearMonto(diferencia)} por cobrar`
                 : `${formatearMonto(-diferencia)} más de lo que debe`}
             </span>
           )}

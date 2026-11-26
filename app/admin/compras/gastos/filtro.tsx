@@ -4,7 +4,7 @@ import {
   BotonesDeFiltro,
   useFiltrosDeLista,
 } from "@/components/admin/filtros-de-lista";
-import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 
 /**
  * Cortar los gastos por circuito de facturación.
@@ -14,6 +14,7 @@ import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
  * `lib/db/schema/circuito.ts`.
  */
 export function FiltroDeCircuito({ actual }: { actual: string }) {
+  const etiquetasCircuito = useEtiquetasDelCircuito();
   const { actualizar } = useFiltrosDeLista({
     ruta: "/admin/compras/gastos",
     neutros: ["todos"],
@@ -26,8 +27,8 @@ export function FiltroDeCircuito({ actual }: { actual: string }) {
       alElegir={(v) => actualizar({ circuito: v })}
       opciones={[
         { valor: "todos", texto: "Los dos" },
-        { valor: "blanco", texto: ETIQUETA_CIRCUITO.blanco },
-        { valor: "negro", texto: ETIQUETA_CIRCUITO.negro },
+        { valor: "blanco", texto: etiquetasCircuito.blanco },
+        { valor: "negro", texto: etiquetasCircuito.negro },
       ]}
     />
   );

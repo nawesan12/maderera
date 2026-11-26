@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Vacio } from "@/components/admin/vacio";
 import { puedeEntrar } from "@/lib/roles";
 import { requireStaff } from "@/lib/dal/session";
-import { hayFiltro } from "@/lib/formato";
+import { formatearMonto, hayFiltro } from "@/lib/formato";
 import { redirect } from "next/navigation";
 import {
   Building2,
@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   MessageCircle,
+  MessageSquareText,
   Printer,
   Users,
 } from "lucide-react";
@@ -271,22 +272,26 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           >
             {cliente.nombre}
           </Link>
-          {cliente.razonSocial && (
-            <p className="flex items-center gap-1 truncate text-sm text-muted-foreground">
-              <Building2 className="h-3.5 w-3.5 shrink-0" />
-              {cliente.razonSocial}
+          {/* La empresa entera, sin cortar: cortada («Sim Carpinterí»,
+              «RF Construcciones…») no se sabía cuál era. Por eso el estado
+              baja al renglón del rubro y la columna queda para el nombre y
+              la empresa. Igual al nombre, no se repite. */}
+          {cliente.razonSocial && cliente.razonSocial !== cliente.nombre && (
+            <p className="flex items-start gap-1 text-sm text-muted-foreground">
+              <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="break-words">{cliente.razonSocial}</span>
             </p>
           )}
-          {/* El rubro, que es por donde se corta la lista. El tipo
-              —particular o profesional— sigue estando en el color del
-              círculo de las iniciales y en la ficha. */}
-          <p className="text-sm text-muted-foreground">
-            {etiquetaDeRubro(cliente.rubro)}
+          {/* El rubro, que es por donde se corta la lista, con el estado al
+              lado. El tipo —particular o profesional— sigue estando en el
+              color del círculo de las iniciales y en la ficha. */}
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span>{etiquetaDeRubro(cliente.rubro)}</span>
+            <EtiquetaEstado estado={cliente.estado} />
           </p>
         </div>
 
-        <span className="flex shrink-0 items-start gap-1.5">
-          <EtiquetaEstado estado={cliente.estado} />
+        <span className="flex shrink-0 items-start">
           {/*
             Lo que se hace con un cliente sin entrar a su ficha.
 
@@ -318,6 +323,17 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
                   : undefined,
                 deshabilitada: !cliente.telefono,
               },
+              // Con deuda, la gestión de cobro arranca acá con el cliente y
+              // el importe puestos (mes simulado: se tipeaban a mano).
+              ...(cliente.saldo > 0
+                ? [
+                    {
+                      texto: "Seguimiento de cobro",
+                      icono: <MessageSquareText className="h-4 w-4" aria-hidden="true" />,
+                      href: `/admin/clientes/seguimiento?cliente=${cliente.id}`,
+                    },
+                  ]
+                : []),
               {
                 texto: "Resumen de cuenta",
                 icono: <Printer className="h-4 w-4" aria-hidden="true" />,
@@ -374,7 +390,7 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
               excedido ? "text-saldo-debe" : cliente.saldo > 0 ? "" : "text-muted-foreground"
             }`}
           >
-            {cliente.saldo > 0 ? moneda.format(cliente.saldo) : "Al día"}
+            {cliente.saldo > 0 ? formatearMonto(cliente.saldo) : "Al día"}
           </dd>
         </div>
         <div className="text-right">
@@ -403,7 +419,7 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {excedido
-              ? `Excede el límite en ${moneda.format(cliente.saldo - cliente.limiteCredito)}`
+              ? `Excede el límite en ${formatearMonto(cliente.saldo - cliente.limiteCredito)}`
               : `Límite ${moneda.format(cliente.limiteCredito)}`}
           </p>
         </div>

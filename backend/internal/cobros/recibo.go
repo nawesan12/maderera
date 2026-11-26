@@ -13,6 +13,7 @@ import (
 
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -113,7 +114,9 @@ func huella(c Cobro) string {
 func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error) {
 	q := sqlc.New(tx)
 	if p := Revisar(c.Partes, c.Circuito); p != "" {
-		return ReciboEmitido{}, errCobro(p)
+		// Revisar es puro (golden del TS): el nombre del circuito lo pone la
+		// regla etiqueta_del_circuito.
+		return ReciboEmitido{}, errCobro(strings.Replace(p, "circuito B", reglas.Circuito(ctx, tx), 1))
 	}
 	// Aparte de Revisar, que es el revisarPartes del TS con su golden: la
 	// fecha depende de hoy.
@@ -121,6 +124,9 @@ func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error
 		return ReciboEmitido{}, errCobro(p)
 	}
 	total := TotalDePartes(importes(c.Partes))
+	if err := revisarReferenciasUsadas(ctx, tx, c.Partes); err != nil {
+		return ReciboEmitido{}, err
+	}
 
 	var marca *string
 	if c.Clave != "" {
@@ -461,4 +467,34 @@ func nuloSiVacio(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// revisarReferenciasUsadas frena una transferencia o un depósito cuya
+// referencia ya está en otro recibo vivo (mes simulado, H253: la misma
+// Sim-TRF-880101 canceló dos deudas de clientes distintos, y en el extracto
+// hay una sola). Lo que vino del portal o de Mercado Pago trae su pago
+// atado y no se mira: lo concilia Cobros.
+func revisarReferenciasUsadas(ctx context.Context, tx pgx.Tx, partes []Parte) error {
+	for _, p := range partes {
+		if p.Medio != "transferencia" && p.Medio != "deposito" || p.Referencia == nil || p.PaymentID != nil {
+			continue
+		}
+		ref := strings.TrimSpace(*p.Referencia)
+		if ref == "" {
+			continue
+		}
+		var numero string
+		err := tx.QueryRow(ctx, `
+			SELECT r.numero FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id
+			WHERE r.estado <> 'anulado' AND rp.medio::text IN ('transferencia', 'deposito') AND lower(trim(rp.referencia)) = lower($1)
+			LIMIT 1`, ref).Scan(&numero)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		return errCobro("La referencia " + ref + " ya está en el recibo " + numero + ": una transferencia cancela una sola vez.")
+	}
+	return nil
 }

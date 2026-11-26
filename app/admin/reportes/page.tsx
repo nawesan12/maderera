@@ -87,6 +87,11 @@ export default async function ReportesPage({
   const vendidoSinCosto = vendido - conCosto;
   const sinCosto = totales.lineasSinCosto;
 
+  // Los cortes por renglón suman subtotales y unidades, sin el envío del
+  // pedido: el encabezado dice unidades (no operaciones) y el envío aparte,
+  // que es la diferencia con el «Vendido con IVA» del inicio (H138).
+  const porRenglon = corte === "producto" || corte === "rubro" || corte === "elaboracion";
+
   const etiquetaCorte =
     CORTES.find((c) => c.clave === corte)?.etiqueta ?? "Por producto";
 
@@ -101,7 +106,11 @@ export default async function ReportesPage({
         titulo="Reportes"
         resumen={
           filas.length > 0
-            ? `${etiquetaCorte.toLowerCase()} · ${formatearMonto(total)} en ${plural(operaciones, "operación", "operaciones")}`
+            ? `${etiquetaCorte.toLowerCase()} · ${formatearMonto(total)} en ${
+                porRenglon
+                  ? plural(operaciones, "unidad", "unidades")
+                  : plural(operaciones, "operación", "operaciones")
+              }${porRenglon && totales.envios > 0 ? ` · ${formatearMonto(totales.envios)} de envíos` : ""}`
             : "Sin ventas en el período elegido"
         }
       >
@@ -209,23 +218,24 @@ export default async function ReportesPage({
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-5 py-2.5 font-semibold">
-                  {etiquetaCorte.replace("Por ", "")}
+                  {/* «Por producto» → «Producto», no «producto». */}
+                  {etiquetaCorte.replace(/^Por (.)/, (_, l: string) => l.toUpperCase())}
                 </th>
-                <th className="px-5 py-2.5 text-right font-semibold">
+                <th className="px-3 py-2.5 text-right font-semibold">
                   {corte === "producto" ? "Unidades" : "Operaciones"}
                 </th>
-                <th className="px-5 py-2.5 text-right font-semibold">Total</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Total</th>
                 {hayMargen && (
                   <>
-                    <th className="px-5 py-2.5 text-right font-semibold">
+                    <th className="px-3 py-2.5 text-right font-semibold">
                       Costo
                     </th>
-                    <th className="px-5 py-2.5 text-right font-semibold">
+                    <th className="px-3 py-2.5 text-right font-semibold">
                       Margen
                     </th>
                   </>
                 )}
-                <th className="px-5 py-2.5 text-right font-semibold">
+                <th className="px-3 py-2.5 text-right font-semibold">
                   Participación
                 </th>
               </tr>
@@ -236,26 +246,29 @@ export default async function ReportesPage({
 
                 return (
                   <tr key={f.clave}>
-                    <td className="px-5 py-3">
+                    {/* El nombre puede partirse y el detalle va debajo: con
+                        un nombre largo la tabla no entraba a 1280 px y se
+                        apilaba en tarjetas (mes simulado). */}
+                    <td className="px-5 py-3 [overflow-wrap:anywhere]">
                       {f.etiqueta}
                       {f.detalle && (
-                        <span className="ml-2 text-sm text-muted-foreground">
+                        <span className="block text-sm text-muted-foreground">
                           {f.detalle}
                         </span>
                       )}
                     </td>
-                    <td className="tabular px-5 py-3 text-right">
+                    <td className="tabular px-3 py-3 text-right">
                       {f.cantidad.toLocaleString("es-AR")}
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
+                    <td className="tabular px-3 py-3 text-right font-semibold">
                       {formatearMonto(f.total)}
                     </td>
                     {hayMargen && (
                       <>
-                        <td className="tabular px-5 py-3 text-right text-muted-foreground">
+                        <td className="tabular px-3 py-3 text-right text-muted-foreground">
                           {f.costo === null ? "—" : formatearMonto(f.costo)}
                         </td>
-                        <td className="px-5 py-3 text-right">
+                        <td className="px-3 py-3 text-right">
                           {f.costo === null ? (
                             <span className="estado-problema text-sm font-medium">
                               sin costo
@@ -274,19 +287,26 @@ export default async function ReportesPage({
                               return (
                                 <>
                                   <span
-                                    className={`tabular font-semibold ${
+                                    className={`tabular whitespace-nowrap font-semibold ${
                                       margen < 0
                                         ? "text-saldo-debe"
                                         : "text-saldo-favor"
                                     }`}
                                   >
                                     {formatearMonto(margen)}
+                                    {/* Con su separador: en la tarjeta del
+                                        teléfono se leía «$ 221.2499,2%». */}
+                                    {/* Con `whitespace-nowrap` propio: la regla del
+                                        panel que deja bajar el texto de las
+                                        tablas lo partía en «$ 519.270,90 ·» /
+                                        «20,6%» a 1280 (tercera prueba, H068). */}
+                                    {pct !== null && (
+                                      <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">
+                                        {" · "}
+                                        {formatearPorcentaje(pct)}
+                                      </span>
+                                    )}
                                   </span>
-                                  {pct !== null && (
-                                    <span className="tabular ml-2 text-sm text-muted-foreground">
-                                      {formatearPorcentaje(pct)}
-                                    </span>
-                                  )}
                                   {f.lineasSinCosto > 0 && (
                                     <span className="estado-problema block text-sm font-medium">
                                       {f.lineasSinCosto} sin costo
@@ -299,11 +319,11 @@ export default async function ReportesPage({
                         </td>
                       </>
                     )}
-                    <td className="px-5 py-3">
+                    <td className="py-3 pl-3 pr-5">
                       {/* La barra vale más que el porcentaje solo: el ojo
                           encuentra al que se lleva la mitad sin leer números. */}
                       <div className="flex items-center justify-end gap-2">
-                        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                           <div
                             className="h-full rounded-full bg-primary"
                             style={{ width: `${parte}%` }}
@@ -330,13 +350,13 @@ export default async function ReportesPage({
                     </span>
                   )}
                 </td>
-                <td className="tabular px-5 py-3 text-right">{totales.cantidad.toLocaleString("es-AR")}</td>
-                <td className="tabular px-5 py-3 text-right">{formatearMonto(totales.total)}</td>
+                <td className="tabular px-3 py-3 text-right">{totales.cantidad.toLocaleString("es-AR")}</td>
+                <td className="tabular px-3 py-3 text-right">{formatearMonto(totales.total)}</td>
                 {hayMargen && (
                   <>
-                    <td className="tabular px-5 py-3 text-right">{formatearMonto(costoTotal)}</td>
+                    <td className="tabular px-3 py-3 text-right">{formatearMonto(costoTotal)}</td>
                     <td
-                      className={`tabular px-5 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}
+                      className={`tabular px-3 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}
                     >
                       {formatearMonto(margenTotal)}
                     </td>

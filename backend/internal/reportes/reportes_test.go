@@ -151,8 +151,10 @@ func TestReporteDeVentasYMeses(t *testing.T) {
 	// (que en UTC ya es octubre) es de septiembre.
 	e.pedido(t, "A-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 2, 10, 0, 0, 0, Argentina), &carp,
 		[4]any{placa, 2.0, 1210.0, 500.0}, [4]any{tirante, 3.0, 300.0, nil})
-	e.pedido(t, "A-2", e.aserradero, "pendiente", "tienda", time.Date(2026, 10, 10, 10, 0, 0, 0, Argentina), nil,
+	// Pendiente de entrega, pero facturado: ya es venta (H162).
+	a2 := e.pedido(t, "A-2", e.aserradero, "pendiente", "tienda", time.Date(2026, 10, 10, 10, 0, 0, 0, Argentina), nil,
 		[4]any{placa, 1.0, 605.0, 250.0})
+	e.facturaConCae(t, nil, 90, 605, "2026-10-10T14:00:00Z", &a2)
 	e.pedido(t, "A-3", e.central, "cancelado", "mostrador", time.Date(2026, 10, 11, 10, 0, 0, 0, Argentina), nil,
 		[4]any{placa, 50.0, 99999.0, 1.0})
 	e.pedido(t, "S-1", e.central, "entregado", "mostrador", time.Date(2026, 9, 30, 22, 0, 0, 0, Argentina), nil,
@@ -275,6 +277,18 @@ func TestReposicion(t *testing.T) {
 	if len(r.Filas) != 1 || r.Filas[0].Disponible != 5 || r.Filas[0].Vendido != 0 || r.CoberturaObjetivo != 180 || r.DiasDelPeriodo != 60 {
 		t.Errorf("aserradero y fenólicos: %s", b)
 	}
+	// El mismo slug en otra categoría: por slug salen los dos, por id solo
+	// el elegido (tercera prueba del mes, H069).
+	otraCat := e.id(t, `insert into categories (slug, name, description) values ('herrajes', 'Herrajes', '') returning id`)
+	otroSub := e.id(t, `insert into subcategories (category_id, slug, name) values ($1, 'fenolicos', 'Fenólicos') returning id`, otraCat)
+	otroProd := e.id(t, `insert into products (slug, name, category_id, subcategory_id, description, unit) values ('bisagra', 'Bisagra', $1, $2, '', 'unidad') returning id`, otraCat, otroSub)
+	e.exec(t, `insert into product_variants (product_id, sku, label) values ($1, 'BIS', '35 mm')`, otroProd)
+	if _, b, _ = pedir(t, adm, e.u+"reportes/reposicion?rubro=fenolicos"); json.Unmarshal([]byte(b), &r) != nil || len(r.Filas) != 2 {
+		t.Errorf("por slug: %s", b)
+	}
+	if _, b, _ = pedir(t, adm, e.u+"reportes/reposicion?rubro="+otroSub); json.Unmarshal([]byte(b), &r) != nil || len(r.Filas) != 1 || r.Filas[0].Producto != "Bisagra" {
+		t.Errorf("por id: %s", b)
+	}
 	c, b, h := pedir(t, adm, e.u+"reportes/reposicion/archivo?dias=45")
 	if c != 200 || !strings.HasPrefix(b, "\ufeffProducto;Medida;Código") || !strings.Contains(h.Get("Content-Disposition"), "reposicion-30dias.csv") {
 		t.Errorf("csv: %d %q %v", c, b, h)
@@ -344,7 +358,9 @@ func TestInicioDelPanel(t *testing.T) {
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	dep := e.staff(t, "deposito@prueba.test", "deposito")
 	placa, _ := e.catalogo(t)
-	e.pedido(t, "I-1", e.central, "pendiente", "mostrador", time.Date(2026, 10, 1, 0, 30, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1000.0, nil})
+	// Sin entregar y facturado: es venta del mes de la factura (H162).
+	i1 := e.pedido(t, "I-1", e.central, "pendiente", "mostrador", time.Date(2026, 10, 1, 0, 30, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1000.0, nil})
+	e.facturaConCae(t, nil, 91, 1000, "2026-10-01T03:30:00Z", &i1)
 	e.pedido(t, "I-2", e.aserradero, "entregado", "mostrador", time.Date(2026, 9, 30, 22, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 500.0, nil})
 	e.exec(t, `insert into quotes (numero, contacto_nombre, estado, total, valido_hasta) values ('P-1', 'X', 'enviado', 10, now() + interval '1 day'), ('P-2', 'Y', 'revision', 20, null)`)
 
@@ -362,7 +378,7 @@ func TestInicioDelPanel(t *testing.T) {
 		t.Errorf("por sucursal: %s", b)
 	}
 	_, b, _ = pedir(t, adm, e.u+"inicio/reponer")
-	if !strings.Contains(b, `"sucursal":"Casa Central","qty":10,"minQty":20`) {
+	if !strings.Contains(b, `"sucursal":"Casa Central","qty":8,"minQty":20`) {
 		t.Errorf("reponer: %s", b)
 	}
 	_, b, _ = pedir(t, adm, e.u+"inicio/actividad")
@@ -469,7 +485,7 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 		values ($1, $2, 'pedido', 'mostrador', 'efectivo', 800, 'aprobado', '2026-10-18T15:00:00Z', '2026-10-18T15:00:00Z')`, m1, cliente)
 	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
 		values ('factura_b', 3, 201, 'Pérez SRL', 661.16, 138.84, 0, 0, 0, 800, 'autorizada', '2026-10-20T15:00:00Z', '76123456789013', $1)`, m1)
-	// Sin factura no hay asiento de venta, así que tampoco de cobro.
+	// Sin factura, el cobro va al archivo B contra Ventas sin factura (H160).
 	m2 := e.pedido(t, "M-0002", e.central, "entregado", "mostrador", time.Date(2026, 10, 18, 13, 0, 0, 0, Argentina), nil)
 	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, created_at)
 		values ($1, 'pedido', 'mostrador', 'efectivo', 999, 'aprobado', '2026-10-18T16:00:00Z')`, m2)
@@ -540,9 +556,23 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 		t.Errorf("Deudores baja %v (en %d asientos de cobro)", neto, n)
 	}
 	for _, a := range asientos {
-		if strings.Contains(a.Concepto, "M-0002") {
-			t.Errorf("la venta sin factura no tiene asiento: %+v", a)
+		if strings.Contains(a.Concepto, "M-0002") && a.Circuito != CircuitoNegro {
+			t.Errorf("la venta sin factura no va al archivo del estudio: %+v", a)
 		}
+	}
+	if a := buscarAsiento(asientos, "Cobro del pedido M-0002"); a == nil || a.Circuito != CircuitoNegro ||
+		a.Renglones[0] != renglon(Cuentas.Caja, 999, 0) || a.Renglones[1] != renglon(Cuentas.VentasSinFactura, 0, 999) {
+		t.Errorf("la venta sin factura en el B: %+v", a)
+	}
+	// La de M-0001 se cobró sin factura: entró al B el 18 y pasó al
+	// archivo del estudio con la factura, el 20.
+	if a := buscarAsiento(asientos, "Cobro del pedido M-0001"); a == nil || a.Circuito != CircuitoNegro ||
+		!a.Fecha.Equal(time.Date(2026, 10, 18, 15, 0, 0, 0, time.UTC)) {
+		t.Errorf("M-0001 en el B: %+v", a)
+	}
+	if a := buscarAsiento(asientos, "Pasa al archivo del estudio · Factura B 0003-00000201"); a == nil || a.Circuito != CircuitoNegro ||
+		a.Renglones[0] != renglon(Cuentas.VentasSinFactura, 800, 0) {
+		t.Errorf("M-0001 sale del B: %+v", a)
 	}
 }
 
@@ -646,10 +676,13 @@ func TestLoQueVenceEn48HorasEsDeHoy(t *testing.T) {
 		('entregado', '2002', 'Nación', now() + interval '5 days', 100, 'entregado')`)
 	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
 	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
-		values ($1, 'factura_a', 1, 1, 100, 0, 0, 0, 0, 100, now(), now() + interval '30 hours'),
-		       ($1, 'factura_a', 1, 2, 100, 0, 0, 0, 0, 100, now(), now() + interval '6 days'),
-		       ($1, 'factura_a', 1, 3, 100, 0, 0, 0, 0, 100, now() - interval '20 days', now() - interval '2 days'),
-		       ($1, 'factura_a', 1, 4, 100, 0, 0, 0, 0, 100, now() - interval '20 days', now() - interval '3 days')`, prov)
+		values ($1, 'factura_a', 1, 1, 100, 0, 0, 0, 0, 100, $2, $2::timestamptz + interval '30 hours'),
+		       ($1, 'factura_a', 1, 2, 100, 0, 0, 0, 0, 100, $2, $2::timestamptz + interval '6 days'),
+		       ($1, 'factura_a', 1, 3, 100, 0, 0, 0, 0, 100, $2::timestamptz - interval '20 days', $2::timestamptz - interval '2 days'),
+		       ($1, 'factura_a', 1, 4, 100, 0, 0, 0, 0, 100, $2::timestamptz - interval '20 days', $2::timestamptz - interval '3 days')`, prov, ahoraDePrueba)
+	// Los cortes de día de las facturas son los de «Debo» (el día de la
+	// prueba), y cuentan solo si el libro del proveedor debe algo.
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto) values ($1, 'factura', 400)`, prov)
 	ps, err := e.s.PendientesDelRol(context.Background(), "admin")
 	if err != nil {
 		t.Fatal(err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"math"
 	"net/http"
 
@@ -11,7 +12,9 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -77,7 +80,16 @@ func (o respuesta) VisitCobrarCuentaEnMostradorResponse(w http.ResponseWriter) e
 func (o respuesta) VisitPresupuestoDeMostradorResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitAbrirCajaResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitAbrirCajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitDevolucionDeMostradorDatosResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDevolucionDeMostradorResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDevolucionDeMostradorCalculoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitMovimientoDeCajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCerrarCajaResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitDesvincularTerminalResponse(w http.ResponseWriter) error {
@@ -157,7 +169,7 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	if !res.Ok {
 		return nil, plataforma.Invalido(map[string]string{"error": res.Error})
 	}
-	desc := "Anuló la venta " + res.Numero + " ($" + f2(res.Total) + "): " + zodjs.TrimJS(b.Motivo)
+	desc := "Anuló la venta " + res.Numero + " (" + formato.Importe(res.Total) + "): " + zodjs.TrimJS(b.Motivo)
 	if !pedido.VolvioLaMercaderia {
 		desc += ". La mercadería no volvió"
 	}
@@ -168,13 +180,190 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	a.s.anotar(ctx, ses, sqlc.AccionAuditoriaAnular, "pedido", r.Id, desc, detalle)
 	out := map[string]any{"ok": "Venta anulada.", "porAfuera": res.PorAfuera}
 	if res.PorAfuera > 0.005 {
-		out["ok"] = "Venta anulada. Por afuera se devuelven " + formato.Moneda(res.PorAfuera) + "."
+		out["ok"] = "Venta anulada. Por afuera se devuelven " + formato.Importe(res.PorAfuera) + "."
 	}
 	if res.FacturaPendiente != nil {
 		out["facturaPendiente"] = *res.FacturaPendiente
 		out["facturaSinCae"] = res.FacturaSinCAE
+		// El vendedor no entra a Facturación: la factura que quedó viva se
+		// le avisa a administración en el momento, en vez de mandarlo a una
+		// pantalla que no puede abrir (mes simulado, H178). En Caja queda
+		// marcada como «factura sin nota de crédito» hasta que se resuelva.
+		if !ses.Tiene(sqlc.StaffRoleAdmin) {
+			que := "emitirle la nota de crédito"
+			if res.FacturaSinCAE {
+				que = "darla de baja"
+			}
+			a.s.aut.Avisar(ctx, "Factura de una venta anulada", res.Numero+" se anuló en el mostrador ("+ses.Nombre+") y su factura quedó viva: hay que "+que+".")
+			out["avisado"] = true
+		}
 	}
+	// Lo que tenía la venta, para «Rehacer»: anular y volver a cargarla con
+	// otro cliente sin que el stock salga dos veces (H269). El precio es el de
+	// lista del renglón (el descuento de la venta ya estaba repartido en el
+	// precio, y rehacerla lo aplicaría otra vez). Los renglones de un corte
+	// no: el corte se vuelve a armar.
+	renglones, conCorte, err := renglonesParaRehacer(ctx, a.s, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	out["renglones"], out["conCorte"] = renglones, conCorte
 	return ok(out), nil
+}
+
+// renglonesParaRehacer son los renglones de la venta que no salen de un
+// corte, con su precio de lista si lo tienen.
+func renglonesParaRehacer(ctx context.Context, s *Servicio, pedido string) ([]map[string]any, bool, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT variant_id, descripcion, unidad, cantidad, coalesce(precio_lista, precio_unitario), presentacion, del_corte
+		FROM order_items WHERE order_id::text = $1 ORDER BY orden, id`, pedido)
+	if err != nil {
+		return nil, false, err
+	}
+	defer filas.Close()
+	out := []map[string]any{}
+	conCorte := false
+	for filas.Next() {
+		var variante, presentacion *string
+		var descripcion, unidad string
+		var cantidad, precio jsmath.Num
+		var delCorte bool
+		if err := filas.Scan(&variante, &descripcion, &unidad, &cantidad, &precio, &presentacion, &delCorte); err != nil {
+			return nil, false, err
+		}
+		if delCorte {
+			conCorte = true
+			continue
+		}
+		out = append(out, map[string]any{"variantId": variante, "descripcion": descripcion, "unidad": unidad,
+			"cantidad": cantidad.F(), "precioUnitario": precio.F(), "presentacion": presentacion})
+	}
+	return out, conCorte, filas.Err()
+}
+
+// facturaDeLaVenta es la factura (no su nota) de una venta del mostrador.
+func (a *API) facturaDeLaVenta(ctx context.Context, pedido string) (string, error) {
+	var id string
+	err := a.s.pool.QueryRow(ctx, `SELECT i.id::text FROM invoices i JOIN orders o ON o.id = i.order_id
+		WHERE o.id::text = $1 AND o.origen = 'mostrador' AND i.tipo::text NOT LIKE 'nota%' AND i.estado <> 'anulada'
+		ORDER BY i.created_at LIMIT 1`, pedido).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", plataforma.NuevoProblema(http.StatusNotFound, "Esa venta no tiene factura: anulala y volvé a cobrar lo que se lleva.")
+	}
+	return id, err
+}
+
+// DevolucionDeMostradorDatos es la ficha de la devolución desde el
+// mostrador (mes simulado, H270): devolver uno de cuatro obligaba a anular
+// la venta entera, devolver todo a la tarjeta y cobrar de nuevo.
+func (a *API) DevolucionDeMostradorDatos(ctx context.Context, r mostradorapi.DevolucionDeMostradorDatosRequestObject) (mostradorapi.DevolucionDeMostradorDatosResponseObject, error) {
+	if _, err := puesto(ctx); err != nil {
+		return nil, err
+	}
+	if a.s.fac == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "La devolución no está disponible.")
+	}
+	factura, err := a.facturaDeLaVenta(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	d, err := a.s.fac.ParaDevolver(ctx, factura)
+	if err != nil || d == nil {
+		if err == nil || errors.Is(err, facturacion.ErrNoEsta) {
+			return nil, plataforma.NuevoProblema(http.StatusNotFound, "Esa venta no tiene nada para devolver.")
+		}
+		return nil, err
+	}
+	return ok(d), nil
+}
+
+func renglonesDelMostrador(rs []mostradorapi.MostradorRenglonADevolver) []facturacion.RenglonADevolver {
+	out := make([]facturacion.RenglonADevolver, len(rs))
+	for i, x := range rs {
+		out[i] = facturacion.RenglonADevolver{ItemID: x.ItemId, Cantidad: x.Cantidad, AlStock: x.AlStock, DelAcopio: x.DelAcopio}
+	}
+	return out
+}
+
+func (a *API) DevolucionDeMostradorCalculo(ctx context.Context, r mostradorapi.DevolucionDeMostradorCalculoRequestObject) (mostradorapi.DevolucionDeMostradorCalculoResponseObject, error) {
+	if _, err := puesto(ctx); err != nil {
+		return nil, err
+	}
+	if a.s.fac == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "La devolución no está disponible.")
+	}
+	factura, err := a.facturaDeLaVenta(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	total, err := a.s.fac.CalcularDevolucion(ctx, factura, renglonesDelMostrador(r.Body.Renglones))
+	if err != nil {
+		if m := facturacion.Mensaje(err); m != "" {
+			return nil, plataforma.Invalido(map[string]string{"error": m})
+		}
+		return nil, err
+	}
+	return ok(map[string]float64{"importe": total}), nil
+}
+
+// DevolucionDeMostrador la hace. Un vendedor necesita el PIN (o la
+// contraseña) de un admin por el importe, como para anular: es plata que
+// sale de la venta. La sesión de un admin ya firma.
+func (a *API) DevolucionDeMostrador(ctx context.Context, r mostradorapi.DevolucionDeMostradorRequestObject) (mostradorapi.DevolucionDeMostradorResponseObject, error) {
+	ses, err := puesto(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if a.s.fac == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "La devolución no está disponible.")
+	}
+	factura, err := a.facturaDeLaVenta(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	pin, ficha := "", ""
+	if b.Pin != nil {
+		pin = *b.Pin
+	}
+	if b.Ficha != nil {
+		ficha = *b.Ficha
+	}
+	var sucursal string
+	_ = a.s.pool.QueryRow(ctx, `SELECT coalesce(branch_id::text, '') FROM orders WHERE id::text = $1`, r.Id).Scan(&sucursal)
+	firma, err := a.s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Devolver, Monto: b.Importe, Clave: "devolucion:" + b.Clave,
+		Sucursal: sucursal, PIN: pin, Ficha: ficha})
+	var falta *autorizacion.Falta
+	if errors.As(err, &falta) {
+		fa := faltaDeAutorizacion(falta)
+		return ok(map[string]any{"error": fa.Error, "autorizacion": fa.Autorizacion}), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p := facturacion.PedidoDeDevolucion{InvoiceID: factura, Clave: b.Clave, Destino: string(b.Destino), Motivo: b.Motivo,
+		Importe: &b.Importe, Renglones: renglonesDelMostrador(b.Renglones)}
+	if b.SinStock != nil {
+		p.SinStock = string(*b.SinStock)
+	}
+	if b.SucursalId != nil {
+		p.BranchID = *b.SucursalId
+	}
+	d, err := a.s.fac.DevolucionParcial(ctx, ses.UserID, p)
+	if err != nil {
+		if m := facturacion.Mensaje(err); m != "" {
+			return nil, plataforma.Invalido(map[string]string{"error": m})
+		}
+		return nil, err
+	}
+	if !d.Repetida {
+		desc := "Devolución de " + formato.Importe(d.Importe) + " por " + p.Destino + " desde el mostrador: " + zodjs.TrimJS(p.Motivo)
+		if firma != nil && firma.UserID != ses.UserID {
+			desc += " (autorizó " + firma.Nombre + ")"
+		}
+		a.s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "factura", factura, desc, map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID})
+	}
+	return ok(map[string]any{"ok": "Devolución de " + formato.Importe(d.Importe) + " hecha.", "notaId": d.NotaID}), nil
 }
 
 func (a *API) BuscarEnMostrador(ctx context.Context, r mostradorapi.BuscarEnMostradorRequestObject) (mostradorapi.BuscarEnMostradorResponseObject, error) {
@@ -229,6 +418,27 @@ func (a *API) ClientesRecientes(ctx context.Context, r mostradorapi.ClientesReci
 	return ok(v), err
 }
 
+func (o respuesta) VisitPresupuestoParaElMostradorResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// PresupuestoParaElMostrador: el presupuesto que se trae a la venta por su
+// número (mes simulado).
+func (a *API) PresupuestoParaElMostrador(ctx context.Context, r mostradorapi.PresupuestoParaElMostradorRequestObject) (mostradorapi.PresupuestoParaElMostradorResponseObject, error) {
+	if _, err := puesto(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.PresupuestoParaElMostrador(ctx, r.Numero)
+	var ep *ErrPresupuesto
+	if errors.As(err, &ep) {
+		return nil, plataforma.NuevoProblema(http.StatusUnprocessableEntity, ep.Msj)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(p), nil
+}
+
 func (a *API) ClienteDelMostrador(ctx context.Context, r mostradorapi.ClienteDelMostradorRequestObject) (mostradorapi.ClienteDelMostradorResponseObject, error) {
 	if _, err := puesto(ctx); err != nil {
 		return nil, err
@@ -245,7 +455,11 @@ func (a *API) SaldoDeCuentaEnMostrador(ctx context.Context, r mostradorapi.Saldo
 		return nil, err
 	}
 	s, err := a.s.SaldoDeCuenta(ctx, r.Id)
-	return ok(map[string]float64{"saldo": s}), err
+	if err != nil {
+		return nil, err
+	}
+	pendientes, err := a.s.PedidosSinCobrar(ctx, r.Id)
+	return ok(map[string]any{"saldo": s, "sinCobrar": pendientes}), err
 }
 
 func (a *API) CobrarCuentaEnMostrador(ctx context.Context, r mostradorapi.CobrarCuentaEnMostradorRequestObject) (mostradorapi.CobrarCuentaEnMostradorResponseObject, error) {
@@ -310,7 +524,14 @@ func (a *API) AbrirCaja(ctx context.Context, r mostradorapi.AbrirCajaRequestObje
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.AbrirCaja(ctx, ses, r.Body.BranchId, numeroONaN(r.Body.FondoInicial))
+	motivo, puesto := "", ""
+	if r.Body.Motivo != nil {
+		motivo = *r.Body.Motivo
+	}
+	if r.Body.CajaId != nil {
+		puesto = *r.Body.CajaId
+	}
+	m, err := a.s.AbrirCaja(ctx, ses, r.Body.BranchId, numeroONaN(r.Body.FondoInicial), motivo, puesto)
 	if err != nil {
 		return nil, comoProblema(err)
 	}
@@ -322,7 +543,12 @@ func (a *API) MovimientoDeCaja(ctx context.Context, r mostradorapi.MovimientoDeC
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.MovimientoDeCaja(ctx, ses, r.Body.SessionId, string(r.Body.Tipo), numeroONaN(r.Body.Monto), r.Body.Motivo)
+	var destino *string
+	if r.Body.Destino != nil {
+		d := string(*r.Body.Destino)
+		destino = &d
+	}
+	m, err := a.s.MovimientoDeCaja(ctx, ses, r.Body.SessionId, string(r.Body.Tipo), numeroONaN(r.Body.Monto), r.Body.Motivo, destino)
 	if err != nil {
 		return nil, comoProblema(err)
 	}
@@ -354,6 +580,9 @@ type Pantalla struct {
 	// DescuentoLibrePct: la pantalla avisa apenas una venta lo pasa, antes
 	// de cobrar, para llamar al admin mientras se termina de cargar.
 	DescuentoLibrePct float64 `json:"descuentoLibrePct"`
+	// UltimoContado: lo que quedó contado al cerrar el último turno. La
+	// apertura lo propone (caja.UltimoContado).
+	UltimoContado *float64 `json:"ultimoContado"`
 }
 
 // Pantalla junta el turno, sus movimientos, el cierre Z, las ventas de hoy,
@@ -381,6 +610,11 @@ func (s *Servicio) Pantalla(ctx context.Context, sucursal string) (Pantalla, err
 	if p.DescuentoLibrePct, err = PorcentajeLibre(ctx, s.pool); err != nil {
 		return p, err
 	}
+	if p.Turno == nil {
+		if p.UltimoContado, err = caja.UltimoContado(ctx, s.pool, sucursal); err != nil {
+			return p, err
+		}
+	}
 	if p.Turno != nil {
 		if p.Movimientos, err = caja.MovimientosDelTurno(ctx, s.pool, p.Turno.ID); err != nil {
 			return p, err
@@ -407,7 +641,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, v VentaPedida) 
 		return r, nil
 	}
 	if r.Nueva {
-		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por $"+f2(r.Total), controlDeLaVenta(r))
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por "+formato.Importe(r.Total), controlDeLaVenta(r))
 	}
 	return r, nil
 }
@@ -507,10 +741,10 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 			if r.BajoLista {
 				// Ya pasó y no se rechaza, pero queda marcada: va en rojo en el
 				// inicio del panel.
-				desc += ": bajo lista sin autorizar ($" + f2(r.DejadoDeCobrar) + ")"
+				desc += ": bajo lista sin autorizar (" + formato.Importe(r.DejadoDeCobrar) + ")"
 			}
 			if r.CreditoSinAutorizar > 0 {
-				desc += ": a cuenta pasado el límite sin autorizar ($" + f2(r.CreditoSinAutorizar) + ")"
+				desc += ": a cuenta pasado el límite sin autorizar (" + formato.Importe(r.CreditoSinAutorizar) + ")"
 			}
 			s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, desc, controlDeLaVenta(r))
 			// Y se avisa en el momento, no a fin de semana: el número

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 /**
@@ -22,10 +23,14 @@ export async function GET() {
   const r = await (await api()).GET("/api/v1/documentos/mi-lista-de-precios", { parseAs: "stream" });
   if (!r.data) {
     const estado = r.response.status;
-    const texto =
-      estado === 401 ? "Necesitás iniciar sesión." : mensajeDe(r.error as Problema | undefined);
-    // 403: la tienda está apagada y la lista no sale (ver catalogo.ExigirTienda).
-    return new Response(texto, { status: [401, 403, 429].includes(estado) ? estado : 500 });
+    // Sin sesión, a entrar y volver. Con la tienda apagada la lista no sale
+    // (catalogo.ExigirTienda: los precios se apagan para todos, profesionales
+    // incluidos, decisión del 9/11): en vez de un 403 en texto plano, a la
+    // página de profesionales (mes simulado, H086).
+    if (estado === 401) redirect("/ingresar?volver=/mi-lista-de-precios");
+    if (estado === 403) redirect("/profesionales");
+    const texto = mensajeDe(r.error as Problema | undefined);
+    return new Response(texto, { status: estado === 429 ? 429 : 500 });
   }
 
   return new Response(r.data, {

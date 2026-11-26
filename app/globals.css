@@ -345,8 +345,12 @@ input, textarea, select {
   font-size: 15px !important;
 }
 
+/* El texto de ejemplo con el gris terciario de cada tema: el gris fijo a
+   media opacidad daba menos de 2:1 sobre el campo hundido en oscuro (mes
+   simulado, H094). Con --texto-3 pasa 4,5:1 en los dos. */
 input::placeholder, textarea::placeholder {
-  color: oklch(0.55 0 0 / 0.5);
+  color: var(--texto-3);
+  opacity: 1;
 }
 
 /* Ancho del sitio público: 1200px con 24px de aire, como define la banda.
@@ -1147,6 +1151,79 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   color: var(--tinta-suave);
 }
 
+/* En el teléfono la hoja se lee, no se imprime (solo en pantalla: el papel
+   sigue siendo A4). La cabecera de tres columnas dejaba una o dos palabras
+   por renglón («Maderera / Juan B. / Justo») y partía el número de la
+   factura (mes simulado, el remito a 375 px): se apila, el emisor, la letra y
+   los datos del comprobante, cada uno entero; y el destinatario en una
+   columna. Las tablas también se apilan: el resumen y la factura medían
+   510 px dentro de 375 y el navegador los achicaba hasta dejar Haber y Saldo
+   afuera (H388, H080). Cada celda con número lleva su `data-label`. */
+@media screen and (max-width: 639.98px) {
+  .comprobante-hoja .hoja {
+    margin: 0;
+    max-width: none;
+    padding: 1.25rem 1rem;
+    box-shadow: none;
+  }
+  .comprobante-hoja .cabecera {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .comprobante-hoja .letra-caja {
+    justify-self: start;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+  .comprobante-hoja .comprobante-datos,
+  .comprobante-hoja .comprobante-datos .datos {
+    text-align: left;
+  }
+  .comprobante-hoja .comprobante-datos .datos div {
+    overflow-wrap: anywhere;
+  }
+  .comprobante-hoja .receptor-grilla {
+    grid-template-columns: 1fr;
+  }
+  .comprobante-hoja .totales-caja {
+    width: 100%;
+  }
+  .comprobante-hoja .detalle,
+  .comprobante-hoja .detalle :is(tbody, tr) {
+    display: block;
+  }
+  .comprobante-hoja .detalle thead {
+    display: none;
+  }
+  .comprobante-hoja .detalle tr {
+    border-bottom: 1px solid var(--linea);
+    padding: 0.5rem 0;
+  }
+  .comprobante-hoja .detalle td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 0;
+    padding: 0.1rem 0;
+    font-size: 0.85rem;
+  }
+  .comprobante-hoja .detalle td:empty {
+    display: none;
+  }
+  .comprobante-hoja .detalle td[data-label]::before {
+    content: attr(data-label);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    color: var(--tinta-suave);
+  }
+  .comprobante-hoja .detalle td.fecha {
+    font-size: 0.75rem;
+    color: var(--tinta-suave);
+  }
+  .comprobante-hoja .marca-agua {
+    font-size: 3rem;
+  }
+}
+
 /**
  * Cuerpo de una nota del blog.
  *
@@ -1264,6 +1341,14 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   height: 22mm;
   object-fit: contain;
   object-position: left bottom;
+}
+
+.comprobante-hoja .firma-aclaracion {
+  display: flex;
+  height: 22mm;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.15rem;
 }
 
 .comprobante-hoja .firma-vacia {
@@ -1389,6 +1474,51 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   text-align: right;
   white-space: nowrap;
   font-weight: 600;
+}
+
+/* El cierre del turno, impreso desde la caja del mostrador (mes simulado,
+   H024). Vive en el body, fuera del diálogo: en pantalla no se ve, y al
+   imprimir se ve solo él, en el ancho de la térmica. */
+.cierre-impreso {
+  display: none;
+}
+
+@media print {
+  body:has(> .cierre-impreso) > :not(.cierre-impreso) {
+    display: none !important;
+  }
+  .cierre-impreso {
+    display: block;
+    width: 100%;
+    max-width: 72mm;
+    color: #1a1a1a;
+    background: #fff;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .cierre-impreso .razon {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .cierre-impreso .separador {
+    margin: 3mm 0;
+    border-top: 1px dashed #999;
+  }
+  .cierre-impreso .linea-datos {
+    display: flex;
+    justify-content: space-between;
+    gap: 4mm;
+  }
+  .cierre-impreso .total {
+    font-weight: 700;
+  }
+  .cierre-impreso .firma {
+    margin-top: 12mm;
+    border-top: 1px solid #999;
+    padding-top: 1mm;
+    text-align: center;
+  }
 }
 
 .ticket-hoja .total {
@@ -1639,6 +1769,23 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 body:has([data-sin-flotantes]) .flotante-whatsapp,
 html[data-zona-sin-flotante] .flotante-whatsapp {
   display: none;
+}
+
+/* En Mi cuenta, en el teléfono, el flotante tapaba el importe del envío, la
+   barra del límite y los controles de los formularios (mes simulado, H092).
+   Cada pantalla que lo necesita trae su propio WhatsApp con el texto armado. */
+@media (max-width: 1023px) {
+  body:has([data-sin-flotante-en-celular]) .flotante-whatsapp {
+    display: none;
+  }
+}
+
+/* En el catálogo, mientras la fila de categorías se ve: en el teléfono el
+   flotante tapaba el último chip (ZonaSinFlotante soloEnCelular). */
+@media (max-width: 639px) {
+  html[data-zona-sin-flotante-celular] .flotante-whatsapp {
+    display: none;
+  }
 }
 
 /* En el teléfono, mientras se escribe en un campo, el flotante se va: con el
@@ -2012,5 +2159,23 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
 @media (prefers-reduced-motion: reduce) {
   .animate-temblar {
     animation: none;
+  }
+}
+
+/* Una hoja del panel que se imprime tal como se ve (el traslado entre
+   sucursales): en el papel no van el menú, la barra de arriba ni los botones. */
+@media print {
+  .panel:has(.hoja-sola) > :not(:has(.hoja-sola)),
+  .panel:has(.hoja-sola) header:not(.hoja-sola header),
+  .hoja-sola .no-imprimir {
+    display: none !important;
+  }
+  .panel:has(.hoja-sola),
+  .panel:has(.hoja-sola) main {
+    background: #fff;
+  }
+  .hoja-sola .tarjeta {
+    box-shadow: none;
+    border: 1px solid #ccc;
   }
 }

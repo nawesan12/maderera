@@ -172,7 +172,47 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		if siguiente == "" {
 			return fallo("No hay un estado siguiente.")
 		}
-		if siguiente == "entregado" {
+		// Un pedido con su corte en la cola no está listo (mes simulado): se
+		// marcaba listo y el depósito lo despachaba sin las piezas.
+		if siguiente == "listo" || siguiente == "en-camino" || siguiente == "entregado" {
+			if err := entregas.FaltaElCorte(ctx, tx, id); err != nil {
+				return err
+			}
+		}
+		// El envío que ya salió en parte no se da por entregado entero: lo
+		// que falta llevar sale con su propio remito.
+		if siguiente == "entregado" && p.estado == "en-camino" {
+			saldo, err := entregas.SaldoDeAcopio(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if len(entregas.SoloPendientes(saldo)) > 0 {
+				return fallo(p.numero + " tiene productos por llevar todavía: preparales el remito.")
+			}
+		}
+		// «Listo» es armado: no se arma lo que no está en el galpón. El
+		// tablero ofrecía «Marcar listo» con 135 placas vendidas y 55 en el
+		// estante (mes simulado, H218).
+		if siguiente == "listo" {
+			saldo, err := entregas.SaldoDeAcopio(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if saldo, err = entregas.ConGalpon(ctx, tx, id, saldo); err != nil {
+				return err
+			}
+			for _, r := range saldo {
+				if r.EnElGalpon != nil && r.Pendiente > 0.0005 && *r.EnElGalpon < r.Pendiente {
+					return fallo("No alcanza para armarlo: " + r.Descripcion + " lleva " + formato.Cantidad(r.Pendiente) +
+						" y en el galpón hay " + formato.Cantidad(math.Max(*r.EnElGalpon, 0)) + ".")
+				}
+			}
+		}
+		// El remito sale cuando la mercadería deja el depósito: en un envío,
+		// al despachar (acompaña al camión y lo firma quien recibe); en un
+		// retiro, al entregar. Antes el envío salía sin papel y el remito
+		// nacía al marcarlo entregado.
+		if siguiente == "entregado" || (siguiente == "en-camino" && p.tipoEntrega == "envio") {
 			var sucursal *string
 			if err := tx.QueryRow(ctx, `SELECT branch_id FROM orders WHERE id = $1`, id).Scan(&sucursal); err != nil {
 				return err
@@ -193,7 +233,7 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return err
 			}
 			if falta != nil && *falta > 0.009 {
-				n := NotaEntregadoSinCobrar + " · " + formato.Moneda(*falta)
+				n := NotaEntregadoSinCobrar + " · " + formato.Importe(*falta)
 				nota = &n
 			}
 		}
@@ -204,6 +244,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 			id, siguiente, nota, ses.UserID); err != nil {
 			return err
 		}
+		if siguiente == "entregado" {
+			if err := entregas.CerrarCortes(ctx, tx, id); err != nil {
+				return err
+			}
+		}
 		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoCambioDeEstado, map[string]string{"orderId": id, "estado": siguiente}, time.Time{})
 		return err
 	})
@@ -212,6 +257,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "pedido", id, p.numero+": "+p.estado+" → "+siguiente, nil)
 	texto := textoDelEstado[siguiente]
+	if siguiente == "listo" && p.tipoEntrega == "envio" {
+		texto = "listo para despachar"
+	}
 	if texto == "" {
 		texto = siguiente
 	}
@@ -383,6 +431,35 @@ var EstadosDePresupuesto = []string{"pendiente", "revision", "enviado", "aceptad
 
 // CambiarEstadoPresupuesto acepta, rechaza o mueve un presupuesto.
 func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesion, id, estado string) (*Resultado, error) {
+	return s.CambiarEstadoPresupuestoConMotivo(ctx, ses, id, estado, "")
+}
+
+// MotivosDeRechazo son los que ofrece la pantalla al rechazar (mes simulado:
+// rechazar no pedía motivo y no se sabía por qué se pierden las ventas).
+var MotivosDeRechazo = []string{"Precio", "Se lo llevó otro", "No contestó", "Ya no lo necesita", "Otro"}
+
+// mensajeDelEstado es lo que dice el aviso: antes todo era «Presupuesto
+// actualizado.», enviar, aceptar o rechazar.
+var mensajeDelEstado = map[string]string{
+	"enviado":   "Presupuesto enviado al cliente.",
+	"aceptado":  "Presupuesto aceptado.",
+	"rechazado": "Presupuesto rechazado.",
+}
+
+// CambiarEstadoPresupuestoConMotivo es CambiarEstadoPresupuesto con el
+// motivo del rechazo (uno de MotivosDeRechazo; vacío al rechazar es «Otro»).
+func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *auth.Sesion, id, estado, motivo string) (*Resultado, error) {
+	var motivoRechazo *string
+	if estado == "rechazado" {
+		m := strings.TrimSpace(motivo)
+		if m == "" {
+			m = "Otro"
+		}
+		if !slices.Contains(MotivosDeRechazo, m) {
+			return nil, fallo("Elegí por qué se perdió.")
+		}
+		motivoRechazo = &m
+	}
 	valido := false
 	for _, e := range EstadosDePresupuesto {
 		valido = valido || e == estado
@@ -404,7 +481,7 @@ func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesio
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = $2, updated_at = now() WHERE id = $1`, id, estado); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = $2, motivo_rechazo = $3, updated_at = now() WHERE id = $1`, id, estado, motivoRechazo); err != nil {
 			return err
 		}
 		if estado == "enviado" && anterior != "enviado" {
@@ -415,8 +492,16 @@ func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesio
 	if err != nil {
 		return nil, err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "presupuesto", id, "Pasó el presupuesto a "+estado, nil)
-	return &Resultado{Ok: "Presupuesto actualizado.", Estado: estado}, nil
+	desc := "Pasó el presupuesto a " + estado
+	if motivoRechazo != nil {
+		desc += " (" + *motivoRechazo + ")"
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "presupuesto", id, desc, nil)
+	ok := mensajeDelEstado[estado]
+	if ok == "" {
+		ok = "Presupuesto actualizado."
+	}
+	return &Resultado{Ok: ok, Estado: estado}, nil
 }
 
 // ConvertirEnPedido pasa un presupuesto a pedido: copia las líneas con el
@@ -437,7 +522,11 @@ type Entrega struct {
 	Direccion  string
 	Zona       string
 	CostoEnvio float64
-	MedioPago  *string
+	// ConCosto: se escribió el flete (aunque sea cero). SinCargo: se eligió
+	// llevarlo gratis. Un envío sin ninguna de las dos no sale (mes simulado:
+	// los pedidos con envío se creaban con el flete vacío y sin aviso).
+	ConCosto, SinCargo bool
+	MedioPago          *string
 	// EntregarEl es el día comprometido (AAAA-MM-DD). Vacío: el «para
 	// cuándo» del presupuesto, si lo tenía.
 	EntregarEl string
@@ -446,11 +535,20 @@ type Entrega struct {
 	// un admin). Vacío en uno vigente.
 	Precios    string
 	PIN, Ficha string
+	// ACuenta es la parte que va a la cuenta corriente de un pedido partido
+	// (H047); el resto se paga con MedioPago. Cero: el pedido no se parte.
+	ACuenta float64
 }
 
 func (e Entrega) revisar() error {
 	if e.MedioPago != nil && !medioValido(*e.MedioPago) {
 		return fallo("Ese medio de pago no existe.")
+	}
+	if e.ACuenta < 0 || math.IsNaN(e.ACuenta) || math.IsInf(e.ACuenta, 0) {
+		return fallo("Lo que va a cuenta corriente no puede ser negativo.")
+	}
+	if e.ACuenta > 0 && (e.MedioPago == nil || *e.MedioPago == "cuenta_corriente") {
+		return fallo("Elegí cómo paga el resto.")
 	}
 	if e.Precios != "" && e.Precios != "actualizar" && e.Precios != "respetar" {
 		return fallo("Elegí si se actualizan los precios o se respetan.")
@@ -463,6 +561,37 @@ func (e Entrega) revisar() error {
 	}
 	if e.CostoEnvio < 0 || math.IsNaN(e.CostoEnvio) || math.IsInf(e.CostoEnvio, 0) {
 		return fallo("El costo del envío no puede ser negativo.")
+	}
+	return nil
+}
+
+// fleteDeLaZona revisa la zona contra las de envío (una inventada no pasa)
+// y, sin flete escrito, propone el de la zona si tiene costo fijo. Un envío
+// sin flete y sin «Sin cargo» no sale.
+func fleteDeLaZona(ctx context.Context, tx pgx.Tx, ent *Entrega) error {
+	if !ent.Envio {
+		return nil
+	}
+	if z := strings.TrimSpace(ent.Zona); z != "" {
+		var costo float64
+		var aCotizar bool
+		err := tx.QueryRow(ctx, `SELECT costo::float8, a_cotizar FROM shipping_zones WHERE activa AND lower(nombre) = lower($1) LIMIT 1`, z).
+			Scan(&costo, &aCotizar)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fallo("Elegí una zona de la lista.")
+		}
+		if err != nil {
+			return err
+		}
+		if !ent.ConCosto && !ent.SinCargo && !aCotizar && costo > 0 {
+			ent.CostoEnvio, ent.ConCosto = costo, true
+		}
+	}
+	if !ent.ConCosto && !ent.SinCargo {
+		return fallo("Falta el flete: cargalo o elegí «Sin cargo».")
+	}
+	if ent.SinCargo && !ent.ConCosto {
+		ent.CostoEnvio = 0
 	}
 	return nil
 }
@@ -480,6 +609,12 @@ func medioValido(m string) bool {
 func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, quoteID string, ent Entrega) (*Resultado, error) {
 	if err := ent.revisar(); err != nil {
 		return nil, err
+	}
+	if ent.Envio {
+		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return fleteDeLaZona(ctx, tx, &ent) })
+		if err != nil {
+			return nil, err
+		}
 	}
 	tipo, costo := "retiro", "0"
 	var direccion, zona *string
@@ -525,8 +660,10 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		if err != nil {
 			return err
 		}
+		// Un pedido cancelado no traba (mes simulado): el presupuesto vuelve
+		// a pasarse a pedido, corregido, sin cargarlo todo de nuevo.
 		var ya string
-		err = tx.QueryRow(ctx, `SELECT numero FROM orders WHERE quote_id = $1 LIMIT 1`, quoteID).Scan(&ya)
+		err = tx.QueryRow(ctx, `SELECT numero FROM orders WHERE quote_id = $1 AND estado <> 'cancelado' LIMIT 1`, quoteID).Scan(&ya)
 		if err == nil {
 			return fallo("Ya se convirtió en el pedido " + ya + ".")
 		}
@@ -657,11 +794,31 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 
 		aCuenta := ent.MedioPago != nil && *ent.MedioPago == "cuenta_corriente"
 		totalPedido := jsmath.Numero(q.total) + jsmath.Numero(costo)
+		// El pedido partido (H047): una parte a la cuenta y el resto con el
+		// medio elegido. Si la parte cubre el total, es un pedido a cuenta
+		// como siempre.
+		var partido *string
+		if ent.ACuenta > 0 {
+			parte := ventas.ACentavos(ent.ACuenta)
+			if parte >= totalPedido-0.005 {
+				cc := "cuenta_corriente"
+				ent.MedioPago = &cc
+			} else {
+				p := jsmath.Fijo2(parte)
+				partido = &p
+			}
+			aCuenta = true
+		}
+		deuda := totalPedido
+		if partido != nil {
+			deuda = jsmath.Numero(*partido)
+		}
 		if aCuenta {
 			if q.customerID == nil {
 				return fallo("A cuenta corriente solo con un cliente cargado: elegilo en el presupuesto.")
 			}
-			motivo, err := cobros.LimiteEnLaTransaccion(ctx, tx, *q.customerID, totalPedido)
+			// El crédito se mira solo sobre lo que va a la cuenta.
+			motivo, err := cobros.LimiteEnLaTransaccion(ctx, tx, *q.customerID, deuda)
 			if err != nil {
 				return err
 			}
@@ -673,17 +830,25 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		if numero, err = numeracion.Pedido(ctx, tx); err != nil {
 			return err
 		}
+		// Un retiro sin sucursal en el presupuesto se retira en la primera
+		// activa, la misma de donde reserva (reservas.sucursalDelPedido): la
+		// tarjeta decía «Retira en» sin decir dónde, y el efectivo no sabía a
+		// qué caja entrar (mes simulado).
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
-			                    dejado_de_cobrar, autorizado_por)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
+			                    dejado_de_cobrar, autorizado_por, a_cuenta)
+			VALUES ($1, $2, $3, $4, $5, $6,
+			        CASE WHEN $13::tipo_entrega = 'retiro'
+			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
+			             ELSE $7::uuid END,
+			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
 			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
-			        $19::numeric, $20)
+			        $19::numeric, $20, $21::numeric)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido).Scan(&pedidoID); err != nil {
 			return err
 		}
 
@@ -726,8 +891,12 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 				return err
 			}
 		}
+		nota := "Generado desde el presupuesto " + numeroPresupuesto
+		if partido != nil {
+			nota += " · " + formato.Importe(deuda) + " a cuenta corriente y " + formato.Importe(ventas.ACentavos(totalPedido-deuda)) + " por cobrar"
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'pendiente', $2, $3)`,
-			pedidoID, "Generado desde el presupuesto "+numeroPresupuesto, ses.UserID); err != nil {
+			pedidoID, nota, ses.UserID); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = 'aceptado', updated_at = now() WHERE id = $1`, quoteID); err != nil {
@@ -739,7 +908,7 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
 				VALUES ($1, 'compra', $2::numeric, $3, $4, $5)`,
-				*q.customerID, jsmath.Fijo2(totalPedido), "Pedido "+numero, numero, ses.UserID); err != nil {
+				*q.customerID, jsmath.Fijo2(deuda), "Pedido "+numero, numero, ses.UserID); err != nil {
 				return err
 			}
 		}
@@ -760,6 +929,9 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 	}
 	if quienAutorizo != "" || dejado > 0 {
 		detalle = map[string]any{"dejadoDeCobrar": dejado, "autorizadoPor": quienAutorizo, "precios": ent.Precios}
+	}
+	if ent.ACuenta > 0 && ent.MedioPago != nil && *ent.MedioPago != "cuenta_corriente" {
+		desc += ", con " + formato.Importe(ventas.ACentavos(ent.ACuenta)) + " a cuenta corriente"
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", quoteID, desc, detalle)
 	return &Resultado{Ok: "Se creó el pedido " + numero + ".", ID: pedidoID, Numero: numero}, nil
@@ -813,6 +985,9 @@ func faltaDePIN(f *autorizacion.Falta) error {
 	e := map[string]string{"pin": f.Mensaje(), "pinMonto": jsmath.Fijo2(f.Monto)}
 	if f.PinIncorrecto {
 		e["pinIncorrecto"] = "si"
+	}
+	if f.ConClave {
+		e["pinConClave"] = "si"
 	}
 	if f.BloqueadoHasta != nil {
 		e["pinHasta"] = f.BloqueadoHasta.UTC().Format(time.RFC3339)

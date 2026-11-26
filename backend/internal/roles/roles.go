@@ -46,7 +46,8 @@ var Acceso = map[string][]sqlc.StaffRole{
 	"/admin/campanas":               {sqlc.StaffRoleAdmin},
 	"/admin/caja":                   {sqlc.StaffRoleAdmin},
 	"/admin/proveedores":            {sqlc.StaffRoleAdmin},
-	"/admin/recepciones":            {sqlc.StaffRoleAdmin},
+	"/admin/recepciones":            {sqlc.StaffRoleAdmin, sqlc.StaffRoleDeposito},
+	"/admin/recepciones/nueva":      {sqlc.StaffRoleAdmin},
 	"/admin/compras":                {sqlc.StaffRoleAdmin},
 	"/admin/compras/ordenes":        {sqlc.StaffRoleAdmin},
 	"/admin/compras/facturas":       {sqlc.StaffRoleAdmin},
@@ -60,17 +61,26 @@ var Acceso = map[string][]sqlc.StaffRole{
 	"/admin/reparto":                {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito},
 	"/admin/reglas":                 {sqlc.StaffRoleAdmin},
 	"/admin/cortes/tarifas":         {sqlc.StaffRoleAdmin},
+	"/admin/cortes/nuevo":           {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito},
 	"/admin/precios/formas-de-pago": {sqlc.StaffRoleAdmin},
 	"/admin/migracion":              {sqlc.StaffRoleAdmin},
 	"/admin/bitacora":               {sqlc.StaffRoleAdmin},
+	"/admin/personal":               {sqlc.StaffRoleAdmin},
 	"/admin/ayuda":                  {sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito, sqlc.StaffRoleAserradero},
 }
 
 // ManejanPlata es MANEJAN_PLATA de lib/roles.ts: quién cobra, emite recibos
 // y factura desde la ficha de un pedido. Pedidos lo abre también el depósito,
 // que prepara y entrega pero no mueve plata (hasta T3 marcaba un pedido como
-// cobrado sin recibo ni caja).
+// cobrado sin recibo ni caja). También registran el rechazo de un cheque
+// desde la ficha del cliente (H272), con el PIN de un admin.
 var ManejanPlata = []sqlc.StaffRole{sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor}
+
+// DecidenEnLaCola es DECIDEN_EN_LA_COLA de lib/roles.ts: quién marca un corte
+// urgente, lo entrega, lo anula o lo corrige. Todos los de /admin/cortes
+// menos el aserradero, que empieza y termina (mes simulado, H115: la ficha
+// le dejaba marcar urgente y retirado aunque el taller se lo escondía).
+var DecidenEnLaCola = []sqlc.StaffRole{sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito}
 
 // QuienEntra son los roles de exactamente esa ruta, o nil si no está
 // declarada (quienEntra del TS).

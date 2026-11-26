@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Banknote, Store } from "lucide-react";
+import { Banknote, ChevronDown, Store } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { sucursalesConCaja, turnosCerrados } from "@/lib/dal/admin/caja";
 import {
   anulacionesPorPersona,
+  efectivoFueraDeCaja,
   emitidoPorCaja,
   listarCajasFisicas,
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
-import { fechaHora, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
+import { fechaHora, fechaHoraODia, formatearImporte, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
@@ -69,13 +70,14 @@ export default async function CajaPage({
   // Las cuenta Go por la fecha de la anulación: sumarlas acá sobre lo
   // emitido, que llega cortado en 200 y por la fecha de la venta, perdía las
   // de la primera quincena.
-  const [sucursales, turnosDelMes, cajas, sueltas, emitido, anulaciones] = await Promise.all([
+  const [sucursales, turnosDelMes, cajas, sueltas, emitido, anulaciones, fueraDeCaja] = await Promise.all([
     sucursalesConCaja(),
     turnosCerrados(periodo.clave, pagina, POR_PAGINA),
     listarCajasFisicas(),
     ventasSinCaja(),
     emitidoPorCaja(periodo.clave),
     anulacionesPorPersona(periodo.clave),
+    efectivoFueraDeCaja(periodo.clave),
   ]);
 
   /*
@@ -130,7 +132,7 @@ export default async function CajaPage({
                   arqueo. Es la pregunta del dueño cuando pasa por la caja. */}
               {s.esperado != null && (
                 <p className="tabular mt-1 text-2xl font-bold leading-tight">
-                  {formatearMonto(s.esperado)}
+                  {formatearImporte(s.esperado)}
                   <span className="ml-2 text-base font-medium text-muted-foreground">
                     en efectivo
                   </span>
@@ -152,17 +154,60 @@ export default async function CajaPage({
 
       <VentasSueltas ventas={sueltas} turnos={turnos} />
 
+      {/* El efectivo que no pasó por ningún turno: el asiento mueve la cuenta
+          Caja, pero ningún arqueo lo cuenta (mes simulado, H157). */}
+      {fueraDeCaja.length > 0 && (
+        <section className="tarjeta-atencion overflow-hidden">
+          <header className="flex items-baseline justify-between gap-3 px-5 py-3.5">
+            <h2 className="text-base font-semibold">Efectivo fuera de caja</h2>
+            <span className="tabular text-base font-semibold">
+              {formatearImporte(fueraDeCaja.reduce((s, f) => s + f.monto, 0))}
+            </span>
+          </header>
+          <ul className="divide-y divide-linea">
+            {fueraDeCaja.map((f) => (
+              <li key={`${f.tipo}-${f.id}`} className="flex items-baseline gap-3 px-5 py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base">
+                    {f.tipo === "gasto" ? "Gasto · " : f.tipo === "pago" ? "Pago a " : "Recibo "}
+                    {f.detalle}
+                  </span>
+                  <span className="block text-sm text-muted-foreground">
+                    {fechaHoraODia.format(f.fecha)}
+                    {f.sucursal && ` · ${f.sucursal}`}
+                  </span>
+                </span>
+                <span className={`tabular shrink-0 font-semibold ${f.monto < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}>
+                  {formatearImporte(f.monto)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <CajasFisicas
-        cajas={cajas}
+        cajas={cajas.map((c) => ({
+          ...c,
+          // Desvincular borra el latido: sin el último turno, una caja usada
+          // decía «nunca se vinculó» (H243).
+          cuando: c.ultimaVezAt
+            ? `se conectó ${haceCuanto(new Date(c.ultimaVezAt))}`
+            : c.ultimoTurnoAt
+              ? `último turno ${haceCuanto(new Date(c.ultimoTurnoAt))}`
+              : "sin vincular",
+        }))}
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
       />
 
       <section className="tarjeta overflow-hidden">
-        <header className="tarjeta-cabecera flex items-baseline justify-between gap-3 px-5 py-3.5">
-          <h2 className="text-base font-semibold">Turnos cerrados</h2>
-          <span className="tabular text-base text-muted-foreground">
-            {turnosDelMes.total}
-          </span>
+        <header className="tarjeta-cabecera grid grid-cols-[1fr_auto] items-baseline gap-x-4 px-5 py-3.5 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem]">
+          <h2 className="text-base font-semibold">
+            Turnos cerrados <span className="tabular ml-1 text-muted-foreground">{turnosDelMes.total}</span>
+          </h2>
+          <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block">Tendría que haber</span>
+          <span className="hidden text-right text-sm uppercase tracking-wide text-muted-foreground sm:block">Contado</span>
+          <span className="text-right text-sm uppercase tracking-wide text-muted-foreground">Diferencia</span>
         </header>
 
         {cerrados.length === 0 ? (
@@ -170,118 +215,134 @@ export default async function CajaPage({
             Ningún turno cerrado en el mes elegido.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-base">
-              <thead>
-                <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
-                  <th className="px-5 py-2.5 font-semibold">Sucursal</th>
-                  <th className="px-5 py-2.5 font-semibold">Quién</th>
-                  <th className="px-5 py-2.5 font-semibold">Cerrado</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Tendría que haber</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Contado</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Diferencia</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-linea">
-                {cerrados.map((t) => {
-                  const esperado = Number(t.esperado);
-                  const cierre = t.cierre;
-                  const contado = t.contado === null ? null : Number(t.contado);
-                  const diferencia = contado === null ? null : contado - esperado;
-                  const cuadra = diferencia !== null && Math.abs(diferencia) < 0.01;
-
-                  return [
-                    (
-                    <tr key={t.id}>
-                      <td className="px-5 py-3">{t.sucursal}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{t.abiertaPor}</td>
-                      <td className="px-5 py-3 text-muted-foreground">
-                        {t.cerradaAt ? haceCuanto(new Date(t.cerradaAt)) : "—"}
-                      </td>
-                      <td className="tabular px-5 py-3 text-right">
-                        {formatearMonto(esperado)}
-                      </td>
-                      <td className="tabular px-5 py-3 text-right">
-                        {formatearMonto(contado)}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        {/* Los mismos tokens de signo que usa la cuenta
-                            corriente y el cierre del mostrador: falta en rojo,
-                            sobra en verde, cuadra en gris. Que un descuadre se
-                            vea igual en las dos pantallas es lo que hace que el
-                            color signifique algo. */}
-                        <span
-                          className={`tabular font-semibold ${
-                            diferencia === null
-                              ? "text-muted-foreground"
-                              : cuadra
-                                ? "text-saldo-cero"
-                                : diferencia < 0
-                                  ? "text-saldo-debe"
-                                  : "text-saldo-favor"
-                          }`}
-                        >
-                          {diferencia === null ? "—" : formatearMonto(diferencia)}
+          /*
+           * Un renglón por turno, plegado: la sucursal y el puesto, quién y
+           * cuándo, y los tres números del arqueo. Desplegado, la cuenta del
+           * efectivo (fondo + ventas + otros − retiros − gastos = tendría que
+           * haber) y el cierre Z. En el teléfono la tabla de antes se corría
+           * de costado y, con cada cierre abierto, la página medía 14.000 px
+           * (mes simulado, H238 y H242).
+           */
+          <ul className="divide-y divide-linea">
+            {cerrados.map((t) => {
+              const esperado = Number(t.esperado);
+              const contado = t.contado === null ? null : Number(t.contado);
+              const diferencia = contado === null ? null : contado - esperado;
+              const cuadra = diferencia !== null && Math.abs(diferencia) < 0.005;
+              const cuenta: [string, number][] = (
+                [
+                  ["Fondo", t.fondo],
+                  ["Ventas en efectivo", t.ventas],
+                  ["Otros ingresos", t.otrosIngresos],
+                  ["Retiros", t.retiros],
+                  ["Devoluciones", t.devoluciones],
+                  ["Gastos", t.gastos],
+                ] as [string, number][]
+              ).filter(([titulo, v]) => v !== 0 || titulo === "Fondo");
+              return (
+                <li key={t.id}>
+                  <details className="group">
+                    <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 px-5 py-3 hover:bg-hundida/40 sm:grid-cols-[1fr_repeat(3,8.5rem)_1.25rem] [&::-webkit-details-marker]:hidden">
+                      <span className="min-w-0">
+                        <span className="block truncate text-base font-medium">
+                          {t.sucursal}
+                          {t.puesto && <span className="codigo ml-1.5 text-sm text-muted-foreground">{t.puesto}</span>}
                         </span>
-                        {/* Lo que llegó de la cola después del arqueo —una
-                            venta o un retiro sin conexión de este turno— va
-                            aparte y no cambia la diferencia de esa noche. Un
-                            retiro tardío se lee en rojo: es plata que salió
-                            de una caja ya contada. */}
-                        {t.tardios > 0 && (
-                          <span
-                            className={`tabular mt-0.5 block text-sm ${t.tardiosMonto < 0 ? "text-saldo-debe" : "text-muted-foreground"}`}
-                          >
-                            {t.tardios} tarde · {formatearMonto(t.tardiosMonto)}
-                          </span>
-                        )}
-                        {/* Las ventas sin conexión del turno que pasaron lo
-                            libre o el límite de cuenta corriente sin PIN: ya
-                            pasaron, se ven en rojo. */}
-                        {t.bajoLista > 0 && (
-                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
-                            {t.bajoLista} sin conexión bajo la lista · {formatearMonto(t.bajoListaMonto)}
-                          </span>
-                        )}
-                        {t.creditoSinAutorizar > 0 && (
-                          <span className="tabular mt-0.5 block text-sm font-semibold text-saldo-debe">
-                            {t.creditoSinAutorizar} sin conexión a cuenta pasado el límite · {formatearMonto(t.creditoSinAutorizarMonto)}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ),
-                  cierre.length > 0 && (
-                    <tr key={`${t.id}-cierre`} className="border-0">
-                      <td colSpan={6} className="px-5 pb-3 pt-0">
-                        <div className="flex flex-wrap gap-2">
-                          {cierre.map((r) => (
-                            <span
-                              key={`${r.devolucion ? "dev-" : ""}${r.medioPago}-${r.quien ?? ""}`}
-                              className="inline-flex items-baseline gap-1.5 rounded-full bg-muted px-3 py-1 text-sm"
-                            >
-                              <span className="text-muted-foreground">
-                                {r.devolucion && "Devolución · "}
-                                {MEDIOS[r.medioPago] ?? r.medioPago}
-                                {r.quien && ` · ${r.quien}`}
-                              </span>
-                              <span className="tabular font-semibold">
-                                {formatearMonto(r.total)}
-                              </span>
-                              <span className="text-muted-foreground">
-                                ({r.cantidad})
-                              </span>
+                        <span className="block truncate text-sm text-muted-foreground">
+                          {t.abiertaPor} · {t.cerradaAt ? fechaHora.format(t.cerradaAt) : "—"}
+                        </span>
+                      </span>
+                      <span className="tabular hidden text-right text-base sm:block">{formatearImporte(esperado)}</span>
+                      <span className="tabular hidden text-right text-base sm:block">{formatearImporte(contado)}</span>
+                      {/* Los mismos tokens de signo que usa la cuenta corriente
+                          y el cierre del mostrador: falta en rojo, sobra en
+                          verde, cuadra en gris. Con los centavos, si los hay:
+                          redondeada, una diferencia de 40 centavos se leía
+                          «-$ 0» (H164, H263, H363). */}
+                      <span
+                        className={`tabular text-right text-base font-semibold ${
+                          diferencia === null
+                            ? "text-muted-foreground"
+                            : cuadra
+                              ? "text-saldo-cero"
+                              : diferencia < 0
+                                ? "text-saldo-debe"
+                                : "text-saldo-favor"
+                        }`}
+                      >
+                        {diferencia === null ? "—" : cuadra ? "cierra" : formatearImporte(diferencia)}
+                      </span>
+                      <ChevronDown className="hidden h-4 w-4 self-center text-muted-foreground transition-transform group-open:rotate-180 sm:block" aria-hidden="true" />
+                      {/* Lo que llegó de la cola después del arqueo y las
+                          ventas sin conexión que pasaron lo libre o el límite
+                          sin PIN: se ven sin desplegar. */}
+                      {(t.tardios > 0 || t.bajoLista > 0 || t.creditoSinAutorizar > 0) && (
+                        <span className="col-span-full flex flex-wrap gap-x-4 text-sm">
+                          {t.tardios > 0 && (
+                            <span className={`tabular ${t.tardiosMonto < 0 ? "text-saldo-debe" : "text-muted-foreground"}`}>
+                              {t.tardios} tarde · {formatearImporte(t.tardiosMonto)}
                             </span>
-                          ))}
+                          )}
+                          {t.bajoLista > 0 && (
+                            <span className="tabular font-semibold text-saldo-debe">
+                              {t.bajoLista} sin conexión bajo la lista · {formatearImporte(t.bajoListaMonto)}
+                            </span>
+                          )}
+                          {t.creditoSinAutorizar > 0 && (
+                            <span className="tabular font-semibold text-saldo-debe">
+                              {t.creditoSinAutorizar} sin conexión a cuenta pasado el límite · {formatearImporte(t.creditoSinAutorizarMonto)}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </summary>
+                    <div className="tarjeta-hundida mx-5 mb-4 grid gap-4 rounded-xl p-4 sm:grid-cols-2">
+                      <dl className="space-y-1 text-base">
+                        {cuenta.map(([titulo, v]) => (
+                          <div key={titulo} className="flex items-baseline justify-between gap-3">
+                            <dt className="text-muted-foreground">{titulo}</dt>
+                            <dd className="tabular">{formatearImporte(v)}</dd>
+                          </div>
+                        ))}
+                        <div className="flex items-baseline justify-between gap-3 border-t border-linea pt-1 font-semibold">
+                          <dt>Tendría que haber</dt>
+                          <dd className="tabular">{formatearImporte(esperado)}</dd>
                         </div>
-                      </td>
-                    </tr>
-                  ),
-                ];
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-muted-foreground">Contado</dt>
+                          <dd className="tabular">{formatearImporte(contado)}</dd>
+                        </div>
+                        {t.notas && <p className="pt-1 text-sm text-muted-foreground">{t.notas}</p>}
+                      </dl>
+                      {t.cierre.length > 0 && (
+                        <dl className="space-y-1 text-base">
+                          {t.cierre.map((r) => (
+                            <div
+                              key={`${r.devolucion ? "dev-" : r.cobranza ? "cob-" : ""}${r.medioPago}-${r.quien ?? ""}`}
+                              className="flex items-baseline justify-between gap-3"
+                            >
+                              <dt className="min-w-0 text-muted-foreground">
+                                {r.devolucion
+                                  ? "Devolución · "
+                                  : r.cobranza
+                                    ? "Cobro de cuenta · "
+                                    : r.medioPago === "cuenta_corriente"
+                                      ? "A cuenta · "
+                                      : ""}
+                                {MEDIOS[r.medioPago] ?? r.medioPago}
+                                {r.quien && ` · ${r.quien}`} ({r.cantidad})
+                              </dt>
+                              <dd className="tabular shrink-0">{formatearImporte(r.total)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
         )}
         <div className="px-4">
           <Paginador
@@ -304,10 +365,15 @@ export default async function CajaPage({
         El número provisorio va al lado del definitivo porque es el que trae el
         cliente escrito en el ticket cuando la venta se cobró sin internet.
       */}
-      <section className="tarjeta @container overflow-hidden">
-        <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4">
-          <h2 className="text-base font-semibold">
+      {/* Plegado: son hasta 200 ventas, y abierto era lo que más alargaba la
+          página en el teléfono (H242). Las anulaciones por persona se ven
+          sin desplegar. */}
+      <details className="tarjeta group @container overflow-hidden">
+        <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <h2 className="inline-flex items-center gap-2 text-base font-semibold">
             Emitido en el mostrador
+            <span className="tabular font-normal text-muted-foreground">{emitido.length}</span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
           </h2>
           {/* Quién anuló y cuánto, sin contar a ojo: cinco anulaciones por
               semana de la misma persona se ven acá antes que en la bitácora. */}
@@ -323,7 +389,7 @@ export default async function CajaPage({
               ))}
             </ul>
           )}
-        </div>
+        </summary>
 
         {emitido.length === 0 ? (
           <Vacio
@@ -384,7 +450,7 @@ export default async function CajaPage({
                     </td>
                     <td className="px-5 py-3 text-right">
                       <span className={`tabular font-semibold ${v.anulada ? "line-through decoration-2" : ""}`}>
-                        {formatearMonto(Number(v.total))}
+                        {formatearImporte(Number(v.total))}
                       </span>
                       {v.medioPago && !v.anulada && (
                         <span className="block text-sm text-muted-foreground">
@@ -440,7 +506,7 @@ export default async function CajaPage({
                     </span>
                   )}
                   <span className="tabular ml-auto whitespace-nowrap font-semibold">
-                    {formatearMonto(Number(v.total))}
+                    {formatearImporte(Number(v.total))}
                   </span>
                 </p>
                 {/* Con qué pagó va a la vista: efectivo o transferencia es
@@ -476,7 +542,7 @@ export default async function CajaPage({
           </ul>
           </>
         )}
-      </section>
+      </details>
     </div>
   );
 }

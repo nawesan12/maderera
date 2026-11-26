@@ -73,11 +73,14 @@ const base: RemitoCompleto = {
   transportista: null,
   numeroSeguimiento: null,
   lineas: [
-    { descripcion: "Machimbre de pino 1/2\" × 4\" cepillado", unidad: "metro_lineal", cantidad: 120.5 },
-    { descripcion: "Fenólico 18 mm 1,22 × 2,44", unidad: "placa", cantidad: 12 },
+    { descripcion: "Machimbre de pino 1/2\" × 4\" cepillado", unidad: "metro_lineal", cantidad: 120.5, corte: null },
+    { descripcion: "Fenólico 18 mm 1,22 × 2,44", unidad: "placa", cantidad: 12, corte: null },
   ],
   pendientes: [],
   factura: null,
+  sinCobrar: null,
+  visita: [],
+  reposicion: null,
 };
 
 function lineas(n: number): RemitoCompleto["lineas"] {
@@ -85,6 +88,7 @@ function lineas(n: number): RemitoCompleto["lineas"] {
     descripcion: palabras(1 + entero(22)),
     unidad: elegir(["unidad", "metro_lineal", "metro_cuadrado", "kg", "bolsa_grande", ""]),
     cantidad: azar() < 0.2 ? Number((azar() * 1000).toFixed(3)) : entero(10000),
+    corte: null,
   }));
 }
 

@@ -70,6 +70,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mostrador/ventas/{id}/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que se puede devolver de una venta del mostrador con factura (la ficha de facturación, la misma de la devolución del panel) */
+        get: operations["DevolucionDeMostradorDatos"];
+        put?: never;
+        /** @description La devolución parcial de una venta del mostrador (facturacion.DevolucionParcial): la nota, el stock y la plata. A quien no es admin le pide el PIN, como anular. */
+        post: operations["DevolucionDeMostrador"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mostrador/ventas/{id}/devolucion/calculo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DevolucionDeMostradorCalculo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mostrador/buscar": {
         parameters: {
             query?: never;
@@ -126,6 +164,25 @@ export interface paths {
             cookie?: never;
         };
         get: operations["ClientesRecientes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mostrador/presupuestos/{numero}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        /** @description El presupuesto que se trae a la venta por su número; uno vencido trae los precios de hoy */
+        get: operations["PresupuestoParaElMostrador"];
         put?: never;
         post?: never;
         delete?: never;
@@ -312,14 +369,24 @@ export interface components {
             nueva: boolean;
             lineas?: components["schemas"]["MostradorLinea"][];
             error?: string;
+            /** @description la venta dejó medidas con lo disponible en negativo (se vendió más de lo que hay) */
+            avisoStock?: string;
             autorizacion?: components["schemas"]["MostradorAutorizacion"];
             /** @description un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha */
             ficha?: string;
         };
+        MostradorRenglonADevolver: {
+            itemId: string;
+            /** Format: double */
+            cantidad: number;
+            alStock: boolean;
+            /** Format: double */
+            delAcopio?: number | null;
+        };
         /** @description Hace falta el PIN de un administrador (internal/autorizacion) */
         MostradorAutorizacion: {
             /** @enum {string} */
-            motivo: "precio" | "credito" | "anular" | "presupuesto";
+            motivo: "precio" | "credito" | "anular" | "devolver" | "presupuesto" | "costo";
             /**
              * Format: double
              * @description lo que se autoriza (lo dejado de cobrar
@@ -335,6 +402,8 @@ export interface components {
             bloqueadoHasta?: string;
             /** @description ningún admin cargó su PIN */
             sinAdmins?: boolean;
+            /** @description sin PIN cargado, firma la contraseña de un admin */
+            conClave?: boolean;
         };
         /** @description Lo que Next necesita para emitir el comprobante (facturación sigue en TS) */
         MostradorFiscalPendiente: {
@@ -379,6 +448,31 @@ export interface components {
             formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
             /** Format: double */
             precioMediaPct: number;
+            /**
+             * Format: double
+             * @description el precio final que apenas cubre el costo (sin costo cargado, null)
+             */
+            piso?: number | null;
+        };
+        MostradorPresupuesto: {
+            id: string;
+            numero: string;
+            customerId: string | null;
+            contactoNombre: string;
+            contactoTelefono: string | null;
+            vencido: boolean;
+            lineas: {
+                variantId: string | null;
+                descripcion: string;
+                unidad: string;
+                /** Format: double */
+                cantidad: number;
+                /** Format: double */
+                precioUnitario: number;
+                presentacion: string | null;
+                /** Format: double */
+                precioLista: number | null;
+            }[];
         };
         MostradorCliente: {
             id: string;
@@ -431,6 +525,16 @@ export interface components {
             otrosIngresos: number;
             /** Format: double */
             retiros: number;
+            /**
+             * Format: double
+             * @description anulaciones y devoluciones en efectivo (en negativo)
+             */
+            devoluciones: number;
+            /**
+             * Format: double
+             * @description gastos en efectivo cargados desde el panel (en negativo)
+             */
+            gastos: number;
             cantidadDeVentas: number;
         };
         MostradorMovimiento: {
@@ -443,6 +547,11 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             quien: string | null;
+            /**
+             * @description a dónde fue un retiro
+             * @enum {string|null}
+             */
+            destino?: "banco" | "caja_fuerte" | "otro" | null;
         };
         MostradorVentaDeHoy: {
             id: string;
@@ -450,7 +559,16 @@ export interface components {
             cliente: string;
             /** Format: double */
             total: number;
+            /**
+             * Format: double
+             * @description lo que se devolvió en devoluciones parciales
+             */
+            devuelto: number;
             medioPago: string | null;
+            /** @description todos los medios de un pago partido, del más grande al más chico */
+            medios: string[];
+            /** @description tiene factura viva: se puede devolver una parte */
+            conFactura: boolean;
             estado: string;
             /** Format: date-time */
             createdAt: string;
@@ -467,6 +585,8 @@ export interface components {
             devolucion: boolean;
             /** @description Quién hizo las devoluciones parciales del renglón */
             quien: string | null;
+            /** @description lo cobrado por recibos de cuenta en el mostrador durante el turno */
+            cobranza: boolean;
         };
         MostradorPantalla: {
             turno: components["schemas"]["MostradorTurno"] | null;
@@ -481,6 +601,11 @@ export interface components {
              * @description lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)
              */
             descuentoLibrePct: number;
+            /**
+             * Format: double
+             * @description lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente
+             */
+            ultimoContado: number | null;
         };
     };
     responses: {
@@ -615,6 +740,7 @@ export interface operations {
                      * @default true
                      */
                     volvioLaMercaderia?: boolean;
+                    /** @description el PIN de un admin, o su contraseña si ninguno cargó PIN */
                     pin?: string;
                     ficha?: string;
                 };
@@ -636,8 +762,125 @@ export interface operations {
                         porAfuera?: number;
                         facturaPendiente?: string;
                         facturaSinCae?: boolean;
+                        /** @description la factura que quedó viva se le avisó a administración */
+                        avisado?: boolean;
+                        /** @description lo que tenía la venta, para rehacerla (sin los renglones de un corte) */
+                        renglones?: {
+                            variantId: string | null;
+                            descripcion: string;
+                            unidad: string;
+                            /** Format: double */
+                            cantidad: number;
+                            /** Format: double */
+                            precioUnitario: number;
+                            presentacion: string | null;
+                        }[];
+                        /** @description la venta tenía un corte, que no se rehace solo */
+                        conCorte?: boolean;
                         error?: string;
                         autorizacion?: components["schemas"]["MostradorAutorizacion"];
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolucionDeMostradorDatos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los renglones, la sucursal y por dónde puede volver la plata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DevolucionDeMostrador: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    /** @enum {string} */
+                    destino: "caja" | "cuenta" | "afuera" | "deuda";
+                    motivo: string;
+                    /** @enum {string|null} */
+                    sinStock?: "rota" | "otro" | null;
+                    sucursalId?: string | null;
+                    /** Format: double */
+                    importe: number;
+                    renglones: components["schemas"]["MostradorRenglonADevolver"][];
+                    pin?: string;
+                    ficha?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Hecha, o el PIN que falta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: string;
+                        notaId?: string | null;
+                        error?: string;
+                        autorizacion?: components["schemas"]["MostradorAutorizacion"];
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolucionDeMostradorCalculo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: components["schemas"]["MostradorRenglonADevolver"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Lo que se devolvería */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: double */
+                        importe: number;
                     };
                 };
             };
@@ -767,6 +1010,29 @@ export interface operations {
             };
         };
     };
+    PresupuestoParaElMostrador: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El presupuesto, para armar la venta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MostradorPresupuesto"];
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
     ClienteDelMostrador: {
         parameters: {
             query?: never;
@@ -809,6 +1075,13 @@ export interface operations {
                     "application/json": {
                         /** Format: double */
                         saldo: number;
+                        /** @description pedidos del cliente con mercadería que salió y algo sin cobrar */
+                        sinCobrar?: {
+                            id: string;
+                            numero: string;
+                            /** Format: double */
+                            monto: number;
+                        }[];
                     };
                 };
             };
@@ -895,6 +1168,10 @@ export interface operations {
                     branchId: string;
                     /** Format: double */
                     fondoInicial: number | null;
+                    /** @description adónde fue (o de dónde vino) la diferencia con lo contado al cerrar el turno anterior */
+                    motivo?: string;
+                    /** @description la caja física de la PC que abre, si tiene una */
+                    cajaId?: string;
                 };
             };
         };
@@ -919,6 +1196,11 @@ export interface operations {
                     /** Format: double */
                     monto: number | null;
                     motivo: string;
+                    /**
+                     * @description a dónde va un retiro; sin él se clasifica por el motivo
+                     * @enum {string}
+                     */
+                    destino?: "banco" | "caja_fuerte" | "otro";
                 };
             };
         };

@@ -216,12 +216,19 @@ func (s *Servicio) Copia(ctx context.Context, desde *time.Time) (CopiaDelMostrad
 		}
 	}
 
+	// Lo disponible (físico − reservado), como en el buscador en línea
+	// (H023). Una reserva nueva o liberada no toca inventory.updated_at: el
+	// delta también trae las variantes cuyas reservas cambiaron.
 	stockCambiado := ""
 	if desde != nil {
-		stockCambiado = " AND i.updated_at > $1"
+		stockCambiado = ` AND (i.updated_at > $1 OR EXISTS (SELECT 1 FROM stock_reservations r WHERE r.variant_id = i.variant_id
+		  AND r.branch_id = i.branch_id AND (r.created_at > $1 OR r.resuelto_at > $1)))`
 	}
 	filas, err = s.pool.Query(ctx, `
-		SELECT i.branch_id, i.variant_id, i.qty FROM inventory i JOIN branches b ON b.id = i.branch_id
+		SELECT i.branch_id, i.variant_id,
+		       greatest(i.qty - coalesce((SELECT sum(r.cantidad) FROM stock_reservations r
+		         WHERE r.variant_id = i.variant_id AND r.branch_id = i.branch_id AND r.estado = 'activa'), 0), 0)
+		FROM inventory i JOIN branches b ON b.id = i.branch_id
 		WHERE b.active = true`+stockCambiado, args...)
 	if err != nil {
 		return c, err

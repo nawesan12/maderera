@@ -7,6 +7,7 @@ package portal
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,14 +16,31 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mjbj/internal/auth"
+	"mjbj/internal/bitacora"
+	"mjbj/internal/clientes"
+	"mjbj/internal/cuit"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/push"
+	"mjbj/internal/reglas"
+	"mjbj/internal/sqlc"
 )
 
 // Servicio son las lecturas y acciones del portal.
-type Servicio struct{ pool *pgxpool.Pool }
+type Servicio struct {
+	pool *pgxpool.Pool
+	push *push.Avisador
+}
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool) *Servicio { return &Servicio{pool: pool} }
+
+// ConAvisos le da con qué avisarle al panel (un presupuesto aceptado).
+func (s *Servicio) ConAvisos(p *push.Avisador) *Servicio {
+	s.push = p
+	return s
+}
 
 // Cliente es la ficha del usuario de la sesión (clienteDeLaSesion).
 type Cliente struct {
@@ -37,18 +55,59 @@ type Cliente struct {
 	Tipo          string  `json:"tipo"`
 	Estado        string  `json:"estado"`
 	LimiteCredito float64 `json:"limiteCredito"`
+	// DatosFiscalesFijos: la ficha ya facturó o mueve cuenta corriente. El
+	// CUIT, la razón social y la condición frente al IVA deciden el tipo de
+	// comprobante (A o B), así que desde ahí los cambia la casa, no el
+	// cliente con un clic (mes simulado, H079).
+	DatosFiscalesFijos bool `json:"datosFiscalesFijos"`
+	// Vinculada: la ficha existía antes que la cuenta web (la abrió el
+	// mostrador o vino de ISIS), o el local le ató la cuenta web después. A
+	// esa no se le ofrece «vincular» (H090). El vínculo hecho desde el panel
+	// se lee de la bitácora: la ficha del mostrador puede ser más nueva que
+	// la cuenta web, y por la fecha sola se seguía ofreciendo.
+	Vinculada bool `json:"vinculada"`
+	// Lista es el nombre de la lista de precios propia, si tiene una.
+	Lista *string `json:"lista"`
 }
 
 // ClienteDe es la ficha activa del usuario, o nil.
 func (s *Servicio) ClienteDe(ctx context.Context, usuario string) (*Cliente, error) {
 	var c Cliente
-	err := s.pool.QueryRow(ctx, `SELECT id, nombre, razon_social, cuit, condicion_iva::text, email, telefono, direccion, tipo::text,
-		estado::text, limite_credito::float8 FROM customers WHERE user_id = $1 AND active LIMIT 1`, usuario).
-		Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Email, &c.Telefono, &c.Direccion, &c.Tipo, &c.Estado, &c.LimiteCredito)
+	err := s.pool.QueryRow(ctx, `SELECT c.id, c.nombre, c.razon_social, c.cuit, c.condicion_iva::text, c.email, c.telefono, c.direccion,
+		  c.tipo::text, c.estado::text, c.limite_credito::float8,
+		  c.limite_credito > 0
+		    OR EXISTS (SELECT 1 FROM invoices i WHERE i.customer_id = c.id AND i.estado <> 'borrador')
+		    OR EXISTS (SELECT 1 FROM account_movements m WHERE m.customer_id = c.id),
+		  c.codigo_legacy IS NOT NULL OR c.created_at < u.created_at - interval '1 minute'
+		    OR EXISTS (SELECT 1 FROM audit_log a WHERE a.entidad = 'cliente' AND a.entidad_id = c.id::text
+		      AND a.descripcion = '`+clientes.DescripcionDeVinculo+`'),
+		  CASE WHEN l.is_default THEN NULL ELSE l.name END
+		FROM customers c JOIN "user" u ON u.id = c.user_id LEFT JOIN price_lists l ON l.id = c.price_list_id
+		WHERE c.user_id = $1 AND c.active LIMIT 1`, usuario).
+		Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Email, &c.Telefono, &c.Direccion, &c.Tipo, &c.Estado, &c.LimiteCredito,
+			&c.DatosFiscalesFijos, &c.Vinculada, &c.Lista)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return &c, err
+	if err != nil {
+		return nil, err
+	}
+	// Con la regla en «ninguno», lo fiscal lo cambia siempre la casa, haya
+	// facturado o no (H079).
+	if !c.DatosFiscalesFijos && reglas.Es(ctx, s.pool, reglas.DatosFiscalesDelCliente, "ninguno") {
+		c.DatosFiscalesFijos = true
+	}
+	return &c, nil
+}
+
+// estadosAResponder son los estados de un presupuesto que el cliente puede
+// aceptar o rechazar desde Mi cuenta: el enviado y, si la regla lo deja
+// (H085), también el pendiente que el vendedor todavía no mandó.
+func (s *Servicio) estadosAResponder(ctx context.Context) []string {
+	if reglas.Es(ctx, s.pool, reglas.AceptarPresupuestoPendiente, "si") {
+		return []string{"enviado", "pendiente"}
+	}
+	return []string{"enviado"}
 }
 
 // Resumen es lo de arriba de «Mi cuenta».
@@ -64,8 +123,8 @@ func (s *Servicio) ResumenDe(ctx context.Context, c *Cliente) (Resumen, error) {
 	r := Resumen{LimiteCredito: c.LimiteCredito}
 	err := s.pool.QueryRow(ctx, `SELECT
 		(SELECT count(*)::int FROM orders WHERE customer_id = $1 AND estado NOT IN ('entregado', 'cancelado')),
-		(SELECT count(*)::int FROM quotes WHERE customer_id = $1 AND estado = 'enviado'),
-		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1)`, c.ID).
+		(SELECT count(*)::int FROM quotes WHERE customer_id = $1 AND estado::text = ANY($2)),
+		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1)`, c.ID, s.estadosAResponder(ctx)).
 		Scan(&r.PedidosEnCurso, &r.PresupuestosAResponder, &r.Saldo)
 	return r, err
 }
@@ -76,24 +135,72 @@ type Pedido struct {
 	Numero      string    `json:"numero"`
 	Estado      string    `json:"estado"`
 	EstadoPago  string    `json:"estadoPago"`
+	MedioPago   *string   `json:"medioPago"`
 	TipoEntrega string    `json:"tipoEntrega"`
 	Total       float64   `json:"total"`
 	Items       int       `json:"items"`
 	Sucursal    *string   `json:"sucursal"`
+	EnAcopio    bool      `json:"enAcopio"`
 	CreatedAt   time.Time `json:"createdAt"`
+	// EnRevision es lo informado que falta verificar (las transferencias
+	// con comprobante): la lista decía «Falta abonarlo» y el detalle
+	// «Verificando tu pago».
+	EnRevision *float64 `json:"enRevision"`
+	// DebeEnCuenta es lo que falta pagar de un pedido a cuenta corriente,
+	// con los pagos imputados a la deuda más vieja (Imputar). Nil si el
+	// pedido no se cargó a la cuenta.
+	DebeEnCuenta *float64 `json:"debeEnCuenta" db:"-"`
+	// CuestaEnCuenta es lo que cuesta el pedido en la cuenta después de sus
+	// notas de crédito: con DebeEnCuenta menor, se pagó una parte.
+	CuestaEnCuenta *float64 `json:"cuestaEnCuenta" db:"-"`
 }
 
 // Pedidos es misPedidos: los más nuevos primero.
+//
+// Una venta del mostrador anulada sin remito ni factura no se lista: casi
+// siempre es una venta cargada al cliente equivocado, y mostrársela le decía
+// a quién se le había vendido (H386). Su detalle se sigue abriendo por número
+// (la nota de crédito que la cancela lo enlaza). Solo la del mostrador: un
+// pedido cancelado que salió de un presupuesto o se tomó por teléfono es del
+// cliente y sigue en su lista (H310).
+//
+// «En acopio» es que ya retiró algo y todavía le queda: con un remito vivo y
+// algún renglón con saldo (lo mismo que entregas.SaldoDeAcopio).
 func (s *Servicio) Pedidos(ctx context.Context, c *Cliente) ([]Pedido, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.tipo_entrega::text, o.total::float8,
-		  (SELECT count(*)::int FROM order_items i WHERE i.order_id = o.id), b.name, o.created_at
+		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.total::float8,
+		  (SELECT count(*)::int FROM order_items i WHERE i.order_id = o.id), b.name,
+		  o.estado NOT IN ('entregado', 'cancelado') AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
+		    AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND NOT (oi.variant_id IS NULL AND oi.del_corte)
+		      AND oi.cantidad - coalesce((SELECT sum(di.del_acopio) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)
+		        - coalesce((SELECT sum(di.cantidad) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id
+		                    WHERE di.order_item_id = oi.id AND d.estado <> 'anulada'), 0) > 0.01),
+		  o.created_at,
+		  (SELECT nullif(sum(pr.monto), 0)::float8 FROM payments pr WHERE pr.order_id = o.id AND pr.estado = 'en_revision')
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
-		WHERE o.customer_id = $1 ORDER BY o.created_at DESC`, c.ID)
+		WHERE o.customer_id = $1
+		  AND NOT (o.estado = 'cancelado' AND o.origen = 'mostrador' AND o.quote_id IS NULL
+		    AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
+		    AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.estado <> 'borrador'))
+		ORDER BY o.created_at DESC`, c.ID)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(filas, pgx.RowToStructByPos[Pedido])
+	pedidos, err := pgx.CollectRows(filas, pgx.RowToStructByPos[Pedido])
+	if err != nil {
+		return nil, err
+	}
+	debe, neto, err := s.pendientesDeLaCuenta(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	for i := range pedidos {
+		if v, ok := debe[pedidos[i].Numero]; ok {
+			n := neto[pedidos[i].Numero]
+			pedidos[i].DebeEnCuenta, pedidos[i].CuestaEnCuenta = &v, &n
+		}
+	}
+	return pedidos, nil
 }
 
 // Presupuesto es un renglón de «Mis presupuestos».
@@ -105,6 +212,8 @@ type Presupuesto struct {
 	Items       int        `json:"items"`
 	ValidoHasta *time.Time `json:"validoHasta"`
 	CreatedAt   time.Time  `json:"createdAt"`
+	// AResponder: el cliente lo puede aceptar o rechazar (estadosAResponder).
+	AResponder bool `json:"aResponder"`
 }
 
 // Presupuestos es misPresupuestos. Los que armó el bot de WhatsApp y todavía
@@ -112,9 +221,9 @@ type Presupuesto struct {
 func (s *Servicio) Presupuestos(ctx context.Context, c *Cliente) ([]Presupuesto, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT q.id, q.numero, q.estado::text, q.total::float8, (SELECT count(*)::int FROM quote_items i WHERE i.quote_id = q.id),
-		  q.valido_hasta, q.created_at
+		  q.valido_hasta, q.created_at, q.estado::text = ANY($2)
 		FROM quotes q WHERE q.customer_id = $1 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')
-		ORDER BY q.created_at DESC`, c.ID)
+		ORDER BY q.created_at DESC`, c.ID, s.estadosAResponder(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +259,11 @@ type DetalleDePresupuesto struct {
 	Sucursal    *string                `json:"sucursal"`
 	CreatedAt   time.Time              `json:"createdAt"`
 	Items       []RenglonDePresupuesto `json:"items"`
+	// Pedido es el número del pedido que salió de este presupuesto, si ya
+	// se hizo (H215).
+	Pedido *string `json:"pedido"`
+	// AResponder: el cliente lo puede aceptar o rechazar (estadosAResponder).
+	AResponder bool `json:"aResponder"`
 }
 
 // ErrNoEsta es un presupuesto o una dirección que no es de este cliente.
@@ -159,9 +273,13 @@ var ErrNoEsta = errors.New("no está")
 func (s *Servicio) PresupuestoDe(ctx context.Context, c *Cliente, numero string) (*DetalleDePresupuesto, error) {
 	var p DetalleDePresupuesto
 	err := s.pool.QueryRow(ctx, `SELECT q.id, q.numero, q.estado::text, q.subtotal::text, q.total::text, q.notas, q.asesor, q.valido_hasta,
-		b.name, q.created_at FROM quotes q LEFT JOIN branches b ON b.id = q.branch_id
-		WHERE q.numero = $1 AND q.customer_id = $2 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')`, numero, c.ID).
-		Scan(&p.ID, &p.Numero, &p.Estado, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.Sucursal, &p.CreatedAt)
+		b.name, q.created_at,
+		(SELECT o.numero FROM orders o WHERE o.quote_id = q.id AND o.customer_id = q.customer_id AND o.estado <> 'cancelado'
+		 ORDER BY o.created_at DESC LIMIT 1),
+		q.estado::text = ANY($3)
+		FROM quotes q LEFT JOIN branches b ON b.id = q.branch_id
+		WHERE q.numero = $1 AND q.customer_id = $2 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')`, numero, c.ID, s.estadosAResponder(ctx)).
+		Scan(&p.ID, &p.Numero, &p.Estado, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.Sucursal, &p.CreatedAt, &p.Pedido, &p.AResponder)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -183,15 +301,25 @@ func (s *Servicio) Responder(ctx context.Context, c *Cliente, numero, respuesta 
 	if numero == "" || (respuesta != "aceptado" && respuesta != "rechazado") {
 		return "", plataforma.Invalido(map[string]string{"respuesta": "No pudimos guardar tu respuesta. Probá de nuevo."})
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE quotes SET estado = $1::estado_presupuesto, updated_at = now()
-		WHERE numero = $2 AND customer_id = $3 AND estado = 'enviado'`, respuesta, numero, c.ID)
+	var id string
+	var total float64
+	err := s.pool.QueryRow(ctx, `UPDATE quotes SET estado = $1::estado_presupuesto, updated_at = now()
+		WHERE numero = $2 AND customer_id = $3 AND estado::text = ANY($4) RETURNING id, total::float8`,
+		respuesta, numero, c.ID, s.estadosAResponder(ctx)).Scan(&id, &total)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", plataforma.Invalido(map[string]string{"numero": "Ese presupuesto ya no está esperando respuesta. Escribinos y lo vemos."})
+	}
 	if err != nil {
 		return "", err
 	}
-	if tag.RowsAffected() == 0 {
-		return "", plataforma.Invalido(map[string]string{"numero": "Ese presupuesto ya no está esperando respuesta. Escribinos y lo vemos."})
-	}
 	if respuesta == "aceptado" {
+		// Que alguien de la casa se entere sin abrir la lista (H215).
+		if s.push != nil {
+			go s.push.Avisar(context.WithoutCancel(ctx), push.Aviso{
+				Titulo: "Presupuesto aceptado · " + numero, Cuerpo: c.Nombre + " aceptó " + formato.Importe(total) + " desde Mi cuenta.",
+				URL: "/admin/presupuestos/" + id, Pantalla: "/admin/presupuestos", Etiqueta: "presupuesto_aceptado",
+			})
+		}
 		return "Listo, avisamos al vendedor. Te contactamos para coordinar la entrega.", nil
 	}
 	return "Anotado. Si querés cambiar algo, escribinos y armamos otro.", nil
@@ -217,7 +345,13 @@ func opcional(campo, v string, max int) (*string, error) {
 }
 
 // GuardarDatos es guardarMisDatos: la ficha y el perfil, juntos.
-func (s *Servicio) GuardarDatos(ctx context.Context, usuario string, c *Cliente, f FormDatos) error {
+//
+// El CUIT se verifica con el dígito verificador (internal/cuit), no solo el
+// formato: la ficha alimenta la factura, y uno mal tipeado la hace rebotar en
+// ARCA (H078). Con los datos fiscales fijos (ver Cliente.DatosFiscalesFijos)
+// el cliente cambia su nombre y su teléfono, y lo fiscal lo cambia la casa;
+// si todavía no facturó, puede cambiarlo, y queda en la bitácora (H079).
+func (s *Servicio) GuardarDatos(ctx context.Context, ses *auth.Sesion, c *Cliente, f FormDatos) error {
 	nombre := strings.TrimSpace(f.Nombre)
 	switch {
 	case plataforma.LargoJS(nombre) < 2:
@@ -237,28 +371,60 @@ func (s *Servicio) GuardarDatos(ctx context.Context, usuario string, c *Cliente,
 	if err != nil {
 		return err
 	}
-	if cuitTexto != nil && !reCuit.MatchString(*cuitTexto) {
-		return mal("cuit", "El CUIT tiene que tener 11 dígitos, con o sin guiones.")
+	condicion := f.CondicionIva
+	if c.DatosFiscalesFijos {
+		// El formulario no los manda: se quedan los de la ficha. Si llegan
+		// distintos (un formulario viejo, o a mano), no se pisan en silencio.
+		if (f.RazonSocial != "" && texto(razon) != texto(c.RazonSocial)) ||
+			(f.Cuit != "" && cuit.SoloDigitos(texto(cuitTexto)) != texto(c.Cuit)) ||
+			(condicion != "" && condicion != c.CondicionIva) {
+			return mal("cuit", "Tus datos para facturar los cambiamos desde el local. Escribinos.")
+		}
+		razon, cuitTexto, condicion = c.RazonSocial, c.Cuit, c.CondicionIva
+	} else {
+		if cuitTexto != nil && (!reCuit.MatchString(*cuitTexto) || !cuit.Valido(*cuitTexto)) {
+			if !reCuit.MatchString(*cuitTexto) {
+				return mal("cuit", "El CUIT tiene que tener 11 dígitos, con o sin guiones.")
+			}
+			return mal("cuit", "El CUIT no es válido: revisá los números.")
+		}
+		switch condicion {
+		case "responsable_inscripto", "monotributista", "exento", "consumidor_final", "no_categorizado":
+		default:
+			return mal("condicionIva", `Invalid option: expected one of "responsable_inscripto"|"monotributista"|"exento"|"consumidor_final"|"no_categorizado"`)
+		}
 	}
-	switch f.CondicionIva {
-	case "responsable_inscripto", "monotributista", "exento", "consumidor_final", "no_categorizado":
-	default:
-		return mal("condicionIva", `Invalid option: expected one of "responsable_inscripto"|"monotributista"|"exento"|"consumidor_final"|"no_categorizado"`)
-	}
-	var cuit *string
+	var elCuit *string
 	if cuitTexto != nil {
 		d := noDigito.ReplaceAllString(*cuitTexto, "")
-		cuit = &d
+		elCuit = &d
 	}
+	cambioFiscal := texto(razon) != texto(c.RazonSocial) || texto(elCuit) != texto(c.Cuit) || condicion != c.CondicionIva
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `UPDATE customers SET nombre = $1, telefono = $2, razon_social = $3, cuit = $4,
-			condicion_iva = $5::condicion_iva, updated_at = now() WHERE id = $6`, nombre, telefono, razon, cuit, f.CondicionIva, c.ID); err != nil {
+			condicion_iva = $5::condicion_iva, updated_at = now() WHERE id = $6`, nombre, telefono, razon, elCuit, condicion, c.ID); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE profiles SET telefono = $1, razon_social = $2, cuit = $3, condicion_iva = $4::condicion_iva,
-			updated_at = now() WHERE user_id = $5`, telefono, razon, cuit, f.CondicionIva, usuario)
-		return err
+		if _, err := tx.Exec(ctx, `UPDATE profiles SET telefono = $1, razon_social = $2, cuit = $3, condicion_iva = $4::condicion_iva,
+			updated_at = now() WHERE user_id = $5`, telefono, razon, elCuit, condicion, ses.UserID); err != nil {
+			return err
+		}
+		if cambioFiscal {
+			bitacora.Anotar(ctx, sqlc.New(tx), slog.Default(), ses, sqlc.AccionAuditoriaEditar, "cliente", c.ID,
+				"El cliente cambió sus datos fiscales desde Mi cuenta", map[string]any{
+					"antes":   map[string]any{"razonSocial": c.RazonSocial, "cuit": c.Cuit, "condicionIva": c.CondicionIva},
+					"despues": map[string]any{"razonSocial": razon, "cuit": elCuit, "condicionIva": condicion},
+				})
+		}
+		return nil
 	})
+}
+
+func texto(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }
 
 // Direccion es una dirección de entrega del cliente.

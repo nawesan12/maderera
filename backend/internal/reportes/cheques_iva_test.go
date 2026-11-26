@@ -77,6 +77,9 @@ func TestAsientosDeLosCheques(t *testing.T) {
 		{Sentido: "entregado", Desde: "entregado", Hacia: "acreditado"},
 		{Sentido: "recibido", Desde: "cartera", Hacia: "rechazado"},
 		{Sentido: "recibido", Desde: "cartera", Hacia: "anulado"},
+		// El rechazo del cheque de una venta del mostrador que quedó en el B:
+		// esa venta no tiene asiento de cobro (H419).
+		{Sentido: "recibido", Desde: "depositado", Hacia: "rechazado", ADeudores: true, Circuito: CircuitoNegro, DelMostradorEnB: true},
 	} {
 		if _, ok := AsientoDeCheque(c); ok {
 			t.Errorf("asentó %+v", c)

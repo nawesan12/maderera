@@ -15,6 +15,8 @@ func TestPresupuestoAPedidoConEnvioYACuenta(t *testing.T) {
 	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	_, cliente := e.web(t, "cliente@prueba.test")
 	u := e.srv.URL + "/api/v1/admin/"
+	// La zona tiene que ser una de las de envío.
+	e.exec(t, `insert into shipping_zones (nombre, costo, a_cotizar) values ('Tandil', 0, true)`)
 
 	nuevo := func() string {
 		c, b := pedir(t, ven, "POST", u+"presupuestos", e.alta("Obra Pérez", 1, map[string]any{"customerId": cliente}))
@@ -73,6 +75,23 @@ func TestPresupuestoAPedidoConEnvioYACuenta(t *testing.T) {
 	retiro := leer[Resultado](t, b)
 	if tipo := e.texto(t, `select tipo_entrega::text from orders where id = $1`, retiro.ID); tipo != "retiro" {
 		t.Fatalf("sin cuerpo: %s", tipo)
+	}
+
+	// Un retiro de un presupuesto sin sucursal se retira en la primera
+	// activa: la tarjeta decía «Retira en» sin decir dónde (mes simulado).
+	sinSucursal := nuevo()
+	e.exec(t, `update quotes set branch_id = null where id = $1`, sinSucursal)
+	c, b = pedir(t, ven, "POST", u+"presupuestos/"+sinSucursal+"/pedido", nil)
+	if c != 200 {
+		t.Fatalf("convertir sin sucursal: %d %s", c, b)
+	}
+	if suc := e.texto(t, `select coalesce(branch_id::text, '') from orders where id = $1`, leer[Resultado](t, b).ID); suc == "" {
+		t.Fatal("el retiro quedó sin sucursal")
+	}
+
+	// Sin caja abierta, el diálogo sabe antes de cobrar qué caja abrir.
+	if c, b := pedir(t, ven, "GET", u+"pedidos/"+retiro.ID+"/cobro", nil); c != 200 || !strings.Contains(b, `"sinCaja"`) {
+		t.Fatalf("la caja del cobro: %d %s", c, b)
 	}
 
 	// Cobrarlo con recibo: queda pagado por la suma de lo cobrado.

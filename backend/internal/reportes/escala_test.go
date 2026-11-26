@@ -24,16 +24,16 @@ func TestMargenesSoloDelPeriodo(t *testing.T) {
 	desde := time.Date(2026, 10, 1, 3, 0, 0, 0, time.UTC)
 	hasta := time.Date(2026, 11, 1, 3, 0, 0, 0, time.UTC)
 	var conRenglones, viejo string
-	if err := pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, total, created_at)
-		values ('A', 'Ana', 1210, '2026-10-10') returning id`).Scan(&conRenglones); err != nil {
+	if err := pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, total, created_at, estado)
+		values ('A', 'Ana', 1210, '2026-10-10', 'entregado') returning id`).Scan(&conRenglones); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `insert into orders (numero, contacto_nombre, total, created_at)
-		values ('B', 'Beto', 300, '2026-10-11')`); err != nil {
+	if _, err := pool.Exec(ctx, `insert into orders (numero, contacto_nombre, total, created_at, estado)
+		values ('B', 'Beto', 300, '2026-10-11', 'entregado')`); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, total, created_at)
-		values ('C', 'Viejo', 999, '2026-09-10') returning id`).Scan(&viejo); err != nil {
+	if err := pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, total, created_at, estado)
+		values ('C', 'Viejo', 999, '2026-09-10', 'entregado') returning id`).Scan(&viejo); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `insert into order_items (order_id, descripcion, cantidad, precio_unitario, subtotal, costo_unitario, alicuota_iva)

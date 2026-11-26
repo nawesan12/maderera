@@ -77,10 +77,18 @@ func Corte(d DatosCorte, _ time.Time) ([]byte, error) {
 		placas = "placa"
 	}
 	aprovechado := numeroJS(jsmath.Round(plano.AprovechadoTotal*100)) + "%"
+	// En singular con uno: la hoja decía «1 / piezas» (mes simulado, CRT-904).
+	rotuloPiezas, rotuloPasadas := "piezas", "pasadas"
+	if plano.TotalPiezas == 1 {
+		rotuloPiezas = "pieza"
+	}
+	if plano.Pasadas == 1 {
+		rotuloPasadas = "pasada"
+	}
 	cifras := [][2]string{
 		{strconv.Itoa(len(plano.Placas)), placas},
-		{numeroJS(plano.TotalPiezas), "piezas"},
-		{numeroJS(plano.Pasadas), "pasadas"},
+		{numeroJS(plano.TotalPiezas), rotuloPiezas},
+		{numeroJS(plano.Pasadas), rotuloPasadas},
 		{aprovechado, "aprovechado"},
 		{formatearSierra(plano.AnchoSierra), "se lleva la sierra"},
 		{metrosCorte(corte.MetrosCanto) + " m", "de tapacanto"},

@@ -11,7 +11,9 @@ import (
 
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/ventas"
+	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
 )
 
@@ -35,6 +37,9 @@ type ResultadoDeMostrador struct {
 	Categoria      *string `json:"categoria"`
 	FormaDeVenta   string  `json:"formaDeVenta"`
 	PrecioMediaPct float64 `json:"precioMediaPct"`
+	// Piso es el precio final que apenas cubre el costo (precios.PisoDeCosto);
+	// nil sin costo cargado. El presupuesto marca un renglón por debajo.
+	Piso *float64 `json:"piso"`
 }
 
 // args junta los parámetros de una consulta armada a mano.
@@ -84,6 +89,38 @@ func precio(a *args, l Lista, propia, general string) string {
 	return "coalesce(" + propia + ".price, round((" + general + ".price * " + a.poner(jsmath.Texto(l.FactorDerivado)) + "::numeric)::numeric, 2))"
 }
 
+// numerosSueltos cuenta los números tipeados que no aparecen enteros en el
+// nombre y la medida: «mdf 18» pone primero el de «18 mm» y no el de «1830 x
+// 2600mm» (mes simulado, H017). Cero si no se tipeó ningún número.
+func numerosSueltos(a *args, consulta string) string {
+	var partes []string
+	for _, t := range strings.FieldsFunc(zodjs.TrimJS(consulta), zodjs.EspacioJS) {
+		if !soloDigitos(t) {
+			continue
+		}
+		p := a.poner("(^|[^0-9])" + t + "([^0-9]|$)")
+		partes = append(partes, "CASE WHEN (p.name || ' ' || coalesce(v.label, '')) ~ "+p+" THEN 0 ELSE 1 END")
+		if len(partes) == 6 {
+			break
+		}
+	}
+	if len(partes) == 0 {
+		// Una expresión y no «0»: un entero suelto en el ORDER BY es el
+		// número de columna.
+		return "0::int"
+	}
+	return "(" + strings.Join(partes, " + ") + ")"
+}
+
+func soloDigitos(t string) bool {
+	for _, r := range t {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return t != ""
+}
+
 // Buscar es buscarParaMostrador.
 func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *string) ([]ResultadoDeMostrador, error) {
 	consulta := zodjs.TrimJS(texto)
@@ -110,16 +147,34 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	joins := joinDePrecios(&a, lista, "propio", "general")
 	pr := precio(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)
+	sueltos := numerosSueltos(&a, consulta)
+	// Lo que coincide por el nombre va antes que lo que coincide por la
+	// categoría o un pedazo de palabra (mes simulado: «laca» traía primero
+	// los fenólicos, porque «placa» contiene «laca», y «escalera», los
+	// decks). Primero el nombre que empieza con lo buscado, después el que
+	// tiene una palabra que empieza así, después el resto.
+	nombre := "f_unaccent(p.name || ' ' || coalesce(v.label, ''))"
+	primera := ""
+	if t := strings.FieldsFunc(consulta, zodjs.EspacioJS); len(t) > 0 {
+		primera = t[0]
+	}
+	empieza := a.poner(primera + "%")
+	palabra := a.poner("% " + primera + "%")
+	porNombre := "CASE WHEN " + nombre + " ILIKE f_unaccent(" + empieza + ") THEN 0 WHEN ' ' || " + nombre + " ILIKE f_unaccent(" + palabra + ") THEN 1 ELSE 2 END"
 	sql := `
 		SELECT v.id, v.sku, p.name, v.label, v.largo_mm, v.ancho_mm, v.color, c.name, p.unit::text,
-		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `, coalesce(i.qty, 0)
+		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `,
+		       -- Lo disponible y no el físico: lo reservado para un acopio
+		       -- aparecía libre y se volvía a vender (mes simulado, H023).
+		       greatest(coalesce(i.qty, 0) - coalesce((SELECT sum(r.cantidad) FROM stock_reservations r
+		         WHERE r.variant_id = v.id AND r.branch_id = ` + suc + `::uuid AND r.estado = 'activa'), 0), 0)
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
 		` + joins + `
 		LEFT JOIN inventory i ON i.variant_id = v.id AND i.branch_id = ` + suc + `::uuid
 		WHERE v.active = true AND p.active = true AND ` + cond + `
-		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, p.name, v.sort_order
+		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, ` + sueltos + `, ` + porNombre + `, p.name, v.sort_order
 		LIMIT ` + fmt.Sprint(tope)
 	// Plan a medida en cada búsqueda (QueryExecModeExec): con el plan genérico
 	// que Postgres arma después de cinco ejecuciones de la misma sentencia,
@@ -146,7 +201,24 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		r.Stock = stock.F()
 		out = append(out, r)
 	}
-	return out, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	filas.Close()
+	ids := make([]string, len(out))
+	for i, r := range out {
+		ids[i] = r.VariantID
+	}
+	pisos, err := precios.PisosDeCosto(ctx, s.pool, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if p, ok := pisos[out[i].VariantID]; ok {
+			out[i].Piso = &p
+		}
+	}
+	return out, nil
 }
 
 // PreciosPara son los precios de unas variantes para un cliente (cuando se lo
@@ -303,6 +375,43 @@ func (s *Servicio) ClientePorID(ctx context.Context, id string) (*ClienteDelMost
 	c := cs[0]
 	c.LimiteCredito = nil // clientePorId no lo trae
 	return &c, nil
+}
+
+// PedidoSinCobrar es un pedido del cliente con mercadería que salió y algo
+// sin cobrar (la cifra de «Me deben»).
+type PedidoSinCobrar struct {
+	ID     string  `json:"id"`
+	Numero string  `json:"numero"`
+	Monto  float64 `json:"monto"`
+}
+
+// PedidosSinCobrar son los del cliente, del más viejo al más nuevo (hasta
+// diez): el mostrador los muestra junto al «Debe» para cobrarlos donde se
+// cobra la cuenta (mes simulado, H367).
+func (s *Servicio) PedidosSinCobrar(ctx context.Context, cliente string) ([]PedidoSinCobrar, error) {
+	out := []PedidoSinCobrar{}
+	if !plataforma.UUIDValido(cliente) {
+		return out, nil
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT id, numero, monto FROM (
+		  SELECT o.id::text AS id, o.numero, `+fragmentos.SinCobrarDeLoQueSalio+` AS monto, o.created_at
+		  FROM orders o WHERE o.customer_id = $1 AND `+fragmentos.SalioMercaderia+`
+		) x WHERE monto > 0.009 ORDER BY created_at LIMIT 10`, cliente)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var p PedidoSinCobrar
+		var m jsmath.Num
+		if err := filas.Scan(&p.ID, &p.Numero, &m); err != nil {
+			return nil, err
+		}
+		p.Monto = m.F()
+		out = append(out, p)
+	}
+	return out, filas.Err()
 }
 
 // SaldoDeCuenta es lo que debe un cliente (positivo: debe).

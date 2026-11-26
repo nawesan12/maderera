@@ -144,7 +144,9 @@ func (s *Servicio) manejador(f func(context.Context, json.RawMessage) error) col
 	}
 }
 
-func primerNombre(n string) string { return strings.Split(n, " ")[0] }
+// primerNombre es el nombre del saludo del correo: el de una empresa va
+// entero, sin «SRL» (whatsapp.NombreDeSaludo).
+func primerNombre(n string) string { return whatsapp.NombreDeSaludo(n) }
 
 type cliente struct {
 	nombre          string
@@ -201,7 +203,7 @@ func (s *Servicio) Recibo(ctx context.Context, id string) error {
 	nombre := c.nombre
 	s.wa.AvisarPorWhatsapp(ctx, whatsapp.OpcionesAviso{
 		Evento: "recibo_emitido", Telefono: c.telefono, Nombre: &nombre,
-		Valores:      map[string]string{"importe": formato.MonedaEntera(r.Total), "recibo": r.Numero, "saldo": formato.MonedaEntera(saldo)},
+		Valores:      map[string]string{"importe": formato.Importe(r.Total), "recibo": r.Numero, "saldo": formato.Importe(saldo)},
 		Entidad:      &whatsapp.Entidad{Tipo: "receipt", ID: id},
 		ConDocumento: true, Documento: &whatsapp.Documento{Contenido: archivo, Nombre: nombreArchivo},
 	})
@@ -244,7 +246,7 @@ func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bo
 	}
 	s.wa.AvisarPorWhatsapp(ctx, whatsapp.OpcionesAviso{
 		Evento: "cheque_rechazado", Telefono: telefono, Nombre: &nombre,
-		Valores: map[string]string{"cheque": cheque, "importe": formato.MonedaEntera(importe), "motivo": paraWa},
+		Valores: map[string]string{"cheque": cheque, "importe": formato.Importe(importe), "motivo": paraWa},
 		Entidad: &whatsapp.Entidad{Tipo: "cheque", ID: id},
 	})
 	if correo == nil || *correo == "" {

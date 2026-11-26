@@ -10,6 +10,7 @@ import (
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 )
 
 // ErrorDeEmision es un motivo de negocio que se muestra tal cual (el
@@ -126,7 +127,11 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 	}
 	tipo := tipoForzado
 	if tipo == "" {
-		tipo = fiscal.TipoFactura(fiscal.LetraQueCorresponde(config.CondicionIva, d.ReceptorCondicionIva))
+		l, err := letraPara(ctx, tx, config.CondicionIva, d.ReceptorCondicionIva)
+		if err != nil {
+			return "", err
+		}
+		tipo = fiscal.TipoFactura(l)
 	}
 	// La factura de una venta cuyo cheque ya se endosó en un pago del B no se
 	// emite. Con la factura, el cheque pasa al blanco (CircuitoDelCheque) y
@@ -147,7 +152,7 @@ func (s *Servicio) EmitirEnTransaccion(ctx context.Context, tx pgx.Tx, d DatosEm
 			return "", err
 		}
 		if numero != nil {
-			return "", errEmision("El cheque N° " + *numero + " de esta venta ya se endosó en un pago del circuito B: con la factura quedaría en el blanco. Anulá ese pago antes de facturar.")
+			return "", errEmision("El cheque N° " + *numero + " de esta venta ya se endosó en un pago del " + reglas.Circuito(ctx, tx) + ": con la factura quedaría en el blanco. Anulá ese pago antes de facturar.")
 		}
 	}
 	// Una A sin CUIT válido del receptor no llega a numerarse: venga de un

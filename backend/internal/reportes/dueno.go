@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/cobros"
+	"mjbj/internal/compras"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -84,21 +85,41 @@ type ChequesDeLaSemana struct {
 }
 
 // CajaAbierta es el efectivo que tendría que haber ahora en una sucursal.
+// Cerrada: el turno de hoy ya se cerró y no se abrió otro; la cifra es lo
+// contado al cerrar, que sigue siendo plata de la casa (antes, con todas las
+// cajas cerradas, el efectivo desaparecía de «Plata hoy»).
 type CajaAbierta struct {
 	BranchID string  `json:"branchId"`
 	Sucursal string  `json:"sucursal"`
 	Esperado float64 `json:"esperado"`
+	Cerrada  bool    `json:"cerrada"`
 }
 
 // PlataHoy es la plata del día.
+//
+// No hay saldo del banco (la maderera no lo carga): lo del banco es lo que
+// se movió hoy, entradas menos salidas, con su signo. Así cada pase entre
+// lugares deja el total igual —un cheque acreditado sale de la cartera y
+// entra al banco, un depósito sale de la caja y entra al banco, un retiro a
+// la caja fuerte sale de la caja y entra a la caja fuerte— y lo que se paga
+// por transferencia lo baja.
 type PlataHoy struct {
-	Cajas       []CajaAbierta `json:"cajas"`
-	Efectivo    float64       `json:"efectivo"`
-	Banco       float64       `json:"banco"`
-	MercadoPago float64       `json:"mercadoPago"`
-	Tarjetas    float64       `json:"tarjetas"`
-	Cheques     Monto         `json:"cheques"`
-	Total       float64       `json:"total"`
+	Cajas    []CajaAbierta `json:"cajas"`
+	Efectivo float64       `json:"efectivo"`
+	// CajaFuerte: lo retirado hoy de las cajas a la caja fuerte.
+	CajaFuerte float64 `json:"cajaFuerte"`
+	// Banco es BancoEntro − BancoSalio.
+	Banco       float64 `json:"banco"`
+	BancoEntro  float64 `json:"bancoEntro"`
+	BancoSalio  float64 `json:"bancoSalio"`
+	MercadoPago float64 `json:"mercadoPago"`
+	// Tarjetas no suma al total: se liquidan días después.
+	Tarjetas float64 `json:"tarjetas"`
+	Cheques  Monto   `json:"cheques"`
+	// ChequesDepositados: salieron de la cartera y el banco todavía no los
+	// acreditó. Siguen siendo plata de la casa.
+	ChequesDepositados Monto   `json:"chequesDepositados"`
+	Total              float64 `json:"total"`
 }
 
 // Resultado es ventas netas − lo vendido sin costo − costo − gastos de un
@@ -111,7 +132,13 @@ type Resultado struct {
 	VentasSinCosto float64 `json:"ventasSinCosto"`
 	Costo          float64 `json:"costo"`
 	Gastos         float64 `json:"gastos"`
-	Resultado      float64 `json:"resultado"`
+	// Envios es el flete cobrado en los pedidos del período, sin IVA. Es
+	// ingreso: los fletes pagados restan como gasto, y dejar afuera los
+	// cobrados hacía que el resultado no contara $ 176 mil del mes y que
+	// Reportes no cuadrara con el inicio sin decir por qué (simulación del
+	// mes, H360).
+	Envios    float64 `json:"envios"`
+	Resultado float64 `json:"resultado"`
 	// LineasSinCosto: cuántos renglones forman VentasSinCosto.
 	LineasSinCosto int `json:"lineasSinCosto"`
 	// ConDescuento: la regla del negocio resta el descuento del pedido de
@@ -147,8 +174,9 @@ type ResultadoComparado struct {
 // cobrada así no es plata que se fue.
 //
 // ConFacturaViva son las ventas anuladas, de cualquier fecha y origen, que
-// siguen con su factura autorizada y sin nota de crédito que la acredite:
-// para el fisco esa venta existe y su IVA se debe. Es el mismo número que el
+// siguen con su factura autorizada y sin nota de crédito que la acredite
+// (para el fisco esa venta existe y su IVA se debe), o con una factura sin
+// CAE que falta dar de baja. Es el mismo número que el
 // pendiente del Cierre; contar solo las de la semana hacía que la misma
 // cosa diera dos cantidades, y una de hace diez días dejaba de verse.
 type Anuladas struct {
@@ -293,7 +321,7 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 	hasta := InicioDelDia(ahora).AddDate(0, 0, 1)
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*)::int, coalesce(sum(o.total), 0),
-		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND `+fragmentos.FacturaViva+`),
+		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND (`+fragmentos.FacturaViva+` OR `+fragmentos.FacturaSinBaja+`)),
 		  (SELECT coalesce(-sum(m.monto), 0) FROM cash_movements m
 		   JOIN orders d ON d.id = m.order_id AND d.origen = 'mostrador' AND d.estado = 'cancelado'
 		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2
@@ -305,9 +333,10 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 	return a, err
 }
 
-// saldoDeCompra es el saldo de cada factura de compra (las notas de crédito
-// no son deuda: restan aparte en la cuenta del proveedor).
-const saldoDeCompra = `(f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0))`
+// saldoDeCompra es el saldo de cada factura de compra, con la regla de
+// compras.AplicadoA (las notas de crédito sin aplicar no son deuda: restan
+// aparte en la cuenta del proveedor).
+var saldoDeCompra = `(f.total - ` + compras.AplicadoA("f") + `)`
 
 // Debo suma, proveedor por proveedor, lo que dice su libro.
 //
@@ -320,7 +349,10 @@ const saldoDeCompra = `(f.total - coalesce((SELECT sum(a.importe) FROM supplier_
 // salda la cuenta (Pagos los lista también, por lo mismo).
 func (s *Servicio) Debo(ctx context.Context, ahora time.Time) (Debo, error) {
 	var d Debo
-	hoy := InicioDelDia(ahora)
+	// El vencimiento es un día guardado a medianoche UTC: se compara contra
+	// el día argentino de hoy escrito igual. Contra la medianoche argentina
+	// (las 3 UTC), una factura que vencía hoy ya figuraba vencida.
+	hoy := DiaDeHoy(ahora)
 	rs, err := s.pool.Query(ctx, `
 		SELECT coalesce(l.saldo, 0)::float8,
 		  coalesce(sum(x.saldo), 0)::float8, count(x.saldo)::int,
@@ -384,6 +416,14 @@ func DeudaConProveedor(libro, facturado, vencido, semana float64) DeudaDeUnProve
 	return r
 }
 
+// DiaDeHoy es el día argentino de `ahora` a la medianoche UTC: como se
+// guardan los días que se cargan en un formulario (vencimientos, fechas de
+// pago). Una fecha así está vencida si es anterior a esto, no a InicioDelDia.
+func DiaDeHoy(ahora time.Time) time.Time {
+	a := ahora.In(Argentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
+}
+
 // InicioDelDia es el día argentino de `ahora`, a las 0.
 func InicioDelDia(ahora time.Time) time.Time {
 	a := ahora.In(Argentina)
@@ -407,8 +447,21 @@ func (s *Servicio) ChequesDeLaSemana(ctx context.Context, ahora time.Time) (Cheq
 	return c, err
 }
 
-// PlataHoy: las cajas abiertas, lo cobrado hoy por otro medio que el
-// efectivo y los cheques en cartera.
+// RetiroAlBanco dice, en SQL, si un retiro de caja (alias m) fue un depósito
+// en el banco. Desde la 00310 el retiro guarda a dónde va (H333); los de
+// antes no, y para ellos lo dice el motivo que se escribía («Depósito en el
+// banco», «Al banco»).
+const RetiroAlBanco = `coalesce(m.destino = 'banco', m.motivo ~* '(banco|dep[oó]sit)', false)`
+
+// RetiroACajaFuerte: el retiro fue a la caja fuerte. Uno viejo sin destino
+// que no fue al banco se tomaba como de la caja fuerte, y se sigue tomando
+// así; el que dice «otro» (un pago en mano, el dueño que se lleva plata) no
+// es plata de la casa que esté en algún lado.
+const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.motivo ~* '(banco|dep[oó]sit)', false))`
+
+// PlataHoy: las cajas (abiertas, o la de hoy ya cerrada), lo retirado hoy a
+// la caja fuerte, lo que entró y salió hoy del banco, lo cobrado por Mercado
+// Pago y los cheques en cartera o depositados.
 //
 // Lo cobrado sale de tres lados que no se pisan: las partes de los recibos
 // emitidos hoy (cuenta corriente, mostrador, portal), los pagos de las
@@ -417,24 +470,45 @@ func (s *Servicio) ChequesDeLaSemana(ctx context.Context, ahora time.Time) (Cheq
 // La venta del mostrador se cobra al crearse: cobrada_at solo lo lleva la
 // que llegó de la cola sin conexión (la hora en que se cobró de verdad), así
 // que la de todos los días se mide por created_at, como la caja y Cobros.
-// Con cobrada_at solo, lo cobrado con tarjeta o transferencia en el mostrador
-// no aparecía nunca en «Plata hoy».
 // El efectivo de los recibos y de las ventas ya está en el «esperado» de su
 // caja, así que no se suma otra vez.
+//
+// Al banco también entran los cheques recibidos acreditados hoy y los
+// retiros de caja que fueron depósitos (RetiroAlBanco). Del banco salen los
+// pagos a proveedores de hoy que no fueron en efectivo ni con cheque (el
+// efectivo sale de una caja; el cheque de un tercero, de la cartera; el
+// propio, cuando el banco lo debita, que es cuando se marca acreditado), los
+// gastos de hoy por transferencia o débito y los cheques propios debitados
+// hoy. Hasta el 26/11 el banco era solo lo cobrado: con $5 millones pagados
+// a un proveedor por transferencia, la dueña veía la plata que había
+// entrado y no la que había salido; y un cheque acreditado salía de la
+// cartera sin entrar a ningún lado.
 func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, error) {
 	p := PlataHoy{Cajas: []CajaAbierta{}}
+	hoy := InicioDelDia(ahora)
+	manana := hoy.AddDate(0, 0, 1)
+	// La caja abierta con su esperado; la sucursal sin caja abierta, con lo
+	// contado en el último cierre de hoy. Las abiertas primero.
 	rs, err := s.pool.Query(ctx, `
-		SELECT b.id, b.name, coalesce(sum(m.monto), 0)
-		FROM cash_sessions s JOIN branches b ON b.id = s.branch_id
-		LEFT JOIN cash_movements m ON m.session_id = s.id
-		WHERE s.estado = 'abierta'
-		GROUP BY b.id, b.name, b.sort_order ORDER BY b.sort_order`)
+		SELECT x.id, x.name, x.monto, x.cerrada FROM (
+		  SELECT b.id, b.name, b.sort_order, coalesce(sum(m.monto), 0) AS monto, false AS cerrada
+		  FROM cash_sessions s JOIN branches b ON b.id = s.branch_id
+		  LEFT JOIN cash_movements m ON m.session_id = s.id
+		  WHERE s.estado = 'abierta'
+		  GROUP BY b.id, b.name, b.sort_order
+		  UNION ALL
+		  (SELECT DISTINCT ON (b.id) b.id, b.name, b.sort_order, coalesce(s.contado, 0), true
+		  FROM cash_sessions s JOIN branches b ON b.id = s.branch_id
+		  WHERE s.estado = 'cerrada' AND s.cerrada_at >= $1 AND s.cerrada_at < $2
+		    AND NOT EXISTS (SELECT 1 FROM cash_sessions a WHERE a.branch_id = s.branch_id AND a.estado = 'abierta')
+		  ORDER BY b.id, s.cerrada_at DESC)
+		) x ORDER BY x.cerrada, x.sort_order, x.name`, hoy, manana)
 	if err != nil {
 		return p, err
 	}
 	var c CajaAbierta
 	var esperado jsmath.Num
-	if _, err := pgx.ForEachRow(rs, []any{&c.BranchID, &c.Sucursal, &esperado}, func() error {
+	if _, err := pgx.ForEachRow(rs, []any{&c.BranchID, &c.Sucursal, &esperado, &c.Cerrada}, func() error {
 		c.Esperado = esperado.F()
 		p.Cajas = append(p.Cajas, c)
 		p.Efectivo += c.Esperado
@@ -442,8 +516,7 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 	}); err != nil {
 		return p, err
 	}
-	hoy := InicioDelDia(ahora)
-	var banco, mp, tarjetas, cheques jsmath.Num
+	var cobradoBanco, mp, tarjetas, cheques, depositados, alBanco, cajaFuerte, acreditados, pagos, gastos, debitados jsmath.Num
 	err = s.pool.QueryRow(ctx, `
 		WITH cobrado AS (
 		  SELECT CASE WHEN rp.medio IN ('transferencia', 'deposito') THEN 'banco'
@@ -467,17 +540,47 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		  coalesce(sum(importe) FILTER (WHERE donde = 'mp'), 0),
 		  coalesce(sum(importe) FILTER (WHERE donde = 'tarjeta'), 0),
 		  (SELECT coalesce(sum(importe), 0) FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera'),
-		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera')
-		FROM cobrado`, hoy, hoy.AddDate(0, 0, 1)).Scan(&banco, &mp, &tarjetas, &cheques, &p.Cheques.Cantidad)
+		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'cartera'),
+		  (SELECT coalesce(sum(importe), 0) FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
+		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
+		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroAlBanco+`), 0) FROM cash_movements m
+		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2),
+		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroACajaFuerte+`), 0) FROM cash_movements m
+		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2),
+		  (SELECT coalesce(sum(c.importe), 0) FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
+		    WHERE c.sentido = 'recibido' AND e.hacia = 'acreditado' AND e.at >= $1 AND e.at < $2),
+		  (SELECT coalesce(sum(CASE WHEN EXISTS (SELECT 1 FROM supplier_payment_parts x WHERE x.payment_id = p.id)
+		      THEN (SELECT coalesce(sum(x.importe), 0) FROM supplier_payment_parts x
+		            WHERE x.payment_id = p.id AND x.cheque_id IS NULL AND x.medio NOT IN ('efectivo', 'cheque', 'echeq'))
+		      WHEN p.medio IN ('efectivo', 'cheque', 'echeq') THEN 0 ELSE p.neto END), 0)
+		    FROM supplier_payments p WHERE p.anulado_at IS NULL AND p.fecha >= $1 AND p.fecha < $2),
+		  (SELECT coalesce(sum(importe), 0) FROM expenses
+		    WHERE medio IN ('transferencia', 'debito') AND fecha >= $3 AND fecha < $4 AND anulado_at IS NULL),
+		  (SELECT coalesce(sum(c.importe), 0) FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
+		    WHERE c.sentido = 'entregado' AND e.hacia = 'acreditado' AND e.at >= $1 AND e.at < $2)
+		FROM cobrado`, hoy, manana, diaDeGasto(hoy), diaDeGasto(hoy).AddDate(0, 0, 1)).
+		Scan(&cobradoBanco, &mp, &tarjetas, &cheques, &p.Cheques.Cantidad, &depositados, &p.ChequesDepositados.Cantidad,
+			&alBanco, &cajaFuerte, &acreditados, &pagos, &gastos, &debitados)
 	if err != nil {
 		return p, err
 	}
-	p.Banco, p.MercadoPago, p.Tarjetas, p.Cheques.Total = banco.F(), mp.F(), tarjetas.F(), cheques.F()
+	p.MercadoPago, p.Tarjetas = mp.F(), tarjetas.F()
+	p.Cheques.Total, p.ChequesDepositados.Total = cheques.F(), depositados.F()
+	p.CajaFuerte = jsmath.Redondear2(cajaFuerte.F())
+	p.BancoEntro = jsmath.Redondear2(float64(cobradoBanco.F()+alBanco.F()) + acreditados.F())
+	p.BancoSalio = jsmath.Redondear2(float64(pagos.F()+gastos.F()) + debitados.F())
+	p.Banco = jsmath.Redondear2(p.BancoEntro - p.BancoSalio)
 	p.Efectivo = jsmath.Redondear2(p.Efectivo)
 	// Las tarjetas se liquidan días después: no son plata de hoy. Se muestran
 	// aparte, como lo que está por acreditarse, y no suman al total.
-	p.Total = jsmath.Redondear2(float64(float64(p.Efectivo+p.Banco)+p.MercadoPago) + p.Cheques.Total)
+	p.Total = jsmath.Redondear2(float64(float64(float64(float64(p.Efectivo+p.CajaFuerte)+p.Banco)+p.MercadoPago)+
+		p.Cheques.Total) + p.ChequesDepositados.Total)
 	return p, nil
+}
+
+// diaDeGasto es el día argentino como lo guarda un gasto: a las 0 UTC.
+func diaDeGasto(hoy time.Time) time.Time {
+	return time.Date(hoy.Year(), hoy.Month(), hoy.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // ResultadoEntre es ventas netas − costo − gastos, sobre lo que tiene costo.
@@ -504,32 +607,37 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 // se les resta el descuento del pedido (prorrateado en sus renglones).
 func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, dhasta time.Time) (Resultado, error) {
 	var r Resultado
-	var neto, sinCosto, costo, gastos jsmath.Num
+	var neto, sinCosto, costo, gastos, envios jsmath.Num
 	sinIva := s.ajuste(ctx, "ganancia_gastos", "con_iva") == "sin_iva"
 	r.ConDescuento = s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	gasto := "e.importe"
 	if sinIva {
 		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
 	}
-	const delPeriodo = `o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2`
+	const delPeriodo = `o.fecha >= $1 AND o.fecha < $2`
 	err := s.pool.QueryRow(ctx, `
 		SELECT `+ventasNetas(r.ConDescuento, "margenes.neto")+`,
 		  `+ventasNetas(r.ConDescuento, "(margenes.neto - coalesce(margenes.neto_costeado, 0))")+`,
 		  coalesce(sum(margenes.costo), 0), coalesce(sum(margenes.sin_costo), 0)::int,
 		  (SELECT coalesce(sum(`+gasto+`), 0) FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
-		   WHERE e.fecha >= $3 AND e.fecha < $4)
+		   WHERE e.fecha >= $3 AND e.fecha < $4 AND e.anulado_at IS NULL),
+		  coalesce(sum(`+envioSinIva+`) FILTER (WHERE o.operaciones = 1), 0)
 		FROM `+hechosDeVenta+` o `+margenesDe(delPeriodo)+`
 		WHERE `+delPeriodo, idesde, ihasta, ddesde, dhasta).
-		Scan(&neto, &sinCosto, &costo, &r.LineasSinCosto, &gastos)
+		Scan(&neto, &sinCosto, &costo, &r.LineasSinCosto, &gastos, &envios)
 	if err != nil {
 		return r, err
 	}
 	r.VentasNetas, r.VentasSinCosto = jsmath.Redondear2(neto.F()), jsmath.Redondear2(sinCosto.F())
 	r.Costo, r.Gastos = jsmath.Redondear2(costo.F()), jsmath.Redondear2(gastos.F())
-	r.Resultado = jsmath.Redondear2(float64(float64(r.VentasNetas-r.VentasSinCosto)-r.Costo) - r.Gastos)
+	r.Envios = jsmath.Redondear2(envios.F())
+	r.Resultado = jsmath.Redondear2(float64(float64(float64(r.VentasNetas-r.VentasSinCosto)-r.Costo)-r.Gastos) + r.Envios)
 	r.SinCostosCargados = r.VentasNetas > 0 && r.VentasSinCosto > float64(r.VentasNetas*UmbralSinCostos)
 	return r, nil
 }
+
+// envioSinIva es el flete cobrado de la fila `o`, sin el IVA (21 %).
+const envioSinIva = `coalesce(o.costo_envio, 0) / 1.21`
 
 // ventasNetas suma `neto` (una expresión sobre margenes) de los pedidos `o`,
 // con el descuento del pedido prorrateado si la regla lo pide. La usan el

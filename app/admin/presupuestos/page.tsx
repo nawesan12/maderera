@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarClock, ClipboardList, Plus, Timer } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, Plus, ShoppingCart, Timer } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,16 +16,14 @@ import {
 } from "@/components/admin/paginador";
 import {
   fechaCorta,
+  formatearMonto,
   haceCuanto,
-  moneda,
   plural,
 } from "@/components/admin/formato";
 import {
   listarPresupuestos,
   type PresupuestoListado,
 } from "@/lib/dal/admin/ventas";
-import { AccionesPresupuesto, type ZonaParaPedido } from "./acciones";
-import { zonasParaPedido } from "./zonas";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 
 const ESTADOS = {
@@ -87,14 +85,13 @@ export default async function PresupuestosPage({
   const paginaAbiertos = dosListas ? leerPagina(params.espera) : pagina;
   const de = (n: number) => ({ limite: POR_PAGINA, desplazamiento: (n - 1) * POR_PAGINA });
 
-  const [abiertos, cerrados, zonas, sucursales] = await Promise.all([
+  const [abiertos, cerrados, sucursales] = await Promise.all([
     dosListas || ABIERTOS.has(estado)
       ? listarPresupuestos({ ...filtros, estado: estado ?? "abiertos" }, de(paginaAbiertos))
       : null,
     dosListas || !ABIERTOS.has(estado)
       ? listarPresupuestos({ ...filtros, estado: estado ?? "cerrados" }, de(pagina))
       : null,
-    zonasParaPedido(),
     listarSucursalesPublicas(),
   ]);
 
@@ -137,7 +134,7 @@ export default async function PresupuestosPage({
         titulo="Presupuestos"
         resumen={
           abiertos && abiertos.total > 0
-            ? `${plural(abiertos.total, "presupuesto")} esperando respuesta por ${moneda.format(abiertos.monto)}`
+            ? `${plural(abiertos.total, "presupuesto")} por atender por ${formatearMonto(abiertos.monto)}`
             : `${plural(total, "presupuesto")} en total`
         }
       >
@@ -173,13 +170,13 @@ export default async function PresupuestosPage({
         <>
           {abiertos && (
             <GrupoListado
-              titulo="Esperando respuesta"
+              titulo="Por atender"
               cantidad={abiertos.total}
-              detalle={abiertos.total > 0 ? moneda.format(abiertos.monto) : undefined}
+              detalle={abiertos.total > 0 ? formatearMonto(abiertos.monto) : undefined}
               destacado
             >
               {abiertos.filas.map((p) => (
-                <Tarjeta key={p.id} presupuesto={p} zonas={zonas} />
+                <Tarjeta key={p.id} presupuesto={p} />
               ))}
               {cerrados ? (
                 <Paginador
@@ -204,9 +201,16 @@ export default async function PresupuestosPage({
                 </p>
               }
             >
-              {cerrados.filas.map((p) => (
-                <Tarjeta key={p.id} presupuesto={p} zonas={zonas} apagado />
-              ))}
+              {/* Un renglón por cerrado (mes simulado: con 40 en el mes, la
+                  página medía 9.500 px en el teléfono y lo abierto quedaba
+                  arriba en dos tarjetas). */}
+              {cerrados.filas.length > 0 && (
+                <ul className="tarjeta divide-y divide-linea overflow-hidden">
+                  {cerrados.filas.map((p) => (
+                    <Renglon key={p.id} presupuesto={p} />
+                  ))}
+                </ul>
+              )}
               {paginador}
             </GrupoListado>
           )}
@@ -216,23 +220,39 @@ export default async function PresupuestosPage({
   );
 }
 
-function Tarjeta({
-  presupuesto: p,
-  zonas,
-  apagado = false,
-}: {
-  presupuesto: PresupuestoListado;
-  zonas: ZonaParaPedido[];
-  apagado?: boolean;
-}) {
+/** Un cerrado en una línea: cliente, número, total y estado. */
+function Renglon({ presupuesto: p }: { presupuesto: PresupuestoListado }) {
   return (
-    <article
-      className={`tarjeta tarjeta-activa relative overflow-hidden ${
-        // Fondo apagado y no opacidad: con opacity-75 el texto (y las
-        // insignias) caían por debajo de 4,5:1.
-        apagado ? "bg-sitio-alt shadow-none" : ""
-      }`}
-    >
+    <li>
+      <Link
+        href={`/admin/presupuestos/${p.id}`}
+        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+      >
+        <span className="min-w-0 flex-1">
+          {/* Entero, en dos renglones si hace falta: a 375 px se cortaba
+              «RF Construcciones S…». */}
+          <span className="block break-words text-base font-medium">{p.cliente}</span>
+          <span className="codigo block text-sm text-muted-foreground">
+            {p.numero}
+            {p.numeroPedido && ` · ${p.numeroPedido}`}
+          </span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          <span className="tabular text-base">{formatearMonto(p.total)}</span>
+          <EtiquetaEstado estado={p.vencido && p.estado !== "rechazado" ? "vencido" : p.estado} />
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+    </li>
+  );
+}
+
+function Tarjeta({ presupuesto: p }: { presupuesto: PresupuestoListado }) {
+  // La razón social igual al nombre no se repite (mes simulado).
+  const empresa = p.empresa && p.empresa !== p.cliente ? p.empresa : null;
+  const aceptado = p.estado === "aceptado";
+  return (
+    <article className="tarjeta tarjeta-activa relative overflow-hidden">
       <AcentoEstado estado={p.estado} />
 
       <div className="flex flex-wrap items-start justify-between gap-4 py-5 pl-6 pr-5">
@@ -276,9 +296,7 @@ function Tarjeta({
             )}
           </div>
 
-          {p.empresa && (
-            <p className="text-base text-muted-foreground">{p.empresa}</p>
-          )}
+          {empresa && <p className="text-base text-muted-foreground">{empresa}</p>}
 
           {/* Cada dato con su «·» pegado: sueltos, a 390 px el punto
               quedaba solo al principio o al final del renglón (comité
@@ -324,17 +342,20 @@ function Tarjeta({
             en vez de quedar cortados por el borde. */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p className="tabular text-xl font-semibold">
-            {moneda.format(p.total)}
+            {formatearMonto(p.total)}
           </p>
-          <AccionesPresupuesto
-            id={p.id}
-            numero={p.numero}
-            estado={p.estado}
-            total={p.total}
-            pedido={p.pedidoId && p.numeroPedido ? { id: p.pedidoId, numero: p.numeroPedido } : null}
-            zonas={zonas}
-            conCliente={!!p.customerId}
-          />
+          {/* La acción principal a mano; el resto (corregir, mandárselo,
+              rechazar) en la ficha. El paso a pedido abre ahí, con el
+              disponible de la cuenta y las zonas. */}
+          <Link
+            href={`/admin/presupuestos/${p.id}${aceptado ? "?pasar=1" : ""}`}
+            className={`inline-flex h-11 items-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-base font-medium transition-colors ${
+              aceptado ? "boton-accion" : "bg-hundida hover:bg-muted"
+            }`}
+          >
+            {aceptado ? <ShoppingCart className="h-5 w-5" aria-hidden="true" /> : null}
+            {aceptado ? "Pasar a pedido" : "Abrir"}
+          </Link>
         </div>
       </div>
     </article>

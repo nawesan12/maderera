@@ -1,5 +1,6 @@
 "use client";
 
+import { pasadasACobrar as pasadasConfirmadas, type PiezaDelDespiece } from "@/lib/mostrador/pasadas-confirmadas";
 import { useMemo, useState } from "react";
 import { Download, Loader2, Plus, RotateCcw, Scissors, Trash2 } from "lucide-react";
 import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto";
@@ -93,6 +94,7 @@ export function CorteAMedida({
   onCerrar,
   onAgregar,
   corrigiendo = false,
+  confirmado = null,
 }: {
   /** La placa elegida del catálogo, con su medida y su precio para este cliente. */
   placa: {
@@ -124,6 +126,8 @@ export function CorteAMedida({
   onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador, estado: EstadoDelCorte) => void;
   /** Si se está corrigiendo un corte que ya está en la venta. */
   corrigiendo?: boolean;
+  /** El corte de la cola que se cobra: sus pasadas confirmadas en el taller. */
+  confirmado?: { piezas: PiezaDelDespiece[]; pasadas: number } | null;
 }) {
   const [piezas, setPiezas] = useState<PiezaCargada[]>(() => inicial?.piezas ?? [vacia()]);
   const [canto, setCanto] = useState(inicial?.canto ?? "");
@@ -184,13 +188,16 @@ export function CorteAMedida({
   );
 
   // El plano lo calcula Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
-  const { plano, placasACobrar, pasadasACobrar, calculando } = usePlano({
+  const { plano, placasACobrar, pasadasACobrar: pasadasDelPlano, placasParciales, calculando } = usePlano({
     piezas: validas,
     placaLargo,
     placaAncho,
     anchoSierra,
     fijadas,
   });
+
+  // Las del taller si es el corte de la cola, tal cual (lo mismo que Go).
+  const pasadasACobrar = pasadasConfirmadas(pasadasDelPlano, validas, confirmado);
 
   // La misma cuenta que la ficha del corte y la planilla del taller, que ya
   // está probada: no hay dos formas de medir un metro de tapacanto.
@@ -256,13 +263,13 @@ export function CorteAMedida({
      * catálogo y tienen que descontar stock del estante. El corte y el
      * tapacanto van sin variante, que es lo que hace que no descuenten nada.
      */
+    /*
+     * Media placa se cobra al precio de la media y descuenta **media placa**
+     * del estante: la otra mitad queda en el depósito y se puede vender
+     * suelta. Hasta el 1/10/2026 salía una placa entera, porque el stock no
+     * admitía decimales.
+     */
     if (placasACobrar > 0) {
-      /*
-       * Media placa se cobra al precio de la media y descuenta **media placa**
-       * del estante: la otra mitad queda en el depósito y se puede vender
-       * suelta. Hasta el 1/10/2026 salía una placa entera, porque el stock no
-       * admitía decimales.
-       */
       lineas.push({
         presentacion: presentacionDeMitad(mitad),
         variantId: placa.variantId,
@@ -438,9 +445,13 @@ export function CorteAMedida({
           )}
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        {/* Abajo de `lg` (la tablet, 800 px) todo el cuerpo scrollea junto:
+            con dos zonas de alto propio, la planilla se derramaba sobre el
+            plano y el renglón anterior se asomaba entre el tapacanto y los
+            títulos. */}
+        <div className="grid min-h-0 flex-1 overflow-y-auto overflow-x-hidden lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:overflow-hidden">
           <div
-            className="flex min-h-0 flex-col border-linea lg:border-r"
+            className="flex flex-col border-linea lg:min-h-0 lg:border-r"
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
               // Enter sobre un botón (Veta, un lado del canto, Quitar) hace lo
@@ -459,7 +470,11 @@ export function CorteAMedida({
               sumarPieza();
             }}
           >
-            <div className="px-6 pt-5">
+            {/* El tapacanto va arriba y fuera del scroll de las piezas, con el
+                encabezado de la planilla pegado debajo: antes el encabezado
+                pegajoso quedaba detrás del campo y la pieza que subía se
+                montaba (mes simulado, H181). */}
+            <div className="relative z-20 bg-background px-6 pb-2 pt-5">
               <label className="block">
                 <span className="sr-only">Tapacanto del trabajo</span>
                 <input
@@ -471,9 +486,11 @@ export function CorteAMedida({
               </label>
             </div>
 
-            <div className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-5 pt-1">
+            {/* Sin relleno arriba: el encabezado pegajoso se pega al borde
+                del relleno, y en esa franja se asomaba la pieza que subía. */}
+            <div className="@container px-6 pb-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overflow-x-hidden">
               {/* Encabezado de la planilla: una sola vez, no repetido por fila. */}
-              <div className={`sticky top-0 z-10 hidden bg-background py-2 text-sm font-semibold text-muted-foreground ${columnas}`}>
+              <div className={`sticky top-0 z-10 hidden bg-background py-2 text-sm font-semibold text-muted-foreground shadow-[0_1px_0_var(--linea)] ${columnas}`}>
                 <span>Pieza</span>
                 <span>Largo mm</span>
                 <span>Ancho mm</span>
@@ -493,31 +510,43 @@ export function CorteAMedida({
                       placeholder="Puerta, estante…"
                       className="h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
                     />
-                    <input
-                      autoFocus={i === 0}
-                      data-pieza="largo"
-                      inputMode="numeric"
-                      value={p.largo}
-                      onChange={(e) => cambiar(i, "largo", e.target.value)}
-                      aria-label={`Largo de la pieza ${i + 1}, en mm`}
-                      placeholder="Largo"
-                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
-                    />
-                    <input
-                      inputMode="numeric"
-                      value={p.ancho}
-                      onChange={(e) => cambiar(i, "ancho", e.target.value)}
-                      aria-label={`Ancho de la pieza ${i + 1}, en mm`}
-                      placeholder="Ancho"
-                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
-                    />
-                    <input
-                      inputMode="numeric"
-                      value={p.cantidad}
-                      onChange={(e) => cambiar(i, "cantidad", e.target.value)}
-                      aria-label={`Cantidad de la pieza ${i + 1}`}
-                      className="tabular h-11 w-[calc(33%-6px)] rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
-                    />
+                    {/* En angosto el encabezado de la planilla no se ve: cada
+                        número lleva su rótulo, o una vez tipeado no se sabe
+                        cuál es el largo y cuál el ancho (H181). */}
+                    <label className="w-[calc(33%-6px)] @2xl:contents">
+                      <span className="block text-xs font-semibold text-muted-foreground @2xl:hidden">Largo</span>
+                      <input
+                        autoFocus={i === 0}
+                        data-pieza="largo"
+                        inputMode="numeric"
+                        value={p.largo}
+                        onChange={(e) => cambiar(i, "largo", e.target.value)}
+                        aria-label={`Largo de la pieza ${i + 1}, en mm`}
+                        placeholder="Largo"
+                        className="tabular h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                      />
+                    </label>
+                    <label className="w-[calc(33%-6px)] @2xl:contents">
+                      <span className="block text-xs font-semibold text-muted-foreground @2xl:hidden">Ancho</span>
+                      <input
+                        inputMode="numeric"
+                        value={p.ancho}
+                        onChange={(e) => cambiar(i, "ancho", e.target.value)}
+                        aria-label={`Ancho de la pieza ${i + 1}, en mm`}
+                        placeholder="Ancho"
+                        className="tabular h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                      />
+                    </label>
+                    <label className="w-[calc(33%-6px)] @2xl:contents">
+                      <span className="block text-xs font-semibold text-muted-foreground @2xl:hidden">Cant.</span>
+                      <input
+                        inputMode="numeric"
+                        value={p.cantidad}
+                        onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                        aria-label={`Cantidad de la pieza ${i + 1}`}
+                        className="tabular h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base @2xl:w-auto"
+                      />
+                    </label>
                     {/* El canto se toca en el dibujo de la pieza, lado por
                         lado, como en el sitio: dos desplegables «largo: 1»
                         no se leían de un vistazo. */}
@@ -601,7 +630,7 @@ export function CorteAMedida({
             </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto bg-hundida/40 px-6 py-5">
+          <div className="bg-hundida/40 px-6 py-5 lg:min-h-0 lg:overflow-y-auto">
             {validas.length > 0 ? (
               <PlanoEditable
                 plano={plano}
@@ -633,24 +662,48 @@ export function CorteAMedida({
                 Esta placa no tiene tarifa de corte: las pasadas no se cobran (Cortes → Tarifas).
               </p>
             )}
+            {/* El canto pegado sin precio salía a $0 sin decir nada (H027). */}
+            {metrosCanto > 0 && precioPorMetroCanto === 0 && (
+              <p className="estado-espera mt-3 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base">
+                Esta placa no tiene tarifa de tapacanto: el canto no se cobra (Cortes → Tarifas).
+              </p>
+            )}
           </div>
         </div>
 
         {/* La cuenta y las salidas abajo y fijas: el total se ve mientras se
             tipea, y no hay que bajar para encontrar el botón. */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-linea bg-background px-6 py-4">
-          <dl className="tabular mr-auto flex flex-wrap gap-x-5 gap-y-1 text-base">
+          {/* Mientras Go recalcula, la cuenta que se ve es la del despiece
+              anterior: se apaga, y lo que es una alerta (sin cargo, se
+              cobran) no aparece hasta saberlo. Al abrir se veía un momento
+              «$ 4.800 · Material sin cargo» antes de los $ 96.500. */}
+          <dl
+            aria-busy={calculando || undefined}
+            className={`tabular mr-auto flex flex-wrap gap-x-5 gap-y-1 text-base transition-opacity ${calculando ? "opacity-40" : ""}`}
+          >
             <div>
               <dt className="inline text-muted-foreground">Placas </dt>
               <dd className="inline font-semibold">{plano.placas.length}</dd>
             </div>
             {/* Acomodado a mano, lo que se cobra puede no ser lo que se dibuja:
                 se dice acá, antes de cobrar, y no como un PIN sorpresa. */}
-            {placasACobrar !== plano.placasEnteras && (
+            {!calculando && placasACobrar !== plano.placasEnteras && (
               <div className="text-brand-orange">
                 <dt className="inline">Se cobran </dt>
                 <dd className="inline font-semibold">
                   {placasACobrar} {placasACobrar === 1 ? "placa" : "placas"}
+                </dd>
+              </div>
+            )}
+            {/* Las placas que no pasan la mitad no se venden: se cobra el corte
+                y el recorte queda en la maderera (la regla de la media placa).
+                Se dice acá y no se descubre leyendo la venta (H019, H174). */}
+            {!calculando && placasParciales > 0 && (
+              <div className="estado-espera">
+                <dt className="inline">Material sin cargo </dt>
+                <dd className="inline font-semibold">
+                  {placasParciales} {placasParciales === 1 ? (mitad ? "media" : "placa") : mitad ? "medias" : "placas"}
                 </dd>
               </div>
             )}

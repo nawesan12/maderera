@@ -75,10 +75,10 @@ export async function cancelarPedido(id: string, motivo?: string): Promise<Estad
   return { ok: r.data.ok };
 }
 
-export async function cambiarEstadoPresupuesto(id: string, estado: string): Promise<EstadoVenta> {
+export async function cambiarEstadoPresupuesto(id: string, estado: string, motivo?: string): Promise<EstadoVenta> {
   const r = await (await api()).POST("/api/v1/admin/presupuestos/{id}/estado", {
     params: { path: { id } },
-    body: { estado },
+    body: { estado, ...(motivo ? { motivo } : {}) },
   });
   if (!r.data) return fallo(r);
   refrescar();
@@ -120,7 +120,11 @@ export interface EntregaDelPedido {
   direccion?: string;
   zona?: string;
   costoEnvio?: number;
+  /** El envío va sin flete: sin flete escrito ni esto, Go no lo deja salir. */
+  sinCargo?: boolean;
   medioPago?: MedioDelPedido;
+  /** Pedido partido (H047): lo que va a cuenta corriente; el resto, con medioPago. */
+  aCuenta?: number;
   /** AAAA-MM-DD: el día que se compromete la entrega. */
   entregarEl?: string;
   /** Un presupuesto vencido: los precios de hoy o los suyos (con PIN). */
@@ -147,6 +151,8 @@ export async function convertirEnPedido(
           motivo: "presupuesto",
           monto: Number(e.pinMonto ?? 0),
           pinIncorrecto: e.pinIncorrecto === "si",
+          sinAdmins: e.pinConClave === "si" || undefined,
+          conClave: e.pinConClave === "si" || undefined,
           bloqueadoHasta: e.pinHasta,
         },
       };
@@ -174,7 +180,7 @@ const DIAS_DE_VALIDEZ = 15;
  * A Go le llega lo mismo que antes se le pasaba a zod: los campos del
  * FormData con sus `|| undefined`, y las líneas leídas con JSON.parse.
  */
-export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData): Promise<EstadoVenta> {
+function leerFormulario(formData: FormData) {
   const cabecera = {
     customerId: (formData.get("customerId") as string) || undefined,
     contactoNombre: formData.get("contactoNombre"),
@@ -187,6 +193,11 @@ export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData)
     necesitaPara: (formData.get("necesitaPara") as string) || undefined,
   };
   const lineas: unknown[] = formData.getAll("linea").map((cruda) => JSON.parse(String(cruda)));
+  return { cabecera, lineas };
+}
+
+export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData): Promise<EstadoVenta> {
+  const { cabecera, lineas } = leerFormulario(formData);
   // «Guardar y pasar a pedido» guarda y abre el paso a pedido en la ficha,
   // que pregunta cómo se entrega y cómo paga.
   const pasar = formData.get("convertir") === "si";
@@ -199,6 +210,127 @@ export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData)
   // guardarlo dos veces, y el PDF y el WhatsApp están en la ficha.
   if (r.data.id) redirect(`/admin/presupuestos/${r.data.id}${pasar ? "?pasar=1" : ""}`);
   return { ok: r.data.ok };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Devolver y corregir un pedido sin factura                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * La devolución de un pedido sin factura (mes simulado): lo que vuelve al
+ * stock queda atado al pedido y baja lo que falta cobrar. Con factura, se
+ * devuelve desde la factura, con su nota de crédito. Lo hace Go
+ * (pedidos.DevolverSinFactura).
+ */
+export async function devolverPedido(
+  id: string,
+  renglones: { orderItemId: string; cantidad: number }[],
+  motivo: string,
+  clave: string,
+): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/devolucion", {
+    params: { path: { id } },
+    body: { renglones, motivo, clave },
+  });
+  if (!r.data) return fallo(r);
+  refrescar();
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/stock");
+  return { ok: r.data.ok };
+}
+
+/** El importe de la nota de crédito que saldría (con los tributos), sin hacer nada. */
+export async function calcularDevolucionFacturada(
+  id: string,
+  renglones: { itemId: string; cantidad: number }[],
+): Promise<{ importe?: number; error?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/facturacion/pedidos/{id}/devolucion/calculo", {
+    params: { path: { id } },
+    body: { renglones },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  return { importe: r.data.importe };
+}
+
+/**
+ * La devolución de un pedido facturado, con su nota de crédito (H279): baja
+ * lo que falta cobrar o va a la cuenta corriente. La plata no sale de acá.
+ */
+export async function devolverPedidoFacturado(
+  id: string,
+  renglones: { itemId: string; cantidad: number }[],
+  motivo: string,
+  clave: string,
+  importe: number | null,
+): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/facturacion/pedidos/{id}/devolucion", {
+    params: { path: { id } },
+    body: { renglones, motivo, clave, importe },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar();
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin/facturacion");
+  return { ok: "Devolución registrada." };
+}
+
+/**
+ * Corrige los renglones y el flete de un pedido sin factura ni cobro (mes
+ * simulado: PED-1066 salió sin flete y no había cómo agregarlo). Un precio
+ * bajo la lista, pasado lo libre, pide el PIN de un admin.
+ */
+export async function corregirPedido(
+  id: string,
+  correccion: {
+    renglones: { orderItemId: string; cantidad: number; precioUnitario: number }[];
+    costoEnvio?: number;
+    motivo: string;
+    pin?: string;
+  },
+): Promise<EstadoVenta & { autorizacion?: Autorizacion }> {
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/correccion", {
+    params: { path: { id } },
+    body: correccion,
+  });
+  if (!r.data) {
+    const e = (r.error as Problema | undefined)?.errores;
+    if (e?.pin) {
+      return {
+        error: e.pin,
+        autorizacion: {
+          motivo: "precio",
+          monto: Number(e.pinMonto ?? 0),
+          pinIncorrecto: e.pinIncorrecto === "si",
+          bloqueadoHasta: e.pinHasta,
+        },
+      };
+    }
+    return fallo(r);
+  }
+  refrescar();
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/reparto");
+  revalidatePath("/admin/stock");
+  return { ok: r.data.ok };
+}
+
+/**
+ * Corrige un presupuesto que todavía no se mandó: los mismos campos que el
+ * alta, con el mismo número (mes simulado: había que rechazarlo y cargarlo de
+ * nuevo). Go no deja si ya se mandó o tiene pedido.
+ */
+export async function editarPresupuesto(_previo: EstadoVenta, formData: FormData): Promise<EstadoVenta> {
+  const id = String(formData.get("id") ?? "");
+  const { cabecera, lineas } = leerFormulario(formData);
+  const r = await (await api()).PUT("/api/v1/admin/presupuestos/{id}", {
+    params: { path: { id } },
+    body: { cabecera, lineas },
+  });
+  if (!r.data) return fallo(r);
+  refrescar();
+  revalidatePath(`/admin/presupuestos/${id}`);
+  redirect(`/admin/presupuestos/${id}`);
 }
 
 /** Corrige el día comprometido de entrega; vacío lo saca. */

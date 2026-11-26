@@ -39,8 +39,8 @@ describe("importeParaElCampo", () => {
   it.each([
     [15000, "15.000"],
     [1234.56, "1.234,56"],
-    [1234.5, "1.234,5"],
-    [0.1 + 0.2, "0,3"],
+    [1234.5, "1.234,50"],
+    [0.1 + 0.2, "0,30"],
     ["19200.0000", "19.200"],
   ])("%s se precarga «%s»", (n, texto) => {
     expect(importeParaElCampo(n)).toBe(texto);

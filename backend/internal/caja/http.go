@@ -66,6 +66,9 @@ func (o respuestaPanel) VisitTurnosParaAsignarResponse(w http.ResponseWriter) er
 	return o.escribir(w)
 }
 func (o respuestaPanel) VisitVentasSinCajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuestaPanel) VisitEfectivoFueraDeCajaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuestaPanel) VisitAsignarVentaAlTurnoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -206,5 +209,18 @@ func (a *PanelAPI) AnulacionesPorPersona(ctx context.Context, r cajaapi.Anulacio
 	}
 	desde, hasta := MesArgentino(periodo, a.ahora())
 	v, err := a.p.AnulacionesPorPersona(ctx, desde, hasta)
+	return okPanel(v), err
+}
+
+func (a *PanelAPI) EfectivoFueraDeCaja(ctx context.Context, r cajaapi.EfectivoFueraDeCajaRequestObject) (cajaapi.EfectivoFueraDeCajaResponseObject, error) {
+	if _, err := pantallaDeCaja(ctx); err != nil {
+		return nil, err
+	}
+	periodo := ""
+	if r.Params.Periodo != nil {
+		periodo = *r.Params.Periodo
+	}
+	desde, hasta := MesArgentino(periodo, a.ahora())
+	v, err := a.p.EfectivoFueraDeCaja(ctx, desde, hasta)
 	return okPanel(v), err
 }

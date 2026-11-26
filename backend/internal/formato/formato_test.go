@@ -40,3 +40,14 @@ func TestDecimal(t *testing.T) {
 		}
 	}
 }
+
+func TestImporte(t *testing.T) {
+	for v, quiere := range map[float64]string{
+		50000: "$\u00a050.000", 50000.4: "$\u00a050.000,40", 3617000: "$\u00a03.617.000", -470: "-$\u00a0470",
+		-0.004: "$\u00a00", 0: "$\u00a00", 0.05: "$\u00a00,05", 136390: "$\u00a0136.390", -1000.2: "-$\u00a01.000,20",
+	} {
+		if got := Importe(v); got != quiere {
+			t.Errorf("Importe(%v) = %q, quería %q", v, got, quiere)
+		}
+	}
+}

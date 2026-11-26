@@ -246,7 +246,7 @@ func TestPresupuestoAPedidoYDeVuelta(t *testing.T) {
 	if c, b := pedir(t, ven, "POST", u+"presupuestos/"+alta.ID+"/estado", map[string]any{"estado": "otro"}); c != 422 || !strings.Contains(b, "Ese estado no existe.") {
 		t.Fatalf("estado raro: %d %s", c, b)
 	}
-	if c, b := pedir(t, ven, "POST", u+"presupuestos/"+alta.ID+"/estado", map[string]any{"estado": "aceptado"}); c != 200 || !strings.Contains(b, "Presupuesto actualizado.") {
+	if c, b := pedir(t, ven, "POST", u+"presupuestos/"+alta.ID+"/estado", map[string]any{"estado": "aceptado"}); c != 200 || !strings.Contains(b, "Presupuesto aceptado.") {
 		t.Fatalf("aceptar: %d %s", c, b)
 	}
 	c, b = pedir(t, ven, "POST", u+"presupuestos/"+alta.ID+"/pedido", nil)

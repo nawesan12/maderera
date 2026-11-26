@@ -43,7 +43,9 @@ export function MandarPorWhatsapp({
         className={`inline-flex ${alto} items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted`}
       >
         <MessageCircle className="h-4 w-4 text-brand-green" />
-        PDF por la API
+        {/* «PDF por la API» era jerga (mes simulado): sale por WhatsApp con
+            el PDF adjunto, desde el sistema, y eso se cobra. */}
+        WhatsApp con el PDF
         <span className="text-sm font-normal text-muted-foreground">se cobra</span>
       </button>
     );
@@ -61,7 +63,9 @@ export function MandarPorWhatsapp({
         name="telefono"
         inputMode="tel"
         placeholder="El de la ficha, u otro"
-        className={`${alto} w-48 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-base`}
+        // Su renglón entero en el teléfono: al lado de «Mandar» y la cruz el
+        // texto de ayuda quedaba «El de la ficha, u…» (mes simulado).
+        className={`${alto} min-w-0 basis-full rounded-lg border bg-background px-2.5 text-base sm:basis-56 sm:flex-1`}
       />
       <button
         type="submit"

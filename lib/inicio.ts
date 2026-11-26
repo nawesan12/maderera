@@ -27,7 +27,7 @@ export function partirPendientes<T extends { clave: string; urgente?: boolean }>
 }
 
 /** Lo que el depósito ve en sus listas de Inicio, y no en «Para hoy». */
-export const CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO = ["cortes", "preparar"] as const;
+export const CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO = ["entregar", "cortes", "preparar"] as const;
 
 /**
  * Cuántos de los meses del gráfico tienen ventas (en alguna sucursal).
@@ -60,6 +60,11 @@ export interface RenglonParaPreparar {
   zonaEnvio: string | null;
   /** Si está pagado o no (sin el importe): el botón de avanzar lo pide. */
   estadoPago: string;
+  /**
+   * Un acopio que ya empezó a salir: el botón es «Preparar remito», no
+   * «Marcar entregado», que se llevaba todo lo que queda (H104).
+   */
+  acopio: boolean;
 }
 
 /**
@@ -78,6 +83,7 @@ export function paraPreparar(
     tipoEntrega: string;
     zonaEnvio: string | null;
     estadoPago: string;
+    acopio?: boolean;
     createdAt: Date;
   }[],
   tope = 5,
@@ -97,6 +103,60 @@ export function paraPreparar(
       tipoEntrega: p.tipoEntrega,
       zonaEnvio: p.zonaEnvio,
       estadoPago: p.estadoPago,
+      acopio: Boolean(p.acopio),
+    })),
+  };
+}
+
+export interface RenglonParaEntregar extends RenglonParaPreparar {
+  /**
+   * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` de Go): el
+   * «Marcar entregado» pregunta antes con eso, como en el tablero de Pedidos,
+   * que el depósito ya ve.
+   */
+  sinCobrar: number | null;
+}
+
+/**
+ * Lo que el depósito tiene que entregar o despachar hoy: los pedidos listos,
+ * el que espera hace más primero (mes simulado, H396). Quedaban reducidos a
+ * un chip al fondo de «Pendientes» y para entregar había que ir a Pedidos.
+ * Se cuentan los mismos que Go (`listos`, solo «listo»): los que están en
+ * camino ya salieron.
+ *
+ * Como `paraPreparar`, arma el renglón campo por campo: el total del pedido
+ * no viaja al navegador.
+ */
+export function paraEntregar(
+  pedidos: {
+    id: string;
+    numero: string;
+    cliente: string;
+    estado: string;
+    tipoEntrega: string;
+    zonaEnvio: string | null;
+    estadoPago: string;
+    acopio?: boolean;
+    sinCobrar: number | null;
+    createdAt: Date;
+  }[],
+  tope = 5,
+): { renglones: RenglonParaEntregar[]; total: number } {
+  const listos = pedidos
+    .filter((p) => p.estado === "listo")
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return {
+    total: listos.length,
+    renglones: listos.slice(0, tope).map((p) => ({
+      id: p.id,
+      numero: p.numero,
+      cliente: p.cliente,
+      estado: p.estado,
+      tipoEntrega: p.tipoEntrega,
+      zonaEnvio: p.zonaEnvio,
+      estadoPago: p.estadoPago,
+      acopio: Boolean(p.acopio),
+      sinCobrar: p.sinCobrar,
     })),
   };
 }

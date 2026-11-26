@@ -36,6 +36,17 @@ export async function crearOrdenDeCompra(datos: DatosOrden): Promise<EstadoOrden
   return { ok: r.data.ok, id: r.data.id };
 }
 
+/** Corrige una orden en borrador, con los mismos campos que el alta. */
+export async function editarOrdenDeCompra(id: string, datos: DatosOrden): Promise<EstadoOrden> {
+  const r = await (await api()).PUT("/api/v1/admin/compras/ordenes/{id}", {
+    params: { path: { id } },
+    body: { ...datos },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
+  refrescar(id);
+  return { ok: r.data.ok, id };
+}
+
 /** Marca la orden como enviada al proveedor: desde acá cuenta en lo pendiente. */
 export async function marcarOrdenEnviada(id: string): Promise<EstadoOrden> {
   const r = await (await api()).POST("/api/v1/admin/compras/ordenes/{id}/enviada", { params: { path: { id } } });

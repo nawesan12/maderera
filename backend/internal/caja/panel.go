@@ -18,6 +18,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -118,6 +119,19 @@ type TurnoCerrado struct {
 	CreditoSinAutorizar      int                `json:"creditoSinAutorizar"`
 	CreditoSinAutorizarMonto float64            `json:"creditoSinAutorizarMonto"`
 	Cierre                   []RenglonDelCierre `json:"cierre"`
+	// La cuenta del efectivo, como en el mostrador: fondo + ventas + otros
+	// ingresos − retiros − devoluciones − gastos = «Tendría que haber». Solo
+	// se veían las ventas por medio y el número final no se podía rehacer
+	// (mes simulado, H238). Lo que entró tarde no está acá: va en Tardios.
+	Fondo         float64 `json:"fondo"`
+	Ventas        float64 `json:"ventas"`
+	OtrosIngresos float64 `json:"otrosIngresos"`
+	Retiros       float64 `json:"retiros"`
+	Devoluciones  float64 `json:"devoluciones"`
+	Gastos        float64 `json:"gastos"`
+	// Puesto es el código de la caja física desde la que se abrió (nil si
+	// la PC no tenía una, o en los turnos de antes de la 00210).
+	Puesto *string `json:"puesto"`
 }
 
 // TurnosCerrados son los turnos cerrados entre `desde` y `hasta` (el mes
@@ -131,10 +145,28 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 		desde, hasta).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	filas, err := p.pool.Query(ctx, `
+	out, err := turnosCerrados(ctx, p.pool, "s.cerrada_at >= $1 AND s.cerrada_at <= $2", "LIMIT $3 OFFSET $4", desde, hasta, limite, desplazamiento)
+	if err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+// consultaDeTurnos es la de los turnos cerrados con su cuenta del efectivo;
+// el filtro y el límite se completan con fmt (son siempre de este archivo).
+const consultaDeTurnos = `
 		SELECT s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name,
 		       coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at
 		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at)), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'apertura'), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta' AND (m.created_at <= s.cerrada_at
+		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso' AND (m.created_at <= s.cerrada_at
+		                                 OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at))), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'retiro' AND m.created_at <= s.cerrada_at), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion' AND m.created_at <= s.cerrada_at), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo NOT IN ('apertura', 'venta', 'ingreso', 'retiro', 'devolucion') AND m.created_at <= s.cerrada_at), 0),
+		       d.codigo,
 		       count(m.id) FILTER (WHERE m.created_at > s.cerrada_at)::int,
 		       coalesce(sum(m.monto) FILTER (WHERE m.created_at > s.cerrada_at), 0),
 		       (SELECT count(*)::int FROM orders o WHERE o.bajo_lista_sin_autorizar AND o.branch_id = s.branch_id
@@ -148,13 +180,18 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 		FROM cash_sessions s
 		JOIN branches b ON b.id = s.branch_id
 		JOIN "user" u ON u.id = s.abierta_por
+		LEFT JOIN pos_devices d ON d.id = s.pos_device_id
 		LEFT JOIN cash_movements m ON m.session_id = s.id
-		WHERE s.estado = 'cerrada' AND s.cerrada_at >= $1 AND s.cerrada_at <= $2
-		GROUP BY s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name
+		WHERE s.estado = 'cerrada' AND %s
+		GROUP BY s.id, b.name, s.abierta_at, s.cerrada_at, s.contado, s.notas, u.name, d.codigo
 		ORDER BY s.cerrada_at DESC
-		LIMIT $3 OFFSET $4`, desde, hasta, limite, desplazamiento)
+		%s`
+
+// turnosCerrados corre consultaDeTurnos y le suma a cada turno su cierre Z.
+func turnosCerrados(ctx context.Context, c Consultador, donde, limite string, args ...any) ([]TurnoCerrado, error) {
+	filas, err := c.Query(ctx, fmt.Sprintf(consultaDeTurnos, donde, limite), args...)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer filas.Close()
 	out := []TurnoCerrado{}
@@ -162,12 +199,15 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 	for filas.Next() {
 		var t TurnoCerrado
 		var contado *jsmath.Num
-		var esperado, tardios, bajoLista, credito jsmath.Num
-		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado, &t.Tardios, &tardios,
+		var esperado, tardios, bajoLista, credito, fondo, ventas, ingresos, retiros, devoluciones, gastos jsmath.Num
+		if err := filas.Scan(&t.ID, &t.Sucursal, &t.AbiertaAt, &t.CerradaAt, &contado, &t.Notas, &t.AbiertaPor, &esperado,
+			&fondo, &ventas, &ingresos, &retiros, &devoluciones, &gastos, &t.Puesto, &t.Tardios, &tardios,
 			&t.BajoLista, &bajoLista, &t.CreditoSinAutorizar, &credito); err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		t.Esperado, t.TardiosMonto, t.BajoListaMonto, t.CreditoSinAutorizarMonto = esperado.F(), tardios.F(), bajoLista.F(), credito.F()
+		t.Fondo, t.Ventas, t.OtrosIngresos, t.Retiros = fondo.F(), ventas.F(), ingresos.F(), retiros.F()
+		t.Devoluciones, t.Gastos = devoluciones.F(), gastos.F()
 		if contado != nil {
 			c := contado.F()
 			t.Contado = &c
@@ -176,11 +216,11 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 		ids = append(ids, t.ID)
 	}
 	if err := filas.Err(); err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	cierres, err := CierresDeTurnos(ctx, p.pool, ids)
+	cierres, err := CierresDeTurnos(ctx, c, ids)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	for i := range out {
 		out[i].Cierre = cierres[out[i].ID]
@@ -188,7 +228,21 @@ func (p *Panel) TurnosCerrados(ctx context.Context, desde, hasta time.Time, limi
 			out[i].Cierre = []RenglonDelCierre{}
 		}
 	}
-	return out, total, nil
+	return out, nil
+}
+
+// TurnoCerradoPorID es el resumen de un turno ya cerrado, para imprimirlo
+// desde el mostrador al cerrar (mes simulado, H024: no quedaba un papel del
+// turno). nil si no existe o sigue abierto.
+func TurnoCerradoPorID(ctx context.Context, c Consultador, id string) (*TurnoCerrado, error) {
+	if !plataforma.UUIDValido(id) {
+		return nil, nil
+	}
+	ts, err := turnosCerrados(ctx, c, "s.id = $1", "", id)
+	if err != nil || len(ts) == 0 {
+		return nil, err
+	}
+	return &ts[0], nil
 }
 
 // CajaFisica es una máquina del mostrador.
@@ -201,12 +255,17 @@ type CajaFisica struct {
 	Activo      bool       `json:"activo"`
 	UltimaVezAt *time.Time `json:"ultimaVezAt"`
 	Pendientes  int        `json:"pendientes"`
+	// UltimoTurnoAt es la apertura del último turno que se abrió desde esta
+	// caja. Desvincular borra el latido, y sin esto una caja usada figuraba
+	// «nunca se vinculó» con su turno en la lista de abajo (H243).
+	UltimoTurnoAt *time.Time `json:"ultimoTurnoAt"`
 }
 
 // ListarCajasFisicas es listarCajasFisicas: todas, por código.
 func (p *Panel) ListarCajasFisicas(ctx context.Context) ([]CajaFisica, error) {
 	filas, err := p.pool.Query(ctx, `
-		SELECT d.id, d.codigo, d.nombre, d.branch_id, b.name, d.activo, d.ultima_vez_at, d.pendientes
+		SELECT d.id, d.codigo, d.nombre, d.branch_id, b.name, d.activo, d.ultima_vez_at, d.pendientes,
+		       (SELECT max(s.abierta_at) FROM cash_sessions s WHERE s.pos_device_id = d.id)
 		FROM pos_devices d LEFT JOIN branches b ON b.id = d.branch_id
 		ORDER BY d.codigo`)
 	if err != nil {
@@ -216,7 +275,7 @@ func (p *Panel) ListarCajasFisicas(ctx context.Context) ([]CajaFisica, error) {
 	out := []CajaFisica{}
 	for filas.Next() {
 		var c CajaFisica
-		if err := filas.Scan(&c.ID, &c.Codigo, &c.Nombre, &c.BranchID, &c.Sucursal, &c.Activo, &c.UltimaVezAt, &c.Pendientes); err != nil {
+		if err := filas.Scan(&c.ID, &c.Codigo, &c.Nombre, &c.BranchID, &c.Sucursal, &c.Activo, &c.UltimaVezAt, &c.Pendientes, &c.UltimoTurnoAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -391,6 +450,82 @@ func (p *Panel) VentasSinCaja(ctx context.Context) ([]VentaSuelta, error) {
 		out = append(out, v)
 	}
 	return out, filas.Err()
+}
+
+// FueraDeCaja es efectivo que entró o salió sin pasar por ningún turno: un
+// recibo cobrado en efectivo desde el panel, un gasto en efectivo cargado
+// sin caja abierta, o un pago a proveedor en efectivo sin caja (Compras lo
+// registra igual y avisa; no figuraba acá, y era la única forma que quedaba
+// de sacar efectivo por fuera de un turno: el gasto ya se rechaza). Los asientos sí mueven la cuenta Caja, pero ningún arqueo
+// los incluía y no se veían en ninguna pantalla: $255.000 netos en una semana
+// que existían solo en el libro (mes simulado, H157).
+type FueraDeCaja struct {
+	Tipo string `json:"tipo"` // recibo | gasto | pago
+	ID   string `json:"id"`
+	// Numero del recibo, la descripción del gasto o el proveedor del pago.
+	Detalle  string  `json:"detalle"`
+	Sucursal *string `json:"sucursal"`
+	// Monto con signo: el recibo entra (+), el gasto sale (−).
+	Monto float64   `json:"monto"`
+	Fecha time.Time `json:"fecha"`
+}
+
+// EfectivoFueraDeCaja es lo de `desde`–`hasta` (el mes de la pantalla), lo
+// más nuevo primero, hasta 100. El recibo se reconoce por el motivo con que
+// cobros.efectivoALaCaja lo anota en el turno («Recibo REC-0007 — …»): no
+// hay otra columna que los ate.
+func (p *Panel) EfectivoFueraDeCaja(ctx context.Context, desde, hasta time.Time) ([]FueraDeCaja, error) {
+	filas, err := p.pool.Query(ctx, `
+		SELECT tipo, id, detalle, sucursal, monto, fecha FROM (
+		  SELECT 'recibo' AS tipo, r.id::text AS id, r.numero || ' · ' || r.recibido_de AS detalle, b.name AS sucursal,
+		         sum(rp.importe) AS monto, r.created_at AS fecha
+		  FROM receipts r
+		  JOIN receipt_parts rp ON rp.receipt_id = r.id AND rp.medio = 'efectivo'
+		  LEFT JOIN branches b ON b.id = r.branch_id
+		  WHERE r.estado <> 'anulado' AND r.created_at >= $1 AND r.created_at <= $2
+		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.motivo LIKE 'Recibo ' || r.numero || ' —%')
+		  GROUP BY r.id, r.numero, r.recibido_de, b.name, r.created_at
+		  UNION ALL
+		  SELECT 'gasto', e.id::text, e.descripcion, b.name, -e.importe, e.fecha
+		  FROM expenses e
+		  LEFT JOIN branches b ON b.id = e.branch_id
+		  WHERE e.medio = 'efectivo' AND e.fecha >= $3 AND e.fecha <= $4 AND e.anulado_at IS NULL
+		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id)
+		  UNION ALL
+		  SELECT 'pago', sp.id::text, su.nombre, NULL, -ef.efectivo, sp.fecha
+		  FROM supplier_payments sp
+		  JOIN suppliers su ON su.id = sp.supplier_id
+		  CROSS JOIN LATERAL (SELECT CASE WHEN EXISTS (SELECT 1 FROM supplier_payment_parts pp WHERE pp.payment_id = sp.id)
+		      THEN (SELECT coalesce(sum(pp.importe), 0) FROM supplier_payment_parts pp WHERE pp.payment_id = sp.id AND pp.medio = 'efectivo')
+		      WHEN sp.medio = 'efectivo' THEN sp.neto ELSE 0 END AS efectivo) ef
+		  WHERE sp.anulado_at IS NULL AND ef.efectivo > 0 AND sp.fecha >= $1 AND sp.fecha <= $2
+		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.supplier_payment_id = sp.id)
+		) x
+		ORDER BY fecha DESC
+		LIMIT 100`, desde, hasta, diaDelMes(desde), diaDelMes(hasta))
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	out := []FueraDeCaja{}
+	for filas.Next() {
+		var f FueraDeCaja
+		var monto jsmath.Num
+		if err := filas.Scan(&f.Tipo, &f.ID, &f.Detalle, &f.Sucursal, &monto, &f.Fecha); err != nil {
+			return nil, err
+		}
+		f.Monto = monto.F()
+		out = append(out, f)
+	}
+	return out, filas.Err()
+}
+
+// diaDelMes es el día argentino de t guardado como día: medianoche UTC, como
+// guarda el gasto su fecha (`expenses.fecha`). Comparado con el instante, el
+// gasto del 1.º caía en el mes anterior, que empieza a las 3 de la mañana UTC.
+func diaDelMes(t time.Time) time.Time {
+	a := t.In(Argentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // TurnoParaAsignar es un turno al que se puede mandar una venta suelta.
@@ -711,7 +846,7 @@ func (p *Panel) GuardarFondoBase(ctx context.Context, ses *auth.Sesion, branchID
 	if err != nil {
 		return "", err
 	}
-	bitacora.Anotar(ctx, p.q, p.log, ses, sqlc.AccionAuditoriaEditar, "caja", "", "Fijó el cambio fijo de "+nombre+" en $"+jsmath.Fijo2(n), nil)
+	bitacora.Anotar(ctx, p.q, p.log, ses, sqlc.AccionAuditoriaEditar, "caja", "", "Fijó el cambio fijo de "+nombre+" en "+formato.Importe(n), nil)
 	if n > 0 {
 		return "Listo: el mostrador no va a poder retirar por debajo de ese monto.", nil
 	}

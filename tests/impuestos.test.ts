@@ -110,6 +110,16 @@ describe("letra del comprobante", () => {
     ).toBe("A");
   });
 
+  it("de inscripto a monotributista sale A (RG 5003/2021)", () => {
+    expect(letraQueCorresponde("responsable_inscripto", "monotributista")).toBe("A");
+  });
+
+  it("con la regla factura_al_monotributista en «b», al monotributista sale B", () => {
+    expect(letraQueCorresponde("responsable_inscripto", "monotributista", "b")).toBe("B");
+    expect(letraQueCorresponde("responsable_inscripto", "responsable_inscripto", "b")).toBe("A");
+    expect(letraQueCorresponde("monotributista", "monotributista", "b")).toBe("C");
+  });
+
   it("de inscripto a consumidor final sale B", () => {
     expect(letraQueCorresponde("responsable_inscripto", "consumidor_final")).toBe(
       "B",

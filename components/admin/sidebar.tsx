@@ -62,7 +62,10 @@ export function AdminSidebar({
         <Marca tamano="panel" tono="oscuro" etiqueta="Panel" />
       </Link>
 
-      <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto px-2.5 pb-3 pt-1">
+      {/* Abajo se desvanece: a 1280×900 «Proveedores» quedaba cortado contra
+          «Ayuda» y Comprar parecía vacía (mes simulado, H075). El relleno de
+          abajo deja que el último renglón suba por encima del desvanecido. */}
+      <nav className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-2.5 pb-10 pt-1 [mask-image:linear-gradient(to_bottom,#000_calc(100%-2.5rem),transparent)]">
         {visibles.map((seccion) => (
           <div key={seccion.titulo}>
             <p className="px-2 pb-1.5 text-xs font-semibold uppercase tracking-[0.09em] text-sidebar-foreground/50">

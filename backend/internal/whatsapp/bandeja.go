@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -159,35 +160,38 @@ type DocumentoListado struct {
 
 // DetalleConversacion es una conversación con sus mensajes y el cliente.
 type DetalleConversacion struct {
-	ID               string               `json:"id"`
-	WaJid            string               `json:"waJid"`
-	DisplayName      *string              `json:"displayName"`
-	CustomerID       *string              `json:"customerId"`
-	OrderID          *string              `json:"orderId"`
-	Estado           string               `json:"estado"`
-	Notas            *string              `json:"notas"`
-	UltimoEntranteAt *time.Time           `json:"ultimoEntranteAt"`
-	NoLeidos         int32                `json:"noLeidos"`
-	AsignadoAUserID  *string              `json:"asignadoAUserId"`
-	BajaAt           *time.Time           `json:"bajaAt"`
-	BajaDetalle      *string              `json:"bajaDetalle"`
-	ResueltaAt       *time.Time           `json:"resueltaAt"`
-	BotEstado        string               `json:"botEstado"`
-	ClienteNombre    *string              `json:"clienteNombre"`
-	ClienteTipo      *string              `json:"clienteTipo"`
-	ClienteTelefono  *string              `json:"clienteTelefono"`
-	ClienteEmail     *string              `json:"clienteEmail"`
-	ClienteLimite    *string              `json:"clienteLimite"`
-	ClienteEstado    *string              `json:"clienteEstado"`
-	Conocidos        map[string]string    `json:"conocidos"`
-	Nombre           string               `json:"nombre"`
-	SinNumero        bool                 `json:"sinNumero"`
-	VentanaAbierta   bool                 `json:"ventanaAbierta"`
-	Mensajes         []MensajeDeLaBandeja `json:"mensajes"`
-	Saldo            float64              `json:"saldo"`
-	LimiteCredito    float64              `json:"limiteCredito"`
-	Pedidos          []PedidoDelCliente   `json:"pedidos"`
-	Documentos       []DocumentoListado   `json:"documentos"`
+	ID               string     `json:"id"`
+	WaJid            string     `json:"waJid"`
+	DisplayName      *string    `json:"displayName"`
+	CustomerID       *string    `json:"customerId"`
+	OrderID          *string    `json:"orderId"`
+	Estado           string     `json:"estado"`
+	Notas            *string    `json:"notas"`
+	UltimoEntranteAt *time.Time `json:"ultimoEntranteAt"`
+	NoLeidos         int32      `json:"noLeidos"`
+	AsignadoAUserID  *string    `json:"asignadoAUserId"`
+	BajaAt           *time.Time `json:"bajaAt"`
+	BajaDetalle      *string    `json:"bajaDetalle"`
+	ResueltaAt       *time.Time `json:"resueltaAt"`
+	BotEstado        string     `json:"botEstado"`
+	ClienteNombre    *string    `json:"clienteNombre"`
+	ClienteTipo      *string    `json:"clienteTipo"`
+	// ClienteLista es la lista de precios propia, si no es la general: el
+	// chip dice «Constructora» y no «Profesional» a todos (como el portal).
+	ClienteLista    *string              `json:"clienteLista"`
+	ClienteTelefono *string              `json:"clienteTelefono"`
+	ClienteEmail    *string              `json:"clienteEmail"`
+	ClienteLimite   *string              `json:"clienteLimite"`
+	ClienteEstado   *string              `json:"clienteEstado"`
+	Conocidos       map[string]string    `json:"conocidos"`
+	Nombre          string               `json:"nombre"`
+	SinNumero       bool                 `json:"sinNumero"`
+	VentanaAbierta  bool                 `json:"ventanaAbierta"`
+	Mensajes        []MensajeDeLaBandeja `json:"mensajes"`
+	Saldo           float64              `json:"saldo"`
+	LimiteCredito   float64              `json:"limiteCredito"`
+	Pedidos         []PedidoDelCliente   `json:"pedidos"`
+	Documentos      []DocumentoListado   `json:"documentos"`
 }
 
 // ObtenerConversacion es el detalle; nil si no existe.
@@ -199,11 +203,13 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 	err := s.pool.QueryRow(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, c.order_id, c.estado::text, c.notas, c.ultimo_entrante_at, c.no_leidos,
 		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado,
-		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text
+		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text,
+		       CASE WHEN pl.is_default THEN NULL ELSE pl.name END
 		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id
+		  left join price_lists pl on pl.id = cu.price_list_id
 		 where c.id = $1`, id).Scan(&d.ID, &d.WaJid, &d.DisplayName, &d.CustomerID, &d.OrderID, &d.Estado, &d.Notas, &d.UltimoEntranteAt,
 		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado,
-		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado)
+		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado, &d.ClienteLista)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -237,7 +243,7 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 		d.Conocidos["pedido"] = d.Pedidos[0].Numero
 	}
 	if d.Saldo > 0 {
-		d.Conocidos["saldo"] = Moneda(d.Saldo)
+		d.Conocidos["saldo"] = formato.Importe(d.Saldo)
 	}
 	d.Conocidos["fecha"] = FechaCorta(ahora)
 	d.Nombre = oTexto(primero(d.ClienteNombre, d.DisplayName), "Sin identificar")
@@ -363,14 +369,15 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 		sql   string
 		armar func(pgx.Rows) (DocumentoListado, error)
 	}{
-		{`select id, numero, total::float8, created_at from quotes where customer_id = $1 order by created_at desc limit 5`,
+		{`select id, numero, total::float8, created_at from quotes where customer_id = $1
+			and estado not in ('rechazado', 'vencido') order by created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero string
 				var total float64
 				var f time.Time
 				err := r.Scan(&d.ID, &numero, &total, &f)
-				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "presupuesto", "Presupuesto "+numero, "el presupuesto "+numero, Moneda(total), &f
+				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "presupuesto", "Presupuesto "+numero, "el presupuesto "+numero, formato.Importe(total), &f
 				return d, err
 			}},
 		{`select id, tipo::text, punto_venta, numero, total::float8, created_at from invoices where customer_id = $1 and estado <> 'borrador'
@@ -384,7 +391,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				err := r.Scan(&d.ID, &tipo, &pv, &n, &total, &f)
 				num := numeroFormateado(pv, n)
 				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "comprobante",
-					"Factura "+mayusculasJS(reemplazarPrimero(tipo, "factura_", ""))+" "+num, "la factura "+num, Moneda(total), &f
+					"Factura "+mayusculasJS(reemplazarPrimero(tipo, "factura_", ""))+" "+num, "la factura "+num, formato.Importe(total), &f
 				return d, err
 			}},
 		{`select d.id, d.numero, o.numero, d.created_at from deliveries d join orders o on o.id = d.order_id
@@ -404,7 +411,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				var total float64
 				var f time.Time
 				err := r.Scan(&d.ID, &numero, &total, &f)
-				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "recibo", "Recibo "+numero, "el recibo "+numero, Moneda(total), &f
+				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "recibo", "Recibo "+numero, "el recibo "+numero, formato.Importe(total), &f
 				return d, err
 			}},
 		{`select id, numero, created_at from cutting_orders where customer_id = $1 order by created_at desc limit 5`,

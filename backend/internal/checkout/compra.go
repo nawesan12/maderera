@@ -380,11 +380,15 @@ func (s *Servicio) Confirmar(ctx context.Context, q Quien, ip string, m map[stri
 			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
-				                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden)
-				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12)`,
+				                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, del_corte)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $13)`,
 				compra.PedidoID, l.variante, desc, l.unidad, jsmath.Fijo2(l.cantidad), jsmath.Fijo2(l.precio),
 				jsmath.Fijo2(float64(l.precio*l.cantidad)), f.Presentacion, jsmath.Texto(f.StockPorUnidad),
-				reservas.CostoPorUnidadDeVenta(costo, f.StockPorUnidad), alicuota, i); err != nil {
+				// Los renglones del despiece (placa, pasadas, tapacanto) son del
+				// corte, como en el mostrador: sin la marca, la ficha del corte
+				// cobraba «Fuera del pedido» lo que la compra ya cobró (mes
+				// simulado, CRT-3 de PED-1116).
+				reservas.CostoPorUnidadDeVenta(costo, f.StockPorUnidad), alicuota, i, i >= nItems); err != nil {
 				return err
 			}
 		}
@@ -482,7 +486,7 @@ func abrirCorte(ctx context.Context, tx pgx.Tx, c cortes.CorteResuelto, pedido s
 		RETURNING id`,
 		numero, cliente, pedido, d.Nombre, d.SucursalID, c.Placa.VariantID, c.Placa.Descripcion, entero(c.PlacaLargoMm),
 		entero(c.PlacaAnchoMm), c.Mitad, int32(c.Placas), jsmath.Texto(c.AnchoSierraMm), int32(c.Pasadas), c.CantoDescripcion,
-		usuario, int32(cortes.MotorMediaConSierra)).Scan(&id); err != nil {
+		usuario, int32(cortes.MotorActual)).Scan(&id); err != nil {
 		return err
 	}
 	for i, p := range c.Piezas {

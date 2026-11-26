@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   enlaceDeWhatsapp,
+  formatearMonto,
   formatearDecimal,
   formatearPeso,
   ABREVIATURA_UNIDAD,
+  cantidadConUnidad,
+  unidadConcordada,
+  unidadDeVenta,
+  documentoConTipo,
   formatearUnidad,
   primerNombre,
   whatsappDestino,
@@ -110,6 +115,15 @@ describe("formatearUnidad cubre todas las unidades de venta", () => {
   });
 });
 
+describe("formatearMonto (mes simulado, H034)", () => {
+  it("muestra los centavos cuando los hay, como la cuenta del cliente", () => {
+    expect(formatearMonto(203566.5)).toBe(formatearMonto("203566.50"));
+    expect(formatearMonto(203566.5)).toMatch(/203\.566,50/);
+    expect(formatearMonto(203567)).toMatch(/203\.567$/);
+    expect(formatearMonto(0.1 + 0.2)).toMatch(/0,30/);
+  });
+});
+
 describe("formatearPorcentaje", () => {
   it("va con coma decimal y un decimal", async () => {
     const { formatearPorcentaje } = await import("@/lib/formato");
@@ -144,5 +158,43 @@ describe("hayFiltro", () => {
     expect(hayFiltro({ pagina: "2", estado: "todos", cat: "todas", buscar: "  " })).toBe(false);
     expect(hayFiltro({ buscar: "fenólico" })).toBe(true);
     expect(hayFiltro({ estado: "sin-stock" })).toBe(true);
+  });
+});
+
+// «3 placas», no «3 placa»; la línea del corte dice «4 cortes» (simulación
+// del mes, H095 y H145). El mes simulado también leyó «Quedan 25 placa».
+describe("cantidadConUnidad", () => {
+  it("concuerda la unidad con la cantidad", () => {
+    expect(cantidadConUnidad(3, "placa")).toBe("3 placas");
+    expect(cantidadConUnidad(1, "placa")).toBe("1 placa");
+    expect(cantidadConUnidad(25, "placa")).toBe("25 placas");
+    expect(cantidadConUnidad(6, "rollo")).toBe("6 rollos");
+    expect(cantidadConUnidad(2, "par")).toBe("2 pares");
+    expect(cantidadConUnidad(20, "unidad")).toBe("20 u.");
+    expect(cantidadConUnidad(4, null)).toBe("4");
+    expect(cantidadConUnidad(2.5, "metro_cuadrado")).toBe("2,5 m²");
+    expect(cantidadConUnidad(4, "pasada")).toBe("4 cortes");
+    // La ficha y Entregas dicen lo mismo que el remito (mes simulado, PED-1193).
+    expect(cantidadConUnidad(20, "metro_lineal")).toBe("20 m");
+    expect(cantidadConUnidad(19, "m")).toBe("19 m");
+  });
+
+  // H110: la lata se cuenta por lata en la firma, el remito, el stock y el mostrador.
+  it("la lata de cuatro litros se cuenta por unidad", () => {
+    expect(cantidadConUnidad(2, "litro", "Laca Poliuretánica — 4 litros — Brillante")).toBe("2 u.");
+    expect(cantidadConUnidad(2, "litro", "Thinner suelto")).toBe("2 l");
+    expect(unidadDeVenta("litro", "Laca 4 litros")).toBe("unidad");
+    expect(unidadConcordada(119, "placa")).toBe("placas");
+    expect(unidadConcordada(2.5, "placa")).toBe("placas");
+    expect(unidadConcordada(22, "rollo")).toBe("rollos");
+  });
+});
+
+describe("documentoConTipo", () => {
+  // Un CUIT con guiones salía «DNI 30-71234567-8» (mes simulado).
+  it("cuenta los dígitos", () => {
+    expect(documentoConTipo("30-71234567-8")).toBe("CUIT 30-71234567-8");
+    expect(documentoConTipo("20301112220")).toBe("CUIT 20-30111222-0");
+    expect(documentoConTipo("30111222")).toBe("DNI 30.111.222");
   });
 });

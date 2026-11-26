@@ -75,6 +75,11 @@ type StockDeVariante struct {
 	Rubro                *string `json:"rubro"`
 	DisponibleCentral    float64 `json:"disponibleCentral"`
 	DisponibleAserradero float64 `json:"disponibleAserradero"`
+	// El proveedor habitual: «Generar orden de compra» arma una orden por
+	// proveedor (simulación del mes, H377). No viene del TS (los golden lo
+	// dejan vacío).
+	ProveedorID *string `json:"proveedorId,omitempty"`
+	Proveedor   *string `json:"proveedor,omitempty"`
 }
 
 // FilaDeReposicion es FilaDeReposicion del TS.

@@ -115,7 +115,13 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
    * número que no se muestra en el mostrador.
    */
   "/admin/proveedores": ["admin"],
-  "/admin/recepciones": ["admin"],
+  /*
+   * El depósito recibe el camión y controla el remito (mes simulado, H097):
+   * entra a recepciones, corrige lo que vino y la confirma, sin ver precios.
+   * Cargar una a mano, con sus costos, y anularla queda para el admin.
+   */
+  "/admin/recepciones": ["admin", "deposito"],
+  "/admin/recepciones/nueva": ["admin"],
   /*
    * Las de compras van **una por una y no solo el prefijo**.
    *
@@ -145,9 +151,15 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   // Las dos reglas que fijan cuánto entra por caja: tarifa de corte y
   // descuento por forma de pago. Son precios, no operación.
   "/admin/cortes/tarifas": ["admin"],
+  // Tomar un corte es del mostrador, como «Nuevo corte» en la cola (H127):
+  // el aserradero abría el alta escribiendo la dirección, sin buscador de
+  // clientes ni de placas, y recién Go lo frenaba al mandar (mes simulado).
+  "/admin/cortes/nuevo": ["admin", "vendedor", "deposito"],
   "/admin/precios/formas-de-pago": ["admin"],
   "/admin/migracion": ["admin"],
   "/admin/bitacora": ["admin"],
+  // Dar usuario al personal y cambiarle el puesto es repartir permisos.
+  "/admin/personal": ["admin"],
   /*
    * Las guías son de **todo** el personal, aserradero incluido: la número 8
    * está escrita para el taller.
@@ -165,8 +177,17 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
  * facturarlo (T3, 18/11/2026). Pedidos lo abre también el depósito, que
  * prepara y entrega, y hasta ahora podía marcar un pedido como cobrado sin
  * recibo ni caja. La ficha se le sigue mostrando; los botones de plata, no.
+ * También registra, desde la ficha del cliente, que el banco rechazó un
+ * cheque (H272): quien no es admin, con el PIN de uno.
  */
 export const MANEJAN_PLATA: readonly RolStaff[] = ["admin", "vendedor"];
+
+/**
+ * Quién decide en la cola de corte: marcarlo urgente, entregarlo, anularlo o
+ * corregirlo. Todos los de `/admin/cortes` menos el aserradero, que empieza y
+ * termina (mes simulado, H115).
+ */
+export const DECIDEN_EN_LA_COLA: readonly RolStaff[] = ["admin", "vendedor", "deposito"];
 
 /** Los roles que pueden entrar a una ruta, o `null` si la ve todo el personal. */
 export function quienEntra(ruta: string): readonly RolStaff[] | null {

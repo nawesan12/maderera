@@ -18,6 +18,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -60,14 +61,20 @@ func (o respuesta) VisitChequesEnCarteraResponse(w http.ResponseWriter) error { 
 func (o respuesta) VisitChequesTerminadosResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
+func (o respuesta) VisitRechazarChequeDelClienteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitCambiarEstadoDeChequeResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitListarClientesResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitGuardarClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitFichaDeClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitBloquearCuentaResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitCobrarAClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitListarClientesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitGuardarClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitFichaDeClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitBloquearCuentaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCobrarAClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCajaDelCobroACuentaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitCreditoDeClienteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitVincularCuentaWebResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitHistorialDeClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
@@ -146,14 +153,14 @@ func (a *API) GuardarCliente(ctx context.Context, r cuentasapi.GuardarClienteReq
 		return nil, err
 	}
 	b := r.Body
-	m, err := a.clientes.Guardar(ctx, ses, clientes.FormCliente{ID: texto(b.Id), Nombre: b.Nombre, RazonSocial: texto(b.RazonSocial),
+	id, m, err := a.clientes.GuardarConID(ctx, ses, clientes.FormCliente{ID: texto(b.Id), Nombre: b.Nombre, RazonSocial: texto(b.RazonSocial),
 		Cuit: texto(b.Cuit), CondicionIva: texto(b.CondicionIva), Tipo: texto(b.Tipo), Email: texto(b.Email), Telefono: texto(b.Telefono),
 		Direccion: texto(b.Direccion), Rubro: texto(b.Rubro), Asesor: texto(b.Asesor), SellerID: texto(b.SellerId),
 		LimiteCredito: texto(b.LimiteCredito), PriceListID: texto(b.PriceListId), Notas: texto(b.Notas)})
 	if err != nil {
 		return nil, err
 	}
-	return mensaje(m), nil
+	return ok(map[string]string{"ok": m, "id": id}), nil
 }
 
 func (a *API) FichaDeCliente(ctx context.Context, r cuentasapi.FichaDeClienteRequestObject) (cuentasapi.FichaDeClienteResponseObject, error) {
@@ -269,8 +276,31 @@ func (a *API) CobrarACliente(ctx context.Context, r cuentasapi.CobrarAClienteReq
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.cobros.CobrarACliente(ctx, ses, r.Id, texto(r.Body.OrderId), texto(r.Body.Concepto), r.Body.Partes, texto(r.Body.Clave))
+	v, err := a.cobros.CobrarAClienteEn(ctx, ses, r.Id, texto(r.Body.OrderId), texto(r.Body.Concepto), r.Body.Partes, texto(r.Body.Clave), texto(r.Body.BranchId))
 	return ok(v), err
+}
+
+// CajaDelCobroACuenta: lo que contestaría el cobro en efectivo desde la
+// ficha, antes de cobrar (quien mueve plata, como el cobro).
+func (a *API) CajaDelCobroACuenta(ctx context.Context, _ cuentasapi.CajaDelCobroACuentaRequestObject) (cuentasapi.CajaDelCobroACuentaResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	falta, err := a.cobros.CajaDelCobroACuenta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if falta != nil {
+		if falta.Sucursal != "" {
+			out["sinCaja"] = falta.Sucursal
+			out["fondoBase"] = falta.FondoBase
+		}
+		if len(falta.Sucursales) > 0 {
+			out["sucursales"] = falta.Sucursales
+		}
+	}
+	return ok(out), nil
 }
 
 // AnularRecibo: quien mueve plata (roles.ManejanPlata), como el cobro.
@@ -282,7 +312,7 @@ func (a *API) AnularRecibo(ctx context.Context, r cuentasapi.AnularReciboRequest
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.cobros.Anular(ctx, ses, r.Id, r.Body.Motivo)
+	m, err := a.cobros.AnularConPIN(ctx, ses, r.Id, r.Body.Motivo, texto(r.Body.Pin))
 	if err != nil {
 		return nil, err
 	}
@@ -400,6 +430,17 @@ func (a *API) CambiarEstadoDeCheque(ctx context.Context, r cuentasapi.CambiarEst
 	return ok(v), err
 }
 
+// RechazarChequeDelCliente: quien mueve plata, desde la ficha del cliente
+// (H272); quien no es admin, con el PIN de uno.
+func (a *API) RechazarChequeDelCliente(ctx context.Context, r cuentasapi.RechazarChequeDelClienteRequestObject) (cuentasapi.RechazarChequeDelClienteResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.cobros.RechazarConPIN(ctx, ses, r.Id.String(), r.Body.Motivo, texto(r.Body.Pin))
+	return ok(v), err
+}
+
 /* ---------------------------- vendedores --------------------------- */
 
 func (a *API) ListarVendedores(ctx context.Context, r cuentasapi.ListarVendedoresRequestObject) (cuentasapi.ListarVendedoresResponseObject, error) {
@@ -427,6 +468,57 @@ func (a *API) AlternarVendedor(ctx context.Context, r cuentasapi.AlternarVendedo
 		return nil, err
 	}
 	m, err := a.clientes.AlternarVendedor(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
+/* ----------------------------- personal ---------------------------- */
+
+func (o respuesta) VisitListarPersonalResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitAltaDePersonalResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCambiarPuestoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitBajaDePersonalResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) ListarPersonal(ctx context.Context, _ cuentasapi.ListarPersonalRequestObject) (cuentasapi.ListarPersonalResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...); err != nil {
+		return nil, err
+	}
+	v, err := a.clientes.Personal(ctx)
+	return ok(v), err
+}
+
+func (a *API) AltaDePersonal(ctx context.Context, r cuentasapi.AltaDePersonalRequestObject) (cuentasapi.AltaDePersonalResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.clientes.AltaDePersonal(ctx, ses, r.Body.Nombre, r.Body.Correo, r.Body.Clave, sqlc.StaffRole(r.Body.Rol))
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
+func (a *API) CambiarPuesto(ctx context.Context, r cuentasapi.CambiarPuestoRequestObject) (cuentasapi.CambiarPuestoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.clientes.CambiarPuesto(ctx, ses, r.Id, sqlc.StaffRole(r.Body.Rol))
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
+func (a *API) BajaDePersonal(ctx context.Context, r cuentasapi.BajaDePersonalRequestObject) (cuentasapi.BajaDePersonalResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.clientes.BajaDePersonal(ctx, ses, r.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +603,33 @@ func (a *API) MiCuentaCorriente(ctx context.Context, _ cuentasapi.MiCuentaCorrie
 		return ok(cobros.CuentaCorriente{Movimientos: []cobros.MovimientoDelResumen{}}), nil
 	}
 	v, err := cobros.DelCliente(ctx, a.pool, c.id, c.limite)
-	return ok(v), err
+	if err != nil {
+		return nil, err
+	}
+	// Lo cargado a la cuenta de pedidos que todavía no se entregaron: la
+	// deuda nace con el pedido (así se reserva el crédito), y el cliente veía
+	// una deuda sin comprobante (H082). Se distingue, no se descuenta.
+	//
+	// Del acopio que ya se retiró en parte cuenta solo lo que queda, a su
+	// precio y en la proporción del total (como fragmentos.SinCobrarDeLoQueSalio):
+	// con 35 de 40 placas retiradas sumaba el pedido entero.
+	var sinEntregar float64
+	if err := a.pool.QueryRow(ctx, `SELECT coalesce(sum(m.monto * greatest(1 - coalesce((
+		  SELECT sum(di.cantidad * oi.subtotal / nullif(oi.cantidad, 0)) FROM delivery_items di
+		  JOIN deliveries d ON d.id = di.delivery_id AND d.estado <> 'anulada' JOIN order_items oi ON oi.id = di.order_item_id
+		  WHERE d.order_id = o.id) / nullif((SELECT sum(oi.subtotal) FROM order_items oi WHERE oi.order_id = o.id), 0), 0), 0)), 0)::float8
+		FROM account_movements m
+		JOIN orders o ON o.numero = m.referencia AND o.customer_id = m.customer_id
+		WHERE m.customer_id = $1 AND m.tipo = 'compra' AND o.estado NOT IN ('entregado', 'cancelado')
+		  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.estado <> 'borrador')`, c.id).Scan(&sinEntregar); err != nil {
+		return nil, err
+	}
+	return ok(miCuenta{v, jsmath.Redondear2(sinEntregar)}), nil
+}
+
+type miCuenta struct {
+	cobros.CuentaCorriente
+	SinEntregar float64 `json:"sinEntregar"`
 }
 
 func (a *API) MisMovimientos(ctx context.Context, r cuentasapi.MisMovimientosRequestObject) (cuentasapi.MisMovimientosResponseObject, error) {
@@ -523,6 +641,7 @@ func (a *API) MisMovimientos(ctx context.Context, r cuentasapi.MisMovimientosReq
 		return ok(historial{Movimientos: []cobros.MovimientoDelCliente{}}), nil
 	}
 	h, err := a.historial(ctx, c.id, (*string)(r.Params.Periodo), r.Params.Filtro)
+	h.Movimientos = cobros.HistorialParaElCliente(h.Movimientos)
 	return ok(h), err
 }
 

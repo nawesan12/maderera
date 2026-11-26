@@ -6,7 +6,8 @@ import {
 } from "@/lib/whatsapp/aviso-manual-datos";
 import Link from "next/link";
 import { Banknote } from "lucide-react";
-import { etiquetaDeCircuito } from "@/lib/circuito";
+import { RotuloDelCircuito } from "@/components/admin/circuito";
+import { diasHasta, formatearMonto } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import {
@@ -14,7 +15,7 @@ import {
   Paginador,
   POR_PAGINA,
 } from "@/components/admin/paginador";
-import { fechaCorta, moneda, plural } from "@/components/admin/formato";
+import { fechaCorta, plural } from "@/components/admin/formato";
 import {
   chequesTerminados,
   listarCheques,
@@ -65,9 +66,9 @@ export default async function ChequesPage({
     chequesTerminados(pagina, POR_PAGINA),
   ]);
 
+  // Por día argentino, como la fecha que se muestra (diasHasta).
   const ahora = new Date();
-  const enDias = (fecha: Date) =>
-    Math.ceil((fecha.getTime() - ahora.getTime()) / 86_400_000);
+  const enDias = (fecha: Date) => diasHasta(fecha, ahora) ?? 0;
 
   /*
    * Lo que informaron los clientes desde Mi cuenta y todavía no se tiene en
@@ -197,7 +198,7 @@ function Total({
     <div className="tarjeta p-5">
       <p className="text-base font-semibold text-texto-2">{titulo}</p>
       <p className="tabular mt-1 text-[34px] font-bold leading-none tracking-[-0.03em]">
-        {moneda.format(total)}
+        {formatearMonto(total)}
       </p>
       <p className="mt-2 text-base text-texto-2">
         {plural(cheques.length, "cheque")}
@@ -232,7 +233,7 @@ function Lado({
       {tramos.map((t) => (
         <GrupoListado
           key={t.titulo}
-          titulo={`${t.titulo} · ${moneda.format(t.lista.reduce((s, c) => s + c.importe, 0))}`}
+          titulo={`${t.titulo} · ${formatearMonto(t.lista.reduce((s, c) => s + c.importe, 0))}`}
           cantidad={t.lista.length}
           destacado={t.hasta <= 7}
         >
@@ -267,6 +268,19 @@ function yaVencido(c: ChequeListado): string {
   return "ya se puede depositar";
 }
 
+
+/**
+ * El chip de origen. Un cheque que el cliente libró y entregó él mismo es
+ * «Del cliente»: «De tercero» es el que firmó otro (mes simulado: los del
+ * cobro, sin librador, salían como de tercero).
+ */
+function deQuien(c: { sentido: string; librador: string | null; cliente: string | null }) {
+  if (c.sentido !== "recibido") return "Propio";
+  const igual = (a: string, b: string) => a.trim().toLocaleLowerCase("es-AR") === b.trim().toLocaleLowerCase("es-AR");
+  if (c.cliente && (!c.librador || igual(c.librador, c.cliente))) return "Del cliente";
+  return c.librador ? "De tercero" : "Recibido";
+}
+
 function Tarjeta({
   cheque: c,
   dias,
@@ -280,39 +294,67 @@ function Tarjeta({
 }) {
   const vencido = dias !== null && dias < 0;
 
+  /*
+   * En el teléfono la tarjeta usaba media columna para el banco y el número
+   * en tres renglones, con el importe flotando a la derecha (mes simulado,
+   * H339). Ahora: el importe y la fecha de pago arriba, a todo el ancho; el
+   * banco y el número en una línea; los chips en una fila; y la acción
+   * principal a mano.
+   */
   return (
-    <article
-      className={`tarjeta flex flex-wrap items-center gap-4 px-5 py-4 ${
-        apagado ? "opacity-75" : ""
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* El banco y el número juntos: es como se lo encuentra en el
-              banco, que es lo que pidió la clienta. */}
-          <h3 className="text-lg font-medium">
-            {c.banco ?? "Sin banco"}{" "}
-            <span className="tabular">N° {c.numero}</span>
-          </h3>
+    <article className={`tarjeta space-y-2 px-4 py-3.5 sm:px-5 ${apagado ? "opacity-75" : ""}`}>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="tabular text-xl font-semibold">{formatearMonto(c.importe)}</p>
+        <p
+          className={`tabular text-right text-base ${
+            vencido
+              ? "font-semibold text-brand-orange-dark"
+              : dias !== null && dias <= 7
+                ? "font-medium text-brand-orange-dark"
+                : "text-muted-foreground"
+          }`}
+        >
+          {fechaCorta.format(c.fechaPago)}
+          {dias !== null &&
+            (vencido ? ` · ${yaVencido(c)}` : dias === 0 ? " · hoy" : ` · en ${plural(dias, "día")}`)}
+        </p>
+      </div>
+      {/* El banco y el número juntos: es como se lo encuentra en el banco.
+          Si no entran, se corta el banco: el número no se pierde. */}
+      <h3 className="flex min-w-0 items-baseline gap-2 text-base font-medium">
+        <span className="min-w-0 truncate">{c.banco ?? "Sin banco"}</span>
+        <span className="codigo shrink-0 whitespace-nowrap">N° {c.numero}</span>
+      </h3>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span
+          className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-medium ${
+            c.sentido === "recibido" ? "bg-naranja-claro text-acento-sobre-claro" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {deQuien(c)}
+        </span>
+        <span className="whitespace-nowrap rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">
+          {ESTADOS[c.estado] ?? c.estado}
+          {c.tipo === "echeq" && " · e-Cheq"}
+        </span>
+        {/* Solo el circuito B se marca, y como «Circuito B»: una «B» suelta
+            se leía como Factura B (mes simulado, H167/H262). */}
+        {c.circuito === "negro" && (
+          <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 text-sm font-medium text-texto-2">
+            <RotuloDelCircuito />
+          </span>
+        )}
+        {c.estado === "informado" && c.saldoCliente !== null && (
           <span
-            className={`rounded-full px-2.5 py-1 text-sm font-medium ${
-              c.sentido === "recibido"
-                ? "bg-naranja-claro text-acento-sobre-claro"
-                : "bg-muted text-muted-foreground"
+            className={`tabular whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-medium ${
+              c.saldoCliente <= 0.005 ? "estado-problema bg-[var(--estado-fondo)]" : "bg-muted text-muted-foreground"
             }`}
           >
-            {c.sentido === "recibido" ? "De tercero" : "Propio"}
+            {c.saldoCliente <= 0.005 ? "Sin deuda" : `Debe ${formatearMonto(c.saldoCliente)}`}
           </span>
-          <span className="rounded-full bg-muted px-2.5 py-1 text-sm font-medium text-muted-foreground">
-            {ESTADOS[c.estado] ?? c.estado}
-            {c.tipo === "echeq" && " · e-Cheq"}
-          </span>
-          {/* El circuito, porque la cartera tiene que poder contestar "cuánto
-              hay que cubrir esta semana" para cada uno por separado. */}
-          <span className="rounded-full bg-chip px-2.5 py-1 text-sm font-medium text-texto-2">
-            {etiquetaDeCircuito(c.circuito)}
-          </span>
-        </div>
+        )}
+      </div>
+      <div className="min-w-0">
         {/*
           De quién vino y a quién fue, enlazados: el cliente con su ficha, el
           proveedor con la suya y el cheque con el recibo con que entró. El
@@ -320,9 +362,12 @@ function Tarjeta({
           alguien preguntando de quién era.
         */}
         <p className="mt-1 text-base text-muted-foreground">
+          {/* El propio lo libra la maderera: «Sin librador» no tenía sentido
+              ahí, y la nota «Pago a X» repetía al proveedor que ya dice
+              «entregado a» (mes simulado, tercera prueba). */}
           {c.librador
             ? `Librado por ${c.librador}`
-            : c.cliente
+            : c.cliente || c.sentido !== "recibido"
               ? ""
               : "Sin librador"}
           {c.cliente && (
@@ -342,7 +387,7 @@ function Tarjeta({
           )}
           {c.proveedor && (
             <>
-              {" · entregado a "}
+              {c.librador || c.cliente || c.sentido === "recibido" ? " · entregado a " : "Entregado a "}
               {c.proveedorId ? (
                 <Link
                   href={`/admin/proveedores/${c.proveedorId}`}
@@ -355,7 +400,7 @@ function Tarjeta({
               )}
             </>
           )}
-          {c.notas && ` · ${c.notas}`}
+          {c.notas && c.notas !== `Pago a ${c.proveedor}` && ` · ${c.notas}`}
           {c.receiptId && c.recibo && (
             <>
               {" · "}
@@ -363,7 +408,7 @@ function Tarjeta({
                 href={`/api/recibos/${c.receiptId}/pdf`}
                 target="_blank"
                 rel="noopener"
-                className="tabular hover:text-brand-orange hover:underline"
+                className="tabular whitespace-nowrap hover:text-brand-orange hover:underline"
               >
                 recibo {c.recibo}
               </a>
@@ -382,29 +427,6 @@ function Tarjeta({
         )}
       </div>
 
-      <div className="text-right">
-        <p className="tabular text-xl font-semibold">
-          {moneda.format(c.importe)}
-        </p>
-        <p
-          className={`text-base ${
-            vencido
-              ? "font-semibold text-brand-orange-dark"
-              : dias !== null && dias <= 7
-                ? "font-medium text-brand-orange-dark"
-                : "text-muted-foreground"
-          }`}
-        >
-          {fechaCorta.format(c.fechaPago)}
-          {dias !== null &&
-            (vencido
-              ? ` · ${yaVencido(c)}`
-              : dias === 0
-                ? " · hoy"
-                : ` · en ${plural(dias, "día")}`)}
-        </p>
-      </div>
-
       {!apagado && (
         <AccionesDeCheque
           id={c.id}
@@ -412,6 +434,10 @@ function Tarjeta({
           sentido={c.sentido}
           numero={c.numero}
           importe={c.importe}
+          diasParaCobrar={diasHasta(c.fechaPago) ?? 0}
+          cliente={c.cliente}
+          saldoCliente={c.saldoCliente}
+          proveedor={c.proveedor}
         />
       )}
     </article>

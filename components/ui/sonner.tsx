@@ -20,12 +20,15 @@ import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon
  */
 const Toaster = ({ ...props }: ToasterProps) => {
   const tema = useTemaDelDocumento()
+  const angosta = usePantallaAngosta()
 
   return (
     <Sonner
       theme={tema}
       className="toaster group"
-      position="top-center"
+      // En el teléfono, abajo: arriba tapaba el título del diálogo que se
+      // acababa de abrir (mes simulado, «Pasar a pedido» a 375 px).
+      position={angosta ? "bottom-center" : "top-center"}
       duration={6000}
       richColors
       icons={{
@@ -64,6 +67,21 @@ function useTemaDelDocumento(): "light" | "dark" {
   }, [])
 
   return tema
+}
+
+/** Debajo de 640 px (el `sm` de Tailwind), en vivo. */
+function usePantallaAngosta(): boolean {
+  const [angosta, setAngosta] = useState(false)
+
+  useEffect(() => {
+    const consulta = window.matchMedia("(max-width: 639.98px)")
+    const leer = () => setAngosta(consulta.matches)
+    leer()
+    consulta.addEventListener("change", leer)
+    return () => consulta.removeEventListener("change", leer)
+  }, [])
+
+  return angosta
 }
 
 export { Toaster }

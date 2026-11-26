@@ -451,7 +451,7 @@ func TestProveedorInterno(t *testing.T) {
 	}
 	var estado string
 	e.uno(t, `SELECT estado::text FROM invoices WHERE id = $1 AND cae IS NULL`, &estado, id)
-	if estado != "rechazada" {
+	if estado != "emitida" {
 		t.Fatal(estado)
 	}
 	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
@@ -800,7 +800,7 @@ func TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if serie.AnterioresSinCae != 60 || serie.Tramo == nil || serie.Tramo.InvoiceID != ids[15] || serie.Tramo.Numero != 16 {
+	if serie.AnterioresSinCae != 60 || serie.Tramo == nil || serie.Tramo.InvoiceID != ids[15] || serie.Tramo.Numero != 16 || serie.Tramo.Desde != 1 {
 		t.Fatalf("serie: %+v %+v", serie, serie.Tramo)
 	}
 	if s, _ := e.s.Serie(ctx, ids[15]); s.Tramo != nil {

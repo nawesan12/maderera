@@ -77,3 +77,26 @@ func TestContraLaBase(t *testing.T) {
 		t.Error("Soltar no soltó")
 	}
 }
+
+// Los que entran bien desde el mismo router no gastan el cupo de la IP
+// (mes simulado: la séptima persona de la maderera esperaba con un 429).
+// Los intentos fallidos siguen contando.
+func TestElQueEntraBienDevuelveElIntento(t *testing.T) {
+	pool := pruebas.Base(t)
+	l := Nuevo(sqlc.New(pool), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ctx := context.Background()
+	for i := 1; i <= 30; i++ {
+		if !l.Permitido(ctx, Ingresar, "ip:9.9.9.9").Permitido {
+			t.Fatalf("frenó al que entró bien en el intento %d", i)
+		}
+		l.Devolver(ctx, Ingresar, "ip:9.9.9.9")
+	}
+	for i := 1; i <= 30; i++ {
+		if !l.Permitido(ctx, Ingresar, "ip:9.9.9.9").Permitido {
+			t.Fatalf("el local entero quedó afuera en el intento fallido %d", i)
+		}
+	}
+	if l.Permitido(ctx, Ingresar, "ip:9.9.9.9").Permitido {
+		t.Error("los fallidos dejaron de contar")
+	}
+}

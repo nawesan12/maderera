@@ -68,8 +68,13 @@ paths:
   /api/v1/admin/stock/movimientos:
     get:
       operationId: UltimosMovimientos
+      description: Los últimos de las medidas que pasan el mismo filtro que la grilla (sin filtro, los de todo)
       parameters:
         - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 10 } }
+        - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: categoria, in: query, schema: { type: string } }
+        - { name: marca, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: proveedor, in: query, schema: { type: string } }
       responses:
         "200":
           description: Los últimos movimientos
@@ -79,14 +84,17 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, productId, productName, label, branchName, type, qty, note, createdAt]
+                  required: [id, variantId, productId, productName, label, branchName, type, concepto, referencia, qty, note, createdAt]
                   properties:
                     id: { type: string }
+                    variantId: { type: string }
                     productId: { type: string }
                     productName: { type: string }
                     label: { type: string }
                     branchName: { type: string }
                     type: { type: string }
+                    concepto: { type: string, description: Qué fue (Rotura, Entrega, Recepción…) }
+                    referencia: { type: string, nullable: true, description: El comprobante (REM-0020, PED-1098, TRA-0003…) }
                     qty: { type: number, format: double }
                     note: { type: string, nullable: true }
                     createdAt: { type: string, format: date-time }
@@ -109,8 +117,9 @@ paths:
                   type: number
                   format: double
                   minimum: 0
-                  description: Lo que se contó en el estante. El stock queda en este número, sea lo que sea que había
-                motivo: { type: string, enum: [ingreso, rotura, conteo, devolucion, faltante, correccion, otro] }
+                  description: Lo que se contó en el galpón. Lo que salió en el camión de un pedido en camino se suma solo
+                motivo: { type: string, enum: [ingreso, rotura, conteo, devolucion, faltante, correccion, otro, taller, reposicion] }
+                pedido: { type: string, maxLength: 40, description: El pedido (PED-…) de una reposición a un cliente }
       responses:
         "200":
           description: El cambio («Casa Central 3 → 5»), o vacío si la cantidad era cero
@@ -140,6 +149,72 @@ paths:
                 nota: { type: string }
       responses:
         "204": { description: Registrada }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/stock/traslados:
+    get:
+      operationId: TrasladosEnCamino
+      responses:
+        "200":
+          description: Los traslados que nadie recibió todavía, los más viejos primero
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Traslado" } }
+    post:
+      operationId: CrearTraslado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [origenId, destinoId, renglones]
+              additionalProperties: false
+              properties:
+                origenId: { type: string }
+                destinoId: { type: string }
+                nota: { type: string, maxLength: 300 }
+                renglones:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [variantId, cantidad]
+                    additionalProperties: false
+                    properties:
+                      variantId: { type: string }
+                      cantidad: { type: string, maxLength: 20 }
+      responses:
+        "201":
+          description: Salió del origen y quedó en camino
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, codigo]
+                properties:
+                  id: { type: string }
+                  codigo: { type: string }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/stock/traslados/{id}:
+    get:
+      operationId: VerTraslado
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: El comprobante
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Traslado" }
+        "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/stock/traslados/{id}/recibir:
+    post:
+      operationId: RecibirTraslado
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Recibido; el destino suma lo que llegó }
+        "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/sucursales:
     get:
@@ -229,18 +304,22 @@ components:
         nombre: { type: string }
     StockEnSucursal:
       type: object
-      required: [id, slug, nombre, qty, reservado, min, nivel]
+      required: [id, slug, nombre, qty, reservado, disponible, enReparto, galpon, llegando, min, nivel]
       properties:
         id: { type: string }
         slug: { type: string }
         nombre: { type: string }
         qty: { type: number, format: double }
         reservado: { type: number, format: double }
+        disponible: { type: number, format: double, description: físico − reservado, con signo (negativo es lo vendido de más) }
+        enReparto: { type: number, format: double, description: lo que va en el camión (remitos de envío sin firmar y pedidos en camino sin remito) }
+        galpon: { type: number, format: double, description: lo que hay en el estante (el físico menos lo reservado de pedidos en camino sin remito) }
+        llegando: { type: number, format: double, description: lo que viene en un traslado sin recibir }
         min: { type: number, format: double }
         nivel: { $ref: "#/components/schemas/Nivel" }
     FilaStock:
       type: object
-      required: [variantId, productId, productSlug, productName, label, sku, codigoBarras, categoryName, unidad, largoMm, imagen, sucursales, total]
+      required: [variantId, productId, productSlug, productName, label, sku, codigoBarras, categoryName, unidad, largoMm, imagen, sucursales, total, paraReponer]
       properties:
         variantId: { type: string }
         productId: { type: string }
@@ -254,4 +333,31 @@ components:
         largoMm: { type: integer, nullable: true }
         imagen: { type: string, nullable: true }
         sucursales: { type: array, items: { $ref: "#/components/schemas/StockEnSucursal" } }
-        total: { type: number, format: double }
+        total: { type: number, format: double, description: la suma de lo disponible de cada sucursal }
+        paraReponer: { type: boolean }
+    Traslado:
+      type: object
+      required: [id, codigo, origen, destino, nota, estado, creadoPor, createdAt, recibidoPor, recibidoAt, renglones]
+      properties:
+        id: { type: string }
+        codigo: { type: string }
+        origen: { type: string }
+        destino: { type: string }
+        nota: { type: string, nullable: true }
+        estado: { type: string, enum: [en-camino, recibido] }
+        creadoPor: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        recibidoPor: { type: string, nullable: true }
+        recibidoAt: { type: string, format: date-time, nullable: true }
+        renglones:
+          type: array
+          items:
+            type: object
+            required: [variantId, producto, medida, sku, unidad, cantidad]
+            properties:
+              variantId: { type: string }
+              producto: { type: string }
+              medida: { type: string }
+              sku: { type: string }
+              unidad: { type: string }
+              cantidad: { type: number, format: double }

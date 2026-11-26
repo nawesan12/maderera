@@ -11,6 +11,12 @@ export async function listarRecepciones(limite = 50) {
   return filas.map((f) => ({ ...f, fecha: new Date(f.fecha) }));
 }
 
+/** Las órdenes enviadas o con parte recibida: lo que se espera que llegue (sin importes). */
+export async function ordenesPorRecibir() {
+  const filas = datos(await (await api()).GET("/api/v1/admin/recepciones/por-recibir"));
+  return filas.map((f) => ({ ...f, fechaPrometida: f.fechaPrometida ? new Date(f.fechaPrometida) : null }));
+}
+
 /** Una recepción con sus líneas y la cuenta del costo, si ya se confirmó. */
 export async function obtenerRecepcion(id: string) {
   const r = await (await api()).GET("/api/v1/admin/recepciones/{id}", { params: { path: { id } } });

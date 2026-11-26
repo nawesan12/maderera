@@ -8,7 +8,7 @@ orden: 8
 
 *Cortes* es la cola del taller, como un pizarrón:
 
-**En cola → En proceso → Terminado → Retirado**
+**En cola → En la máquina → Terminado → Retirado**
 
 Cada orden trae el material, la cantidad de placas y el **despiece en
 milímetros**: largo, ancho, cantidad y si la pieza respeta la veta. Las medidas
@@ -19,13 +19,18 @@ después necesita la máquina para armar el patrón de corte. Escribirlas como
 ### La pantalla del taller
 
 Quien opera la seccionadora no trabaja dentro del panel: tiene su propia
-pantalla en **`/taller`**, que es la misma cola pero sola, sin el menú de la
+pantalla en `/taller`, que es la misma cola pero sola, sin el menú de la
 izquierda ni el buscador de arriba. Está pensada para dejarla abierta todo el
-día en la máquina.
+día en la máquina. Con dos talleres, arriba se elige cuál mirar.
 
 Se entra con un usuario de rol **aserradero**, y ese usuario no ve el resto del
-panel: ni precios, ni cobros, ni clientes. Sí entra a la ficha de cada corte y
-a la pantalla de formato, que son lo suyo.
+panel: ni precios, ni cobros, ni clientes. Sí entra a la ficha de cada corte,
+sin los importes. Empieza y termina los trabajos; marcarlos urgentes y
+entregarlos es del mostrador.
+
+En cada tarjeta están la **Hoja de corte** y el **Archivo** para la máquina.
+**Marcar terminado** pide confirmar las pasadas que propone el plano. Si se
+tocó sin querer, el aviso que aparece tiene **Deshacer**.
 
 Es lo mismo que pasa con `/atencion` para quien contesta WhatsApp.
 
@@ -58,6 +63,13 @@ Es lo que explica por qué dos piezas de 900 no entran en una placa de 1830.
 El valor se cambia en **Cortes → Tarifas**, y vale para el plano, el presupuesto y la
 hoja del taller a la vez.
 
+### La hoja de corte
+
+Es lo que se tipea en la seccionadora, placa por placa y en el orden de la
+máquina. Cada paso tiene su casilla: lo tildado queda guardado en esa tablet o
+ese teléfono mientras dura el corte. Las pasadas y los retales de la hoja son
+los mismos de la ficha y del plano, y son los que se cobran.
+
 ### El reporte del corte
 
 El botón **Reporte en PDF** de la ficha baja el trabajo entero: cada placa
@@ -70,42 +82,43 @@ para bajar al taller.
 
 ### El corte que pide el cliente desde el sitio
 
-En **`/corte`** cualquiera puede armar su despiece, ver el dibujo y el precio, y
-agregarlo al carrito. No hace falta tener cuenta para mirar; sí para comprar.
-
-Lo que entra por ahí abre su orden en la cola del taller **al confirmarse la
-compra**, atada al pedido, igual que un corte vendido en el mostrador. El precio
-se vuelve a calcular en ese momento: el que vio el cliente sirve para decidir, no
-para cobrar.
+En `/corte` cualquiera puede armar su despiece, ver el dibujo y mandarlo por
+WhatsApp. El mensaje trae un enlace a la consulta: desde ahí, **Pasar a corte**
+abre el alta con la placa y las piezas ya cargadas.
 
 ### Urgente
 
-El botón *Urgente* manda la orden al principio de la cola. Úselo con criterio:
+El botón *Urgente* manda la orden al principio de la cola. Usalo con criterio:
 si todo es urgente, nada lo es.
 
 ### Cortes que vienen de un pedido
 
-Cuando el corte nace de un pedido, quedan enganchados: desde la orden se llega
-al pedido y al revés.
+**Mandar a cortar**, desde la ficha del pedido, arranca con la placa que vende
+el pedido, el teléfono del cliente y el día de retiro. Quedan enganchados:
+desde la orden se llega al pedido y al revés, y la ficha del corte no vuelve a
+cobrar las placas que el pedido ya vende.
+
+La pieza que faltó en una entrega se repone desde el mismo pedido, con
+**Reposición sin cargo**. Al entregarla queda escrito en el pedido.
+
+### Corregir o anular
+
+Un corte que todavía no se cortó se **corrige** (se carga de nuevo con lo suyo
+y el nuevo reemplaza al viejo en la cola) o se **anula** con un motivo.
 
 ### Cobrar el corte
 
 El corte se cobra **por pasada de sierra**, y el precio depende del material y
-de si el cliente es mayorista:
+de si el cliente es mayorista. De una placa que se vende entera —también la que
+vende el pedido del corte— el corte va sin cargo.
 
-| Material | Público | Mayorista |
-|---|---|---|
-| Placas | $ 1.200 | $ 996 |
-| Tableros de madera | $ 1.400 | $ 1.162 |
+Las pasadas salen del plano, y el taller las confirma al terminar. Si la
+máquina dio otras, se corrigen en la ficha, en «Pasadas a cobrar».
 
-**Cuántas pasadas lleva el trabajo lo dice la máquina, no el sistema.** El
-patrón de corte lo arma el optimizador de la seccionadora, así que el número se
-carga a mano en la ficha del corte, en «Pasadas de sierra», **después de
-optimizar**. Recién ahí la ficha muestra el importe.
-
-Mientras el campo esté en cero la ficha dice «el corte todavía no se puede
-cobrar». Eso es a propósito: es preferible que falte el dato a que el sistema
-invente un mínimo.
+Un corte suelto —el que se toma por teléfono y se paga al retirar— no se
+entrega sin cobrar: **Cobrar** lo pasa a pedido, con la mercadería reservada, y
+se cobra y se entrega desde ahí. El que se vendió en el mostrador muestra lo
+que se cobró en la venta.
 
 Los precios se editan en **Cortes → Tarifas**. El material es texto libre y no
 un desplegable de productos: la tarifa no depende de la placa concreta sino de
@@ -118,8 +131,8 @@ público, igual que el precio del catálogo.
 
 ### Pasarle el trabajo a la máquina
 
-En la ficha del corte, el botón **Para la máquina** baja un archivo con el
-despiece: una fila por medida, con largo, ancho, cantidad, material y los
+En la tarjeta del taller y en la ficha del corte, **Archivo para la máquina**
+baja un archivo con el despiece: una fila por medida, con largo, ancho, cantidad, material y los
 cantos. Ese archivo se copia a la PC de la seccionadora y se importa en el
 programa que optimiza el corte, en vez de tipear las medidas de nuevo.
 

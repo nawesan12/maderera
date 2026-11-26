@@ -3,7 +3,6 @@ package compras
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -37,7 +37,7 @@ type RecepcionListada struct {
 func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]RecepcionListada, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, s.nombre, r.supplier_id, b.name, coalesce(t.lineas, 0), t.neto, r.gastos,
-		  EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = r.id)
+		  EXISTS (SELECT 1 FROM purchase_invoice_receipts x WHERE x.goods_receipt_id = r.id)
 		FROM goods_receipts r
 		JOIN suppliers s ON s.id = r.supplier_id
 		LEFT JOIN branches b ON b.id = r.branch_id
@@ -229,7 +229,7 @@ func (s *Servicio) CrearRecepcion(ctx context.Context, ses *auth.Sesion, m map[s
 		}
 		return "", err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "recepcion", id, fmt.Sprintf("Cargó una recepción con %d renglones", len(r.Lineas)), nil)
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "recepcion", id, "Cargó una recepción con "+formato.Cuantos(len(r.Lineas), "renglón", "renglones"), nil)
 	return id, nil
 }
 
@@ -268,6 +268,28 @@ func leerItems(ctx context.Context, tx pgx.Tx, id string) ([]itemRecepcion, erro
 		var i itemRecepcion
 		return i, r.Scan(&i.id, &i.variante, &i.itemDeOrden, &i.cantidad, &i.costo, &i.alicuota, &i.cantidadTexto)
 	})
+}
+
+// recepcionConfirmable frena la recepción cuya sucursal o cuyos productos
+// ya no existen. goods_receipts y sus renglones no tienen clave foránea a
+// branches ni a product_variants: una orden de una sucursal borrada llegaba
+// hasta el INSERT del stock y terminaba en «Algo falló de nuestro lado» (mes
+// simulado, tercera prueba).
+func recepcionConfirmable(ctx context.Context, tx pgx.Tx, sucursal string, variantes []string) error {
+	var hay bool
+	var faltan int
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM branches WHERE id::text = $1),
+		(SELECT count(*)::int FROM unnest($2::text[]) v WHERE NOT EXISTS (SELECT 1 FROM product_variants p WHERE p.id::text = v))`,
+		sucursal, variantes).Scan(&hay, &faltan); err != nil {
+		return err
+	}
+	if !hay {
+		return fallo("La sucursal de esta recepción ya no existe: anulala y cargala de nuevo con la sucursal que corresponde.")
+	}
+	if faltan > 0 {
+		return fallo("Un producto de esta recepción ya no existe: anulala y cargala de nuevo.")
+	}
+	return nil
 }
 
 // bloquearStock toma el candado de lib/inventario/locks.ts de cada variante
@@ -328,6 +350,9 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 		variantes := make([]string, len(items))
 		for i, it := range items {
 			variantes[i] = it.variante
+		}
+		if err := recepcionConfirmable(ctx, tx, c.branch, variantes); err != nil {
+			return err
 		}
 		if err := bloquearStock(ctx, tx, c.branch, variantes); err != nil {
 			return err
@@ -421,7 +446,7 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 		return 0, 0, err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "recepcion", id,
-		fmt.Sprintf("Confirmó la recepción: %d renglones por $%s netos", lineas, jsmath.Fijo2(neto)), nil)
+		"Confirmó la recepción: "+formato.Cuantos(lineas, "renglón", "renglones")+" por "+formato.Importe(neto)+" netos", nil)
 	return lineas, neto, nil
 }
 
@@ -457,7 +482,9 @@ func cargadoPorRecepcion(ctx context.Context, tx pgx.Tx, id string) (*float64, e
 // facturaDeRecepcion es el id de la factura que cubre la recepción, o "".
 func facturaDeRecepcion(ctx context.Context, tx pgx.Tx, id string) (string, error) {
 	var f string
-	err := tx.QueryRow(ctx, `SELECT id FROM purchase_invoices WHERE receipt_id = $1 LIMIT 1`, id).Scan(&f)
+	err := tx.QueryRow(ctx, `
+		SELECT f.id FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
+		WHERE x.goods_receipt_id = $1 AND f.anulada_at IS NULL LIMIT 1`, id).Scan(&f)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
@@ -575,6 +602,7 @@ func (s *Servicio) AnularRecepcion(ctx context.Context, ses *auth.Sesion, id, mo
 			if err != nil {
 				return err
 			}
+			deuda = jsmath.Redondear2(deuda)
 			switch {
 			case facturada != "":
 				deuda = 0

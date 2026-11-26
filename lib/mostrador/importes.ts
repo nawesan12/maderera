@@ -363,15 +363,50 @@ export function aplicarDescuento(
 
   const factor = Math.max(0, (total - descuentoPedido) / total);
 
-  const rebajadas = lineas.map((l) => ({
-    ...l,
-    precioUnitario: aCentavos(l.precioUnitario * factor),
-  }));
+  const rebajadas = alCentavo(
+    lineas.map((l) => ({
+      ...l,
+      precioUnitario: aCentavos(l.precioUnitario * factor),
+    })),
+    aCentavos(Math.max(0, total - descuentoPedido)),
+  );
 
   return {
     lineas: rebajadas,
     descuento: aCentavos(total - totalDeLaVenta(rebajadas)),
   };
+}
+
+/**
+ * Lleva la suma de los renglones a `objetivo` (mes simulado, H425): el
+ * reparto redondea cada precio, y un descuento de $5.000 quedaba en
+ * $5.000,01. Lo que sobra o falta lo toma un renglón de a uno; si no hay,
+ * uno cuya cantidad divida la diferencia; si tampoco, uno de cantidad entera
+ * se parte en dos (q − 1 al precio repartido y 1 con el centavo). Es
+ * `alCentavo` de Go, paso por paso.
+ */
+function alCentavo(ls: LineaDeVenta[], objetivo: number): LineaDeVenta[] {
+  const r = aCentavos(objetivo - totalDeLaVenta(ls));
+  if (r === 0 || objetivo <= 0) return ls;
+  for (const deAUno of [true, false]) {
+    for (let i = 0; i < ls.length; i++) {
+      const l = ls[i];
+      if ((l.cantidad === 1) !== deAUno || !(l.cantidad > 0)) continue;
+      const nuevo = aCentavos(l.precioUnitario + r / l.cantidad);
+      if (nuevo <= 0) continue;
+      const prueba = ls.map((x, j) => (j === i ? { ...x, precioUnitario: nuevo } : x));
+      if (totalDeLaVenta(prueba) === objetivo) return prueba;
+    }
+  }
+  for (let i = 0; i < ls.length; i++) {
+    const l = ls[i];
+    if (l.cantidad < 2 || l.cantidad !== Math.trunc(l.cantidad)) continue;
+    const uno = { ...l, cantidad: 1, precioUnitario: aCentavos(l.precioUnitario + r) };
+    if (uno.precioUnitario <= 0) continue;
+    const prueba = [...ls.slice(0, i), { ...l, cantidad: l.cantidad - 1 }, uno, ...ls.slice(i + 1)];
+    if (totalDeLaVenta(prueba) === objetivo) return prueba;
+  }
+  return ls;
 }
 
 /* -------------------------------------------------------------------------- */

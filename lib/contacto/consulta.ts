@@ -30,5 +30,7 @@ export function textoDeContacto(valores: Record<string, string> | undefined): st
   if (!mensaje) return null;
   const nombre = valores?.nombre?.trim();
   const motivo = MOTIVOS.find((m) => m.valor === valores?.motivo)?.etiqueta;
-  return `Hola!${nombre ? ` Soy ${nombre}.` : ""} ${motivo ? `${motivo}: ` : ""}${mensaje}`;
+  // Sin doble punto si el nombre ya lo trae («S.R.L.»).
+  const soy = nombre ? ` Soy ${nombre}${/[.!?]$/.test(nombre) ? "" : "."}` : "";
+  return `Hola!${soy} ${motivo ? `${motivo}: ` : ""}${mensaje}`;
 }

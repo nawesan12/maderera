@@ -1,5 +1,5 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
-import { formatearUnidad } from "@/lib/formato";
+import { formatearCuit, formatearMonto, formatearUnidad, unidadDeVenta, unidadEnPlural } from "@/lib/formato";
 import { fechaDelRemito, fechaHoraDeFirma } from "@/lib/entregas/fecha";
 import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 
@@ -40,6 +40,7 @@ export function RemitoImpreso({
    * número diciendo cosas distintas es peor que cualquiera de los dos.
    */
   const deAcopio = remito.pendientes.length > 0;
+  const envio = remito.tipo === "envio";
 
   return (
     <div className="comprobante-hoja">
@@ -61,7 +62,7 @@ export function RemitoImpreso({
             )}
             <div className="datos">
               {emisor?.domicilio && <div>{emisor.domicilio}</div>}
-              {emisor?.cuit && <div>CUIT {emisor.cuit}</div>}
+              {emisor?.cuit && <div>CUIT {formatearCuit(emisor.cuit)}</div>}
               {remito.sucursal && (
                 <div>
                   {remito.sucursal}
@@ -80,7 +81,11 @@ export function RemitoImpreso({
 
           <div className="comprobante-datos">
             <p className="titulo">
-              {deAcopio ? "Remito de entrega parcial" : "Remito de entrega total"}
+              {remito.reposicion
+                ? "Reposición sin cargo"
+                : deAcopio
+                  ? "Remito de entrega parcial"
+                  : "Remito de entrega total"}
             </p>
             <p className="numero">{remito.numero}</p>
             <div className="datos">
@@ -88,9 +93,11 @@ export function RemitoImpreso({
               <div>Pedido {remito.pedidoNumero}</div>
               {/* La factura con su CAE: el CAE es de la factura, y el remito
                   dice con cuál viaja la mercadería. */}
-              {lineasDeLaFactura(remito.factura).map((linea) => (
-                <div key={linea}>{linea}</div>
-              ))}
+              {remito.reposicion ? (
+                <div>Corte {remito.reposicion}</div>
+              ) : (
+                lineasDeLaFactura(remito.factura).map((linea) => <div key={linea}>{linea}</div>)
+              )}
               <div>
                 {remito.tipo === "envio" ? "Envío a domicilio" : "Retiro en sucursal"}
               </div>
@@ -106,7 +113,7 @@ export function RemitoImpreso({
               <strong>{remito.clienteNombre}</strong>
             </div>
             <div>
-              <span>Retira</span>
+              <span>{envio ? "Recibe" : "Retira"}</span>
               <strong>{remito.receptorNombre || "—"}</strong>
             </div>
             {remito.clienteDireccion && (
@@ -141,20 +148,12 @@ export function RemitoImpreso({
               </div>
             )}
             {/* Si lo que sale está pago o no: quien entrega tiene que saberlo
-                sin ir a buscar la factura. Sin importes, a propósito. */}
+                sin ir a buscar la factura. Sin los precios de los renglones;
+                en un envío contra entrega, cuánto traer y en qué medio
+                (pdf.CondicionDePago, el mismo texto del PDF). */}
             <div>
               <span>Condición de pago</span>
-              <strong>
-                {remito.estadoPago === "pagado"
-                  ? "Pagado"
-                  : remito.estadoPago === "parcial"
-                    ? "Pagado en parte · resto en cuenta corriente"
-                    : remito.estadoPago === "pendiente"
-                      ? remito.medioPago === "cuenta_corriente"
-                        ? "Cuenta corriente"
-                        : "Pendiente de pago"
-                      : "—"}
-              </strong>
+              <strong>{condicionDePago(remito)}</strong>
             </div>
           </div>
         </section>
@@ -170,9 +169,13 @@ export function RemitoImpreso({
           <tbody>
             {remito.lineas.map((linea, i) => (
               <tr key={i}>
-                <td>{linea.descripcion}</td>
+                <td>
+                  {linea.descripcion}
+                  {/* Lo que sale cortado y según qué corte. */}
+                  {linea.corte && <span className="chico" style={{ display: "block" }}>{linea.corte}</span>}
+                </td>
                 <td className="der mono">{linea.cantidad}</td>
-                <td className="der">{formatearUnidad(linea.unidad)}</td>
+                <td className="der">{unidadDe(linea.unidad, linea.cantidad, linea.descripcion)}</td>
               </tr>
             ))}
           </tbody>
@@ -183,19 +186,23 @@ export function RemitoImpreso({
             papel no lo dice hay que llamar. Sin importes, como todo el remito. */}
         {deAcopio && (
           <section className="acopio">
-            <p className="etiqueta">Queda en acopio</p>
+            {/* En un envío no es acopio: es lo que falta llevar (lo que no
+                había, o el segundo viaje). */}
+            <p className="etiqueta">{envio ? "Falta entregar" : "Queda en acopio"}</p>
             <ul>
               {remito.pendientes.map((p, i) => (
                 <li key={i}>
                   <span className="mono">{p.pendiente}</span>{" "}
-                  {formatearUnidad(p.unidad)} · {p.descripcion}
+                  {unidadDe(p.unidad, p.pendiente, p.descripcion)} · {p.descripcion}
                 </li>
               ))}
             </ul>
-            <p className="chico">
-              Esta mercadería queda guardada en la maderera a nombre del cliente
-              y se retira contra este remito.
-            </p>
+            {!envio && (
+              <p className="chico">
+                Esta mercadería queda guardada en la maderera a nombre del cliente
+                y se retira contra este remito.
+              </p>
+            )}
           </section>
         )}
 
@@ -221,7 +228,6 @@ export function RemitoImpreso({
                 <p className="chico">
                   Firmado el{" "}
                   {remito.firmadoAt ? fechaHoraDeFirma.format(remito.firmadoAt) : "—"}
-                  {remito.receptorNombre ? ` por ${remito.receptorNombre}` : ""}
                 </p>
               </>
             ) : (
@@ -231,15 +237,67 @@ export function RemitoImpreso({
 
           <div className="firma-caja">
             <p className="etiqueta">Aclaración y documento</p>
-            <div className="firma-vacia" />
+            {/* Firmado en la pantalla, la aclaración es quien firmó: el
+                recuadro quedaba en blanco y el nombre iba debajo de la firma
+                (mes simulado). Sin firma, en blanco para el papel. */}
+            {remito.firmaUrl && remito.receptorNombre ? (
+              <div className="firma-aclaracion">
+                <strong>{remito.receptorNombre}</strong>
+                {remito.receptorDocumento && <span className="mono">{remito.receptorDocumento}</span>}
+              </div>
+            ) : (
+              <div className="firma-vacia" />
+            )}
           </div>
         </section>
 
+        {/* Sin factura no se manda a buscar los importes a un comprobante
+            que no existe (decía «Sin factura asociada» arriba). */}
         <p className="leyenda">
-          Documento no válido como factura. Los importes se detallan en el
-          comprobante fiscal correspondiente.
+          {remito.factura
+            ? "Documento no válido como factura. Los importes se detallan en el comprobante fiscal correspondiente."
+            : "Documento no válido como factura."}
         </p>
       </div>
     </div>
   );
+}
+
+/** La unidad concordada: «placas», «rollos»; lo abreviado no cambia. */
+function unidadDe(unidad: string, cantidad: number, descripcion: string): string {
+  if (unidad === "pasada") return cantidad === 1 ? "corte" : "cortes";
+  const u = formatearUnidad(unidadDeVenta(unidad, descripcion));
+  return cantidad === 1 ? u : unidadEnPlural(u);
+}
+
+const MEDIO: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  debito: "Débito",
+  credito: "Crédito",
+  mercado_pago: "Mercado Pago",
+  cheque: "Cheque",
+};
+
+/** Gemelo de pdf.CondicionDePago (backend/internal/pdf/remito.go). */
+function condicionDePago(r: RemitoCompleto): string {
+  if (r.reposicion) return "Sin cargo";
+  if (r.tipo === "envio" && r.sinCobrar != null && r.sinCobrar > 0.009 && r.medioPago !== "cuenta_corriente") {
+    const medio = r.medioPago ? MEDIO[r.medioPago] : null;
+    return `A cobrar ${formatearMonto(r.sinCobrar)}${medio ? ` · ${medio}` : ""}`;
+  }
+  switch (r.estadoPago) {
+    case "pagado":
+      return "Pagado";
+    case "parcial":
+      return "Pagado en parte · resto en cuenta corriente";
+    case "pendiente":
+      return r.medioPago === "cuenta_corriente" ? "Cuenta corriente" : "Pendiente de pago";
+    case "reintegrado":
+      return "Reintegrado";
+    case "rechazado":
+      return "Pago rechazado";
+    default:
+      return "—";
+  }
 }

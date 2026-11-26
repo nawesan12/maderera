@@ -10,5 +10,8 @@ RETURNING cuenta;
 -- name: SoltarIntentos :exec
 DELETE FROM rate_limits WHERE clave = $1 AND ventana = $2;
 
+-- name: DevolverIntento :exec
+UPDATE rate_limits SET cuenta = greatest(cuenta - 1, 0) WHERE clave = $1 AND ventana = $2;
+
 -- name: BorrarVentanasViejas :execrows
 DELETE FROM rate_limits WHERE ventana < $1;

@@ -39,6 +39,7 @@ import { guardarCliente, type EstadoCliente } from "./actions";
 import { buscarClientes } from "@/app/mostrador/actions";
 import Link from "next/link";
 import { RUBROS_CLIENTE } from "@/lib/rubros-cliente";
+import { cuitValido, soloDigitos } from "@/lib/cuit";
 import { Opciones, Seccion, sinReiniciar } from "@/components/admin/formulario";
 
 const CONDICIONES = [
@@ -126,7 +127,15 @@ export function DialogoCliente({
     setParecido(otro ? { id: otro.id, nombre: otro.razonSocial ?? otro.nombre } : null);
   }
 
+  // El verificador se revisa al salir del campo: con un CUIT mal tipeado la
+  // factura A la rechaza ARCA en el mostrador (Go lo frena igual al guardar).
+  const [cuitMal, setCuitMal] = useState(false);
+
   const [tipo, setTipo] = useState(cliente?.tipo ?? "particular");
+  // Tocada la casilla, manda lo que se eligió: el rubro elegido después ya no
+  // la vuelve a marcar (mes simulado: una constructora quedaba «Profesional»
+  // con la casilla desmarcada antes de elegir el rubro).
+  const [tipoElegido, setTipoElegido] = useState(Boolean(cliente));
   const [rubro, setRubro] = useState(cliente?.rubro ?? "particular");
   const [condicion, setCondicion] = useState(cliente?.condicionIva ?? "consumidor_final");
   const [lista, setLista] = useState(cliente?.priceListId ?? "");
@@ -170,11 +179,11 @@ export function DialogoCliente({
     )?.esProfesional;
 
     if (delGremio) {
-      setTipo("profesional");
+      if (!tipoElegido) setTipo("profesional");
       if (condicion === "consumidor_final") {
         setCondicion("responsable_inscripto");
       }
-    } else {
+    } else if (!tipoElegido) {
       setTipo("particular");
     }
   }
@@ -244,8 +253,20 @@ export function DialogoCliente({
                   placeholder="20-12345678-9"
                   inputMode="numeric"
                   defaultValue={cliente?.cuit ?? ""}
-                  onBlur={(e) => revisarSiExiste(e.target.value)}
+                  aria-invalid={cuitMal || undefined}
+                  aria-describedby={cuitMal ? "cuit-mal" : undefined}
+                  onChange={() => cuitMal && setCuitMal(false)}
+                  onBlur={(e) => {
+                    const d = soloDigitos(e.target.value);
+                    setCuitMal(d.length > 0 && !cuitValido(d));
+                    revisarSiExiste(e.target.value);
+                  }}
                 />
+                {cuitMal && (
+                  <p id="cuit-mal" role="alert" className="text-sm text-destructive">
+                    El CUIT no es válido: revisá los números.
+                  </p>
+                )}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Condición frente al IVA</Label>
@@ -294,9 +315,10 @@ export function DialogoCliente({
                 <Switch
                   id="cliente-profesional"
                   checked={tipo === "profesional"}
-                  onCheckedChange={(marcado) =>
-                    setTipo(marcado ? "profesional" : "particular")
-                  }
+                  onCheckedChange={(marcado) => {
+                    setTipoElegido(true);
+                    setTipo(marcado ? "profesional" : "particular");
+                  }}
                 />
               </label>
               <div className="space-y-2">

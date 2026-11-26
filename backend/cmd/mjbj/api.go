@@ -261,8 +261,9 @@ func correrAPI() error {
 		stockapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	servicioCobros := cobros.Nuevo(pool, log)
 	cuentasapi.HandlerWithOptions(
-		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), cobros.Nuevo(pool, log), cfg.Interna),
+		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), servicioCobros, cfg.Interna),
 			[]cuentasapi.StrictMiddlewareFunc{plataforma.ConPedido[cuentasapi.StrictHandlerFunc]},
 			cuentasapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -336,7 +337,7 @@ func correrAPI() error {
 
 	// Mi cuenta: el portal del cliente.
 	portalapi.HandlerWithOptions(
-		portalapi.NewStrictHandlerWithOptions(portal.NuevaAPI(portal.Nuevo(pool)),
+		portalapi.NewStrictHandlerWithOptions(portal.NuevaAPI(portal.Nuevo(pool).ConAvisos(push.Nuevo(cfg.Push, q, log))),
 			[]portalapi.StrictMiddlewareFunc{plataforma.ConPedido[portalapi.StrictHandlerFunc]},
 			portalapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -395,9 +396,12 @@ func correrAPI() error {
 		buscadorapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
-	// Facturación electrónica con ARCA (tanda 7).
+	// Facturación electrónica con ARCA (tanda 7). Una sola instancia: el
+	// mostrador la usa para la devolución parcial y comparte el candado del
+	// CAE.
+	servicioFacturacion := facturacion.Nuevo(pool, log)
 	facturacionapi.HandlerWithOptions(
-		facturacionapi.NewStrictHandlerWithOptions(facturacion.NuevaAPI(facturacion.Nuevo(pool, log), cfg.Interna),
+		facturacionapi.NewStrictHandlerWithOptions(facturacion.NuevaAPI(servicioFacturacion, cfg.Interna),
 			[]facturacionapi.StrictMiddlewareFunc{plataforma.ConPedido[facturacionapi.StrictHandlerFunc]},
 			facturacionapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -420,7 +424,8 @@ func correrAPI() error {
 	apiDeSesion.ConAvisoDePIN(func(ctx context.Context, titulo, cuerpo string) {
 		go avisosDePIN.Avisar(ctx, push.Aviso{Titulo: titulo, Cuerpo: cuerpo, URL: "/admin/bitacora", Etiqueta: "pin", Pantalla: "/admin/bitacora"})
 	})
-	servicioMostrador := mostrador.Nuevo(pool, log).ConClaveDeCola(cfg.Auth.Secreto).ConAutorizacion(aut)
+	servicioCobros.ConAutorizacion(aut)
+	servicioMostrador := mostrador.Nuevo(pool, log).ConClaveDeCola(cfg.Auth.Secreto).ConAutorizacion(aut).ConFacturacion(servicioFacturacion)
 	servicioMostrador.Rutas(m)
 	mostradorapi.HandlerWithOptions(
 		mostradorapi.NewStrictHandlerWithOptions(mostrador.NuevaAPI(servicioMostrador),
@@ -445,7 +450,7 @@ func correrAPI() error {
 
 	// Entregas, acopio, remitos, la firma y las zonas de envío (tanda 5).
 	entregasapi.HandlerWithOptions(
-		entregasapi.NewStrictHandlerWithOptions(entregas.NuevaAPI(entregas.Nuevo(pool, log), cfg.Interna),
+		entregasapi.NewStrictHandlerWithOptions(entregas.NuevaAPI(entregas.Nuevo(pool, log).ConAutorizacion(aut), cfg.Interna),
 			[]entregasapi.StrictMiddlewareFunc{plataforma.ConPedido[entregasapi.StrictHandlerFunc]},
 			entregasapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

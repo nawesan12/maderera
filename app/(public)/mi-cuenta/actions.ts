@@ -31,6 +31,11 @@ export async function responderPresupuesto(
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos guardar tu respuesta. Probá de nuevo.") };
   revalidatePath("/mi-cuenta", "layout");
   revalidatePath("/admin/presupuestos");
+  // Desde el Resumen la tarjeta se va con la respuesta: se sigue en el
+  // detalle, que dice qué pasa ahora y enlaza el pedido. La navegación la
+  // hace la acción y no un efecto del cliente, que se desmontaba con la
+  // tarjeta antes de navegar (H215).
+  if (formData.get("desde") === "resumen") redirect(`/mi-cuenta/presupuestos/${encodeURIComponent(numero)}`);
   return { ok: r.data.ok };
 }
 

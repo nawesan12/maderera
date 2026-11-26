@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useId } from "react";
+import { useActionState, useEffect, useId } from "react";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { guardarTarifaDeCorte, type EstadoTarifa } from "./actions";
 
 const inicial: EstadoTarifa = {};
@@ -30,6 +31,11 @@ export function EditorDeTarifa({
   listas: { id: string; nombre: string; esGeneral: boolean }[];
 }) {
   const [estado, guardar, guardando] = useActionState(guardarTarifaDeCorte, inicial);
+  // Guardado, con el aviso de todo el panel: el renglón gris al lado del
+  // botón no se veía (tercera prueba del mes).
+  useEffect(() => {
+    if (estado.ok) toast.success(estado.ok);
+  }, [estado]);
   const id = useId();
 
   return (
@@ -121,7 +127,6 @@ export function EditorDeTarifa({
         </button>
 
         {estado.error && <p className="text-base text-destructive">{estado.error}</p>}
-        {estado.ok && <p className="text-base text-muted-foreground">{estado.ok}</p>}
       </div>
     </form>
   );

@@ -407,12 +407,16 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 	if estado != "entregado" {
 		t.Errorf("el cheque endosado: %s", estado)
 	}
+	// La ficha de la factura dice los dos medios, el de más plata primero.
+	if _, b := pedir(t, adm, "GET", e.u+"compras/facturas/"+factura, nil); !strings.Contains(b, `"medios":["cheque","transferencia"]`) {
+		t.Errorf("medios en la ficha: %s", b)
+	}
 	// La misma factura ya no tiene saldo; el mismo cheque ya no está en cartera.
 	c, b = pedir(t, adm, "POST", e.u+"compras/pagos", pago)
 	if c != 422 || !strings.Contains(b, "A la factura 1274 le quedan $0.00 y se le están imputando $1000.00.") {
 		t.Errorf("imputar dos veces: %d %s", c, b)
 	}
-	if _, b := pedir(t, adm, "GET", e.u+"compras/pagos", nil); !strings.Contains(b, `"retenido":15`) || !strings.Contains(b, `"numero":"3-1274"`) {
+	if _, b := pedir(t, adm, "GET", e.u+"compras/pagos", nil); !strings.Contains(b, `"retenido":15`) || !strings.Contains(b, `"numero":"0003-00001274"`) {
 		t.Errorf("pagos: %s", b)
 	}
 	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/acumulado-del-mes", nil); !strings.Contains(b, `"retenido":"15.00"`) {
@@ -498,6 +502,8 @@ func TestGastos(t *testing.T) {
 	var usuario string
 	_ = e.pool.QueryRow(ctx, `select id from "user" limit 1`).Scan(&usuario)
 	_, _ = e.pool.Exec(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, '2026-10-01T08:00:00Z')`, e.central, usuario)
+	// El cajón abre con $ 5.000: sin efectivo, el gasto no sale.
+	_, _ = e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto, created_at) select id, 'apertura', 5000, abierta_at from cash_sessions`)
 	gasto := map[string]any{"fecha": "2026-10-02", "categoria": "flete", "descripcion": "  Flete a obra ", "importe": 1500, "medio": "efectivo", "branchId": e.central}
 	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 200 || b != `{"ok":"Gasto anotado por $`+" "+`1.500."}`+"\n" {
 		t.Fatalf("gasto: %d %s", c, b)
@@ -505,16 +511,18 @@ func TestGastos(t *testing.T) {
 	if m := e.numero(t, `select monto::float8 from cash_movements where tipo = 'gasto'`); m != -1500 {
 		t.Errorf("salió de la caja: %v", m)
 	}
-	// En el aserradero no hay turno: se anota igual y avisa.
+	// En el aserradero no hay turno: el efectivo no sale de ninguna caja y
+	// el gasto se frena (mes simulado, H351: antes se anotaba igual y el CSV
+	// lo sacaba de una Caja que ningún arqueo vio).
 	gasto["branchId"] = e.aserradero
-	if _, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); !strings.Contains(b, "No había caja abierta") {
-		t.Errorf("sin turno: %s", b)
+	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 422 || !strings.Contains(b, "No había caja abierta en Aserradero") {
+		t.Errorf("sin turno: %d %s", c, b)
 	}
 	q := "?desde=2026-10-01T00:00:00Z&hasta=2026-10-31T23:59:59.999Z"
 	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos"+q, nil); !strings.Contains(b, `"enCaja":true`) || !strings.Contains(b, `"descripcion":"Flete a obra"`) {
 		t.Errorf("listado: %s", b)
 	}
-	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/por-categoria"+q, nil); !strings.Contains(b, `{"clave":"flete","cantidad":2,"total":"3000.00"}`) {
+	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/por-categoria"+q, nil); !strings.Contains(b, `{"clave":"flete","cantidad":1,"total":"1500.00"}`) {
 		t.Errorf("por categoría: %s", b)
 	}
 	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/sucursales", nil); !strings.Contains(b, `"turnoAbierto":"`) {
@@ -532,6 +540,7 @@ func TestGastoDeHoySaleDelTurnoAbierto(t *testing.T) {
 	var usuario string
 	_ = e.pool.QueryRow(ctx, `select id from "user" limit 1`).Scan(&usuario)
 	_, _ = e.pool.Exec(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, now() - interval '1 minute')`, e.central, usuario)
+	_, _ = e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto, created_at) select id, 'apertura', 5000, abierta_at from cash_sessions`)
 	hoy := time.Now().In(caja.Argentina).Format("2006-01-02")
 	gasto := map[string]any{"fecha": hoy, "categoria": "flete", "descripcion": "Flete", "importe": 800, "medio": "efectivo", "branchId": e.central}
 	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 200 || strings.Contains(b, "No había caja abierta") {
@@ -720,5 +729,28 @@ func TestFacturaDeUnaRecepcionNoDuplicaLaDeuda(t *testing.T) {
 	}
 	if s := e.saldo(t); s != 1210+1331+121 {
 		t.Errorf("factura suelta: %v", s)
+	}
+}
+
+// Una recepción cuya sucursal ya no existe se frena con un mensaje que dice
+// qué hacer, no con «Algo falló de nuestro lado» (mes simulado, tercera
+// prueba: la OC sembrada apuntaba a una sucursal borrada).
+func TestRecepcionDeUnaSucursalQueNoExiste(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	linea := map[string]any{"variantId": e.placa, "descripcion": "Fenólico 18 mm", "cantidad": 2, "costoUnitario": 100, "alicuotaIva": 21}
+	_, b := pedir(t, adm, "POST", e.u+"compras/ordenes", map[string]any{"supplierId": e.proveedor, "branchId": e.central, "lineas": []any{linea}})
+	orden := idDe(t, b)
+	pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/enviada", nil)
+	_, b = pedir(t, adm, "POST", e.u+"compras/ordenes/"+orden+"/recibir", map[string]string{"numeroRemito": "R-9"})
+	recepcion := idDe(t, b)
+	if _, err := e.pool.Exec(context.Background(), `update goods_receipts set branch_id = '77439015-0000-4000-8000-000000000000' where id = $1`, recepcion); err != nil {
+		t.Fatal(err)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"recepciones/"+recepcion+"/confirmar", nil); c != 422 || !strings.Contains(b, "La sucursal de esta recepción ya no existe") {
+		t.Fatalf("confirmar: %d %s", c, b)
+	}
+	if q := e.numero(t, `select count(*)::float8 from inventory where branch_id = '77439015-0000-4000-8000-000000000000'`); q != 0 {
+		t.Errorf("stock en una sucursal que no existe: %v", q)
 	}
 }

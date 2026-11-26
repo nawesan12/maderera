@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/csvexcel"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
@@ -177,10 +178,66 @@ func CuentaDeRecepcion(lineas []LineaRecibida, gastos float64, estado func(varia
 			return 0, 0, err
 		}
 	}
-	for i, l := range lineas {
-		deuda += AgregarIva(float64(l.Cantidad*conGastos[i]), l.AlicuotaIva)
+	return neto, DeudaDeRecepcion(lineas, gastos), nil
+}
+
+// DeudaDeRecepcion es lo que la recepción le carga al proveedor: el neto
+// de cada alícuota con su parte del flete, más el IVA, como lo factura el
+// proveedor.
+//
+// Antes se sumaba línea por línea con el costo por unidad del prorrateo,
+// que tiene cuatro decimales: 1.152.000 netos daban $ 1.393.920,03 en vez
+// de 1.393.920, y la factura cargaba la diferencia de 3 centavos en
+// negativo. El flete se reparte entre alícuotas a centavos (el resto, a la
+// de más peso) y el neto de cada una se cuenta con el costo sin redondear.
+func DeudaDeRecepcion(lineas []LineaRecibida, gastos float64) float64 {
+	type grupo struct{ alicuota, neto, cantidad float64 }
+	var grupos []*grupo
+	por := map[float64]*grupo{}
+	total, cantidades := 0.0, 0.0
+	for _, l := range lineas {
+		a := l.AlicuotaIva
+		if math.IsNaN(a) {
+			a = 0
+		}
+		g := por[a]
+		if g == nil {
+			g = &grupo{alicuota: a}
+			por[a] = g
+			grupos = append(grupos, g)
+		}
+		v := float64(l.Cantidad * l.CostoUnitario)
+		g.neto += v
+		g.cantidad += l.Cantidad
+		total += v
+		cantidades += l.Cantidad
 	}
-	return neto, deuda, nil
+	partes := make([]float64, len(grupos))
+	if finito(gastos) && gastos > 0 && len(grupos) > 0 && (total > 0 || cantidades > 0) {
+		mayor, peso := 0, math.Inf(-1)
+		for i, g := range grupos {
+			p := g.cantidad / cantidades
+			if total > 0 {
+				p = g.neto / total
+			}
+			partes[i] = jsmath.Redondear2(float64(p * gastos))
+			if p > peso {
+				mayor, peso = i, p
+			}
+		}
+		resto := 0.0
+		for i, p := range partes {
+			if i != mayor {
+				resto += p
+			}
+		}
+		partes[mayor] = jsmath.Redondear2(gastos - resto)
+	}
+	deuda := 0.0
+	for i, g := range grupos {
+		deuda += AgregarIva(float64(g.neto+partes[i]), g.alicuota)
+	}
+	return jsmath.Redondear2(deuda)
 }
 
 // --- las retenciones ---
@@ -368,6 +425,8 @@ func NormalizarNumeroDeCheque(t string) string {
 func RevisarNumeroDeCheque(t string) string {
 	n := len(NormalizarNumeroDeCheque(t))
 	switch {
+	case cobros.ConLetras(t):
+		return cobros.MensajeConLetras
 	case n == 0:
 		return "Poné el número del cheque: es como se lo encuentra en el banco."
 	case n < 4:
@@ -633,4 +692,27 @@ func LeerFecha(t string) (time.Time, bool) {
 // del proveedor (setDate en la zona de Next, UTC).
 func Vencimiento(emision time.Time, dias int) time.Time {
 	return emision.AddDate(0, 0, dias)
+}
+
+// zonaArgentina es la zona del negocio.
+var zonaArgentina = fiscal.Argentina
+
+// diaDeHoy es el día argentino de `ahora` a la medianoche UTC, como se
+// guardan los vencimientos. Vencida es la factura de un día anterior a este:
+// comparada contra `ahora`, una que vencía hoy ya figuraba vencida.
+func diaDeHoy(ahora time.Time) time.Time {
+	a := ahora.In(zonaArgentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// AplicadoA es lo que ya canceló la factura de compra con alias `f`: lo
+// imputado en pagos, las notas de crédito aplicadas a ella (mes simulado,
+// H292: la nota de crédito no se descontaba y la factura quedaba «vencida»
+// por lo que el proveedor ya había devuelto) y, si se pagó en el acto como
+// un gasto, su total entero. Es la única regla del saldo de una factura:
+// la usan el listado, el pago, el Resumen y los CSV.
+func AplicadoA(f string) string {
+	return `(coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = ` + f + `.id), 0)
+	  + coalesce((SELECT sum(n.total) FROM purchase_invoices n WHERE n.aplica_a_id = ` + f + `.id AND n.anulada_at IS NULL), 0)
+	  + CASE WHEN EXISTS (SELECT 1 FROM expenses e WHERE e.purchase_invoice_id = ` + f + `.id) THEN ` + f + `.total ELSE 0 END)`
 }

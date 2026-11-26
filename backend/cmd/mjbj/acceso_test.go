@@ -259,6 +259,12 @@ func TestAccesoPorPantalla(t *testing.T) {
 			for _, r := range roles.ManejanPlata {
 				quiero[string(r)] = true
 			}
+		case "cola":
+			// Lo que decide en la cola de corte: todo /admin/cortes menos el
+			// aserradero (roles.DecidenEnLaCola, mes simulado H115).
+			for _, r := range roles.DecidenEnLaCola {
+				quiero[string(r)] = true
+			}
 		default:
 			rs := roles.QuienEntra(pantalla)
 			if len(rs) == 0 {

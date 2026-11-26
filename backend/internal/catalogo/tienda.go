@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 
+	"mjbj/internal/auth"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 )
 
 // Tienda son los dos interruptores del sitio (migración 00093).
@@ -57,6 +59,53 @@ func (s *Servicio) ExigirTienda(ctx context.Context) error {
 		return err
 	}
 	if !t.Activa {
+		return ErrTiendaApagada
+	}
+	return nil
+}
+
+// PreciosDelProfesional dice si, con la tienda apagada, la lista l igual
+// muestra sus precios: la regla «precios_profesional_sin_tienda» en «si»
+// (H086), una lista propia (nunca la general: esa es la del público) que
+// tiene al menos un profesional aprobado, y, si el pedido trae sesión, que
+// quien pide sea ese profesional. El pedido interno de Next con lista=<id>
+// llega sin sesión: Next la eligió de la sesión de quien mira, y la caché
+// por lista solo la comparten los de esa lista.
+//
+// Comprar sigue sin poderse: el carrito y el checkout usan ExigirTienda.
+func (s *Servicio) PreciosDelProfesional(ctx context.Context, ses *auth.Sesion, l Lista) (bool, error) {
+	if !l.EsDiferenciada || l.ID == nil {
+		return false, nil
+	}
+	v, err := reglas.Valor(ctx, s.pool, reglas.PreciosProfesionalSinTienda)
+	if err != nil || v != "si" {
+		return false, err
+	}
+	if ses != nil && !ses.EsStaff() {
+		pro, err := s.q.EsProfesionalAprobado(ctx, &ses.UserID)
+		if err != nil || !pro {
+			return false, err
+		}
+	}
+	var deProfesional bool
+	err = s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customers
+		WHERE price_list_id = $1 AND active AND tipo = 'profesional' AND estado <> 'inactivo')`, *l.ID).Scan(&deProfesional)
+	return deProfesional, err
+}
+
+// ExigirTiendaPara es ExigirTienda, salvo para el profesional con su lista
+// cuando la regla lo deja (PreciosDelProfesional): la lista de precios en
+// PDF.
+func (s *Servicio) ExigirTiendaPara(ctx context.Context, ses *auth.Sesion, l Lista) error {
+	t, err := s.Tienda(ctx)
+	if err != nil || t.Activa {
+		return err
+	}
+	pro, err := s.PreciosDelProfesional(ctx, ses, l)
+	if err != nil {
+		return err
+	}
+	if !pro {
 		return ErrTiendaApagada
 	}
 	return nil

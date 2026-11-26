@@ -122,7 +122,18 @@ func TestCostoComoTS(t *testing.T) {
 					k++
 					return nil
 				})
-			if jsmath.Fijo2(deuda) != paso.Deuda || jsmath.Fijo2(neto) != paso.Neto || neto != paso.NetoNumero {
+			// La deuda ya no es la del TS: se cuenta por alícuota y no línea
+			// por línea con el costo de cuatro decimales (mes simulado), así
+			// que difiere en centavos. Se pide que no se aleje más de lo que
+			// mueven esos redondeos (medio centavo por renglón y medio
+			// diezmilésimo por unidad, con IVA) y que quede en centavos justos.
+			ts := jsmath.Numero(paso.Deuda)
+			margen := 0.01
+			for _, l := range lineas {
+				margen += (0.005 + math.Abs(l.Cantidad)*0.00005) * (1 + l.AlicuotaIva/100)
+			}
+			if math.Abs(deuda-ts) > margen || jsmath.Redondear2(deuda) != deuda ||
+				jsmath.Fijo2(neto) != paso.Neto || neto != paso.NetoNumero {
 				t.Errorf("recepción %d paso %d: deuda %s neto %v, TS %s %v", n, p, jsmath.Fijo2(deuda), neto, paso.Deuda, paso.NetoNumero)
 			}
 		}
@@ -379,7 +390,13 @@ func TestFiscalComoTS(t *testing.T) {
 			montos[i] = jsmath.Numero(m)
 		}
 		saldos, total := SaldosCorrientes(montos)
-		if !reflect.DeepEqual(saldos, l.Saldos) && len(saldos)+len(l.Saldos) > 0 || total != l.Saldo {
+		// El TS arrastraba el error de la suma de floats; Go redondea a
+		// centavos en cada paso.
+		esperado := make([]float64, len(l.Saldos))
+		for i, v := range l.Saldos {
+			esperado[i] = jsmath.Redondear2(v)
+		}
+		if !reflect.DeepEqual(saldos, esperado) && len(saldos)+len(l.Saldos) > 0 || total != jsmath.Redondear2(l.Saldo) {
 			t.Errorf("libreta %d: Go %v %v, TS %v %v", n, saldos, total, l.Saldos, l.Saldo)
 		}
 	}
@@ -524,5 +541,29 @@ func TestEsquemasComoZod(t *testing.T) {
 		if _, ok := leerFilasAplicar(v); ok != *c.Ok {
 			t.Errorf("aplicar %s: Go %v, zod %v", c.Entrada, ok, *c.Ok)
 		}
+	}
+}
+
+// Mes simulado: 1.152.000 netos con el flete adentro cargaban $ 1.393.920,03
+// porque la deuda se sumaba con el costo por unidad del prorrateo (cuatro
+// decimales). Por alícuota da lo que factura el proveedor.
+func TestDeudaDeRecepcionSinCentavosSueltos(t *testing.T) {
+	lineas := []LineaRecibida{
+		{"a", 3, 42000, 21},
+		{"b", 7, 100000, 21},
+		{"c", 9, 34000, 21},
+	}
+	if d := DeudaDeRecepcion(lineas, 20000); d != 1393920 {
+		t.Errorf("deuda %v, quería 1393920", d)
+	}
+	// Dos alícuotas: el flete se reparte a centavos y el resto va a la de
+	// más peso; el neto total es el de la mercadería más el flete justo.
+	mixta := []LineaRecibida{{"a", 3, 1000, 21}, {"b", 7, 1000, 10.5}}
+	// 3000 + 3000,00 (30 %) y 7000 + 7000,00 (70 %) de 10.000 de flete.
+	if d := DeudaDeRecepcion(mixta, 10000); d != jsmath.Redondear2(6000*1.21+14000*1.105) {
+		t.Errorf("deuda mixta %v", d)
+	}
+	if d := DeudaDeRecepcion(mixta, 0); d != jsmath.Redondear2(3000*1.21+7000*1.105) {
+		t.Errorf("deuda sin flete %v", d)
 	}
 }

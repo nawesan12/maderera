@@ -8,6 +8,7 @@ import {
 import { ETAPAS_PEDIDO, ETAPAS_RETIRO, Pasos } from "@/components/admin/pasos";
 import { fechaCorta, formatearMonto, haceCuanto, plural } from "@/lib/formato";
 import type { PedidoPropio } from "@/lib/dal/cuenta";
+import { estadoDelPago } from "@/lib/cuenta/portal";
 
 /**
  * Un pedido en la lista del cliente.
@@ -25,6 +26,14 @@ export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
   const cancelado = pedido.estado === "cancelado";
   const { abierto } = estiloDeEstado(pedido.estado);
+  const pago = estadoDelPago(pedido);
+  // La línea de abajo solo cuando hay algo que hacer o que saber: lo que
+  // falta pagar (también de uno ya entregado, H393) o lo que queda en acopio.
+  const avisaPago =
+    !cancelado &&
+    (pago?.clave === "pendiente" ||
+      pago?.clave === "parcial" ||
+      pago?.clave === "en_revision");
 
   return (
     <Link
@@ -65,22 +74,62 @@ export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
             <span className="tabular text-xl font-semibold">
               {formatearMonto(pedido.total)}
             </span>
-            <EtiquetaEstado estado={pedido.estado} />
+            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
           </div>
         </div>
 
-        <div className="mt-4">
-          <Pasos etapas={etapas} actual={pedido.estado} cancelado={cancelado} />
-        </div>
+        {/* Cancelado, la etiqueta ya lo dice: el recorrido no suma nada. */}
+        {!cancelado && (
+          <div className="mt-4">
+            <Pasos etapas={etapas} actual={pedido.estado} />
+          </div>
+        )}
 
-        {!cancelado && abierto && (
+        {!cancelado && (abierto || avisaPago || pedido.enAcopio) && (
           <p className="mt-3 text-sm text-muted-foreground">
-            Actualizado {haceCuanto(pedido.createdAt)}
-            {pedido.estadoPago === "pendiente" && (
-              <span className="ml-2 text-brand-orange-dark">
-                · Falta abonarlo
-              </span>
-            )}
+            {[
+              abierto && (
+                <span key="hecho">Hecho {haceCuanto(pedido.createdAt)}</span>
+              ),
+              pedido.enAcopio && (
+                <span key="acopio" className="text-brand-orange-dark">
+                  Te queda mercadería en acopio
+                </span>
+              ),
+              avisaPago && (
+                <span
+                  key="pago"
+                  className={
+                    pago?.clave === "en_revision"
+                      ? "text-foreground"
+                      : "text-brand-orange-dark"
+                  }
+                >
+                  {pago?.etiqueta}
+                  {pago?.falta != null && pago.falta < pedido.total - 0.005 && (
+                    <>
+                      {" "}
+                      · faltan{" "}
+                      <span className="tabular">
+                        {formatearMonto(pago.falta)}
+                      </span>
+                    </>
+                  )}
+                </span>
+              ),
+            ]
+              .filter(Boolean)
+              .flatMap((parte, i) =>
+                i === 0
+                  ? [parte]
+                  : [
+                      <span key={`sep-${i}`} aria-hidden>
+                        {" "}
+                        ·{" "}
+                      </span>,
+                      parte,
+                    ],
+              )}
           </p>
         )}
       </div>

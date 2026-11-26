@@ -38,6 +38,10 @@ type CorteDeMostrador struct {
 	AcomodoManual       *string        `json:"acomodoManual"`
 	AnchoSierraMm       *float64       `json:"anchoSierraMm"`
 	Piezas              []PiezaDeCorte `json:"piezas"`
+	// Existente es un corte que ya está en la cola sin venta (cargado desde
+	// el panel, «paga al retirar»): la venta lo cobra y lo ata, en vez de
+	// crear otro (mes simulado, H173). Sin él no había cómo cobrarlo.
+	Existente *string `json:"existente,omitempty"`
 }
 
 // TopeDeCortes es cuántos despieces entran en una venta.
@@ -74,6 +78,18 @@ type VentaPedida struct {
 	// misma venta (internal/autorizacion).
 	PIN   string
 	Ficha string
+	// SinEscala: la pantalla tiene el pago partido en medios distintos,
+	// aunque alguno todavía no tenga importe. El descuento por forma de pago
+	// no corre (como con el pago partido), y el total no salta mientras se
+	// reparte (mes simulado, H025). Solo puede sacar un descuento.
+	SinEscala bool
+	// ALista: el cliente compra esta vez al precio de la lista general
+	// (para pagar con cheque o en cuotas, que su lista no admite). Solo
+	// puede subir los precios: Go los vuelve a poner con la general.
+	ALista bool
+	// PresupuestoID es el presupuesto que armó la venta (se tipeó su número
+	// en el buscador): al cobrar queda aceptado y atado al pedido.
+	PresupuestoID *string
 
 	NumeroProvisorio *string
 	CobradaAt        *time.Time
@@ -177,6 +193,7 @@ func leerCorte(c *zodjs.Lector) *CorteDeMostrador {
 	k.Pasadas = entero(c.Numero("pasadas", zodjs.Num{Coerce: true}, zodjs.Entero(), zodjs.Min(0), zodjs.Max(9999)))
 	k.AcomodoManual = c.Cadena("acomodoManual", zodjs.Texto{Max: 20_000, Nulo: true})
 	k.AnchoSierraMm = c.Numero("anchoSierraMm", zodjs.Num{Nulo: true, Opcional: true}, zodjs.Min(0.5), zodjs.Max(10))
+	k.Existente = c.Cadena("existente", zodjs.Texto{Opcional: true, Nulo: true, UUID: true})
 	c.Objetos("piezas", zodjs.Lista{Min: 1, Max: 500}, func(_ int, e *zodjs.Lector) {
 		var p PiezaDeCorte
 		p.LargoMm = entero(e.Numero("largoMm", zodjs.Num{Coerce: true}, zodjs.Entero(), zodjs.Positivo(), zodjs.Max(10_000)))
@@ -224,6 +241,8 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	l := zodjs.Raiz(crudo)
 	v := leerComun(l, false)
 	v.Autorizado = booleano(l.Booleano("autorizado", true))
+	v.SinEscala = booleano(l.Booleano("sinEscala", true))
+	v.ALista = booleano(l.Booleano("aLista", true))
 	// «corte» es el de antes, uno solo y sin renglones atados (lo arma
 	// atarRenglonesAlCorte); «cortes», la lista de ahora.
 	if c := l.Objeto("corte", true, false); c != nil {
@@ -233,9 +252,11 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	l.Objetos("cortes", zodjs.Lista{Opcional: true, Max: TopeDeCortes}, func(_ int, c *zodjs.Lector) {
 		v.Cortes = append(v.Cortes, *leerCorte(c))
 	})
-	if p := l.Cadena("pin", zodjs.Texto{Opcional: true, Nulo: true, Max: 20}); p != nil {
+	// 128: sin ningún PIN cargado firma la contraseña de un admin.
+	if p := l.Cadena("pin", zodjs.Texto{Opcional: true, Nulo: true, Max: 128}); p != nil {
 		v.PIN = *p
 	}
+	v.PresupuestoID = l.Cadena("presupuestoId", zodjs.Texto{Opcional: true, Nulo: true, UUID: true})
 	if f := l.Cadena("ficha", zodjs.Texto{Opcional: true, Nulo: true, Max: 400}); f != nil {
 		v.Ficha = *f
 	}
@@ -275,6 +296,8 @@ type MovimientoDiferido struct {
 	Monto    float64
 	Motivo   string
 	HechoAt  time.Time
+	// Destino del retiro (00310); los clientes de antes no lo mandan.
+	Destino *string
 }
 
 // LeerMovimientoDiferido es el esquema de POST /api/mostrador/caja/movimientos.
@@ -288,6 +311,9 @@ func LeerMovimientoDiferido(crudo any) (MovimientoDiferido, *zodjs.Lector) {
 	}
 	m.Monto = numero(l.Numero("monto", zodjs.Num{}, zodjs.Positivo()))
 	m.Motivo = l.Requerido("motivo", zodjs.Texto{Min: 1})
+	if d := l.Opcion("destino", zodjs.Opciones{Opcional: true}, "banco", "caja_fuerte", "otro"); d != nil {
+		m.Destino = d
+	}
 	if s := l.Cadena("hechoAt", zodjs.Texto{FechaHora: true}); s != nil && l.Ok() {
 		m.HechoAt, _ = time.Parse(time.RFC3339Nano, *s)
 	}

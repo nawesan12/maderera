@@ -4,7 +4,7 @@ import { Receipt } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
-import { ETIQUETA_CIRCUITO, etiquetaDeCircuito } from "@/lib/circuito";
+import { EtiquetaDeCircuito } from "@/components/admin/circuito";
 import { FiltroDeCircuito } from "./filtro";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
@@ -15,8 +15,9 @@ import {
 } from "@/lib/dal/admin/gastos";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { formatearMonto } from "@/lib/formato";
+import { fechaCorta, formatearMonto } from "@/lib/formato";
 import { CargarGasto } from "./cargar";
+import { AnularGasto } from "./anular";
 
 export const metadata: Metadata = { title: "Gastos" };
 
@@ -99,7 +100,7 @@ export default async function GastosPage({
                 className="tarjeta block p-4 transition-colors hover:border-brand-orange/40 hover:bg-hundida"
               >
                 <p className="text-sm text-muted-foreground">
-                  {ETIQUETA_CIRCUITO[c]} · {etiqueta}
+                  <EtiquetaDeCircuito valor={c} /> · {etiqueta}
                 </p>
                 <p className="tabular mt-0.5 text-2xl font-bold">
                   {formatearMonto(Number(fila?.total ?? 0))}
@@ -156,90 +157,169 @@ export default async function GastosPage({
           nombre: s.nombre,
           conTurno: Boolean(s.turnoAbierto),
           deLaSesion: s.deLaSesion,
+          enCaja: s.enCaja,
+          cambioFijo: s.cambioFijo,
         }))}
         proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
       />
 
-      <section className="tarjeta overflow-hidden">
+      <section className="tarjeta @container overflow-hidden">
         {gastos.length === 0 ? (
-          <Vacio
-            icono={Receipt}
-            titulo={`Sin gastos en ${etiqueta}`}
-          />
+          <Vacio icono={Receipt} titulo={`Sin gastos en ${etiqueta}`} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-base">
+          <>
+            <table className="hidden w-full text-base @4xl:table" data-tabla="fija">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Fecha</th>
-                  <th className="px-5 py-2.5 font-semibold">Categoría</th>
-                  <th className="px-5 py-2.5 font-semibold">En qué se gastó</th>
-                  <th className="px-5 py-2.5 font-semibold">Forma de pago</th>
-                  <th className="px-5 py-2.5 font-semibold">Circuito de facturación</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">
-                    Importe
+                  <th className="px-5 py-2.5 font-semibold">Gasto</th>
+                  <th className="px-5 py-2.5 font-semibold">Pago</th>
+                  <th className="px-5 py-2.5 font-semibold">Circuito</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Importe</th>
+                  <th className="w-14 px-2 py-2.5">
+                    <span className="sr-only">Anular</span>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-linea">
                 {gastos.map((g) => (
-                  <tr key={g.id}>
-                    <td className="tabular px-5 py-3 text-muted-foreground">
-                      {g.fecha.toLocaleDateString("es-AR")}
-                    </td>
+                  <tr key={g.id} className={g.anuladoAt ? "opacity-60" : undefined}>
+                    <td className="tabular px-5 py-3 text-muted-foreground">{fechaCorta.format(g.fecha)}</td>
                     <td className="px-5 py-3">
-                      {CATEGORIAS[g.categoria] ?? g.categoria}
-                    </td>
-                    <td className="px-5 py-3">
-                      {g.descripcion}
-                      {g.proveedor && (
-                        /* El gasto suele ser la punta del ovillo: "esto se lo
-                           pagamos a Maderas del Sur, ¿qué más le debemos?" */
-                        <Link
-                          href={`/admin/proveedores/${g.supplierId}`}
-                          className="block text-sm text-muted-foreground hover:text-brand-orange hover:underline"
-                        >
-                          {g.proveedor}
-                        </Link>
-                      )}
-                      {g.sucursal && (
-                        <span className="block text-sm text-muted-foreground">
-                          {g.sucursal}
-                        </span>
-                      )}
+                      <span className="block">{g.descripcion}</span>
+                      <DeQuien g={g} />
+                      <Anulado g={g} />
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {g.medio}
-                      {g.enCaja && (
-                        <span className="block text-sm">salió de la caja</span>
-                      )}
+                      <Medio g={g} />
                     </td>
                     <td className="px-5 py-3">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-sm font-medium ${
-                          g.circuito === "negro"
-                            ? "bg-chip text-texto-2"
-                            : "bg-naranja-claro text-acento-sobre-claro"
-                        }`}
-                      >
-                        {etiquetaDeCircuito(g.circuito)}
-                      </span>
-                      {/* Con factura o sin factura: es otra pregunta, y la
-                          columna estaba en la base sin mostrarse nunca. */}
-                      <span className="mt-0.5 block text-sm text-muted-foreground">
-                        {g.conFactura ? "con factura" : "sin factura"}
-                      </span>
+                      <Circuito g={g} />
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
+                    <td className={`tabular px-5 py-3 text-right font-semibold ${g.anuladoAt ? "line-through" : ""}`}>
                       {formatearMonto(Number(g.importe))}
+                    </td>
+                    <td className="px-2 py-1.5 text-right">
+                      <Anular g={g} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+            {/* En el teléfono: qué fue y cuánto arriba; a quién y de dónde,
+                cada cosa en su renglón. Apilada, la descripción, el
+                proveedor y la sucursal iban en tres columnitas de una palabra. */}
+            <ul className="divide-y divide-linea @4xl:hidden">
+              {gastos.map((g) => (
+                <li key={g.id} className={`space-y-1 px-4 py-3 ${g.anuladoAt ? "opacity-60" : ""}`}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 break-words text-base font-semibold">{g.descripcion}</span>
+                    <span className={`tabular shrink-0 text-base font-semibold ${g.anuladoAt ? "line-through" : ""}`}>
+                      {formatearMonto(Number(g.importe))}
+                    </span>
+                  </div>
+                  <DeQuien g={g} />
+                  <div className="flex items-center gap-2">
+                    <p className="tabular flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                      <span>{fechaCorta.format(g.fecha)}</span>
+                      <span>·</span>
+                      <Medio g={g} />
+                      <Circuito g={g} />
+                    </p>
+                    <Anular g={g} />
+                  </div>
+                  <Anulado g={g} />
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
     </div>
+  );
+}
+
+type Gasto = Awaited<ReturnType<typeof listarGastos>>[number];
+
+const MEDIOS: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  debito: "Débito",
+  credito: "Crédito",
+  cheque: "Cheque",
+};
+
+/** A quién se le pagó y en qué sucursal: el gasto suele ser la punta del ovillo. */
+function DeQuien({ g }: { g: Gasto }) {
+  return (
+    <span className="block text-sm text-muted-foreground">
+      {CATEGORIAS[g.categoria] ?? g.categoria}
+      {g.proveedor && (
+        <>
+          {" · "}
+          <Link href={`/admin/proveedores/${g.supplierId}`} className="hover:text-brand-orange hover:underline">
+            {g.proveedor}
+          </Link>
+        </>
+      )}
+      {g.sucursal && ` · ${g.sucursal}`}
+    </span>
+  );
+}
+
+/** El motivo de la anulación, donde se lee el gasto. */
+function Anulado({ g }: { g: Gasto }) {
+  if (!g.anuladoAt) return null;
+  return (
+    <span className="block text-sm font-medium text-saldo-debe">
+      Anulado{g.motivoAnulacion && ` · ${g.motivoAnulacion}`}
+    </span>
+  );
+}
+
+/** Anular, con lo que vuelve: el efectivo a la caja y la factura que vino con él. */
+function Anular({ g }: { g: Gasto }) {
+  if (g.anuladoAt) return null;
+  return (
+    <AnularGasto
+      id={g.id}
+      titulo={`Anular el gasto de ${formatearMonto(Number(g.importe))}: ${g.descripcion}`}
+      detalle={[
+        "Deja de contar en los gastos del mes.",
+        g.enCaja ? `Los ${formatearMonto(Number(g.importe))} en efectivo vuelven a la caja${g.sucursal ? ` de ${g.sucursal}` : ""}.` : "",
+        g.factura ? `La factura ${g.factura} queda anulada.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    />
+  );
+}
+
+function Medio({ g }: { g: Gasto }) {
+  return (
+    <span>
+      {MEDIOS[g.medio] ?? g.medio}
+      {g.enCaja && " de la caja"}
+    </span>
+  );
+}
+
+/** El circuito y, si tiene, la factura: una sola marca, sin «Facturas · sin factura». */
+function Circuito({ g }: { g: Gasto }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span
+        className={`rounded-full px-2.5 py-0.5 text-sm font-medium ${
+          g.circuito === "negro" ? "bg-chip text-texto-2" : "bg-naranja-claro text-acento-sobre-claro"
+        }`}
+      >
+        <EtiquetaDeCircuito valor={g.circuito} />
+      </span>
+      {g.factura && g.purchaseInvoiceId && (
+        <Link href={`/admin/compras/facturas/${g.purchaseInvoiceId}`} className="codigo text-sm hover:underline">
+          {g.factura}
+        </Link>
+      )}
+    </span>
   );
 }

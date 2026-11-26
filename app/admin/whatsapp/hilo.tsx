@@ -1,5 +1,6 @@
 "use client";
 
+import { distintivoDeLista } from "@/lib/cuenta/portal";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -14,8 +15,10 @@ import {
   Clock,
   FileText,
   FlaskConical,
+  IdCard,
   Loader2,
   MapPin,
+  MessageSquareText,
   Paperclip,
   Reply,
   RotateCw,
@@ -46,6 +49,8 @@ import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import { restanteLegible } from "@/lib/whatsapp/ventana";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { ConfirmarTope } from "./confirmar-tope";
+import { PanelCliente } from "./panel-cliente";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatearPeso } from "@/lib/formato";
 
 const estadoInicial: EstadoWhatsapp = {};
@@ -65,6 +70,7 @@ export function Hilo({
   usuarioId,
   modoDemo,
   alto = "max-h-[calc(100vh-16rem)] min-h-[32rem]",
+  clienteAlCostado = "2xl",
 }: {
   detalle: DetalleConversacion;
   plantillas: PlantillaDisponible[];
@@ -73,7 +79,14 @@ export function Hilo({
   modoDemo: boolean;
   /** Clases de alto: cambian entre el panel y el puesto de atención. */
   alto?: string;
+  /**
+   * Desde qué ancho el panel del cliente va en su columna. Por debajo se
+   * abre con el botón de la cabecera (mes simulado: en el teléfono no había
+   * cómo armar el presupuesto o el corte desde la conversación).
+   */
+  clienteAlCostado?: "xl" | "2xl";
 }) {
+  const [verCliente, setVerCliente] = useState(false);
   const pathname = usePathname();
   const parametros = useSearchParams();
 
@@ -154,50 +167,80 @@ export function Hilo({
   }
 
   const restante = restanteLegible(detalle.ultimoEntranteAt);
+  const distintivo = detalle.customerId ? distintivoDeLista(detalle.clienteTipo ?? undefined, detalle.clienteLista) : null;
 
   return (
     <section className={`tarjeta flex flex-col overflow-hidden ${alto}`}>
       {/* Cabecera */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
-        <Link
-          href={volverALista()}
-          className="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-muted lg:hidden"
-          aria-label="Volver a la lista"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
+      {/* El nombre manda: va solo en su renglón con la flecha y el botón del
+          cliente, y la asignación y «Resolver» bajan cuando no entran (mes
+          simulado: a 375 px el selector se comía el nombre y el teléfono, y
+          el chip «Profesional» lo tapaba). */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-3 py-2 sm:px-4 sm:py-2.5">
+        <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-2">
+          <Link
+            href={volverALista()}
+            className="-ml-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted lg:hidden"
+            aria-label="Volver a la lista"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
 
-        <div className="min-w-0 flex-1">
-          {/* El `truncate` va sobre el nombre y no sobre el `h2`: puesto en el
-              contenedor recortaba también la píldora. */}
-          <h2 className="flex items-center gap-2 text-base font-medium">
-            <span className="truncate">{detalle.nombre}</span>
-            {detalle.clienteTipo === "profesional" && (
-              <span className="shrink-0 rounded-full bg-naranja-claro px-2 py-0.5 text-sm font-semibold text-acento-sobre-claro">
-                Profesional
+          <div className="min-w-0 flex-1">
+            {/* Entero, en dos renglones si hace falta: cortado
+                («Constructora del Sur Atención …») no se sabía quién era. */}
+            <h2 className="line-clamp-2 break-words text-base font-medium leading-snug">{detalle.nombre}</h2>
+            <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+              <span className="tabular truncate">
+                {detalle.sinNumero ? "WhatsApp no comparte su número" : jidCorto(detalle.waJid)}
               </span>
-            )}
-          </h2>
-          <p className="tabular truncate text-sm text-muted-foreground">
-            {detalle.sinNumero ? "WhatsApp no comparte su número" : jidCorto(detalle.waJid)}
-            {detalle.customerId ? (
-              <Link href={`/admin/clientes/${detalle.customerId}`} className="ml-2 font-sans text-brand-orange hover:underline">
-                ver ficha
-              </Link>
-            ) : (
-              <span className="ml-2 font-sans">· sin ficha de cliente</span>
-            )}
-          </p>
+              {/* El de su lista («Constructora»), como el portal: no
+                  «Profesional» a todos los que no son la general (mes
+                  simulado). */}
+              {distintivo && (
+                <span className="shrink-0 rounded-full bg-naranja-claro px-2 py-0.5 text-xs font-semibold text-acento-sobre-claro">
+                  {distintivo}
+                </span>
+              )}
+              {!detalle.customerId && <span className="shrink-0">· sin ficha</span>}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setVerCliente(true)}
+            aria-label="Cliente: presupuesto, corte y cuenta"
+            title="Cliente"
+            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-hundida transition-colors hover:bg-muted ${
+              clienteAlCostado === "xl" ? "xl:hidden" : "2xl:hidden"
+            }`}
+          >
+            <IdCard className="h-5 w-5" />
+          </button>
         </div>
 
-        <Asignar
-          conversacionId={detalle.id}
-          asignado={detalle.asignadoAUserId}
-          personal={personal}
-          usuarioId={usuarioId}
-        />
-        <FormularioEstado conversacionId={detalle.id} estado={detalle.estado} />
+        {/* El selector toma lo que deja «Resuelta» y nunca se le mete abajo
+            (a 375 px lo pisaba 7 px y tapaba la flecha): min-w-0 en el
+            formulario y el selector, y el botón sin encogerse. */}
+        <div className="flex shrink-0 items-center gap-2 max-sm:w-full max-sm:[&>form:first-child]:min-w-0 max-sm:[&>form:first-child]:flex-1 max-sm:[&>form:last-child]:shrink-0 max-sm:[&_select]:w-0 max-sm:[&_select]:min-w-0 max-sm:[&_select]:max-w-none max-sm:[&_select]:flex-1">
+          <Asignar
+            conversacionId={detalle.id}
+            asignado={detalle.asignadoAUserId}
+            personal={personal}
+            usuarioId={usuarioId}
+          />
+          <FormularioEstado conversacionId={detalle.id} estado={detalle.estado} />
+        </div>
       </header>
+
+      <Dialog open={verCliente} onOpenChange={setVerCliente}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="break-words pr-8">{detalle.clienteNombre ?? detalle.nombre}</DialogTitle>
+          </DialogHeader>
+          <PanelCliente detalle={detalle} enDialogo />
+        </DialogContent>
+      </Dialog>
 
       {detalle.botEstado === "derivada" && <AvisoDerivada conversacionId={detalle.id} />}
 
@@ -210,7 +253,7 @@ export function Hilo({
       )}
 
       {/* Mensajes */}
-      <div tabIndex={0} role="log" aria-label="Mensajes de la conversación" className="flex-1 space-y-1 overflow-y-auto bg-brand-cream/25 px-4 py-4" aria-live="polite">
+      <div tabIndex={0} role="log" aria-label="Mensajes de la conversación" className="flex-1 space-y-1 overflow-y-auto bg-hundida px-3 py-3 sm:px-4 sm:py-4" aria-live="polite">
         {detalle.mensajes.length === 0 ? (
           <p className="py-10 text-center text-base text-muted-foreground">Todavía no hay mensajes en esta conversación.</p>
         ) : (
@@ -236,29 +279,24 @@ export function Hilo({
         <div ref={finRef} />
       </div>
 
-      {/* Ventana de 24 h: se dice siempre, porque decide qué se puede mandar. */}
-      {!conPlantilla && modo !== "documento" && (
+      {/* Ventana de 24 h: se dice siempre, porque decide qué se puede mandar.
+          Abierta, va en la barra del compositor (lo que queda y el botón del
+          mensaje preparado): un renglón aparte era uno menos de mensajes a
+          375 px y no entraba sin cortarse («Podés contestar li…»). Cerrada,
+          tiene su renglón, porque cambia lo que se puede hacer. */}
+      {!conPlantilla && modo !== "documento" && !ventanaAbierta && (
         <p
-          className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-2 text-sm ${
-            ventanaAbierta ? "text-muted-foreground" : "estado-espera bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
-          }`}
+          className="estado-espera flex items-center gap-2 border-t bg-[var(--estado-fondo)] px-3 py-1.5 text-sm text-[var(--estado-tinta)] sm:px-4 sm:py-2"
         >
           <Clock className="h-4 w-4 shrink-0" />
-          {ventanaAbierta ? (
-            <>
-              Podés contestar libremente por {restante} más.
-              <button type="button" onClick={() => setModo("plantilla")} className="font-medium text-brand-orange hover:underline">
-                Usar un mensaje preparado
-              </button>
-            </>
-          ) : (
-            <>
-              Pasaron más de 24 horas: solo se puede mandar un mensaje preparado.
-              <button type="button" onClick={() => setModo("plantilla")} className="font-medium underline">
-                Elegir uno
-              </button>
-            </>
-          )}
+          <span className="min-w-0 flex-1">
+            {detalle.ultimoEntranteAt
+              ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
+              : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
+          </span>
+          <button type="button" onClick={() => setModo("plantilla")} className="shrink-0 font-medium underline">
+            Elegir uno
+          </button>
         </p>
       )}
 
@@ -268,6 +306,7 @@ export function Hilo({
           conversacionId={detalle.id}
           documentos={detalle.documentos}
           ventanaAbierta={ventanaAbierta}
+          escribio={!!detalle.ultimoEntranteAt}
           onCerrar={() => setModo("auto")}
           gratis={gratis}
         />
@@ -278,6 +317,7 @@ export function Hilo({
           nombre={detalle.nombre}
           plantillas={plantillas}
           ventanaAbierta={ventanaAbierta}
+          escribio={!!detalle.ultimoEntranteAt}
           conocidos={detalle.conocidos}
           documentos={detalle.documentos}
           onCerrar={ventanaAbierta ? () => setModo("texto") : null}
@@ -297,7 +337,7 @@ export function Hilo({
             setCitado(null);
             iniciarRespuesta(() => accionResponder(datos));
           }}
-          className="border-t p-3"
+          className="border-t p-2 sm:p-3"
         >
           <input type="hidden" name="conversacionId" value={detalle.id} />
           <input type="hidden" name="citado" value={citado?.waMessageId ?? ""} />
@@ -330,69 +370,99 @@ export function Hilo({
           )}
 
           {/* El texto ocupa todo el ancho: en la columna del medio, con los
-              botones al costado, quedaba de tres palabras por renglón. */}
-          <div className="space-y-2">
-            <textarea
-              ref={campoRef}
-              name="cuerpo"
-              rows={2}
-              required
-              maxLength={4096}
-              placeholder="Escribí tu respuesta…"
-              aria-label="Respuesta"
-              className="block min-h-[2.75rem] w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-base"
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={(e) => {
-                // Enter manda, Shift+Enter hace salto de línea: es lo que la
-                // mano ya sabe hacer de usar WhatsApp todo el día.
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-            />
-            <div className="flex items-center gap-2">
-            <AdjuntarArchivo conversacionId={detalle.id} citado={citado?.waMessageId ?? null} />
-            <button
-              type="button"
-              onClick={() => setModo("documento")}
-              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
-              title="Mandar un presupuesto, una factura, un remito, un recibo o el resumen de cuenta"
-            >
-              <FileText className="h-5 w-5" />
-              <span className="hidden sm:inline">Documento</span>
-            </button>
-              <span className="flex-1" />
-            {gratis && (
-              <a
-                ref={telefonoRef}
-                href={gratis}
-                onClick={(e) => {
-                  e.currentTarget.href = conLoEscrito() ?? gratis;
+              botones al costado, quedaba de tres palabras por renglón. En el
+              teléfono «Enviar» sube al lado del texto (un renglón menos de
+              compositor es uno más de mensajes, H048): el `order` y el corte
+              de renglón solo valen por debajo de `sm`. Los rótulos aparecen
+              según el ancho de la columna, no de la pantalla. */}
+          <div className="@container">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {/* Un renglón en el teléfono, dos en la computadora. */}
+              <textarea
+                ref={campoRef}
+                name="cuerpo"
+                rows={1}
+                required
+                maxLength={4096}
+                placeholder="Escribí tu respuesta…"
+                aria-label="Respuesta"
+                className="block min-h-[2.75rem] w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-base max-sm:order-1 max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 sm:min-h-[4.25rem]"
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter manda, Shift+Enter hace salto de línea: es lo que la
+                  // mano ya sabe hacer de usar WhatsApp todo el día.
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
                 }}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-keyshortcuts="Alt+W"
-                // Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra.
-                title="Alt + W"
-                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10"
+              />
+              <span className="hidden basis-full max-sm:order-3 max-sm:block" aria-hidden="true" />
+              <span className="contents max-sm:[&>*]:order-4">
+                <AdjuntarArchivo conversacionId={detalle.id} citado={citado?.waMessageId ?? null} />
+                <button
+                  type="button"
+                  onClick={() => setModo("documento")}
+                  aria-label="Documento"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-base transition-colors hover:bg-muted sm:px-3"
+                  title="Mandar un presupuesto, una factura, un remito, un recibo o el resumen de cuenta"
+                >
+                  <FileText className="h-5 w-5" />
+                  <span className="hidden @lg:inline">Documento</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo("plantilla")}
+                  aria-label="Mensaje preparado"
+                  title="Mensaje preparado"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-base transition-colors hover:bg-muted sm:px-3"
+                >
+                  <MessageSquareText className="h-5 w-5" />
+                  <span className="hidden @2xl:inline">Preparado</span>
+                </button>
+                {/* Lo que queda de las 24 h: corto, para que entre sin cortarse. */}
+                {restante && (
+                  <span
+                    className="tabular inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground"
+                    title={`Podés contestar libremente por ${restante} más`}
+                  >
+                    <Clock className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">Podés contestar libremente por</span>
+                    {restante}
+                  </span>
+                )}
+                <span className="flex-1" />
+                {gratis && (
+                  <a
+                    ref={telefonoRef}
+                    href={gratis}
+                    onClick={(e) => {
+                      e.currentTarget.href = conLoEscrito() ?? gratis;
+                    }}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-keyshortcuts="Alt+W"
+                    // Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra.
+                    title="Alt + W"
+                    className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-2.5 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10 sm:px-3"
+                  >
+                    <Smartphone className="h-5 w-5" />
+                    <span>Teléfono</span>
+                    <span className="hidden text-sm font-normal @md:inline">gratis</span>
+                  </a>
+                )}
+              </span>
+              <button
+                type="submit"
+                disabled={enviando}
+                // Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h.
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50 max-sm:order-2 sm:gap-2 sm:px-4"
               >
-                <Smartphone className="h-5 w-5" />
-                <span className="hidden sm:inline">Contestar desde el teléfono</span>
-                <span className="text-sm font-normal">gratis</span>
-              </a>
-            )}
-            <button
-              type="submit"
-              disabled={enviando}
-              // Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h.
-              className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
-            >
-              {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-              Enviar
-              <span className="hidden text-sm font-normal text-white/85 sm:inline">se cobra</span>
-            </button>
+                {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                Enviar
+                <span className="hidden text-sm font-normal text-white/85 @md:inline">se cobra</span>
+              </button>
             </div>
           </div>
         </form>
@@ -440,7 +510,7 @@ function Burbuja({
               ? "rounded-br-sm bg-destructive/10 ring-1 ring-destructive/30"
               : saliente
                 ? "rounded-br-sm bg-brand-green/15"
-                : "rounded-bl-sm bg-background"
+                : "rounded-bl-sm bg-card"
           }`}
         >
           <Procedencia mensaje={mensaje} />
@@ -796,9 +866,9 @@ function Asignar({
         Quién la atiende
       </label>
       {pendiente ? (
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground" />
       ) : (
-        <UserRound className="h-4 w-4 text-muted-foreground" />
+        <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
       <select
         id={`asignar-${conversacionId}`}
@@ -860,21 +930,21 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
   }, [pendiente, estado.error]);
 
   return (
-    <form ref={formRef} action={accion} className="flex items-center gap-2 border-t border-dashed bg-muted/40 px-3 py-2">
+    <form ref={formRef} action={accion} className="flex items-center gap-2 border-t border-dashed bg-muted/40 px-3 py-1">
       <input type="hidden" name="conversacionId" value={conversacionId} />
       <FlaskConical className="h-4 w-4 shrink-0 text-muted-foreground" />
       <input
         name="cuerpo"
         required
         maxLength={500}
-        placeholder="Simular un mensaje del cliente (solo en demostración)"
+        placeholder="Mensaje del cliente"
         aria-label="Simular un mensaje del cliente"
-        className="h-10 flex-1 rounded-lg border bg-background px-2.5 text-sm"
+        className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm sm:h-9"
       />
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-10 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60 sm:h-9"
       >
         {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
         Simular

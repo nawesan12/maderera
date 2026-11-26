@@ -92,6 +92,7 @@ function Tarjeta({
     borrarDireccion,
     estadoInicial,
   );
+  const [confirmando, setConfirmando] = useState(false);
 
   return (
     /* Entra con una animación de CSS. La salida no se anima: la dirección
@@ -125,32 +126,51 @@ function Tarjeta({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={onEditar}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <Pencil className="h-4 w-4" />
-            Editar
-          </button>
-
-          <form action={accion}>
+        {/* Borrar pide confirmar en el lugar: era un tacho pegado a
+            «Editar» que borraba al instante la dirección de la obra (mes
+            simulado, H390). Los dos de 44 px y separados. */}
+        {confirmando ? (
+          <form action={accion} className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <input type="hidden" name="id" value={direccion.id} />
+            <span className="mr-auto text-sm font-medium sm:mr-1">¿La borramos?</span>
+            <button
+              type="button"
+              onClick={() => setConfirmando(false)}
+              className="inline-flex h-11 items-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              No
+            </button>
             <button
               type="submit"
               disabled={pendiente}
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-saldo-debe disabled:opacity-60"
+              autoFocus
+              className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-destructive px-4 text-sm font-medium text-white disabled:opacity-60"
             >
-              {pendiente ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-              <span className="sr-only sm:not-sr-only">Borrar</span>
+              {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Sí, borrar
             </button>
           </form>
-        </div>
+        ) : (
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={onEditar}
+              className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Pencil className="h-4 w-4" />
+              Editar
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmando(true)}
+              aria-label={`Borrar ${direccion.etiqueta}`}
+              className="inline-flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-saldo-debe"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="sr-only sm:not-sr-only">Borrar</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {estado.error && (
@@ -264,7 +284,7 @@ function Formulario({
           defaultChecked={direccion?.predeterminada}
           className="h-4 w-4 accent-[var(--brand-orange,#e2711d)]"
         />
-        Usar esta dirección por defecto en el carrito
+        Usar esta dirección por defecto
       </label>
 
       {estado.error && (

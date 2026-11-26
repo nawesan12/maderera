@@ -26,7 +26,9 @@ import (
 // Defines values for MostradorAutorizacionMotivo.
 const (
 	Anular      MostradorAutorizacionMotivo = "anular"
+	Costo       MostradorAutorizacionMotivo = "costo"
 	Credito     MostradorAutorizacionMotivo = "credito"
+	Devolver    MostradorAutorizacionMotivo = "devolver"
 	Precio      MostradorAutorizacionMotivo = "precio"
 	Presupuesto MostradorAutorizacionMotivo = "presupuesto"
 )
@@ -36,11 +38,36 @@ func (e MostradorAutorizacionMotivo) Valid() bool {
 	switch e {
 	case Anular:
 		return true
+	case Costo:
+		return true
 	case Credito:
+		return true
+	case Devolver:
 		return true
 	case Precio:
 		return true
 	case Presupuesto:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MostradorMovimientoDestino.
+const (
+	MostradorMovimientoDestinoBanco      MostradorMovimientoDestino = "banco"
+	MostradorMovimientoDestinoCajaFuerte MostradorMovimientoDestino = "caja_fuerte"
+	MostradorMovimientoDestinoOtro       MostradorMovimientoDestino = "otro"
+)
+
+// Valid indicates whether the value is a known member of the MostradorMovimientoDestino enum.
+func (e MostradorMovimientoDestino) Valid() bool {
+	switch e {
+	case MostradorMovimientoDestinoBanco:
+		return true
+	case MostradorMovimientoDestinoCajaFuerte:
+		return true
+	case MostradorMovimientoDestinoOtro:
 		return true
 	default:
 		return false
@@ -89,6 +116,27 @@ func (e MostradorVarianteFormaDeVenta) Valid() bool {
 	}
 }
 
+// Defines values for MovimientoDeCajaJSONBodyDestino.
+const (
+	MovimientoDeCajaJSONBodyDestinoBanco      MovimientoDeCajaJSONBodyDestino = "banco"
+	MovimientoDeCajaJSONBodyDestinoCajaFuerte MovimientoDeCajaJSONBodyDestino = "caja_fuerte"
+	MovimientoDeCajaJSONBodyDestinoOtro       MovimientoDeCajaJSONBodyDestino = "otro"
+)
+
+// Valid indicates whether the value is a known member of the MovimientoDeCajaJSONBodyDestino enum.
+func (e MovimientoDeCajaJSONBodyDestino) Valid() bool {
+	switch e {
+	case MovimientoDeCajaJSONBodyDestinoBanco:
+		return true
+	case MovimientoDeCajaJSONBodyDestinoCajaFuerte:
+		return true
+	case MovimientoDeCajaJSONBodyDestinoOtro:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MovimientoDeCajaJSONBodyTipo.
 const (
 	Ingreso MovimientoDeCajaJSONBodyTipo = "ingreso"
@@ -101,6 +149,51 @@ func (e MovimientoDeCajaJSONBodyTipo) Valid() bool {
 	case Ingreso:
 		return true
 	case Retiro:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DevolucionDeMostradorJSONBodyDestino.
+const (
+	Afuera DevolucionDeMostradorJSONBodyDestino = "afuera"
+	Caja   DevolucionDeMostradorJSONBodyDestino = "caja"
+	Cuenta DevolucionDeMostradorJSONBodyDestino = "cuenta"
+	Deuda  DevolucionDeMostradorJSONBodyDestino = "deuda"
+)
+
+// Valid indicates whether the value is a known member of the DevolucionDeMostradorJSONBodyDestino enum.
+func (e DevolucionDeMostradorJSONBodyDestino) Valid() bool {
+	switch e {
+	case Afuera:
+		return true
+	case Caja:
+		return true
+	case Cuenta:
+		return true
+	case Deuda:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DevolucionDeMostradorJSONBodySinStock.
+const (
+	DevolucionDeMostradorJSONBodySinStockLessThannil DevolucionDeMostradorJSONBodySinStock = "<nil>"
+	DevolucionDeMostradorJSONBodySinStockOtro        DevolucionDeMostradorJSONBodySinStock = "otro"
+	DevolucionDeMostradorJSONBodySinStockRota        DevolucionDeMostradorJSONBodySinStock = "rota"
+)
+
+// Valid indicates whether the value is a known member of the DevolucionDeMostradorJSONBodySinStock enum.
+func (e DevolucionDeMostradorJSONBodySinStock) Valid() bool {
+	switch e {
+	case DevolucionDeMostradorJSONBodySinStockLessThannil:
+		return true
+	case DevolucionDeMostradorJSONBodySinStockOtro:
+		return true
+	case DevolucionDeMostradorJSONBodySinStockRota:
 		return true
 	default:
 		return false
@@ -130,6 +223,9 @@ type MostradorAltaRapida struct {
 // MostradorAutorizacion Hace falta el PIN de un administrador (internal/autorizacion)
 type MostradorAutorizacion struct {
 	BloqueadoHasta *time.Time `json:"bloqueadoHasta,omitempty"`
+
+	// ConClave sin PIN cargado, firma la contraseña de un admin
+	ConClave *bool `json:"conClave,omitempty"`
 
 	// Credito con motivo precio
 	Credito *float64 `json:"credito,omitempty"`
@@ -200,13 +296,19 @@ type MostradorLinea struct {
 // MostradorMovimiento defines model for MostradorMovimiento.
 type MostradorMovimiento struct {
 	CreatedAt time.Time `json:"createdAt"`
-	Id        string    `json:"id"`
-	Monto     float64   `json:"monto"`
-	Motivo    *string   `json:"motivo"`
-	OrderId   *string   `json:"orderId"`
-	Quien     *string   `json:"quien"`
-	Tipo      string    `json:"tipo"`
+
+	// Destino a dónde fue un retiro
+	Destino *MostradorMovimientoDestino `json:"destino,omitempty"`
+	Id      string                      `json:"id"`
+	Monto   float64                     `json:"monto"`
+	Motivo  *string                     `json:"motivo"`
+	OrderId *string                     `json:"orderId"`
+	Quien   *string                     `json:"quien"`
+	Tipo    string                      `json:"tipo"`
 }
+
+// MostradorMovimientoDestino a dónde fue un retiro
+type MostradorMovimientoDestino string
 
 // MostradorPantalla defines model for MostradorPantalla.
 type MostradorPantalla struct {
@@ -218,12 +320,45 @@ type MostradorPantalla struct {
 	ListaGeneral      *string               `json:"listaGeneral"`
 	Movimientos       []MostradorMovimiento `json:"movimientos"`
 	Turno             *MostradorTurno       `json:"turno"`
-	Ventas            []MostradorVentaDeHoy `json:"ventas"`
+
+	// UltimoContado lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente
+	UltimoContado *float64              `json:"ultimoContado"`
+	Ventas        []MostradorVentaDeHoy `json:"ventas"`
+}
+
+// MostradorPresupuesto defines model for MostradorPresupuesto.
+type MostradorPresupuesto struct {
+	ContactoNombre   string  `json:"contactoNombre"`
+	ContactoTelefono *string `json:"contactoTelefono"`
+	CustomerId       *string `json:"customerId"`
+	Id               string  `json:"id"`
+	Lineas           []struct {
+		Cantidad       float64  `json:"cantidad"`
+		Descripcion    string   `json:"descripcion"`
+		PrecioLista    *float64 `json:"precioLista"`
+		PrecioUnitario float64  `json:"precioUnitario"`
+		Presentacion   *string  `json:"presentacion"`
+		Unidad         string   `json:"unidad"`
+		VariantId      *string  `json:"variantId"`
+	} `json:"lineas"`
+	Numero  string `json:"numero"`
+	Vencido bool   `json:"vencido"`
+}
+
+// MostradorRenglonADevolver defines model for MostradorRenglonADevolver.
+type MostradorRenglonADevolver struct {
+	AlStock   bool     `json:"alStock"`
+	Cantidad  float64  `json:"cantidad"`
+	DelAcopio *float64 `json:"delAcopio,omitempty"`
+	ItemId    string   `json:"itemId"`
 }
 
 // MostradorRenglonDelCierre defines model for MostradorRenglonDelCierre.
 type MostradorRenglonDelCierre struct {
 	Cantidad int `json:"cantidad"`
+
+	// Cobranza lo cobrado por recibos de cuenta en el mostrador durante el turno
+	Cobranza bool `json:"cobranza"`
 
 	// Devolucion Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno)
 	Devolucion bool   `json:"devolucion"`
@@ -256,7 +391,10 @@ type MostradorResultadoDeColaEstado string
 type MostradorResultadoVenta struct {
 	// Autorizacion Hace falta el PIN de un administrador (internal/autorizacion)
 	Autorizacion *MostradorAutorizacion `json:"autorizacion,omitempty"`
-	Error        *string                `json:"error,omitempty"`
+
+	// AvisoStock la venta dejó medidas con lo disponible en negativo (se vendió más de lo que hay)
+	AvisoStock *string `json:"avisoStock,omitempty"`
+	Error      *string `json:"error,omitempty"`
 
 	// Ficha un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha
 	Ficha   *string           `json:"ficha,omitempty"`
@@ -274,31 +412,40 @@ type MostradorTurno struct {
 	AbiertaPor       string    `json:"abiertaPor"`
 	BranchId         string    `json:"branchId"`
 	CantidadDeVentas int       `json:"cantidadDeVentas"`
-	Esperado         float64   `json:"esperado"`
-	FondoBase        float64   `json:"fondoBase"`
-	FondoInicial     float64   `json:"fondoInicial"`
-	Id               string    `json:"id"`
-	OtrosIngresos    float64   `json:"otrosIngresos"`
-	Retiros          float64   `json:"retiros"`
-	Sucursal         string    `json:"sucursal"`
-	VentasEnEfectivo float64   `json:"ventasEnEfectivo"`
+
+	// Devoluciones anulaciones y devoluciones en efectivo (en negativo)
+	Devoluciones float64 `json:"devoluciones"`
+	Esperado     float64 `json:"esperado"`
+	FondoBase    float64 `json:"fondoBase"`
+	FondoInicial float64 `json:"fondoInicial"`
+
+	// Gastos gastos en efectivo cargados desde el panel (en negativo)
+	Gastos           float64 `json:"gastos"`
+	Id               string  `json:"id"`
+	OtrosIngresos    float64 `json:"otrosIngresos"`
+	Retiros          float64 `json:"retiros"`
+	Sucursal         string  `json:"sucursal"`
+	VentasEnEfectivo float64 `json:"ventasEnEfectivo"`
 }
 
 // MostradorVariante defines model for MostradorVariante.
 type MostradorVariante struct {
-	AnchoMm        *int                          `json:"anchoMm"`
-	Categoria      *string                       `json:"categoria"`
-	Color          *string                       `json:"color"`
-	FormaDeVenta   MostradorVarianteFormaDeVenta `json:"formaDeVenta"`
-	LargoMm        *int                          `json:"largoMm"`
-	Medida         string                        `json:"medida"`
-	Precio         float64                       `json:"precio"`
-	PrecioMediaPct float64                       `json:"precioMediaPct"`
-	Producto       string                        `json:"producto"`
-	Sku            string                        `json:"sku"`
-	Stock          float64                       `json:"stock"`
-	Unidad         string                        `json:"unidad"`
-	VariantId      string                        `json:"variantId"`
+	AnchoMm      *int                          `json:"anchoMm"`
+	Categoria    *string                       `json:"categoria"`
+	Color        *string                       `json:"color"`
+	FormaDeVenta MostradorVarianteFormaDeVenta `json:"formaDeVenta"`
+	LargoMm      *int                          `json:"largoMm"`
+	Medida       string                        `json:"medida"`
+
+	// Piso el precio final que apenas cubre el costo (sin costo cargado, null)
+	Piso           *float64 `json:"piso,omitempty"`
+	Precio         float64  `json:"precio"`
+	PrecioMediaPct float64  `json:"precioMediaPct"`
+	Producto       string   `json:"producto"`
+	Sku            string   `json:"sku"`
+	Stock          float64  `json:"stock"`
+	Unidad         string   `json:"unidad"`
+	VariantId      string   `json:"variantId"`
 }
 
 // MostradorVarianteFormaDeVenta defines model for MostradorVariante.FormaDeVenta.
@@ -306,13 +453,22 @@ type MostradorVarianteFormaDeVenta string
 
 // MostradorVentaDeHoy defines model for MostradorVentaDeHoy.
 type MostradorVentaDeHoy struct {
-	Cliente   string    `json:"cliente"`
-	CreatedAt time.Time `json:"createdAt"`
-	Estado    string    `json:"estado"`
-	Id        string    `json:"id"`
-	MedioPago *string   `json:"medioPago"`
-	Numero    string    `json:"numero"`
-	Total     float64   `json:"total"`
+	Cliente string `json:"cliente"`
+
+	// ConFactura tiene factura viva: se puede devolver una parte
+	ConFactura bool      `json:"conFactura"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	// Devuelto lo que se devolvió en devoluciones parciales
+	Devuelto  float64 `json:"devuelto"`
+	Estado    string  `json:"estado"`
+	Id        string  `json:"id"`
+	MedioPago *string `json:"medioPago"`
+
+	// Medios todos los medios de un pago partido, del más grande al más chico
+	Medios []string `json:"medios"`
+	Numero string   `json:"numero"`
+	Total  float64  `json:"total"`
 }
 
 // Problema defines model for Problema.
@@ -337,8 +493,14 @@ type BuscarEnMostradorParams struct {
 
 // AbrirCajaJSONBody defines parameters for AbrirCaja.
 type AbrirCajaJSONBody struct {
-	BranchId     string   `json:"branchId"`
+	BranchId string `json:"branchId"`
+
+	// CajaId la caja física de la PC que abre, si tiene una
+	CajaId       *string  `json:"cajaId,omitempty"`
 	FondoInicial *float64 `json:"fondoInicial"`
+
+	// Motivo adónde fue (o de dónde vino) la diferencia con lo contado al cerrar el turno anterior
+	Motivo *string `json:"motivo,omitempty"`
 }
 
 // CerrarCajaJSONBody defines parameters for CerrarCaja.
@@ -358,11 +520,16 @@ type DesvincularTerminalJSONBody struct {
 
 // MovimientoDeCajaJSONBody defines parameters for MovimientoDeCaja.
 type MovimientoDeCajaJSONBody struct {
-	Monto     *float64                     `json:"monto"`
-	Motivo    string                       `json:"motivo"`
-	SessionId string                       `json:"sessionId"`
-	Tipo      MovimientoDeCajaJSONBodyTipo `json:"tipo"`
+	// Destino a dónde va un retiro; sin él se clasifica por el motivo
+	Destino   *MovimientoDeCajaJSONBodyDestino `json:"destino,omitempty"`
+	Monto     *float64                         `json:"monto"`
+	Motivo    string                           `json:"motivo"`
+	SessionId string                           `json:"sessionId"`
+	Tipo      MovimientoDeCajaJSONBodyTipo     `json:"tipo"`
 }
+
+// MovimientoDeCajaJSONBodyDestino defines parameters for MovimientoDeCaja.
+type MovimientoDeCajaJSONBodyDestino string
 
 // MovimientoDeCajaJSONBodyTipo defines parameters for MovimientoDeCaja.
 type MovimientoDeCajaJSONBodyTipo string
@@ -418,10 +585,36 @@ type CobrarVentaJSONBody map[string]interface{}
 type AnularVentaDeMostradorJSONBody struct {
 	Ficha  *string `json:"ficha,omitempty"`
 	Motivo string  `json:"motivo"`
-	Pin    *string `json:"pin,omitempty"`
+
+	// Pin el PIN de un admin, o su contraseña si ninguno cargó PIN
+	Pin *string `json:"pin,omitempty"`
 
 	// VolvioLaMercaderia false: el cliente se la llevó y el stock no vuelve (pide el PIN)
 	VolvioLaMercaderia *bool `json:"volvioLaMercaderia,omitempty"`
+}
+
+// DevolucionDeMostradorJSONBody defines parameters for DevolucionDeMostrador.
+type DevolucionDeMostradorJSONBody struct {
+	Clave      string                                 `json:"clave"`
+	Destino    DevolucionDeMostradorJSONBodyDestino   `json:"destino"`
+	Ficha      *string                                `json:"ficha,omitempty"`
+	Importe    float64                                `json:"importe"`
+	Motivo     string                                 `json:"motivo"`
+	Pin        *string                                `json:"pin,omitempty"`
+	Renglones  []MostradorRenglonADevolver            `json:"renglones"`
+	SinStock   *DevolucionDeMostradorJSONBodySinStock `json:"sinStock,omitempty"`
+	SucursalId *string                                `json:"sucursalId,omitempty"`
+}
+
+// DevolucionDeMostradorJSONBodyDestino defines parameters for DevolucionDeMostrador.
+type DevolucionDeMostradorJSONBodyDestino string
+
+// DevolucionDeMostradorJSONBodySinStock defines parameters for DevolucionDeMostrador.
+type DevolucionDeMostradorJSONBodySinStock string
+
+// DevolucionDeMostradorCalculoJSONBody defines parameters for DevolucionDeMostradorCalculo.
+type DevolucionDeMostradorCalculoJSONBody struct {
+	Renglones []MostradorRenglonADevolver `json:"renglones"`
 }
 
 // AbrirCajaJSONRequestBody defines body for AbrirCaja for application/json ContentType.
@@ -456,6 +649,12 @@ type CobrarVentaJSONRequestBody CobrarVentaJSONBody
 
 // AnularVentaDeMostradorJSONRequestBody defines body for AnularVentaDeMostrador for application/json ContentType.
 type AnularVentaDeMostradorJSONRequestBody AnularVentaDeMostradorJSONBody
+
+// DevolucionDeMostradorJSONRequestBody defines body for DevolucionDeMostrador for application/json ContentType.
+type DevolucionDeMostradorJSONRequestBody DevolucionDeMostradorJSONBody
+
+// DevolucionDeMostradorCalculoJSONRequestBody defines body for DevolucionDeMostradorCalculo for application/json ContentType.
+type DevolucionDeMostradorCalculoJSONRequestBody DevolucionDeMostradorCalculoJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -505,11 +704,23 @@ type ServerInterface interface {
 	// (POST /api/v1/mostrador/presupuestos)
 	PresupuestoDeMostrador(w http.ResponseWriter, r *http.Request)
 
+	// (GET /api/v1/mostrador/presupuestos/{numero})
+	PresupuestoParaElMostrador(w http.ResponseWriter, r *http.Request, numero string)
+
 	// (POST /api/v1/mostrador/ventas)
 	CobrarVenta(w http.ResponseWriter, r *http.Request)
 
 	// (POST /api/v1/mostrador/ventas/{id}/anular)
 	AnularVentaDeMostrador(w http.ResponseWriter, r *http.Request, id string)
+
+	// (GET /api/v1/mostrador/ventas/{id}/devolucion)
+	DevolucionDeMostradorDatos(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/v1/mostrador/ventas/{id}/devolucion)
+	DevolucionDeMostrador(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/v1/mostrador/ventas/{id}/devolucion/calculo)
+	DevolucionDeMostradorCalculo(w http.ResponseWriter, r *http.Request, id string)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -869,6 +1080,32 @@ func (siw *ServerInterfaceWrapper) PresupuestoDeMostrador(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// PresupuestoParaElMostrador operation middleware
+func (siw *ServerInterfaceWrapper) PresupuestoParaElMostrador(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "numero" -------------
+	var numero string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "numero", r.PathValue("numero"), &numero, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "numero", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PresupuestoParaElMostrador(w, r, numero)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CobrarVenta operation middleware
 func (siw *ServerInterfaceWrapper) CobrarVenta(w http.ResponseWriter, r *http.Request) {
 
@@ -900,6 +1137,84 @@ func (siw *ServerInterfaceWrapper) AnularVentaDeMostrador(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AnularVentaDeMostrador(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DevolucionDeMostradorDatos operation middleware
+func (siw *ServerInterfaceWrapper) DevolucionDeMostradorDatos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DevolucionDeMostradorDatos(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DevolucionDeMostrador operation middleware
+func (siw *ServerInterfaceWrapper) DevolucionDeMostrador(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DevolucionDeMostrador(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DevolucionDeMostradorCalculo operation middleware
+func (siw *ServerInterfaceWrapper) DevolucionDeMostradorCalculo(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DevolucionDeMostradorCalculo(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1033,11 +1348,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas", wrapper.CobrarVenta)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/descarga", wrapper.DescargarVentas)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/anular", wrapper.AnularVentaDeMostrador)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion", wrapper.DevolucionDeMostradorDatos)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion", wrapper.DevolucionDeMostrador)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/ventas/{id}/devolucion/calculo", wrapper.DevolucionDeMostradorCalculo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/buscar", wrapper.BuscarEnMostrador)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/precios", wrapper.PreciosDelCliente)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/clientes", wrapper.BuscarClientesEnMostrador)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/clientes", wrapper.AltaRapidaDeCliente)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/clientes/recientes", wrapper.ClientesRecientes)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/presupuestos/{numero}", wrapper.PresupuestoParaElMostrador)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/clientes/{id}", wrapper.ClienteDelMostrador)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/mostrador/clientes/{id}/saldo", wrapper.SaldoDeCuentaEnMostrador)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/clientes/{id}/cobro", wrapper.CobrarCuentaEnMostrador)
@@ -1371,6 +1690,13 @@ type SaldoDeCuentaEnMostradorResponseObject interface {
 
 type SaldoDeCuentaEnMostrador200JSONResponse struct {
 	Saldo float64 `json:"saldo"`
+
+	// SinCobrar pedidos del cliente con mercadería que salió y algo sin cobrar
+	SinCobrar *[]struct {
+		Id     string  `json:"id"`
+		Monto  float64 `json:"monto"`
+		Numero string  `json:"numero"`
+	} `json:"sinCobrar,omitempty"`
 }
 
 func (response SaldoDeCuentaEnMostrador200JSONResponse) VisitSaldoDeCuentaEnMostradorResponse(w http.ResponseWriter) error {
@@ -1507,6 +1833,44 @@ func (response PresupuestoDeMostrador422ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type PresupuestoParaElMostradorRequestObject struct {
+	Numero string `json:"numero"`
+}
+
+type PresupuestoParaElMostradorResponseObject interface {
+	VisitPresupuestoParaElMostradorResponse(w http.ResponseWriter) error
+}
+
+type PresupuestoParaElMostrador200JSONResponse MostradorPresupuesto
+
+func (response PresupuestoParaElMostrador200JSONResponse) VisitPresupuestoParaElMostradorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PresupuestoParaElMostrador422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response PresupuestoParaElMostrador422ApplicationProblemPlusJSONResponse) VisitPresupuestoParaElMostradorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CobrarVentaRequestObject struct {
 	Body *CobrarVentaJSONRequestBody
 }
@@ -1556,14 +1920,30 @@ type AnularVentaDeMostradorResponseObject interface {
 
 type AnularVentaDeMostrador200JSONResponse struct {
 	// Autorizacion Hace falta el PIN de un administrador (internal/autorizacion)
-	Autorizacion     *MostradorAutorizacion `json:"autorizacion,omitempty"`
-	Error            *string                `json:"error,omitempty"`
-	FacturaPendiente *string                `json:"facturaPendiente,omitempty"`
-	FacturaSinCae    *bool                  `json:"facturaSinCae,omitempty"`
-	Ok               *string                `json:"ok,omitempty"`
+	Autorizacion *MostradorAutorizacion `json:"autorizacion,omitempty"`
+
+	// Avisado la factura que quedó viva se le avisó a administración
+	Avisado *bool `json:"avisado,omitempty"`
+
+	// ConCorte la venta tenía un corte, que no se rehace solo
+	ConCorte         *bool   `json:"conCorte,omitempty"`
+	Error            *string `json:"error,omitempty"`
+	FacturaPendiente *string `json:"facturaPendiente,omitempty"`
+	FacturaSinCae    *bool   `json:"facturaSinCae,omitempty"`
+	Ok               *string `json:"ok,omitempty"`
 
 	// PorAfuera Lo que falta devolver por el posnet o el banco (sin el efectivo, la cuenta corriente ni el cheque en cartera)
 	PorAfuera *float64 `json:"porAfuera,omitempty"`
+
+	// Renglones lo que tenía la venta, para rehacerla (sin los renglones de un corte)
+	Renglones *[]struct {
+		Cantidad       float64 `json:"cantidad"`
+		Descripcion    string  `json:"descripcion"`
+		PrecioUnitario float64 `json:"precioUnitario"`
+		Presentacion   *string `json:"presentacion"`
+		Unidad         string  `json:"unidad"`
+		VariantId      *string `json:"variantId"`
+	} `json:"renglones,omitempty"`
 }
 
 func (response AnularVentaDeMostrador200JSONResponse) VisitAnularVentaDeMostradorResponse(w http.ResponseWriter) error {
@@ -1583,6 +1963,130 @@ type AnularVentaDeMostrador422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response AnularVentaDeMostrador422ApplicationProblemPlusJSONResponse) VisitAnularVentaDeMostradorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionDeMostradorDatosRequestObject struct {
+	Id string `json:"id"`
+}
+
+type DevolucionDeMostradorDatosResponseObject interface {
+	VisitDevolucionDeMostradorDatosResponse(w http.ResponseWriter) error
+}
+
+type DevolucionDeMostradorDatos200JSONResponse map[string]interface{}
+
+func (response DevolucionDeMostradorDatos200JSONResponse) VisitDevolucionDeMostradorDatosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionDeMostradorDatos404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DevolucionDeMostradorDatos404ApplicationProblemPlusJSONResponse) VisitDevolucionDeMostradorDatosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionDeMostradorRequestObject struct {
+	Id   string `json:"id"`
+	Body *DevolucionDeMostradorJSONRequestBody
+}
+
+type DevolucionDeMostradorResponseObject interface {
+	VisitDevolucionDeMostradorResponse(w http.ResponseWriter) error
+}
+
+type DevolucionDeMostrador200JSONResponse struct {
+	// Autorizacion Hace falta el PIN de un administrador (internal/autorizacion)
+	Autorizacion *MostradorAutorizacion `json:"autorizacion,omitempty"`
+	Error        *string                `json:"error,omitempty"`
+	NotaId       *string                `json:"notaId,omitempty"`
+	Ok           *string                `json:"ok,omitempty"`
+}
+
+func (response DevolucionDeMostrador200JSONResponse) VisitDevolucionDeMostradorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionDeMostrador422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DevolucionDeMostrador422ApplicationProblemPlusJSONResponse) VisitDevolucionDeMostradorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionDeMostradorCalculoRequestObject struct {
+	Id   string `json:"id"`
+	Body *DevolucionDeMostradorCalculoJSONRequestBody
+}
+
+type DevolucionDeMostradorCalculoResponseObject interface {
+	VisitDevolucionDeMostradorCalculoResponse(w http.ResponseWriter) error
+}
+
+type DevolucionDeMostradorCalculo200JSONResponse struct {
+	Importe float64 `json:"importe"`
+}
+
+func (response DevolucionDeMostradorCalculo200JSONResponse) VisitDevolucionDeMostradorCalculoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolucionDeMostradorCalculo422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DevolucionDeMostradorCalculo422ApplicationProblemPlusJSONResponse) VisitDevolucionDeMostradorCalculoResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1642,11 +2146,23 @@ type StrictServerInterface interface {
 	// (POST /api/v1/mostrador/presupuestos)
 	PresupuestoDeMostrador(ctx context.Context, request PresupuestoDeMostradorRequestObject) (PresupuestoDeMostradorResponseObject, error)
 
+	// (GET /api/v1/mostrador/presupuestos/{numero})
+	PresupuestoParaElMostrador(ctx context.Context, request PresupuestoParaElMostradorRequestObject) (PresupuestoParaElMostradorResponseObject, error)
+
 	// (POST /api/v1/mostrador/ventas)
 	CobrarVenta(ctx context.Context, request CobrarVentaRequestObject) (CobrarVentaResponseObject, error)
 
 	// (POST /api/v1/mostrador/ventas/{id}/anular)
 	AnularVentaDeMostrador(ctx context.Context, request AnularVentaDeMostradorRequestObject) (AnularVentaDeMostradorResponseObject, error)
+
+	// (GET /api/v1/mostrador/ventas/{id}/devolucion)
+	DevolucionDeMostradorDatos(ctx context.Context, request DevolucionDeMostradorDatosRequestObject) (DevolucionDeMostradorDatosResponseObject, error)
+
+	// (POST /api/v1/mostrador/ventas/{id}/devolucion)
+	DevolucionDeMostrador(ctx context.Context, request DevolucionDeMostradorRequestObject) (DevolucionDeMostradorResponseObject, error)
+
+	// (POST /api/v1/mostrador/ventas/{id}/devolucion/calculo)
+	DevolucionDeMostradorCalculo(ctx context.Context, request DevolucionDeMostradorCalculoRequestObject) (DevolucionDeMostradorCalculoResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -2125,6 +2641,32 @@ func (sh *strictHandler) PresupuestoDeMostrador(w http.ResponseWriter, r *http.R
 	}
 }
 
+// PresupuestoParaElMostrador operation middleware
+func (sh *strictHandler) PresupuestoParaElMostrador(w http.ResponseWriter, r *http.Request, numero string) {
+	var request PresupuestoParaElMostradorRequestObject
+
+	request.Numero = numero
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PresupuestoParaElMostrador(ctx, request.(PresupuestoParaElMostradorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PresupuestoParaElMostrador")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PresupuestoParaElMostradorResponseObject); ok {
+		if err := validResponse.VisitPresupuestoParaElMostradorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CobrarVenta operation middleware
 func (sh *strictHandler) CobrarVenta(w http.ResponseWriter, r *http.Request) {
 	var request CobrarVentaRequestObject
@@ -2189,75 +2731,186 @@ func (sh *strictHandler) AnularVentaDeMostrador(w http.ResponseWriter, r *http.R
 	}
 }
 
+// DevolucionDeMostradorDatos operation middleware
+func (sh *strictHandler) DevolucionDeMostradorDatos(w http.ResponseWriter, r *http.Request, id string) {
+	var request DevolucionDeMostradorDatosRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DevolucionDeMostradorDatos(ctx, request.(DevolucionDeMostradorDatosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DevolucionDeMostradorDatos")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DevolucionDeMostradorDatosResponseObject); ok {
+		if err := validResponse.VisitDevolucionDeMostradorDatosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DevolucionDeMostrador operation middleware
+func (sh *strictHandler) DevolucionDeMostrador(w http.ResponseWriter, r *http.Request, id string) {
+	var request DevolucionDeMostradorRequestObject
+
+	request.Id = id
+
+	var body DevolucionDeMostradorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DevolucionDeMostrador(ctx, request.(DevolucionDeMostradorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DevolucionDeMostrador")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DevolucionDeMostradorResponseObject); ok {
+		if err := validResponse.VisitDevolucionDeMostradorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DevolucionDeMostradorCalculo operation middleware
+func (sh *strictHandler) DevolucionDeMostradorCalculo(w http.ResponseWriter, r *http.Request, id string) {
+	var request DevolucionDeMostradorCalculoRequestObject
+
+	request.Id = id
+
+	var body DevolucionDeMostradorCalculoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DevolucionDeMostradorCalculo(ctx, request.(DevolucionDeMostradorCalculoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DevolucionDeMostradorCalculo")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DevolucionDeMostradorCalculoResponseObject); ok {
+		if err := validResponse.VisitDevolucionDeMostradorCalculoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"/eM81M3N/w8A",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

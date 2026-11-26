@@ -6,28 +6,33 @@ orden: 0
 
 ## Entrar
 
-El panel vive en la misma dirección que el sitio, con `/admin` al final. Se entra
-con el correo y la contraseña que le dio administración. **No hay usuario
-compartido**: cada persona tiene el suyo, y todo lo que se carga queda a nombre
-de quien lo cargó. Prestar la clave es prestar la firma.
+El panel vive en la misma dirección que el sitio, con `/admin` al final. Se
+entra con el correo y la contraseña que le dio administración al darle el alta
+(*Sitio y configuración → Personal*); la contraseña se cambia después desde
+*Mi cuenta*. **No hay usuario compartido**: cada persona
+tiene el suyo, y todo lo que se carga queda a nombre de quien lo cargó. Prestar
+la clave es prestar la firma.
 
 Si la sesión se cierra sola, no pasó nada malo: vuelva a entrar y siga donde
 estaba.
 
 ## Cómo está armado
 
-A la izquierda está el menú, en seis bloques, y el orden de cada uno es el del
+A la izquierda está el menú, en siete bloques, y el orden de cada uno es el del
 circuito real, no el alfabético:
 
-- **Operación** — lo del día: pedidos, WhatsApp, presupuestos, cortes y mostrador.
-- **Catálogo** — lo que se vende: productos, stock y precios.
-- **Ventas** — el cliente y su plata: clientes, profesionales, facturación,
-  cobros, caja, ARCA y cierre del mes.
-- **Compras** — el otro lado: proveedores, órdenes, recepciones, facturas,
-  pagos, cheques y gastos.
-- **Sitio** — lo que ve el público: contenido, eventos, documentación y avisos.
-- **Ajustes** — lo que se toca de vez en cuando: reportes, sucursales, envíos,
-  migración y bitácora.
+- **Vender** — lo del día: resumen, mostrador, pedidos, presupuestos, cortes,
+  WhatsApp, clientes y profesionales.
+- **Cobrar** — la plata que entra: facturación, cobranzas, seguimiento, caja y
+  cheques.
+- **Comprar** — el otro lado: proveedores, órdenes de compra, facturas de
+  compra, pagos y gastos.
+- **Depósito** — la mercadería: stock, recepciones y reparto.
+- **Catálogo** — lo que se vende: productos, precios y documentación.
+- **Números** — reportes, cierre del mes, ARCA e impuestos, y sucursales.
+- **Sitio y configuración** — lo que se toca de vez en cuando: tienda y
+  contenido, eventos, avisos, campañas, reglas del negocio, zonas de envío,
+  personal, vendedores, importar planillas y bitácora.
 
 **No todos ven lo mismo.** El menú muestra solo lo que corresponde al puesto de
 cada uno: quien atiende el mostrador no ve Cobros ni Migración, y quien opera
@@ -41,19 +46,20 @@ taller molesta de noche.
 
 ## Lo primero que se ve: «Para hoy»
 
-El **Resumen** abre con un recuadro llamado **Para hoy**: los pedidos que faltan
-preparar, los que están listos y nadie retiró, los cortes en la cola, los
-cheques que vencen esta semana, las facturas de compra vencidas y los
-profesionales esperando respuesta. Cada renglón lleva a la pantalla donde se
-resuelve.
+El **Resumen** abre con **Para hoy**: lo que hay que atender hoy, cada cosa con
+su cantidad y tocándola se abre la pantalla donde se resuelve. Según el puesto
+son los pedidos por preparar y los listos para entregar, los cortes en la cola
+o para retirar hoy, los presupuestos que esperan respuesta, las conversaciones
+de WhatsApp, las transferencias a verificar, los cheques que vencen o
+rebotaron, las facturas de compra que vencen y las órdenes de compra atrasadas
+o que llegan. Lo vencido va en rojo. Cada uno ve solo lo suyo.
 
-Es la respuesta a «¿qué tengo que hacer?» sin recorrer el menú. Lo que apremia
-va en naranja; lo demás, en gris. Cada uno ve solo lo suyo.
+Debajo, **Pendientes** junta lo que espera sin apuro, y **Empezar algo** los
+botones para arrancar una venta, un presupuesto, un corte o una compra.
 
-Las cuatro tarjetas de abajo —ventas, presupuestos abiertos, productos a
-reponer, clientes— **también se pueden tocar**, y llevan a la lista de
-exactamente eso: si la tarjeta dice 4 presupuestos abiertos, la pantalla que se
-abre muestra esos 4.
+Administración ve además **Los números**: lo que le deben, lo que debe, los
+cheques de la semana, la plata de hoy, la ganancia del mes y lo vendido. Cada
+tarjeta se puede tocar y lleva a la pantalla que explica esa cifra.
 
 ## El buscador es más rápido que el menú
 
@@ -108,8 +114,10 @@ inicio.
 1. **No hay botón de guardar general.** Cada pantalla guarda lo suyo cuando
    aprieta *Guardar*. Si sale de una pantalla sin guardar, se pierde lo que
    escribió ahí y nada más.
-2. **No hay que cerrar el mes ni cerrar el día.** Los números se calculan
-   solos cada vez que se abre una pantalla.
+2. **Los números se calculan solos** cada vez que se abre una pantalla: no
+   hay que procesar nada para verlos. Lo único que se cierra es el turno de
+   caja y, cuando el contador ya tiene los números, el mes (ver *Cerrar el
+   mes*), para que nadie cargue algo con fecha de un mes ya presentado.
 3. **Varios pueden estar cargando a la vez.** Si dos personas tocan el mismo
    pedido, gana la última que guardó; la bitácora deja constancia de las dos.
 4. **Todo tiene su dirección.** La pantalla que está mirando tiene una URL: se

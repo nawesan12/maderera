@@ -23,6 +23,7 @@ import {
   Seccion,
 } from "@/components/admin/formulario";
 import { guardarDatosEmisor, type EstadoFactura } from "../facturacion/actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const inicial: EstadoFactura = {};
 
@@ -264,17 +265,27 @@ function Campo({
       <label htmlFor={id} className="mb-1.5 block text-base font-medium">
         {etiqueta}
       </label>
-      <input
-        id={id}
-        name={id}
-        type={type}
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        required={required}
-        className={`h-10 w-full rounded-lg border bg-background px-3 text-base ${
-          tabular ? "tabular" : ""
-        }`}
-      />
+      {type === "date" ? (
+        <CampoFecha
+          id={id}
+          name={id}
+          defaultValue={defaultValue}
+          required={required}
+          className="tabular h-10 w-full rounded-lg border bg-background px-3 text-base"
+        />
+      ) : (
+        <input
+          id={id}
+          name={id}
+          type={type}
+          defaultValue={defaultValue}
+          placeholder={placeholder}
+          required={required}
+          className={`h-10 w-full rounded-lg border bg-background px-3 text-base ${
+            tabular ? "tabular" : ""
+          }`}
+        />
+      )}
     </div>
   );
 }

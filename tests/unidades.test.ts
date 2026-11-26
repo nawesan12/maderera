@@ -115,3 +115,4 @@ describe("lo tipeado con decimales", () => {
     expect(llevaDecimales("")).toBe(false);
   });
 });
+

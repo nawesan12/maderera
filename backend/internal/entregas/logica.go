@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/zodjs"
 )
@@ -27,6 +28,12 @@ type Renglon struct {
 	// a mano es texto libre («m» de tapacanto, «flete»). Sin producto, no se
 	// controla: no hay stock que dejar en 619,99.
 	Enteros bool `json:"enteros,omitempty"`
+	// EnElGalpon es lo que hay en el estante de la sucursal de donde sale el
+	// renglón, en la unidad del renglón: el físico menos lo que ya salió en
+	// el camión de un pedido en camino. Lo mira quien arma el remito: con 135
+	// placas vendidas y 70 en el galpón, el formulario no mostraba stock
+	// (mes simulado, H218). Sin producto, no hay.
+	EnElGalpon *float64 `json:"enElGalpon,omitempty"`
 }
 
 // maxCero es Math.max(x, 0) (NaN sigue siendo NaN).
@@ -190,6 +197,28 @@ type FormRemito struct {
 	NumeroSeguimiento *string          `json:"numeroSeguimiento"`
 	Notas             *string          `json:"notas"`
 	Lineas            []LineaAEntregar `json:"lineas"`
+	// Otros son los acopios de otros pedidos del mismo cliente que salen en
+	// la misma visita (`otros`: [{orderId, cantidades}]).
+	Otros []OtroPedido `json:"otros,omitempty"`
+}
+
+// OtroPedido es lo que sale de otro acopio en la misma visita.
+type OtroPedido struct {
+	OrderID string           `json:"orderId"`
+	Lineas  []LineaAEntregar `json:"lineas"`
+}
+
+// otrosComoFormularios: cada otro pedido con el mismo receptor y las mismas
+// notas que el remito principal.
+func (f FormRemito) otrosComoFormularios() []FormRemito {
+	var out []FormRemito
+	for _, o := range f.Otros {
+		g := f
+		g.OrderID, g.Lineas, g.Otros = o.OrderID, o.Lineas, nil
+		g.Transportista, g.NumeroSeguimiento = nil, nil
+		out = append(out, g)
+	}
+	return out
 }
 
 // MsjFaltaDocumento es la regla del retiro: la firma sola no identifica.
@@ -257,6 +286,16 @@ func LeerRemito(m map[string]any) (FormRemito, string, string) {
 		return f, campo, msj
 	}
 	f.Lineas = Cantidades(m["cantidades"])
+	if xs, ok := m["otros"].([]any); ok {
+		for _, x := range xs {
+			o, _ := x.(map[string]any)
+			id, _ := o["orderId"].(string)
+			if !plataforma.UUIDValido(id) || id == f.OrderID {
+				return f, "otros", "Hay un pedido que no existe."
+			}
+			f.Otros = append(f.Otros, OtroPedido{OrderID: id, Lineas: Cantidades(o["cantidades"])})
+		}
+	}
 	return f, "", ""
 }
 

@@ -121,7 +121,9 @@ func TestNumerosDelDueno(t *testing.T) {
 	}
 	p := n.PlataHoy
 	if len(p.Cajas) != 1 || p.Cajas[0].Sucursal != "Casa Central" || p.Cajas[0].Esperado != 1300 || p.Efectivo != 1300 ||
-		p.Banco != 120 || p.MercadoPago != 80 || p.Tarjetas != 80 || p.Cheques != (Monto{500, 2}) || p.Total != 2000 {
+		p.Banco != 120 || p.MercadoPago != 80 || p.Tarjetas != 80 || p.Cheques != (Monto{500, 2}) ||
+		// El depositado sin acreditar sigue siendo plata de la casa (H406).
+		p.ChequesDepositados != (Monto{200, 1}) || p.Total != 2200 {
 		t.Errorf("plata hoy: %+v", p)
 	}
 	g := n.Ganancia
@@ -508,8 +510,9 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 	// venta de renglones: 1000.
 	interno := e.pedido(t, "F-2", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
 	e.exec(t, `update orders set total = 1331, costo_envio = 121 where id = $1`, interno)
-	// Sin factura: el comprobante quedó en borrador (500), y un pedido web
-	// (100).
+	// Sin factura: el comprobante quedó en borrador (500). El pedido web
+	// pendiente (100) todavía no se vendió: ni se entregó ni se facturó
+	// (H162).
 	borrador := e.pedido(t, "F-3", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 605.0, 300.0})
 	factura(borrador, "borrador", 2, nil, "2026-10-05T15:00:00Z")
 	e.pedido(t, "F-6", e.central, "pendiente", "tienda", octubre, nil, [4]any{placa, 1.0, 121.0, 60.0})
@@ -517,6 +520,14 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 	// De octubre, facturado el 2 de noviembre: facturado.
 	tarde := e.pedido(t, "F-5", e.central, "entregado", "mostrador", time.Date(2026, 10, 31, 20, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1210.0, 600.0})
 	factura(tarde, "autorizada", 3, "762", "2026-11-02T15:00:00Z")
+	// Facturado y esperando el CAE (sin certificado): sin CAE, no sin
+	// factura (H422).
+	esperando := e.pedido(t, "F-7", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 484.0, 200.0})
+	factura(esperando, "emitida", 4, nil, "2026-10-05T15:00:00Z")
+	// Y la percepción de IIBB que nos hizo un proveedor (H165).
+	prov := e.id(t, `insert into suppliers (nombre) values ('Placas del Sur') returning id`)
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, percepciones, percepcion_iibb, total)
+		values ($1, 'factura_a', 3, 88412, '2026-10-26T00:00:00Z', 1000, 210, 30, 30, 1240)`, prov)
 
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	var r ResumenDelMes
@@ -524,11 +535,14 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 		t.Fatal(cuerpo)
 	}
 	v := r.Vendido
-	quiere := VendidoDelMes{Total: 3600, Facturado: Totales{2000, 2}, Interno: Totales{1000, 1}, SinFactura: Totales{600, 2}}
+	quiere := VendidoDelMes{Total: 3900, Facturado: Totales{2000, 2}, SinCae: Totales{400, 1}, Interno: Totales{1000, 1}, SinFactura: Totales{500, 1}}
 	if v != quiere {
 		t.Errorf("vendido: %+v, quería %+v", v, quiere)
 	}
-	if v.Total != r.Resultado.Actual.VentasNetas || jsmath.Redondear2(v.Facturado.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
+	if r.PercepcionesIibb != (Totales{30, 1}) {
+		t.Errorf("percepciones de IIBB: %+v", r.PercepcionesIibb)
+	}
+	if v.Total != r.Resultado.Actual.VentasNetas || jsmath.Redondear2(v.Facturado.Total+v.SinCae.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
 		t.Errorf("no cierra con el resultado: %+v %+v", v, r.Resultado.Actual)
 	}
 	if r.Ventas.Cantidad != 1 || r.Ventas.Neto != 1000 {
@@ -539,8 +553,8 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 	e.exec(t, `update orders set subtotal = 1210, total = 1089 where id = $1`, facturado)
 	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	_ = json.Unmarshal([]byte(cuerpo), &r)
-	if v := r.Vendido; v.Total != r.Resultado.Actual.VentasNetas || v.Total != 3500 || !r.Resultado.Actual.ConDescuento ||
-		jsmath.Redondear2(v.Facturado.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
+	if v := r.Vendido; v.Total != r.Resultado.Actual.VentasNetas || v.Total != 3800 || !r.Resultado.Actual.ConDescuento ||
+		jsmath.Redondear2(v.Facturado.Total+v.SinCae.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
 		t.Errorf("con descuento: %+v %+v", v, r.Resultado.Actual)
 	}
 	_, asientos, _ := pedir(t, adm, e.u+"cierre/asientos?periodo=2026-10")
@@ -802,5 +816,103 @@ func TestMeDebenConRemitosParciales(t *testing.T) {
 	}
 	if q := (Monto{Total: 600, Cantidad: 1}); n.MeDeben.PedidosSinCobrar != q {
 		t.Errorf("sin cobrar: %+v, quería %+v", n.MeDeben.PedidosSinCobrar, q)
+	}
+}
+
+// **Una factura que vence hoy figuraba vencida** (mes simulado, H005/H061).
+// El vencimiento se guarda como día, a la medianoche UTC; se comparaba
+// contra la medianoche argentina (las 3 UTC) en Debo y contra `now()` en
+// «Para hoy», así que una factura de contado salía vencida en el momento en
+// que se cargaba. Vence hoy: cuenta para esta semana y para las 48 horas.
+func TestLaFacturaQueVenceHoyNoEstaVencida(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	// 00:40 del 15/10 en Argentina, la hora en que la vio la dueña.
+	temprano := time.Date(2026, 10, 15, 0, 40, 0, 0, Argentina)
+	e.s.ahora = func() time.Time { return temprano }
+	prov := e.id(t, `insert into suppliers (nombre) values ('Contado') returning id`)
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
+		values ($1, 'factura_a', 4, 1877, 800, 0, 0, 0, 0, 800, '2026-10-15T00:00:00Z', '2026-10-15T00:00:00Z')`, prov)
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto) values ($1, 'factura', 800)`, prov)
+	for _, ahora := range []time.Time{temprano, time.Date(2026, 10, 15, 23, 30, 0, 0, Argentina)} {
+		d, err := e.s.Debo(context.Background(), ahora)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d.Vencido != 0 || d.FacturasVencidas != 0 || d.EstaSemana != 800 || d.FacturasEstaSemana != 1 {
+			t.Errorf("%v: %+v", ahora, d)
+		}
+	}
+	// «Para hoy», con el reloj del servicio: la factura de contado de hoy.
+	e.exec(t, `update purchase_invoices set fecha_vencimiento = $1`, DiaDeHoy(temprano))
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
+	if strings.Contains(cuerpo, "compras-vencidas") || !strings.Contains(cuerpo, `"clave":"compras-48h"`) {
+		t.Errorf("para hoy: %s", cuerpo)
+	}
+	e.exec(t, `update purchase_invoices set fecha_vencimiento = '2026-10-15T00:00:00Z'`)
+	// Al día siguiente, sí.
+	d, err := e.s.Debo(context.Background(), time.Date(2026, 10, 16, 0, 10, 0, 0, Argentina))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Vencido != 800 || d.FacturasVencidas != 1 {
+		t.Errorf("al otro día: %+v", d)
+	}
+}
+
+// H137/H349: Cobros cuenta lo cobrado en el mostrador (sin la cuenta
+// corriente) y no cuenta el cheque que rebotó.
+func TestCobradoConElMostradorYSinElRechazado(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cuando := time.Date(2026, 10, 10, 10, 0, 0, 0, Argentina)
+	venta := e.pedido(t, "M-1", e.central, "entregado", "mostrador", cuando, nil)
+	e.exec(t, `insert into order_payments (order_id, medio, importe, created_at) values ($1, 'efectivo', 1000, $2), ($1, 'debito', 500, $2), ($1, 'cuenta_corriente', 700, $2)`, venta, cuando)
+	cheque := e.pedido(t, "M-2", e.central, "entregado", "mostrador", cuando, nil)
+	pago := e.id(t, `insert into order_payments (order_id, medio, importe, created_at) values ($1, 'cheque', 400, $2) returning id`, cheque, cuando)
+	e.exec(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, order_payment_id) values ('recibido', '55500321', 'Nación', $1, 400, 'rechazado', $2)`, cuando, pago)
+	desde, hasta := time.Date(2026, 10, 1, 0, 0, 0, 0, Argentina), time.Date(2026, 11, 1, 0, 0, 0, 0, Argentina)
+	c, err := e.s.Cobranzas(ctx, Periodo{Desde: &desde, Hasta: &hasta}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Cobrado != 1500 || c.Ventas != 1 {
+		t.Errorf("cobrado %v en %d ventas", c.Cobrado, c.Ventas)
+	}
+	medios := map[string]float64{}
+	for _, m := range c.PorMedio {
+		medios[m.Medio] = m.Total
+	}
+	if medios["efectivo"] != 1000 || medios["tarjeta_debito"] != 500 || medios["cheque"] != 0 || medios["cuenta_corriente"] != 0 {
+		t.Errorf("por medio: %v", medios)
+	}
+}
+
+// La venta cuenta al entregarse o al facturarse, lo que pase primero, no al
+// confirmarse el pedido (mes simulado, H162): el pedido de octubre que se
+// prepara y nadie cobró ni facturó no suma en octubre; facturado el 3 de
+// noviembre, suma en noviembre.
+func TestLaVentaCuentaAlEntregarseOFacturarse(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, _ := e.catalogo(t)
+	octubre := time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina)
+	e.pedido(t, "V-1", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
+	preparando := e.pedido(t, "V-2", e.central, "preparando", "tienda", octubre, nil, [4]any{placa, 1.0, 2420.0, 1200.0})
+	vendido := func(periodo string) float64 {
+		t.Helper()
+		_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo="+periodo)
+		var r ResumenDelMes
+		if err := json.Unmarshal([]byte(cuerpo), &r); err != nil {
+			t.Fatal(cuerpo)
+		}
+		return r.Vendido.Total
+	}
+	if v := vendido("2026-10"); v != 1000 {
+		t.Fatalf("octubre con el pedido sin entregar ni facturar: %v", v)
+	}
+	e.facturaConCae(t, nil, 95, 2420, "2026-11-03T15:00:00Z", &preparando)
+	if o, n := vendido("2026-10"), vendido("2026-11"); o != 1000 || n != 2000 {
+		t.Fatalf("facturado en noviembre: octubre %v, noviembre %v", o, n)
 	}
 }

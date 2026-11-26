@@ -100,9 +100,12 @@ const LINEA_VACIA: Linea = {
  */
 export function FormularioFacturaManual({
   condicionEmisor,
+  alMonotributista = "a",
   cajas,
 }: {
   condicionEmisor: CondicionIva;
+  /** La regla `factura_al_monotributista`: la letra que Go le va a poner. */
+  alMonotributista?: "a" | "b";
   /** Las sucursales con la caja abierta. */
   cajas: { valor: string; texto: string }[];
 }) {
@@ -132,7 +135,7 @@ export function FormularioFacturaManual({
     domicilio: "",
   });
 
-  const letra = letraQueCorresponde(condicionEmisor, condicion);
+  const letra = letraQueCorresponde(condicionEmisor, condicion, alMonotributista);
   // Un comprobante fiscal no se borra: se corrige con nota de crédito. Antes
   // salía al primer clic, sin ver a quién ni por cuánto.
   const formulario = useRef<HTMLFormElement>(null);

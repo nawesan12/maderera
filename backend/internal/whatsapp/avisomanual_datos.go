@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 )
 
@@ -113,7 +114,7 @@ func (s *Servicio) cargarAviso(ctx context.Context, evento, tipo, id string) (*b
 		if valido != nil {
 			vence = FechaCorta(*valido)
 		}
-		return &baseAviso{nombre: cNombre, telefono: primero(cTel, clTel), valores: map[string]string{"presupuesto": numero, "total": Moneda(total),
+		return &baseAviso{nombre: cNombre, telefono: primero(cTel, clTel), valores: map[string]string{"presupuesto": numero, "total": formato.Importe(total),
 			"vence": vence, "documento": "el presupuesto " + numero}, pdf: ptr("/api/presupuestos/" + id + "/pdf")}, nil
 	case "receipt":
 		var numero string
@@ -127,8 +128,8 @@ func (s *Servicio) cargarAviso(ctx context.Context, evento, tipo, id string) (*b
 		if !ok {
 			return nil, err
 		}
-		return &baseAviso{nombre: nombre, telefono: tel, valores: map[string]string{"importe": Moneda(total), "recibo": numero,
-			"saldo": Moneda(saldo), "documento": "el recibo " + numero}, pdf: ptr("/api/recibos/" + id + "/pdf")}, nil
+		return &baseAviso{nombre: nombre, telefono: tel, valores: map[string]string{"importe": formato.Importe(total), "recibo": numero,
+			"saldo": formato.Importe(saldo), "documento": "el recibo " + numero}, pdf: ptr("/api/recibos/" + id + "/pdf")}, nil
 	case "cheque":
 		var tipoCheque, numero string
 		var banco, motivo, nombre, tel *string
@@ -143,7 +144,7 @@ func (s *Servicio) cargarAviso(ctx context.Context, evento, tipo, id string) (*b
 			m = "lo rechazó el banco"
 		}
 		return &baseAviso{nombre: nombre, telefono: tel, valores: map[string]string{"cheque": NombreDelCheque(tipoCheque, banco, numero),
-			"importe": Moneda(importe), "motivo": m}}, nil
+			"importe": formato.Importe(importe), "motivo": m}}, nil
 	case "customer":
 		var nombre string
 		var tel *string
@@ -374,6 +375,14 @@ func (s *Servicio) RegistrarAvisoManual(ctx context.Context, ses *auth.Sesion, e
 	if _, err := s.pool.Exec(ctx, `insert into notifications_log (canal, evento, destinatario, asunto, entidad_tipo, entidad_id, estado, usuario_id)
 		values ('whatsapp_manual', $1, $2, $3, $4, $5, 'enviada', $6)`, evento, destinatario, am.Titulo, entidadTipo, entidadID, ses.UserID); err != nil {
 		return Resultado{}, err
+	}
+	// El presupuesto que se le avisó desde el teléfono queda «enviado», como
+	// por cualquier otro canal (mes simulado: seguía «pendiente»).
+	if evento == "presupuesto_listo" && entidadTipo == "quote" {
+		if _, err := s.pool.Exec(ctx, `update quotes set estado = 'enviado', updated_at = now()
+			where id = $1 and estado in ('pendiente', 'revision')`, entidadID); err != nil {
+			return Resultado{}, err
+		}
 	}
 	return Resultado{Ok: "ok"}, nil
 }

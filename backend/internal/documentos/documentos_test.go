@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -300,5 +301,30 @@ func TestListaEnPDFConLaTiendaApagada(t *testing.T) {
 	ana := e.cliente(t, "ana@prueba.test")
 	if r := pedir(t, ana, e.srv.URL+"/api/v1/documentos/mi-lista-de-precios"); r.estado != 403 {
 		t.Errorf("la lista en PDF salió con la tienda apagada: %d", r.estado)
+	}
+}
+
+// H086: con la regla en «si», el profesional aprobado baja su lista en PDF
+// con la tienda apagada; quien tiene la lista general, no.
+func TestListaEnPDFDelProfesionalSinTienda(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	pro := e.sembrar(t)
+	pruebas.TiendaApagada(t, e.pool)
+	if err := reglas.Fijar(ctx, e.pool, reglas.PreciosProfesionalSinTienda, "si"); err != nil {
+		t.Fatal(err)
+	}
+	u := e.srv.URL + "/api/v1/documentos/mi-lista-de-precios"
+	ana := e.cliente(t, "ana@prueba.test")
+	if r := pedir(t, ana, u); r.estado != 403 {
+		t.Errorf("la general salió con la tienda apagada: %d", r.estado)
+	}
+	_, _ = e.pool.Exec(ctx, `update customers set price_list_id = $1, tipo = 'profesional' where email = 'ana@prueba.test'`, pro)
+	r := pedir(t, ana, u)
+	if r.estado != 200 || r.tipo != "application/pdf" {
+		t.Fatalf("la del profesional: %d", r.estado)
+	}
+	if txt, ok := textoDelPDF(t, r.cuerpo); ok {
+		contiene(t, "la del profesional", txt, "Lista Profesional", "$ 76.050")
 	}
 }

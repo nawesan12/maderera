@@ -91,11 +91,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [filas, total, suma]
+                required: [filas, total, suma, cantidad]
                 properties:
                   filas: { type: array, items: { $ref: "#/components/schemas/ComprobanteListado" } }
                   total: { type: integer }
                   suma: { type: number, format: double }
+                  cantidad: { type: integer, description: Cuántos comprobantes suma `suma` }
   /api/v1/admin/facturacion/comprobantes:
     get:
       operationId: ListarComprobantes
@@ -476,6 +477,84 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Emitido" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/pedidos/{id}/devolucion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: DevolucionDesdeElPedido
+      description: Lo que se puede devolver de un pedido facturado desde el pedido (renglones de su factura, el destino de la plata y el tope). 404 si no tiene factura viva. De quien mueve plata.
+      responses:
+        "200":
+          description: Los datos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [facturaId, factura, destino, tope, renglones]
+                properties:
+                  facturaId: { type: string }
+                  factura: { type: string }
+                  destino: { type: string, enum: [cuenta, deuda] }
+                  tope: { type: number, format: double }
+                  renglones: { $ref: "#/components/schemas/RenglonesDevolvibles" }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DevolverDesdeElPedido
+      description: La devolución de un pedido facturado con su nota de crédito, sin que salga plata (a la cuenta corriente o bajando lo que falta cobrar). La clave hace que el reintento devuelva la misma. De quien mueve plata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, motivo, renglones]
+              additionalProperties: false
+              properties:
+                clave: { type: string }
+                motivo: { type: string }
+                importe: { type: number, format: double, nullable: true }
+                renglones: { $ref: "#/components/schemas/RenglonesDelPedidoADevolver" }
+      responses:
+        "200":
+          description: La devolución hecha (o la misma, si la clave ya se usó)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, notaId, importe, repetida]
+                properties:
+                  id: { type: string }
+                  notaId: { type: string }
+                  importe: { type: number, format: double }
+                  repetida: { type: boolean }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/facturacion/pedidos/{id}/devolucion/calculo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: CalcularDevolucionDelPedido
+      description: El importe de la nota que saldría con esos renglones, sin hacer nada. De quien mueve plata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [renglones]
+              additionalProperties: false
+              properties:
+                renglones: { $ref: "#/components/schemas/RenglonesDelPedidoADevolver" }
+      responses:
+        "200":
+          description: El importe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [importe]
+                properties:
+                  importe: { type: number, format: double }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/cuenta/comprobantes:
     get:
       operationId: MisComprobantes
@@ -609,10 +688,11 @@ components:
           description: Con más de 15 anteriores sin CAE, el comprobante desde el que se autoriza la serie (de a 15).
           type: object
           nullable: true
-          required: [invoiceId, numero]
+          required: [invoiceId, numero, desde]
           properties:
             invoiceId: { type: string }
             numero: { type: integer, format: int64 }
+            desde: { type: integer, format: int64, description: El primero sin CAE de la serie, el que sale primero. }
         corren: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
         deuda: { type: number, format: double }
         bloqueo: { type: string, nullable: true }
@@ -649,25 +729,35 @@ components:
           cantidad: { type: number, format: double }
           alStock: { type: boolean }
           delAcopio: { type: number, format: double, nullable: true }
+    RenglonesDelPedidoADevolver:
+      type: array
+      items:
+        type: object
+        required: [itemId, cantidad]
+        additionalProperties: false
+        properties:
+          itemId: { type: string }
+          cantidad: { type: number, format: double }
+    RenglonesDevolvibles:
+      type: array
+      items:
+        type: object
+        required: [itemId, descripcion, unidad, cantidad, queda, unitario, alStock, enAcopio]
+        properties:
+          itemId: { type: string }
+          descripcion: { type: string }
+          unidad: { type: string }
+          cantidad: { type: number, format: double }
+          queda: { type: number, format: double }
+          unitario: { type: number, format: double }
+          alStock: { type: boolean }
+          enAcopio: { type: number, format: double }
     DatosDeDevolucion:
       type: object
       required: [pedido, renglones, caja, cuenta, afuera, deuda, conCliente, sucursal, sucursales, ventaAnulada]
       properties:
         pedido: { type: string }
-        renglones:
-          type: array
-          items:
-            type: object
-            required: [itemId, descripcion, unidad, cantidad, queda, unitario, alStock, enAcopio]
-            properties:
-              itemId: { type: string }
-              descripcion: { type: string }
-              unidad: { type: string }
-              cantidad: { type: number, format: double }
-              queda: { type: number, format: double }
-              unitario: { type: number, format: double }
-              alStock: { type: boolean }
-              enAcopio: { type: number, format: double }
+        renglones: { $ref: "#/components/schemas/RenglonesDevolvibles" }
         caja: { type: number, format: double }
         cuenta: { type: number, format: double }
         afuera: { type: number, format: double }
@@ -754,7 +844,7 @@ components:
         pendientesDeAutorizar: { type: integer }
     ComprobanteListado:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, receptorNombre, receptorCuit, total, cobrado, cae, fechaEmision, fechaVencimiento, medios]
+      required: [id, tipo, puntoVenta, numero, estado, receptorNombre, receptorCuit, total, cobrado, cae, fechaEmision, fechaVencimiento, medios, enCuenta, pedido, ventaAnulada]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -769,6 +859,9 @@ components:
         fechaEmision: { type: string, format: date-time }
         fechaVencimiento: { type: string, format: date-time, nullable: true }
         medios: { type: array, items: { type: string } }
+        enCuenta: { type: boolean, description: La deuda vive en la cuenta corriente del cliente }
+        pedido: { type: string, nullable: true, description: Número del pedido que factura }
+        ventaAnulada: { type: boolean, description: El pedido que factura se canceló }
     LineasManuales:
       description: Los renglones como los mandaba el FormData (getAll de cada campo, en paralelo)
       type: object
@@ -821,7 +914,7 @@ components:
         importe: { type: string }
     ComprobanteCompleto:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl]
+      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl, enCuenta, pedido, ventaAnulada, cobrosDelPedido]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -859,6 +952,20 @@ components:
         tributos: { type: array, items: { $ref: "#/components/schemas/TributoDeComprobante" } }
         cobrado: { type: number, format: double }
         saldo: { type: number, format: double }
+        enCuenta: { type: boolean }
+        pedido: { type: string, nullable: true }
+        ventaAnulada: { type: boolean }
+        cobrosDelPedido:
+          type: array
+          items:
+            type: object
+            required: [medio, monto, fecha, recibo, reciboId]
+            properties:
+              medio: { type: string }
+              monto: { type: number, format: double }
+              fecha: { type: string, format: date-time }
+              recibo: { type: string, nullable: true }
+              reciboId: { type: string, nullable: true }
         qrUrl: { type: string, nullable: true, description: El enlace de verificación de ARCA (solo con CAE) }
     ResultadoDeAutorizacion:
       type: object
@@ -946,7 +1053,7 @@ components:
             tipo: { type: string }
     ComprobantePropio:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, total, cae, fechaEmision]
+      required: [id, tipo, puntoVenta, numero, estado, total, cae, fechaEmision, pedido, ventaAnulada]
       properties:
         id: { type: string }
         tipo: { type: string }
@@ -956,6 +1063,8 @@ components:
         total: { type: number, format: double }
         cae: { type: string, nullable: true }
         fechaEmision: { type: string, format: date-time }
+        pedido: { type: string, nullable: true }
+        ventaAnulada: { type: boolean }
     LineaDeEmision:
       type: object
       required: [descripcion, cantidad, precioFinalUnitario]

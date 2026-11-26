@@ -42,13 +42,6 @@ func (o respuesta) VisitBorrarDireccionResponse(w http.ResponseWriter) error  { 
 
 func hecho(m string) respuesta { return respuesta{map[string]string{"ok": m}} }
 
-func texto(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
-}
-
 // cliente es la ficha de la sesión para leer: nil sin sesión o sin ficha.
 func (a *API) cliente(ctx context.Context) (*Cliente, error) {
 	ses := auth.DeContexto(ctx)
@@ -139,7 +132,7 @@ func (a *API) GuardarMisDatos(ctx context.Context, r portalapi.GuardarMisDatosRe
 		return nil, err
 	}
 	b := r.Body
-	if err := a.s.GuardarDatos(ctx, ses.UserID, c, FormDatos{Nombre: texto(b.Nombre), Telefono: texto(b.Telefono), RazonSocial: texto(b.RazonSocial),
+	if err := a.s.GuardarDatos(ctx, ses, c, FormDatos{Nombre: texto(b.Nombre), Telefono: texto(b.Telefono), RazonSocial: texto(b.RazonSocial),
 		Cuit: texto(b.Cuit), CondicionIva: texto(b.CondicionIva)}); err != nil {
 		return nil, err
 	}

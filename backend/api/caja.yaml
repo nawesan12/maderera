@@ -90,6 +90,17 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/CajaVentaSuelta" } }
+  /api/v1/admin/caja/fuera-de-caja:
+    get:
+      operationId: EfectivoFueraDeCaja
+      parameters:
+        - { name: periodo, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Recibos y gastos en efectivo del mes que no pasaron por ningún turno
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CajaFueraDeCaja" } }
   /api/v1/admin/caja/ventas-sueltas/{id}/asignar:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -187,16 +198,17 @@ components:
         esperado: { type: number, format: double, nullable: true, description: El efectivo que tendría que haber ahora en el turno abierto }
     CajaRenglonDelCierre:
       type: object
-      required: [medioPago, cantidad, total, devolucion, quien]
+      required: [medioPago, cantidad, total, devolucion, quien, cobranza]
       properties:
         medioPago: { type: string }
         cantidad: { type: integer }
         total: { type: number, format: double, description: En negativo si es una devolución }
         devolucion: { type: boolean, description: Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) }
         quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
+        cobranza: { type: boolean, description: "lo cobrado por recibos de cuenta en el mostrador durante el turno" }
     TurnoCerrado:
       type: object
-      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, tardiosMonto, bajoLista, bajoListaMonto, creditoSinAutorizar, creditoSinAutorizarMonto, cierre]
+      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, tardios, tardiosMonto, bajoLista, bajoListaMonto, creditoSinAutorizar, creditoSinAutorizarMonto, cierre, fondo, ventas, otrosIngresos, retiros, devoluciones, gastos, puesto]
       properties:
         id: { type: string }
         sucursal: { type: string }
@@ -213,9 +225,26 @@ components:
         creditoSinAutorizar: { type: integer, description: Ventas sin conexión del turno que cargaron a cuenta corriente pasado el límite sin PIN }
         creditoSinAutorizarMonto: { type: number, format: double, description: Lo que cargaron a cuenta }
         cierre: { type: array, items: { $ref: "#/components/schemas/CajaRenglonDelCierre" } }
+        fondo: { type: number, format: double }
+        ventas: { type: number, format: double, description: Ventas en efectivo hasta el arqueo }
+        otrosIngresos: { type: number, format: double }
+        retiros: { type: number, format: double, description: En negativo }
+        devoluciones: { type: number, format: double, description: En negativo }
+        gastos: { type: number, format: double, description: En negativo }
+        puesto: { type: string, nullable: true, description: La caja física desde la que se abrió }
+    CajaFueraDeCaja:
+      type: object
+      required: [tipo, id, detalle, sucursal, monto, fecha]
+      properties:
+        tipo: { type: string, enum: [recibo, gasto, pago] }
+        id: { type: string }
+        detalle: { type: string }
+        sucursal: { type: string, nullable: true }
+        monto: { type: number, format: double, description: "con signo: el recibo entra, el gasto sale" }
+        fecha: { type: string, format: date-time }
     CajaFisica:
       type: object
-      required: [id, codigo, nombre, branchId, sucursal, activo, ultimaVezAt, pendientes]
+      required: [id, codigo, nombre, branchId, sucursal, activo, ultimaVezAt, pendientes, ultimoTurnoAt]
       properties:
         id: { type: string }
         codigo: { type: string }
@@ -225,6 +254,7 @@ components:
         activo: { type: boolean }
         ultimaVezAt: { type: string, format: date-time, nullable: true }
         pendientes: { type: integer }
+        ultimoTurnoAt: { type: string, format: date-time, nullable: true, description: El último turno que se abrió desde esta caja }
     CajaVentaSuelta:
       type: object
       required: [id, numero, numeroProvisorio, branchId, sucursal, cliente, total, efectivo, cobradaAt, createdAt]

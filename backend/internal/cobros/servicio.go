@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,11 +15,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -28,11 +32,19 @@ type Servicio struct {
 	pool *pgxpool.Pool
 	q    *sqlc.Queries
 	log  *slog.Logger
+	aut  *autorizacion.Servicio
 }
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, q: sqlc.New(pool), log: log}
+	return &Servicio{pool: pool, q: sqlc.New(pool), log: log, aut: autorizacion.Nuevo(pool, log, "")}
+}
+
+// ConAutorizacion le da el servicio del PIN compartido con el mostrador (la
+// clave de las fichas y el aviso al tercer error).
+func (s *Servicio) ConAutorizacion(a *autorizacion.Servicio) *Servicio {
+	s.aut = a
+	return s
 }
 
 // Los avisos al cliente (correo y WhatsApp con el PDF) los atiende el worker
@@ -80,6 +92,17 @@ type ResultadoDeCobro struct {
 // `clave` la genera la pantalla al abrir el diálogo: un reintento devuelve
 // el mismo recibo (EmitirRecibo) y no vuelve a avisar ni a marcar el pedido.
 func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave string) (ResultadoDeCobro, error) {
+	return s.CobrarAClienteEn(ctx, ses, cliente, pedido, concepto, partesCrudas, clave, "")
+}
+
+// CobrarAClienteEn es CobrarACliente diciendo en qué sucursal entra el
+// efectivo (vacía: la del pedido, o la única caja abierta).
+//
+// Sin caja abierta, el efectivo no se cobra (mes simulado, H132): antes el
+// recibo salía igual y recién después avisaba que el efectivo «no entró al
+// arqueo», así que la plata quedaba en el recibo y en ningún cajón. Ahora
+// pide abrir la caja antes, como el cobro desde el pedido.
+func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave, sucursal string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(cliente) || (pedido != "" && !plataforma.UUIDValido(pedido)) || plataforma.LargoJS(strings.TrimSpace(concepto)) > 200 {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"customerId": "Falta el cliente."})
 	}
@@ -106,6 +129,30 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			p = &fila
 		}
 		c := Cobro{CustomerID: &cliente, Origen: "panel", Partes: partes, Caja: &Caja{Buscar: true}, UsuarioID: &ses.UserID, Clave: clave}
+		if hayEfectivo(partes) {
+			var donde *string
+			if p != nil && p.BranchID != nil {
+				donde = p.BranchID
+			} else if plataforma.UUIDValido(sucursal) {
+				donde = &sucursal
+			}
+			yaEsta := false
+			if clave != "" {
+				if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM receipts WHERE clave = $1)`, clave).Scan(&yaEsta); err != nil {
+					return err
+				}
+			}
+			if !yaEsta {
+				turno, err := turnoDelPedido(ctx, q, donde)
+				if err != nil {
+					return err
+				}
+				if turno == "" {
+					return sinCaja(ctx, tx, donde)
+				}
+				c.Caja = &Caja{TurnoID: turno}
+			}
+		}
 		texto := "Pago a cuenta"
 		if t := strings.TrimSpace(concepto); t != "" {
 			texto = t
@@ -117,9 +164,7 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			c.OrderID = &p.ID
 			// La deuda de un pedido de contado no está en la cuenta: el pago
 			// tampoco (ver Cobro.FueraDeLaCuenta).
-			if err := tx.QueryRow(ctx, `SELECT o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
-				AND NOT EXISTS (SELECT 1 FROM account_movements am
-				                WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.DeudaFueraDeLaCuenta+`
 				FROM orders o WHERE o.id = $1`, p.ID).Scan(&c.FueraDeLaCuenta); err != nil {
 				return err
 			}
@@ -137,7 +182,7 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 		// recibo contra el total empujaba a cobrar otra vez la seña.
 		if p != nil {
 			var pagado bool
-			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarDelPedido+` FROM orders o WHERE o.id = $1`, p.ID).
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, p.ID).
 				Scan(&pagado); err != nil {
 				return err
 			}
@@ -156,7 +201,14 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	if r.Repetido {
 		return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", ReceiptID: &r.ReceiptID}, nil
 	}
-	desc := "Emitió el recibo " + r.Numero + " por " + jsmath.Fijo2(r.Total)
+	// El monto con el formato del resto y el cliente: «Emitió el recibo
+	// REC-0035 por 2116200.00» no decía de quién (simulación del mes, H381).
+	var nombre string
+	_ = s.pool.QueryRow(ctx, `SELECT coalesce(razon_social, nombre) FROM customers WHERE id = $1`, cliente).Scan(&nombre)
+	desc := "Emitió el recibo " + r.Numero + " por " + formato.Importe(r.Total)
+	if nombre != "" {
+		desc += " a " + nombre
+	}
 	if numeroPedido != "" {
 		desc += " (pedido " + numeroPedido + ")"
 	}
@@ -185,6 +237,53 @@ func cobradoPorMercadoPago(ctx context.Context, tx pgx.Tx, recibo string) (bool,
 // Anular es anularReciboDesdeElPanel: los roles que manejan plata, salvo el
 // recibo de un cobro de Mercado Pago (cobradoPorMercadoPago).
 func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, recibo, motivo string) (string, error) {
+	return s.AnularConPIN(ctx, ses, recibo, motivo, "")
+}
+
+// AnularConPIN es Anular con la firma de un admin (mes simulado, H278): la
+// vendedora anulaba un recibo de $1.880.100 con el motivo solo, mientras que
+// anular una venta pide el PIN. Ahora pide lo mismo que anular una venta: el
+// admin firma solo; el resto, con el PIN de un admin.
+func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, motivo, pin string) (string, error) {
+	if strings.TrimSpace(motivo) == "" {
+		return "", plataforma.Invalido(map[string]string{"motivo": "Poné el motivo de la anulación."})
+	}
+	// El cobro de Mercado Pago no se anula desde el panel, ni con PIN: se dice
+	// eso antes de pedir el PIN de algo que igual no se puede.
+	var porMP bool
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) (err error) {
+		porMP, err = cobradoPorMercadoPago(ctx, tx, recibo)
+		return err
+	}); err != nil {
+		return "", err
+	}
+	if porMP {
+		return "", comoProblema(errCobro("Este cobro entró por Mercado Pago: devolvelo desde Mercado Pago y el recibo se anula solo cuando llega el aviso."))
+	}
+	if !ses.Tiene(sqlc.StaffRoleAdmin) {
+		var total float64
+		err := s.pool.QueryRow(ctx, `SELECT total::float8 FROM receipts WHERE id::text = $1`, recibo).Scan(&total)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", plataforma.NuevoProblema(404, "No se encontró el recibo.")
+		}
+		if err != nil {
+			return "", err
+		}
+		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: total, Clave: recibo, PIN: pin}); err != nil {
+			var falta *autorizacion.Falta
+			if errors.As(err, &falta) {
+				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto)}
+				if falta.PinIncorrecto {
+					e["pinIncorrecto"] = "si"
+				}
+				if falta.BloqueadoHasta != nil {
+					e["pinHasta"] = falta.BloqueadoHasta.UTC().Format(time.RFC3339)
+				}
+				return "", plataforma.Invalido(e)
+			}
+			return "", err
+		}
+	}
 	limpio := strings.TrimSpace(motivo)
 	if r := []rune(limpio); len(r) > 300 {
 		limpio = string(r[:300])
@@ -280,7 +379,7 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 		return mal("importe", "El importe tiene que ser mayor a cero.")
 	}
 	if f.Tipo == "echeq" && f.Circuito == "negro" {
-		return mal("circuito", "Un e-Cheq no puede ir por el circuito B: queda registrado en el banco a nombre de la empresa.")
+		return mal("circuito", "Un e-Cheq no puede ir por el "+reglas.Circuito(ctx, s.pool)+": queda registrado en el banco a nombre de la empresa.")
 	}
 	fecha, ok := LeerFechaDeCheque(f.FechaPago)
 	if !ok {
@@ -311,7 +410,7 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 		return err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "cheque", "",
-		"Cheque "+f.Sentido+" "+numero+" por $"+jsmath.Fijo2(importe)+", al "+fechaCorta(fecha), nil)
+		"Cheque "+f.Sentido+" "+numero+" por "+formato.Importe(importe)+", al "+fechaCorta(fecha), nil)
 	return nil
 }
 
@@ -338,9 +437,65 @@ func reabrirDeudaConElProveedor(ctx context.Context, tx pgx.Tx, cheque sqlc.Cheq
 	if motivo != "" {
 		detalle += ": " + motivo
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id)
-		VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5)`, proveedor, jsmath.Fijo2(float64(cheque.Importe)), cheque.Numero, detalle, usuario)
+	// Atado al cheque: es la deuda que Pagos ofrece reponer (mes simulado,
+	// H293: los $400.000 subían la cuenta y no había dónde pagarlos).
+	_, err = tx.Exec(ctx, `INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, cheque_id)
+		VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5, $6)`, proveedor, jsmath.Fijo2(float64(cheque.Importe)), cheque.Numero, detalle, usuario, cheque.ID)
 	return err
+}
+
+// RechazablesDesdeLaFicha son los estados de un cheque recibido que el banco
+// puede devolver: en la cartera (se depositó en otro lado o lo avisó el
+// banco), depositado o endosado a un proveedor.
+var RechazablesDesdeLaFicha = []Estado{"cartera", "depositado", "entregado"}
+
+// RechazarConPIN registra que el banco rechazó un cheque de un cliente,
+// desde su ficha (H272): quien no es admin, con el PIN de uno (motivo
+// cheque, por el importe), porque vuelve la deuda. Después es el mismo
+// CambiarEstado de /admin/cheques: la nota de débito, el aviso al cliente y,
+// si estaba endosado, la deuda con el proveedor.
+func (s *Servicio) RechazarConPIN(ctx context.Context, ses *auth.Sesion, id, motivo, pin string) (ResultadoDeCobro, error) {
+	if strings.TrimSpace(motivo) == "" {
+		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"motivo": "Poné el motivo del rechazo: lo lee el cliente."})
+	}
+	var estado, sentido string
+	var importe float64
+	err := s.pool.QueryRow(ctx, `SELECT estado::text, sentido::text, importe::float8 FROM cheques WHERE id::text = $1`, id).Scan(&estado, &sentido, &importe)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ResultadoDeCobro{}, plataforma.NuevoProblema(404, "Ese cheque no está.")
+	}
+	if err != nil {
+		return ResultadoDeCobro{}, err
+	}
+	if sentido != "recibido" {
+		return ResultadoDeCobro{}, comoProblema(errCobro("Ese cheque no es de un cliente."))
+	}
+	if !slices.Contains(RechazablesDesdeLaFicha, Estado(estado)) {
+		return ResultadoDeCobro{}, comoProblema(errCobro("Un cheque " + strings.ToLower(ParaElCliente[Estado(estado)]) + " no se puede rechazar."))
+	}
+	if !ses.Tiene(sqlc.StaffRoleAdmin) {
+		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Cheque, Monto: importe, Clave: id, PIN: pin}); err != nil {
+			var falta *autorizacion.Falta
+			if errors.As(err, &falta) {
+				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto)}
+				if falta.PinIncorrecto {
+					e["pinIncorrecto"] = "si"
+				}
+				if falta.ConClave {
+					e["pinConClave"] = "si"
+				}
+				if falta.SinAdmins && !falta.ConClave {
+					e["pinSinAdmins"] = "si"
+				}
+				if falta.BloqueadoHasta != nil {
+					e["pinHasta"] = falta.BloqueadoHasta.UTC().Format(time.RFC3339)
+				}
+				return ResultadoDeCobro{}, plataforma.Invalido(e)
+			}
+			return ResultadoDeCobro{}, err
+		}
+	}
+	return s.CambiarEstado(ctx, ses, id, "rechazado", motivo)
 }
 
 // CambiarEstado es cambiarEstadoDeCheque: aceptar uno informado emite el
@@ -412,6 +567,14 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 			if err == nil && estado != "cancelado" {
 				return errCobro("Este cheque pagó la venta " + numero + " del mostrador: anulá la venta " + numero +
 					" desde el mostrador, que devuelve la plata o la deuda y anula el cheque.")
+			}
+		}
+		// Un diferido no se deposita antes de su fecha: el banco lo rechaza
+		// (mes simulado, H405: el 55500901 del 20/12 se depositó y acreditó
+		// el 26/11 con dos clics).
+		if hacia == "depositado" {
+			if m := RevisarDeposito(cheque.FechaPago, time.Now()); m != "" {
+				return errCobro(m)
 			}
 		}
 		efecto := "nada"

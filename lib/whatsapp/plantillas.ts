@@ -323,3 +323,34 @@ export function nombreLegible(nombre: string): string {
   const texto = nombre.replace(/_/g, " ").trim();
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
+
+/*
+ * Meta no deja tildes en el nombre de una plantilla, y en pantalla
+ * «Retomar conversacion» se lee como una falta (mes simulado). Las palabras
+ * que aparecen en los nombres van con su tilde. `nombreLegible` queda igual
+ * porque Go la espeja en las pruebas doradas.
+ */
+const CON_TILDE: Record<string, string> = {
+  conversacion: "conversación",
+  verificacion: "verificación",
+  codigo: "código",
+  promocion: "promoción",
+  informacion: "información",
+  envio: "envío",
+  credito: "crédito",
+  debito: "débito",
+  devolucion: "devolución",
+  cotizacion: "cotización",
+  facturacion: "facturación",
+  ultimo: "último",
+  dia: "día",
+  rapido: "rápido",
+};
+
+export function nombreParaMostrar(nombre: string): string {
+  return nombreLegible(nombre).replace(/\p{L}+/gu, (palabra) => {
+    const tilde = CON_TILDE[palabra.toLowerCase()];
+    if (!tilde) return palabra;
+    return palabra[0] === palabra[0].toUpperCase() ? tilde[0].toUpperCase() + tilde.slice(1) : tilde;
+  });
+}

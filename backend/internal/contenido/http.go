@@ -103,6 +103,14 @@ func (o respuesta) VisitEventoPorSlugResponse(w http.ResponseWriter) error     {
 func (o respuesta) VisitEventoVisibleResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitSitemapResponse(w http.ResponseWriter) error           { return o.escribir(w) }
 func (o respuesta) VisitEnviarConsultaResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitEstadoDelContactoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// EstadoDelContacto dice si la consulta sale por correo de verdad (H211):
+// sin eso, la página dejaba escribir todo y recién al enviar avisaba que no
+// iba a llegar.
+func (a *API) EstadoDelContacto(context.Context, contenidoapi.EstadoDelContactoRequestObject) (contenidoapi.EstadoDelContactoResponseObject, error) {
+	return ok(map[string]bool{"correo": a.envio != nil && a.envio.Real() && a.contacto.Casilla != ""}), nil
+}
 func (o respuesta) VisitResenasDelNegocioResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitResumenDelNegocioResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAdminResenasDelNegocioResponse(w http.ResponseWriter) error {
@@ -198,7 +206,7 @@ func (a *API) AdminAjustes(ctx context.Context, _ contenidoapi.AdminAjustesReque
 	// del sitio para escribir a mano.
 	v := todos[:0]
 	for _, f := range todos {
-		if _, esRegla := reglas[f.Clave]; !esRegla && !numericos[f.Clave] {
+		if !EsRegla(f.Clave) && !numericos[f.Clave] {
 			v = append(v, f)
 		}
 	}
@@ -210,8 +218,19 @@ func (a *API) GuardarAjuste(ctx context.Context, r contenidoapi.GuardarAjusteReq
 	if err != nil {
 		return nil, err
 	}
+	var antes string
+	regla := EsRegla(r.Clave)
+	if regla {
+		_ = a.s.pool.QueryRow(ctx, `SELECT valor FROM site_settings WHERE clave = $1`, r.Clave).Scan(&antes)
+	}
 	if err := a.s.GuardarAjuste(ctx, r.Clave, r.Body.Valor); err != nil {
 		return nil, err
+	}
+	// Una regla del negocio cambia cómo se calcula la plata: queda anotado
+	// quién la cambió, de qué a qué.
+	if regla && antes != r.Body.Valor {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "regla", r.Clave,
+			"Regla «"+r.Clave+"»: "+antes+" → "+r.Body.Valor, map[string]string{"antes": antes, "despues": r.Body.Valor})
 	}
 	// Prender o apagar la tienda cambia qué ve todo el mundo: queda anotado.
 	if desc, ok := interruptores[r.Clave]; ok {

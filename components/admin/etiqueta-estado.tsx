@@ -70,6 +70,8 @@ const ESTADOS: Record<string, Estilo> = {
   // no existe. Solo la usan los comprobantes.
   emitida: { etiqueta: "Sin autorizar", familia: "espera", abierto: true },
   autorizada: { etiqueta: "Autorizada", familia: "ok", abierto: false },
+  // El traslado entre sucursales, ya en el destino.
+  recibido: { etiqueta: "Recibido", familia: "ok", abierto: false },
   anulada: { etiqueta: "Anulada", familia: "cerrado", abierto: false },
   rechazada: { etiqueta: "Rechazada por ARCA", familia: "problema", abierto: true },
   borrador: { etiqueta: "Borrador", familia: "espera", abierto: true },

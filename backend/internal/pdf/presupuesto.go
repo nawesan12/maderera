@@ -144,7 +144,7 @@ func Presupuesto(d DatosPresupuesto, _ time.Time) ([]byte, error) {
 		{"Cód. cliente", o(p.ClienteCodigo, "—")},
 		{"Vendedor", o(p.Vendedor, o(p.Asesor, "—"))},
 		{"Domicilio", o(p.ClienteDireccion, "—")},
-		{"CUIT", o(p.ClienteCuit, "—")},
+		{"CUIT", Cuit(p.ClienteCuit)},
 		{"IVA", iva},
 	}, cursor, 3)
 

@@ -83,6 +83,7 @@ export async function fichaDeFacturaDeCompra(id: string) {
     createdAt: new Date(f.createdAt),
     anuladaAt: f.anuladaAt ? new Date(f.anuladaAt) : null,
     pagos: f.pagos.map((p) => ({ ...p, fecha: new Date(p.fecha) })),
+    creditos: f.creditos.map((c) => ({ ...c, fecha: new Date(c.fecha) })),
   };
 }
 

@@ -12,13 +12,16 @@ import type { CorteListado } from "@/lib/cortes/tipos";
 
 export type { CorteListado };
 
-export async function listarCortes(filtros: { busqueda?: string; estado?: string } = {}): Promise<CorteListado[]> {
+export async function listarCortes(
+  filtros: { busqueda?: string; estado?: string; sucursal?: string } = {},
+): Promise<CorteListado[]> {
   const query = {
     ...(filtros.busqueda ? { busqueda: filtros.busqueda.slice(0, 200) } : {}),
     ...(filtros.estado ? { estado: filtros.estado.slice(0, 40) } : {}),
+    ...(filtros.sucursal ? { sucursal: filtros.sucursal.slice(0, 40) } : {}),
   };
   const filas = datos(await (await api()).GET("/api/v1/admin/cortes", { params: { query } }));
-  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
+  return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt), salioAt: f.salioAt ? new Date(f.salioAt) : null }));
 }
 
 type CorteDeGo = Esquemas["Corte"];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { queSeHaceConLaPlaca, type QuienSeQueda } from "@/lib/cortes/de-quien";
 import { RotateCcw, RotateCw } from "lucide-react";
 import type {
   PiezaColocada,
@@ -67,7 +68,9 @@ export function PlanoEditable({
   fijadas,
   onFijadas,
   sencillo = false,
+  sinPasadas = false,
   girable = () => true,
+  quien = {},
 }: {
   plano: PlanoDeCorte;
   fijadas: PiezaFijada[];
@@ -78,8 +81,20 @@ export function PlanoEditable({
    * mostrador hay un cliente mirando la pantalla (T4, hallazgo 44).
    */
   sencillo?: boolean;
+  /**
+   * Sin las pasadas de cada placa: en la ficha la cifra de arriba es la que
+   * se cobra, y «4 pasadas» en el dibujo al lado de «3 pasadas a cobrar» se
+   * leía como un error (mes simulado, H052).
+   */
+  sinPasadas?: boolean;
   /** Si la pieza (por su índice en el despiece) se puede girar: con veta, no. */
   girable?: (indice: number) => boolean;
+  /**
+   * Cómo se rotula cada placa: la media no se vende «entera», la reposición
+   * no «se cobra», y las del pedido que vende todas las placas son del
+   * cliente (mes simulado, H184 e ítem 10).
+   */
+  quien?: QuienSeQueda & { todasDelCliente?: boolean };
 }) {
   const [agarrada, setAgarrada] = useState<PiezaColocada | null>(null);
   const [encima, setEncima] = useState<number | null>(null);
@@ -218,14 +233,18 @@ export function PlanoEditable({
           >
             <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="text-base font-medium">
-                Placa {placa.numero}
+                {quien.media ? "Media" : "Placa"} {placa.numero}
               </span>
+              {/* La placa que vende el pedido es una placa vendida entera:
+                  el mismo sello, con el corte sin cargo (H184). */}
               <span
                 className={`inline-flex items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)] ${
-                  placa.seVendeEntera ? "estado-marca" : "estado-ok"
+                  (placa.seVendeEntera || quien.todasDelCliente) && !quien.sinCargo ? "estado-marca" : "estado-ok"
                 }`}
               >
-                {placa.seVendeEntera ? "Se vende entera" : "Se cobra el corte"}
+                {(placa.seVendeEntera || quien.todasDelCliente) && !quien.sinCargo
+                  ? `${queSeHaceConLaPlaca(true, quien)} · corte sin cargo`
+                  : queSeHaceConLaPlaca(placa.seVendeEntera, quien)}
               </span>
               <span className="tabular w-full text-sm text-muted-foreground">
                 {sencillo ? (
@@ -233,9 +252,12 @@ export function PlanoEditable({
                 ) : (
                   <>
                     {Math.round(placa.aprovechado * 100)}% · {placa.piezas.length}{" "}
-                    {placa.piezas.length === 1 ? "pieza" : "piezas"} ·{" "}
-                    {placa.cortes.length}{" "}
-                    {placa.cortes.length === 1 ? "pasada" : "pasadas"}
+                    {placa.piezas.length === 1 ? "pieza" : "piezas"}
+                    {!sinPasadas && (
+                      <>
+                        {" "}· {placa.cortes.length} {placa.cortes.length === 1 ? "pasada" : "pasadas"}
+                      </>
+                    )}
                   </>
                 )}
               </span>
@@ -332,10 +354,13 @@ function Dibujo({
 
       {placa.piezas.map((p, i) => {
         const medida = `${p.ancho}×${p.alto}`;
+        // Angosta y alta, la medida va parada: acostada corría de una pieza a
+        // la otra («350×900350×900», H194). Un dígito ocupa ~0,6 del cuerpo.
+        const parada = p.alto > p.ancho * 1.4;
         const cuerpo = Math.min(
           92,
-          p.alto * 0.38,
-          (p.ancho * 1.7) / medida.length,
+          parada ? p.ancho * 0.55 : p.alto * 0.38,
+          ((parada ? p.alto : p.ancho) * 0.85) / (medida.length * 0.6),
         );
         const aMano = movidas.has(claveDe(p));
 
@@ -395,6 +420,7 @@ function Dibujo({
                 fill="currentColor"
                 opacity={0.75}
                 pointerEvents="none"
+                transform={parada ? `rotate(-90 ${p.x + p.ancho / 2} ${p.y + p.alto / 2})` : undefined}
               >
                 {medida}
               </text>

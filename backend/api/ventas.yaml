@@ -162,8 +162,114 @@ paths:
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/devolucion:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: DevolverPedido
+      summary: >-
+        La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve
+        al stock queda atado a ella. Con factura, se devuelve desde la factura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [renglones, motivo, clave]
+              additionalProperties: false
+              properties:
+                renglones:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [orderItemId, cantidad]
+                    additionalProperties: false
+                    properties:
+                      orderItemId: { type: string, maxLength: 64 }
+                      cantidad: { type: number, format: double }
+                motivo: { type: string, maxLength: 300 }
+                clave: { type: string, maxLength: 80, description: "la del intento: un reintento devuelve la misma devolución" }
+      responses:
+        "200":
+          description: La devolución
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, id, importe]
+                properties:
+                  ok: { type: string }
+                  id: { type: string }
+                  importe: { type: number, format: double }
+                  repetida: { type: boolean }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/correccion:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      operationId: CorregirPedido
+      summary: >-
+        Corrige los renglones y el flete de un pedido sin factura ni cobro; un precio bajo la lista pasado lo
+        libre pide el PIN de un admin (422 en `pin`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [renglones, motivo]
+              additionalProperties: false
+              properties:
+                renglones:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [orderItemId, cantidad, precioUnitario]
+                    additionalProperties: false
+                    properties:
+                      orderItemId: { type: string, maxLength: 64 }
+                      cantidad: { type: number, format: double }
+                      precioUnitario: { type: number, format: double }
+                costoEnvio: { type: number, format: double }
+                motivo: { type: string, maxLength: 300 }
+                pin: { type: string, maxLength: 12 }
+                ficha: { type: string, maxLength: 400 }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/cobro:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: CajaDelCobro
+      summary: Si el efectivo del pedido tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro)
+      responses:
+        "200":
+          description: Vacío si hay caja
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sinCaja: { type: string, description: la sucursal cuya caja hay que abrir }
+                  fondoBase: { type: number, format: double }
+                  sucursales:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, nombre, abierta, fondo]
+                      properties:
+                        id: { type: string }
+                        nombre: { type: string }
+                        abierta: { type: boolean }
+                        fondo: { type: number, format: double }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
     post:
       operationId: CobrarPedido
       summary: Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal
@@ -244,6 +350,29 @@ paths:
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/presupuestos/{id}:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    put:
+      operationId: EditarPresupuesto
+      description: |
+        Corrige los renglones y los datos de un presupuesto que todavía no se
+        mandó (pendiente o en revisión) ni tiene pedido: el mismo cuerpo que
+        el alta, sin `convertir`. Mantiene el número.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cabecera, lineas]
+              additionalProperties: false
+              properties:
+                cabecera: { type: object, additionalProperties: true }
+                lineas: { type: array, maxItems: 500, items: {} }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
     get:
       operationId: FichaDePresupuesto
       responses:
@@ -290,6 +419,7 @@ paths:
               additionalProperties: false
               properties:
                 estado: { type: string }
+                motivo: { type: string, maxLength: 60, description: "al rechazar, por qué se perdió (Precio, Se lo llevó otro, No contestó, Ya no lo necesita, Otro)" }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -313,10 +443,12 @@ paths:
                 direccion: { type: string, maxLength: 300 }
                 zona: { type: string, maxLength: 120 }
                 costoEnvio: { type: number, format: double, minimum: 0 }
+                sinCargo: { type: boolean, description: "el envío va sin flete; un envío sin flete ni sinCargo no sale" }
                 medioPago: { $ref: "#/components/schemas/MedioPago" }
+                aCuenta: { type: number, format: double, minimum: 0, description: "la parte a cuenta corriente de un pedido partido (H047); el resto se paga con medioPago" }
                 entregarEl: { type: string, description: AAAA-MM-DD }
                 precios: { type: string, enum: [actualizar, respetar], description: "para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)" }
-                pin: { type: string, maxLength: 20 }
+                pin: { type: string, maxLength: 128, description: "el PIN de un admin, o su contraseña si ninguno cargó PIN" }
                 ficha: { type: string, maxLength: 400 }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
@@ -416,6 +548,8 @@ components:
         subtotal: { type: string }
         orden: { type: integer }
         alicuotaIva: { type: string, nullable: true }
+        bajoCosto: { type: boolean, description: el precio no cubre el costo }
+        piso: { type: number, format: double, nullable: true, description: "el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación" }
     FichaParaUnir:
       type: object
       description: >-
@@ -433,6 +567,7 @@ components:
         pedidoId, numeroPedido, vencido, totalDeHoy]
       properties:
         vencido: { type: boolean, description: "pasó su validez: para pasarlo a pedido hay que elegir los precios" }
+        motivoRechazo: { type: string, nullable: true, description: "por qué se perdió" }
         totalDeHoy: { type: string, nullable: true, description: "el total con los precios de lista de hoy, si venció" }
         fichaPorCorreo:
           nullable: true
@@ -466,8 +601,19 @@ components:
     PedidoListado:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
-        total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt]
+        total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt, entregarEl, porEntregar, cortesSinTerminar,
+        comprobante, facturado, acopio]
       properties:
+        aCuenta: { type: number, format: double, nullable: true, description: "lo que un pedido partido cargó a la cuenta corriente (H047)" }
+        acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
+        entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }
+        porEntregar:
+          type: array
+          description: Lo que falta de un pedido que ya salió en parte; vacío si no salió nada
+          items: { $ref: "#/components/schemas/PorEntregar" }
+        cortesSinTerminar: { type: array, items: { type: string }, description: Los cortes del pedido en cola o en la máquina }
+        comprobante: { type: string, nullable: true, enum: [interno, fiscal, null], description: Con qué salió la venta del mostrador }
+        facturado: { type: boolean, description: Tiene una factura viva }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
@@ -487,6 +633,24 @@ components:
         sinCobrar: { $ref: "#/components/schemas/SinCobrar" }
         pagoEnRevision: { type: boolean, description: Una transferencia informada que nadie verificó todavía }
         entregadoAt: { type: string, format: date-time, nullable: true, description: El último paso a entregado del historial }
+    PorEntregar:
+      type: object
+      required: [descripcion, unidad, pendiente]
+      properties:
+        descripcion: { type: string }
+        unidad: { type: string }
+        pendiente: { type: number, format: double }
+    ReciboDelPedido:
+      type: object
+      required: [id, numero, total, estado, medios, quien, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        total: { type: number, format: double }
+        estado: { type: string }
+        medios: { type: string, description: Los medios del recibo separados por coma }
+        quien: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
     SinCobrar:
       type: number
       format: double
@@ -564,19 +728,30 @@ components:
           type: array
           items:
             type: object
-            required: [variantId, descripcion, unidad, cantidad, presentacion]
+            required: [variantId, descripcion, unidad, cantidad, presentacion, largoMm, anchoMm, color]
             properties:
               variantId: { type: string, nullable: true }
               descripcion: { type: string }
               unidad: { type: string }
               cantidad: { type: string }
               presentacion: { type: string, nullable: true }
+              largoMm: { type: integer, nullable: true, description: La medida de la placa, si es una }
+              anchoMm: { type: integer, nullable: true }
+              color: { type: string, nullable: true }
     FichaDePedido:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
-        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar]
+        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar,
+        cobrado, aCobrar, recibos, comprobante, acopio, facturado]
       properties:
+        facturado: { type: boolean, description: Tiene una factura viva }
+        acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
+        cobrado: { type: number, format: double, description: Lo cobrado con recibos y en línea }
+        aCobrar: { type: number, format: double, description: El total menos lo devuelto contra la deuda }
+        aCuenta: { type: number, format: double, nullable: true, description: "lo que un pedido partido cargó a la cuenta corriente (H047)" }
+        recibos: { type: array, items: { $ref: "#/components/schemas/ReciboDelPedido" } }
+        comprobante: { type: string, nullable: true, enum: [interno, fiscal, null] }
         id: { type: string }
         numero: { type: string }
         numeroProvisorio: { type: string, nullable: true }

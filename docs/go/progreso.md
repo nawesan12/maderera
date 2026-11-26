@@ -2933,3 +2933,343 @@ misma consulta al contador.
   devoluciones le dejaron sin tramo. Prueba:
   `TestLaDevolucionPorAfueraVaPrimeroAMercadoPago` (MP $600 + transferencia
   $400; devolver $300 y $800, Deudores en 0 y Banco en 900).
+
+## Mes simulado: mostrador, caja y ticket (26/11, rama `mes-mostrador-caja`)
+
+Lo que encontró el mes simulado en producción en `/mostrador`, `/admin/caja`
+y el ticket. Migración **00210** (`cash_sessions.pos_device_id`, el puesto del
+turno; el espejo drizzle al día a mano). Golden del mostrador regenerado
+(`aplicarDescuento` al centavo, igual en TS y en Go).
+
+- **Firma sin PIN cargado** (`autorizacion`): Go dice de entrada quién puede
+  firmar (`sinAdmins`, `conClave`); mientras ningún admin cargó su PIN, firma
+  la contraseña del panel de un admin, con los mismos topes y el aviso
+  («usó la contraseña de…»). Cargado un PIN, la contraseña deja de servir.
+  `TestSinPINFirmaLaClave`. El campo largo es de 128 en el contrato.
+- **Caja**: abre con lo contado al cerrar el anterior (`caja.UltimoContado`);
+  otro fondo pide el motivo y queda como retiro o ingreso «Entre turnos».
+  `TurnoAbierto` y `TurnoCerrado` traen devoluciones y gastos (los recuadros
+  suman el esperado); el cierre Z suma los recibos de cuenta del mostrador
+  (`Cobranza`); `EfectivoFueraDeCaja` lista recibos y gastos en efectivo sin
+  turno (el recibo se reconoce por el motivo «Recibo REC-… —»). Montos con
+  `formato.Importe` / `formatearImporte` (centavos solo si hay, nunca «-$ 0»).
+  `TestElTurnoArrancaConLoContado`, `TestLaCajaDelMesSimulado`.
+- **Venta**: bajo el costo pide firma (`autorizacion.Costo`); la escala por
+  forma de pago no toca los renglones a mano (`EsElegibleParaLaEscala`);
+  `sinEscala` (pago partido en medios distintos) y `aLista` (el cliente con
+  lista propia compra a la general). La regla de contado de la lista vale si
+  la lista le da algo mejor en esa venta (`listaConVentaja`).
+  `TestCobrosDelMesSimulado`, `TestListaDelClienteYCheque`, `TestDescuentoAlCentavo`.
+- **Buscador**: los números tipeados enteros ordenan primero
+  (`numerosSueltos`, y `buscarVariantes` en la copia local); stock disponible
+  (físico − reservado) en línea y en la copia. `TestBuscarDelMesSimulado`.
+- **Cortes**: `Cobro.Parciales` (placas que no pasan la mitad; el mostrador
+  dice «Material sin cargo»); retirar uno sin cobrar pide `sinCobrar`; el
+  mostrador cobra un corte de la cola (`cortes[].existente`, `/mostrador?corte=`).
+  `TestCobrarUnCorteDeLaCola`.
+- **Devolución parcial desde el mostrador**: `/api/v1/mostrador/ventas/{id}/devolucion`
+  (+ `/calculo`), la misma `facturacion.DevolucionParcial` con la instancia
+  compartida (`ConFacturacion`), y el PIN para el vendedor.
+  `TestDevolucionDesdeElMostrador`.
+- Anular devuelve los renglones (`renglones`) para «Rehacer» y avisa a los
+  admins de la factura que queda viva (`avisado`).
+
+### Decisiones a confirmar
+
+- [ ] **Firma con la contraseña** mientras no haya PIN (default prudente:
+      solo hasta que un admin cargue el suyo).
+- [ ] **El corte por debajo de la mitad** sigue sin cobrar material (la regla
+      de la media placa y A2); ahora se dice «Material sin cargo». Si se
+      quiere cobrar media placa, es otra regla en `revisarCobroDelCorte`.
+- [ ] **Lote y cupón** obligatorios para cobrar con tarjeta en línea.
+- [ ] **La regla de contado** de una lista propia, solo cuando le da un precio
+      mejor en la venta.
+- [ ] **Descuento por forma de pago** sin los renglones a mano (el flete).
+## El mes simulado: facturación, cierre y reportes (26/11, rama `mes-facturacion-cierre`)
+
+Lo que encontró el mes simulado en producción, arreglado en Go con su
+prueba. Migraciones 00220 y 00221.
+
+- **Sin certificado no hay rechazo.** El proveedor interno deja el
+  comprobante «emitida» (antes «rechazada»); la 00220 devuelve los de antes.
+- **El saldo de una factura sale del pedido** (`facturacion.SaldoDeFactura`,
+  la regla de «Me deben»): lo cobrado en el mostrador o con un recibo del
+  pedido no se vuelve a cobrar (Cobrar lo frena); lo que va a cuenta
+  corriente debe hasta el saldo de la cuenta. El encabezado de Facturación
+  suma y cuenta el mismo conjunto y el IVA de la tarjeta es el débito con CAE.
+- **La baja llena el hueco con el último de la serie**: ya no corre a todos
+  los de detrás (le cambiaba el número a comprobantes que el cliente tenía).
+- **Al monotributista, factura A** (RG 5003/2021, leyenda de la Ley 27.618).
+  Falta que lo confirme el contador.
+- **La factura sin CAE se devuelve**: la nota sale numerada, atada a ella, y
+  `autorizar` no la manda antes que la factura.
+- **Cerrar el mes** (00221): `meses_cerrados` y triggers en gastos, compras,
+  recibos, pagos y la baja de facturas; el error (MJ001) sale como 422.
+- Cierre: «sin CAE» aparte de «sin factura», los cobros de facturas sin CAE
+  no son señas, el saldo técnico a favor con su signo, las percepciones de
+  IIBB, los gastos repetidos, el depósito de la caja en el banco, Deudores
+  con la columna de facturas sin CAE y Cuentas a pagar contra el libro de
+  cada proveedor. Reportes por medida, con el envío (que suma al resultado
+  sin IVA). El precio bajo el costo se marca en el inicio y en Precios.
+- Quedan para Nahuel y el contador: el excedente de un recibo y el cobro de
+  una venta que se factura después siguen la regla del reparto
+  (`docs/CONTADOR-SIN-CAE.md`: se fija al emitir y lo que sobra va al B).
+- **La venta cuenta al entregarse o al facturarse** (lo primero), no al
+  confirmarse el pedido (H162, default prudente a confirmar con el
+  contador): `orders.vendido_at` (00275) lo ponen dos triggers, el paso a
+  «entregado» y la primera factura; `hechosDeVenta` filtra por esa fecha,
+  con índice. `TestLaVentaCuentaAlEntregarseOFacturarse`.
+## Mes simulado: la cola de corte y el taller (rama `mes-cortes-taller`)
+
+- **El plano se cuenta como la hoja** (`cortes.MotorPasadasDeLaHoja`, 4):
+  las pasadas que se cobran, las del plano y los retales salen de los mismos
+  árboles guillotina que la hoja de la seccionadora (`ConLaHoja`). Sobre 200
+  despieces del banco, 155 daban otras pasadas. La hoja se arma siempre del
+  plano del motor (`PlanoDelMotor`), nunca del ya contado: rearmarla desde
+  las piezas movidas no siempre da el mismo árbol. Lo nacido antes queda como
+  se cobró. `TestElPlanoCuentaComoLaHoja`.
+- **Migración 00240**: `terminado_at`, `sin_cargo` y `motivo_anulado` en
+  `cutting_orders`.
+- El alta guarda placas y pasadas del plano, frena piezas que no entran y la
+  placa que el pedido no vende (`otraPlaca`), y corrige con `reemplaza`.
+  **El handler descartaba el teléfono y el día de retiro** del formulario.
+- La ficha trae `modo` (suelto, pedido, vendido, sinCargo): de dónde sale la
+  plata. El suelto con cargo no se retira: `POST /cortes/{id}/pedido` lo pasa
+  a pedido (reservado, renglones `del_corte`) y se cobra por el pedido.
+  Pendiente con Nahuel: sumar las pasadas a un pedido que ya vende las
+  placas (hoy se muestran «fuera del pedido»).
+- `roles.DecidenEnLaCola` (y `DECIDEN_EN_LA_COLA`): urgente, retirar, anular
+  y corregir no son del aserradero; su ficha llega sin importes ni teléfono.
+## El mes simulado en compras y pagos (26/11, rama `mes-compras-pagos`)
+
+- Migración 00250: el remito de una recepción anulada queda libre (índice
+  parcial), `purchase_invoice_receipts` (una factura cubre varios remitos;
+  `receipt_id` sigue siendo el primero), `purchase_invoices.aplica_a_id` (la
+  nota de crédito aplicada a la factura que corrige), `supplier_movements.
+  cheque_id` y `supplier_payment_cheques` (el cheque que rebotó se repone
+  como una factura). Las dos tablas nuevas van en `SOLO_EN_GO` del espejo.
+- **El saldo de una factura de compra sale de `compras.AplicadoA`**: lo
+  imputado en pagos, las notas de crédito aplicadas y, si se pagó como gasto,
+  su total. La usan el listado, el pago, el Resumen, «Para hoy» y el CSV.
+- **Un vencimiento es un día a la medianoche UTC**: vencida es la de un día
+  anterior al día argentino de hoy escrito igual (`reportes.DiaDeHoy`,
+  `compras.diaDeHoy`), no la que pasó de `now()`.
+- El gasto en efectivo sin caja que lo contenga se rechaza (antes se anotaba
+  y el CSV lo sacaba de una Caja que ningún arqueo vio), y no baja del cambio
+  fijo. El gasto con factura crea la factura de compra, nace pagada y va al
+  asiento del gasto con su IVA.
+- El depósito entra a `/admin/recepciones` (`/admin/recepciones/nueva` es
+  del admin): recibe, corrige cantidades y confirma; Go le borra los costos.
+## 26/11/2026: el mes simulado, ventas y clientes (rama `mes-ventas-clientes`)
+
+Migración 00260 (`quotes.motivo_rechazo`). Lo que cambió en Go:
+
+- **CUIT con verificador** en la ficha (`clientes.ValidarCliente`): antes
+  solo se miraba la forma. El alta devuelve el `id` (el panel abre la ficha).
+- **Efectivo sin caja, desde la ficha** (`cobros.CobrarAClienteEn`): pide
+  abrir la caja antes (ErrSinCaja, como el cobro del pedido) en vez de
+  emitir el recibo y avisar después que el efectivo no entró a ningún arqueo.
+- **Anular un recibo** (`cobros.AnularConPIN`): quien no es admin, con el
+  PIN de uno (motivo `anular`), como anular una venta. El de Mercado Pago se
+  rechaza antes de pedir el PIN. El servicio de cobros toma el `aut`
+  compartido en `cmd/mjbj/api.go`.
+- **Historial del cliente**: el cheque entregado con una venta del mostrador
+  aparece (clase `cheque`, no mueve la cuenta) y rebotado dice «Rechazado por
+  el banco».
+- **Piso de costo** (`precios.PisoDeCosto` = costo promedio × (1 + IVA)): en
+  la búsqueda del mostrador (`piso`), en la grilla de precios (`piso`) y en
+  cada renglón del presupuesto (`bajoCosto`). No frena: lo marcan las
+  pantallas.
+- **Presupuestos**: `PUT /admin/presupuestos/{id}` corrige uno pendiente o en
+  revisión sin pedido (mismo número); el rechazo guarda el motivo (de
+  `MotivosDeRechazo`) y cada estado dice su mensaje; un renglón a $0 no se
+  guarda; el pedido cancelado no traba el presupuesto; «abiertos» suma los
+  aceptados sin pedido (primero); con envío, la zona tiene que ser de
+  `shipping_zones`, la de costo fijo propone el flete y sin flete hace falta
+  `sinCargo`.
+- **WhatsApp**: `presupuesto_enviado` se completa con número, total y
+  vencimiento; un envío que falla no deja una conversación vacía; mandado
+  por WhatsApp (por la API, «Documento» o avisado desde el teléfono) el
+  presupuesto pasa a enviado; «Documento» no ofrece rechazados ni vencidos;
+  sin `?chat=` la bandeja no abre ni marca leída ninguna conversación.
+- **Búsqueda del mostrador**: lo que coincide por el nombre va antes que lo
+  que coincide por la categoría («laca» ya no trae primero las placas).
+
+Quedó para decidir: dejar una parte del pedido a cuenta corriente y el resto
+por otro medio (hoy se ve el disponible antes de crear, y si no alcanza no
+se crea), y que la vendedora registre el rechazo de un cheque desde la
+ficha (hoy es de /admin/cheques, del admin).
+
+## 26/11/2026: el mes simulado, arreglos del depósito (rama `mes-simulado-arreglos`)
+
+- **Acopio sin servicios** (`entregas.SaldoDeAcopio`): las pasadas y el
+  tapacanto de un corte (sin producto, `del_corte`) no quedan por retirar ni
+  salen en el remito; la devolución usa `SaldoConServicios`. Un pedido sin
+  mercadería por retirar no es acopio en el listado.
+- **Caja antes de cobrar**: `GET /admin/pedidos/{id}/cobro`
+  (`cobros.CajaDelCobro`) contesta lo mismo que el cobro en efectivo sin
+  caja, con la misma regla (`turnoParaElEfectivo`).
+- **Retiro sin sucursal**: el pedido de un presupuesto sin sucursal toma la
+  primera activa, la misma de donde reserva.
+- **Remito en PDF**: la unidad de venta (`pdf.UnidadDeVenta`: la lata de 4
+  litros es «u.») y la aclaración con quien firmó (golden del remito
+  rehechos con Go).
+
+## 26/11/2026: el mes simulado, arreglos del aserradero (rama `mes-simulado-arreglos`)
+
+- **Lo cobrado del corte vendido** (`cortes.pedidoDelCorte`): los renglones
+  del mostrador ya vienen netos (`ventas.AplicarDescuento` rebaja el precio de
+  cada uno) y `orders.descuento` es constancia; la ficha volvía a descontarlo
+  ($1.944 de un corte cobrado $2.160).
+- **Retales del pedido** (`cortes.RetalesDelCliente`): un pedido que vende
+  todas las placas que usan *todos* sus cortes vivos deja los retales al
+  cliente, y la hoja (`GET /cortes/{id}/hoja`) marca sus placas igual que la
+  ficha. El aviso «el plano usa N y el pedido vende M» cuenta los otros cortes;
+  `GET /pedidos/{id}/cortes` suma `variantId`, `placasEnteras` y `sinCargo`
+  para que el alta diga lo mismo.
+- **Permisos**: pasadas, acomodo y disco son de `DecidenEnLaCola` (el taller
+  confirma sus pasadas al terminar, con `avanzar`). El formato de la máquina
+  sigue abierto al aserradero, como está decidido.
+- **CUIT del comprobante fiscal** antes de registrar la venta en línea
+  (`mostrador.revisarCuitDelComprobante`); el corte de la cola cobrado en el
+  mostrador pasa su `retira_el` al pedido.
+- **Ingreso**: la IP aguanta 30 intentos fallidos en 5 minutos
+  (`limites.porIP`), la cuenta sigue en 10.
+
+## 26/11/2026: el mes simulado, arreglos de compras y caja (rama `mes-simulado-arreglos`)
+
+- **Gasto anulado** (migración 00280, `compras.AnularGasto`,
+  `POST /compras/gastos/{id}/anular`, solo admin): queda con su motivo y sale
+  de todos los totales (`anulado_at IS NULL` en compras, reportes, cierre y
+  caja). El efectivo vuelve como ingreso al turno abierto de su sucursal, como
+  la anulación del pago; la factura que vino con el gasto se anula con él.
+- **El cajón no queda en negativo**: sin cambio fijo, el piso es cero, en el
+  gasto en efectivo (`compras.AlcanzaElCajon`) y en el retiro del mostrador.
+- **`porLlegar`** en `GET /compras/ordenes`: el neto de lo que falta recibir;
+  «en camino» ya no suma lo que llegó de una orden parcial.
+- **El número de la factura de compra** sale con ceros (`0003-00089010`) en
+  la cuenta del proveedor, los pagos, los gastos y las notas aplicadas.
+
+## 26/11/2026: el mes simulado, el saludo de WhatsApp y del correo
+
+- **`whatsapp.NombreDeSaludo`** (espejo: `lib/whatsapp/saludo.ts`): a una
+  persona, el primer nombre; a una empresa (forma societaria al final o rubro
+  al principio), el nombre sin «SRL», «S.A.»… Lo usan `PrimerNombre`, el
+  `{{nombre}}` del documento fuera de la ventana (`presupuesto_enviado`), los
+  avisos automáticos y el saludo de los correos (`notificaciones.primerNombre`).
+  Las pruebas doradas no cambian: sus nombres son de personas.
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador de la dueña (rama `mes-simulado-arreglos`)
+
+- **Seña o cobranza** (cierre, H131): los destinos de un recibo son todo lo
+  que el cliente tenía pendiente ese día, así que el cobro de una factura sin
+  CAE de un cliente con otro pedido abierto lleva «i:» y «o:». Es seña solo
+  si el recibo es de un pedido que seguía abierto y no cobra una factura
+  (`invoice_payments.receipt_id`); si no, va a «Cobros de facturas sin CAE».
+- **Recibos con plata en el B** (cierre, H374 y H407, a decidir con el
+  contador): como el reparto no se recalcula, el cierre marca «Cobros en el B
+  de ventas facturadas después» y «Recibos partidos entre los dos archivos»,
+  con la ficha del cliente.
+- **La baja del personal borra su clave** (`auth.BajaDePersonal`): la persona
+  ya no entra a Mi cuenta con ella; si vuelve, el alta le pide una nueva.
+- **La factura que ya está en la cuenta corriente** no se pasa a cuenta otra
+  vez (`facturacion.Cobrar`, 422).
+- **`TramoDeLaSerie.Desde`**: el primero sin CAE de la serie, para que el
+  botón diga el tramo entero que se autoriza.
+- **Next 16.4 valida en `next dev` la navegación instantánea**: el panel y Mi
+  cuenta leen la sesión en el layout y exportan `instant = false` (la salida
+  de la guía de autenticación con Cache Components). Producción no cambia.
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador del depósito
+
+- **`SaldoAlRemito`** cuenta el propio remito aunque esté anulado, y los
+  anteriores anulados después de hacerlo: un remito total anulado decía
+  «Entrega parcial» en la ficha y en el PDF. `SaldoDeAcopio` sigue contando
+  solo los vivos (`vivas`).
+- **El retiro parcial de un pedido pendiente o en preparación lo pasa a
+  «listo»** («Remito X: se retiró una parte», sin aviso), salvo con un corte
+  en la máquina.
+- **Anular un remito firmado** deja un solo renglón en el historial cuando el
+  pedido vuelve a «listo» (motivo y autorización juntos); en un envío dice
+  «por llevar», no «en acopio».
+- **La reposición sin cargo** anota la cantidad con su unidad
+  (`pdf.UnidadPara`): «1 par · Corredera…».
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador del aserradero
+
+- **La placa que vende el pedido se vende entera.** Si el pedido vende todas
+  las placas que usan sus cortes (`RetalesDelCliente`), la ficha marca el
+  plano con `TodasDelCliente`, que ahora también deja `PasadasCobrables` en
+  0, y `PasadasACobrar` da 0 cuando todas las placas se venden enteras
+  (aunque el alta hubiera guardado otras). La tarjeta del taller cuenta lo
+  mismo (`PlanoParaCobrar`).
+- **`Modo` «anulado»**: el corte cancelado no cobra nada. Anular uno ya
+  anulado dice «ya está anulado», no «ya salió de la máquina».
+- **El checkout marca `del_corte`** en los renglones del despiece (placa,
+  pasadas, tapacanto), como el mostrador: la ficha de un corte de la tienda
+  cobraba «Fuera del pedido» lo que la compra ya cobró. La migración 00285
+  marca los de antes con la regla de la 00175, en pedidos con corte.
+- **`CrearCorte` pide `/admin/cortes/nuevo`** (admin, vendedor, depósito),
+  declarada en `internal/roles` y `lib/roles.ts`: el aserradero no toma
+  cortes.
+- Los PDF del corte y de la hoja dicen «1 pieza» y «1 pasada»; el golden de
+  `corte` y `hoja-de-corte` pasa a ser el de Go.
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador de atención
+
+- **`GET /admin/cobros/caja`** (`CajaDelCobroACuenta`, quien maneja plata):
+  la regla del cobro a cuenta sin pedido (la única caja abierta, o elegir),
+  para que el diálogo de la ficha diga qué caja abrir apenas se abre, como el
+  del pedido (H132).
+- **`ItemDePresupuesto.piso`** (`precios.PisoDeCosto`): corregir y duplicar
+  un presupuesto marcan «Bajo costo» y piden «Guardar igual» como el alta.
+- **`entregas.sinServicios`** también saca del acopio las pasadas, el canto
+  en metros y los renglones a mano que dicen un trabajo (armado, colocación,
+  flete…) sin corte atado: los de un presupuesto figuraban «por retirar».
+- **Los importes con centavos se dicen con centavos** (`formato.Importe`) en
+  las plantillas de WhatsApp, la lista de Documento del chat, los avisos al
+  panel, los medios del recibo en la ficha y los correos (`email`, con
+  `email.ComoElTS` para que los golden contra el TS sigan comparando).
+- **El buscador** no repite la razón social igual al nombre y escribe el
+  CUIT con guiones.
+
+## 26/11/2026: «hacé todo y construí todo» (ramas `mes-decision-*`)
+
+Las políticas que esperaban al contador o a la clienta son **reglas** de
+`/admin/reglas` (migración 00290, `internal/reglas` y su espejo
+`lib/reglas.ts`): arrancan con el comportamiento de antes, solo el admin las
+cambia y cada cambio queda en la bitácora (`entidad = 'regla'`, antes →
+después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
+
+- **Mostrador** (`mes-decision-mostrador`): `firma_sin_pin`, `lote_y_cupon`
+  (Go también exige lote y cupón en línea), `contado_por_lista`,
+  `descuento_al_flete`, `corte_chico_material` («cobrar» vende la placa o la
+  media placa y descuenta stock).
+- **Caja y cuenta** (`mes-decision-caja-cuenta`, 00310 y 00311): el retiro
+  guarda su destino (`reportes.RetiroAlBanco`, `RetiroACajaFuerte`); la
+  vendedora registra el rechazo de un cheque con PIN
+  (`POST /admin/cheques/{id}/rechazo`, `cobros.RechazarConPIN`); el pedido
+  partido entre la cuenta y otro medio (`orders.a_cuenta`,
+  `DeudaFueraDeLaCuenta`, `ACobrarFueraDeLaCuenta`).
+- **Contable** (`mes-decision-contable`, 00320 y 00321): `venta_reconocida`
+  con `entregado_at`, `facturado_at` y `cancelado_at`, sin tocar un mes
+  cerrado; `cobro_antes_de_facturar` y `excedente_cuenta_corriente`
+  (`receipts.anticipo_por_regla`, fijado al emitir); los asientos de costo,
+  cobros del mostrador, extracciones y diferencias de arqueo, y
+  `asiento_sin_cae` (2.1.12). Un pedido cancelado después de contar resta en
+  el mes de la cancelación.
+- **Facturación** (`mes-decision-facturacion`): `factura_al_monotributista`
+  (`fiscal.LetraConRegla`), `etiqueta_del_circuito`
+  (`reglas/circuito.go`, `lib/circuito.ts`) y la devolución de un pedido
+  facturado con nota de crédito
+  (`/admin/facturacion/pedidos/{id}/devolucion`).
+- **Cortes** (`mes-decision-cortes`, 00340): `sucursal_del_corte_suelto`,
+  sumar las pasadas al pedido (`/admin/cortes/{id}/sumar-al-pedido`; si el
+  pedido está facturado, cobrado o a cuenta, va a un pedido aparte) y el
+  remito firmado de la reposición sin cargo.
+- **Portal** (`mes-decision-portal`): `precios_profesional_sin_tienda`
+  (`catalogo.PreciosDelProfesional`), `aceptar_presupuesto_pendiente`
+  (`aResponder`) y `datos_fiscales_del_cliente`.
+
+Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
+Next: las pruebas de pantalla la cambian desde `/admin/reglas`.

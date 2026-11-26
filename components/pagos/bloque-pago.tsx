@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition, type FormEvent } from "react";
+import { sinRomper } from "@/lib/acciones/sin-romper";
+import { CampoArchivo } from "@/components/campo-archivo";
 import {
   AlertCircle,
   Banknote,
@@ -13,7 +15,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatearPrecio } from "@/lib/formato";
 import {
@@ -55,6 +56,9 @@ interface Props {
 }
 
 const inicial: EstadoPago = {};
+// Si la acción se corta, el error queda en el formulario con el archivo
+// elegido, sin pasar la página a «Se nos rompió algo».
+const subir = sinRomper(subirComprobante);
 
 export function BloquePago({
   numero,
@@ -244,8 +248,17 @@ function TransferenciaBancaria({
   total: number;
   banco: DatosParaTransferir | null;
 }) {
-  const [estado, accion, pendiente] = useActionState(subirComprobante, inicial);
+  const [estado, accion] = useActionState(subir, inicial);
+  const [pendiente, empezar] = useTransition();
   const [copiado, setCopiado] = useState<string | null>(null);
+
+  // Con `onSubmit` y no con `action`: con `action`, React vacía el formulario
+  // al volver, y un error se llevaba el archivo elegido (H076).
+  function enviar(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const datos = new FormData(e.currentTarget);
+    empezar(() => accion(datos));
+  }
 
   async function copiar(valor: string, etiqueta: string) {
     try {
@@ -307,7 +320,7 @@ function TransferenciaBancaria({
             {estado.ok}
           </p>
         ) : (
-          <form action={accion} className="space-y-3">
+          <form onSubmit={enviar} className="space-y-3">
             <input type="hidden" name="numero" value={numero} />
             <input type="hidden" name="token" value={token} />
 
@@ -315,10 +328,9 @@ function TransferenciaBancaria({
               <Label htmlFor="comprobante" className="text-sm">
                 Subí el comprobante
               </Label>
-              <Input
+              <CampoArchivo
                 id="comprobante"
                 name="comprobante"
-                type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 required
                 className="mt-1.5"

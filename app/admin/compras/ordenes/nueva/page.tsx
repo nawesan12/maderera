@@ -5,8 +5,8 @@ import { requireStaffRole } from "@/lib/dal/session";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { variantesParaPedir } from "@/lib/dal/admin/recepciones";
 import { sucursalesParaGasto } from "@/lib/dal/admin/gastos";
-import { importeParaElCampo } from "@/lib/formato";
 import { FormularioOrden } from "./formulario";
+import { costoPropuesto } from "../costos";
 
 export const metadata: Metadata = { title: "Nueva orden de compra" };
 
@@ -18,11 +18,11 @@ export default async function NuevaOrdenPage({
    * separados por coma. Es la acción que ese reporte pedía a gritos: decía qué
    * comprar y cuánto, y no dejaba hacer nada con eso.
    */
-  searchParams: Promise<{ sugeridos?: string }>;
+  searchParams: Promise<{ sugeridos?: string; proveedor?: string; sucursal?: string }>;
 }) {
   await requireStaffRole("admin");
 
-  const { sugeridos } = await searchParams;
+  const { sugeridos, proveedor, sucursal } = await searchParams;
 
   const pedidos = (sugeridos ?? "")
     .split(",")
@@ -51,8 +51,9 @@ export default async function NuevaOrdenPage({
         variantId: v.variantId,
         descripcion: [v.producto, v.variante].filter(Boolean).join(" "),
         cantidad: String(p.cantidad),
-        costoUnitario: importeParaElCampo(v.costoActual),
+        costoUnitario: costoPropuesto(v.costoActual),
         alicuotaIva: v.alicuotaIva,
+        ultimo: v.costoActual ? Number(v.costoActual) : null,
       },
     ];
   });
@@ -79,7 +80,7 @@ export default async function NuevaOrdenPage({
       {renglones.length > 0 && (
         <p className="tarjeta-atencion px-4 py-3 text-base">
           Vienen <strong>{renglones.length}</strong> renglones del reporte de
-          reposición. Falta elegir el proveedor y revisar los costos.
+          reposición. {proveedor ? "Revisá los costos." : "Falta elegir el proveedor y revisar los costos."}
         </p>
       )}
 
@@ -87,6 +88,8 @@ export default async function NuevaOrdenPage({
         proveedores={proveedores}
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre, deLaSesion: s.deLaSesion }))}
         renglonesIniciales={renglones.length > 0 ? renglones : undefined}
+        proveedorInicial={proveedores.some((p) => p.id === proveedor) ? proveedor : undefined}
+        sucursalInicial={sucursales.some((x) => x.id === sucursal) ? sucursal : undefined}
       />
     </div>
   );

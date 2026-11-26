@@ -2,9 +2,10 @@
 
 import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BellOff, BellRing, ClipboardList, Link2, Loader2, Scissors, Search, UserPlus, Wallet } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, moneda } from "@/lib/formato";
+import { fechaCorta, formatearMonto, moneda } from "@/lib/formato";
 import {
   buscarClientesParaVincular,
   cambiarBaja,
@@ -23,10 +24,17 @@ const estadoInicial: EstadoWhatsapp = {};
  * lo mío?» y «¿cuánto debo?». Tenerlas contestadas antes de leer el mensaje es
  * la diferencia entre responder en diez segundos o abrir tres pantallas.
  */
-export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
+export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleConversacion; enDialogo?: boolean }) {
+  // El corte que se toma desde el chat vuelve al chat, con el número de la
+  // conversación por si la ficha no tiene teléfono (mes simulado, H046).
+  const ruta = usePathname();
+  const volver = encodeURIComponent(`${ruta}?chat=${detalle.id}`);
+  const telefono = detalle.sinNumero ? "" : `&telefono=${encodeURIComponent(detalle.waJid.split("@")[0])}`;
+  // En la columna queda pegado arriba al bajar; en el diálogo, no.
+  const pegado = enDialogo ? "" : "lg:sticky lg:top-24";
   if (!detalle.customerId) {
     return (
-      <div className="space-y-4 lg:sticky lg:top-24">
+      <div className={`min-w-0 space-y-4 ${pegado}`}>
         <SinFicha detalle={detalle} />
         <Avisos detalle={detalle} />
       </div>
@@ -36,12 +44,16 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
   const excedido = detalle.limiteCredito > 0 && detalle.saldo > detalle.limiteCredito;
 
   return (
-    <div className="space-y-4 lg:sticky lg:top-24">
+    // `min-w-0`: en el diálogo (que vive fuera del panel) el nombre sin
+    // cortar empujaba las tarjetas más allá del borde («Activ», «Pendien»).
+    <div className={`min-w-0 space-y-4 ${pegado}`}>
       <section className="tarjeta p-4">
         <div className="flex items-start justify-between gap-2">
+          {/* En el diálogo el nombre ya es el título: dos renglones seguidos
+              con el mismo nombre (mes simulado). El correo, entero. */}
           <div className="min-w-0">
-            <h2 className="truncate text-base font-medium">{detalle.clienteNombre}</h2>
-            {detalle.clienteEmail && <p className="truncate text-sm text-muted-foreground">{detalle.clienteEmail}</p>}
+            {!enDialogo && <h2 className="break-words text-base font-medium">{detalle.clienteNombre}</h2>}
+            {detalle.clienteEmail && <p className="break-all text-sm text-muted-foreground">{detalle.clienteEmail}</p>}
           </div>
           {detalle.clienteEstado && <EtiquetaEstado estado={detalle.clienteEstado} />}
         </div>
@@ -63,7 +75,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
             Presupuesto
           </Link>
           <Link
-            href={`/admin/cortes/nuevo?cliente=${detalle.customerId}`}
+            href={`/admin/cortes/nuevo?cliente=${detalle.customerId}&volver=${volver}${telefono}`}
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida text-base font-medium hover:bg-muted"
           >
             <Scissors className="h-4 w-4" aria-hidden="true" />
@@ -82,7 +94,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
             excedido ? "text-saldo-debe" : detalle.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
           }`}
         >
-          {moneda.format(Math.abs(detalle.saldo))}
+          {formatearMonto(Math.abs(detalle.saldo))}
         </p>
         <p className="mt-0.5 text-base text-muted-foreground">
           {detalle.saldo > 0 ? "Debe" : detalle.saldo < 0 ? "A favor" : "Sin deuda"}

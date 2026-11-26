@@ -44,6 +44,20 @@ func (q *Queries) ContarIntento(ctx context.Context, arg ContarIntentoParams) (i
 	return cuenta, err
 }
 
+const devolverIntento = `-- name: DevolverIntento :exec
+UPDATE rate_limits SET cuenta = greatest(cuenta - 1, 0) WHERE clave = $1 AND ventana = $2
+`
+
+type DevolverIntentoParams struct {
+	Clave   string    `json:"clave"`
+	Ventana time.Time `json:"ventana"`
+}
+
+func (q *Queries) DevolverIntento(ctx context.Context, arg DevolverIntentoParams) error {
+	_, err := q.db.Exec(ctx, devolverIntento, arg.Clave, arg.Ventana)
+	return err
+}
+
 const soltarIntentos = `-- name: SoltarIntentos :exec
 DELETE FROM rate_limits WHERE clave = $1 AND ventana = $2
 `

@@ -13,6 +13,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/reportes"
 	"mjbj/internal/roles"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // --- lib/dal/pagos.ts ---
@@ -201,6 +202,14 @@ type PagoListado struct {
 	CustomerID         *string    `json:"customerId"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	AcreditadoAt       *time.Time `json:"acreditadoAt"`
+	// Lo que hace falta para decidir uno a verificar (mes simulado, H375):
+	// lo que debe hoy el cliente y si es el mismo aviso que otro (mismo
+	// cliente o pedido, mismo importe, a menos de diez minutos). El aviso de
+	// un pedido que no va a la cuenta lleva lo que falta cobrar del pedido:
+	// con la cuenta decía «Sin deuda» de un pedido sin cobrar, y empujaba a
+	// rechazarlo (mes simulado, tercera prueba).
+	SaldoCliente *float64 `json:"saldoCliente"`
+	Duplicado    bool     `json:"duplicado"`
 }
 
 // Listar es listarPagos: los últimos 300, del período.
@@ -211,7 +220,15 @@ func (s *Servicio) Listar(ctx context.Context, estado string, desde *time.Time) 
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT p.id, p.tipo::text, p.proveedor::text, p.estado::text, p.monto::float8, p.medio, p.comprobante_url, p.motivo_rechazo,
-		       p.proveedor_payment_id, o.numero, p.order_id, c.nombre, p.customer_id, p.created_at, p.acreditado_at
+		       p.proveedor_payment_id, o.numero, p.order_id, c.nombre, p.customer_id, p.created_at, p.acreditado_at,
+		       CASE WHEN p.estado = 'en_revision' AND p.order_id IS NOT NULL AND o.medio_pago IS DISTINCT FROM 'cuenta_corriente' THEN
+		         greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`, 0)::float8
+		       WHEN p.estado = 'en_revision' AND p.customer_id IS NOT NULL THEN
+		         (SELECT coalesce(sum(m.monto), 0)::float8 FROM account_movements m WHERE m.customer_id = p.customer_id) END,
+		       p.estado = 'en_revision' AND EXISTS (SELECT 1 FROM payments q WHERE q.id <> p.id AND q.estado IN ('en_revision', 'aprobado')
+		         AND q.monto = p.monto AND (q.customer_id = p.customer_id OR q.order_id = p.order_id)
+		         AND q.created_at BETWEEN p.created_at - interval '10 minutes' AND p.created_at + interval '10 minutes'
+		         AND (q.created_at, q.id) < (p.created_at, p.id))
 		FROM payments p
 		LEFT JOIN orders o ON o.id = p.order_id
 		LEFT JOIN customers c ON c.id = p.customer_id
@@ -223,7 +240,8 @@ func (s *Servicio) Listar(ctx context.Context, estado string, desde *time.Time) 
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (PagoListado, error) {
 		var p PagoListado
 		err := r.Scan(&p.ID, &p.Tipo, &p.Proveedor, &p.Estado, &p.Monto, &p.Medio, &p.ComprobanteURL, &p.MotivoRechazo,
-			&p.ProveedorPaymentID, &p.NumeroPedido, &p.OrderID, &p.Cliente, &p.CustomerID, &p.CreatedAt, &p.AcreditadoAt)
+			&p.ProveedorPaymentID, &p.NumeroPedido, &p.OrderID, &p.Cliente, &p.CustomerID, &p.CreatedAt, &p.AcreditadoAt,
+			&p.SaldoCliente, &p.Duplicado)
 		if p.ComprobanteURL != nil {
 			u := URLDelComprobante(p.ID)
 			p.ComprobanteURL = &u

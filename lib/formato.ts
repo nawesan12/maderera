@@ -43,8 +43,36 @@ export function formatearMonto(valor: string | number | null): string {
   const numero = typeof valor === "string" ? Number(valor) : valor;
   if (!Number.isFinite(numero)) return "—";
 
-  return moneda.format(numero);
+  // Con centavos, los centavos (mes simulado): el mostrador decía «$ 203.567»
+  // y la cuenta del cliente «$ 203.566,50» para la misma venta. Lo que
+  // redondea a cero es «$ 0»: Intl dice «-$ 0» (mes simulado, H148).
+  const centavos = Math.round(numero * 100);
+  if (centavos === 0) return moneda.format(0);
+  return centavos % 100 !== 0 ? monedaConCentavos.format(numero) : moneda.format(numero);
 }
+
+/**
+ * La plata de la caja: los pesos enteros como `formatearMonto` y los
+ * centavos solo cuando los hay («$ 50.000», «-$ 0,40»). El efectivo con el
+ * descuento del 10 % deja centavos, y redondeados a pesos el arqueo escondía
+ * diferencias («-$ 0» en rojo de 40 centavos que faltaban; mes simulado,
+ * H164, H263 y H363). Es `formato.Importe` de Go.
+ */
+export function formatearImporte(valor: string | number | null): string {
+  if (valor === null) return "—";
+  const numero = typeof valor === "string" ? Number(valor) : valor;
+  if (!Number.isFinite(numero)) return "—";
+  const centavos = Math.round(numero * 100);
+  if (centavos === 0) return moneda.format(0);
+  return centavos % 100 === 0 ? moneda.format(centavos / 100) : monedaConCentavos.format(centavos / 100);
+}
+
+const monedaConCentavos = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 const UN_DECIMAL = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -165,6 +193,16 @@ export const fechaHora = new Intl.DateTimeFormat("es-AR", {
   hour12: false,
 });
 
+/**
+ * El día y la hora de un instante, o solo el día si lo guardado es un día
+ * (un gasto): «04/11, 21:00» para algo del 5/11 era la medianoche UTC leída
+ * en hora argentina.
+ */
+export const fechaHoraODia = {
+  format: (fecha: Date) => (esDia(fecha) ? diaYMes.format(fecha) : fechaHora.format(fecha)),
+};
+const diaYMes = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC", day: "2-digit", month: "2-digit" });
+
 export const hora = new Intl.DateTimeFormat("es-AR", {
   timeZone: ZONA,
   hour: "2-digit",
@@ -191,10 +229,23 @@ export function haceCuanto(fecha: Date | null): string {
   return meses === 1 ? "hace un mes" : `hace ${meses} meses`;
 }
 
-/** Días que faltan para una fecha. Negativo si ya pasó. */
-export function diasHasta(fecha: Date | null): number | null {
+/**
+ * Días que faltan para una fecha. Negativo si ya pasó.
+ *
+ * Un día guardado como día (un vencimiento: medianoche UTC) se cuenta contra
+ * el día de hoy en la Argentina, no contra la hora: restando horas, una
+ * factura que vencía hoy pasaba a «hace 1 día» desde las 21.
+ */
+export function diasHasta(fecha: Date | null, ahora: Date = new Date()): number | null {
   if (!fecha) return null;
-  return Math.ceil((fecha.getTime() - Date.now()) / 86_400_000);
+  const hoy = Date.parse(`${hoyEnArgentina(ahora)}T00:00:00Z`);
+  if (esDia(fecha)) {
+    return Math.round((fecha.getTime() - hoy) / 86_400_000);
+  }
+  // Un instante, por el día argentino en que cae: el cheque con fecha de
+  // pago de hoy al mediodía decía «26/11/26 · en 1 día» (mes simulado).
+  const dia = Date.parse(`${hoyEnArgentina(fecha)}T00:00:00Z`);
+  return Math.round((dia - hoy) / 86_400_000);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -207,6 +258,20 @@ export function formatearCuit(cuit: string | null): string {
   const limpio = cuit.replace(/\D/g, "");
   if (limpio.length !== 11) return cuit;
   return `${limpio.slice(0, 2)}-${limpio.slice(2, 10)}-${limpio.slice(10)}`;
+}
+
+/**
+ * El documento con su nombre: «CUIT 30-71234567-8», «DNI 30.111.222».
+ *
+ * Se decidía por el largo del texto guardado, y un CUIT con guiones (13
+ * caracteres) salía «DNI 30-71234567-8», al lado de otro sin guiones
+ * («CUIT 20301112220»; mes simulado). Se cuentan los dígitos.
+ */
+export function documentoConTipo(documento: string): string {
+  const digitos = documento.replace(/\D/g, "");
+  if (digitos.length === 11) return `CUIT ${formatearCuit(digitos)}`;
+  if (digitos.length >= 7 && digitos.length <= 8) return `DNI ${Number(digitos).toLocaleString("es-AR")}`;
+  return documento;
 }
 
 /**
@@ -225,7 +290,8 @@ export function formatearCuit(cuit: string | null): string {
  */
 export const ABREVIATURA_UNIDAD: Record<string, string> = {
   unidad: "u.",
-  metro_lineal: "ml",
+  // «m» y no «ml»: «12 ml» se leía como mililitros (mes simulado).
+  metro_lineal: "m",
   metro_cuadrado: "m²",
   tabla: "tabla",
   placa: "placa",
@@ -239,6 +305,53 @@ export const ABREVIATURA_UNIDAD: Record<string, string> = {
 export function formatearUnidad(unidad: string | null): string {
   if (!unidad) return "u.";
   return ABREVIATURA_UNIDAD[unidad] ?? unidad.replace(/_/g, " ");
+}
+
+/** La unidad en plural: «placas», «rollos», «pares»; lo abreviado no cambia. */
+export function unidadEnPlural(unidad: string): string {
+  if (/[.²\s]/.test(unidad) || unidad.length <= 2 || /s$/i.test(unidad)) return unidad;
+  return /[aeiouáéíóú]$/i.test(unidad) ? `${unidad}s` : `${unidad}es`;
+}
+
+const cantidadLegible = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 });
+
+/**
+ * La unidad en que se cuenta lo que se vende. Un producto en litros o en
+ * kilos que trae su envase en el nombre («Laca Poliuretánica — 4 litros»)
+ * se vende y se cuenta por envase: «2 l» eran dos latas de cuatro litros, y
+ * el stock decía «41 l» de 41 latas (mes simulado, H110). Ahí es «unidad».
+ * Una sola regla para la ficha, el remito, la firma, el stock y el mostrador.
+ */
+export function unidadDeVenta(unidad: string | null, descripcion: string | null | undefined = ""): string | null {
+  if ((unidad === "litro" || unidad === "kg") && /\d\s*(l|lts?|litros?|kg|kilos?)\b/i.test(descripcion ?? "")) {
+    return "unidad";
+  }
+  return unidad;
+}
+
+/**
+ * La cantidad con su unidad, concordada: «1 placa», «25 placas», «20 u.»,
+ * «2,5 m²». Se leía «Quedan 25 placa» y «4 rollo» en las entregas y «3 placa»
+ * en el papel del cliente (mes simulado, H095). Sin unidad, la cifra sola.
+ */
+export function cantidadConUnidad(cantidad: number, unidad: string | null, descripcion = ""): string {
+  const n = cantidadLegible.format(cantidad);
+  unidad = unidadDeVenta(unidad, descripcion);
+  if (!unidad) return n;
+  // La línea del corte se cobra por pasada de la sierra; en el papel del
+  // cliente es «4 cortes», al lado de «Corte a medida · 3 piezas»: la
+  // cantidad sola no se entendía (simulación del mes, H145).
+  if (unidad === "pasada") return `${n} ${cantidad === 1 ? "corte" : "cortes"}`;
+  const u = formatearUnidad(unidad);
+  return `${n} ${cantidad === 1 ? u : unidadEnPlural(u)}`;
+}
+
+/**
+ * La unidad sola, concordada con la cantidad que va al lado en otro estilo:
+ * «119 placas», «2,5 placas», «22 rollos» (el traslado decía «119 placa»).
+ */
+export function unidadConcordada(cantidad: number, unidad: string | null, descripcion = ""): string {
+  return cantidadConUnidad(cantidad, unidad, descripcion).replace(/^\S+\s?/, "");
 }
 
 /** Pluraliza sin que quede "1 ítems". */
@@ -359,15 +472,24 @@ const IMPORTE_DEL_CAMPO = new Intl.NumberFormat("es-AR", {
 
 /**
  * Un importe listo para precargar un campo de plata, como lo escribe una
- * persona: 15000 → «15.000», 1234.5 → «1.234,5». `importeDelCampo` lo lee de
- * vuelta igual. Antes se precargaba con `toFixed(2)` («1234.50», con punto).
+ * persona: 15000 → «15.000», 1234.5 → «1.234,50». `importeDelCampo` lo lee
+ * de vuelta igual. Antes se precargaba con `toFixed(2)` («1234.50», con
+ * punto), y después con un solo decimal («1.477.899,5», mes simulado): con
+ * centavos, van los dos.
  */
 export function importeParaElCampo(valor: number | string | null | undefined): string {
   if (valor === null || valor === undefined || valor === "") return "";
   const n = typeof valor === "string" ? Number(valor) : valor;
   if (!Number.isFinite(n)) return "";
-  return IMPORTE_DEL_CAMPO.format(Number(n.toFixed(2)));
+  const redondo = Number(n.toFixed(2));
+  return (Math.round(redondo * 100) % 100 === 0 ? IMPORTE_DEL_CAMPO : IMPORTE_CON_CENTAVOS).format(redondo);
 }
+
+const IMPORTE_CON_CENTAVOS = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  useGrouping: true,
+});
 
 /**
  * El nombre de pila, para saludar.

@@ -57,6 +57,9 @@ var sinContenido = respuesta{codigo: http.StatusNoContent}
 
 func (o respuesta) VisitAlternarUrgenteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitAvanzarCorteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitVolverCorteResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitAnularCorteResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitPasarCorteAPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitBorrarPerfilResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitCalcularPlanoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCambiarSierraResponse(w http.ResponseWriter) error     { return o.escribir(w) }
@@ -110,23 +113,46 @@ func (a *API) ListarCortes(ctx context.Context, r cortesapi.ListarCortesRequestO
 	if _, err := auth.ExigirStaff(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Estado))
+	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Estado), texto(r.Params.Sucursal))
 	return ok(v), err
 }
 
+// mostrador: quien atiende la cola desde el panel (todos los de
+// /admin/cortes menos el aserradero). Urgencias, entregas, anular y cobrar
+// son decisiones del mostrador, no del taller (mes simulado, H115).
+//
+// Las pasadas que se cobran, el acomodo y el disco también: cambian lo que
+// se cobra, y el aserradero las cambiaba con el corte en la cola (mes
+// simulado, ítem 7). El taller confirma las suyas al terminar (Avanzar).
+func mostrador(ctx context.Context) (*auth.Sesion, error) {
+	return auth.Exigir(ctx, roles.DecidenEnLaCola...)
+}
+
 func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObject) (cortesapi.CrearCorteResponseObject, error) {
-	ses, err := gestion(ctx)
+	// Quien entra al alta: el mostrador, no el aserradero (lib/roles.ts).
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cortes/nuevo")...)
 	if err != nil {
 		return nil, err
 	}
 	b := r.Body
 	f := FormCorte{
 		CustomerID: texto(b.CustomerId), OrderID: texto(b.OrderId), ContactoNombre: b.ContactoNombre,
+		// El teléfono y el día de retiro no se pasaban: la pantalla los
+		// mandaba y el corte nacía sin a quién avisarle (mes simulado, H046).
+		ContactoTelefono: texto(b.ContactoTelefono), RetiraEl: texto(b.RetiraEl),
 		BranchID: texto(b.BranchId), VariantID: texto(b.VariantId), MaterialDescripcion: b.MaterialDescripcion,
 		PlacaLargoMm: texto(b.PlacaLargoMm), PlacaAnchoMm: texto(b.PlacaAnchoMm), Mitad: texto(b.Mitad),
 		Placas: texto(b.Placas), CantoDescripcion: texto(b.CantoDescripcion), Urgente: b.Urgente != nil && *b.Urgente,
 		Notas: texto(b.Notas), AcomodoManual: texto(b.AcomodoManual), AnchoSierraMm: texto(b.AnchoSierraMm),
 		Consulta: texto(b.Consulta), ConsultaGrupo: texto(b.ConsultaGrupo),
+		Reemplaza: texto(b.Reemplaza), SinCargo: b.SinCargo != nil && *b.SinCargo, OtraPlaca: b.OtraPlaca != nil && *b.OtraPlaca,
+	}
+	if f.Reemplaza != "" || f.SinCargo {
+		// Corregir uno que ya está en la cola y regalar una reposición son
+		// del mostrador.
+		if _, err := mostrador(ctx); err != nil {
+			return nil, err
+		}
 	}
 	for _, p := range b.Piezas {
 		crudo, err := json.Marshal(p)
@@ -135,15 +161,16 @@ func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObjec
 		}
 		f.Piezas = append(f.Piezas, crudo)
 	}
-	numero, err := a.s.Crear(ctx, ses, f)
+	numero, id, err := a.s.Alta(ctx, ses, f)
 	if err != nil {
 		return nil, err
 	}
-	return ok(map[string]string{"numero": numero}), nil
+	return ok(map[string]string{"numero": numero, "id": id}), nil
 }
 
 func (a *API) FichaDeCorte(ctx context.Context, r cortesapi.FichaDeCorteRequestObject) (cortesapi.FichaDeCorteResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	ses, err := auth.ExigirStaff(ctx)
+	if err != nil {
 		return nil, err
 	}
 	f, err := a.s.Ficha(ctx, r.Id.String())
@@ -152,6 +179,9 @@ func (a *API) FichaDeCorte(ctx context.Context, r cortesapi.FichaDeCorteRequestO
 	}
 	if f == nil {
 		return nil, noEncontrado
+	}
+	if esDelTaller(ses) {
+		f.SinPlataParaElTaller()
 	}
 	return ok(f), nil
 }
@@ -167,17 +197,34 @@ func (a *API) HojaDelCorte(ctx context.Context, r cortesapi.HojaDelCorteRequestO
 	if c == nil {
 		return nil, noEncontrado
 	}
-	plano, err := PlanoDelCorteConTope(c)
+	motor, err := PlanoDelCorteConTope(c)
 	if err != nil {
 		return nil, err
 	}
-	hoja, err := ArmarHojaDeCorte(plano)
+	// La hoja, del plano del motor; el plano que se muestra, contado como
+	// ella (ConLaHoja sale de esos mismos árboles).
+	hoja, err := ArmarHojaDeCorte(motor)
+	plano := ConLaHojaSi(c.MotorPlano, motor)
 	var ng ErrNoGuillotina
 	if errors.As(err, &ng) {
 		return nil, plataforma.NuevoProblema(http.StatusConflict, ng.Error())
 	}
 	if err != nil {
 		return nil, err
+	}
+	// Lo que sobra es de quien dice la ficha: del pedido que vende todas las
+	// placas de sus cortes, el retal es del cliente aunque la placa no pase
+	// la mitad (mes simulado, H184). La hoja del operario decía «los retales
+	// quedan en la maderera» y la ficha «del cliente».
+	delCliente, err := a.s.RetalesDelClienteDe(ctx, c, plano)
+	if err != nil {
+		return nil, err
+	}
+	if delCliente {
+		plano = TodasDelCliente(plano)
+		for _, p := range hoja.Patrones {
+			p.SeVendeEntera = true
+		}
 	}
 	sup := make([]float64, len(plano.Placas))
 	for i, p := range plano.Placas {
@@ -195,15 +242,93 @@ func (a *API) AvanzarCorte(ctx context.Context, r cortesapi.AvanzarCorteRequestO
 	if r.Params.Desde != nil {
 		desde = *r.Params.Desde
 	}
-	m, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde)
+	sinCobrar := r.Params.SinCobrar != nil && *r.Params.SinCobrar
+	var pasadas []float64
+	if r.Params.Pasadas != nil {
+		pasadas = append(pasadas, float64(*r.Params.Pasadas))
+	}
+	m, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde, sinCobrar, pasadas...)
 	if err != nil {
 		return nil, err
 	}
 	return okTexto(m), nil
 }
 
+func (a *API) VolverCorte(ctx context.Context, r cortesapi.VolverCorteRequestObject) (cortesapi.VolverCorteResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.Volver(ctx, ses, r.Id.String(), texto(r.Params.Desde))
+	if err != nil {
+		return nil, err
+	}
+	return okTexto(m), nil
+}
+
+func (a *API) AnularCorte(ctx context.Context, r cortesapi.AnularCorteRequestObject) (cortesapi.AnularCorteResponseObject, error) {
+	ses, err := mostrador(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.Anular(ctx, ses, r.Id.String(), r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return okTexto(m), nil
+}
+
+// PasarCorteAPedido: quien vende (admin y vendedor), como pasar un
+// presupuesto a pedido.
+func (a *API) PasarCorteAPedido(ctx context.Context, r cortesapi.PasarCorteAPedidoRequestObject) (cortesapi.PasarCorteAPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	numero, id, err := a.s.PasarAPedido(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]string{"numero": numero, "id": id}), nil
+}
+
+// SumarCorteAlPedido suma lo que el corte cobra fuera de su pedido (H184),
+// con la confirmación de la ficha. Lo hace quien maneja plata, como pasar un
+// corte suelto a pedido.
+func (a *API) SumarCorteAlPedido(ctx context.Context, r cortesapi.SumarCorteAlPedidoRequestObject) (cortesapi.SumarCorteAlPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	numero, aparte, err := a.s.SumarAlPedido(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]any{"numero": numero, "aparte": aparte}), nil
+}
+
+func (o respuesta) VisitSumarCorteAlPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// RemitoDeLaReposicion es el remito sin cargo de una reposición (H321). Lo
+// hace el mostrador, que es quien la entrega.
+func (a *API) RemitoDeLaReposicion(ctx context.Context, r cortesapi.RemitoDeLaReposicionRequestObject) (cortesapi.RemitoDeLaReposicionResponseObject, error) {
+	ses, err := mostrador(ctx)
+	if err != nil {
+		return nil, err
+	}
+	e, err := a.s.RemitoDeLaReposicion(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]string{"id": e.ID, "numero": e.Numero, "firmaToken": e.FirmaToken}), nil
+}
+
+func (o respuesta) VisitRemitoDeLaReposicionResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
 func (a *API) AlternarUrgente(ctx context.Context, r cortesapi.AlternarUrgenteRequestObject) (cortesapi.AlternarUrgenteResponseObject, error) {
-	if _, err := gestion(ctx); err != nil {
+	if _, err := mostrador(ctx); err != nil {
 		return nil, err
 	}
 	m, err := a.s.AlternarUrgente(ctx, r.Id.String())
@@ -214,7 +339,7 @@ func (a *API) AlternarUrgente(ctx context.Context, r cortesapi.AlternarUrgenteRe
 }
 
 func (a *API) CargarPasadas(ctx context.Context, r cortesapi.CargarPasadasRequestObject) (cortesapi.CargarPasadasResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := mostrador(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +362,7 @@ func aFijadas(xs []cortesapi.PiezaFijada) []PiezaFijada {
 }
 
 func (a *API) GuardarAcomodo(ctx context.Context, r cortesapi.GuardarAcomodoRequestObject) (cortesapi.GuardarAcomodoResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := mostrador(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +374,7 @@ func (a *API) GuardarAcomodo(ctx context.Context, r cortesapi.GuardarAcomodoRequ
 }
 
 func (a *API) CambiarSierra(ctx context.Context, r cortesapi.CambiarSierraRequestObject) (cortesapi.CambiarSierraResponseObject, error) {
-	ses, err := gestion(ctx)
+	ses, err := mostrador(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -454,15 +579,20 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	if b.Fijadas != nil {
 		d.Fijadas = aFijadas(*b.Fijadas)
 	}
-	plano := CalcularPlano(d)
+	motor := CalcularPlano(d)
+	plano := ConLaHoja(motor)
 	// Lo que se cobra puede no ser lo que se dibuja: con piezas acomodadas a
 	// mano se cobra el plano libre, salvo que el manual gaste más placas
 	// (ACobrar). La pantalla lo dice antes de cobrar.
-	cobro := Cobro{Placas: plano.PlacasEnteras, Pasadas: plano.PasadasCobrables}
+	cobro := Cobro{Placas: plano.PlacasEnteras, Pasadas: plano.PasadasCobrables, Parciales: len(plano.Placas) - plano.PlacasEnteras}
 	if len(d.Fijadas) > 0 {
 		cobro = ACobrar(d)
 	}
-	out := map[string]any{"plano": plano, "placasACobrar": cobro.Placas, "pasadasACobrar": cobro.Pasadas}
+	if MaterialSeCobra(ctx, a.s.pool) {
+		cobro = cobro.ConMaterial()
+		plano = TodasDelCliente(plano)
+	}
+	out := map[string]any{"plano": plano, "placasACobrar": cobro.Placas, "pasadasACobrar": cobro.Pasadas, "placasParciales": cobro.Parciales}
 	// La hoja de la máquina, para el PDF que baja el mostrador antes de cobrar
 	// (18/11/2026). Solo el staff: al público no le sirve y cuesta armarla. Un
 	// plano que no se puede cortar en guillotina sale sin hoja, como en la
@@ -470,7 +600,7 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	// Con un tope: cada placa es una hoja, y el PDF del mostrador no arma más
 	// de 60 (ver app/api/mostrador/plano).
 	if b.Hoja != nil && *b.Hoja && auth.DeContexto(ctx).EsStaff() && len(plano.Placas) > 0 && len(plano.Placas) <= 60 {
-		if hoja, err := ArmarHojaDeCorte(plano); err == nil {
+		if hoja, err := ArmarHojaDeCorte(motor); err == nil {
 			sup := make([]float64, len(plano.Placas))
 			for i, p := range plano.Placas {
 				sup[i] = SuperficieDeSierra(p.Cortes, plano.AnchoSierra)

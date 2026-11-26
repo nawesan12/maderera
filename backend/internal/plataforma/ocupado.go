@@ -3,6 +3,7 @@ package plataforma
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -72,4 +73,31 @@ func EnTransaccion(ctx context.Context, base Iniciador, f func(pgx.Tx) error) er
 		case <-time.After(esperasDeReintento[intento]):
 		}
 	}
+}
+
+// MesCerrado dice si el error es el candado de un mes cerrado (los triggers
+// de la 00221, código MJ001) y de qué mes (aaaa-mm).
+func MesCerrado(err error) (string, bool) {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "MJ001" {
+		mes, _ := strings.CutPrefix(pg.Message, "MES_CERRADO ")
+		return mes, true
+	}
+	return "", false
+}
+
+var nombresDeMes = []string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+	"noviembre", "diciembre"}
+
+// NombreDelMes: «2026-11» es «noviembre de 2026».
+func NombreDelMes(mes string) string {
+	a, m, ok := strings.Cut(mes, "-")
+	if !ok || len(m) != 2 {
+		return mes
+	}
+	n := int(m[0]-'0')*10 + int(m[1]-'0')
+	if n < 1 || n > 12 {
+		return mes
+	}
+	return nombresDeMes[n-1] + " de " + a
 }

@@ -86,6 +86,8 @@ export const quotes = pgTable(
      * veces no es lo que entró primero.
      */
     necesitaPara: timestamp({ withTimezone: true }),
+    /** Por qué se perdió (al rechazarlo): Precio, Se lo llevó otro… */
+    motivoRechazo: text(),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -279,6 +281,16 @@ export const orders = pgTable(
     entregarEl: date(),
     huellaMostrador: text(),
     mercaderiaNoVolvio: boolean().notNull().default(false),
+    /** Con qué salió la venta del mostrador: «interno» o «fiscal» (migración 00230). */
+    comprobante: text(),
+    /** Cuándo cuenta como vendida: la primera entrega o factura (migración 00275). */
+    vendidoAt: timestamp({ withTimezone: true }),
+    /** La primera entrega, la primera factura y la cancelación: de ahí sale vendidoAt según la regla (migración 00320). */
+    entregadoAt: timestamp({ withTimezone: true }),
+    facturadoAt: timestamp({ withTimezone: true }),
+    canceladoAt: timestamp({ withTimezone: true }),
+    /** Lo que un pedido partido cargó a la cuenta corriente; el resto, con medioPago (00311). */
+    aCuenta: numeric({ precision: 12, scale: 2 }),
   },
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),
@@ -353,6 +365,8 @@ export const orderItems = pgTable(
     /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
     delCorte: boolean().notNull().default(false),
     precioLista: numeric({ precision: 12, scale: 2 }),
+    /* 00340: el corte cuyas pasadas se sumaron al pedido (FK en goose). */
+    cuttingOrderId: uuid(),
   },
   (t) => [index("order_items_order_idx").on(t.orderId)],
 );
@@ -559,6 +573,12 @@ export const cuttingOrders = pgTable(
     /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
     contactoTelefono: text(),
     retiraEl: date(),
+    /* 00240: cuándo salió de la máquina, la reposición sin cargo y por qué se anuló. */
+    terminadoAt: timestamp({ withTimezone: true }),
+    sinCargo: boolean().notNull().default(false),
+    motivoAnulado: text(),
+    /* 00340: el pedido aparte con las pasadas, si el suyo ya no se tocaba (FK en goose). */
+    cargoOrderId: uuid(),
   },
   (t) => [
     uniqueIndex("cutting_orders_numero_idx").on(t.numero),

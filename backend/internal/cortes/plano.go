@@ -714,8 +714,24 @@ func sembrarFijadas(
 type Cobro struct {
 	Placas  int `json:"placasACobrar"`
 	Pasadas int `json:"pasadasACobrar"`
+	// Parciales son las placas del plano que no pasan la mitad: no se
+	// venden, se cobra su corte y el recorte queda en la maderera. El
+	// mostrador lo dice al armar el corte («Material sin cargo»): antes se
+	// descubría leyendo la venta (mes simulado, H019 y H174).
+	Parciales int `json:"placasParciales"`
 	// Manual: se cobra el acomodo a mano (cobra más placas que el libre).
 	Manual bool `json:"-"`
+}
+
+// ConMaterial es el cobro con la regla corte_chico_material en «cobrar»
+// (H019): la placa que no pasa la mitad también se vende —entera, o media si
+// el trabajo sale de media placa—, así que como toda placa vendida no cobra
+// pasadas y el recorte es del cliente.
+func (c Cobro) ConMaterial() Cobro {
+	c.Placas += c.Parciales
+	c.Parciales = 0
+	c.Pasadas = 0
+	return c
 }
 
 // ACobrar es lo que se cobra de un despiece (T3, hallazgo 11). La regla de la
@@ -725,16 +741,19 @@ type Cobro struct {
 // libre y el del acomodo a mano, y se cobra el libre, salvo que el acomodo a
 // mano cobre más placas (alguien eligió gastar más material): las pasadas
 // son las del plano que se cobra.
+//
+// Se cuenta como la hoja (PlanoConLaHoja): lo que se cobra ahora nace con
+// MotorPasadasDeLaHoja.
 func ACobrar(d DatosDelPlano) Cobro {
-	manual := CalcularPlano(d)
+	manual := PlanoConLaHoja(d)
 	if len(d.Fijadas) == 0 {
-		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables}
+		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Parciales: len(manual.Placas) - manual.PlacasEnteras}
 	}
 	sinFijar := d
 	sinFijar.Fijadas = nil
-	libre := CalcularPlano(sinFijar)
+	libre := PlanoConLaHoja(sinFijar)
 	if manual.PlacasEnteras > libre.PlacasEnteras {
-		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Manual: true}
+		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Manual: true, Parciales: len(manual.Placas) - manual.PlacasEnteras}
 	}
-	return Cobro{Placas: libre.PlacasEnteras, Pasadas: libre.PasadasCobrables}
+	return Cobro{Placas: libre.PlacasEnteras, Pasadas: libre.PasadasCobrables, Parciales: len(libre.Placas) - libre.PlacasEnteras}
 }

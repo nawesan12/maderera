@@ -121,6 +121,9 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 			}
 		}
 
+		if _, err := tx.Exec(ctx, `DELETE FROM supplier_payment_cheques WHERE payment_id = $1`, id); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `DELETE FROM supplier_payment_allocations WHERE payment_id = $1`, id); err != nil {
 			return err
 		}

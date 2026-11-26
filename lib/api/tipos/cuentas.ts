@@ -182,6 +182,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cobros/caja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Si el efectivo de un cobro a cuenta (sin pedido) tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro) */
+        get: operations["CajaDelCobroACuenta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/recibos/{id}/anular": {
         parameters: {
             query?: never;
@@ -340,6 +357,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cheques/{id}/rechazo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description El banco rechazó un cheque que entregó un cliente: lo registra quien maneja plata desde la ficha del cliente (H272), con el PIN de un admin si no es admin. Hace lo mismo que pasarlo a rechazado en /admin/cheques (la nota de débito y el aviso). */
+        post: operations["RechazarChequeDelCliente"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/vendedores": {
         parameters: {
             query?: never;
@@ -368,6 +404,58 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["AlternarVendedor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/personal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListarPersonal"];
+        put?: never;
+        post: operations["AltaDePersonal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/personal/{id}/puesto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CambiarPuesto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/personal/{id}/baja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BajaDePersonal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -476,6 +564,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        Puesto: "admin" | "vendedor" | "deposito" | "aserradero";
         Problema: {
             title: string;
             status: number;
@@ -638,7 +728,7 @@ export interface components {
             /** Format: date-time */
             fecha: string;
             /** @enum {string} */
-            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque_rechazado";
+            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque" | "cheque_rechazado";
             titulo: string;
             detalle: string | null;
             /** Format: double */
@@ -655,7 +745,15 @@ export interface components {
                 anulado: boolean;
                 /** @description Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel */
                 porMercadoPago: boolean;
+                chequeRechazado?: boolean;
             } | null;
+            /** @description Los cheques del renglón que el banco todavía puede rechazar (H272) */
+            cheques?: {
+                id: string;
+                nombre: string;
+                /** Format: double */
+                importe: number;
+            }[];
         };
         Historial: {
             movimientos: components["schemas"]["MovimientoDelCliente"][];
@@ -671,6 +769,7 @@ export interface components {
             detalle: string | null;
             referencia: string | null;
             receiptId: string | null;
+            reciboNumero?: string | null;
             /** Format: double */
             monto: number;
             /** Format: double */
@@ -783,6 +882,11 @@ export interface components {
             receiptId: string | null;
             recibo: string | null;
             motivoRechazo: string | null;
+            /**
+             * Format: double
+             * @description lo que debe hoy el cliente (solo en los informados)
+             */
+            saldoCliente: number | null;
         };
         Gestion: {
             id: string;
@@ -819,6 +923,8 @@ export interface components {
                     ok: string;
                     aviso?: string;
                     receiptId?: string;
+                    /** @description la ficha guardada (el alta abre la ficha nueva) */
+                    id?: string;
                 };
             };
         };
@@ -1077,6 +1183,8 @@ export interface operations {
                     concepto?: string;
                     /** @description el JSON de las partes, como lo arma el formulario */
                     partes: string;
+                    /** @description la sucursal donde entra el efectivo (sin caja abierta se pide abrirla) */
+                    branchId?: string;
                     /** @description la del intento, generada al abrir el cobro: un reintento devuelve el mismo recibo */
                     clave?: string;
                 };
@@ -1085,6 +1193,40 @@ export interface operations {
         responses: {
             200: components["responses"]["Ok"];
             422: components["responses"]["Problema"];
+        };
+    };
+    CajaDelCobroACuenta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vacío si hay caja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description la sucursal cuya caja hay que abrir */
+                        sinCaja?: string;
+                        /** Format: double */
+                        fondoBase?: number;
+                        sucursales?: {
+                            id: string;
+                            nombre: string;
+                            abierta: boolean;
+                            /** Format: double */
+                            fondo: number;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
         };
     };
     AnularRecibo: {
@@ -1100,6 +1242,8 @@ export interface operations {
             content: {
                 "application/json": {
                     motivo: string;
+                    /** @description el de un admin, para quien no es admin (como anular una venta) */
+                    pin?: string;
                 };
             };
         };
@@ -1338,6 +1482,29 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    RechazarChequeDelCliente: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    motivo: string;
+                    /** @description el de un admin (o su contraseña, sin ningún PIN cargado) */
+                    pin?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
+        };
+    };
     ListarVendedores: {
         parameters: {
             query?: {
@@ -1401,6 +1568,92 @@ export interface operations {
         responses: {
             200: components["responses"]["Ok"];
             404: components["responses"]["Problema"];
+        };
+    };
+    ListarPersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El personal, por puesto y nombre */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        nombre: string;
+                        correo: string;
+                        rol: components["schemas"]["Puesto"];
+                    }[];
+                };
+            };
+        };
+    };
+    AltaDePersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    nombre: string;
+                    correo: string;
+                    rol: components["schemas"]["Puesto"];
+                    /** @description La contraseña inicial */
+                    clave: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CambiarPuesto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rol: components["schemas"]["Puesto"];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    BajaDePersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Ok"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     ListarGestiones: {
@@ -1527,6 +1780,8 @@ export interface operations {
                         limiteCredito: number;
                         /** Format: double */
                         disponible: number;
+                        /** Format: double */
+                        sinEntregar: number;
                         movimientos: components["schemas"]["MovimientoDelResumen"][];
                     };
                 };

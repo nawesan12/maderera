@@ -29,6 +29,8 @@ import * as schema from "../lib/db/schema";
 const SOLO_EN_GO = new Set([
   "goose_db_version",
   "bases_de_retencion",
+  "purchase_invoice_receipts",
+  "supplier_payment_cheques",
   "cheque_estados",
   "consultas_corte",
   "consultas_corte_grupos",
@@ -40,12 +42,17 @@ const SOLO_EN_GO = new Set([
   "devoluciones",
   "fotos_biblioteca_descartadas",
   "invoices_dadas_de_baja",
+  // El candado del cierre del mes (00221): lo leen y escriben Go y los triggers.
+  "meses_cerrados",
   "padron_iibb",
   "padron_iibb_importaciones",
   "payment_refunds",
   // Copia de respaldo que dejó la 00150 al normalizar los rubros.
   "product_images_rubro_00150",
   "receipt_refunds",
+  // Los traslados entre sucursales (00270): los escribe solo Go.
+  "stock_traslado_items",
+  "stock_traslados",
   "technical_document_targets",
 ]);
 

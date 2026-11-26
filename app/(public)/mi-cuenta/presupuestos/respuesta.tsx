@@ -19,7 +19,14 @@ const estadoInicial: EstadoAccion = {};
  * Aceptar es la acción principal y se ve como tal; rechazar existe pero no
  * compite visualmente, porque no es lo que se espera que pase.
  */
-export function RespuestaPresupuesto({ numero }: { numero: string }) {
+export function RespuestaPresupuesto({
+  numero,
+  desde,
+}: {
+  numero: string;
+  /** Desde el Resumen, la acción lleva al detalle al responder (H215). */
+  desde?: "resumen";
+}) {
   const [estado, accion, pendiente] = useActionState(
     responderPresupuesto,
     estadoInicial,
@@ -37,6 +44,7 @@ export function RespuestaPresupuesto({ numero }: { numero: string }) {
   return (
     <form action={accion} className="space-y-2.5">
       <input type="hidden" name="numero" value={numero} />
+      {desde && <input type="hidden" name="desde" value={desde} />}
 
       <div className="flex flex-wrap gap-2">
         <button

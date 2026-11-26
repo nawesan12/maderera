@@ -222,8 +222,13 @@ export interface components {
             estado: "activo" | "moroso" | "inactivo";
             /** Format: double */
             limiteCredito: number;
+            datosFiscalesFijos: boolean;
+            vinculada: boolean;
+            lista: string | null;
         } | null;
         PresupuestoDelPortal: {
+            aResponder: boolean;
+            pedido: string | null;
             id: string;
             numero: string;
             estado: string;
@@ -285,6 +290,57 @@ export interface components {
             items: components["schemas"]["RenglonDelPedido"][];
         };
         PedidoPropio: {
+            /** Format: double */
+            descuento: number;
+            /** Format: double */
+            debeEnCuenta: number | null;
+            /**
+             * Format: double
+             * @description lo que cuesta en la cuenta después de sus notas de crédito
+             */
+            cuestaEnCuenta?: number | null;
+            /** Format: double */
+            enRevision: number | null;
+            cortes: {
+                id: string;
+                numero: string;
+                estado: string;
+                material: string | null;
+                placas: number;
+                /** Format: date-time */
+                retiraEl: string | null;
+                piezas: {
+                    largoMm: number;
+                    anchoMm: number;
+                    cantidad: number;
+                    etiqueta: string | null;
+                }[];
+            }[];
+            facturas: {
+                id: string;
+                tipo: string;
+                puntoVenta: number;
+                numero: number;
+                estado: string;
+                /** Format: double */
+                total: number;
+            }[];
+            ajustes: {
+                id: string;
+                tipo: string;
+                /** Format: double */
+                monto: number;
+                detalle: string | null;
+                /** Format: date-time */
+                fecha: string;
+            }[];
+            recibos: {
+                id: string;
+                numero: string;
+                estado: string;
+                /** Format: double */
+                total: number;
+            }[];
             id: string;
             numero: string;
             estado: string;
@@ -422,6 +478,17 @@ export interface operations {
                         numero: string;
                         estado: string;
                         estadoPago: string;
+                        medioPago: string | null;
+                        enAcopio: boolean;
+                        /** Format: double */
+                        debeEnCuenta: number | null;
+                        /**
+                         * Format: double
+                         * @description lo que cuesta en la cuenta después de sus notas de crédito
+                         */
+                        cuestaEnCuenta?: number | null;
+                        /** Format: double */
+                        enRevision: number | null;
                         /** @enum {string} */
                         tipoEntrega: "retiro" | "envio";
                         /** Format: double */
@@ -451,6 +518,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        aResponder: boolean;
                         id: string;
                         numero: string;
                         estado: string;

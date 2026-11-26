@@ -9,6 +9,7 @@ import {
   esFiltro,
 } from "@/components/cuenta/filtros-de-movimientos";
 import { formatearMonto } from "@/lib/formato";
+import { avisoDePagosEnVerificacion } from "@/lib/cuenta/portal";
 
 export const metadata: Metadata = { title: "Movimientos" };
 
@@ -75,10 +76,7 @@ export default async function MovimientosPage({
           mirar después de mandar un comprobante o un cheque. */}
       {pendientes.length > 0 && (
         <p className="estado-espera rounded-xl bg-[var(--estado-fondo)] px-4 py-3 text-[15px]">
-          {pendientes.length === 1
-            ? "Tenés un pago que estamos verificando."
-            : `Tenés ${pendientes.length} pagos que estamos verificando.`}{" "}
-          Cuando lo confirmemos baja tu saldo y te llega el recibo por correo.
+          {avisoDePagosEnVerificacion(pendientes.length)}
         </p>
       )}
 
@@ -105,6 +103,11 @@ export default async function MovimientosPage({
           <LineaDeTiempo
             movimientos={historial.movimientos}
             enlacePedido={(p) => `/mi-cuenta/pedidos/${p.numero}`}
+            sinCuenta={
+              cliente.limiteCredito <= 0 &&
+              saldo === 0 &&
+              !historial.movimientos.some((m) => m.importe !== null)
+            }
             vacio="No hay movimientos en este período."
           />
         </section>

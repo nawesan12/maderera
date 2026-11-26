@@ -35,7 +35,7 @@ func TestCobroDelPedido(t *testing.T) {
 	turno := e.id(t, `insert into cash_sessions (branch_id, abierta_por) values ($1, (select id from "user" where email = 'vendedor@prueba.test')) returning id`, e.sucursal)
 
 	// Más que el saldo, no (quedan 80000).
-	if c, b := pedir(t, ven, "POST", u+pedido+"/cobro", map[string]any{"partes": efectivo("90000"), "clave": "k-3"}); c != 422 || !strings.Contains(b, "A PED-7 le faltan 80000.00") {
+	if c, b := pedir(t, ven, "POST", u+pedido+"/cobro", map[string]any{"partes": efectivo("90000"), "clave": "k-3"}); c != 422 || !strings.Contains(b, "A PED-7 le faltan $\u00a080.000") {
 		t.Fatalf("más que el saldo: %d %s", c, b)
 	}
 	// Con caja entra al turno; la misma clave otra vez es el mismo recibo, sin

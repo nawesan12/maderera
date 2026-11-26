@@ -50,6 +50,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -64,8 +65,21 @@ const (
 	// Anular: una venta ajena, de otro turno, ya cobrada o cuya mercadería
 	// no vuelve.
 	Anular Motivo = "anular"
+	// Devolver: una devolución parcial desde el mostrador. Firma lo mismo que
+	// anular (plata que sale de la venta), pero el campo decía «Anular
+	// $ 6.660» sobre una devolución (mes simulado, H270).
+	Devolver Motivo = "devolver"
 	// Presupuesto: respetar los precios de un presupuesto vencido.
 	Presupuesto Motivo = "presupuesto"
+	// Costo: la venta cobra algo por debajo de su costo (mes simulado, H018).
+	Costo Motivo = "costo"
+	// Remito: anular un remito que ya firmó quien recibió (mes simulado: el
+	// depósito lo anulaba con un toque y la mercadería volvía al stock
+	// aunque el cliente se la había llevado).
+	Remito Motivo = "remito"
+	// Cheque: registrar el rechazo de un cheque de un cliente sin ser admin
+	// (mes simulado, H272): vuelve la deuda con una nota de débito.
+	Cheque Motivo = "cheque"
 )
 
 // Los topes de errores.
@@ -124,6 +138,11 @@ type Falta struct {
 	BloqueadoHasta *time.Time
 	// SinAdmins: ningún administrador cargó su PIN todavía.
 	SinAdmins bool
+	// ConClave: sin ningún PIN cargado, firma la contraseña del panel de un
+	// administrador (mes simulado, H016): antes la venta quedaba trabada
+	// hasta que alguien cargara un PIN, y el vendedor no tenía cómo corregir
+	// un error con el encargado al lado.
+	ConClave bool
 }
 
 func (f *Falta) Error() string { return f.Mensaje() }
@@ -133,10 +152,14 @@ func (f *Falta) Mensaje() string {
 	switch {
 	case f.BloqueadoHasta != nil:
 		return "Bloqueado hasta las " + f.BloqueadoHasta.In(argentina).Format("15:04") + "."
-	case f.SinAdmins:
+	case f.SinAdmins && !f.ConClave:
 		return "Ningún administrador cargó su PIN: se carga desde su menú del panel."
+	case f.PinIncorrecto && f.ConClave:
+		return "Contraseña incorrecta."
 	case f.PinIncorrecto:
 		return "PIN incorrecto."
+	case f.ConClave:
+		return "Hace falta la contraseña de un administrador."
 	}
 	return "Hace falta el PIN de un administrador."
 }
@@ -208,6 +231,29 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 			return f, nil
 		}
 	}
+	// Quién puede firmar se mira antes de pedir nada: sin ningún PIN cargado,
+	// el campo pide de entrada la contraseña de un admin, o dice que no hay
+	// quién firme. Antes se enteraba recién al teclear seis números.
+	admins, err := s.adminsConPIN(ctx)
+	if err != nil {
+		return nil, err
+	}
+	porClave := false
+	if len(admins) == 0 {
+		falta.SinAdmins = true
+		// La regla firma_sin_pin (/admin/reglas): con «solo_pin», sin PIN
+		// cargado no firma nadie y el mensaje dice cómo cargarlo.
+		if reglas.Es(ctx, s.pool, reglas.FirmaSinPIN, "solo_pin") {
+			return nil, falta
+		}
+		if admins, err = s.adminsConClave(ctx); err != nil {
+			return nil, err
+		}
+		if len(admins) == 0 {
+			return nil, falta
+		}
+		falta.ConClave, porClave = true, true
+	}
 	if p.PIN == "" {
 		return nil, falta
 	}
@@ -238,15 +284,6 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 		return nil, falta
 	}
 
-	admins, err := s.adminsConPIN(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(admins) == 0 {
-		falta.SinAdmins = true
-		return nil, falta
-	}
-
 	// El intento cuenta antes de verificar (INSERT … ON CONFLICT … RETURNING,
 	// atómico): el que llega pasado el tope se rechaza sin probar el PIN.
 	errores, err := s.sumar(ctx, sujeto, vSuc)
@@ -266,7 +303,7 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 	}
 
 	var ids, nombres []string
-	if auth.PINValido(p.PIN) {
+	if porClave || auth.PINValido(p.PIN) {
 		for _, a := range admins {
 			ok, err := auth.VerificarPIN(a.hash, p.PIN)
 			if err != nil {
@@ -309,7 +346,7 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 	}
 	f := &Firma{UserID: ids[0], Nombre: strings.Join(nombres, " y ")}
 	f.Ficha = s.ficha(p, f.UserID, ahora.Add(vigenciaDeFicha))
-	s.avisarFirma(ctx, ses, p, f.Nombre)
+	s.avisarFirma(ctx, ses, p, f.Nombre, porClave)
 	return f, nil
 }
 
@@ -327,18 +364,26 @@ func (s *Servicio) primeraVez(ctx context.Context, clave string, ventana time.Ti
 // QueSeAutoriza es la cifra en el idioma del mostrador, la misma que muestra
 // el campo del PIN (components/autorizacion/campo-pin.tsx).
 func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
-	m := formato.MonedaEntera(monto)
+	m := formato.Importe(monto)
 	var t string
 	switch motivo {
 	case Credito:
 		t = m + " a cuenta, pasado el límite"
 	case Anular:
 		t = "anular " + m
+	case Devolver:
+		t = "devolver " + m
+	case Costo:
+		t = m + " abajo del costo"
+	case Remito:
+		t = "anular un remito firmado"
+	case Cheque:
+		t = "rechazar un cheque de " + m
 	default:
 		t = m + " abajo del precio"
 	}
 	if credito > 0 {
-		t += " · " + formato.MonedaEntera(credito) + " a cuenta, pasado el límite"
+		t += " · " + formato.Importe(credito) + " a cuenta, pasado el límite"
 	}
 	return t
 }
@@ -346,8 +391,12 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 // avisarFirma le cuenta a los administradores cada PIN que firmó: quién lo
 // pidió, qué y a nombre de quién. Un PIN aprendido no se detecta por los
 // errores, se detecta cuando firma algo que su dueño no firmó.
-func (s *Servicio) avisarFirma(ctx context.Context, ses *auth.Sesion, p Pedido, admin string) {
-	cuerpo := fmt.Sprintf("%s usó el PIN de %s: %s.", ses.Nombre, admin, QueSeAutoriza(p.Motivo, p.Monto, p.Credito))
+func (s *Servicio) avisarFirma(ctx context.Context, ses *auth.Sesion, p Pedido, admin string, porClave bool) {
+	con := "el PIN"
+	if porClave {
+		con = "la contraseña"
+	}
+	cuerpo := fmt.Sprintf("%s usó %s de %s: %s.", ses.Nombre, con, admin, QueSeAutoriza(p.Motivo, p.Monto, p.Credito))
 	s.log.Info("autorizacion: firmó con PIN", "usuario", ses.UserID, "motivo", p.Motivo, "monto", p.Monto, "clave", p.Clave)
 	if s.avisar != nil {
 		s.avisar(context.WithoutCancel(ctx), "Autorización con PIN", cuerpo)
@@ -362,6 +411,29 @@ func (s *Servicio) adminsConPIN(ctx context.Context) ([]admin, error) {
 		SELECT u.id, u.name, u.pin_autorizacion FROM "user" u
 		JOIN profiles p ON p.user_id = u.id AND p.role = 'staff' AND p.staff_role = 'admin'
 		WHERE u.pin_autorizacion IS NOT NULL ORDER BY u.created_at, u.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	var out []admin
+	for filas.Next() {
+		var a admin
+		if err := filas.Scan(&a.id, &a.nombre, &a.hash); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, filas.Err()
+}
+
+// adminsConClave son los administradores con contraseña del panel: firman
+// solo mientras ninguno cargó su PIN. El hash es el mismo scrypt del PIN.
+func (s *Servicio) adminsConClave(ctx context.Context) ([]admin, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT u.id, u.name, a.password FROM "user" u
+		JOIN profiles p ON p.user_id = u.id AND p.role = 'staff' AND p.staff_role = 'admin'
+		JOIN account a ON a.user_id = u.id AND a.provider_id = 'credential'
+		WHERE a.password IS NOT NULL ORDER BY u.created_at, u.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +542,10 @@ func (s *Servicio) leerFicha(ctx context.Context, p Pedido) (*Firma, bool, error
 	}
 	var nombre string
 	err := s.pool.QueryRow(ctx, `SELECT u.name FROM "user" u JOIN profiles p ON p.user_id = u.id
-		WHERE u.id = $1 AND p.role = 'staff' AND p.staff_role = 'admin' AND u.pin_autorizacion IS NOT NULL`, string(usuario)).Scan(&nombre)
+		WHERE u.id = $1 AND p.role = 'staff' AND p.staff_role = 'admin'
+		  AND (u.pin_autorizacion IS NOT NULL OR NOT EXISTS (SELECT 1 FROM "user" x
+		       JOIN profiles xp ON xp.user_id = x.id AND xp.role = 'staff' AND xp.staff_role = 'admin'
+		       WHERE x.pin_autorizacion IS NOT NULL))`, string(usuario)).Scan(&nombre)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, nil
 	}

@@ -7,6 +7,8 @@ import { FormularioDatos } from "./formulario";
 import { NovedadesPorCorreo } from "./novedades";
 import { Clave } from "./clave";
 import { api, datos } from "@/lib/api/servidor";
+import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
+import { conPunto } from "@/lib/cuenta/portal";
 
 export const metadata: Metadata = { title: "Mis datos" };
 
@@ -15,9 +17,12 @@ export default async function MisDatosPage() {
     verifySession(),
     clienteDeLaSesion(),
   ]);
-  const [{ recibe }, clave] = await Promise.all([
+  const [{ recibe }, clave, pedirCambio] = await Promise.all([
     (await api()).GET("/api/v1/mi-cuenta/novedades").then(datos),
     (await api()).GET("/api/v1/sesion/clave").then(datos),
+    enlaceWhatsapp(
+      `Hola! Soy ${conPunto((cliente?.nombre ?? sesion.name).trim())} Quiero cambiar mis datos para facturar.`,
+    ),
   ]);
 
   return (
@@ -48,6 +53,8 @@ export default async function MisDatosPage() {
           cliente?.cuit ? formatearCuit(cliente.cuit) : ""
         }
         condicionIva={cliente?.condicionIva ?? "consumidor_final"}
+        fijos={cliente?.datosFiscalesFijos ?? false}
+        pedirCambio={pedirCambio}
       />
 
       <NovedadesPorCorreo recibe={recibe} />

@@ -22,8 +22,8 @@ func TestGananciaSegunLasReglas(t *testing.T) {
 		}
 	}
 	var pedido, proveedor, factura string
-	_ = pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, subtotal, descuento, total)
-		values ('PED-R1', 'Juan', 1210, 121, 1089) returning id`).Scan(&pedido)
+	_ = pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, subtotal, descuento, total, estado)
+		values ('PED-R1', 'Juan', 1210, 121, 1089, 'entregado') returning id`).Scan(&pedido)
 	exec(`insert into order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal, alicuota_iva, costo_unitario)
 		values ($1, 'Placa', 'unidad', 1, 1210, 1210, 21, 500)`, pedido)
 	_ = pool.QueryRow(ctx, `insert into suppliers (nombre) values ('Flete SA') returning id`).Scan(&proveedor)

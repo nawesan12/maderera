@@ -84,12 +84,19 @@ export function buscarVariantes(
 
   const consulta = terminos.join(" ");
 
+  // Los números tipeados («mdf 18») valen más cuando están enteros en el
+  // nombre o la medida («18 mm») que metidos en otro número («1830 x
+  // 2600mm»): con el orden por nombre quedaba marcado el MDF de 3 mm (mes
+  // simulado, H017). Es `numerosSueltos` de buscar.go.
+  const numeros = terminos.filter((t) => /^\d+$/.test(t)).map((t) => new RegExp(`(^|[^0-9])${t}([^0-9]|$)`));
   const puntaje = (v: VarianteLocal): number => {
     const sku = normalizar(v.sku);
     if (sku === consulta) return 0;
     if (sku.startsWith(consulta)) return 1;
-    if (normalizar(v.producto).startsWith(consulta)) return 2;
-    return 3;
+    const nombre = normalizar(`${v.producto} ${v.medida}`);
+    const sueltos = numeros.filter((n) => !n.test(nombre)).length;
+    if (normalizar(v.producto).startsWith(consulta)) return 2 + sueltos;
+    return 3 + sueltos;
   };
 
   return indice

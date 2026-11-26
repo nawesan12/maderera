@@ -18,6 +18,7 @@
 import { plantillaBase } from "./plantillas-base";
 import { completar, marcadores } from "./plantillas";
 import { aWaId, numeroLegible } from "./numeros";
+import { nombreDeSaludo } from "./saludo";
 
 /**
  * Los avisos que se pueden mandar a mano, con su plantilla.
@@ -72,9 +73,9 @@ function sinOracionesVacias(texto: string, valores: Record<string, string>): str
     .trim();
 }
 
-/** El primer nombre para el saludo; «qué tal» si no hay, igual que el automático. */
+/** El nombre para el saludo (ver `nombreDeSaludo`); «qué tal» si no hay, igual que el automático. */
 export function primerNombre(nombre: string | null | undefined): string {
-  return (nombre ?? "").trim().split(/\s+/)[0] || "qué tal";
+  return nombreDeSaludo(nombre) || "qué tal";
 }
 
 export interface DatosAvisoManual {

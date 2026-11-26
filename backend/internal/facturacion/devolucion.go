@@ -396,6 +396,19 @@ func (s *Servicio) ParaDevolver(ctx context.Context, invoiceID string) (*DatosDe
 	return &d, filas.Err()
 }
 
+// estadoParaDevolver es estadoParaNota sin pedir el CAE: la factura que lo
+// espera también se devuelve, y su nota sale numerada y sin CAE (H294). El
+// cálculo de la pantalla usaba estadoParaNota y cortaba la devolución con
+// «Sin CAE no hay nada que anular» antes de llegar a confirmarla, que es
+// como salen todas las facturas mientras no haya certificado (mes
+// simulado, H270).
+func (s *Servicio) estadoParaDevolver(o *original) error {
+	if o != nil && o.cae == nil && o.estado != "anulada" && o.estado != "borrador" {
+		return nil
+	}
+	return s.estadoParaNota(o)
+}
+
 // parcialesDe son los renglones con cantidad, como los toma la nota.
 func parcialesDe(renglones []RenglonADevolver) ([]fiscal.CantidadAAcreditar, error) {
 	out := []fiscal.CantidadAAcreditar{}
@@ -432,7 +445,7 @@ func (s *Servicio) CalcularDevolucion(ctx context.Context, invoiceID string, ren
 		if err != nil {
 			return err
 		}
-		if err := s.estadoParaNota(o); err != nil {
+		if err := s.estadoParaDevolver(o); err != nil {
 			return err
 		}
 		calc, err := calcularNota(ctx, tx, o, parciales)
@@ -578,7 +591,13 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 	if err != nil {
 		return Devolucion{}, err
 	}
-	if err := s.estadoParaNota(o); err != nil {
+	// **La factura sin CAE también se devuelve.** Un faltante o una laca que
+	// volvió no tenían por dónde hacerse mientras la factura esperaba el CAE:
+	// la deuda quedaba entera, el stock había que sumarlo a mano y el IVA de
+	// la factura seguía completo (simulación del mes, H294/H332/H347). La nota
+	// sale numerada y sin CAE, atada a la factura; se autoriza después de
+	// ella (autorizar lo frena antes).
+	if err := s.estadoParaDevolver(o); err != nil {
 		return Devolucion{}, err
 	}
 	sinNota := s.caeDePruebaEnProduccion(o)

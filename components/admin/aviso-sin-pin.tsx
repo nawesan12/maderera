@@ -7,24 +7,34 @@ import { DialogoPin } from "./dialogo-pin";
 /**
  * Ningún admin cargó su PIN: todo lo que lo pide en el mostrador —vender bajo
  * la lista, anular una venta ajena— queda trabado hasta que alguien lo cargue.
- * Fijo en el inicio mientras dure, con el botón que lo carga ahí mismo.
+ *
+ * Es una celda más de «Para hoy» (mes simulado, H067): iba como una franja
+ * entre el selector de período y los números, lejos de lo que había que hacer
+ * a la mañana. Toda la celda abre el diálogo; en lugar de la cifra, la llave.
  */
-export function AvisoSinPin() {
+export function CeldaPin({
+  texto,
+  tieneClave,
+  className,
+}: {
+  texto: string;
+  tieneClave: boolean;
+  className: string;
+}) {
   const [abierto, setAbierto] = useState(false);
   return (
-    <div className="tarjeta-atencion flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-      <p className="flex items-center gap-2.5 text-base font-semibold">
-        <KeyRound className="h-5 w-5 shrink-0 text-brand-orange" aria-hidden="true" />
-        Cargá tu PIN de autorización
-      </p>
+    <>
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="boton-accion inline-flex h-10 items-center rounded-lg px-4 text-base font-medium"
+        className={`${className} text-left`}
       >
-        Cargar PIN
+        <KeyRound className="h-8 w-8 text-acento-texto sm:h-11 sm:w-11" aria-hidden="true" />
+        <span className="text-[15px] font-semibold leading-tight group-hover:underline sm:text-base">
+          {texto}
+        </span>
       </button>
-      <DialogoPin abierto={abierto} alCerrar={() => setAbierto(false)} />
-    </div>
+      <DialogoPin abierto={abierto} alCerrar={() => setAbierto(false)} tieneClave={tieneClave} />
+    </>
   );
 }

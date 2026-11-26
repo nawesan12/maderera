@@ -25,6 +25,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for FichaDePedidoComprobante.
+const (
+	FichaDePedidoComprobanteFiscal      FichaDePedidoComprobante = "fiscal"
+	FichaDePedidoComprobanteInterno     FichaDePedidoComprobante = "interno"
+	FichaDePedidoComprobanteLessThannil FichaDePedidoComprobante = "<nil>"
+)
+
+// Valid indicates whether the value is a known member of the FichaDePedidoComprobante enum.
+func (e FichaDePedidoComprobante) Valid() bool {
+	switch e {
+	case FichaDePedidoComprobanteFiscal:
+		return true
+	case FichaDePedidoComprobanteInterno:
+		return true
+	case FichaDePedidoComprobanteLessThannil:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MedioPago.
 const (
 	Credito         MedioPago = "credito"
@@ -49,6 +70,27 @@ func (e MedioPago) Valid() bool {
 	case MercadoPago:
 		return true
 	case Transferencia:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PedidoListadoComprobante.
+const (
+	PedidoListadoComprobanteFiscal      PedidoListadoComprobante = "fiscal"
+	PedidoListadoComprobanteInterno     PedidoListadoComprobante = "interno"
+	PedidoListadoComprobanteLessThannil PedidoListadoComprobante = "<nil>"
+)
+
+// Valid indicates whether the value is a known member of the PedidoListadoComprobante enum.
+func (e PedidoListadoComprobante) Valid() bool {
+	switch e {
+	case PedidoListadoComprobanteFiscal:
+		return true
+	case PedidoListadoComprobanteInterno:
+		return true
+	case PedidoListadoComprobanteLessThannil:
 		return true
 	default:
 		return false
@@ -111,21 +153,36 @@ func (e ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega) Valid() bool {
 
 // FichaDePedido defines model for FichaDePedido.
 type FichaDePedido struct {
-	BranchId         *string   `json:"branchId"`
-	Cliente          string    `json:"cliente"`
-	CostoEnvio       string    `json:"costoEnvio"`
-	CreatedAt        time.Time `json:"createdAt"`
-	CustomerId       *string   `json:"customerId"`
-	Descuento        string    `json:"descuento"`
-	DescuentoMotivo  *string   `json:"descuentoMotivo"`
-	DireccionEntrega *string   `json:"direccionEntrega"`
-	Email            *string   `json:"email"`
-	Empresa          *string   `json:"empresa"`
+	// ACobrar El total menos lo devuelto contra la deuda
+	ACobrar float64 `json:"aCobrar"`
+
+	// ACuenta lo que un pedido partido cargó a la cuenta corriente (H047)
+	ACuenta *float64 `json:"aCuenta,omitempty"`
+
+	// Acopio Se retira de a partes (ya salió algo
+	Acopio   bool    `json:"acopio"`
+	BranchId *string `json:"branchId"`
+	Cliente  string  `json:"cliente"`
+
+	// Cobrado Lo cobrado con recibos y en línea
+	Cobrado          float64                   `json:"cobrado"`
+	Comprobante      *FichaDePedidoComprobante `json:"comprobante"`
+	CostoEnvio       string                    `json:"costoEnvio"`
+	CreatedAt        time.Time                 `json:"createdAt"`
+	CustomerId       *string                   `json:"customerId"`
+	Descuento        string                    `json:"descuento"`
+	DescuentoMotivo  *string                   `json:"descuentoMotivo"`
+	DireccionEntrega *string                   `json:"direccionEntrega"`
+	Email            *string                   `json:"email"`
+	Empresa          *string                   `json:"empresa"`
 
 	// EntregarEl AAAA-MM-DD
 	EntregarEl *string `json:"entregarEl"`
 	Estado     string  `json:"estado"`
 	EstadoPago string  `json:"estadoPago"`
+
+	// Facturado Tiene una factura viva
+	Facturado bool `json:"facturado"`
 
 	// FichaPorCorreo Sin cliente, la ficha con el correo del contacto (para unirlo a mano)
 	FichaPorCorreo *FichaParaUnir  `json:"fichaPorCorreo,omitempty"`
@@ -134,15 +191,16 @@ type FichaDePedido struct {
 	Items          []ItemDePedido  `json:"items"`
 
 	// Margen Solo para el admin, y solo si alguna línea tiene costo congelado
-	Margen            *MargenDelPedido `json:"margen"`
-	MedioPago         *string          `json:"medioPago"`
-	Notas             *string          `json:"notas"`
-	Numero            string           `json:"numero"`
-	NumeroPresupuesto *string          `json:"numeroPresupuesto"`
-	NumeroProvisorio  *string          `json:"numeroProvisorio"`
-	Origen            string           `json:"origen"`
-	Pagos             []PagoDelPedido  `json:"pagos"`
-	QuoteId           *string          `json:"quoteId"`
+	Margen            *MargenDelPedido  `json:"margen"`
+	MedioPago         *string           `json:"medioPago"`
+	Notas             *string           `json:"notas"`
+	Numero            string            `json:"numero"`
+	NumeroPresupuesto *string           `json:"numeroPresupuesto"`
+	NumeroProvisorio  *string           `json:"numeroProvisorio"`
+	Origen            string            `json:"origen"`
+	Pagos             []PagoDelPedido   `json:"pagos"`
+	QuoteId           *string           `json:"quoteId"`
+	Recibos           []ReciboDelPedido `json:"recibos"`
 
 	// SaldoCliente Positivo
 	SaldoCliente *float64 `json:"saldoCliente"`
@@ -156,6 +214,9 @@ type FichaDePedido struct {
 	Total       string     `json:"total"`
 	ZonaEnvio   *string    `json:"zonaEnvio"`
 }
+
+// FichaDePedidoComprobante defines model for FichaDePedido.Comprobante.
+type FichaDePedidoComprobante string
 
 // FichaDePresupuesto defines model for FichaDePresupuesto.
 type FichaDePresupuesto struct {
@@ -175,10 +236,13 @@ type FichaDePresupuesto struct {
 	FichaPorCorreo *FichaParaUnir      `json:"fichaPorCorreo,omitempty"`
 	Id             string              `json:"id"`
 	Items          []ItemDePresupuesto `json:"items"`
-	Notas          *string             `json:"notas"`
-	Numero         string              `json:"numero"`
-	NumeroPedido   *string             `json:"numeroPedido"`
-	Origen         string              `json:"origen"`
+
+	// MotivoRechazo por qué se perdió
+	MotivoRechazo *string `json:"motivoRechazo,omitempty"`
+	Notas         *string `json:"notas"`
+	Numero        string  `json:"numero"`
+	NumeroPedido  *string `json:"numeroPedido"`
+	Origen        string  `json:"origen"`
 
 	// PedidoId El pedido en que se convirtió
 	PedidoId     *string `json:"pedidoId"`
@@ -228,15 +292,21 @@ type ItemDePedido struct {
 
 // ItemDePresupuesto defines model for ItemDePresupuesto.
 type ItemDePresupuesto struct {
-	AlicuotaIva    *string `json:"alicuotaIva"`
-	Cantidad       string  `json:"cantidad"`
-	Descripcion    string  `json:"descripcion"`
-	Id             string  `json:"id"`
-	Orden          int     `json:"orden"`
-	PrecioUnitario string  `json:"precioUnitario"`
-	Subtotal       string  `json:"subtotal"`
-	Unidad         string  `json:"unidad"`
-	VariantId      *string `json:"variantId"`
+	AlicuotaIva *string `json:"alicuotaIva"`
+
+	// BajoCosto el precio no cubre el costo
+	BajoCosto   *bool  `json:"bajoCosto,omitempty"`
+	Cantidad    string `json:"cantidad"`
+	Descripcion string `json:"descripcion"`
+	Id          string `json:"id"`
+	Orden       int    `json:"orden"`
+
+	// Piso el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación
+	Piso           *float64 `json:"piso,omitempty"`
+	PrecioUnitario string   `json:"precioUnitario"`
+	Subtotal       string   `json:"subtotal"`
+	Unidad         string   `json:"unidad"`
+	VariantId      *string  `json:"variantId"`
 }
 
 // MargenDelPedido defines model for MargenDelPedido.
@@ -273,23 +343,43 @@ type PasoDelPedido struct {
 
 // PedidoListado defines model for PedidoListado.
 type PedidoListado struct {
-	Cliente          string    `json:"cliente"`
-	CreatedAt        time.Time `json:"createdAt"`
-	CustomerId       *string   `json:"customerId"`
-	DireccionEntrega *string   `json:"direccionEntrega"`
-	Empresa          *string   `json:"empresa"`
+	// ACuenta lo que un pedido partido cargó a la cuenta corriente (H047)
+	ACuenta *float64 `json:"aCuenta,omitempty"`
+
+	// Acopio Se retira de a partes (ya salió algo
+	Acopio  bool   `json:"acopio"`
+	Cliente string `json:"cliente"`
+
+	// Comprobante Con qué salió la venta del mostrador
+	Comprobante *PedidoListadoComprobante `json:"comprobante"`
+
+	// CortesSinTerminar Los cortes del pedido en cola o en la máquina
+	CortesSinTerminar []string  `json:"cortesSinTerminar"`
+	CreatedAt         time.Time `json:"createdAt"`
+	CustomerId        *string   `json:"customerId"`
+	DireccionEntrega  *string   `json:"direccionEntrega"`
+	Empresa           *string   `json:"empresa"`
 
 	// EntregadoAt El último paso a entregado del historial
 	EntregadoAt *time.Time `json:"entregadoAt"`
-	Estado      string     `json:"estado"`
-	EstadoPago  string     `json:"estadoPago"`
-	Id          string     `json:"id"`
-	Items       int        `json:"items"`
-	MedioPago   *string    `json:"medioPago"`
-	Numero      string     `json:"numero"`
+
+	// EntregarEl AAAA-MM-DD
+	EntregarEl *string `json:"entregarEl"`
+	Estado     string  `json:"estado"`
+	EstadoPago string  `json:"estadoPago"`
+
+	// Facturado Tiene una factura viva
+	Facturado bool    `json:"facturado"`
+	Id        string  `json:"id"`
+	Items     int     `json:"items"`
+	MedioPago *string `json:"medioPago"`
+	Numero    string  `json:"numero"`
 
 	// PagoEnRevision Una transferencia informada que nadie verificó todavía
 	PagoEnRevision bool `json:"pagoEnRevision"`
+
+	// PorEntregar Lo que falta de un pedido que ya salió en parte; vacío si no salió nada
+	PorEntregar []PorEntregar `json:"porEntregar"`
 
 	// SinCobrar Lo que falta cobrar sin pasar por la cuenta corriente (el total menos lo cobrado en línea); null si no falta nada o si la deuda está en la cuenta del cliente. La misma regla que «Me deben».
 	SinCobrar    *SinCobrar `json:"sinCobrar"`
@@ -299,6 +389,9 @@ type PedidoListado struct {
 	Total        float64    `json:"total"`
 	ZonaEnvio    *string    `json:"zonaEnvio"`
 }
+
+// PedidoListadoComprobante Con qué salió la venta del mostrador
+type PedidoListadoComprobante string
 
 // PedidoParaElTaller La ficha para quien corta (el aserradero): qué y para quién, sin
 // importes, mail, teléfono, saldo, pagos ni margen. Un tipo aparte y no
@@ -312,8 +405,13 @@ type PedidoParaElTaller struct {
 	Estado     string  `json:"estado"`
 	Id         string  `json:"id"`
 	Items      []struct {
-		Cantidad     string  `json:"cantidad"`
-		Descripcion  string  `json:"descripcion"`
+		AnchoMm     *int    `json:"anchoMm"`
+		Cantidad    string  `json:"cantidad"`
+		Color       *string `json:"color"`
+		Descripcion string  `json:"descripcion"`
+
+		// LargoMm La medida de la placa
+		LargoMm      *int    `json:"largoMm"`
 		Presentacion *string `json:"presentacion"`
 		Unidad       string  `json:"unidad"`
 		VariantId    *string `json:"variantId"`
@@ -329,6 +427,13 @@ type PlazoDelPresupuesto struct {
 	Texto   string `json:"texto"`
 	Urgente bool   `json:"urgente"`
 	Vencido bool   `json:"vencido"`
+}
+
+// PorEntregar defines model for PorEntregar.
+type PorEntregar struct {
+	Descripcion string  `json:"descripcion"`
+	Pendiente   float64 `json:"pendiente"`
+	Unidad      string  `json:"unidad"`
 }
 
 // PresupuestoListado defines model for PresupuestoListado.
@@ -360,6 +465,19 @@ type Problema struct {
 	Errores *map[string]string `json:"errores,omitempty"`
 	Status  int                `json:"status"`
 	Title   string             `json:"title"`
+}
+
+// ReciboDelPedido defines model for ReciboDelPedido.
+type ReciboDelPedido struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Estado    string    `json:"estado"`
+	Id        string    `json:"id"`
+
+	// Medios Los medios del recibo separados por coma
+	Medios string  `json:"medios"`
+	Numero string  `json:"numero"`
+	Quien  *string `json:"quien"`
+	Total  float64 `json:"total"`
 }
 
 // ResultadoDeVenta defines model for ResultadoDeVenta.
@@ -425,6 +543,30 @@ type CobrarPedidoJSONBody struct {
 	Partes string `json:"partes"`
 }
 
+// CorregirPedidoJSONBody defines parameters for CorregirPedido.
+type CorregirPedidoJSONBody struct {
+	CostoEnvio *float64 `json:"costoEnvio,omitempty"`
+	Ficha      *string  `json:"ficha,omitempty"`
+	Motivo     string   `json:"motivo"`
+	Pin        *string  `json:"pin,omitempty"`
+	Renglones  []struct {
+		Cantidad       float64 `json:"cantidad"`
+		OrderItemId    string  `json:"orderItemId"`
+		PrecioUnitario float64 `json:"precioUnitario"`
+	} `json:"renglones"`
+}
+
+// DevolverPedidoJSONBody defines parameters for DevolverPedido.
+type DevolverPedidoJSONBody struct {
+	// Clave la del intento: un reintento devuelve la misma devolución
+	Clave     string `json:"clave"`
+	Motivo    string `json:"motivo"`
+	Renglones []struct {
+		Cantidad    float64 `json:"cantidad"`
+		OrderItemId string  `json:"orderItemId"`
+	} `json:"renglones"`
+}
+
 // CambiarEntregaDelPedidoJSONBody defines parameters for CambiarEntregaDelPedido.
 type CambiarEntregaDelPedidoJSONBody struct {
 	EntregarEl *string `json:"entregarEl,omitempty"`
@@ -453,9 +595,18 @@ type CrearPresupuestoJSONBody struct {
 	Lineas    []interface{}          `json:"lineas"`
 }
 
+// EditarPresupuestoJSONBody defines parameters for EditarPresupuesto.
+type EditarPresupuestoJSONBody struct {
+	Cabecera map[string]interface{} `json:"cabecera"`
+	Lineas   []interface{}          `json:"lineas"`
+}
+
 // CambiarEstadoDePresupuestoJSONBody defines parameters for CambiarEstadoDePresupuesto.
 type CambiarEstadoDePresupuestoJSONBody struct {
 	Estado string `json:"estado"`
+
+	// Motivo al rechazar, por qué se perdió (Precio, Se lo llevó otro, No contestó, Ya no lo necesita, Otro)
+	Motivo *string `json:"motivo,omitempty"`
 }
 
 // UnirPresupuestoAFichaJSONBody defines parameters for UnirPresupuestoAFicha.
@@ -465,6 +616,8 @@ type UnirPresupuestoAFichaJSONBody struct {
 
 // ConvertirPresupuestoEnPedidoJSONBody defines parameters for ConvertirPresupuestoEnPedido.
 type ConvertirPresupuestoEnPedidoJSONBody struct {
+	// ACuenta la parte a cuenta corriente de un pedido partido (H047); el resto se paga con medioPago
+	ACuenta    *float64 `json:"aCuenta,omitempty"`
 	CostoEnvio *float64 `json:"costoEnvio,omitempty"`
 	Direccion  *string  `json:"direccion,omitempty"`
 
@@ -472,10 +625,15 @@ type ConvertirPresupuestoEnPedidoJSONBody struct {
 	EntregarEl *string    `json:"entregarEl,omitempty"`
 	Ficha      *string    `json:"ficha,omitempty"`
 	MedioPago  *MedioPago `json:"medioPago,omitempty"`
-	Pin        *string    `json:"pin,omitempty"`
+
+	// Pin el PIN de un admin, o su contraseña si ninguno cargó PIN
+	Pin *string `json:"pin,omitempty"`
 
 	// Precios para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)
-	Precios     *ConvertirPresupuestoEnPedidoJSONBodyPrecios     `json:"precios,omitempty"`
+	Precios *ConvertirPresupuestoEnPedidoJSONBodyPrecios `json:"precios,omitempty"`
+
+	// SinCargo el envío va sin flete; un envío sin flete ni sinCargo no sale
+	SinCargo    *bool                                            `json:"sinCargo,omitempty"`
 	TipoEntrega *ConvertirPresupuestoEnPedidoJSONBodyTipoEntrega `json:"tipoEntrega,omitempty"`
 	Zona        *string                                          `json:"zona,omitempty"`
 }
@@ -495,6 +653,12 @@ type CancelarPedidoJSONRequestBody CancelarPedidoJSONBody
 // CobrarPedidoJSONRequestBody defines body for CobrarPedido for application/json ContentType.
 type CobrarPedidoJSONRequestBody CobrarPedidoJSONBody
 
+// CorregirPedidoJSONRequestBody defines body for CorregirPedido for application/json ContentType.
+type CorregirPedidoJSONRequestBody CorregirPedidoJSONBody
+
+// DevolverPedidoJSONRequestBody defines body for DevolverPedido for application/json ContentType.
+type DevolverPedidoJSONRequestBody DevolverPedidoJSONBody
+
 // CambiarEntregaDelPedidoJSONRequestBody defines body for CambiarEntregaDelPedido for application/json ContentType.
 type CambiarEntregaDelPedidoJSONRequestBody CambiarEntregaDelPedidoJSONBody
 
@@ -503,6 +667,9 @@ type UnirPedidoAFichaJSONRequestBody UnirPedidoAFichaJSONBody
 
 // CrearPresupuestoJSONRequestBody defines body for CrearPresupuesto for application/json ContentType.
 type CrearPresupuestoJSONRequestBody CrearPresupuestoJSONBody
+
+// EditarPresupuestoJSONRequestBody defines body for EditarPresupuesto for application/json ContentType.
+type EditarPresupuestoJSONRequestBody EditarPresupuestoJSONBody
 
 // CambiarEstadoDePresupuestoJSONRequestBody defines body for CambiarEstadoDePresupuesto for application/json ContentType.
 type CambiarEstadoDePresupuestoJSONRequestBody CambiarEstadoDePresupuestoJSONBody
@@ -527,9 +694,18 @@ type ServerInterface interface {
 
 	// (POST /api/v1/admin/pedidos/{id}/cancelar)
 	CancelarPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// CajaDelCobro Si el efectivo del pedido tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro)
+	// (GET /api/v1/admin/pedidos/{id}/cobro)
+	CajaDelCobro(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// CobrarPedido Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal
 	// (POST /api/v1/admin/pedidos/{id}/cobro)
 	CobrarPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// CorregirPedido Corrige los renglones y el flete de un pedido sin factura ni cobro; un precio bajo la lista pasado lo libre pide el PIN de un admin (422 en `pin`).
+	// (POST /api/v1/admin/pedidos/{id}/correccion)
+	CorregirPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// DevolverPedido La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura.
+	// (POST /api/v1/admin/pedidos/{id}/devolucion)
+	DevolverPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
 	// (PUT /api/v1/admin/pedidos/{id}/entrega)
 	CambiarEntregaDelPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -548,6 +724,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/presupuestos/{id})
 	FichaDePresupuesto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (PUT /api/v1/admin/presupuestos/{id})
+	EditarPresupuesto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
 	// (POST /api/v1/admin/presupuestos/{id}/estado)
 	CambiarEstadoDePresupuesto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -776,6 +955,32 @@ func (siw *ServerInterfaceWrapper) CancelarPedido(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// CajaDelCobro operation middleware
+func (siw *ServerInterfaceWrapper) CajaDelCobro(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CajaDelCobro(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CobrarPedido operation middleware
 func (siw *ServerInterfaceWrapper) CobrarPedido(w http.ResponseWriter, r *http.Request) {
 
@@ -793,6 +998,58 @@ func (siw *ServerInterfaceWrapper) CobrarPedido(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CobrarPedido(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CorregirPedido operation middleware
+func (siw *ServerInterfaceWrapper) CorregirPedido(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CorregirPedido(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DevolverPedido operation middleware
+func (siw *ServerInterfaceWrapper) DevolverPedido(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DevolverPedido(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -996,6 +1253,32 @@ func (siw *ServerInterfaceWrapper) FichaDePresupuesto(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.FichaDePresupuesto(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditarPresupuesto operation middleware
+func (siw *ServerInterfaceWrapper) EditarPresupuesto(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditarPresupuesto(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1236,10 +1519,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/avanzar", wrapper.AvanzarPedido)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/cancelar", wrapper.CancelarPedido)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/entrega", wrapper.CambiarEntregaDelPedido)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/devolucion", wrapper.DevolverPedido)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/correccion", wrapper.CorregirPedido)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/cobro", wrapper.CajaDelCobro)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/cobro", wrapper.CobrarPedido)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/presupuestos", wrapper.ListarPresupuestos)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/presupuestos", wrapper.CrearPresupuesto)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/presupuestos/{id}", wrapper.FichaDePresupuesto)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/presupuestos/{id}", wrapper.EditarPresupuesto)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/presupuestos/{id}/ficha", wrapper.UnirPresupuestoAFicha)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/presupuestos/{id}/estado", wrapper.CambiarEstadoDePresupuesto)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/presupuestos/{id}/pedido", wrapper.ConvertirPresupuestoEnPedido)
@@ -1547,6 +1834,83 @@ func (response CancelarPedido422ApplicationProblemPlusJSONResponse) VisitCancela
 	return err
 }
 
+type CajaDelCobroRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type CajaDelCobroResponseObject interface {
+	VisitCajaDelCobroResponse(w http.ResponseWriter) error
+}
+
+type CajaDelCobro200JSONResponse struct {
+	FondoBase *float64 `json:"fondoBase,omitempty"`
+
+	// SinCaja la sucursal cuya caja hay que abrir
+	SinCaja    *string `json:"sinCaja,omitempty"`
+	Sucursales *[]struct {
+		Abierta bool    `json:"abierta"`
+		Fondo   float64 `json:"fondo"`
+		Id      string  `json:"id"`
+		Nombre  string  `json:"nombre"`
+	} `json:"sucursales,omitempty"`
+}
+
+func (response CajaDelCobro200JSONResponse) VisitCajaDelCobroResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CajaDelCobro401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response CajaDelCobro401ApplicationProblemPlusJSONResponse) VisitCajaDelCobroResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CajaDelCobro403ApplicationProblemPlusJSONResponse Problema
+
+func (response CajaDelCobro403ApplicationProblemPlusJSONResponse) VisitCajaDelCobroResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CajaDelCobro404ApplicationProblemPlusJSONResponse Problema
+
+func (response CajaDelCobro404ApplicationProblemPlusJSONResponse) VisitCajaDelCobroResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CobrarPedidoRequestObject struct {
 	Id   openapi_types.UUID `json:"id"`
 	Body *CobrarPedidoJSONRequestBody
@@ -1635,6 +1999,145 @@ func (response CobrarPedido409ApplicationProblemPlusJSONResponse) VisitCobrarPed
 type CobrarPedido422ApplicationProblemPlusJSONResponse Problema
 
 func (response CobrarPedido422ApplicationProblemPlusJSONResponse) VisitCobrarPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorregirPedidoRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *CorregirPedidoJSONRequestBody
+}
+
+type CorregirPedidoResponseObject interface {
+	VisitCorregirPedidoResponse(w http.ResponseWriter) error
+}
+
+type CorregirPedido200JSONResponse struct{ HechoJSONResponse }
+
+func (response CorregirPedido200JSONResponse) VisitCorregirPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorregirPedido401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response CorregirPedido401ApplicationProblemPlusJSONResponse) VisitCorregirPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorregirPedido403ApplicationProblemPlusJSONResponse Problema
+
+func (response CorregirPedido403ApplicationProblemPlusJSONResponse) VisitCorregirPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CorregirPedido422ApplicationProblemPlusJSONResponse Problema
+
+func (response CorregirPedido422ApplicationProblemPlusJSONResponse) VisitCorregirPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolverPedidoRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *DevolverPedidoJSONRequestBody
+}
+
+type DevolverPedidoResponseObject interface {
+	VisitDevolverPedidoResponse(w http.ResponseWriter) error
+}
+
+type DevolverPedido200JSONResponse struct {
+	Id       string  `json:"id"`
+	Importe  float64 `json:"importe"`
+	Ok       string  `json:"ok"`
+	Repetida *bool   `json:"repetida,omitempty"`
+}
+
+func (response DevolverPedido200JSONResponse) VisitDevolverPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolverPedido401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response DevolverPedido401ApplicationProblemPlusJSONResponse) VisitDevolverPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolverPedido403ApplicationProblemPlusJSONResponse Problema
+
+func (response DevolverPedido403ApplicationProblemPlusJSONResponse) VisitDevolverPedidoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DevolverPedido422ApplicationProblemPlusJSONResponse Problema
+
+func (response DevolverPedido422ApplicationProblemPlusJSONResponse) VisitDevolverPedidoResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2064,6 +2567,87 @@ func (response FichaDePresupuesto404ApplicationProblemPlusJSONResponse) VisitFic
 	return err
 }
 
+type EditarPresupuestoRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *EditarPresupuestoJSONRequestBody
+}
+
+type EditarPresupuestoResponseObject interface {
+	VisitEditarPresupuestoResponse(w http.ResponseWriter) error
+}
+
+type EditarPresupuesto200JSONResponse struct{ HechoJSONResponse }
+
+func (response EditarPresupuesto200JSONResponse) VisitEditarPresupuestoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarPresupuesto401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response EditarPresupuesto401ApplicationProblemPlusJSONResponse) VisitEditarPresupuestoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarPresupuesto403ApplicationProblemPlusJSONResponse Problema
+
+func (response EditarPresupuesto403ApplicationProblemPlusJSONResponse) VisitEditarPresupuestoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarPresupuesto404ApplicationProblemPlusJSONResponse Problema
+
+func (response EditarPresupuesto404ApplicationProblemPlusJSONResponse) VisitEditarPresupuestoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditarPresupuesto422ApplicationProblemPlusJSONResponse Problema
+
+func (response EditarPresupuesto422ApplicationProblemPlusJSONResponse) VisitEditarPresupuestoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CambiarEstadoDePresupuestoRequestObject struct {
 	Id   openapi_types.UUID `json:"id"`
 	Body *CambiarEstadoDePresupuestoJSONRequestBody
@@ -2365,9 +2949,18 @@ type StrictServerInterface interface {
 
 	// (POST /api/v1/admin/pedidos/{id}/cancelar)
 	CancelarPedido(ctx context.Context, request CancelarPedidoRequestObject) (CancelarPedidoResponseObject, error)
+	// CajaDelCobro Si el efectivo del pedido tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro)
+	// (GET /api/v1/admin/pedidos/{id}/cobro)
+	CajaDelCobro(ctx context.Context, request CajaDelCobroRequestObject) (CajaDelCobroResponseObject, error)
 	// CobrarPedido Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal
 	// (POST /api/v1/admin/pedidos/{id}/cobro)
 	CobrarPedido(ctx context.Context, request CobrarPedidoRequestObject) (CobrarPedidoResponseObject, error)
+	// CorregirPedido Corrige los renglones y el flete de un pedido sin factura ni cobro; un precio bajo la lista pasado lo libre pide el PIN de un admin (422 en `pin`).
+	// (POST /api/v1/admin/pedidos/{id}/correccion)
+	CorregirPedido(ctx context.Context, request CorregirPedidoRequestObject) (CorregirPedidoResponseObject, error)
+	// DevolverPedido La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura.
+	// (POST /api/v1/admin/pedidos/{id}/devolucion)
+	DevolverPedido(ctx context.Context, request DevolverPedidoRequestObject) (DevolverPedidoResponseObject, error)
 
 	// (PUT /api/v1/admin/pedidos/{id}/entrega)
 	CambiarEntregaDelPedido(ctx context.Context, request CambiarEntregaDelPedidoRequestObject) (CambiarEntregaDelPedidoResponseObject, error)
@@ -2386,6 +2979,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/admin/presupuestos/{id})
 	FichaDePresupuesto(ctx context.Context, request FichaDePresupuestoRequestObject) (FichaDePresupuestoResponseObject, error)
+
+	// (PUT /api/v1/admin/presupuestos/{id})
+	EditarPresupuesto(ctx context.Context, request EditarPresupuestoRequestObject) (EditarPresupuestoResponseObject, error)
 
 	// (POST /api/v1/admin/presupuestos/{id}/estado)
 	CambiarEstadoDePresupuesto(ctx context.Context, request CambiarEstadoDePresupuestoRequestObject) (CambiarEstadoDePresupuestoResponseObject, error)
@@ -2564,6 +3160,32 @@ func (sh *strictHandler) CancelarPedido(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// CajaDelCobro operation middleware
+func (sh *strictHandler) CajaDelCobro(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request CajaDelCobroRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CajaDelCobro(ctx, request.(CajaDelCobroRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CajaDelCobro")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CajaDelCobroResponseObject); ok {
+		if err := validResponse.VisitCajaDelCobroResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CobrarPedido operation middleware
 func (sh *strictHandler) CobrarPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var request CobrarPedidoRequestObject
@@ -2590,6 +3212,72 @@ func (sh *strictHandler) CobrarPedido(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CobrarPedidoResponseObject); ok {
 		if err := validResponse.VisitCobrarPedidoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CorregirPedido operation middleware
+func (sh *strictHandler) CorregirPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request CorregirPedidoRequestObject
+
+	request.Id = id
+
+	var body CorregirPedidoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CorregirPedido(ctx, request.(CorregirPedidoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CorregirPedido")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CorregirPedidoResponseObject); ok {
+		if err := validResponse.VisitCorregirPedidoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DevolverPedido operation middleware
+func (sh *strictHandler) DevolverPedido(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DevolverPedidoRequestObject
+
+	request.Id = id
+
+	var body DevolverPedidoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DevolverPedido(ctx, request.(DevolverPedidoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DevolverPedido")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DevolverPedidoResponseObject); ok {
+		if err := validResponse.VisitDevolverPedidoResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2772,6 +3460,39 @@ func (sh *strictHandler) FichaDePresupuesto(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// EditarPresupuesto operation middleware
+func (sh *strictHandler) EditarPresupuesto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request EditarPresupuestoRequestObject
+
+	request.Id = id
+
+	var body EditarPresupuestoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditarPresupuesto(ctx, request.(EditarPresupuestoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditarPresupuesto")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditarPresupuestoResponseObject); ok {
+		if err := validResponse.VisitEditarPresupuestoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CambiarEstadoDePresupuesto operation middleware
 func (sh *strictHandler) CambiarEstadoDePresupuesto(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	var request CambiarEstadoDePresupuestoRequestObject
@@ -2905,82 +3626,103 @@ func (sh *strictHandler) PresupuestoPdf(w http.ResponseWriter, r *http.Request, 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

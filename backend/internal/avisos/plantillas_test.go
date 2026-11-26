@@ -26,6 +26,7 @@ func lineasDe(ls []lineaGolden) []email.LineaCorreo {
 }
 
 func TestPlantillasDePedidosComoElTS(t *testing.T) {
+	email.ComoElTS(t)
 	crudo, err := os.ReadFile("../../testdata/golden/avisos/pedidos.json")
 	if err != nil {
 		t.Fatal(err)

@@ -44,11 +44,21 @@ export function ColumnaTablero({
   cantidad,
   detalle,
   estado,
+  tope = TOPE_VISIBLE,
+  secundaria = false,
   children,
 }: {
+  /**
+   * Lo que ya pasó y se mira de reojo (los terminados del taller): con
+   * tarjetas, más angosta que las columnas del trabajo. En el taller las tres
+   * medían lo mismo y «Terminados» ocupaba tanto como la cola (H404).
+   */
+  secundaria?: boolean;
   titulo: string;
   cantidad: number;
   detalle?: string;
+  /** Cuántas tarjetas se ven antes de «Ver N más». */
+  tope?: number;
   /**
    * El estado que representa la columna. La franja de color sale de acá y no
    * como clase suelta: quien llama dice qué es la columna, no de qué color
@@ -60,9 +70,9 @@ export function ColumnaTablero({
   const [expandida, setExpandida] = useState(false);
 
   const tarjetas = Array.isArray(children) ? children.flat() : [children];
-  const hayDeMas = tarjetas.length > TOPE_VISIBLE;
+  const hayDeMas = tarjetas.length > tope;
   const visibles =
-    hayDeMas && !expandida ? tarjetas.slice(0, TOPE_VISIBLE) : tarjetas;
+    hayDeMas && !expandida ? tarjetas.slice(0, tope) : tarjetas;
   const ocultas = tarjetas.length - visibles.length;
 
   return (
@@ -74,14 +84,19 @@ export function ColumnaTablero({
     <section
       className={`tarjeta-hundida flex min-w-0 flex-col overflow-hidden rounded-xl ${
         cantidad > 0
-          ? "@5xl:min-w-[240px] @5xl:flex-[3_1_0%]"
+          ? secundaria
+            ? "@5xl:min-w-[240px] @5xl:flex-[1.6_1_0%]"
+            : "@5xl:min-w-[240px] @5xl:flex-[3_1_0%]"
           : "@5xl:min-w-[132px] @5xl:flex-[1_1_0%]"
       }`}
     >
-      <header className="sticky top-0 z-[2] px-3.5 pb-2 pt-3">
+      {/* Vacía y en el teléfono, un renglón: «0 Sin preparar» y «0
+          Preparando» se llevaban media pantalla y el primer pedido para
+          atender quedaba abajo (mes simulado). */}
+      <header className={`sticky top-0 z-[2] px-3.5 pb-2 pt-3 ${cantidad > 0 ? "" : "@max-xl:py-2"}`}>
         <span
           className={`${claseDeFamilia(estado)} mb-2.5 block h-[3px] w-[34px] rounded-full ${
-            cantidad > 0 ? "bg-[var(--estado-acento)]" : "bg-linea"
+            cantidad > 0 ? "bg-[var(--estado-acento)]" : "bg-linea @max-xl:hidden"
           }`}
           aria-hidden="true"
         />
@@ -90,7 +105,7 @@ export function ColumnaTablero({
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span
             className={`tabular text-[28px] font-bold leading-none tracking-[-0.03em] ${
-              cantidad > 0 ? "text-foreground" : "text-texto-3"
+              cantidad > 0 ? "text-foreground" : "text-texto-3 @max-xl:text-lg"
             }`}
           >
             {cantidad}
@@ -109,13 +124,15 @@ export function ColumnaTablero({
       </header>
 
       {/*
-        La columna scrollea sola en lugar de estirar la página: con cincuenta
-        pedidos en una etapa, una columna infinita obliga a bajar hasta el fondo
-        para ver qué hay en las otras, que es justo lo que el tablero venía a
-        resolver.
+        En una fila (escritorio ancho) la columna scrollea sola en lugar de
+        estirar la página: con cincuenta pedidos en una etapa, una columna
+        infinita obliga a bajar hasta el fondo para ver qué hay en las otras.
+        Apiladas (teléfono y tablet) no: un scroll dentro de otro mostraba una
+        tarjeta y media y escondía «Ver N más» (mes simulado, H121 y H329).
+        Para lo largo está el pliegue.
       */}
       {cantidad > 0 && (
-        <div className="flex max-h-[calc(100vh-300px)] flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
+        <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 @5xl:max-h-[calc(100vh-300px)] @5xl:overflow-y-auto">
           {visibles}
 
           {hayDeMas && !expandida && (

@@ -27,39 +27,57 @@ export function Pasos({
     );
   }
 
-  return (
-    <ol className="flex items-center gap-1" aria-label="Estado del recorrido">
-      {etapas.map((etapa, i) => {
-        const hecha = i < indiceActual;
-        const activa = i === indiceActual;
+  /*
+   * En el teléfono no entran cinco nombres en una fila (a 375 px «En camino»
+   * se partía en dos renglones y «Recibido Preparando Listo» quedaban
+   * pegados): las barras van solas y debajo, entero, el paso en que está y
+   * cuántos faltan. Desde `sm` vuelve cada nombre bajo su barra.
+   */
+  const actualTitulo = etapas[indiceActual]?.titulo;
 
-        return (
-          <li key={etapa.clave} className="flex flex-1 items-center gap-1">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <span
-                className={`h-1.5 rounded-full ${
-                  hecha
-                    ? "bg-brand-orange/40"
-                    : activa
-                      ? "bg-brand-orange"
-                      : "bg-border"
-                }`}
-              />
-              <span
-                className={`flex items-center gap-1 text-sm ${
-                  activa
-                    ? "font-medium text-foreground"
-                    : "text-muted-foreground"
-                }`}
-              >
-                {hecha && <Check className="h-3.5 w-3.5 text-brand-orange" />}
-                {etapa.titulo}
-              </span>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+  return (
+    <div>
+      <ol className="flex items-center gap-1" aria-label="Estado del recorrido">
+        {etapas.map((etapa, i) => {
+          const hecha = i < indiceActual;
+          const activa = i === indiceActual;
+
+          return (
+            <li key={etapa.clave} className="flex min-w-0 flex-1 items-center gap-1" aria-current={activa ? "step" : undefined}>
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span
+                  className={`h-1.5 rounded-full ${
+                    hecha
+                      ? "bg-brand-orange/40"
+                      : activa
+                        ? "bg-brand-orange"
+                        : "bg-border"
+                  }`}
+                />
+                <span
+                  className={`flex items-center gap-1 text-sm leading-tight max-sm:sr-only ${
+                    activa
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {hecha && <Check className="h-3.5 w-3.5 shrink-0 text-brand-orange" />}
+                  {etapa.titulo}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {actualTitulo && (
+        <p className="mt-2 flex items-baseline justify-between gap-3 text-base sm:hidden" aria-hidden="true">
+          <span className="font-medium">{actualTitulo}</span>
+          <span className="tabular text-sm text-muted-foreground">
+            {indiceActual + 1} de {etapas.length}
+          </span>
+        </p>
+      )}
+    </div>
   );
 }
 

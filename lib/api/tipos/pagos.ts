@@ -291,6 +291,13 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             acreditadoAt: string | null;
+            /**
+             * Format: double
+             * @description lo que debe hoy el cliente (solo en los que esperan verificación)
+             */
+            saldoCliente: number | null;
+            /** @description el mismo aviso que otro anterior (mismo cliente o pedido */
+            duplicado: boolean;
         };
         ResumenPagos: {
             /** Format: double */
@@ -497,6 +504,7 @@ export interface operations {
                 "multipart/form-data": {
                     monto?: string;
                     medio?: string;
+                    confirmar?: string;
                     /** Format: binary */
                     comprobante?: string;
                 };

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { promosVigentes } from "@/lib/dal/contenido";
+import { ajustesDelSitio, promosVigentes } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 import { tarifasDeCorte } from "@/lib/dal/cortes-tarifas";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { redirect } from "next/navigation";
@@ -9,6 +10,8 @@ import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { api, datos } from "@/lib/api/servidor";
 import { VistaMostrador } from "./vista";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { fichaDeCorte } from "@/lib/dal/admin/cortes";
+import { esUuid } from "@/lib/uuid";
 
 export const metadata: Metadata = {
   title: "Mostrador",
@@ -31,7 +34,7 @@ export const metadata: Metadata = {
 export default async function MostradorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sucursal?: string }>;
+  searchParams: Promise<{ sucursal?: string; corte?: string }>;
 }) {
   const usuario = await requireStaff();
 
@@ -49,7 +52,7 @@ export default async function MostradorPage({
     redirect(inicioDelRol(usuario.staffRole));
   }
 
-  const { sucursal } = await searchParams;
+  const { sucursal, corte } = await searchParams;
 
   const sucursales = await listarSucursalesPublicas();
   if (sucursales.length === 0) redirect("/admin/sucursales");
@@ -63,7 +66,7 @@ export default async function MostradorPage({
    * sabe si el cliente compra con precio de profesional, que es de contado) y
    * el cambio que tiene que quedar en el cajón: todo de Go, en un pedido.
    */
-  const [pantalla, tarifas, promos, sierra, escalas] = await Promise.all([
+  const [pantalla, tarifas, promos, sierra, escalas, ajustes] = await Promise.all([
     (async () =>
       datos(
         await (await api()).GET("/api/v1/mostrador/pantalla", {
@@ -82,8 +85,55 @@ export default async function MostradorPage({
     // El descuento por forma de pago, para que el total de la pantalla sea
     // el que va a registrar el servidor.
     escalasDePago(),
+    // Las reglas que cambian la cuenta (/admin/reglas): las mismas que lee Go.
+    ajustesDelSitio(),
   ]);
-  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct } = pantalla;
+  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct, ultimoContado } = pantalla;
+
+  /*
+   * «Cobrar en el mostrador» desde la ficha de un corte sin venta (mes
+   * simulado, H173): el corte llega cargado para cobrarlo, y la venta lo ata
+   * en vez de crear otro.
+   */
+  const ficha = corte && esUuid(corte) ? await fichaDeCorte(corte) : null;
+  /*
+   * El corte que ya tiene su venta se cobra en esa venta, desde la ficha del
+   * pedido: el mostrador abría vacío y sin decir nada (mes simulado, H173,
+   * CRT-7 con PED-1158 sin cobrar). El anulado, o el que no tiene material,
+   * vuelve a su ficha.
+   */
+  if (ficha?.corte.orderId) redirect(`/admin/pedidos/${ficha.corte.orderId}`);
+  if (ficha && (ficha.corte.estado === "cancelado" || !ficha.corte.variantId)) redirect(`/admin/cortes/${ficha.corte.id}`);
+  const corteACobrar =
+    ficha && !ficha.corte.orderId && ficha.corte.estado !== "cancelado" && ficha.corte.variantId
+      ? {
+          id: ficha.corte.id,
+          numero: ficha.corte.numero,
+          customerId: ficha.corte.customerId,
+          variantId: ficha.corte.variantId,
+          material: ficha.corte.material,
+          unidad: ficha.corte.unidad ?? "placa",
+          precio: ficha.corte.precioPlaca ?? 0,
+          largoMm: ficha.corte.varianteLargoMm,
+          anchoMm: ficha.corte.varianteAnchoMm,
+          color: ficha.corte.color,
+          categoria: ficha.corte.categoria,
+          formaDeVenta: (ficha.corte.formaDeVenta ?? "entera") as "entera" | "entera_o_media" | "metro_cuadrado",
+          precioMediaPct: ficha.corte.precioMediaPct ?? 50,
+          mitad: ficha.corte.mitad as "largo" | "ancho" | null,
+          canto: ficha.corte.cantoDescripcion ?? "",
+          pasadas: ficha.pasadasACobrar,
+          piezas: ficha.corte.piezas.map((p) => ({
+            largo: String(p.largoMm),
+            ancho: String(p.anchoMm),
+            cantidad: String(p.cantidad),
+            veta: p.respetaVeta === 1,
+            cantoLargo: p.cantoLargo,
+            cantoAncho: p.cantoAncho,
+            etiqueta: p.etiqueta ?? "",
+          })),
+        }
+      : null;
 
   return (
     <VistaMostrador
@@ -91,6 +141,7 @@ export default async function MostradorPage({
         nombre: usuario.name,
         userId: usuario.userId,
         administraCaja: puedeEntrar("/admin/caja", usuario.staffRole),
+        factura: puedeEntrar("/admin/facturacion", usuario.staffRole),
       }}
       listaGeneral={listaGeneral}
       sucursales={sucursales.map((s) => ({
@@ -105,10 +156,17 @@ export default async function MostradorPage({
       tarifasDeCorte={tarifas}
       anchoSierra={sierra}
       fondoBase={fondoBase}
+      ultimoContado={ultimoContado ?? null}
       descuentoLibrePct={descuentoLibrePct}
       promos={promos}
       escalasDePago={escalas}
       ventas={ventas}
+      corteACobrar={corteACobrar}
+      reglas={{
+        contadoSiempre: valorDeRegla(ajustes, "contado_por_lista") === "siempre",
+        descuentoAlFlete: valorDeRegla(ajustes, "descuento_al_flete") === "si",
+        loteObligatorio: valorDeRegla(ajustes, "lote_y_cupon") === "obligatorio",
+      }}
     />
   );
 }

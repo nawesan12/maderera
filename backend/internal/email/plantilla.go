@@ -94,7 +94,7 @@ func filaLinea(l LineaCorreo) string {
 	importe := ""
 	if l.Importe != nil {
 		importe = `<td style="padding:10px 0;border-bottom:1px solid ` + borde + `;font-size:14px;color:` + gris + `;text-align:right;white-space:nowrap;">
-      ` + Escapar(formato.Precio(*l.Importe)) + `
+      ` + Escapar(importeDelCorreo(*l.Importe)) + `
     </td>`
 	}
 	return `<tr>
@@ -141,7 +141,7 @@ func Envolver(sitio string, o Opciones) (html, texto string) {
 		if o.Total != nil {
 			total = `<tr>
                 <td style="padding:14px 0 0;font-size:16px;font-weight:700;color:` + gris + `;">Total</td>
-                <td style="padding:14px 0 0;font-size:18px;font-weight:700;color:` + gris + `;text-align:right;">` + Escapar(formato.Precio(*o.Total)) + `</td>
+                <td style="padding:14px 0 0;font-size:18px;font-weight:700;color:` + gris + `;text-align:right;">` + Escapar(importeDelCorreo(*o.Total)) + `</td>
               </tr>`
 		}
 		lineas = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;">
@@ -217,13 +217,13 @@ func Envolver(sitio string, o Opciones) (html, texto string) {
 		for i, l := range o.Lineas {
 			filas[i] = "- " + l.Descripcion + " (" + cantidadDe(l) + ")"
 			if l.Importe != nil {
-				filas[i] += " " + formato.Precio(*l.Importe)
+				filas[i] += " " + importeDelCorreo(*l.Importe)
 			}
 		}
 		t = append(t, "\n"+strings.Join(filas, "\n"))
 	}
 	if o.Total != nil {
-		t = append(t, "\nTotal: "+formato.Precio(*o.Total))
+		t = append(t, "\nTotal: "+importeDelCorreo(*o.Total))
 	}
 	if o.CTA != nil {
 		t = append(t, "\n"+o.CTA.Texto+": "+o.CTA.URL)
@@ -256,4 +256,24 @@ func pieSucursalesTexto() string {
 		partes[i] = s.Nombre + " " + s.Telefono
 	}
 	return strings.Join(partes, " · ")
+}
+
+// importeDelCorreo es el importe de un renglón o del total con los centavos
+// cuando los hay («$ 84.500,50»), como la cuenta del cliente y el PDF: el
+// correo decía «$ 84.501» del mismo presupuesto (mes simulado, H034). Sin
+// importe, lo de siempre («A consultar»). Es una variable para que los
+// golden contra el TS (que redondeaba a pesos) sigan comparando el resto.
+var importeDelCorreo = func(v float64) string {
+	if !(v > 0) {
+		return formato.Precio(v)
+	}
+	return formato.Importe(v)
+}
+
+// ComoElTS deja los importes del correo redondeados a pesos, como los
+// escribía el TS, hasta que la prueba termina. Solo para los golden.
+func ComoElTS(t interface{ Cleanup(func()) }) {
+	antes := importeDelCorreo
+	importeDelCorreo = formato.Precio
+	t.Cleanup(func() { importeDelCorreo = antes })
 }

@@ -46,6 +46,7 @@ func textoJS(crudo json.RawMessage) string {
 }
 
 func TestEnvolverComoElTS(t *testing.T) {
+	ComoElTS(t)
 	crudo, err := os.ReadFile("../../testdata/golden/email/envolver.json")
 	if err != nil {
 		t.Fatal(err)
@@ -108,6 +109,16 @@ func TestEnvolverComoElTS(t *testing.T) {
 	for _, c := range g.Precios {
 		if r := formato.PrecioONulo(numeroJS(t, c.V)); r != c.R {
 			t.Errorf("Precio(%s) = %q, el TS da %q", c.V, r, c.R)
+		}
+	}
+}
+
+// Los importes con centavos van con centavos (mes simulado, H034); sin
+// centavos, igual que antes.
+func TestImporteDelCorreoConCentavos(t *testing.T) {
+	for v, quiere := range map[float64]string{84500.5: "$\u00a084.500,50", 3500: "$\u00a03.500", 0: "A consultar"} {
+		if got := importeDelCorreo(v); got != quiere {
+			t.Errorf("%v: %q, quería %q", v, got, quiere)
 		}
 	}
 }

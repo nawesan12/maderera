@@ -8,10 +8,12 @@ import (
 
 	"mjbj/internal/api/reportesapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/bitacora"
 	"mjbj/internal/documentos"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
@@ -275,7 +277,17 @@ func (a *API) PendientesDelCierre(ctx context.Context, r reportesapi.PendientesD
 	}
 	p := a.mes(r.Params.Periodo)
 	v, err := a.s.PendientesDelCierre(ctx, p.Desde, p.Hasta)
-	return ok(v), err
+	if err != nil {
+		return nil, err
+	}
+	// La palabra del circuito sin factura la pone la regla (H167).
+	if regla, _ := reglas.Valor(ctx, a.s.pool, reglas.EtiquetaDelCircuito); regla != "b" {
+		for i := range v {
+			v[i].Titulo = reglas.EnElTexto(v[i].Titulo, regla)
+			v[i].Detalle = reglas.EnElTexto(v[i].Detalle, regla)
+		}
+	}
+	return ok(v), nil
 }
 
 func (a *API) ResumenDelMes(ctx context.Context, r reportesapi.ResumenDelMesRequestObject) (reportesapi.ResumenDelMesResponseObject, error) {
@@ -288,7 +300,30 @@ func (a *API) ResumenDelMes(ctx context.Context, r reportesapi.ResumenDelMesRequ
 		return nil, err
 	}
 	v.Resultado, err = a.s.ResultadoDelMes(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	v.Cerrado, err = a.s.EstadoDelMes(ctx, p.Clave)
 	return ok(v), err
+}
+
+func (o respuesta) VisitCerrarElMesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) CerrarElMes(ctx context.Context, r reportesapi.CerrarElMesRequestObject) (reportesapi.CerrarElMesResponseObject, error) {
+	ses, err := pantalla(ctx, "/admin/cierre")
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.CerrarElMes(ctx, r.Body.Periodo, r.Body.Cerrado, ses.UserID, ses.Nombre)
+	if err != nil {
+		return nil, err
+	}
+	accion := "Reabrió "
+	if r.Body.Cerrado {
+		accion = "Cerró "
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "cierre", "", accion+"el mes "+r.Body.Periodo, nil)
+	return ok(v), nil
 }
 
 // --- el inicio del panel ---

@@ -8,6 +8,8 @@ import {
   importeDelCampo,
   importeIlegible,
   importeParaElCampo,
+  unidadConcordada,
+  unidadDeVenta,
 } from "@/lib/formato";
 import { admiteDecimales, formatearCantidad, pasoDeCantidad } from "@/lib/unidades";
 import { cantidadDelRenglon, esLineaDelCorte, type LineaDeVenta } from "@/lib/mostrador/importes";
@@ -88,12 +90,14 @@ export function Lineas({
 
       {/* Los rótulos de las dos cajas, a la vista: eran iguales y sin
           nombre, y un Tab de más dejaba la placa a $3. */}
-      <div className="flex items-center gap-3 px-4 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        <span className="flex-1" />
-        <span className="w-24 text-right">Cant.</span>
+      {/* Alineados a la derecha, como los campos: cuando el renglón no
+          entra, los campos bajan abajo del nombre y siguen debajo de su
+          rótulo. */}
+      <div className="flex items-center justify-end gap-3 px-4 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="w-20 text-right">Cant.</span>
         <span className="w-3" />
-        <span className="w-32 text-right">Precio</span>
-        <span className="w-32" />
+        <span className="w-28 text-right">Precio</span>
+        <span className="w-28" />
         <span className="w-8" />
       </div>
 
@@ -112,22 +116,32 @@ export function Lineas({
           const corteId = l.corteId;
           const delCorte = corteId != null;
           return (
-            <li key={`${l.variantId ?? "suelta"}-${i}`} className="flex items-center gap-3 px-4 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-base font-medium">{l.descripcion}</span>
+            /*
+             * El nombre tiene todo el ancho que haga falta y no se corta: lo
+             * que distingue una placa de otra es la medida y el espesor, que
+             * van al final («Membran…», «MDF — 1830 x 2600mm …»; mes
+             * simulado, H017 y H274). Si no entra al lado, los campos bajan.
+             */
+            <li key={`${l.variantId ?? "suelta"}-${i}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+              <span className="min-w-[14rem] flex-1 basis-[14rem]">
+                <NombreDelRenglon descripcion={l.descripcion} />
                 <span className="block text-sm text-muted-foreground">
                   {delCorte
                     ? esLineaDelCorte(l)
                       ? "del plano"
-                      : `${formatearCantidad(l.cantidad)} ${formatearUnidad(l.unidad)} · del plano`
+                      : // La media placa dice media placa, no «1 placa» (H035).
+                        `${formatearCantidad(l.cantidad)} ${
+                          l.presentacion ? (l.cantidad === 1 ? "media placa" : "medias placas") : unidadConcordada(l.cantidad, l.unidad, l.descripcion)
+                        } · del plano`
                     : l.presentacion
                       ? "cada media placa"
-                      : `por ${formatearUnidad(l.unidad)}`}
+                      : `por ${formatearUnidad(unidadDeVenta(l.unidad, l.descripcion))}`}
                 </span>
               </span>
 
+              <span className="ml-auto flex shrink-0 items-center gap-3">
               {delCorte ? (
-                <span className="flex w-[16.25rem] shrink-0 justify-end">
+                <span className="flex w-[14.25rem] shrink-0 justify-end">
                   {corteId != null && (
                     <button
                       type="button"
@@ -168,7 +182,7 @@ export function Lineas({
                           enfocar("buscador");
                         }
                       }}
-                      className="tabular h-11 w-24 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+                      className="tabular h-11 w-20 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
                     />
                   </label>
 
@@ -180,7 +194,7 @@ export function Lineas({
                       valor={l.precioUnitario}
                       alCambiar={(n) => cambiar(i, "precioUnitario", n)}
                       aria-describedby={tocado ? `lista-${i}` : undefined}
-                      className={`tabular h-11 w-32 rounded-lg border bg-background px-2.5 text-right text-base ${
+                      className={`tabular h-11 w-28 rounded-lg border bg-background px-2.5 text-right text-base ${
                         tocado ? "border-brand-orange font-semibold text-brand-orange" : "border-linea"
                       }`}
                     />
@@ -196,7 +210,7 @@ export function Lineas({
                 </>
               )}
 
-              <span className="tabular w-32 shrink-0 text-right text-lg font-semibold">
+              <span className="tabular w-28 shrink-0 text-right text-lg font-semibold">
                 {formatearMonto(l.cantidad * l.precioUnitario)}
               </span>
 
@@ -209,16 +223,18 @@ export function Lineas({
               >
                 <Trash2 className="h-4 w-4" />
               </button>
+              </span>
             </li>
           );
         })}
         {sinCargo.map((c) => (
-          <li key={c.id} className="flex items-center gap-3 px-4 py-3">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-base font-medium">Corte de {c.descripcion}</span>
+          <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+            <span className="min-w-[14rem] flex-1 basis-[14rem]">
+              <NombreDelRenglon descripcion={`Corte de ${c.descripcion}`} />
               <span className="block text-sm text-muted-foreground">sin cargo · va al taller</span>
             </span>
-            <span className="flex w-[16.25rem] shrink-0 justify-end">
+            <span className="ml-auto flex shrink-0 items-center gap-3">
+            <span className="flex w-[14.25rem] shrink-0 justify-end">
               <button
                 type="button"
                 onClick={() => onEditarCorte(c.id)}
@@ -228,7 +244,7 @@ export function Lineas({
                 Corregir
               </button>
             </span>
-            <span className="tabular w-32 shrink-0 text-right text-lg font-semibold">{formatearMonto(0)}</span>
+            <span className="tabular w-28 shrink-0 text-right text-lg font-semibold">{formatearMonto(0)}</span>
             <button
               onClick={() => onQuitarCorte(c.id)}
               aria-label={`Quitar el corte de ${c.descripcion}`}
@@ -236,6 +252,7 @@ export function Lineas({
             >
               <Trash2 className="h-4 w-4" />
             </button>
+            </span>
           </li>
         ))}
       </ul>
@@ -409,5 +426,28 @@ function PrecioDelRenglon({
       }}
       className={className}
     />
+  );
+}
+
+/**
+ * El nombre del renglón, con la medida siempre a la vista.
+ *
+ * Lo que distingue una placa de otra es la medida y el espesor, y van al
+ * final del nombre («Placa de Yeso — Resistente humedad 1200 x 2400mm —
+ * 12.5mm»). Con el nombre en dos renglones recortados, a 1280 se perdía el
+ * espesor (mes simulado, H274). El producto va entero y baja de renglón si
+ * no entra —recortado con «…», a 1280 no se sabía qué tornillo era—; lo que
+ * sigue a la primera raya va entero, en su propio renglón.
+ */
+function NombreDelRenglon({ descripcion }: { descripcion: string }) {
+  const corte = descripcion.indexOf(" — ");
+  if (corte < 0) return <span className="block break-words text-base font-medium">{descripcion}</span>;
+  return (
+    <>
+      <span className="block break-words text-base font-medium">
+        {descripcion.slice(0, corte)}
+      </span>
+      <span className="block break-words text-base">{descripcion.slice(corte + 3).replaceAll(" — ", " · ")}</span>
+    </>
   );
 }

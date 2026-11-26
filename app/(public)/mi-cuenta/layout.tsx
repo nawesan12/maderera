@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { verifySession } from "@/lib/dal/session";
 import { clienteDeLaSesion, resumenCuenta } from "@/lib/dal/cuenta";
-import { formatearMonto, primerNombre } from "@/lib/formato";
+import { formatearMonto } from "@/lib/formato";
+import { distintivoDeLista, saludoDelCliente } from "@/lib/cuenta/portal";
 import { NavegacionCuenta } from "./navegacion";
 import { BotonSalir } from "./salir";
 
@@ -13,6 +14,19 @@ export const metadata: Metadata = {
   title: { default: "Mi cuenta", template: "%s · Mi cuenta" },
   robots: { index: false, follow: false },
 };
+
+/*
+ * Todo lo que cuelga de acá depende de quién entró: no hay navegación que se
+ * pueda armar antes de leer la sesión. Con Cache Components, Next 16.4 valida
+ * en desarrollo que cada navegación sea instantánea y marcaba casi todas las
+ * pantallas («encountered uncached data during prerendering», con el overlay
+ * encima). Es la salida que da su guía de autenticación
+ * (node_modules/next/dist/docs/01-app/02-guides/authentication-with-cache-components.md):
+ * este segmento puede esperar a la sesión. No cambia producción: la
+ * validación corre solo en `next dev`, y la ruta sigue haciendo streaming
+ * con su `<Suspense>` y su `loading.tsx`.
+ */
+export const instant = false;
 
 /**
  * Mi cuenta lee la sesión desde el layout, así que el layout pone su propio
@@ -41,21 +55,22 @@ async function CuentaConSesion({
   ]);
 
   const operaACuenta = resumen.limiteCredito > 0 || resumen.saldo !== 0;
-  const nombreDePila = primerNombre(sesion.name);
+  const nombreDePila = saludoDelCliente(cliente?.nombre ?? sesion.name, cliente?.cuit);
+  const distintivo = distintivoDeLista(cliente?.tipo, cliente?.lista);
 
   return (
-    <div className="min-h-screen bg-sitio-alt">
-      <div className="mx-auto px-6 max-w-6xl py-8 lg:py-10">
+    <div className="min-h-screen bg-sitio-alt" data-sin-flotante-en-celular>
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
         <header className="mb-[26px] flex flex-wrap items-end justify-between gap-5">
           <div>
             <p className="text-[15px] text-texto-3">Hola,</p>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-[38px] font-bold leading-[1.05] tracking-[-0.035em]">
+              <h1 className="text-[30px] font-bold leading-[1.05] tracking-[-0.035em] [overflow-wrap:anywhere] sm:text-[38px]">
                 {nombreDePila}
               </h1>
-              {cliente?.tipo === "profesional" && (
+              {distintivo && (
                 <span className="rounded-full bg-naranja-claro px-[11px] py-[5px] text-[11.5px] font-bold uppercase tracking-[0.09em] text-acento-sobre-claro">
-                  Profesional
+                  {distintivo}
                 </span>
               )}
             </div>

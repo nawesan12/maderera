@@ -20,6 +20,9 @@ type CorteParaHoja struct {
 	Material  string    `json:"material"`
 	DeQueSale string    `json:"deQueSale"`
 	CreatedAt time.Time `json:"createdAt"`
+	// SinCargo y Media: de quién es lo que sobra (lib/cortes/de-quien.ts).
+	SinCargo bool `json:"sinCargo,omitempty"`
+	Media    bool `json:"media,omitempty"`
 }
 
 // SalidaDeCorte es Salida de lib/cortes/secuencia.ts.
@@ -166,7 +169,11 @@ func HojaDeCortePdf(d DatosHojaDeCorte, _ time.Time) ([]byte, error) {
 	if hoja.Placas == 1 {
 		placas = "placa"
 	}
-	a.y -= h.EscribirParrafo("Las medidas son las de la pieza: la máquina descuenta la sierra sola y tiene que tener cargado un disco de "+formatearSierra(hoja.AnchoSierra)+". Sin refilado: el plano usa la placa entera. Orden de la seccionadora: primero los cortes longitudinales de la placa, después los transversales de cada tira, después los de tercer nivel. Tandas de hasta 4 medidas. "+numeroJS(hoja.Placas)+" "+placas+", "+numeroJS(hoja.TotalPiezas)+" piezas.",
+	piezas := "piezas"
+	if hoja.TotalPiezas == 1 {
+		piezas = "pieza"
+	}
+	a.y -= h.EscribirParrafo("Las medidas son las de la pieza: la máquina descuenta la sierra sola y tiene que tener cargado un disco de "+formatearSierra(hoja.AnchoSierra)+". Sin refilado: el plano usa la placa entera. Orden de la seccionadora: primero los cortes longitudinales de la placa, después los transversales de cada tira, después los de tercer nivel. Tandas de hasta 4 medidas. "+numeroJS(hoja.Placas)+" "+placas+", "+numeroJS(hoja.TotalPiezas)+" "+piezas+".",
 		Parrafo{Opciones: Opciones{X: Margen, Y: a.y, Tamano: 9.5}, Ancho: anchoUtil})
 	a.y -= 6
 
@@ -221,10 +228,19 @@ func (a *armadoHojaDeCorte) dibujarPatron(patron PatronDeCorte) float64 {
 	if cuantas > 1 {
 		porPlaca = " por placa"
 	}
+	// De quién es lo que sobra, como la hoja en pantalla (mes simulado,
+	// ítem 10): la reposición no «se cobra» y la media no «se vende entera».
+	delCliente := patron.SeVendeEntera && !a.corte.SinCargo
 	queda := "se cobra el corte: los retales quedan en la maderera"
-	if patron.SeVendeEntera {
+	switch {
+	case a.corte.SinCargo:
+		queda = "sin cargo: los retales quedan en la maderera"
+	case delCliente && a.corte.Media:
+		queda = "se vende la media: los retales son del cliente"
+	case delCliente:
 		queda = "se vende entera: los retales son del cliente"
 	}
+	patron.SeVendeEntera = delCliente
 	h.Escribir(numeroJS(patron.PiezasPorPlaca)+" piezas · "+numeroJS(patron.PasadasPorPlaca)+" cortes"+porPlaca+" · "+queda,
 		Opciones{X: Margen, Y: y, Tamano: 9, Color: TintaSuave})
 	y -= 8

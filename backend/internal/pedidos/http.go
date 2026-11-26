@@ -60,9 +60,11 @@ func (o respuesta) VisitPedidoParaElTallerResponse(w http.ResponseWriter) error 
 func (o respuesta) VisitAvanzarPedidoResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitCancelarPedidoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCobrarPedidoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitCajaDelCobroResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitEditarPresupuestoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitCambiarEstadoDePresupuestoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -198,6 +200,68 @@ func (a *API) CobrarPedido(ctx context.Context, r ventasapi.CobrarPedidoRequestO
 	return ok(v), nil
 }
 
+// CajaDelCobro: lo mismo que contestaría el cobro en efectivo, antes de
+// cobrar (quien mueve plata).
+func (a *API) CajaDelCobro(ctx context.Context, r ventasapi.CajaDelCobroRequestObject) (ventasapi.CajaDelCobroResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	falta, err := cobros.Nuevo(a.s.pool, a.s.log).CajaDelCobro(ctx, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	if falta != nil {
+		if falta.Sucursal != "" {
+			out["sinCaja"] = falta.Sucursal
+			out["fondoBase"] = falta.FondoBase
+		}
+		if len(falta.Sucursales) > 0 {
+			out["sucursales"] = falta.Sucursales
+		}
+	}
+	return ok(out), nil
+}
+
+func (o respuesta) VisitDevolverPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCorregirPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// DevolverPedido: la devolución de un pedido sin factura, de quien mueve
+// plata (baja lo que se cobra, como el cobro).
+func (a *API) DevolverPedido(ctx context.Context, r ventasapi.DevolverPedidoRequestObject) (ventasapi.DevolverPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	var renglones []RenglonDevuelto
+	for _, x := range r.Body.Renglones {
+		renglones = append(renglones, RenglonDevuelto{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad})
+	}
+	v, err := a.s.DevolverSinFactura(ctx, ses, r.Id.String(), renglones, r.Body.Motivo, r.Body.Clave)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+// CorregirPedido: los renglones y el flete de un pedido sin factura ni
+// cobro, de quien mueve plata.
+func (a *API) CorregirPedido(ctx context.Context, r ventasapi.CorregirPedidoRequestObject) (ventasapi.CorregirPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	c := Correccion{Motivo: r.Body.Motivo, CostoEnvio: r.Body.CostoEnvio, PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha)}
+	for _, x := range r.Body.Renglones {
+		c.Renglones = append(c.Renglones, RenglonCorregido{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario})
+	}
+	v, err := a.s.Corregir(ctx, ses, r.Id.String(), c)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
 /* ------------------------------ presupuestos ------------------------------ */
 
 func (a *API) ListarPresupuestos(ctx context.Context, r ventasapi.ListarPresupuestosRequestObject) (ventasapi.ListarPresupuestosResponseObject, error) {
@@ -223,6 +287,18 @@ func (a *API) CrearPresupuesto(ctx context.Context, r ventasapi.CrearPresupuesto
 	}
 	b := r.Body
 	v, err := a.s.CrearPresupuesto(ctx, ses, b.Cabecera, b.Lineas, b.Convertir != nil && *b.Convertir)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (a *API) EditarPresupuesto(ctx context.Context, r ventasapi.EditarPresupuestoRequestObject) (ventasapi.EditarPresupuestoResponseObject, error) {
+	ses, err := presupuestos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.EditarPresupuesto(ctx, ses, r.Id.String(), r.Body.Cabecera, r.Body.Lineas)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +354,7 @@ func (a *API) CambiarEstadoDePresupuesto(ctx context.Context, r ventasapi.Cambia
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.CambiarEstadoPresupuesto(ctx, ses, r.Id.String(), r.Body.Estado)
+	v, err := a.s.CambiarEstadoPresupuestoConMotivo(ctx, ses, r.Id.String(), r.Body.Estado, texto(r.Body.Motivo))
 	if err != nil {
 		return nil, err
 	}
@@ -296,8 +372,9 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 		ent.Direccion = texto(b.Direccion)
 		ent.Zona = texto(b.Zona)
 		if b.CostoEnvio != nil {
-			ent.CostoEnvio = *b.CostoEnvio
+			ent.CostoEnvio, ent.ConCosto = *b.CostoEnvio, true
 		}
+		ent.SinCargo = b.SinCargo != nil && *b.SinCargo
 		if b.MedioPago != nil {
 			m := string(*b.MedioPago)
 			ent.MedioPago = &m
@@ -307,6 +384,9 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 			ent.Precios = string(*b.Precios)
 		}
 		ent.PIN, ent.Ficha = texto(b.Pin), texto(b.Ficha)
+		if b.ACuenta != nil {
+			ent.ACuenta = *b.ACuenta
+		}
 	}
 	v, err := a.s.ConvertirConEntrega(ctx, ses, r.Id.String(), ent)
 	if err != nil {

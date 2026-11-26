@@ -79,7 +79,11 @@ WHERE id = $1;
 SELECT id, numero, total::float8 AS total, customer_id, branch_id FROM orders WHERE id = $1;
 
 -- name: PedidoPagado :exec
-UPDATE orders SET estado_pago = 'pagado', updated_at = now() WHERE id = $1;
+-- El pedido partido (a_cuenta) con el resto cobrado queda «parcial», como la
+-- venta del mostrador que cargó una parte a la cuenta: lo que falta está en
+-- la cuenta corriente.
+UPDATE orders SET estado_pago = CASE WHEN a_cuenta IS NOT NULL THEN 'parcial'::estado_pago ELSE 'pagado'::estado_pago END,
+  updated_at = now() WHERE id = $1;
 
 -- name: BloquearCheque :exec
 SELECT pg_advisory_xact_lock(hashtext(sqlc.arg(cheque)::text));
@@ -115,11 +119,17 @@ ORDER BY m.created_at DESC
 LIMIT $2;
 
 -- name: ComprasDeContado :many
-SELECT id, created_at, numero, total::float8 AS total, estado_pago::text AS estado_pago
-FROM orders
-WHERE customer_id = $1 AND (medio_pago IS NULL OR medio_pago <> 'cuenta_corriente') AND estado <> 'cancelado'
-  AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
-ORDER BY created_at DESC
+-- El recibo, si la compra se cobró después con uno (una transferencia
+-- conciliada): no fue «pagada en el momento» (H305). Del pedido partido
+-- (H047), el resto: la parte a cuenta es su «compra» en el libro.
+SELECT o.id, o.created_at, o.numero, (o.total - coalesce(o.a_cuenta, 0))::float8 AS total, o.estado_pago::text AS estado_pago,
+  r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
+FROM orders o
+LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.order_id = o.id AND x.estado <> 'anulado'
+  ORDER BY x.created_at DESC LIMIT 1)
+WHERE o.customer_id = $1 AND (o.medio_pago IS NULL OR o.medio_pago <> 'cuenta_corriente') AND o.estado <> 'cancelado'
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR o.created_at >= sqlc.narg(desde))
+ORDER BY o.created_at DESC
 LIMIT $2;
 
 -- name: PagosInformados :many
@@ -130,15 +140,33 @@ WHERE customer_id = $1 AND tipo = 'deuda' AND estado IN ('en_revision', 'rechaza
 ORDER BY created_at DESC;
 
 -- name: ChequesSueltos :many
-SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo
+-- Los cheques que no tienen recibo: los informados, los rechazados al
+-- recibirlos y los que se entregaron con una venta del mostrador (mes
+-- simulado: esos no figuraban en ningún lado de la ficha, ni rebotados).
+SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo,
+       (order_payment_id IS NOT NULL)::boolean AS de_una_venta
 FROM cheques
 WHERE customer_id = $1 AND sentido = 'recibido'
-  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL))
+  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL)
+       OR (order_payment_id IS NOT NULL AND receipt_id IS NULL AND estado <> 'anulado'))
   AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
 ORDER BY fecha_pago;
 
+-- name: ChequesDeRecibos :many
+-- Los cheques que entraron con un recibo y el banco todavía puede devolver:
+-- el filtro «Cheques» de la ficha los muestra para registrar el rechazo
+-- (H272); en «Todo» van en el renglón del pago.
+SELECT c.id, c.updated_at, c.tipo::text AS tipo, c.numero, c.banco, c.importe::float8 AS importe, c.estado::text AS estado,
+       c.fecha_pago, r.id AS recibo_id, r.numero AS recibo_numero
+FROM cheques c JOIN receipts r ON r.id = c.receipt_id
+WHERE c.customer_id = $1 AND c.sentido = 'recibido' AND r.estado = 'emitido'
+  AND c.estado IN ('cartera', 'depositado', 'entregado')
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR c.created_at >= sqlc.narg(desde))
+ORDER BY c.fecha_pago;
+
 -- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
+       c.id AS cheque_id, c.estado AS cheque_estado,
        (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id

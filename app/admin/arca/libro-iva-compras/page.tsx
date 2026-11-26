@@ -5,6 +5,7 @@ import { requireStaffRole } from "@/lib/dal/session";
 import { libroIvaCompras } from "@/lib/dal/admin/compras-fiscal";
 import { leerPeriodoMensual } from "@/lib/periodos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
+import { fechaCorta } from "@/lib/formato";
 import {
   daCreditoFiscal,
   nombreComprobanteCompra,
@@ -148,7 +149,7 @@ export default async function LibroIvaComprasPage({
               {libro.filas.map((f) => (
                 <tr key={f.id}>
                   <td className="tabular whitespace-nowrap px-3 py-3 text-muted-foreground">
-                    {f.fechaEmision.toLocaleDateString("es-AR")}
+                    {fechaCorta.format(f.fechaEmision)}
                   </td>
                   <td className="px-3 py-3">
                     <span className="tabular block">

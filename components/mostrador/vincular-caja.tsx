@@ -54,6 +54,7 @@ interface CajaDisponible {
  * suelta y vuelve a pedir que se la vincule, sin perder su contador.
  */
 export function VincularCaja({
+  leida = true,
   branchId,
   enLinea,
   vinculada,
@@ -62,6 +63,8 @@ export function VincularCaja({
   administra = false,
   pendientesLocales = 0,
 }: {
+  /** Si ya se leyó la caja guardada en esta PC: antes no se ofrece vincular. */
+  leida?: boolean;
   branchId: string;
   enLinea: boolean;
   /** Si quien atiende puede dar de alta terminales (/admin/caja). */
@@ -90,7 +93,7 @@ export function VincularCaja({
   const [soltando, setSoltando] = useState(false);
 
   useEffect(() => {
-    if (!enLinea || vinculada) return;
+    if (!leida || !enLinea || vinculada) return;
 
     let vivo = true;
     void fetch(`/api/mostrador/caja/vincular?branchId=${branchId}`)
@@ -105,7 +108,7 @@ export function VincularCaja({
     return () => {
       vivo = false;
     };
-  }, [branchId, enLinea, vinculada]);
+  }, [branchId, enLinea, vinculada, leida]);
 
   async function vincular(cajaId: string) {
     setEnCurso(true);
@@ -252,6 +255,9 @@ export function VincularCaja({
     </span>
   );
 
+  // Hasta leer la caja guardada no se sabe si está vinculada: ni el ícono
+  // ni «Esta PC…», que aparecían un instante en una PC que sí lo estaba.
+  if (!leida) return null;
   if (!enLinea) return sinVincular;
   // Mientras carga no se muestra nada: un círculo que gira en la barra, en
   // cada arranque, es más ruido que lo que informa.

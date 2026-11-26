@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Ban, Loader2 } from "lucide-react";
+import { ArrowRight, Ban, FileText, Loader2, PenLine, Scissors } from "lucide-react";
 import { avanzarPedido, cancelarPedido } from "@/app/admin/ventas-actions";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { moneda } from "@/components/admin/formato";
+import { formatearMonto } from "@/components/admin/formato";
+import type { MedioDeCobro } from "@/lib/cobros/partes";
 
 const SIGUIENTE: Record<string, string> = {
   pendiente: "Preparar",
@@ -27,6 +29,11 @@ export function AccionesPedido({
   cobro,
   sinCobrar,
   pedido,
+  cortesSinTerminar = [],
+  acopio = false,
+  enLaFicha = false,
+  porLlevar = false,
+  firmar = null,
 }: {
   id: string;
   estado: string;
@@ -40,7 +47,7 @@ export function AccionesPedido({
    * sin recibo ni caja. Sin esto (el depósito, que no mueve plata), el botón
    * no aparece.
    */
-  cobro?: { numero: string; aCobrar: number; customerId: string | null; nombre: string } | null;
+  cobro?: { numero: string; aCobrar: number; customerId: string | null; nombre: string; medio?: MedioDeCobro } | null;
   /**
    * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` del
    * pedido, la misma regla que «Me deben»). Con algo, «Marcar entregado»
@@ -55,6 +62,27 @@ export function AccionesPedido({
    * contacto: precarga «quién retira», que casi siempre es el mismo.
    */
   pedido?: { numero: string; nombre?: string | null };
+  /**
+   * Los cortes del pedido que todavía no salieron de la máquina: el pedido
+   * no se marca listo ni sale (Go lo rechaza). En el lugar del botón va el
+   * corte que espera (mes simulado: se marcaba listo con el corte en cola).
+   */
+  cortesSinTerminar?: string[];
+  /**
+   * Un acopio en curso: lo que se hace en cada visita es un remito con lo
+   * que se lleva, no «Marcar entregado», que se lleva todo lo que queda.
+   */
+  acopio?: boolean;
+  /** En la ficha, «Preparar remito» abre el formulario sin salir de la página. */
+  enLaFicha?: boolean;
+  /**
+   * Queda algo que no salió en ningún remito. Un envío en camino así no se
+   * marca entregado (Go lo rechaza: «tiene productos por llevar»): lo que
+   * sigue es la firma del remito que va en el camión.
+   */
+  porLlevar?: boolean;
+  /** La firma del remito de envío que está en la calle (la ficha la tiene). */
+  firmar?: string | null;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -87,6 +115,14 @@ export function AccionesPedido({
   }
 
   const entregaUnRetiro = estado === "listo" && tipoEntrega === "retiro";
+  const esperaCorte =
+    cortesSinTerminar.length > 0 && ["Marcar listo", "Despachar", "Marcar entregado"].includes(etiqueta ?? "");
+  // Un acopio que ya empezó a salir se atiende de a remitos, esté como esté
+  // el pedido: «Preparar» o «Marcar entregado» se llevaban todo lo que
+  // queda (mes simulado, H104).
+  const preparaRemito = acopio && tipoEntrega === "retiro" && ["pendiente", "preparando", "listo"].includes(estado);
+  // El envío en camino con algo por llevar: se firma el remito del camión.
+  const esperaFirma = estado === "en-camino" && porLlevar;
   const debe = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
   // «Marcar entregado» emite el remito y no tiene vuelta: siempre pregunta,
   // también cuando no hay nada que cobrar ni documento que pedir.
@@ -109,13 +145,39 @@ export function AccionesPedido({
           customerId={cobro.customerId}
           nombre={cobro.nombre}
           aCobrar={cobro.aCobrar}
+          medio={cobro.medio}
           pedido={{ id, numero: cobro.numero }}
           etiqueta="Cobrar"
           claseBoton={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         />
       )}
 
-      {etiqueta && (
+      {preparaRemito ? (
+        <Link
+          href={enLaFicha ? "?remito=1#remito" : `/admin/pedidos/${id}?remito=1#remito`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+        >
+          <FileText className="h-5 w-5" />
+          Preparar remito
+        </Link>
+      ) : esperaFirma ? (
+        firmar || !enLaFicha ? (
+          <Link
+            href={firmar ?? `/admin/pedidos/${id}#remito`}
+            className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          >
+            <PenLine className="h-5 w-5" aria-hidden="true" />
+            Firmar
+          </Link>
+        ) : null
+      ) : esperaCorte ? (
+        <span
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida px-3 text-base font-medium text-muted-foreground ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+        >
+          <Scissors className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{cortesSinTerminar.join(", ")}</span>
+        </span>
+      ) : etiqueta && (
         <button
           onClick={() => (preguntar ? setConfirmando(true) : accion(avanzar))}
           disabled={pendiente}
@@ -130,14 +192,14 @@ export function AccionesPedido({
         </button>
       )}
 
-      {preguntar && (
+      {preguntar && !esperaCorte && !preparaRemito && !esperaFirma && (
         <Dialog open={confirmando} onOpenChange={(abierto) => !pendiente && setConfirmando(abierto)}>
           <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>
                 {debe && sinCobrar ? (
                   <>
-                    {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+                    {sinCobrar.numero} sin cobrar · <span className="tabular">{formatearMonto(sinCobrar.monto)}</span>
                   </>
                 ) : entregaUnRetiro ? (
                   "Quién retira"
@@ -146,7 +208,8 @@ export function AccionesPedido({
                 )}
               </DialogTitle>
             </DialogHeader>
-            {!debe && !entregaUnRetiro && (
+            {/* En camino, el remito ya salió con el camión. */}
+            {!debe && !entregaUnRetiro && estado !== "en-camino" && (
               <p className="text-base text-muted-foreground">Sale el remito. No se puede deshacer.</p>
             )}
             {/* Un <form>: Enter hace lo principal (entregar, o cobrar y
@@ -200,13 +263,30 @@ export function AccionesPedido({
               </div>
             )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
+              {/* Quien no cobra (el depósito) tiene dos caminos con peso: no
+                  soltar la mercadería, que es lo que queda a mano, o
+                  entregarla igual, que deja su nombre en el historial (mes
+                  simulado: era un solo botón de texto, sin jerarquía). */}
+              {debe && !cobro && (
+                <button
+                  type="button"
+                  autoFocus={!entregaUnRetiro}
+                  onClick={() => setConfirmando(false)}
+                  className="inline-flex h-11 items-center rounded-lg px-4 text-base font-medium hover:bg-hundida"
+                >
+                  Mejor no
+                </button>
+              )}
               {debe ? (
                 <button
                   type={cobro ? "button" : "submit"}
                   disabled={pendiente || faltaDocumento}
                   onClick={cobro ? () => accion(avanzar) : undefined}
-                  className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
+                  className={`inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50 ${
+                    cobro ? "hover:bg-hundida" : "estado-problema border"
+                  }`}
                 >
+                  {pendiente && !cobro && <Loader2 className="h-4 w-4 animate-spin" />}
                   Entregar sin cobrar
                 </button>
               ) : (
@@ -229,7 +309,7 @@ export function AccionesPedido({
                   disabled={pendiente || faltaDocumento}
                   className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
                 >
-                  Cobrar <span className="tabular">{moneda.format(sinCobrar.monto)}</span> y entregar
+                  Cobrar <span className="tabular">{formatearMonto(sinCobrar.monto)}</span> y entregar
                 </button>
               )}
             </div>
@@ -238,7 +318,7 @@ export function AccionesPedido({
         </Dialog>
       )}
 
-      {debe && sinCobrar && cobro && (
+      {debe && sinCobrar && cobro && !esperaFirma && !preparaRemito && (
         <DialogoCobro
           sinBoton
           abierto={cobrandoParaEntregar}
@@ -246,6 +326,7 @@ export function AccionesPedido({
           customerId={cobro.customerId}
           nombre={cobro.nombre}
           aCobrar={sinCobrar.monto}
+          medio={cobro.medio}
           pedido={{ id, numero: cobro.numero }}
           alCobrar={() => accion(avanzar)}
         />

@@ -12,16 +12,19 @@ import {
 } from "@/components/admin/formulario";
 import {
   formatearMonto,
+  hoyEnArgentina,
   importeDelCampo,
   importeIlegible,
-  importeParaElCampo,
 } from "@/lib/formato";
 import { CampoImporte } from "@/components/admin/campo-importe";
+import { costoLejos, costoPropuesto } from "../costos";
 import {
   buscarParaPedir,
   crearOrdenDeCompra,
+  editarOrdenDeCompra,
   type EstadoOrden,
 } from "../actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 interface Hallazgo {
   variantId: string;
@@ -32,12 +35,14 @@ interface Hallazgo {
   costoActual: string | null;
 }
 
-interface Linea {
+export interface Linea {
   variantId: string;
   descripcion: string;
   cantidad: string;
   costoUnitario: string;
   alicuotaIva: string;
+  /** El último costo conocido: el campo se marca si se aleja mucho. */
+  ultimo?: number | null;
 }
 
 /**
@@ -51,6 +56,9 @@ export function FormularioOrden({
   proveedores,
   sucursales,
   renglonesIniciales,
+  proveedorInicial,
+  sucursalInicial,
+  editar,
 }: {
   proveedores: { id: string; nombre: string }[];
   sucursales: { id: string; nombre: string; deLaSesion?: boolean }[];
@@ -62,6 +70,11 @@ export function FormularioOrden({
    * así la orden ya nace cargada en el primer pintado.
    */
   renglonesIniciales?: Linea[];
+  /** El proveedor y la sucursal que trae el reporte de reposición. */
+  proveedorInicial?: string;
+  sucursalInicial?: string;
+  /** La orden en borrador que se corrige: arranca con lo que tenía. */
+  editar?: { id: string; supplierId: string; branchId: string; fechaPrometida: string; notas: string };
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoOrden>({});
@@ -69,10 +82,10 @@ export function FormularioOrden({
 
   // Ningún proveedor de entrada (el primero alfabético casi nunca es el que
   // se quiere) y la sucursal de quien carga, si se sabe (sucursalPropuesta).
-  const [supplierId, setSupplierId] = useState("");
-  const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
-  const [fechaPrometida, setFecha] = useState("");
-  const [notas, setNotas] = useState("");
+  const [supplierId, setSupplierId] = useState(editar?.supplierId ?? proveedorInicial ?? "");
+  const [branchId, setBranchId] = useState(() => editar?.branchId ?? sucursalInicial ?? sucursalPropuesta(sucursales));
+  const [fechaPrometida, setFecha] = useState(editar?.fechaPrometida ?? "");
+  const [notas, setNotas] = useState(editar?.notas ?? "");
   const [lineas, setLineas] = useState<Linea[]>(renglonesIniciales ?? []);
 
   const [texto, setTexto] = useState("");
@@ -99,8 +112,9 @@ export function FormularioOrden({
               variantId: h.variantId,
               descripcion: [h.producto, h.variante].filter(Boolean).join(" "),
               cantidad: "1",
-              costoUnitario: importeParaElCampo(h.costoActual),
+              costoUnitario: costoPropuesto(h.costoActual),
               alicuotaIva: h.alicuotaIva,
+              ultimo: h.costoActual ? Number(h.costoActual) : null,
             },
           ],
     );
@@ -119,16 +133,30 @@ export function FormularioOrden({
     0,
   );
 
-  const listo =
-    supplierId !== "" &&
-    branchId !== "" &&
-    lineas.length > 0 &&
-    lineas.every(
-      (l) =>
-        Number(l.cantidad) > 0 &&
-        l.costoUnitario !== "" &&
-        !importeIlegible(l.costoUnitario),
-    );
+  /*
+   * Lo que falta, en el orden de la pantalla. El botón no se apaga: con el
+   * botón gris no se sabía por qué no andaba (mes simulado: «Entrega en»
+   * viene sin elegir a propósito, ver sucursalPropuesta). Al tocarlo se
+   * marca lo que falta y se dice en la barra.
+   */
+  const [intentado, setIntentado] = useState(false);
+  const fechaVieja = fechaPrometida !== "" && fechaPrometida < hoyEnArgentina();
+  const lineasMal = lineas.some(
+    (l) => !(Number(l.cantidad) > 0) || l.costoUnitario === "" || importeIlegible(l.costoUnitario),
+  );
+  const falta: { campo: string; texto: string } | null =
+    supplierId === ""
+      ? { campo: "orden-proveedor", texto: "Elegí el proveedor." }
+      : branchId === ""
+        ? { campo: "orden-sucursal", texto: "Elegí dónde se entrega." }
+        : fechaVieja
+          ? { campo: "orden-fecha", texto: "La fecha prometida ya pasó." }
+          : lineas.length === 0
+            ? { campo: "orden-buscar", texto: "Agregá qué se pide." }
+            : lineasMal
+              ? { campo: "orden-renglones", texto: "Revisá cantidades y costos." }
+              : null;
+  const marcar = (campo: string) => intentado && falta?.campo === campo;
 
   return (
     <div className="space-y-4">
@@ -137,7 +165,9 @@ export function FormularioOrden({
           <label className="block md:col-span-2">
             <span className="text-sm font-medium">Proveedor</span>
             <select
+              id="orden-proveedor"
               value={supplierId}
+              aria-invalid={marcar("orden-proveedor") || undefined}
               onChange={(e) => setSupplierId(e.target.value)}
               className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             >
@@ -152,7 +182,13 @@ export function FormularioOrden({
             </select>
           </label>
 
-          <div className="space-y-1 md:col-span-2">
+          <div
+            id="orden-sucursal"
+            tabIndex={-1}
+            className={`space-y-1 rounded-xl outline-none md:col-span-2 ${
+              marcar("orden-sucursal") ? "ring-2 ring-saldo-debe ring-offset-4 ring-offset-card" : ""
+            }`}
+          >
             <span className="text-sm font-medium">Entrega en</span>
             {/* Las sucursales son pocas: fichas. Si algún día son muchas,
               vuelve el desplegable. */}
@@ -188,9 +224,11 @@ export function FormularioOrden({
 
           <label className="block">
             <span className="text-sm font-medium">Fecha prometida</span>
-            <input
-              type="date"
+            <CampoFecha
+              id="orden-fecha"
               value={fechaPrometida}
+              min={hoyEnArgentina()}
+              aria-invalid={(fechaPrometida !== "" && fechaPrometida < hoyEnArgentina()) || undefined}
               onChange={(e) => setFecha(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             />
@@ -212,7 +250,9 @@ export function FormularioOrden({
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
+              id="orden-buscar"
               value={texto}
+              aria-invalid={marcar("orden-buscar") || undefined}
               onChange={(e) => setTexto(e.target.value)}
               placeholder="Buscar qué pedir…"
               className="h-12 w-full rounded-lg border border-linea bg-background pl-9 pr-3 text-base"
@@ -253,7 +293,7 @@ export function FormularioOrden({
             Buscá arriba qué pedirle al proveedor.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div id="orden-renglones" tabIndex={-1} className="overflow-x-auto outline-none">
             <table className="w-full min-w-[680px] text-base">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
@@ -289,7 +329,10 @@ export function FormularioOrden({
                         valor={l.costoUnitario}
                         alCambiar={(v) => cambiar(i, "costoUnitario", v)}
                         aria-label={`Costo de ${l.descripcion}`}
-                        className="tabular h-10 w-32 rounded-lg border border-linea bg-background px-2 text-right text-base"
+                        aria-invalid={costoLejos(importeDelCampo(l.costoUnitario), l.ultimo) || undefined}
+                        className={`tabular h-10 w-32 rounded-lg border border-linea bg-background px-2 text-right text-base ${
+                          costoLejos(importeDelCampo(l.costoUnitario), l.ultimo) ? "ring-2 ring-saldo-debe" : ""
+                        }`}
                       />
                     </td>
                     <td className="tabular px-4 py-2.5 text-right font-semibold">
@@ -317,7 +360,7 @@ export function FormularioOrden({
         )}
       </section>
 
-      <BarraGuardar error={estado.error}>
+      <BarraGuardar error={estado.error ?? (intentado ? falta?.texto : null)}>
         <div className="mr-auto">
           <p className="text-sm text-muted-foreground">Neto de la orden</p>
           <p className="tabular text-2xl font-bold">{formatearMonto(neto)}</p>
@@ -325,9 +368,16 @@ export function FormularioOrden({
 
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            if (falta) {
+              setIntentado(true);
+              const el = document.getElementById(falta.campo);
+              el?.scrollIntoView({ block: "center", behavior: "smooth" });
+              el?.focus({ preventScroll: true });
+              return;
+            }
             empezar(async () => {
-              const r = await crearOrdenDeCompra({
+              const datos = {
                 supplierId,
                 branchId,
                 fechaPrometida: fechaPrometida || undefined,
@@ -339,16 +389,17 @@ export function FormularioOrden({
                   costoUnitario: importeDelCampo(l.costoUnitario),
                   alicuotaIva: Number(l.alicuotaIva),
                 })),
-              });
+              };
+              const r = editar ? await editarOrdenDeCompra(editar.id, datos) : await crearOrdenDeCompra(datos);
               setEstado(r);
               if (r.id) router.push(`/admin/compras/ordenes/${r.id}`);
-            })
-          }
-          disabled={enCurso || !listo}
+            });
+          }}
+          disabled={enCurso}
           className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          Crear la orden
+          {editar ? "Guardar los cambios" : "Crear la orden"}
         </button>
       </BarraGuardar>
     </div>

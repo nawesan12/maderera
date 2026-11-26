@@ -19,6 +19,10 @@ export interface Turno {
   ventasEnEfectivo: number;
   otrosIngresos: number;
   retiros: number;
+  /** Anulaciones y devoluciones en efectivo, en negativo. */
+  devoluciones: number;
+  /** Gastos en efectivo cargados desde el panel, en negativo. */
+  gastos: number;
   cantidadDeVentas: number;
 }
 
@@ -29,6 +33,8 @@ export interface Movimiento {
   motivo: string | null;
   createdAt: string;
   quien: string | null;
+  /** A dónde fue un retiro (null en los de antes y en los ingresos). */
+  destino?: "banco" | "caja_fuerte" | "otro" | null;
 }
 
 export interface VentaDeHoy {
@@ -36,7 +42,13 @@ export interface VentaDeHoy {
   numero: string;
   cliente: string;
   total: number;
+  /** Lo devuelto en devoluciones parciales. */
+  devuelto?: number;
   medioPago: string | null;
+  /** Todos los medios de un pago partido. */
+  medios?: string[];
+  /** Tiene factura viva: se puede devolver una parte. */
+  conFactura?: boolean;
   estado: string;
   createdAt: string;
 }

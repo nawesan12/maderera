@@ -34,9 +34,14 @@ export default async function MisComprobantesPage() {
     );
   }
 
+  // Lo facturado de verdad: sin las anuladas ni las de una venta anulada que
+  // nunca se autorizó (se dan de baja), y las notas de crédito restan. Antes
+  // la factura de la venta anulada sumaba y el total no daba con Pedidos.
+  const fuera = (c: (typeof comprobantes)[number]) =>
+    c.estado === "anulada" || (c.ventaAnulada && !c.cae);
   const total = comprobantes
-    .filter((c) => !c.tipo.startsWith("nota_credito"))
-    .reduce((suma, c) => suma + c.total, 0);
+    .filter((c) => !fuera(c))
+    .reduce((suma, c) => suma + (c.tipo.startsWith("nota_credito") ? -c.total : c.total), 0);
 
   return (
     <div className="space-y-5">
@@ -51,13 +56,17 @@ export default async function MisComprobantesPage() {
       <div className="space-y-3">
         {comprobantes.map((comprobante) => {
           const esNota = comprobante.tipo.startsWith("nota_credito");
+          const anulada = fuera(comprobante);
+          // Sin CAE no vale como factura: se dice en la fila, no solo en el
+          // papel (H077).
+          const estado = anulada ? "anulada" : comprobante.cae ? null : "emitida";
 
           return (
             <article
               key={comprobante.id}
               className="relative overflow-hidden rounded-xl border bg-card"
             >
-              <AcentoEstado estado={comprobante.estado} />
+              <AcentoEstado estado={estado ?? comprobante.estado} />
 
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-5 pl-6">
                 <div className="min-w-0">
@@ -69,7 +78,7 @@ export default async function MisComprobantesPage() {
                         comprobante.numero,
                       )}
                     </span>
-                    {comprobante.cae && (
+                    {comprobante.cae ? (
                       <span
                         className="inline-flex items-center gap-1 text-sm font-normal text-saldo-favor"
                         title="Autorizada por ARCA"
@@ -77,11 +86,13 @@ export default async function MisComprobantesPage() {
                         <ShieldCheck className="h-3.5 w-3.5" />
                         Autorizada
                       </span>
+                    ) : (
+                      !anulada && <EtiquetaSinValor />
                     )}
                   </p>
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     {fechaCorta.format(comprobante.fechaEmision)}
-                    {esNota && " · anula una factura anterior"}
+                    {comprobante.pedido && <span className="tabular"> · {comprobante.pedido}</span>}
                   </p>
                 </div>
 
@@ -95,8 +106,8 @@ export default async function MisComprobantesPage() {
                     {formatearMonto(comprobante.total)}
                   </span>
 
-                  {comprobante.estado === "anulada" ? (
-                    <EtiquetaEstado estado={comprobante.estado} />
+                  {anulada ? (
+                    <EtiquetaEstado estado="anulada" />
                   ) : (
                     <span className="flex items-center gap-2">
                       <Link
@@ -123,5 +134,14 @@ export default async function MisComprobantesPage() {
         })}
       </div>
     </div>
+  );
+}
+
+/** La factura sin CAE: el estado «Sin autorizar», dicho para el cliente. */
+function EtiquetaSinValor() {
+  return (
+    <span className="estado-espera inline-flex shrink-0 items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
+      Sin valor fiscal
+    </span>
   );
 }

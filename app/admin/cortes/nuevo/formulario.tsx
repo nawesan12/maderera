@@ -1,10 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Columns2,
   Layers,
   LayoutGrid,
+  PackageCheck,
   ListOrdered,
   Loader2,
   Plus,
@@ -24,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { crearCorte } from "../actions";
+import { crearCorte, type EstadoCorte } from "../actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
 import { medidaDePlaca, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
 import type { PiezaFijada } from "@/lib/cortes/tipos";
@@ -40,6 +43,7 @@ import {
   Seccion,
   sinReiniciar,
 } from "@/components/admin/formulario";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
 export interface PlacaElegida {
@@ -75,7 +79,7 @@ const piezaVacia = (): Pieza => ({
   etiqueta: "",
 });
 
-const estadoInicial = {} as { error?: string; ok?: string };
+const estadoInicial: EstadoCorte = {};
 
 /** De qué sale el trabajo. La placa entera viaja como `mitad` vacía. */
 const MITADES = [
@@ -84,6 +88,22 @@ const MITADES = [
   { valor: "ancho", texto: "Media al ancho", icono: Columns2 },
 ];
 
+/** La placa que vende el pedido, con la mitad si la vende partida. */
+export interface PlacaDelPedido extends PlacaElegida {
+  mitad: Mitad;
+  /** Las que vende el pedido de esta placa, en placas enteras. */
+  vendidas?: number;
+  /** Las que ya usan los otros cortes vivos del pedido. */
+  enOtrosCortes?: number;
+}
+
+/** «1 placa», «media placa», «2,5 placas», como lo dice Go. */
+function placasEnTexto(n: number): string {
+  if (n === 0.5) return "media placa";
+  if (n === 1) return "1 placa";
+  return `${String(n).replace(".", ",")} placas`;
+}
+
 export function FormularioCorte({
   sucursales,
   desdePedido,
@@ -91,7 +111,37 @@ export function FormularioCorte({
   anchoSierra: anchoSierraGeneral,
   clienteInicial,
   sierraEditable = false,
+  puedeReponer = false,
+  preguntarSucursal = false,
+  corregir,
 }: {
+  /** Regla «Dónde se corta un corte suelto» en «Se elige siempre» (H045). */
+  preguntarSucursal?: boolean;
+  /**
+   * Una reposición sin cargo (la pieza que faltó en una entrega) sale del
+   * pedido que la originó. La decide el mostrador.
+   */
+  puedeReponer?: boolean;
+  /** El corte que este reemplaza, con lo suyo para arrancar (H185). */
+  corregir?: {
+    id: string;
+    numero: string;
+    placa: PlacaElegida | null;
+    material: string;
+    largoMm: number | null;
+    anchoMm: number | null;
+    mitad: Mitad;
+    cantoDescripcion: string;
+    notas: string;
+    urgente: boolean;
+    contactoNombre: string;
+    telefono: string;
+    retiraEl: string;
+    cliente: { id: string; nombre: string; razonSocial: string | null } | null;
+    branchId: string | null;
+    sinCargo: boolean;
+    piezas: Pieza[];
+  };
   /** Desde la ficha del cliente: llega con el cliente ya elegido. */
   clienteInicial?: { id: string; nombre: string; razonSocial: string | null; telefono: string | null };
   /**
@@ -123,6 +173,12 @@ export function FormularioCorte({
     branchId: string | null;
     cliente: { id: string; nombre: string; razonSocial: string | null } | null;
     contactoNombre: string;
+    /** El de la ficha del cliente, para el aviso de «corte listo». */
+    telefono?: string | null;
+    /** El día que el pedido prometió (AAAA-MM-DD). */
+    entregarEl?: string | null;
+    /** Las placas que vende: el corte arranca con la primera. */
+    placas?: PlacaDelPedido[];
   };
   /**
    * El corte que alguien mandó por WhatsApp desde el sitio (`?consulta=`):
@@ -138,46 +194,87 @@ export function FormularioCorte({
     piezas: Pieza[];
   };
 }) {
-  const [estado, accion, pendiente] = useActionState(crearCorte, estadoInicial);
+  const router = useRouter();
+  // Guardado: a la ficha del corte nuevo, con el aviso a la vista (H044).
+  // Quedarse con el formulario lleno y el aviso al pie invitaba a apretar de
+  // nuevo y duplicar el trabajo. Se navega desde la acción misma y no desde
+  // un efecto: al corregir, la revalidación vuelve a armar esta página con
+  // el corte viejo ya cancelado, el formulario se desmontaba antes de que
+  // corriera el efecto y la persona quedaba ahí creyendo que había fallado
+  // (mes simulado, H185).
+  const [estado, accion, pendiente] = useActionState(async (previo: EstadoCorte, datos: FormData) => {
+    const r = await crearCorte(previo, datos);
+    if (r.ok && r.id) {
+      toast.success(r.ok);
+      // Arriba de todo a mano: el desplazamiento de Next llevaba la ficha
+      // hasta su primer elemento y el título quedaba debajo del encabezado
+      // fijo (tercera prueba del mes).
+      window.scrollTo({ top: 0 });
+      router.push(`/admin/cortes/${r.id}`, { scroll: false });
+    }
+    return r;
+  }, estadoInicial);
 
   /*
    * Dónde se corta.
    *
-   * Dejó de preguntarse —lo pidió la clienta— porque no era una decisión: el
-   * corte se hace donde está la máquina y quien carga el trabajo ya está
-   * parado ahí. La sucursal se sigue guardando, que es lo que hace que el
-   * trabajo aparezca en la cola de ese taller y que el stock se descuente
-   * donde corresponde; sale del pedido, o de la primera sucursal.
+   * La clienta pidió que no se preguntara: el corte se hace donde está la
+   * máquina y quien carga el trabajo ya está parado ahí. Pero quien toma un
+   * corte por teléfono no está al lado de la máquina (mes simulado, H045):
+   * el corte suelto deja elegir el taller, con la primera sucursal ya
+   * elegida para que nadie tenga que contestar. Con pedido, la del pedido.
    */
-  const sucursal = desdePedido?.branchId ?? sucursales[0]?.id ?? "";
+  const [sucursal, setSucursal] = useState(
+    desdePedido?.branchId ??
+      corregir?.branchId ??
+      (preguntarSucursal && sucursales.length > 1 ? "" : (sucursales[0]?.id ?? "")),
+  );
   const [cliente, setCliente] = useState<{
     id: string;
     nombre: string;
     razonSocial: string | null;
-  } | null>(desdePedido?.cliente ?? clienteInicial ?? null);
+  } | null>(desdePedido?.cliente ?? corregir?.cliente ?? clienteInicial ?? null);
   const [nombre, setNombre] = useState(
-    desdePedido?.contactoNombre ?? (clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : ""),
+    corregir?.contactoNombre ??
+      desdePedido?.contactoNombre ??
+      (clienteInicial ? (clienteInicial.razonSocial ?? clienteInicial.nombre) : ""),
   );
-  const [telefono, setTelefono] = useState(clienteInicial?.telefono ?? "");
+  const [telefono, setTelefono] = useState(
+    corregir?.telefono || clienteInicial?.telefono || desdePedido?.telefono || "",
+  );
+  // La placa del pedido de entrada: arrancar con una medida supuesta armaba
+  // el plano sobre una placa que no era (H188).
+  const placaDelPedido = corregir ? undefined : desdePedido?.placas?.[0];
   const [placa, setPlaca] = useState<PlacaElegida | null>(
-    desdeConsulta?.placa ?? null,
+    desdeConsulta?.placa ?? corregir?.placa ?? placaDelPedido ?? null,
   );
   /** La medida de la placa, en milímetros, como está en pantalla. */
-  const [largoPlaca, setLargoPlaca] = useState("");
-  const [anchoPlaca, setAnchoPlaca] = useState("");
+  const [largoPlaca, setLargoPlaca] = useState(
+    String(corregir?.largoMm ?? (placaDelPedido?.largoMm || "")),
+  );
+  const [anchoPlaca, setAnchoPlaca] = useState(
+    String(corregir?.anchoMm ?? (placaDelPedido?.anchoMm || "")),
+  );
   /** Si sale de media placa, y en qué sentido se parte. */
-  const [mitad, setMitad] = useState<Mitad>(desdeConsulta?.mitad ?? null);
+  const [mitad, setMitad] = useState<Mitad>(
+    desdeConsulta?.mitad ?? corregir?.mitad ?? placaDelPedido?.mitad ?? null,
+  );
   const [material, setMaterial] = useState(
-    desdeConsulta?.placa?.descripcion ?? "",
+    desdeConsulta?.placa?.descripcion ?? corregir?.material ?? placaDelPedido?.descripcion ?? "",
   );
   const [piezas, setPiezas] = useState<Pieza[]>(
-    desdeConsulta?.piezas.length ? desdeConsulta.piezas : [piezaVacia()],
+    desdeConsulta?.piezas.length ? desdeConsulta.piezas : corregir?.piezas.length ? corregir.piezas : [piezaVacia()],
   );
-  const [placas, setPlacas] = useState(1);
   /** Las piezas que alguien mandó a mano a una placa. */
   const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
-  /** Si alguien lo pisó a mano, el plano deja de moverlo solo. */
-  const [placasTocado, setPlacasTocado] = useState(false);
+  const [sinCargo, setSinCargo] = useState(corregir?.sinCargo ?? false);
+  /** Confirmado que el corte del pedido va en otra placa (H280). */
+  const [otraPlaca, setOtraPlaca] = useState(false);
+  const placasDelPedidoLista = desdePedido?.placas ?? [];
+  const esOtraPlaca =
+    placasDelPedidoLista.length > 0 &&
+    placa !== null &&
+    !placasDelPedidoLista.some((p) => p.variantId === placa.variantId);
 
   const validas = piezas.filter(
     (p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0,
@@ -251,12 +348,51 @@ export function FormularioCorte({
     fijadas,
   });
 
+  // Las placas son las del plano: el campo para pisarlas dejaba la tarjeta
+  // del taller con 3 placas y el plano con 2 (H113). Go guarda las suyas.
   const placasDelPlano = Math.max(1, plano.placas.length);
 
-  // Mientras nadie lo pise a mano, el campo sigue al plano. Se ajusta durante
-  // el render y no en un efecto: con el efecto, cada cambio del plano dibujaba
-  // una vez el número viejo y otra el nuevo.
-  if (!placasTocado && placas !== placasDelPlano) setPlacas(placasDelPlano);
+  // Lo que vende el pedido contra lo que usan sus cortes, con el mismo texto
+  // que después muestra la ficha: el aviso solo aparecía al guardar (mes
+  // simulado, H184).
+  const delPedidoElegida = placa ? placasDelPedidoLista.find((p) => p.variantId === placa.variantId) : undefined;
+  const avisoDelPedido = (() => {
+    if (!desdePedido || !delPedidoElegida?.vendidas || sinCargo || plano.placas.length === 0) return null;
+    const usadas = plano.placas.length / (mitad ? 2 : 1);
+    const otras = delPedidoElegida.enOtrosCortes ?? 0;
+    const total = usadas + otras;
+    if (Math.abs(total - delPedidoElegida.vendidas) < 1e-6) return null;
+    return otras > 0
+      ? `Los cortes de ${desdePedido.numero} usan ${placasEnTexto(total)} y el pedido vende ${placasEnTexto(delPedidoElegida.vendidas)}.`
+      : `El plano usa ${placasEnTexto(usadas)} y el pedido ${desdePedido.numero} vende ${placasEnTexto(delPedidoElegida.vendidas)}.`;
+  })();
+
+  // El pedido vende todas las placas que usan sus cortes: se venden enteras
+  // y el corte va sin cargo, como lo va a decir la ficha (H184).
+  const todasDelPedido =
+    !sinCargo &&
+    Boolean(delPedidoElegida?.vendidas) &&
+    plano.placas.length > 0 &&
+    (delPedidoElegida?.vendidas ?? 0) + 1e-6 >=
+      plano.placas.length / (mitad ? 2 : 1) + (delPedidoElegida?.enOtrosCortes ?? 0);
+
+  // Lo que frena el envío, dicho al lado del botón (H043, H188).
+  const motivoParaNoEnviar =
+    plano.noEntran.length > 0
+      ? plano.noEntran.length === 1
+        ? "Una pieza no entra en la placa."
+        : `${plano.noEntran.length} piezas no entran en la placa.`
+      : !material.trim()
+        ? "Falta elegir la placa."
+        : esOtraPlaca && !otraPlaca
+          ? "Confirmá que va en otra placa."
+          : !sucursal && !desdePedido && sucursales.length > 1
+            ? "Falta elegir dónde se corta."
+            : // Con la placa elegida y sin piezas el botón quedaba apagado
+            // sin decir por qué (tercera prueba del mes).
+            validas.length === 0
+            ? "Faltan las piezas."
+            : null;
 
   function actualizar(
     indice: number,
@@ -283,6 +419,10 @@ export function FormularioCorte({
   return (
     <form {...sinReiniciar(accion)} className="space-y-5">
       <input type="hidden" name="branchId" value={sucursal} />
+      <input type="hidden" name="placas" value={placasDelPlano} />
+      {corregir && <input type="hidden" name="reemplaza" value={corregir.id} />}
+      {sinCargo && desdePedido && <input type="hidden" name="sinCargo" value="si" />}
+      {esOtraPlaca && otraPlaca && <input type="hidden" name="otraPlaca" value="si" />}
       {desdePedido && (
         <input type="hidden" name="orderId" value={desdePedido.id} />
       )}
@@ -316,7 +456,11 @@ export function FormularioCorte({
               elegido={cliente}
               onElegir={(c) => {
                 setCliente(c);
-                if (c) setNombre(c.razonSocial ?? c.nombre);
+                if (c) {
+                  setNombre(c.razonSocial ?? c.nombre);
+                  // El de la ficha, como en el presupuesto (H046).
+                  if (c.telefono) setTelefono(c.telefono);
+                }
               }}
             />
           </div>
@@ -346,15 +490,22 @@ export function FormularioCorte({
           </div>
           <div className="space-y-2">
             <Label htmlFor="retiraEl">Lo retira el</Label>
-            <Input id="retiraEl" name="retiraEl" type="date" />
+            {/* El día del pedido, si ya se prometió (H289). */}
+            <CampoFecha
+              Entrada={Input}
+              id="retiraEl"
+              name="retiraEl"
+              defaultValue={corregir?.retiraEl || desdePedido?.entregarEl || ""}
+            />
           </div>
         </Seccion>
 
         <Seccion titulo="La placa" icono={Layers}>
           <div className="md:col-span-2">
             <BuscadorDePlaca
-              branchId={sucursal}
+              branchId={sucursal || sucursales[0]?.id || ""}
               elegida={placa}
+              delPedido={placasDelPedidoLista}
               onElegir={(p) => {
                 setPlaca(p);
                 if (p) {
@@ -364,55 +515,36 @@ export function FormularioCorte({
                   // mide lo que dice el catálogo.
                   setLargoPlaca(p.largoMm ? String(p.largoMm) : "");
                   setAnchoPlaca(p.anchoMm ? String(p.anchoMm) : "");
+                  const delPedido = placasDelPedidoLista.find((x) => x.variantId === p.variantId);
+                  if (delPedido) setMitad(delPedido.mitad);
+                  setOtraPlaca(false);
                 }
               }}
             />
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-[1fr_140px] md:col-span-2">
-            <div className="space-y-2">
-              <Label htmlFor="materialDescripcion">Placa</Label>
-              <Input
-                id="materialDescripcion"
-                name="materialDescripcion"
-                value={material}
-                onChange={(e) => setMaterial(e.target.value)}
-                placeholder="Melamina blanca 18mm"
-                required
-              />
-            </div>
+          {/* El pedido vende otra placa: se confirma, no se guarda callado
+              (H280: el pedido vendía MDF 18 y el corte quedó en MDF 3 mm). */}
+          {esOtraPlaca && desdePedido && (
+            <label className="tarjeta-atencion flex cursor-pointer items-center gap-3 px-4 py-3 text-base md:col-span-2">
+              <Checkbox checked={otraPlaca} onCheckedChange={(v) => setOtraPlaca(v === true)} />
+              <span>
+                {desdePedido.numero} vende{" "}
+                <strong>{placasDelPedidoLista.map((p) => p.descripcion).join(", ")}</strong>. Va en otra placa.
+              </span>
+            </label>
+          )}
 
-            {/* Cuántas placas.
-                Ya no arranca en 1 a ciegas: lo calcula el plano con el despiece
-                cargado y el campo lo sigue. Se puede pisar a mano —alguien
-                puede querer llevarse una de más— pero el número de partida es
-                el medido, no un supuesto. */}
-            <div className="space-y-2">
-              <Label htmlFor="placas">Placas</Label>
-              <Input
-                id="placas"
-                name="placas"
-                type="number"
-                min="1"
-                value={placas}
-                onChange={(e) => {
-                  setPlacasTocado(true);
-                  setPlacas(Number(e.target.value) || 1);
-                }}
-              />
-              {placasTocado && placas !== placasDelPlano && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPlacas(placasDelPlano);
-                    setPlacasTocado(false);
-                  }}
-                  className="text-sm text-muted-foreground underline-offset-2 hover:underline"
-                >
-                  El plano dice {placasDelPlano}
-                </button>
-              )}
-            </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="materialDescripcion">Placa</Label>
+            <Input
+              id="materialDescripcion"
+              name="materialDescripcion"
+              value={material}
+              onChange={(e) => setMaterial(e.target.value)}
+              placeholder="Melamina blanca 18mm"
+              required
+            />
           </div>
 
           {/* La medida de la placa y de qué sale.
@@ -487,7 +619,7 @@ export function FormularioCorte({
             <Input
               id="cantoDescripcion"
               name="cantoDescripcion"
-              defaultValue={desdeConsulta?.cantoDescripcion}
+              defaultValue={desdeConsulta?.cantoDescripcion ?? corregir?.cantoDescripcion}
               placeholder="Blanco 0,45 mm — vacío si no lleva"
             />
           </div>
@@ -696,11 +828,17 @@ export function FormularioCorte({
           Cómo entra en la placa
         </h2>
 
+        {avisoDelPedido && (
+          <p className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2 text-base font-medium">
+            {avisoDelPedido}
+          </p>
+        )}
         <PlanoEnVivo
           plano={plano}
           medidaSupuesta={medidaPlaca.supuesta}
           fijadas={fijadas}
           onFijadas={setFijadas}
+          quien={{ sinCargo: sinCargo && Boolean(desdePedido), media: Boolean(mitad), todasDelCliente: todasDelPedido }}
         />
       </section>
 
@@ -712,6 +850,7 @@ export function FormularioCorte({
               id="notas"
               name="notas"
               rows={2}
+              defaultValue={corregir?.notas}
               placeholder="Cuándo lo retiran, si hay que avisar, medidas críticas."
             />
           </div>
@@ -725,34 +864,49 @@ export function FormularioCorte({
             <span className="flex-1 text-[15px] font-semibold leading-tight">
               Urgente
             </span>
-            <Switch name="urgente" value="si" />
+            <Switch name="urgente" value="si" defaultChecked={corregir?.urgente} />
           </label>
+
+          {/* La pieza que faltó en una entrega se repone sin cobrar, atada al
+              pedido que la originó (H283). */}
+          {desdePedido && puedeReponer && (
+            <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5">
+              <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                <PackageCheck className="h-5 w-5" />
+              </span>
+              <span className="flex-1 text-[15px] font-semibold leading-tight">
+                Reposición sin cargo
+              </span>
+              <Switch checked={sinCargo} onCheckedChange={(v) => setSinCargo(v === true)} />
+            </label>
+          )}
+
+          {/* Dónde se corta: el corte suelto (H045). */}
+          {!desdePedido && sucursales.length > 1 && (
+            <div className="space-y-2 md:col-span-2">
+              <Label>Dónde se corta</Label>
+              <Opciones
+                nombre="sucursal-opcion"
+                opciones={sucursales.map((x) => ({ valor: x.id, texto: x.nombre }))}
+                valor={sucursal}
+                alCambiar={setSucursal}
+                columnas={2}
+              />
+            </div>
+          )}
         </Seccion>
       </Hoja>
 
-      {estado.error && (
-        <p
-          role="alert"
-          className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive"
-        >
-          {estado.error}
-        </p>
-      )}
-
-      {estado.ok && (
-        <p className="rounded-lg border border-brand-green/40 bg-brand-green/10 px-4 py-3 text-brand-green">
-          {estado.ok}
-        </p>
-      )}
-
-      <BarraGuardar>
+      {/* El error y lo que falta, en la barra fija, al lado del botón: al
+          pie de una página larga no se veía en el teléfono. */}
+      <BarraGuardar error={estado.error ?? motivoParaNoEnviar}>
         <Button
           type="submit"
-          disabled={pendiente || validas.length === 0}
+          disabled={pendiente || motivoParaNoEnviar !== null || Boolean(estado.ok)}
           className="h-11 px-6"
         >
           {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-          Mandar a la cola del taller
+          {corregir ? `Reemplazar ${corregir.numero}` : "Mandar a la cola del taller"}
         </Button>
       </BarraGuardar>
     </form>
@@ -765,13 +919,13 @@ function BuscadorDeCliente({
 }: {
   elegido: { id: string; nombre: string; razonSocial: string | null } | null;
   onElegir: (
-    c: { id: string; nombre: string; razonSocial: string | null } | null,
+    c: { id: string; nombre: string; razonSocial: string | null; telefono?: string | null } | null,
   ) => void;
 }) {
   const [texto, setTexto] = useState("");
   const [traidos, setTraidos] = useState<{
     texto: string;
-    items: { id: string; nombre: string; razonSocial: string | null }[];
+    items: { id: string; nombre: string; razonSocial: string | null; telefono?: string | null }[];
   }>({ texto: "", items: [] });
 
   const consulta = texto.trim();
@@ -855,10 +1009,13 @@ function BuscadorDeCliente({
 function BuscadorDePlaca({
   branchId,
   elegida,
+  delPedido = [],
   onElegir,
 }: {
   branchId: string;
   elegida: PlacaElegida | null;
+  /** Las placas del pedido, a un toque. */
+  delPedido?: PlacaElegida[];
   onElegir: (p: PlacaElegida | null) => void;
 }) {
   const [texto, setTexto] = useState("");
@@ -916,6 +1073,21 @@ function BuscadorDePlaca({
 
   return (
     <div className="space-y-2">
+      {delPedido.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {delPedido.map((p) => (
+            <button
+              key={p.variantId}
+              type="button"
+              onClick={() => onElegir(p)}
+              className="tarjeta-hundida inline-flex min-h-11 items-center gap-2 rounded-xl px-3.5 text-left text-base font-medium hover:bg-muted"
+            >
+              <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {p.descripcion}
+            </button>
+          ))}
+        </div>
+      )}
       <Label htmlFor="buscarPlaca">Buscar la placa en el catálogo</Label>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

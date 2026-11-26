@@ -5031,18 +5031,20 @@ type CashMovement struct {
 	SupplierPaymentID *string            `json:"supplierPaymentId"`
 	DeclaradoAt       pgtype.Timestamptz `json:"declaradoAt"`
 	BajoLaBase        bool               `json:"bajoLaBase"`
+	Destino           *string            `json:"destino"`
 }
 
 type CashSession struct {
-	ID         string      `json:"id"`
-	BranchID   string      `json:"branchId"`
-	AbiertaPor string      `json:"abiertaPor"`
-	AbiertaAt  time.Time   `json:"abiertaAt"`
-	CerradaPor *string     `json:"cerradaPor"`
-	CerradaAt  *time.Time  `json:"cerradaAt"`
-	Contado    *jsmath.Num `json:"contado"`
-	Estado     EstadoCaja  `json:"estado"`
-	Notas      *string     `json:"notas"`
+	ID          string      `json:"id"`
+	BranchID    string      `json:"branchId"`
+	AbiertaPor  string      `json:"abiertaPor"`
+	AbiertaAt   time.Time   `json:"abiertaAt"`
+	CerradaPor  *string     `json:"cerradaPor"`
+	CerradaAt   *time.Time  `json:"cerradaAt"`
+	Contado     *jsmath.Num `json:"contado"`
+	Estado      EstadoCaja  `json:"estado"`
+	Notas       *string     `json:"notas"`
+	PosDeviceID *string     `json:"posDeviceId"`
 }
 
 type Category struct {
@@ -5308,6 +5310,10 @@ type CuttingOrder struct {
 	MotorPlano          int32       `json:"motorPlano"`
 	ContactoTelefono    *string     `json:"contactoTelefono"`
 	RetiraEl            pgtype.Date `json:"retiraEl"`
+	TerminadoAt         *time.Time  `json:"terminadoAt"`
+	SinCargo            bool        `json:"sinCargo"`
+	MotivoAnulado       *string     `json:"motivoAnulado"`
+	CargoOrderID        *string     `json:"cargoOrderId"`
 }
 
 type CuttingRate struct {
@@ -5350,6 +5356,8 @@ type Delivery struct {
 	CreatedByUserID   *string           `json:"createdByUserId"`
 	CreatedAt         time.Time         `json:"createdAt"`
 	UpdatedAt         time.Time         `json:"updatedAt"`
+	VisitaDe          *string           `json:"visitaDe"`
+	CuttingOrderID    *string           `json:"cuttingOrderId"`
 }
 
 type DeliveryItem struct {
@@ -5363,7 +5371,7 @@ type DeliveryItem struct {
 type DevolucionItem struct {
 	ID            string     `json:"id"`
 	DevolucionID  string     `json:"devolucionId"`
-	InvoiceItemID string     `json:"invoiceItemId"`
+	InvoiceItemID *string    `json:"invoiceItemId"`
 	OrderItemID   *string    `json:"orderItemId"`
 	Cantidad      jsmath.Num `json:"cantidad"`
 	DelAcopio     jsmath.Num `json:"delAcopio"`
@@ -5375,7 +5383,7 @@ type Devolucione struct {
 	ID                string             `json:"id"`
 	Clave             string             `json:"clave"`
 	OrderID           string             `json:"orderId"`
-	InvoiceID         string             `json:"invoiceId"`
+	InvoiceID         *string            `json:"invoiceId"`
 	NotaID            *string            `json:"notaId"`
 	Importe           jsmath.Num         `json:"importe"`
 	Destino           string             `json:"destino"`
@@ -5434,19 +5442,22 @@ type EventRegistration struct {
 }
 
 type Expense struct {
-	ID                string         `json:"id"`
-	Fecha             time.Time      `json:"fecha"`
-	Categoria         CategoriaGasto `json:"categoria"`
-	Descripcion       string         `json:"descripcion"`
-	Importe           jsmath.Num     `json:"importe"`
-	Medio             MedioGasto     `json:"medio"`
-	BranchID          *string        `json:"branchId"`
-	SupplierID        *string        `json:"supplierId"`
-	PurchaseInvoiceID *string        `json:"purchaseInvoiceId"`
-	Notas             *string        `json:"notas"`
-	CreatedByUserID   *string        `json:"createdByUserId"`
-	CreatedAt         time.Time      `json:"createdAt"`
-	Circuito          Circuito       `json:"circuito"`
+	ID                string             `json:"id"`
+	Fecha             time.Time          `json:"fecha"`
+	Categoria         CategoriaGasto     `json:"categoria"`
+	Descripcion       string             `json:"descripcion"`
+	Importe           jsmath.Num         `json:"importe"`
+	Medio             MedioGasto         `json:"medio"`
+	BranchID          *string            `json:"branchId"`
+	SupplierID        *string            `json:"supplierId"`
+	PurchaseInvoiceID *string            `json:"purchaseInvoiceId"`
+	Notas             *string            `json:"notas"`
+	CreatedByUserID   *string            `json:"createdByUserId"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	Circuito          Circuito           `json:"circuito"`
+	AnuladoAt         pgtype.Timestamptz `json:"anuladoAt"`
+	MotivoAnulacion   *string            `json:"motivoAnulacion"`
+	AnuladoPorUserID  *string            `json:"anuladoPorUserId"`
 }
 
 type FotosBibliotecaDescartada struct {
@@ -5635,6 +5646,13 @@ type InvoicesDadasDeBaja struct {
 	Comprobante    json.RawMessage `json:"comprobante"`
 }
 
+type MesesCerrado struct {
+	Mes              string             `json:"mes"`
+	CerradoAt        pgtype.Timestamptz `json:"cerradoAt"`
+	CerradoPor       *string            `json:"cerradoPor"`
+	CerradoPorNombre *string            `json:"cerradoPorNombre"`
+}
+
 type MigrationRun struct {
 	ID              string           `json:"id"`
 	Entidad         EntidadMigracion `json:"entidad"`
@@ -5669,44 +5687,50 @@ type NotificationsLog struct {
 }
 
 type Order struct {
-	ID                     string       `json:"id"`
-	Numero                 string       `json:"numero"`
-	CustomerID             *string      `json:"customerId"`
-	QuoteID                *string      `json:"quoteId"`
-	ContactoNombre         string       `json:"contactoNombre"`
-	ContactoEmail          *string      `json:"contactoEmail"`
-	ContactoTelefono       *string      `json:"contactoTelefono"`
-	BranchID               *string      `json:"branchId"`
-	Estado                 EstadoPedido `json:"estado"`
-	Origen                 OrigenPedido `json:"origen"`
-	TipoEntrega            TipoEntrega  `json:"tipoEntrega"`
-	DireccionEntrega       *string      `json:"direccionEntrega"`
-	ZonaEnvio              *string      `json:"zonaEnvio"`
-	CostoEnvio             jsmath.Num   `json:"costoEnvio"`
-	Subtotal               jsmath.Num   `json:"subtotal"`
-	Total                  jsmath.Num   `json:"total"`
-	MedioPago              *MedioPago   `json:"medioPago"`
-	EstadoPago             EstadoPago   `json:"estadoPago"`
-	Notas                  *string      `json:"notas"`
-	CreatedByUserID        *string      `json:"createdByUserId"`
-	CreatedAt              time.Time    `json:"createdAt"`
-	UpdatedAt              time.Time    `json:"updatedAt"`
-	PublicToken            string       `json:"publicToken"`
-	ClaveMostrador         *string      `json:"claveMostrador"`
-	Descuento              jsmath.Num   `json:"descuento"`
-	DescuentoMotivo        *string      `json:"descuentoMotivo"`
-	NumeroProvisorio       *string      `json:"numeroProvisorio"`
-	CobradaAt              *time.Time   `json:"cobradaAt"`
-	SincronizadaAt         *time.Time   `json:"sincronizadaAt"`
-	SellerID               *string      `json:"sellerId"`
-	EntregarEl             pgtype.Date  `json:"entregarEl"`
-	AutorizadoPor          *string      `json:"autorizadoPor"`
-	DejadoDeCobrar         jsmath.Num   `json:"dejadoDeCobrar"`
-	BajoListaSinAutorizar  bool         `json:"bajoListaSinAutorizar"`
-	HuellaMostrador        *string      `json:"huellaMostrador"`
-	AnulacionAutorizadaPor *string      `json:"anulacionAutorizadaPor"`
-	MercaderiaNoVolvio     bool         `json:"mercaderiaNoVolvio"`
-	CreditoSinAutorizar    jsmath.Num   `json:"creditoSinAutorizar"`
+	ID                     string             `json:"id"`
+	Numero                 string             `json:"numero"`
+	CustomerID             *string            `json:"customerId"`
+	QuoteID                *string            `json:"quoteId"`
+	ContactoNombre         string             `json:"contactoNombre"`
+	ContactoEmail          *string            `json:"contactoEmail"`
+	ContactoTelefono       *string            `json:"contactoTelefono"`
+	BranchID               *string            `json:"branchId"`
+	Estado                 EstadoPedido       `json:"estado"`
+	Origen                 OrigenPedido       `json:"origen"`
+	TipoEntrega            TipoEntrega        `json:"tipoEntrega"`
+	DireccionEntrega       *string            `json:"direccionEntrega"`
+	ZonaEnvio              *string            `json:"zonaEnvio"`
+	CostoEnvio             jsmath.Num         `json:"costoEnvio"`
+	Subtotal               jsmath.Num         `json:"subtotal"`
+	Total                  jsmath.Num         `json:"total"`
+	MedioPago              *MedioPago         `json:"medioPago"`
+	EstadoPago             EstadoPago         `json:"estadoPago"`
+	Notas                  *string            `json:"notas"`
+	CreatedByUserID        *string            `json:"createdByUserId"`
+	CreatedAt              time.Time          `json:"createdAt"`
+	UpdatedAt              time.Time          `json:"updatedAt"`
+	PublicToken            string             `json:"publicToken"`
+	ClaveMostrador         *string            `json:"claveMostrador"`
+	Descuento              jsmath.Num         `json:"descuento"`
+	DescuentoMotivo        *string            `json:"descuentoMotivo"`
+	NumeroProvisorio       *string            `json:"numeroProvisorio"`
+	CobradaAt              *time.Time         `json:"cobradaAt"`
+	SincronizadaAt         *time.Time         `json:"sincronizadaAt"`
+	SellerID               *string            `json:"sellerId"`
+	EntregarEl             pgtype.Date        `json:"entregarEl"`
+	AutorizadoPor          *string            `json:"autorizadoPor"`
+	DejadoDeCobrar         jsmath.Num         `json:"dejadoDeCobrar"`
+	BajoListaSinAutorizar  bool               `json:"bajoListaSinAutorizar"`
+	HuellaMostrador        *string            `json:"huellaMostrador"`
+	AnulacionAutorizadaPor *string            `json:"anulacionAutorizadaPor"`
+	MercaderiaNoVolvio     bool               `json:"mercaderiaNoVolvio"`
+	CreditoSinAutorizar    jsmath.Num         `json:"creditoSinAutorizar"`
+	Comprobante            *string            `json:"comprobante"`
+	VendidoAt              pgtype.Timestamptz `json:"vendidoAt"`
+	ACuenta                *jsmath.Num        `json:"aCuenta"`
+	EntregadoAt            pgtype.Timestamptz `json:"entregadoAt"`
+	FacturadoAt            pgtype.Timestamptz `json:"facturadoAt"`
+	CanceladoAt            pgtype.Timestamptz `json:"canceladoAt"`
 }
 
 type OrderItem struct {
@@ -5725,6 +5749,7 @@ type OrderItem struct {
 	StockPorUnidad jsmath.Num  `json:"stockPorUnidad"`
 	PrecioLista    *jsmath.Num `json:"precioLista"`
 	DelCorte       bool        `json:"delCorte"`
+	CuttingOrderID *string     `json:"cuttingOrderId"`
 }
 
 type OrderPayment struct {
@@ -6027,6 +6052,12 @@ type PurchaseInvoice struct {
 	AnuladaPorUserID *string               `json:"anuladaPorUserId"`
 	PercepcionIva    jsmath.Num            `json:"percepcionIva"`
 	PercepcionIibb   jsmath.Num            `json:"percepcionIibb"`
+	AplicaAID        *string               `json:"aplicaAId"`
+}
+
+type PurchaseInvoiceReceipt struct {
+	PurchaseInvoiceID string `json:"purchaseInvoiceId"`
+	GoodsReceiptID    string `json:"goodsReceiptId"`
 }
 
 type PurchaseOrder struct {
@@ -6087,6 +6118,7 @@ type Quote struct {
 	RespondeHasta    *time.Time        `json:"respondeHasta"`
 	NecesitaPara     *time.Time        `json:"necesitaPara"`
 	SellerID         *string           `json:"sellerId"`
+	MotivoRechazo    *string           `json:"motivoRechazo"`
 }
 
 type QuoteItem struct {
@@ -6133,6 +6165,7 @@ type Receipt struct {
 	OrderID             *string      `json:"orderId"`
 	Clave               *string      `json:"clave"`
 	Huella              *string      `json:"huella"`
+	AnticipoPorRegla    bool         `json:"anticipoPorRegla"`
 }
 
 type ReceiptPart struct {
@@ -6278,6 +6311,27 @@ type StockReservation struct {
 	CreatedAt   time.Time     `json:"createdAt"`
 }
 
+type StockTraslado struct {
+	ID                string             `json:"id"`
+	Numero            *int32             `json:"numero"`
+	OrigenID          string             `json:"origenId"`
+	DestinoID         string             `json:"destinoId"`
+	Nota              *string            `json:"nota"`
+	Estado            string             `json:"estado"`
+	CreatedByUserID   *string            `json:"createdByUserId"`
+	CreatedAt         pgtype.Timestamptz `json:"createdAt"`
+	RecibidoPorUserID *string            `json:"recibidoPorUserId"`
+	RecibidoAt        pgtype.Timestamptz `json:"recibidoAt"`
+}
+
+type StockTrasladoItem struct {
+	ID         string     `json:"id"`
+	TrasladoID string     `json:"trasladoId"`
+	VariantID  string     `json:"variantId"`
+	Cantidad   jsmath.Num `json:"cantidad"`
+	Orden      int32      `json:"orden"`
+}
+
 type Subcategory struct {
 	ID         string    `json:"id"`
 	CategoryID string    `json:"categoryId"`
@@ -6326,6 +6380,7 @@ type SupplierMovement struct {
 	GoodsReceiptID    *string                 `json:"goodsReceiptId"`
 	PurchaseInvoiceID *string                 `json:"purchaseInvoiceId"`
 	SupplierPaymentID *string                 `json:"supplierPaymentId"`
+	ChequeID          *string                 `json:"chequeId"`
 }
 
 type SupplierPayment struct {
@@ -6350,6 +6405,12 @@ type SupplierPaymentAllocation struct {
 	PaymentID         string     `json:"paymentId"`
 	PurchaseInvoiceID string     `json:"purchaseInvoiceId"`
 	Importe           jsmath.Num `json:"importe"`
+}
+
+type SupplierPaymentCheque struct {
+	PaymentID string     `json:"paymentId"`
+	ChequeID  string     `json:"chequeId"`
+	Importe   jsmath.Num `json:"importe"`
 }
 
 type SupplierPaymentPart struct {

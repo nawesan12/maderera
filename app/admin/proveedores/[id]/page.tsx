@@ -19,6 +19,14 @@ import { CuentaDelProveedor } from "./cuenta";
 
 export const metadata: Metadata = { title: "Proveedor" };
 
+const MEDIOS: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  debito: "Débito",
+  credito: "Crédito",
+  cheque: "Cheque",
+};
+
 /**
  * La ficha del proveedor y su cuenta corriente.
  *
@@ -105,15 +113,13 @@ export default async function ProveedorPage({
         </header>
       </div>
 
-      {(proveedor.contacto || proveedor.telefono || proveedor.cbu) && (
-        <section className="tarjeta grid gap-4 p-4 sm:grid-cols-3">
+      {(proveedor.contacto || proveedor.telefono || proveedor.cbu || proveedor.aliasCbu) && (
+        <section className="tarjeta grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <Dato titulo="Contacto" valor={proveedor.contacto} />
           <Dato titulo="Teléfono" valor={proveedor.telefono} />
-          <Dato
-            titulo="CBU"
-            valor={proveedor.cbu ?? proveedor.aliasCbu}
-            mono
-          />
+          {/* Cada dato con su nombre: el alias salía bajo «CBU». */}
+          {proveedor.cbu && <Dato titulo="CBU" valor={proveedor.cbu} mono />}
+          {proveedor.aliasCbu && <Dato titulo="Alias" valor={proveedor.aliasCbu} mono />}
         </section>
       )}
 
@@ -128,23 +134,36 @@ export default async function ProveedorPage({
               const vence = f.fechaVencimiento ? new Date(f.fechaVencimiento) : null;
               const dias = diasHasta(vence);
               const vencida = dias !== null && dias < 0;
+              const nota = f.tipo.startsWith("nota_credito");
+              const cheque = f.tipo === "cheque_rechazado";
               return (
                 <li key={f.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3">
-                  <Link href={`/admin/compras/facturas/${f.id}`} className="min-w-0 flex-1 hover:underline">
-                    <span className="tabular block font-medium">{f.numero}</span>
+                  <Link
+                    href={cheque ? "/admin/cheques" : `/admin/compras/facturas/${f.id}`}
+                    className="min-w-0 flex-1 hover:underline"
+                  >
+                    <span className="codigo block font-medium">{nota ? `Nota de crédito ${f.numero}` : f.numero}</span>
                     <span className="block text-sm text-muted-foreground">
-                      del {fechaCorta.format(f.fechaEmision)}
+                      {cheque ? "Rechazado" : `del ${fechaCorta.format(f.fechaEmision)}`}
                     </span>
                   </Link>
-                  <span className={`tabular text-base ${vencida ? "font-semibold text-saldo-debe" : "text-muted-foreground"}`}>
-                    {vence ? `${vencida ? "venció" : "vence"} el ${fechaCorta.format(vence)}` : "sin vencimiento"}
+                  {!nota && !cheque && (
+                    <span className={`tabular text-base ${vencida ? "font-semibold text-saldo-debe" : dias === 0 ? "font-semibold text-brand-orange-dark" : "text-muted-foreground"}`}>
+                      {vence ? (dias === 0 ? "vence hoy" : `${vencida ? "venció" : "vence"} el ${fechaCorta.format(vence)}`) : "sin vencimiento"}
+                    </span>
+                  )}
+                  <span className={`tabular w-32 text-right text-base font-semibold ${nota ? "text-saldo-favor" : ""}`}>
+                    {nota ? `−${formatearMonto(f.saldo)}` : formatearMonto(f.saldo)}
                   </span>
-                  <span className="tabular w-32 text-right text-base font-semibold">{formatearMonto(f.saldo)}</span>
                   <Link
-                    href={`/admin/compras/pagos?proveedor=${proveedor.id}&factura=${f.id}`}
+                    href={
+                      nota
+                        ? `/admin/compras/facturas/${f.id}`
+                        : `/admin/compras/pagos?proveedor=${proveedor.id}&${cheque ? "cheque" : "factura"}=${f.id}`
+                    }
                     className="tarjeta-hundida inline-flex h-10 items-center rounded-xl px-4 text-base font-medium"
                   >
-                    Pagar
+                    {nota ? "Aplicar" : "Pagar"}
                   </Link>
                 </li>
               );
@@ -158,10 +177,38 @@ export default async function ProveedorPage({
         movimientos={proveedor.movimientos}
       />
 
+      {/* Lo pagado en el acto (un flete, la luz): no pasa por la cuenta, pero
+          es plata que se le pagó (mes simulado, H065). */}
+      {proveedor.gastos.length > 0 && (
+        <section className="tarjeta overflow-hidden">
+          <h2 className="flex items-baseline gap-2 px-5 pt-5 text-[19px] font-bold tracking-tight">
+            Pagado en el acto
+            <span className="tabular text-base font-medium text-muted-foreground">
+              {formatearMonto(proveedor.gastos.reduce((t, g) => t + g.importe, 0))}
+            </span>
+          </h2>
+          <ul className="mt-2 divide-y divide-linea">
+            {proveedor.gastos.map((g) => (
+              <li key={g.id} className="flex items-baseline justify-between gap-3 px-5 py-3">
+                <span className="min-w-0">
+                  <span className="block">{g.descripcion}</span>
+                  <span className="tabular block text-sm text-muted-foreground">
+                    {fechaCorta.format(new Date(g.fecha))} · {MEDIOS[g.medio] ?? g.medio}
+                    {g.factura && ` · factura ${g.factura}`}
+                  </span>
+                </span>
+                <span className="tabular shrink-0 font-semibold">{formatearMonto(g.importe)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <CondicionesDelProveedor
         supplierId={proveedor.id}
         condiciones={condiciones}
         convenios={proveedor.convenios}
+        diasPago={proveedor.diasPago}
       />
 
       <details className="tarjeta p-5">

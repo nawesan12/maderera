@@ -10,6 +10,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -59,6 +60,12 @@ func (e *ErrSinCaja) Error() string {
 //   - La clave hace repetible el cobro.
 //   - Un pedido sin sucursal cobra el efectivo en la que se elige
 //     (`sucursal`); sin elegir, en la única caja abierta.
+//   - El efectivo entra a la caja donde está la plata (mes simulado): el
+//     fletero trae a Casa Central el efectivo de un pedido del Aserradero,
+//     y cobrarlo pedía abrir un turno del Aserradero que nadie iba a
+//     contar. Si la sucursal del pedido no tiene la caja abierta y otra sí,
+//     se elige entre las abiertas (y la del pedido, para abrirla); la
+//     elegida (`sucursal`) manda.
 func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, partesCrudas, clave, sucursal string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(pedido) {
 		return ResultadoDeCobro{}, plataforma.NuevoProblema(404, "No se encontró el pedido.")
@@ -82,10 +89,8 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 		}
 		err := tx.QueryRow(ctx, `
 			SELECT o.numero, o.contacto_nombre, o.estado::text, o.customer_id, o.branch_id,
-			       greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`, 0)::float8,
-			       o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
-			         AND NOT EXISTS (SELECT 1 FROM account_movements am
-			                         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+			       greatest(`+fragmentos.ACobrarFueraDeLaCuenta+` - `+fragmentos.CobradoDelPedido+`, 0)::float8,
+			       `+fragmentos.DeudaFueraDeLaCuenta+`
 			FROM orders o WHERE o.id = $1 FOR UPDATE`, pedido).
 			Scan(&p.numero, &p.contacto, &p.estado, &p.cliente, &p.sucursal, &p.saldo, &p.fuera)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -112,21 +117,14 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 				return errCobro(p.numero + " ya está cobrado.")
 			}
 			if total > p.saldo+0.005 {
-				return errCobro("A " + p.numero + " le faltan " + jsmath.Fijo2(p.saldo) + ": no se puede cobrar más que eso.")
+				return errCobro("A " + p.numero + " le faltan " + formato.Importe(p.saldo) + ": no se puede cobrar más que eso.")
 			}
 		}
 		var c *Caja
 		if hayEfectivo(partes) {
-			donde := p.sucursal
-			if donde == nil && plataforma.UUIDValido(sucursal) {
-				donde = &sucursal
-			}
-			turno, err := turnoDelPedido(ctx, q, donde)
+			turno, err := turnoParaElEfectivo(ctx, tx, q, p.sucursal, sucursal)
 			if err != nil {
 				return err
-			}
-			if turno == "" {
-				return sinCaja(ctx, tx, donde)
 			}
 			c = &Caja{TurnoID: turno}
 		}
@@ -147,7 +145,7 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 			return nil
 		}
 		var pagado bool
-		if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarDelPedido+` FROM orders o WHERE o.id = $1`, pedido).Scan(&pagado); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, pedido).Scan(&pagado); err != nil {
 			return err
 		}
 		if pagado {
@@ -165,9 +163,79 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 	}
 	if !r.Repetido {
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "pedido", pedido,
-			"Cobró "+numero+" con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+			"Cobró "+numero+" con el recibo "+r.Numero+" por "+formato.Importe(r.Total), map[string]any{"receiptId": r.ReceiptID})
 	}
 	return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", Aviso: r.Aviso, ReceiptID: &r.ReceiptID}, nil
+}
+
+// turnoParaElEfectivo es el turno donde entra el efectivo de un pedido de
+// la sucursal `delPedido`: el de la elegida (`elegida`) o el de la suya. Sin
+// turno devuelve el ErrSinCaja con lo que hay que abrir o elegir.
+func turnoParaElEfectivo(ctx context.Context, tx pgx.Tx, q *sqlc.Queries, delPedido *string, elegida string) (string, error) {
+	donde := delPedido
+	if plataforma.UUIDValido(elegida) {
+		donde = &elegida
+	}
+	turno, err := turnoDelPedido(ctx, q, donde)
+	if err != nil {
+		return "", err
+	}
+	if turno == "" && donde != nil && donde == delPedido {
+		// La del pedido está cerrada: si hay otra abierta, se elige.
+		if err := otrasCajas(ctx, tx, *donde); err != nil {
+			return "", err
+		}
+	}
+	if turno == "" {
+		return "", sinCaja(ctx, tx, donde)
+	}
+	return turno, nil
+}
+
+// CajaDelCobro es lo que diría el cobro en efectivo del pedido antes de
+// cobrarlo: nil si hay caja, o el ErrSinCaja con lo que hay que abrir o
+// elegir. El diálogo lo muestra al abrirse (mes simulado: la caja aparecía
+// recién después del primer «Registrar»).
+func (s *Servicio) CajaDelCobro(ctx context.Context, pedido string) (*ErrSinCaja, error) {
+	if !plataforma.UUIDValido(pedido) {
+		return nil, plataforma.NuevoProblema(404, "No se encontró el pedido.")
+	}
+	var falta *ErrSinCaja
+	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		var sucursal *string
+		err := tx.QueryRow(ctx, `SELECT branch_id::text FROM orders WHERE id = $1`, pedido).Scan(&sucursal)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return plataforma.NuevoProblema(404, "No se encontró el pedido.")
+		}
+		if err != nil {
+			return err
+		}
+		_, err = turnoParaElEfectivo(ctx, tx, s.q.WithTx(tx), sucursal, "")
+		if errors.As(err, &falta) {
+			return nil
+		}
+		return err
+	})
+	return falta, err
+}
+
+// CajaDelCobroACuenta es lo mismo para el cobro desde la ficha, sin pedido:
+// la regla de CobrarAClienteEn sin sucursal (la única caja abierta, o
+// elegir). El diálogo de la ficha lo muestra al abrirse, como el del pedido
+// (mes simulado, H132: sin caja, el aviso aparecía recién al registrar).
+func (s *Servicio) CajaDelCobroACuenta(ctx context.Context) (*ErrSinCaja, error) {
+	var falta *ErrSinCaja
+	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		turno, err := turnoDelPedido(ctx, s.q.WithTx(tx), nil)
+		if err != nil || turno != "" {
+			return err
+		}
+		if err := sinCaja(ctx, tx, nil); !errors.As(err, &falta) {
+			return err
+		}
+		return nil
+	})
+	return falta, err
 }
 
 func hayEfectivo(partes []Parte) bool {
@@ -196,6 +264,42 @@ func turnoDelPedido(ctx context.Context, q *sqlc.Queries, sucursal *string) (str
 		return turnos[0].ID, nil
 	}
 	return "", nil
+}
+
+// otrasCajas: la sucursal del pedido no tiene la caja abierta. Si otra sí,
+// devuelve el ErrSinCaja con las abiertas y la del pedido para elegir dónde
+// entra el efectivo; si no hay ninguna abierta, nil (se abre la del pedido).
+func otrasCajas(ctx context.Context, tx pgx.Tx, delPedido string) error {
+	filas, err := tx.Query(ctx, `
+		SELECT b.id::text, b.name, exists(SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = b.id AND cs.estado = 'abierta'), b.fondo_base
+		FROM branches b WHERE b.active ORDER BY b.sort_order, b.name`)
+	if err != nil {
+		return err
+	}
+	todas, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (SucursalParaCobrar, error) {
+		var o SucursalParaCobrar
+		var fondo jsmath.Num
+		err := r.Scan(&o.ID, &o.Nombre, &o.Abierta, &fondo)
+		o.Fondo = fondo.F()
+		return o, err
+	})
+	if err != nil {
+		return err
+	}
+	var opciones []SucursalParaCobrar
+	hayAbierta := false
+	for _, o := range todas {
+		if o.Abierta {
+			hayAbierta = true
+		}
+		if o.Abierta || o.ID == delPedido {
+			opciones = append(opciones, o)
+		}
+	}
+	if !hayAbierta {
+		return nil
+	}
+	return &ErrSinCaja{Sucursales: opciones}
 }
 
 // sinCaja arma el ErrSinCaja: con la sucursal y su fondo, o, sin sucursal,

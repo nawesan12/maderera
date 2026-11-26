@@ -41,4 +41,22 @@ func TestComprobanteBTransparenciaFiscal(t *testing.T) {
 	if s := texto(cp); strings.Contains(s, "Ley 27.743") || !strings.Contains(s, "$ 10.000") {
 		t.Errorf("la A:\n%s", s)
 	}
+	// Con el neto del renglón, la fila de la A cierra: 2 × $ 10.000 =
+	// $ 20.000, no los $ 24.200 con IVA (H080). Y la condición de venta.
+	cp.Items[0].Neto = "20000.00"
+	cp.CondicionVenta, cp.Pedido = "Contado · Efectivo", "PED-1000"
+	s = texto(cp)
+	for _, quiero := range []string{"$ 20.000", "Condición de venta: Contado · Efectivo", "Pedido PED-1000"} {
+		if !strings.Contains(s, quiero) {
+			t.Errorf("falta %q en la A:\n%s", quiero, s)
+		}
+	}
+	if strings.Count(s, "$ 24.200") != 1 {
+		t.Errorf("el subtotal de la fila de la A va neto:\n%s", s)
+	}
+	// La A a un monotributista, con la leyenda de la Ley 27.618 (H207).
+	cp.ReceptorCondicionIva = "monotributista"
+	if s := texto(cp); !strings.Contains(s, "Ley Nº 27.618") {
+		t.Errorf("la A al monotributista:\n%s", s)
+	}
 }

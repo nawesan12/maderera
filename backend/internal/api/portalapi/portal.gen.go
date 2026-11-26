@@ -118,17 +118,20 @@ func (e MisPedidos200JSONResponseBodyTipoEntrega) Valid() bool {
 
 // ClienteDelPortal defines model for ClienteDelPortal.
 type ClienteDelPortal struct {
-	CondicionIva  string                 `json:"condicionIva"`
-	Cuit          *string                `json:"cuit"`
-	Direccion     *string                `json:"direccion"`
-	Email         *string                `json:"email"`
-	Estado        ClienteDelPortalEstado `json:"estado"`
-	Id            string                 `json:"id"`
-	LimiteCredito float64                `json:"limiteCredito"`
-	Nombre        string                 `json:"nombre"`
-	RazonSocial   *string                `json:"razonSocial"`
-	Telefono      *string                `json:"telefono"`
-	Tipo          ClienteDelPortalTipo   `json:"tipo"`
+	CondicionIva       string                 `json:"condicionIva"`
+	Cuit               *string                `json:"cuit"`
+	DatosFiscalesFijos bool                   `json:"datosFiscalesFijos"`
+	Direccion          *string                `json:"direccion"`
+	Email              *string                `json:"email"`
+	Estado             ClienteDelPortalEstado `json:"estado"`
+	Id                 string                 `json:"id"`
+	LimiteCredito      float64                `json:"limiteCredito"`
+	Lista              *string                `json:"lista"`
+	Nombre             string                 `json:"nombre"`
+	RazonSocial        *string                `json:"razonSocial"`
+	Telefono           *string                `json:"telefono"`
+	Tipo               ClienteDelPortalTipo   `json:"tipo"`
+	Vinculada          bool                   `json:"vinculada"`
 }
 
 // ClienteDelPortalEstado defines model for ClienteDelPortal.Estado.
@@ -152,22 +155,63 @@ type DireccionDelPortal struct {
 
 // PedidoPropio defines model for PedidoPropio.
 type PedidoPropio struct {
-	CostoEnvio       *string   `json:"costoEnvio"`
-	CreatedAt        time.Time `json:"createdAt"`
-	DireccionEntrega *string   `json:"direccionEntrega"`
-	Estado           string    `json:"estado"`
-	EstadoPago       string    `json:"estadoPago"`
-	Historial        []struct {
+	Ajustes []struct {
+		Detalle *string   `json:"detalle"`
+		Fecha   time.Time `json:"fecha"`
+		Id      string    `json:"id"`
+		Monto   float64   `json:"monto"`
+		Tipo    string    `json:"tipo"`
+	} `json:"ajustes"`
+	Cortes []struct {
+		Estado   string  `json:"estado"`
+		Id       string  `json:"id"`
+		Material *string `json:"material"`
+		Numero   string  `json:"numero"`
+		Piezas   []struct {
+			AnchoMm  int     `json:"anchoMm"`
+			Cantidad int     `json:"cantidad"`
+			Etiqueta *string `json:"etiqueta"`
+			LargoMm  int     `json:"largoMm"`
+		} `json:"piezas"`
+		Placas   int        `json:"placas"`
+		RetiraEl *time.Time `json:"retiraEl"`
+	} `json:"cortes"`
+	CostoEnvio *string   `json:"costoEnvio"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	// CuestaEnCuenta lo que cuesta en la cuenta después de sus notas de crédito
+	CuestaEnCuenta   *float64 `json:"cuestaEnCuenta,omitempty"`
+	DebeEnCuenta     *float64 `json:"debeEnCuenta"`
+	Descuento        float64  `json:"descuento"`
+	DireccionEntrega *string  `json:"direccionEntrega"`
+	EnRevision       *float64 `json:"enRevision"`
+	Estado           string   `json:"estado"`
+	EstadoPago       string   `json:"estadoPago"`
+	Facturas         []struct {
+		Estado     string  `json:"estado"`
+		Id         string  `json:"id"`
+		Numero     int     `json:"numero"`
+		PuntoVenta int     `json:"puntoVenta"`
+		Tipo       string  `json:"tipo"`
+		Total      float64 `json:"total"`
+	} `json:"facturas"`
+	Historial []struct {
 		CreatedAt time.Time `json:"createdAt"`
 		Estado    string    `json:"estado"`
 		Id        string    `json:"id"`
 		Nota      *string   `json:"nota"`
 	} `json:"historial"`
-	Id           string                  `json:"id"`
-	Items        []RenglonDelPedido      `json:"items"`
-	MedioPago    *string                 `json:"medioPago"`
-	Notas        *string                 `json:"notas"`
-	Numero       string                  `json:"numero"`
+	Id        string             `json:"id"`
+	Items     []RenglonDelPedido `json:"items"`
+	MedioPago *string            `json:"medioPago"`
+	Notas     *string            `json:"notas"`
+	Numero    string             `json:"numero"`
+	Recibos   []struct {
+		Estado string  `json:"estado"`
+		Id     string  `json:"id"`
+		Numero string  `json:"numero"`
+		Total  float64 `json:"total"`
+	} `json:"recibos"`
 	Subtotal     string                  `json:"subtotal"`
 	Sucursal     *string                 `json:"sucursal"`
 	SucursalSlug *string                 `json:"sucursalSlug"`
@@ -206,11 +250,12 @@ type PedidoSeguidoTipoEntrega string
 
 // PresupuestoDelPortal defines model for PresupuestoDelPortal.
 type PresupuestoDelPortal struct {
-	Asesor    *string   `json:"asesor"`
-	CreatedAt time.Time `json:"createdAt"`
-	Estado    string    `json:"estado"`
-	Id        string    `json:"id"`
-	Items     []struct {
+	AResponder bool      `json:"aResponder"`
+	Asesor     *string   `json:"asesor"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Estado     string    `json:"estado"`
+	Id         string    `json:"id"`
+	Items      []struct {
 		Cantidad       string  `json:"cantidad"`
 		Descripcion    string  `json:"descripcion"`
 		Id             string  `json:"id"`
@@ -225,6 +270,7 @@ type PresupuestoDelPortal struct {
 	} `json:"items"`
 	Notas       *string    `json:"notas"`
 	Numero      string     `json:"numero"`
+	Pedido      *string    `json:"pedido"`
 	Subtotal    string     `json:"subtotal"`
 	Sucursal    *string    `json:"sucursal"`
 	Total       string     `json:"total"`
@@ -942,15 +988,22 @@ type MisPedidosResponseObject interface {
 }
 
 type MisPedidos200JSONResponse []struct {
-	CreatedAt   time.Time                                `json:"createdAt"`
-	Estado      string                                   `json:"estado"`
-	EstadoPago  string                                   `json:"estadoPago"`
-	Id          string                                   `json:"id"`
-	Items       int                                      `json:"items"`
-	Numero      string                                   `json:"numero"`
-	Sucursal    *string                                  `json:"sucursal"`
-	TipoEntrega MisPedidos200JSONResponseBodyTipoEntrega `json:"tipoEntrega"`
-	Total       float64                                  `json:"total"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CuestaEnCuenta lo que cuesta en la cuenta después de sus notas de crédito
+	CuestaEnCuenta *float64                                 `json:"cuestaEnCuenta,omitempty"`
+	DebeEnCuenta   *float64                                 `json:"debeEnCuenta"`
+	EnAcopio       bool                                     `json:"enAcopio"`
+	EnRevision     *float64                                 `json:"enRevision"`
+	Estado         string                                   `json:"estado"`
+	EstadoPago     string                                   `json:"estadoPago"`
+	Id             string                                   `json:"id"`
+	Items          int                                      `json:"items"`
+	MedioPago      *string                                  `json:"medioPago"`
+	Numero         string                                   `json:"numero"`
+	Sucursal       *string                                  `json:"sucursal"`
+	TipoEntrega    MisPedidos200JSONResponseBodyTipoEntrega `json:"tipoEntrega"`
+	Total          float64                                  `json:"total"`
 }
 
 func (response MisPedidos200JSONResponse) VisitMisPedidosResponse(w http.ResponseWriter) error {
@@ -1011,6 +1064,7 @@ type MisPresupuestosResponseObject interface {
 }
 
 type MisPresupuestos200JSONResponse []struct {
+	AResponder  bool       `json:"aResponder"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	Estado      string     `json:"estado"`
 	Id          string     `json:"id"`
@@ -1592,39 +1646,46 @@ func (sh *strictHandler) SeguirPedido(w http.ResponseWriter, r *http.Request, nu
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"/jcA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

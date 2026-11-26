@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	reglasdel "mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/subidas"
 )
@@ -264,6 +265,16 @@ var reglas = map[string][]string{
 	"descuento_sin_autorizacion_pct": {"0", "5", "10"},
 }
 
+// EsRegla dice si la clave es una regla del negocio (00104, 00141 o 00290):
+// cambiarla queda en la bitácora con el antes y el después.
+func EsRegla(clave string) bool {
+	if _, ok := reglas[clave]; ok {
+		return true
+	}
+	_, ok := reglasdel.Opciones[clave]
+	return ok
+}
+
 // numericos son los ajustes que son una cantidad y tienen su pantalla: el
 // tope de mensajes de WhatsApp (migración 00106) se cambia en la
 // configuración de WhatsApp. Un texto ahí haría que Go use el de siempre.
@@ -285,6 +296,9 @@ func (s *Servicio) GuardarAjuste(ctx context.Context, clave, valor string) error
 		}
 	}
 	if posibles, ok := reglas[clave]; ok && !slices.Contains(posibles, valor) {
+		return plataforma.Invalido(map[string]string{"valor": "Ese valor no es una de las opciones."})
+	}
+	if _, ok := reglasdel.Opciones[clave]; ok && !reglasdel.Valida(clave, valor) {
 		return plataforma.Invalido(map[string]string{"valor": "Ese valor no es una de las opciones."})
 	}
 	n, err := s.q.GuardarAjuste(ctx, sqlc.GuardarAjusteParams{Clave: clave, Valor: valor})

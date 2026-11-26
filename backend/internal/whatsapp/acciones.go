@@ -6,11 +6,13 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -222,6 +224,21 @@ func (s *Servicio) EnviarDocumento(ctx context.Context, ses *auth.Sesion, convID
 				RequierePlantilla: true}, nil
 		}
 		conocidos := map[string]string{"nombre": s.nombreDeLaConversacion(ctx, c), "documento": doc.Descripcion}
+		// Los datos del presupuesto los completa el sistema (mes simulado:
+		// «presupuesto_enviado» pedía número, total y vencimiento, y el PDF no
+		// salía nunca desde la ficha).
+		if tipo == "presupuesto" {
+			var numero string
+			var total float64
+			var vence *time.Time
+			if err := s.pool.QueryRow(ctx, `select numero, total::float8, valido_hasta from quotes where id::text = $1`, id).
+				Scan(&numero, &total, &vence); err == nil {
+				conocidos["presupuesto"], conocidos["total"] = numero, formato.Importe(total)
+				if vence != nil {
+					conocidos["vence"] = vence.In(zonaArgentina).Format("02/01/2006")
+				}
+			}
+		}
 		valores := map[string]string{}
 		for _, campo := range p.Campos {
 			valores[campo.Clave] = conocidos[campo.Marcador]
@@ -243,6 +260,16 @@ func (s *Servicio) EnviarDocumento(ctx context.Context, ses *auth.Sesion, convID
 	if r.Error != nil {
 		return deErrorDeEnvio(r.Error), nil
 	}
+	// El presupuesto que se le manda queda «enviado» (mes simulado): por la
+	// bandeja salía bien y seguía «pendiente», fuera de «Esperando respuesta»
+	// y sin poder aceptarlo el cliente desde el portal. Solo el estado: el
+	// aviso por correo de «Enviar al cliente» no se repite.
+	if tipo == "presupuesto" {
+		if _, err := s.pool.Exec(ctx, `update quotes set estado = 'enviado', updated_at = now()
+			where id::text = $1 and estado in ('pendiente', 'revision')`, id); err != nil {
+			return Resultado{}, err
+		}
+	}
 	return Resultado{Ok: doc.Nombre + " enviado.", MensajeID: r.MensajeID}, nil
 }
 
@@ -250,10 +277,12 @@ func (s *Servicio) nombreDeLaConversacion(ctx context.Context, c *Conversacion) 
 	if c.CustomerID != nil {
 		var n string
 		if err := s.pool.QueryRow(ctx, `select nombre from customers where id = $1`, *c.CustomerID).Scan(&n); err == nil {
-			return primeraPalabraJS(n)
+			if p := NombreDeSaludo(n); p != "" {
+				return p
+			}
 		}
 	}
-	if p := primeraPalabraJS(oTexto(c.DisplayName, "")); p != "" {
+	if p := NombreDeSaludo(oTexto(c.DisplayName, "")); p != "" {
 		return p
 	}
 	return "qué tal"
@@ -292,6 +321,10 @@ func (s *Servicio) EnviarDocumentoAlCliente(ctx context.Context, ses *auth.Sesio
 	if jid == "" {
 		return conError("«" + tel + "» no parece un número de WhatsApp."), nil
 	}
+	var yaEstaba bool
+	if err := s.pool.QueryRow(ctx, `select exists(select 1 from whatsapp_conversaciones where wa_jid = $1)`, jid).Scan(&yaEstaba); err != nil {
+		return Resultado{}, err
+	}
 	c, err := s.ConversacionDe(ctx, jid, nulo(doc.Contacto), nil)
 	if err != nil {
 		return Resultado{}, err
@@ -306,6 +339,13 @@ func (s *Servicio) EnviarDocumentoAlCliente(ctx context.Context, ses *auth.Sesio
 		ep = *epigrafe
 	}
 	r, err := s.EnviarDocumento(ctx, ses, c.ID, tipo, id, ep, &doc.PDF, confirmarTope)
+	// Si no salió nada, la conversación que se abrió para esto no queda vacía
+	// en la bandeja (mes simulado).
+	if !yaEstaba && (err != nil || r.Error != "") {
+		_, _ = s.pool.Exec(context.WithoutCancel(ctx), `delete from whatsapp_conversaciones c where c.id = $1
+			and not exists (select 1 from whatsapp_mensajes m where m.conversacion_id = c.id)`, c.ID)
+		return r, err
+	}
 	r.ConversacionID = c.ID
 	return r, err
 }

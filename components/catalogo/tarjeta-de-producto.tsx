@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Loader2, Plus } from "lucide-react";
-import type { ReactNode } from "react";
+import { Suspense, type ComponentProps, type ReactNode } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCarrito } from "@/lib/carrito-context";
 import { formatearUnidad } from "@/lib/formato";
@@ -11,6 +11,8 @@ import type { ProductoListado } from "@/lib/dal/catalog";
 import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { enlaceDeConsulta } from "@/lib/catalogo/consulta";
+import { mensajeDeConsulta, quienConsulta } from "@/lib/cuenta/portal";
+import { useEstado } from "@/lib/estado-context";
 
 /**
  * Tarjeta de producto del catálogo.
@@ -88,18 +90,26 @@ export function TarjetaDeProducto({
   const rubroVisible = Boolean(product.image) && !rubroRedundante;
   // Con una sola medida, el mensaje ya la lleva: quien atiende contesta sin
   // preguntar cuál. Con varias, la elige en la ficha.
-  const consulta = enlaceDeConsulta(
+  const consulta = {
     whatsapp,
-    product.labels.length === 1
-      ? `Hola! Quería el precio de ${product.name} — ${product.labels[0]}.`
-      : `Hola! Quería consultar por ${product.name}.`,
-  );
+    texto:
+      product.labels.length === 1
+        ? `Hola! Quería el precio de ${product.name} — ${product.labels[0]}.`
+        : `Hola! Quería consultar por ${product.name}.`,
+  };
   /*
    * Sin precio, la acción de la tarjeta es preguntarlo, con nombre y a la
    * vista (lo pidió el dueño en el comité: la medida sola no dice si se puede
    * comprar). Con precio queda el ícono al lado de «Agregar».
    */
   const consultarPrecio = sinPrecio;
+  /*
+   * Sin foto, en el teléfono la tarjeta es un renglón: la placa en miniatura,
+   * el nombre y el WhatsApp. Cada tarjeta medía unos 770 px y el catálogo
+   * sin tienda, 19.000 px de placas con el rubro en mayúsculas (mes simulado,
+   * H213). Desde `sm` vuelve a ser la tarjeta de la grilla.
+   */
+  const renglon = !product.image;
 
   return (
     /*
@@ -109,7 +119,9 @@ export function TarjetaDeProducto({
      * redondeadas ni nada encima, y abajo solo el nombre, el precio y el
      * WhatsApp. Desde `sm` vuelve a ser la tarjeta de la grilla.
      */
-    <article className="group relative flex h-full flex-col overflow-hidden bg-card max-sm:ml-[calc(50%-50vw)] max-sm:w-screen sm:rounded-[14px] sm:superficie sm:shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] sm:transition-[box-shadow,transform,border-color] sm:duration-200 sm:hover:-translate-y-[3px] sm:hover:border-linea-hover sm:hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)] motion-reduce:transform-none motion-reduce:transition-none">
+    <article className={`group relative flex h-full flex-col overflow-hidden bg-card max-sm:ml-[calc(50%-50vw)] max-sm:w-screen ${
+      renglon ? "max-sm:h-auto max-sm:flex-row max-sm:items-center max-sm:gap-3.5 max-sm:px-4 max-sm:py-3" : ""
+    } sm:rounded-[14px] sm:superficie sm:shadow-[0_1px_2px_rgb(60_50_40_/_0.05)] sm:transition-[box-shadow,transform,border-color] sm:duration-200 sm:hover:-translate-y-[3px] sm:hover:border-linea-hover sm:hover:shadow-[0_14px_30px_-16px_rgb(60_50_40_/_0.34)] motion-reduce:transform-none motion-reduce:transition-none`}>
       {/* La foto lleva a la misma ficha que el nombre de abajo: fuera del Tab
           y de los lectores, que si no la anunciaban dos veces (y sin foto,
           como un enlace sin nombre). */}
@@ -122,7 +134,7 @@ export function TarjetaDeProducto({
         tabIndex={-1}
         aria-hidden="true"
         className={`relative block overflow-hidden bg-brand-wood-light/25 sm:aspect-[4/3] ${
-          product.image ? "aspect-square" : "aspect-[5/2]"
+          product.image ? "aspect-square" : "aspect-[5/2] max-sm:aspect-square max-sm:h-14 max-sm:w-14 max-sm:shrink-0 max-sm:rounded-lg"
         }`}
       >
         {/* El acercamiento crece desde abajo: en las placas el canto va
@@ -136,7 +148,12 @@ export function TarjetaDeProducto({
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           />
         ) : (
-          <PlacaDeProducto rubro={rubro} categoria={product.categorySlug} marca={product.brand} />
+          <PlacaDeProducto
+            rubro={rubro}
+            categoria={product.categorySlug}
+            marca={product.brand}
+            className="max-sm:p-0 max-sm:[&>span]:hidden"
+          />
         )}
 
         {/* El cartel tapaba la foto en el teléfono; el descuento igual se ve en el precio. */}
@@ -144,7 +161,9 @@ export function TarjetaDeProducto({
       </Link>
 
       <div
-        className={`flex flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-[13px] sm:pt-[15px] ${
+        className={`flex min-w-0 flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-[13px] sm:pt-[15px] ${
+          renglon ? "max-sm:gap-0.5 max-sm:p-0" : ""
+        } ${
           // Lugar para el WhatsApp, que en el teléfono va a la altura del precio.
           variasMedidas && !consultarPrecio ? "max-sm:pr-16" : ""
         }`}
@@ -176,14 +195,14 @@ export function TarjetaDeProducto({
         </div>
 
         {consultarPrecio ? (
-          <div className="mt-auto flex sm:border-t sm:border-linea-tenue sm:pt-3.5">
-            <BotonWhatsapp
-              enlace={consulta}
+          <div className={`mt-auto flex sm:border-t sm:border-linea-tenue sm:pt-3.5 ${renglon ? "max-sm:hidden" : ""}`}>
+            <ConsultaPorWhatsapp
+              consulta={consulta}
               className="min-w-0 flex-1"
               aria-label={`Consultar el precio de ${product.name} por WhatsApp`}
             >
               Consultar precio
-            </BotonWhatsapp>
+            </ConsultaPorWhatsapp>
           </div>
         ) : (
           /* Sin «Agregar», en el teléfono el WhatsApp sube a la altura del
@@ -227,8 +246,8 @@ export function TarjetaDeProducto({
               </Button>
             )}
 
-            <BotonWhatsapp
-              enlace={consulta}
+            <ConsultaPorWhatsapp
+              consulta={consulta}
               variante="secundario"
               tamano="icono"
               aria-label={`Consultar por ${product.name} por WhatsApp`}
@@ -236,6 +255,38 @@ export function TarjetaDeProducto({
           </div>
         )}
       </div>
+
+      {/* En el renglón del teléfono, el WhatsApp al costado, de 44 px. */}
+      {renglon && consultarPrecio && (
+        <ConsultaPorWhatsapp
+          consulta={consulta}
+          tamano="icono"
+          className="sm:hidden"
+          aria-label={`Consultar el precio de ${product.name} por WhatsApp`}
+        />
+      )}
     </article>
   );
+}
+
+type Consulta = { whatsapp: string; texto: string };
+type PropsDeConsulta = Omit<ComponentProps<typeof BotonWhatsapp>, "enlace"> & { consulta: Consulta };
+
+/**
+ * El WhatsApp de la tarjeta, con quién consulta si hay sesión: la ficha ya lo
+ * decía y el renglón del catálogo no (mes simulado). La sesión se resuelve
+ * aparte; mientras tanto, el mensaje de siempre.
+ */
+function ConsultaPorWhatsapp({ consulta, ...props }: PropsDeConsulta) {
+  return (
+    <Suspense fallback={<BotonWhatsapp {...props} enlace={enlaceDeConsulta(consulta.whatsapp, consulta.texto)} />}>
+      <ConsultaDeQuienMira consulta={consulta} {...props} />
+    </Suspense>
+  );
+}
+
+function ConsultaDeQuienMira({ consulta, ...props }: PropsDeConsulta) {
+  const { sesion } = useEstado();
+  const quien = quienConsulta(sesion);
+  return <BotonWhatsapp {...props} enlace={enlaceDeConsulta(consulta.whatsapp, mensajeDeConsulta(consulta.texto, quien))} />;
 }

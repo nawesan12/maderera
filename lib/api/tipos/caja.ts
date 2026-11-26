@@ -104,6 +104,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/caja/fuera-de-caja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EfectivoFueraDeCaja"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/caja/ventas-sueltas/{id}/asignar": {
         parameters: {
             query?: never;
@@ -219,6 +235,8 @@ export interface components {
             devolucion: boolean;
             /** @description Quién hizo las devoluciones parciales del renglón */
             quien: string | null;
+            /** @description lo cobrado por recibos de cuenta en el mostrador durante el turno */
+            cobranza: boolean;
         };
         TurnoCerrado: {
             id: string;
@@ -258,6 +276,46 @@ export interface components {
              */
             creditoSinAutorizarMonto: number;
             cierre: components["schemas"]["CajaRenglonDelCierre"][];
+            /** Format: double */
+            fondo: number;
+            /**
+             * Format: double
+             * @description Ventas en efectivo hasta el arqueo
+             */
+            ventas: number;
+            /** Format: double */
+            otrosIngresos: number;
+            /**
+             * Format: double
+             * @description En negativo
+             */
+            retiros: number;
+            /**
+             * Format: double
+             * @description En negativo
+             */
+            devoluciones: number;
+            /**
+             * Format: double
+             * @description En negativo
+             */
+            gastos: number;
+            /** @description La caja física desde la que se abrió */
+            puesto: string | null;
+        };
+        CajaFueraDeCaja: {
+            /** @enum {string} */
+            tipo: "recibo" | "gasto" | "pago";
+            id: string;
+            detalle: string;
+            sucursal: string | null;
+            /**
+             * Format: double
+             * @description con signo: el recibo entra, el gasto sale
+             */
+            monto: number;
+            /** Format: date-time */
+            fecha: string;
         };
         CajaFisica: {
             id: string;
@@ -269,6 +327,11 @@ export interface components {
             /** Format: date-time */
             ultimaVezAt: string | null;
             pendientes: number;
+            /**
+             * Format: date-time
+             * @description El último turno que se abrió desde esta caja
+             */
+            ultimoTurnoAt: string | null;
         };
         CajaVentaSuelta: {
             id: string;
@@ -497,6 +560,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CajaVentaSuelta"][];
+                };
+            };
+        };
+    };
+    EfectivoFueraDeCaja: {
+        parameters: {
+            query?: {
+                periodo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recibos y gastos en efectivo del mes que no pasaron por ningún turno */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CajaFueraDeCaja"][];
                 };
             };
         };

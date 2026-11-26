@@ -46,7 +46,7 @@ export function CargarPasadas({
           htmlFor={`pasadas-${id}`}
           className="mb-1 block text-sm font-medium text-muted-foreground"
         >
-          Pasadas de sierra
+          Pasadas a cobrar
         </label>
         <input
           id={`pasadas-${id}`}
@@ -54,7 +54,7 @@ export function CargarPasadas({
           min={0}
           value={valor}
           onChange={(e) => setValor(e.target.value)}
-          className="h-11 w-28 rounded-lg border bg-background px-3 text-base"
+          className="tabular h-11 w-28 rounded-lg border bg-background px-3 text-base"
         />
       </div>
 

@@ -3,16 +3,22 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Scissors, Truck } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { pedidoParaElTaller } from "@/lib/dal/admin/ventas";
-import { obtenerCorte } from "@/lib/dal/admin/cortes";
+import { cortesDelPedido, fichaDeCorte, obtenerCorte } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { DECIDEN_EN_LA_COLA, puedeEntrar } from "@/lib/roles";
 import { esUuid } from "@/lib/uuid";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
 import { consultaDeCorte } from "@/lib/dal/consultas-corte";
 import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 
 export const metadata = { title: "Nuevo corte" };
+
+/** Solo se vuelve a pantallas propias: el chat del panel o de atención. */
+const VUELTA_PERMITIDA = /^\/(admin\/whatsapp|atencion)(\?|$)/;
 
 /**
  * Alta de una orden de corte.
@@ -21,29 +27,54 @@ export const metadata = { title: "Nuevo corte" };
  * parte del sistema podía crear una: las que había las puso el sembrado de
  * datos de prueba.
  *
- * Con `?pedido=`, el corte nace atado a ese pedido y con el cliente y la
- * sucursal ya puestos. Es el camino real: primero entra la venta, después se
- * manda a cortar. Cargarlo suelto y volver a tipear el nombre es lo que hacía
- * que en el pedido no quedara rastro de que había un corte esperando.
+ * Con `?pedido=`, el corte nace atado a ese pedido y con el cliente, la
+ * sucursal, la placa, el teléfono y el día de retiro ya puestos. Es el camino
+ * real: primero entra la venta, después se manda a cortar.
+ *
+ * Con `?corregir=`, arranca con lo de un corte que está en la cola y, al
+ * guardar, el nuevo lo reemplaza (mes simulado, H185): el malo salía primero
+ * en la cola del taller y no había forma de sacarlo.
  */
 export default async function NuevoCortePage({
   searchParams,
 }: {
-  searchParams: Promise<{ pedido?: string; consulta?: string; grupo?: string; cliente?: string }>;
+  searchParams: Promise<{
+    pedido?: string;
+    consulta?: string;
+    grupo?: string;
+    cliente?: string;
+    corregir?: string;
+    volver?: string;
+    telefono?: string;
+  }>;
 }) {
   const usuario = await requireStaff();
+  const decide = usuario.staffRole !== null && DECIDEN_EN_LA_COLA.includes(usuario.staffRole);
+  const veClientes = puedeEntrar("/admin/clientes", usuario.staffRole);
 
-  const { pedido: pedidoId, consulta: token, grupo: grupoPedido, cliente: clienteId } = await searchParams;
-  const [sucursales, pedido, sierra, consulta, placas, cliente] = await Promise.all([
+  const sp = await searchParams;
+  const { consulta: token, grupo: grupoPedido, cliente: clienteId } = sp;
+  const corregido = sp.corregir && esUuid(sp.corregir) && decide ? await fichaDeCorte(sp.corregir) : null;
+  if (sp.corregir && !corregido) notFound();
+  const pedidoId = sp.pedido ?? corregido?.corte.orderId ?? undefined;
+  // De dónde se vino: el chat del cliente (H046).
+  const volver = sp.volver && VUELTA_PERMITIDA.test(sp.volver) ? sp.volver : null;
+  const [sucursales, pedido, sierra, consulta, placas, cliente, ajustes] = await Promise.all([
     listarSucursalesPublicas(),
-    // Sin plata: el aserradero también carga cortes de un pedido.
+    // Sin plata: el depósito también carga cortes de un pedido (el alta no
+    // es del aserradero: lib/roles.ts).
     pedidoId ? pedidoParaElTaller(pedidoId) : Promise.resolve(null),
     anchoDeSierra(),
     token ? consultaDeCorte(token) : Promise.resolve(null),
     token ? placasCortablesPublicas() : Promise.resolve([]),
     clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
+    ajustesDelSitio(),
   ]);
   if (token && !consulta) notFound();
+  // El teléfono del cliente del pedido, para el aviso de «corte listo»
+  // (H046). El aserradero no lo ve.
+  const clienteDelPedido =
+    pedido?.customerId && veClientes && !corregido ? await obtenerCliente(pedido.customerId) : null;
   // Una consulta con varias placas se pasa de a una (`?grupo=`): cada placa es
   // su propia orden de corte. Sin grupo, la primera, como antes.
   const orden = Number(grupoPedido ?? 0);
@@ -86,18 +117,113 @@ export default async function NuevoCortePage({
   // seguir de largo dejaría un corte suelto creyendo que quedó atado.
   if (pedidoId && !pedido) notFound();
 
+  if (corregido && corregido.corte.estado !== "en-cola" && corregido.corte.estado !== "en-proceso") {
+    return (
+      <div className="space-y-6">
+        <Link
+          href={`/admin/cortes/${corregido.corte.id}`}
+          className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          Volver a {corregido.corte.numero}
+        </Link>
+        <h1 className="text-3xl font-bold text-foreground">Corregir {corregido.corte.numero}</h1>
+        {/* Uno anulado o reemplazado no «salió de la máquina» (H185). */}
+        <p className="tarjeta-hundida rounded-xl px-4 py-3 text-base">
+          {corregido.corte.estado === "cancelado"
+            ? (corregido.corte.motivoAnulado ?? "Anulado")
+            : `${corregido.corte.numero} ya salió de la máquina.`}
+        </p>
+      </div>
+    );
+  }
+
+  // Las placas que vende el pedido: «Mandar a cortar» arranca con la primera
+  // y no con una medida supuesta (H188), y elegir otra se confirma (H280).
+  // Cuántas vende el pedido de cada placa y cuántas usan sus otros cortes:
+  // el alta avisa la diferencia igual que la ficha (mes simulado, H184).
+  const otrosCortes = pedido ? await cortesDelPedido(pedido.id) : [];
+  const enEntera = (it: { cantidad: string | number; presentacion: string | null }) =>
+    Number(it.cantidad) / (it.presentacion?.startsWith("media") ? 2 : 1);
+  const placasDelPedido = (pedido?.items ?? [])
+    .filter((it) => it.variantId && it.largoMm && it.anchoMm)
+    .filter((it, i, todos) => todos.findIndex((o) => o.variantId === it.variantId) === i)
+    .map((it) => ({
+      variantId: it.variantId!,
+      descripcion: it.descripcion,
+      largoMm: it.largoMm,
+      anchoMm: it.anchoMm,
+      color: it.color,
+      mitad: (it.presentacion === "media_largo" ? "largo" : it.presentacion === "media_ancho" ? "ancho" : null) as
+        | "largo"
+        | "ancho"
+        | null,
+      vendidas: (pedido?.items ?? []).filter((o) => o.variantId === it.variantId).reduce((t, o) => t + enEntera(o), 0),
+      enOtrosCortes: otrosCortes
+        .filter((k) => k.variantId === it.variantId && k.estado !== "cancelado" && !k.sinCargo && k.id !== corregido?.corte.id)
+        .reduce((t, k) => t + k.placasEnteras, 0),
+    }));
+
+  const c = corregido?.corte;
+  const deCorregir = c
+    ? {
+        id: c.id,
+        numero: c.numero,
+        placa: c.variantId
+          ? {
+              variantId: c.variantId,
+              descripcion: c.material,
+              largoMm: c.varianteLargoMm,
+              anchoMm: c.varianteAnchoMm,
+              color: c.color,
+            }
+          : null,
+        material: c.material,
+        largoMm: c.propiaLargoMm,
+        anchoMm: c.propiaAnchoMm,
+        mitad: c.medida.mitad,
+        cantoDescripcion: c.cantoDescripcion ?? "",
+        notas: c.notas ?? "",
+        urgente: c.urgente,
+        contactoNombre: c.cliente,
+        telefono: c.telefono ?? "",
+        retiraEl: c.retiraEl ?? "",
+        cliente: c.customerId ? { id: c.customerId, nombre: c.cliente, razonSocial: c.empresa } : null,
+        branchId: c.branchId,
+        sinCargo: c.sinCargo,
+        piezas: c.piezas.map((p) => ({
+          largoMm: p.largoMm,
+          anchoMm: p.anchoMm,
+          cantidad: p.cantidad,
+          respetaVeta: p.respetaVeta === 1,
+          cantoLargo: p.cantoLargo,
+          cantoAncho: p.cantoAncho,
+          aclaracion: p.aclaracion ?? "",
+          etiqueta: p.etiqueta ?? "",
+        })),
+      }
+    : undefined;
+
+  const vuelta = c
+    ? { href: `/admin/cortes/${c.id}`, texto: `Volver a ${c.numero}` }
+    : volver
+      ? { href: volver, texto: "Volver al chat" }
+      : pedido
+        ? { href: `/admin/pedidos/${pedido.id}`, texto: `Volver al pedido ${pedido.numero}` }
+        : { href: "/admin/cortes", texto: "Volver a cortes" };
+
   return (
     <div className="space-y-6">
       <Link
-        href={pedido ? `/admin/pedidos/${pedido.id}` : "/admin/cortes"}
+        href={vuelta.href}
         className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-5 w-5" />
-        {pedido ? `Volver al pedido ${pedido.numero}` : "Volver a cortes"}
+        {vuelta.texto}
       </Link>
 
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Nuevo corte</h1>
+        <h1 className="text-3xl font-bold text-foreground">{c ? `Corregir ${c.numero}` : "Nuevo corte"}</h1>
       </div>
 
       {pedido && (
@@ -113,6 +239,7 @@ export default async function NuevoCortePage({
       )}
 
       <FormularioCorte
+        preguntarSucursal={valorDeRegla(ajustes, "sucursal_del_corte_suelto") === "preguntar"}
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
         desdeConsulta={
           consulta && grupo
@@ -145,9 +272,16 @@ export default async function NuevoCortePage({
         }
         anchoSierra={sierra}
         sierraEditable={usuario.staffRole === "admin"}
+        puedeReponer={decide}
+        corregir={deCorregir}
         clienteInicial={
           cliente
-            ? { id: cliente.id, nombre: cliente.nombre, razonSocial: cliente.razonSocial, telefono: cliente.telefono }
+            ? {
+                id: cliente.id,
+                nombre: cliente.nombre,
+                razonSocial: cliente.razonSocial,
+                telefono: cliente.telefono ?? (sp.telefono?.slice(0, 40) || null),
+              }
             : undefined
         }
         desdePedido={
@@ -157,6 +291,9 @@ export default async function NuevoCortePage({
                 numero: pedido.numero,
                 branchId: pedido.branchId,
                 contactoNombre: pedido.cliente,
+                telefono: clienteDelPedido?.telefono ?? null,
+                entregarEl: pedido.entregarEl,
+                placas: placasDelPedido,
                 cliente: pedido.customerId
                   ? {
                       id: pedido.customerId,

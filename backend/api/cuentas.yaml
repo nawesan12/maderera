@@ -185,10 +185,37 @@ paths:
                 orderId: { type: string }
                 concepto: { type: string }
                 partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+                branchId: { type: string, description: "la sucursal donde entra el efectivo (sin caja abierta se pide abrirla)" }
                 clave: { type: string, maxLength: 64, description: "la del intento, generada al abrir el cobro: un reintento devuelve el mismo recibo" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cobros/caja:
+    get:
+      operationId: CajaDelCobroACuenta
+      summary: Si el efectivo de un cobro a cuenta (sin pedido) tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro)
+      responses:
+        "200":
+          description: Vacío si hay caja
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sinCaja: { type: string, description: la sucursal cuya caja hay que abrir }
+                  fondoBase: { type: number, format: double }
+                  sucursales:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, nombre, abierta, fondo]
+                      properties:
+                        id: { type: string }
+                        nombre: { type: string }
+                        abierta: { type: boolean }
+                        fondo: { type: number, format: double }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/recibos/{id}/anular:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -204,6 +231,7 @@ paths:
               additionalProperties: false
               properties:
                 motivo: { type: string }
+                pin: { type: string, maxLength: 12, description: "el de un admin, para quien no es admin (como anular una venta)" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -365,6 +393,30 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cheques/{id}/rechazo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: RechazarChequeDelCliente
+      description: >-
+        El banco rechazó un cheque que entregó un cliente: lo registra quien
+        maneja plata desde la ficha del cliente (H272), con el PIN de un admin
+        si no es admin. Hace lo mismo que pasarlo a rechazado en
+        /admin/cheques (la nota de débito y el aviso).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+                pin: { type: string, maxLength: 64, description: "el de un admin (o su contraseña, sin ningún PIN cargado)" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/vendedores:
     get:
       operationId: ListarVendedores
@@ -411,6 +463,70 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/personal:
+    get:
+      operationId: ListarPersonal
+      responses:
+        "200":
+          description: El personal, por puesto y nombre
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, correo, rol]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    correo: { type: string }
+                    rol: { $ref: "#/components/schemas/Puesto" }
+    post:
+      operationId: AltaDePersonal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, correo, rol, clave]
+              additionalProperties: false
+              properties:
+                nombre: { type: string, maxLength: 120 }
+                correo: { type: string, maxLength: 200 }
+                rol: { $ref: "#/components/schemas/Puesto" }
+                clave: { type: string, maxLength: 200, description: La contraseña inicial }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/personal/{id}/puesto:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }
+    post:
+      operationId: CambiarPuesto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rol]
+              additionalProperties: false
+              properties:
+                rol: { $ref: "#/components/schemas/Puesto" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/personal/{id}/baja:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }
+    post:
+      operationId: BajaDePersonal
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/seguimiento:
     get:
       operationId: ListarGestiones
@@ -484,11 +600,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [saldo, limiteCredito, disponible, movimientos]
+                required: [saldo, limiteCredito, disponible, movimientos, sinEntregar]
                 properties:
                   saldo: { type: number, format: double }
                   limiteCredito: { type: number, format: double }
                   disponible: { type: number, format: double }
+                  sinEntregar: { type: number, format: double }
                   movimientos: { type: array, items: { $ref: "#/components/schemas/MovimientoDelResumen" } }
         "401": { $ref: "#/components/responses/Problema" }
   /api/v1/cuenta/movimientos:
@@ -542,7 +659,11 @@ components:
               ok: { type: string }
               aviso: { type: string }
               receiptId: { type: string }
+              id: { type: string, description: "la ficha guardada (el alta abre la ficha nueva)" }
   schemas:
+    Puesto:
+      type: string
+      enum: [admin, vendedor, deposito, aserradero]
     Problema:
       type: object
       required: [title, status]
@@ -725,7 +846,7 @@ components:
         fecha: { type: string, format: date-time }
         clase:
           type: string
-          enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque_rechazado]
+          enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque, cheque_rechazado]
         titulo: { type: string }
         detalle: { type: string, nullable: true }
         importe: { type: number, format: double, nullable: true }
@@ -740,7 +861,15 @@ components:
           nullable: true
           required: [id, numero, anulado, porMercadoPago]
           properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean },
-            porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel } }
+            porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel },
+            chequeRechazado: { type: boolean } }
+        cheques:
+          type: array
+          description: Los cheques del renglón que el banco todavía puede rechazar (H272)
+          items:
+            type: object
+            required: [id, nombre, importe]
+            properties: { id: { type: string }, nombre: { type: string }, importe: { type: number, format: double } }
     Historial:
       type: object
       required: [movimientos, hayMas, saldo]
@@ -758,6 +887,7 @@ components:
         detalle: { type: string, nullable: true }
         referencia: { type: string, nullable: true }
         receiptId: { type: string, nullable: true }
+        reciboNumero: { type: string, nullable: true }
         monto: { type: number, format: double }
         saldo: { type: number, format: double }
     Tramo:
@@ -853,7 +983,7 @@ components:
     ChequeListado:
       type: object
       required: [id, sentido, tipo, numero, banco, librador, fechaPago, importe, estado, cliente, customerId, circuito, proveedor, proveedorId,
-        notas, receiptId, recibo, motivoRechazo]
+        notas, receiptId, recibo, motivoRechazo, saldoCliente]
       properties:
         id: { type: string }
         sentido: { type: string, enum: [recibido, entregado] }
@@ -873,6 +1003,7 @@ components:
         receiptId: { type: string, nullable: true }
         recibo: { type: string, nullable: true }
         motivoRechazo: { type: string, nullable: true }
+        saldoCliente: { type: number, format: double, nullable: true, description: lo que debe hoy el cliente (solo en los informados) }
     Gestion:
       type: object
       required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, createdAt]

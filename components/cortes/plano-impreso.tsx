@@ -3,6 +3,7 @@ import { fechaCorta } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
 import type { PlanoDeCorte, PlacaDelPlano } from "@/lib/cortes/tipos";
 import { formatearSierra } from "@/lib/cortes/sierra";
+import { queSeHaceConLaPlaca, sobraDelCliente, type QuienSeQueda } from "@/lib/cortes/de-quien";
 
 /**
  * El plano de corte en papel.
@@ -38,18 +39,26 @@ export function PlanoImpreso({
     createdAt: Date;
     /** «Placa entera» o de qué media sale. */
     deQueSale?: string;
+    /** Una reposición sin cargo: no se vende ni se cobra nada. */
+    sinCargo?: boolean;
+    /** Sale de media placa. */
+    media?: boolean;
   };
 }) {
   const desperdicio = 1 - plano.aprovechadoTotal;
+  const quien: QuienSeQueda = { sinCargo: corte.sinCargo, media: corte.media };
+  const nombre = corte.media ? "Media" : "Placa";
+  const enteras = corte.sinCargo ? 0 : plano.placasEnteras;
 
   return (
     <div className="plano-pagina">
       <style>{`
-        .plano-pagina { max-width: 297mm; margin: 0 auto; padding: 10mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; }
-        .plano-barra { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 6mm; }
+        .plano-pagina { max-width: 297mm; margin: 0 auto; padding: 10mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; background: #fff; color-scheme: light; }
+        .plano-pagina .boton-imprimir { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 12pt; font-weight: 600; color: #1a1a1a; text-decoration: none; cursor: pointer; }
+        .plano-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 6mm; }
         .plano-titulo { font-size: 15pt; font-weight: 700; }
         .plano-sub { font-size: 10pt; color: #555; margin-top: 1mm; }
-        .plano-numeros { display: flex; gap: 6mm; margin: 0 0 6mm; padding: 3mm 4mm; border: 1px solid #ddd; border-radius: 2mm; background: #faf8f5; }
+        .plano-numeros { display: flex; flex-wrap: wrap; gap: 4mm 6mm; margin: 0 0 6mm; padding: 3mm 4mm; border: 1px solid #ddd; border-radius: 2mm; background: #faf8f5; }
         .plano-numero .valor { font-size: 16pt; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
         .plano-numero .rotulo { font-size: 8pt; color: #555; }
         .plano-placa { margin-bottom: 7mm; break-inside: avoid; }
@@ -67,6 +76,23 @@ export function PlanoImpreso({
         @media print {
           .no-imprimir { display: none; }
           .plano-pagina { padding: 0; }
+        }
+        /* En el teléfono nada se sale de la pantalla (H229): los botones
+           bajan debajo del título, las cifras de a dos y las tablas se
+           apilan, cada celda con su rótulo. */
+        @media screen and (max-width: 640px) {
+          .plano-pagina { padding: 16px; }
+          .plano-barra > div { min-width: 0; }
+          .plano-barra .no-imprimir { width: 100%; }
+          .plano-barra .no-imprimir > * { flex: 1 1 0; justify-content: center; }
+          .plano-numeros { display: grid; grid-template-columns: 1fr 1fr; }
+          .plano-numero .rotulo { font-size: 10pt; }
+          .plano-placa h3 .sello-entera, .plano-placa h3 .sello-corte { display: block; width: fit-content; margin: 1.5mm 0 0; white-space: normal; }
+          .plano-tabla, .plano-tabla tbody, .plano-tabla tr, .plano-tabla td { display: block; width: 100%; }
+          .plano-tabla thead { display: none; }
+          .plano-tabla tr { padding: 2mm 0; border-bottom: 1px solid #ddd; }
+          .plano-tabla td { border: 0; padding: 0.5mm 0; text-align: left !important; font-size: 11pt; }
+          .plano-tabla td[data-label]::before { content: attr(data-label) " · "; color: #666; }
         }
       `}</style>
 
@@ -103,22 +129,24 @@ export function PlanoImpreso({
         <div className="plano-numero">
           <p className="valor">{plano.placas.length}</p>
           <p className="rotulo">
-            {plano.placas.length === 1 ? "placa" : "placas"}
+            {corte.media
+              ? plano.placas.length === 1 ? "media placa" : "medias placas"
+              : plano.placas.length === 1 ? "placa" : "placas"}
           </p>
         </div>
-        {plano.placasEnteras > 0 && (
+        {enteras > 0 && (
           <div className="plano-numero">
-            <p className="valor">{plano.placasEnteras}</p>
+            <p className="valor">{enteras}</p>
             <p className="rotulo">
-              {plano.placasEnteras === 1
-                ? "se vende entera"
-                : "se venden enteras"}
+              {corte.media
+                ? enteras === 1 ? "media se vende" : "medias se venden"
+                : enteras === 1 ? "se vende entera" : "se venden enteras"}
             </p>
           </div>
         )}
         <div className="plano-numero">
           <p className="valor">{plano.pasadas}</p>
-          <p className="rotulo">pasadas de sierra</p>
+          <p className="rotulo">{plano.pasadas === 1 ? "pasada de sierra" : "pasadas de sierra"}</p>
         </div>
         <div className="plano-numero">
           <p className="valor">{Math.round(desperdicio * 100)}%</p>
@@ -126,7 +154,7 @@ export function PlanoImpreso({
         </div>
         <div className="plano-numero">
           <p className="valor">{plano.totalPiezas}</p>
-          <p className="rotulo">piezas</p>
+          <p className="rotulo">{plano.totalPiezas === 1 ? "pieza" : "piezas"}</p>
         </div>
         {/* Lo que se lleva el disco. Es el número que faltaba: estaba
             descontado en el acomodo desde siempre y no se decía en ninguna
@@ -157,7 +185,7 @@ export function PlanoImpreso({
       {plano.placas.map((placa) => (
         <section key={placa.numero} className="plano-placa">
           <h3>
-            Placa {placa.numero} de {plano.placas.length}{" "}
+            {nombre} {placa.numero} de {plano.placas.length}{" "}
             <span>
               · {placa.piezas.length}{" "}
               {placa.piezas.length === 1 ? "pieza" : "piezas"} ·{" "}
@@ -168,19 +196,20 @@ export function PlanoImpreso({
                 cliente** y se va con él. Guardarlo en el depósito sería
                 quedarse con material ajeno. */}
             <span
-              className={placa.seVendeEntera ? "sello-entera" : "sello-corte"}
+              className={sobraDelCliente(placa.seVendeEntera, quien) ? "sello-entera" : "sello-corte"}
             >
-              {placa.seVendeEntera
-                ? "Se vende entera · el recorte se lo lleva el cliente"
-                : "Se cobra el corte · el recorte queda en la maderera"}
+              {queSeHaceConLaPlaca(placa.seVendeEntera, quien)}
+              {sobraDelCliente(placa.seVendeEntera, quien)
+                ? " · el recorte se lo lleva el cliente"
+                : " · el recorte queda en la maderera"}
             </span>
           </h3>
-          <DibujoDePlaca placa={placa} plano={plano} />
+          <DibujoDePlaca placa={placa} plano={plano} delCliente={sobraDelCliente(placa.seVendeEntera, quien)} />
         </section>
       ))}
 
       {plano.placas.length > 0 && <TablaDePiezas plano={plano} />}
-      {plano.placas.length > 0 && <TablaDeSobrantes plano={plano} sierra={superficieSierra} />}
+      {plano.placas.length > 0 && <TablaDeSobrantes plano={plano} sierra={superficieSierra} quien={quien} />}
 
       <p className="plano-pie">
         Las piezas están numeradas en el orden en que salen de la máquina: las
@@ -188,7 +217,7 @@ export function PlanoImpreso({
         derecha. Entre pieza y pieza se descuentan {formatearSierra(plano.anchoSierra)} de
         sierra. El dibujo está a escala, pero para cortar vale el número escrito.
         Los recuadros punteados son los pedazos que quedan enteros; lo que sobra
-        fuera de ellos no da para nada. **Ojo con a quién pertenecen**: de una
+        fuera de ellos no da para nada. <strong>Ojo con a quién pertenecen</strong>: de una
         placa que se vende entera el recorte es del cliente y se va con él; de
         una que se cobró por corte, vuelve al stock. Cada uno está rotulado.
       </p>
@@ -207,9 +236,11 @@ export function PlanoImpreso({
 function DibujoDePlaca({
   placa,
   plano,
+  delCliente,
 }: {
   placa: PlacaDelPlano;
   plano: PlanoDeCorte;
+  delCliente: boolean;
 }) {
   const { placaLargo, placaAncho } = plano;
 
@@ -243,13 +274,17 @@ function DibujoDePlaca({
          * etiqueta cuando de verdad no hay lugar para las dos líneas.
          */
         const medida = `${p.ancho} × ${p.alto}`;
+        // Angosta y alta, la medida va parada: acostada se pisaba con la de
+        // la pieza de al lado (H194). Un dígito ocupa ~0,6 del cuerpo.
+        const parada = p.alto > p.ancho * 1.4;
         const cuerpo = Math.min(
           44,
-          p.alto * 0.34,
-          (p.ancho * 1.7) / medida.length,
+          parada ? p.ancho * 0.5 : p.alto * 0.34,
+          ((parada ? p.alto - 80 : p.ancho) * 0.85) / (medida.length * 0.6),
         );
         const cuerpoEtiqueta = Math.min(32, cuerpo * 0.72);
         const entraLaEtiqueta =
+          !parada &&
           Boolean(p.etiqueta || p.girada) &&
           p.alto > cuerpo + cuerpoEtiqueta + 26;
         const cuerpoNumero = Math.min(38, p.alto * 0.42, p.ancho * 0.22);
@@ -286,11 +321,12 @@ function DibujoDePlaca({
             {cuerpo >= 14 && (
               <text
                 x={p.x + p.ancho / 2}
-                y={yMedida}
+                y={parada ? p.y + p.alto / 2 + 40 + cuerpo * 0.35 : yMedida}
                 fontSize={cuerpo}
                 fontWeight={700}
                 textAnchor="middle"
                 fill="#1a1a1a"
+                transform={parada ? `rotate(-90 ${p.x + p.ancho / 2} ${p.y + p.alto / 2 + 40})` : undefined}
               >
                 {medida}
               </text>
@@ -332,7 +368,7 @@ function DibujoDePlaca({
               textAnchor="middle"
               fill="#8a8178"
             >
-              {placa.seVendeEntera ? "para el cliente" : "al stock"} {r.ancho}{" "}
+              {delCliente ? "para el cliente" : "al stock"} {r.ancho}{" "}
               × {r.alto}
             </text>
           )}
@@ -413,16 +449,16 @@ function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
         {plano.placas.flatMap((placa) =>
           placa.piezas.map((p, i) => (
             <tr key={`${placa.numero}-${i}`}>
-              <td>{placa.numero}</td>
-              <td>{i + 1}</td>
-              <td>
+              <td data-label="Placa">{placa.numero}</td>
+              <td data-label="N.º">{i + 1}</td>
+              <td data-label="Sobre la placa">
                 {p.ancho} × {p.alto} mm{p.girada ? " (girada)" : ""}
               </td>
-              <td>
+              <td data-label="Como se pidió">
                 {p.largoOriginal} × {p.anchoOriginal} mm
               </td>
-              <td>{p.etiqueta || "—"}</td>
-              <td className="num">
+              <td data-label="Etiqueta">{p.etiqueta || "—"}</td>
+              <td className="num" data-label="Posición">
                 x {p.x} · y {p.y}
               </td>
             </tr>
@@ -441,7 +477,7 @@ function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
  * las dos formas en que se va el material que no es pieza —el aserrín de la
  * sierra y lo que sobra— que es lo que contesta «¿por qué no entró todo?».
  */
-function TablaDeSobrantes({ plano, sierra }: { plano: PlanoDeCorte; sierra: number }) {
+function TablaDeSobrantes({ plano, sierra, quien }: { plano: PlanoDeCorte; sierra: number; quien: QuienSeQueda }) {
   return (
     <>
       <table className="plano-tabla">
@@ -465,20 +501,18 @@ function TablaDeSobrantes({ plano, sierra }: { plano: PlanoDeCorte; sierra: numb
                 ]
               : placa.recortes.map((r, i) => (
                   <tr key={`${placa.numero}-s${i}`}>
-                    <td>{placa.numero}</td>
-                    <td>{i + 1}</td>
-                    <td>
+                    <td data-label="Placa">{placa.numero}</td>
+                    <td data-label="Sobrante">{i + 1}</td>
+                    <td data-label="Medida">
                       {r.ancho} × {r.alto} mm
                     </td>
-                    <td className="num">
+                    <td className="num" data-label="m²">
                       {formatearDecimal((r.ancho * r.alto) / 1_000_000, 2, {
                         fijo: true,
                       })}
                     </td>
-                    <td>
-                      {placa.seVendeEntera
-                        ? "Del cliente: se lleva la placa entera"
-                        : "Al stock de la maderera"}
+                    <td data-label="De quién es">
+                      {sobraDelCliente(placa.seVendeEntera, quien) ? "Del cliente" : "Al stock de la maderera"}
                     </td>
                   </tr>
                 )),

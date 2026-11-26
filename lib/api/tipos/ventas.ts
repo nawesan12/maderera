@@ -132,7 +132,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/pedidos/{id}/cobro": {
+    "/api/v1/admin/pedidos/{id}/devolucion": {
         parameters: {
             query?: never;
             header?: never;
@@ -142,6 +142,45 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /** La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura. */
+        post: operations["DevolverPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pedidos/{id}/correccion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Corrige los renglones y el flete de un pedido sin factura ni cobro; un precio bajo la lista pasado lo libre pide el PIN de un admin (422 en `pin`). */
+        post: operations["CorregirPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pedidos/{id}/cobro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Si el efectivo del pedido tiene caja abierta; sin caja, cuál abrir o entre cuáles elegir (lo mismo que contestaría el cobro) */
+        get: operations["CajaDelCobro"];
         put?: never;
         /** Cobrar el pedido con su recibo (cobros.EmitirRecibo); el efectivo entra al turno de su sucursal */
         post: operations["CobrarPedido"];
@@ -182,7 +221,12 @@ export interface paths {
             cookie?: never;
         };
         get: operations["FichaDePresupuesto"];
-        put?: never;
+        /**
+         * @description Corrige los renglones y los datos de un presupuesto que todavía no se
+         *     mandó (pendiente o en revisión) ni tiene pedido: el mismo cuerpo que
+         *     el alta, sin `convertir`. Mantiene el número.
+         */
+        put: operations["EditarPresupuesto"];
         post?: never;
         delete?: never;
         options?: never;
@@ -330,6 +374,13 @@ export interface components {
             subtotal: string;
             orden: number;
             alicuotaIva: string | null;
+            /** @description el precio no cubre el costo */
+            bajoCosto?: boolean;
+            /**
+             * Format: double
+             * @description el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación
+             */
+            piso?: number | null;
         };
         /** @description La única ficha activa sin cuenta web con el correo del contacto. Con dos o más, ninguna: se busca a mano. */
         FichaParaUnir: {
@@ -343,6 +394,8 @@ export interface components {
         FichaDePresupuesto: {
             /** @description pasó su validez: para pasarlo a pedido hay que elegir los precios */
             vencido: boolean;
+            /** @description por qué se perdió */
+            motivoRechazo?: string | null;
             /** @description el total con los precios de lista de hoy, si venció */
             totalDeHoy: string | null;
             /** @description Sin cliente, la ficha con el correo del contacto (para unirlo a mano) */
@@ -377,6 +430,26 @@ export interface components {
             numeroPedido: string | null;
         };
         PedidoListado: {
+            /**
+             * Format: double
+             * @description lo que un pedido partido cargó a la cuenta corriente (H047)
+             */
+            aCuenta?: number | null;
+            /** @description Se retira de a partes (ya salió algo */
+            acopio: boolean;
+            /** @description AAAA-MM-DD */
+            entregarEl: string | null;
+            /** @description Lo que falta de un pedido que ya salió en parte; vacío si no salió nada */
+            porEntregar: components["schemas"]["PorEntregar"][];
+            /** @description Los cortes del pedido en cola o en la máquina */
+            cortesSinTerminar: string[];
+            /**
+             * @description Con qué salió la venta del mostrador
+             * @enum {string|null}
+             */
+            comprobante: "interno" | "fiscal" | null;
+            /** @description Tiene una factura viva */
+            facturado: boolean;
             id: string;
             numero: string;
             cliente: string;
@@ -403,6 +476,24 @@ export interface components {
              * @description El último paso a entregado del historial
              */
             entregadoAt: string | null;
+        };
+        PorEntregar: {
+            descripcion: string;
+            unidad: string;
+            /** Format: double */
+            pendiente: number;
+        };
+        ReciboDelPedido: {
+            id: string;
+            numero: string;
+            /** Format: double */
+            total: number;
+            estado: string;
+            /** @description Los medios del recibo separados por coma */
+            medios: string;
+            quien: string | null;
+            /** Format: date-time */
+            createdAt: string;
         };
         /**
          * Format: double
@@ -475,9 +566,35 @@ export interface components {
                 unidad: string;
                 cantidad: string;
                 presentacion: string | null;
+                /** @description La medida de la placa */
+                largoMm: number | null;
+                anchoMm: number | null;
+                color: string | null;
             }[];
         };
         FichaDePedido: {
+            /** @description Tiene una factura viva */
+            facturado: boolean;
+            /** @description Se retira de a partes (ya salió algo */
+            acopio: boolean;
+            /**
+             * Format: double
+             * @description Lo cobrado con recibos y en línea
+             */
+            cobrado: number;
+            /**
+             * Format: double
+             * @description El total menos lo devuelto contra la deuda
+             */
+            aCobrar: number;
+            /**
+             * Format: double
+             * @description lo que un pedido partido cargó a la cuenta corriente (H047)
+             */
+            aCuenta?: number | null;
+            recibos: components["schemas"]["ReciboDelPedido"][];
+            /** @enum {string|null} */
+            comprobante: "interno" | "fiscal" | null;
             id: string;
             numero: string;
             numeroProvisorio: string | null;
@@ -732,6 +849,121 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    DevolverPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: {
+                        orderItemId: string;
+                        /** Format: double */
+                        cantidad: number;
+                    }[];
+                    motivo: string;
+                    /** @description la del intento: un reintento devuelve la misma devolución */
+                    clave: string;
+                };
+            };
+        };
+        responses: {
+            /** @description La devolución */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                        id: string;
+                        /** Format: double */
+                        importe: number;
+                        repetida?: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CorregirPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: {
+                        orderItemId: string;
+                        /** Format: double */
+                        cantidad: number;
+                        /** Format: double */
+                        precioUnitario: number;
+                    }[];
+                    /** Format: double */
+                    costoEnvio?: number;
+                    motivo: string;
+                    pin?: string;
+                    ficha?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CajaDelCobro: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vacío si hay caja */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description la sucursal cuya caja hay que abrir */
+                        sinCaja?: string;
+                        /** Format: double */
+                        fondoBase?: number;
+                        sucursales?: {
+                            id: string;
+                            nombre: string;
+                            abierta: boolean;
+                            /** Format: double */
+                            fondo: number;
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+        };
+    };
     CobrarPedido: {
         parameters: {
             query?: never;
@@ -861,6 +1093,33 @@ export interface operations {
             404: components["responses"]["Problema"];
         };
     };
+    EditarPresupuesto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    cabecera: {
+                        [key: string]: unknown;
+                    };
+                    lineas: unknown[];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
     UnirPresupuestoAFicha: {
         parameters: {
             query?: never;
@@ -898,6 +1157,8 @@ export interface operations {
             content: {
                 "application/json": {
                     estado: string;
+                    /** @description al rechazar, por qué se perdió (Precio, Se lo llevó otro, No contestó, Ya no lo necesita, Otro) */
+                    motivo?: string;
                 };
             };
         };
@@ -927,7 +1188,14 @@ export interface operations {
                     zona?: string;
                     /** Format: double */
                     costoEnvio?: number;
+                    /** @description el envío va sin flete; un envío sin flete ni sinCargo no sale */
+                    sinCargo?: boolean;
                     medioPago?: components["schemas"]["MedioPago"];
+                    /**
+                     * Format: double
+                     * @description la parte a cuenta corriente de un pedido partido (H047); el resto se paga con medioPago
+                     */
+                    aCuenta?: number;
                     /** @description AAAA-MM-DD */
                     entregarEl?: string;
                     /**
@@ -935,6 +1203,7 @@ export interface operations {
                      * @enum {string}
                      */
                     precios?: "actualizar" | "respetar";
+                    /** @description el PIN de un admin, o su contraseña si ninguno cargó PIN */
                     pin?: string;
                     ficha?: string;
                 };

@@ -142,7 +142,9 @@ export function ElegirCliente({
         <div className={`tarjeta-hundida flex ${alto} items-center gap-3 px-4 py-1.5`}>
           <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-base font-medium">
-            {elegido.razonSocial || elegido.nombre}
+            {/* El nombre, como la ficha y la lista de clientes; la razón
+                social va en la lista de resultados, debajo (mes simulado). */}
+            {elegido.nombre || elegido.razonSocial}
             {elegido.cuit && (
               <span className="tabular ml-2 font-normal text-muted-foreground">
                 {elegido.cuit}
@@ -263,11 +265,13 @@ export function ElegirCliente({
                 }`}
               >
                 <span className="text-base font-medium">
-                  {c.razonSocial || c.nombre}
+                  {c.nombre || c.razonSocial}
                 </span>
-                {c.cuit && (
+                {(c.cuit || (c.razonSocial && c.razonSocial !== c.nombre)) && (
                   <span className="tabular text-base text-muted-foreground">
-                    {c.cuit}
+                    {[c.razonSocial && c.razonSocial !== c.nombre ? c.razonSocial : null, c.cuit]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 )}
               </button>

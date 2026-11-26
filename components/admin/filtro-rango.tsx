@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { CalendarRange, X } from "lucide-react";
+import { aIso, aPantalla, conBarras } from "@/lib/fecha-texto";
 
 /**
  * Un rango de fechas libre, además de los períodos armados.
@@ -44,25 +45,9 @@ export function FiltroRango({
   return (
     <div className="flex flex-wrap items-center gap-1.5" aria-busy={pendiente}>
       <CalendarRange className="h-[18px] w-[18px] text-texto-3" aria-hidden />
-      <label className="flex items-center gap-1.5">
-        <span className="sr-only">Desde</span>
-        <input
-          type="date"
-          value={desde ?? ""}
-          onChange={(e) => cambiar({ desde: e.target.value })}
-          className="h-10 rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50"
-        />
-      </label>
+      <CampoFecha etiqueta="Desde" valor={desde ?? ""} alCambiar={(v) => cambiar({ desde: v })} />
       <span className="text-sm text-texto-3">a</span>
-      <label className="flex items-center gap-1.5">
-        <span className="sr-only">Hasta</span>
-        <input
-          type="date"
-          value={hasta ?? ""}
-          onChange={(e) => cambiar({ hasta: e.target.value })}
-          className="h-10 rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50"
-        />
-      </label>
+      <CampoFecha etiqueta="Hasta" valor={hasta ?? ""} alCambiar={(v) => cambiar({ hasta: v })} />
 
       {hayRango && (
         <button
@@ -75,5 +60,75 @@ export function FiltroRango({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * Una fecha escrita como se escribe acá, dd/mm/aaaa.
+ *
+ * El `<input type="date">` la muestra en el formato del navegador: en uno en
+ * inglés salía «mm/dd/yyyy» (simulación del mes, H267). Se escribe de
+ * corrido —las barras se ponen solas— y se aplica al salir del campo o con
+ * Enter.
+ */
+function CampoFecha({
+  etiqueta,
+  valor,
+  alCambiar,
+}: {
+  etiqueta: string;
+  valor: string;
+  alCambiar: (iso: string) => void;
+}) {
+  const [texto, setTexto] = useState(aPantalla(valor));
+  const [deAntes, setDeAntes] = useState(valor);
+  // Si la URL cambió desde afuera (Quitar fechas), el campo la sigue.
+  if (valor !== deAntes) {
+    setDeAntes(valor);
+    setTexto(aPantalla(valor));
+  }
+  const invalido = texto.trim() !== "" && aIso(texto) === null;
+  // Se marca al salir del campo o con Enter, no mientras se escribe.
+  const [marcar, setMarcar] = useState(false);
+
+  function aplicar() {
+    setMarcar(true);
+    if (texto.trim() === "") {
+      if (valor) alCambiar("");
+      return;
+    }
+    const iso = aIso(texto);
+    if (iso && iso !== valor) alCambiar(iso);
+  }
+
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="sr-only">{etiqueta}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="dd/mm/aaaa"
+        maxLength={10}
+        value={texto}
+        aria-invalid={(marcar && invalido) || undefined}
+        onChange={(e) => {
+          setMarcar(false);
+          setTexto(conBarras(e.target.value));
+        }}
+        onBlur={aplicar}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          // Una fecha que no existe (99/99/2026) no filtra: queda marcada y
+          // seleccionada para corregirla, en vez de no pasar nada.
+          aplicar();
+          if (invalido) e.currentTarget.select();
+        }}
+        // La familia del problema va solo con la fecha marcada: también pinta
+        // el texto, y puesta siempre dejaba toda fecha en rojo.
+        className={`tabular h-10 w-[8.5rem] rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50 aria-[invalid]:border-[var(--estado-tinta)] aria-[invalid]:bg-[var(--estado-fondo)] aria-[invalid]:text-[var(--estado-tinta)] aria-[invalid]:ring-2 aria-[invalid]:ring-[var(--estado-tinta)]/30 ${
+          marcar && invalido ? "estado-problema" : ""
+        }`}
+      />
+    </label>
   );
 }

@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { Printer, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { clienteDeLaSesion, miCuentaCorriente } from "@/lib/dal/cuenta";
 import { datosParaTransferir } from "@/lib/dal/pagos";
+import { tienda } from "@/lib/dal/contenido";
 import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
+import { importeAInformar } from "@/lib/cuenta/portal";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
+import { misMovimientos } from "@/lib/dal/historial-cliente";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 export const metadata: Metadata = { title: "Cuenta corriente" };
@@ -16,13 +20,22 @@ export default async function CuentaCorrientePage({
 }: {
   searchParams: Promise<{ pago?: string }>;
 }) {
+  // Los datos bancarios se leen sin caché y sin la sesión: sin marcar antes
+  // que la página es de cada pedido, el modo desarrollo avisaba «uncached
+  // data outside of <Suspense>».
+  await connection();
   const whatsapp = await enlaceWhatsapp("Hola! Consulto por mi cuenta corriente.");
-  const [cuenta, banco, { pago }, cliente] = await Promise.all([
+  // Todo lo informado de los últimos meses, no solo los pagos: el cheque
+  // informado es de la clase «cheques» y no salía arriba del libro (H216).
+  const [cuenta, banco, { pago }, cliente, recientes, laTienda] = await Promise.all([
     miCuentaCorriente(),
     datosParaTransferir(),
     searchParams,
     clienteDeLaSesion(),
+    misMovimientos({ periodo: "3m", filtro: "todo" }),
+    tienda(),
   ]);
+  const enCamino = recientes.movimientos.filter((m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir");
 
   if (cuenta.movimientos.length === 0 && cuenta.limiteCredito === 0) {
     return (
@@ -62,10 +75,10 @@ export default async function CuentaCorrientePage({
             href={`/cuenta/${cliente.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-linea px-3.5 py-2 text-sm font-medium transition-colors hover:bg-chip"
+            className="inline-flex h-11 items-center gap-2 rounded-lg superficie px-3.5 text-sm font-medium transition-colors hover:bg-chip"
           >
             <Printer className="h-4 w-4" />
-            Ver resumen imprimible
+            Resumen
           </a>
         )}
       </div>
@@ -95,6 +108,13 @@ export default async function CuentaCorrientePage({
                   ? "A tu favor"
                   : "Estás al día"}
             </p>
+            {/* La deuda nace con el pedido (así se aparta el crédito): lo que
+                todavía no se entregó se distingue de lo adeudado (H082). */}
+            {cuenta.sinEntregar > 0 && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                <span className="tabular font-medium text-foreground">{formatearMonto(cuenta.sinEntregar)}</span> de pedidos sin entregar
+              </p>
+            )}
           </div>
 
           {cuenta.limiteCredito > 0 && (
@@ -127,7 +147,7 @@ export default async function CuentaCorrientePage({
             <div
               className="h-2.5 overflow-hidden rounded-full bg-black/10"
               role="img"
-              aria-label={`Usás el ${Math.round(porcentaje)} por ciento de tu límite`}
+              aria-label={`Usás el ${Math.floor(porcentaje)} por ciento de tu límite`}
             >
               <div
                 className={`h-full rounded-full ${
@@ -150,7 +170,7 @@ export default async function CuentaCorrientePage({
                   . Para seguir comprando a cuenta hay que regularizarlo.
                 </span>
               ) : (
-                `Usás el ${Math.round(porcentaje)}% de tu límite.`
+                `Usás el ${Math.floor(porcentaje)}% de tu límite.`
               )}
             </p>
           </div>
@@ -177,7 +197,14 @@ export default async function CuentaCorrientePage({
         </p>
       )}
 
-      <PagarDeuda saldo={cuenta.saldo} banco={banco} />
+      <PagarDeuda
+        saldo={cuenta.saldo}
+        propuesto={importeAInformar(
+          cuenta.saldo,
+          enCamino.reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0),
+        )}
+        banco={banco}
+      />
 
       {/* El saldo a favor no se «usa» acá: ya descuenta solo de lo que se
           debe. Donde sirve es al comprar, y conviene decirlo, porque si no el
@@ -185,90 +212,100 @@ export default async function CuentaCorrientePage({
       {cuenta.saldo < 0 && (
         <p className="rounded-xl superficie p-4 text-[15px]">
           Tenés <strong className="tabular">{formatearMonto(-cuenta.saldo)}</strong> a favor. Se
-          descuenta solo de tu próxima compra: en el carrito elegí «Con mi saldo a favor», o
-          avisá en el mostrador.
+          descuenta solo de tu próxima compra:{" "}
+          {laTienda.activa ? "en el carrito elegí «Con mi saldo a favor», o avisá en el mostrador." : "avisá en el mostrador."}
         </p>
       )}
 
-      {/* Acá sí va tabla: son cifras que se comparan columna contra columna, y
-          el saldo corrido solo se sigue si está alineado. */}
-      <section className="overflow-hidden rounded-xl border bg-card">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3.5">
+      {/* El libro: fecha y concepto a la izquierda, importe y saldo a la
+          derecha, uno debajo del otro. Era una tabla que a 375 px cortaba el
+          importe y dejaba el saldo afuera (H089). Arriba, lo informado que
+          todavía no mueve el saldo: se acaba de informar acá y no aparecía
+          (H216). */}
+      <section className="tarjeta overflow-hidden rounded-xl bg-card">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-2">
           <h2 className="font-medium">Libro de la cuenta</h2>
-          {/* Acá va solo lo que mueve el saldo. Las compras de contado, las
-              transferencias en revisión y los cheques por recibir están en
-              Movimientos. */}
-          <Link href="/mi-cuenta/movimientos" className="text-sm font-medium text-acento-texto hover:underline">
-            Ver todos tus movimientos
+          <Link href="/mi-cuenta/movimientos" className="-my-2 inline-flex min-h-11 items-center text-sm font-medium text-acento-texto hover:underline">
+            Todos tus movimientos
           </Link>
         </div>
 
-        {cuenta.movimientos.length === 0 ? (
+        {cuenta.movimientos.length === 0 && enCamino.length === 0 ? (
           <p className="px-5 py-10 text-center text-muted-foreground">
             Todavía no hay movimientos en tu cuenta.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[34rem] text-left">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-[0.06em] text-muted-foreground">
-                  <th scope="col" className="px-5 py-2.5 font-semibold">
-                    Fecha
-                  </th>
-                  <th scope="col" className="px-3 py-2.5 font-semibold">
-                    Concepto
-                  </th>
-                  <th scope="col" className="px-3 py-2.5 text-right font-semibold">
-                    Importe
-                  </th>
-                  <th scope="col" className="px-5 py-2.5 text-right font-semibold">
-                    Saldo
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {cuenta.movimientos.map((m) => (
-                  <tr key={m.id}>
-                    <td className="tabular whitespace-nowrap px-5 py-3.5 text-sm text-muted-foreground">
-                      {fechaCorta.format(m.createdAt)}
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <span className="flex flex-wrap items-center gap-2">
+          <ul className="divide-y divide-linea">
+            {enCamino.map((m) => (
+              <li key={`${m.clase}-${m.id}`} className="flex items-start gap-3 px-5 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="tabular text-sm text-muted-foreground">{fechaCorta.format(m.fecha)}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                      {m.clase === "cheque_por_recibir" ? "Cheque por recibir" : "En revisión"}
+                    </span>
+                    <span className="text-sm">{m.titulo}</span>
+                  </p>
+                </div>
+                <span className="tabular shrink-0 pt-5 text-right text-muted-foreground">
+                  {formatearMonto(m.importeInformativo ?? 0)}
+                </span>
+              </li>
+            ))}
+            {cuenta.movimientos.map((m) => {
+              const rechazo = m.tipo === "nota_debito" && /rechazado/i.test(m.detalle ?? "");
+              // El recibo va como enlace abajo: «— recibo REC-0002» en el
+              // concepto lo repetía.
+              const recibo = m.reciboNumero ?? m.referencia;
+              const concepto =
+                m.receiptId && recibo && m.detalle
+                  ? m.detalle.replace(` — recibo ${recibo}`, "").trim()
+                  : m.detalle;
+              return (
+                <li key={m.id} className="flex items-start gap-3 px-5 py-3.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="tabular text-sm text-muted-foreground">{fechaCorta.format(m.createdAt)}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-2">
+                      {rechazo ? (
+                        <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                          Cheque rechazado
+                        </span>
+                      ) : (
                         <EtiquetaEstado estado={m.tipo} />
-                        <span className="text-sm">{m.detalle ?? ""}</span>
-                      </span>
-                      {m.referencia && !m.receiptId && (
-                        <PedidoRelacionado referencia={m.referencia} />
                       )}
-                      {/* El pago con recibo lleva el papel a un clic: es lo
-                          que el cliente le manda a su contador. */}
-                      {m.receiptId && (
-                        <a
-                          href={`/api/recibos/${m.receiptId}/pdf`}
-                          target="_blank"
-                          rel="noopener"
-                          className="tabular mt-0.5 block text-sm text-acento-texto hover:underline"
-                        >
-                          Recibo {m.referencia}
-                        </a>
+                      {concepto && (
+                        <span className="min-w-0 text-sm [overflow-wrap:anywhere]">
+                          <ConEnlace texto={concepto} referencia={m.referencia} />
+                        </span>
                       )}
-                    </td>
-                    <td
-                      className={`tabular whitespace-nowrap px-3 py-3.5 text-right font-medium ${
-                        m.monto > 0 ? "" : "text-saldo-favor"
-                      }`}
-                    >
-                      {m.monto > 0 ? "+" : ""}
-                      {formatearMonto(m.monto)}
-                    </td>
-                    <td className="tabular whitespace-nowrap px-5 py-3.5 text-right text-muted-foreground">
-                      {formatearMonto(m.saldoDespues)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </p>
+                    {m.referencia && !m.receiptId && !m.detalle?.includes(m.referencia) && (
+                      <PedidoRelacionado referencia={m.referencia} />
+                    )}
+                    {/* El pago con recibo lleva el papel a un toque, con el
+                        número del recibo, no el del cheque (H303). */}
+                    {m.receiptId && (
+                      <a
+                        href={`/api/recibos/${m.receiptId}/pdf`}
+                        target="_blank"
+                        rel="noopener"
+                        className="tabular -my-1.5 inline-flex min-h-11 items-center text-sm text-acento-texto hover:underline"
+                      >
+                        Recibo {m.reciboNumero ?? m.referencia}
+                      </a>
+                    )}
+                  </div>
+                  <div className="shrink-0 pt-5 text-right">
+                    <p className={`tabular font-semibold ${m.monto > 0 ? "" : "text-saldo-favor"}`}>
+                      {m.monto > 0 ? "+" : "−"}
+                      {formatearMonto(Math.abs(m.monto))}
+                    </p>
+                    <p className="tabular text-sm text-muted-foreground">{formatearMonto(m.saldoDespues)}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 
@@ -295,6 +332,29 @@ export default async function CuentaCorrientePage({
  * abrirlo desde acá es lo que convierte una cifra suelta en algo verificable:
  * "¿qué compré ese día?" se contesta con un click.
  */
+/**
+ * El concepto con el número de pedido como enlace, cuando ya lo nombra
+ * («Pedido PED-1050»): así no sale dos veces (H212, H388).
+ */
+function ConEnlace({ texto, referencia }: { texto: string; referencia: string | null }) {
+  if (!referencia?.startsWith("PED-") || !texto.includes(referencia)) return <>{texto}</>;
+  const [antes, ...resto] = texto.split(referencia);
+  return (
+    <>
+      {antes}
+      {/* Entero y con alto de dedo: se cortaba «PED-» / «1128» y medía 18 px
+          (H312). El relleno agranda el toque sin mover el renglón. */}
+      <Link
+        href={`/mi-cuenta/pedidos/${referencia}`}
+        className="tabular -my-3 inline-block whitespace-nowrap py-3 text-acento-texto hover:underline"
+      >
+        {referencia}
+      </Link>
+      {resto.join(referencia)}
+    </>
+  );
+}
+
 function PedidoRelacionado({ referencia }: { referencia: string }) {
   if (!referencia.startsWith("PED-")) {
     return (
@@ -307,7 +367,7 @@ function PedidoRelacionado({ referencia }: { referencia: string }) {
   return (
     <Link
       href={`/mi-cuenta/pedidos/${referencia}`}
-      className="tabular mt-0.5 block text-sm text-acento-texto hover:underline"
+      className="tabular -my-1.5 inline-flex min-h-11 items-center text-sm text-acento-texto hover:underline"
     >
       {referencia}
     </Link>

@@ -13,7 +13,7 @@ func rol(r sqlc.StaffRole) *sqlc.StaffRole { return &r }
 func TestBuscar(t *testing.T) {
 	pool := pruebas.Base(t)
 	ctx := context.Background()
-	_, _ = pool.Exec(ctx, `insert into customers (nombre, cuit) values ('Carpintería Ñandú', '30589445259')`)
+	_, _ = pool.Exec(ctx, `insert into customers (nombre, razon_social, cuit) values ('Carpintería Ñandú', 'carpintería ñandú', '30589445259')`)
 	_, _ = pool.Exec(ctx, `insert into suppliers (nombre) values ('Tableros Ñandú')`)
 	_, _ = pool.Exec(ctx, `insert into orders (numero, contacto_nombre, created_at) values ('PED-0042', 'Juan Ñandú', '2026-11-11 01:30:00+00')`)
 
@@ -25,7 +25,7 @@ func TestBuscar(t *testing.T) {
 	for _, x := range r {
 		tipos[x.Tipo] = x.Titulo + " | " + x.Detalle
 	}
-	if tipos["Cliente"] != "Carpintería Ñandú | 30589445259" || tipos["Proveedor"] == "" || tipos["Pedido"] != "PED-0042 · Juan Ñandú | pendiente · 10/11/2026" {
+	if tipos["Cliente"] != "Carpintería Ñandú | 30-58944525-9" || tipos["Proveedor"] == "" || tipos["Pedido"] != "PED-0042 · Juan Ñandú | pendiente · 10/11/2026" {
 		t.Errorf("admin: %v", tipos)
 	}
 	// Una palabra corta no busca nada.

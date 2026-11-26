@@ -372,7 +372,7 @@ func (h *Hoja) EncabezadoEmisor(e *Emisor, y float64) float64 {
 	}
 	cuit := ""
 	if e.Cuit != "" {
-		cuit = "CUIT " + e.Cuit
+		cuit = "CUIT " + Cuit(e.Cuit)
 	}
 	for _, dato := range []string{e.Domicilio, cuit} {
 		if dato == "" {

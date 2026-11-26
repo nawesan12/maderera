@@ -24,6 +24,8 @@ export interface DatosGasto {
   branchId?: string;
   supplierId?: string;
   notas?: string;
+  /** La factura del gasto: entra al libro IVA compras con su crédito fiscal. */
+  factura?: { tipo: string; puntoVenta: number; numero: number; iva21: number; iva105: number; iva27: number };
 }
 
 export async function cargarGasto(datos: DatosGasto): Promise<EstadoGasto> {
@@ -31,5 +33,24 @@ export async function cargarGasto(datos: DatosGasto): Promise<EstadoGasto> {
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
   revalidatePath("/admin/compras/gastos");
   revalidatePath("/admin/caja");
+  revalidatePath("/admin/arca/libro-iva-compras");
+  if (datos.supplierId) revalidatePath(`/admin/proveedores/${datos.supplierId}`);
   return { ok: r.data.ok, aviso: r.data.aviso };
+}
+
+/**
+ * Anula un gasto mal cargado. Go lo deja con su motivo, devuelve el efectivo
+ * al turno abierto de su sucursal y anula la factura que vino con él.
+ */
+export async function anularGasto(id: string, motivo: string): Promise<{ error?: string; ok?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/compras/gastos/{id}/anular", {
+    params: { path: { id } },
+    body: { motivo },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo anular el gasto.") };
+  revalidatePath("/admin/compras/gastos");
+  revalidatePath("/admin/caja");
+  revalidatePath("/admin/arca/libro-iva-compras");
+  revalidatePath("/admin/compras/facturas");
+  return { ok: r.data.ok };
 }

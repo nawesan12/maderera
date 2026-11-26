@@ -5,25 +5,13 @@ import { AlertCircle, CheckCircle2, Loader2, Send, Smartphone, X } from "lucide-
 import { enviarPlantilla, type EstadoWhatsapp } from "./actions";
 import { ConfirmarTope } from "./confirmar-tope";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
-import { camposFaltantes, nombreLegible, sugerirValores, vistaPrevia } from "@/lib/whatsapp/plantillas";
+import { camposFaltantes, nombreParaMostrar, sugerirValores, vistaPrevia } from "@/lib/whatsapp/plantillas";
 import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import type { DocumentoListado } from "@/lib/dal/admin/whatsapp";
 import { primerNombre } from "@/lib/formato";
+import { nombreDeSaludo } from "@/lib/whatsapp/saludo";
 
 const estadoInicial: EstadoWhatsapp = {};
-
-/** Lo que cuesta cada categoría en Argentina (USD por mensaje entregado, tarifa del 1/10/2026). */
-const COSTO: Record<string, string> = {
-  UTILITY: "USD 0,026",
-  MARKETING: "USD 0,062",
-  AUTHENTICATION: "USD 0,026",
-};
-
-const CATEGORIA: Record<string, string> = {
-  UTILITY: "de utilidad",
-  MARKETING: "de promoción",
-  AUTHENTICATION: "de verificación",
-};
 
 /** Cómo se llama cada dato en pantalla, para las plantillas con nombres. */
 const ETIQUETAS: Record<string, string> = {
@@ -62,6 +50,7 @@ export function CompositorPlantilla({
   conocidos,
   documentos,
   ventanaAbierta,
+  escribio = true,
   onCerrar,
   waId = null,
 }: {
@@ -73,6 +62,8 @@ export function CompositorPlantilla({
   conocidos: Record<string, string>;
   documentos: DocumentoListado[];
   ventanaAbierta: boolean;
+  /** El cliente escribió alguna vez: si no, la ventana nunca se abrió. */
+  escribio?: boolean;
   /** Null cuando no hay alternativa: fuera de la ventana no se puede escribir libre. */
   onCerrar: (() => void) | null;
 }) {
@@ -85,7 +76,7 @@ export function CompositorPlantilla({
   const plantilla = plantillas.find((p) => p.nombre === elegida);
 
   const sugeridos = useMemo(
-    () => ({ nombre: nombre === "Sin identificar" ? "" : primerNombre(nombre), ...conocidos }),
+    () => ({ nombre: nombre === "Sin identificar" ? "" : nombreDeSaludo(nombre, primerNombre), ...conocidos }),
     [nombre, conocidos],
   );
 
@@ -103,8 +94,11 @@ export function CompositorPlantilla({
   const gratis = waId && texto ? enlaceWaMe(`+${waId}`, texto) : null;
   const pdfs = documentos;
 
+  // En el teléfono, la mitad del alto como mucho: con dos tercios quedaban
+  // unos 90 px de conversación (H048). Lo que no entra se desplaza adentro y
+  // «Enviar» queda pegado abajo, siempre a mano.
   return (
-    <form action={accion} className="max-h-[65%] overflow-y-auto border-t bg-muted/30 p-3">
+    <form action={accion} className="max-h-[50%] overflow-y-auto border-t bg-muted/30 p-3 pb-0 sm:max-h-[65%]">
       <input type="hidden" name="conversacionId" value={conversacionId} />
       <input type="hidden" name="plantilla" value={elegida} />
       <input type="hidden" name="idioma" value={plantilla?.idioma ?? ""} />
@@ -113,8 +107,20 @@ export function CompositorPlantilla({
         .filter((c) => c.marcador !== "media")
         .map((c) => <input key={c.clave} type="hidden" name={`v:${c.clave}`} value={valores[c.clave] ?? ""} />)}
 
+      {/* Con la ventana cerrada, el porqué hace de título: «Mensaje
+          preparado» arriba de «solo se puede mandar un mensaje preparado»
+          era un renglón repetido. */}
       <div className="mb-2.5 flex items-center justify-between gap-3">
-        <h3 className="text-base font-medium">Mensaje preparado</h3>
+        {ventanaAbierta ? (
+          <h3 className="text-base font-medium">Mensaje preparado</h3>
+        ) : (
+          <h3 className="estado-espera w-full rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm font-normal text-[var(--estado-tinta)]">
+            {/* Cuando conteste, se vuelve a poder escribir libremente. */}
+            {escribio
+              ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
+              : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
+          </h3>
+        )}
         {onCerrar && (
           <button
             type="button"
@@ -127,15 +133,8 @@ export function CompositorPlantilla({
         )}
       </div>
 
-      {!ventanaAbierta && (
-        <p className="estado-espera mb-2.5 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm text-[var(--estado-tinta)]">
-          {/* Cuando conteste, se vuelve a poder escribir libremente. */}
-          Pasaron más de 24 horas: solo se puede mandar un mensaje preparado.
-        </p>
-      )}
-
       {plantillas.length === 0 ? (
-        <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
+        <p className="estado-espera mb-3 rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
           {/* Se cargan en Meta, se espera la aprobación y se sincronizan desde la configuración. */}
           No hay mensajes preparados aprobados.
         </p>
@@ -153,18 +152,11 @@ export function CompositorPlantilla({
           >
             {plantillas.map((p) => (
               <option key={`${p.nombre}-${p.idioma}`} value={p.nombre}>
-                {nombreLegible(p.nombre)}
+                {nombreParaMostrar(p.nombre)}
                 {p.uso ? ` — ${p.uso}` : ""}
               </option>
             ))}
           </select>
-
-          {plantilla?.categoria && (
-            <p className="text-sm text-muted-foreground">
-              Mensaje {CATEGORIA[plantilla.categoria] ?? plantilla.categoria.toLowerCase()}: Meta cobra{" "}
-              {COSTO[plantilla.categoria] ?? "según la categoría"} por cada uno que se entrega.
-            </p>
-          )}
 
           {plantilla && plantilla.campos.some((c) => c.marcador !== "media") && (
             <div className="grid gap-2 sm:grid-cols-2">
@@ -226,31 +218,34 @@ export function CompositorPlantilla({
             </p>
           )}
 
-          {/* Desde la app del teléfono no hay ventana de 24 h ni plantilla que
-              aprobar, y no se cobra: el mismo texto, gratis. */}
-          {gratis && !estado.requiereConfirmacionTope && (
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-              Por la API se cobra.
+          {/* La acción principal y, al lado, el mismo texto desde la app del
+              teléfono: ahí no hay ventana de 24 h ni plantilla que aprobar, y
+              no se cobra. */}
+          <div className="sticky bottom-0 -mx-3 flex flex-wrap items-center gap-2 bg-[color-mix(in_oklab,var(--muted)_30%,var(--card))] px-3 py-2.5">
+            <button
+              type="submit"
+              disabled={enviando || faltan.length > 0 || faltaDocumento || !plantilla}
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+            >
+              {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              {faltan.length > 0 ? "Faltan datos" : faltaDocumento ? "Elegí el documento" : "Enviar"}
+              {faltan.length === 0 && !faltaDocumento && (
+                <span className="text-sm font-normal text-white/85">se cobra</span>
+              )}
+            </button>
+            {gratis && !estado.requiereConfirmacionTope && (
               <a
                 href={gratis}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 font-medium text-brand-green hover:underline"
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10"
               >
-                <Smartphone className="h-4 w-4" />
-                Mandarlo desde el teléfono (gratis)
+                <Smartphone className="h-5 w-5" />
+                Teléfono
+                <span className="text-sm font-normal">gratis</span>
               </a>
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={enviando || faltan.length > 0 || faltaDocumento || !plantilla}
-            className="inline-flex h-11 items-center gap-2 rounded-lg bg-verde-whatsapp px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
-          >
-            {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-            {faltan.length > 0 ? "Faltan datos" : faltaDocumento ? "Elegí el documento" : "Enviar mensaje preparado"}
-          </button>
+            )}
+          </div>
         </div>
       )}
     </form>

@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -210,6 +210,8 @@ export const supplierMovements = pgTable(
     goodsReceiptId: uuid(),
     purchaseInvoiceId: uuid(),
     supplierPaymentId: uuid(),
+    /** El cheque que le dimos y rebotó (goose 00250). */
+    chequeId: uuid(),
   },
   (t) => [
     index("supplier_movements_supplier_idx").on(t.supplierId),
@@ -413,7 +415,10 @@ export const goodsReceipts = pgTable(
      * entrega, que además de duplicar el stock **corrompe el costo promedio**,
      * y el costo promedio no se puede revertir.
      */
-    uniqueIndex("goods_receipts_remito_idx").on(t.supplierId, t.numeroRemito),
+    // Sin las anuladas (goose 00250): una anulada no ocupa su remito.
+    uniqueIndex("goods_receipts_remito_idx")
+      .on(t.supplierId, t.numeroRemito)
+      .where(sql`estado <> 'anulada'`),
   ],
 );
 
@@ -568,6 +573,8 @@ export const purchaseInvoices = pgTable(
     receiptId: uuid().references(() => goodsReceipts.id, {
       onDelete: "set null",
     }),
+    /** De una nota de crédito, la factura a la que se aplicó (goose 00250). */
+    aplicaAId: uuid(),
 
     observaciones: text(),
     createdByUserId: text().references(() => user.id),

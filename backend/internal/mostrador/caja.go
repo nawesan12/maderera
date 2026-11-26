@@ -13,6 +13,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/caja"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -40,7 +41,19 @@ func f2(n float64) string { return jsmath.Fijo2(n) }
 
 // AbrirCaja abre el turno con su fondo (como movimiento «apertura»). Abrir
 // con menos que la base de cambio se puede, pero se avisa.
-func (s *Servicio) AbrirCaja(ctx context.Context, ses *auth.Sesion, sucursal string, fondo float64) (string, error) {
+//
+// **El turno arranca con lo que quedó contado** (mes simulado, H024 y
+// H249). Abrir con la base cuando al cierre quedaron más hacía desaparecer
+// la diferencia entre turnos sin un solo movimiento: $301.374 en una semana.
+// Ahora, si el fondo no es lo contado al cerrar el turno anterior, hace
+// falta decir adónde fue (o de dónde vino) la diferencia, y queda a la
+// vista: la apertura es lo contado y la diferencia, un retiro (o un
+// ingreso) «entre turnos» con ese motivo. Los recuadros del turno y el
+// arqueo la muestran como cualquier otro retiro.
+//
+// `puesto` es la caja física de la PC que abre (vacío si no tiene): queda en
+// el turno para el arqueo por caja (H356).
+func (s *Servicio) AbrirCaja(ctx context.Context, ses *auth.Sesion, sucursal string, fondo float64, motivo, puesto string) (string, error) {
 	if math.IsNaN(fondo) || math.IsInf(fondo, 0) || fondo < 0 {
 		return "", rechazo("El fondo inicial no puede ser negativo.")
 	}
@@ -48,14 +61,48 @@ func (s *Servicio) AbrirCaja(ctx context.Context, ses *auth.Sesion, sucursal str
 	if err != nil {
 		return "", err
 	}
+	anterior, err := caja.UltimoContado(ctx, s.pool, sucursal)
+	if err != nil {
+		return "", err
+	}
+	motivo = zodjs.TrimJS(motivo)
+	diferencia := 0.0
+	if anterior != nil && math.Abs(*anterior-fondo) > caja.ToleranciaArqueo {
+		diferencia = jsmath.Redondear2(*anterior - fondo)
+	}
+	if diferencia != 0 && motivo == "" {
+		if diferencia > 0 {
+			return "", rechazo("Al cerrar quedaron " + formato.Importe(*anterior) + ". Poné adónde fueron los " + formato.Importe(diferencia) + ".")
+		}
+		return "", rechazo("Al cerrar quedaron " + formato.Importe(*anterior) + ". Poné de dónde salieron los " + formato.Importe(-diferencia) + ".")
+	}
+	var posID *string
+	if plataforma.UUIDValido(puesto) {
+		posID = &puesto
+	}
 	faltaCambio := base > 0 && fondo < base
 	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var sesion string
-		if err := tx.QueryRow(ctx, `INSERT INTO cash_sessions (branch_id, abierta_por) VALUES ($1, $2) RETURNING id`, sucursal, ses.UserID).Scan(&sesion); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO cash_sessions (branch_id, abierta_por, pos_device_id)
+			VALUES ($1, $2, (SELECT id FROM pos_devices WHERE id::text = $3 AND branch_id = $1)) RETURNING id`,
+			sucursal, ses.UserID, posID).Scan(&sesion); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, 'apertura', $2::numeric, 'Fondo inicial', $3)`,
-			sesion, f2(fondo), ses.UserID)
+		if diferencia == 0 {
+			_, err := tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, 'apertura', $2::numeric, 'Fondo inicial', $3)`,
+				sesion, f2(fondo), ses.UserID)
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, 'apertura', $2::numeric, 'Quedó del turno anterior', $3)`,
+			sesion, f2(*anterior), ses.UserID); err != nil {
+			return err
+		}
+		tipo := "retiro"
+		if diferencia < 0 {
+			tipo = "ingreso"
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, $2, $3::numeric, $4, $5)`,
+			sesion, tipo, f2(-diferencia), "Entre turnos: "+motivo, ses.UserID)
 		return err
 	})
 	var pg *pgconn.PgError
@@ -65,20 +112,35 @@ func (s *Servicio) AbrirCaja(ctx context.Context, ses *auth.Sesion, sucursal str
 	if err != nil {
 		return "", err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "caja", "", "Abrió la caja con un fondo de $"+f2(fondo), nil)
+	desc := "Abrió la caja con un fondo de " + formato.Importe(fondo)
+	if diferencia != 0 {
+		desc += " (al cerrar quedaron " + formato.Importe(*anterior) + "; entre turnos: " + motivo + ")"
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "caja", "", desc, nil)
 	if faltaCambio {
-		return "Caja abierta, pero el fondo quedó por debajo de la base de $" + f2(base) + ". Reponé el cambio.", nil
+		return "Caja abierta, pero el fondo quedó por debajo de la base de " + formato.Importe(base) + ". Reponé el cambio.", nil
 	}
 	return "Caja abierta.", nil
 }
 
 // MovimientoDeCaja es un ingreso o un retiro desde el mostrador. Un retiro
 // no puede dejar el cajón por debajo del fondo de cambio.
-func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesion, tipo string, monto float64, motivo string) (string, error) {
+//
+// El retiro dice a dónde va (H333): al banco, a la caja fuerte u otro. Al
+// banco y a la caja fuerte no hace falta escribir el motivo: el destino lo
+// dice. Sin destino (un cliente viejo) se clasifica por el motivo, como
+// antes.
+func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesion, tipo string, monto float64, motivo string, destino *string) (string, error) {
 	if math.IsNaN(monto) || math.IsInf(monto, 0) || monto <= 0 {
 		return "", rechazo("El monto tiene que ser mayor a cero.")
 	}
+	if tipo != "retiro" {
+		destino = nil
+	}
 	motivo = zodjs.TrimJS(motivo)
+	if motivo == "" && destino != nil {
+		motivo = MotivoDelDestino[*destino]
+	}
 	if motivo == "" {
 		return "", rechazo("Poné el motivo: un movimiento sin explicación no se puede revisar después.")
 	}
@@ -107,16 +169,24 @@ func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesio
 				return err
 			}
 			enCaja := esperado.F()
-			if base.F() > 0 && enCaja-monto < base.F() {
-				disponible := math.Max(0, enCaja-base.F())
-				if disponible > 0 {
-					return rechazo("Ese retiro deja el cajón sin el cambio de la base ($" + f2(base.F()) + "). Podés retirar hasta $" + f2(disponible) + ".")
+			// Sin base de cambio, el piso es cero: el retiro no deja el
+			// cajón en negativo (mes simulado).
+			piso := math.Max(0, base.F())
+			if float64(enCaja-monto)-piso < -0.009 {
+				disponible := math.Max(0, jsmath.Redondear2(enCaja-piso))
+				switch {
+				case piso > 0 && disponible > 0:
+					return rechazo("Ese retiro deja el cajón sin el cambio de la base (" + formato.Importe(base.F()) + "). Podés retirar hasta " + formato.Importe(disponible) + ".")
+				case piso > 0:
+					return rechazo("No se puede retirar: en el cajón hay " + formato.Importe(enCaja) + " y la base de cambio es " + formato.Importe(base.F()) + ".")
+				case disponible > 0:
+					return rechazo("En el cajón hay " + formato.Importe(enCaja) + ". Podés retirar hasta " + formato.Importe(disponible) + ".")
 				}
-				return rechazo("No se puede retirar: en el cajón hay $" + f2(enCaja) + " y la base de cambio es $" + f2(base.F()) + ".")
+				return rechazo("No se puede retirar: el cajón no tiene efectivo.")
 			}
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, $2, $3::numeric, $4, $5)`,
-			sesion, tipo, f2(firmado), motivo, ses.UserID)
+		_, err = tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por, destino) VALUES ($1, $2, $3::numeric, $4, $5, $6)`,
+			sesion, tipo, f2(firmado), motivo, ses.UserID, destino)
 		return err
 	})
 	if err != nil {
@@ -126,7 +196,7 @@ func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesio
 	if tipo == "retiro" {
 		verbo = "Retiró"
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "caja", "", verbo+" $"+f2(monto)+": "+motivo, nil)
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "caja", "", verbo+" "+formato.Importe(monto)+": "+motivo, nil)
 	if tipo == "retiro" {
 		return "Retiro registrado.", nil
 	}
@@ -184,7 +254,7 @@ func (s *Servicio) CerrarCaja(ctx context.Context, ses *auth.Sesion, sesion stri
 		diferencia = contado - esperado.F()
 		nombre = caja.NombreDeLaDiferencia(diferencia)
 		if math.Abs(diferencia) > caja.ToleranciaArqueo && notas == "" {
-			return rechazo("Hay un " + nombre + " de $" + f2(math.Abs(diferencia)) + ". Escribí qué pasó antes de cerrar: mañana nadie se va a acordar.")
+			return rechazo("Hay un " + nombre + " de " + formato.Importe(math.Abs(diferencia)) + ". Escribí qué pasó antes de cerrar: mañana nadie se va a acordar.")
 		}
 		_, err := tx.Exec(ctx, `
 			UPDATE cash_sessions SET estado = 'cerrada', cerrada_por = $2, cerrada_at = now(), contado = $3::numeric, notas = $4
@@ -195,11 +265,11 @@ func (s *Servicio) CerrarCaja(ctx context.Context, ses *auth.Sesion, sesion stri
 		return "", err
 	}
 	sinCambio := base.F() > 0 && contado < base.F()
-	desc := "Cerró la caja. Esperado $" + f2(esperado.F()) + ", contado $" + f2(contado)
+	desc := "Cerró la caja. Esperado " + formato.Importe(esperado.F()) + ", contado " + formato.Importe(contado)
 	if nombre == "sin diferencia" {
 		desc += ", sin diferencia"
 	} else {
-		desc += ", " + nombre + " de $" + f2(math.Abs(diferencia))
+		desc += ", " + nombre + " de " + formato.Importe(math.Abs(diferencia))
 	}
 	if notas != "" {
 		desc += ": " + notas
@@ -207,15 +277,22 @@ func (s *Servicio) CerrarCaja(ctx context.Context, ses *auth.Sesion, sesion stri
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "caja", "", desc, nil)
 	cierre := "Caja cerrada sin diferencia."
 	if nombre != "sin diferencia" {
-		cierre = "Caja cerrada con un " + nombre + " de $" + f2(math.Abs(diferencia)) + "."
+		cierre = "Caja cerrada con un " + nombre + " de " + formato.Importe(math.Abs(diferencia)) + "."
 	}
 	if sinCambio {
-		return cierre + " Ojo: quedan $" + f2(contado) + " en el cajón y la base de cambio es $" + f2(base.F()) + ".", nil
+		return cierre + " Ojo: quedan " + formato.Importe(contado) + " en el cajón y la base de cambio es " + formato.Importe(base.F()) + ".", nil
 	}
 	return cierre, nil
 }
 
 func itoa(n int) string { return jsmath.Texto(float64(n)) }
+
+// MotivoDelDestino es el motivo de un retiro que no lo escribió: el destino
+// ya dice qué pasó con la plata.
+var MotivoDelDestino = map[string]string{
+	"banco":       "Depósito en el banco",
+	"caja_fuerte": "A la caja fuerte",
+}
 
 // ResultadoDiferido es lo que contesta POST /api/mostrador/caja/movimientos.
 type ResultadoDiferido struct {
@@ -274,10 +351,14 @@ func (s *Servicio) MovimientoDiferido(ctx context.Context, ses *auth.Sesion, m M
 			}
 			bajoLaBase = enCaja.F()-m.Monto < base.F()
 		}
+		var destino *string
+		if m.Tipo == "retiro" {
+			destino = m.Destino
+		}
 		tag, err := tx.Exec(ctx, `
-			INSERT INTO cash_movements (session_id, tipo, monto, motivo, clave, creado_por, created_at, declarado_at, bajo_la_base)
-			VALUES ($1, $2, $3::numeric, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (clave) DO NOTHING`, turno, m.Tipo, f2(monto), zodjs.TrimJS(m.Motivo), m.Clave, ses.UserID, creado, declarado, bajoLaBase)
+			INSERT INTO cash_movements (session_id, tipo, monto, motivo, clave, creado_por, created_at, declarado_at, bajo_la_base, destino)
+			VALUES ($1, $2, $3::numeric, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (clave) DO NOTHING`, turno, m.Tipo, f2(monto), zodjs.TrimJS(m.Motivo), m.Clave, ses.UserID, creado, declarado, bajoLaBase, destino)
 		nuevo = err == nil && tag.RowsAffected() > 0
 		return err
 	})
@@ -293,7 +374,7 @@ func (s *Servicio) MovimientoDiferido(ctx context.Context, ses *auth.Sesion, m M
 			verbo = "Retiro"
 		}
 		hora := momento.In(caja.Argentina).Format("02/01 15:04")
-		desc := verbo + " sin conexión de $" + f2(m.Monto) + " (" + hora + ")"
+		desc := verbo + " sin conexión de " + formato.Importe(m.Monto) + " (" + hora + ")"
 		if cerrado {
 			desc += " llegó con la caja ya cerrada: queda como tardío y no cambia el arqueo"
 		} else {

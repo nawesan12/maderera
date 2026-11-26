@@ -31,6 +31,7 @@ export function AccionesCobro({
   comprobanteUrl,
   cliente,
   monto,
+  revisar,
 }: {
   pagoId: string;
   estado: string;
@@ -39,7 +40,10 @@ export function AccionesCobro({
   /** Para el título del rechazo: nombra el cobro, no la acción. */
   cliente?: string | null;
   monto?: string;
+  /** Si hay algo que mirar antes de acreditar (repetido, cuenta en cero): pide confirmar. */
+  revisar?: string;
 }) {
+  const [confirmando, setConfirmando] = useState(false);
   /*
    * Rechazar una transferencia pide motivo y se confirma en un diálogo: antes
    * era un botón suelto pegado a «Acreditar», sin preguntar nada, y el motivo
@@ -80,9 +84,22 @@ export function AccionesCobro({
 
       {estado === "en_revision" && (
         <>
-          <form action={conciliar}>
+          <form
+            action={conciliar}
+            onSubmit={(e) => {
+              if (revisar && !confirmando) {
+                e.preventDefault();
+                setConfirmando(true);
+              }
+            }}
+          >
             <input type="hidden" name="pagoId" value={pagoId} />
             <input type="hidden" name="decision" value="aprobar" />
+            {confirmando && revisar && (
+              <span className="estado-problema mb-1.5 block max-w-72 text-right text-base font-medium" role="alert">
+                {revisar}
+              </span>
+            )}
             <button
               type="submit"
               disabled={conciliando}
@@ -93,7 +110,7 @@ export function AccionesCobro({
               ) : (
                 <Check className="h-4 w-4" />
               )}
-              Acreditar
+              {confirmando ? "Acreditar igual" : "Acreditar"}
             </button>
           </form>
 

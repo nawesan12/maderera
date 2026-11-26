@@ -176,7 +176,8 @@ func (a *API) SubirComprobanteDeDeuda(ctx context.Context, r pagosapi.SubirCompr
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.SubirComprobanteDeDeuda(ctx, a.x, auth.DeContexto(ctx), archivo, campos["monto"], campos["medio"])
+	v, err := a.s.SubirComprobanteDeDeuda(ctx, a.x, auth.DeContexto(ctx), archivo, campos["monto"], campos["medio"],
+		campos["confirmar"] == "1")
 	if err != nil {
 		return nil, err
 	}

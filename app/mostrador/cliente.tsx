@@ -20,7 +20,7 @@ import {
 import { enfocar } from "./atajos";
 import { SaldoDelCliente } from "./cuenta-del-cliente";
 import type { Cliente } from "./tipos";
-import { moneda } from "@/lib/formato";
+import { documentoConTipo, moneda } from "@/lib/formato";
 import { MONTO_IDENTIFICAR_CONSUMIDOR_FINAL } from "@/lib/fiscal/umbral";
 
 export function BuscadorDeCliente({
@@ -29,13 +29,19 @@ export function BuscadorDeCliente({
   branchId,
   enLinea,
   buscarLocal,
+  aCuenta = 0,
+  sinFicha = null,
 }: {
+  /** Lo que la venta de ahora carga a cuenta corriente: se mide contra el límite. */
+  aCuenta?: number;
   cliente: Cliente | null;
   onCliente: (c: Cliente | null) => void;
   branchId: string;
   enLinea: boolean;
   /** La copia local del padrón: contesta al instante y sin internet. */
   buscarLocal: (texto: string) => Cliente[];
+  /** A nombre de quién sale la venta sin cliente (el del presupuesto). */
+  sinFicha?: string | null;
 }) {
   const [texto, setTexto] = useState("");
   const [delServidor, setDelServidor] = useState<Cliente[]>([]);
@@ -114,8 +120,15 @@ export function BuscadorDeCliente({
           <span className="min-w-0 flex-1">
             <span className="block truncate text-base font-medium">{cliente.nombre}</span>
             {cliente.cuit && (
-              <span className="tabular block text-sm text-muted-foreground">
-                {cliente.cuit.length === 11 ? "CUIT" : "DNI"} {cliente.cuit}
+              <span
+                className={`tabular block text-sm ${
+                  "error" in leerDocumento(cliente.cuit)
+                    ? "estado-problema font-medium text-[var(--estado-tinta)]"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {documentoConTipo(cliente.cuit)}
+                {"error" in leerDocumento(cliente.cuit) && " · no es válido"}
               </span>
             )}
           </span>
@@ -141,7 +154,7 @@ export function BuscadorDeCliente({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <SaldoDelCliente cliente={cliente} branchId={branchId} enLinea={enLinea} />
+        <SaldoDelCliente cliente={cliente} branchId={branchId} enLinea={enLinea} aCuenta={aCuenta} />
       </div>
     );
   }
@@ -191,7 +204,7 @@ export function BuscadorDeCliente({
               setTexto("");
             }
           }}
-          placeholder="Consumidor final — buscá por nombre, CUIT o DNI"
+          placeholder={`${sinFicha || "Consumidor final"} — buscá por nombre, CUIT o DNI`}
           className="h-11 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
         />
       </div>
@@ -223,7 +236,7 @@ export function BuscadorDeCliente({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-medium">{c.nombre}</span>
                   <span className="block text-sm text-muted-foreground">
-                    {c.cuit ? `${c.cuit.length === 11 ? "CUIT" : "DNI"} ${c.cuit}` : "sin documento"}
+                    {c.cuit ? documentoConTipo(c.cuit) : "sin documento"}
                     {c.estado === "moroso" && " · moroso"}
                   </span>
                 </span>
@@ -334,7 +347,7 @@ export function CuitSuelto({
           inputMode="numeric"
           aria-invalid={Boolean(problema)}
           aria-required={obligatorio}
-          placeholder={obligatorio ? undefined : "Sin CUIT: sale a consumidor final"}
+          placeholder={obligatorio ? undefined : "Consumidor final"}
           className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
         />
       </label>

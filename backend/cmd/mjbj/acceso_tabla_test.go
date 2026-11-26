@@ -17,6 +17,9 @@ package main
 //     acción puntual dentro de ella: bloquear una cuenta, anular un recibo).
 //   - "plata": quien mueve plata desde la ficha de un pedido (cobrar,
 //     facturar): roles.ManejanPlata. El depósito abre Pedidos pero no cobra.
+//   - "cola": lo que se decide en la cola de corte (urgente, anular, pasadas,
+//     acomodo, disco y el alta):
+//     roles.DecidenEnLaCola, todo /admin/cortes menos el aserradero.
 //   - "personal": todo el personal, a propósito. Hoy: el push (cada uno
 //     activa el suyo), el buscador del encabezado (filtra adentro según el
 //     rol), los datos del emisor (van en todo lo que se imprime) y el pedido
@@ -44,6 +47,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"TurnosParaAsignar":              "/admin/caja",                   // GET /api/v1/admin/caja/turnos-para-asignar
 	"AsignarVentaAlTurno":            "/admin/caja",                   // POST /api/v1/admin/caja/ventas-sueltas/{id}/asignar
 	"VentasSinCaja":                  "/admin/caja",                   // GET /api/v1/admin/caja/ventas-sueltas
+	"EfectivoFueraDeCaja":            "/admin/caja",                   // GET /api/v1/admin/caja/fuera-de-caja
 	"GuardarParametros":              "/admin/cortes/tarifas",         // PUT /api/v1/admin/calculadoras
 	"GuardarSierra":                  "/admin/cortes/tarifas",         // PUT /api/v1/admin/cortes/sierra
 	"GuardarConsultaDeCorte":         "publico",                       // POST /api/v1/cortes/consulta
@@ -65,9 +69,11 @@ var pantallaDeCadaRuta = map[string]string{
 	"CategoriasAdmin":                "/admin/stock",                  // GET /api/v1/admin/categorias
 	"ChequesEnCartera":               "/admin/cheques",                // GET /api/v1/admin/cheques/cartera
 	"CambiarEstadoDeCheque":          "/admin/cheques",                // PUT /api/v1/admin/cheques/{id}/estado
+	"RechazarChequeDelCliente":       "plata",                         // POST /api/v1/admin/cheques/{id}/rechazo
 	"ListarCheques":                  "/admin/cheques",                // GET /api/v1/admin/cheques
 	"CargarCheque":                   "/admin/cheques",                // POST /api/v1/admin/cheques
 	"AsientosCsv":                    "/admin/cierre",                 // GET /api/v1/admin/cierre/asientos-csv
+	"CerrarElMes":                    "/admin/cierre",                 // POST /api/v1/admin/cierre/cerrado
 	"AsientosDelPeriodo":             "/admin/cierre",                 // GET /api/v1/admin/cierre/asientos
 	"PendientesDelCierre":            "/admin/cierre",                 // GET /api/v1/admin/cierre/pendientes
 	"ResumenDelMes":                  "/admin/cierre",                 // GET /api/v1/admin/cierre/resumen
@@ -91,6 +97,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"SucursalesParaGasto":            "/admin/compras",                // GET /api/v1/admin/compras/gastos/sucursales
 	"ListarGastos":                   "/admin/compras",                // GET /api/v1/admin/compras/gastos
 	"CargarGasto":                    "/admin/compras",                // POST /api/v1/admin/compras/gastos
+	"AnularGasto":                    "admin",                         // POST /api/v1/admin/compras/gastos/{id}/anular
 	"LibroIvaComprasCsv":             "/admin/compras",                // GET /api/v1/admin/compras/libro-iva/csv
 	"LibroIvaCompras":                "/admin/compras",                // GET /api/v1/admin/compras/libro-iva
 	"AplicarLista":                   "/admin/compras",                // POST /api/v1/admin/compras/lista-proveedor/aplicar
@@ -98,7 +105,9 @@ var pantallaDeCadaRuta = map[string]string{
 	"BuscarMercaderia":               "/admin/compras",                // GET /api/v1/admin/compras/mercaderia
 	"AnularOrdenDeCompra":            "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/anular
 	"MarcarOrdenEnviada":             "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/enviada
-	"RecibirDeLaOrden":               "/admin/compras",                // POST /api/v1/admin/compras/ordenes/{id}/recibir
+	"RecibirDeLaOrden":               "/admin/recepciones",            // POST /api/v1/admin/compras/ordenes/{id}/recibir
+	"EditarOrdenDeCompra":            "/admin/compras",                // PUT /api/v1/admin/compras/ordenes/{id}
+	"AplicarNotaDeCredito":           "/admin/compras",                // POST /api/v1/admin/compras/facturas/{id}/aplicar
 	"OrdenDeCompra":                  "/admin/compras",                // GET /api/v1/admin/compras/ordenes/{id}
 	"ListarOrdenesDeCompra":          "/admin/compras",                // GET /api/v1/admin/compras/ordenes
 	"CrearOrdenDeCompra":             "/admin/compras",                // POST /api/v1/admin/compras/ordenes
@@ -142,15 +151,20 @@ var pantallaDeCadaRuta = map[string]string{
 	"TarifasActivas":                 "/mostrador",                    // GET /api/v1/admin/cortes/tarifas/activas
 	"ListarTarifas":                  "/admin/cortes/tarifas",         // GET /api/v1/admin/cortes/tarifas
 	"GuardarTarifa":                  "/admin/cortes/tarifas",         // POST /api/v1/admin/cortes/tarifas
-	"GuardarAcomodo":                 "/admin/cortes",                 // PUT /api/v1/admin/cortes/{id}/acomodo
+	"GuardarAcomodo":                 "cola",                          // PUT /api/v1/admin/cortes/{id}/acomodo
 	"AvanzarCorte":                   "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/avanzar
 	"HojaDelCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}/hoja
-	"CargarPasadas":                  "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/pasadas
-	"CambiarSierra":                  "/admin/cortes",                 // PUT /api/v1/admin/cortes/{id}/sierra
-	"AlternarUrgente":                "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/urgente
+	"CargarPasadas":                  "cola",                          // POST /api/v1/admin/cortes/{id}/pasadas
+	"CambiarSierra":                  "cola",                          // PUT /api/v1/admin/cortes/{id}/sierra
+	"AlternarUrgente":                "cola",                          // POST /api/v1/admin/cortes/{id}/urgente
+	"AnularCorte":                    "cola",                          // POST /api/v1/admin/cortes/{id}/anular
+	"VolverCorte":                    "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/volver
+	"PasarCorteAPedido":              "plata",                         // POST /api/v1/admin/cortes/{id}/pedido
+	"SumarCorteAlPedido":             "plata",                         // POST /api/v1/admin/cortes/{id}/sumar-al-pedido
+	"RemitoDeLaReposicion":           "cola",                          // POST /api/v1/admin/cortes/{id}/remito
 	"FichaDeCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}
 	"ListarCortes":                   "/admin/cortes",                 // GET /api/v1/admin/cortes
-	"CrearCorte":                     "/admin/cortes",                 // POST /api/v1/admin/cortes
+	"CrearCorte":                     "cola",                          // POST /api/v1/admin/cortes
 	"CategoriasDeDocumentos":         "/admin/documentacion",          // GET /api/v1/admin/documentos/categorias
 	"ActivarDocumento":               "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/activo
 	"VisibilidadDocumento":           "/admin/documentacion",          // POST /api/v1/admin/documentos/{id}/visibilidad
@@ -188,6 +202,9 @@ var pantallaDeCadaRuta = map[string]string{
 	"LibroIvaDigital":                "/admin/arca",                   // GET /api/v1/admin/facturacion/libro-iva/digital
 	"FacturarPedido":                 "plata",                         // POST /api/v1/admin/facturacion/pedidos/{id}/facturar
 	"PedidoParaFacturar":             "plata",                         // GET /api/v1/admin/facturacion/pedidos/{id}
+	"DevolucionDesdeElPedido":        "plata",                         // GET /api/v1/admin/facturacion/pedidos/{id}/devolucion
+	"DevolverDesdeElPedido":          "plata",                         // POST /api/v1/admin/facturacion/pedidos/{id}/devolucion
+	"CalcularDevolucionDelPedido":    "plata",                         // POST /api/v1/admin/facturacion/pedidos/{id}/devolucion/calculo
 	"ListarPuntosDeVenta":            "/admin/facturacion",            // GET /api/v1/admin/facturacion/puntos-de-venta
 	"GuardarPuntoDeVenta":            "/admin/facturacion",            // POST /api/v1/admin/facturacion/puntos-de-venta
 	"ResumenDeFacturacion":           "/admin/facturacion",            // GET /api/v1/admin/facturacion/resumen
@@ -216,6 +233,10 @@ var pantallaDeCadaRuta = map[string]string{
 	"AvanzarPedido":                  "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/avanzar
 	"CancelarPedido":                 "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/cancelar
 	"CobrarPedido":                   "plata",                         // POST /api/v1/admin/pedidos/{id}/cobro
+	"CajaDelCobro":                   "plata",                         // GET /api/v1/admin/pedidos/{id}/cobro
+	"CajaDelCobroACuenta":            "plata",                         // GET /api/v1/admin/cobros/caja
+	"DevolverPedido":                 "plata",                         // POST /api/v1/admin/pedidos/{id}/devolucion
+	"CorregirPedido":                 "plata",                         // POST /api/v1/admin/pedidos/{id}/correccion
 	"CambiarEntregaDelPedido":        "/admin/presupuestos",           // PUT /api/v1/admin/pedidos/{id}/entrega
 	"CortesDelPedido":                "/admin/cortes",                 // GET /api/v1/admin/pedidos/{id}/cortes
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos
@@ -247,6 +268,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"FichaDePresupuesto":             "/admin/presupuestos",           // GET /api/v1/admin/presupuestos/{id}
 	"ListarPresupuestos":             "/admin/presupuestos",           // GET /api/v1/admin/presupuestos
 	"CrearPresupuesto":               "/admin/presupuestos",           // POST /api/v1/admin/presupuestos
+	"EditarPresupuesto":              "/admin/presupuestos",           // PUT /api/v1/admin/presupuestos/{id}
 	"CandidatosDeBaja":               "/admin/productos",              // GET /api/v1/admin/productos-candidatos
 	"GuardarMesesSinVender":          "admin",                         // PUT /api/v1/admin/productos-candidatos
 	"ImputacionesUsadas":             "/admin/productos",              // GET /api/v1/admin/productos-imputaciones
@@ -285,14 +307,17 @@ var pantallaDeCadaRuta = map[string]string{
 	"DesactivarPush":                 "personal",                      // DELETE /api/v1/admin/push
 	"ClaveDePush":                    "personal",                      // GET /api/v1/admin/push
 	"ActivarPush":                    "personal",                      // POST /api/v1/admin/push
-	"AnularRecepcion":                "/admin/recepciones",            // POST /api/v1/admin/recepciones/{id}/anular
+	"AnularRecepcion":                "/admin/recepciones/nueva",      // POST /api/v1/admin/recepciones/{id}/anular
+	"EditarRecepcion":                "/admin/recepciones",            // PUT /api/v1/admin/recepciones/{id}
+	"OrdenesPorRecibir":              "/admin/recepciones",            // GET /api/v1/admin/recepciones/por-recibir
 	"ConfirmarRecepcion":             "/admin/recepciones",            // POST /api/v1/admin/recepciones/{id}/confirmar
 	"Recepcion":                      "/admin/recepciones",            // GET /api/v1/admin/recepciones/{id}
 	"ListarRecepciones":              "/admin/recepciones",            // GET /api/v1/admin/recepciones
-	"CrearRecepcion":                 "/admin/recepciones",            // POST /api/v1/admin/recepciones
+	"CrearRecepcion":                 "/admin/recepciones/nueva",      // POST /api/v1/admin/recepciones
 	"AnularRecibo":                   "plata",                         // POST /api/v1/admin/recibos/{id}/anular
 	"AnularRemito":                   "/admin/pedidos",                // POST /api/v1/admin/remitos/{id}/anular
 	"PrepararRemito":                 "/admin/pedidos",                // POST /api/v1/admin/remitos
+	"OtrosAcopios":                   "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/otros-acopios
 	"ReporteDeReposicionArchivo":     "/admin/reportes",               // GET /api/v1/admin/reportes/reposicion/archivo
 	"ReporteDeReposicion":            "/admin/reportes",               // GET /api/v1/admin/reportes/reposicion
 	"ReporteDeVentasArchivo":         "/admin/reportes",               // GET /api/v1/admin/reportes/ventas/archivo
@@ -314,6 +339,10 @@ var pantallaDeCadaRuta = map[string]string{
 	"AlertasDeStock":                 "/admin/stock",                  // GET /api/v1/admin/stock/alertas
 	"UltimosMovimientos":             "/admin/stock",                  // GET /api/v1/admin/stock/movimientos
 	"TransferirStock":                "/admin/stock",                  // POST /api/v1/admin/stock/transferencia
+	"TrasladosEnCamino":              "/admin/stock",                  // GET /api/v1/admin/stock/traslados
+	"CrearTraslado":                  "/admin/stock",                  // POST /api/v1/admin/stock/traslados
+	"VerTraslado":                    "/admin/stock",                  // GET /api/v1/admin/stock/traslados/{id}
+	"RecibirTraslado":                "/admin/stock",                  // POST /api/v1/admin/stock/traslados/{id}/recibir
 	"GrillaDeStock":                  "/admin/stock",                  // GET /api/v1/admin/stock
 	"MetricasDeSucursales":           "/admin/sucursales",             // GET /api/v1/admin/sucursales/metricas
 	"SinSucursalAsignada":            "/admin/sucursales",             // GET /api/v1/admin/sucursales/sin-asignar
@@ -321,6 +350,10 @@ var pantallaDeCadaRuta = map[string]string{
 	"AlternarVendedor":               "/admin/clientes",               // POST /api/v1/admin/vendedores/{id}/alternar
 	"ListarVendedores":               "/admin/clientes",               // GET /api/v1/admin/vendedores
 	"GuardarVendedor":                "/admin/clientes",               // POST /api/v1/admin/vendedores
+	"ListarPersonal":                 "/admin/personal",               // GET /api/v1/admin/personal
+	"AltaDePersonal":                 "/admin/personal",               // POST /api/v1/admin/personal
+	"CambiarPuesto":                  "/admin/personal",               // POST /api/v1/admin/personal/{id}/puesto
+	"BajaDePersonal":                 "/admin/personal",               // POST /api/v1/admin/personal/{id}/baja
 	"RegistrarAvisoManual":           "/admin/whatsapp",               // POST /api/v1/admin/whatsapp/avisos-manuales/registro
 	"AvisoDelUltimoRecibo":           "/admin/whatsapp",               // GET /api/v1/admin/whatsapp/avisos-manuales/ultimo-recibo/{customerId}
 	"AvisosManuales":                 "/admin/whatsapp",               // GET /api/v1/admin/whatsapp/avisos-manuales
@@ -385,6 +418,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"Ajustes":                        "publico",                       // GET /api/v1/contenido/ajustes
 	"Banners":                        "publico",                       // GET /api/v1/contenido/banners
 	"EnviarConsulta":                 "publico",                       // POST /api/v1/contenido/contacto
+	"EstadoDelContacto":              "publico",                       // GET /api/v1/contenido/contacto
 	"DocumentosReservados":           "publico",                       // GET /api/v1/contenido/documentos/reservados
 	"Documentos":                     "publico",                       // GET /api/v1/contenido/documentos
 	"EscalasDePago":                  "publico",                       // GET /api/v1/contenido/escalas-pago
@@ -450,6 +484,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CobrarCuentaEnMostrador":        "/mostrador",                    // POST /api/v1/mostrador/clientes/{id}/cobro
 	"SaldoDeCuentaEnMostrador":       "/mostrador",                    // GET /api/v1/mostrador/clientes/{id}/saldo
 	"ClienteDelMostrador":            "/mostrador",                    // GET /api/v1/mostrador/clientes/{id}
+	"PresupuestoParaElMostrador":     "/mostrador",                    // GET /api/v1/mostrador/presupuestos/{numero}
 	"BuscarClientesEnMostrador":      "/mostrador",                    // GET /api/v1/mostrador/clientes
 	"AltaRapidaDeCliente":            "/mostrador",                    // POST /api/v1/mostrador/clientes
 	"DescargarVentas":                "/mostrador",                    // POST /api/v1/mostrador/descarga
@@ -458,6 +493,9 @@ var pantallaDeCadaRuta = map[string]string{
 	"PreciosDelCliente":              "/mostrador",                    // POST /api/v1/mostrador/precios
 	"PresupuestoDeMostrador":         "/mostrador",                    // POST /api/v1/mostrador/presupuestos
 	"AnularVentaDeMostrador":         "/mostrador",                    // POST /api/v1/mostrador/ventas/{id}/anular
+	"DevolucionDeMostradorDatos":     "/mostrador",                    // GET /api/v1/mostrador/ventas/{id}/devolucion
+	"DevolucionDeMostrador":          "/mostrador",                    // POST /api/v1/mostrador/ventas/{id}/devolucion
+	"DevolucionDeMostradorCalculo":   "/mostrador",                    // POST /api/v1/mostrador/ventas/{id}/devolucion/calculo
 	"CobrarVenta":                    "/mostrador",                    // POST /api/v1/mostrador/ventas
 	"InformarChequesDeDeuda":         "publico",                       // POST /api/v1/pagos/cheques
 	"SubirComprobanteDeDeuda":        "publico",                       // POST /api/v1/pagos/comprobante-deuda

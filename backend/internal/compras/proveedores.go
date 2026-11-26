@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -121,6 +122,22 @@ type MovimientoDeCuenta struct {
 	// De dónde salió: la ficha lleva a la factura o al pago.
 	PurchaseInvoiceID *string `json:"purchaseInvoiceId"`
 	SupplierPaymentID *string `json:"supplierPaymentId"`
+	// GoodsReceiptID es la recepción que lo cargó (es un remito, no una
+	// factura: mes simulado, H070) y FacturaDelRemito la factura que la cubrió.
+	GoodsReceiptID   *string `json:"goodsReceiptId"`
+	FacturaDelRemito *string `json:"facturaDelRemito"`
+}
+
+// GastoDelProveedor es un gasto pagado en el acto a un proveedor (un flete,
+// la luz): no pasa por su cuenta, pero es plata que se le pagó (mes
+// simulado, H065).
+type GastoDelProveedor struct {
+	ID          string    `json:"id"`
+	Fecha       time.Time `json:"fecha"`
+	Descripcion string    `json:"descripcion"`
+	Importe     float64   `json:"importe"`
+	Medio       string    `json:"medio"`
+	Factura     *string   `json:"factura"`
 }
 
 // Proveedor es la ficha completa, con el libro de la cuenta.
@@ -150,6 +167,7 @@ type Proveedor struct {
 	ExentoGananciasHasta *string              `json:"exentoGananciasHasta"`
 	Saldo                float64              `json:"saldo"`
 	Movimientos          []MovimientoDeCuenta `json:"movimientos"`
+	Gastos               []GastoDelProveedor  `json:"gastos"`
 }
 
 // ObtenerProveedor es obtenerProveedor: la ficha y los últimos 200
@@ -173,15 +191,28 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		return nil, err
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT id, tipo::text, monto, detalle, referencia, created_at, purchase_invoice_id, supplier_payment_id FROM supplier_movements
-		WHERE supplier_id = $1 ORDER BY created_at DESC LIMIT 200`, id)
+		SELECT m.id, m.tipo::text, m.monto,
+		  -- Los pagos de una sola parte anotados antes como «Pago cheque»: se
+		  -- leen con el número de esa parte (mes simulado). El renglón
+		  -- guardado no se toca.
+		  CASE WHEN m.tipo = 'pago' AND m.detalle IN ('Pago cheque', 'Pago echeq', 'Pago transferencia', 'Pago efectivo') THEN coalesce((
+		    SELECT 'Pago ' || CASE pp.medio WHEN 'echeq' THEN 'e-Cheq' ELSE pp.medio END || ' ' || coalesce(c.numero, nullif(pp.referencia, ''))
+		    FROM supplier_payment_parts pp LEFT JOIN cheques c ON c.id = pp.cheque_id
+		    WHERE pp.payment_id = m.supplier_payment_id AND (SELECT count(*) FROM supplier_payment_parts q WHERE q.payment_id = m.supplier_payment_id) = 1
+		    LIMIT 1), m.detalle) ELSE m.detalle END,
+		  m.referencia, m.created_at, m.purchase_invoice_id, m.supplier_payment_id, m.goods_receipt_id,
+		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
+		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1)
+		FROM supplier_movements m
+		WHERE m.supplier_id = $1 ORDER BY m.created_at DESC LIMIT 200`, id)
 	if err != nil {
 		return nil, err
 	}
 	p.Movimientos, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (MovimientoDeCuenta, error) {
 		var m MovimientoDeCuenta
 		var monto jsmath.Num
-		err := r.Scan(&m.ID, &m.Tipo, &monto, &m.Detalle, &m.Referencia, &m.CreatedAt, &m.PurchaseInvoiceID, &m.SupplierPaymentID)
+		err := r.Scan(&m.ID, &m.Tipo, &monto, &m.Detalle, &m.Referencia, &m.CreatedAt, &m.PurchaseInvoiceID, &m.SupplierPaymentID,
+			&m.GoodsReceiptID, &m.FacturaDelRemito)
 		m.Monto = float64(monto)
 		return m, err
 	})
@@ -197,6 +228,23 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		p.Movimientos[i].Saldo = saldos[i]
 	}
 	p.Saldo = total
+	filas, err = s.pool.Query(ctx, `
+		SELECT e.id, e.fecha, e.descripcion, e.importe, e.medio::text, CASE WHEN f.id IS NOT NULL THEN lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') END
+		FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
+		WHERE e.supplier_id = $1 AND e.anulado_at IS NULL ORDER BY e.fecha DESC LIMIT 50`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Gastos, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (GastoDelProveedor, error) {
+		var g GastoDelProveedor
+		var importe jsmath.Num
+		err := r.Scan(&g.ID, &g.Fecha, &g.Descripcion, &importe, &g.Medio, &g.Factura)
+		g.Importe = importe.F()
+		return g, err
+	})
+	if err != nil {
+		return nil, err
+	}
 	return &p, nil
 }
 
@@ -326,7 +374,7 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 		ref = " (" + *x.Referencia + ")"
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "proveedor", x.SupplierID,
-		"Anotó un ajuste de $"+jsmath.Fijo2(conSigno)+ref+": "+*x.Detalle, nil)
+		"Anotó un ajuste de "+formato.Importe(conSigno)+ref+": "+*x.Detalle, nil)
 	return x.SupplierID, nil
 }
 

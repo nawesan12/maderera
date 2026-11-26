@@ -71,6 +71,7 @@ func (o respuesta) VisitCargarFacturaDeCompraResponse(w http.ResponseWriter) err
 }
 func (o respuesta) VisitListarGastosResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitCargarGastoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitAnularGastoResponse(w http.ResponseWriter) error        { return o.escribir(w) }
 func (o respuesta) VisitGastosPorCategoriaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitGastosPorCircuitoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitSucursalesParaGastoResponse(w http.ResponseWriter) error {
@@ -467,7 +468,8 @@ func (a *API) AnularOrdenDeCompra(ctx context.Context, r comprasapi.AnularOrdenD
 }
 
 func (a *API) RecibirDeLaOrden(ctx context.Context, r comprasapi.RecibirDeLaOrdenRequestObject) (comprasapi.RecibirDeLaOrdenResponseObject, error) {
-	ses, err := compras(ctx)
+	// Lo hace quien recibe el camión: también el depósito (mes simulado, H097).
+	ses, err := recepciones(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -511,15 +513,21 @@ func (a *API) BuscarMercaderia(ctx context.Context, r comprasapi.BuscarMercaderi
 // --- recepciones ---
 
 func (a *API) ListarRecepciones(ctx context.Context, r comprasapi.ListarRecepcionesRequestObject) (comprasapi.ListarRecepcionesResponseObject, error) {
-	if _, err := recepciones(ctx); err != nil {
+	ses, err := recepciones(ctx)
+	if err != nil {
 		return nil, err
 	}
 	v, err := a.s.ListarRecepciones(ctx, limite(r.Params.Limite, 50))
+	if err == nil && !veCostos(ses) {
+		for i := range v {
+			v[i].Neto, v[i].Gastos = 0, ""
+		}
+	}
 	return ok(v), err
 }
 
 func (a *API) CrearRecepcion(ctx context.Context, r comprasapi.CrearRecepcionRequestObject) (comprasapi.CrearRecepcionResponseObject, error) {
-	ses, err := recepciones(ctx)
+	ses, err := recepcionesConCostos(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +539,8 @@ func (a *API) CrearRecepcion(ctx context.Context, r comprasapi.CrearRecepcionReq
 }
 
 func (a *API) Recepcion(ctx context.Context, r comprasapi.RecepcionRequestObject) (comprasapi.RecepcionResponseObject, error) {
-	if _, err := recepciones(ctx); err != nil {
+	ses, err := recepciones(ctx)
+	if err != nil {
 		return nil, err
 	}
 	v, err := a.s.ObtenerRecepcion(ctx, r.Id)
@@ -540,6 +549,9 @@ func (a *API) Recepcion(ctx context.Context, r comprasapi.RecepcionRequestObject
 	}
 	if v == nil {
 		return nil, noEncontrado("Esa recepción no existe.")
+	}
+	if !veCostos(ses) {
+		sinCostos(v)
 	}
 	return ok(v), nil
 }
@@ -560,7 +572,7 @@ func (a *API) ConfirmarRecepcion(ctx context.Context, r comprasapi.ConfirmarRece
 }
 
 func (a *API) AnularRecepcion(ctx context.Context, r comprasapi.AnularRecepcionRequestObject) (comprasapi.AnularRecepcionResponseObject, error) {
-	ses, err := recepciones(ctx)
+	ses, err := recepcionesConCostos(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -849,6 +861,19 @@ func (a *API) CargarGasto(ctx context.Context, r comprasapi.CargarGastoRequestOb
 		out["aviso"] = aviso
 	}
 	return ok(out), nil
+}
+
+// AnularGasto es solo del admin, como el pago: deshace plata que ya salió.
+func (a *API) AnularGasto(ctx context.Context, r comprasapi.AnularGastoRequestObject) (comprasapi.AnularGastoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.AnularGasto(ctx, ses, r.Id, r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return hecho(m), nil
 }
 
 func (a *API) GastosPorCategoria(ctx context.Context, r comprasapi.GastosPorCategoriaRequestObject) (comprasapi.GastosPorCategoriaResponseObject, error) {

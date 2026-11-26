@@ -16,8 +16,10 @@ func TestPresupuestosDeAPaginas(t *testing.T) {
 	ctx := context.Background()
 	// 45 cerrados, de a pares con la misma fecha (el id desempata), y 3
 	// abiertos. Cada uno con dos renglones, salvo uno sin ninguno.
+	// (Un aceptado sin pedido ya no es «cerrado»: espera que se lo pase a
+	// pedido. Los cerrados de acá son vencidos y rechazados.)
 	for i := range 48 {
-		estado := "aceptado"
+		estado := "vencido"
 		if i%2 == 1 {
 			estado = "rechazado"
 		}
@@ -76,8 +78,8 @@ func TestPresupuestosDeAPaginas(t *testing.T) {
 		t.Errorf("página 99999: %d de %d, %v", len(p.Filas), p.Total, err)
 	}
 	// Un estado puntual también va de a páginas, y sin límite trae una.
-	if p, _ := e.s.ListarPresupuestos(ctx, Filtros{Estado: "aceptado"}, 0, 0); len(p.Filas) != 23 || p.Total != 23 {
-		t.Errorf("aceptados: %d de %d", len(p.Filas), p.Total)
+	if p, _ := e.s.ListarPresupuestos(ctx, Filtros{Estado: "vencido"}, 0, 0); len(p.Filas) != 23 || p.Total != 23 {
+		t.Errorf("vencidos: %d de %d", len(p.Filas), p.Total)
 	}
 	if p, _ := e.s.ListarPresupuestos(ctx, Filtros{}, 0, 0); len(p.Filas) != 30 || p.Total != 48 {
 		t.Errorf("todos sin límite: %d de %d", len(p.Filas), p.Total)
@@ -142,9 +144,10 @@ func TestVencerPresupuestos(t *testing.T) {
 			t.Errorf("%s: %s, quería %s", c.numero, estado, c.quiero)
 		}
 	}
-	// Ya vencido, no sale en «Esperando respuesta».
+	// Ya vencido, no sale en «Esperando respuesta»; el aceptado sin pedido
+	// (V-6), sí: falta pasarlo a pedido.
 	p, err := e.s.ListarPresupuestos(ctx, Filtros{Estado: "abiertos"}, 0, 0)
-	if err != nil || p.Total != 5 {
+	if err != nil || p.Total != 6 {
 		t.Errorf("abiertos después de vencer: %d, %v", p.Total, err)
 	}
 }

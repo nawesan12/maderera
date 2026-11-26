@@ -1,13 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Vacio } from "@/components/admin/vacio";
 import { hayFiltro } from "@/lib/formato";
-import { Barcode, FileSpreadsheet, ImageOff, Package } from "lucide-react";
+import { Barcode, ClipboardList, FileSpreadsheet, Package, Truck } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { leerPagina, Paginador } from "@/components/admin/paginador";
-import { NivelStock } from "@/components/admin/nivel-stock";
 import { fechaHora, plural } from "@/components/admin/formato";
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
 import { listarCategoriasAdmin, marcasDeProductos } from "@/lib/dal/admin/products";
@@ -15,24 +13,14 @@ import {
   estadoDeStock,
   listarStock,
   STOCK_POR_PAGINA,
+  trasladosEnCamino,
   ultimosMovimientos,
-  type FilaStock,
 } from "@/lib/dal/admin/inventory";
 import { loQueEstaPorLlegar } from "@/lib/dal/admin/ordenes-compra";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { formatearCantidad } from "@/lib/unidades";
-import { AjusteRapido } from "./ajuste-rapido";
-import { DialogoTransferencia } from "./dialogo-transferencia";
-
-const etiquetaMovimiento: Record<string, string> = {
-  ingreso: "Ingreso",
-  egreso: "Egreso",
-  ajuste: "Ajuste",
-  transferencia_salida: "Salida",
-  transferencia_entrada: "Entrada",
-  venta: "Venta",
-  devolucion: "Devolución",
-};
+import { DialogoTraslado } from "./dialogo-traslado";
+import { TarjetaStock } from "./tarjeta";
 
 type Params = {
   buscar?: string;
@@ -42,6 +30,10 @@ type Params = {
   prov?: string;
   pagina?: string;
 };
+
+/** Los botones secundarios del encabezado: en el teléfono, solo el ícono. */
+const BOTON_SECUNDARIO =
+  "inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted";
 
 export default async function AdminStockPage({
   searchParams,
@@ -53,21 +45,23 @@ export default async function AdminStockPage({
   const pagina = leerPagina(params.pagina);
   // Los proveedores son de Compras: quien no entra ahí no los ve ni filtra.
   const conProveedores = puedeEntrar("/admin/compras", usuario.staffRole);
+  const filtros = {
+    busqueda: params.buscar,
+    categoria: params.cat,
+    marca: params.marca,
+    proveedor: params.prov,
+  };
+  const conFiltro = Boolean(params.buscar || (params.cat && params.cat !== "todos") || (params.marca && params.marca !== "todas"));
 
-  const [grilla, categorias, marcas, proveedores, movimientos, enCamino] =
+  const [grilla, categorias, marcas, proveedores, movimientos, enCamino, traslados] =
     await Promise.all([
-      listarStock({
-        busqueda: params.buscar,
-        categoria: params.cat,
-        estado: params.estado,
-        marca: params.marca,
-        proveedor: params.prov,
-        pagina,
-      }),
+      listarStock({ ...filtros, estado: params.estado, pagina }),
       listarCategoriasAdmin(),
       marcasDeProductos(),
       conProveedores ? proveedoresParaElegir() : Promise.resolve(undefined),
-      ultimosMovimientos(8),
+      // Los movimientos siguen al filtro: buscando un tirante, los de ese
+      // tirante y no los del negocio entero (mes simulado, H206).
+      ultimosMovimientos(conFiltro ? 20 : 8, filtros),
       /*
        * Lo que ya está pedido y todavía no llegó.
        *
@@ -76,6 +70,7 @@ export default async function AdminStockPage({
        * de nuevo lo que ya viene en camino.
        */
       loQueEstaPorLlegar(),
+      trasladosEnCamino(),
     ]);
   const { filas, total, conteos, sucursales } = grilla;
   const estado = estadoDeStock(params.estado) ?? "todos";
@@ -83,54 +78,47 @@ export default async function AdminStockPage({
   const pedido = new Map(
     enCamino.map((p) => [
       p.variantId,
-      { cantidad: Number(p.pendiente), llega: p.proximaEntrega },
+      { cantidad: Number(p.pendiente), llega: p.proximaEntrega ? new Date(p.proximaEntrega).toISOString() : null },
     ]),
   );
 
   const verFicha = puedeEntrar("/admin/productos", usuario.staffRole);
-  const paraAtender = conteos.reponer + conteos.sinStock;
 
   return (
     <div>
       <EncabezadoPanel
         titulo="Stock"
         resumen={
-          paraAtender > 0
-            ? `${plural(paraAtender, "medida")} para atender de ${conteos.todas}`
+          conteos.reponer > 0
+            ? `${plural(conteos.reponer, "medida")} para reponer de ${conteos.todas}`
             : `${plural(conteos.todas, "medida")} en inventario`
         }
       >
-        {/* El cruce de stock y ventas vive en su propio reporte: acá se mira
-            cuánto hay, allá qué conviene comprar. */}
-        <Link
-          href="/admin/reportes/reposicion"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-        >
-          Qué reponer
-        </Link>
-        <Link
-          href="/admin/stock/etiquetas"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-        >
-          <Barcode className="h-5 w-5" aria-hidden="true" />
-          Etiquetas
-        </Link>
-        {puedeEntrar("/admin/migracion", usuario.staffRole) && (
-          <Link
-            href="/admin/migracion?que=stock"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-          >
-            <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
-            Cargar desde Excel
+        {/* El cruce de stock y ventas vive en su propio reporte, que es de
+            administración: al depósito el enlace lo rebotaba al panel sin
+            decir nada (mes simulado, H101). */}
+        {puedeEntrar("/admin/reportes/reposicion", usuario.staffRole) && (
+          <Link href="/admin/reportes/reposicion" className={BOTON_SECUNDARIO} aria-label="Qué reponer">
+            <ClipboardList className="h-5 w-5" aria-hidden="true" />
+            <span className="hidden sm:inline">Qué reponer</span>
           </Link>
         )}
-        <DialogoTransferencia
-          sucursales={sucursales.map((s) => ({ id: s.id, name: s.nombre }))}
-        />
+        <Link href="/admin/stock/etiquetas" className={BOTON_SECUNDARIO} aria-label="Etiquetas">
+          <Barcode className="h-5 w-5" aria-hidden="true" />
+          <span className="hidden sm:inline">Etiquetas</span>
+        </Link>
+        {puedeEntrar("/admin/migracion", usuario.staffRole) && (
+          <Link href="/admin/migracion?que=stock" className={BOTON_SECUNDARIO} aria-label="Cargar desde Excel">
+            <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
+            <span className="hidden sm:inline">Cargar desde Excel</span>
+          </Link>
+        )}
+        <DialogoTraslado sucursales={sucursales.map((s) => ({ id: s.id, name: s.nombre }))} />
       </EncabezadoPanel>
 
-      {/* Los grupos en el orden en que se atienden: lo que no hay, lo que se
-          está por acabar y lo que está bien. */}
+      {/* Los grupos no se pisan y suman «Todas»: lo que hay que reponer
+          (el mismo número que el inicio), lo que no tiene nada para vender
+          y lo que está bien. */}
       <BuscadorProductos
         categorias={categorias}
         busquedaActual={params.buscar ?? ""}
@@ -142,8 +130,8 @@ export default async function AdminStockPage({
         estadoActual={estado}
         estados={[
           { valor: "todos", texto: "Todas", cantidad: conteos.todas },
-          { valor: "sin-stock", texto: "Sin stock", cantidad: conteos.sinStock, atencion: true },
-          { valor: "reponer", texto: "Hay que reponer", cantidad: conteos.reponer, atencion: true },
+          { valor: "reponer", texto: "Para reponer", cantidad: conteos.reponer, atencion: true },
+          { valor: "sin-stock", texto: "Sin stock", cantidad: conteos.sinStock },
           { valor: "con-stock", texto: "Con stock", cantidad: conteos.conStock },
         ]}
       />
@@ -171,228 +159,91 @@ export default async function AdminStockPage({
           />
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 2xl:grid-cols-[1fr_320px]">
-          <div>
-            <Grilla filas={filas} enCamino={pedido} verFicha={verFicha} />
-            <Paginador
-              pagina={pagina}
-              total={total}
-              porPagina={STOCK_POR_PAGINA}
-              params={params}
-            />
+        <div className="mt-6 grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {filas.map((fila) => (
+                <TarjetaStock key={fila.variantId} fila={fila} enCamino={pedido.get(fila.variantId)} verFicha={verFicha} />
+              ))}
+            </div>
+            <Paginador pagina={pagina} total={total} porPagina={STOCK_POR_PAGINA} params={params} />
           </div>
 
-          <aside className="2xl:sticky 2xl:top-24 2xl:self-start">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Últimos movimientos
-            </h2>
-            {movimientos.length === 0 ? (
-              <p className="rounded-xl border border-dashed px-3 py-6 text-center text-base text-muted-foreground">
-                Todavía no se registró ningún movimiento.
-              </p>
-            ) : (
-              <ul className="tarjeta-hundida overflow-hidden">
-                {movimientos.map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-baseline justify-between gap-3 border-b border-border/60 px-3 py-3 last:border-0"
-                  >
-                    <div className="min-w-0">
-                      <EnlaceSi
-                        si={verFicha}
-                        href={`/admin/productos/${m.productId}`}
-                        className="block truncate text-base hover:text-brand-orange hover:underline"
+          <aside className="min-w-0 space-y-6 2xl:sticky 2xl:top-24 2xl:self-start">
+            {traslados.length > 0 && (
+              <section>
+                <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Traslados en camino
+                </h2>
+                <ul className="tarjeta-atencion overflow-hidden">
+                  {traslados.map((t) => (
+                    <li key={t.id} className="border-b border-border/60 last:border-0">
+                      <Link
+                        href={`/admin/stock/traslados/${t.id}`}
+                        className="flex items-center gap-3 px-3 py-3 hover:bg-muted"
                       >
-                        {m.productName}
-                      </EnlaceSi>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {m.label}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {etiquetaMovimiento[m.type] ?? m.type} · {m.branchName}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {fechaHora.format(m.createdAt)}
-                      </p>
-                    </div>
-                    <span
-                      className={`tabular shrink-0 text-base font-medium ${
-                        m.qty > 0 ? "text-saldo-favor" : "text-muted-foreground"
-                      }`}
-                    >
-                      {m.qty > 0 ? `+${formatearCantidad(m.qty)}` : formatearCantidad(m.qty)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                        <Truck className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-base">
+                            <span className="codigo">{t.codigo}</span> · {t.origen} → {t.destino}
+                          </span>
+                          <span className="tabular block text-sm text-muted-foreground">{fechaHora.format(t.createdAt)}</span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
+
+            <section id="movimientos" className="scroll-mt-24">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                {conFiltro ? "Movimientos" : "Últimos movimientos"}
+              </h2>
+              {movimientos.length === 0 ? (
+                <p className="tarjeta-hundida px-3 py-6 text-center text-base text-muted-foreground">
+                  Sin movimientos.
+                </p>
+              ) : (
+                <ul className="tarjeta-hundida overflow-hidden">
+                  {movimientos.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-baseline justify-between gap-3 border-b border-border/60 px-3 py-3 last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-base">
+                          {m.productName} <span className="text-muted-foreground">{m.label}</span>
+                        </p>
+                        {/* Qué fue, con su comprobante: «Rotura», «Entrega ·
+                            REM-0020», «Traslado · TRA-0003» (H106, H326). */}
+                        <p className="truncate text-sm">
+                          <span className="font-medium">{m.concepto}</span>
+                          {m.referencia && (
+                            <>
+                              {" · "}
+                              <span className="codigo">{m.referencia}</span>
+                            </>
+                          )}
+                          <span className="text-muted-foreground"> · {m.branchName}</span>
+                        </p>
+                        <p className="tabular text-sm text-muted-foreground">{fechaHora.format(m.createdAt)}</p>
+                      </div>
+                      <span
+                        className={`tabular shrink-0 text-base font-medium ${
+                          m.qty > 0 ? "text-saldo-favor" : "text-muted-foreground"
+                        }`}
+                      >
+                        {m.qty > 0 ? `+${formatearCantidad(m.qty)}` : formatearCantidad(m.qty)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </aside>
         </div>
       )}
     </div>
   );
-}
-
-/** `enCamino` es lo pedido y no recibido, por variante. Ver `loQueEstaPorLlegar`. */
-function Grilla({
-  filas,
-  enCamino,
-  verFicha,
-}: {
-  filas: FilaStock[];
-  enCamino: Map<string, { cantidad: number; llega: Date | null }>;
-  verFicha: boolean;
-}) {
-  return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      {filas.map((fila) => (
-        <TarjetaStock
-          key={fila.variantId}
-          fila={fila}
-          enCamino={enCamino.get(fila.variantId)}
-          verFicha={verFicha}
-        />
-      ))}
-    </div>
-  );
-}
-
-function TarjetaStock({
-  fila,
-  enCamino,
-  verFicha,
-}: {
-  fila: FilaStock;
-  enCamino?: { cantidad: number; llega: Date | null };
-  /** El depósito no entra a la ficha: el enlace lo rebotaba al inicio. */
-  verFicha: boolean;
-}) {
-  const necesitaAtencion =
-    fila.total === 0 || fila.sucursales.some((s) => s.nivel === "bajo");
-
-  return (
-    <article
-      className={`flex gap-4 p-4 ${
-        necesitaAtencion ? "tarjeta-atencion" : "tarjeta"
-      }`}
-    >
-      <EnlaceSi
-        si={verFicha}
-        href={`/admin/productos/${fila.productId}`}
-        className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted"
-      >
-        {fila.imagen ? (
-          <Image
-            src={fila.imagen}
-            alt={fila.productName}
-            fill
-            className="object-cover"
-            sizes="96px"
-          />
-        ) : (
-          <span className="flex h-full items-center justify-center text-muted-foreground">
-            <ImageOff className="h-5 w-5" />
-          </span>
-        )}
-      </EnlaceSi>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <EnlaceSi
-              si={verFicha}
-              href={`/admin/productos/${fila.productId}`}
-              className="text-base font-medium leading-snug hover:text-brand-orange"
-            >
-              {fila.productName}
-            </EnlaceSi>
-            <p className="text-sm text-muted-foreground">{fila.label}</p>
-            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <span className="tabular">{fila.sku}</span>
-              <Link
-                href={`/admin/stock/etiquetas?m=${fila.variantId}`}
-                aria-label={`Etiquetas de ${fila.productName} ${fila.label}`}
-                title="Etiquetas"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted hover:text-foreground"
-              >
-                <Barcode className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </p>
-          </div>
-          {/* Mono solo en el número: «total», «en camino» y la fecha van en la
-              letra del texto. En mono y sin encogerse le comían el ancho al
-              nombre, y la tarjeta de la bisagra se desarmaba. */}
-          <p className="shrink-0 text-right [font-variant-numeric:tabular-nums]">
-            <span className="tabular block text-xl font-semibold">{formatearCantidad(fila.total)}</span>
-            <span className="block text-sm text-muted-foreground">total</span>
-            {/* Lo pedido va acá arriba, al lado del número que se mira para
-                decidir si hay que reponer. Puesto en cualquier otro lado sería
-                un dato que nadie cruza a tiempo. */}
-            {enCamino && (
-              <span className="estado-espera mt-1 block text-sm font-medium">
-                +{formatearCantidad(enCamino.cantidad)} en camino
-                {enCamino.llega
-                  ? ` · ${new Date(enCamino.llega).toLocaleDateString("es-AR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                    })}`
-                  : ""}
-              </span>
-            )}
-          </p>
-        </div>
-
-        {/* Una columna por sucursal activa de la base: estaban escritas
-            «Casa Central» y «Aserradero», y una sucursal nueva no aparecía. */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
-          {fila.sucursales.map((s) => (
-            <div key={s.id}>
-              <NivelStock
-                sucursal={s.nombre}
-                cantidad={s.qty}
-                reservado={s.reservado}
-                minimo={s.min}
-                nivel={s.nivel}
-                unidad={fila.unidad}
-                largoMm={fila.unidad === "metro_lineal" ? fila.largoMm : null}
-              />
-              <div className="mt-2">
-                <AjusteRapido
-                  variantId={fila.variantId}
-                  producto={`${fila.productName} ${fila.label}`}
-                  branchSlug={s.slug}
-                  actual={s.qty}
-                  unidad={fila.unidad}
-                  largoMm={fila.largoMm}
-                  sucursal={s.nombre}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-/** Un enlace, o el mismo contenido sin enlace para quien no puede entrar. */
-function EnlaceSi({
-  si,
-  href,
-  className,
-  children,
-}: {
-  si: boolean;
-  href: string;
-  className: string;
-  children: React.ReactNode;
-}) {
-  if (si) {
-    return (
-      <Link href={href} className={className}>
-        {children}
-      </Link>
-    );
-  }
-  return <span className={`block ${className.replace(/hover:\S+/g, "")}`}>{children}</span>;
 }

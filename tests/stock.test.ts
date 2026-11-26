@@ -84,11 +84,33 @@ describe("costo de envío", () => {
 describe("el ajuste rápido (comité de T4)", () => {
   it("Mayús+Enter no suma: hasta T4 era restar, y por costumbre dejaba un ingreso", async () => {
     const { teclaDelAjuste } = await import("@/lib/stock-ajuste");
-    expect(teclaDelAjuste({ key: "Enter", shiftKey: false }, "mover")).toBe("ingreso");
-    expect(teclaDelAjuste({ key: "Enter", shiftKey: true }, "mover")).toBe("nada");
+    expect(teclaDelAjuste({ key: "Enter", shiftKey: false }, "sumar")).toBe("ingreso");
+    expect(teclaDelAjuste({ key: "Enter", shiftKey: true }, "sumar")).toBe("nada");
     expect(teclaDelAjuste({ key: "Enter", shiftKey: true }, "contar")).toBe("nada");
     expect(teclaDelAjuste({ key: "Enter", shiftKey: false }, "contar")).toBe("contar");
-    expect(teclaDelAjuste({ key: "a", shiftKey: false }, "mover")).toBeNull();
+    expect(teclaDelAjuste({ key: "a", shiftKey: false }, "sumar")).toBeNull();
+  });
+
+  it("restando, Enter no carga un ingreso (mes simulado, H106)", async () => {
+    const { teclaDelAjuste } = await import("@/lib/stock-ajuste");
+    expect(teclaDelAjuste({ key: "Enter", shiftKey: false }, "restar")).toBe("nada");
+  });
+
+  it("un conteo que no coincide ofrece los motivos de su lado (H398)", async () => {
+    const { motivosDelConteo } = await import("@/lib/stock-ajuste");
+    expect(motivosDelConteo(-18).map((m) => m.valor)).toEqual(["conteo", "rotura", "faltante", "taller"]);
+    expect(motivosDelConteo(5).map((m) => m.valor)).toEqual(["conteo", "ingreso", "devolucion"]);
+    expect(motivosDelConteo(0).map((m) => m.valor)).toEqual(["conteo"]);
+  });
+
+  it("el estado de la sucursal dice el faltante, y 2,5 veces el mínimo está bien (H218, H013)", async () => {
+    const { estadoEnSucursal } = await import("@/lib/stock-ajuste");
+    expect(estadoEnSucursal(-65, 0)).toBe("faltante");
+    expect(estadoEnSucursal(0, 50)).toBe("sin-stock");
+    expect(estadoEnSucursal(40, 40)).toBe("reponer");
+    expect(estadoEnSucursal(70, 40)).toBe("va-bajando");
+    expect(estadoEnSucursal(100, 40)).toBe("bien");
+    expect(estadoEnSucursal(3, 0)).toBe("bien");
   });
 
   it("la devolución está para los dos lados", async () => {

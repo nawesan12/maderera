@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -171,9 +172,22 @@ func Unidad(u string) string {
 	return strings.ReplaceAll(u, "_", " ")
 }
 
+// envase: un tamaño en litros o kilos en el nombre del producto.
+var envase = regexp.MustCompile(`(?i)\d\s*(l|lts?|litros?|kg|kilos?)\b`)
+
+// UnidadDeVenta es unidadDeVenta de lib/formato.ts: un producto en litros o
+// en kilos que trae su envase en el nombre («Laca — 4 litros») se cuenta
+// por envase, «unidad» (mes simulado, H110: «2 l» eran dos latas).
+func UnidadDeVenta(u, descripcion string) string {
+	if (u == "litro" || u == "kg") && envase.MatchString(descripcion) {
+		return "unidad"
+	}
+	return u
+}
+
 var abreviaturaUnidad = map[string]string{
 	"unidad":         "u.",
-	"metro_lineal":   "ml",
+	"metro_lineal":   "m",
 	"metro_cuadrado": "m²",
 	"tabla":          "tabla",
 	"placa":          "placa",
@@ -182,6 +196,8 @@ var abreviaturaUnidad = map[string]string{
 	"juego":          "juego",
 	"kg":             "kg",
 	"litro":          "l",
+	// La línea del corte a medida se cobra por pasada: «4 cortes» (H145).
+	"pasada": "cortes",
 }
 
 // Cuit es formatearCuit de lib/formato.ts.

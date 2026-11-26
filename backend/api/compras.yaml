@@ -135,22 +135,7 @@ paths:
             application/json:
               schema:
                 type: array
-                items:
-                  type: object
-                  required: [id, numero, tipo, fechaEmision, fechaVencimiento, total, imputado, saldo, netoSinIva]
-                  properties:
-                    id: { type: string }
-                    numero: { type: string }
-                    tipo: { type: string }
-                    fechaEmision: { type: string, format: date-time }
-                    fechaVencimiento: { type: string, format: date-time, nullable: true }
-                    total: { type: number, format: double }
-                    imputado: { type: number, format: double }
-                    saldo: { type: number, format: double }
-                    netoSinIva:
-                      type: number
-                      format: double
-                      description: neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
+                items: { $ref: "#/components/schemas/FacturaConSaldo" }
   /api/v1/admin/proveedores/{id}/acumulado-del-mes:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     get:
@@ -248,6 +233,13 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Orden" }
         "404": { $ref: "#/components/responses/Problema" }
+    put:
+      operationId: EditarOrdenDeCompra
+      description: Corrige una orden en borrador (los mismos campos que el alta).
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/ordenes/{id}/enviada:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -341,6 +333,29 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/recepciones/por-recibir:
+    get:
+      operationId: OrdenesPorRecibir
+      description: Las órdenes enviadas o con parte recibida, sin importes (las ve el depósito).
+      responses:
+        "200":
+          description: Lo que se espera que llegue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, numero, estado, proveedor, sucursal, fechaPrometida, pendientes, lineas]
+                  properties:
+                    id: { type: string }
+                    numero: { type: string }
+                    estado: { type: string }
+                    proveedor: { type: string }
+                    sucursal: { type: string, nullable: true }
+                    fechaPrometida: { type: string, format: date-time, nullable: true }
+                    pendientes: { type: integer }
+                    lineas: { type: integer }
   /api/v1/admin/recepciones/{id}:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     get:
@@ -352,6 +367,16 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Recepcion" }
         "404": { $ref: "#/components/responses/Problema" }
+    put:
+      operationId: EditarRecepcion
+      description: |
+        Corrige el borrador con lo que de verdad llegó: la cantidad de cada
+        renglón (en cero, sale), su costo y el flete. El costo y el flete solo
+        los cambia quien ve los precios.
+      requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/recepciones/{id}/confirmar:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
@@ -399,7 +424,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [facturas, impago, impagas, vencidas, impagoVencido, hayMas]
+                required: [facturas, impago, impagas, vencidas, impagoVencido, hayMas, chequesAReponer]
                 properties:
                   facturas:
                     type: array
@@ -419,11 +444,13 @@ paths:
                         total: { type: string }
                         pagado: { type: string }
                         anuladaAt: { type: string, format: date-time, nullable: true }
+                        aplicaA: { type: string, nullable: true, description: de una nota de crédito, la factura a la que se aplicó }
                   impago: { type: number, format: double }
                   impagas: { type: integer }
                   vencidas: { type: integer }
                   impagoVencido: { type: number, format: double }
                   hayMas: { type: boolean }
+                  chequesAReponer: { type: array, items: { $ref: "#/components/schemas/FacturaConSaldo" } }
     post:
       operationId: CargarFacturaDeCompra
       requestBody: { $ref: "#/components/requestBodies/Formulario" }
@@ -448,6 +475,24 @@ paths:
         ni la recepción; si el total cambia, la diferencia va a la cuenta del
         proveedor como un ajuste.
       requestBody: { $ref: "#/components/requestBodies/Formulario" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/facturas/{id}/aplicar:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AplicarNotaDeCredito
+      description: Aplica una nota de crédito que había quedado a favor a una factura del mismo proveedor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [facturaId]
+              additionalProperties: false
+              properties:
+                facturaId: { type: string }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -679,6 +724,18 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/gastos/{id}/anular:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: AnularGasto
+      description: |
+        Solo el admin. El gasto queda anulado con su motivo y deja de contar;
+        el efectivo vuelve al turno abierto de su sucursal y la factura que
+        se cargó con él se anula.
+      requestBody: { $ref: "#/components/requestBodies/Motivo" }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/gastos/por-categoria:
     get:
       operationId: GastosPorCategoria
@@ -715,12 +772,14 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, nombre, turnoAbierto, deLaSesion]
+                  required: [id, nombre, turnoAbierto, deLaSesion, enCaja, cambioFijo]
                   properties:
                     id: { type: string }
                     nombre: { type: string }
                     turnoAbierto: { type: string, nullable: true }
                     deLaSesion: { type: boolean, description: el turno abierto lo abrió quien pregunta }
+                    enCaja: { type: number, format: double, nullable: true, description: el efectivo del turno abierto }
+                    cambioFijo: { type: number, format: double }
 components:
   requestBodies:
     Formulario:
@@ -794,7 +853,7 @@ components:
     Proveedor:
       type: object
       required: [id, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, rubro, contacto, diasPago, cbu, aliasCbu, estado,
-        notas, codigoLegacy, active, createdAt, updatedAt, convenios, condicionGanancias, exentoGananciasHasta, saldo, movimientos]
+        notas, codigoLegacy, active, createdAt, updatedAt, convenios, condicionGanancias, exentoGananciasHasta, saldo, movimientos, gastos]
       properties:
         id: { type: string }
         nombre: { type: string }
@@ -823,7 +882,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, tipo, monto, detalle, referencia, createdAt, saldo, purchaseInvoiceId, supplierPaymentId]
+            required: [id, tipo, monto, detalle, referencia, createdAt, saldo, purchaseInvoiceId, supplierPaymentId, goodsReceiptId, facturaDelRemito]
             properties:
               id: { type: string }
               tipo: { type: string }
@@ -834,6 +893,21 @@ components:
               saldo: { type: number, format: double }
               purchaseInvoiceId: { type: string, nullable: true, description: la factura de la que salió }
               supplierPaymentId: { type: string, nullable: true, description: el pago del que salió }
+              goodsReceiptId: { type: string, nullable: true, description: la recepción (el remito) que lo cargó }
+              facturaDelRemito: { type: string, nullable: true, description: la factura que cubrió ese remito }
+        gastos:
+          type: array
+          description: los gastos pagados en el acto a este proveedor
+          items:
+            type: object
+            required: [id, fecha, descripcion, importe, medio, factura]
+            properties:
+              id: { type: string }
+              fecha: { type: string, format: date-time }
+              descripcion: { type: string }
+              importe: { type: number, format: double }
+              medio: { type: string }
+              factura: { type: string, nullable: true }
     PerfilDeLista:
       type: object
       nullable: true
@@ -882,7 +956,7 @@ components:
         error: { type: string }
     OrdenListada:
       type: object
-      required: [id, numero, estado, fechaPrometida, createdAt, proveedor, supplierId, sucursal, lineas, neto, pendientes]
+      required: [id, numero, estado, fechaPrometida, createdAt, proveedor, supplierId, sucursal, lineas, neto, pendientes, porLlegar]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -895,9 +969,10 @@ components:
         lineas: { type: integer }
         neto: { type: number, format: double }
         pendientes: { type: integer }
+        porLlegar: { type: number, format: double }
     Orden:
       type: object
-      required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, items]
+      required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, borradorAbierto, items]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -910,6 +985,14 @@ components:
         proveedor: { type: string }
         branchId: { type: string }
         sucursal: { type: string, nullable: true }
+        borradorAbierto:
+          description: La recepción en borrador de esta orden, si hay una (se corrige esa en vez de hacer otra).
+          type: object
+          nullable: true
+          required: [id, numeroRemito]
+          properties:
+            id: { type: string }
+            numeroRemito: { type: string, nullable: true }
         items:
           type: array
           items:
@@ -1005,10 +1088,32 @@ components:
         exento: { type: number, format: double }
         percepciones: { type: number, format: double }
         total: { type: number, format: double }
+    FacturaConSaldo:
+      type: object
+      description: |
+        Una factura con saldo, una nota de crédito a favor (tipo nota_credito_*,
+        el saldo es lo que resta) o un cheque que se le dio y rebotó (tipo
+        cheque_rechazado, el id es el del cheque).
+      required: [id, numero, tipo, fechaEmision, fechaVencimiento, total, imputado, saldo, netoSinIva]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        tipo: { type: string }
+        fechaEmision: { type: string, format: date-time }
+        fechaVencimiento: { type: string, format: date-time, nullable: true }
+        total: { type: number, format: double }
+        imputado: { type: number, format: double }
+        saldo: { type: number, format: double }
+        netoSinIva:
+          type: number
+          format: double
+          description: neto gravado más no gravado/exento, sin IVA ni percepciones (lo que entra en la base de Ganancias e IIBB)
+        proveedor: { type: string }
+        supplierId: { type: string }
     PagoListado:
       type: object
       required: [id, fecha, total, neto, medio, circuito, referencia, proveedor, supplierId, retenido, certificados, numerosCertificado, facturas,
-        anuladoAt, motivoAnulacion]
+        partes, anuladoAt, motivoAnulacion]
       properties:
         id: { type: string }
         fecha: { type: string, format: date-time }
@@ -1024,6 +1129,16 @@ components:
         motivoAnulacion: { type: string, nullable: true }
         certificados: { type: integer }
         numerosCertificado: { type: array, items: { type: string } }
+        partes:
+          type: array
+          description: con qué salió la plata, renglón por renglón
+          items:
+            type: object
+            required: [medio, importe, referencia]
+            properties:
+              medio: { type: string }
+              importe: { type: number, format: double }
+              referencia: { type: string, nullable: true }
         facturas:
           type: array
           items:
@@ -1037,7 +1152,7 @@ components:
       type: object
       required: [id, tipo, puntoVenta, numero, fechaEmision, fechaVencimiento, cae, neto, iva21, iva105, iva27, exento, percepciones,
         percepcionIva, percepcionIibb, total, pagado, observaciones, supplierId, proveedor, condicionIva, receiptId, numeroRemito, createdAt,
-        anuladaAt, motivoAnulacion, pagos, renglones]
+        anuladaAt, motivoAnulacion, aplicaA, aplicaAId, pagos, creditos, renglones]
       properties:
         id: { type: string }
         tipo: { type: string }
@@ -1065,17 +1180,34 @@ components:
         createdAt: { type: string, format: date-time }
         anuladaAt: { type: string, format: date-time, nullable: true }
         motivoAnulacion: { type: string, nullable: true }
+        aplicaA: { type: string, nullable: true }
+        aplicaAId: { type: string, nullable: true }
         pagos:
           type: array
           items:
             type: object
-            required: [pagoId, fecha, medio, referencia, aplicado]
+            required: [pagoId, fecha, medio, medios, referencia, aplicado]
             properties:
               pagoId: { type: string }
               fecha: { type: string, format: date-time }
               medio: { type: string }
+              medios:
+                description: Los medios con que salió el pago, del de más plata al de menos (un pago puede ir en transferencia y cheque).
+                type: array
+                items: { type: string }
               referencia: { type: string, nullable: true }
               aplicado: { type: number, format: double }
+        creditos:
+          description: Las notas de crédito vigentes aplicadas a esta factura.
+          type: array
+          items:
+            type: object
+            required: [id, numero, fecha, total]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              fecha: { type: string, format: date-time }
+              total: { type: number, format: double }
         renglones:
           type: array
           items:
@@ -1188,7 +1320,8 @@ components:
         jurisdiccion: { type: string, nullable: true }
     Gasto:
       type: object
-      required: [id, fecha, categoria, descripcion, importe, medio, circuito, conFactura, sucursal, proveedor, supplierId, notas, enCaja]
+      required: [id, fecha, categoria, descripcion, importe, medio, circuito, conFactura, sucursal, proveedor, supplierId, notas, enCaja,
+        purchaseInvoiceId, factura, anuladoAt, motivoAnulacion]
       properties:
         id: { type: string }
         fecha: { type: string, format: date-time }
@@ -1203,6 +1336,10 @@ components:
         supplierId: { type: string, nullable: true }
         notas: { type: string, nullable: true }
         enCaja: { type: boolean }
+        purchaseInvoiceId: { type: string, nullable: true }
+        factura: { type: string, nullable: true }
+        anuladoAt: { type: string, format: date-time, nullable: true }
+        motivoAnulacion: { type: string, nullable: true }
     TotalDeGastos:
       type: object
       required: [clave, cantidad, total]

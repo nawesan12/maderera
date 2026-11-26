@@ -69,6 +69,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cortes/{id}/volver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Deshace el último paso del taller (de la máquina a la cola, de terminado a la máquina). */
+        post: operations["VolverCorte"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/cortes/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AnularCorte"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/cortes/{id}/pedido": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Un corte suelto con algo para cobrar nace como pedido (con la mercadería reservada) y se cobra por ahí. */
+        post: operations["PasarCorteAPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/cortes/{id}/sumar-al-pedido": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Suma al pedido del corte sus pasadas y su tapacanto; si el pedido ya está facturado, cobrado o en la cuenta corriente, van a un pedido aparte. */
+        post: operations["SumarCorteAlPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/cortes/{id}/remito": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description El remito sin cargo de una reposición entregada, para firmar; si ya tiene uno vivo, ese. */
+        post: operations["RemitoDeLaReposicion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/cortes/{id}/urgente": {
         parameters: {
             query?: never;
@@ -396,6 +480,15 @@ export interface components {
         /** Format: double */
         Metros: number;
         CorteListado: {
+            /** @description Las placas son medias */
+            mitad: string | null;
+            sinCargo: boolean;
+            branchId: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo salió de la máquina
+             */
+            salioAt: string | null;
             id: string;
             numero: string;
             cliente: string;
@@ -437,6 +530,12 @@ export interface components {
             piezas: {
                 [key: string]: unknown;
             }[];
+            /** @description El corte que este corrige (se anula) */
+            reemplaza?: string;
+            /** @description Una reposición de un pedido */
+            sinCargo?: boolean;
+            /** @description Confirma una placa que el pedido no vende */
+            otraPlaca?: boolean;
         };
         PiezaDelCorte: {
             id: string;
@@ -466,6 +565,9 @@ export interface components {
             mitad: string | null;
         };
         Corte: {
+            sinCargo: boolean;
+            motivoAnulado: string | null;
+            branchId: string | null;
             /** @description El que se anotó */
             telefono: string | null;
             /** @description AAAA-MM-DD */
@@ -507,6 +609,10 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             piezas: components["schemas"]["PiezaDelCorte"][];
+            formaDeVenta?: string | null;
+            unidad?: string | null;
+            /** @description tiene venta y no le queda nada por cobrar */
+            cobrado?: boolean;
             /** Format: double */
             precioPlaca: number | null;
             medida: components["schemas"]["Medida"];
@@ -532,6 +638,44 @@ export interface components {
             updatedAt: string;
         };
         FichaCorte: {
+            remito: {
+                id: string;
+                numero: string;
+                firmaToken: string | null;
+                firmado: boolean;
+            } | null;
+            sumar: {
+                /** Format: double */
+                total: number;
+                aparte: boolean;
+                motivo: string;
+            } | null;
+            /** @enum {string} */
+            modo: "suelto" | "pedido" | "vendido" | "sinCargo" | "anulado";
+            pasadasACobrar: number;
+            pedido: {
+                /** @description El pedido aparte con lo del corte */
+                cargo: string | null;
+                cargoId: string | null;
+                cargoEstadoPago: string | null;
+                numero: string;
+                estado: string;
+                estadoPago: string;
+                /** Format: double */
+                cobrado: number;
+                /** Format: double */
+                placasDelPedido: number;
+                lineas: {
+                    descripcion: string;
+                    unidad: string;
+                    /** Format: double */
+                    cantidad: number;
+                    /** Format: double */
+                    subtotal: number;
+                }[];
+            } | null;
+            retalesDelCliente: boolean;
+            sinPlata: boolean;
             corte: components["schemas"]["Corte"];
             tarifa: components["schemas"]["TarifaDeCorte"] | null;
             /** Format: double */
@@ -939,6 +1083,8 @@ export interface operations {
             query?: {
                 busqueda?: string;
                 estado?: string;
+                /** @description El id de una sucursal (los cortes sin sucursal salen en todas) */
+                sucursal?: string;
             };
             header?: never;
             path?: never;
@@ -970,7 +1116,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description El número del corte nuevo */
+            /** @description El número y el id del corte nuevo */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -978,6 +1124,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         numero: string;
+                        id: string;
                     };
                 };
             };
@@ -1042,6 +1189,30 @@ export interface operations {
         parameters: {
             query?: {
                 desde?: string;
+                /** @description entregar un corte que no está cobrado, sabiéndolo */
+                sinCobrar?: boolean;
+                /** @description Al terminar */
+                pasadas?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Ok"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            409: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    VolverCorte: {
+        parameters: {
+            query?: {
+                desde?: string;
             };
             header?: never;
             path: {
@@ -1057,6 +1228,114 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    AnularCorte: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    motivo: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    PasarCorteAPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pedido nuevo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        numero: string;
+                        id: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    SumarCorteAlPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pedido donde quedó */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        numero: string;
+                        aparte: boolean;
+                    };
+                };
+            };
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    RemitoDeLaReposicion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El remito */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        numero: string;
+                        firmaToken: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
     AlternarUrgente: {
         parameters: {
             query?: never;
@@ -1069,6 +1348,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Ok"];
+            403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
         };
     };
@@ -1365,6 +1645,10 @@ export interface operations {
                         urgente: number;
                         /** Format: date-time */
                         createdAt: string;
+                        variantId: string | null;
+                        /** Format: double */
+                        placasEnteras: number;
+                        sinCargo: boolean;
                     }[];
                 };
             };
@@ -1529,6 +1813,8 @@ export interface operations {
                         placasACobrar: number;
                         /** @description Las pasadas del plano que se cobra */
                         pasadasACobrar: number;
+                        /** @description Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte */
+                        placasParciales?: number;
                         cuenta?: components["schemas"]["Presupuesto"];
                         hoja?: components["schemas"]["HojaDeCorte"];
                         superficies?: number[];

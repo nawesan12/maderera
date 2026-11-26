@@ -67,6 +67,8 @@ async function Contenido({
         // De qué sale: placa entera o media, y en qué sentido partida. En el
         // taller es lo primero que hay que saber antes de bajar la placa.
         deQueSale: nombreDeLaMitad(corte.medida.mitad),
+        sinCargo: corte.sinCargo,
+        media: Boolean(corte.medida.mitad),
       }}
     />
   );

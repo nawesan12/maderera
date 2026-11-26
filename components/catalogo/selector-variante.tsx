@@ -11,6 +11,8 @@ import { useTienda } from "@/lib/tienda-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { useEstado } from "@/lib/estado-context";
+import { mensajeDeConsulta, quienConsulta } from "@/lib/cuenta/portal";
 import { cantidadDeConsulta, enlaceDeConsulta, problemaDeCantidad, textoDeConsulta } from "@/lib/catalogo/consulta";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
@@ -258,6 +260,9 @@ export function SelectorVariante({
           aPedido={aPedido}
           stockVisible={tienda.stockVisible}
           enlace={(texto) => (numeroWhatsapp ? enlaceDeConsulta(numeroWhatsapp, texto) : whatsapp)}
+          // Con la tienda apagada el precio solo llega si es el propio del
+          // profesional y la regla lo deja (H086): Go no manda otro.
+          precio={sinPrecio ? null : mostrado}
         />
       ) : (
         <>
@@ -454,7 +459,9 @@ function ConsultaDeLaMedida({
   aPedido,
   stockVisible,
   enlace,
+  precio,
 }: {
+  precio: { principal: number; sufijo?: string | null } | null;
   productName: string;
   medida: VarianteDetalle;
   presentacion: Presentacion;
@@ -497,6 +504,14 @@ function ConsultaDeLaMedida({
         {/* Medidas en la sans con cifras tabulares (comité final, M21): la mono
             es para importes y códigos. */}
         <p className="text-2xl font-bold leading-tight tracking-[-0.02em] tabular-nums">{medida.label}</p>
+        {precio && (
+          <p className="mt-2 flex items-baseline gap-2">
+            <span className="tabular text-3xl font-bold leading-none tracking-[-0.03em]">
+              {formatearPrecio(String(precio.principal))}
+            </span>
+            {precio.sufijo && <span className="text-base font-semibold text-texto-2">{precio.sufijo}</span>}
+          </p>
+        )}
         <p className="mt-1.5 text-[14.5px] text-texto-2">
           {como ?? `Se vende por ${formatearUnidadLarga(unidad)}`}
           {detalles.map((d) => ` · ${d}`)}
@@ -541,14 +556,12 @@ function ConsultaDeLaMedida({
             {sufijo}
           </span>
         </label>
-        <BotonWhatsapp
-          enlace={enlace(texto)}
-          tamano="grande"
-          deshabilitado={invalida}
-          className="min-w-0 flex-1 px-3"
-        >
-          <span className="truncate">Consultar precio</span>
-        </BotonWhatsapp>
+        {/* Con sesión, el mensaje dice quién consulta: el vendedor cotiza con
+            su lista sin preguntar (mes simulado, H087). La sesión se resuelve
+            aparte; mientras tanto, el botón con el mensaje de siempre. */}
+        <Suspense fallback={<BotonConsultarPrecio enlace={enlace(texto)} deshabilitado={invalida} />}>
+          <BotonConsultarPrecioDeQuienMira texto={texto} enlace={enlace} deshabilitado={invalida} />
+        </Suspense>
       </div>
       {problema && (
         <p id="problema-de-cantidad" role="alert" className="-mt-1 flex items-center gap-1.5 text-[14.5px] text-destructive">
@@ -588,4 +601,26 @@ function SelectorConPrecios({
   promesa: Promise<PreciosDeFicha>;
 }) {
   return <SelectorVariante {...props} precios={use(promesa)} />;
+}
+
+function BotonConsultarPrecio({ enlace, deshabilitado }: { enlace: string; deshabilitado: boolean }) {
+  return (
+    <BotonWhatsapp enlace={enlace} tamano="grande" deshabilitado={deshabilitado} className="min-w-0 flex-1 px-3">
+      <span className="truncate">Consultar precio</span>
+    </BotonWhatsapp>
+  );
+}
+
+function BotonConsultarPrecioDeQuienMira({
+  texto,
+  enlace,
+  deshabilitado,
+}: {
+  texto: string;
+  enlace: (texto: string) => string;
+  deshabilitado: boolean;
+}) {
+  const { sesion } = useEstado();
+  const quien = quienConsulta(sesion);
+  return <BotonConsultarPrecio enlace={enlace(mensajeDeConsulta(texto, quien))} deshabilitado={deshabilitado} />;
 }

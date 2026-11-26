@@ -66,8 +66,12 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 		Tributos:     make([]pdf.TributoComprobante, len(c.Tributos))}
 	for i, x := range c.Items {
 		cp.Items[i] = pdf.ItemComprobante{Descripcion: x.Descripcion, Unidad: x.Unidad, Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario,
-			AlicuotaIva: x.AlicuotaIva, Subtotal: x.Subtotal}
+			AlicuotaIva: x.AlicuotaIva, Subtotal: x.Subtotal, Neto: x.Neto}
 	}
+	if strings.HasPrefix(c.Tipo, "factura") {
+		cp.CondicionVenta = condicionDeVenta(c)
+	}
+	cp.Pedido = de(c.Pedido)
 	for i, t := range c.Tributos {
 		cp.Tributos[i] = pdf.TributoComprobante{Descripcion: t.Descripcion, Alicuota: t.Alicuota, Importe: t.Importe}
 	}
@@ -77,4 +81,37 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 	}
 	nombre := strings.ToUpper(c.Tipo) + "-" + fiscal.NumeroFormateado(c.PuntoVenta, c.Numero) + ".pdf"
 	return b, nombre, nil
+}
+
+var mediosImpresos = map[string]string{
+	"efectivo": "Efectivo", "transferencia": "Transferencia", "deposito": "Transferencia", "mercado_pago": "Mercado Pago",
+	"tarjeta": "Tarjeta", "debito": "Tarjeta de débito", "credito": "Tarjeta de crédito", "tarjeta_debito": "Tarjeta de débito",
+	"tarjeta_credito": "Tarjeta de crédito", "cheque": "Cheque", "echeq": "Cheque",
+}
+
+// condicionDeVenta es lo que va en «Condición de venta» del papel: cuenta
+// corriente, o contado con los medios con que se cobró (los de la factura y
+// los del pedido). Sin ningún cobro, nada: no se sabe todavía.
+func condicionDeVenta(c *Completo) string {
+	if c.EnCuenta {
+		return "Cuenta corriente"
+	}
+	var medios []string
+	visto := map[string]bool{}
+	sumar := func(m string) {
+		if n, ok := mediosImpresos[m]; ok && !visto[n] {
+			visto[n] = true
+			medios = append(medios, n)
+		}
+	}
+	for _, p := range c.Cobros {
+		sumar(p.Medio)
+	}
+	for _, p := range c.CobrosDelPedido {
+		sumar(p.Medio)
+	}
+	if len(medios) == 0 {
+		return ""
+	}
+	return "Contado · " + strings.Join(medios, ", ")
 }

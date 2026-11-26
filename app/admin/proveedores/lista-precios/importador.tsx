@@ -48,6 +48,7 @@ export function ImportadorDeLista({
    */
   const [usado, setUsado] = useState<Record<string, string> | null>(null);
   const [mirando, mirar] = useTransition();
+  const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
   const [estado, aplicar, aplicando] = useActionState(aplicarLista, inicial);
 
   // Las columnas que ofrece el select salen del archivo que se acaba de subir.
@@ -88,13 +89,27 @@ export function ImportadorDeLista({
           <label htmlFor="archivo" className="block text-base font-medium">
             El archivo que mandó
           </label>
+          {/* El control del navegador dice «Choose File / No file chosen» en
+              inglés (mes simulado, H014): el campo queda oculto y el botón y
+              el nombre del archivo, en castellano. */}
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-3">
+            <label
+              htmlFor="archivo"
+              className="tarjeta-hundida inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg px-4 text-base font-medium focus-within:ring-2 focus-within:ring-ring"
+            >
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              Elegir archivo
+            </label>
+            <span className="min-w-0 truncate text-base text-muted-foreground">{nombreArchivo ?? "Ninguno elegido"}</span>
+          </div>
           <input
             id="archivo"
             name="archivo"
             type="file"
             accept=".csv,.xlsx,text/csv"
             required
-            className="mt-1 block w-full text-base file:mr-3 file:rounded-lg file:border file:bg-background file:px-3 file:py-2 file:text-base"
+            onChange={(e) => setNombreArchivo(e.target.files?.[0]?.name ?? null)}
+            className="sr-only"
           />
           {/* Un PDF no: sacar una tabla de un PDF es adivinar, y adivinar precios de compra sale caro. */}
           <p className="mt-1 text-sm text-muted-foreground">
@@ -307,6 +322,13 @@ export function ImportadorDeLista({
   );
 }
 
+/** Lo que suele decir el encabezado de cada columna en la planilla. */
+const EJEMPLO: Record<string, string> = {
+  columnaCodigo: "Código",
+  columnaPrecio: "Precio",
+  columnaDescripcion: "Descripción",
+};
+
 function Columna({
   nombre,
   etiqueta,
@@ -320,6 +342,7 @@ function Columna({
   defecto?: string;
   opcional?: boolean;
 }) {
+  const ejemplo = EJEMPLO[nombre] ?? "";
   return (
     <div>
       <label htmlFor={nombre} className="block text-base font-medium">
@@ -347,7 +370,7 @@ function Columna({
           id={nombre}
           name={nombre}
           defaultValue={defecto}
-          placeholder={opcional ? "Opcional" : "Codigo"}
+          placeholder={ejemplo || (opcional ? "Opcional" : "")}
           className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
         />
       )}

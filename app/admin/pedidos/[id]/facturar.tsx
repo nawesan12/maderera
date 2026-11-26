@@ -16,9 +16,12 @@ const inicial: EstadoFactura = {};
 export function BotonFacturar({
   orderId,
   comprobante,
+  discreto = false,
 }: {
   orderId: string;
   comprobante: { id: string; numero: number; tipo: string } | null;
+  /** La venta salió con comprobante interno a propósito: facturar no es lo que falta. */
+  discreto?: boolean;
 }) {
   const [estado, accion, pendiente] = useActionState(facturarPedido, inicial);
 
@@ -41,7 +44,9 @@ export function BotonFacturar({
         <button
           type="submit"
           disabled={pendiente}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
+          className={`inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-60 ${
+            discreto ? "text-muted-foreground hover:bg-hundida hover:text-foreground" : "border hover:bg-muted"
+          }`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />

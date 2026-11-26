@@ -98,6 +98,8 @@ export async function listarComprobantesPagina(
   return {
     total: r.total,
     suma: r.suma,
+    /** Cuántos suma `suma`: sin anuladas, rechazadas ni borradores. */
+    cantidad: r.cantidad,
     filas: r.filas.map(
       (f): ComprobanteListado => ({
         ...f,
@@ -111,9 +113,13 @@ export async function listarComprobantesPagina(
 
 type Crudo = Esquemas["ComprobanteCompleto"];
 type CobroCrudo = Crudo["cobros"][number];
+type CobroDelPedidoCrudo = Crudo["cobrosDelPedido"][number];
 
 export interface ComprobanteCompleto
-  extends Omit<Crudo, "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros" | "fechaEmisionOriginal"> {
+  extends Omit<
+    Crudo,
+    "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros" | "fechaEmisionOriginal" | "cobrosDelPedido"
+  > {
   tipo: TipoComprobante;
   fechaEmision: Date;
   /** La fecha con que se emitió, si al reintentar salió con la del día. */
@@ -121,6 +127,8 @@ export interface ComprobanteCompleto
   fechaVencimiento: Date | null;
   caeVencimiento: Date | null;
   cobros: (Omit<CobroCrudo, "fecha" | "createdAt"> & { fecha: Date; createdAt: Date })[];
+  /** Con qué se cobró el pedido fuera de Facturación: la caja, sus recibos. */
+  cobrosDelPedido: (Omit<CobroDelPedidoCrudo, "fecha"> & { fecha: Date })[];
 }
 
 function conFechas(c: Crudo): ComprobanteCompleto {
@@ -131,6 +139,7 @@ function conFechas(c: Crudo): ComprobanteCompleto {
     fechaVencimiento: c.fechaVencimiento ? new Date(c.fechaVencimiento) : null,
     caeVencimiento: c.caeVencimiento ? new Date(c.caeVencimiento) : null,
     cobros: c.cobros.map((p) => ({ ...p, fecha: new Date(p.fecha), createdAt: new Date(p.createdAt) })),
+    cobrosDelPedido: c.cobrosDelPedido.map((p) => ({ ...p, fecha: new Date(p.fecha) })),
   };
 }
 
@@ -278,6 +287,17 @@ export async function libroIvaVentas(periodo?: string | null) {
 }
 
 /** Pedido listo para facturar, con sus ítems y la condición fiscal del cliente. */
+/**
+ * La devolución de un pedido facturado desde el pedido (H279): los renglones
+ * de su factura, adónde va la plata (la cuenta o la deuda) y el tope. null si
+ * no tiene factura viva.
+ */
+export async function devolucionDesdeElPedido(orderId: string) {
+  const r = await (await api()).GET("/api/v1/admin/facturacion/pedidos/{id}/devolucion", { params: { path: { id: orderId } } });
+  if (r.response.status === 404 || r.response.status === 403) return null;
+  return datos(r);
+}
+
 export async function pedidoParaFacturar(orderId: string) {
   const r = await (await api()).GET("/api/v1/admin/facturacion/pedidos/{id}", { params: { path: { id: orderId } } });
   if (r.response.status === 404 || r.response.status === 400) return null;

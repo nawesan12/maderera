@@ -1,8 +1,10 @@
+import { cantidadConUnidad } from "@/lib/formato";
 import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { MapPin, Printer, MessageCircle, Phone, Scissors, Store, Truck } from "lucide-react";
+import { MapPin, Printer, MessageCircle, Phone, Scissors, Store, Truck, Undo2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import {
@@ -10,15 +12,18 @@ import {
   ETAPAS_RETIRO,
   Pasos,
 } from "@/components/admin/pasos";
-import { fechaHora, formatearPorcentaje, moneda } from "@/components/admin/formato";
+import { fechaHora, formatearMonto, formatearPorcentaje, moneda } from "@/components/admin/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
-import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
+import { devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { BotonFacturar } from "./facturar";
+import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
+import { DevolverFacturado } from "./devolver-facturado";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
-import { remitosDelPedido } from "@/lib/dal/admin/entregas";
+import { seOfreceLaFirma } from "@/lib/entregas/firma";
+import { otrosAcopios, remitosDelPedido } from "@/lib/dal/admin/entregas";
 import { cortesDelPedido } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
 import { cobroDelPedido } from "../cobro";
@@ -45,10 +50,14 @@ function paraWhatsapp(telefono: string): string {
 
 export default async function FichaPedidoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ remito?: string }>;
 }) {
   const { id } = await params;
+  // «Preparar remito» desde el tablero llega con el formulario abierto.
+  const { remito: abrirRemito } = await searchParams;
   if (!esUuid(id)) notFound();
   const [usuario, pedido] = await Promise.all([
     requireStaff(),
@@ -84,12 +93,49 @@ export default async function FichaPedidoPage({
   // Solo para quien atiende el WhatsApp de la maderera (no depósito).
   const eventoAviso = puedeEntrar("/admin/whatsapp", usuario.staffRole) ? (EVENTO_DEL_ESTADO[pedido.estado] ?? null) : null;
 
-  const [pendientes, remitos, cortes, aviso] = await Promise.all([
+  const cancelado = pedido.estado === "cancelado";
+  const [pendientes, remitos, cortes, aviso, otros] = await Promise.all([
     saldoDeAcopio(id),
     remitosDelPedido(id),
     cortesDelPedido(id),
     eventoAviso ? avisoManual(eventoAviso, { tipo: "order", id }) : null,
+    // La misma visita se lleva de los otros acopios del cliente.
+    pedido.customerId && pedido.tipoEntrega === "retiro" && !cancelado && pedido.estado !== "entregado"
+      ? otrosAcopios(id)
+      : [],
   ]);
+  const porEntregar = pendientes.filter((p) => p.pendiente > 0.01);
+  // Un acopio en curso: ya salió algo y queda algo. Va arriba de todo, y el
+  // botón principal es «Preparar remito» (mes simulado: era «Marcar
+  // entregado», que se lleva todo lo que queda).
+  const acopioEnCurso = pedido.acopio && porEntregar.length > 0;
+  // El remito del camión sin firmar: en un envío en camino con algo por
+  // llevar, firmarlo es lo que sigue (no «Marcar entregado»).
+  const remitoEnLaCalle = remitos.find((r) => r.tipo === "envio" && seOfreceLaFirma(r));
+  const firmaEnLaCalle = remitoEnLaCalle
+    ? `/firmar/${remitoEnLaCalle.firmaToken}?volver=${encodeURIComponent(`/admin/pedidos/${pedido.id}`)}`
+    : null;
+  const cortesSinTerminar = cortes.filter((c) => c.estado === "en-cola" || c.estado === "en-proceso").map((c) => c.numero);
+  const interno = pedido.comprobante === "interno" && !facturado;
+  // Devolver y corregir: de quien mueve plata, y sin factura (con factura,
+  // por la factura y su nota). Corregir, además, sin nada cobrado y fuera
+  // del mostrador (la venta del mostrador se anula desde ahí).
+  const manejaPlata = Boolean(usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole));
+  const devolvible = manejaPlata && !cancelado && !pedido.facturado;
+  // Facturado: la devolución sale del pedido con su nota de crédito mientras
+  // no saque plata (H279); lo cobrado vuelve desde la factura.
+  const devolucionFacturada =
+    manejaPlata && !cancelado && pedido.facturado ? await devolucionDesdeElPedido(pedido.id) : null;
+  const devuelveDesdeElPedido = devolucionFacturada && devolucionFacturada.tope > 0.005 && devolucionFacturada.renglones.some((r) => r.queda > 0);
+  const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
+  const renglones = pedido.items.map((i) => ({
+    id: i.id,
+    descripcion: i.descripcion,
+    unidad: i.unidad,
+    cantidad: Number(i.cantidad),
+    precioUnitario: Number(i.precioUnitario),
+    subtotal: Number(i.subtotal),
+  }));
 
   // El remito también se manda gratis, desde la app del teléfono.
   const avisosRemito = puedeEntrar("/admin/whatsapp", usuario.staffRole)
@@ -103,6 +149,67 @@ export default async function FichaPedidoPage({
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
 
+  const entregas = (
+    <Entregas
+      whatsapp={puedeEntrar("/admin/whatsapp", usuario.staffRole)}
+      avisos={avisosRemito}
+      orderId={pedido.id}
+      tipoEntrega={pedido.tipoEntrega}
+      estado={pedido.estado}
+      pendientes={pendientes}
+      remitos={remitos}
+      otros={otros}
+      receptor={pedido.cliente}
+      abrir={abrirRemito === "1" && !cancelado}
+      sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
+      cobro={manejaPlata ? cobroDelPedido(pedido) : null}
+    />
+  );
+
+  // Un renglón que no cambió el estado (una anulación, una reposición sin
+  // cargo) no lleva el chip: decía «Entregado» al lado de «Remito anulado»
+  // (mes simulado). Su nota es el título.
+  const cronologico = [...pedido.historial].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const sinCambio = new Set(
+    cronologico.filter((h, i) => i > 0 && h.nota && h.estado === cronologico[i - 1].estado).map((h) => h.id),
+  );
+  const historial: { clave: string; cuando: Date; titulo: ReactNode; nota?: string | null; quien?: string | null }[] = [
+    ...pedido.historial.map((h) => ({
+      clave: h.id,
+      cuando: h.createdAt,
+      titulo: sinCambio.has(h.id) ? (
+        <p className="text-base font-medium">{h.nota}</p>
+      ) : (
+        <EtiquetaEstado estado={h.estado} contexto="pedido" />
+      ),
+      nota: sinCambio.has(h.id) ? null : h.nota,
+      quien: h.quien,
+    })),
+    ...pedido.recibos.map((r) => ({
+      clave: r.id,
+      cuando: new Date(r.createdAt),
+      titulo: (
+        <p className="text-base font-medium">
+          Cobro <span className="tabular">{formatearMonto(r.total)}</span>
+          {r.estado === "anulado" && <span className="font-normal text-muted-foreground"> · anulado</span>}
+        </p>
+      ),
+      nota: [r.numero, ...r.medios.split(",").filter(Boolean).map((m) => MEDIOS_DE_COBRO[m] ?? m)].join(" · "),
+      quien: r.quien,
+    })),
+    ...remitos
+      // El remito que completa el pedido ya está en el historial como
+      // «Entregado»; los demás (los retiros de un acopio) faltaban.
+      .filter((r) => !pedido.historial.some((h) => h.nota?.includes(r.numero)))
+      .map((r) => ({
+        clave: r.id,
+        cuando: r.createdAt,
+        titulo: <p className="text-base font-medium">{r.tipo === "envio" ? "Salió" : "Retiro"}</p>,
+        nota: `${r.numero}${r.receptorNombre ? ` · ${r.receptorNombre}` : ""}${r.estado === "anulada" ? " · anulado" : ""}`,
+        quien: null,
+      })),
+  ].sort((a, b) => b.cuando.getTime() - a.cuando.getTime());
+
   return (
     <div className="space-y-6">
       <EncabezadoFicha
@@ -112,10 +219,15 @@ export default async function FichaPedidoPage({
         estado={
           <>
             <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
-            {pedido.estadoPago !== "pagado" && (
-              <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
-                Sin cobrar
-              </span>
+            {/* La misma regla que «Me deben» y que el encabezado de Pedidos:
+                lo que va a cuenta corriente ya está en la cuenta y no se
+                cobra en la puerta (mes simulado: el encabezado no lo sumaba
+                y la ficha decía «Sin cobrar»). */}
+            {!cancelado && <ChipDeCobro pedido={pedido} />}
+            {/* Salió con el comprobante interno a propósito: no es una venta
+                que se olvidó de facturar. */}
+            {interno && (
+              <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">Comprobante interno</span>
             )}
           </>
         }
@@ -137,6 +249,17 @@ export default async function FichaPedidoPage({
         acciones={
           <>
             {cancelable && <CancelarPedido id={pedido.id} numero={pedido.numero} cobrado={pedido.estadoPago === "pagado"} />}
+            {corregible && (
+              <CorregirPedido
+                id={pedido.id}
+                numero={pedido.numero}
+                renglones={renglones}
+                costoEnvio={Number(pedido.costoEnvio)}
+                conEnvio={pedido.tipoEntrega === "envio"}
+                descuento={Number(pedido.descuento)}
+              />
+            )}
+            {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} />}
             <a
               href={`/ticket/${pedido.id}`}
               target="_blank"
@@ -150,6 +273,7 @@ export default async function FichaPedidoPage({
                 enlace sigue. */}
             {factura && (facturado || pedido.estado !== "cancelado") && (
               <BotonFacturar
+                discreto={interno}
                 orderId={pedido.id}
                 comprobante={
                   facturado
@@ -162,14 +286,41 @@ export default async function FichaPedidoPage({
                 }
               />
             )}
+            {/* La devolución de una venta ya entregada se hace sobre su
+                factura, con o sin CAE (H332): desde el pedido no había por
+                dónde. */}
+            {devuelveDesdeElPedido && devolucionFacturada && (
+              <DevolverFacturado
+                id={pedido.id}
+                numero={pedido.numero}
+                factura={devolucionFacturada.factura}
+                destino={devolucionFacturada.destino}
+                tope={devolucionFacturada.tope}
+                renglones={devolucionFacturada.renglones}
+              />
+            )}
+            {!devuelveDesdeElPedido && factura && facturado && facturado.tipo.startsWith("factura") && pedido.estado !== "cancelado" && (
+              <Link
+                href={`/admin/facturacion/${facturado.id}#devolucion`}
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <Undo2 className="h-5 w-5" aria-hidden="true" />
+                Devolución
+              </Link>
+            )}
             <AccionesPedido
               id={pedido.id}
               estado={pedido.estado}
               estadoPago={pedido.estadoPago}
               tipoEntrega={pedido.tipoEntrega}
               pedido={{ numero: pedido.numero, nombre: pedido.cliente }}
-              cobro={usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole) ? cobroDelPedido(pedido) : null}
+              cobro={manejaPlata ? cobroDelPedido(pedido) : null}
               sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
+              cortesSinTerminar={cortesSinTerminar}
+              acopio={acopioEnCurso}
+              porLlevar={porEntregar.length > 0}
+              firmar={firmaEnLaCalle}
+              enLaFicha
             />
           </>
         }
@@ -201,27 +352,25 @@ export default async function FichaPedidoPage({
         </section>
       )}
 
-      {/* `items-start` para que la tarjeta del detalle no se estire hasta la
-          altura de la columna lateral y deje un vacío abajo. */}
+      {/* Dos columnas que corren solas: con la grilla de filas, «Qué lleva» y
+          la columna de la derecha compartían la primera fila y entre «Qué
+          lleva» y lo que seguía quedaban unos 400 px vacíos (mes simulado). */}
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="min-w-0 space-y-4">
+        {acopioEnCurso && entregas}
+
         <section className="tarjeta overflow-hidden">
-          <h2 className="px-5 py-4 text-base font-medium">Qué lleva</h2>
-          <table className="w-full border-t">
+          <h2 className="px-5 pt-4 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Qué lleva</h2>
+          {/* Sin pie de tabla: apilada en el teléfono, cada celda toma el
+              nombre de su columna, y «Envío» y «Total» salían rotulados
+              «Subtotal». El unitario va siempre: apilado tiene su renglón. */}
+          <table className="mt-3 w-full border-t">
             <thead>
               <tr className="border-b text-left">
-                <th className="px-5 py-3 text-sm font-medium text-muted-foreground">
-                  Producto
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
-                  Cantidad
-                </th>
-                {/* En el teléfono no entra: el subtotal quedaba cortado. */}
-                <th className="hidden px-4 py-3 text-right text-sm font-medium text-muted-foreground sm:table-cell">
-                  Unitario
-                </th>
-                <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">
-                  Subtotal
-                </th>
+                <th className="px-5 py-3 text-sm font-medium text-muted-foreground">Producto</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Cantidad</th>
+                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Unitario</th>
+                <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">Subtotal</th>
               </tr>
             </thead>
             <tbody>
@@ -229,51 +378,34 @@ export default async function FichaPedidoPage({
                 <tr key={item.id} className="border-b last:border-0">
                   <td className="px-5 py-3.5 text-base">{item.descripcion}</td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
-                    {Number(item.cantidad)} {item.unidad.replace("_", " ")}
+                    {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
                   </td>
-                  <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
-                    {moneda.format(Number(item.precioUnitario))}
+                  <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
+                    {formatearMonto(Number(item.precioUnitario))}
                   </td>
-                  <td className="tabular px-5 py-3.5 text-right text-base">
-                    {moneda.format(Number(item.subtotal))}
-                  </td>
+                  <td className="tabular px-5 py-3.5 text-right text-base">{formatearMonto(Number(item.subtotal))}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t bg-muted/40">
-              {Number(pedido.costoEnvio) > 0 && (
-                <>
-                  <tr>
-                    <td colSpan={2} className="px-5 pt-4 text-base">
-                      Subtotal
-                    </td>
-                    <td className="hidden sm:table-cell" />
-                    <td className="tabular px-5 pt-4 text-right text-base">
-                      {moneda.format(Number(pedido.subtotal))}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colSpan={2} className="px-5 pb-2 pt-1 text-base">
-                      Envío · {pedido.zonaEnvio}
-                    </td>
-                    <td className="hidden sm:table-cell" />
-                    <td className="tabular px-5 pb-2 pt-1 text-right text-base">
-                      {moneda.format(Number(pedido.costoEnvio))}
-                    </td>
-                  </tr>
-                </>
-              )}
-              <tr>
-                <td colSpan={2} className="px-5 py-4 text-base font-medium">
-                  Total
-                </td>
-                <td className="hidden sm:table-cell" />
-                <td className="tabular px-5 py-4 text-right text-xl font-semibold">
-                  {moneda.format(Number(pedido.total))}
-                </td>
-              </tr>
-            </tfoot>
           </table>
+          <dl className="space-y-1 border-t bg-hundida/50 px-5 py-4 text-base">
+            {Number(pedido.costoEnvio) > 0 && (
+              <>
+                <div className="flex justify-between gap-3">
+                  <dt>Subtotal</dt>
+                  <dd className="tabular">{formatearMonto(Number(pedido.subtotal))}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt>Envío{pedido.zonaEnvio ? ` · ${pedido.zonaEnvio}` : ""}</dt>
+                  <dd className="tabular">{formatearMonto(Number(pedido.costoEnvio))}</dd>
+                </div>
+              </>
+            )}
+            <div className="flex items-baseline justify-between gap-3 pt-1">
+              <dt className="font-medium">Total</dt>
+              <dd className="tabular text-xl font-semibold">{formatearMonto(Number(pedido.total))}</dd>
+            </div>
+          </dl>
 
           {/*
             * El margen de esta venta.
@@ -312,68 +444,47 @@ export default async function FichaPedidoPage({
           )}
         </section>
 
-        {/* El corte, en la ficha del pedido.
+        {!acopioEnCurso && entregas}
 
-            Es la pregunta de todos los días en una maderera con seccionadora:
-            "el pedido está listo menos el corte". Antes no se podía contestar
-            desde acá —la columna que ata las dos cosas existía en la base y no
-            la escribía nadie—, así que el corte se cargaba suelto y el pedido
-            no sabía que estaba esperando. */}
-        <section className="tarjeta p-5 lg:col-start-1">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Corte
-            </h2>
-            <Link
-              href={`/admin/cortes/nuevo?pedido=${pedido.id}`}
-              className="text-base text-brand-orange hover:underline"
-            >
-              Mandar a cortar
-            </Link>
-          </div>
+        {/* El corte, en la ficha del pedido: «el pedido está listo menos el
+            corte». Un pedido cancelado o entregado no manda nada a cortar. */}
+        {(cortes.length > 0 || !["cancelado", "entregado"].includes(pedido.estado)) && (
+          <section className="tarjeta p-5">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Corte</h2>
+              {!["cancelado", "entregado"].includes(pedido.estado) && (
+                <Link href={`/admin/cortes/nuevo?pedido=${pedido.id}`} className="text-base text-brand-orange hover:underline">
+                  Mandar a cortar
+                </Link>
+              )}
+            </div>
 
-          {cortes.length === 0 ? (
-            <p className="text-base text-muted-foreground">
-              Este pedido no tiene ningún corte cargado.
-            </p>
-          ) : (
-            <ul className="space-y-1.5">
-              {cortes.map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={`/admin/cortes/${c.id}`}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50"
-                  >
-                    <Scissors
-                      className="h-5 w-5 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="tabular block text-base">{c.numero}</span>
-                      <span className="block text-sm text-muted-foreground">
-                        {c.material}
+            {cortes.length === 0 ? (
+              <p className="text-base text-muted-foreground">Sin corte.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {cortes.map((c) => (
+                  <li key={c.id}>
+                    <Link
+                      href={`/admin/cortes/${c.id}`}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50"
+                    >
+                      <Scissors className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="tabular block text-base">{c.numero}</span>
+                        <span className="block text-sm text-muted-foreground">{c.material}</span>
                       </span>
-                    </span>
-                    <EtiquetaEstado estado={c.estado} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <div className="lg:col-start-1">
-          <Entregas
-            whatsapp={puedeEntrar("/admin/whatsapp", usuario.staffRole)}
-            avisos={avisosRemito}
-            orderId={pedido.id}
-            tipoEntrega={pedido.tipoEntrega}
-            pendientes={pendientes}
-            remitos={remitos}
-          />
+                      <EtiquetaEstado estado={c.estado} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
         </div>
 
-        <aside className="space-y-4 lg:col-start-2 lg:row-start-1">
+        <aside className="min-w-0 space-y-4">
           <section className="tarjeta p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Entrega
@@ -394,7 +505,7 @@ export default async function FichaPedidoPage({
             ) : (
               <p className="flex items-center gap-2 text-base">
                 <Store className="h-5 w-5 shrink-0 text-muted-foreground" />
-                Retira en {pedido.sucursal}
+                {pedido.sucursal ? `Retira en ${pedido.sucursal}` : "Retira en el local"}
               </p>
             )}
             {!["entregado", "cancelado"].includes(pedido.estado) && (
@@ -416,12 +527,55 @@ export default async function FichaPedidoPage({
                 <dt className="text-muted-foreground">Forma de pago</dt>
                 <dd>{pedido.medioPago ? MEDIOS[pedido.medioPago] : "—"}</dd>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted-foreground">Estado</dt>
-                <dd>
-                  <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
-                </dd>
-              </div>
+              {/* El pedido partido (H047): la parte que quedó en la cuenta. */}
+              {pedido.aCuenta != null && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">A cuenta corriente</dt>
+                  <dd className="tabular">{formatearMonto(pedido.aCuenta)}</dd>
+                </div>
+              )}
+              {/* Un cobro parcial se ve: cuánto entró y cuánto falta (seguía
+                  «Sin cobrar» por el total). */}
+              {pedido.cobrado > 0.004 && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Cobrado</dt>
+                  <dd className="tabular">{formatearMonto(pedido.cobrado)}</dd>
+                </div>
+              )}
+              {/* Cancelado no se cobra: ni «Falta cobrar» ni «Sin cobrar»
+                  (mes simulado, H281). Lo cobrado, si hubo, sigue arriba. */}
+              {cancelado ? null : pedido.sinCobrar != null ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Falta cobrar</dt>
+                  <dd className="tabular estado-problema font-semibold">{formatearMonto(pedido.sinCobrar)}</dd>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">Estado</dt>
+                  <dd>
+                    {pedido.medioPago === "cuenta_corriente" && pedido.estadoPago !== "pagado" ? (
+                      <span className="estado-info rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">A cuenta corriente</span>
+                    ) : (
+                      <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
+                    )}
+                  </dd>
+                </div>
+              )}
+              {pedido.recibos.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {pedido.recibos.map((r) => (
+                    <a
+                      key={r.id}
+                      href={`/api/recibos/${r.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`codigo hover:text-brand-orange ${r.estado === "anulado" ? "line-through" : ""}`}
+                    >
+                      {r.numero}
+                    </a>
+                  ))}
+                </div>
+              )}
               {pedido.saldoCliente != null && verCliente && (
                 <div className="flex justify-between gap-3 border-t pt-2">
                   <dt className="text-muted-foreground">Cuenta del cliente</dt>
@@ -431,9 +585,9 @@ export default async function FichaPedidoPage({
                     }`}
                   >
                     {pedido.saldoCliente > 0.004
-                      ? `Debe ${moneda.format(pedido.saldoCliente)}`
+                      ? `Debe ${formatearMonto(pedido.saldoCliente)}`
                       : pedido.saldoCliente < -0.004
-                        ? `A favor ${moneda.format(-pedido.saldoCliente)}`
+                        ? `A favor ${formatearMonto(-pedido.saldoCliente)}`
                         : "Al día"}
                   </dd>
                 </div>
@@ -492,37 +646,66 @@ export default async function FichaPedidoPage({
             )}
           </section>
 
-          <section className="tarjeta p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Historial
-            </h2>
-            <ol className="space-y-3">
-              {pedido.historial.map((h) => (
-                <li key={h.id} className="flex gap-3">
-                  <span
-                    className="mt-2 h-2 w-2 shrink-0 rounded-full bg-border"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <EtiquetaEstado estado={h.estado} contexto="pedido" />
-                    {h.nota && (
-                      <p className="mt-1 text-base text-muted-foreground">
-                        {h.nota}
+          {/* El historial junta los cambios de estado, los cobros y los
+              remitos: el cobro no quedaba en ningún lado, y una venta del
+              mostrador o un acopio mostraban la tarjeta vacía. */}
+          {historial.length > 0 && (
+            <section className="tarjeta p-5">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Historial</h2>
+              <ol className="space-y-3">
+                {historial.map((h) => (
+                  <li key={h.clave} className="flex gap-3">
+                    <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-border" aria-hidden="true" />
+                    <div className="min-w-0">
+                      {h.titulo}
+                      {h.nota && <p className="mt-1 text-base text-muted-foreground">{h.nota}</p>}
+                      <p className="text-sm text-muted-foreground">
+                        {fechaHora.format(h.cuando)}
+                        {h.quien && ` · ${h.quien}`}
                       </p>
-                    )}
-                    <p className="text-sm text-muted-foreground">
-                      {fechaHora.format(h.createdAt)}
-                      {h.quien && ` · ${h.quien}`}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
         </aside>
       </div>
     </div>
   );
+}
+
+const MEDIOS_DE_COBRO: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  deposito: "Depósito",
+  cheque: "Cheque",
+  echeq: "e-Cheq",
+  tarjeta_debito: "Débito",
+  tarjeta_credito: "Crédito",
+  mercado_pago: "Mercado Pago",
+  retencion: "Retención",
+};
+
+/** Lo que falta cobrar del pedido, en una etiqueta. */
+function ChipDeCobro({
+  pedido,
+}: {
+  pedido: { sinCobrar: number | null; cobrado: number; medioPago: string | null; estadoPago: string };
+}) {
+  if (pedido.sinCobrar != null) {
+    return (
+      <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">
+        {pedido.cobrado > 0.004 ? "Cobrado en parte" : "Sin cobrar"}
+      </span>
+    );
+  }
+  if (pedido.medioPago === "cuenta_corriente" && pedido.estadoPago !== "pagado") {
+    return (
+      <span className="estado-info rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">A cuenta corriente</span>
+    );
+  }
+  return null;
 }
 
 /** Qué aviso le corresponde al pedido según dónde está. */

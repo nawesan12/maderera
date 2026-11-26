@@ -220,10 +220,77 @@ func ImportePorMedio(pagos []PagoDeVenta, medio string) float64 {
 
 // AplicarDescuento reparte el descuento entre las líneas y devuelve el que
 // efectivamente quedó (ver el comentario largo del TS).
+//
+// **Al centavo** (mes simulado, H425): el reparto redondea cada precio, y un
+// descuento tipeado de $5.000 quedaba en $5.000,01 (3 × $87.033,33). Lo que
+// sobra o falta lo toma un renglón de a uno; si no hay, uno de cantidad
+// entera se parte en dos (q − 1 al precio repartido y 1 con el centavo). Si
+// ni así cierra, queda el reparto de siempre.
 func AplicarDescuento(lineas []LineaDeVenta, pedido float64) ([]LineaDeVenta, float64) {
+	rebajadas, _, descuento := aplicarDescuento(lineas, pedido)
+	return rebajadas, descuento
+}
+
+// EsElegibleParaLaEscala: el descuento por forma de pago va sobre lo que se
+// vende del catálogo y el corte, no sobre un renglón a mano (un flete, una
+// diferencia): el flete de $15.000 se guardaba a $13.500 (mes simulado,
+// H168).
+func EsElegibleParaLaEscala(l LineaDeVenta) bool { return l.VariantID != nil || l.Corte != nil }
+
+// TodoEsElegible es la base de la escala con la regla descuento_al_flete en
+// «si»: el descuento por forma de pago va también sobre el renglón a mano.
+func TodoEsElegible(LineaDeVenta) bool { return true }
+
+// FaltaLoteOCupon es el problema de un pago con tarjeta sin el lote o el
+// cupón de la terminal (regla lote_y_cupon, H032). Vacío si no falta nada.
+func FaltaLoteOCupon(pagos []PagoDeVenta) string {
+	for _, p := range pagos {
+		if p.Medio != "debito" && p.Medio != "credito" {
+			continue
+		}
+		if p.NroLote == nil || strings.TrimSpace(*p.NroLote) == "" || p.NroCupon == nil || strings.TrimSpace(*p.NroCupon) == "" {
+			return "Falta el lote o el cupón de la tarjeta."
+		}
+	}
+	return ""
+}
+
+// AplicarDescuentoSobre reparte el descuento solo entre las líneas elegibles
+// (el resto sale como está) y devuelve todas, en su orden.
+func AplicarDescuentoSobre(lineas []LineaDeVenta, pedido float64, elegible func(LineaDeVenta) bool) ([]LineaDeVenta, float64) {
+	var sub []LineaDeVenta
+	for _, l := range lineas {
+		if elegible(l) {
+			sub = append(sub, l)
+		}
+	}
+	rebajadas, origen, descuento := aplicarDescuento(sub, pedido)
+	out := make([]LineaDeVenta, 0, len(lineas)+1)
+	k, j := 0, 0
+	for _, l := range lineas {
+		if !elegible(l) {
+			out = append(out, l)
+			continue
+		}
+		for j < len(rebajadas) && origen[j] == k {
+			out = append(out, rebajadas[j])
+			j++
+		}
+		k++
+	}
+	return out, descuento
+}
+
+// aplicarDescuento devuelve además, por cada línea rebajada, el índice de la
+// línea de entrada de la que sale (una partida da dos).
+func aplicarDescuento(lineas []LineaDeVenta, pedido float64) ([]LineaDeVenta, []int, float64) {
+	origen := make([]int, len(lineas))
+	for i := range origen {
+		origen[i] = i
+	}
 	total := TotalDeLaVenta(lineas)
 	if pedido <= 0 || total <= 0 {
-		return lineas, 0
+		return lineas, origen, 0
 	}
 	factor := math.Max(0, (total-pedido)/total)
 	rebajadas := make([]LineaDeVenta, len(lineas))
@@ -231,7 +298,55 @@ func AplicarDescuento(lineas []LineaDeVenta, pedido float64) ([]LineaDeVenta, fl
 		l.PrecioUnitario = ACentavos(float64(l.PrecioUnitario * factor))
 		rebajadas[i] = l
 	}
-	return rebajadas, ACentavos(total - TotalDeLaVenta(rebajadas))
+	rebajadas, origen = alCentavo(rebajadas, origen, ACentavos(math.Max(0, total-pedido)))
+	return rebajadas, origen, ACentavos(total - TotalDeLaVenta(rebajadas))
+}
+
+// alCentavo lleva la suma de los renglones a `objetivo` (ver AplicarDescuento).
+func alCentavo(ls []LineaDeVenta, origen []int, objetivo float64) ([]LineaDeVenta, []int) {
+	r := ACentavos(objetivo - TotalDeLaVenta(ls))
+	if r == 0 || objetivo <= 0 {
+		return ls, origen
+	}
+	// Primero un renglón de a uno, después cualquiera cuya cantidad divida
+	// la diferencia en centavos justos.
+	for _, deAUno := range []bool{true, false} {
+		for i, l := range ls {
+			if (l.Cantidad == 1) != deAUno || !(l.Cantidad > 0) {
+				continue
+			}
+			nuevo := ACentavos(l.PrecioUnitario + r/l.Cantidad)
+			if nuevo <= 0 {
+				continue
+			}
+			prueba := append([]LineaDeVenta{}, ls...)
+			prueba[i].PrecioUnitario = nuevo
+			if TotalDeLaVenta(prueba) == objetivo {
+				return prueba, origen
+			}
+		}
+	}
+	// Un renglón de cantidad entera se parte: q − 1 como está y uno con la
+	// diferencia.
+	for i, l := range ls {
+		if l.Cantidad < 2 || l.Cantidad != math.Trunc(l.Cantidad) {
+			continue
+		}
+		uno := l
+		uno.Cantidad = 1
+		uno.PrecioUnitario = ACentavos(l.PrecioUnitario + r)
+		if uno.PrecioUnitario <= 0 {
+			continue
+		}
+		resto := l
+		resto.Cantidad = l.Cantidad - 1
+		prueba := append(append(append([]LineaDeVenta{}, ls[:i]...), resto, uno), ls[i+1:]...)
+		if TotalDeLaVenta(prueba) == objetivo {
+			o := append(append(append([]int{}, origen[:i]...), origen[i], origen[i]), origen[i+1:]...)
+			return prueba, o
+		}
+	}
+	return ls, origen
 }
 
 func espacioJS(r rune) bool {

@@ -4,9 +4,10 @@ import { Suspense } from "react";
 import { existe } from "@/lib/dal/existencia";
 import { Check, PackageCheck } from "lucide-react";
 import { remitoPorToken } from "@/lib/dal/admin/entregas";
-import { formatearUnidad } from "@/lib/formato";
+import { cantidadConUnidad } from "@/lib/formato";
 import { fechaHoraDeFirma } from "@/lib/entregas/fecha";
 import { Pizarra } from "./pizarra";
+import { VolverAlPedido } from "./volver";
 
 export const metadata: Metadata = {
   title: "Firmar la entrega",
@@ -70,16 +71,28 @@ async function Firma({ token }: { token: string }) {
   // El link sigue sirviendo después de firmar, pero ya no para firmar: muestra
   // la constancia. Es lo que el cliente quiere ver cuando lo vuelve a abrir.
   const firmado = remito.estado !== "preparada";
+  // En un envío firma quien recibe en la obra, no quien retira (mes
+  // simulado: decía «Confirmá lo que retirás» al que recibía el camión).
+  const envio = remito.tipo === "envio";
+  // Lo que se firma: este remito y los de otros pedidos de la misma visita.
+  const grupos = [
+    { numero: remito.numero, pedidoNumero: remito.pedidoNumero, lineas: remito.lineas },
+    ...remito.visita,
+  ];
 
+  // Los colores del tema, no blanco fijo: con el modo oscuro del sistema la
+  // tarjeta quedaba blanca con el texto casi blanco y no se leía qué se
+  // firmaba (mes simulado). El lienzo de la firma sí es blanco: ahí se dibuja
+  // en tinta oscura.
   return (
-    <div className="min-h-screen bg-brand-cream/40 px-4 py-8">
+    <div className="min-h-screen bg-background px-4 py-8 text-foreground">
       <div className="mx-auto max-w-lg space-y-5">
         <header className="text-center">
           <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-orange/10">
             <PackageCheck className="h-6 w-6 text-brand-orange" />
           </span>
           <h1 className="text-2xl font-bold tracking-tight">
-            {firmado ? "Constancia de entrega" : "Confirmá lo que retirás"}
+            {firmado ? "Constancia de entrega" : envio ? "Confirmá lo que recibís" : "Confirmá lo que retirás"}
           </h1>
           <p className="mt-1 text-muted-foreground">
             Remito <span className="tabular">{remito.numero}</span> · pedido{" "}
@@ -87,24 +100,34 @@ async function Firma({ token }: { token: string }) {
           </p>
         </header>
 
-        <section className="overflow-hidden rounded-xl border bg-white">
-          <h2 className="border-b px-5 py-3 font-medium">
-            {firmado ? "Qué se retiró" : "Qué te llevás"}
-          </h2>
-          <ul className="divide-y">
-            {remito.lineas.map((linea, i) => (
-              <li key={i} className="flex justify-between gap-4 px-5 py-3">
-                <span className="min-w-0">{linea.descripcion}</span>
-                <span className="tabular shrink-0 font-medium">
-                  {linea.cantidad} {formatearUnidad(linea.unidad)}
+        {grupos.map((g, n) => (
+          <section key={g.numero} className="tarjeta overflow-hidden">
+            <h2 className="flex flex-wrap items-baseline justify-between gap-x-3 border-b px-5 py-3 font-medium">
+              {firmado ? (envio ? "Qué se entregó" : "Qué se retiró") : envio ? "Qué recibís" : "Qué te llevás"}
+              {grupos.length > 1 && (
+                <span className="tabular text-sm font-normal text-muted-foreground">
+                  {n === 0 ? "" : `Remito ${g.numero} · `}pedido {g.pedidoNumero}
                 </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+              )}
+            </h2>
+            <ul className="divide-y">
+              {g.lineas.map((linea, i) => (
+                <li key={i} className="px-5 py-3">
+                  <span className="flex justify-between gap-4">
+                    <span className="min-w-0">{linea.descripcion}</span>
+                    <span className="tabular shrink-0 font-semibold">{cantidadConUnidad(linea.cantidad, linea.unidad, linea.descripcion)}</span>
+                  </span>
+                  {/* Lo que sale cortado y según qué corte: si falta una
+                      pieza, la firma tiene que servir de constancia. */}
+                  {linea.corte && <span className="mt-0.5 block text-sm text-muted-foreground">{linea.corte}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
 
         {firmado ? (
-          <section className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-6 text-center">
+          <section className="tarjeta p-6 text-center">
             <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-green">
               <Check className="h-6 w-6 text-white" strokeWidth={3} />
             </span>
@@ -125,19 +148,22 @@ async function Firma({ token }: { token: string }) {
 
             {remito.firmaUrl && (
               // Sin optimizar: es una firma, tiene que verse tal cual se trazó.
+              // Va sobre su papel blanco, como se guardó.
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={remito.firmaUrl}
                 alt="Firma registrada"
-                className="mx-auto mt-4 h-20 object-contain"
+                className="mx-auto mt-4 h-20 rounded-md bg-white object-contain p-1"
               />
             )}
+            <VolverAlPedido />
           </section>
         ) : (
           <>
-            <section className="rounded-xl border bg-white p-5">
+            <section className="tarjeta p-5">
               <Pizarra
                 token={token}
+                envio={envio}
                 nombreSugerido={remito.receptorNombre}
                 documentoSugerido={remito.receptorDocumento}
               />

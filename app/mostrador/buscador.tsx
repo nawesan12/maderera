@@ -20,6 +20,9 @@ import {
 } from "@/lib/ventas/forma-de-venta";
 import { buscarEnMostrador } from "./actions";
 
+/** «P-2026-0020», «p-2026-20» o «P2026-20»: el número de un presupuesto. */
+const ES_PRESUPUESTO = /^\s*p-?\d{4}-\d{1,6}\s*$/i;
+
 export function Buscador({
   copia,
   branchId,
@@ -29,6 +32,7 @@ export function Buscador({
   onSuelta,
   onCortar,
   onNoEntra,
+  onPresupuesto,
   sePuedeCortar,
   sinConexion,
 }: {
@@ -45,6 +49,8 @@ export function Buscador({
   onCortar: (placa: ResultadoDeMostrador) => void;
   /** Se quiso agregar algo que no entra así (sin precio, o con decimales lo que va entero). */
   onNoEntra: (texto: string) => void;
+  /** Se tipeó el número de un presupuesto («P-2026-0020»): se trae a la venta. */
+  onPresupuesto?: (numero: string) => void;
   /** Sin conexión, Ctrl+Enter sobre una placa no cobra. */
   sinConexion: boolean;
   /**
@@ -199,6 +205,15 @@ export function Buscador({
               return;
             }
 
+            // El número de un presupuesto trae sus renglones y su cliente
+            // (mes simulado: no había forma de cobrarlo desde acá).
+            if (e.key === "Enter" && onPresupuesto && !sinConexion && ES_PRESUPUESTO.test(texto)) {
+              e.preventDefault();
+              onPresupuesto(texto.trim());
+              setTexto("");
+              return;
+            }
+
             if (e.key === "Enter") {
               const r = visibles[elegido];
               // La regla entera, con sus pruebas, está en `enterDelBuscador`.
@@ -283,97 +298,18 @@ export function Buscador({
       {visibles.length > 0 && (
         <ul className="absolute inset-x-0 top-full z-20 mt-1.5 max-h-[420px] overflow-y-auto rounded-xl border border-linea bg-popover shadow-lg">
           {visibles.map((r, i) => (
-            <li
+            <FilaDeResultado
               key={r.variantId}
-              className={`flex items-stretch ${i === elegido ? "bg-hundida" : ""}`}
-            >
-              <button
-                // Sin precio no se agrega (decisión 4): no hay productos a $0.
-                onClick={() => (r.precio > 0 ? elegir(r) : onNoEntra(sinPrecio(r)))}
-                aria-disabled={!(r.precio > 0)}
-                className={`flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-hundida ${
-                  r.precio > 0 ? "" : "text-muted-foreground"
-                }`}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-medium">
-                    {r.producto} — {r.medida}
-                  </span>
-                  <span className="block text-sm text-muted-foreground">
-                    {r.sku} · {r.stock > 0 ? `${formatearCantidad(r.stock)} en esta sucursal` : "sin stock acá"}
-                  </span>
-                </span>
-                <span className="tabular shrink-0 text-right text-lg font-semibold">
-                  {r.precio > 0 ? formatearPrecio(r.precio) : "sin precio"}
-                  {seVendePorM2(comoSeVende(r)) && (
-                    <span className="block text-sm font-normal text-muted-foreground">
-                      el m²
-                    </span>
-                  )}
-                </span>
-                {i === elegido && (
-                  <kbd className="shrink-0 rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
-                    Enter
-                  </kbd>
-                )}
-              </button>
-
-              {/* Media placa: dos botones y no un menú, porque el sentido
-                  cambia qué piezas entran y se elige mirando la placa. Con
-                  teclado, Mayús + Enter (al largo) y Alt + Enter (al ancho). */}
-              {admiteMedia(comoSeVende(r)) && r.precio > 0 && (
-                <span className="flex shrink-0 items-stretch border-l border-linea">
-                  {(
-                    [
-                      ["media_largo", "Media a lo largo", "Mayús"],
-                      ["media_ancho", "Media al ancho", "Alt"],
-                    ] as const
-                  ).map(([valor, texto, tecla]) => (
-                    <button
-                      key={valor}
-                      onClick={() => elegir(r, valor)}
-                      title={`${nombreDePresentacion(valor)} · ${formatearPrecio(
-                        precioDeLinea(r.precio, comoSeVende(r), valor),
-                      )}`}
-                      className="flex flex-col items-center justify-center px-3 text-sm font-medium transition-colors hover:bg-hundida"
-                    >
-                      {texto}
-                      <span className="tabular text-xs text-muted-foreground">
-                        {formatearPrecio(precioDeLinea(r.precio, comoSeVende(r), valor))}
-                      </span>
-                      {i === elegido && (
-                        <kbd className="mt-0.5 rounded border border-linea px-1 text-[11px] text-muted-foreground">
-                          {tecla} + Enter
-                        </kbd>
-                      )}
-                    </button>
-                  ))}
-                </span>
-              )}
-
-              {/* Cortar, solo para lo que tiene medida de placa cargada: un
-                  tarugo no se corta, y sin las dos medidas no hay plano.
-                  Sin conexión tampoco aparece: la copia local no guarda las
-                  medidas de la placa, y un corte es un trabajo del taller que
-                  necesita el catálogo. */}
-              {sePuedeCortar && r.largoMm && r.anchoMm && (
-                <button
-                  onClick={() => {
-                    onCortar(r as ResultadoDeMostrador);
-                    setTexto("");
-                  }}
-                  className="flex shrink-0 items-center gap-1.5 border-l border-linea px-4 text-base font-medium text-acento-texto transition-colors hover:bg-hundida"
-                >
-                  <Scissors className="h-4 w-4" />
-                  Cortar
-                  {i === elegido && (
-                    <kbd className="rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
-                      Ctrl + Enter
-                    </kbd>
-                  )}
-                </button>
-              )}
-            </li>
+              r={r}
+              elegido={i === elegido}
+              sePuedeCortar={sePuedeCortar}
+              onElegir={(media) => elegir(r, media)}
+              onSinPrecio={() => onNoEntra(sinPrecio(r))}
+              onCortar={() => {
+                onCortar(r as ResultadoDeMostrador);
+                setTexto("");
+              }}
+            />
           ))}
         </ul>
       )}
@@ -381,6 +317,119 @@ export function Buscador({
   );
 }
 
+
+/**
+ * Un resultado del buscador: el nombre arriba y entero; la media placa y
+ * «Cortar», abajo. Al lado, con las teclas del elegido, al nombre le quedaba
+ * una letra por renglón («M…», «Me…») y se agregaba la medida equivocada sin
+ * poder leerla (mes simulado, H017).
+ */
+function FilaDeResultado({
+  r,
+  elegido,
+  sePuedeCortar,
+  onElegir,
+  onSinPrecio,
+  onCortar,
+}: {
+  r: Parameters<typeof comoSeVende>[0] & {
+    variantId: string;
+    sku: string;
+    producto: string;
+    medida: string;
+    precio: number;
+    stock: number;
+  };
+  elegido: boolean;
+  sePuedeCortar: boolean;
+  onElegir: (media?: "media_largo" | "media_ancho") => void;
+  onSinPrecio: () => void;
+  onCortar: () => void;
+}) {
+  const media = admiteMedia(comoSeVende(r)) && r.precio > 0;
+  const cortar = sePuedeCortar && Boolean(r.largoMm && r.anchoMm);
+  return (
+      <li className={elegido ? "bg-hundida" : ""}>
+        <button
+          // Sin precio no se agrega (decisión 4): no hay productos a $0.
+          onClick={() => (r.precio > 0 ? onElegir() : onSinPrecio())}
+          aria-disabled={!(r.precio > 0)}
+          className={`flex w-full min-w-0 items-center gap-3 px-4 pt-3 text-left transition-colors hover:bg-hundida ${
+            media || cortar ? "pb-1.5" : "pb-3"
+          } ${r.precio > 0 ? "" : "text-muted-foreground"}`}
+        >
+          <span className="min-w-0 flex-1">
+            <span className="line-clamp-2 break-words text-base font-medium">
+              {r.producto} — {r.medida}
+            </span>
+            <span className="block text-sm text-muted-foreground">
+              {r.sku} · {r.stock > 0 ? `${formatearCantidad(r.stock)} disponibles acá` : "sin stock acá"}
+            </span>
+          </span>
+          <span className="tabular shrink-0 text-right text-lg font-semibold">
+            {r.precio > 0 ? formatearPrecio(r.precio) : "sin precio"}
+            {seVendePorM2(comoSeVende(r)) && (
+              <span className="block text-sm font-normal text-muted-foreground">
+                el m²
+              </span>
+            )}
+          </span>
+          {elegido && (
+            <kbd className="shrink-0 rounded border border-linea px-1.5 py-0.5 text-xs text-muted-foreground">
+              Enter
+            </kbd>
+          )}
+        </button>
+
+        {(media || cortar) && (
+          <span className="flex flex-wrap justify-end gap-1.5 px-4 pb-2.5">
+            {/* Media placa: dos botones y no un menú, porque el sentido
+                cambia qué piezas entran y se elige mirando la placa. Con
+                teclado, Mayús + Enter (al largo) y Alt + Enter (al ancho). */}
+            {media &&
+              (
+                [
+                  ["media_largo", "Media a lo largo", "Mayús"],
+                  ["media_ancho", "Media al ancho", "Alt"],
+                ] as const
+              ).map(([valor, texto, tecla]) => (
+                <button
+                  key={valor}
+                  onClick={() => onElegir(valor)}
+                  title={nombreDePresentacion(valor) ?? undefined}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-background px-2.5 text-sm font-medium shadow-[var(--sombra-hoja)] transition-colors hover:bg-hundida"
+                >
+                  {texto}
+                  <span className="tabular text-muted-foreground">
+                    {formatearPrecio(precioDeLinea(r.precio, comoSeVende(r), valor))}
+                  </span>
+                  {elegido && (
+                    <kbd className="rounded border border-linea px-1 text-[11px] text-muted-foreground">{tecla} + Enter</kbd>
+                  )}
+                </button>
+              ))}
+
+            {/* Cortar, solo para lo que tiene medida de placa cargada: un
+                tarugo no se corta, y sin las dos medidas no hay plano.
+                Sin conexión tampoco aparece: un corte es un trabajo del
+                taller que necesita el catálogo. */}
+            {cortar && (
+              <button
+                onClick={onCortar}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-background px-2.5 text-sm font-medium text-acento-texto shadow-[var(--sombra-hoja)] transition-colors hover:bg-hundida"
+              >
+                <Scissors className="h-4 w-4" />
+                Cortar
+                {elegido && (
+                  <kbd className="rounded border border-linea px-1 text-[11px] text-muted-foreground">Ctrl + Enter</kbd>
+                )}
+              </button>
+            )}
+          </span>
+        )}
+      </li>
+  );
+}
 
 /** Lo que el buscador sabe de cómo se vende un resultado. */
 export function comoSeVende(r: {

@@ -22,10 +22,14 @@ import {
 export function ExportarAsientos({
   periodo,
   rotos,
+  secundario = false,
 }: {
   periodo: string;
   rotos: number;
+  /** Con «Cerrar el mes» al lado, el principal es ese. */
+  secundario?: boolean;
 }) {
+  const estilo = secundario ? "tarjeta-hundida rounded-xl" : "rounded-lg boton-accion";
   const [abierto, setAbierto] = useState(false);
   const href = `/admin/cierre/exportar?periodo=${periodo}`;
 
@@ -33,7 +37,7 @@ export function ExportarAsientos({
     return (
       <a
         href={href}
-        className="inline-flex h-11 items-center gap-1.5 rounded-lg boton-accion px-4 text-base font-medium transition-colors"
+        className={`inline-flex h-11 items-center gap-1.5 ${estilo} px-4 text-base font-medium transition-colors`}
       >
         <Download className="h-4 w-4" />
         Asientos en CSV
@@ -46,7 +50,7 @@ export function ExportarAsientos({
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="inline-flex h-11 items-center gap-1.5 rounded-lg boton-accion px-4 text-base font-medium transition-colors"
+        className={`inline-flex h-11 items-center gap-1.5 ${estilo} px-4 text-base font-medium transition-colors`}
       >
         <Download className="h-4 w-4" />
         Asientos en CSV

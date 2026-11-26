@@ -24,7 +24,7 @@ export function AvisoConexion({
   esAdmin?: boolean;
 }) {
   if (compacto) {
-    return <AvisoCompacto estado={estado} />;
+    return <AvisoCompacto estado={estado} esAdmin={esAdmin} />;
   }
 
   // Conectado, pero al simulador: nada sale a WhatsApp y hay que decirlo igual
@@ -42,19 +42,19 @@ export function AvisoConexion({
   }
 
   if (estado.proveedor === "demo") {
+    // En un renglón, como el de «Conectado»: en dos se comía el alto de la
+    // bandeja a 1280 (mes simulado).
     return (
-      <section className="tarjeta-atencion flex flex-wrap items-start gap-x-4 gap-y-3 p-5">
-        <FlaskConical className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
+      <section className="tarjeta-atencion flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
+        <FlaskConical className="h-5 w-5 shrink-0 text-brand-orange" />
 
-        <div className="min-w-[16rem] flex-1">
-          <h2 className="text-base font-medium">Modo demostración</h2>
-          {/* La bandeja funciona completa y guarda todo. Para que los mensajes
-              salgan hay que dar de alta el número en la Cloud API de Meta:
-              verificar la empresa, migrar el número y hacer aprobar los textos. */}
-          <p className="mt-1 text-base font-medium">
-            Los mensajes no salen a WhatsApp.
-          </p>
-        </div>
+        {/* La bandeja funciona completa y guarda todo. Para que los mensajes
+            salgan hay que dar de alta el número en la Cloud API de Meta:
+            verificar la empresa, migrar el número y hacer aprobar los textos. */}
+        <h2 className="min-w-0 flex-1 text-base">
+          <span className="font-medium">Modo demostración:</span>{" "}
+          <span className="text-muted-foreground">los mensajes no salen a WhatsApp.</span>
+        </h2>
 
         {esAdmin && (
         <Link
@@ -129,21 +129,33 @@ export function AvisoConexion({
  * demostración no se saca ni se puede cerrar: quien está contestando todo el
  * día tiene que saber en todo momento si lo que escribe está llegando.
  */
-function AvisoCompacto({ estado }: { estado: EstadoConexion }) {
+function AvisoCompacto({ estado, esAdmin }: { estado: EstadoConexion; esAdmin: boolean }) {
   if (estado.proveedor === "demo") {
+    // Un solo renglón: en el teléfono, cartel y cabecera se comían media
+    // pantalla. «Qué falta» lleva a la configuración, que es del admin: a
+    // la vendedora la rebotaba al panel (mes simulado).
     return (
-      <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-brand-orange/35 bg-brand-orange/[0.07] px-3.5 py-2 text-base">
+      <p className="flex shrink-0 items-center gap-2 rounded-lg border border-brand-orange/35 bg-brand-orange/[0.07] px-3 py-1.5 text-sm sm:text-base">
         <FlaskConical className="h-4 w-4 shrink-0 text-brand-orange" />
-        <span className="font-medium">Modo demostración:</span>
-        <span className="text-muted-foreground">
-          se guarda todo, pero los mensajes no salen a WhatsApp.
+        {/* En el teléfono, corto para que entre entero sin elipsis. */}
+        <span className="min-w-0 truncate">
+          <span className="font-medium">
+            <span className="hidden sm:inline">Modo demostración</span>
+            <span className="sm:hidden">Demostración</span>:
+          </span>{" "}
+          <span className="text-muted-foreground">
+            <span className="hidden sm:inline">los mensajes no salen a WhatsApp.</span>
+            <span className="sm:hidden">no sale nada a WhatsApp.</span>
+          </span>
         </span>
-        <Link
-          href="/admin/whatsapp/configuracion"
-          className="font-medium text-brand-orange-dark underline underline-offset-2"
-        >
-          Qué falta
-        </Link>
+        {esAdmin && (
+          <Link
+            href="/admin/whatsapp/configuracion"
+            className="ml-auto shrink-0 font-medium text-brand-orange-dark underline underline-offset-2"
+          >
+            Qué falta
+          </Link>
+        )}
       </p>
     );
   }

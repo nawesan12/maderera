@@ -24,10 +24,12 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
-import { hoyEnArgentina, importeDelCampo, importeIlegible } from "@/lib/formato";
-import { Hoja, Opciones, Seccion } from "@/components/admin/formulario";
+import { CIRCUITOS } from "@/lib/circuito";
+import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
+import { formatearMonto, hoyEnArgentina, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
+import { Hoja, Interruptor, Opciones, Seccion } from "@/components/admin/formulario";
 import { cargarGasto, type EstadoGasto } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const CATEGORIAS = {
   flete: "Fletes",
@@ -71,17 +73,28 @@ const MEDIOS = [
   { valor: "cheque", texto: "Cheque", icono: FileText },
 ];
 
-const OPCIONES_CIRCUITO = CIRCUITOS.map((c) => ({
-  valor: c,
-  texto: ETIQUETA_CIRCUITO[c],
-}));
+const TIPOS_DE_FACTURA = [
+  { valor: "factura_a", texto: "A" },
+  { valor: "factura_b", texto: "B" },
+  { valor: "factura_c", texto: "C" },
+];
+
+const ALICUOTAS = [
+  { valor: "21", texto: "21 %" },
+  { valor: "10.5", texto: "10,5 %" },
+  { valor: "27", texto: "27 %" },
+];
 
 /**
  * Anotar un gasto.
  *
- * La sucursal solo hace falta cuando se paga en efectivo, porque es lo que
- * decide **de qué cajón salió la plata**. Con transferencia el gasto sale del
- * banco y pedir la sucursal sería pedir un dato que después no significa nada.
+ * La sucursal se pide siempre (mes simulado, H200: la luz del Aserradero
+ * pagada por banco no quedaba en el Aserradero). En efectivo, además, es de
+ * qué cajón salió la plata, y se ve cuánto hay en él.
+ *
+ * **Con factura** (H200/H359): el comprobante del proveedor, con su IVA,
+ * entra al libro IVA compras y da crédito fiscal; el mismo número dos veces
+ * se rechaza.
  *
  * Los valores viven en el estado y viajan en la llamada a `cargarGasto`: las
  * fichas de `Opciones` son radios sin formulario, así que sus nombres solo
@@ -91,9 +104,11 @@ export function CargarGasto({
   sucursales,
   proveedores,
 }: {
-  sucursales: { id: string; nombre: string; conTurno: boolean; deLaSesion: boolean }[];
+  sucursales: { id: string; nombre: string; conTurno: boolean; deLaSesion: boolean; enCaja: number | null; cambioFijo: number }[];
   proveedores: { id: string; nombre: string }[];
 }) {
+  const etiquetasCircuito = useEtiquetasDelCircuito();
+  const opcionesCircuito = CIRCUITOS.map((c) => ({ valor: c, texto: etiquetasCircuito[c] }));
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoGasto>({});
   const [enCurso, empezar] = useTransition();
@@ -107,17 +122,37 @@ export function CargarGasto({
   // La caja de quien carga, si se sabe (sucursalPropuesta); si no, se elige.
   const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
   const [supplierId, setSupplierId] = useState("");
+  const [conFactura, setConFactura] = useState(false);
+  const [tipo, setTipo] = useState("factura_a");
+  const [puntoVenta, setPuntoVenta] = useState("");
+  const [numero, setNumero] = useState("");
+  const [alicuota, setAlicuota] = useState("21");
+  const [iva, setIva] = useState("");
 
   const enEfectivo = medio === "efectivo";
   const sucursal = sucursales.find((s) => s.id === branchId);
+  // El IVA que trae un importe final a esa alícuota: se propone y se corrige.
+  const total = importeDelCampo(importe);
+  const ivaSugerido = total > 0 && tipo === "factura_a" ? Math.round((total - total / (1 + Number(alicuota) / 100)) * 100) / 100 : 0;
+  const ivaFinal = iva === "" ? ivaSugerido : importeDelCampo(iva);
+  // Lo que deja el gasto en el cajón: no baja del cambio fijo, y sin cambio
+  // fijo no queda en negativo (AlcanzaElCajon en Go).
+  const quedaria = enEfectivo && sucursal?.enCaja != null ? Math.round((sucursal.enCaja - total) * 100) / 100 : null;
+  const piso = Math.max(0, sucursal?.cambioFijo ?? 0);
+  const bajaDelCambio = quedaria !== null && sucursal !== undefined && quedaria < piso;
+  // Efectivo de hoy de una caja sin turno: Go lo rechaza (el efectivo no
+  // saldría de ningún arqueo). Se dice al elegirla y no después de tocar el
+  // botón: el rechazo quedaba abajo y parecía que no pasaba nada (mes
+  // simulado, tercera prueba). Para otro día decide Go, que mira los turnos
+  // de ese día.
+  const sinTurnoHoy = enEfectivo && sucursal !== undefined && !sucursal.conTurno && fecha === hoyEnArgentina();
 
   return (
     <Hoja>
       <Seccion titulo="Gasto" icono={Receipt}>
         <label className="block">
           <span className="text-sm font-medium">Fecha</span>
-          <input
-            type="date"
+          <CampoFecha
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
@@ -157,13 +192,13 @@ export function CargarGasto({
         </label>
 
         <label className="block md:col-span-2">
-          <span className="text-sm font-medium">Proveedor (opcional)</span>
+          <span className="text-sm font-medium">A quién se le pagó</span>
           <select
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
             className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           >
-            <option value="">—</option>
+            <option value="">{conFactura ? "Elegí el proveedor" : "—"}</option>
             {proveedores.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nombre}
@@ -171,6 +206,54 @@ export function CargarGasto({
             ))}
           </select>
         </label>
+
+        <div className="md:col-span-2">
+          <Interruptor etiqueta="Con factura" icono={FileText} marcado={conFactura} alCambiar={setConFactura} />
+        </div>
+        {conFactura && (
+          <div className="grid gap-3 md:col-span-2 sm:grid-cols-[auto_7rem_minmax(0,1fr)]">
+            <div className="space-y-1">
+              <span className="text-sm font-medium">Tipo</span>
+              <Opciones nombre="gasto-factura-tipo" opciones={TIPOS_DE_FACTURA} valor={tipo} alCambiar={setTipo} columnas={3} />
+            </div>
+            <label className="block">
+              <span className="text-sm font-medium">Punto de venta</span>
+              <input
+                inputMode="numeric"
+                value={puntoVenta}
+                onChange={(e) => setPuntoVenta(e.target.value.replace(/\D/g, ""))}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium">Número</span>
+              <input
+                inputMode="numeric"
+                value={numero}
+                onChange={(e) => setNumero(e.target.value.replace(/\D/g, ""))}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+            {tipo === "factura_a" && (
+              <>
+                <div className="space-y-1">
+                  <span className="text-sm font-medium">Alícuota</span>
+                  <Opciones nombre="gasto-factura-alicuota" opciones={ALICUOTAS} valor={alicuota} alCambiar={setAlicuota} columnas={3} />
+                </div>
+                <label className="block sm:col-span-2">
+                  <span className="text-sm font-medium">IVA</span>
+                  <input
+                    inputMode="decimal"
+                    value={iva === "" && ivaSugerido ? importeParaElCampo(ivaSugerido) : iva}
+                    aria-invalid={importeIlegible(iva) || undefined}
+                    onChange={(e) => setIva(e.target.value)}
+                    className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        )}
       </Seccion>
 
       <Seccion titulo="Pago" icono={Wallet}>
@@ -185,9 +268,9 @@ export function CargarGasto({
           />
         </div>
 
-        {enEfectivo && (
+        {sucursales.length > 0 && (
           <div className="space-y-1 md:col-span-2">
-            <span className="text-sm font-medium">De qué caja salió</span>
+            <span className="text-sm font-medium">{enEfectivo ? "De qué caja salió" : "Sucursal"}</span>
             {/* Las sucursales son pocas: fichas. Si algún día son muchas,
                 vuelve el desplegable. */}
             {sucursales.length <= 6 ? (
@@ -195,9 +278,11 @@ export function CargarGasto({
                 nombre="gasto-caja"
                 opciones={sucursales.map((s) => ({
                   valor: s.id,
-                  texto: s.conTurno
+                  texto: !enEfectivo
                     ? s.nombre
-                    : `${s.nombre} · sin turno abierto`,
+                    : s.conTurno && s.enCaja !== null
+                      ? `${s.nombre} · ${formatearMonto(s.enCaja)}`
+                      : `${s.nombre} · sin turno abierto`,
                   icono: Store,
                 }))}
                 valor={branchId}
@@ -213,14 +298,21 @@ export function CargarGasto({
                 {sucursales.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.nombre}
-                    {s.conTurno ? "" : " · sin turno abierto"}
+                    {enEfectivo && (s.conTurno && s.enCaja !== null ? ` · ${formatearMonto(s.enCaja)}` : " · sin turno abierto")}
                   </option>
                 ))}
               </select>
             )}
-            {sucursal && !sucursal.conTurno && (
-              <span className="block text-sm text-muted-foreground">
-                El gasto se anota igual, pero no va a salir de ningún turno.
+            {sinTurnoHoy && sucursal && (
+              <span className="block text-base font-medium text-saldo-debe" role="alert">
+                {`No hay caja abierta en ${sucursal.nombre}`}
+              </span>
+            )}
+            {bajaDelCambio && sucursal && (
+              <span className="tabular block text-base font-medium text-saldo-debe" role="alert">
+                {piso > 0
+                  ? `Deja ${formatearMonto(quedaria)} con un cambio fijo de ${formatearMonto(sucursal.cambioFijo)}`
+                  : `En el cajón hay ${formatearMonto(sucursal.enCaja)}`}
               </span>
             )}
           </div>
@@ -237,7 +329,7 @@ export function CargarGasto({
           <span className="text-sm font-medium">Circuito de facturación</span>
           <Opciones
             nombre="gasto-circuito"
-            opciones={OPCIONES_CIRCUITO}
+            opciones={opcionesCircuito}
             valor={circuito}
             alCambiar={(v) => setCircuito(v as "blanco" | "negro")}
             columnas={2}
@@ -271,13 +363,25 @@ export function CargarGasto({
                   importe: importeDelCampo(importe),
                   medio: medio as "efectivo",
                   circuito,
-                  branchId: enEfectivo ? branchId : undefined,
+                  branchId: branchId || undefined,
                   supplierId: supplierId || undefined,
+                  factura: conFactura
+                    ? {
+                        tipo,
+                        puntoVenta: Number(puntoVenta || 0),
+                        numero: Number(numero || 0),
+                        iva21: tipo === "factura_a" && alicuota === "21" ? ivaFinal : 0,
+                        iva105: tipo === "factura_a" && alicuota === "10.5" ? ivaFinal : 0,
+                        iva27: tipo === "factura_a" && alicuota === "27" ? ivaFinal : 0,
+                      }
+                    : undefined,
                 });
                 setEstado(r);
                 if (r.ok) {
                   setDescripcion("");
                   setImporte("");
+                  setNumero("");
+                  setIva("");
                   router.refresh();
                 }
               })
@@ -287,10 +391,13 @@ export function CargarGasto({
               !descripcion.trim() ||
               importeIlegible(importe) ||
               importeDelCampo(importe) <= 0 ||
-              // Sin sucursal, el efectivo no saldría de ninguna caja (y Go no avisa).
-              (enEfectivo && sucursales.length > 0 && !branchId)
+              // Sin sucursal, el efectivo no saldría de ninguna caja.
+              (enEfectivo && sucursales.length > 0 && !branchId) ||
+              bajaDelCambio ||
+              sinTurnoHoy ||
+              (conFactura && (!supplierId || !numero || importeIlegible(iva)))
             }
-            className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50 sm:w-auto"
           >
             {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
             Anotar el gasto

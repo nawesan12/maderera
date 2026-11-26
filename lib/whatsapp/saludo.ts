@@ -1,0 +1,39 @@
+/**
+ * Cómo se nombra a alguien en «Hola …,».
+ *
+ * A una persona, por el primer nombre; a una empresa, por el nombre entero
+ * sin la forma societaria: «Hola Carpintería,» salía de «Carpintería Prueba
+ * SRL» (mes simulado). Espejo de backend/internal/whatsapp/saludo.go.
+ */
+
+const FORMAS_SOCIETARIAS = new Set(["srl", "sa", "sas", "sau", "sh", "sca", "scs", "sc", "ltda", "coop", "saic", "saci"]);
+
+const RUBROS = new Set([
+  "carpinteria", "maderera", "maderas", "constructora", "construcciones", "corralon", "aberturas", "muebles",
+  "amoblamientos", "ferreteria", "herreria", "taller", "fabrica", "distribuidora", "comercial", "grupo",
+  "industrias", "estudio", "inmobiliaria", "empresa", "obras", "cooperativa", "aserradero", "metalurgica",
+]);
+
+function clave(palabra: string): string {
+  return palabra
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/^[,;]+|[,;]+$/g, "");
+}
+
+/** Vacío si no hay nombre. `primera` decide cómo se toma el de una persona. */
+export function nombreDeSaludo(nombre: string | null | undefined, primera: (n: string) => string = (n) => n.trim().split(/\s+/)[0] ?? ""): string {
+  const palabras = (nombre ?? "").trim().split(/\s+/).filter(Boolean);
+  if (palabras.length === 0) return "";
+  let corte = palabras.length;
+  for (let i = 1; i < palabras.length; i++) {
+    if (FORMAS_SOCIETARIAS.has(clave(palabras[i]))) {
+      corte = i;
+      break;
+    }
+  }
+  if (corte === palabras.length && !RUBROS.has(clave(palabras[0]))) return primera(nombre ?? "");
+  return palabras.slice(0, corte).join(" ").replace(/[,;]+$/, "");
+}

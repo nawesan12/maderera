@@ -23,10 +23,13 @@ import type { PlacaDelPlano, PlanoDeCorte } from "@/lib/cortes/tipos";
 export function PlanoSimple({
   plano,
   unaColumna,
+  media,
 }: {
   plano: PlanoDeCorte;
   /** En la columna del armador las placas van una abajo de otra, grandes. */
   unaColumna?: boolean;
+  /** Sale de media placa: cada recuadro es una media. */
+  media?: boolean;
 }) {
   if (plano.placas.length === 0) return null;
 
@@ -35,7 +38,7 @@ export function PlanoSimple({
       {plano.placas.map((placa) => (
         <figure key={placa.numero} className="m-0 space-y-1.5">
           <figcaption className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-base font-medium">Placa {placa.numero}</span>
+            <span className="text-base font-medium">{media ? "Media" : "Placa"} {placa.numero}</span>
             <span className="text-sm text-muted-foreground">
               {placa.piezas.length}{" "}
               {placa.piezas.length === 1 ? "pieza" : "piezas"} ·{" "}
@@ -83,10 +86,13 @@ function Dibujo({
         const medida = `${p.ancho}×${p.alto}`;
         // El texto se achica hasta entrar en vez de desaparecer: una pieza
         // fina sin su medida obliga a ir a buscarla a otro lado.
+        // Angosta y alta, la medida va parada: acostada se pisaba con la de
+        // al lado (H194). Un dígito ocupa ~0,6 del cuerpo.
+        const parada = p.alto > p.ancho * 1.4;
         const cuerpo = Math.min(
           92,
-          p.alto * 0.38,
-          (p.ancho * 1.7) / medida.length,
+          parada ? p.ancho * 0.55 : p.alto * 0.38,
+          ((parada ? p.alto : p.ancho) * 0.85) / (medida.length * 0.6),
         );
 
         return (
@@ -113,6 +119,7 @@ function Dibujo({
                 fontWeight={600}
                 textAnchor="middle"
                 className="fill-foreground"
+                transform={parada ? `rotate(-90 ${p.x + p.ancho / 2} ${p.y + p.alto / 2})` : undefined}
               >
                 {medida}
               </text>

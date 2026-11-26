@@ -168,27 +168,34 @@ func nombreComprobante(tipo string) string {
 
 // RemitoCompleto lee un remito para imprimirlo o mostrarlo. No mira la
 // sesión: cada pantalla decide antes quién lo ve.
+//
+// El domicilio de un envío va con la zona: el fletero leía «Av. Colón 1234»
+// sin saber de qué ciudad (tercera prueba, Tandil).
 func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoCompleto, error) {
 	if !plataforma.UUIDValido(id) {
 		return nil, ErrNoEsta
 	}
 	var r RemitoCompleto
-	var slug *string
+	var slug, zona *string
 	err := s.pool.QueryRow(ctx, `
 		SELECT d.id, d.numero, d.tipo::text, d.estado::text, d.receptor_nombre, d.receptor_documento, d.firma_url, d.firmado_at,
 		  d.notas, d.created_at, o.numero, o.id, o.contacto_nombre, o.direccion_entrega, o.customer_id, o.estado_pago::text,
-		  o.medio_pago::text, b.name, b.slug, s.transportista, s.numero_seguimiento, `+fragmentos.SinCobrarDelPedido+`::float8
+		  o.medio_pago::text, b.name, b.slug, s.transportista, s.numero_seguimiento, `+fragmentos.SinCobrarDelPedido+`::float8,
+		  o.zona_envio
 		FROM deliveries d JOIN orders o ON o.id = d.order_id
 		LEFT JOIN branches b ON b.id = d.branch_id
 		LEFT JOIN shipments s ON s.delivery_id = d.id
 		WHERE d.id = $1 LIMIT 1`, id).Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.ReceptorDocumento, &r.FirmaURL,
 		&r.FirmadoAt, &r.Notas, &r.CreatedAt, &r.PedidoNumero, &r.PedidoID, &r.ClienteNombre, &r.ClienteDireccion, &r.CustomerID,
-		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar)
+		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar, &zona)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
 	if err != nil {
 		return nil, err
+	}
+	if r.Tipo == "envio" {
+		r.ClienteDireccion = DomicilioConZona(r.ClienteDireccion, zona)
 	}
 	if slug != nil {
 		if d, ok := direcciones[*slug]; ok {
@@ -382,4 +389,21 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 		out.Factura = &pdf.FacturaDelRemito{Etiqueta: f.Etiqueta, Cae: deTexto(f.Cae), CaeVencimiento: f.CaeVencimiento}
 	}
 	return out
+}
+
+// DomicilioConZona suma la zona de envío al domicilio, salvo que ya la diga.
+func DomicilioConZona(domicilio, zona *string) *string {
+	if zona == nil || strings.TrimSpace(*zona) == "" {
+		return domicilio
+	}
+	z := strings.TrimSpace(*zona)
+	if domicilio == nil || strings.TrimSpace(*domicilio) == "" {
+		return &z
+	}
+	d := strings.TrimSpace(*domicilio)
+	if strings.Contains(strings.ToLower(d), strings.ToLower(z)) {
+		return &d
+	}
+	d += " · " + z
+	return &d
 }

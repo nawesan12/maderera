@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -304,7 +305,53 @@ func (s *Servicio) planoDelCorte(ctx context.Context, k CorteDeMostrador) (corte
 	if k.AcomodoManual != nil {
 		d.Fijadas = cortes.LeerAcomodoManual(*k.AcomodoManual)
 	}
-	return cortes.ACobrar(d), cortes.MetrosDeTapacanto(conCanto)
+	cobro := cortes.ACobrar(d)
+	if n := pasadasConfirmadas(ctx, s.pool, k); n > 0 && cobro.Pasadas > 0 {
+		cobro.Pasadas = n
+	}
+	return cobro, cortes.MetrosDeTapacanto(conCanto)
+}
+
+// pasadasConfirmadas son las pasadas guardadas del corte de la cola que se
+// cobra (las que confirmó el taller), si el despiece que llega es el suyo:
+// la ficha dice esas (cortes.PasadasACobrar) y el mostrador cobraba las del
+// plano, una más (tercera prueba, CRT-7302: 6 en la ficha, 7 al cobrar).
+// Con el despiece cambiado, manda el plano. 0 si no hay.
+func pasadasConfirmadas(ctx context.Context, db precios.Consultador, k CorteDeMostrador) int {
+	if k.Existente == nil {
+		return 0
+	}
+	var pasadas int
+	var piezas []PiezaDeCorte
+	var crudo []byte
+	if err := db.QueryRow(ctx, `SELECT co.pasadas::int, coalesce((SELECT json_agg(json_build_object('largoMm', ci.largo_mm, 'anchoMm', ci.ancho_mm,
+		  'cantidad', ci.cantidad, 'respetaVeta', ci.respeta_veta) ORDER BY ci.orden, ci.id) FROM cutting_items ci WHERE ci.cutting_order_id = co.id), '[]')
+		FROM cutting_orders co WHERE co.id = $1 AND co.order_id IS NULL AND co.estado <> 'cancelado'`, *k.Existente).Scan(&pasadas, &crudo); err != nil {
+		return 0
+	}
+	if json.Unmarshal(crudo, &piezas) != nil || !mismoDespiece(piezas, k.Piezas) {
+		return 0
+	}
+	return pasadas
+}
+
+// mismoDespiece: las mismas piezas (medida, cantidad y veta), en cualquier orden.
+func mismoDespiece(a, b []PiezaDeCorte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	cuenta := map[[4]int]int{}
+	for _, p := range a {
+		cuenta[[4]int{p.LargoMm, p.AnchoMm, p.Cantidad, p.RespetaVeta}]++
+	}
+	for _, p := range b {
+		c := [4]int{p.LargoMm, p.AnchoMm, p.Cantidad, p.RespetaVeta}
+		if cuenta[c] == 0 {
+			return false
+		}
+		cuenta[c]--
+	}
+	return true
 }
 
 // sierraConfigurada es el disco de /admin/calculadora. El que manda el

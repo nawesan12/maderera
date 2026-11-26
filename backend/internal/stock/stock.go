@@ -118,16 +118,21 @@ type Sucursal struct {
 // más, el faltante que hay que comprar (mes simulado, H218). La tarjeta
 // mostraba «0 · Sin stock» con 135 placas vendidas y 70 en el galpón.
 //
-// EnReparto es lo reservado de pedidos que ya salieron en el camión
-// («en camino») y todavía no tienen remito: sigue en el físico del sistema
-// pero no en el galpón (H166). Llegando es lo que viene de otra sucursal en
-// un traslado sin recibir.
+// EnReparto es lo que va en el camión (H166): lo de los remitos de envío
+// sin firmar, que ya bajó del físico al despachar, más lo reservado de un
+// pedido «en camino» de antes de que el despacho sacara remito, que sigue
+// en el físico del sistema pero no en el estante. Galpon es lo que hay que
+// encontrar al ir a contar: el físico menos eso último. La reserva de un
+// pedido en camino con remito es lo que falta llevar, y está en el galpón:
+// se leía como en reparto y se restaba dos veces (mes simulado, PED-1208).
+// Llegando es lo que viene de otra sucursal en un traslado sin recibir.
 type StockEnSucursal struct {
 	Sucursal
 	Qty        float64             `json:"qty"`
 	Reservado  float64             `json:"reservado"`
 	Disponible float64             `json:"disponible"`
 	EnReparto  float64             `json:"enReparto"`
+	Galpon     float64             `json:"galpon"`
 	Llegando   float64             `json:"llegando"`
 	Min        float64             `json:"min"`
 	Nivel      catalogo.NivelStock `json:"nivel"`
@@ -302,7 +307,11 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 	if err := rs.Err(); err != nil {
 		return out, err
 	}
-	reparto, err := s.sumasPorSucursal(ctx, consultaEnReparto, ids)
+	camion, err := s.sumasPorSucursal(ctx, consultaEnElCamion, ids)
+	if err != nil {
+		return out, err
+	}
+	sinRemito, err := s.sumasPorSucursal(ctx, consultaEnCaminoSinRemito, ids)
 	if err != nil {
 		return out, err
 	}
@@ -317,8 +326,9 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 		for j, b := range sucs {
 			c := inv[clave{x.VariantID, b.ID}]
 			disponible := Cantidad(c.qty - c.res)
+			k := [2]string{x.VariantID, b.ID}
 			x.Sucursales[j] = StockEnSucursal{Sucursal: b, Qty: c.qty, Reservado: c.res, Disponible: disponible,
-				EnReparto: reparto[[2]string{x.VariantID, b.ID}], Llegando: llegando[[2]string{x.VariantID, b.ID}], Min: c.min,
+				EnReparto: Cantidad(camion[k] + sinRemito[k]), Galpon: Cantidad(c.qty - sinRemito[k]), Llegando: llegando[[2]string{x.VariantID, b.ID}], Min: c.min,
 				Nivel: catalogo.Nivel(catalogo.Disponible(c.qty, c.res), c.min)}
 			suma += disponible
 		}
@@ -352,12 +362,22 @@ func (s *Servicio) Alertas(ctx context.Context, limite int) ([]Alerta, error) {
 	return out, nil
 }
 
-// Lo reservado de pedidos que ya salieron en el camión y lo que viene en un
-// traslado, por medida y sucursal.
+// Lo que va en el camión y lo que viene en un traslado, por medida y
+// sucursal (ver StockEnSucursal).
 const (
-	consultaEnReparto = `SELECT r.variant_id, r.branch_id, sum(r.cantidad)::float8
+	// Lo que salió con un remito de envío que nadie firmó todavía: el
+	// despacho ya lo bajó del físico. Anulado no cuenta: volvió al stock.
+	consultaEnElCamion = `SELECT m.variant_id, m.branch_id, (-sum(m.qty))::float8
+		FROM deliveries d JOIN inventory_movements m ON m.type = 'venta' AND m.note = 'Remito ' || d.numero
+		WHERE d.tipo = 'envio' AND d.estado = 'preparada' AND m.variant_id = ANY($1::uuid[])
+		GROUP BY m.variant_id, m.branch_id`
+	// Un pedido en camino sin ningún remito de envío vivo salió antes de que
+	// el despacho sacara remito: lo reservado va en el camión y sigue en el
+	// físico. Con remito, lo reservado es lo que falta llevar.
+	consultaEnCaminoSinRemito = `SELECT r.variant_id, r.branch_id, sum(r.cantidad)::float8
 		FROM stock_reservations r JOIN orders o ON o.id = r.order_id
 		WHERE r.estado = 'activa' AND o.estado = 'en-camino' AND r.variant_id = ANY($1::uuid[])
+		  AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.tipo = 'envio' AND d.estado <> 'anulada')
 		GROUP BY r.variant_id, r.branch_id`
 	consultaLlegando = `SELECT it.variant_id, t.destino_id, sum(it.cantidad)::float8
 		FROM stock_traslado_items it JOIN stock_traslados t ON t.id = it.traslado_id
@@ -481,6 +501,13 @@ func ConceptoDe(tipo, nota, documento string) (concepto, referencia string) {
 		return "Existencia inicial", ""
 	}
 	if antes, _, ok := strings.Cut(nota, " desde Stock"); ok && (tipo == "ingreso" || tipo == "egreso") {
+		// La reposición dice a quién: la nota termina en «· PED-1098 ·
+		// Ferreyra» (decía solo el pedido, tercera prueba).
+		if documento == "pedido" && ref != "" {
+			if _, cliente, ok := strings.Cut(nota, ref+" · "); ok && strings.TrimSpace(cliente) != "" {
+				return "Reposición a " + strings.TrimSpace(cliente), ref
+			}
+		}
 		if c, ok := conceptoDeAjuste[antes]; ok {
 			return c, ref
 		}
@@ -642,7 +669,8 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, a Ajuste) (
 		if contado != nil {
 			var reparto float64
 			if err := tx.QueryRow(ctx, `SELECT coalesce(sum(r.cantidad), 0)::float8 FROM stock_reservations r JOIN orders o ON o.id = r.order_id
-				WHERE r.estado = 'activa' AND o.estado = 'en-camino' AND r.variant_id = $1 AND r.branch_id = $2`, variante, suc.ID).Scan(&reparto); err != nil {
+				WHERE r.estado = 'activa' AND o.estado = 'en-camino' AND r.variant_id = $1 AND r.branch_id = $2
+				  AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.tipo = 'envio' AND d.estado <> 'anulada')`, variante, suc.ID).Scan(&reparto); err != nil {
 				return err
 			}
 			galpon := Cantidad(previo - reparto)

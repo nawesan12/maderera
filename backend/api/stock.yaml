@@ -304,7 +304,7 @@ components:
         nombre: { type: string }
     StockEnSucursal:
       type: object
-      required: [id, slug, nombre, qty, reservado, disponible, enReparto, llegando, min, nivel]
+      required: [id, slug, nombre, qty, reservado, disponible, enReparto, galpon, llegando, min, nivel]
       properties:
         id: { type: string }
         slug: { type: string }
@@ -312,7 +312,8 @@ components:
         qty: { type: number, format: double }
         reservado: { type: number, format: double }
         disponible: { type: number, format: double, description: físico − reservado, con signo (negativo es lo vendido de más) }
-        enReparto: { type: number, format: double, description: lo reservado de pedidos en camino, que ya no está en el galpón }
+        enReparto: { type: number, format: double, description: lo que va en el camión (remitos de envío sin firmar y pedidos en camino sin remito) }
+        galpon: { type: number, format: double, description: lo que hay en el estante (el físico menos lo reservado de pedidos en camino sin remito) }
         llegando: { type: number, format: double, description: lo que viene en un traslado sin recibir }
         min: { type: number, format: double }
         nivel: { $ref: "#/components/schemas/Nivel" }

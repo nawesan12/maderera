@@ -56,6 +56,7 @@ export function NivelStock({
   reservado = 0,
   disponible,
   enReparto = 0,
+  galpon,
   llegando = 0,
   minimo,
   unidad,
@@ -64,11 +65,14 @@ export function NivelStock({
   sucursal: string;
   /** Físico: lo que el sistema cuenta en la sucursal. */
   cantidad: number;
-  /** Comprometido en pedidos sin retirar (incluye lo que está en reparto). */
+  /** Comprometido en pedidos: lo que falta retirar o llevar. */
   reservado?: number;
   /** Físico − reservado, con signo. */
   disponible: number;
+  /** Lo que va en el camión (H166). */
   enReparto?: number;
+  /** Lo que hay en el estante; sin el dato, el físico. */
+  galpon?: number;
   llegando?: number;
   minimo: number;
   /** La abreviatura («placa», «u.»), para el lector de pantalla y el número. */
@@ -85,8 +89,10 @@ export function NivelStock({
   const tope = Math.max(minimo * 3, 1);
   const porcentaje = estado === "faltante" ? 100 : Math.min((libre / tope) * 100, 100);
   const texto = textoDelEstado(estado, disponible);
-  const galpon = cantidad - enReparto;
-  const sinRetirar = reservado - enReparto;
+  const enElGalpon = galpon ?? cantidad;
+  // Lo reservado de un pedido en camino sin remito es lo que va en el
+  // camión; el resto de lo reservado sigue en el galpón, sin retirar.
+  const sinRetirar = reservado - (cantidad - enElGalpon);
   // Concordada con el número: «95 pares», «1 placa», «57,5 placas» (decía
   // «95par» y «12placa», mes simulado).
   const unidadDicha = unidad ? (Math.abs(disponible) === 1 ? unidad : unidadEnPlural(unidad)) : "u.";
@@ -126,7 +132,7 @@ export function NivelStock({
 
       {(reservado > 0 || enReparto > 0) && (
         <p className="tabular mt-0.5 text-sm text-muted-foreground">
-          {formatearCantidad(galpon)} en el galpón
+          {formatearCantidad(enElGalpon)} en el galpón
           {sinRetirar > 0 && ` · ${formatearCantidad(sinRetirar)} sin retirar`}
           {enReparto > 0 && ` · ${formatearCantidad(enReparto)} en reparto`}
         </p>

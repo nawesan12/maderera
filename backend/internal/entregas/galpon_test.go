@@ -22,4 +22,11 @@ func TestElAcopioDiceLoQueHayEnElGalpon(t *testing.T) {
 	if len(acopio) != 2 || acopio[0].EnElGalpon == nil || *acopio[0].EnElGalpon != 2 || acopio[1].EnElGalpon == nil || *acopio[1].EnElGalpon != 96 {
 		t.Fatalf("galpón: %s", b)
 	}
+	// Con un remito de envío vivo, lo reservado de PED-1008 es lo que falta
+	// llevar y está en el estante (H166): el galpón vuelve a 12.
+	e.exec(t, `insert into deliveries (numero, order_id, tipo, estado) values ('REM-0011', $1, 'envio', 'preparada')`, otro)
+	_, b = pedir(t, dep, "GET", e.srv.URL+"/api/v1/admin/pedidos/"+pedido+"/acopio", nil)
+	if acopio = leer[[]Renglon](t, b); *acopio[0].EnElGalpon != 12 {
+		t.Fatalf("galpón con remito: %s", b)
+	}
 }

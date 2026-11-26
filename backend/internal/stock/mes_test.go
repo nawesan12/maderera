@@ -157,7 +157,8 @@ func TestConceptoDe(t *testing.T) {
 		{"egreso", "Ajuste rápido desde Stock (3 → 2)", "", "Ajuste", ""},
 		{"ingreso", "Devolución de cliente desde Stock (1 → 2)", "", "Devolución", ""},
 		{"egreso", "Consumo del taller desde Stock (69 → 67,5)", "", "Consumo del taller", ""},
-		{"egreso", "Reposición a cliente desde Stock (115 → 114) · PED-1098 · Ferreyra", "pedido", "Reposición a cliente", "PED-1098"},
+		{"egreso", "Reposición a cliente desde Stock (115 → 114) · PED-1098 · Ferreyra", "pedido", "Reposición a Ferreyra", "PED-1098"},
+		{"egreso", "Reposición a cliente desde Stock (115 → 114) · PED-1098", "pedido", "Reposición a cliente", "PED-1098"},
 		{"venta", "Remito REM-0020", "", "Entrega", "REM-0020"},
 		{"venta", "Mostrador PED-1121", "", "Venta", "PED-1121"},
 		{"devolucion", "Anulación PED-1121", "", "Anulación", "PED-1121"},
@@ -184,7 +185,7 @@ func TestElConteoEsDelGalpon(t *testing.T) {
 	e.pedidoConReserva(t, "PED-1008", "en-camino", 2)
 	e.pedidoConReserva(t, "PED-1009", "pendiente", 3)
 	g := grilla(t, e, dep, "?busqueda=fenol")
-	if s := g.Filas[0].Sucursales[0]; s.EnReparto != 2 || s.Reservado != 5 || s.Disponible != 5 {
+	if s := g.Filas[0].Sucursales[0]; s.EnReparto != 2 || s.Galpon != 8 || s.Reservado != 5 || s.Disponible != 5 {
 		t.Fatalf("en reparto: %+v", s)
 	}
 	u := e.srv.URL + "/api/v1/admin/stock/ajuste"
@@ -252,7 +253,7 @@ func TestMotivosNuevos(t *testing.T) {
 		t.Errorf("historial del pedido: %q", nota)
 	}
 	m := movimientos(t, e, dep, "?busqueda=TOR")
-	if m[0].Concepto != "Reposición a cliente" || m[0].Referencia == nil || *m[0].Referencia != "PED-1098" || m[2].Concepto != "Rotura" {
+	if m[0].Concepto != "Reposición a Sim Carpintería Ferreyra" || m[0].Referencia == nil || *m[0].Referencia != "PED-1098" || m[2].Concepto != "Rotura" {
 		t.Errorf("libro: %+v", m)
 	}
 }
@@ -330,5 +331,37 @@ func TestTraslado(t *testing.T) {
 	m := movimientos(t, e, dep, "?busqueda=FEN18")
 	if m[0].Concepto != "Traslado" || m[0].Referencia == nil || *m[0].Referencia != "TRA-0001" {
 		t.Errorf("libro: %+v", m[0])
+	}
+}
+
+// H166, tercera prueba: un envío que salió en parte. El remito del camión ya
+// bajó del físico y es lo que va en reparto; la reserva que queda es lo que
+// falta llevar y está en el galpón. Antes se leía «20 en reparto» con el
+// pedido de remito anulado y el galpón restaba lo mismo dos veces.
+func TestElEnvioEnParteNoRestaDosVeces(t *testing.T) {
+	e := armar(t)
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	e.exec(t, `update inventory set qty = 10, reservado = 0 where variant_id = $1 and branch_id = $2`, e.placa, e.central)
+	pedido := e.pedidoConReserva(t, "PED-1208", "en-camino", 2)
+	// Salieron 3 en el camión con REM-0011 (ya descontadas); un remito
+	// anulado no cuenta.
+	e.exec(t, `insert into deliveries (numero, order_id, branch_id, tipo, estado) values
+		('REM-0011', $1, $2, 'envio', 'preparada'), ('REM-0010', $1, $2, 'envio', 'anulada')`, pedido, e.central)
+	e.exec(t, `insert into inventory_movements (variant_id, branch_id, type, qty, note) values
+		($1, $2, 'venta', -3, 'Remito REM-0011'), ($1, $2, 'venta', -4, 'Remito REM-0010'), ($1, $2, 'ingreso', 4, 'Remito REM-0010')`, e.placa, e.central)
+	g := grilla(t, e, dep, "?busqueda=fenol")
+	if s := g.Filas[0].Sucursales[0]; s.EnReparto != 3 || s.Galpon != 10 || s.Reservado != 2 {
+		t.Fatalf("envío en parte: %+v", s)
+	}
+	// Firmado, ya no va en el camión.
+	e.exec(t, `update deliveries set estado = 'entregada' where numero = 'REM-0011'`)
+	if s := grilla(t, e, dep, "?busqueda=fenol").Filas[0].Sucursales[0]; s.EnReparto != 0 || s.Galpon != 10 {
+		t.Fatalf("firmado: %+v", s)
+	}
+	// Contar 10 en el galpón coincide: la reserva que falta llevar está ahí.
+	if c, b := pedir(t, dep, "POST", e.srv.URL+"/api/v1/admin/stock/ajuste",
+		map[string]any{"variantId": e.placa, "branchSlug": "casa-central", "cantidad": 0, "contado": 10}); c != 200 ||
+		!strings.Contains(b, "el conteo coincide, 10") {
+		t.Fatalf("conteo: %d %s", c, b)
 	}
 }

@@ -15,13 +15,26 @@ import { AnularConMotivo } from "@/app/admin/compras/anular-con-motivo";
 import { anularCorte, pasarCorteAPedido } from "../actions";
 
 /**
- * Cobrar un corte suelto: nace como pedido, con la mercadería reservada, y
- * se cobra y se entrega por ahí (mes simulado, H348). Lleva a la ficha del
- * pedido, que es donde se cobra.
+ * Cobrar un corte suelto. Con su placa del catálogo se cobra en el
+ * mostrador, como desde la cola del taller: la ficha armaba un pedido y
+ * llevaba a Pedidos, la lista llevaba al mostrador (tercera prueba). Sin
+ * placa del catálogo el mostrador no lo puede cargar: nace como pedido y se
+ * cobra en su ficha (mes simulado, H348).
  */
-export function CobrarCorte({ id }: { id: string }) {
+export function CobrarCorte({ id, conPlaca }: { id: string; conPlaca: boolean }) {
   const router = useRouter();
   const [enCurso, empezar] = useTransition();
+  if (conPlaca) {
+    return (
+      <Link
+        href={`/mostrador?corte=${id}`}
+        className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-base font-medium sm:w-auto"
+      >
+        <ReceiptText className="h-5 w-5" aria-hidden="true" />
+        Cobrar
+      </Link>
+    );
+  }
   return (
     <button
       type="button"

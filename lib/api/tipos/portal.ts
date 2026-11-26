@@ -293,6 +293,11 @@ export interface components {
             descuento: number;
             /** Format: double */
             debeEnCuenta: number | null;
+            /**
+             * Format: double
+             * @description lo que cuesta en la cuenta después de sus notas de crédito
+             */
+            cuestaEnCuenta?: number | null;
             /** Format: double */
             enRevision: number | null;
             cortes: {
@@ -476,6 +481,11 @@ export interface operations {
                         enAcopio: boolean;
                         /** Format: double */
                         debeEnCuenta: number | null;
+                        /**
+                         * Format: double
+                         * @description lo que cuesta en la cuenta después de sus notas de crédito
+                         */
+                        cuestaEnCuenta?: number | null;
                         /** Format: double */
                         enRevision: number | null;
                         /** @enum {string} */

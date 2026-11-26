@@ -17,6 +17,11 @@ type Asiento struct {
 	// cheque rechazado, la anulación de un recibo). No es deuda nueva: le
 	// saca al pago lo que había cubierto, y el pedido vuelve a deber (H302).
 	Revierte bool
+	// Nota: una nota de crédito (una devolución, una cancelación). Con su
+	// referencia baja lo que el pedido cuesta, no es un pago: el pedido
+	// bajado por una devolución, sin ningún pago, decía «Pagado en parte»
+	// (tercera prueba, PED-1218).
+	Nota bool
 }
 
 // Imputar dice cuánto queda por pagar de cada comprobante del libro.
@@ -35,6 +40,14 @@ type Asiento struct {
 // Devuelve lo que falta pagar por referencia (solo de las que tienen débito).
 // No mueve plata: es una lectura del libro, que sigue siendo la verdad.
 func Imputar(libro []Asiento) map[string]float64 {
+	debe, _ := ImputarConNeto(libro)
+	return debe
+}
+
+// ImputarConNeto es Imputar, y además lo que cuesta cada comprobante
+// después de sus notas de crédito: si lo que falta es menos que eso, se
+// pagó una parte.
+func ImputarConNeto(libro []Asiento) (map[string]float64, map[string]float64) {
 	// Un débito sin referencia (un ajuste suelto) también es deuda, con su
 	// lugar en la fila: lleva una clave propia que no se devuelve.
 	clave := func(i int, a Asiento) string {
@@ -59,6 +72,10 @@ func Imputar(libro []Asiento) map[string]float64 {
 			debe[k] = float64(debe[k] + a.Monto)
 		}
 	}
+	neto := map[string]float64{}
+	for k, v := range debe {
+		neto[k] = v
+	}
 	var libre float64
 	for _, a := range libro {
 		if a.Monto >= 0 {
@@ -68,6 +85,9 @@ func Imputar(libro []Asiento) map[string]float64 {
 		if d, ok := debe[a.Referencia]; ok && a.Referencia != "" {
 			aplica := math.Min(d, credito)
 			debe[a.Referencia] = float64(d - aplica)
+			if a.Nota {
+				neto[a.Referencia] = float64(neto[a.Referencia] - aplica)
+			}
 			credito = float64(credito - aplica)
 		}
 		libre = float64(libre + credito)
@@ -83,17 +103,18 @@ func Imputar(libro []Asiento) map[string]float64 {
 		debe[k] = float64(debe[k] - aplica)
 		libre = float64(libre - aplica)
 	}
-	r := map[string]float64{}
+	r, n := map[string]float64{}, map[string]float64{}
 	for k, v := range debe {
 		if !strings.HasPrefix(k, "#") {
 			r[k] = math.Max(jsmath.Redondear2(v), 0)
+			n[k] = math.Max(jsmath.Redondear2(neto[k]), 0)
 		}
 	}
-	return r
+	return r, n
 }
 
 // pendientesDeLaCuenta es Imputar sobre el libro del cliente.
-func (s *Servicio) pendientesDeLaCuenta(ctx context.Context, c *Cliente) (map[string]float64, error) {
+func (s *Servicio) pendientesDeLaCuenta(ctx context.Context, c *Cliente) (map[string]float64, map[string]float64, error) {
 	// Revierte: un débito atado a un recibo cuyo pago está en este libro (el
 	// cheque rechazado de ese recibo, su anulación). El cheque de una venta de
 	// contado que rebotó no deshace ningún pago de la cuenta: es deuda nueva.
@@ -107,19 +128,24 @@ func (s *Servicio) pendientesDeLaCuenta(ctx context.Context, c *Cliente) (map[st
 		  coalesce((SELECT o.numero FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
 		            WHERE dv.account_movement_id = m.id LIMIT 1), m.referencia, ''),
 		  m.monto > 0 AND m.receipt_id IS NOT NULL AND EXISTS (SELECT 1 FROM account_movements p
-		    WHERE p.customer_id = m.customer_id AND p.receipt_id = m.receipt_id AND p.monto < 0)
+		    WHERE p.customer_id = m.customer_id AND p.receipt_id = m.receipt_id AND p.monto < 0),
+		  m.tipo = 'nota_credito'
 		FROM account_movements m WHERE m.customer_id = $1 ORDER BY m.created_at, m.id`, c.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer filas.Close()
 	var libro []Asiento
 	for filas.Next() {
 		var a Asiento
-		if err := filas.Scan(&a.Monto, &a.Referencia, &a.Revierte); err != nil {
-			return nil, err
+		if err := filas.Scan(&a.Monto, &a.Referencia, &a.Revierte, &a.Nota); err != nil {
+			return nil, nil, err
 		}
 		libro = append(libro, a)
 	}
-	return Imputar(libro), filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, nil, err
+	}
+	debe, neto := ImputarConNeto(libro)
+	return debe, neto, nil
 }

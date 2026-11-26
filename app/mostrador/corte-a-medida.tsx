@@ -1,5 +1,6 @@
 "use client";
 
+import { pasadasACobrar as pasadasConfirmadas, type PiezaDelDespiece } from "@/lib/mostrador/pasadas-confirmadas";
 import { useMemo, useState } from "react";
 import { Download, Loader2, Plus, RotateCcw, Scissors, Trash2 } from "lucide-react";
 import { contarCanto, SelectorDeCanto } from "@/components/cortes/selector-canto";
@@ -93,6 +94,7 @@ export function CorteAMedida({
   onCerrar,
   onAgregar,
   corrigiendo = false,
+  confirmado = null,
 }: {
   /** La placa elegida del catálogo, con su medida y su precio para este cliente. */
   placa: {
@@ -124,6 +126,8 @@ export function CorteAMedida({
   onAgregar: (lineas: LineaDeVenta[], corte: CorteDeMostrador, estado: EstadoDelCorte) => void;
   /** Si se está corrigiendo un corte que ya está en la venta. */
   corrigiendo?: boolean;
+  /** El corte de la cola que se cobra: sus pasadas confirmadas en el taller. */
+  confirmado?: { piezas: PiezaDelDespiece[]; pasadas: number } | null;
 }) {
   const [piezas, setPiezas] = useState<PiezaCargada[]>(() => inicial?.piezas ?? [vacia()]);
   const [canto, setCanto] = useState(inicial?.canto ?? "");
@@ -184,13 +188,16 @@ export function CorteAMedida({
   );
 
   // El plano lo calcula Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
-  const { plano, placasACobrar, pasadasACobrar, placasParciales, calculando } = usePlano({
+  const { plano, placasACobrar, pasadasACobrar: pasadasDelPlano, placasParciales, calculando } = usePlano({
     piezas: validas,
     placaLargo,
     placaAncho,
     anchoSierra,
     fijadas,
   });
+
+  // Las del taller si es el corte de la cola, tal cual (lo mismo que Go).
+  const pasadasACobrar = pasadasConfirmadas(pasadasDelPlano, validas, confirmado);
 
   // La misma cuenta que la ficha del corte y la planilla del taller, que ya
   // está probada: no hay dos formas de medir un metro de tapacanto.

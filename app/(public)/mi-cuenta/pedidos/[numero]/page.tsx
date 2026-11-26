@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cuentasDelPedido } from "@/lib/cuenta/cuentas-del-pedido";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -111,6 +112,7 @@ export default async function DetallePedidoPage({
     medioPago: pedido.medioPago,
     total: Number(pedido.total),
     debeEnCuenta: pedido.debeEnCuenta,
+    cuestaEnCuenta: pedido.cuestaEnCuenta,
     enRevision: pedido.enRevision,
   });
   const informar =
@@ -128,7 +130,12 @@ export default async function DetallePedidoPage({
     (s, i) => s + Number(i.subtotal),
     0,
   );
-  const hayDescuento = pedido.descuento > 0.005;
+  const cuentas = cuentasDelPedido({
+    sumaRenglones,
+    descuento: pedido.descuento,
+    costoEnvio: Number(pedido.costoEnvio),
+    total: Number(pedido.total),
+  });
 
   const reclamos = await Promise.all(
     pedido.entregas.map((e) =>
@@ -355,8 +362,7 @@ export default async function DetallePedidoPage({
             </section>
           )}
 
-          {/* Lo comprado: los renglones suman el subtotal; el descuento ya
-              viene repartido en los precios y se dice aparte (H209). */}
+          {/* Lo comprado: los renglones suman el subtotal (H209). */}
           <section className="tarjeta overflow-hidden rounded-xl bg-card">
             <h2 className="px-5 pt-4 pb-2 font-medium">
               Qué pediste
@@ -401,25 +407,18 @@ export default async function DetallePedidoPage({
             </ul>
 
             <dl className="space-y-2 bg-hundida px-5 py-4 text-sm">
-              {/* El descuento ya está repartido en los precios de los
-                  renglones: el subtotal va antes del descuento, así la cuenta
-                  cierra al leerla de arriba abajo (Subtotal − Ahorraste =
-                  Total), como en un ticket. */}
+              {/* Los renglones suman el subtotal. El descuento se resta en
+                  su línea solo si no viene ya en los precios
+                  (cuentasDelPedido, H209). */}
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Subtotal</dt>
-                <dd className="tabular">
-                  {formatearMonto(
-                    hayDescuento
-                      ? Math.round((sumaRenglones + pedido.descuento) * 100) / 100
-                      : sumaRenglones,
-                  )}
-                </dd>
+                <dd className="tabular">{formatearMonto(cuentas.subtotal)}</dd>
               </div>
-              {hayDescuento && (
+              {cuentas.restaElAhorro && (
                 <div className="flex justify-between text-saldo-favor">
                   <dt>Ahorraste</dt>
                   <dd className="tabular">
-                    −{formatearMonto(pedido.descuento)}
+                    −{formatearMonto(cuentas.ahorro)}
                   </dd>
                 </div>
               )}
@@ -439,6 +438,12 @@ export default async function DetallePedidoPage({
                   {formatearMonto(pedido.total)}
                 </dd>
               </div>
+              {cuentas.ahorro > 0 && !cuentas.restaElAhorro && (
+                <div className="flex justify-between text-saldo-favor">
+                  <dt>Ahorraste</dt>
+                  <dd className="tabular">{formatearMonto(cuentas.ahorro)}</dd>
+                </div>
+              )}
             </dl>
           </section>
         </div>

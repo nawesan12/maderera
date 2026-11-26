@@ -131,6 +131,9 @@ type Pedido struct {
 	// con los pagos imputados a la deuda más vieja (Imputar). Nil si el
 	// pedido no se cargó a la cuenta.
 	DebeEnCuenta *float64 `json:"debeEnCuenta" db:"-"`
+	// CuestaEnCuenta es lo que cuesta el pedido en la cuenta después de sus
+	// notas de crédito: con DebeEnCuenta menor, se pagó una parte.
+	CuestaEnCuenta *float64 `json:"cuestaEnCuenta" db:"-"`
 }
 
 // Pedidos es misPedidos: los más nuevos primero.
@@ -168,13 +171,14 @@ func (s *Servicio) Pedidos(ctx context.Context, c *Cliente) ([]Pedido, error) {
 	if err != nil {
 		return nil, err
 	}
-	debe, err := s.pendientesDeLaCuenta(ctx, c)
+	debe, neto, err := s.pendientesDeLaCuenta(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 	for i := range pedidos {
 		if v, ok := debe[pedidos[i].Numero]; ok {
-			pedidos[i].DebeEnCuenta = &v
+			n := neto[pedidos[i].Numero]
+			pedidos[i].DebeEnCuenta, pedidos[i].CuestaEnCuenta = &v, &n
 		}
 	}
 	return pedidos, nil

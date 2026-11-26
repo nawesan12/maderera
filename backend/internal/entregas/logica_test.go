@@ -265,3 +265,21 @@ func TestLoQueNoSeFraccionaSaleEntero(t *testing.T) {
 		}
 	}
 }
+
+func TestDomicilioConZona(t *testing.T) {
+	p := func(s string) *string { return &s }
+	casos := []struct {
+		dom, zona *string
+		quiero    string
+	}{
+		{p("Av. Colón 1234"), p("Tandil"), "Av. Colón 1234 · Tandil"},
+		{p("Av. Colón 1234, Tandil"), p("tandil"), "Av. Colón 1234, Tandil"},
+		{nil, p("Tandil"), "Tandil"},
+		{p("Av. Colón 1234"), nil, "Av. Colón 1234"},
+	}
+	for _, c := range casos {
+		if got := DomicilioConZona(c.dom, c.zona); got == nil || *got != c.quiero {
+			t.Errorf("%v %v: %v", c.dom, c.zona, got)
+		}
+	}
+}

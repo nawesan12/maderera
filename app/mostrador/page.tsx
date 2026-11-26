@@ -119,6 +119,7 @@ export default async function MostradorPage({
           precioMediaPct: ficha.corte.precioMediaPct ?? 50,
           mitad: ficha.corte.mitad as "largo" | "ancho" | null,
           canto: ficha.corte.cantoDescripcion ?? "",
+          pasadas: ficha.pasadasACobrar,
           piezas: ficha.corte.piezas.map((p) => ({
             largo: String(p.largoMm),
             ancho: String(p.anchoMm),

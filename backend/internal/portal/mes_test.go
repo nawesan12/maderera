@@ -15,34 +15,34 @@ func TestImputarALaDeudaMasVieja(t *testing.T) {
 	// H208: la empresa compró dos pedidos a cuenta y pagó casi todo; los
 	// dos decían «Pago pendiente».
 	debe := Imputar([]Asiento{
-		{870400, "PED-1004", false},
-		{4113000, "PED-1006", false},
-		{-3483400, "REC-0001", false},
+		{870400, "PED-1004", false, false},
+		{4113000, "PED-1006", false, false},
+		{-3483400, "REC-0001", false, false},
 	})
 	if debe["PED-1004"] != 0 || debe["PED-1006"] != 1500000 {
 		t.Errorf("FIFO: %v", debe)
 	}
 	// La nota de crédito de un faltante baja su pedido, no el más viejo.
 	debe = Imputar([]Asiento{
-		{1000, "PED-1", false},
-		{2000, "PED-2", false},
-		{-500, "PED-2", false},
-		{-1000, "REC-1", false},
+		{1000, "PED-1", false, false},
+		{2000, "PED-2", false, false},
+		{-500, "PED-2", false, false},
+		{-1000, "REC-1", false, false},
 	})
 	if debe["PED-1"] != 0 || debe["PED-2"] != 1500 {
 		t.Errorf("nota de crédito con referencia: %v", debe)
 	}
 	// Un ajuste suelto ocupa su lugar en la fila y no aparece.
 	debe = Imputar([]Asiento{
-		{300, "", false},
-		{1000, "PED-1", false},
-		{-800, "REC-1", false},
+		{300, "", false, false},
+		{1000, "PED-1", false, false},
+		{-800, "REC-1", false, false},
 	})
 	if debe["PED-1"] != 500 || len(debe) != 1 {
 		t.Errorf("ajuste suelto: %v", debe)
 	}
 	// Pagar de más no deja negativos.
-	if debe = Imputar([]Asiento{{100, "PED-1", false}, {-300, "REC-1", false}}); debe["PED-1"] != 0 {
+	if debe = Imputar([]Asiento{{100, "PED-1", false, false}, {-300, "REC-1", false, false}}); debe["PED-1"] != 0 {
 		t.Errorf("a favor: %v", debe)
 	}
 }
@@ -292,10 +292,10 @@ func TestPedidoConSuNotaDeCredito(t *testing.T) {
 // una deuda nueva al final de la fila.
 func TestImputarElChequeRechazado(t *testing.T) {
 	debe := Imputar([]Asiento{
-		{3168000, "PED-1128", false},
-		{-264000, "PED-1128", false},
-		{-1500000, "REC-0002", false},
-		{1000000, "55500321", true},
+		{3168000, "PED-1128", false, false},
+		{-264000, "PED-1128", false, false},
+		{-1500000, "REC-0002", false, false},
+		{1000000, "55500321", true, false},
 	})
 	if debe["PED-1128"] != 2404000 {
 		t.Errorf("el pedido vuelve a deber lo del cheque: %v", debe)
@@ -305,9 +305,9 @@ func TestImputarElChequeRechazado(t *testing.T) {
 	}
 	// Si rebota más de lo libre, lo que sobra no se le carga a otro pedido.
 	debe = Imputar([]Asiento{
-		{1000, "PED-1", false},
-		{-1000, "PED-1", false},
-		{500, "CH-1", true},
+		{1000, "PED-1", false, false},
+		{-1000, "PED-1", false, false},
+		{500, "CH-1", true, false},
 	})
 	if debe["PED-1"] != 0 {
 		t.Errorf("lo revertido de más: %v", debe)
@@ -329,5 +329,25 @@ func TestFichaVinculadaDespues(t *testing.T) {
 	}
 	if _, b := pedir(t, obra, "GET", e.srv.URL+"/api/v1/cuenta/ficha", nil); !strings.Contains(b, `"vinculada":true`) {
 		t.Errorf("vinculada desde el panel: %s", b)
+	}
+}
+
+// Tercera prueba, PED-1218: la nota de crédito de una devolución baja lo que
+// cuesta el pedido, no es un pago. Un pago con la referencia del pedido sí.
+func TestLaNotaDeCreditoNoEsUnPago(t *testing.T) {
+	debe, neto := ImputarConNeto([]Asiento{
+		{3168000, "PED-1218", false, false},
+		{-264000, "PED-1218", false, true},
+	})
+	if debe["PED-1218"] != 2904000 || neto["PED-1218"] != 2904000 {
+		t.Fatalf("solo la nota: debe %v, cuesta %v", debe, neto)
+	}
+	debe, neto = ImputarConNeto([]Asiento{
+		{3168000, "PED-1218", false, false},
+		{-264000, "PED-1218", false, true},
+		{-1000000, "PED-1218", false, false},
+	})
+	if debe["PED-1218"] != 1904000 || neto["PED-1218"] != 2904000 {
+		t.Fatalf("con un pago: debe %v, cuesta %v", debe, neto)
 	}
 }

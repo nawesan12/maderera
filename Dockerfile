@@ -32,7 +32,7 @@ COPY drizzle.config.ts tsconfig.json ./
 COPY drizzle ./drizzle
 COPY lib/db/schema ./lib/db/schema
 COPY scripts ./scripts
-RUN mkdir -p /datos/subidas /datos/privado && chown 1001:1001 /datos/subidas /datos/privado
+RUN mkdir -p /datos/subidas /datos/privado && chown 65532:1001 /datos/subidas /datos/privado && chmod 2775 /datos/subidas /datos/privado
 ENV HOME=/tmp
 USER 1001:1001
 # Las migraciones las hace `mjbj migrar` (goose). Este contenedor es para los
@@ -88,8 +88,14 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 # ser del usuario de la aplicación. Un volumen nuevo hereda el dueño de la
 # carpeta que tapa; si la carpeta no existe, nace de root y la primera foto que
 # se sube desde el panel falla con «permission denied».
+# Las de datos son de Go (65532, quien escribe desde la mudanza) con el grupo de
+# Next y escritura de grupo: un volumen VACÍO se vuelve a copiar de la imagen
+# cada vez que se crea el contenedor, y con nextjs:nodejs 755 cada despliegue le
+# sacaba a Go el permiso de subir fotos (mes simulado 2).
 RUN mkdir -p .next/cache /datos/subidas /datos/privado \
-  && chown -R nextjs:nodejs .next/cache /datos/subidas /datos/privado
+  && chown -R nextjs:nodejs .next/cache \
+  && chown 65532:nodejs /datos/subidas /datos/privado \
+  && chmod 2775 /datos/subidas /datos/privado
 
 USER nextjs
 EXPOSE 3000

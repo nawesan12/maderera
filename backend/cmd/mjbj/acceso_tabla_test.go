@@ -17,6 +17,8 @@ package main
 //     acción puntual dentro de ella: bloquear una cuenta, anular un recibo).
 //   - "plata": quien mueve plata desde la ficha de un pedido (cobrar,
 //     facturar): roles.ManejanPlata. El depósito abre Pedidos pero no cobra.
+//   - "cola": lo que se decide en la cola de corte (urgente, anular):
+//     roles.DecidenEnLaCola, todo /admin/cortes menos el aserradero.
 //   - "personal": todo el personal, a propósito. Hoy: el push (cada uno
 //     activa el suyo), el buscador del encabezado (filtra adentro según el
 //     rol), los datos del emisor (van en todo lo que se imprime) y el pedido
@@ -69,6 +71,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"ListarCheques":                  "/admin/cheques",                // GET /api/v1/admin/cheques
 	"CargarCheque":                   "/admin/cheques",                // POST /api/v1/admin/cheques
 	"AsientosCsv":                    "/admin/cierre",                 // GET /api/v1/admin/cierre/asientos-csv
+	"CerrarElMes":                    "/admin/cierre",                 // POST /api/v1/admin/cierre/cerrado
 	"AsientosDelPeriodo":             "/admin/cierre",                 // GET /api/v1/admin/cierre/asientos
 	"PendientesDelCierre":            "/admin/cierre",                 // GET /api/v1/admin/cierre/pendientes
 	"ResumenDelMes":                  "/admin/cierre",                 // GET /api/v1/admin/cierre/resumen
@@ -150,7 +153,10 @@ var pantallaDeCadaRuta = map[string]string{
 	"HojaDelCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}/hoja
 	"CargarPasadas":                  "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/pasadas
 	"CambiarSierra":                  "/admin/cortes",                 // PUT /api/v1/admin/cortes/{id}/sierra
-	"AlternarUrgente":                "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/urgente
+	"AlternarUrgente":                "cola",                          // POST /api/v1/admin/cortes/{id}/urgente
+	"AnularCorte":                    "cola",                          // POST /api/v1/admin/cortes/{id}/anular
+	"VolverCorte":                    "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/volver
+	"PasarCorteAPedido":              "plata",                         // POST /api/v1/admin/cortes/{id}/pedido
 	"FichaDeCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}
 	"ListarCortes":                   "/admin/cortes",                 // GET /api/v1/admin/cortes
 	"CrearCorte":                     "/admin/cortes",                 // POST /api/v1/admin/cortes

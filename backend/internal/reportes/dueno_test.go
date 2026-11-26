@@ -842,8 +842,8 @@ func TestLaFacturaQueVenceHoyNoEstaVencida(t *testing.T) {
 			t.Errorf("%v: %+v", ahora, d)
 		}
 	}
-	// «Para hoy» mira el reloj de la base: la factura de contado de hoy.
-	e.exec(t, `update purchase_invoices set fecha_vencimiento = $1`, DiaDeHoy(time.Now()))
+	// «Para hoy», con el reloj del servicio: la factura de contado de hoy.
+	e.exec(t, `update purchase_invoices set fecha_vencimiento = $1`, DiaDeHoy(temprano))
 	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
 	if strings.Contains(cuerpo, "compras-vencidas") || !strings.Contains(cuerpo, `"clave":"compras-48h"`) {
 		t.Errorf("para hoy: %s", cuerpo)

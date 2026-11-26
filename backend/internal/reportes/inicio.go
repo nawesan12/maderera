@@ -352,7 +352,10 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		chequesEn48, comprasEn48, bajoCosto                            int
 	}
 	ahora := s.ahora()
-	hoy := InicioDelDia(ahora)
+	// El vencimiento de una factura de compra es un día (medianoche UTC):
+	// se compara con el día argentino escrito igual (DiaDeHoy), no con la
+	// medianoche argentina, que daba vencida la de hoy (mes simulado, H005).
+	hoy := DiaDeHoy(ahora)
 	// Las facturas de compra impagas se recorren una sola vez (comité
 	// final): antes eran tres subconsultas, cada una con su suma de
 	// imputaciones por factura. Sin permiso ($4 falso) el CTE no lee nada.

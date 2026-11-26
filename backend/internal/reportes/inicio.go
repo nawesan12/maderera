@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/precios"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/stock"
@@ -339,7 +340,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		porPreparar, listos, cortes, chequesVencidos, chequesPorVencer int
 		comprasVencidas, comprasPorVencer, solicitudes, resenas        int
 		reponer, seguimientos, presupuestos                            int
-		chequesEn48, comprasEn48                                       int
+		chequesEn48, comprasEn48, bajoCosto                            int
 	}
 	ahora := s.ahora()
 	// Las facturas de compra impagas se recorren una sola vez (comité
@@ -373,11 +374,15 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		                     AND valido_hasta >= now() AND valido_hasta < now() + interval '3 days') ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*) FILTER (WHERE fecha_pago >= now() AND fecha_pago < now() + interval '48 hours')::int FROM cheques
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
-		  (SELECT en48 FROM compras)`,
+		  (SELECT en48 FROM compras),
+		  CASE WHEN $11 THEN (SELECT count(*)::int FROM product_variants v JOIN products p ON p.id = v.product_id
+		                      WHERE p.active AND v.active AND `+precios.BajoCostoDe(`coalesce((SELECT pli.price FROM price_list_items pli
+		                        JOIN price_lists pl ON pl.id = pli.price_list_id AND pl.is_default WHERE pli.variant_id = v.id), 0)`)+`) ELSE 0 END`,
 		ve("/admin/pedidos"), ve("/admin/cortes"), ve("/admin/cheques"), ve("/admin/compras/facturas"),
-		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), ahora).
+		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), ahora,
+		ve("/admin/precios")).
 		Scan(&c.porPreparar, &c.listos, &c.cortes, &c.chequesVencidos, &c.chequesPorVencer, &c.comprasVencidas, &c.comprasPorVencer,
-			&c.solicitudes, &c.resenas, &c.reponer, &c.seguimientos, &c.presupuestos, &c.chequesEn48, &c.comprasEn48)
+			&c.solicitudes, &c.resenas, &c.reponer, &c.seguimientos, &c.presupuestos, &c.chequesEn48, &c.comprasEn48, &c.bajoCosto)
 	if err != nil {
 		return nil, err
 	}
@@ -420,6 +425,9 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Detalle: detalle("Pidieron la cuenta con precio de gremio"), Href: "/admin/profesionales"})
 	agregar(c.reponer, Pendiente{Clave: "reponer", Texto: uno(c.reponer, "producto bajo el mínimo", "productos bajo el mínimo"),
 		Detalle: detalle("Quedó en el mínimo o por debajo: hay que reponerlo"), Href: "/admin/stock?estado=reponer"})
+	// El precio de lista bajo el costo: cada venta pierde plata (H139).
+	agregar(c.bajoCosto, Pendiente{Clave: "bajo-costo", Texto: uno(c.bajoCosto, "medida con el precio bajo el costo", "medidas con el precio bajo el costo"),
+		Href: "/admin/precios?estado=bajo-costo", Urgente: true})
 	agregar(c.resenas, Pendiente{Clave: "resenas", Texto: uno(c.resenas, "reseña sin moderar", "reseñas sin moderar"),
 		Detalle: detalle("No se publican hasta que alguien las mire"), Href: "/admin/contenido"})
 	agregar(o.whatsapp, Pendiente{Clave: "whatsapp", Texto: uno(o.whatsapp, "conversación de WhatsApp sin contestar", "conversaciones de WhatsApp sin contestar"),

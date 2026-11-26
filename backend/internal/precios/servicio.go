@@ -92,6 +92,18 @@ type ConteosDePrecios struct {
 	SinPrecio   int `json:"sinPrecio"`
 	ParaRevisar int `json:"paraRevisar"`
 	AlDia       int `json:"alDia"`
+	// BajoCosto: el precio de lista, sin IVA, no llega al costo. Es un grupo
+	// que cruza los otros (un precio al día puede estar bajo el costo).
+	BajoCosto int `json:"bajoCosto"`
+}
+
+// BajoCostoDe es, sobre las filas `v` y `p`, que el precio dado (con IVA) sin
+// el IVA del producto no llega al costo promedio. El Fenólico de 18 mm a $100
+// con un costo de $75.500 se vendió dos veces sin que nada lo marcara
+// (simulación del mes, H159); lo cuenta también el inicio.
+func BajoCostoDe(precio string) string {
+	return `(` + precio + ` > 0 AND ` + precio + ` / (1 + p.alicuota_iva / 100) <
+		coalesce((SELECT vc.costo_promedio FROM variant_costs vc WHERE vc.variant_id = v.id), 0))`
 }
 
 // GrillaDePrecios es una página de la grilla, con el total del filtro.
@@ -136,17 +148,19 @@ func (s *Servicio) grilla(ctx context.Context, f listado.Filtros, ahora time.Tim
 		"sin-precio":   precio + ` <= 0`,
 		"para-revisar": viejo,
 		"al-dia":       precio + ` > 0 AND NOT (` + viejo + `)`,
+		"bajo-costo":   BajoCostoDe(precio),
 	}
 	desde := ` FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id `
 	k := &out.Conteos
 	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estados["sin-precio"]+`),
-		count(*) FILTER (WHERE `+estados["para-revisar"]+`), count(*) FILTER (WHERE `+estados["al-dia"]+`)`+desde+c.Donde(),
-		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia); err != nil {
+		count(*) FILTER (WHERE `+estados["para-revisar"]+`), count(*) FILTER (WHERE `+estados["al-dia"]+`),
+		count(*) FILTER (WHERE `+estados["bajo-costo"]+`)`+desde+c.Donde(),
+		c.Args()...).Scan(&k.Todas, &k.SinPrecio, &k.ParaRevisar, &k.AlDia, &k.BajoCosto); err != nil {
 		return out, err
 	}
-	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia}[f.Estado]
+	out.Total = map[string]int{"sin-precio": k.SinPrecio, "para-revisar": k.ParaRevisar, "al-dia": k.AlDia, "bajo-costo": k.BajoCosto}[f.Estado]
 	if cond, ok := estados[f.Estado]; ok {
 		c.Y(cond)
 	} else {

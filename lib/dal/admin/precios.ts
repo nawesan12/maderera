@@ -34,7 +34,7 @@ export const DIAS_PARA_REVISAR = 60;
 /** Las filas de cada página de la grilla: es una tabla, entran más que en tarjetas. */
 export const PRECIOS_POR_PAGINA = 50;
 
-const ESTADOS_DE_PRECIO = ["sin-precio", "para-revisar", "al-dia"] as const;
+const ESTADOS_DE_PRECIO = ["sin-precio", "para-revisar", "al-dia", "bajo-costo"] as const;
 export type EstadoDePrecio = (typeof ESTADOS_DE_PRECIO)[number];
 
 export function estadoDePrecio(v: string | undefined): EstadoDePrecio | undefined {

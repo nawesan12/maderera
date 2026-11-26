@@ -122,3 +122,18 @@ func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 		t.Fatalf("reposición: %v %s", sugeridos, b)
 	}
 }
+
+// El precio de lista bajo el costo se marca en el inicio y lleva a Precios
+// filtrado (H139, H159): el Fenólico de 18 mm a $100 con costo de $75.500.
+func TestPrecioBajoElCostoEnElInicio(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	lista := e.id(t, `insert into price_lists (slug, name, is_default) values ('general-prueba', 'Lista general', true) returning id`)
+	e.exec(t, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 100), ($1, $3, 2420)`, lista, placa, tirante)
+	e.exec(t, `insert into variant_costs (variant_id, costo_promedio) values ($1, 75500), ($2, 1000)`, placa, tirante)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
+	if !strings.Contains(cuerpo, `"clave":"bajo-costo","cantidad":1`) || !strings.Contains(cuerpo, `/admin/precios?estado=bajo-costo`) {
+		t.Fatalf("inicio: %s", cuerpo)
+	}
+}

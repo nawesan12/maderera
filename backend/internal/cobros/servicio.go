@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
 	"mjbj/internal/jsmath"
@@ -28,11 +29,19 @@ type Servicio struct {
 	pool *pgxpool.Pool
 	q    *sqlc.Queries
 	log  *slog.Logger
+	aut  *autorizacion.Servicio
 }
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, q: sqlc.New(pool), log: log}
+	return &Servicio{pool: pool, q: sqlc.New(pool), log: log, aut: autorizacion.Nuevo(pool, log, "")}
+}
+
+// ConAutorizacion le da el servicio del PIN compartido con el mostrador (la
+// clave de las fichas y el aviso al tercer error).
+func (s *Servicio) ConAutorizacion(a *autorizacion.Servicio) *Servicio {
+	s.aut = a
+	return s
 }
 
 // Los avisos al cliente (correo y WhatsApp con el PDF) los atiende el worker
@@ -220,6 +229,41 @@ func cobradoPorMercadoPago(ctx context.Context, tx pgx.Tx, recibo string) (bool,
 // Anular es anularReciboDesdeElPanel: los roles que manejan plata, salvo el
 // recibo de un cobro de Mercado Pago (cobradoPorMercadoPago).
 func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, recibo, motivo string) (string, error) {
+	return s.AnularConPIN(ctx, ses, recibo, motivo, "")
+}
+
+// AnularConPIN es Anular con la firma de un admin (mes simulado, H278): la
+// vendedora anulaba un recibo de $1.880.100 con el motivo solo, mientras que
+// anular una venta pide el PIN. Ahora pide lo mismo que anular una venta: el
+// admin firma solo; el resto, con el PIN de un admin.
+func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, motivo, pin string) (string, error) {
+	if strings.TrimSpace(motivo) == "" {
+		return "", plataforma.Invalido(map[string]string{"motivo": "Poné el motivo de la anulación."})
+	}
+	if !ses.Tiene(sqlc.StaffRoleAdmin) {
+		var total float64
+		err := s.pool.QueryRow(ctx, `SELECT total::float8 FROM receipts WHERE id::text = $1`, recibo).Scan(&total)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", plataforma.NuevoProblema(404, "No se encontró el recibo.")
+		}
+		if err != nil {
+			return "", err
+		}
+		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: total, Clave: recibo, PIN: pin}); err != nil {
+			var falta *autorizacion.Falta
+			if errors.As(err, &falta) {
+				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto)}
+				if falta.PinIncorrecto {
+					e["pinIncorrecto"] = "si"
+				}
+				if falta.BloqueadoHasta != nil {
+					e["pinHasta"] = falta.BloqueadoHasta.UTC().Format(time.RFC3339)
+				}
+				return "", plataforma.Invalido(e)
+			}
+			return "", err
+		}
+	}
 	limpio := strings.TrimSpace(motivo)
 	if r := []rune(limpio); len(r) > 300 {
 		limpio = string(r[:300])

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { anularReciboDesdeElPanel } from "@/app/admin/cobros-actions";
+import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 
 // Con centavos: es lo que vuelve a deber, y redondeado no coincide con el recibo.
 const PESOS = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
@@ -42,29 +43,39 @@ export function AnularRecibo({
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Quien no es admin anula con el PIN de uno (como una venta): Go lo pide.
+  const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
   const [pendiente, empezar] = useTransition();
 
   function cerrar() {
     setAbierto(false);
     setMotivo("");
     setError(null);
+    setPidePin(null);
   }
 
-  function anular(e: React.FormEvent) {
-    e.preventDefault();
+  function enviar(pin?: string) {
     if (!motivo.trim()) {
       setError("Poné el motivo de la anulación.");
       return;
     }
     empezar(async () => {
-      const r = await anularReciboDesdeElPanel(id, motivo);
+      const r = await anularReciboDesdeElPanel(id, motivo, pin);
       if (r.ok) {
         toast.success(r.ok);
         cerrar();
+      } else if (r.autorizacion) {
+        setPidePin(r.autorizacion);
+        setError(null);
       } else {
         setError(r.error ?? "No se pudo anular.");
       }
     });
+  }
+
+  function anular(e: React.FormEvent) {
+    e.preventDefault();
+    enviar();
   }
 
   const consecuencia =
@@ -113,6 +124,15 @@ export function AnularRecibo({
               />
             </label>
 
+            {pidePin && (
+              <CampoPin
+                autorizacion={pidePin}
+                enviando={pendiente}
+                onEnviar={(pin) => enviar(pin)}
+                onCancelar={() => setPidePin(null)}
+              />
+            )}
+
             {error && (
               <p id={`error-anular-${id}`} role="alert" className="text-base text-saldo-debe">
                 {error}
@@ -129,7 +149,7 @@ export function AnularRecibo({
               </button>
               <button
                 type="submit"
-                disabled={pendiente}
+                disabled={pendiente || Boolean(pidePin)}
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white transition-opacity disabled:opacity-50"
               >
                 {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}

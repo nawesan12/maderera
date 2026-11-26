@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 
 /*
  * Los cobros a un cliente desde el panel. Los hace la API de Go
@@ -23,6 +24,8 @@ export interface EstadoCobro {
   fondoBase?: number;
   /** Un pedido sin sucursal: en qué caja puede entrar el efectivo. */
   sucursales?: SucursalParaCobrar[];
+  /** Anular un recibo sin ser admin: hace falta el PIN de uno. */
+  autorizacion?: Autorizacion;
 }
 
 export interface SucursalParaCobrar {
@@ -111,13 +114,28 @@ export async function cobrarPedido(_previo: EstadoCobro, formData: FormData): Pr
  * cuenta. Go lo frena si una devolución ya le reintegró plata o si un cheque
  * suyo ya salió de la cartera, y el mensaje se muestra tal cual.
  */
-export async function anularReciboDesdeElPanel(receiptId: string, motivo: string): Promise<EstadoCobro> {
+export async function anularReciboDesdeElPanel(receiptId: string, motivo: string, pin?: string): Promise<EstadoCobro> {
   if (!motivo.trim()) return { error: "Poné el motivo de la anulación." };
   const r = await (await api()).POST("/api/v1/admin/recibos/{id}/anular", {
     params: { path: { id: receiptId } },
-    body: { motivo },
+    body: { motivo, ...(pin ? { pin } : {}) },
   });
-  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  if (!r.data) {
+    // Quien no es admin anula con el PIN de uno, como una venta.
+    const e = (r.error as Problema | undefined)?.errores;
+    if (e?.pin) {
+      return {
+        error: e.pin,
+        autorizacion: {
+          motivo: "anular",
+          monto: Number(e.pinMonto ?? 0),
+          pinIncorrecto: e.pinIncorrecto === "si",
+          bloqueadoHasta: e.pinHasta,
+        },
+      };
+    }
+    return { error: mensajeDe(r.error as Problema | undefined) };
+  }
   revalidatePath("/admin/clientes");
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin/cheques");

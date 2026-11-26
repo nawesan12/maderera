@@ -282,7 +282,7 @@ func (a *API) AnularRecibo(ctx context.Context, r cuentasapi.AnularReciboRequest
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.cobros.Anular(ctx, ses, r.Id, r.Body.Motivo)
+	m, err := a.cobros.AnularConPIN(ctx, ses, r.Id, r.Body.Motivo, texto(r.Body.Pin))
 	if err != nil {
 		return nil, err
 	}

@@ -261,8 +261,9 @@ func correrAPI() error {
 		stockapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 
+	servicioCobros := cobros.Nuevo(pool, log)
 	cuentasapi.HandlerWithOptions(
-		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), cobros.Nuevo(pool, log), cfg.Interna),
+		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), servicioCobros, cfg.Interna),
 			[]cuentasapi.StrictMiddlewareFunc{plataforma.ConPedido[cuentasapi.StrictHandlerFunc]},
 			cuentasapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -420,6 +421,7 @@ func correrAPI() error {
 	apiDeSesion.ConAvisoDePIN(func(ctx context.Context, titulo, cuerpo string) {
 		go avisosDePIN.Avisar(ctx, push.Aviso{Titulo: titulo, Cuerpo: cuerpo, URL: "/admin/bitacora", Etiqueta: "pin", Pantalla: "/admin/bitacora"})
 	})
+	servicioCobros.ConAutorizacion(aut)
 	servicioMostrador := mostrador.Nuevo(pool, log).ConClaveDeCola(cfg.Auth.Secreto).ConAutorizacion(aut)
 	servicioMostrador.Rutas(m)
 	mostradorapi.HandlerWithOptions(

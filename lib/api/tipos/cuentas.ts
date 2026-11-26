@@ -1104,6 +1104,8 @@ export interface operations {
             content: {
                 "application/json": {
                     motivo: string;
+                    /** @description el de un admin */
+                    pin?: string;
                 };
             };
         };

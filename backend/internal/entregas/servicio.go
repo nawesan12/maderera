@@ -225,7 +225,8 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 		SELECT r.id, r.factor::float8,
 		  (coalesce((SELECT i.qty FROM inventory i WHERE i.variant_id = r.variant_id AND i.branch_id = r.sucursal), 0)
 		   - coalesce((SELECT sum(sr.cantidad) FROM stock_reservations sr JOIN orders o ON o.id = sr.order_id
-		               WHERE sr.estado = 'activa' AND o.estado = 'en-camino' AND sr.variant_id = r.variant_id AND sr.branch_id = r.sucursal), 0))::float8
+		               WHERE sr.estado = 'activa' AND o.estado = 'en-camino' AND sr.variant_id = r.variant_id AND sr.branch_id = r.sucursal
+		                 AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.tipo = 'envio' AND d.estado <> 'anulada')), 0))::float8
 		FROM r WHERE r.sucursal IS NOT NULL`, pedido)
 	if err != nil {
 		return nil, err

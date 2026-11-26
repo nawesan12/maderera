@@ -155,6 +155,7 @@ export function TarjetaStock({
               reservado={s.reservado}
               disponible={s.disponible}
               enReparto={s.enReparto}
+              galpon={s.galpon}
               llegando={s.llegando}
               minimo={s.min}
               unidad={unidad}
@@ -166,7 +167,7 @@ export function TarjetaStock({
                 producto={fila.productName}
                 medida={fila.label}
                 branchSlug={s.slug}
-                galpon={s.qty - s.enReparto}
+                galpon={s.galpon}
                 unidad={codigo}
                 largoMm={fila.largoMm}
                 sucursal={s.nombre}

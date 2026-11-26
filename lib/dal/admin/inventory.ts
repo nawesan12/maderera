@@ -19,8 +19,10 @@ export interface StockEnSucursal {
   reservado: number;
   /** Físico − reservado, con signo: negativo es lo vendido de más. */
   disponible: number;
-  /** Reservado de pedidos en camino: salió en el camión y no tiene remito. */
+  /** Lo que va en el camión: remitos de envío sin firmar y pedidos en camino sin remito. */
   enReparto: number;
+  /** Lo que hay en el estante. */
+  galpon: number;
   /** Lo que viene en un traslado sin recibir. */
   llegando: number;
   min: number;

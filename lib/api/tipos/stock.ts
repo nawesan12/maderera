@@ -215,9 +215,14 @@ export interface components {
             disponible: number;
             /**
              * Format: double
-             * @description lo reservado de pedidos en camino
+             * @description lo que va en el camión (remitos de envío sin firmar y pedidos en camino sin remito)
              */
             enReparto: number;
+            /**
+             * Format: double
+             * @description lo que hay en el estante (el físico menos lo reservado de pedidos en camino sin remito)
+             */
+            galpon: number;
             /**
              * Format: double
              * @description lo que viene en un traslado sin recibir

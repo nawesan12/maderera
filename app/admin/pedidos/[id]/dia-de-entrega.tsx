@@ -47,6 +47,7 @@ export function DiaDeEntrega({
         {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
       </span>
       <CampoFecha
+        soloCompleta
         value={valor}
         onChange={(e) => {
           const nuevo = e.target.value;

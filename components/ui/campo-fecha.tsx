@@ -17,6 +17,8 @@ type Props = Omit<
    * cuando quedó una fecha entera y válida, o "" si se borró.
    */
   onChange?: (e: { target: { value: string } }) => void;
+  /** Avisar solo con una fecha entera o el campo vacío (lo que se guarda al cambiar). */
+  soloCompleta?: boolean;
   /** El campo que se dibuja: el `Input` del panel donde había uno. */
   Entrada?: ComponentType<ComponentProps<"input">> | "input";
 };
@@ -40,6 +42,7 @@ export function CampoFecha({
   className,
   onBlur,
   Entrada = "input",
+  soloCompleta = false,
   ...resto
 }: Props) {
   const controlado = value !== undefined;
@@ -69,9 +72,14 @@ export function CampoFecha({
     const nuevo = conBarras(escrito);
     setTexto(nuevo);
     setTocado(false);
-    const fecha = nuevo === "" ? "" : aIso(nuevo);
-    if (fecha === null) return;
-    if (fecha !== "" && ((min && fecha < min) || (max && fecha > max))) return;
+    const leida = nuevo === "" ? "" : aIso(nuevo);
+    const valida =
+      leida !== null && !(leida !== "" && ((min && leida < min) || (max && leida > max)));
+    // A medio escribir, el formulario se entera de que no hay fecha: si no,
+    // mandaba la de antes sin que se viera. Lo que guarda solo al cambiar
+    // (`soloCompleta`) espera a una fecha entera o al campo vacío.
+    if (!valida && soloCompleta) return;
+    const fecha = valida ? leida : "";
     if (fecha === iso) return;
     setIso(fecha);
     setDeAntes(controlado ? fecha : externo);

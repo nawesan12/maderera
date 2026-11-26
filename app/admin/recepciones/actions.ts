@@ -42,6 +42,21 @@ export async function crearRecepcion(datos: DatosRecepcion): Promise<EstadoRecep
   return { ok: r.data.ok, id: r.data.id };
 }
 
+/**
+ * Corrige el borrador con lo que de verdad llegó: la cantidad de cada
+ * renglón (en cero, sale), su costo y el flete. Quien no ve precios manda
+ * solo las cantidades.
+ */
+export async function editarRecepcion(
+  id: string,
+  datos: { gastos?: number; lineas: { id: string; cantidad: number; costoUnitario?: number }[] },
+): Promise<EstadoRecepcion> {
+  const r = await (await api()).PUT("/api/v1/admin/recepciones/{id}", { params: { path: { id } }, body: { ...datos } });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
+  refrescar(id);
+  return { ok: r.data.ok };
+}
+
 /** Confirmar: entra el stock, se mezcla el costo y sube la deuda. */
 export async function confirmarRecepcion(id: string): Promise<EstadoRecepcion> {
   const r = await (await api()).POST("/api/v1/admin/recepciones/{id}/confirmar", { params: { path: { id } } });

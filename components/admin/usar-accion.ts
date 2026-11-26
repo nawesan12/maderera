@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -30,8 +30,14 @@ export function useAccionDeDialogo(
   alTerminarBien: () => void,
 ) {
   const router = useRouter();
+  // El error del intento anterior se va al volver a intentar: si la acción
+  // sale bien y redirige (el alta abre la ficha nueva), el código de abajo
+  // no corre, y «El CUIT no es válido…» quedaba a la vista sobre la ficha
+  // recién creada (mes simulado).
+  const aviso = useId();
 
   return useActionState(async (previo: ResultadoDeAccion, formData: FormData) => {
+    toast.dismiss(aviso);
     const resultado = await accion(previo, formData);
 
     if (resultado.ok) {
@@ -41,7 +47,7 @@ export function useAccionDeDialogo(
       // esto, la fila recién creada no aparece hasta recargar a mano.
       router.refresh();
     } else if (resultado.error) {
-      toast.error(resultado.error);
+      toast.error(resultado.error, { id: aviso });
     }
 
     return resultado;

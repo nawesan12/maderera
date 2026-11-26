@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PackagePlus, Plus } from "lucide-react";
+import { ChevronDown, PackagePlus, Plus } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
 import { listarRecepciones, ordenesPorRecibir } from "@/lib/dal/admin/recepciones";
@@ -33,6 +33,8 @@ export default async function RecepcionesPage() {
 
   const [recepciones, esperadas] = await Promise.all([listarRecepciones(), ordenesPorRecibir()]);
   const borradores = recepciones.filter((r) => r.estado === "borrador").length;
+  const vivas = recepciones.filter((r) => r.estado !== "anulada");
+  const anuladas = recepciones.filter((r) => r.estado === "anulada");
 
   return (
     <div className="space-y-6">
@@ -57,80 +59,105 @@ export default async function RecepcionesPage() {
         </p>
       )}
 
-      <section className="tarjeta @container overflow-hidden">
-        {recepciones.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <PackagePlus className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-base text-muted-foreground">Todavía no se cargó ninguna recepción.</p>
+      {(vivas.length > 0 || anuladas.length === 0) && (
+        <section className="tarjeta @container overflow-hidden">
+          {vivas.length === 0 ? (
+            <div className="px-5 py-14 text-center">
+              <PackagePlus className="mx-auto h-8 w-8 text-muted-foreground" />
+              <p className="mt-3 text-base text-muted-foreground">Todavía no se cargó ninguna recepción.</p>
+            </div>
+          ) : (
+            <Lista recepciones={vivas} veCostos={veCostos} />
+          )}
+        </section>
+      )}
+
+      {/* Las anuladas, plegadas al final: a 375 px, 34 anuladas hacían una
+          página de 5.400 px entre las que importan (mes simulado, tercera
+          prueba). */}
+      {anuladas.length > 0 && (
+        <details className="tarjeta @container group overflow-hidden">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-base font-medium text-muted-foreground hover:bg-hundida">
+            {plural(anuladas.length, "anulada", "anuladas")}
+            <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-linea">
+            <Lista recepciones={anuladas} veCostos={veCostos} />
           </div>
-        ) : (
-          <>
-            <table className="hidden w-full text-base @4xl:table" data-tabla="fija">
-              <thead>
-                <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
-                  <th className="px-5 py-2.5 font-semibold">Fecha</th>
-                  <th className="px-5 py-2.5 font-semibold">Proveedor</th>
-                  <th className="px-5 py-2.5 font-semibold">Remito</th>
-                  <th className="px-5 py-2.5 font-semibold">Sucursal</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Renglones</th>
-                  {veCostos && <th className="px-5 py-2.5 text-right font-semibold">Neto</th>}
-                  <th className="px-5 py-2.5 font-semibold">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-linea">
-                {recepciones.map((r) => (
-                  <tr key={r.id} className="hover:bg-hundida">
-                    <td className="tabular px-5 py-3 text-muted-foreground">{fechaCorta.format(r.fecha)}</td>
-                    <td className="px-5 py-3">
-                      <Link href={`/admin/recepciones/${r.id}`} className="font-semibold hover:underline">
-                        {r.proveedor}
-                      </Link>
-                    </td>
-                    <td className="codigo px-5 py-3 text-muted-foreground">{r.numeroRemito ?? "—"}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{r.sucursal ?? "—"}</td>
-                    <td className="tabular px-5 py-3 text-right">{r.lineas}</td>
-                    {veCostos && <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(r.neto)}</td>}
-                    <td className="px-5 py-3">
-                      <Estado estado={r.estado} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {/* En el teléfono, tres renglones: el proveedor con el estado, el
-                remito, y la sucursal con la fecha y el neto. */}
-            <ul className="divide-y divide-linea @4xl:hidden">
-              {recepciones.map((r) => (
-                <li key={r.id}>
-                  <Link href={`/admin/recepciones/${r.id}`} className="block space-y-1 px-4 py-3 hover:bg-hundida">
-                    {/* El proveedor entero (hasta dos renglones) y la fecha
-                        entera: si algo no entra se corta la sucursal (mes
-                        simulado, H382). */}
-                    <span className="flex items-start justify-between gap-3">
-                      <span className="line-clamp-2 min-w-0 break-words text-[17px] font-semibold">{r.proveedor}</span>
-                      <Estado estado={r.estado} />
-                    </span>
-                    {/* El neto va con el remito y la fecha con la sucursal,
-                        enteras: al lado del neto, a 375 px la sucursal
-                        quedaba en «Casa Centr…» (mes simulado). */}
-                    <span className="flex items-baseline justify-between gap-3 text-base">
-                      <span className="codigo min-w-0 truncate text-muted-foreground">
-                        {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"}
-                      </span>
-                      {veCostos && <span className="tabular shrink-0 font-semibold">{formatearMonto(r.neto)}</span>}
-                    </span>
-                    <span className="tabular block text-base text-muted-foreground">
-                      {fechaCorta.format(r.fecha)}
-                      {r.sucursal && ` · ${r.sucursal}`}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </section>
+        </details>
+      )}
     </div>
+  );
+}
+
+type Recepcion = Awaited<ReturnType<typeof listarRecepciones>>[number];
+
+function Lista({ recepciones, veCostos }: { recepciones: Recepcion[]; veCostos: boolean }) {
+  return (
+    <>
+      <table className="hidden w-full text-base @4xl:table" data-tabla="fija">
+        <thead>
+          <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
+            <th className="px-5 py-2.5 font-semibold">Fecha</th>
+            <th className="px-5 py-2.5 font-semibold">Proveedor</th>
+            <th className="px-5 py-2.5 font-semibold">Remito</th>
+            <th className="px-5 py-2.5 font-semibold">Sucursal</th>
+            <th className="px-5 py-2.5 text-right font-semibold">Renglones</th>
+            {veCostos && <th className="px-5 py-2.5 text-right font-semibold">Neto</th>}
+            <th className="px-5 py-2.5 font-semibold">Estado</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-linea">
+          {recepciones.map((r) => (
+            <tr key={r.id} className="hover:bg-hundida">
+              <td className="tabular px-5 py-3 text-muted-foreground">{fechaCorta.format(r.fecha)}</td>
+              <td className="px-5 py-3">
+                <Link href={`/admin/recepciones/${r.id}`} className="font-semibold hover:underline">
+                  {r.proveedor}
+                </Link>
+              </td>
+              <td className="codigo px-5 py-3 text-muted-foreground">{r.numeroRemito ?? "—"}</td>
+              <td className="px-5 py-3 text-muted-foreground">{r.sucursal ?? "—"}</td>
+              <td className="tabular px-5 py-3 text-right">{r.lineas}</td>
+              {veCostos && <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(r.neto)}</td>}
+              <td className="px-5 py-3">
+                <Estado estado={r.estado} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {/* En el teléfono, tres renglones: el proveedor con el estado, el
+          remito, y la sucursal con la fecha y el neto. */}
+      <ul className="divide-y divide-linea @4xl:hidden">
+        {recepciones.map((r) => (
+          <li key={r.id}>
+            <Link href={`/admin/recepciones/${r.id}`} className="block space-y-1 px-4 py-3 hover:bg-hundida">
+              {/* El proveedor entero (hasta dos renglones) y la fecha
+                  entera: si algo no entra se corta la sucursal (mes
+                  simulado, H382). */}
+              <span className="flex items-start justify-between gap-3">
+                <span className="line-clamp-2 min-w-0 break-words text-[17px] font-semibold">{r.proveedor}</span>
+                <Estado estado={r.estado} />
+              </span>
+              {/* El neto va con el remito y la fecha con la sucursal,
+                  enteras: al lado del neto, a 375 px la sucursal
+                  quedaba en «Casa Centr…» (mes simulado). */}
+              <span className="flex items-baseline justify-between gap-3 text-base">
+                <span className="codigo min-w-0 truncate text-muted-foreground">
+                  {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"}
+                </span>
+                {veCostos && <span className="tabular shrink-0 font-semibold">{formatearMonto(r.neto)}</span>}
+              </span>
+              <span className="tabular block text-base text-muted-foreground">
+                {fechaCorta.format(r.fecha)}
+                {r.sucursal && ` · ${r.sucursal}`}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

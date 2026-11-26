@@ -32,6 +32,8 @@ export interface CorteDeMostrador {
   }[];
   /** El ancho de la sierra con que se armó el plano. */
   anchoSierraMm?: number | null;
+  /** Un corte que ya estaba en la cola sin venta: se cobra y se ata a esta. */
+  existente?: string | null;
 }
 
 /** Una variante del buscador del mostrador (o de la copia local). */

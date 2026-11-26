@@ -38,6 +38,10 @@ type CorteDeMostrador struct {
 	AcomodoManual       *string        `json:"acomodoManual"`
 	AnchoSierraMm       *float64       `json:"anchoSierraMm"`
 	Piezas              []PiezaDeCorte `json:"piezas"`
+	// Existente es un corte que ya está en la cola sin venta (cargado desde
+	// el panel, «paga al retirar»): la venta lo cobra y lo ata, en vez de
+	// crear otro (mes simulado, H173). Sin él no había cómo cobrarlo.
+	Existente *string `json:"existente,omitempty"`
 }
 
 // TopeDeCortes es cuántos despieces entran en una venta.
@@ -186,6 +190,7 @@ func leerCorte(c *zodjs.Lector) *CorteDeMostrador {
 	k.Pasadas = entero(c.Numero("pasadas", zodjs.Num{Coerce: true}, zodjs.Entero(), zodjs.Min(0), zodjs.Max(9999)))
 	k.AcomodoManual = c.Cadena("acomodoManual", zodjs.Texto{Max: 20_000, Nulo: true})
 	k.AnchoSierraMm = c.Numero("anchoSierraMm", zodjs.Num{Nulo: true, Opcional: true}, zodjs.Min(0.5), zodjs.Max(10))
+	k.Existente = c.Cadena("existente", zodjs.Texto{Opcional: true, Nulo: true, UUID: true})
 	c.Objetos("piezas", zodjs.Lista{Min: 1, Max: 500}, func(_ int, e *zodjs.Lector) {
 		var p PiezaDeCorte
 		p.LargoMm = entero(e.Numero("largoMm", zodjs.Num{Coerce: true}, zodjs.Entero(), zodjs.Positivo(), zodjs.Max(10_000)))

@@ -909,6 +909,19 @@ func revisarCorte(k CorteDeMostrador) string {
 }
 
 func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMostrador, pedido, usuario string) error {
+	// El que ya estaba en la cola sin venta se ata a esta: sus piezas son
+	// las de su ficha (con ellas se armó lo que se cobra).
+	if k.Existente != nil {
+		tag, err := tx.Exec(ctx, `UPDATE cutting_orders SET order_id = $2, customer_id = coalesce(customer_id, $3), updated_at = now()
+			WHERE id = $1 AND order_id IS NULL AND estado <> 'cancelado'`, *k.Existente, pedido, v.CustomerID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return &cobros.ErrorDeCobro{Mensaje: "Ese corte ya está en otra venta, o se canceló."}
+		}
+		return nil
+	}
 	numero, err := numeracion.Corte(ctx, tx)
 	if err != nil {
 		return err

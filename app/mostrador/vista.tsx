@@ -31,6 +31,7 @@ import {
   type EscalaDePago,
 } from "@/lib/precios/medio-pago";
 import {
+  clientePorId,
   cobrarVenta,
   emitirPresupuestoDeMostrador,
   emitirRemitoDeVenta,
@@ -97,6 +98,7 @@ export function VistaMostrador({
   descuentoLibrePct,
   promos,
   escalasDePago,
+  corteACobrar = null,
 }: {
   /**
    * `administraCaja`: si puede dar de alta terminales (/admin/caja).
@@ -126,6 +128,28 @@ export function VistaMostrador({
   promos: PromoVigente[];
   /** El descuento por forma de pago: lo aplica el servidor, acá se muestra. */
   escalasDePago: EscalaDePago[];
+  /**
+   * Un corte de la cola sin venta («paga al retirar»), traído desde su ficha
+   * para cobrarlo: abre el corte cargado y la venta lo ata (H173).
+   */
+  corteACobrar?: {
+    id: string;
+    numero: string;
+    customerId: string | null;
+    variantId: string;
+    material: string;
+    unidad: string;
+    precio: number;
+    largoMm: number | null;
+    anchoMm: number | null;
+    color: string | null;
+    categoria: string | null;
+    formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
+    precioMediaPct: number;
+    mitad: "largo" | "ancho" | null;
+    canto: string;
+    piezas: EstadoDelCorte["piezas"];
+  } | null;
 }) {
   const router = useRouter();
   const [enviando, empezar] = useTransition();
@@ -230,7 +254,27 @@ export function VistaMostrador({
    */
   const [cortes, setCortes] = useState<CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador>[]>([]);
   /** La placa elegida para cortar, mientras el diálogo está abierto. */
-  const [cortando, setCortando] = useState<ResultadoDeMostrador | null>(null);
+  const [cortando, setCortando] = useState<ResultadoDeMostrador | null>(() =>
+    corteACobrar
+      ? {
+          variantId: corteACobrar.variantId,
+          sku: corteACobrar.numero,
+          producto: corteACobrar.material,
+          medida: "",
+          unidad: corteACobrar.unidad,
+          precio: corteACobrar.precio,
+          stock: 0,
+          largoMm: corteACobrar.largoMm,
+          anchoMm: corteACobrar.anchoMm,
+          color: corteACobrar.color,
+          categoria: corteACobrar.categoria,
+          formaDeVenta: corteACobrar.formaDeVenta,
+          precioMediaPct: corteACobrar.precioMediaPct,
+        }
+      : null,
+  );
+  /** El corte de la cola que se está cobrando (H173): se ata al cobrar. */
+  const [corteExistente, setCorteExistente] = useState<string | null>(corteACobrar?.id ?? null);
   /** El corte de la venta que se está corrigiendo, si se reabrió uno. */
   const [corrigiendo, setCorrigiendo] = useState<CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador> | null>(null);
   /*
@@ -557,6 +601,7 @@ export function VistaMostrador({
   function limpiar() {
     setBorradorDelCorte(null);
     setALista(false);
+    setCorteExistente(null);
     setLineas([]);
     setCliente(null);
     setMedio("efectivo");
@@ -769,6 +814,19 @@ export function VistaMostrador({
       ),
     );
   }
+
+  // El cliente del corte traído, si tiene: se busca una vez al abrir.
+  const clienteDelCorte = corteACobrar?.customerId ?? null;
+  useEffect(() => {
+    if (!clienteDelCorte) return;
+    let vigente = true;
+    void clientePorId(clienteDelCorte).then((c) => {
+      if (vigente && c) setCliente({ ...c, estado: c.estado ?? "activo" } as Cliente);
+    });
+    return () => {
+      vigente = false;
+    };
+  }, [clienteDelCorte]);
 
   function aplicarPrecios() {
     if (!otrosPrecios) return;
@@ -1209,7 +1267,7 @@ export function VistaMostrador({
           <CorteAMedida
             placa={{
               variantId: cortando.variantId,
-              descripcion: `${cortando.producto} — ${cortando.medida}`,
+              descripcion: cortando.medida ? `${cortando.producto} — ${cortando.medida}` : cortando.producto,
               unidad: cortando.unidad,
               precio: cortando.precio,
               largoMm: cortando.largoMm ?? null,
@@ -1223,7 +1281,9 @@ export function VistaMostrador({
             inicial={
               corrigiendo
                 ? corrigiendo.estado
-                : borradorDelCorte &&
+                : corteExistente && corteACobrar && cortando.variantId === corteACobrar.variantId
+                  ? { piezas: corteACobrar.piezas, mitad: corteACobrar.mitad, canto: corteACobrar.canto, fijadas: [] }
+                  : borradorDelCorte &&
                     borradorVale(borradorDelCorte, {
                       clave,
                       variantId: cortando.variantId,
@@ -1238,6 +1298,8 @@ export function VistaMostrador({
             precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
             precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
             onCerrar={(estado) => {
+              // El corte traído que se cierra sin agregar deja de estar atado.
+              if (corteExistente && !cortes.some((c) => c.corte.existente === corteExistente)) setCorteExistente(null);
               // Cerrar la corrección deja el corte como estaba en la venta.
               if (corrigiendo) {
                 setCorrigiendo(null);
@@ -1266,10 +1328,16 @@ export function VistaMostrador({
             }}
             onAgregar={(nuevas, elCorte, estado) => {
               // Reabierto, el corte se reemplaza: sus renglones viejos salen.
+              // El corte traído de la cola se ata a la venta en vez de crear otro.
+              const existente =
+                corrigiendo?.corte.existente ??
+                (corteExistente && corteACobrar && cortando.variantId === corteACobrar.variantId && !cortes.some((c) => c.corte.existente === corteExistente)
+                  ? corteExistente
+                  : null);
               const r = conElCorte(lineas, cortes, {
                 id: corrigiendo?.id ?? crypto.randomUUID(),
                 placa: cortando,
-                corte: elCorte,
+                corte: existente ? { ...elCorte, existente } : elCorte,
                 estado,
               }, nuevas);
               setLineas(r.lineas);

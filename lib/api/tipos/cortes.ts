@@ -507,6 +507,10 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             piezas: components["schemas"]["PiezaDelCorte"][];
+            formaDeVenta?: string | null;
+            unidad?: string | null;
+            /** @description tiene venta y no le queda nada por cobrar */
+            cobrado?: boolean;
             /** Format: double */
             precioPlaca: number | null;
             medida: components["schemas"]["Medida"];
@@ -1042,6 +1046,8 @@ export interface operations {
         parameters: {
             query?: {
                 desde?: string;
+                /** @description entregar un corte que no está cobrado, sabiéndolo */
+                sinCobrar?: boolean;
             };
             header?: never;
             path: {

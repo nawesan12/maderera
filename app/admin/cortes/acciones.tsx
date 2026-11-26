@@ -1,6 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRight, Flame, Loader2 } from "lucide-react";
@@ -31,10 +32,22 @@ export function AccionesCorte({
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
+  /*
+   * El corte terminado que no está cobrado no se entrega con un clic (mes
+   * simulado, H173): Go lo rechaza, y el botón pasa a «Entregar sin cobrar»
+   * —el segundo toque, sabiéndolo— con «Cobrar en el mostrador» al lado.
+   */
+  const [sinCobrar, setSinCobrar] = useState(false);
 
   function accion(fn: () => Promise<{ ok?: string; error?: string }>) {
     startTransition(async () => {
       const resultado = await fn();
+      if (resultado.error?.includes("no está cobrado")) {
+        setSinCobrar(true);
+        toast.error(resultado.error);
+        return;
+      }
+      setSinCobrar(false);
       if (resultado.error) toast.error(resultado.error);
       else toast.success(resultado.ok ?? "Listo.");
       // También con error: si fue un 409 («ya estaba en la máquina»), la
@@ -66,18 +79,29 @@ export function AccionesCorte({
         </button>
       )}
 
+      {etiqueta && sinCobrar && estado === "terminado" && (
+        <Link
+          href={`/mostrador?corte=${id}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+        >
+          Cobrar en el mostrador
+        </Link>
+      )}
+
       {etiqueta && (
         <button
-          onClick={() => accion(() => avanzarCorte(id, estado))}
+          onClick={() => accion(() => avanzarCorte(id, estado, sinCobrar && estado === "terminado"))}
           disabled={pendiente}
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium transition-colors disabled:opacity-50 ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-base font-medium transition-colors disabled:opacity-50 ${
+            sinCobrar && estado === "terminado" ? "border border-destructive/40 text-destructive hover:bg-destructive/10" : "boton-accion"
+          } ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
         >
           {pendiente ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <ArrowRight className="h-5 w-5" />
           )}
-          {etiqueta}
+          {sinCobrar && estado === "terminado" ? "Entregar sin cobrar" : etiqueta}
         </button>
       )}
     </div>

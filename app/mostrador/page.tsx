@@ -9,6 +9,7 @@ import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { api, datos } from "@/lib/api/servidor";
 import { VistaMostrador } from "./vista";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
+import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 
 export const metadata: Metadata = {
   title: "Mostrador",
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
 export default async function MostradorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sucursal?: string }>;
+  searchParams: Promise<{ sucursal?: string; corte?: string }>;
 }) {
   const usuario = await requireStaff();
 
@@ -49,7 +50,7 @@ export default async function MostradorPage({
     redirect(inicioDelRol(usuario.staffRole));
   }
 
-  const { sucursal } = await searchParams;
+  const { sucursal, corte } = await searchParams;
 
   const sucursales = await listarSucursalesPublicas();
   if (sucursales.length === 0) redirect("/admin/sucursales");
@@ -85,6 +86,42 @@ export default async function MostradorPage({
   ]);
   const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct, ultimoContado } = pantalla;
 
+  /*
+   * «Cobrar en el mostrador» desde la ficha de un corte sin venta (mes
+   * simulado, H173): el corte llega cargado para cobrarlo, y la venta lo ata
+   * en vez de crear otro.
+   */
+  const ficha = corte ? await fichaDeCorte(corte) : null;
+  const corteACobrar =
+    ficha && !ficha.corte.orderId && ficha.corte.estado !== "cancelado" && ficha.corte.variantId
+      ? {
+          id: ficha.corte.id,
+          numero: ficha.corte.numero,
+          customerId: ficha.corte.customerId,
+          variantId: ficha.corte.variantId,
+          material: ficha.corte.material,
+          unidad: ficha.corte.unidad ?? "placa",
+          precio: ficha.corte.precioPlaca ?? 0,
+          largoMm: ficha.corte.varianteLargoMm,
+          anchoMm: ficha.corte.varianteAnchoMm,
+          color: ficha.corte.color,
+          categoria: ficha.corte.categoria,
+          formaDeVenta: (ficha.corte.formaDeVenta ?? "entera") as "entera" | "entera_o_media" | "metro_cuadrado",
+          precioMediaPct: ficha.corte.precioMediaPct ?? 50,
+          mitad: ficha.corte.mitad as "largo" | "ancho" | null,
+          canto: ficha.corte.cantoDescripcion ?? "",
+          piezas: ficha.corte.piezas.map((p) => ({
+            largo: String(p.largoMm),
+            ancho: String(p.anchoMm),
+            cantidad: String(p.cantidad),
+            veta: p.respetaVeta === 1,
+            cantoLargo: p.cantoLargo,
+            cantoAncho: p.cantoAncho,
+            etiqueta: p.etiqueta ?? "",
+          })),
+        }
+      : null;
+
   return (
     <VistaMostrador
       usuario={{
@@ -111,6 +148,7 @@ export default async function MostradorPage({
       promos={promos}
       escalasDePago={escalas}
       ventas={ventas}
+      corteACobrar={corteACobrar}
     />
   );
 }

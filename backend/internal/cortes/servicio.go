@@ -24,6 +24,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Servicio es el corte a medida.
@@ -228,6 +229,11 @@ type Corte struct {
 	Piezas           []PiezaDelCorte `json:"piezas"`
 	PrecioPlaca      *float64        `json:"precioPlaca"`
 	Medida           MedidaDePlaca   `json:"medida"`
+	// Para cobrarlo en el mostrador (H173): cómo se vende la placa, en qué
+	// unidad, y si ya está cobrado (con venta y sin nada por cobrar).
+	FormaDeVenta *string `json:"formaDeVenta"`
+	Unidad       *string `json:"unidad"`
+	Cobrado      bool    `json:"cobrado"`
 }
 
 func i32f(p *int32) *float64 {
@@ -254,7 +260,9 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		       pv.largo_mm, pv.ancho_mm, co.placa_largo_mm, co.placa_ancho_mm, co.mitad::text, pv.color,
 		       cat.name, p.precio_media_pct, co.placas, co.pasadas, co.canto_descripcion, co.acomodo_manual,
 		       co.ancho_sierra_mm, co.motor_plano, co.estado::text, co.urgente, co.notas, b.name, co.created_at,
-		       coalesce(co.contacto_telefono, o.contacto_telefono, cu.telefono), to_char(co.retira_el, 'YYYY-MM-DD')
+		       coalesce(co.contacto_telefono, o.contacto_telefono, cu.telefono), to_char(co.retira_el, 'YYYY-MM-DD'),
+		       p.forma_de_venta::text, p.unit::text,
+		       (o.id IS NOT NULL AND o.estado <> 'cancelado' AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) <= 0.009)
 		FROM cutting_orders co
 		LEFT JOIN product_variants pv ON pv.id = co.variant_id
 		LEFT JOIN products p ON p.id = pv.product_id
@@ -266,7 +274,7 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		&c.ID, &c.Numero, &c.Cliente, &c.CustomerID, &c.OrderID, &c.PedidoNumero, &c.Empresa, &c.PriceListID,
 		&c.Material, &c.VariantID, &vl, &va, &pl, &pa, &c.Mitad, &c.Color, &c.Categoria, &pct, &c.Placas,
 		&c.Pasadas, &c.CantoDescripcion, &c.AcomodoManual, &sierra, &c.MotorPlano, &c.Estado, &urgente,
-		&c.Notas, &c.Sucursal, &c.CreatedAt, &c.Telefono, &c.RetiraEl)
+		&c.Notas, &c.Sucursal, &c.CreatedAt, &c.Telefono, &c.RetiraEl, &c.FormaDeVenta, &c.Unidad, &c.Cobrado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -471,7 +479,13 @@ var ordenDeLaCola = []string{"en-cola", "en-proceso", "terminado", "retirado"}
 // sobre un corte que ya estaba en la máquina lo daba por terminado sin
 // cortarlo. El UPDATE además exige el estado leído: dos toques a la vez dan
 // un solo paso.
-func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde string) (string, error) {
+//
+// **Retirar uno sin cobrar avisa** (mes simulado, H173): un corte «paga al
+// retirar» sin venta pasaba a retirado con un clic y el material se
+// entregaba sin cobrar. Sin venta, o con la venta sin cobrar, el paso a
+// retirado se rechaza con el aviso, y solo pasa con `sinCobrar` (quien
+// toca lo sabe). Se cobra trayéndolo al mostrador.
+func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde string, sinCobrar bool) (string, error) {
 	var estado, numero string
 	if err := s.pool.QueryRow(ctx, `SELECT estado::text, numero FROM cutting_orders WHERE id = $1`, id).Scan(&estado, &numero); errors.Is(err, pgx.ErrNoRows) {
 		return "", noEncontrado
@@ -494,6 +508,16 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		return "", error422("El corte ya está retirado.")
 	}
 	sig := ordenDeLaCola[pos+1]
+	if sig == "retirado" && !sinCobrar {
+		var cobrado bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM cutting_orders co JOIN orders o ON o.id = co.order_id
+			WHERE co.id = $1 AND o.estado <> 'cancelado' AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) <= 0.009)`, id).Scan(&cobrado); err != nil {
+			return "", err
+		}
+		if !cobrado {
+			return "", error422(numero + " no está cobrado. Cobralo en el mostrador antes de entregarlo.")
+		}
+	}
 	tag, err := s.pool.Exec(ctx, `UPDATE cutting_orders SET estado = $2::estado_corte, updated_at = now() WHERE id = $1 AND estado = $3::estado_corte`, id, sig, estado)
 	if err != nil {
 		return "", err

@@ -3,6 +3,7 @@ package cobros
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/reglas"
 	"mjbj/internal/ventas/fragmentos"
 )
 
@@ -125,8 +127,15 @@ type EventoDeCuenta struct {
 	TipoComprobante    string
 	PuntoVenta, Numero int64
 	Cliente            string
-	// De la factura: su pedido, para aplicarle la seña que lo esperaba.
+	// De la factura: su pedido, para aplicarle la seña que lo esperaba. Del
+	// recibo que mandó a Anticipos lo que no tenía destino (las reglas
+	// «cobro_antes_de_facturar» y «excedente_cuenta_corriente» en
+	// «anticipos»): su pedido, o «*» si no cobra ninguno (va a la próxima
+	// factura del cliente).
 	Pedido string
+	// ExcedenteAAnticipo: del recibo que se está fijando, si lo que no tiene
+	// destino va a Anticipos y no al B (FijarReparto lo lee de la regla).
+	ExcedenteAAnticipo bool
 }
 
 // Bolsa es el anticipo que dejó un recibo: lo que queda sin aplicar, lo
@@ -136,6 +145,10 @@ type Bolsa struct {
 	Fecha           time.Time
 	Monto, Aplicado float64
 	Destinos        []string
+	// PorRegla: lo dejó la regla de mandar a Anticipos lo que no tenía
+	// destino. Sin pedido es un saldo a favor que espera la próxima factura,
+	// no una seña varada.
+	PorRegla bool
 }
 
 // sirve dice si la bolsa se le aplica a la factura.
@@ -194,6 +207,9 @@ type ResultadoDelReparto struct {
 	MovimientosDeDeudores map[string][]Movimiento
 	// Los anticipos que quedan sin aplicar al final, en orden.
 	Bolsas []Bolsa
+	// PorRegla son los recibos cuyo excedente sin destino fue a Anticipos
+	// por la regla (receipts.anticipo_por_regla).
+	PorRegla map[string]bool
 }
 
 // RepartoDeRecibo reparte un recibo con lo que hay abierto en Deudores. El
@@ -214,6 +230,22 @@ func RepartoDeRecibo(deudoresAbiertos, total, retencion, negro float64, pendient
 	}
 	r.B = jsmath.Redondear2(r.B + resto)
 	return r
+}
+
+// ExcedenteAAnticipos pasa a Anticipos lo que el reparto mandaba al B sin
+// destino (todo el B menos los cheques del circuito B, que siguen ahí): las
+// reglas «cobro_antes_de_facturar» y «excedente_cuenta_corriente» en
+// «anticipos» (H374, H407). Lo cobrado de un pedido sin factura y lo que
+// sobra de un cobro a cuenta quedan en el archivo del estudio, contra
+// Anticipos de clientes, y se aplican a la factura cuando sale con CAE.
+func ExcedenteAAnticipos(rep Reparto, negro float64) Reparto {
+	libre := jsmath.Redondear2(rep.B - negro)
+	if libre <= 0.005 {
+		return rep
+	}
+	rep.Anticipo = jsmath.Redondear2(rep.Anticipo + libre)
+	rep.B = jsmath.Redondear2(rep.B - libre)
+	return rep
 }
 
 // TramoPorCircuito reparte lo devuelto de un recibo en la proporción de su
@@ -247,10 +279,10 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 		return a.ID < b.ID
 	})
 	res := ResultadoDelReparto{Recibos: map[string]Reparto{}, Anulados: map[string]bool{}, Deudores: map[string]float64{}, Anticipos: map[string]float64{},
-		MovimientosDeDeudores: map[string][]Movimiento{}}
+		MovimientosDeDeudores: map[string][]Movimiento{}, PorRegla: map[string]bool{}}
 	r2 := jsmath.Redondear2
 	bolsas := map[string][]*Bolsa{}
-	deRecibo := map[string]*Bolsa{}
+	deRecibo := map[string][]*Bolsa{}
 	for _, e := range ev {
 		deudores, anticipo := res.Deudores[e.Clave], res.Anticipos[e.Clave]
 		switch e.Tipo {
@@ -286,14 +318,45 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 			if e.Guardado != nil {
 				rep = *e.Guardado
 			} else {
+				if e.ExcedenteAAnticipo {
+					if nuevo := ExcedenteAAnticipos(rep, e.Negro); nuevo != rep {
+						rep = nuevo
+						res.PorRegla[e.ID] = true
+					}
+				}
 				res.Calculados = append(res.Calculados, e.ID)
+			}
+			destinos := e.Destinos
+			if e.Pedido != "" {
+				res.PorRegla[e.ID] = true
+				if e.Pedido != "*" && !slices.Contains(destinos, "o:"+e.Pedido) {
+					destinos = append(append([]string(nil), destinos...), "o:"+e.Pedido)
+				}
 			}
 			res.Recibos[e.ID] = rep
 			deudores, anticipo = r2(deudores-rep.Deudores), r2(anticipo+rep.Anticipo)
 			if rep.Anticipo > 0.005 {
-				b := &Bolsa{Clave: e.Clave, Recibo: e.ID, Fecha: e.Fecha, Monto: rep.Anticipo, Destinos: e.Destinos}
-				bolsas[e.Clave] = append(bolsas[e.Clave], b)
-				deRecibo[e.ID] = b
+				// Sin pedido, lo que la regla mandó a Anticipos por encima de la
+				// seña es un saldo a favor: va a cualquier factura del cliente,
+				// y la seña sigue atada a lo que esperaba.
+				sena, libre := rep.Anticipo, 0.0
+				if e.Pedido == "*" {
+					sena = 0
+					if e.Pendiente {
+						sena = r2(min(rep.Anticipo, max(porFacturar, 0)))
+					}
+					libre = r2(rep.Anticipo - sena)
+				}
+				if sena > 0.005 {
+					b := &Bolsa{Clave: e.Clave, Recibo: e.ID, Fecha: e.Fecha, Monto: sena, Destinos: destinos, PorRegla: e.Pedido != "" && e.Pedido != "*"}
+					bolsas[e.Clave] = append(bolsas[e.Clave], b)
+					deRecibo[e.ID] = append(deRecibo[e.ID], b)
+				}
+				if libre > 0.005 {
+					b := &Bolsa{Clave: e.Clave, Recibo: e.ID, Fecha: e.Fecha, Monto: libre, PorRegla: true}
+					bolsas[e.Clave] = append(bolsas[e.Clave], b)
+					deRecibo[e.ID] = append(deRecibo[e.ID], b)
+				}
 			}
 		case EventoReintegroFacturado:
 			deudores = r2(deudores + e.Monto)
@@ -301,8 +364,15 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 			if rep, ok := res.Recibos[e.ID]; ok {
 				t := TramoPorCircuito(rep, e.Monto)
 				deudores, anticipo = r2(deudores+t.Deudores), r2(anticipo-t.Anticipo)
-				if b := deRecibo[e.ID]; b != nil {
-					b.Monto = r2(b.Monto - t.Anticipo)
+				// Lo que vuelve sale primero del saldo a favor y después de la seña.
+				falta := t.Anticipo
+				for i := len(deRecibo[e.ID]) - 1; i >= 0 && falta > 0.005; i-- {
+					b := deRecibo[e.ID][i]
+					sale := falta
+					if i > 0 {
+						sale = min(falta, b.Monto)
+					}
+					b.Monto, falta = r2(b.Monto-sale), r2(falta-sale)
 				}
 			}
 		case EventoAnulacion:
@@ -314,13 +384,15 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 			deudores = r2(deudores + rep.Deudores)
 			// Lo que su anticipo no llegó a aplicar sale de Anticipos; lo que
 			// ya había cancelado de una factura vuelve a deberse.
-			if b := deRecibo[e.ID]; b != nil {
+			aplicado := 0.0
+			for _, b := range deRecibo[e.ID] {
 				anticipo = r2(anticipo - b.Monto)
-				if b.Aplicado > 0.005 {
-					deudores = r2(deudores + b.Aplicado)
-					res.Aplicaciones = append(res.Aplicaciones, Aplicacion{Fecha: e.Fecha, Clave: e.Clave, Evento: e, Importe: -b.Aplicado})
-				}
+				aplicado = r2(aplicado + b.Aplicado)
 				b.Monto, b.Aplicado = 0, 0
+			}
+			if aplicado > 0.005 {
+				deudores = r2(deudores + aplicado)
+				res.Aplicaciones = append(res.Aplicaciones, Aplicacion{Fecha: e.Fecha, Clave: e.Clave, Evento: e, Importe: -aplicado})
 			}
 		}
 		if d := r2(deudores - res.Deudores[e.Clave]); d > 0.005 || d < -0.005 {
@@ -329,8 +401,13 @@ func RepartirCobros(eventos []EventoDeCuenta) ResultadoDelReparto {
 		res.Deudores[e.Clave], res.Anticipos[e.Clave] = deudores, anticipo
 	}
 	for _, e := range ev {
-		if b := deRecibo[e.ID]; e.Tipo == EventoRecibo && b != nil && b.Monto > 0.005 {
-			res.Bolsas = append(res.Bolsas, *b)
+		if e.Tipo != EventoRecibo {
+			continue
+		}
+		for _, b := range deRecibo[e.ID] {
+			if b.Monto > 0.005 {
+				res.Bolsas = append(res.Bolsas, *b)
+			}
 		}
 	}
 	return res
@@ -372,7 +449,7 @@ const ramaDelRecibo = `SELECT ` + claveDeRecibo + `, r.created_at, 2, r.id::text
               WHERE x.receipt_id = r.id AND ch.circuito = 'negro'), 0) ELSE 0 END::float8,
     {F},
     r.reparto_deudores::float8, r.reparto_anticipo::float8, r.reparto_b::float8, '', 0, 0, r.recibido_de,
-    '{}', 0, ''
+    '{}', 0, CASE WHEN r.anticipo_por_regla THEN coalesce(r.order_id::text, '*') ELSE '' END
   FROM receipts r
   WHERE r.created_at <= $1 AND {R}`
 
@@ -716,10 +793,41 @@ func FijarReparto(ctx context.Context, tx pgx.Tx, recibo string) (Reparto, error
 	if err := volver(ctx); err != nil {
 		return Reparto{}, err
 	}
-	rep := RepartirCobros(ev).Recibos[recibo]
-	_, err = tx.Exec(ctx, `UPDATE receipts SET reparto_deudores = $2::numeric, reparto_anticipo = $3::numeric, reparto_b = $4::numeric
-		WHERE id = $1`, recibo, jsmath.Fijo2(rep.Deudores), jsmath.Fijo2(rep.Anticipo), jsmath.Fijo2(rep.B))
+	aAnticipo, err := excedenteAAnticipo(ctx, tx, recibo)
+	if err != nil {
+		return Reparto{}, err
+	}
+	if aAnticipo {
+		for i := range ev {
+			if ev[i].Tipo == EventoRecibo && ev[i].ID == recibo {
+				ev[i].ExcedenteAAnticipo = true
+			}
+		}
+	}
+	res := RepartirCobros(ev)
+	rep := res.Recibos[recibo]
+	// Si la regla movió algo, el recibo queda marcado: su anticipo va a su
+	// pedido (o a la próxima factura) aunque no hubiera nada pendiente.
+	porRegla := res.PorRegla[recibo]
+	_, err = tx.Exec(ctx, `UPDATE receipts SET reparto_deudores = $2::numeric, reparto_anticipo = $3::numeric, reparto_b = $4::numeric,
+		anticipo_por_regla = $5 WHERE id = $1`, recibo, jsmath.Fijo2(rep.Deudores), jsmath.Fijo2(rep.Anticipo), jsmath.Fijo2(rep.B), porRegla)
 	return rep, err
+}
+
+// excedenteAAnticipo lee la regla que le toca al recibo: la del cobro antes
+// de facturar si cobra un pedido, la del excedente de cuenta corriente si
+// no. Las dos arrancan en «circuito_b» (el reparto de siempre).
+func excedenteAAnticipo(ctx context.Context, tx pgx.Tx, recibo string) (bool, error) {
+	var conPedido bool
+	if err := tx.QueryRow(ctx, `SELECT order_id IS NOT NULL FROM receipts WHERE id = $1`, recibo).Scan(&conPedido); err != nil {
+		return false, err
+	}
+	clave := reglas.ExcedenteCuentaCorriente
+	if conPedido {
+		clave = reglas.CobroAntesDeFacturar
+	}
+	v, err := reglas.Valor(ctx, tx, clave)
+	return v == "anticipos", err
 }
 
 // FijarRepartosDeAntes fija, una sola vez, el reparto de los recibos de antes

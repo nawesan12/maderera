@@ -608,7 +608,7 @@ func (s *Servicio) ResultadoEntre(ctx context.Context, idesde, ihasta, ddesde, d
 	if sinIva {
 		gasto = "CASE WHEN f.total > 0 THEN e.importe * (f.neto + f.exento) / f.total ELSE e.importe END"
 	}
-	const delPeriodo = `o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2`
+	const delPeriodo = `o.fecha >= $1 AND o.fecha < $2`
 	err := s.pool.QueryRow(ctx, `
 		SELECT `+ventasNetas(r.ConDescuento, "margenes.neto")+`,
 		  `+ventasNetas(r.ConDescuento, "(margenes.neto - coalesce(margenes.neto_costeado, 0))")+`,

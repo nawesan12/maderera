@@ -59,7 +59,7 @@ const consultaDeMetricas = `
 		  (SELECT count(DISTINCT customer_id)::int FROM orders
 		    WHERE estado NOT IN ('entregado', 'cancelado') AND customer_id IS NOT NULL)
 		FROM (SELECT o.estado, o.fecha AS created_at, o.monto AS total FROM ` + hechosDeVenta + ` o) hechos
-		WHERE estado <> 'cancelado' AND ($1::timestamptz IS NULL OR created_at >= least($1::timestamptz, $3::timestamptz))`
+		WHERE ($1::timestamptz IS NULL OR created_at >= least($1::timestamptz, $3::timestamptz))`
 
 // MetricasDelResumen es metricasDelResumen: las ventas del período (hora
 // argentina) contra el mismo lapso anterior, y los conteos del momento.
@@ -157,7 +157,7 @@ func (s *Servicio) VentasPorSucursal(ctx context.Context) ([]VentasDelMes, error
 	rs, err := s.pool.Query(ctx, `
 		SELECT to_char(o.fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM'), b.slug, sum(o.monto)
 		FROM `+hechosDeVenta+` o LEFT JOIN branches b ON b.id = o.branch_id
-		WHERE o.fecha >= $1 AND o.estado <> 'cancelado'
+		WHERE o.fecha >= $1
 		GROUP BY 1, 2`, InicioDeMes(ahora, 5))
 	if err != nil {
 		return nil, err

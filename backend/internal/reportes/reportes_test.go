@@ -485,7 +485,7 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 		values ($1, $2, 'pedido', 'mostrador', 'efectivo', 800, 'aprobado', '2026-10-18T15:00:00Z', '2026-10-18T15:00:00Z')`, m1, cliente)
 	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, cae, order_id)
 		values ('factura_b', 3, 201, 'Pérez SRL', 661.16, 138.84, 0, 0, 0, 800, 'autorizada', '2026-10-20T15:00:00Z', '76123456789013', $1)`, m1)
-	// Sin factura no hay asiento de venta, así que tampoco de cobro.
+	// Sin factura, el cobro va al archivo B contra Ventas sin factura (H160).
 	m2 := e.pedido(t, "M-0002", e.central, "entregado", "mostrador", time.Date(2026, 10, 18, 13, 0, 0, 0, Argentina), nil)
 	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, created_at)
 		values ($1, 'pedido', 'mostrador', 'efectivo', 999, 'aprobado', '2026-10-18T16:00:00Z')`, m2)
@@ -556,9 +556,23 @@ func TestCierreAsientaLosCobrosDesdeLosRecibos(t *testing.T) {
 		t.Errorf("Deudores baja %v (en %d asientos de cobro)", neto, n)
 	}
 	for _, a := range asientos {
-		if strings.Contains(a.Concepto, "M-0002") {
-			t.Errorf("la venta sin factura no tiene asiento: %+v", a)
+		if strings.Contains(a.Concepto, "M-0002") && a.Circuito != CircuitoNegro {
+			t.Errorf("la venta sin factura no va al archivo del estudio: %+v", a)
 		}
+	}
+	if a := buscarAsiento(asientos, "Cobro del pedido M-0002"); a == nil || a.Circuito != CircuitoNegro ||
+		a.Renglones[0] != renglon(Cuentas.Caja, 999, 0) || a.Renglones[1] != renglon(Cuentas.VentasSinFactura, 0, 999) {
+		t.Errorf("la venta sin factura en el B: %+v", a)
+	}
+	// La de M-0001 se cobró sin factura: entró al B el 18 y pasó al
+	// archivo del estudio con la factura, el 20.
+	if a := buscarAsiento(asientos, "Cobro del pedido M-0001"); a == nil || a.Circuito != CircuitoNegro ||
+		!a.Fecha.Equal(time.Date(2026, 10, 18, 15, 0, 0, 0, time.UTC)) {
+		t.Errorf("M-0001 en el B: %+v", a)
+	}
+	if a := buscarAsiento(asientos, "Pasa al archivo del estudio · Factura B 0003-00000201"); a == nil || a.Circuito != CircuitoNegro ||
+		a.Renglones[0] != renglon(Cuentas.VentasSinFactura, 800, 0) {
+		t.Errorf("M-0001 sale del B: %+v", a)
 	}
 }
 

@@ -46,7 +46,10 @@ type Cobranza struct {
 	Cliente    string            `json:"cliente"`
 	CustomerID *string           `json:"customerId"`
 	OrderID    *string           `json:"orderId"`
-	Origen     string            `json:"origen"`
+	// Pedido es el número del pedido que cobró (un recibo de un pedido
+	// puntual no es de la cuenta corriente: mes simulado, H268).
+	Pedido *string `json:"pedido"`
+	Origen string  `json:"origen"`
 	Anulado    bool              `json:"anulado"`
 	Total      float64           `json:"total"`
 	Partes     []ParteDeCobranza `json:"partes"`
@@ -93,13 +96,14 @@ const chequeRechazadoDelRecibo = `
 // solo orden de fecha. Las fechas son instantes: el período en hora
 // argentina.
 const cobranzasDelPeriodo = `
-	SELECT 'recibo' AS tipo, r.id, r.numero, r.created_at AS fecha, r.recibido_de AS cliente, r.customer_id, NULL::uuid AS order_id,
+	SELECT 'recibo' AS tipo, r.id, r.numero, r.created_at AS fecha, r.recibido_de AS cliente, r.customer_id, r.order_id AS order_id,
+	       (SELECT o.numero FROM orders o WHERE o.id = r.order_id) AS pedido,
 	       r.origen::text AS origen, r.estado = 'anulado' AS anulado, r.total
 	FROM receipts r
 	WHERE ($1::timestamptz IS NULL OR r.created_at >= $1) AND ($2::timestamptz IS NULL OR r.created_at < $2)
 	UNION ALL
 	SELECT 'en-linea', p.id, NULL, coalesce(p.acreditado_at, p.created_at), coalesce(cu.nombre, o.contacto_nombre, 'Sin ficha'),
-	       p.customer_id, p.order_id, p.proveedor::text, false, p.monto
+	       p.customer_id, p.order_id, o.numero, p.proveedor::text, false, p.monto
 	FROM payments p LEFT JOIN customers cu ON cu.id = p.customer_id LEFT JOIN orders o ON o.id = p.order_id
 	WHERE p.estado = 'aprobado' AND p.proveedor IN ('mercado_pago', 'transferencia')
 	  AND NOT EXISTS (SELECT 1 FROM receipt_parts rp WHERE rp.payment_id = p.id)
@@ -149,7 +153,7 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 		return out, err
 	}
 
-	rs, err = s.lectura.Query(ctx, `SELECT tipo, id, numero, fecha, cliente, customer_id, order_id, origen, anulado, total FROM (`+cobranzasDelPeriodo+`) c
+	rs, err = s.lectura.Query(ctx, `SELECT tipo, id, numero, fecha, cliente, customer_id, order_id, pedido, origen, anulado, total FROM (`+cobranzasDelPeriodo+`) c
 		ORDER BY fecha DESC, id LIMIT $3 OFFSET $4`, p.Desde, p.Hasta, limite, desplazamiento)
 	if err != nil {
 		return out, err
@@ -157,7 +161,7 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 	recibos := []string{}
 	indice := map[string]int{}
 	var c Cobranza
-	if _, err := pgx.ForEachRow(rs, []any{&c.Tipo, &c.ID, &c.Numero, &c.Fecha, &c.Cliente, &c.CustomerID, &c.OrderID, &c.Origen, &c.Anulado, &total}, func() error {
+	if _, err := pgx.ForEachRow(rs, []any{&c.Tipo, &c.ID, &c.Numero, &c.Fecha, &c.Cliente, &c.CustomerID, &c.OrderID, &c.Pedido, &c.Origen, &c.Anulado, &total}, func() error {
 		c.Total = total.F()
 		c.Partes = []ParteDeCobranza{}
 		if c.Tipo == "recibo" {

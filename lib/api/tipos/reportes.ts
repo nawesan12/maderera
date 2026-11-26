@@ -731,6 +731,8 @@ export interface components {
                 cliente: string;
                 customerId: string | null;
                 orderId: string | null;
+                /** @description el número del pedido que cobró */
+                pedido: string | null;
                 origen: string;
                 anulado: boolean;
                 /** Format: double */

@@ -636,7 +636,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, tipo, numero, fecha, cliente, customerId, orderId, origen, anulado, total, partes]
+            required: [id, tipo, numero, fecha, cliente, customerId, orderId, pedido, origen, anulado, total, partes]
             properties:
               id: { type: string }
               tipo: { type: string, enum: [recibo, en-linea] }
@@ -645,6 +645,7 @@ components:
               cliente: { type: string }
               customerId: { type: string, nullable: true }
               orderId: { type: string, nullable: true }
+              pedido: { type: string, nullable: true, description: el número del pedido que cobró }
               origen: { type: string }
               anulado: { type: boolean }
               total: { type: number, format: double }

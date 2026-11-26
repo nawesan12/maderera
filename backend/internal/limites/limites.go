@@ -142,6 +142,16 @@ func (l *Limitador) Soltar(ctx context.Context, accion Accion, sujeto string) {
 	_ = l.q.SoltarIntentos(ctx, sqlc.SoltarIntentosParams{Clave: string(accion) + ":" + sujeto, Ventana: ventana})
 }
 
+// Devolver descuenta el intento que se acaba de contar: el que entró bien
+// no gasta el cupo de la IP. En la maderera todos salen por el mismo router,
+// y seis personas entrando a la mañana dejaban a la séptima esperando con
+// un 429 (mes simulado). Descuenta uno y no borra la ventana: una cuenta
+// propia no sirve para limpiar los intentos fallidos contra otras.
+func (l *Limitador) Devolver(ctx context.Context, accion Accion, sujeto string) {
+	ventana := inicioDeVentana(l.ahora(), limites[accion].Ventana)
+	_ = l.q.DevolverIntento(ctx, sqlc.DevolverIntentoParams{Clave: string(accion) + ":" + sujeto, Ventana: ventana})
+}
+
 // LimpiarViejas borra las ventanas de hace más de un día (tarea diaria).
 func (l *Limitador) LimpiarViejas(ctx context.Context) (int64, error) {
 	return l.q.BorrarVentanasViejas(ctx, l.ahora().Add(-24*time.Hour))

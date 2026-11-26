@@ -60,6 +60,7 @@ func (a *API) EntrarConEnlace(ctx context.Context, req sesionapi.EntrarConEnlace
 	case err != nil:
 		return nil, err
 	}
+	a.lim.Devolver(ctx, limites.Ingresar, "ip:"+ip)
 	return sesionapi.EntrarConEnlace200JSONResponse{Sesion: dto(ses), Proposito: sesionapi.EntrarConEnlace200JSONResponseBodyProposito(proposito)}, nil
 }
 
@@ -150,6 +151,7 @@ func (a *API) Entrar(ctx context.Context, req sesionapi.EntrarRequestObject) (se
 	// Acertó: la cuenta se suelta. Si no, alguien que se equivoca dos veces y
 	// después entra bien arrastraría el límite el resto de la ventana.
 	a.lim.Soltar(ctx, limites.Ingresar, "correo:"+correo)
+	a.lim.Devolver(ctx, limites.Ingresar, "ip:"+ip)
 	return sesionapi.Entrar200JSONResponse(dto(ses)), nil
 }
 

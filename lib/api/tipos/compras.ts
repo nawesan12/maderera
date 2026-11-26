@@ -2620,6 +2620,13 @@ export interface operations {
                         turnoAbierto: string | null;
                         /** @description el turno abierto lo abrió quien pregunta */
                         deLaSesion: boolean;
+                        /**
+                         * Format: double
+                         * @description el efectivo del turno abierto
+                         */
+                        enCaja: number | null;
+                        /** Format: double */
+                        cambioFijo: number;
                     }[];
                 };
             };

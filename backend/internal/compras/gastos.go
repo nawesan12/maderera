@@ -258,12 +258,19 @@ type SucursalParaGasto struct {
 	// del panel no tiene una sucursal asignada; la caja que abrió hoy es lo
 	// más parecido, y es la que proponen los formularios de compras.
 	DeLaSesion bool `json:"deLaSesion"`
+	// EnCaja es el efectivo del turno abierto y CambioFijo lo que tiene que
+	// quedar: el gasto en efectivo muestra cuánto hay (mes simulado, H376).
+	EnCaja     *float64 `json:"enCaja"`
+	CambioFijo float64  `json:"cambioFijo"`
 }
 
 // SucursalesParaGasto es sucursalesParaGasto: las activas, en su orden.
 func (s *Servicio) SucursalesParaGasto(ctx context.Context, usuario string) ([]SucursalParaGasto, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT b.id, b.name, c.id, coalesce(c.abierta_por = $1, false) FROM branches b
+		SELECT b.id, b.name, c.id, coalesce(c.abierta_por = $1, false),
+		  CASE WHEN c.id IS NOT NULL THEN (SELECT coalesce(sum(m.monto), 0)::float8 FROM cash_movements m WHERE m.session_id = c.id) END,
+		  b.fondo_base::float8
+		FROM branches b
 		LEFT JOIN cash_sessions c ON c.branch_id = b.id AND c.estado = 'abierta'
 		WHERE b.active ORDER BY b.sort_order`, usuario)
 	if err != nil {

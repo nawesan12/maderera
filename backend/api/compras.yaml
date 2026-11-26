@@ -760,12 +760,14 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, nombre, turnoAbierto, deLaSesion]
+                  required: [id, nombre, turnoAbierto, deLaSesion, enCaja, cambioFijo]
                   properties:
                     id: { type: string }
                     nombre: { type: string }
                     turnoAbierto: { type: string, nullable: true }
                     deLaSesion: { type: boolean, description: el turno abierto lo abrió quien pregunta }
+                    enCaja: { type: number, format: double, nullable: true, description: el efectivo del turno abierto }
+                    cambioFijo: { type: number, format: double }
 components:
   requestBodies:
     Formulario:

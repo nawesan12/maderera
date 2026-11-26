@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO,
   mesesConVentas,
+  paraEntregar,
   paraPreparar,
   partirPendientes,
 } from "@/lib/inicio";
@@ -88,5 +89,49 @@ describe("paraPreparar", () => {
   it("no manda importes al depósito", () => {
     const { renglones } = paraPreparar([pedido("PED-1", "pendiente", 1)]);
     expect(Object.keys(renglones[0])).not.toContain("total");
+  });
+});
+
+// Mes simulado, H396: el depósito entrega desde el inicio.
+describe("paraEntregar", () => {
+  const pedido = (numero: string, estado: string, dia: number, sinCobrar: number | null = null) => ({
+    id: numero,
+    numero,
+    cliente: "Cliente",
+    estado,
+    tipoEntrega: "retiro",
+    zonaEnvio: null,
+    estadoPago: "pendiente",
+    sinCobrar,
+    createdAt: new Date(2026, 10, dia),
+    total: 123456,
+  });
+
+  it("solo los listos, como el chip de Go, y el más viejo primero", () => {
+    const { renglones, total } = paraEntregar([
+      pedido("PED-3", "listo", 3),
+      pedido("PED-1", "listo", 1, 500),
+      pedido("PED-2", "en-camino", 2),
+      pedido("PED-4", "preparando", 4),
+    ]);
+    expect(total).toBe(2);
+    expect(renglones.map((r) => r.numero)).toEqual(["PED-1", "PED-3"]);
+    expect(renglones[0].sinCobrar).toBe(500);
+  });
+
+  it("no manda el total al depósito", () => {
+    const { renglones } = paraEntregar([pedido("PED-1", "listo", 1)]);
+    expect(Object.keys(renglones[0])).not.toContain("total");
+  });
+
+  it("el inicio del depósito saca de «Para hoy» lo que ya está en sus listas", () => {
+    const { paraHoy } = partirPendientes(
+      [
+        { clave: "entregar", urgente: true },
+        { clave: "pedidos-atrasados", urgente: true },
+      ],
+      CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO,
+    );
+    expect(paraHoy.map((p) => p.clave)).toEqual(["pedidos-atrasados"]);
   });
 });

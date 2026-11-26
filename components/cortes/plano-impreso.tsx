@@ -146,7 +146,7 @@ export function PlanoImpreso({
         )}
         <div className="plano-numero">
           <p className="valor">{plano.pasadas}</p>
-          <p className="rotulo">pasadas de sierra</p>
+          <p className="rotulo">{plano.pasadas === 1 ? "pasada de sierra" : "pasadas de sierra"}</p>
         </div>
         <div className="plano-numero">
           <p className="valor">{Math.round(desperdicio * 100)}%</p>
@@ -154,7 +154,7 @@ export function PlanoImpreso({
         </div>
         <div className="plano-numero">
           <p className="valor">{plano.totalPiezas}</p>
-          <p className="rotulo">piezas</p>
+          <p className="rotulo">{plano.totalPiezas === 1 ? "pieza" : "piezas"}</p>
         </div>
         {/* Lo que se lleva el disco. Es el número que faltaba: estaba
             descontado en el acomodo desde siempre y no se decía en ninguna

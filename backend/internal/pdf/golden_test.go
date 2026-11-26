@@ -308,6 +308,8 @@ func diferencia(a, b string) (float64, error) {
 //     plata (los casos guardados no traen Totales: se suman las filas).
 //   - remito (26/11, mes simulado): firmado, el nombre y el documento van en
 //     «Aclaración y documento» y no debajo de la firma.
+//   - corte y hoja-de-corte (26/11, mes simulado): con una sola pieza o una
+//     sola pasada, en singular («1 pieza», no «1 piezas»).
 func TestActualizarGolden(t *testing.T) {
 	pedido := os.Getenv("PDF_ACTUALIZAR")
 	if pedido == "" {

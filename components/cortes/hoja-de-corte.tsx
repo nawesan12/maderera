@@ -111,7 +111,7 @@ export function HojaDeCorteImpresa({
 
       <div className="hc-numeros">
         <Numero valor={String(hoja.placas)} rotulo={rotuloPlacas} />
-        <Numero valor={String(hoja.totalPiezas)} rotulo="piezas" />
+        <Numero valor={String(hoja.totalPiezas)} rotulo={hoja.totalPiezas === 1 ? "pieza" : "piezas"} />
         <Numero valor={formatearSierra(hoja.anchoSierra)} rotulo="de sierra por corte" />
         <Numero
           valor={String(hoja.patrones.length)}

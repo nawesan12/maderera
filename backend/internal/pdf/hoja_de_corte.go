@@ -169,7 +169,11 @@ func HojaDeCortePdf(d DatosHojaDeCorte, _ time.Time) ([]byte, error) {
 	if hoja.Placas == 1 {
 		placas = "placa"
 	}
-	a.y -= h.EscribirParrafo("Las medidas son las de la pieza: la máquina descuenta la sierra sola y tiene que tener cargado un disco de "+formatearSierra(hoja.AnchoSierra)+". Sin refilado: el plano usa la placa entera. Orden de la seccionadora: primero los cortes longitudinales de la placa, después los transversales de cada tira, después los de tercer nivel. Tandas de hasta 4 medidas. "+numeroJS(hoja.Placas)+" "+placas+", "+numeroJS(hoja.TotalPiezas)+" piezas.",
+	piezas := "piezas"
+	if hoja.TotalPiezas == 1 {
+		piezas = "pieza"
+	}
+	a.y -= h.EscribirParrafo("Las medidas son las de la pieza: la máquina descuenta la sierra sola y tiene que tener cargado un disco de "+formatearSierra(hoja.AnchoSierra)+". Sin refilado: el plano usa la placa entera. Orden de la seccionadora: primero los cortes longitudinales de la placa, después los transversales de cada tira, después los de tercer nivel. Tandas de hasta 4 medidas. "+numeroJS(hoja.Placas)+" "+placas+", "+numeroJS(hoja.TotalPiezas)+" "+piezas+".",
 		Parrafo{Opciones: Opciones{X: Margen, Y: a.y, Tamano: 9.5}, Ancho: anchoUtil})
 	a.y -= 6
 

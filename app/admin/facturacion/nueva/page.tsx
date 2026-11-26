@@ -4,15 +4,18 @@ import { ArrowLeft } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { configuracionFiscalActual } from "@/lib/dal/admin/facturacion";
 import { sucursalesConCaja } from "@/lib/dal/admin/caja";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 import type { CondicionIva } from "@/lib/fiscal/comprobantes";
 import { FormularioFacturaManual } from "./formulario";
 
 export const metadata: Metadata = { title: "Nueva factura" };
 
 export default async function NuevaFacturaPage() {
-  const [emisor, sucursales] = await Promise.all([
+  const [emisor, sucursales, ajustes] = await Promise.all([
     configuracionFiscalActual(),
     sucursalesConCaja(),
+    ajustesDelSitio(),
   ]);
   // Las cajas abiertas: con más de una, el efectivo de contado no sabe a cuál
   // entrar y el formulario pide elegirla.
@@ -48,6 +51,7 @@ export default async function NuevaFacturaPage() {
       ) : (
         <FormularioFacturaManual
           condicionEmisor={emisor.condicionIva as CondicionIva}
+          alMonotributista={valorDeRegla(ajustes, "factura_al_monotributista")}
           cajas={cajas}
         />
       )}

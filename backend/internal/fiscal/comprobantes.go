@@ -42,8 +42,16 @@ var Condiciones = []string{ResponsableInscripto, Monotributista, Exento, Consumi
 // (simulación del mes, H207). Falta que el contador lo confirme: es la
 // lectura prudente de la norma.
 func LetraQueCorresponde(emisor, receptor string) string {
+	return LetraConRegla(emisor, receptor, "a")
+}
+
+// LetraConRegla es LetraQueCorresponde con la regla del negocio
+// factura_al_monotributista (/admin/reglas, H207): «a» (la de arranque, RG
+// 5003/2021) o «b» (la de antes de la RG, si el contador la prefiere). Solo
+// cambia lo que el inscripto le hace al monotributista.
+func LetraConRegla(emisor, receptor, alMonotributista string) string {
 	if emisor == ResponsableInscripto {
-		if receptor == ResponsableInscripto || receptor == Monotributista {
+		if receptor == ResponsableInscripto || (receptor == Monotributista && alMonotributista != "b") {
 			return "A"
 		}
 		return "B"

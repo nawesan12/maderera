@@ -21,6 +21,8 @@ import { EnterAvanza } from "@/components/admin/enter-avanza";
 import { AvisoDePedidosEnVivo } from "@/components/vivo/aviso-pedidos";
 import { requireStaff } from "@/lib/dal/session";
 import { conversacionesSinLeer } from "@/lib/dal/admin/whatsapp";
+import { nombreDelCircuito } from "@/lib/dal/circuito";
+import { ProveedorDelCircuito } from "@/components/admin/circuito";
 
 /**
  * El panel se puede instalar.
@@ -158,11 +160,11 @@ async function PanelConSesion({
 
   // El contador de conversaciones sin leer es un adorno del menú: si falla, el
   // panel tiene que abrirse igual y sin la pelotita.
-  const sinLeer = await degradar(
-    "las conversaciones sin leer",
-    conversacionesSinLeer,
-    0,
-  );
+  const [sinLeer, circuito] = await Promise.all([
+    degradar("las conversaciones sin leer", conversacionesSinLeer, 0),
+    // La palabra del circuito sin factura (H167); si falla, la de arranque.
+    degradar("el nombre del circuito", nombreDelCircuito, "b" as const),
+  ]);
 
   return (
     <div className="panel flex min-h-screen bg-background text-foreground">
@@ -224,7 +226,9 @@ async function PanelConSesion({
            * en blanco sin saber si había entrado. El menú aparece primero, que
            * además es lo que permite cambiar de sección sin esperar.
            */}
-          <Suspense fallback={<CargandoPantalla />}>{children}</Suspense>
+          <ProveedorDelCircuito nombre={circuito}>
+            <Suspense fallback={<CargandoPantalla />}>{children}</Suspense>
+          </ProveedorDelCircuito>
         </main>
       </div>
     </div>

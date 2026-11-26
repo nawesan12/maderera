@@ -16,9 +16,10 @@ import { fechaHora, formatearMonto, formatearPorcentaje, moneda } from "@/compon
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
-import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
+import { devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { BotonFacturar } from "./facturar";
 import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
+import { DevolverFacturado } from "./devolver-facturado";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { seOfreceLaFirma } from "@/lib/entregas/firma";
@@ -121,6 +122,11 @@ export default async function FichaPedidoPage({
   // del mostrador (la venta del mostrador se anula desde ahí).
   const manejaPlata = Boolean(usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole));
   const devolvible = manejaPlata && !cancelado && !pedido.facturado;
+  // Facturado: la devolución sale del pedido con su nota de crédito mientras
+  // no saque plata (H279); lo cobrado vuelve desde la factura.
+  const devolucionFacturada =
+    manejaPlata && !cancelado && pedido.facturado ? await devolucionDesdeElPedido(pedido.id) : null;
+  const devuelveDesdeElPedido = devolucionFacturada && devolucionFacturada.tope > 0.005 && devolucionFacturada.renglones.some((r) => r.queda > 0);
   const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
   const renglones = pedido.items.map((i) => ({
     id: i.id,
@@ -283,7 +289,17 @@ export default async function FichaPedidoPage({
             {/* La devolución de una venta ya entregada se hace sobre su
                 factura, con o sin CAE (H332): desde el pedido no había por
                 dónde. */}
-            {facturado && facturado.tipo.startsWith("factura") && pedido.estado !== "cancelado" && (
+            {devuelveDesdeElPedido && devolucionFacturada && (
+              <DevolverFacturado
+                id={pedido.id}
+                numero={pedido.numero}
+                factura={devolucionFacturada.factura}
+                destino={devolucionFacturada.destino}
+                tope={devolucionFacturada.tope}
+                renglones={devolucionFacturada.renglones}
+              />
+            )}
+            {!devuelveDesdeElPedido && factura && facturado && facturado.tipo.startsWith("factura") && pedido.estado !== "cancelado" && (
               <Link
                 href={`/admin/facturacion/${facturado.id}#devolucion`}
                 className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"

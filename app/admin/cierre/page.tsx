@@ -14,6 +14,8 @@ import { fechaCorta, formatearMonto, hoyEnArgentina, plural } from "@/lib/format
 import { ExportarAsientos } from "./exportar-asientos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { CerrarMes } from "./cerrar-mes";
+import { nombreDelCircuito } from "@/lib/dal/circuito";
+import { etiquetasDelCircuito, rotuloDelCircuito } from "@/lib/circuito";
 
 export const metadata: Metadata = { title: "Cierre del mes" };
 
@@ -37,11 +39,12 @@ export default async function CierrePage({
   const { periodo: crudo } = await searchParams;
   const periodo = leerPeriodoMensual(crudo, new Date());
 
-  const [resumen, pendientes, asientos, asientosB] = await Promise.all([
+  const [resumen, pendientes, asientos, asientosB, circuito] = await Promise.all([
     resumenDelMes(periodo.clave),
     pendientesDelCierre(periodo.clave),
     asientosDelPeriodo(periodo.clave),
     asientosDelPeriodo(periodo.clave, "negro"),
+    nombreDelCircuito(),
   ]);
 
   const etiqueta = new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString(
@@ -414,7 +417,7 @@ export default async function CierrePage({
       {asientosB.length > 0 && (
         <section className="tarjeta-hundida flex flex-wrap items-center justify-between gap-3 rounded-xl px-5 py-4">
           <div>
-            <h2 className="text-base font-semibold">Circuito B</h2>
+            <h2 className="text-base font-semibold">{rotuloDelCircuito(circuito)}</h2>
             <p className="tabular text-sm text-muted-foreground">
               {asientosB.length === 1 ? "1 asiento" : `${asientosB.length} asientos`}
             </p>
@@ -424,7 +427,7 @@ export default async function CierrePage({
             className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-background"
           >
             <Download className="h-4 w-4" />
-            Asientos B
+            Asientos {circuito === "b" ? "B" : etiquetasDelCircuito(circuito).negro.toLowerCase()}
           </a>
         </section>
       )}

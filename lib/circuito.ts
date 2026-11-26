@@ -21,7 +21,38 @@ export const ETIQUETA_CIRCUITO: Record<Circuito, string> = {
   negro: "B",
 };
 
+/**
+ * Cómo se llama el circuito sin factura: la regla `etiqueta_del_circuito`
+ * (/admin/reglas, H167). «B» se leía como Factura B. Cambia solo la palabra;
+ * el valor guardado («negro») y el archivo de asientos no cambian. Espejo de
+ * `reglas.EtiquetaCorta` y `reglas.EnUnaFrase` en Go.
+ */
+export type NombreDelCircuito = "b" | "sin_factura" | "interno";
+
+const CORTA: Record<NombreDelCircuito, string> = { b: "B", sin_factura: "Sin factura", interno: "Interno" };
+const FRASE: Record<NombreDelCircuito, string> = {
+  b: "circuito B",
+  sin_factura: "circuito sin factura",
+  interno: "circuito interno",
+};
+
+/** Las dos etiquetas («Facturas» y la del circuito sin factura) según la regla. */
+export function etiquetasDelCircuito(nombre: NombreDelCircuito = "b"): Record<Circuito, string> {
+  return { blanco: ETIQUETA_CIRCUITO.blanco, negro: CORTA[nombre] ?? CORTA.b };
+}
+
+/** Cómo se dice en una oración: «circuito B», «circuito sin factura»… */
+export function fraseDelCircuito(nombre: NombreDelCircuito = "b"): string {
+  return FRASE[nombre] ?? FRASE.b;
+}
+
+/** El chip o el título del circuito sin factura: «Circuito B», «Sin factura», «Circuito interno». */
+export function rotuloDelCircuito(nombre: NombreDelCircuito = "b"): string {
+  const f = fraseDelCircuito(nombre);
+  return nombre === "sin_factura" ? "Sin factura" : f[0].toUpperCase() + f.slice(1);
+}
+
 /** Cómo se nombra el circuito en una oración. */
-export function etiquetaDeCircuito(valor: string): string {
-  return ETIQUETA_CIRCUITO[valor as Circuito] ?? valor;
+export function etiquetaDeCircuito(valor: string, etiquetas: Record<Circuito, string> = ETIQUETA_CIRCUITO): string {
+  return etiquetas[valor as Circuito] ?? valor;
 }

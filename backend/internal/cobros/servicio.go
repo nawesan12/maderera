@@ -21,6 +21,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -379,7 +380,7 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 		return mal("importe", "El importe tiene que ser mayor a cero.")
 	}
 	if f.Tipo == "echeq" && f.Circuito == "negro" {
-		return mal("circuito", "Un e-Cheq no puede ir por el circuito B: queda registrado en el banco a nombre de la empresa.")
+		return mal("circuito", "Un e-Cheq no puede ir por el "+reglas.Circuito(ctx, s.pool)+": queda registrado en el banco a nombre de la empresa.")
 	}
 	fecha, ok := LeerFechaDeCheque(f.FechaPago)
 	if !ok {

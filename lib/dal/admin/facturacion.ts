@@ -287,6 +287,17 @@ export async function libroIvaVentas(periodo?: string | null) {
 }
 
 /** Pedido listo para facturar, con sus ítems y la condición fiscal del cliente. */
+/**
+ * La devolución de un pedido facturado desde el pedido (H279): los renglones
+ * de su factura, adónde va la plata (la cuenta o la deuda) y el tope. null si
+ * no tiene factura viva.
+ */
+export async function devolucionDesdeElPedido(orderId: string) {
+  const r = await (await api()).GET("/api/v1/admin/facturacion/pedidos/{id}/devolucion", { params: { path: { id: orderId } } });
+  if (r.response.status === 404 || r.response.status === 403) return null;
+  return datos(r);
+}
+
 export async function pedidoParaFacturar(orderId: string) {
   const r = await (await api()).GET("/api/v1/admin/facturacion/pedidos/{id}", { params: { path: { id: orderId } } });
   if (r.response.status === 404 || r.response.status === 400) return null;

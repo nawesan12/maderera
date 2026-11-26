@@ -7,7 +7,8 @@ import { puedeEntrar } from "@/lib/roles";
 import { esUuid } from "@/lib/uuid";
 import { fichaDePagoAProveedor } from "@/lib/dal/admin/compras-fiscal";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
-import { etiquetaDeCircuito } from "@/lib/circuito";
+import { etiquetaDeCircuito, etiquetasDelCircuito } from "@/lib/circuito";
+import { nombreDelCircuito } from "@/lib/dal/circuito";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { NOMBRE_DEL_MEDIO } from "../medios";
 import { AnularPago } from "./anular";
@@ -30,7 +31,7 @@ export default async function PagoPage({
 
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const p = await fichaDePagoAProveedor(id);
+  const [p, circuito] = await Promise.all([fichaDePagoAProveedor(id), nombreDelCircuito()]);
   if (!p) notFound();
 
   const retenido = Math.round((p.total - p.neto) * 100) / 100;
@@ -50,7 +51,7 @@ export default async function PagoPage({
           fechaCorta.format(p.fecha),
           NOMBRE_DEL_MEDIO[p.medio] ?? p.medio,
           p.referencia,
-          etiquetaDeCircuito(p.circuito),
+          etiquetaDeCircuito(p.circuito, etiquetasDelCircuito(circuito)),
         ]
           .filter(Boolean)
           .join(" · ")}

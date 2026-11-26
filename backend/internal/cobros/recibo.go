@@ -13,6 +13,7 @@ import (
 
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -113,7 +114,9 @@ func huella(c Cobro) string {
 func EmitirRecibo(ctx context.Context, tx pgx.Tx, c Cobro) (ReciboEmitido, error) {
 	q := sqlc.New(tx)
 	if p := Revisar(c.Partes, c.Circuito); p != "" {
-		return ReciboEmitido{}, errCobro(p)
+		// Revisar es puro (golden del TS): el nombre del circuito lo pone la
+		// regla etiqueta_del_circuito.
+		return ReciboEmitido{}, errCobro(strings.Replace(p, "circuito B", reglas.Circuito(ctx, tx), 1))
 	}
 	// Aparte de Revisar, que es el revisarPartes del TS con su golden: la
 	// fecha depende de hoy.

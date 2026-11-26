@@ -4,7 +4,7 @@ import { Receipt } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
-import { ETIQUETA_CIRCUITO, etiquetaDeCircuito } from "@/lib/circuito";
+import { EtiquetaDeCircuito } from "@/components/admin/circuito";
 import { FiltroDeCircuito } from "./filtro";
 import { requireStaffRole } from "@/lib/dal/session";
 import {
@@ -100,7 +100,7 @@ export default async function GastosPage({
                 className="tarjeta block p-4 transition-colors hover:border-brand-orange/40 hover:bg-hundida"
               >
                 <p className="text-sm text-muted-foreground">
-                  {ETIQUETA_CIRCUITO[c]} · {etiqueta}
+                  <EtiquetaDeCircuito valor={c} /> · {etiqueta}
                 </p>
                 <p className="tabular mt-0.5 text-2xl font-bold">
                   {formatearMonto(Number(fila?.total ?? 0))}
@@ -313,7 +313,7 @@ function Circuito({ g }: { g: Gasto }) {
           g.circuito === "negro" ? "bg-chip text-texto-2" : "bg-naranja-claro text-acento-sobre-claro"
         }`}
       >
-        {etiquetaDeCircuito(g.circuito)}
+        <EtiquetaDeCircuito valor={g.circuito} />
       </span>
       {g.factura && g.purchaseInvoiceId && (
         <Link href={`/admin/compras/facturas/${g.purchaseInvoiceId}`} className="codigo text-sm hover:underline">

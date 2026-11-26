@@ -13,6 +13,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
@@ -276,7 +277,17 @@ func (a *API) PendientesDelCierre(ctx context.Context, r reportesapi.PendientesD
 	}
 	p := a.mes(r.Params.Periodo)
 	v, err := a.s.PendientesDelCierre(ctx, p.Desde, p.Hasta)
-	return ok(v), err
+	if err != nil {
+		return nil, err
+	}
+	// La palabra del circuito sin factura la pone la regla (H167).
+	if regla, _ := reglas.Valor(ctx, a.s.pool, reglas.EtiquetaDelCircuito); regla != "b" {
+		for i := range v {
+			v[i].Titulo = reglas.EnElTexto(v[i].Titulo, regla)
+			v[i].Detalle = reglas.EnElTexto(v[i].Detalle, regla)
+		}
+	}
+	return ok(v), nil
 }
 
 func (a *API) ResumenDelMes(ctx context.Context, r reportesapi.ResumenDelMesRequestObject) (reportesapi.ResumenDelMesResponseObject, error) {

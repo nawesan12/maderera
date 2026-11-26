@@ -39,9 +39,12 @@ export type TipoComprobante =
 export function letraQueCorresponde(
   emisor: CondicionIva,
   receptor: CondicionIva,
+  /** La regla `factura_al_monotributista` (/admin/reglas): «a» de arranque, o «b». */
+  alMonotributista: "a" | "b" = "a",
 ): Letra {
   if (emisor === "responsable_inscripto") {
-    return receptor === "responsable_inscripto" || receptor === "monotributista" ? "A" : "B";
+    if (receptor === "responsable_inscripto") return "A";
+    return receptor === "monotributista" && alMonotributista === "a" ? "A" : "B";
   }
   return "C";
 }

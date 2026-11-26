@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/caja"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -19,15 +20,16 @@ import (
 // también sale de la caja del turno que lo contiene (caja.TurnoQueContiene,
 // la misma regla que una venta sin conexión).
 
-// etiquetaDeCircuito es la de lib/circuito.ts.
-func etiquetaDeCircuito(c string) string {
-	switch c {
+// etiquetaDeCircuito es la de lib/circuito.ts, con la palabra del circuito
+// sin factura que eligió la regla etiqueta_del_circuito (H167).
+func etiquetaDeCircuito(ctx context.Context, c reglas.Consultador, circuito string) string {
+	switch circuito {
 	case "blanco":
 		return "Facturas"
 	case "negro":
-		return "B"
+		return reglas.CircuitoCorto(ctx, c)
 	}
-	return c
+	return circuito
 }
 
 // CargarGasto es cargarGasto + registrarGasto. Devuelve el mensaje y el aviso
@@ -103,7 +105,7 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 		return "", "", errorDeFactura(err)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "gasto", "",
-		"Anotó un gasto de "+Monto(d.Importe)+" en "+d.Categoria+" ("+etiquetaDeCircuito(d.Circuito)+"): "+d.Descripcion, nil)
+		"Anotó un gasto de "+Monto(d.Importe)+" en "+d.Categoria+" ("+etiquetaDeCircuito(ctx, s.pool, d.Circuito)+"): "+d.Descripcion, nil)
 	return "Gasto anotado por " + Monto(d.Importe) + ".", "", nil
 }
 

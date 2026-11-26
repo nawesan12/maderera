@@ -95,6 +95,7 @@ const texto = (n: number) => (n ? importeParaElCampo(n) : "");
 export function CargarFactura({
   proveedores,
   recepciones,
+  porPagar = [],
   corregir,
   alTerminar,
 }: {
@@ -106,6 +107,8 @@ export function CargarFactura({
     fecha: Date;
     neto: number;
   }[];
+  /** Las facturas con saldo: a una de ellas se aplica una nota de crédito. */
+  porPagar?: { id: string; supplierId: string; numero: string; saldo: number }[];
   corregir?: FacturaParaCorregir;
   alTerminar?: () => void;
 }) {
@@ -121,7 +124,13 @@ export function CargarFactura({
   const [fechaEmision, setFecha] = useState(corregir?.fechaEmision ?? hoyEnArgentina());
   // null: el que sale de la fecha y los días de pago; si se toca, el tipeado.
   const [venceTocado, setVence] = useState<string | null>(corregir?.fechaVencimiento ?? null);
-  const [receiptId, setReceiptId] = useState("");
+  /*
+   * Los remitos que cubre (uno o varios: hay proveedores que facturan la
+   * quincena) y la factura a la que se aplica una nota de crédito.
+   */
+  const [remitos, setRemitos] = useState<string[]>([]);
+  const [aplicaA, setAplicaA] = useState("");
+  const [ajustarCosto, setAjustarCosto] = useState(false);
   const [cae, setCae] = useState(corregir?.cae ?? "");
   const [neto, setNeto] = useState(texto(corregir?.neto ?? 0));
   const [iva21, setIva21] = useState(texto(corregir?.iva21 ?? 0));
@@ -144,6 +153,10 @@ export function CargarFactura({
 
   const proveedor = proveedores.find((p) => p.id === supplierId);
   const delProveedor = corregir ? [] : recepciones.filter((r) => r.supplierId === supplierId);
+  const esCredito = tipo.startsWith("nota_credito");
+  const aCorregir = corregir || !esCredito ? [] : porPagar.filter((f) => f.supplierId === supplierId);
+  const netoRecibido =
+    Math.round(delProveedor.filter((r) => remitos.includes(r.id)).reduce((s, r) => s + r.neto, 0) * 100) / 100;
   const vence = venceTocado ?? sumarDias(fechaEmision, proveedor?.diasPago ?? 0);
 
   const n = importeDelCampo;
@@ -158,11 +171,28 @@ export function CargarFactura({
    * de un dígito.
    */
   const sugerido = Math.round(n(neto) * 0.21 * 100) / 100;
+  // Lo que la factura cobra de más (o de menos) sobre lo recibido.
+  const contraRecibido = remitos.length > 0 && neto !== "" ? Math.round((n(neto) - netoRecibido) * 100) / 100 : 0;
 
   function elegirProveedor(id: string) {
     setSupplierId(id);
-    setReceiptId("");
+    setRemitos([]);
+    setAplicaA("");
     setTipo(tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva));
+  }
+
+  /*
+   * Al tildar un remito se propone el neto de lo recibido: es lo que la
+   * factura tiene que decir, y tipearlo de nuevo es donde entra el error. Si
+   * ya se tipeó otro número, no se pisa.
+   */
+  function tildarRemito(id: string, si: boolean) {
+    const nuevos = si ? [...remitos, id] : remitos.filter((r) => r !== id);
+    const suma = (lista: string[]) =>
+      Math.round(delProveedor.filter((r) => lista.includes(r.id)).reduce((s, r) => s + r.neto, 0) * 100) / 100;
+    if (neto === "" || n(neto) === suma(remitos)) setNeto(nuevos.length ? importeParaElCampo(suma(nuevos)) : "");
+    setRemitos(nuevos);
+    setAjustarCosto(false);
   }
 
   function limpiar() {
@@ -177,7 +207,9 @@ export function CargarFactura({
     setPercepcionIva("");
     setPercepcionIibb("");
     setTotalPapel("");
-    setReceiptId("");
+    setRemitos([]);
+    setAplicaA("");
+    setAjustarCosto(false);
     setVence(null);
   }
 
@@ -199,16 +231,26 @@ export function CargarFactura({
         percepciones,
         percepcionIva: n(percepcionIva),
         percepcionIibb: n(percepcionIibb),
-        receiptId: receiptId || undefined,
+        receiptId: remitos[0],
+        receiptIds: remitos.slice(1),
+        aplicaA: esCredito && aplicaA ? aplicaA : undefined,
+        ajustarCosto: ajustarCosto && Math.abs(contraRecibido) > 0.01,
       };
       const resultado = corregir
         ? await corregirFacturaDeCompra(corregir.id, { ...datos, motivo })
         : await cargarFacturaDeCompra(datos);
       setEstado(resultado);
       if (resultado.ok) {
-        if (!corregir) limpiar();
-        router.refresh();
-        alTerminar?.();
+        if (corregir) {
+          router.refresh();
+          alTerminar?.();
+          return;
+        }
+        // Se cierra y se va a la factura recién cargada, resaltada: en el
+        // teléfono quedaba el formulario vacío y la factura 4000 px abajo.
+        limpiar();
+        setAbierto(false);
+        router.push(`/admin/compras/facturas?nueva=${resultado.id}`, { scroll: false });
       }
     });
   }
@@ -292,19 +334,51 @@ export function CargarFactura({
 
           <Campo etiqueta="CAE" valor={cae} onCambio={setCae} />
 
-          {delProveedor.length > 0 && (
-            <label className="block">
-              <span className="text-base font-medium">Recepción que cubre</span>
+          {delProveedor.length > 0 && !esCredito && (
+            <fieldset className="md:col-span-2">
+              <legend className="text-base font-medium">Remitos que cubre</legend>
+              <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                {delProveedor.map((r) => {
+                  const tildado = remitos.includes(r.id);
+                  return (
+                    <label
+                      key={r.id}
+                      className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 py-2 ${
+                        tildado ? "tarjeta-hundida" : "border border-linea"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={tildado}
+                        onChange={(e) => tildarRemito(r.id, e.target.checked)}
+                        className="h-5 w-5 shrink-0 accent-[var(--accion)]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="codigo block truncate text-base font-medium">
+                          {r.numeroRemito ?? "Sin remito"}
+                        </span>
+                        <span className="tabular block text-sm text-muted-foreground">{fechaCorta.format(r.fecha)}</span>
+                      </span>
+                      <span className="tabular shrink-0 text-base">{formatearMonto(r.neto)}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
+
+          {aCorregir.length > 0 && (
+            <label className="block md:col-span-2">
+              <span className="text-base font-medium">Factura que corrige</span>
               <select
-                value={receiptId}
-                onChange={(e) => setReceiptId(e.target.value)}
+                value={aplicaA}
+                onChange={(e) => setAplicaA(e.target.value)}
                 className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
               >
-                <option value="">Ninguna</option>
-                {delProveedor.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"} ·{" "}
-                    {fechaCorta.format(r.fecha)} · {formatearMonto(r.neto)} neto
+                <option value="">Ninguna: queda a favor</option>
+                {aCorregir.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.numero} · quedan {formatearMonto(f.saldo)}
                   </option>
                 ))}
               </select>
@@ -331,6 +405,25 @@ export function CargarFactura({
               >
                 IVA 21% = {formatearMonto(sugerido)}
               </button>
+            )}
+            {/* Distinta de lo recibido: se ve antes de cargarla, para reclamar
+                o aceptar, y si se acepta el costo pasa a lo facturado. */}
+            {Math.abs(contraRecibido) > 0.01 && (
+              <span className="mt-1.5 block space-y-1">
+                <span className="tabular block text-base font-medium text-saldo-debe" role="status">
+                  {contraRecibido > 0 ? "+" : "−"}
+                  {formatearMonto(Math.abs(contraRecibido))} contra lo recibido
+                </span>
+                <span className="flex items-center gap-2 text-base">
+                  <input
+                    type="checkbox"
+                    checked={ajustarCosto}
+                    onChange={(e) => setAjustarCosto(e.target.checked)}
+                    className="h-5 w-5 accent-[var(--accion)]"
+                  />
+                  Pasar al costo
+                </span>
+              </span>
             )}
           </label>
           <Campo etiqueta="IVA 21%" valor={iva21} onCambio={setIva21} numerico />

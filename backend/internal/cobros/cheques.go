@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"slices"
 	"time"
+	"unicode"
 )
 
 // Estado es el de un cheque (lib/cheques/estados.ts).
@@ -46,10 +47,31 @@ var noDigito = regexp.MustCompile(`\D`)
 // NormalizarNumeroDeCheque deja solo los dígitos.
 func NormalizarNumeroDeCheque(t string) string { return noDigito.ReplaceAllString(t, "") }
 
+// ConLetras dice si el número trae letras. Se guardan solo los dígitos, así
+// que «E-55500777» quedaba guardado como 55500777 sin avisar (mes simulado,
+// H143): ahora se rechaza y quien carga lo corrige contra el papel. Los
+// guiones, puntos y espacios separan y se aceptan.
+func ConLetras(t string) bool {
+	for _, r := range prefijoDeNumero.ReplaceAllString(t, "") {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// prefijoDeNumero es el «N°», «Nº» o «Nro.» con que se escribe a veces.
+var prefijoDeNumero = regexp.MustCompile(`^\s*(?i:n(?:ro|ú?m(?:ero)?)?)\s*[.°º]?\s*`)
+
+// MensajeConLetras es el rechazo de un número con letras.
+const MensajeConLetras = "El número del cheque lleva solo números. Revisalo contra el papel."
+
 // RevisarNumeroDeCheque es revisarNumeroDeCheque: el problema, o "".
 func RevisarNumeroDeCheque(t string) string {
 	n := NormalizarNumeroDeCheque(t)
 	switch {
+	case ConLetras(t):
+		return MensajeConLetras
 	case len(n) == 0:
 		return "Poné el número del cheque: es como se lo encuentra en el banco."
 	case len(n) < 4:
@@ -115,6 +137,15 @@ func RevisarFechasDeCheques(partes []Parte, ahora time.Time) string {
 				return m
 			}
 		}
+	}
+	return ""
+}
+
+// RevisarDeposito: un cheque se deposita desde el día de su fecha de pago
+// (en hora argentina), no antes. "" si se puede.
+func RevisarDeposito(fechaPago, ahora time.Time) string {
+	if fechaPago.In(argentina).Format("2006-01-02") > ahora.In(argentina).Format("2006-01-02") {
+		return "Este cheque es para el " + fechaCorta(fechaPago) + ": se deposita desde ese día."
 	}
 	return ""
 }

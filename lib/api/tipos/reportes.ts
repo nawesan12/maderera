@@ -749,9 +749,11 @@ export interface components {
             total: number;
             /**
              * Format: double
-             * @description Lo cobrado en el período
+             * @description Lo cobrado en el período (recibos, en línea y mostrador), sin los recibos anulados ni los cheques rechazados
              */
             cobrado: number;
+            /** @description Cuántas ventas del mostrador entran en lo cobrado */
+            ventas: number;
             porMedio: {
                 medio: string;
                 /** Format: double */
@@ -768,6 +770,8 @@ export interface components {
                 cliente: string;
                 customerId: string | null;
                 orderId: string | null;
+                /** @description el número del pedido que cobró */
+                pedido: string | null;
                 origen: string;
                 anulado: boolean;
                 /** Format: double */

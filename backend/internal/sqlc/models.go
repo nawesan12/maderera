@@ -6040,6 +6040,12 @@ type PurchaseInvoice struct {
 	AnuladaPorUserID *string               `json:"anuladaPorUserId"`
 	PercepcionIva    jsmath.Num            `json:"percepcionIva"`
 	PercepcionIibb   jsmath.Num            `json:"percepcionIibb"`
+	AplicaAID        *string               `json:"aplicaAId"`
+}
+
+type PurchaseInvoiceReceipt struct {
+	PurchaseInvoiceID string `json:"purchaseInvoiceId"`
+	GoodsReceiptID    string `json:"goodsReceiptId"`
 }
 
 type PurchaseOrder struct {
@@ -6339,6 +6345,7 @@ type SupplierMovement struct {
 	GoodsReceiptID    *string                 `json:"goodsReceiptId"`
 	PurchaseInvoiceID *string                 `json:"purchaseInvoiceId"`
 	SupplierPaymentID *string                 `json:"supplierPaymentId"`
+	ChequeID          *string                 `json:"chequeId"`
 }
 
 type SupplierPayment struct {
@@ -6363,6 +6370,12 @@ type SupplierPaymentAllocation struct {
 	PaymentID         string     `json:"paymentId"`
 	PurchaseInvoiceID string     `json:"purchaseInvoiceId"`
 	Importe           jsmath.Num `json:"importe"`
+}
+
+type SupplierPaymentCheque struct {
+	PaymentID string     `json:"paymentId"`
+	ChequeID  string     `json:"chequeId"`
+	Importe   jsmath.Num `json:"importe"`
 }
 
 type SupplierPaymentPart struct {

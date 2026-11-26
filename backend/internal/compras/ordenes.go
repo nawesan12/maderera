@@ -150,13 +150,9 @@ func (s *Servicio) CrearOrden(ctx context.Context, ses *auth.Sesion, m map[strin
 	if err != nil {
 		return "", err
 	}
-	var prometida *time.Time
-	if o.FechaPrometida != nil && *o.FechaPrometida != "" {
-		f, ok := LeerFecha(*o.FechaPrometida)
-		if !ok {
-			return "", plataforma.Invalido(map[string]string{"fechaPrometida": "La fecha no es válida."})
-		}
-		prometida = &f
+	prometida, err := fechaPrometidaDe(o.FechaPrometida, time.Now())
+	if err != nil {
+		return "", err
 	}
 	var id string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -211,12 +207,22 @@ func (s *Servicio) AnularOrden(ctx context.Context, ses *auth.Sesion, id, motivo
 		return "", fallo("Poné el motivo.")
 	}
 	var numero string
-	err := s.pool.QueryRow(ctx, `
-		UPDATE purchase_orders SET estado = 'anulada', notas = coalesce(notas || ' · ', '') || $2 WHERE id = $1 RETURNING numero`,
-		id, "Anulada: "+motivo).Scan(&numero)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", fallo("Esa orden no existe.")
-	}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			UPDATE purchase_orders SET estado = 'anulada', notas = coalesce(notas || ' · ', '') || $2 WHERE id = $1 RETURNING numero`,
+			id, "Anulada: "+motivo).Scan(&numero)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fallo("Esa orden no existe.")
+		}
+		if err != nil {
+			return err
+		}
+		// Los borradores de recepción de la orden no van a llegar: se anulan
+		// con ella (no tocaron stock ni deuda) y su remito queda libre.
+		_, err = tx.Exec(ctx, `UPDATE goods_receipts SET estado = 'anulada', notas = coalesce(notas || ' · ', '') || $2
+			WHERE purchase_order_id = $1 AND estado = 'borrador'`, id, "Anulada con la orden: "+motivo)
+		return err
+	})
 	if err != nil {
 		return "", err
 	}
@@ -263,6 +269,18 @@ func (s *Servicio) RecibirDeLaOrden(ctx context.Context, ses *auth.Sesion, orden
 		}
 		if len(pendientes) == 0 {
 			return fallo("Esta orden ya se recibió entera.")
+		}
+		// Un borrador abierto de la misma orden: se corrige ese, no se hace
+		// otro (dos borradores de lo mismo, confirmados, la recibían dos veces).
+		var abierto string
+		if err := tx.QueryRow(ctx, `SELECT coalesce(numero_remito, '') FROM goods_receipts WHERE purchase_order_id = $1 AND estado = 'borrador' LIMIT 1`,
+			ordenID).Scan(&abierto); err == nil {
+			if abierto != "" {
+				return fallo("Ya hay una recepción en borrador de esta orden (remito " + abierto + "): corregí esa.")
+			}
+			return fallo("Ya hay una recepción en borrador de esta orden: corregí esa.")
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
 		}
 		var numero *string
 		if r := trimJS(remito); r != "" {

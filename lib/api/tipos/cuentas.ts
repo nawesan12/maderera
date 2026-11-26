@@ -783,6 +783,11 @@ export interface components {
             receiptId: string | null;
             recibo: string | null;
             motivoRechazo: string | null;
+            /**
+             * Format: double
+             * @description lo que debe hoy el cliente (solo en los informados)
+             */
+            saldoCliente: number | null;
         };
         Gestion: {
             id: string;

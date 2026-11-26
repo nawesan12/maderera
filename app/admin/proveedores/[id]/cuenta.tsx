@@ -21,6 +21,8 @@ interface Movimiento {
   saldo: number;
   purchaseInvoiceId: string | null;
   supplierPaymentId: string | null;
+  goodsReceiptId?: string | null;
+  facturaDelRemito?: string | null;
 }
 
 const TIPOS: Record<string, string> = {
@@ -35,7 +37,23 @@ const TIPOS: Record<string, string> = {
 function destino(m: Movimiento): string | null {
   if (m.purchaseInvoiceId) return `/admin/compras/facturas/${m.purchaseInvoiceId}`;
   if (m.supplierPaymentId) return `/admin/compras/pagos/${m.supplierPaymentId}`;
+  if (m.goodsReceiptId) return `/admin/recepciones/${m.goodsReceiptId}`;
   return null;
+}
+
+/**
+ * Cómo se llama el renglón. Lo que cargó una recepción es un remito, no una
+ * factura (mes simulado, H070: decía «Factura · 0001-00000877» con el número
+ * del remito); si ya llegó la factura que lo cubre, se nombra.
+ */
+function nombreDelMovimiento(m: Movimiento): { titulo: string; numero: string | null } {
+  if (m.goodsReceiptId) {
+    return {
+      titulo: m.tipo === "nota_credito" ? "Remito anulado" : "Remito",
+      numero: [m.referencia, m.facturaDelRemito && `factura ${m.facturaDelRemito}`].filter(Boolean).join(" · ") || null,
+    };
+  }
+  return { titulo: TIPOS[m.tipo] ?? m.tipo, numero: m.referencia };
 }
 
 /**
@@ -190,10 +208,11 @@ export function CuentaDelProveedor({
             <tbody className="divide-y divide-linea">
               {movimientos.map((m) => {
                 const href = destino(m);
+                const n = nombreDelMovimiento(m);
                 const nombre = (
                   <>
-                    <span className="block">{TIPOS[m.tipo] ?? m.tipo}</span>
-                    {m.referencia && <span className="tabular block text-sm text-muted-foreground">{m.referencia}</span>}
+                    <span className="block">{n.titulo}</span>
+                    {n.numero && <span className="codigo block text-sm text-muted-foreground">{n.numero}</span>}
                   </>
                 );
                 return (

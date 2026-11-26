@@ -12,14 +12,16 @@ import {
 } from "@/components/admin/formulario";
 import {
   formatearMonto,
+  hoyEnArgentina,
   importeDelCampo,
   importeIlegible,
-  importeParaElCampo,
 } from "@/lib/formato";
 import { CampoImporte } from "@/components/admin/campo-importe";
+import { costoLejos, costoPropuesto } from "../costos";
 import {
   buscarParaPedir,
   crearOrdenDeCompra,
+  editarOrdenDeCompra,
   type EstadoOrden,
 } from "../actions";
 
@@ -32,12 +34,14 @@ interface Hallazgo {
   costoActual: string | null;
 }
 
-interface Linea {
+export interface Linea {
   variantId: string;
   descripcion: string;
   cantidad: string;
   costoUnitario: string;
   alicuotaIva: string;
+  /** El último costo conocido: el campo se marca si se aleja mucho. */
+  ultimo?: number | null;
 }
 
 /**
@@ -53,6 +57,7 @@ export function FormularioOrden({
   renglonesIniciales,
   proveedorInicial,
   sucursalInicial,
+  editar,
 }: {
   proveedores: { id: string; nombre: string }[];
   sucursales: { id: string; nombre: string; deLaSesion?: boolean }[];
@@ -67,6 +72,8 @@ export function FormularioOrden({
   /** El proveedor y la sucursal que trae el reporte de reposición. */
   proveedorInicial?: string;
   sucursalInicial?: string;
+  /** La orden en borrador que se corrige: arranca con lo que tenía. */
+  editar?: { id: string; supplierId: string; branchId: string; fechaPrometida: string; notas: string };
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoOrden>({});
@@ -74,10 +81,10 @@ export function FormularioOrden({
 
   // Ningún proveedor de entrada (el primero alfabético casi nunca es el que
   // se quiere) y la sucursal de quien carga, si se sabe (sucursalPropuesta).
-  const [supplierId, setSupplierId] = useState(proveedorInicial ?? "");
-  const [branchId, setBranchId] = useState(() => sucursalInicial ?? sucursalPropuesta(sucursales));
-  const [fechaPrometida, setFecha] = useState("");
-  const [notas, setNotas] = useState("");
+  const [supplierId, setSupplierId] = useState(editar?.supplierId ?? proveedorInicial ?? "");
+  const [branchId, setBranchId] = useState(() => editar?.branchId ?? sucursalInicial ?? sucursalPropuesta(sucursales));
+  const [fechaPrometida, setFecha] = useState(editar?.fechaPrometida ?? "");
+  const [notas, setNotas] = useState(editar?.notas ?? "");
   const [lineas, setLineas] = useState<Linea[]>(renglonesIniciales ?? []);
 
   const [texto, setTexto] = useState("");
@@ -104,8 +111,9 @@ export function FormularioOrden({
               variantId: h.variantId,
               descripcion: [h.producto, h.variante].filter(Boolean).join(" "),
               cantidad: "1",
-              costoUnitario: importeParaElCampo(h.costoActual),
+              costoUnitario: costoPropuesto(h.costoActual),
               alicuotaIva: h.alicuotaIva,
+              ultimo: h.costoActual ? Number(h.costoActual) : null,
             },
           ],
     );
@@ -127,6 +135,7 @@ export function FormularioOrden({
   const listo =
     supplierId !== "" &&
     branchId !== "" &&
+    !(fechaPrometida !== "" && fechaPrometida < hoyEnArgentina()) &&
     lineas.length > 0 &&
     lineas.every(
       (l) =>
@@ -196,6 +205,8 @@ export function FormularioOrden({
             <input
               type="date"
               value={fechaPrometida}
+              min={hoyEnArgentina()}
+              aria-invalid={(fechaPrometida !== "" && fechaPrometida < hoyEnArgentina()) || undefined}
               onChange={(e) => setFecha(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             />
@@ -294,7 +305,10 @@ export function FormularioOrden({
                         valor={l.costoUnitario}
                         alCambiar={(v) => cambiar(i, "costoUnitario", v)}
                         aria-label={`Costo de ${l.descripcion}`}
-                        className="tabular h-10 w-32 rounded-lg border border-linea bg-background px-2 text-right text-base"
+                        aria-invalid={costoLejos(importeDelCampo(l.costoUnitario), l.ultimo) || undefined}
+                        className={`tabular h-10 w-32 rounded-lg border border-linea bg-background px-2 text-right text-base ${
+                          costoLejos(importeDelCampo(l.costoUnitario), l.ultimo) ? "ring-2 ring-saldo-debe" : ""
+                        }`}
                       />
                     </td>
                     <td className="tabular px-4 py-2.5 text-right font-semibold">
@@ -332,7 +346,7 @@ export function FormularioOrden({
           type="button"
           onClick={() =>
             empezar(async () => {
-              const r = await crearOrdenDeCompra({
+              const datos = {
                 supplierId,
                 branchId,
                 fechaPrometida: fechaPrometida || undefined,
@@ -344,7 +358,8 @@ export function FormularioOrden({
                   costoUnitario: importeDelCampo(l.costoUnitario),
                   alicuotaIva: Number(l.alicuotaIva),
                 })),
-              });
+              };
+              const r = editar ? await editarOrdenDeCompra(editar.id, datos) : await crearOrdenDeCompra(datos);
               setEstado(r);
               if (r.id) router.push(`/admin/compras/ordenes/${r.id}`);
             })
@@ -353,7 +368,7 @@ export function FormularioOrden({
           className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          Crear la orden
+          {editar ? "Guardar los cambios" : "Crear la orden"}
         </button>
       </BarraGuardar>
     </div>

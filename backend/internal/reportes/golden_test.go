@@ -104,7 +104,7 @@ func asientoDe(e entradaAsiento) Asiento {
 	case "pago":
 		return AsientoDePagoAProveedor(PagoAAsentar{e.Fecha, e.Proveedor, e.Medio, e.Referencia, e.Total, e.Retenido, nil, nil})
 	}
-	return AsientoDeGasto(GastoAAsentar{e.Fecha, e.Descripcion, e.Categoria, e.Medio, e.Importe})
+	return AsientoDeGasto(GastoAAsentar{Fecha: e.Fecha, Descripcion: e.Descripcion, Categoria: e.Categoria, Medio: e.Medio, Importe: e.Importe})
 }
 
 func TestGoldenAsientos(t *testing.T) {

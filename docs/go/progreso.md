@@ -3036,3 +3036,23 @@ prueba. Migraciones 00220 y 00221.
   placas (hoy se muestran «fuera del pedido»).
 - `roles.DecidenEnLaCola` (y `DECIDEN_EN_LA_COLA`): urgente, retirar, anular
   y corregir no son del aserradero; su ficha llega sin importes ni teléfono.
+## El mes simulado en compras y pagos (26/11, rama `mes-compras-pagos`)
+
+- Migración 00250: el remito de una recepción anulada queda libre (índice
+  parcial), `purchase_invoice_receipts` (una factura cubre varios remitos;
+  `receipt_id` sigue siendo el primero), `purchase_invoices.aplica_a_id` (la
+  nota de crédito aplicada a la factura que corrige), `supplier_movements.
+  cheque_id` y `supplier_payment_cheques` (el cheque que rebotó se repone
+  como una factura). Las dos tablas nuevas van en `SOLO_EN_GO` del espejo.
+- **El saldo de una factura de compra sale de `compras.AplicadoA`**: lo
+  imputado en pagos, las notas de crédito aplicadas y, si se pagó como gasto,
+  su total. La usan el listado, el pago, el Resumen, «Para hoy» y el CSV.
+- **Un vencimiento es un día a la medianoche UTC**: vencida es la de un día
+  anterior al día argentino de hoy escrito igual (`reportes.DiaDeHoy`,
+  `compras.diaDeHoy`), no la que pasó de `now()`.
+- El gasto en efectivo sin caja que lo contenga se rechaza (antes se anotaba
+  y el CSV lo sacaba de una Caja que ningún arqueo vio), y no baja del cambio
+  fijo. El gasto con factura crea la factura de compra, nace pagada y va al
+  asiento del gasto con su IVA.
+- El depósito entra a `/admin/recepciones` (`/admin/recepciones/nueva` es
+  del admin): recibe, corrige cantidades y confirma; Go le borra los costos.

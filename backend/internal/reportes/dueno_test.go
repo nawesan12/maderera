@@ -815,3 +815,72 @@ func TestMeDebenConRemitosParciales(t *testing.T) {
 		t.Errorf("sin cobrar: %+v, quería %+v", n.MeDeben.PedidosSinCobrar, q)
 	}
 }
+
+// **Una factura que vence hoy figuraba vencida** (mes simulado, H005/H061).
+// El vencimiento se guarda como día, a la medianoche UTC; se comparaba
+// contra la medianoche argentina (las 3 UTC) en Debo y contra `now()` en
+// «Para hoy», así que una factura de contado salía vencida en el momento en
+// que se cargaba. Vence hoy: cuenta para esta semana y para las 48 horas.
+func TestLaFacturaQueVenceHoyNoEstaVencida(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	// 00:40 del 15/10 en Argentina, la hora en que la vio la dueña.
+	temprano := time.Date(2026, 10, 15, 0, 40, 0, 0, Argentina)
+	e.s.ahora = func() time.Time { return temprano }
+	prov := e.id(t, `insert into suppliers (nombre) values ('Contado') returning id`)
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
+		values ($1, 'factura_a', 4, 1877, 800, 0, 0, 0, 0, 800, '2026-10-15T00:00:00Z', '2026-10-15T00:00:00Z')`, prov)
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto) values ($1, 'factura', 800)`, prov)
+	for _, ahora := range []time.Time{temprano, time.Date(2026, 10, 15, 23, 30, 0, 0, Argentina)} {
+		d, err := e.s.Debo(context.Background(), ahora)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d.Vencido != 0 || d.FacturasVencidas != 0 || d.EstaSemana != 800 || d.FacturasEstaSemana != 1 {
+			t.Errorf("%v: %+v", ahora, d)
+		}
+	}
+	// «Para hoy» mira el reloj de la base: la factura de contado de hoy.
+	e.exec(t, `update purchase_invoices set fecha_vencimiento = $1`, DiaDeHoy(time.Now()))
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
+	if strings.Contains(cuerpo, "compras-vencidas") || !strings.Contains(cuerpo, `"clave":"compras-48h"`) {
+		t.Errorf("para hoy: %s", cuerpo)
+	}
+	e.exec(t, `update purchase_invoices set fecha_vencimiento = '2026-10-15T00:00:00Z'`)
+	// Al día siguiente, sí.
+	d, err := e.s.Debo(context.Background(), time.Date(2026, 10, 16, 0, 10, 0, 0, Argentina))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Vencido != 800 || d.FacturasVencidas != 1 {
+		t.Errorf("al otro día: %+v", d)
+	}
+}
+
+// H137/H349: Cobros cuenta lo cobrado en el mostrador (sin la cuenta
+// corriente) y no cuenta el cheque que rebotó.
+func TestCobradoConElMostradorYSinElRechazado(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cuando := time.Date(2026, 10, 10, 10, 0, 0, 0, Argentina)
+	venta := e.pedido(t, "M-1", e.central, "entregado", "mostrador", cuando, nil)
+	e.exec(t, `insert into order_payments (order_id, medio, importe, created_at) values ($1, 'efectivo', 1000, $2), ($1, 'debito', 500, $2), ($1, 'cuenta_corriente', 700, $2)`, venta, cuando)
+	cheque := e.pedido(t, "M-2", e.central, "entregado", "mostrador", cuando, nil)
+	pago := e.id(t, `insert into order_payments (order_id, medio, importe, created_at) values ($1, 'cheque', 400, $2) returning id`, cheque, cuando)
+	e.exec(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, order_payment_id) values ('recibido', '55500321', 'Nación', $1, 400, 'rechazado', $2)`, cuando, pago)
+	desde, hasta := time.Date(2026, 10, 1, 0, 0, 0, 0, Argentina), time.Date(2026, 11, 1, 0, 0, 0, 0, Argentina)
+	c, err := e.s.Cobranzas(ctx, Periodo{Desde: &desde, Hasta: &hasta}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Cobrado != 1500 || c.Ventas != 1 {
+		t.Errorf("cobrado %v en %d ventas", c.Cobrado, c.Ventas)
+	}
+	medios := map[string]float64{}
+	for _, m := range c.PorMedio {
+		medios[m.Medio] = m.Total
+	}
+	if medios["efectivo"] != 1000 || medios["tarjeta_debito"] != 500 || medios["cheque"] != 0 || medios["cuenta_corriente"] != 0 {
+		t.Errorf("por medio: %v", medios)
+	}
+}

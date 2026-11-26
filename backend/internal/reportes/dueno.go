@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/cobros"
+	"mjbj/internal/compras"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -312,9 +313,10 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 	return a, err
 }
 
-// saldoDeCompra es el saldo de cada factura de compra (las notas de crédito
-// no son deuda: restan aparte en la cuenta del proveedor).
-const saldoDeCompra = `(f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0))`
+// saldoDeCompra es el saldo de cada factura de compra, con la regla de
+// compras.AplicadoA (las notas de crédito sin aplicar no son deuda: restan
+// aparte en la cuenta del proveedor).
+var saldoDeCompra = `(f.total - ` + compras.AplicadoA("f") + `)`
 
 // Debo suma, proveedor por proveedor, lo que dice su libro.
 //
@@ -327,7 +329,10 @@ const saldoDeCompra = `(f.total - coalesce((SELECT sum(a.importe) FROM supplier_
 // salda la cuenta (Pagos los lista también, por lo mismo).
 func (s *Servicio) Debo(ctx context.Context, ahora time.Time) (Debo, error) {
 	var d Debo
-	hoy := InicioDelDia(ahora)
+	// El vencimiento es un día guardado a medianoche UTC: se compara contra
+	// el día argentino de hoy escrito igual. Contra la medianoche argentina
+	// (las 3 UTC), una factura que vencía hoy ya figuraba vencida.
+	hoy := DiaDeHoy(ahora)
 	rs, err := s.pool.Query(ctx, `
 		SELECT coalesce(l.saldo, 0)::float8,
 		  coalesce(sum(x.saldo), 0)::float8, count(x.saldo)::int,
@@ -389,6 +394,14 @@ func DeudaConProveedor(libro, facturado, vencido, semana float64) DeudaDeUnProve
 	r.EstaSemana = max(min(semana, jsmath.Redondear2(libro-r.Vencido)), 0)
 	r.SinFactura = max(jsmath.Redondear2(libro-facturado), 0)
 	return r
+}
+
+// DiaDeHoy es el día argentino de `ahora` a la medianoche UTC: como se
+// guardan los días que se cargan en un formulario (vencimientos, fechas de
+// pago). Una fecha así está vencida si es anterior a esto, no a InicioDelDia.
+func DiaDeHoy(ahora time.Time) time.Time {
+	a := ahora.In(Argentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // InicioDelDia es el día argentino de `ahora`, a las 0.

@@ -115,7 +115,13 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
    * número que no se muestra en el mostrador.
    */
   "/admin/proveedores": ["admin"],
-  "/admin/recepciones": ["admin"],
+  /*
+   * El depósito recibe el camión y controla el remito (mes simulado, H097):
+   * entra a recepciones, corrige lo que vino y la confirma, sin ver precios.
+   * Cargar una a mano, con sus costos, y anularla queda para el admin.
+   */
+  "/admin/recepciones": ["admin", "deposito"],
+  "/admin/recepciones/nueva": ["admin"],
   /*
    * Las de compras van **una por una y no solo el prefijo**.
    *

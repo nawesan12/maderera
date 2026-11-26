@@ -24,9 +24,11 @@ import (
 //     el sitio con Mercado Pago o con una transferencia informada y
 //     acreditada. No emiten recibo, pero son plata cobrada.
 //
-// Lo que no está: la venta del mostrador cobrada al contado. Es una venta
-// (está en Caja, «Emitido en el mostrador», y en su cierre Z), no una
-// cobranza de algo que se debía.
+// Y, desde el mes simulado (H137/H349), **lo cobrado en el mostrador**: con
+// 36 ventas cobradas la pantalla decía «Cobrado $ 0». Las ventas no se
+// listan renglón por renglón (están en Caja, «Emitido en el mostrador»),
+// pero suman en lo cobrado y en cada medio, sin la cuenta corriente, que no
+// es plata. Lo que pagó un cheque que después rebotó no suma: no entró.
 
 // ParteDeCobranza es un medio de un cobro.
 type ParteDeCobranza struct {
@@ -37,17 +39,20 @@ type ParteDeCobranza struct {
 
 // Cobranza es un renglón: un recibo o un cobro en línea sin recibo.
 type Cobranza struct {
-	ID         string            `json:"id"`
-	Tipo       string            `json:"tipo"` // «recibo» o «en-linea»
-	Numero     *string           `json:"numero"`
-	Fecha      time.Time         `json:"fecha"`
-	Cliente    string            `json:"cliente"`
-	CustomerID *string           `json:"customerId"`
-	OrderID    *string           `json:"orderId"`
-	Origen     string            `json:"origen"`
-	Anulado    bool              `json:"anulado"`
-	Total      float64           `json:"total"`
-	Partes     []ParteDeCobranza `json:"partes"`
+	ID         string    `json:"id"`
+	Tipo       string    `json:"tipo"` // «recibo» o «en-linea»
+	Numero     *string   `json:"numero"`
+	Fecha      time.Time `json:"fecha"`
+	Cliente    string    `json:"cliente"`
+	CustomerID *string   `json:"customerId"`
+	OrderID    *string   `json:"orderId"`
+	// Pedido es el número del pedido que cobró (un recibo de un pedido
+	// puntual no es de la cuenta corriente: mes simulado, H268).
+	Pedido  *string           `json:"pedido"`
+	Origen  string            `json:"origen"`
+	Anulado bool              `json:"anulado"`
+	Total   float64           `json:"total"`
+	Partes  []ParteDeCobranza `json:"partes"`
 }
 
 // TotalPorMedio es lo cobrado por un medio en el período.
@@ -64,19 +69,41 @@ type Cobranzas struct {
 	Total    int             `json:"total"`
 	Cobrado  float64         `json:"cobrado"`
 	PorMedio []TotalPorMedio `json:"porMedio"`
+	// Ventas es cuántas ventas del mostrador entraron en lo cobrado.
+	Ventas int `json:"ventas"`
 }
+
+// cobradoEnElMostrador son los pagos de las ventas del mostrador del
+// período, sin la cuenta corriente ni los cheques rechazados, con el medio
+// dicho como en los recibos.
+const cobradoEnElMostrador = `
+	SELECT CASE op.medio::text WHEN 'debito' THEN 'tarjeta_debito' WHEN 'credito' THEN 'tarjeta_credito' ELSE op.medio::text END AS medio,
+	       op.importe, op.order_id
+	FROM order_payments op JOIN orders o ON o.id = op.order_id
+	WHERE o.origen = 'mostrador' AND o.estado <> 'cancelado' AND op.medio::text <> 'cuenta_corriente'
+	  AND NOT EXISTS (SELECT 1 FROM cheques ch WHERE ch.order_payment_id = op.id AND ch.estado = 'rechazado')
+	  AND ($1::timestamptz IS NULL OR op.created_at >= $1) AND ($2::timestamptz IS NULL OR op.created_at < $2)`
+
+// chequeRechazadoDelRecibo es lo que de los recibos del período pagó un
+// cheque que rebotó (el recibo queda emitido; la deuda volvió con una nota
+// de débito).
+const chequeRechazadoDelRecibo = `
+	SELECT coalesce(sum(rp.importe), 0) FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id JOIN cheques ch ON ch.id = rp.cheque_id
+	WHERE r.estado = 'emitido' AND ch.estado = 'rechazado'
+	  AND ($1::timestamptz IS NULL OR r.created_at >= $1) AND ($2::timestamptz IS NULL OR r.created_at < $2)`
 
 // cobranzasDelPeriodo: los recibos y los cobros en línea sin recibo, en un
 // solo orden de fecha. Las fechas son instantes: el período en hora
 // argentina.
 const cobranzasDelPeriodo = `
-	SELECT 'recibo' AS tipo, r.id, r.numero, r.created_at AS fecha, r.recibido_de AS cliente, r.customer_id, NULL::uuid AS order_id,
+	SELECT 'recibo' AS tipo, r.id, r.numero, r.created_at AS fecha, r.recibido_de AS cliente, r.customer_id, r.order_id AS order_id,
+	       (SELECT o.numero FROM orders o WHERE o.id = r.order_id) AS pedido,
 	       r.origen::text AS origen, r.estado = 'anulado' AS anulado, r.total
 	FROM receipts r
 	WHERE ($1::timestamptz IS NULL OR r.created_at >= $1) AND ($2::timestamptz IS NULL OR r.created_at < $2)
 	UNION ALL
 	SELECT 'en-linea', p.id, NULL, coalesce(p.acreditado_at, p.created_at), coalesce(cu.nombre, o.contacto_nombre, 'Sin ficha'),
-	       p.customer_id, p.order_id, p.proveedor::text, false, p.monto
+	       p.customer_id, p.order_id, o.numero, p.proveedor::text, false, p.monto
 	FROM payments p LEFT JOIN customers cu ON cu.id = p.customer_id LEFT JOIN orders o ON o.id = p.order_id
 	WHERE p.estado = 'aprobado' AND p.proveedor IN ('mercado_pago', 'transferencia')
 	  AND NOT EXISTS (SELECT 1 FROM receipt_parts rp WHERE rp.payment_id = p.id)
@@ -91,7 +118,15 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 		p.Desde, p.Hasta).Scan(&out.Total, &cobrado); err != nil {
 		return out, err
 	}
-	out.Cobrado = cobrado.F()
+	var mostrador, rebotado jsmath.Num
+	if err := s.lectura.QueryRow(ctx, `SELECT coalesce(sum(importe), 0), count(DISTINCT order_id)::int FROM (`+cobradoEnElMostrador+`) m`,
+		p.Desde, p.Hasta).Scan(&mostrador, &out.Ventas); err != nil {
+		return out, err
+	}
+	if err := s.lectura.QueryRow(ctx, chequeRechazadoDelRecibo, p.Desde, p.Hasta).Scan(&rebotado); err != nil {
+		return out, err
+	}
+	out.Cobrado = jsmath.Redondear2(float64(cobrado.F()-rebotado.F()) + mostrador.F())
 
 	// Por medio: las partes de los recibos emitidos y, de los cobros en
 	// línea, el proveedor (mercado_pago o transferencia).
@@ -99,8 +134,11 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 		SELECT medio, sum(importe), count(*)::int FROM (
 		  SELECT rp.medio::text AS medio, rp.importe FROM receipt_parts rp JOIN receipts r ON r.id = rp.receipt_id
 		  WHERE r.estado = 'emitido' AND ($1::timestamptz IS NULL OR r.created_at >= $1) AND ($2::timestamptz IS NULL OR r.created_at < $2)
+		    AND NOT EXISTS (SELECT 1 FROM cheques ch WHERE ch.id = rp.cheque_id AND ch.estado = 'rechazado')
 		  UNION ALL
 		  SELECT origen, total FROM (`+cobranzasDelPeriodo+`) c WHERE tipo = 'en-linea'
+		  UNION ALL
+		  SELECT medio, importe FROM (`+cobradoEnElMostrador+`) m
 		) x GROUP BY medio ORDER BY sum(importe) DESC`, p.Desde, p.Hasta)
 	if err != nil {
 		return out, err
@@ -115,7 +153,7 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 		return out, err
 	}
 
-	rs, err = s.lectura.Query(ctx, `SELECT tipo, id, numero, fecha, cliente, customer_id, order_id, origen, anulado, total FROM (`+cobranzasDelPeriodo+`) c
+	rs, err = s.lectura.Query(ctx, `SELECT tipo, id, numero, fecha, cliente, customer_id, order_id, pedido, origen, anulado, total FROM (`+cobranzasDelPeriodo+`) c
 		ORDER BY fecha DESC, id LIMIT $3 OFFSET $4`, p.Desde, p.Hasta, limite, desplazamiento)
 	if err != nil {
 		return out, err
@@ -123,7 +161,7 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 	recibos := []string{}
 	indice := map[string]int{}
 	var c Cobranza
-	if _, err := pgx.ForEachRow(rs, []any{&c.Tipo, &c.ID, &c.Numero, &c.Fecha, &c.Cliente, &c.CustomerID, &c.OrderID, &c.Origen, &c.Anulado, &total}, func() error {
+	if _, err := pgx.ForEachRow(rs, []any{&c.Tipo, &c.ID, &c.Numero, &c.Fecha, &c.Cliente, &c.CustomerID, &c.OrderID, &c.Pedido, &c.Origen, &c.Anulado, &total}, func() error {
 		c.Total = total.F()
 		c.Partes = []ParteDeCobranza{}
 		if c.Tipo == "recibo" {

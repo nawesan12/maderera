@@ -37,7 +37,7 @@ type RecepcionListada struct {
 func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]RecepcionListada, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, s.nombre, r.supplier_id, b.name, coalesce(t.lineas, 0), t.neto, r.gastos,
-		  EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = r.id)
+		  EXISTS (SELECT 1 FROM purchase_invoice_receipts x WHERE x.goods_receipt_id = r.id)
 		FROM goods_receipts r
 		JOIN suppliers s ON s.id = r.supplier_id
 		LEFT JOIN branches b ON b.id = r.branch_id
@@ -457,7 +457,9 @@ func cargadoPorRecepcion(ctx context.Context, tx pgx.Tx, id string) (*float64, e
 // facturaDeRecepcion es el id de la factura que cubre la recepción, o "".
 func facturaDeRecepcion(ctx context.Context, tx pgx.Tx, id string) (string, error) {
 	var f string
-	err := tx.QueryRow(ctx, `SELECT id FROM purchase_invoices WHERE receipt_id = $1 LIMIT 1`, id).Scan(&f)
+	err := tx.QueryRow(ctx, `
+		SELECT f.id FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
+		WHERE x.goods_receipt_id = $1 AND f.anulada_at IS NULL LIMIT 1`, id).Scan(&f)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}

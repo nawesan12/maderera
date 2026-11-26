@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/csvexcel"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
@@ -368,6 +369,8 @@ func NormalizarNumeroDeCheque(t string) string {
 func RevisarNumeroDeCheque(t string) string {
 	n := len(NormalizarNumeroDeCheque(t))
 	switch {
+	case cobros.ConLetras(t):
+		return cobros.MensajeConLetras
 	case n == 0:
 		return "Poné el número del cheque: es como se lo encuentra en el banco."
 	case n < 4:
@@ -633,4 +636,27 @@ func LeerFecha(t string) (time.Time, bool) {
 // del proveedor (setDate en la zona de Next, UTC).
 func Vencimiento(emision time.Time, dias int) time.Time {
 	return emision.AddDate(0, 0, dias)
+}
+
+// zonaArgentina es la zona del negocio.
+var zonaArgentina = fiscal.Argentina
+
+// diaDeHoy es el día argentino de `ahora` a la medianoche UTC, como se
+// guardan los vencimientos. Vencida es la factura de un día anterior a este:
+// comparada contra `ahora`, una que vencía hoy ya figuraba vencida.
+func diaDeHoy(ahora time.Time) time.Time {
+	a := ahora.In(zonaArgentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// AplicadoA es lo que ya canceló la factura de compra con alias `f`: lo
+// imputado en pagos, las notas de crédito aplicadas a ella (mes simulado,
+// H292: la nota de crédito no se descontaba y la factura quedaba «vencida»
+// por lo que el proveedor ya había devuelto) y, si se pagó en el acto como
+// un gasto, su total entero. Es la única regla del saldo de una factura:
+// la usan el listado, el pago, el Resumen y los CSV.
+func AplicadoA(f string) string {
+	return `(coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = ` + f + `.id), 0)
+	  + coalesce((SELECT sum(n.total) FROM purchase_invoices n WHERE n.aplica_a_id = ` + f + `.id AND n.anulada_at IS NULL), 0)
+	  + CASE WHEN EXISTS (SELECT 1 FROM expenses e WHERE e.purchase_invoice_id = ` + f + `.id) THEN ` + f + `.total ELSE 0 END)`
 }

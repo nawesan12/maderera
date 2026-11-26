@@ -8,9 +8,16 @@ import {
 } from "react";
 import {
   AlertTriangle,
+  Ellipsis,
   Loader2,
   Plus,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -66,22 +73,46 @@ const ACCIONES: Record<string, { a: string; texto: string }[]> = {
 /** Desde qué estados se puede anular. Lo dice `TRANSICIONES` en `actions.ts`. */
 const SE_PUEDE_ANULAR = ["cartera"];
 
+const pesos = (n: number) =>
+  n.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+
+/**
+ * Lo que se hace con un cheque.
+ *
+ * La acción que se espera de cada estado va a mano y destacada (aceptar,
+ * depositar, se acreditó); el rechazo y la anulación, que no tienen vuelta,
+ * van en el menú de al lado (mes simulado, H339: «Rechazado» pesaba lo mismo
+ * que «Depositar»).
+ *
+ * Aceptar uno informado pide confirmar con lo que debe hoy el cliente (H142,
+ * H240: con un toque emitía el recibo y bajaba la deuda, también de una
+ * cuenta ya saldada). Un diferido no se deposita antes de su fecha (H405).
+ */
 export function AccionesDeCheque({
   id,
   estado,
   sentido,
   numero,
   importe,
+  diasParaCobrar = null,
+  cliente = null,
+  saldoCliente = null,
 }: {
   id: string;
   estado: string;
   sentido: string;
   numero: string;
   importe: number;
+  /** Cuántos días faltan para la fecha de pago: antes no se deposita. */
+  diasParaCobrar?: number | null;
+  cliente?: string | null;
+  /** Lo que debe hoy el cliente que lo informó. */
+  saldoCliente?: number | null;
 }) {
   const [pendiente, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  const [aceptando, setAceptando] = useState(false);
   /** El rechazo pide motivo: lo lee el cliente en el correo y en Mi cuenta. */
   const [rechazando, setRechazando] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -93,17 +124,25 @@ export function AccionesDeCheque({
     (a) => !(sentido === "entregado" && a.a === "depositado"),
   );
   const puedeAnular = SE_PUEDE_ANULAR.includes(estado);
+  const principal = acciones.find((a) => a.a !== "rechazado");
+  const secundarias = acciones.filter((a) => a !== principal);
+  const antesDeTiempo = principal?.a === "depositado" && diasParaCobrar !== null && diasParaCobrar > 0;
 
   if (acciones.length === 0 && !puedeAnular) return null;
 
-  function cambiar(a: string, conMotivo?: string) {
+  function cambiar(a: string, conMotivo?: string, confirmado = false) {
     if (a === "rechazado" && conMotivo === undefined) {
       setRechazando(true);
+      return;
+    }
+    if (estado === "informado" && a === "cartera" && !confirmado) {
+      setAceptando(true);
       return;
     }
     empezar(async () => {
       const r = await cambiarEstadoDeCheque(id, a, conMotivo);
       setConfirmando(false);
+      setAceptando(false);
       if (!r.error) {
         setRechazando(false);
         setMotivo("");
@@ -131,42 +170,40 @@ export function AccionesDeCheque({
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:items-end">
       <div className="flex items-center gap-2">
-        {acciones.map((accion) => (
+        {principal && (
           <button
-            key={accion.a}
             type="button"
-            disabled={pendiente}
-            onClick={() => cambiar(accion.a)}
-            className={`h-11 rounded-lg px-3.5 text-base font-medium transition-colors disabled:opacity-50 ${
-              estado === "informado" && accion.a === "cartera"
-                ? "boton-accion"
-                : "border border-linea hover:bg-muted"
-            }`}
+            disabled={pendiente || antesDeTiempo}
+            onClick={() => cambiar(principal.a)}
+            className="boton-accion inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-base font-semibold disabled:opacity-50 sm:flex-none"
           >
-            {pendiente && estado === "informado" && accion.a === "cartera" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              accion.texto
-            )}
+            {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+            {principal.texto}
           </button>
-        ))}
-
-        {puedeAnular && (
-          <>
-            {acciones.length > 0 && (
-              <span aria-hidden="true" className="h-7 w-px bg-linea" />
-            )}
-            <button
-              type="button"
-              disabled={pendiente}
-              onClick={() => setConfirmando(true)}
-              className="h-11 rounded-lg px-3.5 text-base font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+        )}
+        {(secundarias.length > 0 || puedeAnular) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label={`Más acciones del cheque ${numero}`}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-linea hover:bg-muted"
             >
-              Anular
-            </button>
-          </>
+              <Ellipsis className="h-5 w-5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {secundarias.map((a) => (
+                <DropdownMenuItem key={a.a} onClick={() => cambiar(a.a)} className="h-10 text-base">
+                  {a.texto}
+                </DropdownMenuItem>
+              ))}
+              {puedeAnular && (
+                <DropdownMenuItem variant="destructive" onClick={() => setConfirmando(true)} className="h-10 text-base">
+                  Anular
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
@@ -242,6 +279,24 @@ export function AccionesDeCheque({
           </form>
         </DialogContent>
       </Dialog>
+
+      <Confirmar
+        abierto={aceptando}
+        alCerrar={() => setAceptando(false)}
+        titulo={`Aceptar el cheque ${numero} por ${pesos(importe)}`}
+        detalle={
+          saldoCliente === null
+            ? "Se emite el recibo y baja la deuda del cliente."
+            : saldoCliente <= 0.005
+              ? `${cliente ?? "El cliente"} no tiene deuda: aceptarlo le deja ${pesos(importe)} a favor.`
+              : `${cliente ?? "El cliente"} debe ${pesos(saldoCliente)}. Se emite el recibo y la deuda baja ${pesos(Math.min(importe, saldoCliente))}.`
+        }
+        confirmar="Sí, aceptarlo"
+        cancelar="Todavía no"
+        peligro={saldoCliente !== null && saldoCliente <= 0.005}
+        pendiente={pendiente}
+        alConfirmar={() => cambiar("cartera", undefined, true)}
+      />
 
       <Confirmar
         abierto={confirmando}

@@ -216,10 +216,20 @@ export function haceCuanto(fecha: Date | null): string {
   return meses === 1 ? "hace un mes" : `hace ${meses} meses`;
 }
 
-/** Días que faltan para una fecha. Negativo si ya pasó. */
-export function diasHasta(fecha: Date | null): number | null {
+/**
+ * Días que faltan para una fecha. Negativo si ya pasó.
+ *
+ * Un día guardado como día (un vencimiento: medianoche UTC) se cuenta contra
+ * el día de hoy en la Argentina, no contra la hora: restando horas, una
+ * factura que vencía hoy pasaba a «hace 1 día» desde las 21.
+ */
+export function diasHasta(fecha: Date | null, ahora: Date = new Date()): number | null {
   if (!fecha) return null;
-  return Math.ceil((fecha.getTime() - Date.now()) / 86_400_000);
+  if (esDia(fecha)) {
+    const hoy = Date.parse(`${hoyEnArgentina(ahora)}T00:00:00Z`);
+    return Math.round((fecha.getTime() - hoy) / 86_400_000);
+  }
+  return Math.ceil((fecha.getTime() - ahora.getTime()) / 86_400_000);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -18,7 +18,7 @@ import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador"
 import { AccionesCobro } from "./acciones";
 import { DatosBancarios } from "./banco";
 
-export const metadata: Metadata = { title: "Cobros" };
+export const metadata: Metadata = { title: "Cobranzas" };
 
 const PROVEEDORES: Record<string, string> = {
   mercado_pago: "Mercado Pago",
@@ -96,7 +96,8 @@ export default async function PagosPage({
 
   return (
     <div className="space-y-6">
-      <EncabezadoPanel titulo="Cobros" resumen={periodo.etiqueta}>
+      {/* El mismo nombre que el menú (mes simulado, H137). */}
+      <EncabezadoPanel titulo="Cobranzas" resumen={periodo.etiqueta}>
         <FiltroPeriodo actual={periodo.clave} />
         {/* Sin token, o con token y sin el secreto del webhook (los avisos se
             descartarían): el checkout no se ofrece. */}
@@ -134,8 +135,15 @@ export default async function PagosPage({
           <p className="tabular mt-1 text-[34px] font-bold leading-none tracking-[-0.03em]">
             {moneda.format(cobranzas.cobrado)}
           </p>
+          {/* Lo cobrado de verdad: los recibos, lo cobrado en línea y el
+              mostrador, sin los cheques que rebotaron (H137/H349). */}
           <p className="mt-2 text-base text-texto-2">
-            {plural(cobranzas.total, "cobro")}
+            {[
+              cobranzas.total > 0 ? plural(cobranzas.total, "cobro") : null,
+              cobranzas.ventas > 0 ? plural(cobranzas.ventas, "venta del mostrador", "ventas del mostrador") : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "Sin cobros"}
           </p>
         </div>
         <div className="tarjeta-hundida grid grid-cols-2 gap-x-6 gap-y-3 p-5 sm:grid-cols-3">
@@ -178,8 +186,8 @@ export default async function PagosPage({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-base">
+          <div className="@container">
+            <table className="hidden w-full text-base @4xl:table" data-tabla="fija">
               <thead>
                 <tr className="text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Cuándo</th>
@@ -192,79 +200,46 @@ export default async function PagosPage({
               <tbody className="divide-y divide-linea-suave">
                 {cobranzas.filas.map((c) => (
                   <tr key={c.id} className={c.anulado ? "opacity-60" : ""}>
-                    <td className="tabular px-5 py-3 text-muted-foreground">
-                      {fechaHora.format(c.fecha)}
-                    </td>
+                    <td className="tabular px-5 py-3 text-muted-foreground">{fechaHora.format(c.fecha)}</td>
                     <td className="px-5 py-3">
-                      {c.customerId ? (
-                        <Link
-                          href={`/admin/clientes/${c.customerId}`}
-                          className="hover:text-brand-orange hover:underline"
-                        >
-                          {c.cliente}
-                        </Link>
-                      ) : (
-                        c.cliente
-                      )}
+                      <Quien c={c} />
                       <span className="block text-sm text-muted-foreground">
-                        {ORIGENES[c.origen] ?? c.origen}
+                        <Origen c={c} />
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      {c.tipo === "recibo" ? (
-                        <a
-                          href={`/api/recibos/${c.id}/pdf`}
-                          target="_blank"
-                          rel="noopener"
-                          className="tabular font-medium hover:text-brand-orange hover:underline"
-                        >
-                          Recibo {c.numero}
-                        </a>
-                      ) : c.orderId ? (
-                        <Link
-                          href={`/admin/pedidos/${c.orderId}`}
-                          className="font-medium hover:text-brand-orange hover:underline"
-                        >
-                          Pedido en línea
-                        </Link>
-                      ) : (
-                        "En línea"
-                      )}
-                      {c.anulado && (
-                        <span className="estado-problema block text-sm font-medium">
-                          Anulado
-                        </span>
-                      )}
+                      <Comprobante c={c} />
                     </td>
                     <td className="px-5 py-3">
-                      <span className="flex flex-wrap gap-1.5">
-                        {c.partes.map((p, i) =>
-                          p.chequeId ? (
-                            <Link
-                              key={i}
-                              href="/admin/cheques"
-                              className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm hover:text-brand-orange hover:underline"
-                            >
-                              {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
-                            </Link>
-                          ) : (
-                            <span
-                              key={i}
-                              className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm"
-                            >
-                              {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
-                            </span>
-                          ),
-                        )}
-                      </span>
+                      <Medios c={c} />
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
-                      {moneda.format(c.total)}
-                    </td>
+                    <td className="tabular px-5 py-3 text-right font-semibold">{moneda.format(c.total)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {/* En el teléfono, sin columna de rótulos (se cortaban en «De q…»,
+                «Me…»): la fecha con el origen y el total arriba, quién a todo
+                el ancho, y el comprobante con los medios como chips. */}
+            <ul className="divide-y divide-linea-suave @4xl:hidden">
+              {cobranzas.filas.map((c) => (
+                <li key={c.id} className={`space-y-1.5 px-4 py-3 ${c.anulado ? "opacity-60" : ""}`}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="tabular min-w-0 truncate text-sm text-muted-foreground">
+                      {fechaHora.format(c.fecha)} · <Origen c={c} />
+                    </span>
+                    <span className="tabular shrink-0 text-lg font-semibold">{moneda.format(c.total)}</span>
+                  </div>
+                  <p className="text-base font-semibold">
+                    <Quien c={c} />
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <Comprobante c={c} />
+                    <Medios c={c} />
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         <div className="px-4">
@@ -276,6 +251,70 @@ export default async function PagosPage({
         </div>
       </section>
     </div>
+  );
+}
+
+type Cobranza = Awaited<ReturnType<typeof cobranzasDelPeriodo>>["filas"][number];
+
+function Quien({ c }: { c: Cobranza }) {
+  return c.customerId ? (
+    <Link href={`/admin/clientes/${c.customerId}`} className="hover:text-brand-orange hover:underline">
+      {c.cliente}
+    </Link>
+  ) : (
+    <>{c.cliente}</>
+  );
+}
+
+/** De dónde vino: un recibo de un pedido puntual no es «Cuenta corriente» (H268). */
+function Origen({ c }: { c: Cobranza }) {
+  if (c.tipo === "recibo" && c.pedido) return <>Pedido {c.pedido}</>;
+  return <>{ORIGENES[c.origen] ?? c.origen}</>;
+}
+
+function Comprobante({ c }: { c: Cobranza }) {
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+      {c.tipo === "recibo" ? (
+        <a
+          href={`/api/recibos/${c.id}/pdf`}
+          target="_blank"
+          rel="noopener"
+          className="codigo whitespace-nowrap font-medium hover:text-brand-orange hover:underline"
+        >
+          Recibo {c.numero}
+        </a>
+      ) : c.orderId ? (
+        <Link href={`/admin/pedidos/${c.orderId}`} className="whitespace-nowrap font-medium hover:text-brand-orange hover:underline">
+          Pedido en línea
+        </Link>
+      ) : (
+        "En línea"
+      )}
+      {c.anulado && <span className="estado-problema text-sm font-medium">Anulado</span>}
+    </span>
+  );
+}
+
+function Medios({ c }: { c: Cobranza }) {
+  return (
+    <span className="flex flex-wrap gap-1.5">
+      {c.partes.map((p, i) =>
+        p.chequeId ? (
+          <Link
+            key={i}
+            href="/admin/cheques"
+            className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm hover:text-brand-orange hover:underline"
+          >
+            {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
+          </Link>
+        ) : (
+          <span key={i} className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm">
+            {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
+          </span>
+        ),
+      )}
+    </span>
   );
 }
 
@@ -321,8 +360,29 @@ function Grupo({
               <p className="text-base text-muted-foreground">
                 {pago.cliente ?? "Sin ficha de cliente"} ·{" "}
                 {PROVEEDORES[pago.proveedor] ?? pago.proveedor}
-                {pago.medio ? ` · ${pago.medio}` : ""}
+                {/* «Transferencia · transferencia» decía dos veces lo mismo. */}
+                {pago.medio && pago.medio !== pago.proveedor ? ` · ${MEDIOS[pago.medio] ?? pago.medio}` : ""}
               </p>
+              {/* Lo que hace falta para decidir sin abrir la ficha (H375):
+                  cuánto debe hoy y si es el mismo aviso que otro. */}
+              {pago.estado === "en_revision" && (pago.saldoCliente !== null || pago.duplicado) && (
+                <p className="mt-1 flex flex-wrap gap-1.5">
+                  {pago.duplicado && (
+                    <span className="estado-problema rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-semibold">
+                      Repetido
+                    </span>
+                  )}
+                  {pago.saldoCliente !== null && (
+                    <span
+                      className={`tabular rounded-full px-2.5 py-0.5 text-sm font-medium ${
+                        pago.saldoCliente <= 0.005 ? "estado-problema bg-[var(--estado-fondo)]" : "bg-chip"
+                      }`}
+                    >
+                      {pago.saldoCliente <= 0.005 ? "Sin deuda" : `Debe ${moneda.format(pago.saldoCliente)}`}
+                    </span>
+                  )}
+                </p>
+              )}
               {pago.motivoRechazo && (
                 <p className="mt-0.5 text-base text-brand-orange-dark">
                   {pago.motivoRechazo}
@@ -347,6 +407,13 @@ function Grupo({
               comprobanteUrl={pago.comprobanteUrl}
               cliente={pago.cliente}
               monto={moneda.format(pago.monto)}
+              revisar={
+                pago.estado === "en_revision" && (pago.duplicado || (pago.saldoCliente !== null && pago.saldoCliente <= 0.005))
+                  ? pago.duplicado
+                    ? "Es el mismo importe que otro aviso del mismo cliente, de minutos antes."
+                    : `${pago.cliente ?? "El cliente"} no tiene deuda: acreditarlo le deja saldo a favor.`
+                  : undefined
+              }
             />
           </li>
         ))}

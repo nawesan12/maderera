@@ -10,6 +10,7 @@ import {
   HandCoins,
   Handshake,
   Loader2,
+  Plus,
   Trash2,
 } from "lucide-react";
 import { Hoja, Opciones, Seccion } from "@/components/admin/formulario";
@@ -61,10 +62,13 @@ export function CondicionesDelProveedor({
   supplierId,
   condiciones,
   convenios,
+  diasPago,
 }: {
   supplierId: string;
   condiciones: CondicionUI[];
   convenios: string | null;
+  /** El plazo de la ficha: una condición nueva arranca en él. */
+  diasPago: number;
 }) {
   const [borrando, empezarBorrado] = useTransition();
 
@@ -112,7 +116,7 @@ export function CondicionesDelProveedor({
           </ul>
         )}
 
-        <AltaDeCondicion supplierId={supplierId} />
+        <AltaDeCondicion supplierId={supplierId} diasPago={diasPago} />
       </Seccion>
 
       <Seccion titulo="Convenios" icono={Handshake} columnas={1}>
@@ -122,11 +126,30 @@ export function CondicionesDelProveedor({
   );
 }
 
-function AltaDeCondicion({ supplierId }: { supplierId: string }) {
+/*
+ * La alta, plegada detrás de un botón (mes simulado, H008): abierta, su
+ * «Plazo (días)» en 0 se leía como un segundo plazo que contradecía el de la
+ * ficha. Arranca en el plazo de la ficha.
+ */
+function AltaDeCondicion({ supplierId, diasPago }: { supplierId: string; diasPago: number }) {
   const [estado, guardar, guardando] = useActionState(
     guardarCondicion,
     inicial,
   );
+  const [abierta, setAbierta] = useState(false);
+
+  if (!abierta) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierta(true)}
+        className="tarjeta-hundida inline-flex h-11 w-fit items-center gap-1.5 rounded-xl px-4 text-base font-medium"
+      >
+        <Plus className="h-4 w-4" aria-hidden="true" />
+        Sumar una condición
+      </button>
+    );
+  }
 
   return (
     <form
@@ -152,7 +175,7 @@ function AltaDeCondicion({ supplierId }: { supplierId: string }) {
           type="number"
           min="0"
           max="365"
-          defaultValue="0"
+          defaultValue={String(diasPago)}
           className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-right text-base"
         />
       </label>

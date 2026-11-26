@@ -241,6 +241,14 @@ type FormFactura struct {
 	// CargarFactura). Es opcional: hay facturas sin remito.
 	ReceiptID *string `json:"receiptId,omitempty"`
 
+	// Lo del mes simulado (fuera del golden de zod): los demás remitos que
+	// cubre la factura (H199), la factura a la que se aplica una nota de
+	// crédito (H292) y si la diferencia con lo recibido pasa al costo
+	// (H195).
+	ReceiptIDs   []string `json:"-"`
+	AplicaA      *string  `json:"-"`
+	AjustarCosto bool     `json:"-"`
+
 	// Lo que se sumó en la revisión del 17/11/2026 (fuera del golden de zod:
 	// el TS no lo tenía). El vencimiento, si se cambió a mano (si no, la
 	// emisión más los días de pago del proveedor), y las percepciones por
@@ -274,6 +282,34 @@ func leerFactura(m map[string]any) (FormFactura, error) {
 	if v, esta := m["fechaVencimiento"]; esta && v != nil && v != "" {
 		x.FechaVencimiento, _ = l.texto("fechaVencimiento", opcionesTexto{})
 	}
+	if lista, ok := m["receiptIds"].([]any); ok {
+		vistos := map[string]bool{}
+		if x.ReceiptID != nil {
+			vistos[*x.ReceiptID] = true
+		}
+		for _, v := range lista {
+			id, _ := v.(string)
+			if id == "" || vistos[id] {
+				continue
+			}
+			if !plataforma.UUIDValido(id) {
+				l.mal("receiptIds", "Esa recepción no existe.")
+				break
+			}
+			vistos[id] = true
+			x.ReceiptIDs = append(x.ReceiptIDs, id)
+		}
+		if len(x.ReceiptIDs) > 30 {
+			l.mal("receiptIds", "Una factura cubre hasta 30 remitos.")
+		}
+	}
+	if v, ok := m["aplicaA"].(string); ok && v != "" {
+		a := l.uuid("aplicaA", "Esa factura no existe.")
+		x.AplicaA = &a
+	}
+	if v, ok := m["ajustarCosto"].(bool); ok {
+		x.AjustarCosto = v
+	}
 	_, iva := m["percepcionIva"]
 	_, iibb := m["percepcionIibb"]
 	if iva || iibb {
@@ -298,6 +334,8 @@ type FormGasto struct {
 	BranchID    *string `json:"branchId"`
 	SupplierID  *string `json:"supplierId"`
 	Notas       *string `json:"notas"`
+	// Factura es la del mes simulado, fuera del golden de zod.
+	Factura *FacturaDelGasto `json:"-"`
 }
 
 func leerGasto(m map[string]any) (FormGasto, error) {
@@ -319,7 +357,34 @@ func leerGasto(m map[string]any) (FormGasto, error) {
 	g.BranchID = vacio("branchId")
 	g.SupplierID = vacio("supplierId")
 	g.Notas = l.opcionalONulo("notas", 500)
+	// La factura del gasto (mes simulado, H200: la luz entraba entera, sin
+	// su IVA, y no iba al libro IVA compras). Si viene, el gasto la crea.
+	if c, ok := l.objeto("factura"); ok {
+		var x FacturaDelGasto
+		x.Tipo = c.opcion("tipo", "", tiposComprobanteCompra...)
+		x.PuntoVenta = c.numero("puntoVenta", nil, entero(), minimo(0), maximo(99999))
+		x.Numero = c.numero("numero", nil, entero(), minimo(1))
+		x.Iva21 = c.numero("iva21", f(0), minimo(0))
+		x.Iva105 = c.numero("iva105", f(0), minimo(0))
+		x.Iva27 = c.numero("iva27", f(0), minimo(0))
+		x.Percepciones = c.numero("percepciones", f(0), minimo(0))
+		if g.SupplierID == nil {
+			l.mal("supplierId", "Elegí a quién se le pagó: la factura es de un proveedor.")
+		}
+		if l.ok() && float64(float64(float64(x.Iva21+x.Iva105)+x.Iva27)+x.Percepciones)-g.Importe > -0.009 {
+			l.mal("factura.iva21", "El IVA y las percepciones no pueden llegar al importe del gasto.")
+		}
+		g.Factura = &x
+	}
 	return g, l.Problema()
+}
+
+// FacturaDelGasto es el comprobante de un gasto: el neto es el importe menos
+// el IVA y las percepciones.
+type FacturaDelGasto struct {
+	Tipo                               string
+	PuntoVenta, Numero                 float64
+	Iva21, Iva105, Iva27, Percepciones float64
 }
 
 // ChequeNuevo es el cheque que sale con una parte del pago.
@@ -370,6 +435,10 @@ type FormPago struct {
 	// sucursal de cuya caja sale el efectivo.
 	Fecha    *string `json:"-"`
 	BranchID *string `json:"-"`
+	// Del mes simulado: los cheques rechazados que se reponen (el id es el
+	// del cheque) y las notas de crédito a favor que se descuentan.
+	Cheques        []Imputacion `json:"-"`
+	NotasDeCredito []string     `json:"-"`
 }
 
 var mediosDePago = []string{"transferencia", "efectivo", "cheque", "echeq"}
@@ -391,6 +460,20 @@ func leerPago(m map[string]any) (FormPago, error) {
 	_, p.hayImput = l.lista("imputaciones", true, 0, "", 30, func(_ int, e *lector) {
 		p.Imputaciones = append(p.Imputaciones, Imputacion{e.uuid("purchaseInvoiceId", ""), e.numero("importe", nil, minimo(0))})
 	})
+	// Los cheques rechazados que se reponen y las notas de crédito a favor
+	// que se descuentan (mes simulado, H337 y H292).
+	p.Cheques = []Imputacion{}
+	l.lista("cheques", true, 0, "", 30, func(_ int, e *lector) {
+		p.Cheques = append(p.Cheques, Imputacion{e.uuid("chequeId", ""), e.numero("importe", nil, minimo(0))})
+	})
+	p.NotasDeCredito = []string{}
+	if lista, ok := m["notasDeCredito"].([]any); ok {
+		for _, v := range lista {
+			if id, _ := v.(string); plataforma.UUIDValido(id) {
+				p.NotasDeCredito = append(p.NotasDeCredito, id)
+			}
+		}
+	}
 	p.Partes = []ParteDePago{}
 	_, p.hayPartes = l.lista("partes", true, 0, "", 6, func(_ int, e *lector) {
 		var x ParteDePago

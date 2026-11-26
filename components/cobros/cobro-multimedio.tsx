@@ -259,7 +259,8 @@ export function CobroMultimedio({
             <span className={diferencia > 0 ? "text-muted-foreground" : "estado-problema font-semibold"}>
               {" · "}
               {diferencia > 0
-                ? `faltan ${formatearMonto(diferencia)}`
+                ? // Un pago a cuenta es válido: lo que no se cobra queda debiendo, no «falta».
+                  `quedan ${formatearMonto(diferencia)} por cobrar`
                 : `${formatearMonto(-diferencia)} más de lo que debe`}
             </span>
           )}

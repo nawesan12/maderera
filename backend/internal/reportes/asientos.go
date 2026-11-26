@@ -695,6 +695,9 @@ type GastoAAsentar struct {
 	Fecha                         time.Time
 	Descripcion, Categoria, Medio string
 	Importe                       float64
+	// Iva y Percepciones, del gasto con factura que da crédito fiscal (mes
+	// simulado, H200): el gasto va por el neto y el IVA al crédito fiscal.
+	Iva, Percepciones float64
 }
 
 // AsientoDeGasto es asientoDeGasto: cada categoría a su cuenta, lo demás a
@@ -704,8 +707,18 @@ func AsientoDeGasto(g GastoAAsentar) Asiento {
 	if !ok {
 		cuenta = Cuentas.Gastos
 	}
-	return asiento(g.Fecha, g.Categoria+" · "+g.Descripcion, []RenglonDeAsiento{
-		renglon(cuenta, g.Importe, 0), renglon(cuentaDeMedio(g.Medio), 0, g.Importe)})
+	if g.Iva == 0 && g.Percepciones == 0 {
+		return asiento(g.Fecha, g.Categoria+" · "+g.Descripcion, []RenglonDeAsiento{
+			renglon(cuenta, g.Importe, 0), renglon(cuentaDeMedio(g.Medio), 0, g.Importe)})
+	}
+	r := []RenglonDeAsiento{renglon(cuenta, redondear(float64(g.Importe-g.Iva)-g.Percepciones), 0)}
+	if g.Iva != 0 {
+		r = append(r, renglon(Cuentas.IvaCredito, g.Iva, 0))
+	}
+	if g.Percepciones != 0 {
+		r = append(r, renglon(Cuentas.RetencionesSufridas, g.Percepciones, 0))
+	}
+	return asiento(g.Fecha, g.Categoria+" · "+g.Descripcion, append(r, renglon(cuentaDeMedio(g.Medio), 0, g.Importe)))
 }
 
 // NombreComprobante es nombreComprobante de lib/fiscal/comprobantes.ts.

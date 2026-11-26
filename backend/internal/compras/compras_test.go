@@ -505,16 +505,18 @@ func TestGastos(t *testing.T) {
 	if m := e.numero(t, `select monto::float8 from cash_movements where tipo = 'gasto'`); m != -1500 {
 		t.Errorf("salió de la caja: %v", m)
 	}
-	// En el aserradero no hay turno: se anota igual y avisa.
+	// En el aserradero no hay turno: el efectivo no sale de ninguna caja y
+	// el gasto se frena (mes simulado, H351: antes se anotaba igual y el CSV
+	// lo sacaba de una Caja que ningún arqueo vio).
 	gasto["branchId"] = e.aserradero
-	if _, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); !strings.Contains(b, "No había caja abierta") {
-		t.Errorf("sin turno: %s", b)
+	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 422 || !strings.Contains(b, "No había caja abierta en Aserradero") {
+		t.Errorf("sin turno: %d %s", c, b)
 	}
 	q := "?desde=2026-10-01T00:00:00Z&hasta=2026-10-31T23:59:59.999Z"
 	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos"+q, nil); !strings.Contains(b, `"enCaja":true`) || !strings.Contains(b, `"descripcion":"Flete a obra"`) {
 		t.Errorf("listado: %s", b)
 	}
-	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/por-categoria"+q, nil); !strings.Contains(b, `{"clave":"flete","cantidad":2,"total":"3000.00"}`) {
+	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/por-categoria"+q, nil); !strings.Contains(b, `{"clave":"flete","cantidad":1,"total":"1500.00"}`) {
 		t.Errorf("por categoría: %s", b)
 	}
 	if _, b := pedir(t, adm, "GET", e.u+"compras/gastos/sucursales", nil); !strings.Contains(b, `"turnoAbierto":"`) {

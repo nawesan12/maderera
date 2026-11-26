@@ -32,17 +32,28 @@ var NombreCondicion = map[string]string{
 // Condiciones, en el orden del enum de zod.
 var Condiciones = []string{ResponsableInscripto, Monotributista, Exento, ConsumidorFinal, NoCategorizado}
 
-// LetraQueCorresponde: un responsable inscripto emite A a otro inscripto y B
-// a los demás; un monotributista o un exento, siempre C.
+// LetraQueCorresponde: un responsable inscripto emite A a otro inscripto y
+// al monotributista, y B a los demás; un monotributista o un exento, siempre
+// C.
+//
+// **Al monotributista, A** (RG AFIP 5003/2021, con la leyenda de la Ley
+// 27.618, LeyendaMonotributo): el responsable inscripto le discrimina el IVA
+// para el régimen de sostenimiento e inclusión fiscal. Antes le salía B
+// (simulación del mes, H207). Falta que el contador lo confirme: es la
+// lectura prudente de la norma.
 func LetraQueCorresponde(emisor, receptor string) string {
 	if emisor == ResponsableInscripto {
-		if receptor == ResponsableInscripto {
+		if receptor == ResponsableInscripto || receptor == Monotributista {
 			return "A"
 		}
 		return "B"
 	}
 	return "C"
 }
+
+// LeyendaMonotributo es la que lleva la factura A a un monotributista.
+const LeyendaMonotributo = "El crédito fiscal discriminado en el presente comprobante, sólo podrá ser computado a efectos del Régimen de " +
+	"Sostenimiento e Inclusión Fiscal para Pequeños Contribuyentes de la Ley Nº 27.618"
 
 // TipoFactura es `factura_<letra>`.
 func TipoFactura(letra string) string { return "factura_" + strings.ToLower(letra) }

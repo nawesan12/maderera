@@ -160,6 +160,9 @@ export default async function PreciosPage({
           { valor: "sin-precio", texto: "Sin precio", cantidad: conteos.sinPrecio, atencion: true },
           { valor: "para-revisar", texto: "Para revisar", cantidad: conteos.paraRevisar, atencion: true },
           { valor: "al-dia", texto: "Actualizados", cantidad: conteos.alDia },
+          ...(conteos.bajoCosto > 0 || estado === "bajo-costo"
+            ? [{ valor: "bajo-costo", texto: "Bajo el costo", cantidad: conteos.bajoCosto, atencion: true }]
+            : []),
         ]}
       />
 

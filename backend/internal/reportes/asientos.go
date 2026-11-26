@@ -626,6 +626,14 @@ type ChequeAAsentar struct {
 	// débito del cheque), así que vuelve a Deudores.
 	ADeudores bool
 	Circuito  string
+	// DelMostradorEnB: el cheque cobró una venta del mostrador que quedó en
+	// el circuito B (sin factura con CAE). Esa venta no tiene asiento de
+	// cobro en ningún archivo, así que su rechazo no tiene contra qué ir: en
+	// el B dejaba Deudores contra Valores a depositar sin ingreso previo, y
+	// el reemplazo iba al archivo del estudio (simulación del mes, H419).
+	// La deuda nueva vive en la cuenta corriente (la nota de débito) y su
+	// cobro se reparte como cualquier recibo.
+	DelMostradorEnB bool
 }
 
 // AsientoDeCheque es el asiento de un cambio de estado de un cheque, cada uno
@@ -659,6 +667,9 @@ func AsientoDeCheque(c ChequeAAsentar) (Asiento, bool) {
 		}
 		r = []RenglonDeAsiento{renglon(debe, c.Importe, 0), renglon(Cuentas.Proveedores, 0, c.Importe)}
 	case c.Sentido == "recibido" && c.Hacia == "rechazado" && (c.Desde == "cartera" || c.Desde == "depositado") && c.ADeudores:
+		if c.DelMostradorEnB && c.Circuito == CircuitoNegro {
+			return Asiento{}, false
+		}
 		r = []RenglonDeAsiento{renglon(Cuentas.Deudores, c.Importe, 0), renglon(Cuentas.ValoresADepositar, 0, c.Importe)}
 	case c.Sentido == "entregado" && c.Hacia == "acreditado" && c.Diferido:
 		r = []RenglonDeAsiento{renglon(Cuentas.ChequesDiferidos, c.Importe, 0), renglon(Cuentas.Banco, 0, c.Importe)}

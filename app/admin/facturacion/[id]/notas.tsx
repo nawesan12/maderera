@@ -37,6 +37,7 @@ export function NotasSobreElComprobante({
   acreditado,
   revierteConDebito = false,
   devolucion = null,
+  soloDevolucion = false,
 }: {
   invoiceId: string;
   items: Renglon[];
@@ -46,6 +47,8 @@ export function NotasSobreElComprobante({
   revierteConDebito?: boolean;
   /** La factura es de una venta: en vez de la nota parcial, la devolución. */
   devolucion?: DatosDeDevolucion | null;
+  /** La factura espera el CAE: solo la devolución (la nota de débito, después). */
+  soloDevolucion?: boolean;
 }) {
   const reverso = revierteConDebito ? "Nota de débito parcial (revierte la nota de crédito)" : "Nota de crédito parcial";
   const [modo, setModo] = useState<"credito" | "debito" | null>(null);
@@ -100,14 +103,16 @@ export function NotasSobreElComprobante({
               {devolucion ? "Devolución" : reverso}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setModo("debito")}
-            className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
-          >
-            <PlusCircle className="h-4 w-4" />
-            Nota de débito
-          </button>
+          {!soloDevolucion && (
+            <button
+              type="button"
+              onClick={() => setModo("debito")}
+              className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Nota de débito
+            </button>
+          )}
         </div>
       </div>
     );

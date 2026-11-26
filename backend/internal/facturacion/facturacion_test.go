@@ -451,7 +451,7 @@ func TestProveedorInterno(t *testing.T) {
 	}
 	var estado string
 	e.uno(t, `SELECT estado::text FROM invoices WHERE id = $1 AND cae IS NULL`, &estado, id)
-	if estado != "rechazada" {
+	if estado != "emitida" {
 		t.Fatal(estado)
 	}
 	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)

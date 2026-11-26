@@ -182,6 +182,8 @@ var abreviaturaUnidad = map[string]string{
 	"juego":          "juego",
 	"kg":             "kg",
 	"litro":          "l",
+	// La línea del corte a medida se cobra por pasada: «4 cortes» (H145).
+	"pasada": "cortes",
 }
 
 // Cuit es formatearCuit de lib/formato.ts.

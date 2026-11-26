@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, fechaLarga, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
 import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
@@ -65,7 +65,14 @@ const MEDIOS: Record<string, string> = {
   mercado_pago: "Mercado Pago",
   tarjeta: "Tarjeta",
   cheque: "Cheque",
+  echeq: "e-Cheq",
   cuenta_corriente: "Cuenta corriente",
+  debito: "Débito",
+  credito: "Crédito",
+  tarjeta_debito: "Débito",
+  tarjeta_credito: "Crédito",
+  deposito: "Depósito",
+  retencion: "Retención",
 };
 
 export async function generateMetadata({
@@ -115,8 +122,10 @@ export default async function FichaComprobantePage({
   // La factura de una venta, ya autorizada, se corrige con una devolución, y
   // no se anula sola: se anula la venta, que devuelve el stock y la plata.
   // Con la venta anulada queda solo anular la factura.
+  // Sin CAE también: el faltante o lo que volvió se devuelve igual, con la
+  // nota esperando el CAE detrás de la factura (H294).
   const deLaVenta =
-    comprobante.orderId && comprobante.cae && comprobante.tipo.startsWith("factura") && comprobante.estado !== "anulada"
+    comprobante.orderId && comprobante.tipo.startsWith("factura") && comprobante.estado !== "anulada" && comprobante.estado !== "borrador"
       ? await datosDeDevolucion(id)
       : null;
   const devolucion = deLaVenta && !deLaVenta.ventaAnulada ? deLaVenta : null;
@@ -185,6 +194,16 @@ export default async function FichaComprobantePage({
         </p>
       )}
 
+      {comprobante.ventaAnulada && !anulada && (
+        <p
+          role="status"
+          className="estado-problema flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base font-medium text-[var(--estado-tinta)]"
+        >
+          <ShieldAlert className="h-5 w-5 shrink-0" />
+          Venta anulada{comprobante.pedido ? ` · ${comprobante.pedido}` : ""}
+        </p>
+      )}
+
       {/* Estado fiscal: es lo primero que hay que saber del comprobante */}
       {comprobante.cae && comprobante.caeAmbiente === "homologacion" ? (
         // Un CAE de prueba no es una autorización: no va al libro IVA.
@@ -232,7 +251,7 @@ export default async function FichaComprobantePage({
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
               <Link
                 href={`/admin/facturacion/${serie.tramo.invoiceId}`}
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-colors hover:bg-brand-orange-dark"
+                className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-accion px-4 py-2 text-center text-base font-medium text-white transition-colors hover:bg-brand-orange-dark sm:w-auto"
               >
                 Autorizar la serie desde el {numeroFormateado(comprobante.puntoVenta, serie.tramo.numero)}
               </Link>
@@ -298,7 +317,7 @@ export default async function FichaComprobantePage({
             <h2 className="border-b px-5 py-3.5 text-base font-medium">
               Detalle
               <span className="ml-2 text-base font-normal text-muted-foreground">
-                {plural(comprobante.items.length, "renglón")}
+                {plural(comprobante.items.length, "renglón", "renglones")}
               </span>
             </h2>
 
@@ -322,7 +341,7 @@ export default async function FichaComprobantePage({
                     <tr key={item.id}>
                       <td className="px-5 py-3 text-base">{item.descripcion}</td>
                       <td className="tabular px-3 py-3 text-right text-base">
-                        {Number(item.cantidad)}
+                        {cantidadConUnidad(Number(item.cantidad), item.unidad)}
                       </td>
                       <td className="tabular px-3 py-3 text-right text-base">
                         {moneda.format(
@@ -336,8 +355,11 @@ export default async function FichaComprobantePage({
                           {Number(item.alicuotaIva)}%
                         </td>
                       )}
+                      {/* En la A la fila va neta: cantidad × unitario neto
+                          = subtotal neto, y el IVA abajo. Con el subtotal
+                          con IVA la fila no se podía verificar (H080). */}
                       <td className="tabular px-5 py-3 text-right text-base font-medium">
-                        {moneda.format(Number(item.subtotal))}
+                        {moneda.format(Number(discrimina ? item.neto : item.subtotal))}
                       </td>
                     </tr>
                   ))}
@@ -400,16 +422,46 @@ export default async function FichaComprobantePage({
           <section className="tarjeta overflow-hidden">
             <h2 className="flex items-baseline justify-between gap-3 border-b px-5 py-3.5 text-base font-medium">
               Cobros
-              <span
-                className={`tabular text-base font-normal ${
-                  comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
-                }`}
-              >
-                {comprobante.saldo > 0
-                  ? `saldo ${moneda.format(comprobante.saldo)}`
-                  : "cobrada"}
-              </span>
+              {!anulada && !comprobante.tipo.startsWith("nota_credito") && (
+                <span
+                  className={`tabular text-base font-normal ${
+                    comprobante.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
+                  }`}
+                >
+                  {comprobante.ventaAnulada
+                    ? "venta anulada"
+                    : comprobante.saldo > 0
+                      ? `saldo ${moneda.format(comprobante.saldo)}${comprobante.enCuenta ? " en cuenta corriente" : ""}`
+                      : "cobrada"}
+                </span>
+              )}
             </h2>
+
+            {comprobante.cobrosDelPedido.length > 0 && (
+              <ul className="divide-y border-b">
+                {comprobante.cobrosDelPedido.map((cobro, i) => (
+                  <li key={i} className="flex items-baseline justify-between gap-3 px-5 py-3">
+                    <span className="text-base">
+                      {MEDIOS[cobro.medio] ?? cobro.medio}
+                      <span className="tabular ml-2 text-sm text-muted-foreground">
+                        {fechaCorta.format(cobro.fecha)}
+                      </span>
+                      {cobro.reciboId && (
+                        <a
+                          href={`/api/recibos/${cobro.reciboId}/pdf`}
+                          target="_blank"
+                          rel="noopener"
+                          className="codigo ml-2 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                        >
+                          {cobro.recibo}
+                        </a>
+                      )}
+                    </span>
+                    <span className="tabular text-base font-medium">{moneda.format(cobro.monto)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {comprobante.cobros.length > 0 && (
               <ul className="divide-y border-b">
@@ -447,7 +499,7 @@ export default async function FichaComprobantePage({
               </ul>
             )}
 
-            {!anulada && comprobante.saldo > 0 && (
+            {!anulada && !comprobante.ventaAnulada && comprobante.saldo > 0 && (
               <div className="p-5">
                 <FormularioCobro
                   id={comprobante.id}
@@ -468,7 +520,7 @@ export default async function FichaComprobantePage({
             <dl className="mt-2 space-y-1.5 text-base">
               <Dato
                 etiqueta="CUIT"
-                valor={comprobante.receptorCuit ?? "—"}
+                valor={formatearCuit(comprobante.receptorCuit)}
                 tabular
               />
               <Dato
@@ -501,8 +553,8 @@ export default async function FichaComprobantePage({
               <Truck className="h-5 w-5 shrink-0 text-muted-foreground" />
               <span className="text-base">
                 <span className="block font-medium">Pedido asociado</span>
-                <span className="text-muted-foreground">
-                  {comprobante.observaciones ?? "Ver el pedido"}
+                <span className="codigo text-muted-foreground">
+                  {comprobante.pedido ?? comprobante.observaciones ?? "Ver el pedido"}
                 </span>
               </span>
             </Link>
@@ -520,6 +572,24 @@ export default async function FichaComprobantePage({
             </Link>
           )}
 
+          {!comprobante.cae && devolucion && !anulada && (
+            <section id="devolucion" className="tarjeta scroll-mt-24 p-5">
+              <NotasSobreElComprobante
+                invoiceId={comprobante.id}
+                items={comprobante.items.map((i) => ({
+                  id: i.id,
+                  descripcion: i.descripcion,
+                  cantidad: Number(i.cantidad),
+                  subtotal: Number(i.subtotal),
+                }))}
+                total={Number(comprobante.total)}
+                acreditado={Number(comprobante.acreditado)}
+                devolucion={devolucion}
+                soloDevolucion
+              />
+            </section>
+          )}
+
           {/* Sin CAE no hay nada que anular ni que corregir con una nota:
               ARCA rechazaría la nota, y anularlo dejaba el número trabando la
               serie. Lo que no tiene CAE se da de baja, arriba. */}
@@ -529,7 +599,7 @@ export default async function FichaComprobantePage({
                   placas falladas es lo frecuente y anular la factura entera es
                   la excepción. El orden empuja hacia la corrección más chica. */}
               {!deLaVenta?.ventaAnulada && (
-                <section className="tarjeta p-5">
+                <section id="devolucion" className="tarjeta scroll-mt-24 p-5">
                   <NotasSobreElComprobante
                     invoiceId={comprobante.id}
                     items={comprobante.items.map((i) => ({

@@ -578,7 +578,13 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 	if err != nil {
 		return Devolucion{}, err
 	}
-	if err := s.estadoParaNota(o); err != nil {
+	// **La factura sin CAE también se devuelve.** Un faltante o una laca que
+	// volvió no tenían por dónde hacerse mientras la factura esperaba el CAE:
+	// la deuda quedaba entera, el stock había que sumarlo a mano y el IVA de
+	// la factura seguía completo (simulación del mes, H294/H332/H347). La nota
+	// sale numerada y sin CAE, atada a la factura; se autoriza después de
+	// ella (autorizar lo frena antes).
+	if err := s.estadoParaNota(o); err != nil && !(o != nil && o.cae == nil && o.estado != "anulada" && o.estado != "borrador") {
 		return Devolucion{}, err
 	}
 	sinNota := s.caeDePruebaEnProduccion(o)

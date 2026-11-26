@@ -32,6 +32,11 @@ type ItemComprobante struct {
 	PrecioUnitario string `json:"precioUnitario"`
 	AlicuotaIva    string `json:"alicuotaIva"`
 	Subtotal       string `json:"subtotal"`
+	// Neto: en la A, el subtotal de la fila va neto (cantidad × unitario
+	// neto) y el IVA abajo; con el subtotal con IVA la fila no cerraba a
+	// mano (simulación del mes, H080). Vacío, el subtotal (los golden del
+	// TS no lo traen).
+	Neto string `json:"neto,omitempty"`
 }
 
 // TributoComprobante es una percepción u otro tributo.
@@ -69,6 +74,10 @@ type ComprobantePdf struct {
 	Estado           string               `json:"estado"`
 	Items            []ItemComprobante    `json:"items"`
 	Tributos         []TributoComprobante `json:"tributos"`
+	// CondicionVenta (Contado · Efectivo, Cuenta corriente) y Pedido van en
+	// el encabezado si vienen (H030, H311).
+	CondicionVenta string `json:"condicionVenta,omitempty"`
+	Pedido         string `json:"pedido,omitempty"`
 }
 
 // EmisorFiscal es el emisor del comprobante: el del encabezado más los
@@ -229,6 +238,14 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		h.Escribir("Vencimiento "+FechaSolaCorta(*c.FechaVencimiento), Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
 		y -= 10
 	}
+	if c.CondicionVenta != "" {
+		h.Escribir("Condición de venta: "+c.CondicionVenta, Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
+		y -= 10
+	}
+	if c.Pedido != "" {
+		h.Escribir("Pedido "+c.Pedido, Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
+		y -= 10
+	}
 
 	// Receptor
 	cursor := minimo(minimo(finEmisor, yCaja), y+10) - Mm(8)
@@ -321,7 +338,11 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		if discrimina {
 			h.EscribirNumero(numeroJS(num(item.AlicuotaIva))+"%", Opciones{X: colIva, Y: cursor, Tamano: 8, Derecha: true}, anchoIva)
 		}
-		h.EscribirNumero(Moneda2De(item.Subtotal), Opciones{X: colSubtotal, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoSubtotal)
+		subtotal := item.Subtotal
+		if discrimina && item.Neto != "" {
+			subtotal = item.Neto
+		}
+		h.EscribirNumero(Moneda2De(subtotal), Opciones{X: colSubtotal, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoSubtotal)
 
 		cursor -= maximo(alto, 12) + 4
 		h.Raya(cursor+8, 0, Color{})
@@ -393,6 +414,13 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		cursor -= Mm(7)
 	}
 
+	// La A a un monotributista lleva la leyenda de la Ley 27.618 (RG 5003/2021;
+	// fiscal.LeyendaMonotributo, H207).
+	if comprobanteLetra(c.Tipo) == "A" && c.ReceptorCondicionIva == "monotributista" {
+		cursor -= h.EscribirParrafo(leyendaMonotributo, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 7.5, Fuente: Negrita}, Ancho: Mm(170)})
+		cursor -= Mm(3)
+	}
+
 	if c.Observaciones != "" {
 		cursor -= h.EscribirParrafo(c.Observaciones, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8, Color: TintaSuave}, Ancho: Mm(120)})
 	}
@@ -433,3 +461,7 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 
 	return h.Bytes()
 }
+
+// leyendaMonotributo es fiscal.LeyendaMonotributo (pdf no importa fiscal).
+const leyendaMonotributo = "El crédito fiscal discriminado en el presente comprobante, sólo podrá ser computado a efectos del Régimen de " +
+	"Sostenimiento e Inclusión Fiscal para Pequeños Contribuyentes de la Ley Nº 27.618"

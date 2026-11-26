@@ -262,8 +262,13 @@ func TestFacturaASoloConCuitValido(t *testing.T) {
 		return st, string(b)
 	}
 	if st, b := emitir(map[string]string{"receptorNombre": "Gómez SRL", "receptorCondicionIva": "responsable_inscripto"}); st != 422 ||
-		!strings.Contains(b, "hace falta su CUIT") {
+		!strings.Contains(b, "hace falta el CUIT") {
 		t.Fatalf("A sin CUIT: %d %s", st, b)
+	}
+	// Al monotributista también le sale A (RG 5003/2021), y también pide el CUIT.
+	if st, b := emitir(map[string]string{"receptorNombre": "Paredes", "receptorCondicionIva": "monotributista"}); st != 422 ||
+		!strings.Contains(b, "factura A hace falta el CUIT") {
+		t.Fatalf("A al monotributista sin CUIT: %d %s", st, b)
 	}
 	if st, b := emitir(map[string]string{"receptorNombre": "Gómez SRL", "receptorCuit": "30-71234567-2", "receptorCondicionIva": "responsable_inscripto"}); st != 422 ||
 		!strings.Contains(b, "El CUIT no es válido") {

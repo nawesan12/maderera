@@ -426,6 +426,16 @@ func TestGrillaPorEstadoYPaginas(t *testing.T) {
 	if r := leer("?estado=para-revisar"); !r.Filas[0].Desactualizado {
 		t.Error("la de 90 días no salió desactualizada")
 	}
+	// Con un costo por encima del precio sin IVA, la medida sale «bajo el
+	// costo» (H159), y sigue en su grupo de siempre.
+	if _, err := e.pool.Exec(ctx, `insert into variant_costs (variant_id, costo_promedio) values ($1, 9999999)
+		on conflict (variant_id) do update set costo_promedio = excluded.costo_promedio`, e.fen18); err != nil {
+		t.Fatal(err)
+	}
+	if r := leer("?estado=bajo-costo"); r.Total != 1 || len(r.Filas) != 1 || r.Filas[0].SKU != "FEN18" || r.Conteos.BajoCosto != 1 || r.Conteos.AlDia != 1 {
+		t.Errorf("bajo el costo: %+v", r)
+	}
+	_, _ = e.pool.Exec(ctx, `delete from variant_costs where variant_id = $1`, e.fen18)
 	if r := leer("?limite=2&desplazamiento=2"); len(r.Filas) != 1 || r.Total != 3 {
 		t.Errorf("segunda página: %+v", r)
 	}

@@ -127,7 +127,7 @@ export default async function CuentaCorrientePage({
             <div
               className="h-2.5 overflow-hidden rounded-full bg-black/10"
               role="img"
-              aria-label={`Usás el ${Math.round(porcentaje)} por ciento de tu límite`}
+              aria-label={`Usás el ${Math.floor(porcentaje)} por ciento de tu límite`}
             >
               <div
                 className={`h-full rounded-full ${
@@ -150,7 +150,7 @@ export default async function CuentaCorrientePage({
                   . Para seguir comprando a cuenta hay que regularizarlo.
                 </span>
               ) : (
-                `Usás el ${Math.round(porcentaje)}% de tu límite.`
+                `Usás el ${Math.floor(porcentaje)}% de tu límite.`
               )}
             </p>
           </div>

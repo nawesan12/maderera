@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cantidadConUnidad,
   enlaceDeWhatsapp,
   formatearDecimal,
   formatearPeso,
@@ -144,5 +145,18 @@ describe("hayFiltro", () => {
     expect(hayFiltro({ pagina: "2", estado: "todos", cat: "todas", buscar: "  " })).toBe(false);
     expect(hayFiltro({ buscar: "fenólico" })).toBe(true);
     expect(hayFiltro({ estado: "sin-stock" })).toBe(true);
+  });
+});
+
+// «3 placas», no «3 placa»; la unidad suelta no se escribe; la línea del
+// corte dice «4 cortes» (simulación del mes, H095 y H145).
+describe("cantidadConUnidad", () => {
+  it("pone en plural las unidades que son palabras", () => {
+    expect(cantidadConUnidad(3, "placa")).toBe("3 placas");
+    expect(cantidadConUnidad(1, "placa")).toBe("1 placa");
+    expect(cantidadConUnidad(2, "par")).toBe("2 pares");
+    expect(cantidadConUnidad(2.5, "metro_cuadrado")).toBe("2,5 m²");
+    expect(cantidadConUnidad(4, "unidad")).toBe("4");
+    expect(cantidadConUnidad(4, "pasada")).toBe("4 cortes");
   });
 });

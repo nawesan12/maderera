@@ -2,16 +2,17 @@ import { BotonImprimir } from "./boton-imprimir";
 import QRCode from "qrcode";
 import {
   discriminaIva,
+  LEYENDA_MONOTRIBUTO,
   letraDe,
   nombreComprobante,
   numeroFormateado,
   type TipoComprobante,
 } from "@/lib/fiscal/comprobantes";
 import {
+  cantidadConUnidad,
   fechaCorta,
   fechaSolaCorta,
   formatearCuit,
-  formatearUnidad,
   moneda,
 } from "@/lib/formato";
 import type { EmisorFiscal } from "@/lib/dal/admin/facturacion";
@@ -28,6 +29,20 @@ const fechaArgentina = new Intl.DateTimeFormat("es-AR", {
   year: "2-digit",
   timeZone: "America/Argentina/Buenos_Aires",
 });
+
+const MEDIOS: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  deposito: "Transferencia",
+  mercado_pago: "Mercado Pago",
+  tarjeta: "Tarjeta",
+  debito: "Tarjeta de débito",
+  credito: "Tarjeta de crédito",
+  tarjeta_debito: "Tarjeta de débito",
+  tarjeta_credito: "Tarjeta de crédito",
+  cheque: "Cheque",
+  echeq: "Cheque",
+};
 
 const CONDICIONES: Record<string, string> = {
   responsable_inscripto: "Responsable inscripto",
@@ -60,6 +75,13 @@ interface ComprobanteImprimible {
   observaciones: string | null;
   /** El enlace de verificación de ARCA, que arma Go (solo con CAE). */
   qrUrl: string | null;
+  /** La deuda vive en la cuenta corriente: la condición de venta. */
+  enCuenta?: boolean;
+  /** El pedido que factura. */
+  pedido?: string | null;
+  /** Los cobros, para el medio de pago. */
+  cobros?: { medio: string }[];
+  cobrosDelPedido?: { medio: string }[];
   items: {
     id: string;
     descripcion: string;
@@ -67,6 +89,7 @@ interface ComprobanteImprimible {
     cantidad: string;
     precioUnitario: string;
     alicuotaIva: string;
+    neto: string;
     subtotal: string;
   }[];
   tributos: {
@@ -98,6 +121,20 @@ export async function ComprobanteImpreso({
   const letra = letraDe(comprobante.tipo);
   const discrimina = discriminaIva(comprobante.tipo);
   const anulada = comprobante.estado === "anulada";
+  const esFactura = comprobante.tipo.startsWith("factura");
+  // El IVA contenido de la B (Régimen de Transparencia Fiscal al
+  // Consumidor, Ley 27.743): ARCA lo exige impreso desde 2025.
+  const ivaContenido = Number(comprobante.iva21) + Number(comprobante.iva105);
+  // Condición de venta y medio de pago: lo que se cobró en la caja, con un
+  // recibo o desde Facturación; en cuenta corriente, eso.
+  const medios = [
+    ...new Set(
+      [...(comprobante.cobros ?? []), ...(comprobante.cobrosDelPedido ?? [])]
+        .map((c) => MEDIOS[c.medio])
+        .filter(Boolean),
+    ),
+  ];
+  const condicionVenta = comprobante.enCuenta ? "Cuenta corriente" : medios.length > 0 ? "Contado" : null;
 
   // El QR va como SVG para no depender de una petición más al imprimir. La
   // dirección (con la fecha que se le informó a ARCA) la arma Go.
@@ -163,6 +200,19 @@ export async function ComprobanteImpreso({
             </p>
             <p className="datos">
               Fecha de emisión: {fechaArgentina.format(comprobante.fechaEmision)}
+              {esFactura && condicionVenta && (
+                <>
+                  <br />
+                  Condición de venta: {condicionVenta}
+                  {!comprobante.enCuenta && medios.length > 0 && ` · ${medios.join(", ")}`}
+                </>
+              )}
+              {comprobante.pedido && (
+                <>
+                  <br />
+                  Pedido: {comprobante.pedido}
+                </>
+              )}
               {comprobante.fechaVencimiento && (
                 <>
                   <br />
@@ -227,15 +277,14 @@ export async function ComprobanteImpreso({
               return (
                 <tr key={item.id}>
                   <td>{item.descripcion}</td>
-                  <td className="der mono">
-                    {cantidad} {item.unidad === "unidad" ? "" : formatearUnidad(item.unidad)}
-                  </td>
+                  <td className="der mono">{cantidadConUnidad(cantidad, item.unidad)}</td>
                   <td className="der mono">{moneda.format(unitario)}</td>
                   {discrimina && (
                     <td className="der mono">{Number(item.alicuotaIva)}%</td>
                   )}
+                  {/* En la A, la fila neta: cantidad × unitario neto. */}
                   <td className="der mono">
-                    {moneda.format(Number(item.subtotal))}
+                    {moneda.format(Number(discrimina ? item.neto : item.subtotal))}
                   </td>
                 </tr>
               );
@@ -282,8 +331,18 @@ export async function ComprobanteImpreso({
                 {moneda.format(Number(comprobante.total))}
               </span>
             </div>
+            {letra === "B" && comprobante.receptorCondicionIva === "consumidor_final" && ivaContenido > 0 && (
+              <Linea etiqueta="IVA contenido" valor={String(ivaContenido)} />
+            )}
           </div>
         </section>
+
+        {letra === "B" && comprobante.receptorCondicionIva === "consumidor_final" && ivaContenido > 0 && (
+          <p className="leyenda">Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)</p>
+        )}
+        {letra === "A" && comprobante.receptorCondicionIva === "monotributista" && (
+          <p className="leyenda">{LEYENDA_MONOTRIBUTO}</p>
+        )}
 
         {comprobante.observaciones && (
           <section className="observaciones">

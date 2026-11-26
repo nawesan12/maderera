@@ -174,13 +174,23 @@ func (s *Servicio) autorizar(ctx context.Context, id string, a *arca) (string, e
 	if c.estado == "anulada" {
 		return "", errEmision("El comprobante está anulado.")
 	}
+	// La nota de una factura que todavía no tiene CAE espera a la factura:
+	// ARCA rechaza el comprobante asociado que no conoce (la devolución sobre
+	// una factura sin CAE, H294).
+	var origenSinCae bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM invoices n JOIN invoices o ON o.id = n.comprobante_origen_id
+		WHERE n.id = $1 AND o.cae IS NULL)`, id).Scan(&origenSinCae); err != nil {
+		return "", err
+	}
+	if origenSinCae {
+		return "", errEmision("Primero se autoriza la factura que corrige esta nota.")
+	}
 	if !s.env.UsaArca() {
 		// El proveedor interno: numera y emite, pero no autoriza. Nunca un
-		// CAE inventado.
-		if _, err := s.pool.Exec(ctx, `UPDATE invoices SET estado = 'rechazada', observaciones_arca = $2, updated_at = now() WHERE id = $1`,
-			id, sinValorFiscal); err != nil {
-			return "", err
-		}
+		// CAE inventado. El comprobante queda «emitida» (sin autorizar): ARCA
+		// no lo vio, así que no está rechazado. Antes pasaba a «rechazada» y
+		// Facturación mostraba «Rechazada por ARCA» de algo que nunca se
+		// mandó, con el botón de corregir los datos del cliente.
 		return "", errEmision(sinValorFiscal)
 	}
 	cfg := s.env.Leer()

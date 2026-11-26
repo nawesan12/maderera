@@ -114,7 +114,7 @@ export function CorregirReceptor({
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-base font-medium transition-colors hover:bg-muted sm:w-auto"
       >
         Corregir los datos del cliente y reenviar
       </button>

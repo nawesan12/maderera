@@ -180,6 +180,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cierre/cerrado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Cierra (o reabre) un mes: con el mes cerrado, la base no deja cargar, cambiar ni borrar gastos, facturas de compra, pagos ni recibos con fecha de ese mes, ni dar de baja sus facturas (00221). */
+        post: operations["CerrarElMes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/metricas": {
         parameters: {
             query?: never;
@@ -351,6 +368,11 @@ export interface components {
             lineasSinCosto: number;
             /** @description Cuántas filas tiene el corte entero */
             filas: number;
+            /**
+             * Format: double
+             * @description Flete cobrado del período
+             */
+            envios: number;
         };
         ReporteMes: {
             clave: string;
@@ -372,6 +394,9 @@ export interface components {
             disponibleCentral: number;
             /** Format: double */
             disponibleAserradero: number;
+            /** @description El proveedor habitual (el último con el que se cargó un código) */
+            proveedorId?: string | null;
+            proveedor?: string | null;
             /** Format: double */
             disponible: number;
             /** Format: double */
@@ -433,21 +458,30 @@ export interface components {
             total: number;
             cantidad: number;
         };
-        /** @description facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado */
+        /** @description facturado + sinCae + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado */
         CierreVendido: {
             /** Format: double */
             total: number;
             facturado: components["schemas"]["CierreTotales"];
+            sinCae: components["schemas"]["CierreTotales"];
             interno: components["schemas"]["CierreTotales"];
             sinFactura: components["schemas"]["CierreTotales"];
         };
+        MesCerrado: {
+            cerrado: boolean;
+            /** Format: date-time */
+            at: string | null;
+            por: string | null;
+        };
         CierreResumen: {
+            cerrado: components["schemas"]["MesCerrado"];
             ventas: components["schemas"]["CierreTotalesConIva"];
             vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
             retencionesPracticadas: components["schemas"]["CierreTotales"];
             retencionesSufridas: components["schemas"]["CierreTotales"];
+            percepcionesIibb: components["schemas"]["CierreTotales"];
             /**
              * Format: double
              * @description Débito menos crédito del mes
@@ -582,6 +616,11 @@ export interface components {
             costo: number;
             /** Format: double */
             gastos: number;
+            /**
+             * Format: double
+             * @description Flete cobrado sin IVA; suma al resultado
+             */
+            envios: number;
             /** Format: double */
             resultado: number;
             /** @description Renglones vendidos sin costo cargado o con costo en cero */
@@ -1046,6 +1085,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CierreResumen"];
+                };
+            };
+        };
+    };
+    CerrarElMes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    periodo: string;
+                    cerrado: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Cómo quedó el mes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MesCerrado"];
                 };
             };
         };

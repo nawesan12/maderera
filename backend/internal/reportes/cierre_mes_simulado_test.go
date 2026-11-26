@@ -1,0 +1,238 @@
+package reportes
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"mjbj/internal/plataforma"
+)
+
+func pendientesDe(t *testing.T, cuerpo string) map[string]PendienteDelCierre {
+	t.Helper()
+	var lista []PendienteDelCierre
+	if err := json.Unmarshal([]byte(cuerpo), &lista); err != nil {
+		t.Fatal(cuerpo)
+	}
+	out := map[string]PendienteDelCierre{}
+	for _, p := range lista {
+		out[p.Clave] = p
+	}
+	return out
+}
+
+// El cobro de una cuenta corriente con facturas emitidas que esperan el CAE
+// no es una seña: va como «Cobros de facturas sin CAE», sin el consejo del
+// IVA, y lleva a Facturación (simulación del mes, H131/H155). Y el pedido
+// entregado con su factura esperando el CAE no deja la seña «sin aplicar»
+// (H353): las dos situaciones iguales se tratan igual.
+func TestCierreCobrosDeFacturasSinCae(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cuenta := e.id(t, `insert into customers (nombre) values ('Constructora') returning id`)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado,
+		fecha_emision, created_at, customer_id) values ('factura_a', 15, 9, 'Constructora', 1000, 210, 0, 0, 0, 1210, 'emitida', '2026-10-05T15:00:00Z',
+		'2026-10-05T15:00:00Z', $1)`, cuenta)
+	e.recibir(t, &cuenta, "REC-0001", "2026-10-10T15:00:00Z", [2]any{"transferencia", 1210.0})
+
+	herrera := e.id(t, `insert into customers (nombre) values ('Herrera') returning id`)
+	pedido := e.pedido(t, "PED-1057", e.central, "pendiente", "mostrador", time.Date(2026, 10, 1, 12, 0, 0, 0, Argentina), &herrera)
+	e.exec(t, `update orders set total = 500 where id = $1`, pedido)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'pendiente', '2026-10-01T15:00:00Z')`, pedido)
+	e.recibir(t, &herrera, "REC-0019", "2026-10-02T15:00:00Z", [2]any{"efectivo", 500.0})
+	e.exec(t, `update orders set estado = 'entregado' where id = $1`, pedido)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'entregado', '2026-10-03T15:00:00Z')`, pedido)
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado,
+		fecha_emision, created_at, customer_id, order_id) values ('factura_b', 15, 66, 'Herrera', 413.22, 86.78, 0, 0, 0, 500, 'emitida', '2026-10-03T15:00:00Z',
+		'2026-10-03T15:00:00Z', $1, $2)`,
+		herrera, pedido)
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	p := pendientesDe(t, cuerpo)
+	cobro, ok := p["cobros-sin-cae"]
+	if !ok || cobro.Cantidad != 1 || !strings.Contains(cobro.Detalle, "1.210") || !strings.Contains(cobro.Donde, "/admin/facturacion") {
+		t.Fatalf("cobros de facturas sin CAE: %s", cuerpo)
+	}
+	if s, ok := p["senas-del-mes"]; !ok || s.Cantidad != 1 || s.Donde != "/admin/clientes/"+herrera {
+		t.Fatalf("la seña de Herrera es la única seña, con su ficha: %s", cuerpo)
+	}
+	if _, ok := p["anticipos-sin-aplicar"]; ok {
+		t.Fatalf("la seña de un pedido con la factura esperando el CAE no está sin aplicar: %s", cuerpo)
+	}
+}
+
+// Por producto, una fila por medida: juntas, «MDF 3mm» llevaba las de 18 mm
+// (H163). El flete cobrado se informa en los totales (la diferencia con el
+// inicio, H138) y suma al resultado sin IVA (H360).
+func TestReportePorMedidaYEnvios(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, _ := e.catalogo(t)
+	otra := e.id(t, `insert into product_variants (product_id, sku, label) select product_id, 'FEN12', '12 mm' from product_variants where id = $1 returning id`, placa)
+	pedido := e.pedido(t, "PED-1001", e.central, "entregado", "mostrador", time.Date(2026, 10, 2, 10, 0, 0, 0, Argentina), nil,
+		[4]any{placa, 2.0, 1210.0, 500.0}, [4]any{otra, 1.0, 605.0, 250.0})
+	e.exec(t, `update orders set costo_envio = 121, total = total + 121 where id = $1`, pedido)
+
+	_, b, _ := pedir(t, adm, e.u+"reportes/ventas?corte=producto&periodo=mes")
+	var rep ReporteDeVentas
+	_ = json.Unmarshal([]byte(b), &rep)
+	if len(rep.Filas) != 2 || *rep.Filas[0].Detalle != "18 mm" || rep.Filas[0].Cantidad != 2 || *rep.Filas[1].Detalle != "12 mm" ||
+		rep.Totales.Filas != 2 || rep.Totales.Envios != 121 {
+		t.Fatalf("por medida: %s", b)
+	}
+	_, b, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
+	var r ResumenDelMes
+	_ = json.Unmarshal([]byte(b), &r)
+	// 1500 vendido − 1250 de costo + 100 de envío sin IVA.
+	if a := r.Resultado.Actual; a.Envios != 100 || a.Resultado != 350 {
+		t.Fatalf("resultado con el envío: %+v", a)
+	}
+}
+
+// «Productos bajo el mínimo» dice lo mismo en el inicio, en Stock y en
+// Reposición (H062): el inicio cuenta medidas, no filas por sucursal (una
+// sucursal en cero con la otra con stock no es reponer), lleva a Stock ya
+// filtrado, y Reposición sugiere llegar al mínimo aunque no se haya vendido.
+func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	// La placa: 10 en Central con mínimo 20 (bajo), 5 en el Aserradero sin
+	// mínimo. El tirante: 100 con mínimo 10.
+	placa, tirante := e.catalogo(t)
+	// El tirante, en cero en el Aserradero con mínimo: la otra sucursal tiene.
+	e.exec(t, `insert into inventory (variant_id, branch_id, qty, min_qty) values ($1, $2, 0, 5)`, tirante, e.aserradero)
+	// La placa se le compra a Placas del Sur: la orden sale por proveedor (H377).
+	prov := e.id(t, `insert into suppliers (nombre) values ('Placas del Sur') returning id`)
+	e.exec(t, `insert into supplier_variant_codes (supplier_id, variant_id, codigo) values ($1, $2, 'F18')`, prov, placa)
+
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
+	if !strings.Contains(cuerpo, `"clave":"reponer","cantidad":1`) || !strings.Contains(cuerpo, `"href":"/admin/stock?estado=reponer"`) {
+		t.Fatalf("inicio: %s", cuerpo)
+	}
+	_, b, _ := pedir(t, adm, e.u+"reportes/reposicion?dias=30&objetivo=30")
+	var r ReporteDeReposicion
+	_ = json.Unmarshal([]byte(b), &r)
+	sugeridos := map[string]float64{}
+	for _, f := range r.Filas {
+		sugeridos[f.VariantID] = f.Sugerido
+	}
+	// La placa: disponible 8 (10 − 2 reservadas) contra 20; el tirante no
+	// (el cero del Aserradero lo cubre Central, como en Stock).
+	if sugeridos[placa] != 12 || sugeridos[tirante] != 0 || r.Filas[0].VariantID != placa ||
+		r.Filas[0].ProveedorID == nil || *r.Filas[0].ProveedorID != prov || *r.Filas[0].Proveedor != "Placas del Sur" {
+		t.Fatalf("reposición: %v %s", sugeridos, b)
+	}
+}
+
+// El precio de lista bajo el costo se marca en el inicio y lleva a Precios
+// filtrado (H139, H159): el Fenólico de 18 mm a $100 con costo de $75.500.
+func TestPrecioBajoElCostoEnElInicio(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, tirante := e.catalogo(t)
+	lista := e.id(t, `insert into price_lists (slug, name, is_default) values ('general-prueba', 'Lista general', true) returning id`)
+	e.exec(t, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 100), ($1, $3, 2420)`, lista, placa, tirante)
+	e.exec(t, `insert into variant_costs (variant_id, costo_promedio) values ($1, 75500), ($2, 1000)`, placa, tirante)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
+	if !strings.Contains(cuerpo, `"clave":"bajo-costo","cantidad":1`) || !strings.Contains(cuerpo, `/admin/precios?estado=bajo-costo`) {
+		t.Fatalf("inicio: %s", cuerpo)
+	}
+}
+
+// Dos luces de EDEA de Casa Central por octubre: el cierre avisa (H426). Un
+// gasto parecido de otra sucursal o de otra categoría, no.
+func TestCierreAvisaGastosRepetidos(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	e.exec(t, `insert into expenses (fecha, categoria, descripcion, importe, branch_id) values
+		('2026-10-03', 'servicios', 'Luz EDEA Casa Central, octubre', 412350, $1),
+		('2026-10-17', 'servicios', 'luz EDEA Casa Central, período octubre', 427800, $1),
+		('2026-10-17', 'servicios', 'Luz EDEA Aserradero, octubre', 300000, $2),
+		('2026-10-20', 'otros', 'Luz EDEA Casa Central, octubre', 1000, $1)`, e.central, e.aserradero)
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	p, ok := pendientesDe(t, cuerpo)["gastos-repetidos"]
+	if !ok || p.Cantidad != 1 || !strings.Contains(p.Detalle, "412.350") || p.Donde != "/admin/compras/gastos?periodo=2026-10" {
+		t.Fatalf("gastos repetidos: %s", cuerpo)
+	}
+}
+
+// Cerrar el mes (H408): con septiembre cerrado, la base no deja cargar un
+// gasto con fecha de septiembre ni anular un recibo de ese mes; el de
+// octubre, sí. Octubre (el mes en curso) no se puede cerrar. Reabierto, se
+// puede de nuevo. El error de la base sale como un 422 con el mes escrito.
+func TestCerrarElMes(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cerrar := func(mes string, cerrado bool) (int, string) {
+		t.Helper()
+		cuerpo, _ := json.Marshal(map[string]any{"periodo": mes, "cerrado": cerrado})
+		req, _ := http.NewRequest("POST", e.u+"cierre/cerrado", bytes.NewReader(cuerpo))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := adm.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	cli := e.id(t, `insert into customers (nombre) values ('Sosa') returning id`)
+	recibo := e.recibir(t, &cli, "REC-0001", "2026-09-20T15:00:00Z", [2]any{"efectivo", 100.0})
+	if st, b := cerrar("2026-10", true); st != 422 || !strings.Contains(b, "cuando terminó") {
+		t.Fatalf("el mes en curso: %d %s", st, b)
+	}
+	if st, b := cerrar("2026-09", true); st != 200 || !strings.Contains(b, `"cerrado":true`) {
+		t.Fatalf("cerrar: %d %s", st, b)
+	}
+	_, b, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-09")
+	if !strings.Contains(b, `"cerrado":{"cerrado":true`) {
+		t.Fatalf("resumen: %s", b)
+	}
+	esMesCerrado := func(err error) bool {
+		mes, ok := plataforma.MesCerrado(err)
+		return ok && mes == "2026-09"
+	}
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-09-10', 'Luz', 100)`); !esMesCerrado(err) {
+		t.Fatalf("gasto de septiembre: %v", err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-10-10', 'Luz', 100)`); err != nil {
+		t.Fatalf("gasto de octubre: %v", err)
+	}
+	if _, err := e.pool.Exec(ctx, `update receipts set estado = 'anulado', anulado_at = now() where id = $1`, recibo); !esMesCerrado(err) {
+		t.Fatalf("anular el recibo de septiembre: %v", err)
+	}
+	if st, _ := cerrar("2026-09", false); st != 200 {
+		t.Fatal("reabrir")
+	}
+	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-09-10', 'Luz', 100)`); err != nil {
+		t.Fatalf("gasto de septiembre, reabierto: %v", err)
+	}
+	if n := plataforma.NombreDelMes("2026-09"); n != "septiembre de 2026" {
+		t.Fatal(n)
+	}
+}
+
+// El retiro de la caja que fue al banco se asienta de Caja a Banco; el que
+// va a la caja fuerte, no (H160).
+func TestElDepositoDeLaCajaVaAlBanco(t *testing.T) {
+	e := armar(t)
+	e.staff(t, "caja@prueba.test", "vendedor")
+	sesion := e.id(t, `insert into cash_sessions (branch_id, abierta_por) select $1, id from "user" limit 1 returning id`, e.central)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, created_at) values
+		($1, 'retiro', -650000, 'Depósito en el banco', '2026-10-10T15:00:00Z'),
+		($1, 'retiro', -100000, 'A la caja fuerte', '2026-10-10T16:00:00Z')`, sesion)
+	octubre := e.asientosDe(t, "2026-10")
+	d := buscarAsiento(octubre, "Depósito de la caja de Casa Central")
+	if d == nil || cuenta([]Asiento{*d}, Cuentas.Banco) != 650000 || cuenta([]Asiento{*d}, Cuentas.Caja) != -650000 {
+		t.Fatalf("depósito: %+v", d)
+	}
+	if n := cuenta(octubre, Cuentas.Caja); n != -650000 {
+		t.Fatalf("la caja fuerte no mueve Caja: %v", n)
+	}
+}

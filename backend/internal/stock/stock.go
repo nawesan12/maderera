@@ -180,9 +180,14 @@ const (
 		  AND greatest(i.qty - i.reservado, 0) <= i.min_qty)`
 )
 
+// BajoElMinimo es, sobre la fila `v` de product_variants, el grupo «Hay
+// que reponer» de Stock: el número que cuenta el inicio, para que las dos
+// pantallas digan lo mismo (simulación del mes, H062).
+const BajoElMinimo = totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna
+
 var estadosDeStock = map[string]string{
 	"sin-stock": totalDeLaMedida + ` = 0`,
-	"reponer":   totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna,
+	"reponer":   BajoElMinimo,
 	"con-stock": `NOT (` + totalDeLaMedida + ` = 0) AND NOT (` + totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna + `)`,
 }
 

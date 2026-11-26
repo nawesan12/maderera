@@ -517,6 +517,14 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 	// De octubre, facturado el 2 de noviembre: facturado.
 	tarde := e.pedido(t, "F-5", e.central, "entregado", "mostrador", time.Date(2026, 10, 31, 20, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1210.0, 600.0})
 	factura(tarde, "autorizada", 3, "762", "2026-11-02T15:00:00Z")
+	// Facturado y esperando el CAE (sin certificado): sin CAE, no sin
+	// factura (H422).
+	esperando := e.pedido(t, "F-7", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 484.0, 200.0})
+	factura(esperando, "emitida", 4, nil, "2026-10-05T15:00:00Z")
+	// Y la percepción de IIBB que nos hizo un proveedor (H165).
+	prov := e.id(t, `insert into suppliers (nombre) values ('Placas del Sur') returning id`)
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, percepciones, percepcion_iibb, total)
+		values ($1, 'factura_a', 3, 88412, '2026-10-26T00:00:00Z', 1000, 210, 30, 30, 1240)`, prov)
 
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	var r ResumenDelMes
@@ -524,11 +532,14 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 		t.Fatal(cuerpo)
 	}
 	v := r.Vendido
-	quiere := VendidoDelMes{Total: 3600, Facturado: Totales{2000, 2}, Interno: Totales{1000, 1}, SinFactura: Totales{600, 2}}
+	quiere := VendidoDelMes{Total: 4000, Facturado: Totales{2000, 2}, SinCae: Totales{400, 1}, Interno: Totales{1000, 1}, SinFactura: Totales{600, 2}}
 	if v != quiere {
 		t.Errorf("vendido: %+v, quería %+v", v, quiere)
 	}
-	if v.Total != r.Resultado.Actual.VentasNetas || jsmath.Redondear2(v.Facturado.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
+	if r.PercepcionesIibb != (Totales{30, 1}) {
+		t.Errorf("percepciones de IIBB: %+v", r.PercepcionesIibb)
+	}
+	if v.Total != r.Resultado.Actual.VentasNetas || jsmath.Redondear2(v.Facturado.Total+v.SinCae.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
 		t.Errorf("no cierra con el resultado: %+v %+v", v, r.Resultado.Actual)
 	}
 	if r.Ventas.Cantidad != 1 || r.Ventas.Neto != 1000 {
@@ -539,8 +550,8 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 	e.exec(t, `update orders set subtotal = 1210, total = 1089 where id = $1`, facturado)
 	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	_ = json.Unmarshal([]byte(cuerpo), &r)
-	if v := r.Vendido; v.Total != r.Resultado.Actual.VentasNetas || v.Total != 3500 || !r.Resultado.Actual.ConDescuento ||
-		jsmath.Redondear2(v.Facturado.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
+	if v := r.Vendido; v.Total != r.Resultado.Actual.VentasNetas || v.Total != 3900 || !r.Resultado.Actual.ConDescuento ||
+		jsmath.Redondear2(v.Facturado.Total+v.SinCae.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
 		t.Errorf("con descuento: %+v %+v", v, r.Resultado.Actual)
 	}
 	_, asientos, _ := pedir(t, adm, e.u+"cierre/asientos?periodo=2026-10")

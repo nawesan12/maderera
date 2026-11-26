@@ -154,6 +154,29 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CierreResumen" }
+  /api/v1/admin/cierre/cerrado:
+    post:
+      operationId: CerrarElMes
+      description: >-
+        Cierra (o reabre) un mes: con el mes cerrado, la base no deja cargar, cambiar ni borrar gastos, facturas de compra,
+        pagos ni recibos con fecha de ese mes, ni dar de baja sus facturas (00221).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [periodo, cerrado]
+              additionalProperties: false
+              properties:
+                periodo: { type: string, pattern: '^\d{4}-\d{2}$' }
+                cerrado: { type: boolean }
+      responses:
+        "200":
+          description: Cómo quedó el mes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MesCerrado" }
   /api/v1/admin/inicio/metricas:
     get:
       operationId: MetricasDelResumen
@@ -269,7 +292,7 @@ components:
     ReporteTotales:
       type: object
       description: El período entero con los mismos filtros, sin el tope de filas del corte
-      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas]
+      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas, envios]
       properties:
         total: { type: number, format: double, description: Con IVA; subtotales de renglones o total de los pedidos, según el corte }
         cantidad: { type: number, format: double, description: Unidades o operaciones, según el corte }
@@ -278,6 +301,7 @@ components:
         costo: { type: number, format: double, nullable: true }
         lineasSinCosto: { type: number, format: double }
         filas: { type: integer, description: Cuántas filas tiene el corte entero }
+        envios: { type: number, format: double, description: Flete cobrado del período, con IVA }
     ReporteMes:
       type: object
       required: [clave, etiqueta, total]
@@ -300,6 +324,8 @@ components:
         rubro: { type: string, nullable: true }
         disponibleCentral: { type: number, format: double }
         disponibleAserradero: { type: number, format: double }
+        proveedorId: { type: string, nullable: true, description: El proveedor habitual (el último con el que se cargó un código) }
+        proveedor: { type: string, nullable: true }
         disponible: { type: number, format: double }
         vendido: { type: number, format: double }
         cobertura: { type: number, format: double, nullable: true }
@@ -362,17 +388,26 @@ components:
         cantidad: { type: integer }
     CierreVendido:
       type: object
-      description: facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado
-      required: [total, facturado, interno, sinFactura]
+      description: facturado + sinCae + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado
+      required: [total, facturado, sinCae, interno, sinFactura]
       properties:
         total: { type: number, format: double }
         facturado: { $ref: "#/components/schemas/CierreTotales" }
+        sinCae: { $ref: "#/components/schemas/CierreTotales" }
         interno: { $ref: "#/components/schemas/CierreTotales" }
         sinFactura: { $ref: "#/components/schemas/CierreTotales" }
+    MesCerrado:
+      type: object
+      required: [cerrado, at, por]
+      properties:
+        cerrado: { type: boolean }
+        at: { type: string, format: date-time, nullable: true }
+        por: { type: string, nullable: true }
     CierreResumen:
       type: object
-      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, iva, resultado]
+      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado]
       properties:
+        cerrado: { $ref: "#/components/schemas/MesCerrado" }
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
         # Lo vendido en el mes sin IVA (el «Vendido sin IVA» del resultado) partido según su factura. No entra
         # en los asientos ni en ningún archivo.
@@ -381,6 +416,7 @@ components:
         gastos: { $ref: "#/components/schemas/CierreTotales" }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
+        percepcionesIibb: { $ref: "#/components/schemas/CierreTotales" }
         posicionIva: { type: number, format: double, description: Débito menos crédito del mes, sin percepciones ni saldos }
         iva:
           type: object
@@ -501,13 +537,14 @@ components:
         cantidad: { type: integer }
     Resultado:
       type: object
-      required: [ventasNetas, ventasSinCosto, costo, gastos, resultado, lineasSinCosto, conDescuento, sinCostosCargados]
+      required: [ventasNetas, ventasSinCosto, costo, gastos, envios, resultado, lineasSinCosto, conDescuento, sinCostosCargados]
       properties:
         ventasNetas: { type: number, format: double, description: Sin IVA }
         ventasSinCosto: { type: number, format: double, description: La parte de ventasNetas sin costo cargado; queda afuera del resultado }
         conDescuento: { type: boolean, description: ventasNetas lleva restado el descuento del pedido (regla del negocio) }
         costo: { type: number, format: double }
         gastos: { type: number, format: double }
+        envios: { type: number, format: double, description: Flete cobrado sin IVA; suma al resultado }
         resultado: { type: number, format: double }
         lineasSinCosto: { type: integer, description: Renglones vendidos sin costo cargado o con costo en cero }
         sinCostosCargados: { type: boolean, description: Más de la mitad de ventasNetas no tiene costo; el resultado no es la ganancia }

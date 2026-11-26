@@ -40,6 +40,8 @@ const SOLO_EN_GO = new Set([
   "devoluciones",
   "fotos_biblioteca_descartadas",
   "invoices_dadas_de_baja",
+  // El candado del cierre del mes (00221): lo leen y escriben Go y los triggers.
+  "meses_cerrados",
   "padron_iibb",
   "padron_iibb_importaciones",
   "payment_refunds",

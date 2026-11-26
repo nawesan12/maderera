@@ -253,7 +253,7 @@ function MedidorCredito({ saldo, limite }: { saldo: number; limite: number }) {
       <div
         className="h-2 overflow-hidden rounded-full bg-black/10"
         role="img"
-        aria-label={`Usás el ${Math.round(porcentaje)} por ciento de tu límite de crédito`}
+        aria-label={`Usás el ${Math.floor(porcentaje)} por ciento de tu límite de crédito`}
       >
         <div
           className={`h-full rounded-full ${

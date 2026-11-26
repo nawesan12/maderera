@@ -51,6 +51,8 @@ export function FormularioOrden({
   proveedores,
   sucursales,
   renglonesIniciales,
+  proveedorInicial,
+  sucursalInicial,
 }: {
   proveedores: { id: string; nombre: string }[];
   sucursales: { id: string; nombre: string; deLaSesion?: boolean }[];
@@ -62,6 +64,9 @@ export function FormularioOrden({
    * así la orden ya nace cargada en el primer pintado.
    */
   renglonesIniciales?: Linea[];
+  /** El proveedor y la sucursal que trae el reporte de reposición. */
+  proveedorInicial?: string;
+  sucursalInicial?: string;
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoOrden>({});
@@ -69,8 +74,8 @@ export function FormularioOrden({
 
   // Ningún proveedor de entrada (el primero alfabético casi nunca es el que
   // se quiere) y la sucursal de quien carga, si se sabe (sucursalPropuesta).
-  const [supplierId, setSupplierId] = useState("");
-  const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
+  const [supplierId, setSupplierId] = useState(proveedorInicial ?? "");
+  const [branchId, setBranchId] = useState(() => sucursalInicial ?? sucursalPropuesta(sucursales));
   const [fechaPrometida, setFecha] = useState("");
   const [notas, setNotas] = useState("");
   const [lineas, setLineas] = useState<Linea[]>(renglonesIniciales ?? []);

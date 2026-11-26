@@ -21,9 +21,9 @@ import (
 // números. Un comprobante que no sale —rechazado por algo que no es del
 // receptor, emitido con la letra equivocada, anulado sin CAE antes de que eso
 // se frenara— traba a todos los que vienen detrás, para siempre. Para ARCA
-// ese número no se usó: la salida es sacarlo de la serie y correr los
-// pendientes un lugar para abajo, así el siguiente que ARCA espera vuelve a
-// existir.
+// ese número no se usó: la salida es sacarlo de la serie y poner en su lugar
+// el último pendiente (posteriores), así el siguiente que ARCA espera vuelve
+// a existir y ningún otro comprobante cambia de número.
 //
 // **Se borra la fila, no se vacía el número.** Hay decenas de lecturas de
 // `invoices` que esperan un número; un comprobante sin número sería un caso
@@ -230,9 +230,18 @@ func (s *Servicio) Serie(ctx context.Context, id string) (*SerieDelComprobante, 
 	return out, nil
 }
 
+// posteriores es el que se mueve al número que queda libre: **solo el último
+// de la serie**. Antes se corrían todos los de detrás un lugar para abajo, y
+// una baja le cambió el número a 51 comprobantes que los clientes ya tenían
+// en papel, en el portal o por WhatsApp (simulación del mes, H235): la B 0030
+// del monotributista pasó a ser de otra venta. ARCA solo pide que la serie no
+// tenga huecos, y para eso alcanza con llenar el hueco con el último: los
+// demás conservan su número, y si el dado de baja es el último no se mueve
+// ninguno. Al autorizarse, el movido sale con la fecha del día como cualquier
+// atrasado (alDia), así que el orden de las fechas en ARCA se mantiene.
 func posteriores(ctx context.Context, c consultor, x *aBajar, bloquear bool) ([]Corrimiento, error) {
 	sql := `SELECT id, numero, receptor_nombre, customer_id FROM invoices WHERE punto_venta = $1 AND tipo = $2::tipo_comprobante
-		AND numero > $3 ORDER BY numero`
+		AND numero > $3 ORDER BY numero DESC LIMIT 1`
 	if bloquear {
 		sql += ` FOR UPDATE`
 	}
@@ -247,7 +256,7 @@ func posteriores(ctx context.Context, c consultor, x *aBajar, bloquear bool) ([]
 		if err := filas.Scan(&k.InvoiceID, &k.De, &k.ReceptorNombre, &k.CustomerID); err != nil {
 			return nil, err
 		}
-		k.A = k.De - 1
+		k.A = x.numero
 		out = append(out, k)
 	}
 	return out, filas.Err()
@@ -388,7 +397,7 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 		q := s.q.WithTx(tx)
 		bitacora.Anotar(ctx, q, s.log, ses, sqlc.AccionAuditoriaEliminar, "factura", x.id,
 			"Dio de baja "+et+" (sin CAE): "+motivo, map[string]any{"bajaId": res.ID, "corridos": len(corren)})
-		// De abajo hacia arriba: el número de arriba ya quedó libre.
+		// El último pasa al número que quedó libre (posteriores).
 		for _, k := range corren {
 			if _, err := tx.Exec(ctx, `UPDATE invoices SET numero = $2, updated_at = now() WHERE id = $1`, k.InvoiceID, k.A); err != nil {
 				return err

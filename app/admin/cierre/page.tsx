@@ -10,9 +10,10 @@ import {
   resumenDelMes,
 } from "@/lib/dal/admin/cierre-mensual";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { fechaCorta, formatearMonto, plural } from "@/lib/formato";
+import { fechaCorta, formatearMonto, hoyEnArgentina, plural } from "@/lib/formato";
 import { ExportarAsientos } from "./exportar-asientos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
+import { CerrarMes } from "./cerrar-mes";
 
 export const metadata: Metadata = { title: "Cierre del mes" };
 
@@ -73,7 +74,22 @@ export default async function CierrePage({
         <div className="flex flex-wrap gap-2">
           <SelectorDeMes actual={periodo.clave} etiqueta="Mes del cierre" />
 
-          <ExportarAsientos periodo={periodo.clave} rotos={rotos.length} />
+          <CerrarMes
+            periodo={periodo.clave}
+            nombre={new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString("es-AR", { month: "long" })}
+            cerrado={resumen.cerrado.cerrado}
+            cuando={
+              resumen.cerrado.at
+                ? `${fechaCorta.format(new Date(resumen.cerrado.at))}${resumen.cerrado.por ? ` · ${resumen.cerrado.por}` : ""}`
+                : null
+            }
+            terminado={periodo.clave < hoyEnArgentina().slice(0, 7)}
+          />
+          <ExportarAsientos
+            periodo={periodo.clave}
+            rotos={rotos.length}
+            secundario={!resumen.cerrado.cerrado && periodo.clave < hoyEnArgentina().slice(0, 7)}
+          />
           {/* Lo que pide el contador además de los asientos: quién debe y
               desde cuándo, y a quién se le debe. Son de hoy, no del mes. */}
           <a
@@ -218,6 +234,11 @@ export default async function CierrePage({
                 {resumen.vendido.facturado.cantidad > 0 && (
                   <span>con factura {formatearMonto(resumen.vendido.facturado.total)}</span>
                 )}
+                {resumen.vendido.sinCae.cantidad > 0 && (
+                  <span className="estado-espera font-medium">
+                    sin CAE {formatearMonto(resumen.vendido.sinCae.total)}
+                  </span>
+                )}
                 {resumen.vendido.interno.cantidad > 0 && (
                   <span>interno {formatearMonto(resumen.vendido.interno.total)}</span>
                 )}
@@ -238,6 +259,9 @@ export default async function CierrePage({
               />
             )}
             <Linea titulo="Costo de lo vendido" valor={-resultado.actual.costo} />
+            {resultado.actual.envios > 0 && (
+              <Linea titulo="Envíos cobrados sin IVA" valor={resultado.actual.envios} />
+            )}
             <Linea titulo="Gastos" valor={-resultado.actual.gastos} />
             {resultado.actual.sinCostosCargados && (
               <Linea titulo="Resultado" valor={resultado.actual.resultado} />
@@ -300,16 +324,19 @@ export default async function CierrePage({
                   <dd className="text-right">{formatearMonto(v)}</dd>
                 </div>
               ))}
+            {/* Lo que queda a favor va con el mismo signo que el crédito de
+                arriba y dice a favor de quién: en positivo se leía como IVA a
+                pagar (H239). */}
             {resumen.iva.saldoTecnico > 0.005 && (
-              <div className="contents">
-                <dt>Saldo técnico</dt>
-                <dd className="text-right">{formatearMonto(resumen.iva.saldoTecnico)}</dd>
+              <div className="contents font-medium text-saldo-favor">
+                <dt>Saldo técnico a favor</dt>
+                <dd className="text-right">{formatearMonto(-resumen.iva.saldoTecnico)}</dd>
               </div>
             )}
             {resumen.iva.saldoLibre > 0.005 && (
-              <div className="contents">
-                <dt>Libre disponibilidad</dt>
-                <dd className="text-right">{formatearMonto(resumen.iva.saldoLibre)}</dd>
+              <div className="contents font-medium text-saldo-favor">
+                <dt>Libre disponibilidad a favor</dt>
+                <dd className="text-right">{formatearMonto(-resumen.iva.saldoLibre)}</dd>
               </div>
             )}
           </dl>
@@ -364,7 +391,12 @@ export default async function CierrePage({
           <Renglon
             titulo="Retenciones sufridas"
             detalle={`${resumen.retencionesSufridas.cantidad} certificados recibidos`}
-            valor={-resumen.retencionesSufridas.total}
+            valor={-resumen.retencionesSufridas.total || 0}
+          />
+          <Renglon
+            titulo="Percepciones de IIBB sufridas"
+            detalle={plural(resumen.percepcionesIibb.cantidad, "factura de compra", "facturas de compra")}
+            valor={-resumen.percepcionesIibb.total || 0}
           />
         </dl>
       </section>

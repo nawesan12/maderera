@@ -83,6 +83,13 @@ func ErrorDeRespuesta(log *slog.Logger) func(http.ResponseWriter, *http.Request,
 				"La operación tardó demasiado y se cortó. Probá de nuevo en un rato."))
 			return
 		}
+		// Algo con fecha de un mes cerrado (00221): no es un error del
+		// programa, es el candado del cierre.
+		if mes, ok := MesCerrado(err); ok {
+			EscribirProblema(w, NuevoProblema(http.StatusUnprocessableEntity,
+				"El mes de "+NombreDelMes(mes)+" está cerrado: no se puede cargar ni cambiar nada con fecha de ese mes."))
+			return
+		}
 		log.Error("error en la API", "id", IDDelPedido(r.Context()), "ruta", r.URL.Path, "error", err)
 		EscribirProblema(w, NuevoProblema(http.StatusInternalServerError, "Algo falló de nuestro lado. Probá de nuevo en un momento."))
 	}

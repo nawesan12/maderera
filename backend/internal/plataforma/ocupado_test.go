@@ -116,3 +116,15 @@ func TestEnTransaccionReintentaElCandado(t *testing.T) {
 		t.Errorf("otro error: %v en %d intentos", err, intentos)
 	}
 }
+
+// El candado de un mes cerrado (00221) es un 422 con el mes escrito, no un
+// «Algo falló» (simulación del mes, H408).
+func TestMesCerradoEsUn422(t *testing.T) {
+	escribir := ErrorDeRespuesta(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	w := httptest.NewRecorder()
+	escribir(w, httptest.NewRequest(http.MethodPost, "/api/v1/admin/compras/gastos", nil),
+		fmt.Errorf("cargando el gasto: %w", &pgconn.PgError{Code: "MJ001", Message: "MES_CERRADO 2026-11"}))
+	if w.Code != 422 || !strings.Contains(w.Body.String(), "noviembre de 2026 está cerrado") {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+}

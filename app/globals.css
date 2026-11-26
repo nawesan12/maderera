@@ -2059,3 +2059,41 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
     animation: none;
   }
 }
+
+/* La hoja del comprobante en el teléfono (simulación del mes, H080): a
+   375 px la tabla del detalle se salía de la hoja blanca por la derecha. La
+   hoja va de borde a borde, la cabecera se apila y en el detalle solo la
+   descripción parte renglones. En papel no cambia nada. */
+@media screen and (max-width: 639px) {
+  .comprobante-hoja .hoja {
+    margin: 0;
+    padding: 20px 16px;
+    box-shadow: none;
+  }
+  .comprobante-hoja .cabecera {
+    grid-template-columns: 1fr auto;
+  }
+  .comprobante-hoja .cabecera .comprobante-datos {
+    grid-column: 1 / -1;
+  }
+  .comprobante-hoja .receptor-grilla {
+    grid-template-columns: 1fr;
+  }
+  .comprobante-hoja .detalle th,
+  .comprobante-hoja .detalle td {
+    padding: 0.4rem 0.3rem;
+  }
+  .comprobante-hoja .detalle td.mono {
+    white-space: nowrap;
+    font-size: 0.7rem;
+  }
+  .comprobante-hoja .detalle td:first-child {
+    overflow-wrap: anywhere;
+  }
+  .comprobante-hoja .totales-caja {
+    width: 100%;
+  }
+  .comprobante-hoja .marca-agua {
+    font-size: 3rem;
+  }
+}

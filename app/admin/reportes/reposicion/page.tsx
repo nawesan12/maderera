@@ -9,7 +9,8 @@ import {
   reporteDeReposicion,
   type FilaDeReposicion,
 } from "@/lib/dal/admin/reposicion";
-import { listarRubrosAdmin } from "@/lib/dal/admin/products";
+import { rubrosPorCategoria } from "@/lib/dal/admin/products";
+import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { SelectorDeRubro } from "@/components/admin/selector-de-rubro";
 import { Vacio } from "@/components/admin/vacio";
 
@@ -53,7 +54,7 @@ export default async function ReposicionPage({
   const sucursal = params.sucursal ?? "todos";
   const rubro = params.rubro ?? "todos";
 
-  const [reporte, rubros] = await Promise.all([
+  const [reporte, rubros, sucursales] = await Promise.all([
     reporteDeReposicion({
       diasDelPeriodo: dias,
       coberturaObjetivo: objetivo,
@@ -61,10 +62,43 @@ export default async function ReposicionPage({
       rubro,
       sucursal,
     }),
-    listarRubrosAdmin(),
+    rubrosPorCategoria(),
+    listarSucursalesPublicas(),
   ]);
+  const orden = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, "es");
+  const gruposDeRubros = [...rubros]
+    .sort(orden)
+    .map((c) => ({ categoria: c.name, rubros: c.rubros.filter((r) => r.active).sort(orden) }))
+    .filter((g) => g.rubros.length > 0);
 
   const paraComprar = reporte.filas.filter((f) => f.sugerido > 0);
+  /*
+   * Una orden por proveedor habitual: juntos, la bisagra de Herrajes salía en
+   * la orden de Placas del Sur y había que sacarla a mano (simulación del mes,
+   * H377). Con la sucursal elegida en el reporte, la orden nace con esa
+   * sucursal. Los que no tienen proveedor van en su propia orden, al final.
+   */
+  const sucursalId = sucursales.find((x) => x.slug === sucursal)?.id;
+  const porProveedor = new Map<string, { nombre: string | null; filas: typeof paraComprar }>();
+  for (const f of paraComprar) {
+    const clave = f.proveedorId ?? "";
+    const grupo = porProveedor.get(clave) ?? { nombre: f.proveedor ?? null, filas: [] };
+    grupo.filas.push(f);
+    porProveedor.set(clave, grupo);
+  }
+  const ordenes = [...porProveedor.entries()]
+    .sort(([a, x], [b, y]) => (a === "" ? 1 : b === "" ? -1 : y.filas.length - x.filas.length))
+    .map(([id, g]) => {
+      const q = new URLSearchParams({
+        sugeridos: g.filas
+          .slice(0, 40)
+          .map((f) => `${f.variantId}:${f.sugerido}`)
+          .join(","),
+      });
+      if (id) q.set("proveedor", id);
+      if (sucursalId) q.set("sucursal", sucursalId);
+      return { id, nombre: g.nombre, cantidad: g.filas.length, href: `/admin/compras/ordenes/nueva?${q}` };
+    });
   const seMovieron = reporte.filas.filter(
     (f) => f.sugerido === 0 && f.vendido > 0,
   );
@@ -164,7 +198,7 @@ export default async function ReposicionPage({
 
         <SelectorDeRubro
           actual={rubro}
-          rubros={rubros.filter((r) => r.active)}
+          grupos={gruposDeRubros}
         />
       </div>
 
@@ -222,21 +256,21 @@ export default async function ReposicionPage({
               Nace en borrador y sin proveedor: la máquina sugiere qué y
               cuánto, la persona decide a quién y a qué precio.
             */}
-            {paraComprar.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-3">
-                <Link
-                  href={`/admin/compras/ordenes/nueva?sugeridos=${paraComprar
-                    .slice(0, 40)
-                    .map((f) => `${f.variantId}:${f.sugerido}`)
-                    .join(",")}`}
-                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-base font-medium text-white transition-opacity hover:opacity-90"
-                >
-                  <ShoppingCart className="h-5 w-5" aria-hidden="true" />
-                  Generar orden de compra
-                </Link>
-                <span className="text-base text-muted-foreground">
-                  Con {Math.min(paraComprar.length, 40)} renglones
-                </span>
+            {ordenes.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {ordenes.map((o, i) => (
+                  <Link
+                    key={o.id || "sin-proveedor"}
+                    href={o.href}
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-base font-medium transition-opacity hover:opacity-90 ${
+                      i === 0 ? "bg-accion text-white" : "border border-linea"
+                    }`}
+                  >
+                    <ShoppingCart className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    {ordenes.length === 1 && !o.nombre ? "Generar orden de compra" : `Orden a ${o.nombre ?? "otro proveedor"}`}
+                    <span className="tabular rounded-full bg-black/10 px-2 text-sm">{Math.min(o.cantidad, 40)}</span>
+                  </Link>
+                ))}
               </div>
             )}
             <Tabla filas={paraComprar} conSugerido />

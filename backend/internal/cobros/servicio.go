@@ -157,7 +157,14 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	if r.Repetido {
 		return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", ReceiptID: &r.ReceiptID}, nil
 	}
+	// El monto con el formato del resto y el cliente: «Emitió el recibo
+	// REC-0035 por 2116200.00» no decía de quién (simulación del mes, H381).
+	var nombre string
+	_ = s.pool.QueryRow(ctx, `SELECT coalesce(razon_social, nombre) FROM customers WHERE id = $1`, cliente).Scan(&nombre)
 	desc := "Emitió el recibo " + r.Numero + " por " + formato.Importe(r.Total)
+	if nombre != "" {
+		desc += " a " + nombre
+	}
 	if numeroPedido != "" {
 		desc += " (pedido " + numeroPedido + ")"
 	}

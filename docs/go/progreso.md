@@ -2985,3 +2985,33 @@ turno; el espejo drizzle al día a mano). Golden del mostrador regenerado
 - [ ] **La regla de contado** de una lista propia, solo cuando le da un precio
       mejor en la venta.
 - [ ] **Descuento por forma de pago** sin los renglones a mano (el flete).
+## El mes simulado: facturación, cierre y reportes (26/11, rama `mes-facturacion-cierre`)
+
+Lo que encontró el mes simulado en producción, arreglado en Go con su
+prueba. Migraciones 00220 y 00221.
+
+- **Sin certificado no hay rechazo.** El proveedor interno deja el
+  comprobante «emitida» (antes «rechazada»); la 00220 devuelve los de antes.
+- **El saldo de una factura sale del pedido** (`facturacion.SaldoDeFactura`,
+  la regla de «Me deben»): lo cobrado en el mostrador o con un recibo del
+  pedido no se vuelve a cobrar (Cobrar lo frena); lo que va a cuenta
+  corriente debe hasta el saldo de la cuenta. El encabezado de Facturación
+  suma y cuenta el mismo conjunto y el IVA de la tarjeta es el débito con CAE.
+- **La baja llena el hueco con el último de la serie**: ya no corre a todos
+  los de detrás (le cambiaba el número a comprobantes que el cliente tenía).
+- **Al monotributista, factura A** (RG 5003/2021, leyenda de la Ley 27.618).
+  Falta que lo confirme el contador.
+- **La factura sin CAE se devuelve**: la nota sale numerada, atada a ella, y
+  `autorizar` no la manda antes que la factura.
+- **Cerrar el mes** (00221): `meses_cerrados` y triggers en gastos, compras,
+  recibos, pagos y la baja de facturas; el error (MJ001) sale como 422.
+- Cierre: «sin CAE» aparte de «sin factura», los cobros de facturas sin CAE
+  no son señas, el saldo técnico a favor con su signo, las percepciones de
+  IIBB, los gastos repetidos, el depósito de la caja en el banco, Deudores
+  con la columna de facturas sin CAE y Cuentas a pagar contra el libro de
+  cada proveedor. Reportes por medida, con el envío (que suma al resultado
+  sin IVA). El precio bajo el costo se marca en el inicio y en Precios.
+- Quedan para Nahuel y el contador: el excedente de un recibo y el cobro de
+  una venta que se factura después siguen la regla del reparto
+  (`docs/CONTADOR-SIN-CAE.md`: se fija al emitir y lo que sobra va al B), y
+  la venta se sigue reconociendo al confirmarse el pedido, no al entregarse.

@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, Trash2 } from "lucide-react";
 import { darDeBaja, type EstadoFactura } from "../actions";
-import { moneda } from "@/lib/formato";
+import { formatearMonto } from "@/lib/formato";
 import { numeroFormateado } from "@/lib/fiscal/comprobantes";
 
 const inicial: EstadoFactura = {};
@@ -118,14 +118,14 @@ export function DarDeBaja({
 
       {deuda > 0 && (
         <p className="text-base">
-          Sale <span className="tabular font-medium">{moneda.format(deuda)}</span> de la cuenta
+          Sale <span className="tabular font-medium">{formatearMonto(deuda)}</span> de la cuenta
           corriente de {receptor}.
         </p>
       )}
       {deuda < 0 && (
         <p className="text-base">
           {receptor} vuelve a deber{" "}
-          <span className="tabular font-medium">{moneda.format(-deuda)}</span>.
+          <span className="tabular font-medium">{formatearMonto(-deuda)}</span>.
         </p>
       )}
 

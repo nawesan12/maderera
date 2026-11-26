@@ -7,7 +7,7 @@ import { FiltroRango } from "@/components/admin/filtro-rango";
 import { leerPeriodo, leerRango, resolverPeriodo } from "@/lib/periodos";
 import { BuscadorDeComprobantes } from "./buscador";
 import { AcentoEstado, EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, formatearCuit, hoyEnArgentina, moneda, plural } from "@/lib/formato";
+import { fechaCorta, formatearCuit, formatearMonto, hoyEnArgentina, moneda, plural } from "@/lib/formato";
 import {
   dadosDeBaja,
   estadoArca,
@@ -348,7 +348,7 @@ function Grupo({
                         : c.estado === "anulada" || c.tipo.startsWith("nota_credito")
                         ? "—"
                         : saldo > 0
-                          ? moneda.format(saldo)
+                          ? formatearMonto(saldo)
                           : "Cobrado"}
                     </td>
                     <td className="px-5 py-3.5">

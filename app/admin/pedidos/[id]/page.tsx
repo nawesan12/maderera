@@ -12,7 +12,7 @@ import {
   ETAPAS_RETIRO,
   Pasos,
 } from "@/components/admin/pasos";
-import { fechaHora, formatearPorcentaje, moneda } from "@/components/admin/formato";
+import { fechaHora, formatearMonto, formatearPorcentaje, moneda } from "@/components/admin/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
@@ -549,9 +549,9 @@ export default async function FichaPedidoPage({
                     }`}
                   >
                     {pedido.saldoCliente > 0.004
-                      ? `Debe ${moneda.format(pedido.saldoCliente)}`
+                      ? `Debe ${formatearMonto(pedido.saldoCliente)}`
                       : pedido.saldoCliente < -0.004
-                        ? `A favor ${moneda.format(-pedido.saldoCliente)}`
+                        ? `A favor ${formatearMonto(-pedido.saldoCliente)}`
                         : "Al día"}
                   </dd>
                 </div>

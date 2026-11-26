@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BellOff, BellRing, ClipboardList, Link2, Loader2, Scissors, Search, UserPlus, Wallet } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, moneda } from "@/lib/formato";
+import { fechaCorta, formatearMonto, moneda } from "@/lib/formato";
 import {
   buscarClientesParaVincular,
   cambiarBaja,
@@ -90,7 +90,7 @@ export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleC
             excedido ? "text-saldo-debe" : detalle.saldo > 0 ? "text-brand-orange-dark" : "text-saldo-favor"
           }`}
         >
-          {moneda.format(Math.abs(detalle.saldo))}
+          {formatearMonto(Math.abs(detalle.saldo))}
         </p>
         <p className="mt-0.5 text-base text-muted-foreground">
           {detalle.saldo > 0 ? "Debe" : detalle.saldo < 0 ? "A favor" : "Sin deuda"}

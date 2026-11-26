@@ -8,7 +8,7 @@ import { listarGestiones } from "@/lib/dal/admin/seguimiento";
 import { TableroDeSeguimiento } from "./vista";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { esUuid } from "@/lib/uuid";
-import { moneda, plural } from "@/lib/formato";
+import { formatearMonto, plural } from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Seguimiento" };
 
@@ -82,7 +82,7 @@ export default async function SeguimientoPage({
           deudor
             ? {
                 cliente: { id: deudor.id, nombre: deudor.nombre, razonSocial: deudor.razonSocial, cuit: deudor.cuit },
-                asunto: deudor.saldo > 0 ? `Cobrar ${moneda.format(deudor.saldo)}` : "",
+                asunto: deudor.saldo > 0 ? `Cobrar ${formatearMonto(deudor.saldo)}` : "",
               }
             : undefined
         }

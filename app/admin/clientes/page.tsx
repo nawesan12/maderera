@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Vacio } from "@/components/admin/vacio";
 import { puedeEntrar } from "@/lib/roles";
 import { requireStaff } from "@/lib/dal/session";
-import { hayFiltro } from "@/lib/formato";
+import { formatearMonto, hayFiltro } from "@/lib/formato";
 import { redirect } from "next/navigation";
 import {
   Building2,
@@ -389,7 +389,7 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
               excedido ? "text-saldo-debe" : cliente.saldo > 0 ? "" : "text-muted-foreground"
             }`}
           >
-            {cliente.saldo > 0 ? moneda.format(cliente.saldo) : "Al día"}
+            {cliente.saldo > 0 ? formatearMonto(cliente.saldo) : "Al día"}
           </dd>
         </div>
         <div className="text-right">
@@ -418,7 +418,7 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {excedido
-              ? `Excede el límite en ${moneda.format(cliente.saldo - cliente.limiteCredito)}`
+              ? `Excede el límite en ${formatearMonto(cliente.saldo - cliente.limiteCredito)}`
               : `Límite ${moneda.format(cliente.limiteCredito)}`}
           </p>
         </div>

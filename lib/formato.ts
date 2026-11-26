@@ -461,15 +461,24 @@ const IMPORTE_DEL_CAMPO = new Intl.NumberFormat("es-AR", {
 
 /**
  * Un importe listo para precargar un campo de plata, como lo escribe una
- * persona: 15000 → «15.000», 1234.5 → «1.234,5». `importeDelCampo` lo lee de
- * vuelta igual. Antes se precargaba con `toFixed(2)` («1234.50», con punto).
+ * persona: 15000 → «15.000», 1234.5 → «1.234,50». `importeDelCampo` lo lee
+ * de vuelta igual. Antes se precargaba con `toFixed(2)` («1234.50», con
+ * punto), y después con un solo decimal («1.477.899,5», mes simulado): con
+ * centavos, van los dos.
  */
 export function importeParaElCampo(valor: number | string | null | undefined): string {
   if (valor === null || valor === undefined || valor === "") return "";
   const n = typeof valor === "string" ? Number(valor) : valor;
   if (!Number.isFinite(n)) return "";
-  return IMPORTE_DEL_CAMPO.format(Number(n.toFixed(2)));
+  const redondo = Number(n.toFixed(2));
+  return (Math.round(redondo * 100) % 100 === 0 ? IMPORTE_DEL_CAMPO : IMPORTE_CON_CENTAVOS).format(redondo);
 }
+
+const IMPORTE_CON_CENTAVOS = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  useGrouping: true,
+});
 
 /**
  * El nombre de pila, para saludar.

@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, formatearMonto, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
 import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
@@ -435,7 +435,7 @@ export default async function FichaComprobantePage({
                   {comprobante.ventaAnulada
                     ? "venta anulada"
                     : comprobante.saldo > 0
-                      ? `saldo ${moneda.format(comprobante.saldo)}${comprobante.enCuenta ? " en cuenta corriente" : ""}`
+                      ? `saldo ${formatearMonto(comprobante.saldo)}${comprobante.enCuenta ? " en cuenta corriente" : ""}`
                       : "cobrada"}
                 </span>
               )}

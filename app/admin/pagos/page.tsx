@@ -8,7 +8,7 @@ import {
   AcentoEstado,
   EtiquetaEstado,
 } from "@/components/admin/etiqueta-estado";
-import { fechaHora, moneda, plural } from "@/lib/formato";
+import { fechaHora, formatearMonto, moneda, plural } from "@/lib/formato";
 import {
   cobranzasDelPeriodo,
   panelDePagos,
@@ -213,7 +213,7 @@ export default async function PagosPage({
                     <td className="px-5 py-3">
                       <Medios c={c} />
                     </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">{moneda.format(c.total)}</td>
+                    <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(c.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -226,7 +226,7 @@ export default async function PagosPage({
                 <li key={c.id} className={`space-y-1.5 px-4 py-3 ${c.anulado ? "opacity-60" : ""}`}>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="tabular whitespace-nowrap text-sm text-muted-foreground">{fechaHora.format(c.fecha)}</span>
-                    <span className="tabular shrink-0 text-lg font-semibold">{moneda.format(c.total)}</span>
+                    <span className="tabular shrink-0 text-lg font-semibold">{formatearMonto(c.total)}</span>
                   </div>
                   <p className="break-words text-base font-semibold">
                     <Quien c={c} />
@@ -309,11 +309,11 @@ function Medios({ c }: { c: Cobranza }) {
             href="/admin/cheques"
             className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm hover:text-brand-orange hover:underline"
           >
-            {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
+            {MEDIOS[p.medio] ?? p.medio} {formatearMonto(p.importe)}
           </Link>
         ) : (
           <span key={i} className="tabular rounded-full bg-chip px-2.5 py-0.5 text-sm">
-            {MEDIOS[p.medio] ?? p.medio} {moneda.format(p.importe)}
+            {MEDIOS[p.medio] ?? p.medio} {formatearMonto(p.importe)}
           </span>
         ),
       )}
@@ -381,7 +381,7 @@ function Grupo({
                         pago.saldoCliente <= 0.005 ? "estado-problema bg-[var(--estado-fondo)]" : "bg-chip"
                       }`}
                     >
-                      {pago.saldoCliente <= 0.005 ? "Sin deuda" : `Debe ${moneda.format(pago.saldoCliente)}`}
+                      {pago.saldoCliente <= 0.005 ? "Sin deuda" : `Debe ${formatearMonto(pago.saldoCliente)}`}
                     </span>
                   )}
                 </p>

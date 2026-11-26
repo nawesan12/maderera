@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import { Banknote } from "lucide-react";
 import { etiquetaDeCircuito } from "@/lib/circuito";
-import { diasHasta } from "@/lib/formato";
+import { diasHasta, formatearMonto } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import {
@@ -15,7 +15,7 @@ import {
   Paginador,
   POR_PAGINA,
 } from "@/components/admin/paginador";
-import { fechaCorta, moneda, plural } from "@/components/admin/formato";
+import { fechaCorta, plural } from "@/components/admin/formato";
 import {
   chequesTerminados,
   listarCheques,
@@ -198,7 +198,7 @@ function Total({
     <div className="tarjeta p-5">
       <p className="text-base font-semibold text-texto-2">{titulo}</p>
       <p className="tabular mt-1 text-[34px] font-bold leading-none tracking-[-0.03em]">
-        {moneda.format(total)}
+        {formatearMonto(total)}
       </p>
       <p className="mt-2 text-base text-texto-2">
         {plural(cheques.length, "cheque")}
@@ -233,7 +233,7 @@ function Lado({
       {tramos.map((t) => (
         <GrupoListado
           key={t.titulo}
-          titulo={`${t.titulo} · ${moneda.format(t.lista.reduce((s, c) => s + c.importe, 0))}`}
+          titulo={`${t.titulo} · ${formatearMonto(t.lista.reduce((s, c) => s + c.importe, 0))}`}
           cantidad={t.lista.length}
           destacado={t.hasta <= 7}
         >
@@ -291,7 +291,7 @@ function Tarjeta({
   return (
     <article className={`tarjeta space-y-2 px-4 py-3.5 sm:px-5 ${apagado ? "opacity-75" : ""}`}>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="tabular text-xl font-semibold">{moneda.format(c.importe)}</p>
+        <p className="tabular text-xl font-semibold">{formatearMonto(c.importe)}</p>
         <p
           className={`tabular text-right text-base ${
             vencido
@@ -337,7 +337,7 @@ function Tarjeta({
               c.saldoCliente <= 0.005 ? "estado-problema bg-[var(--estado-fondo)]" : "bg-muted text-muted-foreground"
             }`}
           >
-            {c.saldoCliente <= 0.005 ? "Sin deuda" : `Debe ${moneda.format(c.saldoCliente)}`}
+            {c.saldoCliente <= 0.005 ? "Sin deuda" : `Debe ${formatearMonto(c.saldoCliente)}`}
           </span>
         )}
       </div>

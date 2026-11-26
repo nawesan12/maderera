@@ -9,7 +9,7 @@ import {
   type EstadoPago,
 } from "@/app/(public)/pago-actions";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, importeParaElCampo } from "@/lib/formato";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
 
 const inicial: EstadoPago = {};
@@ -130,7 +130,7 @@ function Comprobante({
                 id={`monto-${medio}`}
                 name="monto"
                 inputMode="decimal"
-                defaultValue={saldo.toFixed(2).replace(".", ",")}
+                defaultValue={importeParaElCampo(saldo)}
                 className="tabular mt-1 h-11 w-full rounded-lg border px-3 text-base"
               />
             </div>

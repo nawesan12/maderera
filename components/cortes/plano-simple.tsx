@@ -83,10 +83,13 @@ function Dibujo({
         const medida = `${p.ancho}×${p.alto}`;
         // El texto se achica hasta entrar en vez de desaparecer: una pieza
         // fina sin su medida obliga a ir a buscarla a otro lado.
+        // Angosta y alta, la medida va parada: acostada se pisaba con la de
+        // al lado (H194). Un dígito ocupa ~0,6 del cuerpo.
+        const parada = p.alto > p.ancho * 1.4;
         const cuerpo = Math.min(
           92,
-          p.alto * 0.38,
-          (p.ancho * 1.7) / medida.length,
+          parada ? p.ancho * 0.55 : p.alto * 0.38,
+          ((parada ? p.alto : p.ancho) * 0.85) / (medida.length * 0.6),
         );
 
         return (
@@ -113,6 +116,7 @@ function Dibujo({
                 fontWeight={600}
                 textAnchor="middle"
                 className="fill-foreground"
+                transform={parada ? `rotate(-90 ${p.x + p.ancho / 2} ${p.y + p.alto / 2})` : undefined}
               >
                 {medida}
               </text>

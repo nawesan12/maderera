@@ -332,10 +332,13 @@ function Dibujo({
 
       {placa.piezas.map((p, i) => {
         const medida = `${p.ancho}×${p.alto}`;
+        // Angosta y alta, la medida va parada: acostada corría de una pieza a
+        // la otra («350×900350×900», H194). Un dígito ocupa ~0,6 del cuerpo.
+        const parada = p.alto > p.ancho * 1.4;
         const cuerpo = Math.min(
           92,
-          p.alto * 0.38,
-          (p.ancho * 1.7) / medida.length,
+          parada ? p.ancho * 0.55 : p.alto * 0.38,
+          ((parada ? p.alto : p.ancho) * 0.85) / (medida.length * 0.6),
         );
         const aMano = movidas.has(claveDe(p));
 
@@ -395,6 +398,7 @@ function Dibujo({
                 fill="currentColor"
                 opacity={0.75}
                 pointerEvents="none"
+                transform={parada ? `rotate(-90 ${p.x + p.ancho / 2} ${p.y + p.alto / 2})` : undefined}
               >
                 {medida}
               </text>

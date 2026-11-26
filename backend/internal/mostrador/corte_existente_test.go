@@ -67,3 +67,31 @@ func TestElCuitDelComprobanteSeRevisaAntes(t *testing.T) {
 		t.Errorf("con el CUIT bien: %s", b)
 	}
 }
+
+// Tercera prueba, CRT-7302: el corte de la cola se cobra con las pasadas que
+// confirmó el taller (las de su ficha), no con las del plano. Con el
+// despiece cambiado, manda el plano.
+func TestElCorteDeLaColaCobraSusPasadas(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	k := e.corteDePrueba(piezaDeCorte(500, 300, 2))
+	plano, _ := e.svc.planoDelCorte(ctx, *leerCorte(zodjs.Raiz(aJSON(t, k))))
+	if plano.Pasadas == 0 {
+		t.Fatal("el plano de prueba no tiene pasadas")
+	}
+	existente := e.txt(t, `insert into cutting_orders (numero, contacto_nombre, branch_id, variant_id, material_descripcion, placas, pasadas, estado)
+		values ('CRT-7302', 'Jorge Benítez', $1, $2, 'Fenólico 18 mm', 1, $3, 'terminado') returning id::text`, e.central, e.placa, plano.Pasadas+3)
+	e.exec(t, `insert into cutting_items (cutting_order_id, largo_mm, ancho_mm, cantidad, respeta_veta, orden) values ($1, 500, 300, 2, 0, 0)`, existente)
+	k["existente"] = existente
+	if c, _ := e.svc.planoDelCorte(ctx, *leerCorte(zodjs.Raiz(aJSON(t, k)))); c.Pasadas != plano.Pasadas+3 {
+		t.Errorf("pasadas del corte de la cola: %d, quiero %d", c.Pasadas, plano.Pasadas+3)
+	}
+	otro := e.corteDePrueba(piezaDeCorte(500, 250, 2))
+	otro["existente"] = existente
+	solo := e.corteDePrueba(piezaDeCorte(500, 250, 2))
+	a, _ := e.svc.planoDelCorte(ctx, *leerCorte(zodjs.Raiz(aJSON(t, otro))))
+	b, _ := e.svc.planoDelCorte(ctx, *leerCorte(zodjs.Raiz(aJSON(t, solo))))
+	if a.Pasadas != b.Pasadas {
+		t.Errorf("con otro despiece manda el plano: %d, quiero %d", a.Pasadas, b.Pasadas)
+	}
+}

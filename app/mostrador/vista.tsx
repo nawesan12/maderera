@@ -175,6 +175,8 @@ export function VistaMostrador({
     mitad: "largo" | "ancho" | null;
     canto: string;
     piezas: EstadoDelCorte["piezas"];
+    /** Las confirmadas en el taller: las que dice la ficha. */
+    pasadas: number;
   } | null;
 }) {
   const router = useRouter();
@@ -1435,6 +1437,19 @@ export function VistaMostrador({
             }
             focoAlCerrar={focoAlCerrar("corte")}
             cliente={cliente?.nombre ?? null}
+            confirmado={
+              corteExistente && corteACobrar && cortando.variantId === corteACobrar.variantId
+                ? {
+                    pasadas: corteACobrar.pasadas,
+                    piezas: corteACobrar.piezas.map((p) => ({
+                      largoMm: Number(p.largo) || 0,
+                      anchoMm: Number(p.ancho) || 0,
+                      cantidad: Number(p.cantidad) || 0,
+                      respetaVeta: p.veta ? 1 : 0,
+                    })),
+                  }
+                : null
+            }
             precioPorPasada={tarifaDeLaPlaca?.precioPorPasada ?? 0}
             precioPorMetroCanto={tarifaDeLaPlaca?.precioPorMetroCanto ?? 0}
             onCerrar={(estado) => {

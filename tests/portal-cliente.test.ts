@@ -6,6 +6,7 @@ import {
   mensajeDeConsulta,
   pedidosEnCurso,
   saludoDelCliente,
+  unaPorProducto,
 } from "@/lib/cuenta/portal";
 
 /** Lo que encontró el mes simulado en «Mi cuenta» (noviembre de 2026). */
@@ -119,5 +120,20 @@ describe("la consulta por WhatsApp", () => {
       "Hola! Quería el precio de 20 placas. Soy Carpintería Sim (CUIT 20-12345678-6).",
     );
     expect(mensajeDeConsulta("Hola!", null)).toBe("Hola!");
+  });
+});
+
+describe("las reseñas", () => {
+  it("una por producto, aunque se haya comprado en varios pedidos (H391)", () => {
+    const items = [
+      { productId: "membrana", orderId: "4", yaResenado: false },
+      { productId: "placa", orderId: "4", yaResenado: false },
+      { productId: "membrana", orderId: "3", yaResenado: true },
+      { productId: "membrana", orderId: "2", yaResenado: false },
+    ];
+    expect(unaPorProducto(items)).toEqual([
+      { productId: "membrana", orderId: "4", yaResenado: true },
+      { productId: "placa", orderId: "4", yaResenado: false },
+    ]);
   });
 });

@@ -115,3 +115,21 @@ export function mensajeDeConsulta(texto: string, cliente?: { nombre: string; cui
   const cuit = cliente.cuit ? ` (CUIT ${cliente.cuit})` : "";
   return `${texto} Soy ${cliente.nombre.trim()}${cuit}.`;
 }
+
+/**
+ * Los productos para reseñar, uno por producto aunque se haya comprado en
+ * varios pedidos (H391: la membrana salía cuatro veces). Si ya se reseñó en
+ * alguno, queda reseñado. Conserva el orden en que llegan, así al publicar la
+ * tarjeta no salta de lugar.
+ */
+export function unaPorProducto<T extends { productId: string; yaResenado: boolean }>(items: T[]): T[] {
+  const reseñados = new Set(items.filter((i) => i.yaResenado).map((i) => i.productId));
+  const vistos = new Set<string>();
+  const out: T[] = [];
+  for (const i of items) {
+    if (vistos.has(i.productId)) continue;
+    vistos.add(i.productId);
+    out.push(reseñados.has(i.productId) && !i.yaResenado ? { ...i, yaResenado: true } : i);
+  }
+  return out;
+}

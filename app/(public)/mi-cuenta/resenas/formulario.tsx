@@ -20,32 +20,35 @@ const inicial: EstadoResena = {};
  */
 export function FormularioResena({ item }: { item: ProductoResenable }) {
   const [estado, enviar, enviando] = useActionState(dejarResena, inicial);
-  const [estrellas, setEstrellas] = useState(5);
+  // Sin estrellas elegidas no hay formulario abierto: la página era una
+  // pila de formularios enteros (H391). Tocar una estrella abre el texto.
+  const [estrellas, setEstrellas] = useState(0);
   const [encima, setEncima] = useState(0);
 
   if (estado.ok) {
     return (
-      <div className="rounded-[14px] superficie p-5">
-        <p className="flex items-center gap-2 text-[15px] font-semibold">
-          <Check className="h-4 w-4 text-brand-green" />
-          {item.nombre}
-        </p>
-        <p className="mt-1 text-[15px] text-texto-2">{estado.ok}</p>
-      </div>
+      <p className="flex items-center justify-between gap-3 rounded-[12px] bg-hundida px-4 py-3 text-[15px] text-texto-2">
+        <span className="min-w-0">{item.nombre}</span>
+        <span className="estado-ok inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+          <Check className="h-3.5 w-3.5" />
+          Enviada
+        </span>
+      </p>
     );
   }
 
   return (
-    <form action={enviar} className="rounded-[14px] superficie p-5">
+    <form action={enviar} className="rounded-[14px] superficie px-4 py-3.5">
       <input type="hidden" name="productId" value={item.productId} />
       <input type="hidden" name="orderId" value={item.orderId} />
       <input type="hidden" name="estrellas" value={estrellas} />
 
       <p className="text-[15px] font-semibold">{item.nombre}</p>
-      <p className="mt-0.5 text-sm text-texto-3">Pedido {item.numeroPedido}</p>
 
       <div
-        className="mt-3 flex items-center gap-1"
+        className="mt-1 -ml-2 flex items-center"
+        role="group"
+        aria-label="Cuántas estrellas"
         onMouseLeave={() => setEncima(0)}
       >
         {[1, 2, 3, 4, 5].map((n) => (
@@ -56,10 +59,10 @@ export function FormularioResena({ item }: { item: ProductoResenable }) {
             onMouseEnter={() => setEncima(n)}
             aria-label={`${n} ${n === 1 ? "estrella" : "estrellas"}`}
             aria-pressed={estrellas === n}
-            className="p-0.5"
+            className="inline-flex h-11 w-11 items-center justify-center"
           >
             <Star
-              className={`h-6 w-6 transition-colors ${
+              className={`h-7 w-7 transition-colors ${
                 n <= (encima || estrellas)
                   ? "fill-brand-orange text-brand-orange"
                   : "text-texto-3"
@@ -69,33 +72,37 @@ export function FormularioResena({ item }: { item: ProductoResenable }) {
         ))}
       </div>
 
-      <label htmlFor={`texto-${item.productId}`} className="sr-only">
-        Qué te pareció
-      </label>
-      <textarea
-        id={`texto-${item.productId}`}
-        name="texto"
-        rows={3}
-        maxLength={1000}
-        placeholder="¿Qué te pareció? Cómo llegó, si era lo que esperabas…"
-        className="mt-3 w-full rounded-[10px] border border-linea bg-background px-3 py-2 text-[15px]"
-      />
+      {estrellas > 0 && (
+        <>
+          <label htmlFor={`texto-${item.productId}`} className="sr-only">
+            Qué te pareció
+          </label>
+          <textarea
+            id={`texto-${item.productId}`}
+            name="texto"
+            rows={3}
+            maxLength={1000}
+            placeholder="¿Qué te pareció? Cómo llegó, si era lo que esperabas…"
+            className="mt-3 w-full rounded-[10px] border border-linea bg-background px-3 py-2 text-[15px]"
+          />
 
-      {estado.error && (
-        <p className="mt-2 flex items-start gap-2 text-sm text-destructive">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          {estado.error}
-        </p>
+          {estado.error && (
+            <p className="mt-2 flex items-start gap-2 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {estado.error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={enviando}
+            className="mt-3 inline-flex h-11 items-center gap-2 rounded-[10px] bg-accion px-5 text-[15px] font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-60"
+          >
+            {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
+            Publicar reseña
+          </button>
+        </>
       )}
-
-      <button
-        type="submit"
-        disabled={enviando}
-        className="mt-3 inline-flex h-11 items-center gap-2 rounded-[10px] bg-accion px-5 text-[15px] font-semibold text-white transition-colors hover:bg-accion-hover disabled:opacity-60"
-      >
-        {enviando && <Loader2 className="h-4 w-4 animate-spin" />}
-        Publicar reseña
-      </button>
     </form>
   );
 }

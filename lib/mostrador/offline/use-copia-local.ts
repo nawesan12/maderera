@@ -230,9 +230,10 @@ export function useCopiaLocal(branchId: string): CopiaLista {
   const apartar = useCallback(
     (lineas: LineaApartada[], enLaCola: boolean) => {
       const ahora = Date.now();
+      const nuevos: Apartado[] = [];
       for (const l of lineas) {
         if (!l.variantId || !(l.cantidad > 0)) continue;
-        apartados.current.push({
+        nuevos.push({
           variantId: l.variantId,
           // La media placa descuenta media: es una aproximación hasta que el
           // servidor, que lee el producto (`factoresDeStock`), diga lo exacto.
@@ -240,6 +241,7 @@ export function useCopiaLocal(branchId: string): CopiaLista {
           enElServidorDesde: enLaCola ? null : ahora,
         });
       }
+      apartados.current = [...apartados.current, ...nuevos];
       setApartadosVersion((v) => v + 1);
       if (!enLaCola) sincronizarPronto();
     },
@@ -248,14 +250,11 @@ export function useCopiaLocal(branchId: string): CopiaLista {
 
   const subioLaCola = useCallback(() => {
     const ahora = Date.now();
-    let habia = false;
-    for (const a of apartados.current) {
-      if (a.enElServidorDesde === null) {
-        a.enElServidorDesde = ahora;
-        habia = true;
-      }
-    }
-    if (habia) sincronizarPronto();
+    if (!apartados.current.some((a) => a.enElServidorDesde === null)) return;
+    apartados.current = apartados.current.map((a) =>
+      a.enElServidorDesde === null ? { ...a, enElServidorDesde: ahora } : a,
+    );
+    sincronizarPronto();
   }, [sincronizarPronto]);
 
   const buscar = useCallback(

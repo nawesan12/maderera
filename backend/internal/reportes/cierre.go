@@ -3,6 +3,7 @@ package reportes
 import (
 	"context"
 	"errors"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -298,6 +299,17 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		return nil, err
 	}
 
+	caja, err := s.asientosDeCaja(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, caja...)
+	costo, err := s.asientosDeCosto(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, costo...)
+
 	rs, err = s.lectura.Query(ctx, `
 		SELECT e.fecha, e.descripcion, e.categoria::text, e.importe, e.medio::text, e.circuito::text,
 		  coalesce(f.tipo::text, ''), coalesce(f.iva21 + f.iva105 + f.iva27, 0), coalesce(f.percepciones, 0)
@@ -335,6 +347,120 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 
 // retiroAlBanco: el retiro de caja `m` fue al banco (lo dice el motivo).
 const retiroAlBanco = `(m.motivo ~* '(banco|dep[oó]sit)')`
+
+// ingresoDelBanco: el ingreso de caja `m` vino del banco (una extracción, lo
+// dice el motivo). Los demás ingresos vienen de la caja fuerte (la misma
+// Caja) o devuelven un gasto o un pago anulado (que ya no se asientan).
+const ingresoDelBanco = `(m.motivo ~* '(banco|extracci)')`
+
+// asientosDeCaja son los movimientos de las cajas que no salen de una venta,
+// un cobro o un gasto (H160): la extracción del banco que entra a la caja
+// (Banco a Caja) y la diferencia de cada arqueo cerrado en el período,
+// contra Diferencias de caja hasta que el contador diga a qué cuenta va.
+// El esperado del arqueo es el mismo que el del panel de cajas
+// (caja.consultaDeTurnos).
+func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	var out []Asiento
+	rs, err := s.lectura.Query(ctx, `SELECT m.created_at, m.monto::float8, coalesce(b.name, '')
+		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
+		WHERE m.tipo = 'ingreso' AND m.monto > 0 AND m.created_at >= $1 AND m.created_at <= $2 AND `+ingresoDelBanco+`
+		ORDER BY m.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var fecha time.Time
+	var importe float64
+	var sucursal string
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &sucursal}, func() error {
+		concepto := "Extracción del banco a la caja"
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		a := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Caja, importe, 0), renglon(Cuentas.Banco, 0, importe)})
+		a.Instante = true
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	rs, err = s.lectura.Query(ctx, `SELECT s.cerrada_at, coalesce(b.name, ''), (s.contado - coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at
+		  OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at)), 0))::float8
+		FROM cash_sessions s LEFT JOIN branches b ON b.id = s.branch_id LEFT JOIN cash_movements m ON m.session_id = s.id
+		WHERE s.estado = 'cerrada' AND s.contado IS NOT NULL AND s.cerrada_at >= $1 AND s.cerrada_at <= $2
+		GROUP BY s.id, s.cerrada_at, b.name, s.contado ORDER BY s.cerrada_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var diferencia float64
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &sucursal, &diferencia}, func() error {
+		diferencia = jsmath.Redondear2(diferencia)
+		if math.Abs(diferencia) < toleranciaAsiento {
+			return nil
+		}
+		concepto := "Sobrante del arqueo"
+		if diferencia < 0 {
+			concepto = "Faltante del arqueo"
+		}
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		a := AsientoDeDiferenciaDeCaja(fecha, concepto, diferencia)
+		a.Instante = true
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// asientosDeCosto son el costo de lo vendido de cada hecho de venta del
+// período (hechosDeVenta: la venta en la fecha de la regla, la devolución y
+// la cancelación en la suya), con el costo congelado de cada renglón (H160).
+// Va con la venta: al archivo del estudio si el pedido ya estaba facturado
+// en el mes del hecho, al B si no. Facturar después no lo mueve, así un mes
+// cerrado no cambia.
+func (s *Servicio) asientosDeCosto(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	var out []Asiento
+	rs, err := s.lectura.Query(ctx, `
+		SELECT o.fecha, o.numero, coalesce(nullif(o.contacto_nombre, ''), ''), o.operaciones = 0 AND o.hecho <> o.id,
+		  o.facturado_at IS NOT NULL AND mes_de_instante(o.facturado_at) <= mes_de_instante(o.fecha),
+		  coalesce(sum(`+costoDelRenglon+`) FILTER (WHERE `+costoConocido+`), 0)::float8
+		FROM `+hechosDeVenta+` o JOIN `+renglonesVendidos+` oi ON oi.hecho = o.hecho
+		WHERE o.fecha >= $1 AND o.fecha <= $2
+		GROUP BY o.hecho, o.fecha, o.numero, o.contacto_nombre, o.operaciones, o.id, o.facturado_at
+		ORDER BY o.fecha, o.numero`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var fecha time.Time
+	var numero, cliente string
+	var vuelta, facturado bool
+	var costo float64
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &numero, &cliente, &vuelta, &facturado, &costo}, func() error {
+		costo = jsmath.Redondear2(costo)
+		if math.Abs(costo) < toleranciaAsiento {
+			return nil
+		}
+		concepto := numero
+		if vuelta {
+			concepto = "vuelve " + numero
+		}
+		if cliente != "" {
+			concepto += " · " + cliente
+		}
+		a := AsientoDeCosto(fecha, concepto, costo)
+		a.Instante = true
+		if !facturado {
+			a.Circuito = CircuitoNegro
+		}
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 // asientosDeCheques son los cambios de estado de los cheques del período
 // (cheque_estados, que anota el trigger de la base en cada cambio):

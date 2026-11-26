@@ -11,7 +11,15 @@ import (
 
 	"mjbj/internal/cobros"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/reglas"
 )
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
 
 // Los asientos de cobro del cierre. Antes salían solo de los cobros de una
 // factura (invoice_payments): lo que se cobraba con recibo sin pasar por una
@@ -443,7 +451,15 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		       coalesce(f.receptor_nombre, nullif(c.razon_social, ''), c.nombre, o.contacto_nombre, ''),
 		       coalesce((SELECT json_agg(json_build_object('fecha', `+cobros.FechaDelTramo("x")+`, 'importe', x.importe::float8,
 		                                           'devolucion', x.devolucion_id IS NOT NULL) ORDER BY x.created_at)
-		                 FROM payment_refunds x WHERE x.payment_id = p.id), '[]'::json)
+		                 FROM payment_refunds x WHERE x.payment_id = p.id), '[]'::json),
+		       -- Si el pedido ya estaba facturado (con CAE o esperándolo) cuando
+		       -- se cobró: la venta fiscal del mostrador, o una factura de antes.
+		       coalesce(o.comprobante = 'fiscal', false) OR EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = p.order_id AND i.tipo::text LIKE 'factura%'
+		         AND i.estado <> 'borrador' AND i.created_at <= greatest(coalesce(p.acreditado_at, CASE WHEN p.proveedor = 'mostrador'
+		           THEN coalesce(o.cobrada_at, o.created_at) END, p.conciliado_at, p.created_at), p.created_at)),
+		       -- Cuándo llegó el CAE de esa factura (arca_log), como el reparto.
+		       coalesce((SELECT max(l.created_at) FROM arca_log l WHERE l.invoice_id = f.id AND l.exito
+		                   AND l.operacion IN ('FECAESolicitar', 'FECompConsultar')), f.fecha_emision)
 		FROM payments p
 		LEFT JOIN orders o ON o.id = p.order_id
 		LEFT JOIN customers c ON c.id = p.customer_id
@@ -454,15 +470,27 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 		  ORDER BY (i.estado = 'anulada'), i.fecha_emision LIMIT 1) f ON true
 		WHERE p.estado IN ('aprobado', 'reintegrado')
 		  AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)
-		  AND ((p.tipo = 'pedido' AND f.id IS NOT NULL
-		        AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = f.id AND ip.medio <> 'cuenta_corriente'
-		                          AND ip.receipt_id IS NULL))
+		  AND ((p.tipo = 'pedido' AND (f.id IS NULL
+		        OR NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.invoice_id = f.id AND ip.medio <> 'cuenta_corriente'
+		                          AND ip.receipt_id IS NULL)))
 		    OR (p.tipo = 'deuda' AND p.customer_id IS NOT NULL))`)
 	if err != nil {
 		return nil, err
 	}
+	sinCae, err := reglas.Valor(ctx, s.pool, reglas.AsientoSinCAE)
+	if err != nil {
+		rs.Close()
+		return nil, err
+	}
+	antes, err := reglas.Valor(ctx, s.pool, reglas.CobroAntesDeFacturar)
+	if err != nil {
+		rs.Close()
+		return nil, err
+	}
 	for rs.Next() {
 		var id, tipo, medio, estado, cliente string
+		var facturadaAlCobrar bool
+		var caeAt *time.Time
 		var monto jsmath.Num
 		var comision float64
 		var actualizado, cobrado time.Time
@@ -477,9 +505,60 @@ func (s *Servicio) asientosDeCobro(ctx context.Context, idesde, ihasta time.Time
 			Devolucion bool `json:"devolucion"`
 		}
 		if err := rs.Scan(&id, &tipo, &medio, &monto, &comision, &estado, &actualizado, &cobrado, &factura, &tipoFactura, &pv, &nro, &pedido,
-			&cliente, &tramos); err != nil {
+			&cliente, &tramos, &facturadaAlCobrar, &caeAt); err != nil {
 			rs.Close()
 			return nil, err
+		}
+		// El cobro de un pedido que no tenía factura con CAE el día que se
+		// cobró (H160): contra qué va hasta que la factura salga, según las
+		// reglas. Con la de arranque del CAE, la venta facturada espera su
+		// CAE sin asiento (y después va por el camino de siempre).
+		if tipo == "pedido" {
+			contra, circuito := "", ""
+			imputacion := factura
+			caeDespues := factura == nil || caeAt == nil || caeAt.After(cobrado)
+			switch {
+			case facturadaAlCobrar && sinCae == "transitoria" && caeDespues:
+				contra = Cuentas.CobrosAImputar
+				if factura != nil {
+					f := mayorFecha(cobrado, factura)
+					imputacion = &f
+				}
+			case facturadaAlCobrar:
+			case factura == nil || factura.After(cobrado):
+				contra, circuito = Cuentas.VentasSinFactura, CircuitoNegro
+				if antes == "anticipos" {
+					contra, circuito = Cuentas.AnticiposDeClientes, ""
+				}
+			}
+			if contra == "" && factura == nil {
+				continue
+			}
+			if contra != "" {
+				if medio == "" || medio == "cuenta_corriente" {
+					continue
+				}
+				deLaFactura := ""
+				if tipoFactura != nil {
+					deLaFactura = NombreComprobante(*tipoFactura) + " " + NumeroFormateado(*pv, *nro) + " (pedido " + deref(pedido) + ")"
+				}
+				c := CobroAntesDeLaFactura{CobroAAsentar: CobroAAsentar{Fecha: cobrado, Comprobante: "del pedido " + deref(pedido), Cliente: cliente,
+					Medio: medio, Importe: monto.F(), Comision: comision}, Contra: contra, Circuito: circuito, Factura: imputacion, DeLaFactura: deLaFactura}
+				devuelto := 0.0
+				for _, t := range tramos {
+					devuelto = float64(devuelto + t.Importe)
+					c.Tramos = append(c.Tramos, TramoDeCobro{Fecha: t.Fecha, Importe: t.Importe, Devolucion: t.Devolucion})
+				}
+				if resto := float64(monto.F() - devuelto); estado == "reintegrado" && resto > toleranciaAsiento {
+					c.Tramos = append(c.Tramos, TramoDeCobro{Fecha: actualizado, Importe: resto, Entero: true})
+				}
+				for _, a := range AsientosDelCobroAntesDeLaFactura(c) {
+					if entre(a.Fecha, idesde, ihasta) {
+						asientos = append(asientos, a)
+					}
+				}
+				continue
+			}
 		}
 		comprobante := "de cuenta corriente"
 		if tipo == "pedido" && tipoFactura != nil {

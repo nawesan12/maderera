@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import { Banknote } from "lucide-react";
 import { etiquetaDeCircuito } from "@/lib/circuito";
-import { diasHasta, hoyEnArgentina } from "@/lib/formato";
+import { diasHasta } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import {
@@ -246,12 +246,6 @@ function Lado({
   );
 }
 
-/** Días de calendario argentino hasta la fecha de pago: el banco lo toma desde ese día. */
-function diasCalendario(fecha: Date): number {
-  const dia = (d: Date) => Date.parse(`${hoyEnArgentina(d)}T00:00:00Z`);
-  return Math.round((dia(fecha) - dia(new Date())) / 86_400_000);
-}
-
 const ESTADOS: Record<string, string> = {
   informado: "Por recibir",
   cartera: "En cartera",
@@ -312,9 +306,11 @@ function Tarjeta({
             (vencido ? ` · ${yaVencido(c)}` : dias === 0 ? " · hoy" : ` · en ${plural(dias, "día")}`)}
         </p>
       </div>
-      <h3 className="truncate text-base font-medium">
-        {/* El banco y el número juntos: es como se lo encuentra en el banco. */}
-        {c.banco ?? "Sin banco"} <span className="codigo">N° {c.numero}</span>
+      {/* El banco y el número juntos: es como se lo encuentra en el banco.
+          Si no entran, se corta el banco: el número no se pierde. */}
+      <h3 className="flex min-w-0 items-baseline gap-2 text-base font-medium">
+        <span className="min-w-0 truncate">{c.banco ?? "Sin banco"}</span>
+        <span className="codigo shrink-0 whitespace-nowrap">N° {c.numero}</span>
       </h3>
       <div className="flex flex-wrap items-center gap-1.5">
         <span
@@ -396,7 +392,7 @@ function Tarjeta({
                 href={`/api/recibos/${c.receiptId}/pdf`}
                 target="_blank"
                 rel="noopener"
-                className="tabular hover:text-brand-orange hover:underline"
+                className="tabular whitespace-nowrap hover:text-brand-orange hover:underline"
               >
                 recibo {c.recibo}
               </a>
@@ -422,7 +418,7 @@ function Tarjeta({
           sentido={c.sentido}
           numero={c.numero}
           importe={c.importe}
-          diasParaCobrar={diasCalendario(c.fechaPago)}
+          diasParaCobrar={diasHasta(c.fechaPago) ?? 0}
           cliente={c.cliente}
           saldoCliente={c.saldoCliente}
         />

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"mjbj/internal/bitacora"
 	"net/http"
 
 	"mjbj/internal/api/reportesapi"
@@ -288,7 +289,30 @@ func (a *API) ResumenDelMes(ctx context.Context, r reportesapi.ResumenDelMesRequ
 		return nil, err
 	}
 	v.Resultado, err = a.s.ResultadoDelMes(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	v.Cerrado, err = a.s.EstadoDelMes(ctx, p.Clave)
 	return ok(v), err
+}
+
+func (o respuesta) VisitCerrarElMesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) CerrarElMes(ctx context.Context, r reportesapi.CerrarElMesRequestObject) (reportesapi.CerrarElMesResponseObject, error) {
+	ses, err := pantalla(ctx, "/admin/cierre")
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.CerrarElMes(ctx, r.Body.Periodo, r.Body.Cerrado, ses.UserID, ses.Nombre)
+	if err != nil {
+		return nil, err
+	}
+	accion := "Reabrió "
+	if r.Body.Cerrado {
+		accion = "Cerró "
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "cierre", "", accion+"el mes "+r.Body.Periodo, nil)
+	return ok(v), nil
 }
 
 // --- el inicio del panel ---

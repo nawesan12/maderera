@@ -180,6 +180,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cierre/cerrado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Cierra (o reabre) un mes: con el mes cerrado, la base no deja cargar, cambiar ni borrar gastos, facturas de compra, pagos ni recibos con fecha de ese mes, ni dar de baja sus facturas (00221). */
+        post: operations["CerrarElMes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/metricas": {
         parameters: {
             query?: never;
@@ -450,7 +467,14 @@ export interface components {
             interno: components["schemas"]["CierreTotales"];
             sinFactura: components["schemas"]["CierreTotales"];
         };
+        MesCerrado: {
+            cerrado: boolean;
+            /** Format: date-time */
+            at: string | null;
+            por: string | null;
+        };
         CierreResumen: {
+            cerrado: components["schemas"]["MesCerrado"];
             ventas: components["schemas"]["CierreTotalesConIva"];
             vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
@@ -1061,6 +1085,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CierreResumen"];
+                };
+            };
+        };
+    };
+    CerrarElMes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    periodo: string;
+                    cerrado: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Cómo quedó el mes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MesCerrado"];
                 };
             };
         };

@@ -10,9 +10,10 @@ import {
   resumenDelMes,
 } from "@/lib/dal/admin/cierre-mensual";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { fechaCorta, formatearMonto, plural } from "@/lib/formato";
+import { fechaCorta, formatearMonto, hoyEnArgentina, plural } from "@/lib/formato";
 import { ExportarAsientos } from "./exportar-asientos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
+import { CerrarMes } from "./cerrar-mes";
 
 export const metadata: Metadata = { title: "Cierre del mes" };
 
@@ -73,7 +74,22 @@ export default async function CierrePage({
         <div className="flex flex-wrap gap-2">
           <SelectorDeMes actual={periodo.clave} etiqueta="Mes del cierre" />
 
-          <ExportarAsientos periodo={periodo.clave} rotos={rotos.length} />
+          <CerrarMes
+            periodo={periodo.clave}
+            nombre={new Date(periodo.anio, periodo.mes - 1, 1).toLocaleDateString("es-AR", { month: "long" })}
+            cerrado={resumen.cerrado.cerrado}
+            cuando={
+              resumen.cerrado.at
+                ? `${fechaCorta.format(new Date(resumen.cerrado.at))}${resumen.cerrado.por ? ` · ${resumen.cerrado.por}` : ""}`
+                : null
+            }
+            terminado={periodo.clave < hoyEnArgentina().slice(0, 7)}
+          />
+          <ExportarAsientos
+            periodo={periodo.clave}
+            rotos={rotos.length}
+            secundario={!resumen.cerrado.cerrado && periodo.clave < hoyEnArgentina().slice(0, 7)}
+          />
           {/* Lo que pide el contador además de los asientos: quién debe y
               desde cuándo, y a quién se le debe. Son de hoy, no del mes. */}
           <a

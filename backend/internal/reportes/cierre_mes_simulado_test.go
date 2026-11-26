@@ -1,10 +1,16 @@
 package reportes
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"mjbj/internal/plataforma"
 )
 
 func pendientesDe(t *testing.T, cuerpo string) map[string]PendienteDelCierre {
@@ -152,5 +158,62 @@ func TestCierreAvisaGastosRepetidos(t *testing.T) {
 	p, ok := pendientesDe(t, cuerpo)["gastos-repetidos"]
 	if !ok || p.Cantidad != 1 || !strings.Contains(p.Detalle, "412.350") || p.Donde != "/admin/compras/gastos?periodo=2026-10" {
 		t.Fatalf("gastos repetidos: %s", cuerpo)
+	}
+}
+
+// Cerrar el mes (H408): con septiembre cerrado, la base no deja cargar un
+// gasto con fecha de septiembre ni anular un recibo de ese mes; el de
+// octubre, sí. Octubre (el mes en curso) no se puede cerrar. Reabierto, se
+// puede de nuevo. El error de la base sale como un 422 con el mes escrito.
+func TestCerrarElMes(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	cerrar := func(mes string, cerrado bool) (int, string) {
+		t.Helper()
+		cuerpo, _ := json.Marshal(map[string]any{"periodo": mes, "cerrado": cerrado})
+		req, _ := http.NewRequest("POST", e.u+"cierre/cerrado", bytes.NewReader(cuerpo))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := adm.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	cli := e.id(t, `insert into customers (nombre) values ('Sosa') returning id`)
+	recibo := e.recibir(t, &cli, "REC-0001", "2026-09-20T15:00:00Z", [2]any{"efectivo", 100.0})
+	if st, b := cerrar("2026-10", true); st != 422 || !strings.Contains(b, "cuando terminó") {
+		t.Fatalf("el mes en curso: %d %s", st, b)
+	}
+	if st, b := cerrar("2026-09", true); st != 200 || !strings.Contains(b, `"cerrado":true`) {
+		t.Fatalf("cerrar: %d %s", st, b)
+	}
+	_, b, _ := pedir(t, adm, e.u+"cierre/resumen?periodo=2026-09")
+	if !strings.Contains(b, `"cerrado":{"cerrado":true`) {
+		t.Fatalf("resumen: %s", b)
+	}
+	esMesCerrado := func(err error) bool {
+		mes, ok := plataforma.MesCerrado(err)
+		return ok && mes == "2026-09"
+	}
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-09-10', 'Luz', 100)`); !esMesCerrado(err) {
+		t.Fatalf("gasto de septiembre: %v", err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-10-10', 'Luz', 100)`); err != nil {
+		t.Fatalf("gasto de octubre: %v", err)
+	}
+	if _, err := e.pool.Exec(ctx, `update receipts set estado = 'anulado', anulado_at = now() where id = $1`, recibo); !esMesCerrado(err) {
+		t.Fatalf("anular el recibo de septiembre: %v", err)
+	}
+	if st, _ := cerrar("2026-09", false); st != 200 {
+		t.Fatal("reabrir")
+	}
+	if _, err := e.pool.Exec(ctx, `insert into expenses (fecha, descripcion, importe) values ('2026-09-10', 'Luz', 100)`); err != nil {
+		t.Fatalf("gasto de septiembre, reabierto: %v", err)
+	}
+	if n := plataforma.NombreDelMes("2026-09"); n != "septiembre de 2026" {
+		t.Fatal(n)
 	}
 }

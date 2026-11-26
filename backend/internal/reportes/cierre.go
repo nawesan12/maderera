@@ -2,6 +2,7 @@ package reportes
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/ventas/fragmentos"
 )
 
@@ -805,6 +807,46 @@ type ResumenDelMes struct {
 	// Resultado: ventas netas − costo − gastos, contra el mes anterior (lo
 	// llena la API con ResultadoDelMes).
 	Resultado ResultadoComparado `json:"resultado"`
+	// Cerrado: si el mes está cerrado (lo llena la API con EstadoDelMes).
+	Cerrado MesCerrado `json:"cerrado"`
+}
+
+// MesCerrado es si un mes está cerrado, desde cuándo y quién lo cerró.
+type MesCerrado struct {
+	Cerrado bool       `json:"cerrado"`
+	At      *time.Time `json:"at"`
+	Por     *string    `json:"por"`
+}
+
+// EstadoDelMes lee meses_cerrados.
+func (s *Servicio) EstadoDelMes(ctx context.Context, mes string) (MesCerrado, error) {
+	var m MesCerrado
+	err := s.pool.QueryRow(ctx, `SELECT cerrado_at, cerrado_por_nombre FROM meses_cerrados WHERE mes = $1`, mes).Scan(&m.At, &m.Por)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return MesCerrado{}, nil
+	}
+	m.Cerrado = err == nil
+	return m, err
+}
+
+// CerrarElMes cierra o reabre un mes (meses_cerrados, 00221). Cerrado, los
+// triggers de la base no dejan cargar ni cambiar nada con fecha de ese mes:
+// lo que el estudio ya tiene no cambia (simulación del mes, H408). Un mes que
+// todavía no terminó no se cierra.
+func (s *Servicio) CerrarElMes(ctx context.Context, mes string, cerrar bool, usuario, nombre string) (MesCerrado, error) {
+	if cerrar {
+		hoy := s.ahora().In(Argentina).Format("2006-01")
+		if mes >= hoy {
+			return MesCerrado{}, plataforma.NuevoProblema(422, "Un mes se cierra cuando terminó.")
+		}
+		if _, err := s.pool.Exec(ctx, `INSERT INTO meses_cerrados (mes, cerrado_por, cerrado_por_nombre) VALUES ($1, $2, $3)
+			ON CONFLICT (mes) DO NOTHING`, mes, usuario, nombre); err != nil {
+			return MesCerrado{}, err
+		}
+	} else if _, err := s.pool.Exec(ctx, `DELETE FROM meses_cerrados WHERE mes = $1`, mes); err != nil {
+		return MesCerrado{}, err
+	}
+	return s.EstadoDelMes(ctx, mes)
 }
 
 // ResumenDelMes es resumenDelMes: las notas de crédito restan, y en las

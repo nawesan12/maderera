@@ -3149,3 +3149,12 @@ ficha (hoy es de /admin/cheques, del admin).
   «en camino» ya no suma lo que llegó de una orden parcial.
 - **El número de la factura de compra** sale con ceros (`0003-00089010`) en
   la cuenta del proveedor, los pagos, los gastos y las notas aplicadas.
+
+## 26/11/2026: el mes simulado, el saludo de WhatsApp y del correo
+
+- **`whatsapp.NombreDeSaludo`** (espejo: `lib/whatsapp/saludo.ts`): a una
+  persona, el primer nombre; a una empresa (forma societaria al final o rubro
+  al principio), el nombre sin «SRL», «S.A.»… Lo usan `PrimerNombre`, el
+  `{{nombre}}` del documento fuera de la ventana (`presupuesto_enviado`), los
+  avisos automáticos y el saludo de los correos (`notificaciones.primerNombre`).
+  Las pruebas doradas no cambian: sus nombres son de personas.

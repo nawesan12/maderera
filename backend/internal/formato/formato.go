@@ -173,3 +173,12 @@ func Importe(v float64) string {
 	}
 	return t
 }
+
+// Cuantos es «1 renglón», «3 renglones»: la cifra con la palabra que le toca.
+// La bitácora decía «1 renglones» (mes simulado, H409).
+func Cuantos(n int, uno, varios string) string {
+	if n == 1 {
+		return "1 " + uno
+	}
+	return strconv.Itoa(n) + " " + varios
+}

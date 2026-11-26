@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/caja"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
@@ -761,7 +762,7 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 		}
 		detalle := "Pago " + medio
 		if retenido > 0 {
-			detalle = fmt.Sprintf("Pago %s por $%s más $%s de retenciones", medio, jsmath.Fijo2(neto), jsmath.Fijo2(retenido))
+			detalle = "Pago " + medio + " por " + formato.Importe(neto) + " más " + formato.Importe(retenido) + " de retenciones"
 		}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, supplier_payment_id, created_at)

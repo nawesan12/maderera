@@ -3,7 +3,6 @@ package compras
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
@@ -181,7 +181,7 @@ func (s *Servicio) CrearOrden(ctx context.Context, ses *auth.Sesion, m map[strin
 		}
 		return "", err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "orden_compra", id, fmt.Sprintf("Creó una orden de compra con %d renglones", len(o.Lineas)), nil)
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "orden_compra", id, "Creó una orden de compra con "+formato.Cuantos(len(o.Lineas), "renglón", "renglones"), nil)
 	return id, nil
 }
 

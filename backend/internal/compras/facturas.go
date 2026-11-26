@@ -3,7 +3,6 @@ package compras
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -500,7 +499,7 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	}
 	desc := "Cargó una factura de compra por " + formato.Importe(total)
 	if ajuste.variantes > 0 {
-		desc += fmt.Sprintf("; pasó %s de diferencia al costo de %d productos", Monto(ajuste.diferencia), ajuste.variantes)
+		desc += "; pasó " + Monto(ajuste.diferencia) + " de diferencia al costo de " + formato.Cuantos(ajuste.variantes, "producto", "productos")
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura_compra", id, desc, nil)
 	return id, d.SupplierID, nil

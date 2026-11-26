@@ -297,7 +297,7 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 		return nil, err
 	}
 	if !out.Repetida {
-		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "devolucion", out.ID, "Devolución sin factura del pedido "+numero+" por "+jsmath.Fijo2(out.Importe), nil)
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "devolucion", out.ID, "Devolución sin factura del pedido "+numero+" por "+formato.Importe(out.Importe), nil)
 	}
 	return &out, nil
 }

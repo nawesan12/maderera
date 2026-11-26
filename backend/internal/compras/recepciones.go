@@ -3,7 +3,6 @@ package compras
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -229,7 +229,7 @@ func (s *Servicio) CrearRecepcion(ctx context.Context, ses *auth.Sesion, m map[s
 		}
 		return "", err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "recepcion", id, fmt.Sprintf("Cargó una recepción con %d renglones", len(r.Lineas)), nil)
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "recepcion", id, "Cargó una recepción con "+formato.Cuantos(len(r.Lineas), "renglón", "renglones"), nil)
 	return id, nil
 }
 
@@ -421,7 +421,7 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 		return 0, 0, err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "recepcion", id,
-		fmt.Sprintf("Confirmó la recepción: %d renglones por $%s netos", lineas, jsmath.Fijo2(neto)), nil)
+		"Confirmó la recepción: "+formato.Cuantos(lineas, "renglón", "renglones")+" por "+formato.Importe(neto)+" netos", nil)
 	return lineas, neto, nil
 }
 

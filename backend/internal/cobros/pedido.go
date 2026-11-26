@@ -119,7 +119,7 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 				return errCobro(p.numero + " ya está cobrado.")
 			}
 			if total > p.saldo+0.005 {
-				return errCobro("A " + p.numero + " le faltan " + jsmath.Fijo2(p.saldo) + ": no se puede cobrar más que eso.")
+				return errCobro("A " + p.numero + " le faltan " + formato.Importe(p.saldo) + ": no se puede cobrar más que eso.")
 			}
 		}
 		var c *Caja

@@ -3,7 +3,6 @@ package compras
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -97,7 +97,7 @@ func (s *Servicio) EditarRecepcion(ctx context.Context, ses *auth.Sesion, id str
 		return "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "recepcion", id,
-		fmt.Sprintf("Corrigió el borrador: %d renglones, flete $%s", quedan, jsmath.Fijo2(gastos)), nil)
+		"Corrigió el borrador: "+formato.Cuantos(quedan, "renglón", "renglones")+", flete "+formato.Importe(gastos), nil)
 	return "Recepción corregida.", nil
 }
 
@@ -175,6 +175,6 @@ func (s *Servicio) EditarOrden(ctx context.Context, ses *auth.Sesion, id string,
 		}
 		return "", err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "orden_compra", id, fmt.Sprintf("Corrigió %s: %d renglones", numero, len(o.Lineas)), nil)
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "orden_compra", id, "Corrigió "+numero+": "+formato.Cuantos(len(o.Lineas), "renglón", "renglones"), nil)
 	return numero + " quedó corregida.", nil
 }

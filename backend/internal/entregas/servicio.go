@@ -145,13 +145,16 @@ const consultaSaldo = `
 	  coalesce((
 	    SELECT sum(di.cantidad) FROM delivery_items di
 	    JOIN deliveries d ON d.id = di.delivery_id
-	    WHERE di.order_item_id = oi.id AND d.estado <> 'anulada' %[1]s
+	    WHERE di.order_item_id = oi.id %[1]s
 	  ), 0)::text,
 	  coalesce(p.unit::text, '')
 	FROM order_items oi
 	LEFT JOIN product_variants pv ON pv.id = oi.variant_id
 	LEFT JOIN products p ON p.id = pv.product_id
 	WHERE oi.order_id = $1 %[3]s ORDER BY oi.orden`
+
+// vivas: lo entregado son los remitos sin anular.
+const vivas = `AND d.estado <> 'anulada'`
 
 // sinServicios saca del acopio lo que no es mercadería: las pasadas y el
 // tapacanto de un corte (sin producto, del_corte). Se retiran las piezas,
@@ -183,7 +186,7 @@ func SaldoDeAcopio(ctx context.Context, db consultor, pedido string) ([]Renglon,
 	if !plataforma.UUIDValido(pedido) {
 		return []Renglon{}, nil
 	}
-	return leerSaldo(ctx, db, sprintf(consultaSaldo, "", "", sinServicios), pedido)
+	return leerSaldo(ctx, db, sprintf(consultaSaldo, vivas, "", sinServicios), pedido)
 }
 
 // SaldoConServicios es SaldoDeAcopio con las líneas de servicio del corte:
@@ -192,7 +195,7 @@ func SaldoConServicios(ctx context.Context, db consultor, pedido string) ([]Reng
 	if !plataforma.UUIDValido(pedido) {
 		return []Renglon{}, nil
 	}
-	return leerSaldo(ctx, db, sprintf(consultaSaldo, "", "", ""), pedido)
+	return leerSaldo(ctx, db, sprintf(consultaSaldo, vivas, "", ""), pedido)
 }
 
 // ConGalpon le suma a cada renglón con producto lo que hay en el galpón de
@@ -239,10 +242,14 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 
 // SaldoAlRemito es qué quedaba en acopio **cuando se hizo ese remito**: se
 // cuentan las entregas hasta esa, inclusive. Un remito reimpreso dice lo
-// mismo que el día que se firmó.
+// mismo que el día que se firmó. Anulado no cambia: él mismo cuenta, y los
+// anteriores anulados después también (al hacerlo estaban vivos). Sin eso,
+// un remito que se llevó todo pasaba a decir «Entrega parcial» al anularlo
+// (mes simulado, REM-0017).
 func SaldoAlRemito(ctx context.Context, db consultor, pedido, remito string) ([]Renglon, error) {
 	rs, err := leerSaldo(ctx, db, sprintf(consultaSaldo,
-		`AND d.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`,
+		`AND (d.estado <> 'anulada' OR d.id = $2 OR d.updated_at > (SELECT created_at FROM deliveries WHERE id = $2))
+		 AND d.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`,
 		`AND dv.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`, sinServicios), pedido, remito)
 	if err != nil {
 		return nil, err
@@ -524,6 +531,19 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 		if err := pasarA(ctx, tx, f.OrderID, "entregado", nota, usuario, false); err != nil {
 			return nil, nil, err
 		}
+	case f.Tipo != "envio" && (pedido.estado == "pendiente" || pedido.estado == "preparando"):
+		// Ya se llevó una parte: lo que queda está para retirar. Seguía
+		// «Sin preparar» con el paso «Recibido» (mes simulado, PED-1149).
+		// Con un corte en la máquina no está listo: queda donde estaba.
+		cortes, err := CortesSinTerminar(ctx, tx, f.OrderID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(cortes) == 0 {
+			if err := pasarA(ctx, tx, f.OrderID, "listo", "Remito "+numero+": se retiró una parte", usuario, false); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 	// El enlace para firmar desde el celular: el de la visita va con el
 	// primero, que lleva todo.
@@ -777,13 +797,22 @@ func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id st
 		if _, err := tx.Exec(ctx, `UPDATE deliveries SET estado = 'anulada', updated_at = now() WHERE id = $1`, id); err != nil {
 			return err
 		}
+		// El motivo del firmado anulado va al historial del pedido. Si el
+		// pedido vuelve a «listo», es un solo renglón con el cambio de
+		// estado: eran dos, y el del motivo salía con el chip «Entregado»
+		// (mes simulado).
+		notaFirma := ""
 		if firmado != nil && pedido != nil {
-			nota := "Remito " + numero + " firmado, anulado: " + zodjs.TrimJS(a.Motivo) + " · autorizó " + autorizo
-			if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2, $3, $4)`,
-				pedidoID, pedido.estado, nota, ses.UserID); err != nil {
-				return err
+			notaFirma = "Remito " + numero + " firmado, anulado: " + zodjs.TrimJS(a.Motivo) + " · autorizó " + autorizo
+			bitacora.Anotar(ctx, s.q.WithTx(tx), s.log, ses, sqlc.AccionAuditoriaAnular, "remito", id, notaFirma, nil)
+		}
+		anotarFirma := func() error {
+			if notaFirma == "" {
+				return nil
 			}
-			bitacora.Anotar(ctx, s.q.WithTx(tx), s.log, ses, sqlc.AccionAuditoriaAnular, "remito", id, nota, nil)
+			_, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2, $3, $4)`,
+				pedidoID, pedido.estado, notaFirma, ses.UserID)
+			return err
 		}
 		// Lo que salió con este remito, por variante y sucursal. Se filtra
 		// por las variantes del remito para usar el índice.
@@ -817,13 +846,13 @@ func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id st
 		}
 		if len(lineas) == 0 {
 			// Un remito de constancia: la mercadería salió con la venta.
-			return nil
+			return anotarFirma()
 		}
 		if err := reservas.DevolverAlStock(ctx, tx, numero, &ses.UserID, lineas); err != nil {
 			return err
 		}
 		if pedido == nil || pedido.estado == "cancelado" {
-			return nil
+			return anotarFirma()
 		}
 		filas, err = tx.Query(ctx, `
 			SELECT di.order_item_id, oi.variant_id, di.cantidad::text, oi.stock_por_unidad::text
@@ -854,23 +883,35 @@ func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id st
 			return err
 		}
 		if pedido.estado == "en-camino" {
+			if err := anotarFirma(); err != nil {
+				return err
+			}
 			return VueltaDelViaje(ctx, tx, pedidoID, id, numero, &ses.UserID, false)
 		}
 		if pedido.estado != "entregado" {
-			return nil
+			return anotarFirma()
 		}
 		saldo, err := SaldoDeAcopio(ctx, tx, pedidoID)
 		if err != nil {
 			return err
 		}
 		if len(SoloPendientes(saldo)) == 0 {
-			return nil
+			return anotarFirma()
 		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedidoID); err != nil {
 			return err
 		}
+		// Un envío no tiene acopio: lo que vuelve queda por llevar.
+		queda := "vuelve a quedar mercadería en acopio"
+		if pedido.tipoEntrega == "envio" {
+			queda = "vuelve a quedar mercadería por llevar"
+		}
+		nota := "Remito " + numero + " anulado: " + queda
+		if notaFirma != "" {
+			nota = notaFirma + " · " + queda
+		}
 		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'listo', $2, $3)`,
-			pedidoID, "Remito "+numero+" anulado: vuelve a quedar mercadería en acopio", ses.UserID)
+			pedidoID, nota, ses.UserID)
 		return err
 	})
 }

@@ -2,6 +2,7 @@ package entregas
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -274,4 +275,90 @@ func TestElServicioDelCorteNoQuedaEnAcopio(t *testing.T) {
 	if len(todo) != 3 {
 		t.Fatalf("la devolución no ve el corte: %+v", todo)
 	}
+}
+
+// Segunda vuelta del mes simulado (depósito en el navegador, 26/11): el
+// remito total anulado seguía diciendo «Entrega total»; el acopio retirado
+// en parte quedaba «Sin preparar»; y anular el remito firmado de un envío
+// dejaba dos renglones, uno con el chip «Entregado» y otro que hablaba de
+// acopio.
+func TestElRemitoAnuladoSigueDiciendoLoQueFue(t *testing.T) {
+	e := armar(t)
+	ven, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	pedido, r1, r2 := e.pedido(t, "PED-2010", "listo", nil)
+	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
+		"receptorDocumento": "1", "cantidades": cantidades(r1, "10", r2, "4")}); c != 200 {
+		t.Fatalf("%d %s", c, b)
+	}
+	if err := e.s.AnularEntrega(context.Background(), ses, e.uno(t, `select id::text from deliveries where numero = 'REM-0001'`)); err != nil {
+		t.Fatal(err)
+	}
+	remitos, err := e.s.RemitosDelPedido(context.Background(), pedido)
+	if err != nil || len(remitos) != 1 || remitos[0].Parcial {
+		t.Fatalf("el anulado: %+v %v", remitos, err)
+	}
+	// El siguiente, que se lleva una parte, sí es parcial.
+	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
+		"receptorDocumento": "1", "cantidades": cantidades(r1, "3")}); c != 200 {
+		t.Fatalf("%d %s", c, b)
+	}
+	remitos, _ = e.s.RemitosDelPedido(context.Background(), pedido)
+	if len(remitos) != 2 || !remitos[0].Parcial || remitos[1].Parcial {
+		t.Fatalf("después: %+v", remitos)
+	}
+}
+
+func TestElAcopioRetiradoEnParteQuedaListo(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	pedido, r1, _ := e.pedido(t, "PED-2011", "pendiente", nil)
+	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
+		"receptorDocumento": "1", "cantidades": cantidades(r1, "3")}); c != 200 {
+		t.Fatalf("%d %s", c, b)
+	}
+	if estado, nota := e.estadoYNota(t, pedido); estado != "listo" || nota != "Remito REM-0001: se retiró una parte" {
+		t.Fatalf("retirado en parte: %q %q", estado, nota)
+	}
+	// Con un corte en la máquina no está listo.
+	otro, o1, _ := e.pedido(t, "PED-2012", "pendiente", nil)
+	e.exec(t, `insert into cutting_orders (numero, order_id, contacto_nombre, material_descripcion, estado)
+		values ('CRT-21', $1, 'Marta', 'Melamina 18', 'en-cola')`, otro)
+	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": otro, "tipo": "retiro",
+		"receptorDocumento": "1", "cantidades": cantidades(o1, "1")}); c != 200 {
+		t.Fatalf("%d %s", c, b)
+	}
+	if estado := e.uno(t, `select estado::text from orders where id = $1`, otro); estado != "pendiente" {
+		t.Errorf("con el corte en cola quedó %q", estado)
+	}
+}
+
+func TestAnularElEnvioFirmadoEsUnSoloRenglon(t *testing.T) {
+	e := armar(t)
+	e.s.ConAutorizacion(autorizacion.Nuevo(e.pool, silencio, "secreto-del-pin-de-prueba"))
+	adm, _ := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
+	pedido, r1, r2 := e.pedido(t, "PED-2013", "listo", nil)
+	e.exec(t, `update orders set tipo_entrega = 'envio' where id = $1`, pedido)
+	e.exec(t, `insert into order_status_history (order_id, estado) values ($1, 'listo')`, pedido)
+	if c, b := pedir(t, adm, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "envio",
+		"cantidades": cantidades(r1, "10", r2, "4")}); c != 200 {
+		t.Fatalf("%d %s", c, b)
+	}
+	e.firmar(t, "REM-0001")
+	antes := e.uno(t, `select count(*)::text from order_status_history where order_id = $1`, pedido)
+	remito := e.uno(t, `select id::text from deliveries where numero = 'REM-0001'`)
+	if c, b := pedir(t, adm, "POST", e.srv.URL+"/api/v1/admin/remitos/"+remito+"/anular", map[string]any{"motivo": "Volvió roto"}); c != 200 {
+		t.Fatalf("anular: %d %s", c, b)
+	}
+	if despues := e.uno(t, `select count(*)::text from order_status_history where order_id = $1`, pedido); despues != sumarUno(antes) {
+		t.Errorf("renglones del historial: %s → %s", antes, despues)
+	}
+	if estado, nota := e.estadoYNota(t, pedido); estado != "listo" ||
+		!strings.HasPrefix(nota, "Remito REM-0001 firmado, anulado: Volvió roto") || !strings.HasSuffix(nota, "vuelve a quedar mercadería por llevar") {
+		t.Fatalf("anulado: %q %q", estado, nota)
+	}
+}
+
+func sumarUno(n string) string {
+	i, _ := strconv.Atoi(n)
+	return strconv.Itoa(i + 1)
 }

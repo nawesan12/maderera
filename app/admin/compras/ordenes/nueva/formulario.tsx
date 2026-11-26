@@ -132,17 +132,30 @@ export function FormularioOrden({
     0,
   );
 
-  const listo =
-    supplierId !== "" &&
-    branchId !== "" &&
-    !(fechaPrometida !== "" && fechaPrometida < hoyEnArgentina()) &&
-    lineas.length > 0 &&
-    lineas.every(
-      (l) =>
-        Number(l.cantidad) > 0 &&
-        l.costoUnitario !== "" &&
-        !importeIlegible(l.costoUnitario),
-    );
+  /*
+   * Lo que falta, en el orden de la pantalla. El botón no se apaga: con el
+   * botón gris no se sabía por qué no andaba (mes simulado: «Entrega en»
+   * viene sin elegir a propósito, ver sucursalPropuesta). Al tocarlo se
+   * marca lo que falta y se dice en la barra.
+   */
+  const [intentado, setIntentado] = useState(false);
+  const fechaVieja = fechaPrometida !== "" && fechaPrometida < hoyEnArgentina();
+  const lineasMal = lineas.some(
+    (l) => !(Number(l.cantidad) > 0) || l.costoUnitario === "" || importeIlegible(l.costoUnitario),
+  );
+  const falta: { campo: string; texto: string } | null =
+    supplierId === ""
+      ? { campo: "orden-proveedor", texto: "Elegí el proveedor." }
+      : branchId === ""
+        ? { campo: "orden-sucursal", texto: "Elegí dónde se entrega." }
+        : fechaVieja
+          ? { campo: "orden-fecha", texto: "La fecha prometida ya pasó." }
+          : lineas.length === 0
+            ? { campo: "orden-buscar", texto: "Agregá qué se pide." }
+            : lineasMal
+              ? { campo: "orden-renglones", texto: "Revisá cantidades y costos." }
+              : null;
+  const marcar = (campo: string) => intentado && falta?.campo === campo;
 
   return (
     <div className="space-y-4">
@@ -151,7 +164,9 @@ export function FormularioOrden({
           <label className="block md:col-span-2">
             <span className="text-sm font-medium">Proveedor</span>
             <select
+              id="orden-proveedor"
               value={supplierId}
+              aria-invalid={marcar("orden-proveedor") || undefined}
               onChange={(e) => setSupplierId(e.target.value)}
               className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             >
@@ -166,7 +181,13 @@ export function FormularioOrden({
             </select>
           </label>
 
-          <div className="space-y-1 md:col-span-2">
+          <div
+            id="orden-sucursal"
+            tabIndex={-1}
+            className={`space-y-1 rounded-xl outline-none md:col-span-2 ${
+              marcar("orden-sucursal") ? "ring-2 ring-saldo-debe ring-offset-4 ring-offset-card" : ""
+            }`}
+          >
             <span className="text-sm font-medium">Entrega en</span>
             {/* Las sucursales son pocas: fichas. Si algún día son muchas,
               vuelve el desplegable. */}
@@ -203,6 +224,7 @@ export function FormularioOrden({
           <label className="block">
             <span className="text-sm font-medium">Fecha prometida</span>
             <input
+              id="orden-fecha"
               type="date"
               value={fechaPrometida}
               min={hoyEnArgentina()}
@@ -228,7 +250,9 @@ export function FormularioOrden({
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
+              id="orden-buscar"
               value={texto}
+              aria-invalid={marcar("orden-buscar") || undefined}
               onChange={(e) => setTexto(e.target.value)}
               placeholder="Buscar qué pedir…"
               className="h-12 w-full rounded-lg border border-linea bg-background pl-9 pr-3 text-base"
@@ -269,7 +293,7 @@ export function FormularioOrden({
             Buscá arriba qué pedirle al proveedor.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div id="orden-renglones" tabIndex={-1} className="overflow-x-auto outline-none">
             <table className="w-full min-w-[680px] text-base">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
@@ -336,7 +360,7 @@ export function FormularioOrden({
         )}
       </section>
 
-      <BarraGuardar error={estado.error}>
+      <BarraGuardar error={estado.error ?? (intentado ? falta?.texto : null)}>
         <div className="mr-auto">
           <p className="text-sm text-muted-foreground">Neto de la orden</p>
           <p className="tabular text-2xl font-bold">{formatearMonto(neto)}</p>
@@ -344,7 +368,14 @@ export function FormularioOrden({
 
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            if (falta) {
+              setIntentado(true);
+              const el = document.getElementById(falta.campo);
+              el?.scrollIntoView({ block: "center", behavior: "smooth" });
+              el?.focus({ preventScroll: true });
+              return;
+            }
             empezar(async () => {
               const datos = {
                 supplierId,
@@ -362,9 +393,9 @@ export function FormularioOrden({
               const r = editar ? await editarOrdenDeCompra(editar.id, datos) : await crearOrdenDeCompra(datos);
               setEstado(r);
               if (r.id) router.push(`/admin/compras/ordenes/${r.id}`);
-            })
-          }
-          disabled={enCurso || !listo}
+            });
+          }}
+          disabled={enCurso}
           className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

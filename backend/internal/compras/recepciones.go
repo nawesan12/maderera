@@ -270,6 +270,28 @@ func leerItems(ctx context.Context, tx pgx.Tx, id string) ([]itemRecepcion, erro
 	})
 }
 
+// recepcionConfirmable frena la recepción cuya sucursal o cuyos productos
+// ya no existen. goods_receipts y sus renglones no tienen clave foránea a
+// branches ni a product_variants: una orden de una sucursal borrada llegaba
+// hasta el INSERT del stock y terminaba en «Algo falló de nuestro lado» (mes
+// simulado, tercera prueba).
+func recepcionConfirmable(ctx context.Context, tx pgx.Tx, sucursal string, variantes []string) error {
+	var hay bool
+	var faltan int
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM branches WHERE id::text = $1),
+		(SELECT count(*)::int FROM unnest($2::text[]) v WHERE NOT EXISTS (SELECT 1 FROM product_variants p WHERE p.id::text = v))`,
+		sucursal, variantes).Scan(&hay, &faltan); err != nil {
+		return err
+	}
+	if !hay {
+		return fallo("La sucursal de esta recepción ya no existe: anulala y cargala de nuevo con la sucursal que corresponde.")
+	}
+	if faltan > 0 {
+		return fallo("Un producto de esta recepción ya no existe: anulala y cargala de nuevo.")
+	}
+	return nil
+}
+
 // bloquearStock toma el candado de lib/inventario/locks.ts de cada variante
 // en la sucursal, en un orden fijo para que dos recepciones con las mismas
 // variantes en otro orden no se traben.
@@ -328,6 +350,9 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 		variantes := make([]string, len(items))
 		for i, it := range items {
 			variantes[i] = it.variante
+		}
+		if err := recepcionConfirmable(ctx, tx, c.branch, variantes); err != nil {
+			return err
 		}
 		if err := bloquearStock(ctx, tx, c.branch, variantes); err != nil {
 			return err

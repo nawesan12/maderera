@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Calculator, FileText, Loader2, Plus } from "lucide-react";
 import { BarraGuardar, Hoja, Seccion } from "@/components/admin/formulario";
 import { fechaCorta, formatearMonto, hoyEnArgentina, importeDelCampo, importeParaElCampo, importeIlegible } from "@/lib/formato";
-import { COMPROBANTES_DE_COMPRA } from "@/lib/fiscal/comprobantes-compra";
+import { COMPROBANTES_DE_COMPRA, discriminaIva, ivaPropuesto } from "@/lib/fiscal/comprobantes-compra";
 import {
   cargarFacturaDeCompra,
   corregirFacturaDeCompra,
@@ -134,6 +134,8 @@ export function CargarFactura({
   const [cae, setCae] = useState(corregir?.cae ?? "");
   const [neto, setNeto] = useState(texto(corregir?.neto ?? 0));
   const [iva21, setIva21] = useState(texto(corregir?.iva21 ?? 0));
+  // Mientras no se toque ningún IVA, el 21 % sigue al neto (ivaPropuesto).
+  const [ivaTocado, setIvaTocado] = useState(Boolean(corregir));
   const [iva105, setIva105] = useState(texto(corregir?.iva105 ?? 0));
   const [iva27, setIva27] = useState(texto(corregir?.iva27 ?? 0));
   const [exento, setExento] = useState(texto(corregir?.exento ?? 0));
@@ -168,9 +170,28 @@ export function CargarFactura({
   /*
    * El IVA sugerido: el 21 % del neto. Es lo que trae el 90 % de las facturas,
    * y tipear el mismo número que ya está calculado es donde se cuela el error
-   * de un dígito.
+   * de un dígito. Se carga solo en el campo hasta que se toque un IVA.
    */
-  const sugerido = Math.round(n(neto) * 0.21 * 100) / 100;
+  function cambiarNeto(v: string, tipoDe: string = tipo) {
+    setNeto(v);
+    if (!ivaTocado) {
+      const iva = ivaPropuesto(importeDelCampo(v), tipoDe);
+      setIva21(iva > 0 ? importeParaElCampo(iva) : "");
+    }
+  }
+  function cambiarTipo(t: Tipo) {
+    setTipo(t);
+    cambiarNeto(neto, t);
+  }
+  function tocarIva(set: (v: string) => void) {
+    return (v: string) => {
+      setIvaTocado(true);
+      set(v);
+    };
+  }
+  // Una A con neto y sin ningún IVA ni exento: casi seguro un olvido.
+  const sinIva =
+    discriminaIva(tipo) && n(neto) > 0 && n(iva21) + n(iva105) + n(iva27) + n(exento) === 0;
   // Lo que la factura cobra de más (o de menos) sobre lo recibido.
   const contraRecibido = remitos.length > 0 && neto !== "" ? Math.round((n(neto) - netoRecibido) * 100) / 100 : 0;
 
@@ -178,7 +199,7 @@ export function CargarFactura({
     setSupplierId(id);
     setRemitos([]);
     setAplicaA("");
-    setTipo(tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva));
+    cambiarTipo(tipoSegunCondicion(proveedores.find((p) => p.id === id)?.condicionIva));
   }
 
   /*
@@ -190,7 +211,7 @@ export function CargarFactura({
     const nuevos = si ? [...remitos, id] : remitos.filter((r) => r !== id);
     const suma = (lista: string[]) =>
       Math.round(delProveedor.filter((r) => lista.includes(r.id)).reduce((s, r) => s + r.neto, 0) * 100) / 100;
-    if (neto === "" || n(neto) === suma(remitos)) setNeto(nuevos.length ? importeParaElCampo(suma(nuevos)) : "");
+    if (neto === "" || n(neto) === suma(remitos)) cambiarNeto(nuevos.length ? importeParaElCampo(suma(nuevos)) : "");
     setRemitos(nuevos);
     setAjustarCosto(false);
   }
@@ -211,6 +232,7 @@ export function CargarFactura({
     setAplicaA("");
     setAjustarCosto(false);
     setVence(null);
+    setIvaTocado(false);
   }
 
   function guardar() {
@@ -295,7 +317,7 @@ export function CargarFactura({
             <span className="text-base font-medium">Tipo</span>
             <select
               value={tipo}
-              onChange={(e) => setTipo(e.target.value as Tipo)}
+              onChange={(e) => cambiarTipo(e.target.value as Tipo)}
               className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             >
               {Object.entries(COMPROBANTES_DE_COMPRA).map(([valor, nombre]) => (
@@ -398,19 +420,10 @@ export function CargarFactura({
                 inputMode="decimal"
                 value={neto}
                 aria-invalid={importeIlegible(neto) || undefined}
-                onChange={(e) => setNeto(e.target.value)}
+                onChange={(e) => cambiarNeto(e.target.value)}
                 className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
               />
             </label>
-            {sugerido > 0 && n(iva21) === 0 && (
-              <button
-                type="button"
-                onClick={() => setIva21(importeParaElCampo(sugerido))}
-                className="mt-1 text-base text-muted-foreground underline"
-              >
-                IVA 21% = {formatearMonto(sugerido)}
-              </button>
-            )}
             {/* Distinta de lo recibido: se ve antes de cargarla, para reclamar
                 o aceptar, y si se acepta el costo pasa a lo facturado. */}
             {Math.abs(contraRecibido) > 0.01 && (
@@ -431,9 +444,9 @@ export function CargarFactura({
               </span>
             )}
           </div>
-          <Campo etiqueta="IVA 21%" valor={iva21} onCambio={setIva21} numerico />
-          <Campo etiqueta="IVA 10,5%" valor={iva105} onCambio={setIva105} numerico />
-          <Campo etiqueta="IVA 27%" valor={iva27} onCambio={setIva27} numerico />
+          <Campo etiqueta="IVA 21%" valor={iva21} onCambio={tocarIva(setIva21)} numerico invalido={sinIva} />
+          <Campo etiqueta="IVA 10,5%" valor={iva105} onCambio={tocarIva(setIva105)} numerico />
+          <Campo etiqueta="IVA 27%" valor={iva27} onCambio={tocarIva(setIva27)} numerico />
           <Campo etiqueta="Exento o no gravado" valor={exento} onCambio={setExento} numerico />
           <div className="hidden md:block" />
           <Campo etiqueta="Percepción de IVA" valor={percepcionIva} onCambio={setPercepcionIva} numerico />
@@ -513,12 +526,14 @@ function Campo({
   onCambio,
   numerico,
   entero,
+  invalido,
 }: {
   etiqueta: string;
   valor: string;
   onCambio: (v: string) => void;
   numerico?: boolean;
   entero?: boolean;
+  invalido?: boolean;
 }) {
   return (
     <label className="block">
@@ -531,6 +546,7 @@ function Campo({
         min={numerico && entero ? "0" : undefined}
         step={numerico && entero ? "1" : undefined}
         value={valor}
+        aria-invalid={invalido || undefined}
         onChange={(e) => onCambio(e.target.value)}
         className={`mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base ${
           numerico ? "tabular text-right" : ""

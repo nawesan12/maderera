@@ -52,3 +52,19 @@ export function daCreditoFiscal(tipo: string): boolean {
   return tipo === "factura_a" || tipo === "factura_m" ||
     tipo === "nota_credito_a" || tipo === "nota_debito_a";
 }
+
+/**
+ * Los comprobantes de compra que discriminan IVA (A y M): en esos el IVA 21 %
+ * del neto se carga solo mientras no se toque. Como enlace para tocar, una
+ * Factura A quedaba con el IVA en 0 y el total del papel igual al neto (mes
+ * simulado, tercera prueba).
+ */
+export function discriminaIva(tipo: string): boolean {
+  return /_a$/.test(tipo) || tipo === "factura_m";
+}
+
+/** El IVA 21 % que se propone para ese neto, o 0 si el tipo no discrimina. */
+export function ivaPropuesto(neto: number, tipo: string): number {
+  if (!discriminaIva(tipo) || !(neto > 0)) return 0;
+  return Math.round(neto * 0.21 * 100) / 100;
+}

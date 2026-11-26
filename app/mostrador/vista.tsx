@@ -39,6 +39,7 @@ import {
   emitirRemitoDeVenta,
   letraDelComprobante,
   preciosDelCliente,
+  ventajaDeLaLista,
   presupuestoParaLaVenta,
 } from "./actions";
 import { AltaAMano } from "./alta-a-mano";
@@ -908,11 +909,7 @@ export function VistaMostrador({
     let vigente = true;
     const t = setTimeout(async () => {
       try {
-        const [suyos, generales] = await Promise.all([
-          preciosDelCliente(idsDeLaVenta, cliente.id),
-          preciosDelCliente(idsDeLaVenta, null),
-        ]);
-        const hay = idsDeLaVenta.some((id) => suyos[id] > 0 && (!(generales[id] > 0) || suyos[id] < generales[id] - 0.005));
+        const hay = await ventajaDeLaLista(idsDeLaVenta, cliente.id);
         if (vigente) setVentajaDeLista({ clave: claveDeVentaja, hay });
       } catch {
         // Sin respuesta queda la regla de siempre: su lista es de contado.

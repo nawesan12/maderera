@@ -587,7 +587,9 @@ export function FormularioPago({
                           onChange={(e) => actualizarParte(i, { referencia: e.target.value })}
                           placeholder="N.º de operación"
                           aria-label="Referencia de la transferencia"
-                          className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base"
+                          // Con un mínimo baja a su renglón: a 375 quedaba en
+                          // 50 px al lado del importe y cortaba «V3-TRF».
+                          className="h-11 min-w-[12rem] flex-1 rounded-lg border border-linea bg-card px-3 text-base"
                         />
                       )}
                       {partes.length > 1 && (

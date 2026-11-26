@@ -237,6 +237,42 @@ export async function devolverPedido(
   return { ok: r.data.ok };
 }
 
+/** El importe de la nota de crédito que saldría (con los tributos), sin hacer nada. */
+export async function calcularDevolucionFacturada(
+  id: string,
+  renglones: { itemId: string; cantidad: number }[],
+): Promise<{ importe?: number; error?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/facturacion/pedidos/{id}/devolucion/calculo", {
+    params: { path: { id } },
+    body: { renglones },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  return { importe: r.data.importe };
+}
+
+/**
+ * La devolución de un pedido facturado, con su nota de crédito (H279): baja
+ * lo que falta cobrar o va a la cuenta corriente. La plata no sale de acá.
+ */
+export async function devolverPedidoFacturado(
+  id: string,
+  renglones: { itemId: string; cantidad: number }[],
+  motivo: string,
+  clave: string,
+  importe: number | null,
+): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/facturacion/pedidos/{id}/devolucion", {
+    params: { path: { id } },
+    body: { renglones, motivo, clave, importe },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  refrescar();
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin/facturacion");
+  return { ok: "Devolución registrada." };
+}
+
 /**
  * Corrige los renglones y el flete de un pedido sin factura ni cobro (mes
  * simulado: PED-1066 salió sin flete y no había cómo agregarlo). Un precio

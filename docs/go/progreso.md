@@ -3179,3 +3179,18 @@ ficha (hoy es de /admin/cheques, del admin).
 - **Next 16.4 valida en `next dev` la navegación instantánea**: el panel y Mi
   cuenta leen la sesión en el layout y exportan `instant = false` (la salida
   de la guía de autenticación con Cache Components). Producción no cambia.
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador del depósito
+
+- **`SaldoAlRemito`** cuenta el propio remito aunque esté anulado, y los
+  anteriores anulados después de hacerlo: un remito total anulado decía
+  «Entrega parcial» en la ficha y en el PDF. `SaldoDeAcopio` sigue contando
+  solo los vivos (`vivas`).
+- **El retiro parcial de un pedido pendiente o en preparación lo pasa a
+  «listo»** («Remito X: se retiró una parte», sin aviso), salvo con un corte
+  en la máquina.
+- **Anular un remito firmado** deja un solo renglón en el historial cuando el
+  pedido vuelve a «listo» (motivo y autorización juntos); en un envío dice
+  «por llevar», no «en acopio».
+- **La reposición sin cargo** anota la cantidad con su unidad
+  (`pdf.UnidadPara`): «1 par · Corredera…».

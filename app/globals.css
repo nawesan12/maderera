@@ -345,8 +345,12 @@ input, textarea, select {
   font-size: 15px !important;
 }
 
+/* El texto de ejemplo con el gris terciario de cada tema: el gris fijo a
+   media opacidad daba menos de 2:1 sobre el campo hundido en oscuro (mes
+   simulado, H094). Con --texto-3 pasa 4,5:1 en los dos. */
 input::placeholder, textarea::placeholder {
-  color: oklch(0.55 0 0 / 0.5);
+  color: var(--texto-3);
+  opacity: 1;
 }
 
 /* Ancho del sitio público: 1200px con 24px de aire, como define la banda.
@@ -1639,6 +1643,15 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
 body:has([data-sin-flotantes]) .flotante-whatsapp,
 html[data-zona-sin-flotante] .flotante-whatsapp {
   display: none;
+}
+
+/* En Mi cuenta, en el teléfono, el flotante tapaba el importe del envío, la
+   barra del límite y los controles de los formularios (mes simulado, H092).
+   Cada pantalla que lo necesita trae su propio WhatsApp con el texto armado. */
+@media (max-width: 1023px) {
+  body:has([data-sin-flotante-en-celular]) .flotante-whatsapp {
+    display: none;
+  }
 }
 
 /* En el teléfono, mientras se escribe en un campo, el flotante se va: con el

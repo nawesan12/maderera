@@ -1343,6 +1343,14 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   object-position: left bottom;
 }
 
+.comprobante-hoja .firma-aclaracion {
+  display: flex;
+  height: 22mm;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.15rem;
+}
+
 .comprobante-hoja .firma-vacia {
   height: 22mm;
   border-bottom: 1px solid var(--linea);

@@ -114,7 +114,7 @@ async function Firma({ token }: { token: string }) {
                 <li key={i} className="px-5 py-3">
                   <span className="flex justify-between gap-4">
                     <span className="min-w-0">{linea.descripcion}</span>
-                    <span className="tabular shrink-0 font-semibold">{cantidadConUnidad(linea.cantidad, linea.unidad)}</span>
+                    <span className="tabular shrink-0 font-semibold">{cantidadConUnidad(linea.cantidad, linea.unidad, linea.descripcion)}</span>
                   </span>
                   {/* Lo que sale cortado y según qué corte: si falta una
                       pieza, la firma tiene que servir de constancia. */}

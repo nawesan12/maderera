@@ -280,7 +280,7 @@ export async function ComprobanteImpreso({
                   {/* data-label: en el teléfono la tabla se apila (globals.css). La
                       unidad suelta no se escribe. */}
                   <td className="der mono" data-label="Cant.">
-                    {cantidadConUnidad(cantidad, item.unidad === "unidad" ? null : item.unidad)}
+                    {cantidadConUnidad(cantidad, item.unidad === "unidad" ? null : item.unidad, item.descripcion)}
                   </td>
                   <td className="der mono" data-label="P. unitario">{moneda.format(unitario)}</td>
                   {discrimina && (

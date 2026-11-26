@@ -87,7 +87,7 @@ export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
                       «14 pasada ×» abajo se leía como un cobro de más. */}
                   {!esLineaDelCorte(item) && (
                     <span className="detalle">
-                      {cantidadConUnidad(item.cantidad, item.unidad)} ×{" "}
+                      {cantidadConUnidad(item.cantidad, item.unidad, item.descripcion)} ×{" "}
                       {formatearMonto(item.precioUnitario)}
                     </span>
                   )}

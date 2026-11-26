@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Barcode, ChevronDown, History } from "lucide-react";
 import { NivelStock, TINTA_DEL_ESTADO, textoDelEstado } from "@/components/admin/nivel-stock";
-import { formatearUnidad } from "@/lib/formato";
+import { formatearUnidad, unidadDeVenta, unidadEnPlural } from "@/lib/formato";
 import { estadoEnSucursal } from "@/lib/stock-ajuste";
 import { formatearCantidad } from "@/lib/unidades";
 import type { FilaStock } from "@/lib/dal/admin/inventory";
@@ -35,7 +35,9 @@ export function TarjetaStock({
   verFicha: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
-  const unidad = formatearUnidad(fila.unidad);
+  // La lata de 4 litros se cuenta por lata: «41 u.», no «41 l» (H110).
+  const codigo = unidadDeVenta(fila.unidad, `${fila.productName} ${fila.label}`) ?? fila.unidad;
+  const unidad = formatearUnidad(codigo);
   const detalle = `stock-${fila.variantId}`;
 
   return (
@@ -94,7 +96,13 @@ export function TarjetaStock({
           <span className={`tabular block text-xl font-semibold ${fila.total < 0 ? "text-destructive" : ""}`}>
             {formatearCantidad(fila.total)}
           </span>
-          <span className="block text-sm text-muted-foreground">{unidad}</span>
+          {/* La suma de lo disponible de cada sucursal: el físico menos lo
+              reservado, lo mismo que dice cada una abajo. */}
+          <span className="block text-sm leading-tight text-muted-foreground">
+            {fila.total === 1 ? unidad : unidadEnPlural(unidad)}
+            <br />
+            disponible{fila.total === 1 ? "" : "s"}
+          </span>
         </p>
       </div>
 
@@ -159,7 +167,7 @@ export function TarjetaStock({
                 medida={fila.label}
                 branchSlug={s.slug}
                 galpon={s.qty - s.enReparto}
-                unidad={fila.unidad}
+                unidad={codigo}
                 largoMm={fila.largoMm}
                 sucursal={s.nombre}
               />

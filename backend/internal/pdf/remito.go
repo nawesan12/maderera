@@ -111,9 +111,17 @@ func LeyendaDelRemito(f *FacturaDelRemito) string {
 }
 
 // UnidadPara es la unidad concordada con la cantidad: «placas», «rollos»;
-// lo abreviado no cambia. Gemelo de unidadEnPlural en lib/formato.ts.
-func UnidadPara(u string, cantidad float64) string {
-	a := Unidad(u)
+// lo abreviado no cambia. Gemelo de unidadEnPlural en lib/formato.ts. La
+// descripción decide la unidad de venta (UnidadDeVenta): la lata de 4
+// litros sale «u.», no «l».
+func UnidadPara(u string, cantidad float64, descripcion string) string {
+	if u == "pasada" {
+		if cantidad == 1 {
+			return "corte"
+		}
+		return "cortes"
+	}
+	a := Unidad(UnidadDeVenta(u, descripcion))
 	if cantidad == 1 || strings.ContainsAny(a, ". ²") || len([]rune(a)) <= 2 || strings.HasSuffix(a, "s") {
 		return a
 	}
@@ -285,7 +293,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		espacio(maximo(float64(len(Renglones(item.Descripcion, Helvetica, 9, anchoDescripcion)))*9*1.35, 12)+4+altoCorte, true)
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 9}, Ancho: anchoDescripcion})
 		h.EscribirNumero(numeroJS(item.Cantidad), Opciones{X: colCantidad, Y: cursor, Tamano: 9, Fuente: Mono, Derecha: true}, Mm(16))
-		h.EscribirEnAncho(UnidadPara(item.Unidad, item.Cantidad), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true}, Mm(26))
+		h.EscribirEnAncho(UnidadPara(item.Unidad, item.Cantidad, item.Descripcion), Opciones{X: derecha, Y: cursor, Tamano: 8.5, Derecha: true}, Mm(26))
 		if item.Corte != "" {
 			alto += 2 + h.EscribirParrafo(item.Corte, Parrafo{Opciones: Opciones{X: Margen, Y: cursor - maximo(alto, 12) + 1, Tamano: 7.5, Color: TintaSuave},
 				Ancho: anchoDescripcion})
@@ -308,7 +316,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 		cursor -= 12
 		anchoUtil := AnchoA4 - Margen*2
 		for _, p := range r.Pendientes {
-			texto := numeroJS(p.Pendiente) + " " + UnidadPara(p.Unidad, p.Pendiente) + " · " + p.Descripcion
+			texto := numeroJS(p.Pendiente) + " " + UnidadPara(p.Unidad, p.Pendiente, p.Descripcion) + " · " + p.Descripcion
 			espacio(float64(len(Renglones(texto, Helvetica, 8, anchoUtil)))*8*1.35, false)
 			cursor -= h.EscribirParrafo(texto, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8}, Ancho: anchoUtil, Interlineado: 11})
 		}
@@ -345,15 +353,20 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	h.Pagina.DibujarLinea(Linea{X1: Margen, Y1: yFirma, X2: Margen + anchoFirma, Y2: yFirma, Grosor: 0.5, Color: ColorLinea})
 
 	if r.FirmadoAt != nil {
-		texto := "Firmado el " + FechaHora(*r.FirmadoAt)
-		if r.ReceptorNombre != "" {
-			texto += " por " + r.ReceptorNombre
-		}
-		h.Escribir(texto, Opciones{X: Margen, Y: yFirma - 11, Tamano: 7, Color: TintaSuave})
+		h.Escribir("Firmado el "+FechaHora(*r.FirmadoAt), Opciones{X: Margen, Y: yFirma - 11, Tamano: 7, Color: TintaSuave})
 	}
 
 	xSegunda := Margen + anchoFirma + Mm(10)
 	h.Escribir("ACLARACIÓN Y DOCUMENTO", Opciones{X: xSegunda, Y: yFirma + Mm(26), Tamano: 6, Fuente: Negrita, Color: TintaSuave})
+	// Firmado en la pantalla, la aclaración es quien firmó: el recuadro
+	// quedaba en blanco y el nombre iba debajo de la firma (mes simulado).
+	// Sin firma queda en blanco, para escribirla a mano en el papel.
+	if r.FirmadoAt != nil && r.ReceptorNombre != "" {
+		h.EscribirEnAncho(r.ReceptorNombre, Opciones{X: xSegunda, Y: yFirma + Mm(9), Tamano: 10}, derecha-xSegunda)
+		if r.ReceptorDocumento != "" {
+			h.EscribirEnAncho(r.ReceptorDocumento, Opciones{X: xSegunda, Y: yFirma + Mm(3), Tamano: 9, Color: TintaSuave}, derecha-xSegunda)
+		}
+	}
 	h.Pagina.DibujarLinea(Linea{X1: xSegunda, Y1: yFirma, X2: derecha, Y2: yFirma, Grosor: 0.5, Color: ColorLinea})
 
 	h.EscribirCentrado(LeyendaDelRemito(r.Factura), AnchoA4/2, Opciones{Y: Margen + Mm(4), Tamano: 7, Color: TintaSuave})

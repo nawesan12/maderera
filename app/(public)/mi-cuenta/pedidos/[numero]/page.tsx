@@ -141,7 +141,7 @@ export default async function DetallePedidoPage({
             .slice(0, 12)
             .map(
               (i) =>
-                `${cantidadConUnidad(Number(i.cantidad), i.unidad)} ${i.descripcion}`,
+                `${cantidadConUnidad(Number(i.cantidad), i.unidad, i.descripcion)} ${i.descripcion}`,
             )
             .join("; ")}.`,
           quien,
@@ -193,7 +193,7 @@ export default async function DetallePedidoPage({
                       </strong>
                       <span className="text-sm text-muted-foreground">
                         {" "}
-                        de {cantidadConUnidad(r.pedido, r.unidad)}
+                        de {cantidadConUnidad(r.pedido, r.unidad, r.descripcion)}
                       </span>
                     </span>
                   </div>
@@ -368,13 +368,13 @@ export default async function DetallePedidoPage({
                     <div className="min-w-0">
                       <p>{item.descripcion}</p>
                       <p className="tabular mt-0.5 text-sm text-muted-foreground">
-                        {cantidadConUnidad(Number(item.cantidad), item.unidad)} ×{" "}
+                        {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)} ×{" "}
                         {formatearMonto(item.precioUnitario)}
                       </p>
                       {corto && (
                         <p className="tabular mt-0.5 text-sm text-brand-orange-dark">
                           Entregado: {cantidadConUnidad(r.entregado, null)} de{" "}
-                          {cantidadConUnidad(r.pedido, r.unidad)}
+                          {cantidadConUnidad(r.pedido, r.unidad, r.descripcion)}
                         </p>
                       )}
                     </div>

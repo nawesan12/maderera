@@ -149,7 +149,7 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
           {p.porEntregar.map((r, i) => (
             <li key={i} className="flex justify-between gap-3">
               <span className="min-w-0 truncate">{r.descripcion}</span>
-              <span className="tabular shrink-0 font-semibold">{cantidadConUnidad(r.pendiente, r.unidad)}</span>
+              <span className="tabular shrink-0 font-semibold">{cantidadConUnidad(r.pendiente, r.unidad, r.descripcion)}</span>
             </li>
           ))}
         </ul>

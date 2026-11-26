@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaHora } from "@/components/admin/formato";
 import { verTraslado } from "@/lib/dal/admin/inventory";
-import { formatearUnidad } from "@/lib/formato";
+import { unidadConcordada } from "@/lib/formato";
 import { formatearCantidad } from "@/lib/unidades";
 import { esUuid } from "@/lib/uuid";
 import { AccionesDelTraslado } from "./acciones";
@@ -72,7 +72,10 @@ export default async function TrasladoPage({ params }: { params: Promise<{ id: s
                 </td>
                 <td className="tabular px-4 py-3 text-muted-foreground">{r.sku}</td>
                 <td className="tabular px-4 py-3 text-right text-lg font-semibold">
-                  {formatearCantidad(r.cantidad)} <span className="text-base font-normal text-muted-foreground">{formatearUnidad(r.unidad)}</span>
+                  {formatearCantidad(r.cantidad)}{" "}
+                  <span className="text-base font-normal text-muted-foreground">
+                    {unidadConcordada(r.cantidad, r.unidad, `${r.producto} ${r.medida}`)}
+                  </span>
                 </td>
               </tr>
             ))}

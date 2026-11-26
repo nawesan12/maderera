@@ -455,7 +455,7 @@ function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso:
           {pedido.porEntregar.slice(0, 3).map((r, i) => (
             <li key={i} className="flex justify-between gap-2">
               <span className="truncate text-muted-foreground">{r.descripcion}</span>
-              <span className="tabular shrink-0 font-medium">{cantidadConUnidad(r.pendiente, r.unidad)}</span>
+              <span className="tabular shrink-0 font-medium">{cantidadConUnidad(r.pendiente, r.unidad, r.descripcion)}</span>
             </li>
           ))}
           {pedido.porEntregar.length > 3 && (

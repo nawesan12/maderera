@@ -6,6 +6,8 @@ import {
   formatearPeso,
   ABREVIATURA_UNIDAD,
   cantidadConUnidad,
+  unidadConcordada,
+  unidadDeVenta,
   documentoConTipo,
   formatearUnidad,
   primerNombre,
@@ -172,6 +174,16 @@ describe("cantidadConUnidad", () => {
     expect(cantidadConUnidad(4, null)).toBe("4");
     expect(cantidadConUnidad(2.5, "metro_cuadrado")).toBe("2,5 m²");
     expect(cantidadConUnidad(4, "pasada")).toBe("4 cortes");
+  });
+
+  // H110: la lata se cuenta por lata en la firma, el remito, el stock y el mostrador.
+  it("la lata de cuatro litros se cuenta por unidad", () => {
+    expect(cantidadConUnidad(2, "litro", "Laca Poliuretánica — 4 litros — Brillante")).toBe("2 u.");
+    expect(cantidadConUnidad(2, "litro", "Thinner suelto")).toBe("2 l");
+    expect(unidadDeVenta("litro", "Laca 4 litros")).toBe("unidad");
+    expect(unidadConcordada(119, "placa")).toBe("placas");
+    expect(unidadConcordada(2.5, "placa")).toBe("placas");
+    expect(unidadConcordada(22, "rollo")).toBe("rollos");
   });
 });
 

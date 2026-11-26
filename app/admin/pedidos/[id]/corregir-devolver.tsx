@@ -99,7 +99,7 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
               <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <label htmlFor={`devuelve-${r.id}`} className="min-w-0 flex-1 basis-48 text-base">
                   {r.descripcion}
-                  <span className="block text-sm text-muted-foreground">de {cantidadConUnidad(r.cantidad, r.unidad)}</span>
+                  <span className="block text-sm text-muted-foreground">de {cantidadConUnidad(r.cantidad, r.unidad, r.descripcion)}</span>
                 </label>
                 <Input
                   id={`devuelve-${r.id}`}

@@ -181,7 +181,7 @@ export default async function DetallePresupuestoPage({
                 <div className="min-w-0">
                   <p>{item.descripcion}</p>
                   <p className="tabular mt-0.5 text-sm text-muted-foreground">
-                    {cantidadConUnidad(Number(item.cantidad), item.unidad)} ×{" "}
+                    {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)} ×{" "}
                     {formatearMonto(item.precioUnitario)}
                   </p>
                 </div>

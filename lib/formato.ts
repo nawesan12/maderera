@@ -305,12 +305,27 @@ export function unidadEnPlural(unidad: string): string {
 const cantidadLegible = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 });
 
 /**
+ * La unidad en que se cuenta lo que se vende. Un producto en litros o en
+ * kilos que trae su envase en el nombre («Laca Poliuretánica — 4 litros»)
+ * se vende y se cuenta por envase: «2 l» eran dos latas de cuatro litros, y
+ * el stock decía «41 l» de 41 latas (mes simulado, H110). Ahí es «unidad».
+ * Una sola regla para la ficha, el remito, la firma, el stock y el mostrador.
+ */
+export function unidadDeVenta(unidad: string | null, descripcion: string | null | undefined = ""): string | null {
+  if ((unidad === "litro" || unidad === "kg") && /\d\s*(l|lts?|litros?|kg|kilos?)\b/i.test(descripcion ?? "")) {
+    return "unidad";
+  }
+  return unidad;
+}
+
+/**
  * La cantidad con su unidad, concordada: «1 placa», «25 placas», «20 u.»,
  * «2,5 m²». Se leía «Quedan 25 placa» y «4 rollo» en las entregas y «3 placa»
  * en el papel del cliente (mes simulado, H095). Sin unidad, la cifra sola.
  */
-export function cantidadConUnidad(cantidad: number, unidad: string | null): string {
+export function cantidadConUnidad(cantidad: number, unidad: string | null, descripcion = ""): string {
   const n = cantidadLegible.format(cantidad);
+  unidad = unidadDeVenta(unidad, descripcion);
   if (!unidad) return n;
   // La línea del corte se cobra por pasada de la sierra; en el papel del
   // cliente es «4 cortes», al lado de «Corte a medida · 3 piezas»: la
@@ -318,6 +333,14 @@ export function cantidadConUnidad(cantidad: number, unidad: string | null): stri
   if (unidad === "pasada") return `${n} ${cantidad === 1 ? "corte" : "cortes"}`;
   const u = formatearUnidad(unidad);
   return `${n} ${cantidad === 1 ? u : unidadEnPlural(u)}`;
+}
+
+/**
+ * La unidad sola, concordada con la cantidad que va al lado en otro estilo:
+ * «119 placas», «2,5 placas», «22 rollos» (el traslado decía «119 placa»).
+ */
+export function unidadConcordada(cantidad: number, unidad: string | null, descripcion = ""): string {
+  return cantidadConUnidad(cantidad, unidad, descripcion).replace(/^\S+\s?/, "");
 }
 
 /** Pluraliza sin que quede "1 ítems". */

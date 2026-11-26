@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatearUnidad } from "@/lib/formato";
+import { unidadConcordada } from "@/lib/formato";
 import { admiteDecimales, formatearCantidad, leerCantidad } from "@/lib/unidades";
 import { buscarMedidas, crearTraslado, type MedidaEncontrada } from "./actions";
 
@@ -167,7 +167,8 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
                   <p
                     className={`tabular text-sm ${r.sinStock || r.hay <= 0 ? "font-medium text-destructive" : "text-muted-foreground"}`}
                   >
-                    {origenNombre}: {formatearCantidad(Math.max(r.hay, 0))} {formatearUnidad(r.medida.unidad)}
+                    {origenNombre}: {formatearCantidad(Math.max(r.hay, 0))}{" "}
+                    {unidadConcordada(Math.max(r.hay, 0), r.medida.unidad, `${r.medida.producto} ${r.medida.medida}`)}
                   </p>
                 </div>
                 <label className="sr-only" htmlFor={`traslado-cant-${r.medida.id}`}>

@@ -39,8 +39,11 @@ func TestLeyendaYUnidadesDelRemito(t *testing.T) {
 		u    string
 		n    float64
 		dice string
-	}{{"placa", 1, "placa"}, {"placa", 25, "placas"}, {"rollo", 6, "rollos"}, {"unidad", 20, "u."}, {"par", 2, "pares"}, {"metro_cuadrado", 3, "m²"}} {
-		if got := UnidadPara(c.u, c.n); got != c.dice {
+		desc string
+	}{{"placa", 1, "placa", ""}, {"placa", 25, "placas", ""}, {"rollo", 6, "rollos", ""}, {"unidad", 20, "u.", ""}, {"par", 2, "pares", ""},
+		{"metro_cuadrado", 3, "m²", ""}, {"litro", 2, "u.", "Laca Poliuretánica — 4 litros — Brillante"}, {"litro", 2, "l", "Thinner suelto"},
+		{"pasada", 1, "corte", ""}, {"pasada", 12, "cortes", ""}} {
+		if got := UnidadPara(c.u, c.n, c.desc); got != c.dice {
 			t.Errorf("%v %s: %q, quería %q", c.n, c.u, got, c.dice)
 		}
 	}

@@ -1,3 +1,5 @@
+import { unidadDeVenta } from "@/lib/formato";
+
 /**
  * Cantidades de stock y de venta: cuándo admiten decimales y cómo se escriben.
  *
@@ -188,8 +190,9 @@ export function formatearDecimal(
  */
 export function cantidadConUnidad(cantidad: number, unidad: string | null | undefined, descripcion = ""): string {
   const n = formatearCantidad(cantidad);
-  if ((unidad === "litro" || unidad === "kg") && /\d\s*(l|lts?|litros?|kg|kilos?)\b/i.test(descripcion)) {
-    return `${n} u.`;
-  }
-  return `${n} ${cantidad === 1 ? formatearUnidadLarga(unidad) : formatearUnidadPlural(unidad)}`;
+  const u = unidadDeVenta(unidad ?? null, descripcion);
+  // Lo que se cuenta por unidad dice «u.», como en las entregas, el remito y
+  // el ticket: la ficha decía «40 unidades» y Entregas «40 u.» (H110).
+  if (!u || u === "unidad") return `${n} u.`;
+  return `${n} ${cantidad === 1 ? formatearUnidadLarga(u) : formatearUnidadPlural(u)}`;
 }

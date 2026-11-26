@@ -132,7 +132,7 @@ export function Entregas({
           {conSaldo.map((p) => (
             <li key={p.orderItemId} className="flex items-baseline justify-between gap-3">
               <span className="min-w-0 text-base">{p.descripcion}</span>
-              <span className="tabular shrink-0 text-lg font-semibold">{cantidadConUnidad(p.pendiente, p.unidad)}</span>
+              <span className="tabular shrink-0 text-lg font-semibold">{cantidadConUnidad(p.pendiente, p.unidad, p.descripcion)}</span>
             </li>
           ))}
         </ul>
@@ -438,7 +438,7 @@ function RenglonACantidad({
       <label htmlFor={id} className="min-w-0 flex-1 basis-48 text-base">
         {p.descripcion}
         <span className="block text-muted-foreground">
-          Quedan {cantidadConUnidad(p.pendiente, p.unidad)}
+          Quedan {cantidadConUnidad(p.pendiente, p.unidad, p.descripcion)}
           {/* Lo que hay en el estante, para no prometer lo que no está (mes
               simulado, H218). */}
           {p.enElGalpon !== undefined && (

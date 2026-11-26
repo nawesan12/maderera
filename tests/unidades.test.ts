@@ -123,6 +123,8 @@ describe("cantidadConUnidad (mes simulado, H055)", () => {
     expect(cantidadConUnidad(1, "placa")).toBe("1 placa");
     expect(cantidadConUnidad(2, "litro", "Laca Poliuretánica — 4 litros — Brillante")).toBe("2 u.");
     expect(cantidadConUnidad(2.5, "metro_lineal")).toBe("2,5 metros");
+    // Como en las entregas: «40 u.», no «40 unidades» (H110).
+    expect(cantidadConUnidad(40, "unidad")).toBe("40 u.");
   });
 });
 

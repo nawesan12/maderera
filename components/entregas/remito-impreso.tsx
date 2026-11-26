@@ -1,5 +1,5 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
-import { formatearMonto, formatearUnidad, unidadEnPlural } from "@/lib/formato";
+import { formatearMonto, formatearUnidad, unidadDeVenta, unidadEnPlural } from "@/lib/formato";
 import { fechaDelRemito, fechaHoraDeFirma } from "@/lib/entregas/fecha";
 import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 
@@ -169,7 +169,7 @@ export function RemitoImpreso({
                   {linea.corte && <span className="chico" style={{ display: "block" }}>{linea.corte}</span>}
                 </td>
                 <td className="der mono">{linea.cantidad}</td>
-                <td className="der">{unidadDe(linea.unidad, linea.cantidad)}</td>
+                <td className="der">{unidadDe(linea.unidad, linea.cantidad, linea.descripcion)}</td>
               </tr>
             ))}
           </tbody>
@@ -187,7 +187,7 @@ export function RemitoImpreso({
               {remito.pendientes.map((p, i) => (
                 <li key={i}>
                   <span className="mono">{p.pendiente}</span>{" "}
-                  {unidadDe(p.unidad, p.pendiente)} · {p.descripcion}
+                  {unidadDe(p.unidad, p.pendiente, p.descripcion)} · {p.descripcion}
                 </li>
               ))}
             </ul>
@@ -222,7 +222,6 @@ export function RemitoImpreso({
                 <p className="chico">
                   Firmado el{" "}
                   {remito.firmadoAt ? fechaHoraDeFirma.format(remito.firmadoAt) : "—"}
-                  {remito.receptorNombre ? ` por ${remito.receptorNombre}` : ""}
                 </p>
               </>
             ) : (
@@ -232,7 +231,17 @@ export function RemitoImpreso({
 
           <div className="firma-caja">
             <p className="etiqueta">Aclaración y documento</p>
-            <div className="firma-vacia" />
+            {/* Firmado en la pantalla, la aclaración es quien firmó: el
+                recuadro quedaba en blanco y el nombre iba debajo de la firma
+                (mes simulado). Sin firma, en blanco para el papel. */}
+            {remito.firmaUrl && remito.receptorNombre ? (
+              <div className="firma-aclaracion">
+                <strong>{remito.receptorNombre}</strong>
+                {remito.receptorDocumento && <span className="mono">{remito.receptorDocumento}</span>}
+              </div>
+            ) : (
+              <div className="firma-vacia" />
+            )}
           </div>
         </section>
 
@@ -249,8 +258,9 @@ export function RemitoImpreso({
 }
 
 /** La unidad concordada: «placas», «rollos»; lo abreviado no cambia. */
-function unidadDe(unidad: string, cantidad: number): string {
-  const u = formatearUnidad(unidad);
+function unidadDe(unidad: string, cantidad: number, descripcion: string): string {
+  if (unidad === "pasada") return cantidad === 1 ? "corte" : "cortes";
+  const u = formatearUnidad(unidadDeVenta(unidad, descripcion));
   return cantidad === 1 ? u : unidadEnPlural(u);
 }
 

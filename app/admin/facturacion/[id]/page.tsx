@@ -345,7 +345,7 @@ export default async function FichaComprobantePage({
                     <tr key={item.id}>
                       <td className="px-5 py-3 text-base">{item.descripcion}</td>
                       <td className="tabular px-3 py-3 text-right text-base">
-                        {cantidadConUnidad(Number(item.cantidad), item.unidad)}
+                        {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
                       </td>
                       <td className="tabular px-3 py-3 text-right text-base">
                         {moneda.format(

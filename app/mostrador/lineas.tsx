@@ -8,6 +8,8 @@ import {
   importeDelCampo,
   importeIlegible,
   importeParaElCampo,
+  unidadConcordada,
+  unidadDeVenta,
 } from "@/lib/formato";
 import { admiteDecimales, formatearCantidad, pasoDeCantidad } from "@/lib/unidades";
 import { cantidadDelRenglon, esLineaDelCorte, type LineaDeVenta } from "@/lib/mostrador/importes";
@@ -129,11 +131,11 @@ export function Lineas({
                       ? "del plano"
                       : // La media placa dice media placa, no «1 placa» (H035).
                         `${formatearCantidad(l.cantidad)} ${
-                          l.presentacion ? (l.cantidad === 1 ? "media placa" : "medias placas") : formatearUnidad(l.unidad)
+                          l.presentacion ? (l.cantidad === 1 ? "media placa" : "medias placas") : unidadConcordada(l.cantidad, l.unidad, l.descripcion)
                         } · del plano`
                     : l.presentacion
                       ? "cada media placa"
-                      : `por ${formatearUnidad(l.unidad)}`}
+                      : `por ${formatearUnidad(unidadDeVenta(l.unidad, l.descripcion))}`}
                 </span>
               </span>
 

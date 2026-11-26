@@ -730,13 +730,13 @@ func RemitoDeReposicion(ctx context.Context, tx pgx.Tx, corte string, usuario *s
 		return nil, err
 	}
 	token2 := tokenDeFirma()
-	nota := "Reposición sin cargo " + numeroCorte
+	// Sin nota: el título y la cabecera del remito ya dicen la reposición.
 	var id string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO deliveries (numero, order_id, branch_id, tipo, estado, notas, firma_token, created_by_user_id, cutting_order_id,
+		INSERT INTO deliveries (numero, order_id, branch_id, tipo, estado, firma_token, created_by_user_id, cutting_order_id,
 		  created_at, updated_at)
-		VALUES ($1, $2, $3, 'retiro', 'preparada', $4, $5, $6, $7, clock_timestamp(), clock_timestamp())
-		RETURNING id::text`, numero, *pedido, sucursal, nota, token2, usuario, corte).Scan(&id); err != nil {
+		VALUES ($1, $2, $3, 'retiro', 'preparada', $4, $5, $6, clock_timestamp(), clock_timestamp())
+		RETURNING id::text`, numero, *pedido, sucursal, token2, usuario, corte).Scan(&id); err != nil {
 		return nil, err
 	}
 	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token2}, nil

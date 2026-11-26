@@ -2933,3 +2933,25 @@ misma consulta al contador.
   devoluciones le dejaron sin tramo. Prueba:
   `TestLaDevolucionPorAfueraVaPrimeroAMercadoPago` (MP $600 + transferencia
   $400; devolver $300 y $800, Deudores en 0 y Banco en 900).
+
+## Mes simulado: la cola de corte y el taller (rama `mes-cortes-taller`)
+
+- **El plano se cuenta como la hoja** (`cortes.MotorPasadasDeLaHoja`, 4):
+  las pasadas que se cobran, las del plano y los retales salen de los mismos
+  árboles guillotina que la hoja de la seccionadora (`ConLaHoja`). Sobre 200
+  despieces del banco, 155 daban otras pasadas. La hoja se arma siempre del
+  plano del motor (`PlanoDelMotor`), nunca del ya contado: rearmarla desde
+  las piezas movidas no siempre da el mismo árbol. Lo nacido antes queda como
+  se cobró. `TestElPlanoCuentaComoLaHoja`.
+- **Migración 00240**: `terminado_at`, `sin_cargo` y `motivo_anulado` en
+  `cutting_orders`.
+- El alta guarda placas y pasadas del plano, frena piezas que no entran y la
+  placa que el pedido no vende (`otraPlaca`), y corrige con `reemplaza`.
+  **El handler descartaba el teléfono y el día de retiro** del formulario.
+- La ficha trae `modo` (suelto, pedido, vendido, sinCargo): de dónde sale la
+  plata. El suelto con cargo no se retira: `POST /cortes/{id}/pedido` lo pasa
+  a pedido (reservado, renglones `del_corte`) y se cobra por el pedido.
+  Pendiente con Nahuel: sumar las pasadas a un pedido que ya vende las
+  placas (hoy se muestran «fuera del pedido»).
+- `roles.DecidenEnLaCola` (y `DECIDEN_EN_LA_COLA`): urgente, retirar, anular
+  y corregir no son del aserradero; su ficha llega sin importes ni teléfono.

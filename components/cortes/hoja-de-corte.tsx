@@ -141,7 +141,7 @@ export function HojaDeCorteImpresa({
 
       {/* El primer corte de una media placa es partir la entera. */}
       {corte.mitad && (
-        <section className="hc-patron hc-partir">
+        <section className="hc-partir">
           <h2 className="hc-patron-titulo">
             Partir {enteras === 1 ? "la placa" : `las ${enteras} placas`}
             <span className="hc-patron-datos">
@@ -610,6 +610,7 @@ const ESTILOS = `
   .hc-queda { margin-top: 1.5mm; font-size: 11.5pt; color: #333; }
   .hc-pie { margin-top: 6mm; font-size: 10pt; color: #555; }
   .hc-canto { font-weight: 600; }
+  .hc-partir { margin-top: 6mm; padding-top: 4mm; border-top: 2px solid #1a1a1a; }
   .hc-partir .hc-sale p + p { margin-top: 1mm; }
   .hc-leyenda { display: none; margin: -2mm 0 3mm; font-size: 12pt; font-variant-numeric: tabular-nums; color: #333; }
   @media print {

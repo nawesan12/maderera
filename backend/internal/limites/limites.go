@@ -73,6 +73,14 @@ var limites = map[Accion]Limite{
 	Busqueda:       {120, time.Minute},
 }
 
+// porIP es el tope de los intentos que se cuentan por IP cuando no es el de
+// la acción (PorAmbos). Ingresar: el local de la maderera entra a internet
+// por un solo router, y diez claves mal tipeadas entre todo el personal en
+// cinco minutos dejaban afuera a todos, también al que la tipeaba bien (mes
+// simulado: el aserradero esperó más de 4 minutos con un 429). La cuenta
+// por correo sigue en 10: probar claves contra una cuenta sigue frenado.
+var porIP = map[Accion]int32{Ingresar: 30}
+
 // Veredicto es si pasa, cuántos le quedan y cuánto esperar si no.
 type Veredicto struct {
 	Permitido      bool
@@ -114,6 +122,9 @@ func evaluar(cuenta int32, l Limite, ahora, inicio time.Time) Veredicto {
 // «correo:ana@…»).
 func (l *Limitador) Permitido(ctx context.Context, accion Accion, sujeto string) Veredicto {
 	lim := limites[accion]
+	if m, ok := porIP[accion]; ok && strings.HasPrefix(sujeto, "ip:") {
+		lim.Maximo = m
+	}
 	ahora := l.ahora()
 	ventana := inicioDeVentana(ahora, lim.Ventana)
 	cuenta, err := l.q.ContarIntento(ctx, sqlc.ContarIntentoParams{Clave: string(accion) + ":" + sujeto, Ventana: ventana})

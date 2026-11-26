@@ -91,8 +91,10 @@ func TestElQueEntraBienDevuelveElIntento(t *testing.T) {
 		}
 		l.Devolver(ctx, Ingresar, "ip:9.9.9.9")
 	}
-	for i := 1; i <= 10; i++ {
-		l.Permitido(ctx, Ingresar, "ip:9.9.9.9")
+	for i := 1; i <= 30; i++ {
+		if !l.Permitido(ctx, Ingresar, "ip:9.9.9.9").Permitido {
+			t.Fatalf("el local entero quedó afuera en el intento fallido %d", i)
+		}
 	}
 	if l.Permitido(ctx, Ingresar, "ip:9.9.9.9").Permitido {
 		t.Error("los fallidos dejaron de contar")

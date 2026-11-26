@@ -66,7 +66,8 @@ const MEDIOS: Record<string, string> = {
   tarjeta: "Tarjeta",
   cheque: "Cheque",
   echeq: "e-Cheq",
-  cuenta_corriente: "Cuenta corriente",
+  // El pase a la cuenta no es un cobro: lo paga el recibo que venga.
+  cuenta_corriente: "Pasada a cuenta corriente",
   debito: "Débito",
   credito: "Crédito",
   tarjeta_debito: "Débito",
@@ -117,6 +118,9 @@ export default async function FichaComprobantePage({
     Number(comprobante.iva105) +
     Number(comprobante.iva27);
   const anulada = comprobante.estado === "anulada";
+  // La factura sin CAE de una venta anulada no se manda a ARCA: se da de
+  // baja (Go también lo frena: TestLaVentaAnuladaNoSeAutoriza).
+  const autorizable = !anulada && !comprobante.ventaAnulada;
   // La serie solo importa sin CAE: el reintento y la baja.
   const serie = comprobante.cae ? null : await serieDelComprobante(id);
   // La factura de una venta, ya autorizada, se corrige con una devolución, y
@@ -244,7 +248,7 @@ export default async function FichaComprobantePage({
               </details>
             </div>
           ))}
-          {!anulada && serie?.tramo && (
+          {autorizable && serie?.tramo && (
             // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
             // se pide desde acá: la serie se autoriza de a 15, desde el que
             // tiene justo 15 atrás.
@@ -260,7 +264,7 @@ export default async function FichaComprobantePage({
               </span>
             </div>
           )}
-          {!anulada && !serie?.tramo && (
+          {autorizable && !serie?.tramo && (
             <div className="mt-3">
               <BotonAutorizar
                 id={comprobante.id}
@@ -272,7 +276,7 @@ export default async function FichaComprobantePage({
               />
             </div>
           )}
-          {!anulada && comprobante.estado === "rechazada" && (
+          {autorizable && comprobante.estado === "rechazada" && (
             <div className="mt-3">
               <CorregirReceptor
                 id={comprobante.id}

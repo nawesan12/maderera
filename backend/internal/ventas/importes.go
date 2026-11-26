@@ -237,6 +237,24 @@ func AplicarDescuento(lineas []LineaDeVenta, pedido float64) ([]LineaDeVenta, fl
 // H168).
 func EsElegibleParaLaEscala(l LineaDeVenta) bool { return l.VariantID != nil || l.Corte != nil }
 
+// TodoEsElegible es la base de la escala con la regla descuento_al_flete en
+// «si»: el descuento por forma de pago va también sobre el renglón a mano.
+func TodoEsElegible(LineaDeVenta) bool { return true }
+
+// FaltaLoteOCupon es el problema de un pago con tarjeta sin el lote o el
+// cupón de la terminal (regla lote_y_cupon, H032). Vacío si no falta nada.
+func FaltaLoteOCupon(pagos []PagoDeVenta) string {
+	for _, p := range pagos {
+		if p.Medio != "debito" && p.Medio != "credito" {
+			continue
+		}
+		if p.NroLote == nil || strings.TrimSpace(*p.NroLote) == "" || p.NroCupon == nil || strings.TrimSpace(*p.NroCupon) == "" {
+			return "Falta el lote o el cupón de la tarjeta."
+		}
+	}
+	return ""
+}
+
 // AplicarDescuentoSobre reparte el descuento solo entre las líneas elegibles
 // (el resto sale como está) y devuelve todas, en su orden.
 func AplicarDescuentoSobre(lineas []LineaDeVenta, pedido float64, elegible func(LineaDeVenta) bool) ([]LineaDeVenta, float64) {

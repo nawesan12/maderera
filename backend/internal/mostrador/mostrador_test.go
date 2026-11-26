@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -42,6 +43,11 @@ type entorno struct {
 func armar(t *testing.T) *entorno {
 	t.Helper()
 	pool := pruebas.Base(t)
+	// Las pruebas cobran con tarjeta sin lote ni cupón: lo que exige la
+	// regla lote_y_cupon (de arranque, «obligatorio») lo prueba TestLoteYCupon.
+	if err := reglas.Fijar(context.Background(), pool, reglas.LoteYCupon, "opcional"); err != nil {
+		t.Fatal(err)
+	}
 	ses := auth.Nuevo(auth.Config{Secreto: "secreto-de-prueba-del-mostrador-de-32-caracteres", URL: "http://localhost"}, pool)
 	svc := Nuevo(pool, silencio).ConClaveDeCola("secreto-de-prueba-del-mostrador-de-32-caracteres")
 	m := http.NewServeMux()

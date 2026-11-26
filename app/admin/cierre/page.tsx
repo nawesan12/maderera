@@ -211,7 +211,7 @@ export default async function CierrePage({
               resultado del mes: va el motivo en grande y la cifra abajo. */}
           {resultado.actual.sinCostosCargados ? (
             <p className="estado-problema mt-2 text-[24px] font-bold leading-none tracking-[-0.03em]">
-              Sin costos cargados
+              {resultado.actual.costo > 0 ? "Faltan costos" : "Sin costos cargados"}
             </p>
           ) : (
             <p

@@ -162,7 +162,7 @@ export async function NumerosDelNegocio({
           // Con más de la mitad de lo vendido sin costo, la cifra no es la
           // ganancia: un «$ 0» en grande se leía como un mes perdido. Va
           // el motivo en grande y la cifra queda de dato.
-          valor={g.sinCostosCargados ? "Sin costos cargados" : g.resultado}
+          valor={g.sinCostosCargados ? (g.costo > 0 ? "Faltan costos" : "Sin costos cargados") : g.resultado}
           href="/admin/cierre"
           variacion={g.sinCostosCargados ? null : ganancia.variacion}
           renglones={[

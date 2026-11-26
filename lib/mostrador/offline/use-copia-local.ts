@@ -35,6 +35,31 @@ export interface CopiaLista {
   buscar: (texto: string, customerId: string | null, listaDelCliente: string | null) => ResultadoLocal[];
   buscarCliente: (texto: string) => ClienteLocal[];
   sincronizar: (forzarTodo?: boolean) => Promise<void>;
+  /**
+   * Lo que se acaba de vender o acopiar en esta caja, para que el buscador lo
+   * dé por apartado ya. `enLaCola` es la venta cobrada sin conexión.
+   */
+  apartar: (lineas: LineaApartada[], enLaCola: boolean) => void;
+  /** La cola terminó de subir: sus apartados pasan a esperar al servidor. */
+  subioLaCola: () => void;
+}
+
+export interface LineaApartada {
+  variantId: string | null;
+  cantidad: number;
+  presentacion?: "media_largo" | "media_ancho" | null;
+}
+
+/*
+ * Un apartado vive hasta que una sincronización que **empezó después** de que
+ * el servidor lo tuvo trae el stock nuevo (H023). Los de la cola no tienen
+ * fecha hasta que suben: una sincronización en el medio trae el stock sin
+ * ellos, y descontarlos sigue siendo lo correcto.
+ */
+interface Apartado {
+  variantId: string;
+  cantidad: number;
+  enElServidorDesde: number | null;
 }
 
 export interface ResultadoLocal {
@@ -93,6 +118,9 @@ export function useCopiaLocal(branchId: string): CopiaLista {
     listaGeneralId: null,
   });
 
+  const apartados = useRef<Apartado[]>([]);
+  const [, setApartadosVersion] = useState(0);
+
   const recargar = useCallback(async () => {
     indices.current = await cargarIndices();
     setCuantas(indices.current.variantes.length);
@@ -101,9 +129,13 @@ export function useCopiaLocal(branchId: string): CopiaLista {
 
   const sincronizar = useCallback(
     async (forzarTodo = false) => {
+      const inicio = Date.now();
       try {
         const r = await sincronizarCatalogo({ forzarTodo });
         if (r) {
+          apartados.current = apartados.current.filter(
+            (a) => a.enElServidorDesde === null || a.enElServidorDesde >= inicio,
+          );
           await recargar();
           setUltima(new Date());
         }
@@ -174,9 +206,65 @@ export function useCopiaLocal(branchId: string): CopiaLista {
     [],
   );
 
+  /*
+   * Después de una venta se sincroniza enseguida: el delta trae lo físico y
+   * las reservas que cambiaron (`copia.go`). Antes la copia esperaba los diez
+   * minutos del ciclo, o un cambio de precio, y el buscador seguía ofreciendo
+   * como libres las placas recién vendidas o acopiadas en esta misma caja.
+   */
+  const despues = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sincronizarPronto = useCallback(() => {
+    if (despues.current) clearTimeout(despues.current);
+    despues.current = setTimeout(() => {
+      despues.current = null;
+      void sincronizar();
+    }, 300);
+  }, [sincronizar]);
+  useEffect(
+    () => () => {
+      if (despues.current) clearTimeout(despues.current);
+    },
+    [],
+  );
+
+  const apartar = useCallback(
+    (lineas: LineaApartada[], enLaCola: boolean) => {
+      const ahora = Date.now();
+      for (const l of lineas) {
+        if (!l.variantId || !(l.cantidad > 0)) continue;
+        apartados.current.push({
+          variantId: l.variantId,
+          // La media placa descuenta media: es una aproximación hasta que el
+          // servidor, que lee el producto (`factoresDeStock`), diga lo exacto.
+          cantidad: l.presentacion ? l.cantidad / 2 : l.cantidad,
+          enElServidorDesde: enLaCola ? null : ahora,
+        });
+      }
+      setApartadosVersion((v) => v + 1);
+      if (!enLaCola) sincronizarPronto();
+    },
+    [sincronizarPronto],
+  );
+
+  const subioLaCola = useCallback(() => {
+    const ahora = Date.now();
+    let habia = false;
+    for (const a of apartados.current) {
+      if (a.enElServidorDesde === null) {
+        a.enElServidorDesde = ahora;
+        habia = true;
+      }
+    }
+    if (habia) sincronizarPronto();
+  }, [sincronizarPronto]);
+
   const buscar = useCallback(
     (texto: string, _customerId: string | null, listaDelCliente: string | null) => {
       const { variantes, precios, stock, listaGeneralId } = indices.current;
+      const apartado = new Map<string, number>();
+      for (const a of apartados.current) {
+        apartado.set(a.variantId, (apartado.get(a.variantId) ?? 0) + a.cantidad);
+      }
 
       return buscarVariantes(variantes, texto).map((v) => ({
         variantId: v.variantId,
@@ -185,7 +273,10 @@ export function useCopiaLocal(branchId: string): CopiaLista {
         medida: v.medida,
         unidad: v.unidad,
         precio: precioLocal(precios, v.variantId, listaDelCliente, listaGeneralId),
-        stock: stock.get(`${branchId}:${v.variantId}`) ?? 0,
+        stock: Math.max(
+          (stock.get(`${branchId}:${v.variantId}`) ?? 0) - (apartado.get(v.variantId) ?? 0),
+          0,
+        ),
         largoMm: v.largoMm ?? null,
         anchoMm: v.anchoMm ?? null,
         categoria: v.categoria ?? null,
@@ -209,5 +300,7 @@ export function useCopiaLocal(branchId: string): CopiaLista {
     buscar,
     buscarCliente,
     sincronizar,
+    apartar,
+    subioLaCola,
   };
 }

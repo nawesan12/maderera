@@ -179,6 +179,15 @@ export function VistaMostrador({
   const { conexion, cajaFisica, vincularCaja, desvincularCaja, avanzarContador, cola } =
     useColaDelMostrador(sucursal.id);
 
+  // Cuando la cola baja, lo que subió ya está en el servidor: la copia se
+  // pone al día y deja de descontarlo a mano.
+  const { subioLaCola } = copia;
+  const sinSubirAntes = useRef(cola.sinSubir);
+  useEffect(() => {
+    if (cola.sinSubir < sinSubirAntes.current) subioLaCola();
+    sinSubirAntes.current = cola.sinSubir;
+  }, [cola.sinSubir, subioLaCola]);
+
   const [lineas, setLineas] = useState<LineaDeVenta[]>([]);
   const [clave, setClave] = useState(claveNueva);
   const [cliente, setCliente] = useState<Cliente | null>(null);
@@ -604,7 +613,7 @@ export function VistaMostrador({
         avanzarContador,
         contextoDelTicket,
       },
-      { setAviso, setUltima, limpiar },
+      { setAviso, setUltima, limpiar, apartar: (l) => copia.apartar(l, true) },
     );
   }
 
@@ -1008,6 +1017,7 @@ export function VistaMostrador({
           acopio,
         });
       }
+      copia.apartar(conLosCortes.lineas, false);
       limpiar();
       router.refresh();
     });

@@ -112,6 +112,8 @@ export interface AlCobrarSinConexion {
   setAviso: (aviso: Aviso | null) => void;
   setUltima: (ultima: UltimaVenta | null) => void;
   limpiar: () => void;
+  /** Lo vendido, para que el buscador lo descuente mientras espera en la cola. */
+  apartar: (lineas: LineaDeVenta[]) => void;
 }
 
 /**
@@ -142,7 +144,7 @@ export async function cobrarSinConexion(
     avanzarContador,
     contextoDelTicket,
   }: VentaSinConexion,
-  { setAviso, setUltima, limpiar }: AlCobrarSinConexion,
+  { setAviso, setUltima, limpiar, apartar }: AlCobrarSinConexion,
 ) {
   const problema = revisarVenta(lineas, medio, cliente?.id ?? null);
 
@@ -223,6 +225,7 @@ export async function cobrarSinConexion(
 
     await avanzarContador();
 
+    apartar(conLosCortes.lineas);
     setUltima({ numero, orderId: null, invoiceId: undefined, clave });
     setAviso({
       tipo: "ok",

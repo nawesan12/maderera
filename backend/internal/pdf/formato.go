@@ -187,7 +187,7 @@ func UnidadDeVenta(u, descripcion string) string {
 
 var abreviaturaUnidad = map[string]string{
 	"unidad":         "u.",
-	"metro_lineal":   "ml",
+	"metro_lineal":   "m",
 	"metro_cuadrado": "m²",
 	"tabla":          "tabla",
 	"placa":          "placa",

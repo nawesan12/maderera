@@ -5,6 +5,9 @@ import {
   estadoDelPago,
   mensajeDeConsulta,
   pedidosEnCurso,
+  importeAInformar,
+  quienConsulta,
+  sumaAlNombre,
   saludoDelCliente,
   unaPorProducto,
 } from "@/lib/cuenta/portal";
@@ -20,6 +23,8 @@ describe("el saludo", () => {
     expect(
       saludoDelCliente("Constructora del Sur S.R.L.", "30-71234567-1"),
     ).toBe("Constructora del Sur S.R.L.");
+    // Sin CUIT, el nombre de la empresa tampoco se corta en «Constructora».
+    expect(saludoDelCliente("Constructora Costa Atlántica SRL", null)).toBe("Constructora Costa Atlántica");
   });
   it("el distintivo es el de su lista", () => {
     expect(distintivoDeLista("profesional", "Lista constructora")).toBe(
@@ -156,5 +161,41 @@ describe("las reseñas", () => {
       { productId: "membrana", orderId: "4", yaResenado: true },
       { productId: "placa", orderId: "4", yaResenado: false },
     ]);
+  });
+});
+
+describe("Pagar tu cuenta", () => {
+  it("propone lo que se debe menos lo que ya está en revisión", () => {
+    expect(importeAInformar(5890600, 566456)).toBe(5324144);
+    expect(importeAInformar(1000, 0)).toBe(1000);
+  });
+  it("si ya está todo informado, el campo va vacío", () => {
+    expect(importeAInformar(1000, 1000)).toBeNull();
+    expect(importeAInformar(1000, 1500)).toBeNull();
+  });
+});
+
+describe("quién firma la consulta del catálogo", () => {
+  it("la ficha del cliente, como el portal", () => {
+    expect(quienConsulta({ nombre: "Gustavo Ibarra", esStaff: false, firma: "Constructora Costa Atlántica SRL" })).toEqual({
+      nombre: "Constructora Costa Atlántica SRL",
+    });
+  });
+  it("sin ficha, el usuario; la casa no firma", () => {
+    expect(quienConsulta({ nombre: "Ana", esStaff: false, firma: null })).toEqual({ nombre: "Ana" });
+    expect(quienConsulta({ nombre: "Vendedor", esStaff: true, firma: null })).toBeNull();
+    expect(quienConsulta(null)).toBeNull();
+  });
+});
+
+describe("el encabezado del resumen impreso", () => {
+  it("no repite el nombre de fantasía igual a la razón social", () => {
+    expect(sumaAlNombre("Maderera Juan B. Justo S.R.L.", "Maderera Juan B. Justo")).toBe(false);
+    expect(sumaAlNombre("Constructora Costa Atlántica SRL", "Constructora Costa Atlántica SRL")).toBe(false);
+  });
+  it("sí muestra un nombre distinto", () => {
+    expect(sumaAlNombre("RF Construcciones SRL", "Roberto Fernández")).toBe(true);
+    expect(sumaAlNombre("Maderera Juan B. Justo S.R.L.", "MJBJ")).toBe(true);
+    expect(sumaAlNombre("Algo SA", "")).toBe(false);
   });
 });

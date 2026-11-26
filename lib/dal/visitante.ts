@@ -8,6 +8,7 @@ import { listarProductos, preciosPropiosPorVariante } from "@/lib/dal/catalog";
 import { placasCortables } from "@/lib/dal/cortes-publico";
 import { SENAL_ESTADO } from "@/lib/senal-cliente";
 import { degradar } from "@/lib/degradar";
+import { clienteDeLaSesion } from "@/lib/dal/cuenta";
 
 /**
  * Lo que las páginas públicas saben de quien está mirando, resuelto en el
@@ -34,7 +35,16 @@ import { degradar } from "@/lib/degradar";
 
 /** Lo que el encabezado necesita: el nombre del menú y el contador. */
 export interface EstadoDelVisitante {
-  sesion: { nombre: string; esStaff: boolean } | null;
+  sesion: {
+    nombre: string;
+    esStaff: boolean;
+    /**
+     * Con qué nombre firma sus consultas por WhatsApp: el de su ficha de
+     * cliente («Constructora Costa Atlántica SRL»), como en el portal y en
+     * /contacto, no el del usuario web (mes simulado). Null si no tiene ficha.
+     */
+    firma: string | null;
+  } | null;
   cantidadItems: number;
   /**
    * Con qué señal se resolvió esto.
@@ -68,9 +78,11 @@ export async function estadoDelVisitante(): Promise<EstadoDelVisitante> {
     "lo que el encabezado sabe de quien mira",
     async () => {
       const [sesion, carrito] = await Promise.all([getSession(), obtenerCarrito()]);
+      const esStaff = sesion?.role === "staff";
+      const cliente = sesion && !esStaff ? await degradar("la ficha de quien mira", clienteDeLaSesion, null) : null;
       return {
         sesion: sesion
-          ? { nombre: sesion.name, esStaff: sesion.role === "staff" }
+          ? { nombre: sesion.name, esStaff, firma: cliente?.nombre ?? null }
           : null,
         cantidadItems: carrito.cantidadItems,
         senal,

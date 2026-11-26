@@ -5,6 +5,7 @@ import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 type ConfiguracionFiscal = Awaited<ReturnType<typeof obtenerConfiguracionFiscal>>;
 import type { ResumenDeCuenta } from "@/lib/dal/admin/resumen-cuenta";
 import { LogoEmisor } from "@/components/impresion/logo-emisor";
+import { sumaAlNombre } from "@/lib/cuenta/portal";
 
 const NOMBRE_DEL_TIPO: Record<string, string> = {
   compra: "Compra",
@@ -54,8 +55,8 @@ export function ResumenImpreso({
             <p className="razon">
               {emisor?.razonSocial || "Maderera Juan B. Justo"}
             </p>
-            {emisor?.nombreFantasia && (
-              <p className="fantasia">{emisor.nombreFantasia}</p>
+            {sumaAlNombre(emisor?.razonSocial || "Maderera Juan B. Justo", emisor?.nombreFantasia) && (
+              <p className="fantasia">{emisor?.nombreFantasia}</p>
             )}
             {emisor?.domicilio && <p className="chico">{emisor.domicilio}</p>}
             {emisor?.cuit && <p className="chico">CUIT {formatearCuit(emisor.cuit)}</p>}
@@ -72,7 +73,9 @@ export function ResumenImpreso({
           <p>
             <strong>{cliente.razonSocial ?? cliente.nombre}</strong>
           </p>
-          {cliente.razonSocial && <p className="chico">{cliente.nombre}</p>}
+          {cliente.razonSocial && sumaAlNombre(cliente.razonSocial, cliente.nombre) && (
+            <p className="chico">{cliente.nombre}</p>
+          )}
           {cliente.cuit && <p className="chico">CUIT {formatearCuit(cliente.cuit)}</p>}
           {cliente.direccion && <p className="chico">{cliente.direccion}</p>}
         </section>

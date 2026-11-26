@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CalendarClock, Loader2, MessageSquareText, Plus } from "lucide-react";
 import { ColumnaTablero, Tablero } from "@/components/admin/kanban";
@@ -199,7 +200,10 @@ export function NuevaGestion({
   const [abierto, setAbierto] = useState(abiertoInicial);
   const [cliente, setCliente] = useState<ClienteElegido | null>(clienteInicial ?? null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [sinAsunto, setSinAsunto] = useState(false);
   const [trabajando, empezar] = useTransition();
+  const router = useRouter();
+  const campoAsunto = useRef<HTMLInputElement>(null);
 
   if (!abierto) {
     return (
@@ -216,16 +220,26 @@ export function NuevaGestion({
 
   return (
     <form
-      action={(formData) =>
+      // Sin el globo del navegador (en inglés): el campo vacío se marca acá.
+      noValidate
+      action={(formData) => {
+        if (!String(formData.get("asunto") ?? "").trim()) {
+          setSinAsunto(true);
+          campoAsunto.current?.focus();
+          return;
+        }
         empezar(async () => {
           const r = await crearGestion({}, formData);
           setAviso(r.error ?? r.ok ?? null);
           if (!r.error) {
             setAbierto(false);
             if (!fijo) setCliente(null);
+            // El tablero se vuelve a pedir ya: quedaba con el formulario y
+            // «0 gestiones abiertas» hasta recargar (mes simulado).
+            router.refresh();
           }
-        })
-      }
+        });
+      }}
       className="tarjeta space-y-3 p-4"
     >
       <div className="grid gap-3 sm:grid-cols-2">
@@ -243,8 +257,12 @@ export function NuevaGestion({
         <label className="block">
           <span className="text-sm font-medium">De qué se trata</span>
           <input
+            ref={campoAsunto}
             name="asunto"
             required
+            aria-invalid={sinAsunto || undefined}
+            onChange={() => setSinAsunto(false)}
+            autoFocus={Boolean(clienteInicial) && !asunto}
             defaultValue={asunto}
             placeholder="Cobrar la factura 0015-00001234"
             className="mt-1 h-10 w-full rounded-lg border border-linea bg-background px-3 text-base"

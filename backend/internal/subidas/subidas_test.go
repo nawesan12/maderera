@@ -64,3 +64,20 @@ func TestNombreValido(t *testing.T) {
 		}
 	}
 }
+
+func TestTipoDeComprobante(t *testing.T) {
+	casos := map[string]string{
+		"\x89PNG\r\n\x1a\n":           "image/png",
+		"\xff\xd8\xff\xe0":            "image/jpeg",
+		"RIFF\x00\x00\x00\x00WEBPVP8": "image/webp",
+		"%PDF-1.4":                    "application/pdf",
+		"\n\n%PDF-1.7":                "application/pdf",
+		"texto renombrado":            "",
+		"\x13\x77\x00\xaa":            "",
+	}
+	for datos, quiero := range casos {
+		if got := TipoDeComprobante([]byte(datos)); got != quiero {
+			t.Errorf("%q: %q, quería %q", datos, got, quiero)
+		}
+	}
+}

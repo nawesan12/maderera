@@ -6,7 +6,9 @@ import { Printer, Receipt } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { clienteDeLaSesion, miCuentaCorriente } from "@/lib/dal/cuenta";
 import { datosParaTransferir } from "@/lib/dal/pagos";
+import { tienda } from "@/lib/dal/contenido";
 import { PagarDeuda } from "@/components/cuenta/pagar-deuda";
+import { importeAInformar } from "@/lib/cuenta/portal";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 import { misMovimientos } from "@/lib/dal/historial-cliente";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
@@ -25,12 +27,13 @@ export default async function CuentaCorrientePage({
   const whatsapp = await enlaceWhatsapp("Hola! Consulto por mi cuenta corriente.");
   // Todo lo informado de los últimos meses, no solo los pagos: el cheque
   // informado es de la clase «cheques» y no salía arriba del libro (H216).
-  const [cuenta, banco, { pago }, cliente, recientes] = await Promise.all([
+  const [cuenta, banco, { pago }, cliente, recientes, laTienda] = await Promise.all([
     miCuentaCorriente(),
     datosParaTransferir(),
     searchParams,
     clienteDeLaSesion(),
     misMovimientos({ periodo: "3m", filtro: "todo" }),
+    tienda(),
   ]);
   const enCamino = recientes.movimientos.filter((m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir");
 
@@ -194,7 +197,14 @@ export default async function CuentaCorrientePage({
         </p>
       )}
 
-      <PagarDeuda saldo={cuenta.saldo} banco={banco} />
+      <PagarDeuda
+        saldo={cuenta.saldo}
+        propuesto={importeAInformar(
+          cuenta.saldo,
+          enCamino.reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0),
+        )}
+        banco={banco}
+      />
 
       {/* El saldo a favor no se «usa» acá: ya descuenta solo de lo que se
           debe. Donde sirve es al comprar, y conviene decirlo, porque si no el
@@ -202,8 +212,8 @@ export default async function CuentaCorrientePage({
       {cuenta.saldo < 0 && (
         <p className="rounded-xl superficie p-4 text-[15px]">
           Tenés <strong className="tabular">{formatearMonto(-cuenta.saldo)}</strong> a favor. Se
-          descuenta solo de tu próxima compra: en el carrito elegí «Con mi saldo a favor», o
-          avisá en el mostrador.
+          descuenta solo de tu próxima compra:{" "}
+          {laTienda.activa ? "en el carrito elegí «Con mi saldo a favor», o avisá en el mostrador." : "avisá en el mostrador."}
         </p>
       )}
 

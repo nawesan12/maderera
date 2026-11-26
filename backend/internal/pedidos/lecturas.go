@@ -113,6 +113,14 @@ type PaginaDePresupuestos struct {
 // naturaleza, y no lo eran —un enviado que el cliente nunca contestó quedaba
 // abierto para siempre (ver VencerPresupuestos)—. El monto del encabezado
 // sale de la base, de todos. El id desempata, así dos páginas nunca se pisan.
+// nombreEnLaLista es cómo se nombra al cliente en la lista: el panel cargaba
+// la razón social como contacto al elegir el cliente y el portal el nombre,
+// así que unos salían «RF Construcciones SRL» y otros «Roberto Fernández»
+// (mes simulado). Si el contacto es la razón social de la ficha, va el
+// nombre de la ficha; la razón social sale aparte, como empresa.
+const nombreEnLaLista = `CASE WHEN c.id IS NOT NULL AND q.contacto_nombre = c.razon_social AND c.nombre <> ''
+		THEN c.nombre ELSE q.contacto_nombre END`
+
 func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, desplazamiento int) (PaginaDePresupuestos, error) {
 	out := PaginaDePresupuestos{Filas: []PresupuestoListado{}}
 	var a argumentos
@@ -169,7 +177,7 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 	// calculan solo para las filas de la página (antes se agrupaba
 	// quote_items entero en cada carga).
 	filas, err := s.pool.Query(ctx, `
-		SELECT q.id, q.numero, q.contacto_nombre, c.razon_social, q.customer_id, b.name, q.estado::text, q.origen::text,
+		SELECT q.id, q.numero, `+nombreEnLaLista+`, c.razon_social, q.customer_id, b.name, q.estado::text, q.origen::text,
 		       q.total::text, q.asesor, q.created_at, q.valido_hasta, q.responde_hasta, q.necesita_para,
 		       (SELECT count(*)::int FROM quote_items qi WHERE qi.quote_id = q.id),
 		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado' ORDER BY o.created_at LIMIT 1),

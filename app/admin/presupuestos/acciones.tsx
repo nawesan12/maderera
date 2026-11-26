@@ -552,7 +552,9 @@ function PasarAPedido({
                 {tipo === "envio" && !direccion.trim()
                   ? "Falta la dirección"
                   : faltaFlete
-                    ? "Falta el flete"
+                    ? zonas.length > 0 && !zona
+                      ? "Falta la zona"
+                      : "Falta el flete"
                     : costoMal
                       ? "Revisá el flete"
                       : "Crear el pedido"}

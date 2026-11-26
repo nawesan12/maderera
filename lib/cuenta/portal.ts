@@ -1,5 +1,6 @@
 import { primerNombre } from "@/lib/formato";
 import { soloDigitos } from "@/lib/cuit";
+import { nombreDeSaludo } from "@/lib/whatsapp/saludo";
 
 /**
  * Lo que «Mi cuenta» dice de cada cosa, en un solo lugar.
@@ -18,7 +19,9 @@ import { soloDigitos } from "@/lib/cuit";
 export function saludoDelCliente(nombre: string, cuit: string | null | undefined): string {
   const digitos = cuit ? soloDigitos(cuit) : "";
   if (/^3[034]/.test(digitos)) return nombre.trim();
-  return primerNombre(nombre);
+  // Sin CUIT de empresa, el nombre igual puede ser de una: «Constructora
+  // Costa Atlántica SRL» no se saluda «Hola Constructora».
+  return nombreDeSaludo(nombre, primerNombre);
 }
 
 /**
@@ -28,6 +31,17 @@ export function saludoDelCliente(nombre: string, cuit: string | null | undefined
 export function distintivoDeLista(tipo: string | undefined, lista: string | null | undefined): string | null {
   if (lista) return lista.replace(/^lista\s+/i, "").replace(/^./, (l) => l.toUpperCase());
   return tipo === "profesional" ? "Profesional" : null;
+}
+
+/**
+ * El importe que propone «Pagar tu cuenta»: lo que se debe menos lo que ya
+ * se informó y se está verificando. Con el saldo entero, lo propuesto
+ * disparaba el aviso de que se informa de más (mes simulado). Null si no
+ * queda nada por informar: el campo va vacío.
+ */
+export function importeAInformar(saldo: number, enRevision: number): number | null {
+  const resto = Math.round((saldo - Math.max(enRevision, 0)) * 100) / 100;
+  return resto > 0.005 ? resto : null;
 }
 
 /** El contador de pedidos abiertos: «en curso», nunca «en camino» (H083, H313). */
@@ -122,6 +136,36 @@ export function mensajeDeConsulta(texto: string, cliente?: { nombre: string; cui
   if (!cliente?.nombre) return texto;
   const cuit = cliente.cuit ? ` (CUIT ${cliente.cuit})` : "";
   return `${texto} Soy ${conPunto(`${cliente.nombre.trim()}${cuit}`)}`;
+}
+
+/**
+ * Si un segundo nombre suma algo debajo del primero en un papel: «Maderera
+ * Juan B. Justo» bajo «Maderera Juan B. Justo S.R.L.», o el nombre del cliente
+ * igual a su razón social, se leían dos veces (mes simulado). Se comparan sin
+ * la forma societaria, los puntos ni las mayúsculas.
+ */
+export function sumaAlNombre(principal: string | null | undefined, otro: string | null | undefined): boolean {
+  if (!otro?.trim()) return false;
+  const base = (n: string) => nombreDeSaludo(n.replace(/\b(S)\.\s*(R)\.\s*(L)\.?/gi, "SRL").replace(/\b(S)\.\s*(A)\.?(?=\s|$)/gi, "SA"), (x) => x.trim())
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return base(otro) !== base(principal ?? "");
+}
+
+/**
+ * Quién firma la consulta del catálogo: el nombre de la ficha del cliente,
+ * como el portal y /contacto, y el del usuario web solo si no tiene ficha.
+ * Nadie si no hay sesión o es de la casa.
+ */
+export function quienConsulta(
+  sesion: { nombre: string; esStaff: boolean; firma: string | null } | null,
+): { nombre: string } | null {
+  if (!sesion || sesion.esStaff) return null;
+  return { nombre: sesion.firma ?? sesion.nombre };
 }
 
 /**

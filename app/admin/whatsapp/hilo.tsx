@@ -1,5 +1,6 @@
 "use client";
 
+import { distintivoDeLista } from "@/lib/cuenta/portal";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -166,6 +167,7 @@ export function Hilo({
   }
 
   const restante = restanteLegible(detalle.ultimoEntranteAt);
+  const distintivo = detalle.customerId ? distintivoDeLista(detalle.clienteTipo ?? undefined, detalle.clienteLista) : null;
 
   return (
     <section className={`tarjeta flex flex-col overflow-hidden ${alto}`}>
@@ -192,9 +194,12 @@ export function Hilo({
               <span className="tabular truncate">
                 {detalle.sinNumero ? "WhatsApp no comparte su número" : jidCorto(detalle.waJid)}
               </span>
-              {detalle.clienteTipo === "profesional" && (
+              {/* El de su lista («Constructora»), como el portal: no
+                  «Profesional» a todos los que no son la general (mes
+                  simulado). */}
+              {distintivo && (
                 <span className="shrink-0 rounded-full bg-naranja-claro px-2 py-0.5 text-xs font-semibold text-acento-sobre-claro">
-                  Profesional
+                  {distintivo}
                 </span>
               )}
               {!detalle.customerId && <span className="shrink-0">· sin ficha</span>}
@@ -214,7 +219,10 @@ export function Hilo({
           </button>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 max-sm:w-full max-sm:[&>form:first-child]:flex-1 max-sm:[&_select]:max-w-none max-sm:[&_select]:flex-1">
+        {/* El selector toma lo que deja «Resuelta» y nunca se le mete abajo
+            (a 375 px lo pisaba 7 px y tapaba la flecha): min-w-0 en el
+            formulario y el selector, y el botón sin encogerse. */}
+        <div className="flex shrink-0 items-center gap-2 max-sm:w-full max-sm:[&>form:first-child]:min-w-0 max-sm:[&>form:first-child]:flex-1 max-sm:[&>form:last-child]:shrink-0 max-sm:[&_select]:w-0 max-sm:[&_select]:min-w-0 max-sm:[&_select]:max-w-none max-sm:[&_select]:flex-1">
           <Asignar
             conversacionId={detalle.id}
             asignado={detalle.asignadoAUserId}

@@ -685,6 +685,8 @@ export interface components {
             botEstado: "activo" | "derivada";
             clienteNombre: string | null;
             clienteTipo: string | null;
+            /** @description La lista de precios propia; null si es la general */
+            clienteLista: string | null;
             clienteTelefono: string | null;
             clienteEmail: string | null;
             clienteLimite: string | null;

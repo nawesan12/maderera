@@ -383,8 +383,11 @@ function RenglonDePrecio({
           )}
           <BajoCosto precio={fila.precioGeneral} piso={fila.piso} />
         </div>
+        {/* El ahorro va entre los dos precios; un profesional más caro se
+            marca debajo de su precio, que es el que hay que revisar: en el
+            medio no se sabía de cuál hablaba (mes simulado). */}
         <div className="text-center">
-          <Brecha brecha={fila.brecha} />
+          {fila.brecha !== null && fila.brecha >= 0 && <Brecha brecha={fila.brecha} />}
         </div>
         <div>
           {profesionalId && (
@@ -395,6 +398,11 @@ function RenglonDePrecio({
               rotulo="Profesional"
               tactil
             />
+          )}
+          {fila.brecha !== null && fila.brecha < 0 && (
+            <p className="text-right">
+              <Brecha brecha={fila.brecha} />
+            </p>
           )}
           <BajoCosto precio={fila.precioProfesional} piso={fila.piso} />
         </div>

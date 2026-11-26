@@ -42,19 +42,19 @@ export function AvisoConexion({
   }
 
   if (estado.proveedor === "demo") {
+    // En un renglón, como el de «Conectado»: en dos se comía el alto de la
+    // bandeja a 1280 (mes simulado).
     return (
-      <section className="tarjeta-atencion flex flex-wrap items-start gap-x-4 gap-y-3 p-5">
-        <FlaskConical className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
+      <section className="tarjeta-atencion flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
+        <FlaskConical className="h-5 w-5 shrink-0 text-brand-orange" />
 
-        <div className="min-w-[16rem] flex-1">
-          <h2 className="text-base font-medium">Modo demostración</h2>
-          {/* La bandeja funciona completa y guarda todo. Para que los mensajes
-              salgan hay que dar de alta el número en la Cloud API de Meta:
-              verificar la empresa, migrar el número y hacer aprobar los textos. */}
-          <p className="mt-1 text-base font-medium">
-            Los mensajes no salen a WhatsApp.
-          </p>
-        </div>
+        {/* La bandeja funciona completa y guarda todo. Para que los mensajes
+            salgan hay que dar de alta el número en la Cloud API de Meta:
+            verificar la empresa, migrar el número y hacer aprobar los textos. */}
+        <h2 className="min-w-0 flex-1 text-base">
+          <span className="font-medium">Modo demostración:</span>{" "}
+          <span className="text-muted-foreground">los mensajes no salen a WhatsApp.</span>
+        </h2>
 
         {esAdmin && (
         <Link

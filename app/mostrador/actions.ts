@@ -7,6 +7,7 @@ import { requireStaff } from "@/lib/dal/session";
 import { avisarPedidoNuevo } from "@/lib/dal/existencia";
 import { emitirParaLaVenta, letraQueSaldria } from "@/lib/mostrador/comprobante";
 import type { CorteDeMostrador, ResultadoDeMostrador } from "@/lib/mostrador/tipos";
+import { hayVentaja } from "@/lib/mostrador/ventaja";
 import type { LineaDeVenta, MedioDeMostrador, PagoDeVenta } from "@/lib/mostrador/importes";
 import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 
@@ -277,6 +278,22 @@ export async function clientePorId(id: string) {
  */
 export async function preciosDelCliente(variantIds: string[], customerId: string | null) {
   return datos(await (await api()).POST("/api/v1/mostrador/precios", { body: { variantIds, customerId } }));
+}
+
+/**
+ * Si la lista del cliente le da algo mejor que la general en algún renglón:
+ * ahí su lista es de contado. Una sola acción con las dos consultas en
+ * paralelo: como dos acciones, Next las encolaba una detrás de la otra (y
+ * detrás de cualquier otra del mostrador), y el Cheque quedaba bloqueado
+ * hasta 5 s esperando la respuesta (mes simulado, tercera prueba).
+ */
+export async function ventajaDeLaLista(variantIds: string[], customerId: string): Promise<boolean> {
+  const cliente = await api();
+  const [suyos, generales] = await Promise.all([
+    cliente.POST("/api/v1/mostrador/precios", { body: { variantIds, customerId } }).then(datos),
+    cliente.POST("/api/v1/mostrador/precios", { body: { variantIds, customerId: null } }).then(datos),
+  ]);
+  return hayVentaja(variantIds, suyos, generales);
 }
 
 /** Qué letra saldría con el cliente y el CUIT que hay en pantalla. */

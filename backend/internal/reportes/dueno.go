@@ -106,7 +106,7 @@ type CajaAbierta struct {
 type PlataHoy struct {
 	Cajas    []CajaAbierta `json:"cajas"`
 	Efectivo float64       `json:"efectivo"`
-	// CajaFuerte: lo retirado hoy de las cajas que no fue al banco.
+	// CajaFuerte: lo retirado hoy de las cajas a la caja fuerte.
 	CajaFuerte float64 `json:"cajaFuerte"`
 	// Banco es BancoEntro − BancoSalio.
 	Banco       float64 `json:"banco"`
@@ -448,10 +448,16 @@ func (s *Servicio) ChequesDeLaSemana(ctx context.Context, ahora time.Time) (Cheq
 }
 
 // RetiroAlBanco dice, en SQL, si un retiro de caja (alias m) fue un depósito
-// en el banco. El retiro no guarda el destino: lo dice el motivo que se
-// escribe («Depósito en el banco», «Al banco»). Los demás retiros van a la
-// caja fuerte.
-const RetiroAlBanco = `coalesce(m.motivo ~* '(banco|dep[oó]sit)', false)`
+// en el banco. Desde la 00310 el retiro guarda a dónde va (H333); los de
+// antes no, y para ellos lo dice el motivo que se escribía («Depósito en el
+// banco», «Al banco»).
+const RetiroAlBanco = `coalesce(m.destino = 'banco', m.motivo ~* '(banco|dep[oó]sit)', false)`
+
+// RetiroACajaFuerte: el retiro fue a la caja fuerte. Uno viejo sin destino
+// que no fue al banco se tomaba como de la caja fuerte, y se sigue tomando
+// así; el que dice «otro» (un pago en mano, el dueño que se lleva plata) no
+// es plata de la casa que esté en algún lado.
+const RetiroACajaFuerte = `coalesce(m.destino = 'caja_fuerte', NOT coalesce(m.motivo ~* '(banco|dep[oó]sit)', false))`
 
 // PlataHoy: las cajas (abiertas, o la de hoy ya cerrada), lo retirado hoy a
 // la caja fuerte, lo que entró y salió hoy del banco, lo cobrado por Mercado
@@ -539,7 +545,7 @@ func (s *Servicio) PlataHoy(ctx context.Context, ahora time.Time) (PlataHoy, err
 		  (SELECT count(*)::int FROM cheques WHERE sentido = 'recibido' AND estado = 'depositado'),
 		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroAlBanco+`), 0) FROM cash_movements m
 		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2),
-		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE NOT `+RetiroAlBanco+`), 0) FROM cash_movements m
+		  (SELECT coalesce(-sum(m.monto) FILTER (WHERE `+RetiroACajaFuerte+`), 0) FROM cash_movements m
 		    WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at < $2),
 		  (SELECT coalesce(sum(c.importe), 0) FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		    WHERE c.sentido = 'recibido' AND e.hacia = 'acreditado' AND e.at >= $1 AND e.at < $2),

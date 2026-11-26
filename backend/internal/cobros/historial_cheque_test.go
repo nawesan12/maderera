@@ -34,6 +34,10 @@ func TestElChequeDeUnaVentaSeVeEnLaFicha(t *testing.T) {
 	if len(movs) != 1 || movs[0].Clase != "cheque" || movs[0].Importe != nil {
 		t.Fatalf("el cheque en cartera de la venta no figura (o mueve la cuenta): %+v", movs)
 	}
+	// Mientras está en la cartera, la ficha ofrece registrar su rechazo.
+	if len(movs[0].Cheques) != 1 || movs[0].Cheques[0].ID != cheque || movs[0].Cheques[0].Importe != 287448 {
+		t.Errorf("no ofrece el rechazo: %+v", movs[0].Cheques)
+	}
 
 	_, _ = b.pool.Exec(ctx, `update cheques set estado = 'rechazado' where id = $1`, cheque)
 	movs, _, err = Historial(ctx, q, b.cliente, nil, "cheques", 0)
@@ -42,5 +46,8 @@ func TestElChequeDeUnaVentaSeVeEnLaFicha(t *testing.T) {
 	}
 	if len(movs) != 1 || movs[0].Clase != "cheque_rechazado" || movs[0].Detalle == nil || *movs[0].Detalle != "Rechazado por el banco" {
 		t.Fatalf("rebotado: %+v", movs)
+	}
+	if len(movs[0].Cheques) != 0 {
+		t.Errorf("ofrece rechazar uno ya rechazado: %+v", movs[0].Cheques)
 	}
 }

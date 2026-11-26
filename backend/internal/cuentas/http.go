@@ -61,6 +61,9 @@ func (o respuesta) VisitChequesEnCarteraResponse(w http.ResponseWriter) error { 
 func (o respuesta) VisitChequesTerminadosResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
+func (o respuesta) VisitRechazarChequeDelClienteResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitCambiarEstadoDeChequeResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -424,6 +427,17 @@ func (a *API) CambiarEstadoDeCheque(ctx context.Context, r cuentasapi.CambiarEst
 		return nil, err
 	}
 	v, err := a.cobros.CambiarEstado(ctx, ses, r.Id, r.Body.Estado, texto(r.Body.Motivo))
+	return ok(v), err
+}
+
+// RechazarChequeDelCliente: quien mueve plata, desde la ficha del cliente
+// (H272); quien no es admin, con el PIN de uno.
+func (a *API) RechazarChequeDelCliente(ctx context.Context, r cuentasapi.RechazarChequeDelClienteRequestObject) (cuentasapi.RechazarChequeDelClienteResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.cobros.RechazarConPIN(ctx, ses, r.Id.String(), r.Body.Motivo, texto(r.Body.Pin))
 	return ok(v), err
 }
 

@@ -738,7 +738,7 @@ export interface components {
                 efectivo: number;
                 /**
                  * Format: double
-                 * @description Lo retirado hoy de las cajas que no fue al banco
+                 * @description Lo retirado hoy de las cajas a la caja fuerte
                  */
                 cajaFuerte: number;
                 /**

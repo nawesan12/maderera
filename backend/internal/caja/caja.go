@@ -134,12 +134,13 @@ type Movimiento struct {
 	OrderID   *string   `json:"orderId"`
 	CreatedAt time.Time `json:"createdAt"`
 	Quien     *string   `json:"quien"`
+	Destino   *string   `json:"destino"`
 }
 
 // MovimientosDelTurno, del más nuevo al más viejo.
 func MovimientosDelTurno(ctx context.Context, c Consultador, sesion string) ([]Movimiento, error) {
 	filas, err := c.Query(ctx, `
-		SELECT m.id, m.tipo::text, m.monto, m.motivo, m.order_id, m.created_at, u.name
+		SELECT m.id, m.tipo::text, m.monto, m.motivo, m.order_id, m.created_at, u.name, m.destino
 		FROM cash_movements m LEFT JOIN "user" u ON u.id = m.creado_por
 		WHERE m.session_id = $1 ORDER BY m.created_at DESC`, sesion)
 	if err != nil {
@@ -150,7 +151,7 @@ func MovimientosDelTurno(ctx context.Context, c Consultador, sesion string) ([]M
 	for filas.Next() {
 		var m Movimiento
 		var monto jsmath.Num
-		if err := filas.Scan(&m.ID, &m.Tipo, &monto, &m.Motivo, &m.OrderID, &m.CreatedAt, &m.Quien); err != nil {
+		if err := filas.Scan(&m.ID, &m.Tipo, &monto, &m.Motivo, &m.OrderID, &m.CreatedAt, &m.Quien, &m.Destino); err != nil {
 			return nil, err
 		}
 		m.Monto = monto.F()

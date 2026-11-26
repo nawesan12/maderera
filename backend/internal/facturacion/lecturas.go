@@ -63,8 +63,13 @@ type Listado struct {
 // (EnCuentaDeFactura) debe, como mucho, el saldo de esa cuenta: con la cuenta
 // en cero por los recibos está cobrada, y con saldo se puede cobrar desde acá
 // (el pase a cuenta no es un cobro). Las notas de crédito, las anuladas y los
-// borradores no se cobran.
+// borradores no se cobran. La de un pedido partido (a_cuenta, H047) debe las
+// dos cosas: el resto sin cobrar y, de la parte a cuenta, lo que la cuenta
+// todavía debe.
 const SaldoDeFactura = `(CASE WHEN i.estado IN ('anulada', 'borrador') OR i.tipo::text LIKE 'nota_credito%' THEN 0
+	WHEN o.a_cuenta IS NOT NULL AND o.estado <> 'cancelado' AND i.tipo::text LIKE 'factura%' THEN least(greatest(i.total - coalesce(c.cobrado_contado, 0), 0),
+	  coalesce(` + fragmentos.SinCobrarDelPedido + `, 0) + least(o.a_cuenta,
+	  greatest(coalesce((SELECT sum(amc.monto) FROM account_movements amc WHERE amc.customer_id = i.customer_id), 0), 0)))
 	WHEN ` + EnCuentaDeFactura + ` THEN least(greatest(i.total - coalesce(c.cobrado_contado, 0), 0),
 	  greatest(coalesce((SELECT sum(amc.monto) FROM account_movements amc WHERE amc.customer_id = i.customer_id), 0), 0))
 	WHEN i.order_id IS NULL OR i.tipo::text NOT LIKE 'factura%' THEN greatest(i.total - coalesce(c.cobrado, 0), 0)

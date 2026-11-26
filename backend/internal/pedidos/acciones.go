@@ -535,11 +535,20 @@ type Entrega struct {
 	// un admin). Vacío en uno vigente.
 	Precios    string
 	PIN, Ficha string
+	// ACuenta es la parte que va a la cuenta corriente de un pedido partido
+	// (H047); el resto se paga con MedioPago. Cero: el pedido no se parte.
+	ACuenta float64
 }
 
 func (e Entrega) revisar() error {
 	if e.MedioPago != nil && !medioValido(*e.MedioPago) {
 		return fallo("Ese medio de pago no existe.")
+	}
+	if e.ACuenta < 0 || math.IsNaN(e.ACuenta) || math.IsInf(e.ACuenta, 0) {
+		return fallo("Lo que va a cuenta corriente no puede ser negativo.")
+	}
+	if e.ACuenta > 0 && (e.MedioPago == nil || *e.MedioPago == "cuenta_corriente") {
+		return fallo("Elegí cómo paga el resto.")
 	}
 	if e.Precios != "" && e.Precios != "actualizar" && e.Precios != "respetar" {
 		return fallo("Elegí si se actualizan los precios o se respetan.")
@@ -785,11 +794,31 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 
 		aCuenta := ent.MedioPago != nil && *ent.MedioPago == "cuenta_corriente"
 		totalPedido := jsmath.Numero(q.total) + jsmath.Numero(costo)
+		// El pedido partido (H047): una parte a la cuenta y el resto con el
+		// medio elegido. Si la parte cubre el total, es un pedido a cuenta
+		// como siempre.
+		var partido *string
+		if ent.ACuenta > 0 {
+			parte := ventas.ACentavos(ent.ACuenta)
+			if parte >= totalPedido-0.005 {
+				cc := "cuenta_corriente"
+				ent.MedioPago = &cc
+			} else {
+				p := jsmath.Fijo2(parte)
+				partido = &p
+			}
+			aCuenta = true
+		}
+		deuda := totalPedido
+		if partido != nil {
+			deuda = jsmath.Numero(*partido)
+		}
 		if aCuenta {
 			if q.customerID == nil {
 				return fallo("A cuenta corriente solo con un cliente cargado: elegilo en el presupuesto.")
 			}
-			motivo, err := cobros.LimiteEnLaTransaccion(ctx, tx, *q.customerID, totalPedido)
+			// El crédito se mira solo sobre lo que va a la cuenta.
+			motivo, err := cobros.LimiteEnLaTransaccion(ctx, tx, *q.customerID, deuda)
 			if err != nil {
 				return err
 			}
@@ -809,7 +838,7 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
-			                    dejado_de_cobrar, autorizado_por)
+			                    dejado_de_cobrar, autorizado_por, a_cuenta)
 			VALUES ($1, $2, $3, $4, $5, $6,
 			        CASE WHEN $13::tipo_entrega = 'retiro'
 			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
@@ -817,9 +846,9 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
 			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
-			        $19::numeric, $20)
+			        $19::numeric, $20, $21::numeric)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido).Scan(&pedidoID); err != nil {
 			return err
 		}
 
@@ -862,8 +891,12 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 				return err
 			}
 		}
+		nota := "Generado desde el presupuesto " + numeroPresupuesto
+		if partido != nil {
+			nota += " · " + formato.Importe(deuda) + " a cuenta corriente y " + formato.Importe(ventas.ACentavos(totalPedido-deuda)) + " por cobrar"
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'pendiente', $2, $3)`,
-			pedidoID, "Generado desde el presupuesto "+numeroPresupuesto, ses.UserID); err != nil {
+			pedidoID, nota, ses.UserID); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = 'aceptado', updated_at = now() WHERE id = $1`, quoteID); err != nil {
@@ -875,7 +908,7 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
 				VALUES ($1, 'compra', $2::numeric, $3, $4, $5)`,
-				*q.customerID, jsmath.Fijo2(totalPedido), "Pedido "+numero, numero, ses.UserID); err != nil {
+				*q.customerID, jsmath.Fijo2(deuda), "Pedido "+numero, numero, ses.UserID); err != nil {
 				return err
 			}
 		}
@@ -896,6 +929,9 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 	}
 	if quienAutorizo != "" || dejado > 0 {
 		detalle = map[string]any{"dejadoDeCobrar": dejado, "autorizadoPor": quienAutorizo, "precios": ent.Precios}
+	}
+	if ent.ACuenta > 0 && ent.MedioPago != nil && *ent.MedioPago != "cuenta_corriente" {
+		desc += ", con " + formato.Importe(ventas.ACentavos(ent.ACuenta)) + " a cuenta corriente"
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", quoteID, desc, detalle)
 	return &Resultado{Ok: "Se creó el pedido " + numero + ".", ID: pedidoID, Numero: numero}, nil

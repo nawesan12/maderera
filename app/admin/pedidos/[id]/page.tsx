@@ -527,6 +527,13 @@ export default async function FichaPedidoPage({
                 <dt className="text-muted-foreground">Forma de pago</dt>
                 <dd>{pedido.medioPago ? MEDIOS[pedido.medioPago] : "—"}</dd>
               </div>
+              {/* El pedido partido (H047): la parte que quedó en la cuenta. */}
+              {pedido.aCuenta != null && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">A cuenta corriente</dt>
+                  <dd className="tabular">{formatearMonto(pedido.aCuenta)}</dd>
+                </div>
+              )}
               {/* Un cobro parcial se ve: cuánto entró y cuánto falta (seguía
                   «Sin cobrar» por el total). */}
               {pedido.cobrado > 0.004 && (

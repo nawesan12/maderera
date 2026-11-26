@@ -125,11 +125,22 @@ func (s *Servicio) AbrirCaja(ctx context.Context, ses *auth.Sesion, sucursal str
 
 // MovimientoDeCaja es un ingreso o un retiro desde el mostrador. Un retiro
 // no puede dejar el cajón por debajo del fondo de cambio.
-func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesion, tipo string, monto float64, motivo string) (string, error) {
+//
+// El retiro dice a dónde va (H333): al banco, a la caja fuerte u otro. Al
+// banco y a la caja fuerte no hace falta escribir el motivo: el destino lo
+// dice. Sin destino (un cliente viejo) se clasifica por el motivo, como
+// antes.
+func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesion, tipo string, monto float64, motivo string, destino *string) (string, error) {
 	if math.IsNaN(monto) || math.IsInf(monto, 0) || monto <= 0 {
 		return "", rechazo("El monto tiene que ser mayor a cero.")
 	}
+	if tipo != "retiro" {
+		destino = nil
+	}
 	motivo = zodjs.TrimJS(motivo)
+	if motivo == "" && destino != nil {
+		motivo = MotivoDelDestino[*destino]
+	}
 	if motivo == "" {
 		return "", rechazo("Poné el motivo: un movimiento sin explicación no se puede revisar después.")
 	}
@@ -174,8 +185,8 @@ func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesio
 				return rechazo("No se puede retirar: el cajón no tiene efectivo.")
 			}
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, $2, $3::numeric, $4, $5)`,
-			sesion, tipo, f2(firmado), motivo, ses.UserID)
+		_, err = tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por, destino) VALUES ($1, $2, $3::numeric, $4, $5, $6)`,
+			sesion, tipo, f2(firmado), motivo, ses.UserID, destino)
 		return err
 	})
 	if err != nil {
@@ -276,6 +287,13 @@ func (s *Servicio) CerrarCaja(ctx context.Context, ses *auth.Sesion, sesion stri
 
 func itoa(n int) string { return jsmath.Texto(float64(n)) }
 
+// MotivoDelDestino es el motivo de un retiro que no lo escribió: el destino
+// ya dice qué pasó con la plata.
+var MotivoDelDestino = map[string]string{
+	"banco":       "Depósito en el banco",
+	"caja_fuerte": "A la caja fuerte",
+}
+
 // ResultadoDiferido es lo que contesta POST /api/mostrador/caja/movimientos.
 type ResultadoDiferido struct {
 	Ok        bool   `json:"ok,omitempty"`
@@ -333,10 +351,14 @@ func (s *Servicio) MovimientoDiferido(ctx context.Context, ses *auth.Sesion, m M
 			}
 			bajoLaBase = enCaja.F()-m.Monto < base.F()
 		}
+		var destino *string
+		if m.Tipo == "retiro" {
+			destino = m.Destino
+		}
 		tag, err := tx.Exec(ctx, `
-			INSERT INTO cash_movements (session_id, tipo, monto, motivo, clave, creado_por, created_at, declarado_at, bajo_la_base)
-			VALUES ($1, $2, $3::numeric, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (clave) DO NOTHING`, turno, m.Tipo, f2(monto), zodjs.TrimJS(m.Motivo), m.Clave, ses.UserID, creado, declarado, bajoLaBase)
+			INSERT INTO cash_movements (session_id, tipo, monto, motivo, clave, creado_por, created_at, declarado_at, bajo_la_base, destino)
+			VALUES ($1, $2, $3::numeric, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (clave) DO NOTHING`, turno, m.Tipo, f2(monto), zodjs.TrimJS(m.Motivo), m.Clave, ses.UserID, creado, declarado, bajoLaBase, destino)
 		nuevo = err == nil && tag.RowsAffected() > 0
 		return err
 	})

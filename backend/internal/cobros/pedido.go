@@ -89,10 +89,8 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 		}
 		err := tx.QueryRow(ctx, `
 			SELECT o.numero, o.contacto_nombre, o.estado::text, o.customer_id, o.branch_id,
-			       greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`, 0)::float8,
-			       o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
-			         AND NOT EXISTS (SELECT 1 FROM account_movements am
-			                         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+			       greatest(`+fragmentos.ACobrarFueraDeLaCuenta+` - `+fragmentos.CobradoDelPedido+`, 0)::float8,
+			       `+fragmentos.DeudaFueraDeLaCuenta+`
 			FROM orders o WHERE o.id = $1 FOR UPDATE`, pedido).
 			Scan(&p.numero, &p.contacto, &p.estado, &p.cliente, &p.sucursal, &p.saldo, &p.fuera)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -147,7 +145,7 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 			return nil
 		}
 		var pagado bool
-		if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarDelPedido+` FROM orders o WHERE o.id = $1`, pedido).Scan(&pagado); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, pedido).Scan(&pagado); err != nil {
 			return err
 		}
 		if pagado {

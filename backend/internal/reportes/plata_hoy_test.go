@@ -80,3 +80,30 @@ func TestPlataHoyEntraYSale(t *testing.T) {
 		t.Errorf("total: %v", p.Total)
 	}
 }
+
+// El retiro guarda a dónde va (H333, 00310): el destino manda sobre el
+// motivo, «otro» no es caja fuerte ni banco, y los retiros viejos sin
+// destino se siguen leyendo por el motivo.
+func TestPlataHoyLeeElDestinoDelRetiro(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	usuario := e.id(t, `select id from "user" limit 1`)
+	hoy := "2026-10-15T14:00:00Z"
+	abierta := e.id(t, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, $3) returning id`, e.central, usuario, hoy)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, destino, created_at) values
+		($1, 'apertura', 5000, null, null, $2),
+		($1, 'retiro', -1000, 'Lo lleva Juan', 'banco', $2),
+		($1, 'retiro', -700, 'Banco de la esquina, para la caja fuerte', 'caja_fuerte', $2),
+		($1, 'retiro', -300, 'Pago al fletero', 'otro', $2),
+		($1, 'retiro', -40, 'Depósito', null, $2),
+		($1, 'retiro', -60, 'Sobre', null, $2)`, abierta, hoy)
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/dueno")
+	var n NumerosDelDueno
+	if err := json.Unmarshal([]byte(cuerpo), &n); err != nil {
+		t.Fatal(cuerpo)
+	}
+	p := n.PlataHoy
+	if p.CajaFuerte != 760 || p.BancoEntro != 1040 {
+		t.Errorf("caja fuerte %v (760), banco %v (1040)", p.CajaFuerte, p.BancoEntro)
+	}
+}

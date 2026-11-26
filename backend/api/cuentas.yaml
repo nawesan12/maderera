@@ -393,6 +393,30 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cheques/{id}/rechazo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: RechazarChequeDelCliente
+      description: >-
+        El banco rechazó un cheque que entregó un cliente: lo registra quien
+        maneja plata desde la ficha del cliente (H272), con el PIN de un admin
+        si no es admin. Hace lo mismo que pasarlo a rechazado en
+        /admin/cheques (la nota de débito y el aviso).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              additionalProperties: false
+              properties:
+                motivo: { type: string }
+                pin: { type: string, maxLength: 64, description: "el de un admin (o su contraseña, sin ningún PIN cargado)" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/vendedores:
     get:
       operationId: ListarVendedores
@@ -839,6 +863,13 @@ components:
           properties: { id: { type: string }, numero: { type: string }, anulado: { type: boolean },
             porMercadoPago: { type: boolean, description: Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel },
             chequeRechazado: { type: boolean } }
+        cheques:
+          type: array
+          description: Los cheques del renglón que el banco todavía puede rechazar (H272)
+          items:
+            type: object
+            required: [id, nombre, importe]
+            properties: { id: { type: string }, nombre: { type: string }, importe: { type: number, format: double } }
     Historial:
       type: object
       required: [movimientos, hayMas, saldo]

@@ -40,11 +40,13 @@ const MES = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" })
 const DIA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit" });
 
 type ReciboDelMovimiento = NonNullable<MovimientoDelCliente["recibo"]>;
+type ChequeDelMovimiento = NonNullable<MovimientoDelCliente["cheques"]>[number];
 
 export function LineaDeTiempo({
   movimientos,
   enlacePedido,
   accionDelRecibo,
+  accionDelCheque,
   sinCuenta = false,
   vacio = "Todavía no hay movimientos en este período.",
 }: {
@@ -58,6 +60,8 @@ export function LineaDeTiempo({
   enlacePedido: (pedido: { id: string; numero: string }) => string;
   /** Lo que el panel ofrece sobre un recibo vivo (anularlo); el portal, nada. */
   accionDelRecibo?: (recibo: ReciboDelMovimiento, movimiento: MovimientoDelCliente) => ReactNode;
+  /** Lo que el panel ofrece sobre un cheque que el banco puede rechazar (H272). */
+  accionDelCheque?: (cheque: ChequeDelMovimiento, unoDeVarios: boolean) => ReactNode;
   vacio?: string;
 }) {
   if (movimientos.length === 0) {
@@ -90,6 +94,7 @@ export function LineaDeTiempo({
                 movimiento={m}
                 enlacePedido={enlacePedido}
                 accionDelRecibo={accionDelRecibo}
+                accionDelCheque={accionDelCheque}
                 sinCuenta={sinCuenta}
               />
             ))}
@@ -110,13 +115,16 @@ function Fila({
   movimiento: m,
   enlacePedido,
   accionDelRecibo,
+  accionDelCheque,
   sinCuenta,
 }: {
   movimiento: MovimientoDelCliente;
   enlacePedido: (pedido: { id: string; numero: string }) => string;
   accionDelRecibo?: (recibo: ReciboDelMovimiento, movimiento: MovimientoDelCliente) => ReactNode;
+  accionDelCheque?: (cheque: ChequeDelMovimiento, unoDeVarios: boolean) => ReactNode;
   sinCuenta: boolean;
 }) {
+  const cheques = accionDelCheque ? (m.cheques ?? []) : [];
   const base = ESTILO[m.clase];
   // La nota de débito de un cheque que rebotó se llama igual en todas las
   // pantallas: «Cheque rechazado» (H303).
@@ -178,7 +186,7 @@ function Fila({
           <ConPedido texto={detalle} pedido={m.pedido} enlacePedido={enlacePedido} />
         </p>
       )}
-      {((m.pedido && !pedidoEnTexto) || m.recibo || (!mueve && importe !== null && !sinCuenta)) && (
+      {((m.pedido && !pedidoEnTexto) || m.recibo || cheques.length > 0 || (!mueve && importe !== null && !sinCuenta)) && (
         <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           {m.pedido && !pedidoEnTexto && (
             <Link
@@ -212,6 +220,11 @@ function Fila({
             </span>
           )}
           {m.recibo && !m.recibo.anulado && accionDelRecibo?.(m.recibo, m)}
+          {cheques.map((c) => (
+            <span key={c.id} className="contents">
+              {accionDelCheque?.(c, cheques.length > 1)}
+            </span>
+          ))}
           {!mueve && importe !== null && !sinCuenta && (
             <span className="text-xs text-muted-foreground">No mueve la cuenta</span>
           )}

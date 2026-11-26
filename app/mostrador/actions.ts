@@ -121,8 +121,11 @@ export async function registrarMovimientoDeCaja(
   tipo: "ingreso" | "retiro",
   monto: number,
   motivo: string,
+  destino?: "banco" | "caja_fuerte" | "otro",
 ): Promise<EstadoMostrador> {
-  const r = await (await api()).POST("/api/v1/mostrador/caja/movimiento", { body: { sessionId, tipo, monto, motivo } });
+  const r = await (await api()).POST("/api/v1/mostrador/caja/movimiento", {
+    body: { sessionId, tipo, monto, motivo, ...(destino ? { destino } : {}) },
+  });
   if (!r.data) return error(r);
   refrescar();
   return { ok: r.data.ok };

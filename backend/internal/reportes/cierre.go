@@ -345,8 +345,9 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	return asientos, nil
 }
 
-// retiroAlBanco: el retiro de caja `m` fue al banco (lo dice el motivo).
-const retiroAlBanco = `(m.motivo ~* '(banco|dep[oó]sit)')`
+// retiroAlBanco: el retiro de caja `m` fue al banco (su destino, o el motivo
+// en los de antes de la 00310). Es la misma regla de «Plata hoy».
+const retiroAlBanco = RetiroAlBanco
 
 // ingresoDelBanco: el ingreso de caja `m` vino del banco (una extracción, lo
 // dice el motivo). Los demás ingresos vienen de la caja fuerte (la misma

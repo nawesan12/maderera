@@ -77,6 +77,9 @@ const (
 	// depósito lo anulaba con un toque y la mercadería volvía al stock
 	// aunque el cliente se la había llevado).
 	Remito Motivo = "remito"
+	// Cheque: registrar el rechazo de un cheque de un cliente sin ser admin
+	// (mes simulado, H272): vuelve la deuda con una nota de débito.
+	Cheque Motivo = "cheque"
 )
 
 // Los topes de errores.
@@ -374,6 +377,8 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 		t = m + " abajo del costo"
 	case Remito:
 		t = "anular un remito firmado"
+	case Cheque:
+		t = "rechazar un cheque de " + m
 	default:
 		t = m + " abajo del precio"
 	}

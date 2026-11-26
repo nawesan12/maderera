@@ -260,6 +260,68 @@ func (q *Queries) ChequeRepetido(ctx context.Context, arg ChequeRepetidoParams) 
 	return id, err
 }
 
+const chequesDeRecibos = `-- name: ChequesDeRecibos :many
+SELECT c.id, c.updated_at, c.tipo::text AS tipo, c.numero, c.banco, c.importe::float8 AS importe, c.estado::text AS estado,
+       c.fecha_pago, r.id AS recibo_id, r.numero AS recibo_numero
+FROM cheques c JOIN receipts r ON r.id = c.receipt_id
+WHERE c.customer_id = $1 AND c.sentido = 'recibido' AND r.estado = 'emitido'
+  AND c.estado IN ('cartera', 'depositado', 'entregado')
+  AND ($2::timestamptz IS NULL OR c.created_at >= $2)
+ORDER BY c.fecha_pago
+`
+
+type ChequesDeRecibosParams struct {
+	CustomerID *string            `json:"customerId"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type ChequesDeRecibosRow struct {
+	ID           string    `json:"id"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Tipo         string    `json:"tipo"`
+	Numero       string    `json:"numero"`
+	Banco        *string   `json:"banco"`
+	Importe      float64   `json:"importe"`
+	Estado       string    `json:"estado"`
+	FechaPago    time.Time `json:"fechaPago"`
+	ReciboID     string    `json:"reciboId"`
+	ReciboNumero string    `json:"reciboNumero"`
+}
+
+// Los cheques que entraron con un recibo y el banco todavía puede devolver:
+// el filtro «Cheques» de la ficha los muestra para registrar el rechazo
+// (H272); en «Todo» van en el renglón del pago.
+func (q *Queries) ChequesDeRecibos(ctx context.Context, arg ChequesDeRecibosParams) ([]ChequesDeRecibosRow, error) {
+	rows, err := q.db.Query(ctx, chequesDeRecibos, arg.CustomerID, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChequesDeRecibosRow{}
+	for rows.Next() {
+		var i ChequesDeRecibosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UpdatedAt,
+			&i.Tipo,
+			&i.Numero,
+			&i.Banco,
+			&i.Importe,
+			&i.Estado,
+			&i.FechaPago,
+			&i.ReciboID,
+			&i.ReciboNumero,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const chequesDelRecibo = `-- name: ChequesDelRecibo :many
 SELECT cheque_id FROM receipt_parts WHERE receipt_id = $1 AND cheque_id IS NOT NULL
 `
@@ -374,7 +436,7 @@ func (q *Queries) ClienteParaCredito(ctx context.Context, id string) (ClientePar
 }
 
 const comprasDeContado = `-- name: ComprasDeContado :many
-SELECT o.id, o.created_at, o.numero, o.total::float8 AS total, o.estado_pago::text AS estado_pago,
+SELECT o.id, o.created_at, o.numero, (o.total - coalesce(o.a_cuenta, 0))::float8 AS total, o.estado_pago::text AS estado_pago,
   r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
 FROM orders o
 LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.order_id = o.id AND x.estado <> 'anulado'
@@ -403,7 +465,8 @@ type ComprasDeContadoRow struct {
 }
 
 // El recibo, si la compra se cobró después con uno (una transferencia
-// conciliada): no fue «pagada en el momento» (H305).
+// conciliada): no fue «pagada en el momento» (H305). Del pedido partido
+// (H047), el resto: la parte a cuenta es su «compra» en el libro.
 func (q *Queries) ComprasDeContado(ctx context.Context, arg ComprasDeContadoParams) ([]ComprasDeContadoRow, error) {
 	rows, err := q.db.Query(ctx, comprasDeContado, arg.CustomerID, arg.Limit, arg.Desde)
 	if err != nil {
@@ -758,6 +821,7 @@ func (q *Queries) PagosInformados(ctx context.Context, arg PagosInformadosParams
 
 const partesDeRecibos = `-- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
+       c.id AS cheque_id, c.estado AS cheque_estado,
        (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id
@@ -766,13 +830,15 @@ ORDER BY p.orden
 `
 
 type PartesDeRecibosRow struct {
-	ReceiptID      string      `json:"receiptId"`
-	Medio          string      `json:"medio"`
-	Importe        float64     `json:"importe"`
-	Banco          *string     `json:"banco"`
-	Numero         *string     `json:"numero"`
-	Tipo           *TipoCheque `json:"tipo"`
-	PorMercadoPago bool        `json:"porMercadoPago"`
+	ReceiptID      string        `json:"receiptId"`
+	Medio          string        `json:"medio"`
+	Importe        float64       `json:"importe"`
+	Banco          *string       `json:"banco"`
+	Numero         *string       `json:"numero"`
+	Tipo           *TipoCheque   `json:"tipo"`
+	ChequeID       *string       `json:"chequeId"`
+	ChequeEstado   *EstadoCheque `json:"chequeEstado"`
+	PorMercadoPago bool          `json:"porMercadoPago"`
 }
 
 func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]PartesDeRecibosRow, error) {
@@ -791,6 +857,8 @@ func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]Part
 			&i.Banco,
 			&i.Numero,
 			&i.Tipo,
+			&i.ChequeID,
+			&i.ChequeEstado,
 			&i.PorMercadoPago,
 		); err != nil {
 			return nil, err
@@ -804,9 +872,13 @@ func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]Part
 }
 
 const pedidoPagado = `-- name: PedidoPagado :exec
-UPDATE orders SET estado_pago = 'pagado', updated_at = now() WHERE id = $1
+UPDATE orders SET estado_pago = CASE WHEN a_cuenta IS NOT NULL THEN 'parcial'::estado_pago ELSE 'pagado'::estado_pago END,
+  updated_at = now() WHERE id = $1
 `
 
+// El pedido partido (a_cuenta) con el resto cobrado queda «parcial», como la
+// venta del mostrador que cargó una parte a la cuenta: lo que falta está en
+// la cuenta corriente.
 func (q *Queries) PedidoPagado(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, pedidoPagado, id)
 	return err

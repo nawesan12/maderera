@@ -357,6 +357,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cheques/{id}/rechazo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description El banco rechazó un cheque que entregó un cliente: lo registra quien maneja plata desde la ficha del cliente (H272), con el PIN de un admin si no es admin. Hace lo mismo que pasarlo a rechazado en /admin/cheques (la nota de débito y el aviso). */
+        post: operations["RechazarChequeDelCliente"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/vendedores": {
         parameters: {
             query?: never;
@@ -728,6 +747,13 @@ export interface components {
                 porMercadoPago: boolean;
                 chequeRechazado?: boolean;
             } | null;
+            /** @description Los cheques del renglón que el banco todavía puede rechazar (H272) */
+            cheques?: {
+                id: string;
+                nombre: string;
+                /** Format: double */
+                importe: number;
+            }[];
         };
         Historial: {
             movimientos: components["schemas"]["MovimientoDelCliente"][];
@@ -1448,6 +1474,29 @@ export interface operations {
                 "application/json": {
                     estado: string;
                     motivo?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    RechazarChequeDelCliente: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    motivo: string;
+                    /** @description el de un admin (o su contraseña, sin ningún PIN cargado) */
+                    pin?: string;
                 };
             };
         };

@@ -5031,6 +5031,7 @@ type CashMovement struct {
 	SupplierPaymentID *string            `json:"supplierPaymentId"`
 	DeclaradoAt       pgtype.Timestamptz `json:"declaradoAt"`
 	BajoLaBase        bool               `json:"bajoLaBase"`
+	Destino           *string            `json:"destino"`
 }
 
 type CashSession struct {
@@ -5726,6 +5727,7 @@ type Order struct {
 	CreditoSinAutorizar    jsmath.Num         `json:"creditoSinAutorizar"`
 	Comprobante            *string            `json:"comprobante"`
 	VendidoAt              pgtype.Timestamptz `json:"vendidoAt"`
+	ACuenta                *jsmath.Num        `json:"aCuenta"`
 	EntregadoAt            pgtype.Timestamptz `json:"entregadoAt"`
 	FacturadoAt            pgtype.Timestamptz `json:"facturadoAt"`
 	CanceladoAt            pgtype.Timestamptz `json:"canceladoAt"`

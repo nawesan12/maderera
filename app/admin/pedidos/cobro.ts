@@ -27,10 +27,12 @@ export function cobroDelPedido(p: {
   cliente?: string | null;
   contactoNombre?: string | null;
   medioPago?: string | null;
+  /** El pedido partido (H047): sin resto por cobrar, no hay nada que cobrar desde acá. */
+  aCuenta?: number | null;
 }) {
   return {
     numero: p.numero,
-    aCobrar: p.sinCobrar ?? Number(p.total),
+    aCobrar: p.sinCobrar ?? (p.aCuenta != null ? 0 : Number(p.total)),
     customerId: p.customerId ?? null,
     nombre: p.cliente ?? p.contactoNombre ?? "",
     medio: (p.medioPago && MEDIO_DEL_COBRO[p.medioPago]) || ("efectivo" as MedioDeCobro),

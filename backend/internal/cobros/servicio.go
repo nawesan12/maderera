@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -163,9 +164,7 @@ func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, clien
 			c.OrderID = &p.ID
 			// La deuda de un pedido de contado no está en la cuenta: el pago
 			// tampoco (ver Cobro.FueraDeLaCuenta).
-			if err := tx.QueryRow(ctx, `SELECT o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
-				AND NOT EXISTS (SELECT 1 FROM account_movements am
-				                WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.DeudaFueraDeLaCuenta+`
 				FROM orders o WHERE o.id = $1`, p.ID).Scan(&c.FueraDeLaCuenta); err != nil {
 				return err
 			}
@@ -183,7 +182,7 @@ func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, clien
 		// recibo contra el total empujaba a cobrar otra vez la seña.
 		if p != nil {
 			var pagado bool
-			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarDelPedido+` FROM orders o WHERE o.id = $1`, p.ID).
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, p.ID).
 				Scan(&pagado); err != nil {
 				return err
 			}
@@ -443,6 +442,60 @@ func reabrirDeudaConElProveedor(ctx context.Context, tx pgx.Tx, cheque sqlc.Cheq
 	_, err = tx.Exec(ctx, `INSERT INTO supplier_movements (supplier_id, tipo, monto, referencia, detalle, created_by_user_id, cheque_id)
 		VALUES ($1, 'ajuste', $2::numeric, $3, $4, $5, $6)`, proveedor, jsmath.Fijo2(float64(cheque.Importe)), cheque.Numero, detalle, usuario, cheque.ID)
 	return err
+}
+
+// RechazablesDesdeLaFicha son los estados de un cheque recibido que el banco
+// puede devolver: en la cartera (se depositó en otro lado o lo avisó el
+// banco), depositado o endosado a un proveedor.
+var RechazablesDesdeLaFicha = []Estado{"cartera", "depositado", "entregado"}
+
+// RechazarConPIN registra que el banco rechazó un cheque de un cliente,
+// desde su ficha (H272): quien no es admin, con el PIN de uno (motivo
+// cheque, por el importe), porque vuelve la deuda. Después es el mismo
+// CambiarEstado de /admin/cheques: la nota de débito, el aviso al cliente y,
+// si estaba endosado, la deuda con el proveedor.
+func (s *Servicio) RechazarConPIN(ctx context.Context, ses *auth.Sesion, id, motivo, pin string) (ResultadoDeCobro, error) {
+	if strings.TrimSpace(motivo) == "" {
+		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"motivo": "Poné el motivo del rechazo: lo lee el cliente."})
+	}
+	var estado, sentido string
+	var importe float64
+	err := s.pool.QueryRow(ctx, `SELECT estado::text, sentido::text, importe::float8 FROM cheques WHERE id::text = $1`, id).Scan(&estado, &sentido, &importe)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ResultadoDeCobro{}, plataforma.NuevoProblema(404, "Ese cheque no está.")
+	}
+	if err != nil {
+		return ResultadoDeCobro{}, err
+	}
+	if sentido != "recibido" {
+		return ResultadoDeCobro{}, comoProblema(errCobro("Ese cheque no es de un cliente."))
+	}
+	if !slices.Contains(RechazablesDesdeLaFicha, Estado(estado)) {
+		return ResultadoDeCobro{}, comoProblema(errCobro("Un cheque " + strings.ToLower(ParaElCliente[Estado(estado)]) + " no se puede rechazar."))
+	}
+	if !ses.Tiene(sqlc.StaffRoleAdmin) {
+		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Cheque, Monto: importe, Clave: id, PIN: pin}); err != nil {
+			var falta *autorizacion.Falta
+			if errors.As(err, &falta) {
+				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto)}
+				if falta.PinIncorrecto {
+					e["pinIncorrecto"] = "si"
+				}
+				if falta.ConClave {
+					e["pinConClave"] = "si"
+				}
+				if falta.SinAdmins && !falta.ConClave {
+					e["pinSinAdmins"] = "si"
+				}
+				if falta.BloqueadoHasta != nil {
+					e["pinHasta"] = falta.BloqueadoHasta.UTC().Format(time.RFC3339)
+				}
+				return ResultadoDeCobro{}, plataforma.Invalido(e)
+			}
+			return ResultadoDeCobro{}, err
+		}
+	}
+	return s.CambiarEstado(ctx, ses, id, "rechazado", motivo)
 }
 
 // CambiarEstado es cambiarEstadoDeCheque: aceptar uno informado emite el

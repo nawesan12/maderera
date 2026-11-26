@@ -429,6 +429,8 @@ type PedidoListado struct {
 	// «Cobrar $X» del reparto lo leen de acá, con la misma regla que «Me
 	// deben».
 	SinCobrar *float64 `json:"sinCobrar"`
+	// ACuenta: lo que un pedido partido cargó a la cuenta (H047).
+	ACuenta *float64 `json:"aCuenta"`
 	// PagoEnRevision: el cliente informó una transferencia que nadie
 	// verificó (fragmentos.PagoEnRevision). No es «sin cobrar»: el reparto
 	// no tiene que pedirle la plata otra vez.
@@ -580,7 +582,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		            FROM cutting_orders co WHERE co.order_id = o.id AND co.estado IN ('en-cola', 'en-proceso')) ELSE '{}' END,
 		       o.comprobante,
 		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'),
-		       `+sqlAcopio+`
+		       `+sqlAcopio+`, o.a_cuenta::float8
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -599,7 +601,7 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		var salioAlgo bool
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.Sucursal, &p.SucursalSlug, &p.Estado, &p.TipoEntrega,
 			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio, &p.SinCobrar,
-			&p.PagoEnRevision, &p.EntregadoAt, &p.EntregarEl, &salioAlgo, &p.CortesSinTerminar, &p.Comprobante, &p.Facturado, &p.Acopio); err != nil {
+			&p.PagoEnRevision, &p.EntregadoAt, &p.EntregarEl, &salioAlgo, &p.CortesSinTerminar, &p.Comprobante, &p.Facturado, &p.Acopio, &p.ACuenta); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)
@@ -702,6 +704,9 @@ type FichaDePedido struct {
 	// pedido seguía «Sin cobrar» por el total (mes simulado).
 	Cobrado float64 `json:"cobrado"`
 	ACobrar float64 `json:"aCobrar"`
+	// ACuenta es lo que un pedido partido cargó a la cuenta corriente
+	// (H047); el resto es lo de SinCobrar. Nil en los demás.
+	ACuenta *float64 `json:"aCuenta"`
 	// Recibos son los recibos del pedido, el más viejo primero: van al
 	// bloque del cobro y al historial, que no registraba el cobro.
 	Recibos []ReciboDelPedido `json:"recibos"`
@@ -738,7 +743,8 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END,
 		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8,
 		       `+fragmentos.CobradoDelPedido+`::float8, `+fragmentos.ACobrarDelPedido+`::float8, o.comprobante, `+sqlAcopio+`,
-		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%')
+		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'),
+		       o.a_cuenta::float8
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -747,7 +753,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
 		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar,
-		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado)
+		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado, &p.ACuenta)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

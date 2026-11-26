@@ -22,6 +22,7 @@ import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { AnularRecibo } from "@/components/cobros/anular-recibo";
+import { RechazarCheque } from "@/components/cobros/rechazar-cheque";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
 import { historialDelCliente } from "@/lib/dal/historial-cliente";
@@ -401,8 +402,11 @@ export default async function FichaClientePage({
                 manejaPlata
                   ? // El cobro de Mercado Pago se devuelve desde MP y su aviso
                     // anula el recibo: a mano, el cliente pagaría dos veces.
+                    // El renglón del cheque (filtro «Cheques») y la nota de
+                    // débito de uno rechazado llevan el recibo de referencia:
+                    // se anula desde su pago.
                     (r, m) =>
-                      r.porMercadoPago ? null : (
+                      r.porMercadoPago || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
                         <AnularRecibo
                           id={r.id}
                           numero={r.numero}
@@ -410,6 +414,19 @@ export default async function FichaClientePage({
                           cliente={cliente.nombre}
                         />
                       )
+                  : undefined
+              }
+              accionDelCheque={
+                manejaPlata
+                  ? (c, unoDeVarios) => (
+                      <RechazarCheque
+                        id={c.id}
+                        nombre={c.nombre}
+                        importe={c.importe}
+                        cliente={cliente.nombre}
+                        conNombre={unoDeVarios}
+                      />
+                    )
                   : undefined
               }
             />

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { Printer, Receipt } from "lucide-react";
@@ -17,13 +18,19 @@ export default async function CuentaCorrientePage({
 }: {
   searchParams: Promise<{ pago?: string }>;
 }) {
+  // Los datos bancarios se leen sin caché y sin la sesión: sin marcar antes
+  // que la página es de cada pedido, el modo desarrollo avisaba «uncached
+  // data outside of <Suspense>».
+  await connection();
   const whatsapp = await enlaceWhatsapp("Hola! Consulto por mi cuenta corriente.");
+  // Todo lo informado de los últimos meses, no solo los pagos: el cheque
+  // informado es de la clase «cheques» y no salía arriba del libro (H216).
   const [cuenta, banco, { pago }, cliente, recientes] = await Promise.all([
     miCuentaCorriente(),
     datosParaTransferir(),
     searchParams,
     clienteDeLaSesion(),
-    misMovimientos({ periodo: "3m", filtro: "pagos" }),
+    misMovimientos({ periodo: "3m", filtro: "todo" }),
   ]);
   const enCamino = recientes.movimientos.filter((m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir");
 
@@ -237,6 +244,13 @@ export default async function CuentaCorrientePage({
             ))}
             {cuenta.movimientos.map((m) => {
               const rechazo = m.tipo === "nota_debito" && /rechazado/i.test(m.detalle ?? "");
+              // El recibo va como enlace abajo: «— recibo REC-0002» en el
+              // concepto lo repetía.
+              const recibo = m.reciboNumero ?? m.referencia;
+              const concepto =
+                m.receiptId && recibo && m.detalle
+                  ? m.detalle.replace(` — recibo ${recibo}`, "").trim()
+                  : m.detalle;
               return (
                 <li key={m.id} className="flex items-start gap-3 px-5 py-3.5">
                   <div className="min-w-0 flex-1">
@@ -249,9 +263,9 @@ export default async function CuentaCorrientePage({
                       ) : (
                         <EtiquetaEstado estado={m.tipo} />
                       )}
-                      {m.detalle && (
+                      {concepto && (
                         <span className="min-w-0 text-sm [overflow-wrap:anywhere]">
-                          <ConEnlace texto={m.detalle} referencia={m.referencia} />
+                          <ConEnlace texto={concepto} referencia={m.referencia} />
                         </span>
                       )}
                     </p>
@@ -318,7 +332,12 @@ function ConEnlace({ texto, referencia }: { texto: string; referencia: string | 
   return (
     <>
       {antes}
-      <Link href={`/mi-cuenta/pedidos/${referencia}`} className="tabular text-acento-texto hover:underline">
+      {/* Entero y con alto de dedo: se cortaba «PED-» / «1128» y medía 18 px
+          (H312). El relleno agranda el toque sin mover el renglón. */}
+      <Link
+        href={`/mi-cuenta/pedidos/${referencia}`}
+        className="tabular -my-3 inline-block whitespace-nowrap py-3 text-acento-texto hover:underline"
+      >
         {referencia}
       </Link>
       {resto.join(referencia)}

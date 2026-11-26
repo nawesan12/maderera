@@ -125,8 +125,10 @@ function Fila({
   // Si el título repite la etiqueta («Compra a cuenta» dos veces), el detalle
   // pasa a ser el título: es lo que distingue un renglón de otro.
   const repite = m.titulo === base.etiqueta && Boolean(m.detalle);
-  const titulo = repite ? m.detalle! : m.titulo;
-  const detalle = repite ? null : m.detalle;
+  // El recibo va como enlace debajo: «— recibo REC-0002» en el concepto lo
+  // decía dos veces.
+  const titulo = sinRecibo(repite ? m.detalle! : m.titulo, m.recibo?.numero);
+  const detalle = repite ? null : m.detalle ? sinRecibo(m.detalle, m.recibo?.numero) || null : null;
   const mueve = m.importe !== null;
   const importe = m.importe ?? m.importeInformativo;
   // El pago de un recibo anulado sigue en la historia (con su ajuste al lado),
@@ -138,7 +140,10 @@ function Fila({
 
   return (
     <li className={`px-5 py-3.5 ${anulado ? "opacity-70" : ""}`}>
-      <div className="flex items-center justify-between gap-3">
+      {/* Si la etiqueta y un importe de siete cifras no entran en un renglón,
+          el importe baja, alineado a la derecha, en vez de montarse sobre la
+          etiqueta (H212, medido a 375 px). */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="flex min-w-0 items-center gap-2.5">
           <span className="tabular shrink-0 text-sm text-muted-foreground">{DIA.format(m.fecha)}</span>
           <span
@@ -149,7 +154,7 @@ function Fila({
         </span>
         {importe !== null && (
           <span
-            className={`tabular shrink-0 whitespace-nowrap text-right text-base ${
+            className={`tabular ml-auto shrink-0 whitespace-nowrap text-right text-base ${
               anulado
                 ? "text-muted-foreground line-through"
                 : !mueve
@@ -231,10 +236,21 @@ function ConPedido({
   return (
     <>
       {antes}
-      <Link href={enlacePedido(pedido)} className="tabular text-acento-texto hover:underline">
+      {/* Alto de dedo sin mover el renglón: el relleno agranda el toque y el
+          margen negativo lo devuelve (H312: medía 21 px). */}
+      <Link
+        href={enlacePedido(pedido)}
+        className="tabular -my-3 inline-block whitespace-nowrap py-3 text-acento-texto hover:underline"
+      >
         {pedido.numero}
       </Link>
       {resto.join(pedido.numero)}
     </>
   );
+}
+
+/** El concepto sin el «— recibo REC-xxxx» que ya va como enlace. */
+function sinRecibo(texto: string, recibo: string | undefined): string {
+  if (!recibo) return texto;
+  return texto.replace(` — recibo ${recibo}`, "").trim();
 }

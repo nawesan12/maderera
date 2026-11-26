@@ -7,6 +7,7 @@ import {
 import Link from "next/link";
 import { Banknote } from "lucide-react";
 import { etiquetaDeCircuito } from "@/lib/circuito";
+import { hoyEnArgentina } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import {
@@ -245,6 +246,12 @@ function Lado({
   );
 }
 
+/** Días de calendario argentino hasta la fecha de pago: el banco lo toma desde ese día. */
+function diasCalendario(fecha: Date): number {
+  const dia = (d: Date) => Date.parse(`${hoyEnArgentina(d)}T00:00:00Z`);
+  return Math.round((dia(fecha) - dia(new Date())) / 86_400_000);
+}
+
 const ESTADOS: Record<string, string> = {
   informado: "Por recibir",
   cartera: "En cartera",
@@ -280,39 +287,65 @@ function Tarjeta({
 }) {
   const vencido = dias !== null && dias < 0;
 
+  /*
+   * En el teléfono la tarjeta usaba media columna para el banco y el número
+   * en tres renglones, con el importe flotando a la derecha (mes simulado,
+   * H339). Ahora: el importe y la fecha de pago arriba, a todo el ancho; el
+   * banco y el número en una línea; los chips en una fila; y la acción
+   * principal a mano.
+   */
   return (
-    <article
-      className={`tarjeta flex flex-wrap items-center gap-4 px-5 py-4 ${
-        apagado ? "opacity-75" : ""
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* El banco y el número juntos: es como se lo encuentra en el
-              banco, que es lo que pidió la clienta. */}
-          <h3 className="text-lg font-medium">
-            {c.banco ?? "Sin banco"}{" "}
-            <span className="tabular">N° {c.numero}</span>
-          </h3>
+    <article className={`tarjeta space-y-2 px-4 py-3.5 sm:px-5 ${apagado ? "opacity-75" : ""}`}>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="tabular text-xl font-semibold">{moneda.format(c.importe)}</p>
+        <p
+          className={`tabular text-right text-base ${
+            vencido
+              ? "font-semibold text-brand-orange-dark"
+              : dias !== null && dias <= 7
+                ? "font-medium text-brand-orange-dark"
+                : "text-muted-foreground"
+          }`}
+        >
+          {fechaCorta.format(c.fechaPago)}
+          {dias !== null &&
+            (vencido ? ` · ${yaVencido(c)}` : dias === 0 ? " · hoy" : ` · en ${plural(dias, "día")}`)}
+        </p>
+      </div>
+      <h3 className="truncate text-base font-medium">
+        {/* El banco y el número juntos: es como se lo encuentra en el banco. */}
+        {c.banco ?? "Sin banco"} <span className="codigo">N° {c.numero}</span>
+      </h3>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span
+          className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-medium ${
+            c.sentido === "recibido" ? "bg-naranja-claro text-acento-sobre-claro" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {c.sentido === "recibido" ? "De tercero" : "Propio"}
+        </span>
+        <span className="whitespace-nowrap rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">
+          {ESTADOS[c.estado] ?? c.estado}
+          {c.tipo === "echeq" && " · e-Cheq"}
+        </span>
+        {/* Solo el circuito B se marca, y como «Circuito B»: una «B» suelta
+            se leía como Factura B (mes simulado, H167/H262). */}
+        {c.circuito === "negro" && (
+          <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 text-sm font-medium text-texto-2">
+            Circuito {etiquetaDeCircuito(c.circuito)}
+          </span>
+        )}
+        {c.estado === "informado" && c.saldoCliente !== null && (
           <span
-            className={`rounded-full px-2.5 py-1 text-sm font-medium ${
-              c.sentido === "recibido"
-                ? "bg-naranja-claro text-acento-sobre-claro"
-                : "bg-muted text-muted-foreground"
+            className={`tabular whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-medium ${
+              c.saldoCliente <= 0.005 ? "estado-problema bg-[var(--estado-fondo)]" : "bg-muted text-muted-foreground"
             }`}
           >
-            {c.sentido === "recibido" ? "De tercero" : "Propio"}
+            {c.saldoCliente <= 0.005 ? "Sin deuda" : `Debe ${moneda.format(c.saldoCliente)}`}
           </span>
-          <span className="rounded-full bg-muted px-2.5 py-1 text-sm font-medium text-muted-foreground">
-            {ESTADOS[c.estado] ?? c.estado}
-            {c.tipo === "echeq" && " · e-Cheq"}
-          </span>
-          {/* El circuito, porque la cartera tiene que poder contestar "cuánto
-              hay que cubrir esta semana" para cada uno por separado. */}
-          <span className="rounded-full bg-chip px-2.5 py-1 text-sm font-medium text-texto-2">
-            {etiquetaDeCircuito(c.circuito)}
-          </span>
-        </div>
+        )}
+      </div>
+      <div className="min-w-0">
         {/*
           De quién vino y a quién fue, enlazados: el cliente con su ficha, el
           proveedor con la suya y el cheque con el recibo con que entró. El
@@ -382,29 +415,6 @@ function Tarjeta({
         )}
       </div>
 
-      <div className="text-right">
-        <p className="tabular text-xl font-semibold">
-          {moneda.format(c.importe)}
-        </p>
-        <p
-          className={`text-base ${
-            vencido
-              ? "font-semibold text-brand-orange-dark"
-              : dias !== null && dias <= 7
-                ? "font-medium text-brand-orange-dark"
-                : "text-muted-foreground"
-          }`}
-        >
-          {fechaCorta.format(c.fechaPago)}
-          {dias !== null &&
-            (vencido
-              ? ` · ${yaVencido(c)}`
-              : dias === 0
-                ? " · hoy"
-                : ` · en ${plural(dias, "día")}`)}
-        </p>
-      </div>
-
       {!apagado && (
         <AccionesDeCheque
           id={c.id}
@@ -412,6 +422,9 @@ function Tarjeta({
           sentido={c.sentido}
           numero={c.numero}
           importe={c.importe}
+          diasParaCobrar={diasCalendario(c.fechaPago)}
+          cliente={c.cliente}
+          saldoCliente={c.saldoCliente}
         />
       )}
     </article>

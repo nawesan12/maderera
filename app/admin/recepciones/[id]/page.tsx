@@ -116,7 +116,10 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
                   </p>
                 </div>
                 {veCostos && recepcion.estado === "confirmada" && (
-                  <dl className="tabular grid grid-cols-3 gap-3 text-right @3xl:w-[26rem]">
+                  // En el teléfono, un dato por renglón con su rótulo al
+                  // lado: en tres columnas de 104 px los importes quedaban a
+                  // 3 px uno del otro (mes simulado, H063).
+                  <dl className="tabular space-y-0.5 @md:grid @md:grid-cols-3 @md:gap-3 @md:space-y-0 @md:text-right @3xl:w-[26rem]">
                     <Dato nombre="Con flete" valor={i.costoConGastos} />
                     <Dato nombre="Venía a" valor={i.costoAnterior} apagado />
                     <Dato nombre="Quedó en" valor={i.costoResultante} fuerte />
@@ -153,7 +156,7 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
 
 function Dato({ nombre, valor, apagado, fuerte }: { nombre: string; valor: string | null; apagado?: boolean; fuerte?: boolean }) {
   return (
-    <div className="min-w-0">
+    <div className="flex min-w-0 items-baseline justify-between gap-3 @md:block">
       <dt className="text-sm text-muted-foreground">{nombre}</dt>
       <dd className={`${fuerte ? "font-semibold" : ""} ${apagado ? "text-muted-foreground" : ""}`}>
         {valor ? formatearMonto(Number(valor)) : "—"}

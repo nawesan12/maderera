@@ -151,8 +151,10 @@ func TestReporteDeVentasYMeses(t *testing.T) {
 	// (que en UTC ya es octubre) es de septiembre.
 	e.pedido(t, "A-1", e.central, "entregado", "mostrador", time.Date(2026, 10, 2, 10, 0, 0, 0, Argentina), &carp,
 		[4]any{placa, 2.0, 1210.0, 500.0}, [4]any{tirante, 3.0, 300.0, nil})
-	e.pedido(t, "A-2", e.aserradero, "pendiente", "tienda", time.Date(2026, 10, 10, 10, 0, 0, 0, Argentina), nil,
+	// Pendiente de entrega, pero facturado: ya es venta (H162).
+	a2 := e.pedido(t, "A-2", e.aserradero, "pendiente", "tienda", time.Date(2026, 10, 10, 10, 0, 0, 0, Argentina), nil,
 		[4]any{placa, 1.0, 605.0, 250.0})
+	e.facturaConCae(t, nil, 90, 605, "2026-10-10T14:00:00Z", &a2)
 	e.pedido(t, "A-3", e.central, "cancelado", "mostrador", time.Date(2026, 10, 11, 10, 0, 0, 0, Argentina), nil,
 		[4]any{placa, 50.0, 99999.0, 1.0})
 	e.pedido(t, "S-1", e.central, "entregado", "mostrador", time.Date(2026, 9, 30, 22, 0, 0, 0, Argentina), nil,
@@ -344,7 +346,9 @@ func TestInicioDelPanel(t *testing.T) {
 	adm := e.staff(t, "admin@prueba.test", "admin")
 	dep := e.staff(t, "deposito@prueba.test", "deposito")
 	placa, _ := e.catalogo(t)
-	e.pedido(t, "I-1", e.central, "pendiente", "mostrador", time.Date(2026, 10, 1, 0, 30, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1000.0, nil})
+	// Sin entregar y facturado: es venta del mes de la factura (H162).
+	i1 := e.pedido(t, "I-1", e.central, "pendiente", "mostrador", time.Date(2026, 10, 1, 0, 30, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1000.0, nil})
+	e.facturaConCae(t, nil, 91, 1000, "2026-10-01T03:30:00Z", &i1)
 	e.pedido(t, "I-2", e.aserradero, "entregado", "mostrador", time.Date(2026, 9, 30, 22, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 500.0, nil})
 	e.exec(t, `insert into quotes (numero, contacto_nombre, estado, total, valido_hasta) values ('P-1', 'X', 'enviado', 10, now() + interval '1 day'), ('P-2', 'Y', 'revision', 20, null)`)
 

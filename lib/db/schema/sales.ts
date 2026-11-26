@@ -283,6 +283,8 @@ export const orders = pgTable(
     mercaderiaNoVolvio: boolean().notNull().default(false),
     /** Con qué salió la venta del mostrador: «interno» o «fiscal» (migración 00230). */
     comprobante: text(),
+    /** Cuándo cuenta como vendida: la primera entrega o factura (migración 00275). */
+    vendidoAt: timestamp({ withTimezone: true }),
   },
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),

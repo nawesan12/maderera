@@ -3013,8 +3013,12 @@ prueba. Migraciones 00220 y 00221.
   sin IVA). El precio bajo el costo se marca en el inicio y en Precios.
 - Quedan para Nahuel y el contador: el excedente de un recibo y el cobro de
   una venta que se factura después siguen la regla del reparto
-  (`docs/CONTADOR-SIN-CAE.md`: se fija al emitir y lo que sobra va al B), y
-  la venta se sigue reconociendo al confirmarse el pedido, no al entregarse.
+  (`docs/CONTADOR-SIN-CAE.md`: se fija al emitir y lo que sobra va al B).
+- **La venta cuenta al entregarse o al facturarse** (lo primero), no al
+  confirmarse el pedido (H162, default prudente a confirmar con el
+  contador): `orders.vendido_at` (00275) lo ponen dos triggers, el paso a
+  «entregado» y la primera factura; `hechosDeVenta` filtra por esa fecha,
+  con índice. `TestLaVentaCuentaAlEntregarseOFacturarse`.
 ## Mes simulado: la cola de corte y el taller (rama `mes-cortes-taller`)
 
 - **El plano se cuenta como la hoja** (`cortes.MotorPasadasDeLaHoja`, 4):

@@ -94,6 +94,15 @@ pedido.
 duda, el sistema manda el excedente a Anticipos y no al B. ¿Les sirve ese
 criterio?
 
+## Cuándo cuenta una venta
+
+Las ventas del mes y el resultado cuentan cada venta **cuando se entrega o se
+factura, lo que pase primero**, no cuando se confirma el pedido. Un pedido de
+octubre que se prepara y se factura en noviembre es venta de noviembre. Lo
+que se devuelve resta en el mes de la devolución.
+
+**A confirmar:** ¿les sirve ese criterio para el resultado que les mandamos?
+
 ## Pagos en negro de facturas de compra en blanco
 
 Si una factura de compra en blanco se paga con un pago marcado «en negro», el

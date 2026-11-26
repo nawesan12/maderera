@@ -112,7 +112,15 @@ const (
 	// hechosDeVenta tiene las columnas de orders más hecho (el pedido o la
 	// devolución), fecha, monto (con IVA, en negativo lo devuelto) y
 	// operaciones (1 la venta, 0 la devolución: no es otra operación).
-	hechosDeVenta = `(SELECT o.*, o.id AS hecho, o.created_at AS fecha, o.total AS monto, 1 AS operaciones FROM orders o
+	//
+	// La venta es un hecho cuando se entrega o se factura, lo que pase
+	// primero (fechaDeLaVenta), no al confirmarse el pedido: el resultado del
+	// mes sumaba pedidos preparándose, sin cobrar ni facturar (mes simulado,
+	// H162; criterio prudente, a confirmar con el contador). Hasta entonces
+	// no está en ningún mes. La fecha la ponen los triggers de la 00275
+	// (orders.vendido_at, con índice).
+	hechosDeVenta = `(SELECT o.*, o.id AS hecho, o.vendido_at AS fecha, o.total AS monto, 1 AS operaciones
+		  FROM orders o WHERE o.vendido_at IS NOT NULL
 		UNION ALL
 		SELECT o.*, dv.id, dv.created_at, -dv.importe, 0 FROM devoluciones dv JOIN orders o ON o.id = dv.order_id)`
 	// renglonesVendidos son los renglones de cada hecho: los de la venta y,

@@ -510,8 +510,9 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 	// venta de renglones: 1000.
 	interno := e.pedido(t, "F-2", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
 	e.exec(t, `update orders set total = 1331, costo_envio = 121 where id = $1`, interno)
-	// Sin factura: el comprobante quedó en borrador (500), y un pedido web
-	// (100).
+	// Sin factura: el comprobante quedó en borrador (500). El pedido web
+	// pendiente (100) todavía no se vendió: ni se entregó ni se facturó
+	// (H162).
 	borrador := e.pedido(t, "F-3", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 605.0, 300.0})
 	factura(borrador, "borrador", 2, nil, "2026-10-05T15:00:00Z")
 	e.pedido(t, "F-6", e.central, "pendiente", "tienda", octubre, nil, [4]any{placa, 1.0, 121.0, 60.0})
@@ -534,7 +535,7 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 		t.Fatal(cuerpo)
 	}
 	v := r.Vendido
-	quiere := VendidoDelMes{Total: 4000, Facturado: Totales{2000, 2}, SinCae: Totales{400, 1}, Interno: Totales{1000, 1}, SinFactura: Totales{600, 2}}
+	quiere := VendidoDelMes{Total: 3900, Facturado: Totales{2000, 2}, SinCae: Totales{400, 1}, Interno: Totales{1000, 1}, SinFactura: Totales{500, 1}}
 	if v != quiere {
 		t.Errorf("vendido: %+v, quería %+v", v, quiere)
 	}
@@ -552,7 +553,7 @@ func TestCierreVendidoPorFactura(t *testing.T) {
 	e.exec(t, `update orders set subtotal = 1210, total = 1089 where id = $1`, facturado)
 	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	_ = json.Unmarshal([]byte(cuerpo), &r)
-	if v := r.Vendido; v.Total != r.Resultado.Actual.VentasNetas || v.Total != 3900 || !r.Resultado.Actual.ConDescuento ||
+	if v := r.Vendido; v.Total != r.Resultado.Actual.VentasNetas || v.Total != 3800 || !r.Resultado.Actual.ConDescuento ||
 		jsmath.Redondear2(v.Facturado.Total+v.SinCae.Total+v.Interno.Total+v.SinFactura.Total) != v.Total {
 		t.Errorf("con descuento: %+v %+v", v, r.Resultado.Actual)
 	}
@@ -884,5 +885,34 @@ func TestCobradoConElMostradorYSinElRechazado(t *testing.T) {
 	}
 	if medios["efectivo"] != 1000 || medios["tarjeta_debito"] != 500 || medios["cheque"] != 0 || medios["cuenta_corriente"] != 0 {
 		t.Errorf("por medio: %v", medios)
+	}
+}
+
+// La venta cuenta al entregarse o al facturarse, lo que pase primero, no al
+// confirmarse el pedido (mes simulado, H162): el pedido de octubre que se
+// prepara y nadie cobró ni facturó no suma en octubre; facturado el 3 de
+// noviembre, suma en noviembre.
+func TestLaVentaCuentaAlEntregarseOFacturarse(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, _ := e.catalogo(t)
+	octubre := time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina)
+	e.pedido(t, "V-1", e.central, "entregado", "mostrador", octubre, nil, [4]any{placa, 1.0, 1210.0, 600.0})
+	preparando := e.pedido(t, "V-2", e.central, "preparando", "tienda", octubre, nil, [4]any{placa, 1.0, 2420.0, 1200.0})
+	vendido := func(periodo string) float64 {
+		t.Helper()
+		_, cuerpo, _ := pedir(t, adm, e.u+"cierre/resumen?periodo="+periodo)
+		var r ResumenDelMes
+		if err := json.Unmarshal([]byte(cuerpo), &r); err != nil {
+			t.Fatal(cuerpo)
+		}
+		return r.Vendido.Total
+	}
+	if v := vendido("2026-10"); v != 1000 {
+		t.Fatalf("octubre con el pedido sin entregar ni facturar: %v", v)
+	}
+	e.facturaConCae(t, nil, 95, 2420, "2026-11-03T15:00:00Z", &preparando)
+	if o, n := vendido("2026-10"), vendido("2026-11"); o != 1000 || n != 2000 {
+		t.Fatalf("facturado en noviembre: octubre %v, noviembre %v", o, n)
 	}
 }

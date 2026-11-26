@@ -18,6 +18,7 @@ import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
 import { pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
 import { BotonFacturar } from "./facturar";
+import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
 import { otrosAcopios, remitosDelPedido } from "@/lib/dal/admin/entregas";
@@ -108,6 +109,20 @@ export default async function FichaPedidoPage({
   const acopioEnCurso = pedido.acopio && porEntregar.length > 0;
   const cortesSinTerminar = cortes.filter((c) => c.estado === "en-cola" || c.estado === "en-proceso").map((c) => c.numero);
   const interno = pedido.comprobante === "interno" && !facturado;
+  // Devolver y corregir: de quien mueve plata, y sin factura (con factura,
+  // por la factura y su nota). Corregir, además, sin nada cobrado y fuera
+  // del mostrador (la venta del mostrador se anula desde ahí).
+  const manejaPlata = Boolean(usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole));
+  const devolvible = manejaPlata && !cancelado && !pedido.facturado;
+  const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
+  const renglones = pedido.items.map((i) => ({
+    id: i.id,
+    descripcion: i.descripcion,
+    unidad: i.unidad,
+    cantidad: Number(i.cantidad),
+    precioUnitario: Number(i.precioUnitario),
+    subtotal: Number(i.subtotal),
+  }));
 
   // El remito también se manda gratis, desde la app del teléfono.
   const avisosRemito = puedeEntrar("/admin/whatsapp", usuario.staffRole)
@@ -208,6 +223,17 @@ export default async function FichaPedidoPage({
         acciones={
           <>
             {cancelable && <CancelarPedido id={pedido.id} numero={pedido.numero} cobrado={pedido.estadoPago === "pagado"} />}
+            {corregible && (
+              <CorregirPedido
+                id={pedido.id}
+                numero={pedido.numero}
+                renglones={renglones}
+                costoEnvio={Number(pedido.costoEnvio)}
+                conEnvio={pedido.tipoEntrega === "envio"}
+                descuento={Number(pedido.descuento)}
+              />
+            )}
+            {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} />}
             <a
               href={`/ticket/${pedido.id}`}
               target="_blank"

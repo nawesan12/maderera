@@ -132,6 +132,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pedidos/{id}/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura. */
+        post: operations["DevolverPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pedidos/{id}/correccion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Corrige los renglones y el flete de un pedido sin factura ni cobro; un precio bajo la lista pasado lo libre pide el PIN de un admin (422 en `pin`). */
+        post: operations["CorregirPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pedidos/{id}/cobro": {
         parameters: {
             query?: never;
@@ -511,6 +549,8 @@ export interface components {
             }[];
         };
         FichaDePedido: {
+            /** @description Tiene una factura viva */
+            facturado: boolean;
             /** @description Se retira de a partes (ya salió algo */
             acopio: boolean;
             /**
@@ -777,6 +817,84 @@ export interface operations {
             401: components["responses"]["Problema"];
             403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolverPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: {
+                        orderItemId: string;
+                        /** Format: double */
+                        cantidad: number;
+                    }[];
+                    motivo: string;
+                    /** @description la del intento: un reintento devuelve la misma devolución */
+                    clave: string;
+                };
+            };
+        };
+        responses: {
+            /** @description La devolución */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                        id: string;
+                        /** Format: double */
+                        importe: number;
+                        repetida?: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CorregirPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: {
+                        orderItemId: string;
+                        /** Format: double */
+                        cantidad: number;
+                        /** Format: double */
+                        precioUnitario: number;
+                    }[];
+                    /** Format: double */
+                    costoEnvio?: number;
+                    motivo: string;
+                    pin?: string;
+                    ficha?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
         };
     };

@@ -33,6 +33,7 @@ import {
   Seccion,
   sinReiniciar,
 } from "@/components/admin/formulario";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 export interface Linea {
   variantId: string | null;
@@ -438,7 +439,7 @@ function Formulario({
 
           <div className="space-y-2">
             <Label htmlFor="necesitaPara">Lo necesita para el</Label>
-            <Input id="necesitaPara" name="necesitaPara" type="date" />
+            <CampoFecha Entrada={Input} id="necesitaPara" name="necesitaPara" />
           </div>
 
           <div className="space-y-2 md:col-span-2">

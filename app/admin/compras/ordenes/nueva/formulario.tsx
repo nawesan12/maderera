@@ -24,6 +24,7 @@ import {
   editarOrdenDeCompra,
   type EstadoOrden,
 } from "../actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 interface Hallazgo {
   variantId: string;
@@ -223,9 +224,8 @@ export function FormularioOrden({
 
           <label className="block">
             <span className="text-sm font-medium">Fecha prometida</span>
-            <input
+            <CampoFecha
               id="orden-fecha"
-              type="date"
               value={fechaPrometida}
               min={hoyEnArgentina()}
               aria-invalid={(fechaPrometida !== "" && fechaPrometida < hoyEnArgentina()) || undefined}

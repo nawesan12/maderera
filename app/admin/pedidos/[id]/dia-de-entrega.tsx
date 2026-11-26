@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarClock, Loader2 } from "lucide-react";
 import { cambiarEntrega } from "@/app/admin/ventas-actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /**
  * El día comprometido de entrega, editable. Es lo que dice si el pedido está
@@ -45,8 +46,7 @@ export function DiaDeEntrega({
         {vencido && " · atrasado"}
         {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
       </span>
-      <input
-        type="date"
+      <CampoFecha
         value={valor}
         onChange={(e) => {
           const nuevo = e.target.value;

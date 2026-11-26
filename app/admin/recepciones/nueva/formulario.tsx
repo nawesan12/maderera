@@ -23,6 +23,7 @@ import {
   crearRecepcion,
   type EstadoRecepcion,
 } from "../actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 interface Hallazgo {
   variantId: string;
@@ -234,8 +235,7 @@ export function FormularioRecepcion({
 
           <label className="block">
             <span className="text-sm font-medium">Fecha de entrada</span>
-            <input
-              type="date"
+            <CampoFecha
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"

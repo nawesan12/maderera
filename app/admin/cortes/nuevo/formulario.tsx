@@ -43,6 +43,7 @@ import {
   Seccion,
   sinReiniciar,
 } from "@/components/admin/formulario";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
 export interface PlacaElegida {
@@ -475,10 +476,10 @@ export function FormularioCorte({
           <div className="space-y-2">
             <Label htmlFor="retiraEl">Lo retira el</Label>
             {/* El día del pedido, si ya se prometió (H289). */}
-            <Input
+            <CampoFecha
+              Entrada={Input}
               id="retiraEl"
               name="retiraEl"
-              type="date"
               defaultValue={corregir?.retiraEl || desdePedido?.entregarEl || ""}
             />
           </div>

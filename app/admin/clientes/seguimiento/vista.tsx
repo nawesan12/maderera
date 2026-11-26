@@ -11,6 +11,7 @@ import {
 import type { GestionListada } from "@/lib/dal/admin/seguimiento";
 import { crearGestion, moverGestion } from "./actions";
 import { fechaCorta, plural } from "@/lib/formato";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /** Las cuatro etapas, con el color de estado que les corresponde. */
 const ETAPAS = [
@@ -131,8 +132,7 @@ function Tarjeta({ gestion }: { gestion: GestionListada }) {
           />
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             Volver el
-            <input
-              type="date"
+            <CampoFecha
               value={cuando}
               onChange={(e) => setCuando(e.target.value)}
               className="tabular h-10 flex-1 rounded-lg border border-linea bg-background px-2 text-base"
@@ -253,9 +253,8 @@ export function NuevaGestion({
 
         <label className="block">
           <span className="text-sm font-medium">Volver el</span>
-          <input
+          <CampoFecha
             name="proximaAccion"
-            type="date"
             className="tabular mt-1 h-10 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
           />
           <span className="mt-1 block text-sm text-muted-foreground">

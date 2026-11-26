@@ -12,6 +12,7 @@ import {
   type DatosFacturaCompra,
   type EstadoFacturaCompra,
 } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 type Tipo = keyof typeof COMPROBANTES_DE_COMPRA;
 
@@ -313,8 +314,7 @@ export function CargarFactura({
 
           <label className="block">
             <span className="text-base font-medium">Fecha</span>
-            <input
-              type="date"
+            <CampoFecha
               value={fechaEmision}
               onChange={(e) => setFecha(e.target.value)}
               className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
@@ -323,8 +323,7 @@ export function CargarFactura({
 
           <label className="block">
             <span className="text-base font-medium">Vence</span>
-            <input
-              type="date"
+            <CampoFecha
               value={vence}
               min={fechaEmision}
               onChange={(e) => setVence(e.target.value || null)}

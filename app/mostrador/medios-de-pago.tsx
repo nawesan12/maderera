@@ -10,6 +10,7 @@ import {
   aChequeDePago,
   CUOTAS,
 } from "./medios";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /**
  * Los datos de un cheque en el mostrador: banco, número y fecha de pago.
@@ -69,8 +70,7 @@ export function CamposDeCheque({
           aria-label="Número del cheque"
           className="tabular h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
         />
-        <input
-          type="date"
+        <CampoFecha
           value={valor.fechaPago}
           onChange={(e) => cambiar("fechaPago", e.target.value)}
           aria-label="Fecha de pago del cheque"

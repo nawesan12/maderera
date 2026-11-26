@@ -160,35 +160,38 @@ type DocumentoListado struct {
 
 // DetalleConversacion es una conversación con sus mensajes y el cliente.
 type DetalleConversacion struct {
-	ID               string               `json:"id"`
-	WaJid            string               `json:"waJid"`
-	DisplayName      *string              `json:"displayName"`
-	CustomerID       *string              `json:"customerId"`
-	OrderID          *string              `json:"orderId"`
-	Estado           string               `json:"estado"`
-	Notas            *string              `json:"notas"`
-	UltimoEntranteAt *time.Time           `json:"ultimoEntranteAt"`
-	NoLeidos         int32                `json:"noLeidos"`
-	AsignadoAUserID  *string              `json:"asignadoAUserId"`
-	BajaAt           *time.Time           `json:"bajaAt"`
-	BajaDetalle      *string              `json:"bajaDetalle"`
-	ResueltaAt       *time.Time           `json:"resueltaAt"`
-	BotEstado        string               `json:"botEstado"`
-	ClienteNombre    *string              `json:"clienteNombre"`
-	ClienteTipo      *string              `json:"clienteTipo"`
-	ClienteTelefono  *string              `json:"clienteTelefono"`
-	ClienteEmail     *string              `json:"clienteEmail"`
-	ClienteLimite    *string              `json:"clienteLimite"`
-	ClienteEstado    *string              `json:"clienteEstado"`
-	Conocidos        map[string]string    `json:"conocidos"`
-	Nombre           string               `json:"nombre"`
-	SinNumero        bool                 `json:"sinNumero"`
-	VentanaAbierta   bool                 `json:"ventanaAbierta"`
-	Mensajes         []MensajeDeLaBandeja `json:"mensajes"`
-	Saldo            float64              `json:"saldo"`
-	LimiteCredito    float64              `json:"limiteCredito"`
-	Pedidos          []PedidoDelCliente   `json:"pedidos"`
-	Documentos       []DocumentoListado   `json:"documentos"`
+	ID               string     `json:"id"`
+	WaJid            string     `json:"waJid"`
+	DisplayName      *string    `json:"displayName"`
+	CustomerID       *string    `json:"customerId"`
+	OrderID          *string    `json:"orderId"`
+	Estado           string     `json:"estado"`
+	Notas            *string    `json:"notas"`
+	UltimoEntranteAt *time.Time `json:"ultimoEntranteAt"`
+	NoLeidos         int32      `json:"noLeidos"`
+	AsignadoAUserID  *string    `json:"asignadoAUserId"`
+	BajaAt           *time.Time `json:"bajaAt"`
+	BajaDetalle      *string    `json:"bajaDetalle"`
+	ResueltaAt       *time.Time `json:"resueltaAt"`
+	BotEstado        string     `json:"botEstado"`
+	ClienteNombre    *string    `json:"clienteNombre"`
+	ClienteTipo      *string    `json:"clienteTipo"`
+	// ClienteLista es la lista de precios propia, si no es la general: el
+	// chip dice «Constructora» y no «Profesional» a todos (como el portal).
+	ClienteLista    *string              `json:"clienteLista"`
+	ClienteTelefono *string              `json:"clienteTelefono"`
+	ClienteEmail    *string              `json:"clienteEmail"`
+	ClienteLimite   *string              `json:"clienteLimite"`
+	ClienteEstado   *string              `json:"clienteEstado"`
+	Conocidos       map[string]string    `json:"conocidos"`
+	Nombre          string               `json:"nombre"`
+	SinNumero       bool                 `json:"sinNumero"`
+	VentanaAbierta  bool                 `json:"ventanaAbierta"`
+	Mensajes        []MensajeDeLaBandeja `json:"mensajes"`
+	Saldo           float64              `json:"saldo"`
+	LimiteCredito   float64              `json:"limiteCredito"`
+	Pedidos         []PedidoDelCliente   `json:"pedidos"`
+	Documentos      []DocumentoListado   `json:"documentos"`
 }
 
 // ObtenerConversacion es el detalle; nil si no existe.
@@ -200,11 +203,13 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 	err := s.pool.QueryRow(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, c.order_id, c.estado::text, c.notas, c.ultimo_entrante_at, c.no_leidos,
 		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado,
-		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text
+		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text,
+		       CASE WHEN pl.is_default THEN NULL ELSE pl.name END
 		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id
+		  left join price_lists pl on pl.id = cu.price_list_id
 		 where c.id = $1`, id).Scan(&d.ID, &d.WaJid, &d.DisplayName, &d.CustomerID, &d.OrderID, &d.Estado, &d.Notas, &d.UltimoEntranteAt,
 		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado,
-		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado)
+		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado, &d.ClienteLista)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

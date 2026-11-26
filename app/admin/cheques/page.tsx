@@ -362,9 +362,12 @@ function Tarjeta({
           alguien preguntando de quién era.
         */}
         <p className="mt-1 text-base text-muted-foreground">
+          {/* El propio lo libra la maderera: «Sin librador» no tenía sentido
+              ahí, y la nota «Pago a X» repetía al proveedor que ya dice
+              «entregado a» (mes simulado, tercera prueba). */}
           {c.librador
             ? `Librado por ${c.librador}`
-            : c.cliente
+            : c.cliente || c.sentido !== "recibido"
               ? ""
               : "Sin librador"}
           {c.cliente && (
@@ -384,7 +387,7 @@ function Tarjeta({
           )}
           {c.proveedor && (
             <>
-              {" · entregado a "}
+              {c.librador || c.cliente || c.sentido === "recibido" ? " · entregado a " : "Entregado a "}
               {c.proveedorId ? (
                 <Link
                   href={`/admin/proveedores/${c.proveedorId}`}
@@ -397,7 +400,7 @@ function Tarjeta({
               )}
             </>
           )}
-          {c.notas && ` · ${c.notas}`}
+          {c.notas && c.notas !== `Pago a ${c.proveedor}` && ` · ${c.notas}`}
           {c.receiptId && c.recibo && (
             <>
               {" · "}

@@ -230,23 +230,26 @@ function TarjetaCorte({
       {/* Lo que se abre antes de cargar la placa, a un toque: la hoja y el
           archivo de la máquina, juntos (H327). */}
       {corte.piezas > 0 && pendiente && (
-        <div className="mt-2.5 grid grid-cols-2 gap-2">
+        // Cada botón toma el ancho de su texto y crecen juntos: en dos
+        // columnas iguales «Hoja de corte» se cortaba en «Hoja de cor…» a
+        // 375 px (mes simulado, H327). Si no entran, bajan de renglón.
+        <div className="mt-2.5 flex flex-wrap gap-2">
           <Link
             href={`/hoja-de-corte/${corte.id}`}
             target="_blank"
-            className="inline-flex h-12 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-base font-medium transition-colors hover:bg-muted"
+            className="inline-flex h-12 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
           >
             <ListChecks className="h-5 w-5 shrink-0" />
-            <span className="truncate">Hoja de corte</span>
+            Hoja de corte
           </Link>
           <a
             href={`/api/cortes/${corte.id}/lista`}
             title="Archivo para la máquina"
             aria-label="Archivo para la máquina"
-            className="inline-flex h-12 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-base font-medium transition-colors hover:bg-muted"
+            className="inline-flex h-12 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
           >
             <Download className="h-5 w-5 shrink-0" />
-            <span className="truncate">Archivo</span>
+            Archivo
           </a>
         </div>
       )}

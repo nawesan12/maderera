@@ -102,45 +102,50 @@ export function AccionesCorte({
 
   if (confirmando) {
     return (
+      /* En dos renglones: las pasadas arriba y la confirmación abajo, a lo
+         ancho. En uno solo, a 375 px «Terminado» quedaba en 24 px contra el
+         borde de la tarjeta (mes simulado, H403). */
       <form
-        className="flex w-full flex-wrap items-center gap-2"
+        className="grid w-full gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           setConfirmando(false);
           avanzar(cuantas);
         }}
       >
-        <label htmlFor={`pasadas-${id}`} className="text-base font-medium">
-          Pasadas
-        </label>
-        <div className="flex items-center rounded-lg bg-hundida">
-          <button
-            type="button"
-            onClick={() => setCuantas((n) => Math.max(0, n - 1))}
-            aria-label="Una pasada menos"
-            className={`inline-flex ${alto} w-12 items-center justify-center rounded-lg text-foreground hover:bg-muted`}
-          >
-            <Minus className="h-5 w-5" />
-          </button>
-          <input
-            id={`pasadas-${id}`}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={cuantas}
-            onChange={(e) => setCuantas(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-            className={`tabular ${alto} w-16 bg-transparent text-center text-xl font-semibold`}
-          />
-          <button
-            type="button"
-            onClick={() => setCuantas((n) => n + 1)}
-            aria-label="Una pasada más"
-            className={`inline-flex ${alto} w-12 items-center justify-center rounded-lg text-foreground hover:bg-muted`}
-          >
-            <Plus className="h-5 w-5" />
-          </button>
+        <div className="flex items-center gap-3">
+          <label htmlFor={`pasadas-${id}`} className="text-base font-medium">
+            Pasadas
+          </label>
+          <div className="flex flex-1 items-center justify-between rounded-lg bg-hundida">
+            <button
+              type="button"
+              onClick={() => setCuantas((n) => Math.max(0, n - 1))}
+              aria-label="Una pasada menos"
+              className={`inline-flex ${alto} w-12 items-center justify-center rounded-lg text-foreground hover:bg-muted`}
+            >
+              <Minus className="h-5 w-5" />
+            </button>
+            <input
+              id={`pasadas-${id}`}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={cuantas}
+              onChange={(e) => setCuantas(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+              className={`tabular ${alto} w-16 bg-transparent text-center text-xl font-semibold`}
+            />
+            <button
+              type="button"
+              onClick={() => setCuantas((n) => n + 1)}
+              aria-label="Una pasada más"
+              className={`inline-flex ${alto} w-12 items-center justify-center rounded-lg text-foreground hover:bg-muted`}
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
         </div>
-        <div className="flex min-w-0 flex-1 gap-2">
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={() => {

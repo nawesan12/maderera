@@ -86,18 +86,6 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "20mb" },
     proxyClientMaxBodySize: "20mb",
-    /*
-     * La validación de navegación instantánea, solo en los segmentos que la
-     * piden con `export const instant`. De fábrica valida cada página, y en
-     * `next dev` casi todas las del panel y de Mi cuenta tiraban «encountered
-     * uncached data during prerendering or a navigation» (tercera prueba del
-     * mes): todas leen la sesión, y el `instant = false` de los layouts no
-     * alcanza a sus páginas. Con `partialPrefetching: false` (arriba) la
-     * navegación instantánea que mide no es la que se usa. No cambia el
-     * build ni producción: la validación corre solo en desarrollo
-     * (node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/02-route-segment-config/instant.md).
-     */
-    instantInsights: { validationLevel: "manual-warning" },
   },
   /**
    * Empaquetado para servidor propio.

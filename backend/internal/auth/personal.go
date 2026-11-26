@@ -161,6 +161,14 @@ func BajaDePersonal(ctx context.Context, tx pgx.Tx, quien *Sesion, userID string
 	if _, err := tx.Exec(ctx, `UPDATE "user" SET pin_autorizacion = NULL WHERE id = $1`, userID); err != nil {
 		return "", err
 	}
+	// La clave del personal deja de abrir la cuenta: antes la persona dada de
+	// baja seguía entrando con ella y caía en Mi cuenta como cliente
+	// (simulación del mes). Si además es cliente, entra por el enlace a su
+	// correo, que UsarEnlace ya no le rechaza; si vuelve al personal, el alta
+	// le pide una clave nueva.
+	if _, err := tx.Exec(ctx, `DELETE FROM account WHERE user_id = $1 AND provider_id = 'credential'`, userID); err != nil {
+		return "", err
+	}
 	_, err = tx.Exec(ctx, `DELETE FROM session WHERE user_id = $1`, userID)
 	return nombre, err
 }

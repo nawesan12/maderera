@@ -102,12 +102,25 @@ func TestPersonalDesdeElPanel(t *testing.T) {
 	if sesiones != 0 || rol != nil || activa {
 		t.Errorf("después de la baja: %d sesiones, rol %v, vendedora activa %v", sesiones, rol, activa)
 	}
+	// Y su clave ya no abre la cuenta (antes entraba a Mi cuenta como
+	// cliente). Si vuelve al personal, el alta le pide una clave nueva.
+	if _, err := e.ses.Entrar(ctx, httptest.NewRecorder(), "ana@prueba.test", "una clave inicial", "", "", true); err == nil {
+		t.Errorf("la persona dada de baja sigue entrando con su clave")
+	}
 	if c, _ := pedir(t, adm, "POST", u+"/"+ids["ana@prueba.test"]+"/baja", nil); c != 404 {
 		t.Errorf("dos bajas: %d", c)
 	}
+	c, cuerpo = pedir(t, adm, "POST", u, map[string]string{"nombre": "Ana Rodríguez", "correo": "ana@prueba.test", "rol": "vendedor", "clave": "otra clave nueva"})
+	if c != 200 {
+		t.Fatalf("vuelve al personal: %d %s", c, cuerpo)
+	}
+	if _, err := e.ses.Entrar(ctx, httptest.NewRecorder(), "ana@prueba.test", "otra clave nueva", "", "", true); err != nil {
+		t.Errorf("vuelve con la clave nueva: %v", err)
+	}
+	_, _ = pedir(t, adm, "POST", u+"/"+ids["ana@prueba.test"]+"/baja", nil)
 	var anotadas int
 	_ = e.pool.QueryRow(ctx, `SELECT count(*)::int FROM audit_log WHERE entidad = 'usuario' AND entidad_id = $1`, ids["ana@prueba.test"]).Scan(&anotadas)
-	if anotadas != 4 {
+	if anotadas != 6 {
 		t.Errorf("bitácora: %d", anotadas)
 	}
 }

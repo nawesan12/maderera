@@ -152,6 +152,8 @@ export const cashMovements = pgTable(
     bajoLaBase: boolean().notNull().default(false),
     declaradoAt: timestamp({ withTimezone: true }),
     supplierPaymentId: uuid(),
+    /** A dónde fue un retiro: banco, caja_fuerte u otro (00310). */
+    destino: text(),
   },
   (t) => [
     index("cash_movements_sesion_idx").on(t.sessionId),

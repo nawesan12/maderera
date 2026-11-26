@@ -390,6 +390,7 @@ paths:
                 tipo: { type: string, enum: [ingreso, retiro] }
                 monto: { type: number, format: double, nullable: true }
                 motivo: { type: string }
+                destino: { type: string, enum: [banco, caja_fuerte, otro], description: "a dónde va un retiro; sin él se clasifica por el motivo" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -648,6 +649,7 @@ components:
         orderId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         quien: { type: string, nullable: true }
+        destino: { type: string, nullable: true, enum: [banco, caja_fuerte, otro], description: "a dónde fue un retiro" }
     MostradorVentaDeHoy:
       type: object
       required: [id, numero, cliente, total, devuelto, medioPago, medios, conFactura, estado, createdAt]

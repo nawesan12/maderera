@@ -333,8 +333,9 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	return asientos, nil
 }
 
-// retiroAlBanco: el retiro de caja `m` fue al banco (lo dice el motivo).
-const retiroAlBanco = `(m.motivo ~* '(banco|dep[oó]sit)')`
+// retiroAlBanco: el retiro de caja `m` fue al banco (su destino, o el motivo
+// en los de antes de la 00310). Es la misma regla de «Plata hoy».
+const retiroAlBanco = RetiroAlBanco
 
 // asientosDeCheques son los cambios de estado de los cheques del período
 // (cheque_estados, que anota el trigger de la base en cada cambio):

@@ -543,7 +543,12 @@ func (a *API) MovimientoDeCaja(ctx context.Context, r mostradorapi.MovimientoDeC
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.MovimientoDeCaja(ctx, ses, r.Body.SessionId, string(r.Body.Tipo), numeroONaN(r.Body.Monto), r.Body.Motivo)
+	var destino *string
+	if r.Body.Destino != nil {
+		d := string(*r.Body.Destino)
+		destino = &d
+	}
+	m, err := a.s.MovimientoDeCaja(ctx, ses, r.Body.SessionId, string(r.Body.Tipo), numeroONaN(r.Body.Monto), r.Body.Motivo, destino)
 	if err != nil {
 		return nil, comoProblema(err)
 	}

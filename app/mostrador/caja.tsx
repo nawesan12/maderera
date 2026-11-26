@@ -15,6 +15,23 @@ import { NOMBRE_DEL_MEDIO } from "./medios";
 import type { Sucursal, Turno, Movimiento, VentaDeHoy } from "./tipos";
 import { VentasDeHoy } from "./ventas-de-hoy";
 
+type Destino = "banco" | "caja_fuerte" | "otro";
+
+/** Lo que dice un retiro sin motivo escrito (el mismo texto que pone Go). */
+const DESTINO: Record<Destino, { motivo: string; chip: string }> = {
+  banco: { motivo: "Depósito en el banco", chip: "Banco" },
+  caja_fuerte: { motivo: "A la caja fuerte", chip: "Caja fuerte" },
+  otro: { motivo: "", chip: "" },
+};
+
+/** El retiro dice a dónde va la plata (H333): al banco y a la caja fuerte, sin escribir nada. */
+const MOVIMIENTOS: { tipo: "ingreso" | "retiro"; destino?: Destino; texto: string }[] = [
+  { tipo: "ingreso", texto: "Ingreso" },
+  { tipo: "retiro", destino: "banco", texto: "Al banco" },
+  { tipo: "retiro", destino: "caja_fuerte", texto: "A caja fuerte" },
+  { tipo: "retiro", destino: "otro", texto: "Otro retiro" },
+];
+
 /** El turno recién cerrado, como estaba en pantalla: es lo que se imprime. */
 interface TurnoCerrado {
   turno: Turno;
@@ -276,10 +293,14 @@ export function PanelDeCaja({
                     aria-label="Motivo"
                     className="h-12 min-w-0 flex-1 rounded-lg border border-linea bg-background px-3 text-base"
                   />
-                  {(["ingreso", "retiro"] as const).map((t) => (
+                  {MOVIMIENTOS.map(({ tipo: t, destino, texto }) => (
                     <button
-                      key={t}
-                      disabled={trabajando || !(importeDelMovimiento !== null && importeDelMovimiento > 0) || !motivo.trim()}
+                      key={texto}
+                      disabled={
+                        trabajando ||
+                        !(importeDelMovimiento !== null && importeDelMovimiento > 0) ||
+                        (!motivo.trim() && (t === "ingreso" || destino === "otro"))
+                      }
                       onClick={() =>
                         empezar(async () => {
                           if (importeDelMovimiento === null) return;
@@ -328,7 +349,8 @@ export function PanelDeCaja({
                               branchId: sucursal.id,
                               tipo: t,
                               monto: importeDelMovimiento,
-                              motivo: motivo.trim(),
+                              motivo: motivo.trim() || (destino ? DESTINO[destino].motivo : ""),
+                              ...(destino ? { destino } : {}),
                               hechoAt: new Date().toISOString(),
                             });
                             setAviso(
@@ -345,6 +367,7 @@ export function PanelDeCaja({
                             t,
                             importeDelMovimiento,
                             motivo,
+                            destino,
                           );
                           setAviso(r.error ?? r.ok ?? null);
                           if (!r.error) {
@@ -356,7 +379,7 @@ export function PanelDeCaja({
                       }
                       className="h-12 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-40"
                     >
-                      {t === "ingreso" ? "Ingreso" : "Retiro"}
+                      {texto}
                     </button>
                   ))}
                 </div>
@@ -493,6 +516,11 @@ export function PanelDeCaja({
                         <span className="min-w-0 flex-1 truncate text-base">
                           {m.motivo ?? m.tipo}
                         </span>
+                        {m.destino && m.destino !== "otro" && !m.motivo?.startsWith(DESTINO[m.destino].motivo) && (
+                          <span className="shrink-0 rounded-full bg-hundida px-2.5 py-0.5 text-sm text-muted-foreground">
+                            {DESTINO[m.destino].chip}
+                          </span>
+                        )}
                         <span
                           className={`tabular shrink-0 font-semibold ${
                             m.monto < 0 ? "text-saldo-debe" : "text-saldo-favor"

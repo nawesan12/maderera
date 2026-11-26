@@ -33,6 +33,8 @@ export interface Movimiento {
   motivo: string | null;
   createdAt: string;
   quien: string | null;
+  /** A dónde fue un retiro (null en los de antes y en los ingresos). */
+  destino?: "banco" | "caja_fuerte" | "otro" | null;
 }
 
 export interface VentaDeHoy {

@@ -645,7 +645,7 @@ components:
                   esperado: { type: number, format: double, description: Lo que tendría que haber, o lo contado si la caja de hoy ya se cerró }
                   cerrada: { type: boolean }
             efectivo: { type: number, format: double }
-            cajaFuerte: { type: number, format: double, description: Lo retirado hoy de las cajas que no fue al banco }
+            cajaFuerte: { type: number, format: double, description: Lo retirado hoy de las cajas a la caja fuerte }
             banco: { type: number, format: double, description: Lo que se movió hoy en el banco, entradas menos salidas }
             bancoEntro: { type: number, format: double }
             bancoSalio: { type: number, format: double }

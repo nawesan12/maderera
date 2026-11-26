@@ -296,6 +296,8 @@ type MovimientoDiferido struct {
 	Monto    float64
 	Motivo   string
 	HechoAt  time.Time
+	// Destino del retiro (00310); los clientes de antes no lo mandan.
+	Destino *string
 }
 
 // LeerMovimientoDiferido es el esquema de POST /api/mostrador/caja/movimientos.
@@ -309,6 +311,9 @@ func LeerMovimientoDiferido(crudo any) (MovimientoDiferido, *zodjs.Lector) {
 	}
 	m.Monto = numero(l.Numero("monto", zodjs.Num{}, zodjs.Positivo()))
 	m.Motivo = l.Requerido("motivo", zodjs.Texto{Min: 1})
+	if d := l.Opcion("destino", zodjs.Opciones{Opcional: true}, "banco", "caja_fuerte", "otro"); d != nil {
+		m.Destino = d
+	}
 	if s := l.Cadena("hechoAt", zodjs.Texto{FechaHora: true}); s != nil && l.Ok() {
 		m.HechoAt, _ = time.Parse(time.RFC3339Nano, *s)
 	}

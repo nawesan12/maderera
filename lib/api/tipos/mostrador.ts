@@ -547,6 +547,11 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             quien: string | null;
+            /**
+             * @description a dónde fue un retiro
+             * @enum {string|null}
+             */
+            destino?: "banco" | "caja_fuerte" | "otro" | null;
         };
         MostradorVentaDeHoy: {
             id: string;
@@ -1191,6 +1196,11 @@ export interface operations {
                     /** Format: double */
                     monto: number | null;
                     motivo: string;
+                    /**
+                     * @description a dónde va un retiro; sin él se clasifica por el motivo
+                     * @enum {string}
+                     */
+                    destino?: "banco" | "caja_fuerte" | "otro";
                 };
             };
         };

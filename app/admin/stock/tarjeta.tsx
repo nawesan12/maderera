@@ -137,7 +137,7 @@ export function TarjetaStock({
       {/* Una columna por sucursal activa de la base. */}
       <div
         id={detalle}
-        className={`mt-3 gap-4 sm:grid sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] ${abierto ? "grid" : "hidden"}`}
+        className={`mt-3 gap-4 sm:grid sm:grid-cols-[repeat(auto-fit,minmax(14.5rem,1fr))] ${abierto ? "grid" : "hidden"}`}
       >
         {fila.sucursales.map((s) => (
           <div key={s.id}>

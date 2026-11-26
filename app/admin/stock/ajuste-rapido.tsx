@@ -120,7 +120,7 @@ export function AjusteRapido({
 
   // De 44 px y separados: de 36 y pegados, el + caía en el − con el dedo.
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <RestaRapida
         paso={paso}
         nombrePaso={nombrePaso}

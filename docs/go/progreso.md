@@ -3114,3 +3114,24 @@ ficha (hoy es de /admin/cheques, del admin).
 - **Remito en PDF**: la unidad de venta (`pdf.UnidadDeVenta`: la lata de 4
   litros es «u.») y la aclaración con quien firmó (golden del remito
   rehechos con Go).
+
+## 26/11/2026: el mes simulado, arreglos del aserradero (rama `mes-simulado-arreglos`)
+
+- **Lo cobrado del corte vendido** (`cortes.pedidoDelCorte`): los renglones
+  del mostrador ya vienen netos (`ventas.AplicarDescuento` rebaja el precio de
+  cada uno) y `orders.descuento` es constancia; la ficha volvía a descontarlo
+  ($1.944 de un corte cobrado $2.160).
+- **Retales del pedido** (`cortes.RetalesDelCliente`): un pedido que vende
+  todas las placas que usan *todos* sus cortes vivos deja los retales al
+  cliente, y la hoja (`GET /cortes/{id}/hoja`) marca sus placas igual que la
+  ficha. El aviso «el plano usa N y el pedido vende M» cuenta los otros cortes;
+  `GET /pedidos/{id}/cortes` suma `variantId`, `placasEnteras` y `sinCargo`
+  para que el alta diga lo mismo.
+- **Permisos**: pasadas, acomodo y disco son de `DecidenEnLaCola` (el taller
+  confirma sus pasadas al terminar, con `avanzar`). El formato de la máquina
+  sigue abierto al aserradero, como está decidido.
+- **CUIT del comprobante fiscal** antes de registrar la venta en línea
+  (`mostrador.revisarCuitDelComprobante`); el corte de la cola cobrado en el
+  mostrador pasa su `retira_el` al pedido.
+- **Ingreso**: la IP aguanta 30 intentos fallidos en 5 minutos
+  (`limites.porIP`), la cuenta sigue en 10.

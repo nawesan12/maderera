@@ -218,8 +218,19 @@ func (a *API) GuardarAjuste(ctx context.Context, r contenidoapi.GuardarAjusteReq
 	if err != nil {
 		return nil, err
 	}
+	var antes string
+	regla := EsRegla(r.Clave)
+	if regla {
+		_ = a.s.pool.QueryRow(ctx, `SELECT valor FROM site_settings WHERE clave = $1`, r.Clave).Scan(&antes)
+	}
 	if err := a.s.GuardarAjuste(ctx, r.Clave, r.Body.Valor); err != nil {
 		return nil, err
+	}
+	// Una regla del negocio cambia cómo se calcula la plata: queda anotado
+	// quién la cambió, de qué a qué.
+	if regla && antes != r.Body.Valor {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaEditar, "regla", r.Clave,
+			"Regla «"+r.Clave+"»: "+antes+" → "+r.Body.Valor, map[string]string{"antes": antes, "despues": r.Body.Valor})
 	}
 	// Prender o apagar la tienda cambia qué ve todo el mundo: queda anotado.
 	if desc, ok := interruptores[r.Clave]; ok {

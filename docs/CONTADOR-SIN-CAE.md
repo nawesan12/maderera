@@ -119,3 +119,20 @@ blanco»**.
 
 **A decidir:** dejarlo abierto o asentarlo en el archivo del estudio contra
 una cuenta como «Proveedores – cancelación no documentada».
+
+## Las reglas que eligen ustedes
+
+Lo que quedó «a decidir» en este documento, y otras políticas que esperan
+su respuesta o la de la dueña, ya están construidas con las dos salidas. Se
+eligen en **Reglas del negocio** del panel (solo el admin, y cada cambio
+queda en la bitácora con quién lo hizo y de qué a qué). Hasta que ustedes
+digan otra cosa, cada una sigue como funcionaba: la de **arranque**.
+
+| Regla | Arranque | La otra salida |
+|---|---|---|
+| Cuándo cuenta una venta (H162) | Al entregar o facturar, lo primero | Al tomar el pedido · al entregar · al facturar |
+| Lo cobrado antes de facturar (H374) | Al circuito B si no había nada pendiente | A Anticipos de clientes, y se imputa a la factura cuando sale con CAE |
+| Lo que sobra de un cobro a cuenta (H407) | Al circuito B | A Anticipos de clientes (saldo a favor), y se imputa a la próxima factura |
+| El cobro de una factura sin CAE (H160) | Sin asiento hasta que llega el CAE | Contra una cuenta transitoria, que se cancela al llegar el CAE |
+| Al monotributista (H207) | Factura A con la leyenda de la Ley 27.618 (RG 5003/2021) | Factura B |
+| Cómo se nombra el circuito sin factura (H167) | «B» | «Sin factura» · «Interno» |

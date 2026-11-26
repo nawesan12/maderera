@@ -218,7 +218,8 @@ export default async function ReportesPage({
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-5 py-2.5 font-semibold">
-                  {etiquetaCorte.replace("Por ", "")}
+                  {/* «Por producto» → «Producto», no «producto». */}
+                  {etiquetaCorte.replace(/^Por (.)/, (_, l: string) => l.toUpperCase())}
                 </th>
                 <th className="px-3 py-2.5 text-right font-semibold">
                   {corte === "producto" ? "Unidades" : "Operaciones"}
@@ -295,8 +296,12 @@ export default async function ReportesPage({
                                     {formatearMonto(margen)}
                                     {/* Con su separador: en la tarjeta del
                                         teléfono se leía «$ 221.2499,2%». */}
+                                    {/* Con `whitespace-nowrap` propio: la regla del
+                                        panel que deja bajar el texto de las
+                                        tablas lo partía en «$ 519.270,90 ·» /
+                                        «20,6%» a 1280 (tercera prueba, H068). */}
                                     {pct !== null && (
-                                      <span className="text-sm font-normal text-muted-foreground">
+                                      <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">
                                         {" · "}
                                         {formatearPorcentaje(pct)}
                                       </span>

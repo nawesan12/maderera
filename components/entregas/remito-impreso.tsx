@@ -1,5 +1,5 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
-import { formatearMonto, formatearUnidad, unidadDeVenta, unidadEnPlural } from "@/lib/formato";
+import { formatearCuit, formatearMonto, formatearUnidad, unidadDeVenta, unidadEnPlural } from "@/lib/formato";
 import { fechaDelRemito, fechaHoraDeFirma } from "@/lib/entregas/fecha";
 import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 
@@ -62,7 +62,7 @@ export function RemitoImpreso({
             )}
             <div className="datos">
               {emisor?.domicilio && <div>{emisor.domicilio}</div>}
-              {emisor?.cuit && <div>CUIT {emisor.cuit}</div>}
+              {emisor?.cuit && <div>CUIT {formatearCuit(emisor.cuit)}</div>}
               {remito.sucursal && (
                 <div>
                   {remito.sucursal}

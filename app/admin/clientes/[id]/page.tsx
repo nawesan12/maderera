@@ -1,3 +1,4 @@
+import { leerDocumento } from "@/lib/clientes/documento";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
@@ -284,7 +285,14 @@ export default async function FichaClientePage({
               Datos
             </h2>
             <dl className="space-y-2.5 text-base">
-              <Dato etiqueta="CUIT" valor={formatearCuit(cliente.cuit)} tabular />
+              {/* Un CUIT que no pasa el verificador no factura: se ve acá antes
+                  de que lo descubra el mostrador al cobrar. */}
+              <Dato
+                etiqueta="CUIT"
+                valor={formatearCuit(cliente.cuit)}
+                tabular
+                problema={"error" in leerDocumento(cliente.cuit) ? "no es válido" : undefined}
+              />
               <Dato
                 etiqueta="Condición IVA"
                 valor={CONDICIONES[cliente.condicionIva] ?? cliente.condicionIva}
@@ -477,17 +485,24 @@ function Dato({
   valor,
   tabular = false,
   href,
+  problema,
 }: {
   etiqueta: string;
   valor: string;
   tabular?: boolean;
+  /** El dato está mal: se marca en rojo con su porqué corto. */
+  problema?: string;
   /** Cuando el dato es otra ficha del sistema y no un texto suelto. */
   href?: string;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="shrink-0 text-muted-foreground">{etiqueta}</dt>
-      <dd className={`text-right ${tabular ? "tabular" : ""}`}>
+      <dd
+        className={`text-right ${tabular ? "tabular" : ""} ${
+          problema ? "estado-problema font-medium text-[var(--estado-tinta)]" : ""
+        }`}
+      >
         {href ? (
           <Link href={href} className="hover:text-brand-orange hover:underline">
             {valor}
@@ -495,6 +510,7 @@ function Dato({
         ) : (
           valor
         )}
+        {problema && ` · ${problema}`}
       </dd>
     </div>
   );

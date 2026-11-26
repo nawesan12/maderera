@@ -7,6 +7,7 @@ import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { tarifaDeCorte, type TarifaDeCorte } from "@/lib/cortes/tarifa";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { formatearMonto, importeDelCampo } from "@/lib/formato";
+import { leerDocumento } from "@/lib/clientes/documento";
 import { borradorVale, duenoDelBorrador, type DuenoDelBorrador } from "@/lib/mostrador/borrador-del-corte";
 import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 import {
@@ -486,9 +487,14 @@ export function VistaMostrador({
     comprobante === "fiscal" && faltaIdentificarComprador(letra, total, []);
   const faltaDocumento = pideDocumento && faltaIdentificarComprador(letra, total, [cliente?.cuit, cuit]);
 
+  // Con factura, el CUIT de la ficha va a ARCA: uno que no pasa el
+  // verificador frena acá y no después de cobrar (Go lo rechaza igual).
+  const cuitDeLaFichaMal = comprobante === "fiscal" && !!cliente?.cuit && "error" in leerDocumento(cliente.cuit);
+
   const puedeCobrar =
     lineas.length > 0 &&
     !faltaDocumento &&
+    !cuitDeLaFichaMal &&
     faltaRecibido === 0 &&
     !enviando &&
     !enPausa &&
@@ -1265,6 +1271,7 @@ export function VistaMostrador({
               cuit={cuit}
               onCuit={setCuit}
               pideDocumento={pideDocumento}
+              cuitMal={cuitDeLaFichaMal}
               letra={letraVisible}
               medio={medio}
               onMedio={elegirMedio}

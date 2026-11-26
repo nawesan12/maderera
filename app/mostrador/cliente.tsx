@@ -117,8 +117,15 @@ export function BuscadorDeCliente({
           <span className="min-w-0 flex-1">
             <span className="block truncate text-base font-medium">{cliente.nombre}</span>
             {cliente.cuit && (
-              <span className="tabular block text-sm text-muted-foreground">
+              <span
+                className={`tabular block text-sm ${
+                  "error" in leerDocumento(cliente.cuit)
+                    ? "estado-problema font-medium text-[var(--estado-tinta)]"
+                    : "text-muted-foreground"
+                }`}
+              >
                 {documentoConTipo(cliente.cuit)}
+                {"error" in leerDocumento(cliente.cuit) && " · no es válido"}
               </span>
             )}
           </span>

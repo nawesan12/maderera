@@ -45,6 +45,7 @@ export function Cobro({
   cuit,
   onCuit,
   pideDocumento,
+  cuitMal = false,
   letra,
   medio,
   onMedio,
@@ -104,6 +105,8 @@ export function Cobro({
   onCuit: (v: string) => void;
   /** Una B desde el umbral de ARCA: el documento se pide antes de cobrar. */
   pideDocumento: boolean;
+  /** Con factura, el CUIT de la ficha no pasa el verificador: no se cobra. */
+  cuitMal?: boolean;
   letra: string | null;
   medio: MedioDeMostrador;
   onMedio: (m: MedioDeMostrador) => void;
@@ -415,6 +418,12 @@ export function Cobro({
                 {letra ? `Factura ${letra}` : "Factura"}
               </button>
             </div>
+
+            {cuitMal && (
+              <p role="alert" className="estado-problema mt-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm font-medium text-[var(--estado-tinta)]">
+                El CUIT de la ficha no es válido.
+              </p>
+            )}
 
             {/* Con un cliente sin CUIT el campo vuelve si la venta llega al
                 umbral de la B: el documento tipeado es el que va a ARCA. */}

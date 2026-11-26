@@ -475,6 +475,10 @@ export interface components {
                 unidad: string;
                 cantidad: string;
                 presentacion: string | null;
+                /** @description La medida de la placa */
+                largoMm: number | null;
+                anchoMm: number | null;
+                color: string | null;
             }[];
         };
         FichaDePedido: {

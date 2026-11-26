@@ -125,3 +125,12 @@ describe("cantidadConUnidad (mes simulado, H055)", () => {
     expect(cantidadConUnidad(2.5, "metro_lineal")).toBe("2,5 metros");
   });
 });
+
+describe("las líneas que arma un corte", () => {
+  // «19 ms» de tapacanto y «6 pasadas» al lado de «6 cortes» (mes simulado).
+  it("dicen metros y cortes", () => {
+    expect(cantidadConUnidad(19, "m")).toBe("19 metros");
+    expect(cantidadConUnidad(1, "m")).toBe("1 metro");
+    expect(cantidadConUnidad(6, "pasada")).toBe("6 cortes");
+  });
+});

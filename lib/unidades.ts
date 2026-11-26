@@ -98,6 +98,12 @@ const NOMBRE_LARGO: Record<string, string> = {
   juego: "juego",
   kg: "kilo",
   litro: "litro",
+  // Las líneas que arma un corte (Go, cortes/a_pedido.go): el tapacanto va
+  // en metros y el corte por pasada, que en los papeles se dice «corte»
+  // (lib/formato.ts, H145). Salían «19 ms» y «6 pasadas» al lado de «6
+  // cortes» (mes simulado).
+  m: "metro",
+  pasada: "corte",
 };
 
 /** «unidad», «metro», «placa»: la unidad dicha en una oración. */
@@ -132,6 +138,8 @@ const NOMBRE_PLURAL: Record<string, string> = {
   juego: "juegos",
   kg: "kilos",
   litro: "litros",
+  m: "metros",
+  pasada: "cortes",
 };
 
 /** «metros cuadrados», «pares»: el plural no siempre es agregar una s. */

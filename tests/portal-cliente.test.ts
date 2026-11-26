@@ -5,6 +5,7 @@ import {
   estadoDelPago,
   mensajeDeConsulta,
   pedidosEnCurso,
+  importeAInformar,
   saludoDelCliente,
   unaPorProducto,
 } from "@/lib/cuenta/portal";
@@ -145,5 +146,16 @@ describe("las reseñas", () => {
       { productId: "membrana", orderId: "4", yaResenado: true },
       { productId: "placa", orderId: "4", yaResenado: false },
     ]);
+  });
+});
+
+describe("Pagar tu cuenta", () => {
+  it("propone lo que se debe menos lo que ya está en revisión", () => {
+    expect(importeAInformar(5890600, 566456)).toBe(5324144);
+    expect(importeAInformar(1000, 0)).toBe(1000);
+  });
+  it("si ya está todo informado, el campo va vacío", () => {
+    expect(importeAInformar(1000, 1000)).toBeNull();
+    expect(importeAInformar(1000, 1500)).toBeNull();
   });
 });

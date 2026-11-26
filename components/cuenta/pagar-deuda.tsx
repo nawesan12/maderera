@@ -8,11 +8,14 @@ import {
   subirComprobanteDeDeuda,
   type EstadoPago,
 } from "@/app/(public)/pago-actions";
+import { sinRomper } from "@/lib/acciones/sin-romper";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 import { formatearMonto, importeParaElCampo } from "@/lib/formato";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
 
 const inicial: EstadoPago = {};
+const subirDeDeuda = sinRomper(subirComprobanteDeDeuda);
+const informarCheques = sinRomper(informarChequesDeDeuda);
 
 type Forma = "transferencia" | "deposito" | "cheques";
 
@@ -32,7 +35,16 @@ type Forma = "transferencia" | "deposito" | "cheques";
  * El saldo a favor no es una forma de pago acá: ya descuenta solo de lo que se
  * debe. Se usa al comprar, y la pantalla lo dice.
  */
-export function PagarDeuda({ saldo, banco }: { saldo: number; banco: DatosParaTransferir | null }) {
+export function PagarDeuda({
+  saldo,
+  propuesto,
+  banco,
+}: {
+  saldo: number;
+  /** Lo que se debe menos lo que ya está en revisión (importeAInformar). */
+  propuesto: number | null;
+  banco: DatosParaTransferir | null;
+}) {
   const [forma, setForma] = useState<Forma>("transferencia");
 
   if (saldo <= 0) return null;
@@ -59,9 +71,9 @@ export function PagarDeuda({ saldo, banco }: { saldo: number; banco: DatosParaTr
       </div>
 
       {forma === "cheques" ? (
-        <Cheques saldo={saldo} />
+        <Cheques saldo={propuesto ?? saldo} />
       ) : (
-        <Comprobante key={forma} medio={forma} saldo={saldo} banco={banco} />
+        <Comprobante key={forma} medio={forma} propuesto={propuesto} banco={banco} />
       )}
     </section>
   );
@@ -69,14 +81,14 @@ export function PagarDeuda({ saldo, banco }: { saldo: number; banco: DatosParaTr
 
 function Comprobante({
   medio,
-  saldo,
+  propuesto,
   banco,
 }: {
   medio: "transferencia" | "deposito";
-  saldo: number;
+  propuesto: number | null;
   banco: DatosParaTransferir | null;
 }) {
-  const [estado, accion] = useActionState(subirComprobanteDeDeuda, inicial);
+  const [estado, accion] = useActionState(subirDeDeuda, inicial);
   const [subiendo, empezar] = useTransition();
   const formulario = useRef<HTMLFormElement>(null);
 
@@ -130,7 +142,7 @@ function Comprobante({
                 id={`monto-${medio}`}
                 name="monto"
                 inputMode="decimal"
-                defaultValue={importeParaElCampo(saldo)}
+                defaultValue={propuesto === null ? "" : importeParaElCampo(propuesto)}
                 className="tabular mt-1 h-11 w-full rounded-lg border px-3 text-base"
               />
             </div>
@@ -191,7 +203,7 @@ function Comprobante({
 }
 
 function Cheques({ saldo }: { saldo: number }) {
-  const [estado, accion, enviando] = useActionState(informarChequesDeDeuda, inicial);
+  const [estado, accion, enviando] = useActionState(informarCheques, inicial);
 
   if (estado.ok) {
     return (

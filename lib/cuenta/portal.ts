@@ -33,6 +33,17 @@ export function distintivoDeLista(tipo: string | undefined, lista: string | null
   return tipo === "profesional" ? "Profesional" : null;
 }
 
+/**
+ * El importe que propone «Pagar tu cuenta»: lo que se debe menos lo que ya
+ * se informó y se está verificando. Con el saldo entero, lo propuesto
+ * disparaba el aviso de que se informa de más (mes simulado). Null si no
+ * queda nada por informar: el campo va vacío.
+ */
+export function importeAInformar(saldo: number, enRevision: number): number | null {
+  const resto = Math.round((saldo - Math.max(enRevision, 0)) * 100) / 100;
+  return resto > 0.005 ? resto : null;
+}
+
 /** El contador de pedidos abiertos: «en curso», nunca «en camino» (H083, H313). */
 export function pedidosEnCurso(n: number): string {
   return `${n} en curso`;

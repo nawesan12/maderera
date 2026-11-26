@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -90,6 +90,17 @@ const MITADES = [
 /** La placa que vende el pedido, con la mitad si la vende partida. */
 export interface PlacaDelPedido extends PlacaElegida {
   mitad: Mitad;
+  /** Las que vende el pedido de esta placa, en placas enteras. */
+  vendidas?: number;
+  /** Las que ya usan los otros cortes vivos del pedido. */
+  enOtrosCortes?: number;
+}
+
+/** «1 placa», «media placa», «2,5 placas», como lo dice Go. */
+function placasEnTexto(n: number): string {
+  if (n === 0.5) return "media placa";
+  if (n === 1) return "1 placa";
+  return `${String(n).replace(".", ",")} placas`;
 }
 
 export function FormularioCorte({
@@ -330,6 +341,21 @@ export function FormularioCorte({
   // Las placas son las del plano: el campo para pisarlas dejaba la tarjeta
   // del taller con 3 placas y el plano con 2 (H113). Go guarda las suyas.
   const placasDelPlano = Math.max(1, plano.placas.length);
+
+  // Lo que vende el pedido contra lo que usan sus cortes, con el mismo texto
+  // que después muestra la ficha: el aviso solo aparecía al guardar (mes
+  // simulado, H184).
+  const delPedidoElegida = placa ? placasDelPedidoLista.find((p) => p.variantId === placa.variantId) : undefined;
+  const avisoDelPedido = (() => {
+    if (!desdePedido || !delPedidoElegida?.vendidas || sinCargo || plano.placas.length === 0) return null;
+    const usadas = plano.placas.length / (mitad ? 2 : 1);
+    const otras = delPedidoElegida.enOtrosCortes ?? 0;
+    const total = usadas + otras;
+    if (Math.abs(total - delPedidoElegida.vendidas) < 1e-6) return null;
+    return otras > 0
+      ? `Los cortes de ${desdePedido.numero} usan ${placasEnTexto(total)} y el pedido vende ${placasEnTexto(delPedidoElegida.vendidas)}.`
+      : `El plano usa ${placasEnTexto(usadas)} y el pedido ${desdePedido.numero} vende ${placasEnTexto(delPedidoElegida.vendidas)}.`;
+  })();
 
   // Lo que frena el envío, dicho al lado del botón (H043, H188).
   const motivoParaNoEnviar =
@@ -777,6 +803,11 @@ export function FormularioCorte({
           Cómo entra en la placa
         </h2>
 
+        {avisoDelPedido && (
+          <p className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2 text-base font-medium">
+            {avisoDelPedido}
+          </p>
+        )}
         <PlanoEnVivo
           plano={plano}
           medidaSupuesta={medidaPlaca.supuesta}

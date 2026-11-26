@@ -61,6 +61,9 @@ type PedidoDelCorte struct {
 	// PlacasDelPedido son las placas de la placa del corte que vende el
 	// pedido, en placas enteras (una media es 0,5).
 	PlacasDelPedido float64 `json:"placasDelPedido"`
+	// PlacasDeOtrosCortes son las que usan los otros cortes vivos del pedido
+	// sobre la misma placa (no sale en la API).
+	PlacasDeOtrosCortes float64 `json:"-"`
 }
 
 // RenglonDelPedido es un renglón del pedido que es del corte.
@@ -97,19 +100,79 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		return nil, err
 	}
 	modo := ModoDelCorte(c, delCorte)
+	if modo == "pedido" {
+		if pedido.PlacasDeOtrosCortes, err = s.placasDeOtrosCortes(ctx, c); err != nil {
+			return nil, err
+		}
+	}
 	cuenta := CuentaDelCorte(c, plano, tarifa, pedido, modo)
 	aCobrar := PasadasACobrar(c, plano)
-	retalesDelCliente := false
-	if modo == "pedido" && pedido.PlacasDelPedido > 0 {
-		retalesDelCliente = pedido.PlacasDelPedido+1e-6 >= placasUsadas(c, plano)
-	}
 	return &Ficha{
 		Corte: c, Tarifa: tarifa, Cargo: CargoPorCorte(tarifa, float64(aCobrar)), MetrosCanto: metros,
 		CargoCanto: CargoPorTapacanto(tarifa, metros), Plano: plano, Superficies: sup,
 		Cuenta:  cuenta,
 		Fijadas: LeerAcomodoManual(texto(c.AcomodoManual)),
-		Modo:    modo, PasadasACobrar: aCobrar, Pedido: pedido, RetalesDelCliente: retalesDelCliente,
+		Modo:    modo, PasadasACobrar: aCobrar, Pedido: pedido, RetalesDelCliente: RetalesDelCliente(c, plano, pedido, modo),
 	}, nil
+}
+
+// RetalesDelCliente: lo que sobra del trabajo es del cliente porque el
+// pedido vende todas las placas que usan sus cortes. Lo dicen igual la
+// ficha, la hoja de corte y el plano: la ficha decía «del cliente» y la
+// hoja del operario «los retales quedan en la maderera» (mes simulado,
+// H184).
+func RetalesDelCliente(c *Corte, plano Plano, pedido *PedidoDelCorte, modo string) bool {
+	if modo != "pedido" || pedido == nil || pedido.PlacasDelPedido <= 0 {
+		return false
+	}
+	return pedido.PlacasDelPedido+1e-6 >= placasUsadas(c, plano)+pedido.PlacasDeOtrosCortes
+}
+
+// RetalesDelClienteDe es RetalesDelCliente leyendo el pedido del trabajo.
+func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plano) (bool, error) {
+	pedido, delCorte, err := s.pedidoDelCorte(ctx, c)
+	if err != nil {
+		return false, err
+	}
+	modo := ModoDelCorte(c, delCorte)
+	if modo != "pedido" {
+		return false, nil
+	}
+	if pedido.PlacasDeOtrosCortes, err = s.placasDeOtrosCortes(ctx, c); err != nil {
+		return false, err
+	}
+	return RetalesDelCliente(c, plano, pedido, modo), nil
+}
+
+// TodasDelCliente marca todas las placas del plano como del cliente: el
+// pedido las vende (la hoja y el plano rotulan de quién es lo que sobra con
+// SeVendeEntera). Copia las placas: el plano puede venir de un caché.
+func TodasDelCliente(plano Plano) Plano {
+	placas := make([]PlacaDelPlano, len(plano.Placas))
+	for i, p := range plano.Placas {
+		p.SeVendeEntera = true
+		placas[i] = p
+	}
+	plano.Placas = placas
+	plano.PlacasEnteras = len(placas)
+	return plano
+}
+
+// placasDeOtrosCortes son las placas, en placas enteras, que usan los otros
+// cortes vivos del mismo pedido sobre la misma placa: CRT-9 y CRT-12 salían
+// de PED-1152 y cada ficha avisaba «el plano usa 1 placa y el pedido vende
+// 3» (mes simulado, H184).
+func (s *Servicio) placasDeOtrosCortes(ctx context.Context, c *Corte) (float64, error) {
+	if c.OrderID == nil || c.VariantID == nil {
+		return 0, nil
+	}
+	var n float64
+	err := s.pool.QueryRow(ctx, `
+		SELECT coalesce(sum(CASE WHEN mitad IS NULL THEN placas ELSE placas / 2.0 END), 0)::float8
+		FROM cutting_orders
+		WHERE order_id = $1 AND variant_id = $2 AND id <> $3 AND estado <> 'cancelado' AND NOT sin_cargo`,
+		*c.OrderID, *c.VariantID, c.ID).Scan(&n)
+	return n, err
 }
 
 // placasUsadas son las placas del plano en placas enteras (dos medias son
@@ -145,10 +208,20 @@ func CuentaDelCorte(c *Corte, plano Plano, tarifa *TarifaDeCorte, pedido *Pedido
 		// Las placas las vende el pedido: no se cotizan otra vez (H184).
 		contado.PlacasEnteras = 0
 		cuenta := Presupuestar(contado, tarifa, c.PrecioPlaca, pres, fraccion)
+		// La diferencia entre lo que vende el pedido y lo que usan todos sus
+		// cortes sobre esa placa: con dos cortes de un pedido de 3 placas,
+		// cada ficha avisaba «el plano usa 1 placa y el pedido vende 3»
+		// (mes simulado, H184). El alta dice lo mismo.
 		if pedido != nil && pedido.PlacasDelPedido > 0 {
-			if usadas := placasUsadas(c, plano); math.Abs(usadas-pedido.PlacasDelPedido) > 1e-6 {
-				cuenta.Faltan = append(cuenta.Faltan, fmt.Sprintf("El plano usa %s y el pedido %s vende %s.",
-					placasEnTexto(usadas), pedido.Numero, placasEnTexto(pedido.PlacasDelPedido)))
+			usadas := placasUsadas(c, plano)
+			if total := usadas + pedido.PlacasDeOtrosCortes; math.Abs(total-pedido.PlacasDelPedido) > 1e-6 {
+				if pedido.PlacasDeOtrosCortes > 0 {
+					cuenta.Faltan = append(cuenta.Faltan, fmt.Sprintf("Los cortes de %s usan %s y el pedido vende %s.",
+						pedido.Numero, placasEnTexto(total), placasEnTexto(pedido.PlacasDelPedido)))
+				} else {
+					cuenta.Faltan = append(cuenta.Faltan, fmt.Sprintf("El plano usa %s y el pedido %s vende %s.",
+						placasEnTexto(usadas), pedido.Numero, placasEnTexto(pedido.PlacasDelPedido)))
+				}
 			}
 		}
 		return cuenta

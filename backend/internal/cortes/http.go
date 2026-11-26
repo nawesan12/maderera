@@ -207,6 +207,20 @@ func (a *API) HojaDelCorte(ctx context.Context, r cortesapi.HojaDelCorteRequestO
 	if err != nil {
 		return nil, err
 	}
+	// Lo que sobra es de quien dice la ficha: del pedido que vende todas las
+	// placas de sus cortes, el retal es del cliente aunque la placa no pase
+	// la mitad (mes simulado, H184). La hoja del operario decía «los retales
+	// quedan en la maderera» y la ficha «del cliente».
+	delCliente, err := a.s.RetalesDelClienteDe(ctx, c, plano)
+	if err != nil {
+		return nil, err
+	}
+	if delCliente {
+		plano = TodasDelCliente(plano)
+		for _, p := range hoja.Patrones {
+			p.SeVendeEntera = true
+		}
+	}
 	sup := make([]float64, len(plano.Placas))
 	for i, p := range plano.Placas {
 		sup[i] = SuperficieDeSierra(p.Cortes, plano.AnchoSierra)

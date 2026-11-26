@@ -1538,6 +1538,9 @@ export interface operations {
                         urgente: number;
                         /** Format: date-time */
                         createdAt: string;
+                        variantId: string | null;
+                        placasEnteras: number;
+                        sinCargo: boolean;
                     }[];
                 };
             };

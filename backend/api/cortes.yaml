@@ -328,7 +328,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, material, estado, urgente, createdAt]
+                  required: [id, numero, material, estado, urgente, createdAt, variantId, placasEnteras, sinCargo]
                   properties:
                     id: { type: string }
                     numero: { type: string }
@@ -336,6 +336,9 @@ paths:
                     estado: { type: string }
                     urgente: { type: integer }
                     createdAt: { type: string, format: date-time }
+                    variantId: { type: string, nullable: true }
+                    placasEnteras: { type: number }
+                    sinCargo: { type: boolean }
   /api/v1/admin/calculadoras:
     put:
       operationId: GuardarParametros

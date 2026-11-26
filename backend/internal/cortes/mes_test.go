@@ -323,6 +323,18 @@ func TestLaFichaSabeDeSuPedido(t *testing.T) {
 	if f["retalesDelCliente"] != true {
 		t.Errorf("los retales de placas pagadas van al stock")
 	}
+	// Otro corte del mismo pedido: el aviso cuenta los dos, y la hoja del
+	// operario dice lo mismo que la ficha (los retales son del cliente).
+	otro := alta(t, e, ven, melamina(e, "orderId", pedido, "piezas", []any{pieza(600, 300, 2)}))
+	f = leerFicha(t, e, ven, otro)
+	faltan, _ = json.Marshal(f["cuenta"].(map[string]any)["faltan"])
+	if !strings.Contains(string(faltan), "Los cortes de PED-1059 usan 2 placas y el pedido vende 3 placas.") || f["retalesDelCliente"] != true {
+		t.Errorf("con dos cortes: %s %v", faltan, f["retalesDelCliente"])
+	}
+	_, hoja := pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/cortes/"+otro+"/hoja", nil)
+	if strings.Contains(hoja, `"seVendeEntera":false`) {
+		t.Errorf("la hoja manda al stock el retal del cliente: %s", hoja)
+	}
 
 	// Vendido en el mostrador con 10 % de descuento: se cobró eso. El
 	// mostrador deja los renglones netos (el precio ya rebajado) y el

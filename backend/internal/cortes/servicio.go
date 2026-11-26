@@ -205,19 +205,26 @@ type CorteDelPedido struct {
 	Estado    string    `json:"estado"`
 	Urgente   int32     `json:"urgente"`
 	CreatedAt time.Time `json:"createdAt"`
+	// VariantID y PlacasEnteras: con qué placa y cuántas (dos medias son
+	// una), para que el alta cuente lo que ya usan los otros cortes del
+	// pedido, como la ficha (mes simulado, H184).
+	VariantID     *string `json:"variantId"`
+	PlacasEnteras float64 `json:"placasEnteras"`
+	SinCargo      bool    `json:"sinCargo"`
 }
 
 // DelPedido son los cortes que salieron de un pedido, el más nuevo primero.
 func (s *Servicio) DelPedido(ctx context.Context, orderID string) ([]CorteDelPedido, error) {
 	filas, err := s.pool.Query(ctx, `
-		SELECT id::text, numero, material_descripcion, estado::text, urgente, created_at
+		SELECT id::text, numero, material_descripcion, estado::text, urgente, created_at, variant_id::text,
+		       (CASE WHEN mitad IS NULL THEN placas ELSE placas / 2.0 END)::float8, sin_cargo
 		FROM cutting_orders WHERE order_id = $1 ORDER BY created_at DESC`, orderID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (CorteDelPedido, error) {
 		var c CorteDelPedido
-		err := r.Scan(&c.ID, &c.Numero, &c.Material, &c.Estado, &c.Urgente, &c.CreatedAt)
+		err := r.Scan(&c.ID, &c.Numero, &c.Material, &c.Estado, &c.Urgente, &c.CreatedAt, &c.VariantID, &c.PlacasEnteras, &c.SinCargo)
 		return c, err
 	})
 }

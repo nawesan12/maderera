@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Scissors, Truck } from "lucide-react";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { pedidoParaElTaller } from "@/lib/dal/admin/ventas";
-import { fichaDeCorte, obtenerCorte } from "@/lib/dal/admin/cortes";
+import { cortesDelPedido, fichaDeCorte, obtenerCorte } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { DECIDEN_EN_LA_COLA, puedeEntrar } from "@/lib/roles";
@@ -136,6 +136,11 @@ export default async function NuevoCortePage({
 
   // Las placas que vende el pedido: «Mandar a cortar» arranca con la primera
   // y no con una medida supuesta (H188), y elegir otra se confirma (H280).
+  // Cuántas vende el pedido de cada placa y cuántas usan sus otros cortes:
+  // el alta avisa la diferencia igual que la ficha (mes simulado, H184).
+  const otrosCortes = pedido ? await cortesDelPedido(pedido.id) : [];
+  const enEntera = (it: { cantidad: string | number; presentacion: string | null }) =>
+    Number(it.cantidad) / (it.presentacion?.startsWith("media") ? 2 : 1);
   const placasDelPedido = (pedido?.items ?? [])
     .filter((it) => it.variantId && it.largoMm && it.anchoMm)
     .filter((it, i, todos) => todos.findIndex((o) => o.variantId === it.variantId) === i)
@@ -149,6 +154,10 @@ export default async function NuevoCortePage({
         | "largo"
         | "ancho"
         | null,
+      vendidas: (pedido?.items ?? []).filter((o) => o.variantId === it.variantId).reduce((t, o) => t + enEntera(o), 0),
+      enOtrosCortes: otrosCortes
+        .filter((k) => k.variantId === it.variantId && k.estado !== "cancelado" && !k.sinCargo && k.id !== corregido?.corte.id)
+        .reduce((t, k) => t + k.placasEnteras, 0),
     }));
 
   const c = corregido?.corte;

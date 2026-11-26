@@ -112,8 +112,11 @@ export function FormularioCorte({
   clienteInicial,
   sierraEditable = false,
   puedeReponer = false,
+  preguntarSucursal = false,
   corregir,
 }: {
+  /** Regla «Dónde se corta un corte suelto» en «Se elige siempre» (H045). */
+  preguntarSucursal?: boolean;
   /**
    * Una reposición sin cargo (la pieza que faltó en una entrega) sale del
    * pedido que la originó. La decide el mostrador.
@@ -222,7 +225,9 @@ export function FormularioCorte({
    * elegida para que nadie tenga que contestar. Con pedido, la del pedido.
    */
   const [sucursal, setSucursal] = useState(
-    desdePedido?.branchId ?? corregir?.branchId ?? sucursales[0]?.id ?? "",
+    desdePedido?.branchId ??
+      corregir?.branchId ??
+      (preguntarSucursal && sucursales.length > 1 ? "" : (sucursales[0]?.id ?? "")),
   );
   const [cliente, setCliente] = useState<{
     id: string;
@@ -381,7 +386,9 @@ export function FormularioCorte({
         ? "Falta elegir la placa."
         : esOtraPlaca && !otraPlaca
           ? "Confirmá que va en otra placa."
-          : // Con la placa elegida y sin piezas el botón quedaba apagado
+          : !sucursal && !desdePedido && sucursales.length > 1
+            ? "Falta elegir dónde se corta."
+            : // Con la placa elegida y sin piezas el botón quedaba apagado
             // sin decir por qué (tercera prueba del mes).
             validas.length === 0
             ? "Faltan las piezas."
@@ -496,7 +503,7 @@ export function FormularioCorte({
         <Seccion titulo="La placa" icono={Layers}>
           <div className="md:col-span-2">
             <BuscadorDePlaca
-              branchId={sucursal}
+              branchId={sucursal || sucursales[0]?.id || ""}
               elegida={placa}
               delPedido={placasDelPedidoLista}
               onElegir={(p) => {

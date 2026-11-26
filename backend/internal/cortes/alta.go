@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -224,6 +225,18 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	} {
 		if msg != "" {
 			return "", "", error422(msg)
+		}
+	}
+
+	// Dónde se corta un corte suelto (H045): con la regla en «preguntar», no
+	// se supone la primera sucursal; con una sola, no hay nada que elegir.
+	if f.OrderID == "" && f.BranchID == "" && reglas.Es(ctx, s.pool, reglas.SucursalDelCorteSuelto, "preguntar") {
+		var activas int
+		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM branches WHERE active`).Scan(&activas); err != nil {
+			return "", "", err
+		}
+		if activas > 1 {
+			return "", "", plataforma.Invalido(map[string]string{"branchId": "Elegí dónde se corta."})
 		}
 	}
 

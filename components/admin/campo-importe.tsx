@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, type InputHTMLAttributes } from "react";
-import { importeIlegible } from "@/lib/formato";
+import { importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "inputMode" | "value" | "onChange"> & {
   valor: string;
@@ -18,7 +18,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "inputMode" | 
  * `aria-invalid` y lo dice abajo; el formulario usa `importeIlegible` para no
  * dejar mandar. Antes se tomaba como $0 sin avisar.
  */
-export function CampoImporte({ valor, alCambiar, className = "", ...resto }: Props) {
+export function CampoImporte({ valor, alCambiar, className = "", onBlur, ...resto }: Props) {
   const id = useId();
   const malo = importeIlegible(valor);
   return (
@@ -30,6 +30,15 @@ export function CampoImporte({ valor, alCambiar, className = "", ...resto }: Pro
         autoComplete="off"
         value={valor}
         onChange={(e) => alCambiar(e.target.value)}
+        // Al salir, lo escrito se muestra como el resto de los importes:
+        // «12000» quedaba al lado de «42.000».
+        onBlur={(e) => {
+          if (!malo && valor.trim()) {
+            const prolijo = importeParaElCampo(importeDelCampo(valor));
+            if (prolijo !== valor) alCambiar(prolijo);
+          }
+          onBlur?.(e);
+        }}
         aria-invalid={malo || undefined}
         aria-describedby={malo ? id : resto["aria-describedby"]}
         className={className}

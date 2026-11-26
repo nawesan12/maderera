@@ -49,7 +49,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, total, items, sucursal, enAcopio, createdAt, debeEnCuenta]
+                  required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, total, items, sucursal, enAcopio, createdAt, debeEnCuenta, enRevision]
                   properties:
                     id: { type: string }
                     numero: { type: string }
@@ -58,6 +58,7 @@ paths:
                     medioPago: { type: string, nullable: true }
                     enAcopio: { type: boolean }
                     debeEnCuenta: { type: number, format: double, nullable: true }
+                    enRevision: { type: number, format: double, nullable: true }
                     tipoEntrega: { type: string, enum: [retiro, envio] }
                     total: { type: number, format: double }
                     items: { type: integer }

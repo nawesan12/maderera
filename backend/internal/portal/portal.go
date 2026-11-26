@@ -123,6 +123,10 @@ type Pedido struct {
 	Sucursal    *string   `json:"sucursal"`
 	EnAcopio    bool      `json:"enAcopio"`
 	CreatedAt   time.Time `json:"createdAt"`
+	// EnRevision es lo informado que falta verificar (las transferencias
+	// con comprobante): la lista decía «Falta abonarlo» y el detalle
+	// «Verificando tu pago».
+	EnRevision *float64 `json:"enRevision"`
 	// DebeEnCuenta es lo que falta pagar de un pedido a cuenta corriente,
 	// con los pagos imputados a la deuda más vieja (Imputar). Nil si el
 	// pedido no se cargó a la cuenta.
@@ -149,7 +153,8 @@ func (s *Servicio) Pedidos(ctx context.Context, c *Cliente) ([]Pedido, error) {
 		      AND oi.cantidad - coalesce((SELECT sum(di.del_acopio) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)
 		        - coalesce((SELECT sum(di.cantidad) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id
 		                    WHERE di.order_item_id = oi.id AND d.estado <> 'anulada'), 0) > 0.01),
-		  o.created_at
+		  o.created_at,
+		  (SELECT nullif(sum(pr.monto), 0)::float8 FROM payments pr WHERE pr.order_id = o.id AND pr.estado = 'en_revision')
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.customer_id = $1
 		  AND NOT (o.estado = 'cancelado' AND o.origen = 'mostrador' AND o.quote_id IS NULL

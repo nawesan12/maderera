@@ -194,6 +194,17 @@ func TestPedidosParaElCliente(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// La lista dice «Verificando tu pago» como el detalle: trae lo informado.
+	pedido("PED-1129", "pendiente", "tienda", "transferencia", "", 300000)
+	if _, err := e.pool.Exec(ctx, `insert into payments (order_id, proveedor, monto, estado)
+		select id, 'transferencia', 300000, 'en_revision' from orders where numero = 'PED-1129'`); err != nil {
+		t.Fatal(err)
+	}
+	_, b = pedir(t, juan, "GET", u+"pedidos", nil)
+	if !strings.Contains(b, `"numero":"PED-1129"`) || !strings.Contains(b, `"enRevision":300000`) {
+		t.Errorf("lo informado en la lista: %s", b)
+	}
+
 	// H084: las notas del vendedor no le llegan como «Tu nota».
 	if _, b := pedir(t, juan, "GET", u+"pedidos/PED-1004", nil); strings.Contains(b, "paga tarde") || !strings.Contains(b, `"debeEnCuenta":0`) {
 		t.Errorf("notas del vendedor: %s", b)

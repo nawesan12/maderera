@@ -476,6 +476,8 @@ export interface operations {
                         enAcopio: boolean;
                         /** Format: double */
                         debeEnCuenta: number | null;
+                        /** Format: double */
+                        enRevision: number | null;
                         /** @enum {string} */
                         tipoEntrega: "retiro" | "envio";
                         /** Format: double */

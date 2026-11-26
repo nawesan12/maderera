@@ -211,7 +211,7 @@ func (s *Servicio) ListarGastos(ctx context.Context, desde, hasta time.Time, lim
 	filas, err := s.pool.Query(ctx, `
 		SELECT e.id, e.fecha, e.categoria::text, e.descripcion, e.importe::text, e.medio::text, e.circuito::text, e.purchase_invoice_id IS NOT NULL,
 		  b.name, s.nombre, e.supplier_id, e.notas, EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id),
-		  e.purchase_invoice_id, CASE WHEN f.id IS NOT NULL THEN f.punto_venta || '-' || f.numero END
+		  e.purchase_invoice_id, CASE WHEN f.id IS NOT NULL THEN lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') END
 		FROM expenses e LEFT JOIN branches b ON b.id = e.branch_id LEFT JOIN suppliers s ON s.id = e.supplier_id
 		LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
 		WHERE e.fecha >= $1 AND e.fecha <= $2 ORDER BY e.fecha DESC LIMIT $3`, desde, hasta, limite)

@@ -83,7 +83,7 @@ func (s *Servicio) ListarPagos(ctx context.Context, limite int) ([]PagoListado, 
 		-- agrupaba todas las retenciones e imputaciones de la historia).
 		LEFT JOIN LATERAL (SELECT sum(importe) AS retenido, count(*)::int AS certificados, array_agg(numero ORDER BY numero) AS numeros
 		           FROM retenciones_practicadas WHERE payment_id = p.id) r ON true
-		LEFT JOIN LATERAL (SELECT json_agg(json_build_object('id', f.id, 'numero', f.punto_venta || '-' || f.numero, 'importe', a.importe::text)
+		LEFT JOIN LATERAL (SELECT json_agg(json_build_object('id', f.id, 'numero', lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0'), 'importe', a.importe::text)
 		             ORDER BY f.fecha_emision) AS facturas
 		           FROM (SELECT a.purchase_invoice_id AS id, a.importe FROM supplier_payment_allocations a WHERE a.payment_id = p.id) a
 		           JOIN purchase_invoices f ON f.id = a.id) i0 ON true

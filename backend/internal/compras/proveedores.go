@@ -192,7 +192,7 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT m.id, m.tipo::text, m.monto, m.detalle, m.referencia, m.created_at, m.purchase_invoice_id, m.supplier_payment_id, m.goods_receipt_id,
-		  (SELECT f.punto_venta || '-' || f.numero FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
+		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
 		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1)
 		FROM supplier_movements m
 		WHERE m.supplier_id = $1 ORDER BY m.created_at DESC LIMIT 200`, id)
@@ -220,7 +220,7 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 	}
 	p.Saldo = total
 	filas, err = s.pool.Query(ctx, `
-		SELECT e.id, e.fecha, e.descripcion, e.importe, e.medio::text, CASE WHEN f.id IS NOT NULL THEN f.punto_venta || '-' || f.numero END
+		SELECT e.id, e.fecha, e.descripcion, e.importe, e.medio::text, CASE WHEN f.id IS NOT NULL THEN lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') END
 		FROM expenses e LEFT JOIN purchase_invoices f ON f.id = e.purchase_invoice_id
 		WHERE e.supplier_id = $1 ORDER BY e.fecha DESC LIMIT 50`, id)
 	if err != nil {

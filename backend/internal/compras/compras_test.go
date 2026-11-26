@@ -412,7 +412,7 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 	if c != 422 || !strings.Contains(b, "A la factura 1274 le quedan $0.00 y se le están imputando $1000.00.") {
 		t.Errorf("imputar dos veces: %d %s", c, b)
 	}
-	if _, b := pedir(t, adm, "GET", e.u+"compras/pagos", nil); !strings.Contains(b, `"retenido":15`) || !strings.Contains(b, `"numero":"3-1274"`) {
+	if _, b := pedir(t, adm, "GET", e.u+"compras/pagos", nil); !strings.Contains(b, `"retenido":15`) || !strings.Contains(b, `"numero":"0003-00001274"`) {
 		t.Errorf("pagos: %s", b)
 	}
 	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/acumulado-del-mes", nil); !strings.Contains(b, `"retenido":"15.00"`) {

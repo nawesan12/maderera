@@ -92,7 +92,7 @@ func (s *Servicio) ListarFacturas(ctx context.Context, filtro FiltroDeFacturas, 
 	base := `
 		WITH f AS (
 		  SELECT f.*, s.nombre AS proveedor, ` + AplicadoA("f") + ` AS pagado,
-		    (SELECT c.punto_venta || '-' || c.numero FROM purchase_invoices c WHERE c.id = f.aplica_a_id) AS aplica_a
+		    (SELECT lpad(c.punto_venta::text, 4, '0') || '-' || lpad(c.numero::text, 8, '0') FROM purchase_invoices c WHERE c.id = f.aplica_a_id) AS aplica_a
 		  FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
 		  WHERE ($1::text = '' OR f.supplier_id::text = $1)
 		    AND ($2::timestamptz IS NULL OR f.fecha_emision >= $2) AND ($3::timestamptz IS NULL OR f.fecha_emision <= $3)
@@ -240,7 +240,7 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 		  (SELECT string_agg(g.numero_remito, ' · ' ORDER BY g.fecha) FROM purchase_invoice_receipts x JOIN goods_receipts g ON g.id = x.goods_receipt_id
 		   WHERE x.purchase_invoice_id = f.id),
 		  f.created_at, f.anulada_at, f.motivo_anulacion,
-		  (SELECT c.punto_venta || '-' || c.numero FROM purchase_invoices c WHERE c.id = f.aplica_a_id), f.aplica_a_id
+		  (SELECT lpad(c.punto_venta::text, 4, '0') || '-' || lpad(c.numero::text, 8, '0') FROM purchase_invoices c WHERE c.id = f.aplica_a_id), f.aplica_a_id
 		FROM purchase_invoices f JOIN suppliers s ON s.id = f.supplier_id
 		WHERE f.id = $1`, id).Scan(&f.ID, &f.Tipo, &f.PuntoVenta, &f.Numero, &f.FechaEmision, &f.FechaVencimiento, &f.Cae, &neto, &i21, &i105, &i27,
 		&exento, &perc, &pIva, &pIibb, &total, &pagado, &f.Observaciones, &f.SupplierID, &f.Proveedor, &f.CondicionIva, &f.ReceiptID,
@@ -561,7 +561,7 @@ func (s *Servicio) AplicarNotaDeCredito(ctx context.Context, ses *auth.Sesion, n
 		if err := revisarAplicacion(ctx, tx, factura, f.supplierID, f.total); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT punto_venta || '-' || numero FROM purchase_invoices WHERE id = $1`, factura).Scan(&numero); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT lpad(punto_venta::text, 4, '0') || '-' || lpad(numero::text, 8, '0') FROM purchase_invoices WHERE id = $1`, factura).Scan(&numero); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE purchase_invoices SET aplica_a_id = $2, updated_at = now() WHERE id = $1`, nota, factura)

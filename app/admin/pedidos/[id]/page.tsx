@@ -2,7 +2,7 @@ import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { MapPin, Printer, MessageCircle, Phone, Scissors, Store, Truck } from "lucide-react";
+import { MapPin, Printer, MessageCircle, Phone, Scissors, Store, Truck, Undo2 } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import {
@@ -161,6 +161,18 @@ export default async function FichaPedidoPage({
                     : null
                 }
               />
+            )}
+            {/* La devolución de una venta ya entregada se hace sobre su
+                factura, con o sin CAE (H332): desde el pedido no había por
+                dónde. */}
+            {facturado && facturado.tipo.startsWith("factura") && pedido.estado !== "cancelado" && (
+              <Link
+                href={`/admin/facturacion/${facturado.id}#devolucion`}
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
+              >
+                <Undo2 className="h-5 w-5" aria-hidden="true" />
+                Devolución
+              </Link>
             )}
             <AccionesPedido
               id={pedido.id}

@@ -655,6 +655,7 @@ export interface components {
                 anulado: boolean;
                 /** @description Una parte es un cobro de Mercado Pago aprobado; no se anula desde el panel */
                 porMercadoPago: boolean;
+                chequeRechazado?: boolean;
             } | null;
         };
         Historial: {
@@ -671,6 +672,7 @@ export interface components {
             detalle: string | null;
             referencia: string | null;
             receiptId: string | null;
+            reciboNumero?: string | null;
             /** Format: double */
             monto: number;
             /** Format: double */
@@ -1538,6 +1540,8 @@ export interface operations {
                         limiteCredito: number;
                         /** Format: double */
                         disponible: number;
+                        /** Format: double */
+                        sinEntregar: number;
                         movimientos: components["schemas"]["MovimientoDelResumen"][];
                     };
                 };

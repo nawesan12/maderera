@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, useTransition, type FormEvent } from "react";
 import { CampoArchivo } from "@/components/campo-archivo";
 import { AlertCircle, Banknote, Check, Landmark, Loader2, ScrollText, Upload } from "lucide-react";
 import {
@@ -44,7 +44,9 @@ export function PagarDeuda({ saldo, banco }: { saldo: number; banco: DatosParaTr
         <p className="text-sm text-muted-foreground">Debés {formatearMonto(saldo)}</p>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b px-5 pt-3">
+      {/* Las tres entran a 375 px: se reparten el ancho, sin correrse de
+          costado (H217). */}
+      <div className="flex border-b px-2 pt-3 sm:gap-1 sm:px-5">
         <Pestana activa={forma === "transferencia"} onClick={() => setForma("transferencia")} icono={Banknote}>
           Transferencia
         </Pestana>
@@ -74,7 +76,26 @@ function Comprobante({
   saldo: number;
   banco: DatosParaTransferir | null;
 }) {
-  const [estado, accion, subiendo] = useActionState(subirComprobanteDeDeuda, inicial);
+  const [estado, accion] = useActionState(subirComprobanteDeDeuda, inicial);
+  const [subiendo, empezar] = useTransition();
+  const formulario = useRef<HTMLFormElement>(null);
+
+  // Con `onSubmit` y no con `action`: con `action`, React vacía el formulario
+  // al volver, y un error se llevaba el importe y el archivo elegido (H076).
+  function enviar(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const datos = new FormData(e.currentTarget);
+    empezar(() => accion(datos));
+  }
+
+  // Go frenó un pago igual al que ya está en revisión, o uno que pasa lo que
+  // se debe (H385): se manda el mismo formulario, confirmado.
+  function confirmar() {
+    if (!formulario.current) return;
+    const datos = new FormData(formulario.current);
+    datos.set("confirmar", "1");
+    empezar(() => accion(datos));
+  }
 
   return (
     <div className="space-y-4 p-5">
@@ -98,7 +119,7 @@ function Comprobante({
           {estado.ok}
         </p>
       ) : (
-        <form action={accion} className="space-y-3">
+        <form ref={formulario} onSubmit={enviar} className="space-y-3">
           <input type="hidden" name="medio" value={medio} />
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -132,6 +153,22 @@ function Comprobante({
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               {estado.error}
             </p>
+          )}
+
+          {estado.confirmar && !subiendo && (
+            <div role="alert" className="estado-espera flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--estado-fondo)] p-3 text-sm">
+              <span className="flex min-w-0 items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {estado.confirmar}
+              </span>
+              <button
+                type="button"
+                onClick={confirmar}
+                className="inline-flex h-11 items-center rounded-lg bg-card px-4 font-medium text-foreground"
+              >
+                Sí, informarlo
+              </button>
+            </div>
           )}
 
           <button
@@ -173,7 +210,7 @@ function Cheques({ saldo }: { saldo: number }) {
         saldo y te llega el recibo.
       </p>
 
-      <CobroMultimedio aCobrar={saldo} medios={["cheque", "echeq"]} medioInicial="cheque" />
+      <CobroMultimedio aCobrar={saldo} medios={["cheque", "echeq"]} medioInicial="cheque" delCliente />
 
       {estado.error && (
         <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
@@ -210,13 +247,13 @@ function Pestana({
       type="button"
       onClick={onClick}
       aria-pressed={activa}
-      className={`-mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-3 pb-2.5 text-sm font-medium transition-colors ${
+      className={`-mb-px inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 pb-2.5 text-sm font-medium transition-colors sm:flex-none sm:justify-start sm:gap-2 sm:px-3 ${
         activa
           ? "border-brand-orange text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground"
       }`}
     >
-      <Icono className="h-4 w-4" />
+      <Icono className="hidden h-4 w-4 shrink-0 sm:block" />
       {children}
     </button>
   );

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { AlertCircle, Check, Loader2, X } from "lucide-react";
 import {
   responderPresupuesto,
@@ -24,6 +25,16 @@ export function RespuestaPresupuesto({ numero }: { numero: string }) {
     responderPresupuesto,
     estadoInicial,
   );
+  const router = useRouter();
+  const ruta = usePathname();
+  const detalle = `/mi-cuenta/presupuestos/${numero}`;
+
+  // Desde el resumen, la tarjeta desaparece al responder (ya no espera
+  // respuesta) y el aviso se iba con ella: se sigue en el detalle, que dice
+  // qué pasa ahora y enlaza el pedido cuando lo hay (H215).
+  useEffect(() => {
+    if (estado.ok && ruta !== detalle) router.push(detalle);
+  }, [estado.ok, ruta, detalle, router]);
 
   if (estado.ok) {
     return (

@@ -525,6 +525,33 @@ func ordenar(ps []ProductoListado, f Filtros) {
 	case "nombre":
 		sort.SliceStable(ps, func(i, j int) bool { return colador.CompareString(ps[i].Name, ps[j].Name) < 0 })
 	default:
+		// Con la tienda apagada no hay precio ni oferta que ordenar, y lo
+		// destacado primero partía cada rubro en dos (Decks, Pisos y
+		// Tirantería salían dos veces, mes simulado H213): se agrupa por
+		// categoría —en el orden de la base— y por rubro, y adentro va lo
+		// destacado primero.
+		if f.sinPrecios {
+			lugar := map[string]int{}
+			for i, p := range ps {
+				if _, ok := lugar[p.CategorySlug]; !ok {
+					lugar[p.CategorySlug] = i
+				}
+			}
+			sort.SliceStable(ps, func(i, j int) bool {
+				a, b := ps[i], ps[j]
+				if lugar[a.CategorySlug] != lugar[b.CategorySlug] {
+					return lugar[a.CategorySlug] < lugar[b.CategorySlug]
+				}
+				if ra, rb := rubroDe(a), rubroDe(b); ra != rb {
+					return colador.CompareString(ra, rb) < 0
+				}
+				if a.Featured != b.Featured {
+					return a.Featured
+				}
+				return colador.CompareString(a.Name, b.Name) < 0
+			})
+			return
+		}
 		sort.SliceStable(ps, func(i, j int) bool {
 			a, b := ps[i], ps[j]
 			if !f.sinStock && a.HayStock != b.HayStock {
@@ -539,6 +566,15 @@ func ordenar(ps []ProductoListado, f Filtros) {
 			return colador.CompareString(a.Name, b.Name) < 0
 		})
 	}
+}
+
+// rubroDe es el rubro que muestra la tarjeta: el texto del producto o, si no
+// tiene, el de la subcategoría.
+func rubroDe(p ProductoListado) string {
+	if r := deref(p.Subcategory); r != "" {
+		return r
+	}
+	return deref(p.SubcategoryName)
 }
 
 // hidratar es la segunda fase: la primera foto y la descripción de las

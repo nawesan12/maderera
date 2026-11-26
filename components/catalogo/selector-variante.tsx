@@ -11,6 +11,8 @@ import { useTienda } from "@/lib/tienda-context";
 import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { useEstado } from "@/lib/estado-context";
+import { mensajeDeConsulta } from "@/lib/cuenta/portal";
 import { cantidadDeConsulta, enlaceDeConsulta, problemaDeCantidad, textoDeConsulta } from "@/lib/catalogo/consulta";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
@@ -541,14 +543,12 @@ function ConsultaDeLaMedida({
             {sufijo}
           </span>
         </label>
-        <BotonWhatsapp
-          enlace={enlace(texto)}
-          tamano="grande"
-          deshabilitado={invalida}
-          className="min-w-0 flex-1 px-3"
-        >
-          <span className="truncate">Consultar precio</span>
-        </BotonWhatsapp>
+        {/* Con sesión, el mensaje dice quién consulta: el vendedor cotiza con
+            su lista sin preguntar (mes simulado, H087). La sesión se resuelve
+            aparte; mientras tanto, el botón con el mensaje de siempre. */}
+        <Suspense fallback={<BotonConsultarPrecio enlace={enlace(texto)} deshabilitado={invalida} />}>
+          <BotonConsultarPrecioDeQuienMira texto={texto} enlace={enlace} deshabilitado={invalida} />
+        </Suspense>
       </div>
       {problema && (
         <p id="problema-de-cantidad" role="alert" className="-mt-1 flex items-center gap-1.5 text-[14.5px] text-destructive">
@@ -588,4 +588,26 @@ function SelectorConPrecios({
   promesa: Promise<PreciosDeFicha>;
 }) {
   return <SelectorVariante {...props} precios={use(promesa)} />;
+}
+
+function BotonConsultarPrecio({ enlace, deshabilitado }: { enlace: string; deshabilitado: boolean }) {
+  return (
+    <BotonWhatsapp enlace={enlace} tamano="grande" deshabilitado={deshabilitado} className="min-w-0 flex-1 px-3">
+      <span className="truncate">Consultar precio</span>
+    </BotonWhatsapp>
+  );
+}
+
+function BotonConsultarPrecioDeQuienMira({
+  texto,
+  enlace,
+  deshabilitado,
+}: {
+  texto: string;
+  enlace: (texto: string) => string;
+  deshabilitado: boolean;
+}) {
+  const { sesion } = useEstado();
+  const quien = sesion && !sesion.esStaff ? { nombre: sesion.nombre } : null;
+  return <BotonConsultarPrecio enlace={enlace(mensajeDeConsulta(texto, quien))} deshabilitado={deshabilitado} />;
 }

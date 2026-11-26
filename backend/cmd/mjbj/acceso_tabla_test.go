@@ -398,6 +398,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"Ajustes":                        "publico",                       // GET /api/v1/contenido/ajustes
 	"Banners":                        "publico",                       // GET /api/v1/contenido/banners
 	"EnviarConsulta":                 "publico",                       // POST /api/v1/contenido/contacto
+	"EstadoDelContacto":              "publico",                       // GET /api/v1/contenido/contacto
 	"DocumentosReservados":           "publico",                       // GET /api/v1/contenido/documentos/reservados
 	"Documentos":                     "publico",                       // GET /api/v1/contenido/documentos
 	"EscalasDePago":                  "publico",                       // GET /api/v1/contenido/escalas-pago

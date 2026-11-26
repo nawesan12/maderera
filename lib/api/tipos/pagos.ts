@@ -504,6 +504,7 @@ export interface operations {
                 "multipart/form-data": {
                     monto?: string;
                     medio?: string;
+                    confirmar?: string;
                     /** Format: binary */
                     comprobante?: string;
                 };

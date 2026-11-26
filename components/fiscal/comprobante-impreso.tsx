@@ -277,13 +277,17 @@ export async function ComprobanteImpreso({
               return (
                 <tr key={item.id}>
                   <td>{item.descripcion}</td>
-                  <td className="der mono">{cantidadConUnidad(cantidad, item.unidad)}</td>
-                  <td className="der mono">{moneda.format(unitario)}</td>
+                  {/* data-label: en el teléfono la tabla se apila (globals.css). La
+                      unidad suelta no se escribe. */}
+                  <td className="der mono" data-label="Cant.">
+                    {cantidadConUnidad(cantidad, item.unidad === "unidad" ? null : item.unidad)}
+                  </td>
+                  <td className="der mono" data-label="P. unitario">{moneda.format(unitario)}</td>
                   {discrimina && (
-                    <td className="der mono">{Number(item.alicuotaIva)}%</td>
+                    <td className="der mono" data-label="IVA">{Number(item.alicuotaIva)}%</td>
                   )}
                   {/* En la A, la fila neta: cantidad × unitario neto. */}
-                  <td className="der mono">
+                  <td className="der mono" data-label="Subtotal">
                     {moneda.format(Number(discrimina ? item.neto : item.subtotal))}
                   </td>
                 </tr>

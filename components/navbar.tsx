@@ -27,7 +27,6 @@ import {
   Warehouse,
   MessageCircle,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { PersonajeAsistente } from "@/components/asistente/personaje";
 import { ETIQUETA_ASISTENTE, abrirAsistente } from "@/lib/asistente/abrir";
@@ -613,6 +612,18 @@ export function Navbar({
                     <SesionDelTelefonoVigente cerrar={() => setMobileMenuOpen(false)} />
                   </Suspense>
 
+                  {/* La acción principal del sitio va arriba, a mano: estaba al
+                      fondo, debajo de los rubros y de «Y además» (mes
+                      simulado, H307). */}
+                  <Link
+                    href={presupuesto}
+                    {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="mb-4 inline-flex h-11 w-full items-center justify-center rounded-full bg-accion font-semibold text-white transition-colors hover:bg-accion-hover"
+                  >
+                    Pedir Presupuesto
+                  </Link>
+
                   <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-texto-3">
                     Productos
                   </p>
@@ -720,16 +731,6 @@ export function Navbar({
                     </EnlaceDeSeccion>
                   ))}
 
-                  <div className="my-3 border-t border-linea-tenue" />
-                  <Link
-                    href={presupuesto}
-                    {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Button className="w-full rounded-full bg-accion font-semibold text-white hover:bg-accion-hover">
-                      Pedir Presupuesto
-                    </Button>
-                  </Link>
 
                   {/* Crear cuenta también acá. En la barra de arriba solo
                       aparece desde `xl`, así que en celular y en tablet —que

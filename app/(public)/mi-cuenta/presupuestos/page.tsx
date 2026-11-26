@@ -10,11 +10,18 @@ import { diasHasta, fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { RespuestaPresupuesto } from "./respuesta";
 import { tienda } from "@/lib/dal/contenido";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
+import { clienteDeLaSesion } from "@/lib/dal/cuenta";
+import { mensajeDeConsulta } from "@/lib/cuenta/portal";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 export const metadata: Metadata = { title: "Presupuestos" };
 
 export default async function MisPresupuestosPage() {
-  const presupuestos = await misPresupuestos();
+  const [presupuestos, laTienda, cliente] = await Promise.all([misPresupuestos(), tienda(), clienteDeLaSesion()]);
+  // Pedir otro tiene que estar siempre a mano, no solo en el vacío (H307).
+  const pedirOtro = await enlaceWhatsapp(
+    mensajeDeConsulta("Hola! Quería pedir un presupuesto de...", cliente ? { nombre: cliente.nombre } : null),
+  );
 
   const aResponder = presupuestos.filter((p) => p.estado === "enviado");
   const enCurso = presupuestos.filter(
@@ -29,7 +36,7 @@ export default async function MisPresupuestosPage() {
 
   if (presupuestos.length === 0) {
     // Con la tienda apagada no se arma desde el catálogo: se pide por WhatsApp.
-    const [laTienda, whatsapp] = await Promise.all([tienda(), enlaceWhatsapp()]);
+    const whatsapp = pedirOtro;
     return (
       <div className="rounded-2xl border border-dashed bg-card/60 px-6 py-16 text-center">
         <ScrollText className="mx-auto h-10 w-10 text-muted-foreground/60" />
@@ -65,7 +72,19 @@ export default async function MisPresupuestosPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold tracking-tight">Mis presupuestos</h1>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight">Mis presupuestos</h1>
+        {laTienda.activa ? (
+          <Link
+            href="/catalogo"
+            className="inline-flex h-11 items-center rounded-lg bg-accion px-5 font-medium text-white transition-colors hover:bg-brand-orange-dark"
+          >
+            Pedir otro
+          </Link>
+        ) : (
+          <BotonWhatsapp enlace={pedirOtro}>Pedir otro</BotonWhatsapp>
+        )}
+      </header>
 
       {aResponder.length > 0 && (
         <section>

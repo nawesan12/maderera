@@ -405,6 +405,21 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/RutaSitemap" } }
   /api/v1/contenido/contacto:
+    get:
+      operationId: EstadoDelContacto
+      description: |
+        Si el formulario de contacto manda de verdad. Sin correo conectado la
+        página no ofrece «Enviar»: lo principal es WhatsApp (mes simulado, H211).
+      responses:
+        "200":
+          description: Si hay correo conectado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [correo]
+                properties:
+                  correo: { type: boolean }
     post:
       operationId: EnviarConsulta
       requestBody:

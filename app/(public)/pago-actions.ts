@@ -14,6 +14,8 @@ import { api, comoFormulario, mensajeDe, soloCampos, type Problema } from "@/lib
 export interface EstadoPago {
   error?: string;
   ok?: string;
+  /** Go pide confirmar (el mismo pago ya informado, o más de lo que se debe). */
+  confirmar?: string;
 }
 
 /** Abre el checkout de un pedido y manda a la persona a pagar. */
@@ -55,6 +57,7 @@ export async function subirComprobante(_previo: EstadoPago, formData: FormData):
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos guardar el comprobante.") };
   revalidatePath(`/pedido/${numero}`);
+  revalidatePath(`/mi-cuenta/pedidos/${numero}`);
   revalidatePath("/admin/pagos");
   return { ok: r.data.ok };
 }
@@ -65,7 +68,12 @@ export async function subirComprobanteDeDeuda(_previo: EstadoPago, formData: For
     body: soloCampos(formData) as never,
     ...comoFormulario,
   });
-  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos guardar el comprobante.") };
+  if (!r.data) {
+    const problema = r.error as Problema | undefined;
+    const confirmar = problema?.errores?.confirmar;
+    if (confirmar) return { confirmar };
+    return { error: mensajeDe(problema, "No pudimos guardar el comprobante.") };
+  }
   revalidatePath("/mi-cuenta/cuenta-corriente");
   revalidatePath("/mi-cuenta/movimientos");
   revalidatePath("/admin/pagos");

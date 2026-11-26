@@ -416,7 +416,7 @@ export function FormularioPresupuesto({
           </div>
 
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="notas">Notas</Label>
+            <Label htmlFor="notas">Observaciones para el cliente</Label>
             <Textarea
               id="notas"
               name="notas"

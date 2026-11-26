@@ -44,6 +44,33 @@ type RefRecibo struct {
 	// aprobado. Ese recibo no se anula desde el panel (Servicio.Anular): se
 	// devuelve desde MP y el aviso lo anula.
 	PorMercadoPago bool `json:"porMercadoPago"`
+	// ChequeRechazado: el banco rechazó un cheque de este recibo y volvió a
+	// la cuenta con una nota de débito. El recibo emitido no cambia (lo
+	// emitido no se edita), pero el pago no puede verse entero (H303).
+	ChequeRechazado bool `json:"chequeRechazado,omitempty"`
+}
+
+// DetalleParaElCliente saca de un asiento lo que se escribió para la casa.
+// La anulación de una venta guarda su motivo («…: se cargó a la Mueblería y
+// era de la Constructora»), y el cliente se enteraba de lo que había
+// comprado otro (H386). El motivo sigue en el pedido y en la bitácora.
+func DetalleParaElCliente(detalle *string) *string {
+	if detalle == nil || !strings.HasPrefix(*detalle, "Anulación de la venta ") {
+		return detalle
+	}
+	if i := strings.Index(*detalle, ": "); i > 0 {
+		t := (*detalle)[:i]
+		return &t
+	}
+	return detalle
+}
+
+// HistorialParaElCliente es el historial como lo lee el cliente en Mi cuenta.
+func HistorialParaElCliente(movs []MovimientoDelCliente) []MovimientoDelCliente {
+	for i := range movs {
+		movs[i].Detalle = DetalleParaElCliente(movs[i].Detalle)
+	}
+	return movs
 }
 
 // ClasesPorFiltro son las clases que muestra cada filtro (nil: todas).
@@ -148,6 +175,15 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		}
 	}
 
+	// Los recibos con un cheque que rebotó: la nota de débito lleva el
+	// recibo con el que había entrado.
+	rebotados := map[string]bool{}
+	for _, m := range libro {
+		if m.Tipo == "nota_debito" && m.ReciboID != nil {
+			rebotados[*m.ReciboID] = true
+		}
+	}
+
 	var movs []MovimientoDelCliente
 	for i, m := range libro {
 		if i >= tope {
@@ -171,7 +207,8 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			x.Pedido = &RefPedido{*m.PedidoID, *m.Referencia}
 		}
 		if m.ReciboID != nil {
-			x.Recibo = &RefRecibo{*m.ReciboID, deref(m.ReciboNumero), m.ReciboEstado != nil && *m.ReciboEstado == sqlc.EstadoReciboAnulado, porMP[*m.ReciboID]}
+			x.Recibo = &RefRecibo{*m.ReciboID, deref(m.ReciboNumero), m.ReciboEstado != nil && *m.ReciboEstado == sqlc.EstadoReciboAnulado, porMP[*m.ReciboID],
+				rebotados[*m.ReciboID]}
 		}
 		movs = append(movs, x)
 	}
@@ -180,11 +217,16 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			break
 		}
 		detalle := "Pago pendiente"
-		if p.EstadoPago == "pagado" {
+		var recibo *RefRecibo
+		switch {
+		case p.ReciboID != nil:
+			detalle = "Pagada con recibo"
+			recibo = &RefRecibo{ID: *p.ReciboID, Numero: deref(p.ReciboNumero)}
+		case p.EstadoPago == "pagado":
 			detalle = "Pagada en el momento"
 		}
-		movs = append(movs, MovimientoDelCliente{ID: p.ID, Fecha: p.CreatedAt, Clase: "compra_contado", Titulo: "Compra " + p.Numero,
-			Detalle: &detalle, ImporteInformativo: f64(p.Total), Pedido: &RefPedido{p.ID, p.Numero}})
+		movs = append(movs, MovimientoDelCliente{ID: p.ID, Fecha: p.CreatedAt, Clase: "compra_contado", Titulo: "Compra",
+			Detalle: &detalle, ImporteInformativo: f64(p.Total), Pedido: &RefPedido{p.ID, p.Numero}, Recibo: recibo})
 	}
 	for _, p := range informados {
 		clase, detalle := "pago_en_revision", "La estamos verificando en el banco"

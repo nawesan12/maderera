@@ -1,0 +1,135 @@
+import { primerNombre } from "@/lib/formato";
+import { soloDigitos } from "@/lib/cuit";
+
+/**
+ * Lo que «Mi cuenta» dice de cada cosa, en un solo lugar.
+ *
+ * El mes simulado de noviembre de 2026 encontró la misma frase contradiciendo
+ * al estado en varias pantallas: «Falta abonarlo» en un pedido a cuenta, «Te
+ * pasamos los datos bancarios» en uno pagado o cancelado, «1 en camino» con el
+ * pedido pendiente. La decisión va acá y se prueba (tests/portal-cliente).
+ */
+
+/**
+ * Cómo se saluda. A una persona, por su nombre de pila; a una empresa (CUIT
+ * de persona jurídica: 30, 33, 34) con su nombre entero: «Hola, Constructora»
+ * no es un saludo (H091).
+ */
+export function saludoDelCliente(nombre: string, cuit: string | null | undefined): string {
+  const digitos = cuit ? soloDigitos(cuit) : "";
+  if (/^3[034]/.test(digitos)) return nombre.trim();
+  return primerNombre(nombre);
+}
+
+/**
+ * El distintivo junto al nombre: el de la lista de precios que tiene
+ * («Constructora»), no «Profesional» para todos los que no son la general.
+ */
+export function distintivoDeLista(tipo: string | undefined, lista: string | null | undefined): string | null {
+  if (lista) return lista.replace(/^lista\s+/i, "").replace(/^./, (l) => l.toUpperCase());
+  return tipo === "profesional" ? "Profesional" : null;
+}
+
+/** El contador de pedidos abiertos: «en curso», nunca «en camino» (H083, H313). */
+export function pedidosEnCurso(n: number): string {
+  return `${n} en curso`;
+}
+
+export interface PagoDelPedido {
+  estado: string;
+  estadoPago: string;
+  medioPago: string | null;
+  total: number;
+  /** Lo que falta pagar de un pedido a cuenta (null: no se cargó a la cuenta). */
+  debeEnCuenta: number | null;
+  /** Lo informado que se está verificando. */
+  enRevision?: number | null;
+}
+
+export interface EstadoDelPago {
+  /** Clave de EtiquetaEstado. */
+  clave: "pagado" | "parcial" | "pendiente" | "reintegrado" | "en_revision" | "cuenta";
+  etiqueta: string;
+  /** Lo que sigue, si hay algo que decir; nunca contradice la etiqueta. */
+  sigue: string | null;
+  /** Cuánto falta, si falta algo. */
+  falta: number | null;
+}
+
+const ABONA_AL_RETIRAR: Record<string, string> = {
+  efectivo: "Abonás al retirar o cuando te lo entregamos.",
+  mercado_pago: "Te mandamos el enlace para pagar por WhatsApp.",
+};
+
+/**
+ * Qué dice la tarjeta «Pago» de un pedido (H088, H208, H214, H310, H393).
+ *
+ * - Cancelado: lo que pasó con la plata y nada más.
+ * - A cuenta corriente: pagado, pagado en parte o «a tu cuenta», con lo que
+ *   falta imputando los pagos a la deuda más vieja (lo hace Go).
+ * - Pagado: «Pagado» y nada más.
+ * - Pendiente: lo que sigue según el medio y la etapa; ya entregado, lo que
+ *   se debe, sin la frase de «al retirar».
+ */
+export function estadoDelPago(p: PagoDelPedido): EstadoDelPago {
+  const entregado = p.estado === "entregado";
+  if (p.estado === "cancelado") {
+    if (p.estadoPago === "reintegrado") return { clave: "reintegrado", etiqueta: "Reintegrado", sigue: null, falta: null };
+    return { clave: "pendiente", etiqueta: "Sin cobrar", sigue: null, falta: null };
+  }
+  if (p.debeEnCuenta !== null) {
+    if (p.debeEnCuenta <= 0.005) return { clave: "pagado", etiqueta: "Pagado", sigue: null, falta: null };
+    if (p.debeEnCuenta < p.total - 0.005) {
+      return { clave: "parcial", etiqueta: "Pagado en parte", sigue: null, falta: p.debeEnCuenta };
+    }
+    return { clave: "cuenta", etiqueta: "A cuenta corriente", sigue: null, falta: p.debeEnCuenta };
+  }
+  if (p.estadoPago === "pagado") return { clave: "pagado", etiqueta: "Pagado", sigue: null, falta: null };
+  if (p.estadoPago === "reintegrado") return { clave: "reintegrado", etiqueta: "Reintegrado", sigue: null, falta: null };
+  if (p.enRevision && p.enRevision > 0) {
+    return { clave: "en_revision", etiqueta: "Verificando tu pago", sigue: null, falta: null };
+  }
+  if (entregado) return { clave: "pendiente", etiqueta: "Falta abonarlo", sigue: null, falta: p.total };
+  if (p.medioPago === "cuenta_corriente") {
+    return { clave: "cuenta", etiqueta: "A cuenta corriente", sigue: null, falta: null };
+  }
+  // Transferencia: el comprobante se sube desde el pedido; no hace falta
+  // decir que se manda por WhatsApp.
+  const sigue = p.medioPago ? (ABONA_AL_RETIRAR[p.medioPago] ?? null) : "Coordinamos el pago por WhatsApp.";
+  return { clave: "pendiente", etiqueta: "Falta abonarlo", sigue, falta: null };
+}
+
+/** El aviso de pagos en verificación, con el pronombre que corresponde (H314). */
+export function avisoDePagosEnVerificacion(n: number): string {
+  return n === 1
+    ? "Tenés un pago que estamos verificando. Cuando lo confirmemos baja tu saldo y te llega el recibo por correo."
+    : `Tenés ${n} pagos que estamos verificando. Cuando los confirmemos baja tu saldo y te llegan los recibos por correo.`;
+}
+
+/**
+ * El mensaje de WhatsApp para consultar por algo del portal. Sale con quién
+ * pregunta, así el vendedor no tiene que preguntarlo (H087).
+ */
+export function mensajeDeConsulta(texto: string, cliente?: { nombre: string; cuit?: string | null } | null): string {
+  if (!cliente?.nombre) return texto;
+  const cuit = cliente.cuit ? ` (CUIT ${cliente.cuit})` : "";
+  return `${texto} Soy ${cliente.nombre.trim()}${cuit}.`;
+}
+
+/**
+ * Los productos para reseñar, uno por producto aunque se haya comprado en
+ * varios pedidos (H391: la membrana salía cuatro veces). Si ya se reseñó en
+ * alguno, queda reseñado. Conserva el orden en que llegan, así al publicar la
+ * tarjeta no salta de lugar.
+ */
+export function unaPorProducto<T extends { productId: string; yaResenado: boolean }>(items: T[]): T[] {
+  const reseñados = new Set(items.filter((i) => i.yaResenado).map((i) => i.productId));
+  const vistos = new Set<string>();
+  const out: T[] = [];
+  for (const i of items) {
+    if (vistos.has(i.productId)) continue;
+    vistos.add(i.productId);
+    out.push(reseñados.has(i.productId) && !i.yaResenado ? { ...i, yaResenado: true } : i);
+  }
+  return out;
+}

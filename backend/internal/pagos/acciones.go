@@ -157,7 +157,13 @@ func (s *Servicio) cliente(ctx context.Context, ses *auth.Sesion) (*clienteDeLaS
 
 // SubirComprobanteDeDeuda: una transferencia o un depósito para la cuenta
 // corriente, en revisión hasta que alguien de la casa lo concilie.
-func (s *Servicio) SubirComprobanteDeDeuda(ctx context.Context, x Extras, ses *auth.Sesion, a *Archivo, monto, medio string) (Resultado, error) {
+//
+// Sin `confirmar`, frena el doble aviso: el mismo importe que ya está en
+// revisión, o informar en total más de lo que se debe. El doble toque o
+// volver a entrar dejaba dos transferencias iguales «verificando» y la
+// administración las tenía que encontrar a mano (H385). Con `confirmar` se
+// informa igual: puede ser de verdad un segundo pago.
+func (s *Servicio) SubirComprobanteDeDeuda(ctx context.Context, x Extras, ses *auth.Sesion, a *Archivo, monto, medio string, confirmar bool) (Resultado, error) {
 	c, err := s.cliente(ctx, ses)
 	if err != nil {
 		return Resultado{}, err
@@ -174,6 +180,25 @@ func (s *Servicio) SubirComprobanteDeDeuda(ctx context.Context, x Extras, ses *a
 	}
 	if medio != "deposito" {
 		medio = "transferencia"
+	}
+	if !confirmar {
+		var igual bool
+		var enRevision, saldo float64
+		if err := s.pool.QueryRow(ctx, `SELECT
+			  EXISTS (SELECT 1 FROM payments WHERE customer_id = $1 AND tipo = 'deuda' AND estado = 'en_revision' AND monto = $2::numeric),
+			  (SELECT coalesce(sum(monto), 0)::float8 FROM payments WHERE customer_id = $1 AND tipo = 'deuda' AND estado = 'en_revision'),
+			  (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1)`,
+			c.id, jsmath.Fijo2(importe)).Scan(&igual, &enRevision, &saldo); err != nil {
+			return Resultado{}, err
+		}
+		switch {
+		case igual:
+			return Resultado{}, plataforma.Invalido(map[string]string{"confirmar": "Ya nos informaste un pago de " +
+				formato.Moneda(importe) + " que estamos verificando. ¿Es otro pago?"})
+		case jsmath.Redondear2(float64(enRevision+importe)) > jsmath.Redondear2(saldo)+0.005:
+			return Resultado{}, plataforma.Invalido(map[string]string{"confirmar": "Con este pago informás " +
+				formato.Moneda(float64(enRevision+importe)) + " y tu saldo es de " + formato.Moneda(math.Max(saldo, 0)) + ". ¿Lo informamos igual?"})
+		}
 	}
 	if v := x.Lim.Permitido(ctx, limites.Comprobante, "cliente:"+c.id); !v.Permitido {
 		return Resultado{}, fallo(limites.AvisoDeEspera(v))

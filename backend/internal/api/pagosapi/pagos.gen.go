@@ -209,6 +209,7 @@ type SubirComprobanteMultipartBody struct {
 // SubirComprobanteDeDeudaMultipartBody defines parameters for SubirComprobanteDeDeuda.
 type SubirComprobanteDeDeudaMultipartBody struct {
 	Comprobante *openapi_types.File `json:"comprobante,omitempty"`
+	Confirmar   *string             `json:"confirmar,omitempty"`
 	Medio       *string             `json:"medio,omitempty"`
 	Monto       *string             `json:"monto,omitempty"`
 }
@@ -1922,13 +1923,13 @@ var swaggerSpec = []string{
 	"z5ulHj6JJf/DIChtkTXVMDRVHmkPyVeGYeWOdcLYrUq7ZahLXsgzkLArTv2o0rX6PFOS2K33FcvWovmv",
 	"D7q9m6RrlcQU+OXy5I9GE5WpXOJ5Ke9JBvcK/u7N9Vf2puBFde3uDRINsJehDeDDsPAIj7CSj0fPJbBF",
 	"c0+jPzIDP9yYy0ap36Cn1UTxYWvlJlMWVW6Vs9HIobAjwcIma64o0PTxE6XBF8U9dyTxFpguUceb3F8S",
-	"EjvSO+xgPIZ4+JPD0lyh9d8M/AJRCS2BS1I7ixmC4t6u0XcEJ8Dwdrn2ga3ZSmnoNrjv8Htl1BNkxec7",
-	"6y3eSp8W2vqlScSWI0NhlLAkYXbzE7i5h0GRAU+BSW/HzYsFNaVA1KTdS6wn7HO7G8X+bZSHPndtFhXy",
-	"4P7dPC39+QrQcEhu/rnyxD3LA8L8UYBtjVM3/dVuVmE+Qz8PRDak4V6wrnn4cmAbde9jE64EmnHWI5JF",
-	"/wh9hQnqhUOo4FT5qU098DGQox9dzpAlSEHCkI7ER8QuZfMfh83lefsyrhkc74qDyhKrz36y6LO+2Apz",
-	"4gpv/kl+imnQuN3TMECuQc37KvTmev5x4mFZpLSidH8v3VCz3BLOXchq+e+eKoWu1fkPzqQBudF10NyN",
-	"ciZMm2l/+be5R42LZudb08FSgY03UivYZHVXf4ewOs4X41HfSWp/ndykm3xxX9IkWU3iAq62nyzz1O41",
-	"MPvsD59t2+QuGWw+n/93AA==",
+	"EjvSO+xgPIZ4+JPDkpH2XSlvvmDrvzf4BWIWGgaXwnYWEwbFvT2l7xdOgOHtcu0DG7eVwtFtcN/R+Mog",
+	"KMiKT3/WG8CVLi40/UuTiC1HlcIoYUnC7OYncFMRgyIDngKT3o6bFwtqCoWoSbtXXE/YBXc3iv0XKQ9d",
+	"8NqkKmTJ/bt5WvrzlafhkNz8r+WJO5oHhPmjANsatm76I96swnyGflqIbEjDvWBd8/DlODfq3scmXBg0",
+	"w65HJIv+AfsKE9QLh1DBqfIznXocZCBHP9icIUuQgoQhHYmPiF3K5h8Qm4v39lVdM1beFQeVJVaf/dzR",
+	"1wRiK0yRK7z5J/kZp0Hjdk/DeLkGNe+r35vL+8eJh2UJ04rS/b10Q0VzSzh3Iavlv3uqFLrWBTw4kwbk",
+	"RtdBczfomTBtpv3ln+oeNS6anW9NB0sFNt5XrWCT1T3/HcLqOF8MT32fqf1lc5Nu8sVtSpNkNYkLuNp+",
+	"ssxTu9fA7LM/fPJtk7tksPl8/t8BAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

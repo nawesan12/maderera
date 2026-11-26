@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import { productosQuePuedoResenar } from "@/lib/dal/resenas";
+import { unaPorProducto } from "@/lib/cuenta/portal";
 import { FormularioResena } from "./formulario";
 
 export const metadata: Metadata = {
@@ -17,10 +18,9 @@ export const metadata: Metadata = {
  * vacío que no se puede completar.
  */
 export default async function MisResenasPage() {
-  const items = await productosQuePuedoResenar();
-
-  const pendientes = items.filter((i) => !i.yaResenado);
-  const hechas = items.filter((i) => i.yaResenado);
+  // Una tarjeta por producto, en el orden en que llegan: al publicar, la
+  // tarjeta se queda en su lugar como «Enviada» (H391).
+  const items = unaPorProducto(await productosQuePuedoResenar());
 
   return (
     <div className="space-y-5">
@@ -50,32 +50,23 @@ export default async function MisResenasPage() {
         </div>
       )}
 
-      {pendientes.map((item) => (
-        <FormularioResena
-          key={`${item.orderId}:${item.productId}`}
-          item={item}
-        />
-      ))}
-
-      {hechas.length > 0 && (
-        <section>
-          <h2 className="mb-2.5 text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">
-            Ya reseñaste
-          </h2>
-          <ul className="space-y-2">
-            {hechas.map((item) => (
-              <li
-                key={`${item.orderId}:${item.productId}`}
-                className="rounded-[12px] border border-linea bg-chip px-4 py-3 text-[15px] text-texto-2"
-              >
-                {item.nombre}
-                <span className="block text-sm text-texto-3">
-                  Pedido {item.numeroPedido}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {items.length > 0 && (
+        <ul className="space-y-2.5">
+          {items.map((item) => (
+            <li key={item.productId}>
+              {item.yaResenado ? (
+                <p className="flex items-center justify-between gap-3 rounded-[12px] bg-hundida px-4 py-3 text-[15px] text-texto-2">
+                  <span className="min-w-0">{item.nombre}</span>
+                  <span className="estado-ok shrink-0 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                    Enviada
+                  </span>
+                </p>
+              ) : (
+                <FormularioResena item={item} />
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

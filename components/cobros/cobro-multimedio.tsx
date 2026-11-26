@@ -74,6 +74,7 @@ export function CobroMultimedio({
   medioInicial = "efectivo",
   circuito = "blanco",
   onTotal,
+  delCliente = false,
 }: {
   /** Lo que se espera cobrar. Es lo que se propone en el primer renglón. */
   aCobrar: number;
@@ -84,6 +85,8 @@ export function CobroMultimedio({
   circuito?: "blanco" | "negro";
   /** Lo que suman los renglones, cada vez que cambia. */
   onTotal?: (total: number) => void;
+  /** Lo llena el cliente en Mi cuenta: las etiquetas le hablan a él (H217). */
+  delCliente?: boolean;
 }) {
   const id = useId();
   const [renglones, setRenglones] = useState<Renglon[]>(() => [
@@ -141,7 +144,7 @@ export function CobroMultimedio({
             <li key={r.clave} className="tarjeta-hundida space-y-2.5 rounded-xl p-3">
               <div className="flex flex-wrap items-end gap-2.5">
                 <label className="min-w-40 flex-1 text-sm text-muted-foreground">
-                  {renglones.length > 1 ? `Medio ${i + 1}` : "Con qué paga"}
+                  {renglones.length > 1 ? `Medio ${i + 1}` : delCliente ? "¿Con qué pagás?" : "Con qué paga"}
                   <select
                     autoFocus={r.clave === recienAgregado}
                     value={r.medio}
@@ -213,7 +216,7 @@ export function CobroMultimedio({
                     />
                   </label>
                   <label className="text-sm text-muted-foreground sm:col-span-3">
-                    Librador <span className="font-normal">(si no es el cliente)</span>
+                    Librador <span className="font-normal">{delCliente ? "(si no sos vos)" : "(si no es el cliente)"}</span>
                     <input
                       value={r.librador}
                       onChange={(e) => cambiar(r.clave, "librador", e.target.value)}

@@ -345,8 +345,12 @@ input, textarea, select {
   font-size: 15px !important;
 }
 
+/* El texto de ejemplo con el gris terciario de cada tema: el gris fijo a
+   media opacidad daba menos de 2:1 sobre el campo hundido en oscuro (mes
+   simulado, H094). Con --texto-3 pasa 4,5:1 en los dos. */
 input::placeholder, textarea::placeholder {
-  color: oklch(0.55 0 0 / 0.5);
+  color: var(--texto-3);
+  opacity: 1;
 }
 
 /* Ancho del sitio público: 1200px con 24px de aire, como define la banda.
@@ -1147,15 +1151,18 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   color: var(--tinta-suave);
 }
 
-/* En el teléfono la hoja se lee, no se imprime: la cabecera de tres
-   columnas dejaba una o dos palabras por renglón («Maderera / Juan B. /
-   Justo») y partía el número de la factura (mes simulado, el remito a
-   375 px). Se apila: el emisor, la letra y los datos del comprobante, cada
-   uno entero; y el destinatario en una columna. Solo en pantalla: el papel
-   sigue siendo A4. */
+/* En el teléfono la hoja se lee, no se imprime (solo en pantalla: el papel
+   sigue siendo A4). La cabecera de tres columnas dejaba una o dos palabras
+   por renglón («Maderera / Juan B. / Justo») y partía el número de la
+   factura (mes simulado, el remito a 375 px): se apila, el emisor, la letra y
+   los datos del comprobante, cada uno entero; y el destinatario en una
+   columna. Las tablas también se apilan: el resumen y la factura medían
+   510 px dentro de 375 y el navegador los achicaba hasta dejar Haber y Saldo
+   afuera (H388, H080). Cada celda con número lleva su `data-label`. */
 @media screen and (max-width: 639.98px) {
   .comprobante-hoja .hoja {
     margin: 0;
+    max-width: none;
     padding: 1.25rem 1rem;
     box-shadow: none;
   }
@@ -1177,6 +1184,43 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   }
   .comprobante-hoja .receptor-grilla {
     grid-template-columns: 1fr;
+  }
+  .comprobante-hoja .totales-caja {
+    width: 100%;
+  }
+  .comprobante-hoja .detalle,
+  .comprobante-hoja .detalle :is(tbody, tr) {
+    display: block;
+  }
+  .comprobante-hoja .detalle thead {
+    display: none;
+  }
+  .comprobante-hoja .detalle tr {
+    border-bottom: 1px solid var(--linea);
+    padding: 0.5rem 0;
+  }
+  .comprobante-hoja .detalle td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 0;
+    padding: 0.1rem 0;
+    font-size: 0.85rem;
+  }
+  .comprobante-hoja .detalle td:empty {
+    display: none;
+  }
+  .comprobante-hoja .detalle td[data-label]::before {
+    content: attr(data-label);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    color: var(--tinta-suave);
+  }
+  .comprobante-hoja .detalle td.fecha {
+    font-size: 0.75rem;
+    color: var(--tinta-suave);
+  }
+  .comprobante-hoja .marca-agua {
+    font-size: 3rem;
   }
 }
 
@@ -1719,6 +1763,15 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
   display: none;
 }
 
+/* En Mi cuenta, en el teléfono, el flotante tapaba el importe del envío, la
+   barra del límite y los controles de los formularios (mes simulado, H092).
+   Cada pantalla que lo necesita trae su propio WhatsApp con el texto armado. */
+@media (max-width: 1023px) {
+  body:has([data-sin-flotante-en-celular]) .flotante-whatsapp {
+    display: none;
+  }
+}
+
 /* En el teléfono, mientras se escribe en un campo, el flotante se va: con el
    teclado abierto quedaba encima del campo o del botón de mandar (comité
    final, a 390 px). Vuelve apenas se sale del campo. */
@@ -2090,44 +2143,6 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
 @media (prefers-reduced-motion: reduce) {
   .animate-temblar {
     animation: none;
-  }
-}
-
-/* La hoja del comprobante en el teléfono (simulación del mes, H080): a
-   375 px la tabla del detalle se salía de la hoja blanca por la derecha. La
-   hoja va de borde a borde, la cabecera se apila y en el detalle solo la
-   descripción parte renglones. En papel no cambia nada. */
-@media screen and (max-width: 639px) {
-  .comprobante-hoja .hoja {
-    margin: 0;
-    padding: 20px 16px;
-    box-shadow: none;
-  }
-  .comprobante-hoja .cabecera {
-    grid-template-columns: 1fr auto;
-  }
-  .comprobante-hoja .cabecera .comprobante-datos {
-    grid-column: 1 / -1;
-  }
-  .comprobante-hoja .receptor-grilla {
-    grid-template-columns: 1fr;
-  }
-  .comprobante-hoja .detalle th,
-  .comprobante-hoja .detalle td {
-    padding: 0.4rem 0.3rem;
-  }
-  .comprobante-hoja .detalle td.mono {
-    white-space: nowrap;
-    font-size: 0.7rem;
-  }
-  .comprobante-hoja .detalle td:first-child {
-    overflow-wrap: anywhere;
-  }
-  .comprobante-hoja .totales-caja {
-    width: 100%;
-  }
-  .comprobante-hoja .marca-agua {
-    font-size: 3rem;
   }
 }
 

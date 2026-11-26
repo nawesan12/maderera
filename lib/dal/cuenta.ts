@@ -25,6 +25,12 @@ export interface ClienteDeSesion {
   tipo: "particular" | "profesional";
   estado: "activo" | "moroso" | "inactivo";
   limiteCredito: number;
+  /** Ya facturó o mueve cuenta: lo fiscal lo cambia la casa. */
+  datosFiscalesFijos: boolean;
+  /** La ficha existía antes que la cuenta web (mostrador o ISIS). */
+  vinculada: boolean;
+  /** Su lista de precios, si no es la general. */
+  lista: string | null;
 }
 
 /**
@@ -66,10 +72,15 @@ export interface PedidoPropio {
   numero: string;
   estado: string;
   estadoPago: string;
+  medioPago: string | null;
   tipoEntrega: "retiro" | "envio";
   total: number;
   items: number;
   sucursal: string | null;
+  /** Ya retiró una parte y le queda mercadería en acopio. */
+  enAcopio: boolean;
+  /** Lo que falta pagar de un pedido a cuenta corriente (null: no es a cuenta). */
+  debeEnCuenta: number | null;
   createdAt: Date;
 }
 
@@ -152,6 +163,7 @@ export interface MovimientoConSaldo {
   saldoDespues: number;
   /** El recibo del pago, si es un pago con recibo. */
   receiptId: string | null;
+  reciboNumero: string | null;
   createdAt: Date;
 }
 
@@ -159,6 +171,8 @@ export interface CuentaCorriente {
   saldo: number;
   limiteCredito: number;
   disponible: number;
+  /** Lo cargado de pedidos que todavía no se entregaron ni facturaron. */
+  sinEntregar: number;
   movimientos: MovimientoConSaldo[];
 }
 
@@ -181,6 +195,7 @@ export async function miCuentaCorriente(): Promise<CuentaCorriente> {
       detalle: m.detalle,
       referencia: m.referencia,
       receiptId: m.receiptId,
+      reciboNumero: m.reciboNumero ?? null,
       saldoDespues: m.saldo,
       createdAt: new Date(m.fecha),
     })),

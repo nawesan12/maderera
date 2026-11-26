@@ -115,11 +115,16 @@ ORDER BY m.created_at DESC
 LIMIT $2;
 
 -- name: ComprasDeContado :many
-SELECT id, created_at, numero, total::float8 AS total, estado_pago::text AS estado_pago
-FROM orders
-WHERE customer_id = $1 AND (medio_pago IS NULL OR medio_pago <> 'cuenta_corriente') AND estado <> 'cancelado'
-  AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
-ORDER BY created_at DESC
+-- El recibo, si la compra se cobró después con uno (una transferencia
+-- conciliada): no fue «pagada en el momento» (H305).
+SELECT o.id, o.created_at, o.numero, o.total::float8 AS total, o.estado_pago::text AS estado_pago,
+  r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
+FROM orders o
+LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.order_id = o.id AND x.estado <> 'anulado'
+  ORDER BY x.created_at DESC LIMIT 1)
+WHERE o.customer_id = $1 AND (o.medio_pago IS NULL OR o.medio_pago <> 'cuenta_corriente') AND o.estado <> 'cancelado'
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR o.created_at >= sqlc.narg(desde))
+ORDER BY o.created_at DESC
 LIMIT $2;
 
 -- name: PagosInformados :many

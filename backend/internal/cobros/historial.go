@@ -268,6 +268,20 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		movs = append(movs, MovimientoDelCliente{ID: p.ID, Fecha: p.CreatedAt, Clase: clase, Titulo: titulo + " informada",
 			Detalle: &detalle, ImporteInformativo: f64(p.Monto)})
 	}
+	if filtro == "cheques" {
+		conRecibo, err := q.ChequesDeRecibos(ctx, sqlc.ChequesDeRecibosParams{CustomerID: &cliente, Desde: d})
+		if err != nil {
+			return nil, false, err
+		}
+		for _, c := range conRecibo {
+			detalle := estadoDelCheque[c.Estado] + " · al " + fechaCorta(c.FechaPago)
+			titulo := NombreDelCheque(c.Tipo, c.Banco, c.Numero)
+			movs = append(movs, MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: "cheque", Titulo: titulo,
+				Detalle: &detalle, ImporteInformativo: f64(c.Importe),
+				Recibo:  &RefRecibo{ID: c.ReciboID, Numero: c.ReciboNumero},
+				Cheques: []RefCheque{{c.ID, titulo, c.Importe}}})
+		}
+	}
 	for _, c := range sueltos {
 		clase := "cheque_rechazado"
 		detalle := "No lo pudimos tomar"

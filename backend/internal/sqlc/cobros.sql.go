@@ -260,6 +260,68 @@ func (q *Queries) ChequeRepetido(ctx context.Context, arg ChequeRepetidoParams) 
 	return id, err
 }
 
+const chequesDeRecibos = `-- name: ChequesDeRecibos :many
+SELECT c.id, c.updated_at, c.tipo::text AS tipo, c.numero, c.banco, c.importe::float8 AS importe, c.estado::text AS estado,
+       c.fecha_pago, r.id AS recibo_id, r.numero AS recibo_numero
+FROM cheques c JOIN receipts r ON r.id = c.receipt_id
+WHERE c.customer_id = $1 AND c.sentido = 'recibido' AND r.estado = 'emitido'
+  AND c.estado IN ('cartera', 'depositado', 'entregado')
+  AND ($2::timestamptz IS NULL OR c.created_at >= $2)
+ORDER BY c.fecha_pago
+`
+
+type ChequesDeRecibosParams struct {
+	CustomerID *string            `json:"customerId"`
+	Desde      pgtype.Timestamptz `json:"desde"`
+}
+
+type ChequesDeRecibosRow struct {
+	ID           string    `json:"id"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Tipo         string    `json:"tipo"`
+	Numero       string    `json:"numero"`
+	Banco        *string   `json:"banco"`
+	Importe      float64   `json:"importe"`
+	Estado       string    `json:"estado"`
+	FechaPago    time.Time `json:"fechaPago"`
+	ReciboID     string    `json:"reciboId"`
+	ReciboNumero string    `json:"reciboNumero"`
+}
+
+// Los cheques que entraron con un recibo y el banco todavía puede devolver:
+// el filtro «Cheques» de la ficha los muestra para registrar el rechazo
+// (H272); en «Todo» van en el renglón del pago.
+func (q *Queries) ChequesDeRecibos(ctx context.Context, arg ChequesDeRecibosParams) ([]ChequesDeRecibosRow, error) {
+	rows, err := q.db.Query(ctx, chequesDeRecibos, arg.CustomerID, arg.Desde)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ChequesDeRecibosRow{}
+	for rows.Next() {
+		var i ChequesDeRecibosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UpdatedAt,
+			&i.Tipo,
+			&i.Numero,
+			&i.Banco,
+			&i.Importe,
+			&i.Estado,
+			&i.FechaPago,
+			&i.ReciboID,
+			&i.ReciboNumero,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const chequesDelRecibo = `-- name: ChequesDelRecibo :many
 SELECT cheque_id FROM receipt_parts WHERE receipt_id = $1 AND cheque_id IS NOT NULL
 `

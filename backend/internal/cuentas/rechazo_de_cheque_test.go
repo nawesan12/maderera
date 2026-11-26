@@ -65,6 +65,11 @@ func TestLaVendedoraRegistraElRechazoDeUnCheque(t *testing.T) {
 		t.Fatalf("el pago no ofrece su cheque: %s", b)
 	}
 	r := u + "cheques/" + cheque + "/rechazo"
+	// El filtro «Cheques» lo muestra con su recibo.
+	if _, b := pedir(t, ven, "GET", u+"clientes/"+id+"/historial?filtro=cheques", nil); !strings.Contains(b, `"clase":"cheque"`) ||
+		!strings.Contains(b, `"cheques":[{"id":"`+cheque) || !strings.Contains(b, `"numero":"REC-`) {
+		t.Errorf("filtro cheques: %s", b)
+	}
 
 	if c, _ := pedir(t, dep, "POST", r, map[string]string{"motivo": "Sin fondos"}); c != 403 {
 		t.Errorf("el depósito: %d", c)
@@ -94,6 +99,9 @@ func TestLaVendedoraRegistraElRechazoDeUnCheque(t *testing.T) {
 	_, b = pedir(t, ven, "GET", u+"clientes/"+id+"/historial", nil)
 	if strings.Contains(b, `"cheques":[{"id":"`+cheque) {
 		t.Errorf("sigue ofreciendo el rechazado: %s", b)
+	}
+	if _, b := pedir(t, ven, "GET", u+"clientes/"+id+"/historial?filtro=cheques", nil); strings.Contains(b, `"cheques":[{"id":"`+cheque) {
+		t.Errorf("el filtro sigue ofreciendo el rechazado: %s", b)
 	}
 	if c, b := pedir(t, adm, "POST", r, map[string]string{"motivo": "otra vez"}); c != 422 || !strings.Contains(b, "no se puede rechazar") {
 		t.Errorf("rechazar dos veces: %d %s", c, b)

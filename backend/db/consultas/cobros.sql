@@ -147,6 +147,18 @@ WHERE customer_id = $1 AND sentido = 'recibido'
   AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
 ORDER BY fecha_pago;
 
+-- name: ChequesDeRecibos :many
+-- Los cheques que entraron con un recibo y el banco todavía puede devolver:
+-- el filtro «Cheques» de la ficha los muestra para registrar el rechazo
+-- (H272); en «Todo» van en el renglón del pago.
+SELECT c.id, c.updated_at, c.tipo::text AS tipo, c.numero, c.banco, c.importe::float8 AS importe, c.estado::text AS estado,
+       c.fecha_pago, r.id AS recibo_id, r.numero AS recibo_numero
+FROM cheques c JOIN receipts r ON r.id = c.receipt_id
+WHERE c.customer_id = $1 AND c.sentido = 'recibido' AND r.estado = 'emitido'
+  AND c.estado IN ('cartera', 'depositado', 'entregado')
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR c.created_at >= sqlc.narg(desde))
+ORDER BY c.fecha_pago;
+
 -- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
        c.id AS cheque_id, c.estado AS cheque_estado,

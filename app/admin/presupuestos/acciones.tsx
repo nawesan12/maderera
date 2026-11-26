@@ -322,22 +322,21 @@ function PasarAPedido({
                     autoFocus
                   />
                 </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="pedido-zona">Zona</Label>
-                    <Input
-                      id="pedido-zona"
-                      list="pedido-zonas"
-                      value={zona}
-                      onChange={(e) => elegirZona(e.target.value)}
-                      maxLength={120}
+                {/* La zona es una de las de reparto, elegida y no escrita: con
+                    texto libre quedaba «Mar del Plata» como zona y el reparto
+                    no la podía ubicar (mes simulado). */}
+                {zonas.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-base font-medium">Zona</p>
+                    <Opciones
+                      etiqueta="Zona"
+                      valor={zona || null}
+                      alCambiar={elegirZona}
+                      opciones={zonas.map((z) => ({ valor: z.nombre, texto: z.nombre }))}
                     />
-                    <datalist id="pedido-zonas">
-                      {zonas.map((z) => (
-                        <option key={z.nombre} value={z.nombre} />
-                      ))}
-                    </datalist>
                   </div>
+                )}
+                <div className="grid gap-3 sm:grid-cols-[160px]">
                   <div className="space-y-1.5">
                     <Label htmlFor="pedido-costo">Flete</Label>
                     <Input

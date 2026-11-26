@@ -1147,6 +1147,39 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   color: var(--tinta-suave);
 }
 
+/* En el teléfono la hoja se lee, no se imprime: la cabecera de tres
+   columnas dejaba una o dos palabras por renglón («Maderera / Juan B. /
+   Justo») y partía el número de la factura (mes simulado, el remito a
+   375 px). Se apila: el emisor, la letra y los datos del comprobante, cada
+   uno entero; y el destinatario en una columna. Solo en pantalla: el papel
+   sigue siendo A4. */
+@media screen and (max-width: 639.98px) {
+  .comprobante-hoja .hoja {
+    margin: 0;
+    padding: 1.25rem 1rem;
+    box-shadow: none;
+  }
+  .comprobante-hoja .cabecera {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .comprobante-hoja .letra-caja {
+    justify-self: start;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+  .comprobante-hoja .comprobante-datos,
+  .comprobante-hoja .comprobante-datos .datos {
+    text-align: left;
+  }
+  .comprobante-hoja .comprobante-datos .datos div {
+    overflow-wrap: anywhere;
+  }
+  .comprobante-hoja .receptor-grilla {
+    grid-template-columns: 1fr;
+  }
+}
+
 /**
  * Cuerpo de una nota del blog.
  *

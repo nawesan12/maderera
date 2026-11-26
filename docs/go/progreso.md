@@ -3232,3 +3232,44 @@ ficha (hoy es de /admin/cheques, del admin).
   `email.ComoElTS` para que los golden contra el TS sigan comparando).
 - **El buscador** no repite la razón social igual al nombre y escribe el
   CUIT con guiones.
+
+## 26/11/2026: «hacé todo y construí todo» (ramas `mes-decision-*`)
+
+Las políticas que esperaban al contador o a la clienta son **reglas** de
+`/admin/reglas` (migración 00290, `internal/reglas` y su espejo
+`lib/reglas.ts`): arrancan con el comportamiento de antes, solo el admin las
+cambia y cada cambio queda en la bitácora (`entidad = 'regla'`, antes →
+después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
+
+- **Mostrador** (`mes-decision-mostrador`): `firma_sin_pin`, `lote_y_cupon`
+  (Go también exige lote y cupón en línea), `contado_por_lista`,
+  `descuento_al_flete`, `corte_chico_material` («cobrar» vende la placa o la
+  media placa y descuenta stock).
+- **Caja y cuenta** (`mes-decision-caja-cuenta`, 00310 y 00311): el retiro
+  guarda su destino (`reportes.RetiroAlBanco`, `RetiroACajaFuerte`); la
+  vendedora registra el rechazo de un cheque con PIN
+  (`POST /admin/cheques/{id}/rechazo`, `cobros.RechazarConPIN`); el pedido
+  partido entre la cuenta y otro medio (`orders.a_cuenta`,
+  `DeudaFueraDeLaCuenta`, `ACobrarFueraDeLaCuenta`).
+- **Contable** (`mes-decision-contable`, 00320 y 00321): `venta_reconocida`
+  con `entregado_at`, `facturado_at` y `cancelado_at`, sin tocar un mes
+  cerrado; `cobro_antes_de_facturar` y `excedente_cuenta_corriente`
+  (`receipts.anticipo_por_regla`, fijado al emitir); los asientos de costo,
+  cobros del mostrador, extracciones y diferencias de arqueo, y
+  `asiento_sin_cae` (2.1.12). Un pedido cancelado después de contar resta en
+  el mes de la cancelación.
+- **Facturación** (`mes-decision-facturacion`): `factura_al_monotributista`
+  (`fiscal.LetraConRegla`), `etiqueta_del_circuito`
+  (`reglas/circuito.go`, `lib/circuito.ts`) y la devolución de un pedido
+  facturado con nota de crédito
+  (`/admin/facturacion/pedidos/{id}/devolucion`).
+- **Cortes** (`mes-decision-cortes`, 00340): `sucursal_del_corte_suelto`,
+  sumar las pasadas al pedido (`/admin/cortes/{id}/sumar-al-pedido`; si el
+  pedido está facturado, cobrado o a cuenta, va a un pedido aparte) y el
+  remito firmado de la reposición sin cargo.
+- **Portal** (`mes-decision-portal`): `precios_profesional_sin_tienda`
+  (`catalogo.PreciosDelProfesional`), `aceptar_presupuesto_pendiente`
+  (`aResponder`) y `datos_fiscales_del_cliente`.
+
+Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
+Next: las pruebas de pantalla la cambian desde `/admin/reglas`.

@@ -198,3 +198,12 @@ sobre la factura (misma letra y punto de venta; sin CAE si la factura todavía
 lo espera). La nota baja lo que falta cobrar o va a la cuenta corriente, y lo
 traído vuelve al stock atado a la devolución. Lo ya cobrado no se reintegra
 desde ahí: vuelve por caja o banco desde la factura.
+
+## Pedido partido y cheque rechazado
+
+- **Pedido partido:** un pedido puede dejar una parte en la cuenta corriente
+  (es una venta a cuenta: va a Deudores) y cobrar el resto como contado, con
+  su recibo. El recibo del resto no pasa por la cuenta corriente.
+- **Cheque rechazado:** además del admin, la vendedora registra el rechazo
+  desde la ficha del cliente con la firma de un admin. Hace lo mismo que la
+  cartera: nota de débito por el importe, y la deuda vuelve a la cuenta.

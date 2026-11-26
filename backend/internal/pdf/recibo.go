@@ -89,7 +89,7 @@ func Recibo(d DatosRecibo, _ time.Time) ([]byte, error) {
 	if r.Cliente != nil {
 		cuit := ""
 		if r.Cliente.Cuit != "" {
-			cuit = "CUIT " + r.Cliente.Cuit
+			cuit = "CUIT " + Cuit(r.Cliente.Cuit)
 		}
 		datosCliente = []string{cuit, r.Cliente.Direccion}
 	}

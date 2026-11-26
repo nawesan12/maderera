@@ -13,6 +13,7 @@ import (
 	"mjbj/internal/csvexcel"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/pdf"
 )
 
 // Los dos listados que pide el contador al cierre y que no salían de ningún
@@ -112,7 +113,13 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		if f.aging.DiasDeLaMasVieja != nil {
 			dias = strconv.Itoa(*f.aging.DiasDeLaMasVieja)
 		}
-		r := []string{csvexcel.Texto(f.c.codigo), csvexcel.Texto(f.c.nombre), csvexcel.Texto(f.c.cuit), csvexcel.Texto(f.c.telefono)}
+		// El CUIT con guiones, como lo escribe el resto del sistema: unos
+		// clientes lo tenían cargado con guiones y otros sin (mes simulado).
+		cuit := f.c.cuit
+		if cuit != "" {
+			cuit = pdf.Cuit(cuit)
+		}
+		r := []string{csvexcel.Texto(f.c.codigo), csvexcel.Texto(f.c.nombre), csvexcel.Texto(cuit), csvexcel.Texto(f.c.telefono)}
 		for i, t := range f.aging.Tramos {
 			r = append(r, csvexcel.NumeroCsv(t.Monto, 2))
 			tot[i] += t.Monto

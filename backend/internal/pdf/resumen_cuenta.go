@@ -100,7 +100,7 @@ func ResumenCuenta(d DatosResumenCuenta, hoy time.Time) ([]byte, error) {
 
 	cuit := ""
 	if r.Cliente.Cuit != "" {
-		cuit = "CUIT " + r.Cliente.Cuit
+		cuit = "CUIT " + Cuit(r.Cliente.Cuit)
 	}
 	for _, dato := range []string{cuit, r.Cliente.Direccion} {
 		if dato == "" {

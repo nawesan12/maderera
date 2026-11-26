@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"mjbj/internal/facturacion"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -58,6 +59,18 @@ func TestPedidoPartidoEntreLaCuentaYOtroMedio(t *testing.T) {
 	if s := sinCobrar(); s != 46500.5 {
 		t.Fatalf("sin cobrar: %v", s)
 	}
+	// Su factura debe las dos cosas: el resto y lo que la cuenta debe.
+	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id, customer_id)
+		values ('factura_b', 1, 1, 'Obra Ferreyra', 79752.48, 16748.02, 0, 0, 0, 96500.50, 'emitida', now(), $1, $2)`, pedido.ID, cliente)
+	saldoDeFactura := func() float64 {
+		return e.numero(t, `select `+facturacion.SaldoDeFactura+`::float8 from invoices i
+			left join (select invoice_id, sum(monto) as cobrado, sum(monto) filter (where medio <> 'cuenta_corriente') as cobrado_contado
+			           from invoice_payments group by invoice_id) c on c.invoice_id = i.id
+			left join orders o on o.id = i.order_id where i.order_id = $1`, pedido.ID)
+	}
+	if f := saldoDeFactura(); f != 96500.5 {
+		t.Errorf("saldo de la factura: %v", f)
+	}
 	if nota := e.texto(t, `select nota from order_status_history where order_id = $1`, pedido.ID); !strings.Contains(nota, "$ 50.000 a cuenta corriente y $ 46.500,50 por cobrar") {
 		t.Errorf("historial: %s", nota)
 	}
@@ -77,6 +90,9 @@ func TestPedidoPartidoEntreLaCuentaYOtroMedio(t *testing.T) {
 	}
 	if s := sinCobrar(); s != 0 {
 		t.Errorf("sin cobrar después del resto: %v", s)
+	}
+	if f := saldoDeFactura(); f != 50000 {
+		t.Errorf("saldo de la factura después del resto: %v", f)
 	}
 	// El recibo del resto no toca la cuenta: sigue debiendo la parte.
 	if d := e.numero(t, `select coalesce(sum(monto),0)::float8 from account_movements where customer_id = $1`, cliente); d != 50000 {

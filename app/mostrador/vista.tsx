@@ -85,8 +85,19 @@ interface VentaGuardada {
   cliente: Cliente | null;
   medio: MedioDeMostrador;
   acopio: boolean;
-  presupuesto: { id: string; numero: string } | null;
+  presupuesto: PresupuestoDeLaVenta | null;
   clave: string;
+}
+
+/**
+ * El presupuesto que armó la venta. Sin ficha, su nombre y teléfono pasan
+ * al pedido: salía «Consumidor final» (mes simulado, P-2026-0097).
+ */
+interface PresupuestoDeLaVenta {
+  id: string;
+  numero: string;
+  contacto?: string | null;
+  telefono?: string | null;
 }
 
 function claveNueva() {
@@ -204,7 +215,7 @@ export function VistaMostrador({
   const [clave, setClave] = useState(claveNueva);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   /** El presupuesto que armó la venta (se tipeó su número en el buscador). */
-  const [presupuesto, setPresupuesto] = useState<{ id: string; numero: string } | null>(null);
+  const [presupuesto, setPresupuesto] = useState<PresupuestoDeLaVenta | null>(null);
   const [medio, setMedio] = useState<MedioDeMostrador>("efectivo");
   const [recibido, setRecibido] = useState("");
   const [aviso, setAviso] = useState<Aviso | null>(null);
@@ -645,6 +656,7 @@ export function VistaMostrador({
         lineas,
         cortes,
         cliente,
+        contacto: presupuesto?.contacto,
         medio,
         pagosDeLaVenta,
         acopio,
@@ -848,7 +860,12 @@ export function VistaMostrador({
         presentacion: l.presentacion === "media_largo" || l.presentacion === "media_ancho" ? l.presentacion : null,
       })),
     );
-    setPresupuesto({ id: r.id, numero: r.numero });
+    setPresupuesto({
+      id: r.id,
+      numero: r.numero,
+      contacto: r.customerId ? null : r.contactoNombre.trim() || null,
+      telefono: r.customerId ? null : r.contactoTelefono,
+    });
     if (r.customerId) {
       const c = await clientePorId(r.customerId);
       if (c) await alElegirCliente(c as Cliente);
@@ -1004,7 +1021,8 @@ export function VistaMostrador({
           branchId: sucursal.id,
           lineas: conLosCortes.lineas,
           customerId: cliente?.id ?? null,
-          contactoNombre: cliente?.nombre ?? "Consumidor final",
+          contactoNombre: cliente?.nombre ?? (presupuesto?.contacto || "Consumidor final"),
+          ...(!cliente && presupuesto?.telefono ? { contactoTelefono: presupuesto.telefono } : {}),
           medioPago: medio,
           pagos: pagosDeLaVenta(),
           acopio,
@@ -1318,6 +1336,7 @@ export function VistaMostrador({
             <Cobro
               branchId={sucursal.id}
               buscarClienteLocal={buscarClienteLocal}
+              sinFicha={cliente ? null : presupuesto?.contacto}
               listaDeContado={listaDeContado}
               aLista={aLista}
               onALista={conListaPropia ? () => void alternarALista() : undefined}

@@ -30,6 +30,7 @@ export function BuscadorDeCliente({
   enLinea,
   buscarLocal,
   aCuenta = 0,
+  sinFicha = null,
 }: {
   /** Lo que la venta de ahora carga a cuenta corriente: se mide contra el límite. */
   aCuenta?: number;
@@ -39,6 +40,8 @@ export function BuscadorDeCliente({
   enLinea: boolean;
   /** La copia local del padrón: contesta al instante y sin internet. */
   buscarLocal: (texto: string) => Cliente[];
+  /** A nombre de quién sale la venta sin cliente (el del presupuesto). */
+  sinFicha?: string | null;
 }) {
   const [texto, setTexto] = useState("");
   const [delServidor, setDelServidor] = useState<Cliente[]>([]);
@@ -201,7 +204,7 @@ export function BuscadorDeCliente({
               setTexto("");
             }
           }}
-          placeholder="Consumidor final — buscá por nombre, CUIT o DNI"
+          placeholder={`${sinFicha || "Consumidor final"} — buscá por nombre, CUIT o DNI`}
           className="h-11 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
         />
       </div>

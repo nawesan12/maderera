@@ -91,6 +91,8 @@ export interface VentaSinConexion {
   /** Los cortes armados con conexión: viajan para que el trabajo llegue al taller. */
   cortes: { id: string; corte: CorteDeMostrador }[];
   cliente: Cliente | null;
+  /** Sin cliente, el nombre del presupuesto traído (si no, «Consumidor final»). */
+  contacto?: string | null;
   medio: MedioDeMostrador;
   /** Se arma recién al encolar, igual que con conexión. */
   pagosDeLaVenta: () => PagoDeVenta[] | undefined;
@@ -132,6 +134,7 @@ export async function cobrarSinConexion(
     lineas,
     cortes,
     cliente,
+    contacto,
     medio,
     pagosDeLaVenta,
     acopio,
@@ -192,7 +195,7 @@ export async function cobrarSinConexion(
         numero,
         provisorio: true,
         cobradaAt,
-        contactoNombre: cliente?.nombre ?? "Consumidor final",
+        contactoNombre: cliente?.nombre ?? (contacto || "Consumidor final"),
         medioPago: medio,
         pagos,
         acopio,
@@ -210,7 +213,7 @@ export async function cobrarSinConexion(
         branchId,
         ...conLosCortes,
         customerId: cliente?.id ?? null,
-        contactoNombre: cliente?.nombre ?? "Consumidor final",
+        contactoNombre: cliente?.nombre ?? (contacto || "Consumidor final"),
         medioPago: medio,
         pagos,
         acopio,

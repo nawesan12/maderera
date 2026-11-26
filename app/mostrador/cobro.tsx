@@ -27,6 +27,7 @@ export function Cobro({
   onCheque,
   branchId,
   buscarClienteLocal,
+  sinFicha = null,
   subtotal,
   descuento,
   etiquetaDelDescuento,
@@ -172,6 +173,8 @@ export function Cobro({
   branchId: string;
   /** La copia local del padrón de clientes. */
   buscarClienteLocal: (texto: string) => Cliente[];
+  /** El nombre del presupuesto traído sin ficha: la venta sale a ese nombre. */
+  sinFicha?: string | null;
   onRemito: () => void;
   onPresupuesto: () => void;
 }) {
@@ -221,6 +224,7 @@ export function Cobro({
           branchId={branchId}
           enLinea={enLinea}
           buscarLocal={buscarClienteLocal}
+          sinFicha={sinFicha}
           aCuenta={medio === "cuenta_corriente" && !partes ? total : (partes?.filter((p) => p.medio === "cuenta_corriente").reduce((s, p) => s + importeDelCampo(p.importe), 0) ?? 0)}
         />
       </div>

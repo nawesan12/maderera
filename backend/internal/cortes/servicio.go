@@ -101,8 +101,10 @@ func condicionBusqueda(texto string, columnas []string, args *[]any) string {
 }
 
 // Listar es listarCortes: primero lo urgente, después por antigüedad.
-// sucursal (un id) deja solo los de ese taller; los que no tienen sucursal
-// se ven en todos.
+// sucursal (un id) deja solo los de ese taller. Un corte sin sucursal (de
+// antes, o cargado sin elegirla) va al taller de la primera sucursal activa,
+// la misma que le pone el alta: antes salía en los dos talleres y lo podían
+// cortar dos veces (tercera prueba del mes).
 func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal ...string) ([]CorteListado, error) {
 	var args []any
 	var cond []string
@@ -112,7 +114,9 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 	}
 	if len(sucursal) > 0 && sucursal[0] != "" && plataforma.UUIDValido(sucursal[0]) {
 		args = append(args, sucursal[0])
-		cond = append(cond, "(co.branch_id IS NULL OR co.branch_id = $"+strconv.Itoa(len(args))+"::uuid)")
+		n := "$" + strconv.Itoa(len(args)) + "::uuid"
+		cond = append(cond, "(co.branch_id = "+n+" OR (co.branch_id IS NULL AND "+n+
+			" = (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1)))")
 	}
 	if c := condicionBusqueda(busqueda, []string{"co.numero", "co.contacto_nombre", "co.material_descripcion"}, &args); c != "" {
 		cond = append(cond, c)

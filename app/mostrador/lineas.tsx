@@ -122,7 +122,7 @@ export function Lineas({
              */
             <li key={`${l.variantId ?? "suelta"}-${i}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
               <span className="min-w-[14rem] flex-1 basis-[14rem]">
-                <span className="line-clamp-2 break-words text-base font-medium">{l.descripcion}</span>
+                <NombreDelRenglon descripcion={l.descripcion} />
                 <span className="block text-sm text-muted-foreground">
                   {delCorte
                     ? esLineaDelCorte(l)
@@ -228,7 +228,7 @@ export function Lineas({
         {sinCargo.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
             <span className="min-w-[14rem] flex-1 basis-[14rem]">
-              <span className="line-clamp-2 break-words text-base font-medium">Corte de {c.descripcion}</span>
+              <NombreDelRenglon descripcion={`Corte de ${c.descripcion}`} />
               <span className="block text-sm text-muted-foreground">sin cargo · va al taller</span>
             </span>
             <span className="ml-auto flex shrink-0 items-center gap-3">
@@ -424,5 +424,27 @@ function PrecioDelRenglon({
       }}
       className={className}
     />
+  );
+}
+
+/**
+ * El nombre del renglón, con la medida siempre a la vista.
+ *
+ * Lo que distingue una placa de otra es la medida y el espesor, y van al
+ * final del nombre («Placa de Yeso — Resistente humedad 1200 x 2400mm —
+ * 12.5mm»). Con el nombre en dos renglones recortados, a 1280 se perdía el
+ * espesor (mes simulado, H274). El producto se recorta si hace falta; lo que
+ * sigue a la primera raya va entero, en su propio renglón.
+ */
+function NombreDelRenglon({ descripcion }: { descripcion: string }) {
+  const corte = descripcion.indexOf(" — ");
+  if (corte < 0) return <span className="block break-words text-base font-medium">{descripcion}</span>;
+  return (
+    <>
+      <span className="block truncate text-base font-medium" title={descripcion}>
+        {descripcion.slice(0, corte)}
+      </span>
+      <span className="block break-words text-base">{descripcion.slice(corte + 3).replaceAll(" — ", " · ")}</span>
+    </>
   );
 }

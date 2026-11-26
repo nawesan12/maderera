@@ -457,7 +457,9 @@ export default async function DetallePedidoPage({
           </section>
 
           {/* Facturas y recibos del pedido, para bajarlos sin pedirlos (H305). */}
-          {(pedido.facturas.length > 0 || pedido.recibos.length > 0) && (
+          {(pedido.facturas.length > 0 ||
+            pedido.recibos.length > 0 ||
+            pedido.ajustes.length > 0) && (
             <section className="tarjeta rounded-xl bg-card p-5">
               <h2 className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Comprobantes
@@ -513,6 +515,33 @@ export default async function DetallePedidoPage({
                         PDF
                       </a>
                     )}
+                  </li>
+                ))}
+                {pedido.ajustes.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-baseline justify-between gap-3 py-2.5"
+                  >
+                    <span className="min-w-0 text-sm">
+                      <span className="font-medium">
+                        {a.tipo === "nota_credito"
+                          ? "Nota de crédito"
+                          : a.tipo === "nota_debito"
+                            ? "Nota de débito"
+                            : "Ajuste"}
+                      </span>
+                      {a.detalle && (
+                        <span className="block text-muted-foreground [overflow-wrap:anywhere]">
+                          {a.detalle}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={`tabular shrink-0 font-medium ${a.monto < 0 ? "text-saldo-favor" : ""}`}
+                    >
+                      {a.monto < 0 ? "−" : "+"}
+                      {formatearMonto(Math.abs(a.monto))}
+                    </span>
                   </li>
                 ))}
               </ul>

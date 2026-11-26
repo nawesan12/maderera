@@ -319,6 +319,15 @@ export interface components {
                 /** Format: double */
                 total: number;
             }[];
+            ajustes: {
+                id: string;
+                tipo: string;
+                /** Format: double */
+                monto: number;
+                detalle: string | null;
+                /** Format: date-time */
+                fecha: string;
+            }[];
             recibos: {
                 id: string;
                 numero: string;

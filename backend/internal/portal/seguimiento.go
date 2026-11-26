@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/cobros"
 	"mjbj/internal/roles"
 )
 
@@ -130,8 +131,12 @@ type PedidoPropio struct {
 	Cortes       []CorteDelPedido   `json:"cortes"`
 	Facturas     []FacturaDelPedido `json:"facturas"`
 	Recibos      []ReciboDelPedido  `json:"recibos"`
-	EnRevision   *float64           `json:"enRevision"`
-	origen       string
+	// Ajustes son las notas de crédito y de débito de la cuenta que nombran
+	// al pedido (un faltante, una anulación): sin esto el pedido seguía
+	// diciendo 120 m² y el cliente no veía la corrección (H302).
+	Ajustes    []AjusteDelPedido `json:"ajustes"`
+	EnRevision *float64          `json:"enRevision"`
+	origen     string
 }
 
 // CorteDelPedido es un trabajo del taller atado al pedido (H210).
@@ -162,6 +167,15 @@ type FacturaDelPedido struct {
 	Numero     int32   `json:"numero"`
 	Estado     string  `json:"estado"`
 	Total      float64 `json:"total"`
+}
+
+// AjusteDelPedido es un asiento de la cuenta con la referencia del pedido.
+type AjusteDelPedido struct {
+	ID      string    `json:"id"`
+	Tipo    string    `json:"tipo"`
+	Monto   float64   `json:"monto"`
+	Detalle *string   `json:"detalle"`
+	Fecha   time.Time `json:"fecha"`
 }
 
 // ReciboDelPedido es un recibo que cobró el pedido (H305).
@@ -249,6 +263,17 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	}
 	if p.Recibos, err = pgx.CollectRows(filas, pgx.RowToStructByPos[ReciboDelPedido]); err != nil {
 		return nil, err
+	}
+	filas, err = s.pool.Query(ctx, `SELECT id, tipo::text, monto::float8, detalle, created_at FROM account_movements
+		WHERE customer_id = $1 AND referencia = $2 AND tipo IN ('nota_credito', 'nota_debito', 'ajuste') ORDER BY created_at`, c.ID, p.Numero)
+	if err != nil {
+		return nil, err
+	}
+	if p.Ajustes, err = pgx.CollectRows(filas, pgx.RowToStructByPos[AjusteDelPedido]); err != nil {
+		return nil, err
+	}
+	for i := range p.Ajustes {
+		p.Ajustes[i].Detalle = cobros.DetalleParaElCliente(p.Ajustes[i].Detalle)
 	}
 	var revision float64
 	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(monto), 0)::float8 FROM payments

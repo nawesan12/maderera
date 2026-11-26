@@ -316,7 +316,7 @@ components:
     PedidoPropio:
       type: object
       required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total, notas,
-        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, enRevision]
+        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, ajustes, enRevision]
       properties:
         descuento: { type: number, format: double }
         debeEnCuenta: { type: number, format: double, nullable: true }
@@ -355,6 +355,17 @@ components:
               numero: { type: integer }
               estado: { type: string }
               total: { type: number, format: double }
+        ajustes:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, monto, detalle, fecha]
+            properties:
+              id: { type: string }
+              tipo: { type: string }
+              monto: { type: number, format: double }
+              detalle: { type: string, nullable: true }
+              fecha: { type: string, format: date-time }
         recibos:
           type: array
           items:

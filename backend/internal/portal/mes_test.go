@@ -196,3 +196,28 @@ func TestPedidoConSuCorte(t *testing.T) {
 		t.Errorf("el corte del pedido: %s", b)
 	}
 }
+
+// H302: la nota de crédito de un faltante aparece en su pedido y baja lo que
+// falta pagar de ese pedido, no del más viejo.
+func TestPedidoConSuNotaDeCredito(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	if _, err := e.pool.Exec(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, subtotal, medio_pago)
+		values ('PED-1004', 'Juan', $1, 1000, 1000, 'cuenta_corriente'), ('PED-1006', 'Juan', $1, 4113000, 4113000, 'cuenta_corriente')`, idJuan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto, referencia, detalle, created_at) values
+		($1, 'compra', 1000, 'PED-1004', null, now() - interval '3 day'),
+		($1, 'compra', 4113000, 'PED-1006', null, now() - interval '2 day'),
+		($1, 'nota_credito', -187000, 'PED-1006', 'Faltante en REM-0002: 10 machimbres', now() - interval '1 day')`, idJuan); err != nil {
+		t.Fatal(err)
+	}
+	_, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-1006", nil)
+	if !strings.Contains(b, `"monto":-187000`) || !strings.Contains(b, "Faltante en REM-0002") || !strings.Contains(b, `"debeEnCuenta":3926000`) {
+		t.Errorf("la nota de crédito del faltante: %s", b)
+	}
+	if _, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-1004", nil); !strings.Contains(b, `"debeEnCuenta":1000`) {
+		t.Errorf("la del faltante no es del pedido más viejo: %s", b)
+	}
+}

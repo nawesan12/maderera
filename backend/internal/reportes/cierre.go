@@ -700,6 +700,9 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 	destinos := map[string]bool{}
 	clientesDeSenas := map[string]bool{}
 	for _, b := range reparto.Bolsas {
+		if b.PorRegla && len(b.Destinos) == 0 {
+			continue // un saldo a favor, no una seña (abajo)
+		}
 		if entre(b.Fecha, idesde, ihasta) {
 			if soloFacturas(b) {
 				deFacturas = float64(deFacturas + b.Monto)
@@ -758,9 +761,17 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 			return nil, err
 		}
 	}
-	var varados float64
-	clientes := map[string]bool{}
+	var varados, aFavor float64
+	clientes, conSaldo := map[string]bool{}, map[string]bool{}
 	for _, b := range reparto.Bolsas {
+		// Lo que la regla mandó a Anticipos sin ningún pedido (lo que sobró de
+		// un cobro a cuenta) es un saldo a favor que espera la próxima
+		// factura del cliente, no una seña varada.
+		if b.PorRegla && len(b.Destinos) == 0 {
+			aFavor = float64(aFavor + b.Monto)
+			conSaldo[b.Clave] = true
+			continue
+		}
 		vivo := false
 		for _, d := range b.Destinos {
 			vivo = vivo || destinos[d]
@@ -774,6 +785,11 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		out = append(out, PendienteDelCierre{"anticipos-sin-aplicar", "Anticipos sin aplicar",
 			formato.Moneda(jsmath.Redondear2(varados)) + " de pedidos entregados o cancelados sin factura con CAE.", len(clientes),
 			fichaOClientes(clientes)})
+	}
+	if len(conSaldo) > 0 {
+		out = append(out, PendienteDelCierre{"saldos-a-favor", "Saldos a favor en Anticipos",
+			formato.Moneda(jsmath.Redondear2(aFavor)) + " cobrados de más, a imputar a la próxima factura.", len(conSaldo),
+			fichaOClientes(conSaldo)})
 	}
 
 	mas, err := s.pendientesDeRecibosEnB(ctx, idesde, ihasta, reparto)

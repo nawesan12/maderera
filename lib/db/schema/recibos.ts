@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   numeric,
@@ -113,6 +114,8 @@ export const receipts = pgTable(
     repartoAnticipo: numeric({ precision: 12, scale: 2 }),
     repartoB: numeric({ precision: 12, scale: 2 }),
     repartoDeudores: numeric({ precision: 12, scale: 2 }),
+    /** Lo que no tenía destino fue a Anticipos por la regla (migración 00321). */
+    anticipoPorRegla: boolean().notNull().default(false),
   },
   (t) => [
     uniqueIndex("receipts_numero_idx").on(t.numero),

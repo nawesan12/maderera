@@ -5724,6 +5724,9 @@ type Order struct {
 	CreditoSinAutorizar    jsmath.Num         `json:"creditoSinAutorizar"`
 	Comprobante            *string            `json:"comprobante"`
 	VendidoAt              pgtype.Timestamptz `json:"vendidoAt"`
+	EntregadoAt            pgtype.Timestamptz `json:"entregadoAt"`
+	FacturadoAt            pgtype.Timestamptz `json:"facturadoAt"`
+	CanceladoAt            pgtype.Timestamptz `json:"canceladoAt"`
 }
 
 type OrderItem struct {
@@ -6157,6 +6160,7 @@ type Receipt struct {
 	OrderID             *string      `json:"orderId"`
 	Clave               *string      `json:"clave"`
 	Huella              *string      `json:"huella"`
+	AnticipoPorRegla    bool         `json:"anticipoPorRegla"`
 }
 
 type ReceiptPart struct {

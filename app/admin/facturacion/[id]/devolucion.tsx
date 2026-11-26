@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Opciones } from "@/components/admin/opciones";
 import { Confirmar } from "@/components/admin/confirmar";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
+import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 import { calcularDevolucion, devolver, type EstadoFactura } from "../actions";
 
 type Destino = "caja" | "cuenta" | "afuera" | "deuda";
@@ -30,15 +31,48 @@ type Renglon = DatosDeDevolucion["renglones"][number];
  * hace. Un renglón con una parte retirada y otra en acopio pide cuánto sale
  * del acopio; el resto es lo que trae el cliente.
  */
+/** Lo que se le pide a la devolución: la del panel o la del mostrador. */
+export interface AccionesDeDevolucion {
+  calcular: (renglones: RenglonPedido[]) => Promise<{ importe?: number; error?: string }>;
+  devolver: (
+    pedido: PedidoDeDevolucion,
+    pin?: string,
+  ) => Promise<{ ok?: string; error?: string; autorizacion?: Autorizacion } | EstadoFactura | undefined>;
+}
+type RenglonPedido = { itemId: string; cantidad: number; alStock: boolean; delAcopio: number | null };
+type PedidoDeDevolucion = {
+  clave: string;
+  destino: Destino;
+  motivo: string;
+  sinStock: SinStock | null;
+  sucursalId: string | null;
+  importe: number;
+  renglones: RenglonPedido[];
+};
+
 export function Devolucion({
   invoiceId,
   datos,
   alCancelar,
+  acciones,
+  alTerminar,
 }: {
   invoiceId: string;
   datos: DatosDeDevolucion;
   alCancelar: () => void;
+  /**
+   * Desde el mostrador (mes simulado, H270): las acciones van por la venta y
+   * piden el PIN de un admin al vendedor. Sin esto, las del panel.
+   */
+  acciones?: AccionesDeDevolucion;
+  /** Hecha desde el mostrador: el mensaje, en vez de ir a la nota. */
+  alTerminar?: (mensaje: string) => void;
 }) {
+  const hacer: AccionesDeDevolucion = acciones ?? {
+    calcular: (renglones) => calcularDevolucion(invoiceId, renglones),
+    devolver: (pedido) => devolver(invoiceId, pedido),
+  };
+  const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
   const id = useId();
   // Una clave por intento: el doble clic y el reintento devuelven la misma.
   const [clave] = useState(() => crypto.randomUUID());
@@ -89,16 +123,15 @@ export function Devolucion({
     if (pares.length === 0) return;
     let vigente = true;
     const t = setTimeout(async () => {
-      const r = await calcularDevolucion(
-        invoiceId,
-        pares.map(([itemId, cantidad]) => ({ itemId, cantidad, alStock: false, delAcopio: null })),
-      );
+      const r = await hacer.calcular(pares.map(([itemId, cantidad]) => ({ itemId, cantidad, alStock: false, delAcopio: null })));
       if (vigente) setCalculo({ para: firma, ...r });
     }, 250);
     return () => {
       vigente = false;
       clearTimeout(t);
     };
+    // `hacer` cambia en cada render y no cambia lo que se calcula.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firma, invoiceId]);
   const vale = calculo?.para === firma && renglones.length > 0 && !pasado ? calculo : null;
   const importe = vale?.importe ?? null;
@@ -153,6 +186,30 @@ export function Devolucion({
         ]
           .filter(Boolean)
           .join(" · ");
+
+  function mandar(pin?: string) {
+    if (importe === null || destino === null) return;
+    const pedido: PedidoDeDevolucion = {
+      clave,
+      destino,
+      motivo,
+      sinStock: hayFueraDeStock ? sinStock : null,
+      sucursalId: sucursal,
+      importe,
+      renglones,
+    };
+    empezar(async () => {
+      // Desde el panel, si sale bien, la acción lleva a la nota emitida.
+      const r = (await hacer.devolver(pedido, pin)) ?? {};
+      if ("autorizacion" in r && r.autorizacion) {
+        setPidePin(r.autorizacion);
+        return;
+      }
+      setPidePin(null);
+      setEstado({ error: r.error });
+      if ("ok" in r && r.ok && !r.error) alTerminar?.(r.ok);
+    });
+  }
 
   return (
     <form
@@ -299,29 +356,23 @@ export function Devolucion({
           pendiente={enCurso}
           alConfirmar={() => {
             setConfirmando(false);
-            empezar(async () => {
-              const r = await devolver(invoiceId, {
-                clave,
-                destino: destino!,
-                motivo,
-                sinStock: hayFueraDeStock ? sinStock : null,
-                sucursalId: sucursal,
-                importe: importe!,
-                renglones,
-              });
-              // Si sale bien, la acción lleva a la nota emitida.
-              setEstado(r ?? {});
-            });
+            mandar();
           }}
         />
-        <button
-          type="submit"
-          disabled={enCurso || !listo}
-          className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-semibold disabled:opacity-50"
-        >
-          {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          Devolver
-        </button>
+        {pidePin ? (
+          <div className="w-full">
+            <CampoPin autorizacion={pidePin} enviando={enCurso} onEnviar={(pin) => mandar(pin)} onCancelar={() => setPidePin(null)} />
+          </div>
+        ) : (
+          <button
+            type="submit"
+            disabled={enCurso || !listo}
+            className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-semibold disabled:opacity-50"
+          >
+            {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
+            Devolver
+          </button>
+        )}
         <button type="button" onClick={alCancelar} className="h-11 rounded-lg bg-hundida px-4 text-base">
           Cancelar
         </button>

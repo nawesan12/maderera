@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/jackc/pgx/v5"
 	"math"
 	"net/http"
 
@@ -11,6 +12,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
@@ -78,7 +80,16 @@ func (o respuesta) VisitCobrarCuentaEnMostradorResponse(w http.ResponseWriter) e
 func (o respuesta) VisitPresupuestoDeMostradorResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitAbrirCajaResponse(w http.ResponseWriter) error        { return o.escribir(w) }
+func (o respuesta) VisitAbrirCajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitDevolucionDeMostradorDatosResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDevolucionDeMostradorResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDevolucionDeMostradorCalculoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitMovimientoDeCajaResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCerrarCajaResponse(w http.ResponseWriter) error       { return o.escribir(w) }
 func (o respuesta) VisitDesvincularTerminalResponse(w http.ResponseWriter) error {
@@ -228,6 +239,125 @@ func renglonesParaRehacer(ctx context.Context, s *Servicio, pedido string) ([]ma
 			"cantidad": cantidad.F(), "precioUnitario": precio.F(), "presentacion": presentacion})
 	}
 	return out, conCorte, filas.Err()
+}
+
+// facturaDeLaVenta es la factura (no su nota) de una venta del mostrador.
+func (a *API) facturaDeLaVenta(ctx context.Context, pedido string) (string, error) {
+	var id string
+	err := a.s.pool.QueryRow(ctx, `SELECT i.id::text FROM invoices i JOIN orders o ON o.id = i.order_id
+		WHERE o.id::text = $1 AND o.origen = 'mostrador' AND i.tipo::text NOT LIKE 'nota%' AND i.estado <> 'anulada'
+		ORDER BY i.created_at LIMIT 1`, pedido).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", plataforma.NuevoProblema(http.StatusNotFound, "Esa venta no tiene factura: anulala y volvé a cobrar lo que se lleva.")
+	}
+	return id, err
+}
+
+// DevolucionDeMostradorDatos es la ficha de la devolución desde el
+// mostrador (mes simulado, H270): devolver uno de cuatro obligaba a anular
+// la venta entera, devolver todo a la tarjeta y cobrar de nuevo.
+func (a *API) DevolucionDeMostradorDatos(ctx context.Context, r mostradorapi.DevolucionDeMostradorDatosRequestObject) (mostradorapi.DevolucionDeMostradorDatosResponseObject, error) {
+	if _, err := puesto(ctx); err != nil {
+		return nil, err
+	}
+	if a.s.fac == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "La devolución no está disponible.")
+	}
+	factura, err := a.facturaDeLaVenta(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	d, err := a.s.fac.ParaDevolver(ctx, factura)
+	if err != nil || d == nil {
+		if err == nil || errors.Is(err, facturacion.ErrNoEsta) {
+			return nil, plataforma.NuevoProblema(http.StatusNotFound, "Esa venta no tiene nada para devolver.")
+		}
+		return nil, err
+	}
+	return ok(d), nil
+}
+
+func renglonesDelMostrador(rs []mostradorapi.MostradorRenglonADevolver) []facturacion.RenglonADevolver {
+	out := make([]facturacion.RenglonADevolver, len(rs))
+	for i, x := range rs {
+		out[i] = facturacion.RenglonADevolver{ItemID: x.ItemId, Cantidad: x.Cantidad, AlStock: x.AlStock, DelAcopio: x.DelAcopio}
+	}
+	return out
+}
+
+func (a *API) DevolucionDeMostradorCalculo(ctx context.Context, r mostradorapi.DevolucionDeMostradorCalculoRequestObject) (mostradorapi.DevolucionDeMostradorCalculoResponseObject, error) {
+	if _, err := puesto(ctx); err != nil {
+		return nil, err
+	}
+	factura, err := a.facturaDeLaVenta(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	total, err := a.s.fac.CalcularDevolucion(ctx, factura, renglonesDelMostrador(r.Body.Renglones))
+	if err != nil {
+		if m := facturacion.Mensaje(err); m != "" {
+			return nil, plataforma.Invalido(map[string]string{"error": m})
+		}
+		return nil, err
+	}
+	return ok(map[string]float64{"importe": total}), nil
+}
+
+// DevolucionDeMostrador la hace. Un vendedor necesita el PIN (o la
+// contraseña) de un admin por el importe, como para anular: es plata que
+// sale de la venta. La sesión de un admin ya firma.
+func (a *API) DevolucionDeMostrador(ctx context.Context, r mostradorapi.DevolucionDeMostradorRequestObject) (mostradorapi.DevolucionDeMostradorResponseObject, error) {
+	ses, err := puesto(ctx)
+	if err != nil {
+		return nil, err
+	}
+	factura, err := a.facturaDeLaVenta(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	pin, ficha := "", ""
+	if b.Pin != nil {
+		pin = *b.Pin
+	}
+	if b.Ficha != nil {
+		ficha = *b.Ficha
+	}
+	var sucursal string
+	_ = a.s.pool.QueryRow(ctx, `SELECT coalesce(branch_id::text, '') FROM orders WHERE id::text = $1`, r.Id).Scan(&sucursal)
+	firma, err := a.s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: b.Importe, Clave: "devolucion:" + b.Clave,
+		Sucursal: sucursal, PIN: pin, Ficha: ficha})
+	var falta *autorizacion.Falta
+	if errors.As(err, &falta) {
+		fa := faltaDeAutorizacion(falta)
+		return ok(map[string]any{"error": fa.Error, "autorizacion": fa.Autorizacion}), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p := facturacion.PedidoDeDevolucion{InvoiceID: factura, Clave: b.Clave, Destino: string(b.Destino), Motivo: b.Motivo,
+		Importe: &b.Importe, Renglones: renglonesDelMostrador(b.Renglones)}
+	if b.SinStock != nil {
+		p.SinStock = string(*b.SinStock)
+	}
+	if b.SucursalId != nil {
+		p.BranchID = *b.SucursalId
+	}
+	d, err := a.s.fac.DevolucionParcial(ctx, ses.UserID, p)
+	if err != nil {
+		if m := facturacion.Mensaje(err); m != "" {
+			return nil, plataforma.Invalido(map[string]string{"error": m})
+		}
+		return nil, err
+	}
+	if !d.Repetida {
+		desc := "Devolución de " + formato.Importe(d.Importe) + " por " + p.Destino + " desde el mostrador: " + zodjs.TrimJS(p.Motivo)
+		if firma != nil && firma.UserID != ses.UserID {
+			desc += " (autorizó " + firma.Nombre + ")"
+		}
+		a.s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "factura", factura, desc, map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID})
+	}
+	return ok(map[string]any{"ok": "Devolución de " + formato.Importe(d.Importe) + " hecha.", "notaId": d.NotaID}), nil
 }
 
 func (a *API) BuscarEnMostrador(ctx context.Context, r mostradorapi.BuscarEnMostradorRequestObject) (mostradorapi.BuscarEnMostradorResponseObject, error) {

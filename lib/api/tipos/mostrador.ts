@@ -70,6 +70,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mostrador/ventas/{id}/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que se puede devolver de una venta del mostrador con factura (la ficha de facturación, la misma de la devolución del panel) */
+        get: operations["DevolucionDeMostradorDatos"];
+        put?: never;
+        /** @description La devolución parcial de una venta del mostrador (facturacion.DevolucionParcial): la nota, el stock y la plata. A quien no es admin le pide el PIN, como anular. */
+        post: operations["DevolucionDeMostrador"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mostrador/ventas/{id}/devolucion/calculo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DevolucionDeMostradorCalculo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mostrador/buscar": {
         parameters: {
             query?: never;
@@ -316,6 +354,14 @@ export interface components {
             /** @description un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha */
             ficha?: string;
         };
+        MostradorRenglonADevolver: {
+            itemId: string;
+            /** Format: double */
+            cantidad: number;
+            alStock: boolean;
+            /** Format: double */
+            delAcopio?: number | null;
+        };
         /** @description Hace falta el PIN de un administrador (internal/autorizacion) */
         MostradorAutorizacion: {
             /** @enum {string} */
@@ -465,6 +511,8 @@ export interface components {
             medioPago: string | null;
             /** @description todos los medios de un pago partido, del más grande al más chico */
             medios: string[];
+            /** @description tiene factura viva: se puede devolver una parte */
+            conFactura: boolean;
             estado: string;
             /** Format: date-time */
             createdAt: string;
@@ -675,6 +723,108 @@ export interface operations {
                         conCorte?: boolean;
                         error?: string;
                         autorizacion?: components["schemas"]["MostradorAutorizacion"];
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolucionDeMostradorDatos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los renglones, la sucursal y por dónde puede volver la plata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DevolucionDeMostrador: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    /** @enum {string} */
+                    destino: "caja" | "cuenta" | "afuera" | "deuda";
+                    motivo: string;
+                    /** @enum {string|null} */
+                    sinStock?: "rota" | "otro" | null;
+                    sucursalId?: string | null;
+                    /** Format: double */
+                    importe: number;
+                    renglones: components["schemas"]["MostradorRenglonADevolver"][];
+                    pin?: string;
+                    ficha?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Hecha, o el PIN que falta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: string;
+                        notaId?: string | null;
+                        error?: string;
+                        autorizacion?: components["schemas"]["MostradorAutorizacion"];
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolucionDeMostradorCalculo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: components["schemas"]["MostradorRenglonADevolver"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Lo que se devolvería */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: double */
+                        importe: number;
                     };
                 };
             };

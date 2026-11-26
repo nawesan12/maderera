@@ -43,6 +43,8 @@ export interface VentaDeHoy {
   medioPago: string | null;
   /** Todos los medios de un pago partido. */
   medios?: string[];
+  /** Tiene factura viva: se puede devolver una parte. */
+  conFactura?: boolean;
   estado: string;
   createdAt: string;
 }

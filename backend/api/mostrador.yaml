@@ -112,6 +112,79 @@ paths:
                   error: { type: string }
                   autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/ventas/{id}/devolucion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: DevolucionDeMostradorDatos
+      description: Lo que se puede devolver de una venta del mostrador con factura (la ficha de facturación, la misma de la devolución del panel)
+      responses:
+        "200":
+          description: Los renglones, la sucursal y por dónde puede volver la plata
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DevolucionDeMostrador
+      description: >-
+        La devolución parcial de una venta del mostrador (facturacion.DevolucionParcial): la nota,
+        el stock y la plata. A quien no es admin le pide el PIN, como anular.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, destino, motivo, importe, renglones]
+              properties:
+                clave: { type: string }
+                destino: { type: string, enum: [caja, cuenta, afuera, deuda] }
+                motivo: { type: string }
+                sinStock: { type: string, nullable: true, enum: [rota, otro, null] }
+                sucursalId: { type: string, nullable: true }
+                importe: { type: number, format: double }
+                renglones: { type: array, items: { $ref: "#/components/schemas/MostradorRenglonADevolver" } }
+                pin: { type: string, maxLength: 128 }
+                ficha: { type: string, maxLength: 400 }
+      responses:
+        "200":
+          description: Hecha, o el PIN que falta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: string }
+                  notaId: { type: string, nullable: true }
+                  error: { type: string }
+                  autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/ventas/{id}/devolucion/calculo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: DevolucionDeMostradorCalculo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [renglones]
+              properties:
+                renglones: { type: array, items: { $ref: "#/components/schemas/MostradorRenglonADevolver" } }
+      responses:
+        "200":
+          description: Lo que se devolvería
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [importe]
+                properties:
+                  importe: { type: number, format: double }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/buscar:
     get:
       operationId: BuscarEnMostrador
@@ -400,6 +473,14 @@ components:
         error: { type: string }
         autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         ficha: { type: string, description: "un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha" }
+    MostradorRenglonADevolver:
+      type: object
+      required: [itemId, cantidad, alStock]
+      properties:
+        itemId: { type: string }
+        cantidad: { type: number, format: double }
+        alStock: { type: boolean }
+        delAcopio: { type: number, format: double, nullable: true }
     MostradorAutorizacion:
       type: object
       description: Hace falta el PIN de un administrador (internal/autorizacion)
@@ -531,7 +612,7 @@ components:
         quien: { type: string, nullable: true }
     MostradorVentaDeHoy:
       type: object
-      required: [id, numero, cliente, total, medioPago, medios, estado, createdAt]
+      required: [id, numero, cliente, total, medioPago, medios, conFactura, estado, createdAt]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -539,6 +620,7 @@ components:
         total: { type: number, format: double }
         medioPago: { type: string, nullable: true }
         medios: { type: array, items: { type: string }, description: "todos los medios de un pago partido, del más grande al más chico" }
+        conFactura: { type: boolean, description: "tiene factura viva: se puede devolver una parte" }
         estado: { type: string }
         createdAt: { type: string, format: date-time }
     MostradorRenglonDelCierre:

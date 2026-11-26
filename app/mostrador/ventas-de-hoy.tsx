@@ -3,12 +3,14 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Printer, RotateCcw, Undo2 } from "lucide-react";
+import { PackageMinus, Printer, RotateCcw, Undo2 } from "lucide-react";
+import { Devolucion } from "@/app/admin/facturacion/[id]/devolucion";
+import type { DatosDeDevolucion } from "@/lib/dal/admin/facturacion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 import { formatearImporte, hora } from "@/lib/formato";
 import type { LineaDeVenta } from "@/lib/mostrador/importes";
-import { anularVenta } from "./actions";
+import { anularVenta, calcularDevolucionDeVenta, datosDeDevolucionDeVenta, devolverDeVenta } from "./actions";
 import { NOMBRE_DEL_MEDIO } from "./medios";
 import type { VentaDeHoy } from "./tipos";
 
@@ -44,6 +46,23 @@ export function VentasDeHoy({
    */
   const [volvio, setVolvio] = useState(true);
   const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
+  /*
+   * Devolver una parte de una venta con factura (mes simulado, H270): antes
+   * había que anular la venta entera, devolver todo a la tarjeta y cobrar de
+   * nuevo lo que se quedaba. Es la devolución del panel, por la venta.
+   */
+  const [devolviendo, setDevolviendo] = useState<{ venta: VentaDeHoy; datos: DatosDeDevolucion } | null>(null);
+
+  function abrirDevolucion(v: VentaDeHoy) {
+    empezar(async () => {
+      const r = await datosDeDevolucionDeVenta(v.id);
+      if (r.error || !r.datos) {
+        setAviso(r.error ?? "No se pudo abrir la devolución.");
+        return;
+      }
+      setDevolviendo({ venta: v, datos: r.datos });
+    });
+  }
   /** Se está anulando para rehacer: lo recuerda mientras se pide el PIN. */
   const [rehaciendo, setRehaciendo] = useState(false);
 
@@ -119,6 +138,18 @@ export function VentasDeHoy({
                 <Printer className="h-4 w-4" />
               </Link>
 
+              {!anulada && v.conFactura && (
+                <button
+                  onClick={() => abrirDevolucion(v)}
+                  disabled={trabajando}
+                  aria-label={`Devolver una parte de ${v.numero}`}
+                  title="Devolver una parte"
+                  className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
+                >
+                  <PackageMinus className="h-4 w-4" />
+                </button>
+              )}
+
               {!anulada && (
                 <button
                   onClick={() => {
@@ -138,6 +169,30 @@ export function VentasDeHoy({
           );
         })}
       </ul>
+
+      {devolviendo && (
+        <Dialog open onOpenChange={(abierto) => !abierto && setDevolviendo(null)}>
+          <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold tracking-tight">Devolver de {devolviendo.venta.numero}</DialogTitle>
+            </DialogHeader>
+            <Devolucion
+              invoiceId=""
+              datos={devolviendo.datos}
+              alCancelar={() => setDevolviendo(null)}
+              acciones={{
+                calcular: (renglones) => calcularDevolucionDeVenta(devolviendo.venta.id, renglones),
+                devolver: (pedido, pin) => devolverDeVenta(devolviendo.venta.id, pedido, pin),
+              }}
+              alTerminar={(mensaje) => {
+                setDevolviendo(null);
+                setAviso(mensaje);
+                router.refresh();
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       {anulando && (
         <Dialog open onOpenChange={(abierto) => !abierto && setAnulando(null)}>

@@ -27,6 +27,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/productos"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
@@ -42,6 +43,9 @@ type Servicio struct {
 	claveCola []byte
 	// aut es la segunda firma: el PIN de un admin (internal/autorizacion).
 	aut *autorizacion.Servicio
+	// fac es facturación, para la devolución parcial desde el mostrador
+	// (la misma instancia que el panel: comparte el candado del CAE).
+	fac *facturacion.Servicio
 }
 
 // Nuevo arma el servicio.
@@ -53,6 +57,12 @@ func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
 // los avisos a los admins).
 func (s *Servicio) ConAutorizacion(a *autorizacion.Servicio) *Servicio {
 	s.aut = a
+	return s
+}
+
+// ConFacturacion le da el servicio de facturación (la devolución parcial).
+func (s *Servicio) ConFacturacion(f *facturacion.Servicio) *Servicio {
+	s.fac = f
 	return s
 }
 

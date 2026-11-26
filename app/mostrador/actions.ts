@@ -400,3 +400,55 @@ export async function cobrarCuentaEnMostrador(
   revalidatePath("/admin/caja");
   return { ok: r.data.ok, receiptId: r.data.receiptId, numero: r.data.numero };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Devolución parcial                                                          */
+/* -------------------------------------------------------------------------- */
+
+type RenglonADevolverEnMostrador = { itemId: string; cantidad: number; alStock: boolean; delAcopio: number | null };
+
+/**
+ * Lo que se puede devolver de una venta de hoy con factura: la misma ficha de
+ * la devolución del panel (mes simulado, H270).
+ */
+export async function datosDeDevolucionDeVenta(orderId: string) {
+  const r = await (await api()).GET("/api/v1/mostrador/ventas/{id}/devolucion", { params: { path: { id: orderId } } });
+  if (!r.data) return { error: (error(r).error ?? "No se pudo abrir la devolución.") as string };
+  return { datos: r.data as unknown as import("@/lib/dal/admin/facturacion").DatosDeDevolucion };
+}
+
+export async function calcularDevolucionDeVenta(
+  orderId: string,
+  renglones: RenglonADevolverEnMostrador[],
+): Promise<{ importe?: number; error?: string }> {
+  const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/devolucion/calculo", {
+    params: { path: { id: orderId } },
+    body: { renglones },
+  });
+  if (!r.data) return { error: error(r).error };
+  return { importe: r.data.importe };
+}
+
+/** La devolución: al vendedor le pide la firma de un admin, como anular. */
+export async function devolverDeVenta(
+  orderId: string,
+  pedido: {
+    clave: string;
+    destino: "caja" | "cuenta" | "afuera" | "deuda";
+    motivo: string;
+    sinStock: "rota" | "otro" | null;
+    sucursalId: string | null;
+    importe: number;
+    renglones: RenglonADevolverEnMostrador[];
+  },
+  pin?: string,
+): Promise<{ ok?: string; error?: string; autorizacion?: Autorizacion }> {
+  const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/devolucion", {
+    params: { path: { id: orderId } },
+    body: { ...pedido, ...(pin ? { pin } : {}) },
+  });
+  if (!r.data) return { error: error(r).error };
+  if (r.data.autorizacion) return { error: r.data.error, autorizacion: r.data.autorizacion as Autorizacion };
+  refrescar();
+  return { ok: r.data.ok };
+}

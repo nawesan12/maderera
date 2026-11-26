@@ -32,7 +32,7 @@ import {
   ElegirCliente,
   type ClienteElegido,
 } from "@/components/admin/elegir-cliente";
-import { ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 import {
   cambiarEstadoDeCheque,
   cargarCheque,
@@ -360,6 +360,7 @@ export function AccionesDeCheque({
  * banco a nombre de la empresa.
  */
 export function AltaDeCheque() {
+  const etiquetasCircuito = useEtiquetasDelCircuito();
   const [abierto, setAbierto] = useState(false);
   const [estado, guardar, guardando] = useActionState(
     async (previo: EstadoCheque, formData: FormData) => {
@@ -453,8 +454,8 @@ export function AltaDeCheque() {
                   disabled={tipo === "echeq"}
                   className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base disabled:opacity-60"
                 >
-                  <option value="blanco">{ETIQUETA_CIRCUITO.blanco}</option>
-                  <option value="negro">{ETIQUETA_CIRCUITO.negro}</option>
+                  <option value="blanco">{etiquetasCircuito.blanco}</option>
+                  <option value="negro">{etiquetasCircuito.negro}</option>
                 </select>
               </label>
 

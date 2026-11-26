@@ -6,7 +6,7 @@ import {
 } from "@/lib/whatsapp/aviso-manual-datos";
 import Link from "next/link";
 import { Banknote } from "lucide-react";
-import { etiquetaDeCircuito } from "@/lib/circuito";
+import { RotuloDelCircuito } from "@/components/admin/circuito";
 import { diasHasta, formatearMonto } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
@@ -341,7 +341,7 @@ function Tarjeta({
             se leía como Factura B (mes simulado, H167/H262). */}
         {c.circuito === "negro" && (
           <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 text-sm font-medium text-texto-2">
-            Circuito {etiquetaDeCircuito(c.circuito)}
+            <RotuloDelCircuito />
           </span>
         )}
         {c.estado === "informado" && c.saldoCliente !== null && (

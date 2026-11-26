@@ -11,7 +11,7 @@ import {
 import { listarProveedores } from "@/lib/dal/admin/proveedores";
 import { sucursalesParaGasto } from "@/lib/dal/admin/gastos";
 import { fechaCorta, formatearMonto, plural } from "@/lib/formato";
-import { etiquetaDeCircuito } from "@/lib/circuito";
+import { EtiquetaDeCircuito } from "@/components/admin/circuito";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Vacio } from "@/components/admin/vacio";
 import { FormularioPago } from "./formulario";
@@ -221,7 +221,7 @@ function TablaDePagos({ pagos }: { pagos: Pago[] }) {
               </td>
               <td className="px-5 py-3">
                 <Medios p={p} />
-                <span className="mt-0.5 block text-sm text-muted-foreground">{etiquetaDeCircuito(p.circuito)}</span>
+                <span className="mt-0.5 block text-sm text-muted-foreground"><EtiquetaDeCircuito valor={p.circuito} /></span>
               </td>
               <td className={`tabular px-5 py-3 text-right font-semibold ${p.anuladoAt ? "line-through" : ""}`}>
                 {formatearMonto(p.total)}

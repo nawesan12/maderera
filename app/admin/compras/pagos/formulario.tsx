@@ -26,7 +26,8 @@ import {
   importeParaElCampo,
   importeIlegible,
 } from "@/lib/formato";
-import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { CIRCUITOS } from "@/lib/circuito";
+import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 import { type ChequeDeCartera, chequesParaEndosar, sinEndososDelOtroCircuito } from "./endoso";
 import {
   BarraGuardar,
@@ -123,11 +124,6 @@ const MEDIOS = [
   { valor: "echeq", texto: "e-Cheq", icono: FileDigit },
 ];
 
-const OPCIONES_CIRCUITO = CIRCUITOS.map((c) => ({
-  valor: c,
-  texto: ETIQUETA_CIRCUITO[c],
-}));
-
 const parteVacia = (medio: ParteUI["medio"] = "transferencia"): ParteUI => ({
   medio,
   importe: "",
@@ -182,6 +178,8 @@ export function FormularioPago({
   /** El cheque rechazado que viene a reponerse, igual que una factura. */
   chequeInicial?: string;
 }) {
+  const etiquetasCircuito = useEtiquetasDelCircuito();
+  const opcionesCircuito = CIRCUITOS.map((c) => ({ valor: c, texto: etiquetasCircuito[c] }));
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoPago>({});
   const [enCurso, empezar] = useTransition();
@@ -519,7 +517,7 @@ export function FormularioPago({
               <span className="text-base font-medium">Circuito</span>
               <Opciones
                 nombre="pago-circuito"
-                opciones={OPCIONES_CIRCUITO}
+                opciones={opcionesCircuito}
                 valor={circuito}
                 columnas={2}
                 alCambiar={(v) => {
@@ -634,7 +632,7 @@ export function FormularioPago({
                               </option>
                             ))}
                             {delOtroCircuito.length > 0 && (
-                              <optgroup label={ETIQUETA_CIRCUITO[circuito === "negro" ? "blanco" : "negro"]}>
+                              <optgroup label={etiquetasCircuito[circuito === "negro" ? "blanco" : "negro"]}>
                                 {delOtroCircuito.map((c) => (
                                   <option key={c.id} value={c.id} disabled>
                                     {textoDelEndoso(c)}

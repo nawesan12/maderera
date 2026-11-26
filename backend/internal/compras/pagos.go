@@ -19,6 +19,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -829,7 +830,7 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 	}
 	esEcheq := parte.Medio == "echeq" || parte.Cheque != nil && parte.Cheque.Tipo == "echeq"
 	if circuito == "negro" && esEcheq {
-		return "", fallo("Un e-Cheq no puede salir por el circuito B: queda registrado en el banco a nombre de la empresa. Usá cheque físico o efectivo.")
+		return "", fallo("Un e-Cheq no puede salir por el " + reglas.Circuito(ctx, tx) + ": queda registrado en el banco a nombre de la empresa. Usá cheque físico o efectivo.")
 	}
 	var chequeID *string
 	if parte.ChequeID != nil && *parte.ChequeID != "" {
@@ -853,7 +854,7 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 			return "", err
 		}
 		if circuito == "negro" && tipo == "echeq" {
-			return "", fallo("Ese es un e-Cheq y el pago va por el circuito B: quedaría registrado en el banco. Endosá un cheque físico.")
+			return "", fallo("Ese es un e-Cheq y el pago va por el " + reglas.Circuito(ctx, tx) + ": quedaría registrado en el banco. Endosá un cheque físico.")
 		}
 		// Un cheque se endosa en un pago de su mismo circuito (comité final,
 		// M8): el del B endosado en un pago blanco salía de Valores a
@@ -865,9 +866,9 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 		}
 		if delCheque != pago {
 			if delCheque == "negro" {
-				return "", fallo("Ese cheque es del circuito B y el pago no: endosalo en un pago del circuito B.")
+				return "", fallo("Ese cheque es del " + reglas.Circuito(ctx, tx) + " y el pago no: endosalo en un pago del " + reglas.Circuito(ctx, tx) + ".")
 			}
-			return "", fallo("Ese cheque es del circuito blanco y el pago va por el B: endosalo en un pago blanco.")
+			return "", fallo("Ese cheque es del circuito blanco y el pago va por el " + reglas.Circuito(ctx, tx) + ": endosalo en un pago blanco.")
 		}
 		if diferencia := float64(importe) - parte.Importe; diferencia > 0.01 || diferencia < -0.01 {
 			return "", fallo("El importe del renglón no coincide con el del cheque endosado.")

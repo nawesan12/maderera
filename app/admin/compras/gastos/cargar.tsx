@@ -24,7 +24,8 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
+import { CIRCUITOS } from "@/lib/circuito";
+import { useEtiquetasDelCircuito } from "@/components/admin/circuito";
 import { formatearMonto, hoyEnArgentina, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { Hoja, Interruptor, Opciones, Seccion } from "@/components/admin/formulario";
 import { cargarGasto, type EstadoGasto } from "./actions";
@@ -72,11 +73,6 @@ const MEDIOS = [
   { valor: "cheque", texto: "Cheque", icono: FileText },
 ];
 
-const OPCIONES_CIRCUITO = CIRCUITOS.map((c) => ({
-  valor: c,
-  texto: ETIQUETA_CIRCUITO[c],
-}));
-
 const TIPOS_DE_FACTURA = [
   { valor: "factura_a", texto: "A" },
   { valor: "factura_b", texto: "B" },
@@ -111,6 +107,8 @@ export function CargarGasto({
   sucursales: { id: string; nombre: string; conTurno: boolean; deLaSesion: boolean; enCaja: number | null; cambioFijo: number }[];
   proveedores: { id: string; nombre: string }[];
 }) {
+  const etiquetasCircuito = useEtiquetasDelCircuito();
+  const opcionesCircuito = CIRCUITOS.map((c) => ({ valor: c, texto: etiquetasCircuito[c] }));
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoGasto>({});
   const [enCurso, empezar] = useTransition();
@@ -331,7 +329,7 @@ export function CargarGasto({
           <span className="text-sm font-medium">Circuito de facturación</span>
           <Opciones
             nombre="gasto-circuito"
-            opciones={OPCIONES_CIRCUITO}
+            opciones={opcionesCircuito}
             valor={circuito}
             alCambiar={(v) => setCircuito(v as "blanco" | "negro")}
             columnas={2}

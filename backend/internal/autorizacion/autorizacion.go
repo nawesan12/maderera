@@ -50,6 +50,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -236,10 +237,15 @@ func (s *Servicio) Exigir(ctx context.Context, ses *auth.Sesion, p Pedido) (*Fir
 	}
 	porClave := false
 	if len(admins) == 0 {
+		falta.SinAdmins = true
+		// La regla firma_sin_pin (/admin/reglas): con «solo_pin», sin PIN
+		// cargado no firma nadie y el mensaje dice cómo cargarlo.
+		if reglas.Es(ctx, s.pool, reglas.FirmaSinPIN, "solo_pin") {
+			return nil, falta
+		}
 		if admins, err = s.adminsConClave(ctx); err != nil {
 			return nil, err
 		}
-		falta.SinAdmins = true
 		if len(admins) == 0 {
 			return nil, falta
 		}

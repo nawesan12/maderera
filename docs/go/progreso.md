@@ -3194,3 +3194,23 @@ ficha (hoy es de /admin/cheques, del admin).
   «por llevar», no «en acopio».
 - **La reposición sin cargo** anota la cantidad con su unidad
   (`pdf.UnidadPara`): «1 par · Corredera…».
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador del aserradero
+
+- **La placa que vende el pedido se vende entera.** Si el pedido vende todas
+  las placas que usan sus cortes (`RetalesDelCliente`), la ficha marca el
+  plano con `TodasDelCliente`, que ahora también deja `PasadasCobrables` en
+  0, y `PasadasACobrar` da 0 cuando todas las placas se venden enteras
+  (aunque el alta hubiera guardado otras). La tarjeta del taller cuenta lo
+  mismo (`PlanoParaCobrar`).
+- **`Modo` «anulado»**: el corte cancelado no cobra nada. Anular uno ya
+  anulado dice «ya está anulado», no «ya salió de la máquina».
+- **El checkout marca `del_corte`** en los renglones del despiece (placa,
+  pasadas, tapacanto), como el mostrador: la ficha de un corte de la tienda
+  cobraba «Fuera del pedido» lo que la compra ya cobró. La migración 00285
+  marca los de antes con la regla de la 00175, en pedidos con corte.
+- **`CrearCorte` pide `/admin/cortes/nuevo`** (admin, vendedor, depósito),
+  declarada en `internal/roles` y `lib/roles.ts`: el aserradero no toma
+  cortes.
+- Los PDF del corte y de la hoja dicen «1 pieza» y «1 pasada»; el golden de
+  `corte` y `hoja-de-corte` pasa a ser el de Go.

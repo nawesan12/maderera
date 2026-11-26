@@ -289,6 +289,9 @@ func (a *API) DevolucionDeMostradorCalculo(ctx context.Context, r mostradorapi.D
 	if _, err := puesto(ctx); err != nil {
 		return nil, err
 	}
+	if a.s.fac == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "La devolución no está disponible.")
+	}
 	factura, err := a.facturaDeLaVenta(ctx, r.Id)
 	if err != nil {
 		return nil, err
@@ -310,6 +313,9 @@ func (a *API) DevolucionDeMostrador(ctx context.Context, r mostradorapi.Devoluci
 	ses, err := puesto(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if a.s.fac == nil {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "La devolución no está disponible.")
 	}
 	factura, err := a.facturaDeLaVenta(ctx, r.Id)
 	if err != nil {

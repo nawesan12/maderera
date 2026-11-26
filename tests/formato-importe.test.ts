@@ -18,8 +18,12 @@ describe("formatearImporte", () => {
 });
 
 describe("formatearMonto", () => {
-  it("no dice «-$ 0» de unos centavos negativos (mes simulado, H148)", () => {
-    expect(n(formatearMonto(-0.4))).toBe("$ 0");
+  // Los centavos se muestran cuando los hay (mes simulado: el mostrador y la
+  // cuenta del cliente decían montos distintos de la misma venta); lo que
+  // redondea a cero no lleva signo (H148).
+  it("no dice «-$ 0» de lo que redondea a cero (mes simulado, H148)", () => {
+    expect(n(formatearMonto(-0.004))).toBe("$ 0");
+    expect(n(formatearMonto(-0.4))).toBe("-$ 0,40");
     expect(n(formatearMonto(-470))).toBe("-$ 470");
   });
 });

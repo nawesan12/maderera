@@ -3135,3 +3135,17 @@ ficha (hoy es de /admin/cheques, del admin).
   mostrador pasa su `retira_el` al pedido.
 - **Ingreso**: la IP aguanta 30 intentos fallidos en 5 minutos
   (`limites.porIP`), la cuenta sigue en 10.
+
+## 26/11/2026: el mes simulado, arreglos de compras y caja (rama `mes-simulado-arreglos`)
+
+- **Gasto anulado** (migración 00280, `compras.AnularGasto`,
+  `POST /compras/gastos/{id}/anular`, solo admin): queda con su motivo y sale
+  de todos los totales (`anulado_at IS NULL` en compras, reportes, cierre y
+  caja). El efectivo vuelve como ingreso al turno abierto de su sucursal, como
+  la anulación del pago; la factura que vino con el gasto se anula con él.
+- **El cajón no queda en negativo**: sin cambio fijo, el piso es cero, en el
+  gasto en efectivo (`compras.AlcanzaElCajon`) y en el retiro del mostrador.
+- **`porLlegar`** en `GET /compras/ordenes`: el neto de lo que falta recibir;
+  «en camino» ya no suma lo que llegó de una orden parcial.
+- **El número de la factura de compra** sale con ceros (`0003-00089010`) en
+  la cuenta del proveedor, los pagos, los gastos y las notas aplicadas.

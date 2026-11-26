@@ -259,23 +259,40 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	// pago partido en medios distintos no hay descuento automático (el que
 	// atiende puede tipear uno), y declarar efectivo pagando con crédito no
 	// se lleva el de contado.
+	//
+	// La base de la escala es lo que se vende del catálogo y el corte: un
+	// renglón a mano (el flete) sale al precio tipeado (H168).
 	var escala *ventas.EscalaDePago
-	if ventas.UnSoloMedio(v.Pagos, v.MedioPago) {
-		escala = ventas.DescuentoPorMedioDePago(esc, v.MedioPago, subtotal)
+	baseEscala := 0.0
+	for _, l := range v.Lineas {
+		if ventas.EsElegibleParaLaEscala(l) {
+			baseEscala += ventas.ACentavos(float64(l.Cantidad * l.PrecioUnitario))
+		}
+	}
+	baseEscala = ventas.ACentavos(baseEscala)
+	if ventas.UnSoloMedio(v.Pagos, v.MedioPago) && !v.SinEscala {
+		escala = ventas.DescuentoPorMedioDePago(esc, v.MedioPago, baseEscala)
 	}
 	automatico := 0.0
 	if escala != nil {
-		automatico = ventas.MontoDelDescuentoDePago(subtotal, escala.Porcentaje)
+		automatico = ventas.MontoDelDescuentoDePago(baseEscala, escala.Porcentaje)
 	}
-	aDescontar := automatico
 	var motivoAutomatico *string
+	var lineas []ventas.LineaDeVenta
+	var descuento float64
 	if pedido > 0 {
-		aDescontar = pedido
-	} else if escala != nil && escala.Etiqueta != "" {
-		e := escala.Etiqueta
-		motivoAutomatico = &e
+		lineas, descuento = ventas.AplicarDescuento(v.Lineas, pedido)
+	} else {
+		if escala != nil && escala.Etiqueta != "" {
+			e := escala.Etiqueta
+			motivoAutomatico = &e
+		}
+		lineas, descuento = ventas.AplicarDescuentoSobre(v.Lineas, automatico, ventas.EsElegibleParaLaEscala)
 	}
-	lineas, descuento := ventas.AplicarDescuento(v.Lineas, aDescontar)
+	aDescontar := pedido
+	if pedido <= 0 {
+		aDescontar = automatico
+	}
 	total := ventas.TotalDeLaVenta(lineas)
 	if total <= 0 {
 		// Sin descuento, un total en cero es un precio que falta (comité
@@ -317,6 +334,16 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 		return ResultadoVenta{}, err
 	}
 	pidePrecio := !desvio.DentroDeLoLibre(libre)
+
+	// Lo que se cobra por debajo del costo (mes simulado, H018): seis
+	// fenólicos de 18 mm a $100 se cobraban sin decir nada porque el precio
+	// era el de la lista. Pide la firma de un admin, como bajar de la lista;
+	// sin conexión, se marca.
+	bajoCosto, err := s.bajoElCosto(ctx, lineas)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	pideCosto := bajoCosto > 0
 
 	// Cuenta corriente: límite y mora. Pasarse lo autoriza un admin con su
 	// PIN (antes era un booleano que mandaba la pantalla). Si pasó sin
@@ -365,13 +392,18 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	bajoListaSinAutorizar := false
 	creditoSinAutorizar := 0.0
 	if sinConexion {
-		bajoListaSinAutorizar = pidePrecio || renglonRaro
+		bajoListaSinAutorizar = pidePrecio || renglonRaro || pideCosto
 		if pasaElLimite {
 			creditoSinAutorizar = parteCuenta
 		}
-	} else if pidePrecio || pideCredito {
+	} else if pidePrecio || pideCredito || pideCosto {
 		pedidoDePIN := autorizacion.Pedido{Motivo: autorizacion.Precio, Monto: desvio.Total, Clave: v.Clave, Sucursal: v.BranchID, PIN: v.PIN, Ficha: v.Ficha}
 		switch {
+		case !pidePrecio && pideCosto:
+			pedidoDePIN.Motivo, pedidoDePIN.Monto = autorizacion.Costo, bajoCosto
+			if pideCredito {
+				pedidoDePIN.Credito = parteCuenta
+			}
 		case !pidePrecio:
 			pedidoDePIN.Motivo, pedidoDePIN.Monto = autorizacion.Credito, parteCuenta
 		case pideCredito:
@@ -438,7 +470,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 		return ResultadoVenta{}, err
 	}
 	r.DejadoDeCobrar, r.BajoLista, r.CreditoSinAutorizar = desvio.Total, bajoListaSinAutorizar, creditoSinAutorizar
-	if firma != nil && (pidePrecio || pideCredito) {
+	if firma != nil && (pidePrecio || pideCredito || pideCosto) {
 		r.AutorizadoPor = firma.Nombre
 	}
 	return r, nil

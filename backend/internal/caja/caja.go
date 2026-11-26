@@ -187,11 +187,14 @@ func FondoBase(ctx context.Context, c Consultador, sucursal string) (float64, er
 
 // VentaDeHoy es una venta de mostrador del día.
 type VentaDeHoy struct {
-	ID        string    `json:"id"`
-	Numero    string    `json:"numero"`
-	Cliente   string    `json:"cliente"`
-	Total     float64   `json:"total"`
-	MedioPago *string   `json:"medioPago"`
+	ID        string  `json:"id"`
+	Numero    string  `json:"numero"`
+	Cliente   string  `json:"cliente"`
+	Total     float64 `json:"total"`
+	MedioPago *string `json:"medioPago"`
+	// Medios son todos los de un pago partido, del más grande al más chico:
+	// «Efectivo + Débito» y no solo el principal (mes simulado, H025).
+	Medios    []string  `json:"medios"`
 	Estado    string    `json:"estado"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -216,7 +219,9 @@ func InicioDelDia(ahora time.Time) time.Time {
 // now()) en la zona de la conexión.
 func VentasDeHoy(ctx context.Context, c Consultador, sucursal string, ahora time.Time) ([]VentaDeHoy, error) {
 	filas, err := c.Query(ctx, `
-		SELECT id, numero, contacto_nombre, total, medio_pago::text, estado::text, created_at
+		SELECT id, numero, contacto_nombre, total, medio_pago::text,
+		       coalesce((SELECT array_agg(p.medio::text ORDER BY p.importe DESC) FROM order_payments p WHERE p.order_id = orders.id), '{}'),
+		       estado::text, created_at
 		FROM orders
 		WHERE branch_id = $1 AND origen = 'mostrador' AND clave_mostrador IS NOT NULL AND created_at >= $2
 		ORDER BY created_at DESC LIMIT 40`, sucursal, InicioDelDia(ahora))
@@ -228,7 +233,7 @@ func VentasDeHoy(ctx context.Context, c Consultador, sucursal string, ahora time
 	for filas.Next() {
 		var v VentaDeHoy
 		var total jsmath.Num
-		if err := filas.Scan(&v.ID, &v.Numero, &v.Cliente, &total, &v.MedioPago, &v.Estado, &v.CreatedAt); err != nil {
+		if err := filas.Scan(&v.ID, &v.Numero, &v.Cliente, &total, &v.MedioPago, &v.Medios, &v.Estado, &v.CreatedAt); err != nil {
 			return nil, err
 		}
 		v.Total = total.F()

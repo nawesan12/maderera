@@ -66,6 +66,8 @@ const (
 	Anular Motivo = "anular"
 	// Presupuesto: respetar los precios de un presupuesto vencido.
 	Presupuesto Motivo = "presupuesto"
+	// Costo: la venta cobra algo por debajo de su costo (mes simulado, H018).
+	Costo Motivo = "costo"
 )
 
 // Los topes de errores.
@@ -352,6 +354,8 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 		t = m + " a cuenta, pasado el límite"
 	case Anular:
 		t = "anular " + m
+	case Costo:
+		t = m + " abajo del costo"
 	default:
 		t = m + " abajo del precio"
 	}

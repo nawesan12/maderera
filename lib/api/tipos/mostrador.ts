@@ -319,7 +319,7 @@ export interface components {
         /** @description Hace falta el PIN de un administrador (internal/autorizacion) */
         MostradorAutorizacion: {
             /** @enum {string} */
-            motivo: "precio" | "credito" | "anular" | "presupuesto";
+            motivo: "precio" | "credito" | "anular" | "presupuesto" | "costo";
             /**
              * Format: double
              * @description lo que se autoriza (lo dejado de cobrar
@@ -463,6 +463,8 @@ export interface components {
             /** Format: double */
             total: number;
             medioPago: string | null;
+            /** @description todos los medios de un pago partido, del más grande al más chico */
+            medios: string[];
             estado: string;
             /** Format: date-time */
             createdAt: string;

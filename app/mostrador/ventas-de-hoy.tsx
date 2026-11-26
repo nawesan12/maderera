@@ -94,7 +94,13 @@ export function VentasDeHoy({
                   {/* En 24 h y con el nombre del medio, no su clave
                       («12:16 a. m. · cuenta corriente»): comité final. */}
                   {hora.format(new Date(v.createdAt))}
-                  {v.medioPago ? ` · ${NOMBRE_DEL_MEDIO[v.medioPago] ?? v.medioPago}` : ""}
+                  {/* Todos los medios de un pago partido, no solo el
+                      principal (H025). */}
+                  {(v.medios?.length ?? 0) > 1
+                    ? ` · ${v.medios!.map((m) => NOMBRE_DEL_MEDIO[m] ?? m).join(" + ")}`
+                    : v.medioPago
+                      ? ` · ${NOMBRE_DEL_MEDIO[v.medioPago] ?? v.medioPago}`
+                      : ""}
                 </span>
               </span>
 

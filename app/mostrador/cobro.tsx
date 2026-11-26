@@ -52,6 +52,8 @@ export function Cobro({
   recibido,
   onRecibido,
   cambio,
+  faltaRecibido,
+  escalaSinCorrer,
   faltaCaja,
   onAbrirCaja,
   enviando,
@@ -108,6 +110,10 @@ export function Cobro({
   recibido: string;
   onRecibido: (v: string) => void;
   cambio: number | null;
+  /** Con cuánto paga no alcanza: cuánto falta (cero si alcanza). */
+  faltaRecibido: number;
+  /** El descuento por forma de pago que el pago partido deja sin correr. */
+  escalaSinCorrer: string | null;
   /**
    * Hay efectivo en el cobro (solo o en una parte del pago partido) y la
    * sucursal no tiene turno abierto: Go lo rechazaría.
@@ -329,7 +335,6 @@ export function Cobro({
                   inputMode="decimal"
                   aria-label="Con cuánto paga"
                   value={recibido}
-                  aria-invalid={importeIlegible(recibido) || undefined}
                   onChange={(e) => onRecibido(e.target.value)}
                   data-foco="recibido"
                   onKeyDown={(e) => {
@@ -341,9 +346,17 @@ export function Cobro({
                     }
                   }}
                   placeholder="0"
-                  className="tabular mt-1.5 h-14 w-full rounded-xl border border-linea bg-background px-3.5 text-right text-2xl font-semibold"
+                  aria-invalid={faltaRecibido > 0 || importeIlegible(recibido) || undefined}
+                  className={`tabular mt-1.5 h-14 w-full rounded-xl border bg-background px-3.5 text-right text-2xl font-semibold ${
+                    faltaRecibido > 0 ? "border-[var(--estado-acento)] estado-problema" : "border-linea"
+                  }`}
                 />
-                {cambio !== null && (
+                {faltaRecibido > 0 ? (
+                  <span className="estado-problema mt-2 flex items-baseline justify-between text-lg font-bold">
+                    <span>Faltan</span>
+                    <span className="tabular">{formatearMonto(faltaRecibido)}</span>
+                  </span>
+                ) : cambio !== null && (
                   <span className="mt-2 flex items-baseline justify-between text-lg">
                     <span className="text-muted-foreground">Vuelto</span>
                     <span className="tabular font-bold text-saldo-favor">
@@ -614,6 +627,9 @@ export function Cobro({
               <span className="tabular mt-1 block text-sm font-semibold text-brand-orange">
                 {formatearMonto(porAutorizar)} abajo del precio · PIN admin
               </span>
+            )}
+            {escalaSinCorrer && (
+              <span className="mt-1 block text-sm text-muted-foreground">Partido: sin «{escalaSinCorrer}»</span>
             )}
           </span>
         </div>

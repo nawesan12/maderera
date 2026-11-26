@@ -41,6 +41,8 @@ export interface VentaDeHoy {
   cliente: string;
   total: number;
   medioPago: string | null;
+  /** Todos los medios de un pago partido. */
+  medios?: string[];
   estado: string;
   createdAt: string;
 }

@@ -333,16 +333,31 @@ export function VistaMostrador({
    * hay. Uno tipeado a mano gana y nunca se suman. Sin esto la pantalla
    * cobraba y daba vuelto sobre un total y la caja registraba otro.
    */
+  //
+  // Con el pago partido manda el medio elegido en cada renglón y no el
+  // importe: antes el descuento aparecía y desaparecía mientras se repartía
+  // y «Faltan» cambiaba solo (mes simulado, H025). Va a Go como `sinEscala`.
+  //
+  // La base es lo del catálogo y el corte: un renglón a mano (el flete) va al
+  // precio tipeado, como en Go (`EsElegibleParaLaEscala`; H168).
+  const partidoEnMedios = partes !== null && partes.some((p) => p.medio !== medio);
+  const baseEscala = useMemo(
+    () => totalDeLaVenta(lineas.filter((l) => l.variantId || l.corteId)),
+    [lineas],
+  );
   const escalaDePago = useMemo(() => {
     const unSoloMedio =
       !partes || partes.every((p) => !(importeDelCampo(p.importe) > 0) || p.medio === medio);
-    return unSoloMedio ? descuentoPorMedioDePago(escalasDePago, medio, subtotal) : null;
-  }, [escalasDePago, partes, medio, subtotal]);
+    return unSoloMedio && !partidoEnMedios ? descuentoPorMedioDePago(escalasDePago, medio, baseEscala) : null;
+  }, [escalasDePago, partes, medio, baseEscala, partidoEnMedios]);
+  // La escala que el pago partido dejó sin correr, para decirlo al lado del total.
+  const escalaSinCorrer =
+    partidoEnMedios && descuentoManual <= 0 ? descuentoPorMedioDePago(escalasDePago, medio, baseEscala) : null;
   const descuento =
     descuentoManual > 0
       ? descuentoManual
       : escalaDePago
-        ? montoDelDescuentoDePago(subtotal, escalaDePago.porcentaje)
+        ? montoDelDescuentoDePago(baseEscala, escalaDePago.porcentaje)
         : 0;
   const motivoDelDescuento =
     descuentoManual > 0 ? motivoDesc : (escalaDePago?.etiqueta ?? "");
@@ -368,6 +383,15 @@ export function VistaMostrador({
         : null,
     [medio, total, recibido],
   );
+  /*
+   * Con cuánto paga, menos que el total: la venta se cobraba igual por el
+   * total y la diferencia aparecía recién en el arqueo como faltante (mes
+   * simulado, H175). Se dice cuánto falta y no se cobra hasta corregirlo.
+   */
+  const faltaRecibido =
+    medio === "efectivo" && !partes && recibido.trim() !== "" && importeDelCampo(recibido) < total - 0.005
+      ? Math.round((total - importeDelCampo(recibido)) * 100) / 100
+      : 0;
 
   // Cuánto falta repartir cuando el pago está partido. Cero es "listo".
   const restanteDePartes = useMemo(() => {
@@ -403,6 +427,7 @@ export function VistaMostrador({
   const puedeCobrar =
     lineas.length > 0 &&
     !faltaDocumento &&
+    faltaRecibido === 0 &&
     !enviando &&
     !enPausa &&
     !faltaCaja &&
@@ -750,6 +775,7 @@ export function VistaMostrador({
           cuit: cuit || null,
           descuento: descuentoManual,
           descuentoMotivo: motivoDesc || null,
+          ...(partidoEnMedios ? { sinEscala: true } : {}),
           ...(pin ? { pin } : ficha ? { ficha } : {}),
         });
       } catch {
@@ -1062,6 +1088,8 @@ export function VistaMostrador({
               recibido={recibido}
               onRecibido={setRecibido}
               cambio={cambio}
+              faltaRecibido={faltaRecibido}
+              escalaSinCorrer={escalaSinCorrer?.etiqueta ?? null}
               faltaCaja={faltaCaja}
               onAbrirCaja={abrirCajaParaCobrar}
               enviando={enviando}

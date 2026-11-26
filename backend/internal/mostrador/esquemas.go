@@ -74,6 +74,11 @@ type VentaPedida struct {
 	// misma venta (internal/autorizacion).
 	PIN   string
 	Ficha string
+	// SinEscala: la pantalla tiene el pago partido en medios distintos,
+	// aunque alguno todavía no tenga importe. El descuento por forma de pago
+	// no corre (como con el pago partido), y el total no salta mientras se
+	// reparte (mes simulado, H025). Solo puede sacar un descuento.
+	SinEscala bool
 
 	NumeroProvisorio *string
 	CobradaAt        *time.Time
@@ -224,6 +229,7 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	l := zodjs.Raiz(crudo)
 	v := leerComun(l, false)
 	v.Autorizado = booleano(l.Booleano("autorizado", true))
+	v.SinEscala = booleano(l.Booleano("sinEscala", true))
 	// «corte» es el de antes, uno solo y sin renglones atados (lo arma
 	// atarRenglonesAlCorte); «cortes», la lista de ahora.
 	if c := l.Objeto("corte", true, false); c != nil {

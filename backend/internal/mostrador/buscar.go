@@ -84,6 +84,38 @@ func precio(a *args, l Lista, propia, general string) string {
 	return "coalesce(" + propia + ".price, round((" + general + ".price * " + a.poner(jsmath.Texto(l.FactorDerivado)) + "::numeric)::numeric, 2))"
 }
 
+// numerosSueltos cuenta los números tipeados que no aparecen enteros en el
+// nombre y la medida: «mdf 18» pone primero el de «18 mm» y no el de «1830 x
+// 2600mm» (mes simulado, H017). Cero si no se tipeó ningún número.
+func numerosSueltos(a *args, consulta string) string {
+	var partes []string
+	for _, t := range strings.FieldsFunc(zodjs.TrimJS(consulta), zodjs.EspacioJS) {
+		if !soloDigitos(t) {
+			continue
+		}
+		p := a.poner("(^|[^0-9])" + t + "([^0-9]|$)")
+		partes = append(partes, "CASE WHEN (p.name || ' ' || coalesce(v.label, '')) ~ "+p+" THEN 0 ELSE 1 END")
+		if len(partes) == 6 {
+			break
+		}
+	}
+	if len(partes) == 0 {
+		// Una expresión y no «0»: un entero suelto en el ORDER BY es el
+		// número de columna.
+		return "0::int"
+	}
+	return "(" + strings.Join(partes, " + ") + ")"
+}
+
+func soloDigitos(t string) bool {
+	for _, r := range t {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return t != ""
+}
+
 // Buscar es buscarParaMostrador.
 func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *string) ([]ResultadoDeMostrador, error) {
 	consulta := zodjs.TrimJS(texto)
@@ -110,16 +142,21 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	joins := joinDePrecios(&a, lista, "propio", "general")
 	pr := precio(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)
+	sueltos := numerosSueltos(&a, consulta)
 	sql := `
 		SELECT v.id, v.sku, p.name, v.label, v.largo_mm, v.ancho_mm, v.color, c.name, p.unit::text,
-		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `, coalesce(i.qty, 0)
+		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `,
+		       -- Lo disponible y no el físico: lo reservado para un acopio
+		       -- aparecía libre y se volvía a vender (mes simulado, H023).
+		       greatest(coalesce(i.qty, 0) - coalesce((SELECT sum(r.cantidad) FROM stock_reservations r
+		         WHERE r.variant_id = v.id AND r.branch_id = ` + suc + `::uuid AND r.estado = 'activa'), 0), 0)
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
 		` + joins + `
 		LEFT JOIN inventory i ON i.variant_id = v.id AND i.branch_id = ` + suc + `::uuid
 		WHERE v.active = true AND p.active = true AND ` + cond + `
-		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, p.name, v.sort_order
+		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, ` + sueltos + `, p.name, v.sort_order
 		LIMIT ` + fmt.Sprint(tope)
 	// Plan a medida en cada búsqueda (QueryExecModeExec): con el plan genérico
 	// que Postgres arma después de cinco ejecuciones de la misma sentencia,

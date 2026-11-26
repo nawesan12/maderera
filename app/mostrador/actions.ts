@@ -66,6 +66,8 @@ export interface VentaDelMostrador {
   notas?: string | null;
   /** Los cortes de la venta; cada renglón de uno lleva su índice en `corte`. */
   cortes?: CorteDeMostrador[];
+  /** El pago partido en medios distintos: el descuento por forma de pago no corre. */
+  sinEscala?: boolean;
   /** El PIN de un admin, o la ficha de un PIN anterior para esta venta. */
   pin?: string;
   ficha?: string;

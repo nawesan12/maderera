@@ -229,6 +229,27 @@ func (a *API) ClientesRecientes(ctx context.Context, r mostradorapi.ClientesReci
 	return ok(v), err
 }
 
+func (o respuesta) VisitPresupuestoParaElMostradorResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// PresupuestoParaElMostrador: el presupuesto que se trae a la venta por su
+// número (mes simulado).
+func (a *API) PresupuestoParaElMostrador(ctx context.Context, r mostradorapi.PresupuestoParaElMostradorRequestObject) (mostradorapi.PresupuestoParaElMostradorResponseObject, error) {
+	if _, err := puesto(ctx); err != nil {
+		return nil, err
+	}
+	p, err := a.s.PresupuestoParaElMostrador(ctx, r.Numero)
+	var ep *ErrPresupuesto
+	if errors.As(err, &ep) {
+		return nil, plataforma.NuevoProblema(http.StatusUnprocessableEntity, ep.Msj)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(p), nil
+}
+
 func (a *API) ClienteDelMostrador(ctx context.Context, r mostradorapi.ClienteDelMostradorRequestObject) (mostradorapi.ClienteDelMostradorResponseObject, error) {
 	if _, err := puesto(ctx); err != nil {
 		return nil, err

@@ -20,6 +20,9 @@ import {
 } from "@/lib/ventas/forma-de-venta";
 import { buscarEnMostrador } from "./actions";
 
+/** «P-2026-0020», «p-2026-20» o «P2026-20»: el número de un presupuesto. */
+const ES_PRESUPUESTO = /^\s*p-?\d{4}-\d{1,6}\s*$/i;
+
 export function Buscador({
   copia,
   branchId,
@@ -29,6 +32,7 @@ export function Buscador({
   onSuelta,
   onCortar,
   onNoEntra,
+  onPresupuesto,
   sePuedeCortar,
   sinConexion,
 }: {
@@ -45,6 +49,8 @@ export function Buscador({
   onCortar: (placa: ResultadoDeMostrador) => void;
   /** Se quiso agregar algo que no entra así (sin precio, o con decimales lo que va entero). */
   onNoEntra: (texto: string) => void;
+  /** Se tipeó el número de un presupuesto («P-2026-0020»): se trae a la venta. */
+  onPresupuesto?: (numero: string) => void;
   /** Sin conexión, Ctrl+Enter sobre una placa no cobra. */
   sinConexion: boolean;
   /**
@@ -196,6 +202,15 @@ export function Buscador({
                   ? Math.min(i + 1, tope)
                   : Math.max(i - 1, 0);
               });
+              return;
+            }
+
+            // El número de un presupuesto trae sus renglones y su cliente
+            // (mes simulado: no había forma de cobrarlo desde acá).
+            if (e.key === "Enter" && onPresupuesto && !sinConexion && ES_PRESUPUESTO.test(texto)) {
+              e.preventDefault();
+              onPresupuesto(texto.trim());
+              setTexto("");
               return;
             }
 

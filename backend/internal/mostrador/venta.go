@@ -608,6 +608,17 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		return ResultadoVenta{}, err
 	}
 
+	// El presupuesto que armó la venta queda aceptado y atado al pedido.
+	if v.PresupuestoID != nil {
+		if err := atarAlPresupuesto(ctx, tx, pedido, *v.PresupuestoID); err != nil {
+			var ep *ErrPresupuesto
+			if errors.As(err, &ep) {
+				return fallo(ep.Msj), nil
+			}
+			return ResultadoVenta{}, err
+		}
+	}
+
 	// El alta en el historial del pedido: la ficha de una venta del
 	// mostrador o de un acopio quedaba con el historial vacío.
 	nota := "Venta de mostrador"

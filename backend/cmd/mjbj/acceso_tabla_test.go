@@ -453,6 +453,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CobrarCuentaEnMostrador":        "/mostrador",                    // POST /api/v1/mostrador/clientes/{id}/cobro
 	"SaldoDeCuentaEnMostrador":       "/mostrador",                    // GET /api/v1/mostrador/clientes/{id}/saldo
 	"ClienteDelMostrador":            "/mostrador",                    // GET /api/v1/mostrador/clientes/{id}
+	"PresupuestoParaElMostrador":     "/mostrador",                    // GET /api/v1/mostrador/presupuestos/{numero}
 	"BuscarClientesEnMostrador":      "/mostrador",                    // GET /api/v1/mostrador/clientes
 	"AltaRapidaDeCliente":            "/mostrador",                    // POST /api/v1/mostrador/clientes
 	"DescargarVentas":                "/mostrador",                    // POST /api/v1/mostrador/descarga

@@ -134,6 +134,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mostrador/presupuestos/{numero}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        /** @description El presupuesto que se trae a la venta por su número; uno vencido trae los precios de hoy */
+        get: operations["PresupuestoParaElMostrador"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mostrador/clientes/{id}": {
         parameters: {
             query?: never;
@@ -379,6 +398,26 @@ export interface components {
             formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
             /** Format: double */
             precioMediaPct: number;
+        };
+        MostradorPresupuesto: {
+            id: string;
+            numero: string;
+            customerId: string | null;
+            contactoNombre: string;
+            contactoTelefono: string | null;
+            vencido: boolean;
+            lineas: {
+                variantId: string | null;
+                descripcion: string;
+                unidad: string;
+                /** Format: double */
+                cantidad: number;
+                /** Format: double */
+                precioUnitario: number;
+                presentacion: string | null;
+                /** Format: double */
+                precioLista: number | null;
+            }[];
         };
         MostradorCliente: {
             id: string;
@@ -765,6 +804,29 @@ export interface operations {
                     "application/json": components["schemas"]["MostradorCliente"][];
                 };
             };
+        };
+    };
+    PresupuestoParaElMostrador: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                numero: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El presupuesto, para armar la venta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MostradorPresupuesto"];
+                };
+            };
+            422: components["responses"]["Problema"];
         };
     };
     ClienteDelMostrador: {

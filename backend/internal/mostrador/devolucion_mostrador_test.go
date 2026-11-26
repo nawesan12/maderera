@@ -29,6 +29,9 @@ func TestDevolucionDesdeElMostrador(t *testing.T) {
 	pedido := map[string]any{"clave": claveDeDevolucion(), "destino": "afuera", "motivo": "Le sobró una", "importe": 1000, "renglones": renglones}
 	if _, m, b := pedir(t, ven, "POST", u, pedido); m["autorizacion"] == nil {
 		t.Fatalf("sin PIN, el vendedor devolvía: %s", b)
+	} else if a, _ := m["autorizacion"].(map[string]any); a["motivo"] != "devolver" {
+		// El campo del PIN decía «Anular $ 1.000» sobre una devolución (H270).
+		t.Errorf("la firma de la devolución: %s", b)
 	}
 	pedido["pin"] = pinDeLaDuena
 	if st, m, b := pedir(t, ven, "POST", u, pedido); st != 200 || m["ok"] == nil {

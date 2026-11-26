@@ -331,7 +331,7 @@ func (a *API) DevolucionDeMostrador(ctx context.Context, r mostradorapi.Devoluci
 	}
 	var sucursal string
 	_ = a.s.pool.QueryRow(ctx, `SELECT coalesce(branch_id::text, '') FROM orders WHERE id::text = $1`, r.Id).Scan(&sucursal)
-	firma, err := a.s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: b.Importe, Clave: "devolucion:" + b.Clave,
+	firma, err := a.s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Devolver, Monto: b.Importe, Clave: "devolucion:" + b.Clave,
 		Sucursal: sucursal, PIN: pin, Ficha: ficha})
 	var falta *autorizacion.Falta
 	if errors.As(err, &falta) {

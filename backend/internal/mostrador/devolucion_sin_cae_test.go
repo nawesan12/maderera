@@ -21,6 +21,12 @@ func TestDevolucionDeUnaFacturaSinCae(t *testing.T) {
 	c.factura = *res.InvoiceID
 	c.renglon = e.txt(t, `select id::text from invoice_items where invoice_id = $1 order by orden limit 1`, c.factura)
 	antes := c.caja(t)
+	// La pantalla calcula antes de confirmar: sin CAE cortaba ahí con «Sin
+	// CAE no hay nada que anular» (mes simulado, H270).
+	if total, err := c.fac.CalcularDevolucion(context.Background(), c.factura,
+		[]facturacion.RenglonADevolver{{ItemID: c.renglon, Cantidad: 2, AlStock: true}}); err != nil || total != 200 {
+		t.Fatalf("el cálculo sin CAE: %v %v", total, err)
+	}
 	d, err := c.devolver(2, facturacion.DevolverPorCaja)
 	if err != nil {
 		t.Fatal(err)

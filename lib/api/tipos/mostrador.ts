@@ -386,7 +386,7 @@ export interface components {
         /** @description Hace falta el PIN de un administrador (internal/autorizacion) */
         MostradorAutorizacion: {
             /** @enum {string} */
-            motivo: "precio" | "credito" | "anular" | "presupuesto" | "costo";
+            motivo: "precio" | "credito" | "anular" | "devolver" | "presupuesto" | "costo";
             /**
              * Format: double
              * @description lo que se autoriza (lo dejado de cobrar

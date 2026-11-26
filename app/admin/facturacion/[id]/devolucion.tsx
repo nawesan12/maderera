@@ -56,6 +56,7 @@ export function Devolucion({
   alCancelar,
   acciones,
   alTerminar,
+  conTitulo = true,
 }: {
   invoiceId: string;
   datos: DatosDeDevolucion;
@@ -67,6 +68,8 @@ export function Devolucion({
   acciones?: AccionesDeDevolucion;
   /** Hecha desde el mostrador: el mensaje, en vez de ir a la nota. */
   alTerminar?: (mensaje: string) => void;
+  /** En un diálogo, el título es el del diálogo: no se repite. */
+  conTitulo?: boolean;
 }) {
   const hacer: AccionesDeDevolucion = acciones ?? {
     calcular: (renglones) => calcularDevolucion(invoiceId, renglones),
@@ -219,7 +222,7 @@ export function Devolucion({
         if (listo && !enCurso) setConfirmando(true);
       }}
     >
-      <h3 className="text-base font-semibold">Devolución · {datos.pedido}</h3>
+      {conTitulo && <h3 className="text-base font-semibold">Devolución · {datos.pedido}</h3>}
 
       <ul className="divide-y divide-linea rounded-lg bg-hundida">
         {datos.renglones.map((r) => {

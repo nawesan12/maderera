@@ -64,6 +64,10 @@ const (
 	// Anular: una venta ajena, de otro turno, ya cobrada o cuya mercadería
 	// no vuelve.
 	Anular Motivo = "anular"
+	// Devolver: una devolución parcial desde el mostrador. Firma lo mismo que
+	// anular (plata que sale de la venta), pero el campo decía «Anular
+	// $ 6.660» sobre una devolución (mes simulado, H270).
+	Devolver Motivo = "devolver"
 	// Presupuesto: respetar los precios de un presupuesto vencido.
 	Presupuesto Motivo = "presupuesto"
 	// Costo: la venta cobra algo por debajo de su costo (mes simulado, H018).
@@ -358,6 +362,8 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 		t = m + " a cuenta, pasado el límite"
 	case Anular:
 		t = "anular " + m
+	case Devolver:
+		t = "devolver " + m
 	case Costo:
 		t = m + " abajo del costo"
 	case Remito:

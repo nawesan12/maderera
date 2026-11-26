@@ -500,7 +500,7 @@ components:
       description: Hace falta el PIN de un administrador (internal/autorizacion)
       required: [motivo, monto]
       properties:
-        motivo: { type: string, enum: [precio, credito, anular, presupuesto, costo] }
+        motivo: { type: string, enum: [precio, credito, anular, devolver, presupuesto, costo] }
         monto: { type: number, format: double, description: lo que se autoriza (lo dejado de cobrar, lo que pasa el límite, la venta que se anula) }
         credito: { type: number, format: double, description: con motivo precio, lo que además pasa el límite de cuenta corriente (el mismo PIN firma las dos cosas) }
         pinIncorrecto: { type: boolean }

@@ -174,10 +174,11 @@ export function VentasDeHoy({
         <Dialog open onOpenChange={(abierto) => !abierto && setDevolviendo(null)}>
           <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold tracking-tight">Devolver de {devolviendo.venta.numero}</DialogTitle>
+              <DialogTitle className="text-xl font-bold tracking-tight">Devolución · {devolviendo.venta.numero}</DialogTitle>
             </DialogHeader>
             <Devolucion
               invoiceId=""
+              conTitulo={false}
               datos={devolviendo.datos}
               alCancelar={() => setDevolviendo(null)}
               acciones={{

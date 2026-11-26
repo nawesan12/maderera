@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import { Banknote } from "lucide-react";
 import { etiquetaDeCircuito } from "@/lib/circuito";
-import { hoyEnArgentina } from "@/lib/formato";
+import { diasHasta, hoyEnArgentina } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import {
@@ -66,9 +66,9 @@ export default async function ChequesPage({
     chequesTerminados(pagina, POR_PAGINA),
   ]);
 
+  // Por día argentino, como la fecha que se muestra (diasHasta).
   const ahora = new Date();
-  const enDias = (fecha: Date) =>
-    Math.ceil((fecha.getTime() - ahora.getTime()) / 86_400_000);
+  const enDias = (fecha: Date) => diasHasta(fecha, ahora) ?? 0;
 
   /*
    * Lo que informaron los clientes desde Mi cuenta y todavía no se tiene en

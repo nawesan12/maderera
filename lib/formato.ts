@@ -228,11 +228,14 @@ export function haceCuanto(fecha: Date | null): string {
  */
 export function diasHasta(fecha: Date | null, ahora: Date = new Date()): number | null {
   if (!fecha) return null;
+  const hoy = Date.parse(`${hoyEnArgentina(ahora)}T00:00:00Z`);
   if (esDia(fecha)) {
-    const hoy = Date.parse(`${hoyEnArgentina(ahora)}T00:00:00Z`);
     return Math.round((fecha.getTime() - hoy) / 86_400_000);
   }
-  return Math.ceil((fecha.getTime() - ahora.getTime()) / 86_400_000);
+  // Un instante, por el día argentino en que cae: el cheque con fecha de
+  // pago de hoy al mediodía decía «26/11/26 · en 1 día» (mes simulado).
+  const dia = Date.parse(`${hoyEnArgentina(fecha)}T00:00:00Z`);
+  return Math.round((dia - hoy) / 86_400_000);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -45,3 +45,15 @@ describe("diasHasta de un día guardado como día", () => {
     expect(diasHasta(vence, new Date("2026-11-25T23:00:00Z"))).toBe(1);
   });
 });
+
+// Un instante cuenta por el día argentino en que cae (mes simulado: el
+// cheque de hoy al mediodía decía «en 1 día»).
+describe("diasHasta de un instante", () => {
+  it("hoy a cualquier hora es 0; mañana a la madrugada, 1", () => {
+    const ahora = new Date("2026-11-26T12:30:00Z"); // 09:30
+    expect(diasHasta(new Date("2026-11-26T15:00:00Z"), ahora)).toBe(0);
+    expect(diasHasta(new Date("2026-11-27T02:59:00Z"), ahora)).toBe(0); // 23:59
+    expect(diasHasta(new Date("2026-11-27T03:01:00Z"), ahora)).toBe(1);
+    expect(diasHasta(new Date("2026-11-25T20:00:00Z"), ahora)).toBe(-1);
+  });
+});

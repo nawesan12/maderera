@@ -634,3 +634,20 @@ func LeerFecha(t string) (time.Time, bool) {
 func Vencimiento(emision time.Time, dias int) time.Time {
 	return emision.AddDate(0, 0, dias)
 }
+
+// zonaArgentina es la zona del negocio (con un respaldo fijo a −3 si el sistema
+// no trae la base de zonas).
+var zonaArgentina = func() *time.Location {
+	if l, err := time.LoadLocation("America/Argentina/Buenos_Aires"); err == nil {
+		return l
+	}
+	return time.FixedZone("ART", -3*3600)
+}()
+
+// diaDeHoy es el día argentino de `ahora` a la medianoche UTC, como se
+// guardan los vencimientos. Vencida es la factura de un día anterior a este:
+// comparada contra `ahora`, una que vencía hoy ya figuraba vencida.
+func diaDeHoy(ahora time.Time) time.Time {
+	a := ahora.In(zonaArgentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
+}

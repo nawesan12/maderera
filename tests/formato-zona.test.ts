@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fechaCorta, fechaHora, fechaLarga, hora } from "@/lib/formato";
+import { diasHasta, fechaCorta, fechaHora, fechaLarga, hora } from "@/lib/formato";
 import { etiquetaDia, horaMensaje } from "@/app/admin/whatsapp/formato-wa";
 
 // El servidor corre en UTC y el navegador en la Argentina: las horas tienen
@@ -29,5 +29,19 @@ describe("las horas, en hora argentina", () => {
     expect(fechaCorta.format(new Date("2026-10-31T01:30:00Z"))).toBe("30/10/26");
     // Un instante de la tarde, igual que siempre.
     expect(fechaCorta.format(new Date("2026-10-30T18:00:00Z"))).toBe("30/10/26");
+  });
+});
+
+// Mes simulado (H005/H061): la factura que vence hoy no está vencida, ni a la
+// madrugada ni a la noche.
+describe("diasHasta de un día guardado como día", () => {
+  const vence = new Date("2026-11-26T00:00:00Z");
+  it("vence hoy es 0 a cualquier hora del día argentino", () => {
+    expect(diasHasta(vence, new Date("2026-11-26T03:40:00Z"))).toBe(0); // 00:40
+    expect(diasHasta(vence, new Date("2026-11-27T02:30:00Z"))).toBe(0); // 23:30
+  });
+  it("ayer es −1 y mañana 1", () => {
+    expect(diasHasta(vence, new Date("2026-11-27T03:10:00Z"))).toBe(-1);
+    expect(diasHasta(vence, new Date("2026-11-25T23:00:00Z"))).toBe(1);
   });
 });

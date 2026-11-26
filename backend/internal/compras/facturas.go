@@ -120,7 +120,7 @@ func (s *Servicio) ListarFacturas(ctx context.Context, filtro FiltroDeFacturas, 
 	err = s.pool.QueryRow(ctx, base+`
 		SELECT coalesce(sum(f.total - f.pagado), 0), count(*)::int,
 		  count(*) FILTER (WHERE f.fecha_vencimiento < $4)::int, coalesce(sum(f.total - f.pagado) FILTER (WHERE f.fecha_vencimiento < $4), 0)
-		FROM f WHERE `+condicionPendiente, proveedor, nil, nil, ahora).Scan(&impago, &out.Impagas, &out.Vencidas, &vencido)
+		FROM f WHERE `+condicionPendiente, proveedor, nil, nil, diaDeHoy(ahora)).Scan(&impago, &out.Impagas, &out.Vencidas, &vencido)
 	out.Impago, out.ImpagoVencido = float64(impago), float64(vencido)
 	return out, err
 }

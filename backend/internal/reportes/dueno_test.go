@@ -804,3 +804,41 @@ func TestMeDebenConRemitosParciales(t *testing.T) {
 		t.Errorf("sin cobrar: %+v, quería %+v", n.MeDeben.PedidosSinCobrar, q)
 	}
 }
+
+// **Una factura que vence hoy figuraba vencida** (mes simulado, H005/H061).
+// El vencimiento se guarda como día, a la medianoche UTC; se comparaba
+// contra la medianoche argentina (las 3 UTC) en Debo y contra `now()` en
+// «Para hoy», así que una factura de contado salía vencida en el momento en
+// que se cargaba. Vence hoy: cuenta para esta semana y para las 48 horas.
+func TestLaFacturaQueVenceHoyNoEstaVencida(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	// 00:40 del 15/10 en Argentina, la hora en que la vio la dueña.
+	temprano := time.Date(2026, 10, 15, 0, 40, 0, 0, Argentina)
+	e.s.ahora = func() time.Time { return temprano }
+	prov := e.id(t, `insert into suppliers (nombre) values ('Contado') returning id`)
+	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
+		values ($1, 'factura_a', 4, 1877, 800, 0, 0, 0, 0, 800, '2026-10-15T00:00:00Z', '2026-10-15T00:00:00Z')`, prov)
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto) values ($1, 'factura', 800)`, prov)
+	for _, ahora := range []time.Time{temprano, time.Date(2026, 10, 15, 23, 30, 0, 0, Argentina)} {
+		d, err := e.s.Debo(context.Background(), ahora)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d.Vencido != 0 || d.FacturasVencidas != 0 || d.EstaSemana != 800 || d.FacturasEstaSemana != 1 {
+			t.Errorf("%v: %+v", ahora, d)
+		}
+	}
+	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
+	if strings.Contains(cuerpo, "compras-vencidas") || !strings.Contains(cuerpo, `"clave":"compras-48h"`) {
+		t.Errorf("para hoy: %s", cuerpo)
+	}
+	// Al día siguiente, sí.
+	d, err := e.s.Debo(context.Background(), time.Date(2026, 10, 16, 0, 10, 0, 0, Argentina))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Vencido != 800 || d.FacturasVencidas != 1 {
+		t.Errorf("al otro día: %+v", d)
+	}
+}

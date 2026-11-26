@@ -341,14 +341,17 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		chequesEn48, comprasEn48                                       int
 	}
 	ahora := s.ahora()
+	// El vencimiento de una factura de compra es un día (medianoche UTC):
+	// vencida es la de un día anterior al de hoy ($11), no la que pasó de
+	// `now()`, que la daba vencida desde las 21 del día anterior.
 	// Las facturas de compra impagas se recorren una sola vez (comité
 	// final): antes eran tres subconsultas, cada una con su suma de
 	// imputaciones por factura. Sin permiso ($4 falso) el CTE no lee nada.
 	err := s.pool.QueryRow(ctx, `
 		WITH compras AS (
-		  SELECT count(*) FILTER (WHERE fecha_vencimiento < now())::int AS vencidas,
-		         count(*) FILTER (WHERE fecha_vencimiento >= now() + interval '48 hours' AND fecha_vencimiento < now() + interval '7 days')::int AS por_vencer,
-		         count(*) FILTER (WHERE fecha_vencimiento >= now() AND fecha_vencimiento < now() + interval '48 hours')::int AS en48
+		  SELECT count(*) FILTER (WHERE fecha_vencimiento < $11::timestamptz)::int AS vencidas,
+		         count(*) FILTER (WHERE fecha_vencimiento >= $11::timestamptz + interval '2 days' AND fecha_vencimiento < $11::timestamptz + interval '7 days')::int AS por_vencer,
+		         count(*) FILTER (WHERE fecha_vencimiento >= $11::timestamptz AND fecha_vencimiento < $11::timestamptz + interval '2 days')::int AS en48
 		  FROM purchase_invoices f
 		  WHERE $4 AND fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
 		    AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01)
@@ -375,7 +378,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
 		  (SELECT en48 FROM compras)`,
 		ve("/admin/pedidos"), ve("/admin/cortes"), ve("/admin/cheques"), ve("/admin/compras/facturas"),
-		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), ahora).
+		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), ahora, DiaDeHoy(ahora)).
 		Scan(&c.porPreparar, &c.listos, &c.cortes, &c.chequesVencidos, &c.chequesPorVencer, &c.comprasVencidas, &c.comprasPorVencer,
 			&c.solicitudes, &c.resenas, &c.reponer, &c.seguimientos, &c.presupuestos, &c.chequesEn48, &c.comprasEn48)
 	if err != nil {

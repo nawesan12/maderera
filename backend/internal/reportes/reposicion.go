@@ -146,19 +146,25 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 // el mínimo y no se había vendido en el período decía «Para comprar 0 ·
 // Nada por acá» mientras Stock pedía reponerlo y el inicio lo contaba
 // (simulación del mes, H062). Lo que falta en una sucursal no lo tapa el
-// sobrante de la otra (es otro local), con la regla de Stock: la sucursal
-// en cero con la otra con stock no es «reponer» (stock.BajoElMinimo); sin
-// stock en ninguna, sí. Va después de ArmarReposicion, que sigue siendo la
-// del TS.
+// sobrante de la otra (es otro local), con la regla de Stock y del inicio
+// (catalogo.ReponerEnFila): una sucursal pide lo que le falta para llegar a
+// su mínimo, también en cero, y lo vendido de más (disponible en negativo)
+// aunque no tenga mínimo. La chapa con -30 en Casa Central quedaba en «el
+// stock alcanza» porque el Aserradero tenía (H062, segunda vuelta). Va
+// después de ArmarReposicion, que sigue siendo la del TS.
 func HastaElMinimo(r ReporteDeReposicion, minimos map[string][2]float64, sucursal string) ReporteDeReposicion {
 	cambio := false
 	for i := range r.Filas {
 		f := &r.Filas[i]
 		m := minimos[f.VariantID]
-		sinNada := f.DisponibleCentral <= 0 && f.DisponibleAserradero <= 0
 		falta := func(disponible, minimo float64) float64 {
-			if minimo > 0 && disponible <= minimo && (disponible > 0 || sinNada) {
-				return math.Ceil(minimo - max(disponible, 0))
+			if (minimo > 0 && disponible <= minimo) || disponible < 0 {
+				// Justo en el mínimo, Stock ya pide reponer: se pide otro
+				// tanto, o el contador de acá decía uno menos.
+				if n := math.Ceil(float64(max(minimo, 0) - disponible)); n > 0 {
+					return n
+				}
+				return math.Ceil(minimo)
 			}
 			return 0
 		}

@@ -122,11 +122,31 @@ func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 	for _, f := range r.Filas {
 		sugeridos[f.VariantID] = f.Sugerido
 	}
-	// La placa: disponible 8 (10 − 2 reservadas) contra 20; el tirante no
-	// (el cero del Aserradero lo cubre Central, como en Stock).
-	if sugeridos[placa] != 12 || sugeridos[tirante] != 0 || r.Filas[0].VariantID != placa ||
-		r.Filas[0].ProveedorID == nil || *r.Filas[0].ProveedorID != prov || *r.Filas[0].Proveedor != "Placas del Sur" {
+	// La placa: disponible 8 (10 − 2 reservadas) contra 20; el tirante, los 5
+	// del mínimo del Aserradero: lo de Central es de otro local, y Stock y el
+	// inicio ya lo cuentan (las dos medidas, como el inicio).
+	var dePlaca *FilaDeReposicion
+	for i := range r.Filas {
+		if r.Filas[i].VariantID == placa {
+			dePlaca = &r.Filas[i]
+		}
+	}
+	if sugeridos[placa] != 12 || sugeridos[tirante] != 5 || dePlaca == nil ||
+		dePlaca.ProveedorID == nil || *dePlaca.ProveedorID != prov || *dePlaca.Proveedor != "Placas del Sur" {
 		t.Fatalf("reposición: %v %s", sugeridos, b)
+	}
+
+	// Lo vendido de más en una sucursal (disponible en negativo, sin mínimo)
+	// se compra aunque la otra tenga: la chapa con -30 en Central decía «el
+	// stock alcanza» (H062, segunda vuelta).
+	e.exec(t, `update inventory set qty = -30, reservado = 0 where variant_id = $1 and branch_id = $2`, placa, e.aserradero)
+	_, b, _ = pedir(t, adm, e.u+"reportes/reposicion?dias=30&objetivo=30")
+	r = ReporteDeReposicion{}
+	_ = json.Unmarshal([]byte(b), &r)
+	for _, f := range r.Filas {
+		if f.VariantID == placa && f.Sugerido != 12+30 {
+			t.Fatalf("lo vendido de más: %v %s", f.Sugerido, b)
+		}
 	}
 }
 

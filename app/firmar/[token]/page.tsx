@@ -7,6 +7,7 @@ import { remitoPorToken } from "@/lib/dal/admin/entregas";
 import { cantidadConUnidad } from "@/lib/formato";
 import { fechaHoraDeFirma } from "@/lib/entregas/fecha";
 import { Pizarra } from "./pizarra";
+import { VolverAlPedido } from "./volver";
 
 export const metadata: Metadata = {
   title: "Firmar la entrega",
@@ -155,6 +156,7 @@ async function Firma({ token }: { token: string }) {
                 className="mx-auto mt-4 h-20 rounded-md bg-white object-contain p-1"
               />
             )}
+            <VolverAlPedido />
           </section>
         ) : (
           <>

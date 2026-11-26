@@ -1,9 +1,8 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, Eraser, Loader2, TriangleAlert } from "lucide-react";
+import { VolverAlPedido } from "./volver";
+import { Check, Eraser, Loader2, TriangleAlert } from "lucide-react";
 import { firmarRemito, type EstadoFirma } from "./actions";
 
 const inicial: EstadoFirma = {};
@@ -37,11 +36,6 @@ export function Pizarra({
   documentoSugerido: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // Firmado en la tablet del mostrador, se vuelve al pedido (el panel pone
-  // `?volver=`): terminaba en la constancia, sin salida (mes simulado). Solo
-  // una ruta del panel, nunca una dirección de afuera.
-  const volver = useSearchParams().get("volver");
-  const volverA = volver && /^\/admin\/pedidos\/[0-9a-f-]{36}$/.test(volver) ? volver : null;
   // El DNI cargado en el mostrador llega enmascarado: se muestra, y se
   // cambia solo si firma otra persona.
   const [cambiarDni, setCambiarDni] = useState(!documentoSugerido);
@@ -142,15 +136,8 @@ export function Pizarra({
           Guardamos la constancia del remito {estado.numero}. Te la mandamos
           por correo.
         </p>
-        {volverA && (
-          <Link
-            href={volverA}
-            className="boton-accion mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-base font-medium"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            Volver al pedido
-          </Link>
-        )}
+        {/* Firmado en la tablet del mostrador, se vuelve al pedido. */}
+        <VolverAlPedido />
       </div>
     );
   }

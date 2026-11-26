@@ -270,7 +270,14 @@ func TestCorteSueltoSeCobraEnUnPedido(t *testing.T) {
 	if code, b := pedir(t, ven, "POST", u+"/pedido", nil); code != 422 {
 		t.Errorf("dos veces: %d %s", code, b)
 	}
-	// Ya atado a su pedido, se entrega.
+	// Atado a su pedido, se entrega cuando el pedido está cobrado (H173 y
+	// H348): antes, el mismo aviso.
+	if code, b := pedir(t, ven, "POST", u+"/avanzar?desde=terminado", nil); code != 409 || !strings.Contains(b, "no está cobrado") {
+		t.Errorf("retirar con el pedido sin cobrar: %d %s", code, b)
+	}
+	if _, err := e.pool.Exec(context.Background(), `update orders set estado_pago = 'pagado' where id = $1`, p["id"]); err != nil {
+		t.Fatal(err)
+	}
 	if code, b := pedir(t, ven, "POST", u+"/avanzar?desde=terminado", nil); code != 200 {
 		t.Errorf("retirar ya cobrado en el pedido: %d %s", code, b)
 	}

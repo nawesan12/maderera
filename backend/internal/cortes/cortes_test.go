@@ -233,12 +233,13 @@ func TestAltaColaYFicha(t *testing.T) {
 		t.Errorf("segundo toque: %d %s", code, b)
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-cola' where id = $1`, id)
-	// Atado a un pedido: el suelto con cargo no se entrega sin cobrarlo (ver
+	// Atado a un pedido que todavía no se cobró (el suelto con cargo, ver
 	// TestCorteSueltoSeCobraEnUnPedido).
-	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set order_id = $2 where id = $1`, id, e.pedido(t, "PED-1"))
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set order_id = $2 where id = $1`, id,
+		e.pedido(t, "PED-1", map[string]any{"descripcion": "Corte a medida", "unidad": "pasada", "cantidad": 4, "precio": 1200, "delCorte": true}))
 
-	// La cola: avanza hasta retirado y ahí se frena. Sin venta no está
-	// cobrado: retirarlo pide saberlo (mes simulado, H173).
+	// La cola: avanza hasta retirado y ahí se frena. Con la venta sin cobrar,
+	// retirarlo pide saberlo (mes simulado, H173).
 	for _, paso := range []struct{ query, quiere string }{
 		{"", "quedó en la máquina"}, {"", "quedó terminado"},
 		{"", "no está cobrado. Cobralo en el mostrador antes de entregarlo."},

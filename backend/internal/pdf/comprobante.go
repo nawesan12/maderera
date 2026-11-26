@@ -414,6 +414,13 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		cursor -= Mm(7)
 	}
 
+	// La A a un monotributista lleva la leyenda de la Ley 27.618 (RG 5003/2021;
+	// fiscal.LeyendaMonotributo, H207).
+	if comprobanteLetra(c.Tipo) == "A" && c.ReceptorCondicionIva == "monotributista" {
+		cursor -= h.EscribirParrafo(leyendaMonotributo, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 7.5, Fuente: Negrita}, Ancho: Mm(170)})
+		cursor -= Mm(3)
+	}
+
 	if c.Observaciones != "" {
 		cursor -= h.EscribirParrafo(c.Observaciones, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8, Color: TintaSuave}, Ancho: Mm(120)})
 	}
@@ -454,3 +461,7 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 
 	return h.Bytes()
 }
+
+// leyendaMonotributo es fiscal.LeyendaMonotributo (pdf no importa fiscal).
+const leyendaMonotributo = "El crédito fiscal discriminado en el presente comprobante, sólo podrá ser computado a efectos del Régimen de " +
+	"Sostenimiento e Inclusión Fiscal para Pequeños Contribuyentes de la Ley Nº 27.618"

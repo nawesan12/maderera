@@ -30,8 +30,9 @@ export type TipoComprobante =
 /**
  * Letra que corresponde según quién emite y quién recibe.
  *
- * - Un responsable inscripto emite **A** a otro responsable inscripto —el único
- *   que puede computarse el crédito fiscal— y **B** a todos los demás.
+ * - Un responsable inscripto emite **A** a otro responsable inscripto y al
+ *   monotributista (RG AFIP 5003/2021, con la leyenda de la Ley 27.618), y
+ *   **B** a todos los demás. Es el espejo de `fiscal.LetraQueCorresponde`.
  * - Un monotributista emite siempre **C**, sin discriminar IVA: no lo cobra.
  * - Un exento emite **C**.
  */
@@ -40,10 +41,14 @@ export function letraQueCorresponde(
   receptor: CondicionIva,
 ): Letra {
   if (emisor === "responsable_inscripto") {
-    return receptor === "responsable_inscripto" ? "A" : "B";
+    return receptor === "responsable_inscripto" || receptor === "monotributista" ? "A" : "B";
   }
   return "C";
 }
+
+/** La leyenda de la factura A a un monotributista (Ley 27.618). */
+export const LEYENDA_MONOTRIBUTO =
+  "El crédito fiscal discriminado en el presente comprobante, sólo podrá ser computado a efectos del Régimen de Sostenimiento e Inclusión Fiscal para Pequeños Contribuyentes de la Ley Nº 27.618";
 
 export function tipoFactura(letra: Letra): TipoComprobante {
   return `factura_${letra.toLowerCase()}` as TipoComprobante;

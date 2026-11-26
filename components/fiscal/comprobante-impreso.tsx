@@ -2,6 +2,7 @@ import { BotonImprimir } from "./boton-imprimir";
 import QRCode from "qrcode";
 import {
   discriminaIva,
+  LEYENDA_MONOTRIBUTO,
   letraDe,
   nombreComprobante,
   numeroFormateado,
@@ -330,14 +331,17 @@ export async function ComprobanteImpreso({
                 {moneda.format(Number(comprobante.total))}
               </span>
             </div>
-            {!discrimina && ivaContenido > 0 && (
+            {letra === "B" && comprobante.receptorCondicionIva === "consumidor_final" && ivaContenido > 0 && (
               <Linea etiqueta="IVA contenido" valor={String(ivaContenido)} />
             )}
           </div>
         </section>
 
-        {!discrimina && ivaContenido > 0 && (
+        {letra === "B" && comprobante.receptorCondicionIva === "consumidor_final" && ivaContenido > 0 && (
           <p className="leyenda">Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)</p>
+        )}
+        {letra === "A" && comprobante.receptorCondicionIva === "monotributista" && (
+          <p className="leyenda">{LEYENDA_MONOTRIBUTO}</p>
         )}
 
         {comprobante.observaciones && (

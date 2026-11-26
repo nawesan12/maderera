@@ -54,4 +54,9 @@ func TestComprobanteBTransparenciaFiscal(t *testing.T) {
 	if strings.Count(s, "$ 24.200") != 1 {
 		t.Errorf("el subtotal de la fila de la A va neto:\n%s", s)
 	}
+	// La A a un monotributista, con la leyenda de la Ley 27.618 (H207).
+	cp.ReceptorCondicionIva = "monotributista"
+	if s := texto(cp); !strings.Contains(s, "Ley Nº 27.618") {
+		t.Errorf("la A al monotributista:\n%s", s)
+	}
 }

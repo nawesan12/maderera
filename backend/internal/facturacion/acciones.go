@@ -1,10 +1,10 @@
 package facturacion
 
 import (
-	"mjbj/internal/formato"
 	"context"
 	"errors"
 	"math"
+	"mjbj/internal/formato"
 	"slices"
 	"strings"
 	"time"
@@ -596,18 +596,18 @@ func (s *Servicio) alicuotasDeLaVenta(ctx context.Context, orderID string, linea
 // responsable inscripto, o "": la factura A informa el CUIT del receptor
 // (DocTipo 80), y sin uno válido ARCA la rechaza.
 func faltaCuitParaLaA(condicion string, cuit *string) string {
-	if condicion != fiscal.ResponsableInscripto {
+	if condicion != fiscal.ResponsableInscripto && condicion != fiscal.Monotributista {
 		return ""
 	}
 	if cuit == nil || strings.TrimSpace(*cuit) == "" {
-		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT."
+		return "Para hacer una factura A hace falta el CUIT del cliente."
 	}
 	doc, msj := clientes.LeerDocumento(*cuit)
 	if msj != "" {
 		return msj
 	}
 	if doc.Tipo != "cuit" {
-		return "Para facturarle a un responsable inscripto (factura A) hace falta su CUIT, no el DNI."
+		return "Para hacer una factura A hace falta el CUIT del cliente, no el DNI."
 	}
 	return ""
 }

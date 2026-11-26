@@ -124,7 +124,7 @@ export default async function FichaCortePage({
             {/* El suelto con algo para cobrar no se entrega con un clic: se
                 cobra (H348). */}
             {corte.estado === "terminado" && modo === "suelto" && cuenta.total > 0 && cobra ? (
-              <CobrarCorte id={corte.id} />
+              <CobrarCorte id={corte.id} conPlaca={corte.variantId != null} />
             ) : corte.estado === "terminado" && corte.orderId && pedido && !corte.cobrado && modo !== "sinCargo" && cobra ? (
               /* Con la venta hecha y sin cobrar, lo que sigue es cobrarla en
                  su pedido: «Marcar retirado» se rechazaba y «Cobrar en el
@@ -264,7 +264,7 @@ export default async function FichaCortePage({
                 )}
                 <RenglonesDelCorte cuenta={cuenta} />
                 <Total texto="Total del trabajo" monto={cuenta.total}>
-                  {cobra && cuenta.total > 0 && corte.estado !== "terminado" && !anulado && <CobrarCorte id={corte.id} />}
+                  {cobra && cuenta.total > 0 && corte.estado !== "terminado" && !anulado && <CobrarCorte id={corte.id} conPlaca={corte.variantId != null} />}
                 </Total>
               </dl>
             )}

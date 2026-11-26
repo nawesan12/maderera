@@ -134,7 +134,12 @@ func (a *API) PrepararRemito(ctx context.Context, r entregasapi.PrepararRemitoRe
 		return nil, err
 	}
 	m := "Remito " + e.Numero + " listo. Todavía queda mercadería en acopio."
-	if e.PedidoCompleto {
+	switch {
+	case f.Tipo == "envio" && e.PedidoCompleto:
+		m = "Remito " + e.Numero + " listo. El pedido sale en camino."
+	case f.Tipo == "envio":
+		m = "Remito " + e.Numero + " listo. El resto queda por llevar."
+	case e.PedidoCompleto:
 		m = "Remito " + e.Numero + " listo. Con esto el pedido queda entregado."
 	}
 	return ok(map[string]any{"ok": m, "id": e.ID, "numero": e.Numero, "firmaToken": e.FirmaToken, "pedidoCompleto": e.PedidoCompleto}), nil

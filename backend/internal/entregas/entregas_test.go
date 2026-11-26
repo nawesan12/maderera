@@ -354,17 +354,30 @@ func TestRetiroCompletoCierraElPedido(t *testing.T) {
 	}
 	c, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "envio", "transportista": " Expreso Sur ",
 		"numeroSeguimiento": "AB123", "cantidades": cantidades(r1, "10", r2, "4")})
-	if c != 200 || !strings.Contains(b, "Con esto el pedido queda entregado.") {
+	if c != 200 || !strings.Contains(b, "El pedido sale en camino.") {
 		t.Fatalf("envío: %d %s", c, b)
 	}
-	var estado, nota, transportista string
-	_ = e.pool.QueryRow(context.Background(), `select o.estado::text, h.nota from orders o join order_status_history h on h.order_id = o.id where o.id = $1`, pedido).Scan(&estado, &nota)
+	var estado, nota, transportista, token string
+	ultimo := func() {
+		_ = e.pool.QueryRow(context.Background(), `select o.estado::text, h.nota from orders o join order_status_history h on h.order_id = o.id
+			where o.id = $1 order by h.created_at desc limit 1`, pedido).Scan(&estado, &nota)
+	}
+	ultimo()
 	_ = e.pool.QueryRow(context.Background(), `select transportista from shipments`).Scan(&transportista)
-	// El pedido no se cobró: la nota lo dice como «Avanzar» (comité final,
-	// M4).
-	if estado != "entregado" || !strings.HasPrefix(nota, "Entregado sin cobrar · $") ||
-		!strings.HasSuffix(nota, " · Remito REM-0001: se retiró todo lo que quedaba") || transportista != "Expreso Sur" {
+	// El remito de un envío acompaña al camión: el pedido queda en camino
+	// (mes simulado: quedaba entregado al cargar el camión).
+	if estado != "en-camino" || nota != "Remito REM-0001: salió en camino" || transportista != "Expreso Sur" {
 		t.Errorf("pedido %q, nota %q, transportista %q", estado, nota, transportista)
+	}
+	// Firma quien recibe y recién ahí queda entregado. El pedido no se cobró:
+	// la nota lo dice como «Avanzar» (comité final, M4).
+	_ = e.pool.QueryRow(context.Background(), `select firma_token from deliveries where order_id = $1`, pedido).Scan(&token)
+	if _, err := e.s.RegistrarFirma(context.Background(), FormFirma{Token: token, ReceptorNombre: "Juan Obra", Firma: "data:image/png;base64,AAAA"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	ultimo()
+	if estado != "entregado" || !strings.HasPrefix(nota, "Entregado sin cobrar · $") || !strings.HasSuffix(nota, " · Remito REM-0001 firmado") {
+		t.Errorf("después de firmar: pedido %q, nota %q", estado, nota)
 	}
 	// Ya no queda nada.
 	if c, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "envio", "cantidades": cantidades(r1, "1")}); c != 422 ||

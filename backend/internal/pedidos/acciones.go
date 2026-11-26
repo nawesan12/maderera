@@ -172,7 +172,29 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		if siguiente == "" {
 			return fallo("No hay un estado siguiente.")
 		}
-		if siguiente == "entregado" {
+		// Un pedido con su corte en la cola no está listo (mes simulado): se
+		// marcaba listo y el depósito lo despachaba sin las piezas.
+		if siguiente == "listo" || siguiente == "en-camino" || siguiente == "entregado" {
+			if err := entregas.FaltaElCorte(ctx, tx, id); err != nil {
+				return err
+			}
+		}
+		// El envío que ya salió en parte no se da por entregado entero: lo
+		// que falta llevar sale con su propio remito.
+		if siguiente == "entregado" && p.estado == "en-camino" {
+			saldo, err := entregas.SaldoDeAcopio(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if len(entregas.SoloPendientes(saldo)) > 0 {
+				return fallo(p.numero + " tiene productos por llevar todavía: preparales el remito.")
+			}
+		}
+		// El remito sale cuando la mercadería deja el depósito: en un envío,
+		// al despachar (acompaña al camión y lo firma quien recibe); en un
+		// retiro, al entregar. Antes el envío salía sin papel y el remito
+		// nacía al marcarlo entregado.
+		if siguiente == "entregado" || (siguiente == "en-camino" && p.tipoEntrega == "envio") {
 			var sucursal *string
 			if err := tx.QueryRow(ctx, `SELECT branch_id FROM orders WHERE id = $1`, id).Scan(&sucursal); err != nil {
 				return err
@@ -204,6 +226,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 			id, siguiente, nota, ses.UserID); err != nil {
 			return err
 		}
+		if siguiente == "entregado" {
+			if err := entregas.CerrarCortes(ctx, tx, id); err != nil {
+				return err
+			}
+		}
 		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoCambioDeEstado, map[string]string{"orderId": id, "estado": siguiente}, time.Time{})
 		return err
 	})
@@ -212,6 +239,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	}
 	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "pedido", id, p.numero+": "+p.estado+" → "+siguiente, nil)
 	texto := textoDelEstado[siguiente]
+	if siguiente == "listo" && p.tipoEntrega == "envio" {
+		texto = "listo para despachar"
+	}
 	if texto == "" {
 		texto = siguiente
 	}

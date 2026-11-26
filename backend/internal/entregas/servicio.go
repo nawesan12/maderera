@@ -33,14 +33,12 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
-	"mjbj/internal/formato"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
-	"mjbj/internal/ventas/fragmentos"
 )
 
 // Los avisos al cliente que dejan el remito preparado y el firmado, en la
@@ -287,6 +285,17 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 		if pedido.estado == "entregado" {
 			return ErrorDeEntrega("Este pedido ya salió del depósito: emití el remito de constancia, que no vuelve a descontar el stock.")
 		}
+		// Lo que completa el pedido no sale con un corte sin terminar: las
+		// piezas todavía no existen.
+		if control.Completo {
+			if err := FaltaElCorte(ctx, tx, f.OrderID); err != nil {
+				return err
+			}
+		}
+		yaSalio, err := SalioConLaVenta(ctx, tx, f.OrderID)
+		if err != nil {
+			return err
+		}
 		numero, err := numeracion.Remito(ctx, tx)
 		if err != nil {
 			return err
@@ -307,25 +316,32 @@ func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRem
 				return err
 			}
 		}
-		if err := sacarDelDeposito(ctx, tx, f.OrderID, salida, numero, usuario, control.Lineas, pendientes); err != nil {
-			return err
+		if !yaSalio {
+			if err := sacarDelDeposito(ctx, tx, f.OrderID, salida, numero, usuario, control.Lineas, pendientes); err != nil {
+				return err
+			}
 		}
-		if control.Completo && pedido.estado != "entregado" {
+		switch {
+		case f.Tipo == "envio" && pedido.estado != "en-camino":
+			// El remito de un envío acompaña al camión: el pedido queda «en
+			// camino» y se da por entregado cuando firma quien recibe
+			// (VueltaDelViaje). Quedaba entregado al cargar el camión, y el
+			// cobro contra entrega desaparecía del reparto.
+			nota := "Remito " + numero + ": salió en camino"
+			if !control.Completo {
+				nota = "Remito " + numero + ": salió en camino una parte"
+			}
+			if err := pasarA(ctx, tx, f.OrderID, "en-camino", nota, usuario, true); err != nil {
+				return err
+			}
+		case f.Tipo != "envio" && control.Completo:
 			// Como «Avanzar» a entregado: si falta cobrar, la nota lo dice con
 			// la misma cabecera, y queda quién soltó la mercadería.
-			nota := "Remito " + numero + ": se retiró todo lo que quedaba"
-			var falta *float64
-			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.SinCobrarDelPedido+`::float8 FROM orders o WHERE o.id = $1`, f.OrderID).Scan(&falta); err != nil {
+			nota, err := notaSinCobrar(ctx, tx, f.OrderID, "Remito "+numero+": se retiró todo lo que quedaba")
+			if err != nil {
 				return err
 			}
-			if falta != nil && *falta > 0.009 {
-				nota = fragmentos.NotaEntregadoSinCobrar + " · " + formato.Moneda(*falta) + " · " + nota
-			}
-			if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'entregado', updated_at = now() WHERE id = $1`, f.OrderID); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'entregado', $2, $3)`,
-				f.OrderID, nota, usuario); err != nil {
+			if err := pasarA(ctx, tx, f.OrderID, "entregado", nota, usuario, false); err != nil {
 				return err
 			}
 		}
@@ -372,6 +388,9 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 		tipo = "retiro"
 	}
 	nota := "Entregado desde el tablero de pedidos"
+	if tipo == "envio" {
+		nota = "Despachado desde el tablero de pedidos"
+	}
 	token := tokenDeFirma()
 	var nombre, documento *string
 	if tipo == "retiro" {
@@ -381,8 +400,14 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 	if err != nil {
 		return nil, err
 	}
-	if err := sacarDelDeposito(ctx, tx, pedidoID, salida, numero, usuario, lineas, pendientes); err != nil {
+	yaSalio, err := SalioConLaVenta(ctx, tx, pedidoID)
+	if err != nil {
 		return nil, err
+	}
+	if !yaSalio {
+		if err := sacarDelDeposito(ctx, tx, pedidoID, salida, numero, usuario, lineas, pendientes); err != nil {
+			return nil, err
+		}
 	}
 	if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
 		return nil, err
@@ -459,12 +484,14 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 	var r FirmaRegistrada
 	firmo := false
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var pedido, tipo string
 		err := tx.QueryRow(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
 			  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
 			  entregado_at = now(), updated_at = now()
 			WHERE firma_token = $1 AND estado = 'preparada'
-			RETURNING id, numero`, f.Token, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)).Scan(&r.DeliveryID, &r.Numero)
+			RETURNING id, numero, order_id, tipo::text`, f.Token, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)).
+			Scan(&r.DeliveryID, &r.Numero, &pedido, &tipo)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -472,6 +499,15 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 			return err
 		}
 		firmo = true
+		// El envío se da por entregado cuando firma quien recibe en la obra.
+		if tipo == "envio" {
+			if _, err := pedidoBloqueado(ctx, tx, pedido); err != nil {
+				return err
+			}
+			if err := VueltaDelViaje(ctx, tx, pedido, r.DeliveryID, r.Numero, nil, true); err != nil {
+				return err
+			}
+		}
 		// La constancia de lo que se retiró, por correo.
 		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoFirmado, map[string]string{"deliveryId": r.DeliveryID}, time.Time{})
 		return err
@@ -593,6 +629,9 @@ func (s *Servicio) AnularEntrega(ctx context.Context, ses *auth.Sesion, id strin
 		}
 		if err := reservas.VolverAReservar(ctx, tx, otraVez); err != nil {
 			return err
+		}
+		if pedido.estado == "en-camino" {
+			return VueltaDelViaje(ctx, tx, pedidoID, id, numero, &ses.UserID, false)
 		}
 		if pedido.estado != "entregado" {
 			return nil

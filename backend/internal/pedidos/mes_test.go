@@ -109,3 +109,28 @@ func TestFichaYTableroDicenLoCobradoYLoQueFalta(t *testing.T) {
 		t.Errorf("acopio: listado %v, ficha %v", p.Acopio, f.Acopio)
 	}
 }
+
+// El efectivo de un pedido del Aserradero que el fletero trae a Casa
+// Central entra a la caja abierta donde está la plata: pedía abrir un turno
+// del Aserradero que nadie iba a contar (mes simulado).
+func TestElEfectivoEntraALaCajaAbiertaQueSeElige(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	central := e.id(t, `insert into branches (slug, name, sort_order) values ('central-mes', 'Central', 0) returning id`)
+	turno := e.id(t, `insert into cash_sessions (branch_id, abierta_por) values ($1, (select id from "user" where email = 'vendedor@prueba.test')) returning id`, central)
+	pedido := e.id(t, `insert into orders (numero, contacto_nombre, branch_id, origen, estado, medio_pago, subtotal, total)
+		values ('PED-1107', 'Elena Paz', $1, 'presupuesto', 'entregado', 'efectivo', 824440, 824440) returning id`, e.sucursal)
+	u := e.srv.URL + "/api/v1/admin/pedidos/" + pedido + "/cobro"
+	partes := `[{"medio":"efectivo","importe":"824440"}]`
+
+	c, b := pedir(t, ven, "POST", u, map[string]any{"partes": partes, "clave": "mes-1"})
+	if c != 422 || !strings.Contains(b, "Elegí en qué caja entra el efectivo.") || !strings.Contains(b, central) {
+		t.Fatalf("sin elegir: %d %s", c, b)
+	}
+	if c, b := pedir(t, ven, "POST", u, map[string]any{"partes": partes, "clave": "mes-1", "branchId": central}); c != 200 {
+		t.Fatalf("en la caja abierta: %d %s", c, b)
+	}
+	if m := e.numero(t, `select coalesce(sum(monto), 0) from cash_movements where session_id = $1`, turno); m != 824440 {
+		t.Errorf("caja de Central: %v", m)
+	}
+}

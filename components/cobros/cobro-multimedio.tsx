@@ -4,6 +4,7 @@ import { useId, useState, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
 import { NOMBRE_DEL_MEDIO, esCheque, type MedioDeCobro } from "@/lib/cobros/partes";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /**
  * Con qué paga el cliente, renglón por renglón.
@@ -214,8 +215,7 @@ export function CobroMultimedio({
                   </label>
                   <label className="text-sm text-muted-foreground">
                     Fecha de pago
-                    <input
-                      type="date"
+                    <CampoFecha
                       value={r.fechaPago}
                       onChange={(e) => cambiar(r.clave, "fechaPago", e.target.value)}
                       required

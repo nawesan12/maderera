@@ -43,6 +43,7 @@ import {
   verFacturasConSaldo,
   type EstadoPago,
 } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 interface Proveedor {
   id: string;
@@ -477,8 +478,7 @@ export function FormularioPago({
                 <span className="text-base font-medium">Fecha del pago</span>
                 <span className="relative mt-1 block">
                   <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="date"
+                  <CampoFecha
                     value={fechaPago}
                     max={hoyEnArgentina()}
                     onChange={(e) => setFechaPago(e.target.value)}
@@ -662,8 +662,7 @@ export function FormularioPago({
                               aria-label="Banco del cheque"
                               className="h-11 rounded-lg border border-linea bg-card px-2.5 text-base"
                             />
-                            <input
-                              type="date"
+                            <CampoFecha
                               value={parte.fechaPago}
                               onChange={(e) => actualizarParte(i, { fechaPago: e.target.value })}
                               aria-label="Fecha de pago del cheque"

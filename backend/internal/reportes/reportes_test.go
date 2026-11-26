@@ -277,6 +277,18 @@ func TestReposicion(t *testing.T) {
 	if len(r.Filas) != 1 || r.Filas[0].Disponible != 5 || r.Filas[0].Vendido != 0 || r.CoberturaObjetivo != 180 || r.DiasDelPeriodo != 60 {
 		t.Errorf("aserradero y fenólicos: %s", b)
 	}
+	// El mismo slug en otra categoría: por slug salen los dos, por id solo
+	// el elegido (tercera prueba del mes, H069).
+	otraCat := e.id(t, `insert into categories (slug, name, description) values ('herrajes', 'Herrajes', '') returning id`)
+	otroSub := e.id(t, `insert into subcategories (category_id, slug, name) values ($1, 'fenolicos', 'Fenólicos') returning id`, otraCat)
+	otroProd := e.id(t, `insert into products (slug, name, category_id, subcategory_id, description, unit) values ('bisagra', 'Bisagra', $1, $2, '', 'unidad') returning id`, otraCat, otroSub)
+	e.exec(t, `insert into product_variants (product_id, sku, label) values ($1, 'BIS', '35 mm')`, otroProd)
+	if _, b, _ = pedir(t, adm, e.u+"reportes/reposicion?rubro=fenolicos"); json.Unmarshal([]byte(b), &r) != nil || len(r.Filas) != 2 {
+		t.Errorf("por slug: %s", b)
+	}
+	if _, b, _ = pedir(t, adm, e.u+"reportes/reposicion?rubro="+otroSub); json.Unmarshal([]byte(b), &r) != nil || len(r.Filas) != 1 || r.Filas[0].Producto != "Bisagra" {
+		t.Errorf("por id: %s", b)
+	}
 	c, b, h := pedir(t, adm, e.u+"reportes/reposicion/archivo?dias=45")
 	if c != 200 || !strings.HasPrefix(b, "\ufeffProducto;Medida;Código") || !strings.Contains(h.Get("Content-Disposition"), "reposicion-30dias.csv") {
 		t.Errorf("csv: %d %q %v", c, b, h)

@@ -38,6 +38,7 @@ import {
   cargarCheque,
   type EstadoCheque,
 } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const inicial: EstadoCheque = {};
 
@@ -476,10 +477,9 @@ export function AltaDeCheque() {
 
               <label className="block">
                 <span className="text-base font-medium">Fecha de pago</span>
-                <input
+                <CampoFecha
                   id={`${id}-fecha`}
                   name="fechaPago"
-                  type="date"
                   required
                   className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
                 />

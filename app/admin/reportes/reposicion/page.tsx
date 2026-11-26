@@ -4,7 +4,7 @@ import { ArrowLeft, Download, FileText, ShoppingCart } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { GrupoListado } from "@/components/admin/grupo";
 import { plural } from "@/components/admin/formato";
-import { formatearUnidad } from "@/lib/formato";
+import { unidadConcordada } from "@/lib/formato";
 
 // Las cantidades con coma, como en Stock: «36,5» y no «36.5».
 const cantidad = (n: number) => n.toLocaleString("es-AR", { maximumFractionDigits: 2 });
@@ -409,7 +409,7 @@ function Tabla({
               </td>
               {conSugerido && (
                 <td className="tabular px-5 py-3 text-right text-base font-semibold">
-                  {cantidad(f.sugerido)} {formatearUnidad(f.unidad)}
+                  {cantidad(f.sugerido)} {unidadConcordada(f.sugerido, f.unidad)}
                 </td>
               )}
             </tr>

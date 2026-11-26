@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { CalendarRange, X } from "lucide-react";
+import { aIso, aPantalla, conBarras } from "@/lib/fecha-texto";
 
 /**
  * Un rango de fechas libre, además de los períodos armados.
@@ -62,35 +63,6 @@ export function FiltroRango({
   );
 }
 
-/** aaaa-mm-dd a dd/mm/aaaa. */
-function aPantalla(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
-}
-
-/** dd/mm/aaaa a aaaa-mm-dd; null si no es una fecha. */
-function aIso(texto: string): string | null {
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(texto.trim());
-  if (!m) return null;
-  const [d, mes, a] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const f = new Date(Date.UTC(a, mes - 1, d));
-  if (f.getUTCFullYear() !== a || f.getUTCMonth() !== mes - 1 || f.getUTCDate() !== d) return null;
-  return `${a}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-/**
- * Los dígitos hasta el primero que hace imposible la fecha: un día después
- * del 31 o un mes después del 12 no se llegan a escribir. Antes
- * «31/13/2026» quedaba escrito y no filtraba (simulación del mes).
- */
-function sinImposibles(digitos: string): string {
-  const dia = Number(digitos.slice(0, 2));
-  if (digitos.length >= 2 && (dia < 1 || dia > 31)) return digitos.slice(0, 1);
-  const mes = Number(digitos.slice(2, 4));
-  if (digitos.length >= 4 && (mes < 1 || mes > 12)) return digitos.slice(0, 3);
-  return digitos;
-}
-
 /**
  * Una fecha escrita como se escribe acá, dd/mm/aaaa.
  *
@@ -141,9 +113,7 @@ function CampoFecha({
         aria-invalid={(marcar && invalido) || undefined}
         onChange={(e) => {
           setMarcar(false);
-          const digitos = sinImposibles(e.target.value.replace(/\D/g, "").slice(0, 8));
-          const partes = [digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4)].filter(Boolean);
-          setTexto(partes.join("/"));
+          setTexto(conBarras(e.target.value));
         }}
         onBlur={aplicar}
         onKeyDown={(e) => {

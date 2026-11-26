@@ -43,6 +43,7 @@ import {
   Seccion,
   sinReiniciar,
 } from "@/components/admin/formulario";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 /** La placa elegida del catálogo, con lo que el plano necesita saber de ella. */
 export interface PlacaElegida {
@@ -202,7 +203,11 @@ export function FormularioCorte({
     const r = await crearCorte(previo, datos);
     if (r.ok && r.id) {
       toast.success(r.ok);
-      router.push(`/admin/cortes/${r.id}`);
+      // Arriba de todo a mano: el desplazamiento de Next llevaba la ficha
+      // hasta su primer elemento y el título quedaba debajo del encabezado
+      // fijo (tercera prueba del mes).
+      window.scrollTo({ top: 0 });
+      router.push(`/admin/cortes/${r.id}`, { scroll: false });
     }
     return r;
   }, estadoInicial);
@@ -376,7 +381,11 @@ export function FormularioCorte({
         ? "Falta elegir la placa."
         : esOtraPlaca && !otraPlaca
           ? "Confirmá que va en otra placa."
-          : null;
+          : // Con la placa elegida y sin piezas el botón quedaba apagado
+            // sin decir por qué (tercera prueba del mes).
+            validas.length === 0
+            ? "Faltan las piezas."
+            : null;
 
   function actualizar(
     indice: number,
@@ -475,10 +484,10 @@ export function FormularioCorte({
           <div className="space-y-2">
             <Label htmlFor="retiraEl">Lo retira el</Label>
             {/* El día del pedido, si ya se prometió (H289). */}
-            <Input
+            <CampoFecha
+              Entrada={Input}
               id="retiraEl"
               name="retiraEl"
-              type="date"
               defaultValue={corregir?.retiraEl || desdePedido?.entregarEl || ""}
             />
           </div>
@@ -886,7 +895,7 @@ export function FormularioCorte({
       <BarraGuardar error={estado.error ?? motivoParaNoEnviar}>
         <Button
           type="submit"
-          disabled={pendiente || validas.length === 0 || motivoParaNoEnviar !== null || Boolean(estado.ok)}
+          disabled={pendiente || motivoParaNoEnviar !== null || Boolean(estado.ok)}
           className="h-11 px-6"
         >
           {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}

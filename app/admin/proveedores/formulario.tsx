@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Opciones, Seccion } from "@/components/admin/formulario";
 import { guardarProveedor, type EstadoProveedor } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 export interface FichaProveedor {
   id?: string;
@@ -197,8 +198,7 @@ export function FormularioProveedor({
           {datos.condicionIva !== "monotributista" && datos.condicionGanancias === "exento" && (
             <label className="block">
               <span className="text-sm font-medium">Exento hasta</span>
-              <input
-                type="date"
+              <CampoFecha
                 value={datos.exentoGananciasHasta ?? ""}
                 onChange={(e) => campo("exentoGananciasHasta", e.target.value || null)}
                 className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"

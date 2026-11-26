@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatearMonto } from "@/components/admin/formato";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 export interface ZonaParaPedido {
   nombre: string;
@@ -492,9 +493,9 @@ function PasarAPedido({
               <Label htmlFor="pedido-entregar-el">
                 {tipo === "envio" ? "Se entrega el" : "Lo retira el"}
               </Label>
-              <Input
+              <CampoFecha
+                Entrada={Input}
                 id="pedido-entregar-el"
-                type="date"
                 value={entregarEl}
                 onChange={(e) => setEntregarEl(e.target.value)}
                 className="w-48"

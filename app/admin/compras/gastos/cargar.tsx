@@ -28,6 +28,7 @@ import { CIRCUITOS, ETIQUETA_CIRCUITO } from "@/lib/circuito";
 import { formatearMonto, hoyEnArgentina, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { Hoja, Interruptor, Opciones, Seccion } from "@/components/admin/formulario";
 import { cargarGasto, type EstadoGasto } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const CATEGORIAS = {
   flete: "Fletes",
@@ -153,8 +154,7 @@ export function CargarGasto({
       <Seccion titulo="Gasto" icono={Receipt}>
         <label className="block">
           <span className="text-sm font-medium">Fecha</span>
-          <input
-            type="date"
+          <CampoFecha
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"

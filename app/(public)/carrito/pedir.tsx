@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { AlertCircle, Check, Clock, Loader2, Send } from "lucide-react";
 import { pedirPresupuesto, type EstadoPresupuesto } from "./actions";
 import { MOTIVOS_DE_COTIZACION } from "./motivos";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const inicial: EstadoPresupuesto = {};
 
@@ -153,10 +154,9 @@ export function PedirPresupuesto({
         <label htmlFor="necesitaPara" className="block text-sm font-medium">
           ¿Para cuándo lo necesitás?
         </label>
-        <input
+        <CampoFecha
           id="necesitaPara"
           name="necesitaPara"
-          type="date"
           className="mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
         />
       </div>

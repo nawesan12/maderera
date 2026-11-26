@@ -24,6 +24,7 @@ import {
   Seccion,
   sinReiniciar,
 } from "@/components/admin/formulario";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const inicial: EstadoResena = {};
 
@@ -99,9 +100,8 @@ export function EditorDeResenas({
             </label>
             <label className="block">
               <span className="text-base font-medium">Cuándo</span>
-              <input
+              <CampoFecha
                 name="fecha"
-                type="date"
                 className="tabular mt-1 h-11 w-full rounded-lg border bg-background px-3 text-base"
               />
             </label>

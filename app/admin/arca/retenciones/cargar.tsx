@@ -25,6 +25,7 @@ import {
   type ClienteElegido,
 } from "@/components/admin/elegir-cliente";
 import { cargarSufrida, type EstadoSufrida } from "./actions";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const IMPUESTOS = {
   ganancias: "Ganancias",
@@ -89,8 +90,7 @@ export function CargarSufrida() {
 
         <label className="block">
           <span className="text-sm font-medium">Fecha</span>
-          <input
-            type="date"
+          <CampoFecha
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"

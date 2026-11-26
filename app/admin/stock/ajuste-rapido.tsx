@@ -14,7 +14,7 @@ import {
   leerCantidad,
   metrosDePiezas,
 } from "@/lib/unidades";
-import { formatearUnidad } from "@/lib/formato";
+import { formatearUnidad, unidadEnPlural } from "@/lib/formato";
 import {
   avisoDelAjuste,
   MOTIVOS_QUE_RESTAN,
@@ -331,7 +331,7 @@ function CargaPorMedida({
               <>
                 {modo === "contar" ? "Queda en " : modo === "restar" ? "− " : "+ "}
                 <strong>
-                  {formatearCantidad(cantidad)} {abreviatura}
+                  {formatearCantidad(cantidad)} {cantidad === 1 ? abreviatura : unidadEnPlural(abreviatura)}
                 </strong>
                 {porPiezas && largoMm ? (
                   <span className="text-muted-foreground">

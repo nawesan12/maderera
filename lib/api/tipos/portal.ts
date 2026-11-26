@@ -303,6 +303,12 @@ export interface components {
                 placas: number;
                 /** Format: date-time */
                 retiraEl: string | null;
+                piezas: {
+                    largoMm: number;
+                    anchoMm: number;
+                    cantidad: number;
+                    etiqueta: string | null;
+                }[];
             }[];
             facturas: {
                 id: string;

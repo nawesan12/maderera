@@ -142,6 +142,16 @@ type CorteDelPedido struct {
 	Material *string    `json:"material"`
 	Placas   int32      `json:"placas"`
 	RetiraEl *time.Time `json:"retiraEl"`
+	// Piezas es el despiece: lo que el cliente viene a buscar.
+	Piezas []PiezaDelCorte `json:"piezas" db:"-"`
+}
+
+// PiezaDelCorte es un renglón del despiece.
+type PiezaDelCorte struct {
+	LargoMm  int32   `json:"largoMm"`
+	AnchoMm  int32   `json:"anchoMm"`
+	Cantidad int32   `json:"cantidad"`
+	Etiqueta *string `json:"etiqueta"`
 }
 
 // FacturaDelPedido es un comprobante emitido del pedido (H305).
@@ -213,6 +223,16 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	}
 	if p.Cortes, err = pgx.CollectRows(filas, pgx.RowToStructByPos[CorteDelPedido]); err != nil {
 		return nil, err
+	}
+	for i := range p.Cortes {
+		filas, err = s.pool.Query(ctx, `SELECT largo_mm, ancho_mm, cantidad, etiqueta FROM cutting_items
+			WHERE cutting_order_id = $1 ORDER BY orden`, p.Cortes[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		if p.Cortes[i].Piezas, err = pgx.CollectRows(filas, pgx.RowToStructByPos[PiezaDelCorte]); err != nil {
+			return nil, err
+		}
 	}
 	filas, err = s.pool.Query(ctx, `SELECT id, tipo::text, punto_venta, numero, estado::text, total::float8
 		FROM invoices WHERE order_id = $1 AND customer_id = $2 AND estado <> 'borrador' ORDER BY fecha_emision, numero`, p.ID, c.ID)

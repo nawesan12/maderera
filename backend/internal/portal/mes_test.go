@@ -173,3 +173,26 @@ func TestPresupuestoConSuPedido(t *testing.T) {
 		t.Errorf("H215, el pedido del presupuesto: %s", b)
 	}
 }
+
+// H210: el cliente ve su corte atado al pedido, con el estado y el despiece.
+func TestPedidoConSuCorte(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	var pedido, corte string
+	if err := e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, subtotal)
+		values ('PED-1005', 'Juan', $1, 1000, 1000) returning id`, idJuan).Scan(&pedido); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into cutting_orders (numero, contacto_nombre, customer_id, order_id, material_descripcion, placas, estado)
+		values ('CRT-1', 'Juan', $1, $2, 'Melamina blanca 18 mm', 2, 'terminado') returning id`, idJuan, pedido).Scan(&corte); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into cutting_items (cutting_order_id, largo_mm, ancho_mm, cantidad, orden) values ($1, 600, 400, 4, 0)`, corte); err != nil {
+		t.Fatal(err)
+	}
+	_, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-1005", nil)
+	if !strings.Contains(b, `"numero":"CRT-1"`) || !strings.Contains(b, `"estado":"terminado"`) || !strings.Contains(b, `"largoMm":600`) {
+		t.Errorf("el corte del pedido: %s", b)
+	}
+}

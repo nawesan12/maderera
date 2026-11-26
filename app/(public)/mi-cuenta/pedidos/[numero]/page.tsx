@@ -251,6 +251,25 @@ export default async function DetallePedidoPage({
                     >
                       {ESTADO_DEL_CORTE[c.estado] ?? c.estado}
                     </span>
+                    {/* El despiece, plegado: se abre para controlar al retirar. */}
+                    {c.piezas.length > 0 && (
+                      <details className="w-full">
+                        <summary className="-my-2 inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-acento-texto">
+                          {plural(
+                            c.piezas.reduce((t, p) => t + p.cantidad, 0),
+                            "pieza",
+                          )}
+                        </summary>
+                        <ul className="tabular mt-1 space-y-0.5 text-sm text-muted-foreground">
+                          {c.piezas.map((p, i) => (
+                            <li key={i}>
+                              {p.cantidad} × {p.largoMm} × {p.anchoMm} mm
+                              {p.etiqueta ? ` · ${p.etiqueta}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </li>
                 ))}
               </ul>

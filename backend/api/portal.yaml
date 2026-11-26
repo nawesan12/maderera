@@ -325,7 +325,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, numero, estado, material, placas, retiraEl]
+            required: [id, numero, estado, material, placas, retiraEl, piezas]
             properties:
               id: { type: string }
               numero: { type: string }
@@ -333,6 +333,16 @@ components:
               material: { type: string, nullable: true }
               placas: { type: integer }
               retiraEl: { type: string, format: date-time, nullable: true }
+              piezas:
+                type: array
+                items:
+                  type: object
+                  required: [largoMm, anchoMm, cantidad, etiqueta]
+                  properties:
+                    largoMm: { type: integer }
+                    anchoMm: { type: integer }
+                    cantidad: { type: integer }
+                    etiqueta: { type: string, nullable: true }
         facturas:
           type: array
           items:

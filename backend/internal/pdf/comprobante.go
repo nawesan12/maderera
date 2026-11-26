@@ -32,6 +32,11 @@ type ItemComprobante struct {
 	PrecioUnitario string `json:"precioUnitario"`
 	AlicuotaIva    string `json:"alicuotaIva"`
 	Subtotal       string `json:"subtotal"`
+	// Neto: en la A, el subtotal de la fila va neto (cantidad × unitario
+	// neto) y el IVA abajo; con el subtotal con IVA la fila no cerraba a
+	// mano (simulación del mes, H080). Vacío, el subtotal (los golden del
+	// TS no lo traen).
+	Neto string `json:"neto,omitempty"`
 }
 
 // TributoComprobante es una percepción u otro tributo.
@@ -69,6 +74,10 @@ type ComprobantePdf struct {
 	Estado           string               `json:"estado"`
 	Items            []ItemComprobante    `json:"items"`
 	Tributos         []TributoComprobante `json:"tributos"`
+	// CondicionVenta (Contado · Efectivo, Cuenta corriente) y Pedido van en
+	// el encabezado si vienen (H030, H311).
+	CondicionVenta string `json:"condicionVenta,omitempty"`
+	Pedido         string `json:"pedido,omitempty"`
 }
 
 // EmisorFiscal es el emisor del comprobante: el del encabezado más los
@@ -229,6 +238,14 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		h.Escribir("Vencimiento "+FechaSolaCorta(*c.FechaVencimiento), Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
 		y -= 10
 	}
+	if c.CondicionVenta != "" {
+		h.Escribir("Condición de venta: "+c.CondicionVenta, Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
+		y -= 10
+	}
+	if c.Pedido != "" {
+		h.Escribir("Pedido "+c.Pedido, Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
+		y -= 10
+	}
 
 	// Receptor
 	cursor := minimo(minimo(finEmisor, yCaja), y+10) - Mm(8)
@@ -321,7 +338,11 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 		if discrimina {
 			h.EscribirNumero(numeroJS(num(item.AlicuotaIva))+"%", Opciones{X: colIva, Y: cursor, Tamano: 8, Derecha: true}, anchoIva)
 		}
-		h.EscribirNumero(Moneda2De(item.Subtotal), Opciones{X: colSubtotal, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoSubtotal)
+		subtotal := item.Subtotal
+		if discrimina && item.Neto != "" {
+			subtotal = item.Neto
+		}
+		h.EscribirNumero(Moneda2De(subtotal), Opciones{X: colSubtotal, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoSubtotal)
 
 		cursor -= maximo(alto, 12) + 4
 		h.Raya(cursor+8, 0, Color{})

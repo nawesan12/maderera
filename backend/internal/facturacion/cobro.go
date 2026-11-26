@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
@@ -51,6 +52,24 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	if c.estado == "anulada" {
 		return ResultadoDeCobro{}, errEmision("El comprobante está anulado.")
 	}
+	// Lo ya cobrado no se cobra otra vez: la venta del mostrador, el pedido
+	// cobrado con un recibo o el que se debe en la cuenta corriente tienen
+	// saldo cero (SaldoDeFactura). Antes la factura ofrecía cobrar el total
+	// de nuevo (simulación del mes, H130).
+	var saldo jsmath.Num
+	var anulado bool
+	if err := s.pool.QueryRow(ctx, `SELECT `+SaldoDeFactura+`, coalesce(o.estado = 'cancelado', false)
+		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado FROM invoice_payments WHERE invoice_id = $1 GROUP BY invoice_id) c
+		  ON c.invoice_id = i.id
+		LEFT JOIN orders o ON o.id = i.order_id WHERE i.id = $1`, c.id).Scan(&saldo, &anulado); err != nil {
+		return ResultadoDeCobro{}, err
+	}
+	if anulado {
+		return ResultadoDeCobro{}, errEmision("La venta de esta factura se anuló: no hay nada que cobrar.")
+	}
+	if saldo.F() < 0.01 {
+		return ResultadoDeCobro{}, errEmision("Esta factura ya está cobrada.")
+	}
 	et := etiqueta(c.tipo, c.pv, c.numero)
 
 	if modo == "cuenta_corriente" {
@@ -77,7 +96,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 			return ResultadoDeCobro{}, err
 		}
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", c.id,
-			"Pasó "+jsmath.Fijo2(monto)+" de "+et+" a cuenta corriente", nil)
+			"Pasó "+formato.Moneda(monto)+" de "+et+" a cuenta corriente", nil)
 		return ResultadoDeCobro{Ok: "Pasado a cuenta corriente."}, nil
 	}
 
@@ -99,7 +118,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 		return ResultadoDeCobro{}, err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", c.id,
-		"Registró el cobro de "+et+" con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+		"Registró el cobro de "+et+" ("+c.receptor+") con el recibo "+r.Numero+" por "+formato.Moneda(r.Total), map[string]any{"receiptId": r.ReceiptID})
 	ok := "Cobro registrado con el recibo " + r.Numero + "."
 	if r.Aviso != nil && *r.Aviso != "" {
 		ok += " " + *r.Aviso

@@ -21,7 +21,8 @@ func TestListadoDeAPaginas(t *testing.T) {
 	}
 	contado := factura(1, "factura_b", "autorizada", 1000, 1)
 	e.exec(t, `INSERT INTO invoice_payments (invoice_id, medio, monto, fecha) VALUES ($1, 'efectivo', 1000, now())`, contado)
-	factura(2, "factura_b", "autorizada", 500, 2)
+	aCuenta := factura(2, "factura_b", "autorizada", 500, 2)
+	e.exec(t, `INSERT INTO invoice_payments (invoice_id, medio, monto, fecha) VALUES ($1, 'cuenta_corriente', 500, now())`, aCuenta)
 	factura(3, "nota_credito_b", "autorizada", 100, 3)
 	factura(4, "factura_b", "anulada", 9999, 4)
 	factura(5, "factura_b", "rechazada", 7777, 5)
@@ -42,7 +43,9 @@ func TestListadoDeAPaginas(t *testing.T) {
 		t.Fatalf("de contado, con la página de a uno: %s", b)
 	}
 	_, b = pedir(t, admin, "GET", u+"&cobro=cuenta", nil)
-	if p := leerJSON[PaginaDeComprobantes](t, b); p.Total != 5 || p.Suma != 600 {
+	// «En cuenta corriente» es lo que se pasó a la cuenta, no todo lo que no
+	// tiene un cobro de contado.
+	if p := leerJSON[PaginaDeComprobantes](t, b); p.Total != 1 || p.Suma != 500 {
 		t.Fatalf("a cuenta: %s", b)
 	}
 }

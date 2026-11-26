@@ -99,7 +99,22 @@ func (s *Servicio) ventasDelLibroDigital(ctx context.Context, desde, hasta time.
 	return lista, filas.Err()
 }
 
+// comoDia pasa un instante a la misma hora de reloj en UTC. La fecha de una
+// factura de compra es un día y se guarda a las 0 UTC (compras.LeerFecha):
+// el mes argentino del período se corta en UTC, como en el libro de compras
+// y el cierre.
+func comoDia(t time.Time) time.Time {
+	a := t.In(fiscal.Argentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), a.Hour(), a.Minute(), a.Second(), a.Nanosecond(), time.UTC)
+}
+
+// La fecha de la compra, que es un día guardado a las 0 UTC, se pasa a la
+// medianoche argentina de ese día antes de dárselo al libro (que escribe en
+// hora argentina): leída como instante, el 26/11 a las 0 UTC es el 25 a las
+// 21 y COMPRAS_CBTE salía un día antes, con la compra del 1 en el período
+// anterior (simulación del mes, H156).
 func (s *Servicio) comprasDelLibroDigital(ctx context.Context, desde, hasta time.Time) ([]fiscal.ComprobanteDelLibro, []string, error) {
+	desde, hasta = comoDia(desde), comoDia(hasta)
 	filas, err := s.pool.Query(ctx, `
 		SELECT f.fecha_emision, f.tipo::text, f.punto_venta, f.numero, s.nombre, s.cuit,
 		  f.neto::float8, f.iva21::float8, f.iva105::float8, f.iva27::float8, f.exento::float8, f.percepciones::float8,
@@ -123,6 +138,8 @@ func (s *Servicio) comprasDelLibroDigital(ctx context.Context, desde, hasta time
 			return nil, nil, err
 		}
 		c.PuntoVenta, c.Numero = int64(pv), int64(n)
+		d := c.Fecha.UTC()
+		c.Fecha = time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, fiscal.Argentina)
 		codigo, ok := fiscal.CodigoComprobanteCompra[tipo]
 		if !ok {
 			omitidos = append(omitidos, fiscal.FechaArca(c.Fecha)+" "+compras.NombreComprobanteCompra(tipo)+" "+

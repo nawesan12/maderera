@@ -33,7 +33,8 @@ func TestLibroIvaDigitalDelMes(t *testing.T) {
 	var prov string
 	e.uno(t, `INSERT INTO suppliers (nombre, cuit) VALUES ('Faplac', '30-50000000-7') RETURNING id`, &prov)
 	e.exec(t, `INSERT INTO purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, total)
-		VALUES ($1, 'factura_a', 2, 1274, '2026-10-05T12:00:00Z', 1000, 210, 1210),
+		VALUES ($1, 'factura_a', 2, 1274, '2026-10-05T00:00:00Z', 1000, 210, 1210),
+		       ($1, 'factura_a', 2, 1301, '2026-11-01T00:00:00Z', 1000, 210, 1210),
 		       ($1, 'ticket', 1, 55, '2026-10-06T12:00:00Z', 0, 0, 300)`, prov)
 
 	vendedor := e.staff(t, "v@mjbj.test", sqlc.StaffRoleVendedor)
@@ -66,7 +67,9 @@ func TestLibroIvaDigitalDelMes(t *testing.T) {
 		t.Fatalf("VENTAS_ALICUOTAS: %q", va)
 	}
 	cc := archivos["COMPRAS_CBTE_202610.txt"]
-	if len(cc) != fiscal.LargoComprasCbte+2 || cc[16:36] != "00000000000000001274" || cc[239:254] != "000000000021000" {
+	// La compra es del 5/10 (guardada a las 0 UTC, como la carga el
+	// formulario): sale 20261005, no el 4; la del 1/11 no entra en octubre.
+	if len(cc) != fiscal.LargoComprasCbte+2 || cc[0:8] != "20261005" || cc[16:36] != "00000000000000001274" || cc[239:254] != "000000000021000" {
 		t.Fatalf("COMPRAS_CBTE: %q", cc)
 	}
 	if ca := archivos["COMPRAS_ALICUOTAS_202610.txt"]; len(ca) != fiscal.LargoComprasAlicuotas+2 {

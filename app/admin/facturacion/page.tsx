@@ -7,7 +7,7 @@ import { FiltroRango } from "@/components/admin/filtro-rango";
 import { leerPeriodo, leerRango, resolverPeriodo } from "@/lib/periodos";
 import { BuscadorDeComprobantes } from "./buscador";
 import { AcentoEstado, EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, hoyEnArgentina, moneda, plural } from "@/lib/formato";
+import { fechaCorta, formatearCuit, hoyEnArgentina, moneda, plural } from "@/lib/formato";
 import {
   dadosDeBaja,
   estadoArca,
@@ -15,10 +15,7 @@ import {
   resumenFacturacion,
   type ComprobanteListado,
 } from "@/lib/dal/admin/facturacion";
-import { leerPagina, Paginador } from "@/components/admin/paginador";
-
-/** Cuántos comprobantes por página. */
-const POR_PAGINA = 50;
+import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import {
   nombreComprobante,
   numeroFormateado,
@@ -57,55 +54,61 @@ export default async function FacturacionPage({
       : "todos";
 
   const pagina = leerPagina(params.pagina);
+  /*
+   * El estado (lo que falta autorizar, lo rechazado, las ventas anuladas con
+   * factura viva) es de cualquier fecha: un comprobante sin CAE de septiembre
+   * sigue sin poder entregarse en noviembre. Con un estado elegido, el período
+   * no corta. Antes esos grupos se repetían enteros arriba del listado, con
+   * cien filas cada uno, y cada factura salía dos o tres veces.
+   */
+  const estado =
+    params.estado === "emitida" || params.estado === "rechazada" || params.estado === "anulada-viva"
+      ? params.estado
+      : "todos";
+  const conEstado = estado !== "todos";
   const filtros = {
-    ...(rango
-      ? { desde: rango.desde, hasta: rango.hasta }
-      : periodo.desde
-        ? { desde: periodo.desde }
-        : {}),
+    ...(conEstado
+      ? { estado }
+      : rango
+        ? { desde: rango.desde, hasta: rango.hasta }
+        : periodo.desde
+          ? { desde: periodo.desde }
+          : {}),
     cobro,
     busqueda: params.buscar,
   };
 
-  /*
-   * Lo pendiente va arriba y es de cualquier fecha: un comprobante rechazado
-   * en septiembre sigue sin poder entregarse en noviembre. El listado, de a
-   * páginas, es el del filtro, con su total y su suma calculados en Go sobre
-   * el filtro entero: antes se pedían 200 (o 500) y se sumaba lo que había
-   * llegado, sin avisar que había más.
-   */
-  /*
-   * Las facturas de ventas anuladas que siguen con su débito: a donde llevan
-   * el Resumen y el Cierre. Son de cualquier fecha, como el aviso, y cada
-   * una abre su comprobante con la nota de crédito a mano. Antes el enlace
-   * caía en la lista general y había que adivinar cuáles eran.
-   */
-  const anuladasVivas = params.estado === "anulada-viva";
-  const [lista, rechazados, sinAutorizar, resumen, arca, bajas, vivas] = await Promise.all([
+  const [lista, rechazados, sinAutorizar, resumen, arca, bajas] = await Promise.all([
     listarComprobantesPagina(filtros, pagina, POR_PAGINA),
-    listarComprobantesPagina({ estado: "rechazada" }, 1, 100),
-    listarComprobantesPagina({ estado: "emitida" }, 1, 100),
+    listarComprobantesPagina({ estado: "rechazada" }, 1, 1),
+    listarComprobantesPagina({ estado: "emitida" }, 1, 1),
     resumenFacturacion(periodo),
     estadoArca(),
     dadosDeBaja(),
-    anuladasVivas ? listarComprobantesPagina({ estado: "anulada-viva" }, 1, 100) : null,
   ]);
   // Una baja borra un comprobante de este listado: que se vea cuántas hubo
   // en el mes, al lado de los otros accesos.
   const mes = hoyEnArgentina().slice(0, 7);
   const bajasDelMes = bajas.filter((b) => hoyEnArgentina(b.createdAt).startsWith(mes)).length;
 
-  const queSeMira = rango
-    ? `del ${fechaCorta.format(rango.desde)} al ${fechaCorta.format(rango.hasta)}`
-    : periodo.etiqueta.toLowerCase();
+  const queSeMira =
+    estado === "emitida"
+      ? "sin autorizar"
+      : estado === "rechazada"
+        ? "rechazados por ARCA"
+        : estado === "anulada-viva"
+          ? "de ventas anuladas"
+          : rango
+            ? `del ${fechaCorta.format(rango.desde)} al ${fechaCorta.format(rango.hasta)}`
+            : periodo.etiqueta.toLowerCase();
 
   return (
     <div className="space-y-6">
       <EncabezadoPanel
         titulo="Facturación"
-        resumen={`${queSeMira.charAt(0).toUpperCase()}${queSeMira.slice(1)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${moneda.format(lista.suma)} en ${plural(lista.total, "comprobante")}`}
+        resumen={`${queSeMira.charAt(0).toUpperCase()}${queSeMira.slice(1)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${estado === "rechazada" ? plural(lista.total, "comprobante") : `${moneda.format(lista.suma)} en ${plural(lista.cantidad, "comprobante")}`}`}
       >
-        {!rango && <FiltroPeriodo actual={periodo.clave} />}
+        {!rango && !conEstado && <FiltroPeriodo actual={periodo.clave} />}
         {bajas.length > 0 && (
           <Link
             href="/admin/facturacion/dados-de-baja"
@@ -141,8 +144,11 @@ export default async function FacturacionPage({
         <BuscadorDeComprobantes
           busquedaActual={params.buscar ?? ""}
           cobro={cobro}
+          estado={estado}
+          sinAutorizar={sinAutorizar.total}
+          rechazados={rechazados.total}
         />
-        <FiltroRango desde={params.desde} hasta={params.hasta} />
+        {!conEstado && <FiltroRango desde={params.desde} hasta={params.hasta} />}
       </section>
 
       {!arca.operativo && (
@@ -160,44 +166,15 @@ export default async function FacturacionPage({
         </section>
       )}
 
-      {vivas && vivas.total > 0 && (
-        <Grupo
-          titulo="Ventas anuladas con factura viva"
-          cantidad={vivas.total}
-          comprobantes={vivas.filas}
-          atencion
-        />
-      )}
-
-      {rechazados.total > 0 && (
-        <Grupo
-          titulo="Rechazados por ARCA"
-          cantidad={rechazados.total}
-          comprobantes={rechazados.filas}
-          atencion
-        />
-      )}
-      {sinAutorizar.total > 0 && (
-        <Grupo
-          titulo="Sin autorizar"
-          cantidad={sinAutorizar.total}
-          comprobantes={sinAutorizar.filas}
-          atencion
-        />
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Indicador
-          titulo={`Facturado · ${periodo.etiqueta.toLowerCase()}`}
-          valor={moneda.format(resumen.totalMes)}
-          detalle={plural(resumen.cantidadMes, "comprobante")}
-        />
+      {/* El débito fiscal del período: solo lo autorizado por ARCA, el mismo
+          número del libro IVA y del cierre. Lo facturado ya está arriba. */}
+      {!conEstado && (
         <Indicador
           titulo={`IVA · ${periodo.etiqueta.toLowerCase()}`}
           valor={moneda.format(resumen.ivaMes)}
           detalle="Débito fiscal"
         />
-      </div>
+      )}
 
       {lista.total === 0 ? (
         <section className="tarjeta px-6 py-16 text-center">
@@ -207,9 +184,18 @@ export default async function FacturacionPage({
       ) : (
         <>
           <Grupo
-            titulo="Comprobantes"
+            titulo={
+              estado === "emitida"
+                ? "Sin autorizar"
+                : estado === "rechazada"
+                  ? "Rechazados por ARCA"
+                  : estado === "anulada-viva"
+                    ? "Ventas anuladas con factura viva"
+                    : "Comprobantes"
+            }
             cantidad={lista.total}
             comprobantes={lista.filas}
+            atencion={conEstado}
           />
           <Paginador
             pagina={pagina}
@@ -220,6 +206,7 @@ export default async function FacturacionPage({
               hasta: params.hasta,
               cobro: params.cobro,
               buscar: params.buscar,
+              estado: conEstado ? estado : undefined,
             }}
           />
         </>
@@ -306,8 +293,13 @@ function Grupo({
 
                 return (
                   <tr key={c.id} className="relative hover:bg-muted/50">
-                    <AcentoEstado estado={c.estado} />
+                    {/* La franja va dentro de la celda: un <span> suelto en
+                        el <tr> es HTML inválido, el navegador lo sacaba de la
+                        tabla y React no hidrataba (error #418), y la tabla
+                        dibujada en el cliente corría los encabezados una
+                        columna. */}
                     <td className="px-5 py-3.5">
+                      <AcentoEstado estado={c.estado} />
                       <Link
                         href={`/admin/facturacion/${c.id}`}
                         className="block"
@@ -317,6 +309,7 @@ function Grupo({
                         </span>
                         <span className="block text-sm text-muted-foreground">
                           {nombreComprobante(c.tipo)}
+                          {c.pedido && <span className="codigo"> · {c.pedido}</span>}
                         </span>
                       </Link>
                     </td>
@@ -324,7 +317,7 @@ function Grupo({
                       <span className="block text-base">{c.receptorNombre}</span>
                       {c.receptorCuit && (
                         <span className="tabular block text-sm text-muted-foreground">
-                          {c.receptorCuit}
+                          {formatearCuit(c.receptorCuit)}
                         </span>
                       )}
                     </td>
@@ -339,7 +332,13 @@ function Grupo({
                         saldo > 0 ? "text-brand-orange-dark" : "text-muted-foreground"
                       }`}
                     >
-                      {saldo > 0 ? moneda.format(saldo) : "Cobrado"}
+                      {c.estado === "anulada" || c.tipo.startsWith("nota_credito")
+                        ? "—"
+                        : c.enCuenta
+                          ? "En cuenta"
+                          : saldo > 0
+                            ? moneda.format(saldo)
+                            : "Cobrado"}
                     </td>
                     <td className="px-5 py-3.5">
                       <EtiquetaEstado estado={c.estado} />

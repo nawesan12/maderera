@@ -91,11 +91,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [filas, total, suma]
+                required: [filas, total, suma, cantidad]
                 properties:
                   filas: { type: array, items: { $ref: "#/components/schemas/ComprobanteListado" } }
                   total: { type: integer }
                   suma: { type: number, format: double }
+                  cantidad: { type: integer, description: Cuántos comprobantes suma `suma` }
   /api/v1/admin/facturacion/comprobantes:
     get:
       operationId: ListarComprobantes
@@ -754,7 +755,7 @@ components:
         pendientesDeAutorizar: { type: integer }
     ComprobanteListado:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, receptorNombre, receptorCuit, total, cobrado, cae, fechaEmision, fechaVencimiento, medios]
+      required: [id, tipo, puntoVenta, numero, estado, receptorNombre, receptorCuit, total, cobrado, cae, fechaEmision, fechaVencimiento, medios, enCuenta, pedido]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -769,6 +770,8 @@ components:
         fechaEmision: { type: string, format: date-time }
         fechaVencimiento: { type: string, format: date-time, nullable: true }
         medios: { type: array, items: { type: string } }
+        enCuenta: { type: boolean, description: La deuda vive en la cuenta corriente del cliente }
+        pedido: { type: string, nullable: true, description: Número del pedido que factura }
     LineasManuales:
       description: Los renglones como los mandaba el FormData (getAll de cada campo, en paralelo)
       type: object
@@ -821,7 +824,7 @@ components:
         importe: { type: string }
     ComprobanteCompleto:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl]
+      required: [id, tipo, puntoVenta, numero, estado, customerId, orderId, receptorNombre, receptorCuit, receptorCondicionIva, receptorDomicilio, neto, iva21, iva105, iva27, exento, tributosTotal, total, cae, caeVencimiento, caeAmbiente, observacionesArca, comprobanteOrigenId, acreditado, debitado, fechaEmision, fechaVencimiento, observaciones, puntoVentaNombre, sucursal, items, cobros, tributos, cobrado, saldo, qrUrl, enCuenta, pedido, ventaAnulada, cobrosDelPedido]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -859,6 +862,20 @@ components:
         tributos: { type: array, items: { $ref: "#/components/schemas/TributoDeComprobante" } }
         cobrado: { type: number, format: double }
         saldo: { type: number, format: double }
+        enCuenta: { type: boolean }
+        pedido: { type: string, nullable: true }
+        ventaAnulada: { type: boolean }
+        cobrosDelPedido:
+          type: array
+          items:
+            type: object
+            required: [medio, monto, fecha, recibo, reciboId]
+            properties:
+              medio: { type: string }
+              monto: { type: number, format: double }
+              fecha: { type: string, format: date-time }
+              recibo: { type: string, nullable: true }
+              reciboId: { type: string, nullable: true }
         qrUrl: { type: string, nullable: true, description: El enlace de verificación de ARCA (solo con CAE) }
     ResultadoDeAutorizacion:
       type: object
@@ -946,7 +963,7 @@ components:
             tipo: { type: string }
     ComprobantePropio:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, total, cae, fechaEmision]
+      required: [id, tipo, puntoVenta, numero, estado, total, cae, fechaEmision, pedido, ventaAnulada]
       properties:
         id: { type: string }
         tipo: { type: string }
@@ -956,6 +973,8 @@ components:
         total: { type: number, format: double }
         cae: { type: string, nullable: true }
         fechaEmision: { type: string, format: date-time }
+        pedido: { type: string, nullable: true }
+        ventaAnulada: { type: boolean }
     LineaDeEmision:
       type: object
       required: [descripcion, cantidad, precioFinalUnitario]

@@ -118,6 +118,19 @@ const PagoEnRevision = `EXISTS (SELECT 1 FROM payments pr WHERE pr.order_id = o.
 // anulada (revertida por una de débito) no resta.
 const FacturaViva = `EXISTS (SELECT 1 FROM invoices fv WHERE fv.order_id = o.id AND ` + facturaSinAcreditar + `)`
 
+// FacturaSinBaja: el pedido `o` tiene una factura sin CAE que sigue
+// numerada (emitida o rechazada). En una venta anulada no se autoriza nunca
+// (facturacion.ventaAnulada): hay que darla de baja, y el cliente ya pudo
+// haberla recibido. Antes no entraba en ninguna lista y se la encontraba
+// recorriendo Facturación hoja por hoja, con «Registrar cobro» a mano
+// (simulación del mes, H236).
+const FacturaSinBaja = `EXISTS (SELECT 1 FROM invoices fb WHERE fb.order_id = o.id AND ` + facturaSinBaja + `)`
+
+// FacturaSinBajaDeLaFila es FacturaSinBaja sobre la fila `i` de invoices.
+var FacturaSinBajaDeLaFila = strings.ReplaceAll(facturaSinBaja, "fb.", "i.")
+
+const facturaSinBaja = `fb.cae IS NULL AND fb.estado IN ('emitida', 'rechazada') AND fb.tipo::text NOT LIKE 'nota_credito%'`
+
 // FacturaSinAcreditar es la misma regla sobre la fila `i` de invoices: la
 // usa el filtro de Facturación que lleva a cada una (estado=anulada-viva).
 var FacturaSinAcreditar = strings.ReplaceAll(facturaSinAcreditar, "fv.", "i.")

@@ -743,6 +743,10 @@ export interface components {
             /** Format: date-time */
             fechaVencimiento: string | null;
             medios: string[];
+            /** @description La deuda vive en la cuenta corriente del cliente */
+            enCuenta: boolean;
+            /** @description Número del pedido que factura */
+            pedido: string | null;
         };
         /** @description Los renglones como los mandaba el FormData (getAll de cada campo, en paralelo) */
         LineasManuales: {
@@ -835,6 +839,18 @@ export interface components {
             cobrado: number;
             /** Format: double */
             saldo: number;
+            enCuenta: boolean;
+            pedido: string | null;
+            ventaAnulada: boolean;
+            cobrosDelPedido: {
+                medio: string;
+                /** Format: double */
+                monto: number;
+                /** Format: date-time */
+                fecha: string;
+                recibo: string | null;
+                reciboId: string | null;
+            }[];
             /** @description El enlace de verificación de ARCA (solo con CAE) */
             qrUrl: string | null;
         };
@@ -932,6 +948,8 @@ export interface components {
             cae: string | null;
             /** Format: date-time */
             fechaEmision: string;
+            pedido: string | null;
+            ventaAnulada: boolean;
         };
         LineaDeEmision: {
             descripcion: string;
@@ -1172,6 +1190,8 @@ export interface operations {
                         total: number;
                         /** Format: double */
                         suma: number;
+                        /** @description Cuántos comprobantes suma `suma` */
+                        cantidad: number;
                     };
                 };
             };

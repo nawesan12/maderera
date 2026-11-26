@@ -344,7 +344,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		  (SELECT count(*)::int FROM cash_sessions WHERE estado = 'abierta' AND abierta_at <= $3),
 		  (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada' AND g.fecha >= $1 AND g.fecha <= $2
 		     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)),
-		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND `+fragmentos.FacturaViva+`)`, desde, hasta, ihasta).
+		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND o.created_at <= $3 AND (`+fragmentos.FacturaViva+` OR `+fragmentos.FacturaSinBaja+`))`, desde, hasta, ihasta).
 		Scan(&borradores, &cajas, &sinFactura, &facturasVivas)
 	if err != nil {
 		return nil, err
@@ -367,7 +367,7 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	// (mostrador.Anular no toca el comprobante, lo avisa).
 	if facturasVivas > 0 {
 		out = append(out, PendienteDelCierre{"facturas-vivas", "Ventas anuladas con factura viva",
-			"Falta la nota de crédito: su IVA sigue como débito.", facturasVivas, "/admin/facturacion?estado=" + facturacion.EstadoAnuladaViva})
+			"Falta la nota de crédito, o la baja si no tiene CAE.", facturasVivas, "/admin/facturacion?estado=" + facturacion.EstadoAnuladaViva})
 	}
 	// Los emitidos hasta el fin del mes (argentino) que ARCA todavía no
 	// autorizó: no están en el libro ni en el CSV, y si se autorizan el mes

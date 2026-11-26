@@ -147,8 +147,9 @@ type ResultadoComparado struct {
 // cobrada así no es plata que se fue.
 //
 // ConFacturaViva son las ventas anuladas, de cualquier fecha y origen, que
-// siguen con su factura autorizada y sin nota de crédito que la acredite:
-// para el fisco esa venta existe y su IVA se debe. Es el mismo número que el
+// siguen con su factura autorizada y sin nota de crédito que la acredite
+// (para el fisco esa venta existe y su IVA se debe), o con una factura sin
+// CAE que falta dar de baja. Es el mismo número que el
 // pendiente del Cierre; contar solo las de la semana hacía que la misma
 // cosa diera dos cantidades, y una de hace diez días dejaba de verse.
 type Anuladas struct {
@@ -293,7 +294,7 @@ func (s *Servicio) AnuladasDeLaSemana(ctx context.Context, ahora time.Time) (Anu
 	hasta := InicioDelDia(ahora).AddDate(0, 0, 1)
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*)::int, coalesce(sum(o.total), 0),
-		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND `+fragmentos.FacturaViva+`),
+		  (SELECT count(*)::int FROM orders o WHERE o.estado = 'cancelado' AND (`+fragmentos.FacturaViva+` OR `+fragmentos.FacturaSinBaja+`)),
 		  (SELECT coalesce(-sum(m.monto), 0) FROM cash_movements m
 		   JOIN orders d ON d.id = m.order_id AND d.origen = 'mostrador' AND d.estado = 'cancelado'
 		   WHERE m.tipo = 'devolucion' AND m.created_at >= $1 AND m.created_at < $2

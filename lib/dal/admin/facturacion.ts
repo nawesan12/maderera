@@ -98,6 +98,8 @@ export async function listarComprobantesPagina(
   return {
     total: r.total,
     suma: r.suma,
+    /** Cuántos suma `suma`: sin anuladas, rechazadas ni borradores. */
+    cantidad: r.cantidad,
     filas: r.filas.map(
       (f): ComprobanteListado => ({
         ...f,
@@ -111,9 +113,13 @@ export async function listarComprobantesPagina(
 
 type Crudo = Esquemas["ComprobanteCompleto"];
 type CobroCrudo = Crudo["cobros"][number];
+type CobroDelPedidoCrudo = Crudo["cobrosDelPedido"][number];
 
 export interface ComprobanteCompleto
-  extends Omit<Crudo, "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros" | "fechaEmisionOriginal"> {
+  extends Omit<
+    Crudo,
+    "fechaEmision" | "fechaVencimiento" | "caeVencimiento" | "cobros" | "fechaEmisionOriginal" | "cobrosDelPedido"
+  > {
   tipo: TipoComprobante;
   fechaEmision: Date;
   /** La fecha con que se emitió, si al reintentar salió con la del día. */
@@ -121,6 +127,8 @@ export interface ComprobanteCompleto
   fechaVencimiento: Date | null;
   caeVencimiento: Date | null;
   cobros: (Omit<CobroCrudo, "fecha" | "createdAt"> & { fecha: Date; createdAt: Date })[];
+  /** Con qué se cobró el pedido fuera de Facturación: la caja, sus recibos. */
+  cobrosDelPedido: (Omit<CobroDelPedidoCrudo, "fecha"> & { fecha: Date })[];
 }
 
 function conFechas(c: Crudo): ComprobanteCompleto {
@@ -131,6 +139,7 @@ function conFechas(c: Crudo): ComprobanteCompleto {
     fechaVencimiento: c.fechaVencimiento ? new Date(c.fechaVencimiento) : null,
     caeVencimiento: c.caeVencimiento ? new Date(c.caeVencimiento) : null,
     cobros: c.cobros.map((p) => ({ ...p, fecha: new Date(p.fecha), createdAt: new Date(p.createdAt) })),
+    cobrosDelPedido: c.cobrosDelPedido.map((p) => ({ ...p, fecha: new Date(p.fecha) })),
   };
 }
 

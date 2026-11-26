@@ -172,11 +172,10 @@ func (s *Servicio) autorizar(ctx context.Context, id string, a *arca) (string, e
 	}
 	if !s.env.UsaArca() {
 		// El proveedor interno: numera y emite, pero no autoriza. Nunca un
-		// CAE inventado.
-		if _, err := s.pool.Exec(ctx, `UPDATE invoices SET estado = 'rechazada', observaciones_arca = $2, updated_at = now() WHERE id = $1`,
-			id, sinValorFiscal); err != nil {
-			return "", err
-		}
+		// CAE inventado. El comprobante queda «emitida» (sin autorizar): ARCA
+		// no lo vio, así que no está rechazado. Antes pasaba a «rechazada» y
+		// Facturación mostraba «Rechazada por ARCA» de algo que nunca se
+		// mandó, con el botón de corregir los datos del cliente.
 		return "", errEmision(sinValorFiscal)
 	}
 	cfg := s.env.Leer()

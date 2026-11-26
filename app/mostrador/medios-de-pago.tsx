@@ -54,7 +54,9 @@ export function CamposDeCheque({
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-[1.2fr_1fr_1fr] gap-2">
+      {/* Banco y número arriba; la fecha con su ancho justo y el librador
+          abajo. En tres columnas, a 1024 px se leía «N° de che» y «dd/mm/aaa». */}
+      <div className="grid grid-cols-2 gap-2">
         <input
           value={valor.banco}
           onChange={(e) => cambiar("banco", e.target.value)}
@@ -70,20 +72,22 @@ export function CamposDeCheque({
           aria-label="Número del cheque"
           className="tabular h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
         />
+      </div>
+      <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-2">
         <CampoFecha
           value={valor.fechaPago}
           onChange={(e) => cambiar("fechaPago", e.target.value)}
           aria-label="Fecha de pago del cheque"
           className="tabular h-11 min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
         />
+        <input
+          value={valor.librador}
+          onChange={(e) => cambiar("librador", e.target.value)}
+          placeholder="Librador, si no es el cliente"
+          aria-label="Librador del cheque"
+          className="h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+        />
       </div>
-      <input
-        value={valor.librador}
-        onChange={(e) => cambiar("librador", e.target.value)}
-        placeholder="Librador, si no es el cliente"
-        aria-label="Librador del cheque"
-        className="h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base"
-      />
       {problema && <p className="estado-espera text-sm font-medium">{problema}</p>}
     </div>
   );

@@ -83,6 +83,11 @@ func TestSumarLasPasadasAlPedido(t *testing.T) {
 	if f := leerFicha(t, e, ven, id); f["modo"] != "vendido" || f["sumar"] != nil || f["pedido"].(map[string]any)["cobrado"].(float64) != afuera {
 		t.Errorf("la ficha después: %v %v %v", f["modo"], f["sumar"], f["pedido"])
 	}
+	// Las placas las sigue vendiendo el pedido: los retales son del cliente
+	// y el plano no vuelve a cobrar pasadas.
+	if f := leerFicha(t, e, ven, id); f["retalesDelCliente"] != true || f["pasadasACobrar"].(float64) != 0 {
+		t.Errorf("después de sumar, las placas: %v %v", f["retalesDelCliente"], f["pasadasACobrar"])
+	}
 	if f := leerFicha(t, e, ven, otro); f["modo"] != "pedido" || f["sumar"] == nil {
 		t.Errorf("el otro corte del pedido quedó cobrado: %v %v", f["modo"], f["sumar"])
 	}
@@ -129,7 +134,7 @@ func TestSumarLasPasadasAlPedido(t *testing.T) {
 			t.Errorf("%s: el pedido aparte: %s", k.numero, cargo)
 		}
 		f := leerFicha(t, e, ven, corte)
-		if f["modo"] != "vendido" || f["pedido"].(map[string]any)["cargo"] == nil {
+		if f["modo"] != "vendido" || f["pedido"].(map[string]any)["cargo"] == nil || f["retalesDelCliente"] != true {
 			t.Errorf("%s: la ficha después: %v %v", k.numero, f["modo"], f["pedido"])
 		}
 	}

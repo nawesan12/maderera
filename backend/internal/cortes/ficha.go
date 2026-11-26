@@ -74,6 +74,10 @@ type PedidoDelCorte struct {
 	Cargo           *string `json:"cargo"`
 	CargoID         *string `json:"cargoId"`
 	CargoEstadoPago *string `json:"cargoEstadoPago"`
+	// Sumado: lo del corte se sumó con «Sumar al pedido» (H184). El
+	// pedido sigue vendiendo las placas: los retales siguen siendo del
+	// cliente aunque el modo pase a «vendido».
+	Sumado bool `json:"-"`
 }
 
 // RenglonDelPedido es un renglón del pedido que es del corte.
@@ -110,7 +114,8 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		return nil, err
 	}
 	modo := ModoDelCorte(c, delCorte)
-	if modo == "pedido" {
+	placas := modoDeLasPlacas(modo, pedido)
+	if placas == "pedido" {
 		if pedido.PlacasDeOtrosCortes, err = s.placasDeOtrosCortes(ctx, c); err != nil {
 			return nil, err
 		}
@@ -119,7 +124,7 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	// sin cargo y lo que sobra es del cliente. Contado sobre el plano, las
 	// cifras decían «1 se vende entera · 3 pasadas a cobrar» con las dos
 	// placas selladas «Se vende entera» (mes simulado, H052 y H184).
-	delCliente := RetalesDelCliente(c, plano, pedido, modo)
+	delCliente := RetalesDelCliente(c, plano, pedido, placas)
 	if delCliente {
 		plano = TodasDelCliente(plano)
 	}
@@ -161,7 +166,7 @@ func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plan
 	if err != nil {
 		return false, err
 	}
-	modo := ModoDelCorte(c, delCorte)
+	modo := modoDeLasPlacas(ModoDelCorte(c, delCorte), pedido)
 	if modo != "pedido" {
 		return false, nil
 	}
@@ -169,6 +174,16 @@ func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plan
 		return false, err
 	}
 	return RetalesDelCliente(c, plano, pedido, modo), nil
+}
+
+// modoDeLasPlacas es de dónde salen las placas: un corte cuyas pasadas se
+// sumaron al pedido (o a uno aparte) cobra como vendido, pero sus placas las
+// sigue vendiendo el pedido (H184).
+func modoDeLasPlacas(modo string, pedido *PedidoDelCorte) string {
+	if modo == "vendido" && pedido != nil && pedido.Sumado {
+		return "pedido"
+	}
+	return modo
 }
 
 // TodasDelCliente marca todas las placas del plano como del cliente: el
@@ -351,7 +366,8 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 	// Los renglones del pedido, menos los que otro corte sumó (H184), y los
 	// que este corte sumó, en su pedido o en el aparte.
 	filas, err := s.pool.Query(ctx, `
-		SELECT descripcion, unidad, cantidad, subtotal, variant_id::text, presentacion, del_corte
+		SELECT descripcion, unidad, cantidad, subtotal, variant_id::text, presentacion, del_corte,
+		       coalesce(cutting_order_id = $2, false)
 		FROM order_items
 		WHERE (order_id = $1 AND (cutting_order_id IS NULL OR cutting_order_id = $2)) OR cutting_order_id = $2
 		ORDER BY order_id = $1 DESC, orden, id`, *c.OrderID, c.ID)
@@ -364,11 +380,14 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 		var r RenglonDelPedido
 		var cantidad, sub jsmath.Num
 		var variante, presentacion *string
-		var esDelCorte bool
-		if err := filas.Scan(&r.Descripcion, &r.Unidad, &cantidad, &sub, &variante, &presentacion, &esDelCorte); err != nil {
+		var esDelCorte, sumado bool
+		if err := filas.Scan(&r.Descripcion, &r.Unidad, &cantidad, &sub, &variante, &presentacion, &esDelCorte, &sumado); err != nil {
 			return nil, false, err
 		}
 		r.Cantidad, r.Subtotal = cantidad.F(), sub.F()
+		if sumado {
+			p.Sumado = true
+		}
 		if esDelCorte {
 			delCorte = append(delCorte, r)
 		}

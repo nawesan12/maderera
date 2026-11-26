@@ -37,6 +37,10 @@ export interface DatosPago {
   notas?: string;
   retenciones: { regimenId: string; base: number }[];
   imputaciones?: { purchaseInvoiceId: string; importe: number }[];
+  /** Los cheques rechazados que se reponen con este pago. */
+  cheques?: { chequeId: string; importe: number }[];
+  /** Las notas de crédito a favor que se descuentan. */
+  notasDeCredito?: string[];
   partes?: {
     medio: "transferencia" | "efectivo" | "cheque" | "echeq";
     importe: number;

@@ -40,12 +40,12 @@ export default async function PagosPage({
    * `proveedor` y `factura` llegan desde una factura impaga o la ficha del
    * proveedor, para que pagar sea un botón y no un recorrido.
    */
-  searchParams: Promise<{ proveedor?: string; factura?: string }>;
+  searchParams: Promise<{ proveedor?: string; factura?: string; cheque?: string }>;
 }) {
   const usuario = await requireStaff();
   if (!puedeEntrar("/admin/compras/pagos", usuario.staffRole)) notFound();
 
-  const { proveedor: proveedorInicial, factura: facturaInicial } =
+  const { proveedor: proveedorInicial, factura: facturaInicial, cheque: chequeInicial } =
     await searchParams;
 
   const [pagos, proveedores, regimenes, sucursales] = await Promise.all([
@@ -120,6 +120,7 @@ export default async function PagosPage({
         sucursales={sucursales}
         proveedorInicial={proveedorInicial}
         facturaInicial={facturaInicial}
+        chequeInicial={chequeInicial}
       />
 
       <section className="tarjeta overflow-hidden">
@@ -146,16 +147,56 @@ export default async function PagosPage({
   );
 }
 
-/** Los pagos, vigentes o anulados: el anulado sale apagado y tachado. */
+/** Con qué se pagó: cada renglón con su referencia, o el medio de la cabecera. */
+function Medios({ p }: { p: Pago }) {
+  const partes = p.partes.length > 0 ? p.partes : [{ medio: p.medio, importe: p.neto, referencia: p.referencia }];
+  return (
+    <span className="flex flex-wrap gap-1.5">
+      {partes.map((x, i) => (
+        <span key={i} className="tabular inline-flex max-w-full items-baseline gap-1 rounded-full bg-chip px-2.5 py-0.5 text-sm">
+          <span className="font-medium">{NOMBRE_DEL_MEDIO[x.medio] ?? x.medio}</span>
+          {x.referencia && <span className="codigo truncate text-muted-foreground">{x.referencia}</span>}
+          {partes.length > 1 && <span>{formatearMonto(x.importe)}</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Contra qué se aplicó: las facturas y los cheques rechazados repuestos. */
+function Aplicado({ p }: { p: Pago }) {
+  if (p.facturas.length === 0) return <span className="text-sm text-muted-foreground">A cuenta, sin aplicar</span>;
+  return (
+    <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
+      {p.facturas.map((f) => (
+        <Link
+          key={f.id}
+          href={f.numero.startsWith("Cheque") ? "/admin/cheques" : `/admin/compras/facturas/${f.id}`}
+          className="tabular hover:underline"
+        >
+          {f.numero} · {formatearMonto(f.importe)}
+        </Link>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Los pagos, vigentes o anulados: el anulado sale apagado y tachado.
+ *
+ * Donde la tabla no entra, una tarjeta sin columna de rótulos: la fecha y lo
+ * pagado arriba, el proveedor entero, y con qué se pagó como chips. Apilada,
+ * guardaba media tarjeta para rótulos cortados («Me…», «Aplic…»).
+ */
 function TablaDePagos({ pagos }: { pagos: Pago[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] text-base">
+    <div className="@container">
+      <table className="hidden w-full text-base @4xl:table" data-tabla="fija">
         <thead>
           <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
             <th className="px-5 py-2.5 font-semibold">Fecha</th>
             <th className="px-5 py-2.5 font-semibold">Proveedor</th>
-            <th className="px-5 py-2.5 font-semibold">Forma de pago</th>
+            <th className="px-5 py-2.5 font-semibold">Con qué</th>
             <th className="px-5 py-2.5 text-right font-semibold">Aplicado</th>
             <th className="px-5 py-2.5 text-right font-semibold">Retenido</th>
             <th className="px-5 py-2.5 text-right font-semibold">Pagado</th>
@@ -168,63 +209,23 @@ function TablaDePagos({ pagos }: { pagos: Pago[] }) {
                 <Link href={`/admin/compras/pagos/${p.id}`} className="font-medium hover:underline">
                   {fechaCorta.format(p.fecha)}
                 </Link>
-                {p.anuladoAt && (
-                  <span className="block text-sm font-medium text-saldo-debe">Anulado</span>
-                )}
+                {p.anuladoAt && <span className="block text-sm font-medium text-saldo-debe">Anulado</span>}
               </td>
               <td className="px-5 py-3">
                 <Link href={`/admin/proveedores/${p.supplierId}`} className="hover:underline">
                   {p.proveedor}
                 </Link>
-                {p.numerosCertificado.length > 0 && (
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                    <FileCheck2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    {p.numerosCertificado.map((numero) => (
-                      <a
-                        key={numero}
-                        href={`/admin/compras/pagos/certificado/${encodeURIComponent(numero)}`}
-                        className="tabular hover:text-brand-orange hover:underline"
-                      >
-                        {numero}
-                      </a>
-                    ))}
-                  </span>
-                )}
+                <Certificados p={p} />
               </td>
               <td className="px-5 py-3">
-                {NOMBRE_DEL_MEDIO[p.medio] ?? p.medio}
-                {p.referencia && (
-                  <span className="tabular block text-sm text-muted-foreground">{p.referencia}</span>
-                )}
-                {/* Por qué circuito salió: el mismo dato que separa los
-                    totales de gastos. Ver lib/db/schema/circuito.ts. */}
-                <span className="block text-sm text-muted-foreground">
-                  {etiquetaDeCircuito(p.circuito)}
-                </span>
+                <Medios p={p} />
+                <span className="mt-0.5 block text-sm text-muted-foreground">{etiquetaDeCircuito(p.circuito)}</span>
               </td>
-              <td
-                className={`tabular px-5 py-3 text-right font-semibold ${p.anuladoAt ? "line-through" : ""}`}
-              >
+              <td className={`tabular px-5 py-3 text-right font-semibold ${p.anuladoAt ? "line-through" : ""}`}>
                 {formatearMonto(p.total)}
-                {/* Contra qué se aplicó: sin esto la tabla contestaba
-                    "salieron $800.000" y no "de qué facturas". */}
-                {p.facturas.length > 0 ? (
-                  <span className="mt-0.5 flex flex-col items-end gap-0.5 text-sm font-normal text-muted-foreground">
-                    {p.facturas.map((f) => (
-                      <Link
-                        key={f.id}
-                        href={`/admin/compras/facturas/${f.id}`}
-                        className="tabular hover:underline"
-                      >
-                        {f.numero} · {formatearMonto(f.importe)}
-                      </Link>
-                    ))}
-                  </span>
-                ) : (
-                  <span className="mt-0.5 block text-sm font-normal text-muted-foreground">
-                    A cuenta, sin aplicar
-                  </span>
-                )}
+                <span className="mt-0.5 flex justify-end font-normal">
+                  <Aplicado p={p} />
+                </span>
               </td>
               <td
                 className={`tabular px-5 py-3 text-right text-muted-foreground ${p.anuladoAt && p.retenido > 0 ? "line-through" : ""}`}
@@ -238,7 +239,51 @@ function TablaDePagos({ pagos }: { pagos: Pago[] }) {
           ))}
         </tbody>
       </table>
+
+      <ul className="divide-y divide-linea @4xl:hidden">
+        {pagos.map((p) => (
+          <li key={p.id} className={`space-y-1.5 px-4 py-3 ${p.anuladoAt ? "text-muted-foreground" : ""}`}>
+            <div className="flex items-baseline justify-between gap-3">
+              <Link href={`/admin/compras/pagos/${p.id}`} className="tabular text-base text-muted-foreground hover:underline">
+                {fechaCorta.format(p.fecha)}
+                {p.anuladoAt && <span className="font-medium text-saldo-debe"> · Anulado</span>}
+              </Link>
+              <span className={`tabular text-lg font-semibold ${p.anuladoAt ? "line-through" : ""}`}>
+                {formatearMonto(p.total)}
+              </span>
+            </div>
+            <Link href={`/admin/proveedores/${p.supplierId}`} className="block text-base font-semibold hover:underline">
+              {p.proveedor}
+            </Link>
+            <Medios p={p} />
+            <Aplicado p={p} />
+            {p.retenido > 0 && (
+              <p className="tabular text-sm text-muted-foreground">
+                Retenido {formatearMonto(p.retenido)} · salió {formatearMonto(p.neto)}
+              </p>
+            )}
+            <Certificados p={p} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
+function Certificados({ p }: { p: Pago }) {
+  if (p.numerosCertificado.length === 0) return null;
+  return (
+    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+      <FileCheck2 className="h-3.5 w-3.5" aria-hidden="true" />
+      {p.numerosCertificado.map((numero) => (
+        <a
+          key={numero}
+          href={`/admin/compras/pagos/certificado/${encodeURIComponent(numero)}`}
+          className="tabular hover:text-brand-orange hover:underline"
+        >
+          {numero}
+        </a>
+      ))}
+    </span>
+  );
+}

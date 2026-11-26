@@ -52,8 +52,10 @@ export default async function FichaPresupuestoPage({
   const limite = ficha ? Number(ficha.limiteCredito) : 0;
   const credito = ficha ? { disponible: limite > 0 ? limite - ficha.saldo : 0, bloqueada: ficha.cuentaBloqueada } : null;
 
-  const bajoCosto = p.items.filter((i) => i.bajoCosto).length;
   const abierto = !["rechazado"].includes(p.estado);
+  // Un presupuesto rechazado o ya hecho pedido no se va a vender a ese
+  // precio: el aviso del costo no tiene a quién servirle (mes simulado).
+  const bajoCosto = abierto && !p.pedidoId ? p.items.filter((i) => i.bajoCosto).length : 0;
   const empresa = p.empresa && p.empresa !== p.cliente ? p.empresa : null;
 
   return (

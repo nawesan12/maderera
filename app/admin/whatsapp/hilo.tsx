@@ -397,7 +397,7 @@ export function Hilo({
                   type="button"
                   onClick={() => setModo("documento")}
                   aria-label="Documento"
-                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-base transition-colors hover:bg-muted sm:px-3"
                   title="Mandar un presupuesto, una factura, un remito, un recibo o el resumen de cuenta"
                 >
                   <FileText className="h-5 w-5" />
@@ -408,7 +408,7 @@ export function Hilo({
                   onClick={() => setModo("plantilla")}
                   aria-label="Mensaje preparado"
                   title="Mensaje preparado"
-                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-base transition-colors hover:bg-muted sm:px-3"
                 >
                   <MessageSquareText className="h-5 w-5" />
                   <span className="hidden @2xl:inline">Preparado</span>

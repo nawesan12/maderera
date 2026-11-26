@@ -29,3 +29,17 @@ export function leerTienda(ajustes: Record<string, string>): Tienda {
 
 /** La tienda de antes: lo que se usa si no se pudieron leer los ajustes. */
 export const TIENDA_ENCENDIDA: Tienda = { activa: true, stockVisible: true };
+
+/**
+ * Si el profesional ve sus precios: con la tienda encendida, siempre; apagada,
+ * solo si tiene lista propia y la regla «precios_profesional_sin_tienda» lo
+ * deja (H086). Es lo que decide Go (`catalogo.PreciosDelProfesional`); acá
+ * decide qué accesos mostrar. Comprar sigue siendo de la tienda encendida.
+ */
+export function preciosDelProfesional(
+  tienda: Tienda,
+  regla: "no" | "si",
+  conListaPropia: boolean,
+): boolean {
+  return tienda.activa || (regla === "si" && conListaPropia);
+}

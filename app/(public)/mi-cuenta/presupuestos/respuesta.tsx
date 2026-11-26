@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useActionState } from "react";
 import { AlertCircle, Check, Loader2, X } from "lucide-react";
 import {
   responderPresupuesto,
@@ -20,21 +19,18 @@ const estadoInicial: EstadoAccion = {};
  * Aceptar es la acción principal y se ve como tal; rechazar existe pero no
  * compite visualmente, porque no es lo que se espera que pase.
  */
-export function RespuestaPresupuesto({ numero }: { numero: string }) {
+export function RespuestaPresupuesto({
+  numero,
+  desde,
+}: {
+  numero: string;
+  /** Desde el Resumen, la acción lleva al detalle al responder (H215). */
+  desde?: "resumen";
+}) {
   const [estado, accion, pendiente] = useActionState(
     responderPresupuesto,
     estadoInicial,
   );
-  const router = useRouter();
-  const ruta = usePathname();
-  const detalle = `/mi-cuenta/presupuestos/${numero}`;
-
-  // Desde el resumen, la tarjeta desaparece al responder (ya no espera
-  // respuesta) y el aviso se iba con ella: se sigue en el detalle, que dice
-  // qué pasa ahora y enlaza el pedido cuando lo hay (H215).
-  useEffect(() => {
-    if (estado.ok && ruta !== detalle) router.push(detalle);
-  }, [estado.ok, ruta, detalle, router]);
 
   if (estado.ok) {
     return (
@@ -48,6 +44,7 @@ export function RespuestaPresupuesto({ numero }: { numero: string }) {
   return (
     <form action={accion} className="space-y-2.5">
       <input type="hidden" name="numero" value={numero} />
+      {desde && <input type="hidden" name="desde" value={desde} />}
 
       <div className="flex flex-wrap gap-2">
         <button

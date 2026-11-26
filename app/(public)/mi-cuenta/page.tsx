@@ -106,7 +106,7 @@ export default async function ResumenCuentaPage() {
                   </div>
 
                   <div className="mt-4">
-                    <RespuestaPresupuesto numero={presupuesto.numero} />
+                    <RespuestaPresupuesto numero={presupuesto.numero} desde="resumen" />
                   </div>
                 </article>
               );

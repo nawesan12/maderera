@@ -59,6 +59,17 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
         createdAt: corte.createdAt,
         deQueSale: nombreDeLaMitad(corte.medida.mitad),
         notas: corte.notas,
+        canto: corte.cantoDescripcion,
+        // El canto de cada pieza, como en el plano y las etiquetas (H233).
+        cantos: corte.piezas.map((p) => ({ largo: p.cantoLargo, ancho: p.cantoAncho })),
+        // La media placa arranca partiendo la entera (H402).
+        mitad: corte.medida.mitad
+          ? {
+              sentido: corte.medida.mitad,
+              enteraLargo: corte.propiaLargoMm ?? corte.varianteLargoMm ?? 2750,
+              enteraAncho: corte.propiaAnchoMm ?? corte.varianteAnchoMm ?? 1830,
+            }
+          : null,
       }}
     />
   );

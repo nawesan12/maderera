@@ -858,13 +858,18 @@ type PedidoParaElTaller struct {
 	Items       []ItemDelTaller `json:"items"`
 }
 
-// ItemDelTaller es un renglón sin precio.
+// ItemDelTaller es un renglón sin precio. La medida y el color de la placa
+// son para que «Mandar a cortar» arranque con la placa que el pedido vende
+// (mes simulado, H188: arrancaba con una medida supuesta).
 type ItemDelTaller struct {
 	VariantID    *string `json:"variantId"`
 	Descripcion  string  `json:"descripcion"`
 	Unidad       string  `json:"unidad"`
 	Cantidad     string  `json:"cantidad"`
 	Presentacion *string `json:"presentacion"`
+	LargoMm      *int32  `json:"largoMm"`
+	AnchoMm      *int32  `json:"anchoMm"`
+	Color        *string `json:"color"`
 }
 
 // ParaElTaller lee esa ficha, o nil si el pedido no existe.
@@ -885,14 +890,15 @@ func (s *Servicio) ParaElTaller(ctx context.Context, id string) (*PedidoParaElTa
 		return nil, err
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT variant_id, descripcion, unidad, cantidad::text, presentacion
-		FROM order_items WHERE order_id = $1 ORDER BY orden, id`, id)
+		SELECT oi.variant_id, oi.descripcion, oi.unidad, oi.cantidad::text, oi.presentacion, pv.largo_mm, pv.ancho_mm, pv.color
+		FROM order_items oi LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+		WHERE oi.order_id = $1 ORDER BY oi.orden, oi.id`, id)
 	if err != nil {
 		return nil, err
 	}
 	p.Items, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (ItemDelTaller, error) {
 		var it ItemDelTaller
-		err := r.Scan(&it.VariantID, &it.Descripcion, &it.Unidad, &it.Cantidad, &it.Presentacion)
+		err := r.Scan(&it.VariantID, &it.Descripcion, &it.Unidad, &it.Cantidad, &it.Presentacion, &it.LargoMm, &it.AnchoMm, &it.Color)
 		return it, err
 	})
 	if p.Items == nil {

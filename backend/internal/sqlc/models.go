@@ -5309,6 +5309,9 @@ type CuttingOrder struct {
 	MotorPlano          int32       `json:"motorPlano"`
 	ContactoTelefono    *string     `json:"contactoTelefono"`
 	RetiraEl            pgtype.Date `json:"retiraEl"`
+	TerminadoAt         *time.Time  `json:"terminadoAt"`
+	SinCargo            bool        `json:"sinCargo"`
+	MotivoAnulado       *string     `json:"motivoAnulado"`
 }
 
 type CuttingRate struct {

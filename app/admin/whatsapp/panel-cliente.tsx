@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BellOff, BellRing, ClipboardList, Link2, Loader2, Scissors, Search, UserPlus, Wallet } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, moneda } from "@/lib/formato";
@@ -24,6 +25,11 @@ const estadoInicial: EstadoWhatsapp = {};
  * la diferencia entre responder en diez segundos o abrir tres pantallas.
  */
 export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
+  // El corte que se toma desde el chat vuelve al chat, con el número de la
+  // conversación por si la ficha no tiene teléfono (mes simulado, H046).
+  const ruta = usePathname();
+  const volver = encodeURIComponent(`${ruta}?chat=${detalle.id}`);
+  const telefono = detalle.sinNumero ? "" : `&telefono=${encodeURIComponent(detalle.waJid.split("@")[0])}`;
   if (!detalle.customerId) {
     return (
       <div className="space-y-4 lg:sticky lg:top-24">
@@ -63,7 +69,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
             Presupuesto
           </Link>
           <Link
-            href={`/admin/cortes/nuevo?cliente=${detalle.customerId}`}
+            href={`/admin/cortes/nuevo?cliente=${detalle.customerId}&volver=${volver}${telefono}`}
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida text-base font-medium hover:bg-muted"
           >
             <Scissors className="h-4 w-4" aria-hidden="true" />

@@ -19,6 +19,7 @@ paths:
       parameters:
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
         - { name: estado, in: query, schema: { type: string, maxLength: 40 } }
+        - { name: sucursal, in: query, description: El id de una sucursal (los cortes sin sucursal salen en todas), schema: { type: string, maxLength: 40 } }
       responses:
         "200":
           description: La cola, primero lo urgente y después por antigüedad
@@ -34,10 +35,10 @@ paths:
             schema: { $ref: "#/components/schemas/FormCorte" }
       responses:
         "200":
-          description: El número del corte nuevo
+          description: El número y el id del corte nuevo
           content:
             application/json:
-              schema: { type: object, required: [numero], properties: { numero: { type: string } } }
+              schema: { type: object, required: [numero, id], properties: { numero: { type: string }, id: { type: string } } }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}:
     get:
@@ -81,10 +82,56 @@ paths:
         - { $ref: "#/components/parameters/Id" }
         - { name: desde, in: query, schema: { type: string, maxLength: 40 } }
         - { name: sinCobrar, in: query, schema: { type: boolean }, description: "entregar un corte que no está cobrado, sabiéndolo" }
+        - { name: pasadas, in: query, description: Al terminar, las pasadas que confirma el taller, schema: { type: integer, minimum: 0, maximum: 100000 } }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "409": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/volver:
+    post:
+      operationId: VolverCorte
+      description: Deshace el último paso del taller (de la máquina a la cola, de terminado a la máquina).
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: desde, in: query, schema: { type: string, maxLength: 40 } }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "404": { $ref: "#/components/responses/Problema" }
         "409": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/anular:
+    post:
+      operationId: AnularCorte
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              additionalProperties: false
+              properties: { motivo: { type: string, maxLength: 400 } }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/pedido:
+    post:
+      operationId: PasarCorteAPedido
+      description: Un corte suelto con algo para cobrar nace como pedido (con la mercadería reservada) y se cobra por ahí.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: El pedido nuevo
+          content:
+            application/json:
+              schema: { type: object, required: [numero, id], properties: { numero: { type: string }, id: { type: string } } }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/urgente:
     post:
@@ -92,6 +139,7 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Id" }]
       responses:
         "200": { $ref: "#/components/responses/Ok" }
+        "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/pasadas:
     post:
@@ -473,8 +521,13 @@ components:
     Metros: { type: number, format: double, minimum: 0, maximum: 100000 }
     CorteListado:
       type: object
-      required: [id, numero, cliente, material, placas, pasadas, estado, urgente, sucursal, notas, piezas, metrosCuadrados, createdAt]
+      required: [id, numero, cliente, material, placas, pasadas, estado, urgente, sucursal, notas, piezas, metrosCuadrados, createdAt,
+        mitad, sinCargo, branchId, salioAt]
       properties:
+        mitad: { type: string, nullable: true, description: Las placas son medias }
+        sinCargo: { type: boolean }
+        branchId: { type: string, nullable: true }
+        salioAt: { type: string, format: date-time, nullable: true, description: Cuándo salió de la máquina }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
@@ -513,6 +566,9 @@ components:
         consulta: { type: string, maxLength: 40 }
         consultaGrupo: { type: string, maxLength: 2, description: Cuál de las placas de la consulta (vacío es la primera) }
         piezas: { type: array, maxItems: 500, items: { type: object, additionalProperties: true } }
+        reemplaza: { type: string, maxLength: 40, description: El corte que este corrige (se anula) }
+        sinCargo: { type: boolean, description: Una reposición de un pedido }
+        otraPlaca: { type: boolean, description: Confirma una placa que el pedido no vende }
     PiezaDelCorte:
       type: object
       required: [id, cuttingOrderId, largoMm, anchoMm, cantidad, respetaVeta, cantoLargo, cantoAncho, aclaracion, etiqueta, orden]
@@ -541,8 +597,11 @@ components:
       required: [id, numero, cliente, customerId, orderId, pedidoNumero, empresa, priceListId, material, variantId,
         varianteLargoMm, varianteAnchoMm, propiaLargoMm, propiaAnchoMm, mitad, color, categoria, precioMediaPct, placas,
         pasadas, cantoDescripcion, acomodoManual, anchoSierraMm, motorPlano, estado, urgente, notas, sucursal, createdAt,
-        piezas, precioPlaca, medida, telefono, retiraEl]
+        piezas, precioPlaca, medida, telefono, retiraEl, sinCargo, motivoAnulado, branchId]
       properties:
+        sinCargo: { type: boolean }
+        motivoAnulado: { type: string, nullable: true }
+        branchId: { type: string, nullable: true }
         telefono: { type: string, nullable: true, description: El que se anotó, el del pedido o el de la ficha }
         retiraEl: { type: string, nullable: true, description: AAAA-MM-DD }
         id: { type: string }
@@ -603,8 +662,33 @@ components:
         updatedAt: { type: string, format: date-time }
     FichaCorte:
       type: object
-      required: [corte, tarifa, cargo, metrosCanto, cargoCanto, plano, superficies, cuenta, fijadas]
+      required: [corte, tarifa, cargo, metrosCanto, cargoCanto, plano, superficies, cuenta, fijadas, modo, pasadasACobrar,
+        pedido, retalesDelCliente, sinPlata]
       properties:
+        modo: { type: string, enum: [suelto, pedido, vendido, sinCargo] }
+        pasadasACobrar: { type: integer }
+        pedido:
+          nullable: true
+          type: object
+          required: [numero, estado, estadoPago, lineas, cobrado, placasDelPedido]
+          properties:
+            numero: { type: string }
+            estado: { type: string }
+            estadoPago: { type: string }
+            cobrado: { type: number, format: double }
+            placasDelPedido: { type: number, format: double }
+            lineas:
+              type: array
+              items:
+                type: object
+                required: [descripcion, unidad, cantidad, subtotal]
+                properties:
+                  descripcion: { type: string }
+                  unidad: { type: string }
+                  cantidad: { type: number, format: double }
+                  subtotal: { type: number, format: double }
+        retalesDelCliente: { type: boolean }
+        sinPlata: { type: boolean }
         corte: { $ref: "#/components/schemas/Corte" }
         tarifa: { allOf: [{ $ref: "#/components/schemas/TarifaDeCorte" }], nullable: true }
         cargo: { type: number, format: double }

@@ -482,7 +482,7 @@ func abrirCorte(ctx context.Context, tx pgx.Tx, c cortes.CorteResuelto, pedido s
 		RETURNING id`,
 		numero, cliente, pedido, d.Nombre, d.SucursalID, c.Placa.VariantID, c.Placa.Descripcion, entero(c.PlacaLargoMm),
 		entero(c.PlacaAnchoMm), c.Mitad, int32(c.Placas), jsmath.Texto(c.AnchoSierraMm), int32(c.Pasadas), c.CantoDescripcion,
-		usuario, int32(cortes.MotorMediaConSierra)).Scan(&id); err != nil {
+		usuario, int32(cortes.MotorActual)).Scan(&id); err != nil {
 		return err
 	}
 	for i, p := range c.Piezas {

@@ -57,6 +57,9 @@ var sinContenido = respuesta{codigo: http.StatusNoContent}
 
 func (o respuesta) VisitAlternarUrgenteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitAvanzarCorteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
+func (o respuesta) VisitVolverCorteResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitAnularCorteResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitPasarCorteAPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitBorrarPerfilResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitCalcularPlanoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
 func (o respuesta) VisitCambiarSierraResponse(w http.ResponseWriter) error     { return o.escribir(w) }
@@ -110,8 +113,15 @@ func (a *API) ListarCortes(ctx context.Context, r cortesapi.ListarCortesRequestO
 	if _, err := auth.ExigirStaff(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Estado))
+	v, err := a.s.Listar(ctx, texto(r.Params.Busqueda), texto(r.Params.Estado), texto(r.Params.Sucursal))
 	return ok(v), err
+}
+
+// mostrador: quien atiende la cola desde el panel (todos los de
+// /admin/cortes menos el aserradero). Urgencias, entregas, anular y cobrar
+// son decisiones del mostrador, no del taller (mes simulado, H115).
+func mostrador(ctx context.Context) (*auth.Sesion, error) {
+	return auth.Exigir(ctx, roles.DecidenEnLaCola...)
 }
 
 func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObject) (cortesapi.CrearCorteResponseObject, error) {
@@ -122,11 +132,22 @@ func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObjec
 	b := r.Body
 	f := FormCorte{
 		CustomerID: texto(b.CustomerId), OrderID: texto(b.OrderId), ContactoNombre: b.ContactoNombre,
+		// El teléfono y el día de retiro no se pasaban: la pantalla los
+		// mandaba y el corte nacía sin a quién avisarle (mes simulado, H046).
+		ContactoTelefono: texto(b.ContactoTelefono), RetiraEl: texto(b.RetiraEl),
 		BranchID: texto(b.BranchId), VariantID: texto(b.VariantId), MaterialDescripcion: b.MaterialDescripcion,
 		PlacaLargoMm: texto(b.PlacaLargoMm), PlacaAnchoMm: texto(b.PlacaAnchoMm), Mitad: texto(b.Mitad),
 		Placas: texto(b.Placas), CantoDescripcion: texto(b.CantoDescripcion), Urgente: b.Urgente != nil && *b.Urgente,
 		Notas: texto(b.Notas), AcomodoManual: texto(b.AcomodoManual), AnchoSierraMm: texto(b.AnchoSierraMm),
 		Consulta: texto(b.Consulta), ConsultaGrupo: texto(b.ConsultaGrupo),
+		Reemplaza: texto(b.Reemplaza), SinCargo: b.SinCargo != nil && *b.SinCargo, OtraPlaca: b.OtraPlaca != nil && *b.OtraPlaca,
+	}
+	if f.Reemplaza != "" || f.SinCargo {
+		// Corregir uno que ya está en la cola y regalar una reposición son
+		// del mostrador.
+		if _, err := mostrador(ctx); err != nil {
+			return nil, err
+		}
 	}
 	for _, p := range b.Piezas {
 		crudo, err := json.Marshal(p)
@@ -135,15 +156,16 @@ func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObjec
 		}
 		f.Piezas = append(f.Piezas, crudo)
 	}
-	numero, err := a.s.Crear(ctx, ses, f)
+	numero, id, err := a.s.Alta(ctx, ses, f)
 	if err != nil {
 		return nil, err
 	}
-	return ok(map[string]string{"numero": numero}), nil
+	return ok(map[string]string{"numero": numero, "id": id}), nil
 }
 
 func (a *API) FichaDeCorte(ctx context.Context, r cortesapi.FichaDeCorteRequestObject) (cortesapi.FichaDeCorteResponseObject, error) {
-	if _, err := auth.ExigirStaff(ctx); err != nil {
+	ses, err := auth.ExigirStaff(ctx)
+	if err != nil {
 		return nil, err
 	}
 	f, err := a.s.Ficha(ctx, r.Id.String())
@@ -152,6 +174,9 @@ func (a *API) FichaDeCorte(ctx context.Context, r cortesapi.FichaDeCorteRequestO
 	}
 	if f == nil {
 		return nil, noEncontrado
+	}
+	if esDelTaller(ses) {
+		f.SinPlataParaElTaller()
 	}
 	return ok(f), nil
 }
@@ -167,11 +192,14 @@ func (a *API) HojaDelCorte(ctx context.Context, r cortesapi.HojaDelCorteRequestO
 	if c == nil {
 		return nil, noEncontrado
 	}
-	plano, err := PlanoDelCorteConTope(c)
+	motor, err := PlanoDelCorteConTope(c)
 	if err != nil {
 		return nil, err
 	}
-	hoja, err := ArmarHojaDeCorte(plano)
+	// La hoja, del plano del motor; el plano que se muestra, contado como
+	// ella (ConLaHoja sale de esos mismos árboles).
+	hoja, err := ArmarHojaDeCorte(motor)
+	plano := ConLaHojaSi(c.MotorPlano, motor)
 	var ng ErrNoGuillotina
 	if errors.As(err, &ng) {
 		return nil, plataforma.NuevoProblema(http.StatusConflict, ng.Error())
@@ -196,15 +224,57 @@ func (a *API) AvanzarCorte(ctx context.Context, r cortesapi.AvanzarCorteRequestO
 		desde = *r.Params.Desde
 	}
 	sinCobrar := r.Params.SinCobrar != nil && *r.Params.SinCobrar
-	m, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde, sinCobrar)
+	var pasadas []float64
+	if r.Params.Pasadas != nil {
+		pasadas = append(pasadas, float64(*r.Params.Pasadas))
+	}
+	m, err := a.s.Avanzar(ctx, ses, r.Id.String(), desde, sinCobrar, pasadas...)
 	if err != nil {
 		return nil, err
 	}
 	return okTexto(m), nil
 }
 
+func (a *API) VolverCorte(ctx context.Context, r cortesapi.VolverCorteRequestObject) (cortesapi.VolverCorteResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.Volver(ctx, ses, r.Id.String(), texto(r.Params.Desde))
+	if err != nil {
+		return nil, err
+	}
+	return okTexto(m), nil
+}
+
+func (a *API) AnularCorte(ctx context.Context, r cortesapi.AnularCorteRequestObject) (cortesapi.AnularCorteResponseObject, error) {
+	ses, err := mostrador(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.s.Anular(ctx, ses, r.Id.String(), r.Body.Motivo)
+	if err != nil {
+		return nil, err
+	}
+	return okTexto(m), nil
+}
+
+// PasarCorteAPedido: quien vende (admin y vendedor), como pasar un
+// presupuesto a pedido.
+func (a *API) PasarCorteAPedido(ctx context.Context, r cortesapi.PasarCorteAPedidoRequestObject) (cortesapi.PasarCorteAPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	numero, id, err := a.s.PasarAPedido(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]string{"numero": numero, "id": id}), nil
+}
+
 func (a *API) AlternarUrgente(ctx context.Context, r cortesapi.AlternarUrgenteRequestObject) (cortesapi.AlternarUrgenteResponseObject, error) {
-	if _, err := gestion(ctx); err != nil {
+	if _, err := mostrador(ctx); err != nil {
 		return nil, err
 	}
 	m, err := a.s.AlternarUrgente(ctx, r.Id.String())
@@ -455,7 +525,8 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	if b.Fijadas != nil {
 		d.Fijadas = aFijadas(*b.Fijadas)
 	}
-	plano := CalcularPlano(d)
+	motor := CalcularPlano(d)
+	plano := ConLaHoja(motor)
 	// Lo que se cobra puede no ser lo que se dibuja: con piezas acomodadas a
 	// mano se cobra el plano libre, salvo que el manual gaste más placas
 	// (ACobrar). La pantalla lo dice antes de cobrar.
@@ -471,7 +542,7 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	// Con un tope: cada placa es una hoja, y el PDF del mostrador no arma más
 	// de 60 (ver app/api/mostrador/plano).
 	if b.Hoja != nil && *b.Hoja && auth.DeContexto(ctx).EsStaff() && len(plano.Placas) > 0 && len(plano.Placas) <= 60 {
-		if hoja, err := ArmarHojaDeCorte(plano); err == nil {
+		if hoja, err := ArmarHojaDeCorte(motor); err == nil {
 			sup := make([]float64, len(plano.Placas))
 			for i, p := range plano.Placas {
 				sup[i] = SuperficieDeSierra(p.Cortes, plano.AnchoSierra)

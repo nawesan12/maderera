@@ -157,6 +157,11 @@
   "admin",
   "vendedor"
  ],
+ "decidenEnLaCola": [
+  "admin",
+  "vendedor",
+  "deposito"
+ ],
  "quienEntra": {
   "/": null,
   "/admin": [

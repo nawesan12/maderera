@@ -672,13 +672,16 @@ components:
           type: array
           items:
             type: object
-            required: [variantId, descripcion, unidad, cantidad, presentacion]
+            required: [variantId, descripcion, unidad, cantidad, presentacion, largoMm, anchoMm, color]
             properties:
               variantId: { type: string, nullable: true }
               descripcion: { type: string }
               unidad: { type: string }
               cantidad: { type: string }
               presentacion: { type: string, nullable: true }
+              largoMm: { type: integer, nullable: true, description: La medida de la placa, si es una }
+              anchoMm: { type: integer, nullable: true }
+              color: { type: string, nullable: true }
     FichaDePedido:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,

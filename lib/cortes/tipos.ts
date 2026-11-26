@@ -21,7 +21,11 @@ export type Salida = Esquemas["Salida"];
 export type Trozo = Esquemas["Trozo"];
 export type PlacaCortable = Esquemas["PlacaCortable"];
 export type ParametrosDeCalculo = Esquemas["ParametrosDeCalculo"];
-export type CorteListado = Omit<Esquemas["CorteListado"], "createdAt"> & { createdAt: Date };
+export type CorteListado = Omit<Esquemas["CorteListado"], "createdAt" | "salioAt"> & {
+  createdAt: Date;
+  /** Cuándo salió de la máquina; nulo mientras está en la cola. */
+  salioAt: Date | null;
+};
 
 /** Desde qué medida un sobrante es retal y no viruta (MinimoAprovechable en Go). */
 export const MINIMO_APROVECHABLE = 150;

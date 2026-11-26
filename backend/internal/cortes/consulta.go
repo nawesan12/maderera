@@ -159,7 +159,7 @@ func (s *Servicio) GuardarConsulta(ctx context.Context, m map[string]any, ip str
 			return "", error422(fmt.Sprintf("Son demasiadas piezas para calcular acá (el máximo es %d). Pedinos el despiece por WhatsApp y lo armamos nosotros.", MaximoDePiezas))
 		}
 		medida := ResolverMedida(nil, nil, &placa.LargoMm, &placa.AnchoMm, mitad, sierra)
-		plano := CalcularPlano(DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra})
+		plano := PlanoConLaHoja(DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra})
 		if n := len(plano.NoEntran); n == 1 {
 			return "", cual(i, "Hay una pieza que no entra en la placa. Revisá esa medida.")
 		} else if n > 1 {
@@ -275,7 +275,7 @@ func (s *Servicio) Consulta(ctx context.Context, token string) (*ConsultaDeCorte
 	for i := range c.Grupos {
 		g := &c.Grupos[i]
 		s2 := c.AnchoSierraMm
-		g.Plano = CalcularPlano(DatosDelPlano{Piezas: g.Piezas, PlacaLargo: g.PlacaLargoMm, PlacaAncho: g.PlacaAnchoMm, AnchoSierra: &s2})
+		g.Plano = PlanoConLaHoja(DatosDelPlano{Piezas: g.Piezas, PlacaLargo: g.PlacaLargoMm, PlacaAncho: g.PlacaAnchoMm, AnchoSierra: &s2})
 		conCanto := make([]PiezaConCanto, len(g.Piezas))
 		for j, p := range g.Piezas {
 			conCanto[j] = PiezaConCanto{p.LargoMm, p.AnchoMm, p.Cantidad, p.CantoLargo, p.CantoAncho}

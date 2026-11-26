@@ -561,6 +561,10 @@ export const cuttingOrders = pgTable(
     /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
     contactoTelefono: text(),
     retiraEl: date(),
+    /* 00240: cuándo salió de la máquina, la reposición sin cargo y por qué se anuló. */
+    terminadoAt: timestamp({ withTimezone: true }),
+    sinCargo: boolean().notNull().default(false),
+    motivoAnulado: text(),
   },
   (t) => [
     uniqueIndex("cutting_orders_numero_idx").on(t.numero),

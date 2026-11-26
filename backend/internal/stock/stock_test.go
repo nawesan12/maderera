@@ -194,8 +194,11 @@ func TestGrillaYAjuste(t *testing.T) {
 	_ = json.Unmarshal([]byte(b), &grilla)
 	g := grilla.Filas
 	// En Casa Central hay 10 pero 7 reservados: disponible 3, mínimo 4 → bajo.
+	// El total es lo disponible de las dos (3 + 2), lo mismo que se muestra
+	// en cada una: sumaba el físico, 12 (mes simulado, H198).
 	if len(g) != 1 || len(g[0].Sucursales) != 2 || g[0].Sucursales[0].Slug != "casa-central" || g[0].Sucursales[0].Qty != 10 ||
-		g[0].Sucursales[0].Reservado != 7 || g[0].Sucursales[0].Nivel != "bajo" || g[0].Sucursales[1].Nivel != "alto" || g[0].Total != 12 {
+		g[0].Sucursales[0].Reservado != 7 || g[0].Sucursales[0].Nivel != "bajo" || g[0].Sucursales[1].Nivel != "alto" || g[0].Total != 5 ||
+		g[0].Sucursales[0].Disponible != 3 || !g[0].ParaReponer {
 		t.Fatalf("grilla: %s", b)
 	}
 	if _, b := pedir(t, dep, "GET", u+"stock/alertas", nil); !strings.Contains(b, `"branchName":"Casa Central"`) {
@@ -307,7 +310,7 @@ func TestMetricasDeSucursales(t *testing.T) {
 	var m []MetricasDeSucursal
 	_ = json.Unmarshal([]byte(b), &m)
 	if len(m) != 2 || m[0].Slug != "casa-central" || m[0].VentasHoy != 1500 || m[0].PedidosHoy != 2 || m[0].ClientesAtendidos != 2 ||
-		m[0].PedidosAbiertos != 1 || m[0].ProductosStockBajo != 0 {
+		m[0].PedidosAbiertos != 1 || m[0].ProductosStockBajo != 1 {
 		t.Errorf("métricas: %s", b)
 	}
 	if _, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/sucursales/sin-asignar", nil); b != "{\"cortes\":0,\"pedidos\":1}\n" {
@@ -441,7 +444,7 @@ func TestElMotivoDiceLaDireccion(t *testing.T) {
 		{2, "rotura", nil, "resta"},
 		{2, "faltante", nil, "resta"},
 		{-2, "conteo", nil, "cuánto hay"},
-		{0, "rotura", &diez, "Conteo"},
+		{0, "correccion", &diez, "Conteo"},
 	}
 	for _, r := range rechazos {
 		if c, b := ajuste(r.cantidad, r.motivo, r.contado); c != 422 || !strings.Contains(b, r.dice) {

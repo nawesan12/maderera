@@ -190,6 +190,24 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return fallo(p.numero + " tiene productos por llevar todavía: preparales el remito.")
 			}
 		}
+		// «Listo» es armado: no se arma lo que no está en el galpón. El
+		// tablero ofrecía «Marcar listo» con 135 placas vendidas y 55 en el
+		// estante (mes simulado, H218).
+		if siguiente == "listo" {
+			saldo, err := entregas.SaldoDeAcopio(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if saldo, err = entregas.ConGalpon(ctx, tx, id, saldo); err != nil {
+				return err
+			}
+			for _, r := range saldo {
+				if r.EnElGalpon != nil && r.Pendiente > 0.0005 && *r.EnElGalpon < r.Pendiente {
+					return fallo("No alcanza para armarlo: " + r.Descripcion + " lleva " + formato.Cantidad(r.Pendiente) +
+						" y en el galpón hay " + formato.Cantidad(math.Max(*r.EnElGalpon, 0)) + ".")
+				}
+			}
+		}
 		// El remito sale cuando la mercadería deja el depósito: en un envío,
 		// al despachar (acompaña al camión y lo firma quien recibe); en un
 		// retiro, al entregar. Antes el envío salía sin papel y el remito

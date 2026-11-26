@@ -47,6 +47,24 @@ func (e Nivel) Valid() bool {
 	}
 }
 
+// Defines values for TrasladoEstado.
+const (
+	EnCamino TrasladoEstado = "en-camino"
+	Recibido TrasladoEstado = "recibido"
+)
+
+// Valid indicates whether the value is a known member of the TrasladoEstado enum.
+func (e TrasladoEstado) Valid() bool {
+	switch e {
+	case EnCamino:
+		return true
+	case Recibido:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GrillaDeStockParamsEstado.
 const (
 	GrillaDeStockParamsEstadoConStock GrillaDeStockParamsEstado = "con-stock"
@@ -79,7 +97,9 @@ const (
 	Faltante   AjustarStockJSONBodyMotivo = "faltante"
 	Ingreso    AjustarStockJSONBodyMotivo = "ingreso"
 	Otro       AjustarStockJSONBodyMotivo = "otro"
+	Reposicion AjustarStockJSONBodyMotivo = "reposicion"
 	Rotura     AjustarStockJSONBodyMotivo = "rotura"
+	Taller     AjustarStockJSONBodyMotivo = "taller"
 )
 
 // Valid indicates whether the value is a known member of the AjustarStockJSONBodyMotivo enum.
@@ -97,7 +117,11 @@ func (e AjustarStockJSONBodyMotivo) Valid() bool {
 		return true
 	case Otro:
 		return true
+	case Reposicion:
+		return true
 	case Rotura:
+		return true
+	case Taller:
 		return true
 	default:
 		return false
@@ -111,14 +135,17 @@ type FilaStock struct {
 	Imagen       *string           `json:"imagen"`
 	Label        string            `json:"label"`
 	LargoMm      *int              `json:"largoMm"`
+	ParaReponer  bool              `json:"paraReponer"`
 	ProductId    string            `json:"productId"`
 	ProductName  string            `json:"productName"`
 	ProductSlug  string            `json:"productSlug"`
 	Sku          string            `json:"sku"`
 	Sucursales   []StockEnSucursal `json:"sucursales"`
-	Total        float64           `json:"total"`
-	Unidad       string            `json:"unidad"`
-	VariantId    string            `json:"variantId"`
+
+	// Total la suma de lo disponible de cada sucursal
+	Total     float64 `json:"total"`
+	Unidad    string  `json:"unidad"`
+	VariantId string  `json:"variantId"`
 }
 
 // Nivel defines model for Nivel.
@@ -134,7 +161,15 @@ type Problema struct {
 
 // StockEnSucursal defines model for StockEnSucursal.
 type StockEnSucursal struct {
+	// Disponible físico − reservado
+	Disponible float64 `json:"disponible"`
+
+	// EnReparto lo reservado de pedidos en camino
+	EnReparto float64 `json:"enReparto"`
 	Id        string  `json:"id"`
+
+	// Llegando lo que viene en un traslado sin recibir
+	Llegando  float64 `json:"llegando"`
 	Min       float64 `json:"min"`
 	Nivel     Nivel   `json:"nivel"`
 	Nombre    string  `json:"nombre"`
@@ -149,6 +184,31 @@ type Sucursal struct {
 	Nombre string `json:"nombre"`
 	Slug   string `json:"slug"`
 }
+
+// Traslado defines model for Traslado.
+type Traslado struct {
+	Codigo      string         `json:"codigo"`
+	CreadoPor   *string        `json:"creadoPor"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	Destino     string         `json:"destino"`
+	Estado      TrasladoEstado `json:"estado"`
+	Id          string         `json:"id"`
+	Nota        *string        `json:"nota"`
+	Origen      string         `json:"origen"`
+	RecibidoAt  *time.Time     `json:"recibidoAt"`
+	RecibidoPor *string        `json:"recibidoPor"`
+	Renglones   []struct {
+		Cantidad  float64 `json:"cantidad"`
+		Medida    string  `json:"medida"`
+		Producto  string  `json:"producto"`
+		Sku       string  `json:"sku"`
+		Unidad    string  `json:"unidad"`
+		VariantId string  `json:"variantId"`
+	} `json:"renglones"`
+}
+
+// TrasladoEstado defines model for Traslado.Estado.
+type TrasladoEstado string
 
 // GrillaDeStockParams defines parameters for GrillaDeStock.
 type GrillaDeStockParams struct {
@@ -171,10 +231,13 @@ type AjustarStockJSONBody struct {
 	// Cantidad lo que se suma (o resta). Con contado
 	Cantidad float64 `json:"cantidad"`
 
-	// Contado Lo que se contó en el estante. El stock queda en este número, sea lo que sea que había
-	Contado   *float64                    `json:"contado,omitempty"`
-	Motivo    *AjustarStockJSONBodyMotivo `json:"motivo,omitempty"`
-	VariantId string                      `json:"variantId"`
+	// Contado Lo que se contó en el galpón. Lo que salió en el camión de un pedido en camino se suma solo
+	Contado *float64                    `json:"contado,omitempty"`
+	Motivo  *AjustarStockJSONBodyMotivo `json:"motivo,omitempty"`
+
+	// Pedido El pedido (PED-…) de una reposición a un cliente
+	Pedido    *string `json:"pedido,omitempty"`
+	VariantId string  `json:"variantId"`
 }
 
 // AjustarStockJSONBodyMotivo defines parameters for AjustarStock.
@@ -187,7 +250,11 @@ type AlertasDeStockParams struct {
 
 // UltimosMovimientosParams defines parameters for UltimosMovimientos.
 type UltimosMovimientosParams struct {
-	Limite *int `form:"limite,omitempty" json:"limite,omitempty"`
+	Limite    *int    `form:"limite,omitempty" json:"limite,omitempty"`
+	Busqueda  *string `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+	Categoria *string `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Marca     *string `form:"marca,omitempty" json:"marca,omitempty"`
+	Proveedor *string `form:"proveedor,omitempty" json:"proveedor,omitempty"`
 }
 
 // TransferirStockJSONBody defines parameters for TransferirStock.
@@ -199,11 +266,25 @@ type TransferirStockJSONBody struct {
 	VariantId string  `json:"variantId"`
 }
 
+// CrearTrasladoJSONBody defines parameters for CrearTraslado.
+type CrearTrasladoJSONBody struct {
+	DestinoId string  `json:"destinoId"`
+	Nota      *string `json:"nota,omitempty"`
+	OrigenId  string  `json:"origenId"`
+	Renglones []struct {
+		Cantidad  string `json:"cantidad"`
+		VariantId string `json:"variantId"`
+	} `json:"renglones"`
+}
+
 // AjustarStockJSONRequestBody defines body for AjustarStock for application/json ContentType.
 type AjustarStockJSONRequestBody AjustarStockJSONBody
 
 // TransferirStockJSONRequestBody defines body for TransferirStock for application/json ContentType.
 type TransferirStockJSONRequestBody TransferirStockJSONBody
+
+// CrearTrasladoJSONRequestBody defines body for CrearTraslado for application/json ContentType.
+type CrearTrasladoJSONRequestBody CrearTrasladoJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -222,6 +303,18 @@ type ServerInterface interface {
 
 	// (POST /api/v1/admin/stock/transferencia)
 	TransferirStock(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/stock/traslados)
+	TrasladosEnCamino(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/stock/traslados)
+	CrearTraslado(w http.ResponseWriter, r *http.Request)
+
+	// (GET /api/v1/admin/stock/traslados/{id})
+	VerTraslado(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/v1/admin/stock/traslados/{id}/recibir)
+	RecibirTraslado(w http.ResponseWriter, r *http.Request, id string)
 
 	// (GET /api/v1/admin/sucursales)
 	SucursalesDelPanel(w http.ResponseWriter, r *http.Request)
@@ -422,6 +515,58 @@ func (siw *ServerInterfaceWrapper) UltimosMovimientos(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Optional query parameter "busqueda" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "busqueda", r.URL.Query(), &params.Busqueda, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "busqueda"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "busqueda", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "categoria" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "categoria", r.URL.Query(), &params.Categoria, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "categoria"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "categoria", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "marca" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "marca", r.URL.Query(), &params.Marca, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "marca"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "marca", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "proveedor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "proveedor", r.URL.Query(), &params.Proveedor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "proveedor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "proveedor", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UltimosMovimientos(w, r, params)
 	}))
@@ -438,6 +583,86 @@ func (siw *ServerInterfaceWrapper) TransferirStock(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TransferirStock(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TrasladosEnCamino operation middleware
+func (siw *ServerInterfaceWrapper) TrasladosEnCamino(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TrasladosEnCamino(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CrearTraslado operation middleware
+func (siw *ServerInterfaceWrapper) CrearTraslado(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CrearTraslado(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerTraslado operation middleware
+func (siw *ServerInterfaceWrapper) VerTraslado(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerTraslado(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecibirTraslado operation middleware
+func (siw *ServerInterfaceWrapper) RecibirTraslado(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecibirTraslado(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -614,6 +839,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/stock/movimientos", wrapper.UltimosMovimientos)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/ajuste", wrapper.AjustarStock)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/transferencia", wrapper.TransferirStock)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/stock/traslados", wrapper.TrasladosEnCamino)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/traslados", wrapper.CrearTraslado)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/stock/traslados/{id}", wrapper.VerTraslado)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/traslados/{id}/recibir", wrapper.RecibirTraslado)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales", wrapper.SucursalesDelPanel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales/metricas", wrapper.MetricasDeSucursales)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales/sin-asignar", wrapper.SinSucursalAsignada)
@@ -734,7 +963,10 @@ type UltimosMovimientosResponseObject interface {
 }
 
 type UltimosMovimientos200JSONResponse []struct {
-	BranchName  string    `json:"branchName"`
+	BranchName string `json:"branchName"`
+
+	// Concepto Qué fue (Rotura
+	Concepto    string    `json:"concepto"`
 	CreatedAt   time.Time `json:"createdAt"`
 	Id          string    `json:"id"`
 	Label       string    `json:"label"`
@@ -742,7 +974,11 @@ type UltimosMovimientos200JSONResponse []struct {
 	ProductId   string    `json:"productId"`
 	ProductName string    `json:"productName"`
 	Qty         float64   `json:"qty"`
-	Type        string    `json:"type"`
+
+	// Referencia El comprobante (REM-0020
+	Referencia *string `json:"referencia"`
+	Type       string  `json:"type"`
+	VariantId  string  `json:"variantId"`
 }
 
 func (response UltimosMovimientos200JSONResponse) VisitUltimosMovimientosResponse(w http.ResponseWriter) error {
@@ -778,6 +1014,152 @@ type TransferirStock422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response TransferirStock422ApplicationProblemPlusJSONResponse) VisitTransferirStockResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TrasladosEnCaminoRequestObject struct {
+}
+
+type TrasladosEnCaminoResponseObject interface {
+	VisitTrasladosEnCaminoResponse(w http.ResponseWriter) error
+}
+
+type TrasladosEnCamino200JSONResponse []Traslado
+
+func (response TrasladosEnCamino200JSONResponse) VisitTrasladosEnCaminoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTrasladoRequestObject struct {
+	Body *CrearTrasladoJSONRequestBody
+}
+
+type CrearTrasladoResponseObject interface {
+	VisitCrearTrasladoResponse(w http.ResponseWriter) error
+}
+
+type CrearTraslado201JSONResponse struct {
+	Codigo string `json:"codigo"`
+	Id     string `json:"id"`
+}
+
+func (response CrearTraslado201JSONResponse) VisitCrearTrasladoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CrearTraslado422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response CrearTraslado422ApplicationProblemPlusJSONResponse) VisitCrearTrasladoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerTrasladoRequestObject struct {
+	Id string `json:"id"`
+}
+
+type VerTrasladoResponseObject interface {
+	VisitVerTrasladoResponse(w http.ResponseWriter) error
+}
+
+type VerTraslado200JSONResponse Traslado
+
+func (response VerTraslado200JSONResponse) VisitVerTrasladoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerTraslado404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response VerTraslado404ApplicationProblemPlusJSONResponse) VisitVerTrasladoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecibirTrasladoRequestObject struct {
+	Id string `json:"id"`
+}
+
+type RecibirTrasladoResponseObject interface {
+	VisitRecibirTrasladoResponse(w http.ResponseWriter) error
+}
+
+type RecibirTraslado204Response struct {
+}
+
+func (response RecibirTraslado204Response) VisitRecibirTrasladoResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RecibirTraslado404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response RecibirTraslado404ApplicationProblemPlusJSONResponse) VisitRecibirTrasladoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecibirTraslado422ApplicationProblemPlusJSONResponse Problema
+
+func (response RecibirTraslado422ApplicationProblemPlusJSONResponse) VisitRecibirTrasladoResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -893,6 +1275,18 @@ type StrictServerInterface interface {
 
 	// (POST /api/v1/admin/stock/transferencia)
 	TransferirStock(ctx context.Context, request TransferirStockRequestObject) (TransferirStockResponseObject, error)
+
+	// (GET /api/v1/admin/stock/traslados)
+	TrasladosEnCamino(ctx context.Context, request TrasladosEnCaminoRequestObject) (TrasladosEnCaminoResponseObject, error)
+
+	// (POST /api/v1/admin/stock/traslados)
+	CrearTraslado(ctx context.Context, request CrearTrasladoRequestObject) (CrearTrasladoResponseObject, error)
+
+	// (GET /api/v1/admin/stock/traslados/{id})
+	VerTraslado(ctx context.Context, request VerTrasladoRequestObject) (VerTrasladoResponseObject, error)
+
+	// (POST /api/v1/admin/stock/traslados/{id}/recibir)
+	RecibirTraslado(ctx context.Context, request RecibirTrasladoRequestObject) (RecibirTrasladoResponseObject, error)
 
 	// (GET /api/v1/admin/sucursales)
 	SucursalesDelPanel(ctx context.Context, request SucursalesDelPanelRequestObject) (SucursalesDelPanelResponseObject, error)
@@ -1083,6 +1477,113 @@ func (sh *strictHandler) TransferirStock(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// TrasladosEnCamino operation middleware
+func (sh *strictHandler) TrasladosEnCamino(w http.ResponseWriter, r *http.Request) {
+	var request TrasladosEnCaminoRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TrasladosEnCamino(ctx, request.(TrasladosEnCaminoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TrasladosEnCamino")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TrasladosEnCaminoResponseObject); ok {
+		if err := validResponse.VisitTrasladosEnCaminoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CrearTraslado operation middleware
+func (sh *strictHandler) CrearTraslado(w http.ResponseWriter, r *http.Request) {
+	var request CrearTrasladoRequestObject
+
+	var body CrearTrasladoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CrearTraslado(ctx, request.(CrearTrasladoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CrearTraslado")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CrearTrasladoResponseObject); ok {
+		if err := validResponse.VisitCrearTrasladoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VerTraslado operation middleware
+func (sh *strictHandler) VerTraslado(w http.ResponseWriter, r *http.Request, id string) {
+	var request VerTrasladoRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerTraslado(ctx, request.(VerTrasladoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerTraslado")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerTrasladoResponseObject); ok {
+		if err := validResponse.VisitVerTrasladoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RecibirTraslado operation middleware
+func (sh *strictHandler) RecibirTraslado(w http.ResponseWriter, r *http.Request, id string) {
+	var request RecibirTrasladoRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RecibirTraslado(ctx, request.(RecibirTrasladoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RecibirTraslado")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RecibirTrasladoResponseObject); ok {
+		if err := validResponse.VisitRecibirTrasladoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // SucursalesDelPanel operation middleware
 func (sh *strictHandler) SucursalesDelPanel(w http.ResponseWriter, r *http.Request) {
 	var request SucursalesDelPanelRequestObject
@@ -1160,39 +1661,50 @@ func (sh *strictHandler) SinSucursalAsignada(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"St0ZOljz5ub/AwA=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

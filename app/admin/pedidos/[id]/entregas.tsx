@@ -22,7 +22,7 @@ import {
 } from "../entregas-actions";
 import { fechaHora } from "@/components/admin/formato";
 import type { RenglonPendiente } from "@/lib/entregas";
-import { llevaDecimales } from "@/lib/unidades";
+import { formatearCantidad, llevaDecimales } from "@/lib/unidades";
 import { cantidadConUnidad, plural } from "@/lib/formato";
 import { seOfreceLaFirma } from "@/lib/entregas/firma";
 import type { OtroAcopio, RemitoListado } from "@/lib/dal/admin/entregas";
@@ -437,7 +437,17 @@ function RenglonACantidad({
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <label htmlFor={id} className="min-w-0 flex-1 basis-48 text-base">
         {p.descripcion}
-        <span className="block text-muted-foreground">Quedan {cantidadConUnidad(p.pendiente, p.unidad)}</span>
+        <span className="block text-muted-foreground">
+          Quedan {cantidadConUnidad(p.pendiente, p.unidad)}
+          {/* Lo que hay en el estante, para no prometer lo que no está (mes
+              simulado, H218). */}
+          {p.enElGalpon !== undefined && (
+            <span className={`tabular ${p.enElGalpon < p.pendiente ? "font-medium text-destructive" : ""}`}>
+              {" "}
+              · {formatearCantidad(Math.max(p.enElGalpon, 0))} en el galpón
+            </span>
+          )}
+        </span>
       </label>
       <Input
         id={id}

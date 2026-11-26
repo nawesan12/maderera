@@ -286,6 +286,11 @@ export interface components {
             pendiente: number;
             /** @description El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso */
             enteros?: boolean;
+            /**
+             * Format: double
+             * @description Lo que hay en el estante de la sucursal de donde sale
+             */
+            enElGalpon?: number;
         };
         OtroAcopio: {
             orderId: string;

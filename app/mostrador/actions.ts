@@ -35,6 +35,8 @@ export interface EstadoMostrador {
   renglones?: LineaDeVenta[];
   /** La venta anulada tenía un corte, que hay que volver a armar. */
   conCorte?: boolean;
+  /** La venta dejó medidas vendidas de más: hay que pedirlas (mes simulado, H218). */
+  avisoStock?: string;
   /**
    * Falta el PIN de un admin: lo que se deja de cobrar pasa lo libre, la
    * cuenta corriente pasa el límite, o la anulación no es del vendedor. La
@@ -197,6 +199,7 @@ export async function cobrarVenta(venta: VentaDelMostrador): Promise<EstadoMostr
     orderId: resultado.orderId,
     invoiceId,
     avisoFiscal,
+    avisoStock: resultado.avisoStock,
   };
 }
 

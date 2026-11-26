@@ -10,6 +10,7 @@ package listado
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"mjbj/internal/auth"
@@ -105,6 +106,47 @@ func (c *Consulta) Busqueda(texto string, columnas []string, exacto ...string) {
 		}
 		c.Y("(" + strings.Join(col, " OR ") + ")")
 	}
+}
+
+// compactar es la forma en que se escribe una medida «a la apurada»: sin
+// espacios, comillas ni tildes, y con «×» como «x». Así «2x4» encuentra el
+// `Tirante Pino 2" x 4"` (mes simulado, H221), que es como lo pide todo el
+// mundo. La misma expresión se aplica al texto de la fila y al término.
+func compactar(expr string) string {
+	return `regexp_replace(translate(lower(f_unaccent(` + expr + `)), '×', 'x'), '[[:space:]"''´` + "`" + `]+', '', 'g')`
+}
+
+// BusquedaFlexible es Busqueda, y además cada palabra puede coincidir con
+// las columnas pegadas y compactadas (ver compactar).
+func (c *Consulta) BusquedaFlexible(texto string, columnas []string, exacto ...string) {
+	pegadas := "concat_ws(' ', " + strings.Join(columnas, ", ") + ")"
+	for _, t := range Terminos(texto) {
+		patron := c.Arg("%" + t + "%")
+		var col []string
+		for _, x := range columnas {
+			col = append(col, "f_unaccent("+x+") ILIKE f_unaccent("+patron+")")
+		}
+		col = append(col, compactar(pegadas)+" LIKE '%' || "+compactar(c.Arg(t)+"::text")+" || '%'")
+		for _, x := range exacto {
+			col = append(col, x+" = "+c.Arg(t))
+		}
+		c.Y("(" + strings.Join(col, " OR ") + ")")
+	}
+}
+
+// PrimeroPalabrasEnteras es una expresión para ORDER BY … DESC: cuántas
+// palabras de la búsqueda arrancan una palabra de `expr`. Buscando «laca»,
+// la Laca va antes que las placas, que la contienen en el medio (H295).
+func (c *Consulta) PrimeroPalabrasEnteras(texto, expr string) string {
+	var partes []string
+	for _, t := range Terminos(texto) {
+		partes = append(partes, "(f_unaccent("+expr+") ~* ('\\m' || f_unaccent("+c.Arg(regexp.QuoteMeta(t))+"::text)))::int")
+	}
+	if len(partes) == 0 {
+		// «0» a secas en un ORDER BY es «la columna cero»: un error.
+		return "0::int"
+	}
+	return strings.Join(partes, " + ")
 }
 
 // Comunes suma categoría, marca y proveedor. `variante` es la expresión que

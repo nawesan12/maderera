@@ -267,6 +267,7 @@ components:
         entregado: { type: number, format: double }
         pendiente: { type: number, format: double }
         enteros: { type: boolean, description: El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso }
+        enElGalpon: { type: number, format: double, description: Lo que hay en el estante de la sucursal de donde sale, en la unidad del renglón. Ausente sin producto }
     OtroAcopio:
       type: object
       required: [orderId, numero, renglones]

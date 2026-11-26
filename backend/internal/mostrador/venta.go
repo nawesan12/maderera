@@ -23,6 +23,7 @@ import (
 	"mjbj/internal/caja"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cortes"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
@@ -76,6 +77,8 @@ type ResultadoVenta struct {
 	Nueva   bool                  `json:"nueva"`
 	Lineas  []ventas.LineaDeVenta `json:"lineas,omitempty"`
 	Error   string                `json:"error,omitempty"`
+	// AvisoStock: la venta dejó medidas con lo disponible en negativo.
+	AvisoStock string `json:"avisoStock,omitempty"`
 	// Autorizacion: lo que falta para cobrar, si falta el PIN de un admin.
 	Autorizacion *Autorizacion `json:"autorizacion,omitempty"`
 	// Ficha: un PIN que ya se tecleó para esta venta. Si la venta falló
@@ -820,7 +823,43 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		}
 	}
 
-	return ResultadoVenta{Ok: true, OrderID: pedido, Numero: numero, Total: c.total, Nueva: true, Lineas: c.lineas}, nil
+	aviso, err := vendidoDeMas(ctx, tx, pedido, v.BranchID)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	return ResultadoVenta{Ok: true, OrderID: pedido, Numero: numero, Total: c.total, Nueva: true, Lineas: c.lineas, AvisoStock: aviso}, nil
+}
+
+// vendidoDeMas dice qué medidas de la venta quedaron con lo disponible en
+// negativo: se vendió más de lo que hay, y hay que pedirlo (mes simulado,
+// H218: 135 placas vendidas con 70 en el galpón, sin ningún aviso). La venta
+// se hace igual —vender a pedido es parte del negocio—, pero se dice.
+func vendidoDeMas(ctx context.Context, tx pgx.Tx, pedido string, sucursal string) (string, error) {
+	filas, err := tx.Query(ctx, `
+		SELECT DISTINCT p.name || ' ' || v.label, (i.qty - i.reservado)::float8
+		FROM order_items oi
+		JOIN product_variants v ON v.id = oi.variant_id
+		JOIN products p ON p.id = v.product_id
+		JOIN inventory i ON i.variant_id = oi.variant_id AND i.branch_id = coalesce(
+		  (SELECT sr.branch_id FROM stock_reservations sr WHERE sr.order_item_id = oi.id AND sr.estado = 'activa' LIMIT 1), $2::uuid)
+		WHERE oi.order_id = $1 AND i.qty - i.reservado < 0
+		ORDER BY 1`, pedido, nuloSiVacio(&sucursal))
+	if err != nil {
+		return "", err
+	}
+	var partes []string
+	var nombre string
+	var disponible float64
+	if _, err := pgx.ForEachRow(filas, []any{&nombre, &disponible}, func() error {
+		partes = append(partes, nombre+" (faltan "+formato.Cantidad(-disponible)+")")
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	if len(partes) == 0 {
+		return "", nil
+	}
+	return "Se vendió más de lo que hay: " + strings.Join(partes, ", ") + ".", nil
 }
 
 // comprobanteDeLaVenta es con qué salió la venta: «interno» o «fiscal»

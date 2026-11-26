@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"mjbj/internal/catalogo"
 )
 
 // MetricasDeSucursal son los números de cada sucursal para /admin/sucursales
@@ -56,7 +58,7 @@ func (s *Servicio) MetricasPorSucursal(ctx context.Context, ahora time.Time) ([]
 		  coalesce((SELECT count(*)::int FROM inventory i
 		    JOIN product_variants pv ON pv.id = i.variant_id AND pv.active
 		    JOIN products p ON p.id = pv.product_id AND p.active
-		    WHERE i.branch_id = b.id AND i.min_qty > 0 AND i.qty <= i.min_qty), 0)
+		    WHERE i.branch_id = b.id AND `+catalogo.ReponerEnFila+`), 0)
 		FROM branches b
 		LEFT JOIN (
 		  SELECT branch_id, sum(total) AS total, count(*)::int AS pedidos,

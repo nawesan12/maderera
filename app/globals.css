@@ -2130,3 +2130,21 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
     font-size: 3rem;
   }
 }
+
+/* Una hoja del panel que se imprime tal como se ve (el traslado entre
+   sucursales): en el papel no van el menú, la barra de arriba ni los botones. */
+@media print {
+  .panel:has(.hoja-sola) > :not(:has(.hoja-sola)),
+  .panel:has(.hoja-sola) header:not(.hoja-sola header),
+  .hoja-sola .no-imprimir {
+    display: none !important;
+  }
+  .panel:has(.hoja-sola),
+  .panel:has(.hoja-sola) main {
+    background: #fff;
+  }
+  .hoja-sola .tarjeta {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}

@@ -50,6 +50,9 @@ const SOLO_EN_GO = new Set([
   // Copia de respaldo que dejó la 00150 al normalizar los rubros.
   "product_images_rubro_00150",
   "receipt_refunds",
+  // Los traslados entre sucursales (00270): los escribe solo Go.
+  "stock_traslado_items",
+  "stock_traslados",
   "technical_document_targets",
 ]);
 

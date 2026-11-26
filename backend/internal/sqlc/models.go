@@ -6298,6 +6298,27 @@ type StockReservation struct {
 	CreatedAt   time.Time     `json:"createdAt"`
 }
 
+type StockTraslado struct {
+	ID                string             `json:"id"`
+	Numero            *int32             `json:"numero"`
+	OrigenID          string             `json:"origenId"`
+	DestinoID         string             `json:"destinoId"`
+	Nota              *string            `json:"nota"`
+	Estado            string             `json:"estado"`
+	CreatedByUserID   *string            `json:"createdByUserId"`
+	CreatedAt         pgtype.Timestamptz `json:"createdAt"`
+	RecibidoPorUserID *string            `json:"recibidoPorUserId"`
+	RecibidoAt        pgtype.Timestamptz `json:"recibidoAt"`
+}
+
+type StockTrasladoItem struct {
+	ID         string     `json:"id"`
+	TrasladoID string     `json:"trasladoId"`
+	VariantID  string     `json:"variantId"`
+	Cantidad   jsmath.Num `json:"cantidad"`
+	Orden      int32      `json:"orden"`
+}
+
 type Subcategory struct {
 	ID         string    `json:"id"`
 	CategoryID string    `json:"categoryId"`

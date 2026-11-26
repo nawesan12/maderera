@@ -7,11 +7,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/catalogo"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
-	"mjbj/internal/stock"
 )
 
 // El inicio del panel (lib/dal/admin/resumen.ts y lib/dal/admin/pendientes.ts):
@@ -79,7 +79,7 @@ func (s *Servicio) MetricasDelResumen(ctx context.Context, p Periodo) (Metricas,
 		return m, err
 	}
 	rs, err := s.pool.Query(ctx, `
-		SELECT b.slug, b.name, count(i.variant_id) FILTER (WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty <= i.min_qty)::int
+		SELECT b.slug, b.name, count(i.variant_id) FILTER (WHERE p.active AND v.active AND `+catalogo.ReponerEnFila+`)::int
 		FROM branches b
 		LEFT JOIN inventory i ON i.branch_id = b.id
 		LEFT JOIN product_variants v ON v.id = i.variant_id
@@ -194,7 +194,8 @@ func (s *Servicio) VentasPorSucursal(ctx context.Context) ([]VentasDelMes, error
 	return out, nil
 }
 
-// ParaReponer es una medida en el mínimo o por debajo, con su sucursal.
+// ParaReponer es una medida en el mínimo o por debajo, con su sucursal
+// (catalogo.ReponerEnFila). Qty es lo disponible, con signo.
 type ParaReponer struct {
 	VariantID string  `json:"variantId"`
 	ProductID string  `json:"productId"`
@@ -208,13 +209,13 @@ type ParaReponer struct {
 // StockParaReponer es stockParaReponer: lo más urgente primero.
 func (s *Servicio) StockParaReponer(ctx context.Context, limite int) ([]ParaReponer, error) {
 	rs, err := s.pool.Query(ctx, `
-		SELECT v.id, p.id, p.name, v.label, b.name, i.qty, i.min_qty
+		SELECT v.id, p.id, p.name, v.label, b.name, i.qty - i.reservado, i.min_qty
 		FROM inventory i
 		JOIN product_variants v ON v.id = i.variant_id
 		JOIN products p ON p.id = v.product_id
-		JOIN branches b ON b.id = i.branch_id
-		WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty <= i.min_qty
-		ORDER BY i.qty::float / nullif(i.min_qty, 0)
+		JOIN branches b ON b.id = i.branch_id AND b.active
+		WHERE p.active AND v.active AND `+catalogo.ReponerEnFila+`
+		ORDER BY (i.qty - i.reservado) - i.min_qty, p.name
 		LIMIT $1`, limite)
 	if err != nil {
 		return nil, err
@@ -371,7 +372,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		  CASE WHEN $5 THEN (SELECT count(*)::int FROM professional_applications WHERE estado = 'pendiente') ELSE 0 END,
 		  CASE WHEN $6 THEN (SELECT count(*)::int FROM product_reviews WHERE estado = 'pendiente') ELSE 0 END,
 		  CASE WHEN $7 THEN (SELECT count(*)::int FROM product_variants v JOIN products p ON p.id = v.product_id
-		                     WHERE p.active AND v.active AND `+stock.BajoElMinimo+`) ELSE 0 END,
+		                     WHERE p.active AND v.active AND `+catalogo.MedidaParaReponer+`) ELSE 0 END,
 		  CASE WHEN $8 THEN (SELECT count(*)::int FROM customer_follow_ups
 		                     WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at <= $10) ELSE 0 END,
 		  CASE WHEN $9 THEN (SELECT count(*)::int FROM quotes WHERE estado = 'enviado'
@@ -427,8 +428,11 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Detalle: detalle("Un llamado antes de que venza suele cerrar la venta"), Href: "/admin/presupuestos"})
 	agregar(c.solicitudes, Pendiente{Clave: "profesionales", Texto: uno(c.solicitudes, "profesional esperando respuesta", "profesionales esperando respuesta"),
 		Detalle: detalle("Pidieron la cuenta con precio de gremio"), Href: "/admin/profesionales"})
-	agregar(c.reponer, Pendiente{Clave: "reponer", Texto: uno(c.reponer, "producto bajo el mínimo", "productos bajo el mínimo"),
-		Detalle: detalle("Quedó en el mínimo o por debajo: hay que reponerlo"), Href: "/admin/stock?estado=reponer"})
+	// Medidas, como Stock, y con la misma regla (catalogo.MedidaParaReponer):
+	// contaba filas por sucursal con el físico y las llamaba «productos», y
+	// el atajo abría Stock sin filtrar (mes simulado, H004, H102, H358).
+	agregar(c.reponer, Pendiente{Clave: "reponer", Texto: uno(c.reponer, "medida para reponer", "medidas para reponer"),
+		Detalle: detalle("Llegó al mínimo o se vendió de más"), Href: "/admin/stock?estado=reponer"})
 	// El precio de lista bajo el costo: cada venta pierde plata (H139).
 	agregar(c.bajoCosto, Pendiente{Clave: "bajo-costo", Texto: uno(c.bajoCosto, "medida con el precio bajo el costo", "medidas con el precio bajo el costo"),
 		Href: "/admin/precios?estado=bajo-costo", Urgente: true})
@@ -447,7 +451,8 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Href: "/admin/clientes", Urgente: true, Vencido: true})
 	agregar(o.sinPrecio, Pendiente{Clave: "catalogo-precio", Texto: uno(o.sinPrecio, "medida sin precio", "medidas sin precio"), Href: "/admin/precios"})
 	agregar(o.sinFoto, Pendiente{Clave: "catalogo-foto", Texto: uno(o.sinFoto, "medida sin foto", "medidas sin foto"), Href: "/admin/productos"})
-	agregar(o.sinStock, Pendiente{Clave: "catalogo-stock", Texto: uno(o.sinStock, "medida sin stock", "medidas sin stock"), Href: "/admin/stock"})
+	// Sin nada para vender: lo vendido de más no cuenta como stock (H218).
+	agregar(o.sinStock, Pendiente{Clave: "catalogo-stock", Texto: uno(o.sinStock, "medida sin stock", "medidas sin stock"), Href: "/admin/stock?estado=sin-stock"})
 	sort.SliceStable(f, func(i, j int) bool {
 		if f[i].Urgente != f[j].Urgente {
 			return f[i].Urgente
@@ -516,7 +521,7 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 			  CASE WHEN $2 THEN (SELECT count(*)::int FROM medidas m WHERE NOT EXISTS (
 			    SELECT 1 FROM product_images f WHERE f.product_id = m.product_id)) ELSE 0 END,
 			  CASE WHEN $3 THEN (SELECT count(*)::int FROM medidas m WHERE NOT EXISTS (
-			    SELECT 1 FROM inventory i WHERE i.variant_id = m.id AND i.qty > 0)) ELSE 0 END`,
+			    SELECT 1 FROM inventory i WHERE i.variant_id = m.id AND i.qty - i.reservado > 0)) ELSE 0 END`,
 			ve("/admin/precios"), ve("/admin/productos"), ve("/admin/stock")).Scan(&o.sinPrecio, &o.sinFoto, &o.sinStock)
 		if err != nil {
 			return o, err

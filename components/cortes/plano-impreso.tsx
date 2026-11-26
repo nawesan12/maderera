@@ -3,6 +3,7 @@ import { fechaCorta } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
 import type { PlanoDeCorte, PlacaDelPlano } from "@/lib/cortes/tipos";
 import { formatearSierra } from "@/lib/cortes/sierra";
+import { queSeHaceConLaPlaca, sobraDelCliente, type QuienSeQueda } from "@/lib/cortes/de-quien";
 
 /**
  * El plano de corte en papel.
@@ -38,14 +39,22 @@ export function PlanoImpreso({
     createdAt: Date;
     /** «Placa entera» o de qué media sale. */
     deQueSale?: string;
+    /** Una reposición sin cargo: no se vende ni se cobra nada. */
+    sinCargo?: boolean;
+    /** Sale de media placa. */
+    media?: boolean;
   };
 }) {
   const desperdicio = 1 - plano.aprovechadoTotal;
+  const quien: QuienSeQueda = { sinCargo: corte.sinCargo, media: corte.media };
+  const nombre = corte.media ? "Media" : "Placa";
+  const enteras = corte.sinCargo ? 0 : plano.placasEnteras;
 
   return (
     <div className="plano-pagina">
       <style>{`
-        .plano-pagina { max-width: 297mm; margin: 0 auto; padding: 10mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; }
+        .plano-pagina { max-width: 297mm; margin: 0 auto; padding: 10mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; background: #fff; color-scheme: light; }
+        .plano-pagina .boton-imprimir { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 12pt; font-weight: 600; color: #1a1a1a; text-decoration: none; cursor: pointer; }
         .plano-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 6mm; }
         .plano-titulo { font-size: 15pt; font-weight: 700; }
         .plano-sub { font-size: 10pt; color: #555; margin-top: 1mm; }
@@ -120,16 +129,18 @@ export function PlanoImpreso({
         <div className="plano-numero">
           <p className="valor">{plano.placas.length}</p>
           <p className="rotulo">
-            {plano.placas.length === 1 ? "placa" : "placas"}
+            {corte.media
+              ? plano.placas.length === 1 ? "media placa" : "medias placas"
+              : plano.placas.length === 1 ? "placa" : "placas"}
           </p>
         </div>
-        {plano.placasEnteras > 0 && (
+        {enteras > 0 && (
           <div className="plano-numero">
-            <p className="valor">{plano.placasEnteras}</p>
+            <p className="valor">{enteras}</p>
             <p className="rotulo">
-              {plano.placasEnteras === 1
-                ? "se vende entera"
-                : "se venden enteras"}
+              {corte.media
+                ? enteras === 1 ? "media se vende" : "medias se venden"
+                : enteras === 1 ? "se vende entera" : "se venden enteras"}
             </p>
           </div>
         )}
@@ -174,7 +185,7 @@ export function PlanoImpreso({
       {plano.placas.map((placa) => (
         <section key={placa.numero} className="plano-placa">
           <h3>
-            Placa {placa.numero} de {plano.placas.length}{" "}
+            {nombre} {placa.numero} de {plano.placas.length}{" "}
             <span>
               · {placa.piezas.length}{" "}
               {placa.piezas.length === 1 ? "pieza" : "piezas"} ·{" "}
@@ -185,19 +196,20 @@ export function PlanoImpreso({
                 cliente** y se va con él. Guardarlo en el depósito sería
                 quedarse con material ajeno. */}
             <span
-              className={placa.seVendeEntera ? "sello-entera" : "sello-corte"}
+              className={sobraDelCliente(placa.seVendeEntera, quien) ? "sello-entera" : "sello-corte"}
             >
-              {placa.seVendeEntera
-                ? "Se vende entera · el recorte se lo lleva el cliente"
-                : "Se cobra el corte · el recorte queda en la maderera"}
+              {queSeHaceConLaPlaca(placa.seVendeEntera, quien)}
+              {sobraDelCliente(placa.seVendeEntera, quien)
+                ? " · el recorte se lo lleva el cliente"
+                : " · el recorte queda en la maderera"}
             </span>
           </h3>
-          <DibujoDePlaca placa={placa} plano={plano} />
+          <DibujoDePlaca placa={placa} plano={plano} delCliente={sobraDelCliente(placa.seVendeEntera, quien)} />
         </section>
       ))}
 
       {plano.placas.length > 0 && <TablaDePiezas plano={plano} />}
-      {plano.placas.length > 0 && <TablaDeSobrantes plano={plano} sierra={superficieSierra} />}
+      {plano.placas.length > 0 && <TablaDeSobrantes plano={plano} sierra={superficieSierra} quien={quien} />}
 
       <p className="plano-pie">
         Las piezas están numeradas en el orden en que salen de la máquina: las
@@ -224,9 +236,11 @@ export function PlanoImpreso({
 function DibujoDePlaca({
   placa,
   plano,
+  delCliente,
 }: {
   placa: PlacaDelPlano;
   plano: PlanoDeCorte;
+  delCliente: boolean;
 }) {
   const { placaLargo, placaAncho } = plano;
 
@@ -354,7 +368,7 @@ function DibujoDePlaca({
               textAnchor="middle"
               fill="#8a8178"
             >
-              {placa.seVendeEntera ? "para el cliente" : "al stock"} {r.ancho}{" "}
+              {delCliente ? "para el cliente" : "al stock"} {r.ancho}{" "}
               × {r.alto}
             </text>
           )}
@@ -463,7 +477,7 @@ function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
  * las dos formas en que se va el material que no es pieza —el aserrín de la
  * sierra y lo que sobra— que es lo que contesta «¿por qué no entró todo?».
  */
-function TablaDeSobrantes({ plano, sierra }: { plano: PlanoDeCorte; sierra: number }) {
+function TablaDeSobrantes({ plano, sierra, quien }: { plano: PlanoDeCorte; sierra: number; quien: QuienSeQueda }) {
   return (
     <>
       <table className="plano-tabla">
@@ -498,9 +512,7 @@ function TablaDeSobrantes({ plano, sierra }: { plano: PlanoDeCorte; sierra: numb
                       })}
                     </td>
                     <td data-label="De quién es">
-                      {placa.seVendeEntera
-                        ? "Del cliente: se lleva la placa entera"
-                        : "Al stock de la maderera"}
+                      {sobraDelCliente(placa.seVendeEntera, quien) ? "Del cliente" : "Al stock de la maderera"}
                     </td>
                   </tr>
                 )),

@@ -18,6 +18,7 @@ import {
 } from "@/lib/pdf/hoja";
 import type { HojaDeCorte, OperacionDeCorte, PatronDeCorte } from "@/lib/cortes/tipos";
 import { formatearSierra } from "@/lib/cortes/sierra";
+import { queSeHaceConLaPlaca, sobraDelCliente, type QuienSeQueda } from "@/lib/cortes/de-quien";
 
 /**
  * La hoja de corte para la seccionadora, en PDF.
@@ -37,6 +38,10 @@ export interface CorteParaHoja {
   material: string;
   deQueSale: string;
   createdAt: Date;
+  /** Una reposición sin cargo: nada se vende y el retal queda en la maderera. */
+  sinCargo?: boolean;
+  /** Sale de media placa: se vende la media, no la entera. */
+  media?: boolean;
 }
 
 // Sin separador de miles: «1.160» se tipearía como 1,16 en la máquina.
@@ -110,7 +115,7 @@ export async function hojaDeCortePdf(
 
   hoja.patrones.forEach((patron, i) => {
     if (i > 0) hojaNueva();
-    y = dibujarPatron(h, patron, hoja, y, hojaNueva, () => y, (nuevo) => (y = nuevo));
+    y = dibujarPatron(h, patron, hoja, y, hojaNueva, () => y, (nuevo) => (y = nuevo), corte);
   });
 
   return serializar(h);
@@ -124,7 +129,12 @@ function dibujarPatron(
   hojaNueva: () => void,
   leerY: () => number,
   fijarY: (y: number) => void,
+  quien: QuienSeQueda = {},
 ): number {
+  // De quién es lo que sobra, como la hoja en pantalla (mes simulado, ítem
+  // 10): la reposición no «se cobra» y la media no «se vende entera».
+  const delCliente = sobraDelCliente(patron.seVendeEntera, quien);
+  const deEste = { ...patron, seVendeEntera: delCliente };
   const anchoUtil = A4.ancho - MARGEN * 2;
   let y = desde;
 
@@ -137,7 +147,7 @@ function dibujarPatron(
   y -= 13;
   escribir(
     h,
-    `${patron.piezasPorPlaca} piezas · ${patron.pasadasPorPlaca} cortes${cuantas > 1 ? " por placa" : ""} · ${patron.seVendeEntera ? "se vende entera: los retales son del cliente" : "se cobra el corte: los retales quedan en la maderera"}`,
+    `${patron.piezasPorPlaca} piezas · ${patron.pasadasPorPlaca} cortes${cuantas > 1 ? " por placa" : ""} · ${queSeHaceConLaPlaca(patron.seVendeEntera, quien).toLowerCase()}: ${delCliente ? "los retales son del cliente" : "los retales quedan en la maderera"}`,
     { x: MARGEN, y, tamano: 9, color: TINTA_SUAVE },
   );
   y -= 8;
@@ -244,7 +254,7 @@ function dibujarPatron(
   }
 
   for (const op of patron.operaciones) {
-    y = dibujarOperacion(h, op, patron, leerY(), hojaNueva, leerY);
+    y = dibujarOperacion(h, op, deEste, leerY(), hojaNueva, leerY);
     fijarY(y);
   }
 

@@ -39,7 +39,9 @@ export async function GET(
       metrosCanto: datos.metrosCanto,
       superficieSierra: datos.superficies.reduce((t, x) => t + x, 0),
     },
-    plano,
+    // La reposición no vende ninguna placa: lo que sobra queda en la
+    // maderera (mes simulado, ítem 10).
+    corte.sinCargo ? { ...plano, placas: plano.placas.map((p) => ({ ...p, seVendeEntera: false })) } : plano,
     emisor,
   );
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { queSeHaceConLaPlaca, type QuienSeQueda } from "@/lib/cortes/de-quien";
 import { RotateCcw, RotateCw } from "lucide-react";
 import type {
   PiezaColocada,
@@ -68,6 +69,7 @@ export function PlanoEditable({
   onFijadas,
   sencillo = false,
   girable = () => true,
+  quien = {},
 }: {
   plano: PlanoDeCorte;
   fijadas: PiezaFijada[];
@@ -80,6 +82,12 @@ export function PlanoEditable({
   sencillo?: boolean;
   /** Si la pieza (por su índice en el despiece) se puede girar: con veta, no. */
   girable?: (indice: number) => boolean;
+  /**
+   * Cómo se rotula cada placa: la media no se vende «entera», la reposición
+   * no «se cobra», y las del pedido que vende todas las placas son del
+   * cliente (mes simulado, H184 e ítem 10).
+   */
+  quien?: QuienSeQueda & { todasDelCliente?: boolean };
 }) {
   const [agarrada, setAgarrada] = useState<PiezaColocada | null>(null);
   const [encima, setEncima] = useState<number | null>(null);
@@ -218,14 +226,18 @@ export function PlanoEditable({
           >
             <figcaption className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="text-base font-medium">
-                Placa {placa.numero}
+                {quien.media ? "Media" : "Placa"} {placa.numero}
               </span>
               <span
                 className={`inline-flex items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)] ${
-                  placa.seVendeEntera ? "estado-marca" : "estado-ok"
+                  (placa.seVendeEntera || quien.todasDelCliente) && !quien.sinCargo ? "estado-marca" : "estado-ok"
                 }`}
               >
-                {placa.seVendeEntera ? "Se vende entera · corte sin cargo" : "Se cobra el corte"}
+                {quien.todasDelCliente && !quien.sinCargo
+                  ? queSeHaceConLaPlaca(true, quien)
+                  : placa.seVendeEntera && !quien.sinCargo
+                    ? `${queSeHaceConLaPlaca(true, quien)} · corte sin cargo`
+                    : queSeHaceConLaPlaca(placa.seVendeEntera, quien)}
               </span>
               <span className="tabular w-full text-sm text-muted-foreground">
                 {sencillo ? (

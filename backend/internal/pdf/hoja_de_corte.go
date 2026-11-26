@@ -20,6 +20,9 @@ type CorteParaHoja struct {
 	Material  string    `json:"material"`
 	DeQueSale string    `json:"deQueSale"`
 	CreatedAt time.Time `json:"createdAt"`
+	// SinCargo y Media: de quién es lo que sobra (lib/cortes/de-quien.ts).
+	SinCargo bool `json:"sinCargo,omitempty"`
+	Media    bool `json:"media,omitempty"`
 }
 
 // SalidaDeCorte es Salida de lib/cortes/secuencia.ts.
@@ -221,10 +224,19 @@ func (a *armadoHojaDeCorte) dibujarPatron(patron PatronDeCorte) float64 {
 	if cuantas > 1 {
 		porPlaca = " por placa"
 	}
+	// De quién es lo que sobra, como la hoja en pantalla (mes simulado,
+	// ítem 10): la reposición no «se cobra» y la media no «se vende entera».
+	delCliente := patron.SeVendeEntera && !a.corte.SinCargo
 	queda := "se cobra el corte: los retales quedan en la maderera"
-	if patron.SeVendeEntera {
+	switch {
+	case a.corte.SinCargo:
+		queda = "sin cargo: los retales quedan en la maderera"
+	case delCliente && a.corte.Media:
+		queda = "se vende la media: los retales son del cliente"
+	case delCliente:
 		queda = "se vende entera: los retales son del cliente"
 	}
+	patron.SeVendeEntera = delCliente
 	h.Escribir(numeroJS(patron.PiezasPorPlaca)+" piezas · "+numeroJS(patron.PasadasPorPlaca)+" cortes"+porPlaca+" · "+queda,
 		Opciones{X: Margen, Y: y, Tamano: 9, Color: TintaSuave})
 	y -= 8

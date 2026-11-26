@@ -11,6 +11,8 @@ import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
 import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { AcomodoDelCorte } from "../acomodo";
+import { PlanoSimple } from "@/components/cortes/plano-simple";
+import { sobraDelCliente } from "@/lib/cortes/de-quien";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
@@ -187,22 +189,24 @@ export default async function FichaCortePage({
             </div>
             {/* Los papeles del trabajo en una fila: la hoja de la
                 seccionadora y el plano a la vista, el resto en el menú. */}
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            {/* Al ancho de su texto: en mitades iguales «Hoja de corte» se
+                cortaba a 375 px (H327). */}
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <Link
                 href={`/hoja-de-corte/${corte.id}`}
                 target="_blank"
-                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
+                className="inline-flex h-11 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
               >
                 <ListChecks className="h-5 w-5 shrink-0" />
-                <span className="truncate">Hoja de corte</span>
+                Hoja de corte
               </Link>
               <Link
                 href={`/plano/${corte.id}`}
                 target="_blank"
-                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
+                className="inline-flex h-11 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
               >
                 <Map className="h-5 w-5 shrink-0" />
-                <span className="truncate">Plano</span>
+                Plano
               </Link>
               <MasArchivos id={corte.id} />
             </div>
@@ -346,7 +350,7 @@ export default async function FichaCortePage({
                         .map((r) => `${r.ancho} × ${r.alto} mm`)
                         .join(" · ")}{" "}
                       <span className="text-muted-foreground">
-                        ({placa.seVendeEntera || ficha.retalesDelCliente
+                        ({sobraDelCliente(placa.seVendeEntera || ficha.retalesDelCliente, { sinCargo: corte.sinCargo })
                           ? "del cliente"
                           : "al stock"})
                       </span>
@@ -363,16 +367,25 @@ export default async function FichaCortePage({
 
           {/* Editable, no solo mirable: la decisión de qué pieza sale de qué
               placa se toma muchas veces después de cargar el trabajo. */}
+          {/* Se acomoda a mano solo lo que todavía no pasó por la máquina, y
+              solo desde el mostrador: el acomodo cambia lo que se cobra. El
+              aserradero, o un corte ya cortado, ve el plano para mirar (mes
+              simulado, ítem 8: «Arrastrá una pieza…» en cortes terminados). */}
           <div className="border-t border-linea px-5 py-4">
-            <AcomodoDelCorte
-              id={corte.id}
-              piezas={corte.piezas}
-              placaLargo={plano.placaLargo}
-              placaAncho={plano.placaAncho}
-              anchoSierra={plano.anchoSierra}
-              busqueda={corte.motorPlano >= 2}
-              inicial={ficha.fijadas}
-            />
+            {decide && corte.estado === "en-cola" ? (
+              <AcomodoDelCorte
+                id={corte.id}
+                piezas={corte.piezas}
+                placaLargo={plano.placaLargo}
+                placaAncho={plano.placaAncho}
+                anchoSierra={plano.anchoSierra}
+                busqueda={corte.motorPlano >= 2}
+                inicial={ficha.fijadas}
+                quien={{ sinCargo: corte.sinCargo, media, todasDelCliente: ficha.retalesDelCliente }}
+              />
+            ) : (
+              <PlanoSimple plano={plano} media={media} />
+            )}
           </div>
         </section>
       )}

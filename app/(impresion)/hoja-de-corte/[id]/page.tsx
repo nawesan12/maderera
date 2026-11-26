@@ -70,6 +70,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
               enteraAncho: corte.propiaAnchoMm ?? corte.varianteAnchoMm ?? 1830,
             }
           : null,
+        sinCargo: corte.sinCargo,
       }}
     />
   );

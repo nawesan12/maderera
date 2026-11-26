@@ -29,6 +29,8 @@ export async function GET(
       material: corte.material,
       deQueSale: nombreDeLaMitad(corte.medida.mitad),
       createdAt: corte.createdAt,
+      sinCargo: corte.sinCargo,
+      media: Boolean(corte.medida.mitad),
     },
     hoja,
   );

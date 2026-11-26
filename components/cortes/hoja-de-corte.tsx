@@ -3,6 +3,7 @@ import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
 import { CasillasRecordadas } from "./casillas-recordadas";
 import { fechaCorta } from "@/lib/formato";
 import { formatearSierra } from "@/lib/cortes/sierra";
+import { queSeHaceConLaPlaca, sobraDelCliente } from "@/lib/cortes/de-quien";
 import type {
   HojaDeCorte,
   OperacionDeCorte,
@@ -69,6 +70,8 @@ export function HojaDeCorteImpresa({
      * figuraba en ningún lado (H402).
      */
     mitad?: { sentido: "largo" | "ancho"; enteraLargo: number; enteraAncho: number } | null;
+    /** Una reposición sin cargo: el retal queda en la maderera. */
+    sinCargo?: boolean;
   };
 }) {
   const media = Boolean(corte.mitad);
@@ -200,7 +203,7 @@ export function HojaDeCorteImpresa({
       )}
 
       {hoja.patrones.map((patron, i) => (
-        <Patron key={i} patron={patron} hoja={hoja} indice={i} cantos={corte.cantos ?? []} media={media} />
+        <Patron key={i} patron={patron} hoja={hoja} indice={i} cantos={corte.cantos ?? []} media={media} sinCargo={Boolean(corte.sinCargo)} />
       ))}
 
       <p className="hc-pie">
@@ -227,13 +230,16 @@ function Patron({
   indice,
   cantos,
   media,
+  sinCargo,
 }: {
   patron: PatronDeCorte;
   hoja: HojaDeCorte;
   indice: number;
   cantos: CantoDePieza[];
   media: boolean;
+  sinCargo: boolean;
 }) {
+  const delCliente = sobraDelCliente(patron.seVendeEntera, { sinCargo });
   const cuantas = patron.placas.length;
   const nombre = media ? "Media" : "Placa";
   const placas =
@@ -253,9 +259,8 @@ function Patron({
         </span>
       </h2>
       <p className="hc-duenio">
-        {patron.seVendeEntera
-          ? "Se vende entera: los retales son del cliente y se van con él."
-          : "Se cobra el corte: los retales quedan en la maderera."}
+        {queSeHaceConLaPlaca(patron.seVendeEntera, { sinCargo, media })}
+        {delCliente ? ": los retales son del cliente y se van con él." : ": los retales quedan en la maderera."}
       </p>
 
       <Dibujo patron={patron} hoja={hoja} indice={indice} />
@@ -269,7 +274,7 @@ function Patron({
         <p className="hc-aviso">La pieza es la placa entera: no lleva cortes.</p>
       ) : (
         patron.operaciones.map((op) => (
-          <Operacion key={op.numero} op={op} patron={patron} indice={indice} cantos={cantos} media={media} />
+          <Operacion key={op.numero} op={op} patron={patron} indice={indice} cantos={cantos} media={media} delCliente={delCliente} />
         ))
       )}
     </section>
@@ -282,12 +287,14 @@ function Operacion({
   indice,
   cantos,
   media,
+  delCliente,
 }: {
   op: OperacionDeCorte;
   patron: PatronDeCorte;
   indice: number;
   cantos: CantoDePieza[];
   media: boolean;
+  delCliente: boolean;
 }) {
   const multiplicador = patron.placas.length;
   const veces = op.repeticiones * multiplicador;
@@ -370,7 +377,7 @@ function Operacion({
             </strong>{" "}
             {/* De la placa que se vende entera, todo lo que sobra es del
                 cliente, también lo que no llega a retal (H402). */}
-            {patron.seVendeEntera
+            {delCliente
               ? "· del cliente"
               : op.sobra.tipo === "retal"
                 ? "· retal al stock"

@@ -251,13 +251,16 @@ export default async function FichaComprobantePage({
           {autorizable && serie?.tramo && (
             // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
             // se pide desde acá: la serie se autoriza de a 15, desde el que
-            // tiene justo 15 atrás.
+            // tiene justo 15 atrás. El botón dice el tramo entero, del
+            // primero sin CAE a ese: «desde el 16» no decía qué pasaba con
+            // los de antes.
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
               <Link
                 href={`/admin/facturacion/${serie.tramo.invoiceId}`}
                 className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-accion px-4 py-2 text-center text-base font-medium text-white transition-colors hover:bg-brand-orange-dark sm:w-auto"
               >
-                Autorizar la serie desde el {numeroFormateado(comprobante.puntoVenta, serie.tramo.numero)}
+                Autorizar del {numeroFormateado(comprobante.puntoVenta, serie.tramo.desde)} al{" "}
+                {numeroFormateado(comprobante.puntoVenta, serie.tramo.numero)}
               </Link>
               <span className="text-sm text-muted-foreground">
                 {plural(serie.anterioresSinCae, "anterior", "anteriores")} sin CAE
@@ -508,7 +511,8 @@ export default async function FichaComprobantePage({
                 <FormularioCobro
                   id={comprobante.id}
                   saldo={comprobante.saldo}
-                  conCliente={Boolean(comprobante.customerId)}
+                  // La que ya se debe en la cuenta no ofrece pasarla otra vez.
+                  conCliente={Boolean(comprobante.customerId) && !comprobante.enCuenta}
                 />
               </div>
             )}

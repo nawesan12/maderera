@@ -571,6 +571,11 @@ func TestBajaDeUnaFacturaFiada(t *testing.T) {
 	if st != 200 {
 		t.Fatalf("pasar a cuenta: %d %s", st, b)
 	}
+	// Ya en la cuenta, no se pasa otra vez.
+	if st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+id+"/cobros",
+		map[string]string{"modo": "cuenta_corriente", "monto": "12100"}); st != 422 {
+		t.Fatalf("pasar a cuenta dos veces: %d %s", st, b)
+	}
 	if st, b := darDeBaja(t, e, admin, id); st != 200 {
 		t.Fatalf("baja: %d %s", st, b)
 	}

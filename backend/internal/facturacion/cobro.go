@@ -57,11 +57,11 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	// saldo cero (SaldoDeFactura). Antes la factura ofrecía cobrar el total
 	// de nuevo (simulación del mes, H130).
 	var saldo jsmath.Num
-	var anulado bool
-	if err := s.pool.QueryRow(ctx, `SELECT `+SaldoDeFactura+`, coalesce(o.estado = 'cancelado', false)
+	var anulado, enCuenta bool
+	if err := s.pool.QueryRow(ctx, `SELECT `+SaldoDeFactura+`, coalesce(o.estado = 'cancelado', false), `+EnCuentaDeFactura+`
 		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado FROM invoice_payments WHERE invoice_id = $1 GROUP BY invoice_id) c
 		  ON c.invoice_id = i.id
-		LEFT JOIN orders o ON o.id = i.order_id WHERE i.id = $1`, c.id).Scan(&saldo, &anulado); err != nil {
+		LEFT JOIN orders o ON o.id = i.order_id WHERE i.id = $1`, c.id).Scan(&saldo, &anulado, &enCuenta); err != nil {
 		return ResultadoDeCobro{}, err
 	}
 	if anulado {
@@ -73,6 +73,11 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	et := etiqueta(c.tipo, c.pv, c.numero)
 
 	if modo == "cuenta_corriente" {
+		// La que ya se debe en la cuenta no se pasa otra vez: cargaba la
+		// deuda dos veces (la ficha lo ofrecía igual, simulación del mes).
+		if enCuenta {
+			return ResultadoDeCobro{}, errEmision("Esta factura ya está en la cuenta corriente.")
+		}
 		monto := precios.ParsearImporte(montoTexto)
 		if math.IsNaN(monto) || math.IsInf(monto, 0) || monto <= 0 {
 			return ResultadoDeCobro{}, errEmision("El importe tiene que ser mayor a cero.")

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { getSession } from "@/lib/dal/session";
 import { apagarSenal } from "@/lib/senal-cliente";
+import { clienteDeLaSesion } from "@/lib/dal/cuenta";
+import { degradar } from "@/lib/degradar";
 
 /**
  * Lo que el encabezado necesita saber de quien está mirando.
@@ -25,11 +27,13 @@ export async function GET() {
   // apaga acá, y el navegador deja de preguntar en las visitas siguientes.
   // Sin esto, cerrar sesión dejaría un pedido inútil por carga para siempre.
   if (!sesion && carrito.cantidadItems === 0) await apagarSenal();
+  const esStaff = sesion?.role === "staff";
+  const cliente = sesion && !esStaff ? await degradar("la ficha de quien mira", clienteDeLaSesion, null) : null;
 
   return NextResponse.json(
     {
       sesion: sesion
-        ? { nombre: sesion.name, esStaff: sesion.role === "staff" }
+        ? { nombre: sesion.name, esStaff, firma: cliente?.nombre ?? null }
         : null,
       cantidadItems: carrito.cantidadItems,
     },

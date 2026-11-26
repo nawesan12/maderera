@@ -11,7 +11,7 @@ import type { ProductoListado } from "@/lib/dal/catalog";
 import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { enlaceDeConsulta } from "@/lib/catalogo/consulta";
-import { mensajeDeConsulta } from "@/lib/cuenta/portal";
+import { mensajeDeConsulta, quienConsulta } from "@/lib/cuenta/portal";
 import { useEstado } from "@/lib/estado-context";
 
 /**
@@ -287,6 +287,6 @@ function ConsultaPorWhatsapp({ consulta, ...props }: PropsDeConsulta) {
 
 function ConsultaDeQuienMira({ consulta, ...props }: PropsDeConsulta) {
   const { sesion } = useEstado();
-  const quien = sesion && !sesion.esStaff ? { nombre: sesion.nombre } : null;
+  const quien = quienConsulta(sesion);
   return <BotonWhatsapp {...props} enlace={enlaceDeConsulta(consulta.whatsapp, mensajeDeConsulta(consulta.texto, quien))} />;
 }

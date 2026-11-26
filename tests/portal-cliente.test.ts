@@ -6,6 +6,7 @@ import {
   mensajeDeConsulta,
   pedidosEnCurso,
   importeAInformar,
+  quienConsulta,
   saludoDelCliente,
   unaPorProducto,
 } from "@/lib/cuenta/portal";
@@ -157,5 +158,18 @@ describe("Pagar tu cuenta", () => {
   it("si ya está todo informado, el campo va vacío", () => {
     expect(importeAInformar(1000, 1000)).toBeNull();
     expect(importeAInformar(1000, 1500)).toBeNull();
+  });
+});
+
+describe("quién firma la consulta del catálogo", () => {
+  it("la ficha del cliente, como el portal", () => {
+    expect(quienConsulta({ nombre: "Gustavo Ibarra", esStaff: false, firma: "Constructora Costa Atlántica SRL" })).toEqual({
+      nombre: "Constructora Costa Atlántica SRL",
+    });
+  });
+  it("sin ficha, el usuario; la casa no firma", () => {
+    expect(quienConsulta({ nombre: "Ana", esStaff: false, firma: null })).toEqual({ nombre: "Ana" });
+    expect(quienConsulta({ nombre: "Vendedor", esStaff: true, firma: null })).toBeNull();
+    expect(quienConsulta(null)).toBeNull();
   });
 });

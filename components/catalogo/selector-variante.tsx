@@ -12,7 +12,7 @@ import { formatearPrecio, formatearUnidad } from "@/lib/formato";
 import { PrecioSecundario } from "@/components/precio";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { useEstado } from "@/lib/estado-context";
-import { mensajeDeConsulta } from "@/lib/cuenta/portal";
+import { mensajeDeConsulta, quienConsulta } from "@/lib/cuenta/portal";
 import { cantidadDeConsulta, enlaceDeConsulta, problemaDeCantidad, textoDeConsulta } from "@/lib/catalogo/consulta";
 import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
@@ -608,6 +608,6 @@ function BotonConsultarPrecioDeQuienMira({
   deshabilitado: boolean;
 }) {
   const { sesion } = useEstado();
-  const quien = sesion && !sesion.esStaff ? { nombre: sesion.nombre } : null;
+  const quien = quienConsulta(sesion);
   return <BotonConsultarPrecio enlace={enlace(mensajeDeConsulta(texto, quien))} deshabilitado={deshabilitado} />;
 }

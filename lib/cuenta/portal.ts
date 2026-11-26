@@ -134,6 +134,18 @@ export function mensajeDeConsulta(texto: string, cliente?: { nombre: string; cui
 }
 
 /**
+ * Quién firma la consulta del catálogo: el nombre de la ficha del cliente,
+ * como el portal y /contacto, y el del usuario web solo si no tiene ficha.
+ * Nadie si no hay sesión o es de la casa.
+ */
+export function quienConsulta(
+  sesion: { nombre: string; esStaff: boolean; firma: string | null } | null,
+): { nombre: string } | null {
+  if (!sesion || sesion.esStaff) return null;
+  return { nombre: sesion.firma ?? sesion.nombre };
+}
+
+/**
  * Cierra la frase con un punto, sin duplicarlo: «Soy Constructora S.R.L.» y
  * no «S.R.L..» (mes simulado).
  */

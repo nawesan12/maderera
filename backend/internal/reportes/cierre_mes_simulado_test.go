@@ -95,9 +95,10 @@ func TestReportePorMedidaYEnvios(t *testing.T) {
 }
 
 // «Productos bajo el mínimo» dice lo mismo en el inicio, en Stock y en
-// Reposición (H062): el inicio cuenta medidas, no filas por sucursal (una
-// sucursal en cero con la otra con stock no es reponer), lleva a Stock ya
-// filtrado, y Reposición sugiere llegar al mínimo aunque no se haya vendido.
+// Reposición (H062): el inicio cuenta medidas, no filas por sucursal, lleva
+// a Stock ya filtrado, y Reposición sugiere llegar al mínimo aunque no se
+// haya vendido. La sucursal en cero con mínimo también pide reponer, aunque
+// la otra tenga (catalogo.MedidaParaReponer, la regla de Stock: H004).
 func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 	e := armar(t)
 	adm := e.staff(t, "admin@prueba.test", "admin")
@@ -111,7 +112,7 @@ func TestBajoElMinimoEnLasTresPantallas(t *testing.T) {
 	e.exec(t, `insert into supplier_variant_codes (supplier_id, variant_id, codigo) values ($1, $2, 'F18')`, prov, placa)
 
 	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
-	if !strings.Contains(cuerpo, `"clave":"reponer","cantidad":1`) || !strings.Contains(cuerpo, `"href":"/admin/stock?estado=reponer"`) {
+	if !strings.Contains(cuerpo, `"clave":"reponer","cantidad":2`) || !strings.Contains(cuerpo, `"href":"/admin/stock?estado=reponer"`) {
 		t.Fatalf("inicio: %s", cuerpo)
 	}
 	_, b, _ := pedir(t, adm, e.u+"reportes/reposicion?dias=30&objetivo=30")

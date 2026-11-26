@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/dal/session";
 import { DECIDEN_EN_LA_COLA, MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { ArrowLeft, Ban, Flame, ListChecks, Map } from "lucide-react";
+import { ArrowLeft, Ban, Flame, ListChecks, Map, ReceiptText } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
@@ -117,6 +117,17 @@ export default async function FichaCortePage({
                 cobra (H348). */}
             {corte.estado === "terminado" && modo === "suelto" && cuenta.total > 0 && cobra ? (
               <CobrarCorte id={corte.id} />
+            ) : corte.estado === "terminado" && corte.orderId && pedido && !corte.cobrado && modo !== "sinCargo" && cobra ? (
+              /* Con la venta hecha y sin cobrar, lo que sigue es cobrarla en
+                 su pedido: «Marcar retirado» se rechazaba y «Cobrar en el
+                 mostrador» abría el mostrador vacío (mes simulado, H173). */
+              <Link
+                href={`/admin/pedidos/${corte.orderId}`}
+                className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-base font-medium sm:w-auto"
+              >
+                <ReceiptText className="h-5 w-5" aria-hidden="true" />
+                Cobrar <span className="codigo">{pedido.numero}</span>
+              </Link>
             ) : (
               <AccionesCorte
                 id={corte.id}
@@ -268,16 +279,18 @@ export default async function FichaCortePage({
                 {pedido.lineas.map((l, i) => (
                   <Renglon key={i} que={l.descripcion} cuanto={l.subtotal} />
                 ))}
+                {/* «Cobrado en PED-1158 … Sin cobrar» se contradecía (H173):
+                    sin cobrar, el total es el de la venta. */}
                 <Total
                   texto={
                     <>
-                      Cobrado en{" "}
+                      {corte.cobrado ? "Cobrado en " : "Venta "}
                       <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
                         {pedido.numero}
                       </Link>
                     </>
                   }
-                  monto={pedido.cobrado}
+                  monto={corte.cobrado ? pedido.cobrado : pedido.lineas.reduce((s, l) => s + l.subtotal, 0)}
                 >
                   <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
                 </Total>

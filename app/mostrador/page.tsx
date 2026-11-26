@@ -10,6 +10,7 @@ import { api, datos } from "@/lib/api/servidor";
 import { VistaMostrador } from "./vista";
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { fichaDeCorte } from "@/lib/dal/admin/cortes";
+import { esUuid } from "@/lib/uuid";
 
 export const metadata: Metadata = {
   title: "Mostrador",
@@ -91,7 +92,15 @@ export default async function MostradorPage({
    * simulado, H173): el corte llega cargado para cobrarlo, y la venta lo ata
    * en vez de crear otro.
    */
-  const ficha = corte ? await fichaDeCorte(corte) : null;
+  const ficha = corte && esUuid(corte) ? await fichaDeCorte(corte) : null;
+  /*
+   * El corte que ya tiene su venta se cobra en esa venta, desde la ficha del
+   * pedido: el mostrador abría vacío y sin decir nada (mes simulado, H173,
+   * CRT-7 con PED-1158 sin cobrar). El anulado, o el que no tiene material,
+   * vuelve a su ficha.
+   */
+  if (ficha?.corte.orderId) redirect(`/admin/pedidos/${ficha.corte.orderId}`);
+  if (ficha && (ficha.corte.estado === "cancelado" || !ficha.corte.variantId)) redirect(`/admin/cortes/${ficha.corte.id}`);
   const corteACobrar =
     ficha && !ficha.corte.orderId && ficha.corte.estado !== "cancelado" && ficha.corte.variantId
       ? {

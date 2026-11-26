@@ -619,7 +619,7 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 		                     AND fecha_prometida >= $9 AND fecha_prometida < $10) ELSE 0 END,
 		  CASE WHEN $5 THEN (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada'
 		                     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)) ELSE 0 END,
-		  CASE WHEN $6 THEN (SELECT count(*)::int FROM invoices WHERE cae IS NULL AND estado IN ('emitida', 'rechazada')) ELSE 0 END,
+		  CASE WHEN $6 THEN (SELECT count(*)::int FROM invoices WHERE estado IN ('emitida', 'rechazada')) ELSE 0 END,
 		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes WHERE estado = 'enviado' AND (valido_hasta IS NULL OR valido_hasta >= now())) ELSE 0 END,
 		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes q WHERE q.estado = 'aceptado'
 		                     AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado')) ELSE 0 END,

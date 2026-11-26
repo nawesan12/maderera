@@ -425,9 +425,12 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	// Los emitidos hasta el fin del mes (argentino) que ARCA todavía no
 	// autorizó: no están en el libro ni en el CSV, y si se autorizan el mes
 	// que viene salen con la fecha de ese día. Sin los borradores (no se
-	// emitieron) ni los dados de baja (ya no están en invoices).
+	// emitieron) ni los dados de baja (ya no están en invoices). Por el
+	// estado, como Facturación y el libro IVA: una B emitida con un CAE de
+	// homologación tampoco está autorizada, y acá contaba uno menos (mes
+	// simulado: 32 contra 33).
 	var sinCAE int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE cae IS NULL AND estado IN ('emitida', 'rechazada')
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE estado IN ('emitida', 'rechazada')
 		AND fecha_emision <= $1`, ihasta).Scan(&sinCAE); err != nil {
 		return nil, err
 	}

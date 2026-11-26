@@ -17,10 +17,24 @@ import { useEffect } from "react";
  */
 export function TablasApilables() {
   useEffect(() => {
+    let reintento: number | null = null;
     const rotular = () => {
-      const tablas = [
+      const todas = [
         ...document.querySelectorAll<HTMLTableElement>(".panel table, [data-slot=dialog-content] table"),
       ].filter((t) => t.dataset.tabla !== "fija");
+      // Solo las que React ya hidrató. La espera de `cuandoEsteQuieto` se
+      // corta al segundo, y con una página lenta (un Suspense que llega
+      // tarde, el servidor de desarrollo) la tabla todavía era HTML del
+      // servidor: el `data-label` escrito encima salía como aviso de
+      // hidratación en la ficha de la factura (mes simulado). Las que faltan
+      // se rotulan en un rato.
+      const tablas = todas.filter(hidratada);
+      if (tablas.length < todas.length && reintento === null) {
+        reintento = window.setTimeout(() => {
+          reintento = null;
+          programar();
+        }, 400);
+      }
       // Primero todas las medidas y después todas las escrituras: leer el
       // ancho después de escribir un atributo obliga al navegador a
       // recalcular el diseño, una vez por tabla.
@@ -65,9 +79,27 @@ export function TablasApilables() {
       window.removeEventListener("resize", programar);
       observador.disconnect();
       cancelar();
+      if (reintento !== null) window.clearTimeout(reintento);
     };
   }, []);
   return null;
+}
+
+/**
+ * Si React ya tomó este nodo: al hidratarlo le cuelga su fibra en una
+ * propiedad `__reactFiber$…`. No es una API pública, y por eso solo se usa
+ * para esperar: si no aparece, se rotula igual después de un rato.
+ */
+const esperas = new WeakMap<Element, number>();
+function hidratada(nodo: Element): boolean {
+  for (const clave in nodo) {
+    if (clave.startsWith("__reactFiber$")) return true;
+  }
+  // Sin escribir nada en el nodo (sería otra diferencia con el servidor):
+  // a las diez esperas (unos cuatro segundos), se rotula igual.
+  const n = (esperas.get(nodo) ?? 0) + 1;
+  esperas.set(nodo, n);
+  return n > 10;
 }
 
 /**

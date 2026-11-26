@@ -286,6 +286,14 @@ func TestNotaDeCreditoAplicadaALaFactura(t *testing.T) {
 	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/facturas-con-saldo", nil); strings.Contains(b, "2012") || strings.Contains(b, "nota_credito") {
 		t.Errorf("después del pago: %s", b)
 	}
+	// Mes simulado: la ficha de cada factura muestra la nota que la completa
+	// y los medios del pago.
+	if _, b := pedir(t, adm, "GET", e.u+"compras/facturas/"+f, nil); !strings.Contains(b, `"numero":"0001-00000140"`) || !strings.Contains(b, `"total":98494`) {
+		t.Errorf("ficha con la nota aplicada: %s", b)
+	}
+	if _, b := pedir(t, adm, "GET", e.u+"compras/facturas/"+f2, nil); !strings.Contains(b, `"numero":"0001-00000141"`) || !strings.Contains(b, `"medios":["transferencia"]`) {
+		t.Errorf("ficha pagada con nota: %s", b)
+	}
 }
 
 // H293/H337: el cheque endosado que rebotó se ofrece en Pagos y se repone

@@ -1208,9 +1208,20 @@ export interface components {
                 /** Format: date-time */
                 fecha: string;
                 medio: string;
+                /** @description Los medios con que salió el pago, del de más plata al de menos (un pago puede ir en transferencia y cheque). */
+                medios: string[];
                 referencia: string | null;
                 /** Format: double */
                 aplicado: number;
+            }[];
+            /** @description Las notas de crédito vigentes aplicadas a esta factura. */
+            creditos: {
+                id: string;
+                numero: string;
+                /** Format: date-time */
+                fecha: string;
+                /** Format: double */
+                total: number;
             }[];
             renglones: {
                 producto: string | null;

@@ -172,11 +172,23 @@ func (s *Servicio) chequesAReponer(ctx context.Context, proveedor string) ([]Fac
 
 // PagoDeLaFactura es un pago que canceló (en todo o en parte) la factura.
 type PagoDeLaFactura struct {
-	PagoID     string    `json:"pagoId"`
-	Fecha      time.Time `json:"fecha"`
-	Medio      string    `json:"medio"`
-	Referencia *string   `json:"referencia"`
-	Aplicado   float64   `json:"aplicado"`
+	PagoID string    `json:"pagoId"`
+	Fecha  time.Time `json:"fecha"`
+	Medio  string    `json:"medio"`
+	// Medios son los de las partes del pago, del de más plata al de menos:
+	// un pago en transferencia y cheque se veía solo como transferencia.
+	Medios     []string `json:"medios"`
+	Referencia *string  `json:"referencia"`
+	Aplicado   float64  `json:"aplicado"`
+}
+
+// CreditoDeLaFactura es una nota de crédito aplicada a la factura: también
+// la cancela, y la ficha no la mostraba.
+type CreditoDeLaFactura struct {
+	ID     string    `json:"id"`
+	Numero string    `json:"numero"`
+	Fecha  time.Time `json:"fecha"`
+	Total  float64   `json:"total"`
 }
 
 // RenglonDeLaFactura es un renglón de la mercadería que cubre la factura
@@ -222,6 +234,7 @@ type FichaDeFactura struct {
 	AplicaA   *string              `json:"aplicaA"`
 	AplicaAID *string              `json:"aplicaAId"`
 	Pagos     []PagoDeLaFactura    `json:"pagos"`
+	Creditos  []CreditoDeLaFactura `json:"creditos"`
 	Renglones []RenglonDeLaFactura `json:"renglones"`
 }
 
@@ -255,7 +268,10 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 	f.Exento, f.Percepciones, f.PercepcionIva, f.PercepcionIibb = float64(exento), float64(perc), float64(pIva), float64(pIibb)
 	f.Total, f.Pagado = float64(total), float64(pagado)
 	filas, err := s.pool.Query(ctx, `
-		SELECT p.id, p.fecha, p.medio, p.referencia, a.importe
+		SELECT p.id, p.fecha, p.medio, p.referencia, a.importe,
+		  coalesce((SELECT array_agg(x.medio ORDER BY x.total DESC, x.medio) FROM (
+		    SELECT pp.medio, sum(pp.importe) AS total FROM supplier_payment_parts pp WHERE pp.payment_id = p.id GROUP BY pp.medio) x),
+		    ARRAY[p.medio])
 		FROM supplier_payment_allocations a JOIN supplier_payments p ON p.id = a.payment_id
 		WHERE a.purchase_invoice_id = $1 ORDER BY p.fecha`, id)
 	if err != nil {
@@ -264,9 +280,25 @@ func (s *Servicio) ObtenerFactura(ctx context.Context, id string) (*FichaDeFactu
 	f.Pagos, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (PagoDeLaFactura, error) {
 		var p PagoDeLaFactura
 		var importe jsmath.Num
-		err := r.Scan(&p.PagoID, &p.Fecha, &p.Medio, &p.Referencia, &importe)
+		err := r.Scan(&p.PagoID, &p.Fecha, &p.Medio, &p.Referencia, &importe, &p.Medios)
 		p.Aplicado = float64(importe)
 		return p, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT n.id, lpad(n.punto_venta::text, 4, '0') || '-' || lpad(n.numero::text, 8, '0'), n.fecha_emision, n.total
+		FROM purchase_invoices n WHERE n.aplica_a_id = $1 AND n.anulada_at IS NULL ORDER BY n.fecha_emision, n.created_at`, id)
+	if err != nil {
+		return nil, err
+	}
+	f.Creditos, err = pgx.CollectRows(filas, func(r pgx.CollectableRow) (CreditoDeLaFactura, error) {
+		var c CreditoDeLaFactura
+		var total jsmath.Num
+		err := r.Scan(&c.ID, &c.Numero, &c.Fecha, &total)
+		c.Total = float64(total)
+		return c, err
 	})
 	if err != nil {
 		return nil, err

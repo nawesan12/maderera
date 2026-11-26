@@ -1152,7 +1152,7 @@ components:
       type: object
       required: [id, tipo, puntoVenta, numero, fechaEmision, fechaVencimiento, cae, neto, iva21, iva105, iva27, exento, percepciones,
         percepcionIva, percepcionIibb, total, pagado, observaciones, supplierId, proveedor, condicionIva, receiptId, numeroRemito, createdAt,
-        anuladaAt, motivoAnulacion, aplicaA, aplicaAId, pagos, renglones]
+        anuladaAt, motivoAnulacion, aplicaA, aplicaAId, pagos, creditos, renglones]
       properties:
         id: { type: string }
         tipo: { type: string }
@@ -1186,13 +1186,28 @@ components:
           type: array
           items:
             type: object
-            required: [pagoId, fecha, medio, referencia, aplicado]
+            required: [pagoId, fecha, medio, medios, referencia, aplicado]
             properties:
               pagoId: { type: string }
               fecha: { type: string, format: date-time }
               medio: { type: string }
+              medios:
+                description: Los medios con que salió el pago, del de más plata al de menos (un pago puede ir en transferencia y cheque).
+                type: array
+                items: { type: string }
               referencia: { type: string, nullable: true }
               aplicado: { type: number, format: double }
+        creditos:
+          description: Las notas de crédito vigentes aplicadas a esta factura.
+          type: array
+          items:
+            type: object
+            required: [id, numero, fecha, total]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              fecha: { type: string, format: date-time }
+              total: { type: number, format: double }
         renglones:
           type: array
           items:

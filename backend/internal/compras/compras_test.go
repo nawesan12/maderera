@@ -407,6 +407,10 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 	if estado != "entregado" {
 		t.Errorf("el cheque endosado: %s", estado)
 	}
+	// La ficha de la factura dice los dos medios, el de más plata primero.
+	if _, b := pedir(t, adm, "GET", e.u+"compras/facturas/"+factura, nil); !strings.Contains(b, `"medios":["cheque","transferencia"]`) {
+		t.Errorf("medios en la ficha: %s", b)
+	}
 	// La misma factura ya no tiene saldo; el mismo cheque ya no está en cartera.
 	c, b = pedir(t, adm, "POST", e.u+"compras/pagos", pago)
 	if c != 422 || !strings.Contains(b, "A la factura 1274 le quedan $0.00 y se le están imputando $1000.00.") {

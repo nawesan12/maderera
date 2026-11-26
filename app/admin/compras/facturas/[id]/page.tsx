@@ -149,9 +149,12 @@ export default async function FacturaDeCompraPage({
 
         <section className="tarjeta p-5">
           <h2 className="text-[19px] font-bold tracking-tight">Pagos</h2>
-          {f.pagos.length === 0 ? (
+          {f.pagos.length === 0 && f.creditos.length === 0 ? (
             <p className="mt-3 text-base text-muted-foreground">Ninguno</p>
           ) : (
+            // Lo que la canceló: los pagos, con todos sus medios (uno en
+            // transferencia y cheque se leía solo como transferencia), y las
+            // notas de crédito aplicadas, que también la completan.
             <ul className="mt-3 divide-y divide-linea-suave">
               {f.pagos.map((p) => (
                 <li key={p.pagoId}>
@@ -159,10 +162,29 @@ export default async function FacturaDeCompraPage({
                     href={`/admin/compras/pagos/${p.pagoId}`}
                     className="flex items-baseline justify-between gap-3 py-2.5 hover:underline"
                   >
-                    <span>
-                      {fechaCorta.format(p.fecha)} · {NOMBRE_DEL_MEDIO[p.medio] ?? p.medio}
+                    <span className="min-w-0">
+                      {fechaCorta.format(p.fecha)} ·{" "}
+                      {(p.medios.length ? p.medios : [p.medio])
+                        .map((m, i) => {
+                          const nombre = NOMBRE_DEL_MEDIO[m] ?? m;
+                          return i === 0 ? nombre : nombre.toLowerCase();
+                        })
+                        .join(" y ")}
                     </span>
-                    <span className="tabular font-semibold">{formatearMonto(p.aplicado)}</span>
+                    <span className="tabular shrink-0 font-semibold">{formatearMonto(p.aplicado)}</span>
+                  </Link>
+                </li>
+              ))}
+              {f.creditos.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`/admin/compras/facturas/${c.id}`}
+                    className="flex items-baseline justify-between gap-3 py-2.5 hover:underline"
+                  >
+                    <span className="min-w-0">
+                      {fechaCorta.format(c.fecha)} · Nota de crédito <span className="codigo">{c.numero}</span>
+                    </span>
+                    <span className="tabular shrink-0 font-semibold">{formatearMonto(c.total)}</span>
                   </Link>
                 </li>
               ))}

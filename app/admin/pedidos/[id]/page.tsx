@@ -125,7 +125,7 @@ export default async function FichaPedidoPage({
   // Facturado: la devolución sale del pedido con su nota de crédito mientras
   // no saque plata (H279); lo cobrado vuelve desde la factura.
   const devolucionFacturada =
-    manejaPlata && !cancelado && facturado?.tipo.startsWith("factura") ? await devolucionDesdeElPedido(pedido.id) : null;
+    manejaPlata && !cancelado && pedido.facturado ? await devolucionDesdeElPedido(pedido.id) : null;
   const devuelveDesdeElPedido = devolucionFacturada && devolucionFacturada.tope > 0.005 && devolucionFacturada.renglones.some((r) => r.queda > 0);
   const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
   const renglones = pedido.items.map((i) => ({

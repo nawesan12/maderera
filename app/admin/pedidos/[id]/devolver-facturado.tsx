@@ -134,7 +134,9 @@ export function DevolverFacturado({
               Devolución de <span className="tabular whitespace-nowrap">{numero}</span>
             </DialogTitle>
             <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
-              <span className="tabular whitespace-nowrap">Nota de crédito · {factura}</span>
+              <span>
+                Nota de crédito · <span className="tabular whitespace-nowrap">{factura}</span>
+              </span>
               <span className="whitespace-nowrap">
                 {destino === "cuenta" ? "A la cuenta" : "Baja la deuda"} · hasta{" "}
                 <span className="tabular">{formatearMonto(tope)}</span>

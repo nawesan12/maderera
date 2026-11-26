@@ -259,6 +259,41 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	}
 	asientos = append(asientos, cheques...)
 
+	// Los retiros de la caja que fueron al banco (el motivo lo dice): de Caja
+	// a Banco. Sin esto el mayor de Caja y el de Banco no se podían conciliar
+	// con los arqueos ni con el extracto (simulación del mes, H160). Los que
+	// van a la caja fuerte no mueven cuentas (es la misma Caja).
+	rs, err = s.lectura.Query(ctx, `SELECT m.created_at, -m.monto::float8, coalesce(m.motivo, ''), coalesce(b.name, '')
+		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
+		WHERE m.tipo = 'retiro' AND m.created_at >= $1 AND m.created_at <= $2 AND `+retiroAlBanco+`
+		ORDER BY m.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	for rs.Next() {
+		var fecha time.Time
+		var importe float64
+		var motivo, sucursal string
+		if err := rs.Scan(&fecha, &importe, &motivo, &sucursal); err != nil {
+			rs.Close()
+			return nil, err
+		}
+		if importe < 0 {
+			importe = -importe
+		}
+		concepto := "Depósito de la caja"
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		d := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Banco, importe, 0), renglon(Cuentas.Caja, 0, importe)})
+		d.Instante = true
+		asientos = append(asientos, d)
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, err
+	}
+
 	rs, err = s.lectura.Query(ctx, `
 		SELECT fecha, descripcion, categoria::text, importe, medio::text, circuito::text
 		FROM expenses WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha`, desde, hasta)
@@ -288,6 +323,9 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 	sort.SliceStable(asientos, func(i, j int) bool { return asientos[i].Fecha.Before(asientos[j].Fecha) })
 	return asientos, nil
 }
+
+// retiroAlBanco: el retiro de caja `m` fue al banco (lo dice el motivo).
+const retiroAlBanco = `(m.motivo ~* '(banco|dep[oó]sit)')`
 
 // asientosDeCheques son los cambios de estado de los cheques del período
 // (cheque_estados, que anota el trigger de la base en cada cambio):

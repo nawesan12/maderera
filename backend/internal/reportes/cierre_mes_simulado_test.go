@@ -217,3 +217,22 @@ func TestCerrarElMes(t *testing.T) {
 		t.Fatal(n)
 	}
 }
+
+// El retiro de la caja que fue al banco se asienta de Caja a Banco; el que
+// va a la caja fuerte, no (H160).
+func TestElDepositoDeLaCajaVaAlBanco(t *testing.T) {
+	e := armar(t)
+	e.staff(t, "caja@prueba.test", "vendedor")
+	sesion := e.id(t, `insert into cash_sessions (branch_id, abierta_por) select $1, id from "user" limit 1 returning id`, e.central)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, created_at) values
+		($1, 'retiro', -650000, 'Depósito en el banco', '2026-10-10T15:00:00Z'),
+		($1, 'retiro', -100000, 'A la caja fuerte', '2026-10-10T16:00:00Z')`, sesion)
+	octubre := e.asientosDe(t, "2026-10")
+	d := buscarAsiento(octubre, "Depósito de la caja de Casa Central")
+	if d == nil || cuenta([]Asiento{*d}, Cuentas.Banco) != 650000 || cuenta([]Asiento{*d}, Cuentas.Caja) != -650000 {
+		t.Fatalf("depósito: %+v", d)
+	}
+	if n := cuenta(octubre, Cuentas.Caja); n != -650000 {
+		t.Fatalf("la caja fuerte no mueve Caja: %v", n)
+	}
+}

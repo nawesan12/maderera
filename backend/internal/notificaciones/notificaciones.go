@@ -144,7 +144,9 @@ func (s *Servicio) manejador(f func(context.Context, json.RawMessage) error) col
 	}
 }
 
-func primerNombre(n string) string { return strings.Split(n, " ")[0] }
+// primerNombre es el nombre del saludo del correo: el de una empresa va
+// entero, sin «SRL» (whatsapp.NombreDeSaludo).
+func primerNombre(n string) string { return whatsapp.NombreDeSaludo(n) }
 
 type cliente struct {
 	nombre          string

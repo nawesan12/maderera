@@ -276,10 +276,12 @@ func (s *Servicio) nombreDeLaConversacion(ctx context.Context, c *Conversacion) 
 	if c.CustomerID != nil {
 		var n string
 		if err := s.pool.QueryRow(ctx, `select nombre from customers where id = $1`, *c.CustomerID).Scan(&n); err == nil {
-			return primeraPalabraJS(n)
+			if p := NombreDeSaludo(n); p != "" {
+				return p
+			}
 		}
 	}
-	if p := primeraPalabraJS(oTexto(c.DisplayName, "")); p != "" {
+	if p := NombreDeSaludo(oTexto(c.DisplayName, "")); p != "" {
 		return p
 	}
 	return "qué tal"

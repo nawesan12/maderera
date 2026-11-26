@@ -118,9 +118,10 @@ func sinOracionesVacias(texto string, valores map[string]string) string {
 	return trimJS(b.String())
 }
 
-// PrimerNombre es el primer nombre para el saludo; «qué tal» si no hay.
+// PrimerNombre es el nombre para el saludo (ver NombreDeSaludo); «qué tal»
+// si no hay.
 func PrimerNombre(nombre string) string {
-	if p := primeraPalabraJS(nombre); p != "" {
+	if p := NombreDeSaludo(nombre); p != "" {
 		return p
 	}
 	return "qué tal"

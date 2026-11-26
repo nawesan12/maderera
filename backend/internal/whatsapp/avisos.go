@@ -184,7 +184,7 @@ func (s *Servicio) avisarPorWhatsapp(ctx context.Context, o OpcionesAviso) (Resu
 	if o.Nombre != nil {
 		nombre = *o.Nombre
 	}
-	valores := map[string]string{"nombre": primeraPalabraJS(nombre)}
+	valores := map[string]string{"nombre": NombreDeSaludo(nombre)}
 	if valores["nombre"] == "" {
 		valores["nombre"] = "qué tal"
 	}

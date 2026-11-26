@@ -36,6 +36,19 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/*
+ * Todo lo que cuelga de acá depende de quién entró: no hay navegación que se
+ * pueda armar antes de leer la sesión. Con Cache Components, Next 16.4 valida
+ * en desarrollo que cada navegación sea instantánea y marcaba casi todas las
+ * pantallas («encountered uncached data during prerendering», con el overlay
+ * encima). Es la salida que da su guía de autenticación
+ * (node_modules/next/dist/docs/01-app/02-guides/authentication-with-cache-components.md):
+ * este segmento puede esperar a la sesión. No cambia producción: la
+ * validación corre solo en `next dev`, y la ruta sigue haciendo streaming
+ * con su `<Suspense>` y su `loading.tsx`.
+ */
+export const instant = false;
+
 /** Iniciales para el avatar: "Juan Pérez" -> "JP". */
 function iniciales(nombre: string) {
   return nombre

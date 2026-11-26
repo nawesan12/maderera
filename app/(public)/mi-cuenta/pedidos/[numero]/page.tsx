@@ -27,7 +27,6 @@ import {
   fechaLarga,
   formatearMonto,
   cantidadConUnidad,
-  formatearUnidad,
   plural,
 } from "@/lib/formato";
 import {
@@ -142,7 +141,7 @@ export default async function DetallePedidoPage({
             .slice(0, 12)
             .map(
               (i) =>
-                `${Number(i.cantidad)} ${formatearUnidad(i.unidad)} ${i.descripcion}`,
+                `${cantidadConUnidad(Number(i.cantidad), i.unidad)} ${i.descripcion}`,
             )
             .join("; ")}.`,
           quien,
@@ -189,10 +188,12 @@ export default async function DetallePedidoPage({
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="min-w-0">{r.descripcion}</span>
                     <span className="tabular shrink-0 text-right">
-                      <strong className="text-xl">{r.pendiente}</strong>
+                      <strong className="text-xl">
+                        {cantidadConUnidad(r.pendiente, null)}
+                      </strong>
                       <span className="text-sm text-muted-foreground">
                         {" "}
-                        {formatearUnidad(r.unidad)} de {r.pedido}
+                        de {cantidadConUnidad(r.pedido, r.unidad)}
                       </span>
                     </span>
                   </div>
@@ -372,8 +373,8 @@ export default async function DetallePedidoPage({
                       </p>
                       {corto && (
                         <p className="tabular mt-0.5 text-sm text-brand-orange-dark">
-                          Entregado: {r.entregado} de {r.pedido}{" "}
-                          {formatearUnidad(r.unidad)}
+                          Entregado: {cantidadConUnidad(r.entregado, null)} de{" "}
+                          {cantidadConUnidad(r.pedido, r.unidad)}
                         </p>
                       )}
                     </div>

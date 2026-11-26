@@ -320,6 +320,15 @@ func TestRetiroParcialFirmaYAnulacion(t *testing.T) {
 	if c, _ := pedir(t, otro, "GET", u+"mi-cuenta/pedidos/"+pedido+"/entregas", nil); c != 404 {
 		t.Errorf("portal de otro: %d", c)
 	}
+	// La venta del mostrador que se llevó en el acto (entregada, sin
+	// remito): no le queda nada en acopio (H095).
+	retirada, _, _ := e.pedido(t, "PED-1140", "entregado", &propio)
+	_, b = pedir(t, web, "GET", u+"mi-cuenta/pedidos/"+retirada+"/entregas", nil)
+	for _, r := range leer[EntregasDelPortal](t, b).Acopio {
+		if r.Pendiente != 0 || r.Entregado != r.Pedido {
+			t.Fatalf("la retirada en el mostrador en acopio: %s", b)
+		}
+	}
 
 	// Anular devuelve la mercadería; anular otra vez no la devuelve de nuevo.
 	if c, _ := pedir(t, web, "POST", u+"admin/remitos/"+remito+"/anular", nil); c != 403 {

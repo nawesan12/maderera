@@ -1012,6 +1012,22 @@ func (s *Servicio) DelPortal(ctx context.Context, ses *auth.Sesion, pedido strin
 	if err != nil {
 		return out, err
 	}
+	// Entregado sin ningún remito: la venta del mostrador que se llevó en
+	// el acto (descontó el stock al vender). No le queda nada en acopio; el
+	// portal decía «Te queda en acopio · 4 de 4» y «Entregado: 0 de 4»
+	// debajo de «Retirado 4 de 4» (mes simulado, H095).
+	var sinRemito bool
+	if err := s.pool.QueryRow(ctx, `SELECT o.estado = 'entregado' AND NOT EXISTS (
+		  SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
+		FROM orders o WHERE o.id = $1`, pedido).Scan(&sinRemito); err != nil {
+		return out, err
+	}
+	if sinRemito {
+		for i := range out.Acopio {
+			out.Acopio[i].Entregado, out.Acopio[i].Pendiente = out.Acopio[i].Pedido, 0
+		}
+		return out, nil
+	}
 	out.Acopio, err = ConGalpon(ctx, s.pool, pedido, out.Acopio)
 	return out, err
 }

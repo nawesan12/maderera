@@ -79,7 +79,11 @@ WHERE id = $1;
 SELECT id, numero, total::float8 AS total, customer_id, branch_id FROM orders WHERE id = $1;
 
 -- name: PedidoPagado :exec
-UPDATE orders SET estado_pago = 'pagado', updated_at = now() WHERE id = $1;
+-- El pedido partido (a_cuenta) con el resto cobrado queda «parcial», como la
+-- venta del mostrador que cargó una parte a la cuenta: lo que falta está en
+-- la cuenta corriente.
+UPDATE orders SET estado_pago = CASE WHEN a_cuenta IS NOT NULL THEN 'parcial'::estado_pago ELSE 'pagado'::estado_pago END,
+  updated_at = now() WHERE id = $1;
 
 -- name: BloquearCheque :exec
 SELECT pg_advisory_xact_lock(hashtext(sqlc.arg(cheque)::text));

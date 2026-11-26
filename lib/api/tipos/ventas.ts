@@ -430,6 +430,11 @@ export interface components {
             numeroPedido: string | null;
         };
         PedidoListado: {
+            /**
+             * Format: double
+             * @description lo que un pedido partido cargó a la cuenta corriente (H047)
+             */
+            aCuenta?: number | null;
             /** @description Se retira de a partes (ya salió algo */
             acopio: boolean;
             /** @description AAAA-MM-DD */
@@ -582,6 +587,11 @@ export interface components {
              * @description El total menos lo devuelto contra la deuda
              */
             aCobrar: number;
+            /**
+             * Format: double
+             * @description lo que un pedido partido cargó a la cuenta corriente (H047)
+             */
+            aCuenta?: number | null;
             recibos: components["schemas"]["ReciboDelPedido"][];
             /** @enum {string|null} */
             comprobante: "interno" | "fiscal" | null;
@@ -1181,6 +1191,11 @@ export interface operations {
                     /** @description el envío va sin flete; un envío sin flete ni sinCargo no sale */
                     sinCargo?: boolean;
                     medioPago?: components["schemas"]["MedioPago"];
+                    /**
+                     * Format: double
+                     * @description la parte a cuenta corriente de un pedido partido (H047); el resto se paga con medioPago
+                     */
+                    aCuenta?: number;
                     /** @description AAAA-MM-DD */
                     entregarEl?: string;
                     /**

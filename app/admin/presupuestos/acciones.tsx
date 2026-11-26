@@ -277,6 +277,13 @@ function PasarAPedido({
   const [costo, setCosto] = useState("");
   const [sinCargo, setSinCargo] = useState(false);
   const [medio, setMedio] = useState<Medio | null>(null);
+  /*
+   * El pedido partido (H047): con «Cuenta corriente», lo que va a la cuenta
+   * arranca en lo que el crédito deja (o el total) y se puede bajar; el resto
+   * se paga con otro medio y se cobra desde el pedido.
+   */
+  const [parteTexto, setParteTexto] = useState("");
+  const [medioResto, setMedioResto] = useState<Exclude<Medio, "cuenta_corriente"> | null>(null);
   const [entregarEl, setEntregarEl] = useState("");
   /*
    * Vencido: «Actualizar» (los precios de hoy) es lo de siempre y va
@@ -303,7 +310,19 @@ function PasarAPedido({
   const faltaFlete = tipo === "envio" && !hayCosto && !sinCargo;
   const totalPedido = totalBase + costoEnvio;
   const aCuenta = medio === "cuenta_corriente";
-  const pasaElLimite = aCuenta && credito !== null && (credito.bloqueada || totalPedido > credito.disponible + 0.005);
+  const disponible = credito && !credito.bloqueada ? Math.max(credito.disponible, 0) : null;
+  const parteLeida = Number(parteTexto.trim().replace(/\./g, "").replace(",", "."));
+  const parteMal = aCuenta && parteTexto.trim() !== "" && !(Number.isFinite(parteLeida) && parteLeida > 0);
+  const parte = !aCuenta
+    ? 0
+    : parteTexto.trim() === "" || parteMal
+      ? Math.min(totalPedido, disponible ?? totalPedido)
+      : Math.min(parteLeida, totalPedido);
+  const partido = aCuenta && parte > 0 && parte < totalPedido - 0.005;
+  const resto = partido ? Math.round((totalPedido - parte) * 100) / 100 : 0;
+  const faltaResto = partido && !medioResto;
+  const pasaElLimite =
+    aCuenta && credito !== null && (credito.bloqueada || parte <= 0 || parte > credito.disponible + 0.005);
 
   function elegirZona(nombre: string) {
     setZona(nombre);
@@ -321,7 +340,9 @@ function PasarAPedido({
         ...(tipo === "envio"
           ? { direccion, zona: zona || undefined, ...(hayCosto ? { costoEnvio } : {}), ...(sinCargo ? { sinCargo: true } : {}) }
           : {}),
-        medioPago: medio ?? undefined,
+        ...(partido
+          ? { medioPago: medioResto ?? undefined, aCuenta: Math.round(parte * 100) / 100 }
+          : { medioPago: medio ?? undefined }),
         entregarEl: entregarEl || undefined,
         ...(vencido ? { precios } : {}),
         ...(pin ? { pin } : {}),
@@ -505,15 +526,53 @@ function PasarAPedido({
             <div className="space-y-2">
               <p className="text-base font-medium">Cómo paga</p>
               <Opciones etiqueta="Cómo paga" valor={medio} alCambiar={setMedio} opciones={medios} />
-              {aCuenta && credito && (
-                <p
-                  className={`text-base ${pasaElLimite ? "estado-problema font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
-                >
-                  {credito.bloqueada
-                    ? "La cuenta corriente está bloqueada"
-                    : `Disponible ${formatearMonto(Math.max(credito.disponible, 0))}`}
-                  {!credito.bloqueada && pasaElLimite && ` · faltan ${formatearMonto(totalPedido - Math.max(credito.disponible, 0))}`}
+              {aCuenta && credito?.bloqueada && (
+                <p className="estado-problema text-base font-medium text-[var(--estado-tinta)]">
+                  La cuenta corriente está bloqueada
                 </p>
+              )}
+              {aCuenta && !credito?.bloqueada && (
+                <div className="space-y-3 pt-1">
+                  <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+                    <div className="w-40 space-y-1.5">
+                      <Label
+                        htmlFor="pedido-a-cuenta"
+                        className={pasaElLimite || parteMal ? "estado-problema text-[var(--estado-tinta)]" : undefined}
+                      >
+                        A cuenta
+                      </Label>
+                      <Input
+                        id="pedido-a-cuenta"
+                        inputMode="decimal"
+                        value={parteTexto}
+                        placeholder={formatearMonto(parte).replace(/^\$\s?/, "")}
+                        onChange={(e) => setParteTexto(e.target.value)}
+                        aria-invalid={pasaElLimite || parteMal || undefined}
+                        className="tabular"
+                      />
+                    </div>
+                    {disponible !== null && (
+                      <p
+                        className={`pb-2.5 text-base ${pasaElLimite ? "estado-problema font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
+                      >
+                        Disponible <span className="tabular">{formatearMonto(disponible)}</span>
+                      </p>
+                    )}
+                  </div>
+                  {partido && (
+                    <div className="space-y-2">
+                      <p className="text-base font-medium">
+                        El resto, <span className="tabular">{formatearMonto(resto)}</span>
+                      </p>
+                      <Opciones
+                        etiqueta="Cómo paga el resto"
+                        valor={medioResto}
+                        alCambiar={setMedioResto}
+                        opciones={[...MEDIOS_DEL_PEDIDO]}
+                      />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -542,7 +601,13 @@ function PasarAPedido({
               <button
                 type="button"
                 disabled={
-                  pendiente || costoMal || faltaFlete || pasaElLimite || (tipo === "envio" && !direccion.trim())
+                  pendiente ||
+                  costoMal ||
+                  faltaFlete ||
+                  pasaElLimite ||
+                  parteMal ||
+                  faltaResto ||
+                  (tipo === "envio" && !direccion.trim())
                 }
                 onClick={() => pasar()}
                 className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
@@ -558,7 +623,9 @@ function PasarAPedido({
                       : "Falta el flete"
                     : costoMal
                       ? "Revisá el flete"
-                      : "Crear el pedido"}
+                      : faltaResto
+                        ? "Falta cómo paga el resto"
+                        : "Crear el pedido"}
               </button>
             </div>
           </div>

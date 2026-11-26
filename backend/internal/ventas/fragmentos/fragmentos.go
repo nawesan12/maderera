@@ -38,12 +38,24 @@ import "strings"
 //     destino «deuda») baja lo que se debe: la mercadería volvió y nadie
 //     pagó por ella. Lo devuelto por caja u otro medio no se resta: salió
 //     la mercadería y salió la plata, y lo que falta queda igual.
+//   - El pedido partido (a_cuenta, H047) dejó una parte en la cuenta: lo
+//     que falta es el resto, fuera de la cuenta, y esa parte no se resta.
 const SinCobrarDelPedido = `(CASE WHEN o.estado <> 'cancelado' AND o.estado_pago IN ('pendiente', 'rechazado')
-	  AND o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
-	  AND NOT EXISTS (SELECT 1 FROM account_movements am
-	                  WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+	  AND ` + DeudaFueraDeLaCuenta + `
 	  AND NOT ` + PagoEnRevision + `
-	THEN nullif(greatest(` + ACobrarDelPedido + ` - ` + CobradoDelPedido + `, 0), 0) END)`
+	THEN nullif(greatest(` + ACobrarFueraDeLaCuenta + ` - ` + CobradoDelPedido + `, 0), 0) END)`
+
+// DeudaFueraDeLaCuenta: lo que falta cobrar del pedido `o` no está en la
+// cuenta corriente del cliente. Un pedido de contado; no uno a cuenta (el
+// medio cuenta_corriente, o la «compra» asentada con su número). El
+// partido (a_cuenta) sí: su resto se cobra como uno de contado.
+const DeudaFueraDeLaCuenta = `(o.a_cuenta IS NOT NULL OR (o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
+	  AND NOT EXISTS (SELECT 1 FROM account_movements am
+	                  WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')))`
+
+// ACobrarFueraDeLaCuenta es ACobrarDelPedido menos lo que el pedido partido
+// cargó a la cuenta: el resto, que se cobra con un recibo del pedido.
+const ACobrarFueraDeLaCuenta = `(` + ACobrarDelPedido + ` - coalesce(o.a_cuenta, 0))`
 
 // NotaEntregadoSinCobrar encabeza la nota del historial de un pedido que se
 // entregó con algo sin cobrar (lo deja «Avanzar» y el remito que completa

@@ -285,6 +285,8 @@ export const orders = pgTable(
     comprobante: text(),
     /** Cuándo cuenta como vendida: la primera entrega o factura (migración 00275). */
     vendidoAt: timestamp({ withTimezone: true }),
+    /** Lo que un pedido partido cargó a la cuenta corriente; el resto, con medioPago (00311). */
+    aCuenta: numeric({ precision: 12, scale: 2 }),
   },
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),

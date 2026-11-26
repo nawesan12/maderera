@@ -445,6 +445,7 @@ paths:
                 costoEnvio: { type: number, format: double, minimum: 0 }
                 sinCargo: { type: boolean, description: "el envío va sin flete; un envío sin flete ni sinCargo no sale" }
                 medioPago: { $ref: "#/components/schemas/MedioPago" }
+                aCuenta: { type: number, format: double, minimum: 0, description: "la parte a cuenta corriente de un pedido partido (H047); el resto se paga con medioPago" }
                 entregarEl: { type: string, description: AAAA-MM-DD }
                 precios: { type: string, enum: [actualizar, respetar], description: "para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)" }
                 pin: { type: string, maxLength: 128, description: "el PIN de un admin, o su contraseña si ninguno cargó PIN" }
@@ -603,6 +604,7 @@ components:
         total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt, entregarEl, porEntregar, cortesSinTerminar,
         comprobante, facturado, acopio]
       properties:
+        aCuenta: { type: number, format: double, nullable: true, description: "lo que un pedido partido cargó a la cuenta corriente (H047)" }
         acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
         entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }
         porEntregar:
@@ -747,6 +749,7 @@ components:
         acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
         cobrado: { type: number, format: double, description: Lo cobrado con recibos y en línea }
         aCobrar: { type: number, format: double, description: El total menos lo devuelto contra la deuda }
+        aCuenta: { type: number, format: double, nullable: true, description: "lo que un pedido partido cargó a la cuenta corriente (H047)" }
         recibos: { type: array, items: { $ref: "#/components/schemas/ReciboDelPedido" } }
         comprobante: { type: string, nullable: true, enum: [interno, fiscal, null] }
         id: { type: string }

@@ -5725,6 +5725,7 @@ type Order struct {
 	CreditoSinAutorizar    jsmath.Num         `json:"creditoSinAutorizar"`
 	Comprobante            *string            `json:"comprobante"`
 	VendidoAt              pgtype.Timestamptz `json:"vendidoAt"`
+	ACuenta                *jsmath.Num        `json:"aCuenta"`
 }
 
 type OrderItem struct {

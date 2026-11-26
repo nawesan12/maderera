@@ -85,13 +85,15 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 		var facturado, cobrado bool
 		var envio, descuento float64
 		var aCuenta bool
+		var partido *float64
 		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador')),
 			       `+fragmentos.CobradoDelPedido+` > 0.005 OR `+fragmentos.PagoEnRevision+`,
 			       o.costo_envio::float8, o.descuento::float8,
 			       o.customer_id IS NOT NULL AND EXISTS (SELECT 1 FROM account_movements am
-			         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
-			FROM orders o WHERE o.id = $1`, pedido).Scan(&facturado, &cobrado, &envio, &descuento, &aCuenta); err != nil {
+			         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra'),
+			       o.a_cuenta::float8
+			FROM orders o WHERE o.id = $1`, pedido).Scan(&facturado, &cobrado, &envio, &descuento, &aCuenta, &partido); err != nil {
 			return err
 		}
 		if facturado {
@@ -252,7 +254,20 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 			pedido, jsmath.Fijo2(subtotal), jsmath.Fijo2(nuevoEnvio), jsmath.Fijo2(total), jsmath.Fijo2(d.Total)); err != nil {
 			return err
 		}
-		if dif := ventas.ACentavos(total - viejo); aCuenta && math.Abs(dif) > 0.005 && p.customerID != nil {
+		dif := ventas.ACentavos(total - viejo)
+		// El pedido partido (H047): la corrección cambia el resto, que se
+		// cobra aparte; la parte de la cuenta solo baja si el total nuevo
+		// queda por debajo de ella.
+		if partido != nil {
+			dif = 0
+			if total < *partido-0.005 {
+				dif = ventas.ACentavos(total - *partido)
+				if _, err := tx.Exec(ctx, `UPDATE orders SET a_cuenta = nullif(greatest($2::numeric, 0), 0) WHERE id = $1`, pedido, jsmath.Fijo2(total)); err != nil {
+					return err
+				}
+			}
+		}
+		if aCuenta && math.Abs(dif) > 0.005 && p.customerID != nil {
 			if _, err := tx.Exec(ctx, `INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
 				VALUES ($1, 'compra', $2::numeric, $3, $4, $5)`, *p.customerID, jsmath.Fijo2(dif), "Corrección del pedido "+p.numero, p.numero, ses.UserID); err != nil {
 				return err

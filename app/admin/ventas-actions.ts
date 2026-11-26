@@ -123,6 +123,8 @@ export interface EntregaDelPedido {
   /** El envío va sin flete: sin flete escrito ni esto, Go no lo deja salir. */
   sinCargo?: boolean;
   medioPago?: MedioDelPedido;
+  /** Pedido partido (H047): lo que va a cuenta corriente; el resto, con medioPago. */
+  aCuenta?: number;
   /** AAAA-MM-DD: el día que se compromete la entrega. */
   entregarEl?: string;
   /** Un presupuesto vencido: los precios de hoy o los suyos (con PIN). */

@@ -871,9 +871,13 @@ func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]Part
 }
 
 const pedidoPagado = `-- name: PedidoPagado :exec
-UPDATE orders SET estado_pago = 'pagado', updated_at = now() WHERE id = $1
+UPDATE orders SET estado_pago = CASE WHEN a_cuenta IS NOT NULL THEN 'parcial'::estado_pago ELSE 'pagado'::estado_pago END,
+  updated_at = now() WHERE id = $1
 `
 
+// El pedido partido (a_cuenta) con el resto cobrado queda «parcial», como la
+// venta del mostrador que cargó una parte a la cuenta: lo que falta está en
+// la cuenta corriente.
 func (q *Queries) PedidoPagado(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, pedidoPagado, id)
 	return err

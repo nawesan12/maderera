@@ -163,9 +163,7 @@ func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, clien
 			c.OrderID = &p.ID
 			// La deuda de un pedido de contado no está en la cuenta: el pago
 			// tampoco (ver Cobro.FueraDeLaCuenta).
-			if err := tx.QueryRow(ctx, `SELECT o.medio_pago IS DISTINCT FROM 'cuenta_corriente'
-				AND NOT EXISTS (SELECT 1 FROM account_movements am
-				                WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.DeudaFueraDeLaCuenta+`
 				FROM orders o WHERE o.id = $1`, p.ID).Scan(&c.FueraDeLaCuenta); err != nil {
 				return err
 			}
@@ -183,7 +181,7 @@ func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, clien
 		// recibo contra el total empujaba a cobrar otra vez la seña.
 		if p != nil {
 			var pagado bool
-			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarDelPedido+` FROM orders o WHERE o.id = $1`, p.ID).
+			if err := tx.QueryRow(ctx, `SELECT `+fragmentos.CobradoDelPedido+` + 0.005 >= `+fragmentos.ACobrarFueraDeLaCuenta+` FROM orders o WHERE o.id = $1`, p.ID).
 				Scan(&pagado); err != nil {
 				return err
 			}

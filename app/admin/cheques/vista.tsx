@@ -380,7 +380,9 @@ export function AltaDeCheque() {
         <Plus className="h-5 w-5" />
         Cargar cheque
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
+      {/* Más alto que un teléfono de 812: con scroll adentro, o el título
+          quedaba cortado arriba y «Guardar» afuera de la pantalla. */}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Cargar un cheque</DialogTitle>
         </DialogHeader>

@@ -646,10 +646,13 @@ func TestLoQueVenceEn48HorasEsDeHoy(t *testing.T) {
 		('entregado', '2002', 'Nación', now() + interval '5 days', 100, 'entregado')`)
 	prov := e.id(t, `insert into suppliers (nombre) values ('Maderas del Sur') returning id`)
 	e.exec(t, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, neto, iva21, iva105, iva27, percepciones, total, fecha_emision, fecha_vencimiento)
-		values ($1, 'factura_a', 1, 1, 100, 0, 0, 0, 0, 100, now(), now() + interval '30 hours'),
-		       ($1, 'factura_a', 1, 2, 100, 0, 0, 0, 0, 100, now(), now() + interval '6 days'),
-		       ($1, 'factura_a', 1, 3, 100, 0, 0, 0, 0, 100, now() - interval '20 days', now() - interval '2 days'),
-		       ($1, 'factura_a', 1, 4, 100, 0, 0, 0, 0, 100, now() - interval '20 days', now() - interval '3 days')`, prov)
+		values ($1, 'factura_a', 1, 1, 100, 0, 0, 0, 0, 100, $2, $2::timestamptz + interval '30 hours'),
+		       ($1, 'factura_a', 1, 2, 100, 0, 0, 0, 0, 100, $2, $2::timestamptz + interval '6 days'),
+		       ($1, 'factura_a', 1, 3, 100, 0, 0, 0, 0, 100, $2::timestamptz - interval '20 days', $2::timestamptz - interval '2 days'),
+		       ($1, 'factura_a', 1, 4, 100, 0, 0, 0, 0, 100, $2::timestamptz - interval '20 days', $2::timestamptz - interval '3 days')`, prov, ahoraDePrueba)
+	// Los cortes de día de las facturas son los de «Debo» (el día de la
+	// prueba), y cuentan solo si el libro del proveedor debe algo.
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto) values ($1, 'factura', 400)`, prov)
 	ps, err := e.s.PendientesDelRol(context.Background(), "admin")
 	if err != nil {
 		t.Fatal(err)

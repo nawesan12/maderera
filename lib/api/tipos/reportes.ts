@@ -727,18 +727,38 @@ export interface components {
                 cajas: {
                     branchId: string;
                     sucursal: string;
-                    /** Format: double */
+                    /**
+                     * Format: double
+                     * @description Lo que tendría que haber
+                     */
                     esperado: number;
+                    cerrada: boolean;
                 }[];
                 /** Format: double */
                 efectivo: number;
-                /** Format: double */
+                /**
+                 * Format: double
+                 * @description Lo retirado hoy de las cajas que no fue al banco
+                 */
+                cajaFuerte: number;
+                /**
+                 * Format: double
+                 * @description Lo que se movió hoy en el banco
+                 */
                 banco: number;
                 /** Format: double */
-                mercadoPago: number;
+                bancoEntro: number;
                 /** Format: double */
+                bancoSalio: number;
+                /** Format: double */
+                mercadoPago: number;
+                /**
+                 * Format: double
+                 * @description A acreditar; no suma al total
+                 */
                 tarjetas: number;
                 cheques: components["schemas"]["Monto"];
+                chequesDepositados: components["schemas"]["Monto"];
                 /** Format: double */
                 total: number;
             };

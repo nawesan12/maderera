@@ -154,6 +154,8 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   "/admin/precios/formas-de-pago": ["admin"],
   "/admin/migracion": ["admin"],
   "/admin/bitacora": ["admin"],
+  // Dar usuario al personal y cambiarle el puesto es repartir permisos.
+  "/admin/personal": ["admin"],
   /*
    * Las guías son de **todo** el personal, aserradero incluido: la número 8
    * está escrita para el taller.

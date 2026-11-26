@@ -433,6 +433,57 @@ func (a *API) AlternarVendedor(ctx context.Context, r cuentasapi.AlternarVendedo
 	return mensaje(m), nil
 }
 
+/* ----------------------------- personal ---------------------------- */
+
+func (o respuesta) VisitListarPersonalResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitAltaDePersonalResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCambiarPuestoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitBajaDePersonalResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) ListarPersonal(ctx context.Context, _ cuentasapi.ListarPersonalRequestObject) (cuentasapi.ListarPersonalResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...); err != nil {
+		return nil, err
+	}
+	v, err := a.clientes.Personal(ctx)
+	return ok(v), err
+}
+
+func (a *API) AltaDePersonal(ctx context.Context, r cuentasapi.AltaDePersonalRequestObject) (cuentasapi.AltaDePersonalResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.clientes.AltaDePersonal(ctx, ses, r.Body.Nombre, r.Body.Correo, r.Body.Clave, sqlc.StaffRole(r.Body.Rol))
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
+func (a *API) CambiarPuesto(ctx context.Context, r cuentasapi.CambiarPuestoRequestObject) (cuentasapi.CambiarPuestoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.clientes.CambiarPuesto(ctx, ses, r.Id, sqlc.StaffRole(r.Body.Rol))
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
+func (a *API) BajaDePersonal(ctx context.Context, r cuentasapi.BajaDePersonalRequestObject) (cuentasapi.BajaDePersonalResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/personal")...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := a.clientes.BajaDePersonal(ctx, ses, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	return mensaje(m), nil
+}
+
 /* ---------------------------- seguimiento -------------------------- */
 
 func (a *API) ListarGestiones(ctx context.Context, r cuentasapi.ListarGestionesRequestObject) (cuentasapi.ListarGestionesResponseObject, error) {

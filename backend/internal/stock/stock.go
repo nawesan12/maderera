@@ -200,8 +200,8 @@ const BajoElMinimo = catalogo.MedidaParaReponer
 // cero y «sin stock» miraba el total del físico: la chapa sin stock en el
 // Aserradero, mínimo 50, no caía en ningún grupo para atender (H004).
 var estadosDeStock = map[string]string{
-	"reponer":   catalogo.MedidaParaReponer,
-	"sin-stock": `NOT ` + catalogo.MedidaParaReponer + ` AND NOT ` + catalogo.MedidaConDisponible,
+	"reponer":   CondicionReponer,
+	"sin-stock": CondicionSinStock,
 	"con-stock": `NOT ` + catalogo.MedidaParaReponer + ` AND ` + catalogo.MedidaConDisponible,
 }
 
@@ -219,6 +219,15 @@ func filtrar(f listado.Filtros) *listado.Consulta {
 	c.BusquedaFlexible(f.Busqueda, columnasDeBusqueda, "v.codigo_barras")
 	return &c
 }
+
+// CondicionReponer y CondicionSinStock son los grupos «Hay que reponer» y
+// «Sin stock» de la pantalla, sobre una medida (alias v). Los usa también el
+// inicio del panel: contaba filas de inventario por sucursal (30) mientras
+// Stock, a donde lleva, decía 5 medidas.
+const (
+	CondicionReponer  = catalogo.MedidaParaReponer
+	CondicionSinStock = `NOT ` + catalogo.MedidaParaReponer + ` AND NOT ` + catalogo.MedidaConDisponible
+)
 
 // Listar es listarStock, de a páginas: las medidas activas, por nombre.
 func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock, error) {

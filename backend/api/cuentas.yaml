@@ -413,6 +413,70 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/personal:
+    get:
+      operationId: ListarPersonal
+      responses:
+        "200":
+          description: El personal, por puesto y nombre
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, correo, rol]
+                  properties:
+                    id: { type: string }
+                    nombre: { type: string }
+                    correo: { type: string }
+                    rol: { $ref: "#/components/schemas/Puesto" }
+    post:
+      operationId: AltaDePersonal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, correo, rol, clave]
+              additionalProperties: false
+              properties:
+                nombre: { type: string, maxLength: 120 }
+                correo: { type: string, maxLength: 200 }
+                rol: { $ref: "#/components/schemas/Puesto" }
+                clave: { type: string, maxLength: 200, description: La contraseña inicial }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/personal/{id}/puesto:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }
+    post:
+      operationId: CambiarPuesto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rol]
+              additionalProperties: false
+              properties:
+                rol: { $ref: "#/components/schemas/Puesto" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/personal/{id}/baja:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, maxLength: 64 } }
+    post:
+      operationId: BajaDePersonal
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/seguimiento:
     get:
       operationId: ListarGestiones
@@ -547,6 +611,9 @@ components:
               receiptId: { type: string }
               id: { type: string, description: "la ficha guardada (el alta abre la ficha nueva)" }
   schemas:
+    Puesto:
+      type: string
+      enum: [admin, vendedor, deposito, aserradero]
     Problema:
       type: object
       required: [title, status]

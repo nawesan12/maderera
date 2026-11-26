@@ -150,6 +150,9 @@
   "/admin/bitacora": [
    "admin"
   ],
+  "/admin/personal": [
+   "admin"
+  ],
   "/admin/ayuda": [
    "admin",
    "vendedor",
@@ -309,6 +312,11 @@
   ],
   "/admin/pedidos/algo": null,
   "/admin/pedidos/nuevo/123": null,
+  "/admin/personal": [
+   "admin"
+  ],
+  "/admin/personal/algo": null,
+  "/admin/personal/nuevo/123": null,
   "/admin/precios": [
    "admin"
   ],
@@ -2398,6 +2406,81 @@
   },
   {
    "ruta": "/admin/pedidos/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/personal",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/personal/algo",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/algo",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/personal/nuevo/123",
+   "rol": "vendedor",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/nuevo/123",
+   "rol": "deposito",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/personal/nuevo/123",
    "rol": null,
    "puede": false
   },

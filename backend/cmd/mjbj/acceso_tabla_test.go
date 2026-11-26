@@ -334,6 +334,10 @@ var pantallaDeCadaRuta = map[string]string{
 	"AlternarVendedor":               "/admin/clientes",               // POST /api/v1/admin/vendedores/{id}/alternar
 	"ListarVendedores":               "/admin/clientes",               // GET /api/v1/admin/vendedores
 	"GuardarVendedor":                "/admin/clientes",               // POST /api/v1/admin/vendedores
+	"ListarPersonal":                 "/admin/personal",               // GET /api/v1/admin/personal
+	"AltaDePersonal":                 "/admin/personal",               // POST /api/v1/admin/personal
+	"CambiarPuesto":                  "/admin/personal",               // POST /api/v1/admin/personal/{id}/puesto
+	"BajaDePersonal":                 "/admin/personal",               // POST /api/v1/admin/personal/{id}/baja
 	"RegistrarAvisoManual":           "/admin/whatsapp",               // POST /api/v1/admin/whatsapp/avisos-manuales/registro
 	"AvisoDelUltimoRecibo":           "/admin/whatsapp",               // GET /api/v1/admin/whatsapp/avisos-manuales/ultimo-recibo/{customerId}
 	"AvisosManuales":                 "/admin/whatsapp",               // GET /api/v1/admin/whatsapp/avisos-manuales

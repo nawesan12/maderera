@@ -379,6 +379,11 @@ export interface components {
             formaDeVenta: "entera" | "entera_o_media" | "metro_cuadrado";
             /** Format: double */
             precioMediaPct: number;
+            /**
+             * Format: double
+             * @description el precio final que apenas cubre el costo (sin costo cargado, null)
+             */
+            piso?: number | null;
         };
         MostradorCliente: {
             id: string;

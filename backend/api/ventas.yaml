@@ -244,6 +244,29 @@ paths:
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/presupuestos/{id}:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    put:
+      operationId: EditarPresupuesto
+      description: |
+        Corrige los renglones y los datos de un presupuesto que todavía no se
+        mandó (pendiente o en revisión) ni tiene pedido: el mismo cuerpo que
+        el alta, sin `convertir`. Mantiene el número.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cabecera, lineas]
+              additionalProperties: false
+              properties:
+                cabecera: { type: object, additionalProperties: true }
+                lineas: { type: array, maxItems: 500, items: {} }
+      responses:
+        "200": { $ref: "#/components/responses/Hecho" }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
     get:
       operationId: FichaDePresupuesto
       responses:
@@ -290,6 +313,7 @@ paths:
               additionalProperties: false
               properties:
                 estado: { type: string }
+                motivo: { type: string, maxLength: 60, description: "al rechazar, por qué se perdió (Precio, Se lo llevó otro, No contestó, Ya no lo necesita, Otro)" }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }
@@ -313,6 +337,7 @@ paths:
                 direccion: { type: string, maxLength: 300 }
                 zona: { type: string, maxLength: 120 }
                 costoEnvio: { type: number, format: double, minimum: 0 }
+                sinCargo: { type: boolean, description: "el envío va sin flete; un envío sin flete ni sinCargo no sale" }
                 medioPago: { $ref: "#/components/schemas/MedioPago" }
                 entregarEl: { type: string, description: AAAA-MM-DD }
                 precios: { type: string, enum: [actualizar, respetar], description: "para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)" }
@@ -416,6 +441,7 @@ components:
         subtotal: { type: string }
         orden: { type: integer }
         alicuotaIva: { type: string, nullable: true }
+        bajoCosto: { type: boolean, description: el precio no cubre el costo }
     FichaParaUnir:
       type: object
       description: >-
@@ -433,6 +459,7 @@ components:
         pedidoId, numeroPedido, vencido, totalDeHoy]
       properties:
         vencido: { type: boolean, description: "pasó su validez: para pasarlo a pedido hay que elegir los precios" }
+        motivoRechazo: { type: string, nullable: true, description: "por qué se perdió" }
         totalDeHoy: { type: string, nullable: true, description: "el total con los precios de lista de hoy, si venció" }
         fichaPorCorreo:
           nullable: true

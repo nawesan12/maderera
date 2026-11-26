@@ -253,6 +253,11 @@ export interface components {
             /** Format: date-time */
             actualizado: string | null;
             desactualizado: boolean;
+            /**
+             * Format: double
+             * @description el precio final que apenas cubre el costo (sin costo cargado, null)
+             */
+            piso?: number | null;
         };
         CambioDePrecio: {
             id: string;

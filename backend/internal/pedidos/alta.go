@@ -26,6 +26,9 @@ func (s *Servicio) CrearPresupuesto(ctx context.Context, ses *auth.Sesion, cabec
 	if e != nil {
 		return nil, fallo(e.Mensaje)
 	}
+	if err := sinPrecio(alta); err != nil {
+		return nil, err
+	}
 	c := alta.Cabecera
 	ahora := s.ahora()
 	// setDate(getDate() + n) en la zona del servidor; la Argentina no tiene
@@ -95,6 +98,18 @@ func (s *Servicio) CrearPresupuesto(ctx context.Context, ses *auth.Sesion, cabec
 	return &Resultado{Ok: conv.Ok + " Salió del presupuesto " + numero + ".", ID: conv.ID, Numero: conv.Numero}, nil
 }
 
+// sinPrecio frena un renglón a $0 (mes simulado: la escalera «a medida —
+// consultar» se presupuestaba a $0 y el botón seguía activo). Va aparte de
+// LeerAltaDePresupuesto, que copia el esquema de zod.
+func sinPrecio(alta *AltaDePresupuesto) error {
+	for _, l := range alta.Lineas {
+		if !(l.PrecioUnitario > 0) {
+			return fallo("Falta el precio de «" + l.Descripcion + "».")
+		}
+	}
+	return nil
+}
+
 // listasAlEmitir es el precio de lista de hoy de cada renglón, para la
 // lista del cliente.
 func listasAlEmitir(ctx context.Context, tx pgx.Tx, cliente *string, lineas []LineaDePresupuesto) ([]*float64, error) {
@@ -107,4 +122,76 @@ func listasAlEmitir(ctx context.Context, tx pgx.Tx, cliente *string, lineas []Li
 		r[i] = precios.RenglonConVariante{VariantID: l.VariantID}
 	}
 	return precios.PreciosDeLista(ctx, tx, r, lista)
+}
+
+// EditarPresupuesto corrige un presupuesto que todavía no se mandó (mes
+// simulado: no se podía editar, y un renglón equivocado obligaba a
+// rechazarlo —un rechazo «falso» en las estadísticas— y cargarlo de nuevo).
+// Solo pendiente o en revisión y sin pedido: lo que ya vio el cliente no se
+// cambia por debajo. Conserva el número, el origen y la fecha; la validez
+// corre desde hoy.
+func (s *Servicio) EditarPresupuesto(ctx context.Context, ses *auth.Sesion, id string, cabecera map[string]any, lineas []any) (*Resultado, error) {
+	alta, e := LeerAltaDePresupuesto(cabecera, lineas)
+	if e != nil {
+		return nil, fallo(e.Mensaje)
+	}
+	if err := sinPrecio(alta); err != nil {
+		return nil, err
+	}
+	c := alta.Cabecera
+	validoHasta := s.ahora().UTC().AddDate(0, 0, int(c.DiasValidez))
+	var email *string
+	if c.ContactoEmail != nil && *c.ContactoEmail != "" {
+		email = c.ContactoEmail
+	}
+	var numero string
+	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
+		var estado string
+		err := tx.QueryRow(ctx, `SELECT numero, estado::text FROM quotes WHERE id = $1 FOR UPDATE`, id).Scan(&numero, &estado)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return noEsta("No se encontró el presupuesto.")
+		}
+		if err != nil {
+			return err
+		}
+		if estado != "pendiente" && estado != "revision" {
+			return fallo("El presupuesto ya se mandó o se cerró: para cambiarlo, duplicalo.")
+		}
+		var conPedido bool
+		if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM orders WHERE quote_id = $1 AND estado <> 'cancelado')`, id).Scan(&conPedido); err != nil {
+			return err
+		}
+		if conPedido {
+			return fallo("El presupuesto ya tiene pedido: para cambiarlo, duplicalo.")
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE quotes SET customer_id = $2, contacto_nombre = $3, contacto_email = $4, contacto_telefono = $5, branch_id = $6,
+			       subtotal = $7::numeric, total = $7::numeric, notas = $8, valido_hasta = $9, necesita_para = $10, updated_at = now()
+			WHERE id = $1`, id, c.CustomerID, c.ContactoNombre, email, c.ContactoTelefono, c.BranchID, alta.Subtotal, c.Notas,
+			validoHasta, c.NecesitaPara); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM quote_items WHERE quote_id = $1`, id); err != nil {
+			return err
+		}
+		listas, err := listasAlEmitir(ctx, tx, c.CustomerID, alta.Lineas)
+		if err != nil {
+			return err
+		}
+		for i, l := range alta.Lineas {
+			x := alta.Items[i]
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO quote_items (quote_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden, precio_lista)
+				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric)`,
+				id, l.VariantID, l.Descripcion, l.Unidad, x.Cantidad, x.PrecioUnitario, x.Subtotal, i, fijo2ONulo(listas[i])); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaEditar, "presupuesto", id, "Corrigió el presupuesto "+numero, nil)
+	return &Resultado{Ok: "Presupuesto " + numero + " corregido.", ID: id, Numero: numero}, nil
 }

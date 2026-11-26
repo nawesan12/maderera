@@ -383,6 +383,35 @@ var EstadosDePresupuesto = []string{"pendiente", "revision", "enviado", "aceptad
 
 // CambiarEstadoPresupuesto acepta, rechaza o mueve un presupuesto.
 func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesion, id, estado string) (*Resultado, error) {
+	return s.CambiarEstadoPresupuestoConMotivo(ctx, ses, id, estado, "")
+}
+
+// MotivosDeRechazo son los que ofrece la pantalla al rechazar (mes simulado:
+// rechazar no pedía motivo y no se sabía por qué se pierden las ventas).
+var MotivosDeRechazo = []string{"Precio", "Se lo llevó otro", "No contestó", "Ya no lo necesita", "Otro"}
+
+// mensajeDelEstado es lo que dice el aviso: antes todo era «Presupuesto
+// actualizado.», enviar, aceptar o rechazar.
+var mensajeDelEstado = map[string]string{
+	"enviado":   "Presupuesto enviado al cliente.",
+	"aceptado":  "Presupuesto aceptado.",
+	"rechazado": "Presupuesto rechazado.",
+}
+
+// CambiarEstadoPresupuestoConMotivo es CambiarEstadoPresupuesto con el
+// motivo del rechazo (uno de MotivosDeRechazo; vacío al rechazar es «Otro»).
+func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *auth.Sesion, id, estado, motivo string) (*Resultado, error) {
+	var motivoRechazo *string
+	if estado == "rechazado" {
+		m := strings.TrimSpace(motivo)
+		if m == "" {
+			m = "Otro"
+		}
+		if !slices.Contains(MotivosDeRechazo, m) {
+			return nil, fallo("Elegí por qué se perdió.")
+		}
+		motivoRechazo = &m
+	}
 	valido := false
 	for _, e := range EstadosDePresupuesto {
 		valido = valido || e == estado
@@ -404,7 +433,7 @@ func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesio
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = $2, updated_at = now() WHERE id = $1`, id, estado); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = $2, motivo_rechazo = $3, updated_at = now() WHERE id = $1`, id, estado, motivoRechazo); err != nil {
 			return err
 		}
 		if estado == "enviado" && anterior != "enviado" {
@@ -415,8 +444,16 @@ func (s *Servicio) CambiarEstadoPresupuesto(ctx context.Context, ses *auth.Sesio
 	if err != nil {
 		return nil, err
 	}
-	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "presupuesto", id, "Pasó el presupuesto a "+estado, nil)
-	return &Resultado{Ok: "Presupuesto actualizado.", Estado: estado}, nil
+	desc := "Pasó el presupuesto a " + estado
+	if motivoRechazo != nil {
+		desc += " (" + *motivoRechazo + ")"
+	}
+	s.anotar(ctx, ses, sqlc.AccionAuditoriaCambiarEstado, "presupuesto", id, desc, nil)
+	ok := mensajeDelEstado[estado]
+	if ok == "" {
+		ok = "Presupuesto actualizado."
+	}
+	return &Resultado{Ok: ok, Estado: estado}, nil
 }
 
 // ConvertirEnPedido pasa un presupuesto a pedido: copia las líneas con el
@@ -437,7 +474,11 @@ type Entrega struct {
 	Direccion  string
 	Zona       string
 	CostoEnvio float64
-	MedioPago  *string
+	// ConCosto: se escribió el flete (aunque sea cero). SinCargo: se eligió
+	// llevarlo gratis. Un envío sin ninguna de las dos no sale (mes simulado:
+	// los pedidos con envío se creaban con el flete vacío y sin aviso).
+	ConCosto, SinCargo bool
+	MedioPago          *string
 	// EntregarEl es el día comprometido (AAAA-MM-DD). Vacío: el «para
 	// cuándo» del presupuesto, si lo tenía.
 	EntregarEl string
@@ -467,6 +508,37 @@ func (e Entrega) revisar() error {
 	return nil
 }
 
+// fleteDeLaZona revisa la zona contra las de envío (una inventada no pasa)
+// y, sin flete escrito, propone el de la zona si tiene costo fijo. Un envío
+// sin flete y sin «Sin cargo» no sale.
+func fleteDeLaZona(ctx context.Context, tx pgx.Tx, ent *Entrega) error {
+	if !ent.Envio {
+		return nil
+	}
+	if z := strings.TrimSpace(ent.Zona); z != "" {
+		var costo float64
+		var aCotizar bool
+		err := tx.QueryRow(ctx, `SELECT costo::float8, a_cotizar FROM shipping_zones WHERE activa AND lower(nombre) = lower($1) LIMIT 1`, z).
+			Scan(&costo, &aCotizar)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fallo("Elegí una zona de la lista.")
+		}
+		if err != nil {
+			return err
+		}
+		if !ent.ConCosto && !ent.SinCargo && !aCotizar && costo > 0 {
+			ent.CostoEnvio, ent.ConCosto = costo, true
+		}
+	}
+	if !ent.ConCosto && !ent.SinCargo {
+		return fallo("Falta el flete: cargalo o elegí «Sin cargo».")
+	}
+	if ent.SinCargo && !ent.ConCosto {
+		ent.CostoEnvio = 0
+	}
+	return nil
+}
+
 func medioValido(m string) bool {
 	switch m {
 	case "efectivo", "transferencia", "debito", "credito", "mercado_pago", "cuenta_corriente":
@@ -480,6 +552,12 @@ func medioValido(m string) bool {
 func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, quoteID string, ent Entrega) (*Resultado, error) {
 	if err := ent.revisar(); err != nil {
 		return nil, err
+	}
+	if ent.Envio {
+		err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error { return fleteDeLaZona(ctx, tx, &ent) })
+		if err != nil {
+			return nil, err
+		}
 	}
 	tipo, costo := "retiro", "0"
 	var direccion, zona *string
@@ -525,8 +603,10 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		if err != nil {
 			return err
 		}
+		// Un pedido cancelado no traba (mes simulado): el presupuesto vuelve
+		// a pasarse a pedido, corregido, sin cargarlo todo de nuevo.
 		var ya string
-		err = tx.QueryRow(ctx, `SELECT numero FROM orders WHERE quote_id = $1 LIMIT 1`, quoteID).Scan(&ya)
+		err = tx.QueryRow(ctx, `SELECT numero FROM orders WHERE quote_id = $1 AND estado <> 'cancelado' LIMIT 1`, quoteID).Scan(&ya)
 		if err == nil {
 			return fallo("Ya se convirtió en el pedido " + ya + ".")
 		}

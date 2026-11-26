@@ -63,6 +63,7 @@ func (o respuesta) VisitCobrarPedidoResponse(w http.ResponseWriter) error       
 func (o respuesta) VisitListarPresupuestosResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitCrearPresupuestoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitFichaDePresupuestoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitEditarPresupuestoResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitCambiarEstadoDePresupuestoResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -229,6 +230,18 @@ func (a *API) CrearPresupuesto(ctx context.Context, r ventasapi.CrearPresupuesto
 	return ok(v), nil
 }
 
+func (a *API) EditarPresupuesto(ctx context.Context, r ventasapi.EditarPresupuestoRequestObject) (ventasapi.EditarPresupuestoResponseObject, error) {
+	ses, err := presupuestos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.EditarPresupuesto(ctx, ses, r.Id.String(), r.Body.Cabecera, r.Body.Lineas)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
 // FichaDePresupuesto: quien entra a la pantalla, o el servidor de Next con
 // el secreto (manda el PDF por WhatsApp a su dueño).
 func (a *API) FichaDePresupuesto(ctx context.Context, r ventasapi.FichaDePresupuestoRequestObject) (ventasapi.FichaDePresupuestoResponseObject, error) {
@@ -278,7 +291,7 @@ func (a *API) CambiarEstadoDePresupuesto(ctx context.Context, r ventasapi.Cambia
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.CambiarEstadoPresupuesto(ctx, ses, r.Id.String(), r.Body.Estado)
+	v, err := a.s.CambiarEstadoPresupuestoConMotivo(ctx, ses, r.Id.String(), r.Body.Estado, texto(r.Body.Motivo))
 	if err != nil {
 		return nil, err
 	}
@@ -296,8 +309,9 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 		ent.Direccion = texto(b.Direccion)
 		ent.Zona = texto(b.Zona)
 		if b.CostoEnvio != nil {
-			ent.CostoEnvio = *b.CostoEnvio
+			ent.CostoEnvio, ent.ConCosto = *b.CostoEnvio, true
 		}
+		ent.SinCargo = b.SinCargo != nil && *b.SinCargo
 		if b.MedioPago != nil {
 			m := string(*b.MedioPago)
 			ent.MedioPago = &m

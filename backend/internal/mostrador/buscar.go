@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/ventas"
 	"mjbj/internal/zodjs"
 )
@@ -35,6 +36,9 @@ type ResultadoDeMostrador struct {
 	Categoria      *string `json:"categoria"`
 	FormaDeVenta   string  `json:"formaDeVenta"`
 	PrecioMediaPct float64 `json:"precioMediaPct"`
+	// Piso es el precio final que apenas cubre el costo (precios.PisoDeCosto);
+	// nil sin costo cargado. El presupuesto marca un renglón por debajo.
+	Piso *float64 `json:"piso"`
 }
 
 // args junta los parámetros de una consulta armada a mano.
@@ -146,7 +150,24 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		r.Stock = stock.F()
 		out = append(out, r)
 	}
-	return out, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	filas.Close()
+	ids := make([]string, len(out))
+	for i, r := range out {
+		ids[i] = r.VariantID
+	}
+	pisos, err := precios.PisosDeCosto(ctx, s.pool, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if p, ok := pisos[out[i].VariantID]; ok {
+			out[i].Piso = &p
+		}
+	}
+	return out, nil
 }
 
 // PreciosPara son los precios de unas variantes para un cliente (cuando se lo

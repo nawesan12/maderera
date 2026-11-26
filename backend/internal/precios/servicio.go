@@ -84,6 +84,9 @@ type FilaPrecio struct {
 	Brecha            *float64   `json:"brecha"`
 	Actualizado       *time.Time `json:"actualizado"`
 	Desactualizado    bool       `json:"desactualizado"`
+	// Piso es el precio final que apenas cubre el costo (PisoDeCosto); nil
+	// sin costo cargado. La grilla marca la lista que queda por debajo.
+	Piso *float64 `json:"piso"`
 }
 
 // ConteosDePrecios son los totales de cada estado con los mismos filtros.
@@ -224,6 +227,10 @@ func (s *Servicio) completar(ctx context.Context, ls listas, out []FilaPrecio) (
 			ultima[p.VariantID] = p.UpdatedAt
 		}
 	}
+	pisos, err := PisosDeCosto(ctx, s.pool, variantes)
+	if err != nil {
+		return nil, err
+	}
 	buscar := func(v string, l *sqlc.PriceList) string {
 		if l != nil {
 			if x, ok := precio[precioDe{v, l.ID}]; ok {
@@ -240,6 +247,9 @@ func (s *Servicio) completar(ctx context.Context, ls listas, out []FilaPrecio) (
 		f.PrecioGeneral, f.PrecioProfesional = buscar(f.VariantID, ls.general), buscar(f.VariantID, ls.profesional)
 		g, p := jsmath.Numero(f.PrecioGeneral), jsmath.Numero(f.PrecioProfesional)
 		f.Brecha = Brecha(g, p)
+		if piso, ok := pisos[f.VariantID]; ok {
+			f.Piso = &piso
+		}
 		if u, ok := ultima[f.VariantID]; ok {
 			f.Actualizado = &u
 		}

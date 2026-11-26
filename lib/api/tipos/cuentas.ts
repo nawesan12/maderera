@@ -1104,7 +1104,7 @@ export interface operations {
             content: {
                 "application/json": {
                     motivo: string;
-                    /** @description el de un admin */
+                    /** @description el de un admin, para quien no es admin (como anular una venta) */
                     pin?: string;
                 };
             };

@@ -351,6 +351,7 @@ components:
         brecha: { type: number, format: double, nullable: true, description: «la profesional es N % más barata» }
         actualizado: { type: string, format: date-time, nullable: true }
         desactualizado: { type: boolean }
+        piso: { type: number, format: double, nullable: true, description: "el precio final que apenas cubre el costo (sin costo cargado, null)" }
     CambioDePrecio:
       type: object
       required: [id, sku, producto, medida, lista, precioAnterior, precioNuevo, origen, motivo, createdAt]

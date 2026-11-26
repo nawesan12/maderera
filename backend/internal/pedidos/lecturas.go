@@ -117,11 +117,15 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 	var a argumentos
 	var cond []string
 	cerrados := false
+	// «Abiertos» suma los aceptados que todavía no tienen pedido (mes
+	// simulado: el que el cliente aceptó desde el portal quedaba escondido
+	// entre los cerrados, con el único «Pasar a pedido» pendiente).
+	sinPedido := "(q.estado = 'aceptado' AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado'))"
 	switch f.Estado {
 	case "abiertos":
-		cond = append(cond, "q.estado::text = ANY("+a.poner(estadosAbiertos)+")")
+		cond = append(cond, "(q.estado::text = ANY("+a.poner(estadosAbiertos)+") OR "+sinPedido+")")
 	case "cerrados":
-		cond = append(cond, "NOT (q.estado::text = ANY("+a.poner(estadosAbiertos)+"))")
+		cond = append(cond, "NOT (q.estado::text = ANY("+a.poner(estadosAbiertos)+") OR "+sinPedido+")")
 		cerrados = true
 	case "", "todos":
 	default:
@@ -153,7 +157,9 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 	if out.Total == 0 || desplazamiento >= out.Total {
 		return out, nil
 	}
-	orden := `CASE WHEN q.responde_hasta IS NULL THEN 1 ELSE 0 END, q.responde_hasta ASC NULLS LAST,
+	// Los aceptados sin pedido primero: es trabajo que ya está ganado.
+	orden := `CASE WHEN q.estado = 'aceptado' THEN 0 ELSE 1 END,
+		         CASE WHEN q.responde_hasta IS NULL THEN 1 ELSE 0 END, q.responde_hasta ASC NULLS LAST,
 		         q.necesita_para ASC NULLS LAST, q.created_at DESC, q.id DESC`
 	if cerrados {
 		orden = `q.created_at DESC, q.id DESC`
@@ -165,8 +171,8 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 		SELECT q.id, q.numero, q.contacto_nombre, c.razon_social, q.customer_id, b.name, q.estado::text, q.origen::text,
 		       q.total::text, q.asesor, q.created_at, q.valido_hasta, q.responde_hasta, q.necesita_para,
 		       (SELECT count(*)::int FROM quote_items qi WHERE qi.quote_id = q.id),
-		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1),
-		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1)`+desde+`
+		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado' ORDER BY o.created_at LIMIT 1),
+		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado' ORDER BY o.created_at LIMIT 1)`+desde+`
 		ORDER BY `+orden+`
 		LIMIT `+a.poner(limite)+` OFFSET `+a.poner(desplazamiento), a...)
 	if err != nil {
@@ -205,6 +211,13 @@ type ItemDePresupuesto struct {
 	Subtotal       string  `json:"subtotal"`
 	Orden          int     `json:"orden"`
 	AlicuotaIva    *string `json:"alicuotaIva"`
+	// BajoCosto: el precio no cubre el costo (precios.BajoCosto). Se marca
+	// antes de mandarlo o pasarlo a pedido (mes simulado: el Fenólico a $100
+	// con costo de $75.000 salió sin aviso).
+	BajoCosto bool `json:"bajoCosto"`
+	// ConPresentacion: el renglón es una presentación (media placa): su
+	// precio no se compara con el costo de la unidad de stock.
+	ConPresentacion bool `json:"-"`
 }
 
 // FichaDePresupuesto es consultarPresupuesto.
@@ -234,6 +247,8 @@ type FichaDePresupuesto struct {
 	Items               []ItemDePresupuesto `json:"items"`
 	PedidoID            *string             `json:"pedidoId"`
 	NumeroPedido        *string             `json:"numeroPedido"`
+	// MotivoRechazo: por qué se perdió (CambiarEstadoPresupuestoConMotivo).
+	MotivoRechazo *string `json:"motivoRechazo"`
 	// Vencido: pasó su validez y no se convirtió. Para pasarlo a pedido hay
 	// que elegir entre los precios de hoy (TotalDeHoy) y los suyos.
 	Vencido    bool    `json:"vencido"`
@@ -249,15 +264,17 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 		SELECT q.id, q.numero, q.contacto_nombre, q.contacto_email, q.contacto_telefono, c.razon_social, q.customer_id,
 		       c.codigo_legacy, c.cuit, c.condicion_iva::text, c.direccion, b.name, b.slug, v.nombre,
 		       q.estado::text, q.origen::text, q.subtotal::text, q.total::text, q.notas, q.asesor, q.valido_hasta, q.created_at,
-		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1),
-		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id ORDER BY o.created_at LIMIT 1)
+		       (SELECT o.id FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado' ORDER BY o.created_at LIMIT 1),
+		       (SELECT o.numero FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado' ORDER BY o.created_at LIMIT 1),
+		       q.motivo_rechazo
 		FROM quotes q
 		LEFT JOIN customers c ON c.id = q.customer_id
 		LEFT JOIN branches b ON b.id = q.branch_id
 		LEFT JOIN sellers v ON v.id = q.seller_id
 		WHERE q.id = $1`, id).Scan(&p.ID, &p.Numero, &p.Cliente, &p.Email, &p.Telefono, &p.Empresa, &p.CustomerID,
 		&p.ClienteCodigo, &p.ClienteCuit, &p.ClienteCondicionIva, &p.ClienteDireccion, &p.Sucursal, &p.SucursalSlug, &p.Vendedor,
-		&p.Estado, &p.Origen, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.CreatedAt, &p.PedidoID, &p.NumeroPedido)
+		&p.Estado, &p.Origen, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.CreatedAt, &p.PedidoID, &p.NumeroPedido,
+		&p.MotivoRechazo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -266,7 +283,7 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 	}
 	filas, err := s.pool.Query(ctx, `
 		SELECT i.id, i.variant_id, i.descripcion, i.unidad, i.cantidad::text, i.precio_unitario::text, i.subtotal::text, i.orden,
-		       p.alicuota_iva::text
+		       p.alicuota_iva::text, i.presentacion IS NOT NULL
 		FROM quote_items i
 		LEFT JOIN product_variants v ON v.id = i.variant_id
 		LEFT JOIN products p ON p.id = v.product_id
@@ -280,7 +297,7 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 	for filas.Next() {
 		var it ItemDePresupuesto
 		if err := filas.Scan(&it.ID, &it.VariantID, &it.Descripcion, &it.Unidad, &it.Cantidad, &it.PrecioUnitario, &it.Subtotal,
-			&it.Orden, &it.AlicuotaIva); err != nil {
+			&it.Orden, &it.AlicuotaIva, &it.ConPresentacion); err != nil {
 			return nil, err
 		}
 		p.Items = append(p.Items, it)
@@ -289,6 +306,21 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 		return nil, err
 	}
 	filas.Close()
+	var variantes []string
+	for _, it := range p.Items {
+		if it.VariantID != nil {
+			variantes = append(variantes, *it.VariantID)
+		}
+	}
+	pisos, err := precios.PisosDeCosto(ctx, s.pool, variantes)
+	if err != nil {
+		return nil, err
+	}
+	for i, it := range p.Items {
+		if it.VariantID != nil && !p.Items[i].ConPresentacion {
+			p.Items[i].BajoCosto = precios.BajoCosto(jsmath.Numero(it.PrecioUnitario), pisos[*it.VariantID])
+		}
+	}
 	if p.CustomerID == nil {
 		if p.FichaPorCorreo, err = s.fichaConElCorreo(ctx, p.Email); err != nil {
 			return nil, err

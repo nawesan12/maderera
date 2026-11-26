@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Vacio } from "@/components/admin/vacio";
-import { hayFiltro } from "@/lib/formato";
+import { formatearUnidad, hayFiltro } from "@/lib/formato";
+import { disponible } from "@/lib/stock-level";
 import { Barcode, FileSpreadsheet, ImageOff, Package } from "lucide-react";
 import { requireStaff } from "@/lib/dal/session";
 import { puedeEntrar } from "@/lib/roles";
@@ -269,6 +270,12 @@ function TarjetaStock({
 }) {
   const necesitaAtencion =
     fila.total === 0 || fila.sucursales.some((s) => s.nivel === "bajo");
+  // El número grande es el disponible, igual que el de cada sucursal: decía
+  // «474 total» con el físico arriba de «424» disponibles en Casa Central, y
+  // no se sabía qué era cada uno (mes simulado). Con su unidad: «96» de una
+  // moldura no decía si eran metros o piezas.
+  const libre = fila.sucursales.reduce((suma, s) => suma + disponible(s.qty, s.reservado), 0);
+  const unidad = formatearUnidad(fila.unidad);
 
   return (
     <article
@@ -323,8 +330,11 @@ function TarjetaStock({
               letra del texto. En mono y sin encogerse le comían el ancho al
               nombre, y la tarjeta de la bisagra se desarmaba. */}
           <p className="shrink-0 text-right [font-variant-numeric:tabular-nums]">
-            <span className="tabular block text-xl font-semibold">{formatearCantidad(fila.total)}</span>
-            <span className="block text-sm text-muted-foreground">total</span>
+            <span className="block text-xl font-semibold">
+              <span className="tabular">{formatearCantidad(libre)}</span>{" "}
+              <span className="text-base font-medium text-muted-foreground">{unidad}</span>
+            </span>
+            <span className="block text-sm text-muted-foreground">disponible</span>
             {/* Lo pedido va acá arriba, al lado del número que se mira para
                 decidir si hay que reponer. Puesto en cualquier otro lado sería
                 un dato que nadie cruza a tiempo. */}

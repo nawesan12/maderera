@@ -1,5 +1,6 @@
 import { disponible as calcularDisponible, type StockLevel } from "@/lib/stock-level";
 import { formatearCantidad, formatearLargo, piezasDeMetros } from "@/lib/unidades";
+import { formatearUnidad } from "@/lib/formato";
 
 /**
  * Nivel de stock de una sucursal.
@@ -78,6 +79,7 @@ export function NivelStock({
           }`}
         >
           {formatearCantidad(libre)}
+          {unidad && <span className="ml-1 text-sm font-medium text-muted-foreground">{formatearUnidad(unidad)}</span>}
         </span>
       </div>
 

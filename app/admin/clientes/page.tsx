@@ -272,25 +272,26 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           >
             {cliente.nombre}
           </Link>
-          {/* La empresa entera, en dos renglones si hace falta: cortada
-              en una («Sim Carpinterí») no se sabía cuál era. Igual al
-              nombre, no se repite. */}
+          {/* La empresa entera, sin cortar: cortada («Sim Carpinterí»,
+              «RF Construcciones…») no se sabía cuál era. Por eso el estado
+              baja al renglón del rubro y la columna queda para el nombre y
+              la empresa. Igual al nombre, no se repite. */}
           {cliente.razonSocial && cliente.razonSocial !== cliente.nombre && (
             <p className="flex items-start gap-1 text-sm text-muted-foreground">
               <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span className="line-clamp-2 break-words">{cliente.razonSocial}</span>
+              <span className="break-words">{cliente.razonSocial}</span>
             </p>
           )}
-          {/* El rubro, que es por donde se corta la lista. El tipo
-              —particular o profesional— sigue estando en el color del
-              círculo de las iniciales y en la ficha. */}
-          <p className="text-sm text-muted-foreground">
-            {etiquetaDeRubro(cliente.rubro)}
+          {/* El rubro, que es por donde se corta la lista, con el estado al
+              lado. El tipo —particular o profesional— sigue estando en el
+              color del círculo de las iniciales y en la ficha. */}
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span>{etiquetaDeRubro(cliente.rubro)}</span>
+            <EtiquetaEstado estado={cliente.estado} />
           </p>
         </div>
 
-        <span className="flex shrink-0 items-start gap-1.5">
-          <EtiquetaEstado estado={cliente.estado} />
+        <span className="flex shrink-0 items-start">
           {/*
             Lo que se hace con un cliente sin entrar a su ficha.
 

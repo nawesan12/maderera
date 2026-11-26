@@ -16,17 +16,27 @@ export interface EstadoAjuste {
   ok?: string;
 }
 
-export type MotivoDeAjuste = "ingreso" | "rotura" | "conteo" | "devolucion" | "faltante" | "correccion" | "otro";
+export type MotivoDeAjuste =
+  | "ingreso"
+  | "rotura"
+  | "conteo"
+  | "devolucion"
+  | "faltante"
+  | "correccion"
+  | "otro"
+  | "taller"
+  | "reposicion";
 
 /**
- * Suma o resta `cantidad`. Con `contado`, deja el stock en ese número: la
- * diferencia la calcula Go con el candado tomado.
+ * Suma o resta `cantidad`. Con `contado`, deja el galpón en ese número: la
+ * diferencia la calcula Go con el candado tomado. `pedido` es el PED- de una
+ * reposición a un cliente.
  */
 export async function ajustarStock(
   variantId: string,
   branchSlug: string,
   cantidad: number,
-  extra: { contado?: number; motivo?: MotivoDeAjuste } = {},
+  extra: { contado?: number; motivo?: MotivoDeAjuste; pedido?: string } = {},
 ): Promise<EstadoAjuste> {
   const n = leerCantidad(cantidad);
   if (!Number.isFinite(n)) return { error: "La cantidad tiene que ser un número, sin letras." };
@@ -41,5 +51,6 @@ export async function ajustarStock(
   revalidatePath("/admin");
   revalidatePath("/catalogo");
   revalidatePath("/stock");
+  if (extra.pedido) revalidatePath("/admin/pedidos", "layout");
   return { ok: r.data.ok };
 }

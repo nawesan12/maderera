@@ -14,8 +14,15 @@ export interface StockEnSucursal {
   id: string;
   slug: string;
   nombre: string;
+  /** Físico: lo que el sistema cuenta en la sucursal. */
   qty: number;
   reservado: number;
+  /** Físico − reservado, con signo: negativo es lo vendido de más. */
+  disponible: number;
+  /** Reservado de pedidos en camino: salió en el camión y no tiene remito. */
+  enReparto: number;
+  /** Lo que viene en un traslado sin recibir. */
+  llegando: number;
   min: number;
   nivel: StockLevel;
 }
@@ -34,7 +41,10 @@ export interface FilaStock {
   imagen: string | null;
   /** Una por sucursal activa, en el orden de la base. */
   sucursales: StockEnSucursal[];
+  /** La suma de lo disponible de cada sucursal: lo mismo que se ve en cada una. */
   total: number;
+  /** El mismo criterio que la pestaña «Para reponer» y el inicio. */
+  paraReponer: boolean;
 }
 
 /** Dos columnas de tarjetas. */
@@ -64,9 +74,36 @@ export async function alertasDeStock(limite = 8) {
   return datos(await (await api()).GET("/api/v1/admin/stock/alertas", { params: { query: { limite } } }));
 }
 
-export async function ultimosMovimientos(limite = 10) {
-  const filas = datos(await (await api()).GET("/api/v1/admin/stock/movimientos", { params: { query: { limite } } }));
+/**
+ * Los últimos movimientos de las medidas que pasan el mismo filtro que la
+ * grilla: buscando un tirante, los de ese tirante.
+ */
+export async function ultimosMovimientos(limite = 10, filtros: FiltrosDeCatalogo = {}) {
+  const { busqueda, categoria, marca, proveedor } = consultaDeCatalogo(filtros, limite) as FiltrosDeCatalogo;
+  const filas = datos(
+    await (await api()).GET("/api/v1/admin/stock/movimientos", {
+      params: { query: { busqueda, categoria, marca, proveedor, limite } },
+    }),
+  );
   return filas.map((f) => ({ ...f, createdAt: new Date(f.createdAt) }));
+}
+
+/** Los traslados entre sucursales que nadie recibió todavía. */
+export async function trasladosEnCamino() {
+  const filas = datos(await (await api()).GET("/api/v1/admin/stock/traslados"));
+  return filas.map((t) => ({ ...t, createdAt: new Date(t.createdAt) }));
+}
+
+/** El comprobante de un traslado, o null si no existe. */
+export async function verTraslado(id: string) {
+  const r = await (await api()).GET("/api/v1/admin/stock/traslados/{id}", { params: { path: { id } } });
+  if (r.response.status === 404) return null;
+  const t = datos(r);
+  return {
+    ...t,
+    createdAt: new Date(t.createdAt),
+    recibidoAt: t.recibidoAt ? new Date(t.recibidoAt) : null,
+  };
 }
 
 export async function listarSucursales() {

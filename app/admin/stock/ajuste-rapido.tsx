@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Minus, Plus, Ruler } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   admiteDecimales,
@@ -14,8 +15,17 @@ import {
   metrosDePiezas,
 } from "@/lib/unidades";
 import { formatearUnidad } from "@/lib/formato";
-import { avisoDelAjuste, MOTIVOS_QUE_RESTAN, MOTIVOS_QUE_SUMAN, teclaDelAjuste } from "@/lib/stock-ajuste";
+import {
+  avisoDelAjuste,
+  MOTIVOS_QUE_RESTAN,
+  MOTIVOS_QUE_SUMAN,
+  motivosDelConteo,
+  teclaDelAjuste,
+  type ModoDelAjuste,
+} from "@/lib/stock-ajuste";
 import { ajustarStock, type MotivoDeAjuste } from "./ajuste-actions";
+
+type Extra = { contado?: number; motivo?: MotivoDeAjuste; pedido?: string };
 
 /**
  * Suma o resta stock sin salir del listado.
@@ -25,39 +35,37 @@ import { ajustarStock, type MotivoDeAjuste } from "./ajuste-actions";
  * que el inventario del sistema se despegue del real.
  *
  * Todo se carga también con un número, no solo lo que se mide: con un botón
- * de a uno no se cargan 28,8 metros de zócalo, y tampoco 200 bisagras (eran
- * 200 clics). El metro lineal se carga **por piezas**, que es como se cuenta
- * al descargar el camión: «doce de 2,40» y el sistema guarda los metros
- * (pedido del 30/9/2026). Y está «Contar», que deja el número que se contó
- * en el estante, con el motivo de cada ajuste en el libro de movimientos.
+ * de a uno no se cargan 28,8 metros de zócalo, y tampoco 200 bisagras. El
+ * metro lineal se carga **por piezas**, que es como se cuenta al descargar el
+ * camión. Y está «Contar», que deja el número que se contó en el galpón, con
+ * el motivo de cada ajuste en el libro de movimientos.
  */
 export function AjusteRapido({
   variantId,
   producto,
+  medida,
   branchSlug,
   sucursal,
   unidad,
   largoMm,
-  actual,
+  galpon,
 }: {
   variantId: string;
-  /** El nombre de la fila, para el aviso: con dos ajustes seguidos se deshacía el que no era. */
+  /** El nombre y la medida van en el título del cuadro y en el aviso: con dos placas parecidas, se ajustaba la que no era. */
   producto: string;
+  medida: string;
   branchSlug: string;
   sucursal: string;
   unidad: string;
   largoMm: number | null;
-  /** Lo que dice el sistema que hay, para mostrarlo al contar. */
-  actual: number;
+  /** Lo que tiene que haber en el estante: el físico menos lo que salió en el camión. */
+  galpon: number;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
+  const nombre = `${producto} ${medida}`;
 
-  function ajustar(
-    cantidad: number,
-    alTerminar?: () => void,
-    extra?: { contado?: number; motivo?: MotivoDeAjuste },
-  ) {
+  function ajustar(cantidad: number, alTerminar?: () => void, extra?: Extra) {
     startTransition(async () => {
       const resultado = await ajustarStock(variantId, branchSlug, cantidad, extra);
       if (resultado.error) toast.error(resultado.error);
@@ -74,22 +82,13 @@ export function AjusteRapido({
    *
    * Deshacer **no borra** el movimiento: asienta el inverso con motivo
    * «Corrección», y el libro dice las dos cosas, que es lo que pasó. Diez
-   * segundos y no los seis de siempre: el que ajusta suele estar atendiendo a
-   * alguien. Sirve una sola vez —un doble toque no asienta dos inversos— y,
-   * si en el medio se vendió y el inverso dejaría el stock en negativo, lo
-   * que vuelve es el error de Go, a la vista.
-   *
-   * Un conteo no se deshace: su inverso sería «volver a contar lo de antes»,
-   * y si en el medio se vendió algo, eso pisaría la venta con un número viejo
-   * de la pantalla. Se cuenta de nuevo.
+   * segundos: el que ajusta suele estar atendiendo a alguien. Sirve una sola
+   * vez. Un conteo no se deshace: se cuenta de nuevo. Una reposición a un
+   * cliente tampoco: quedó en el historial del pedido.
    */
-  function avisarConDeshacer(
-    mensaje: string,
-    cantidad: number,
-    extra?: { contado?: number; motivo?: MotivoDeAjuste },
-  ) {
-    const titulo = avisoDelAjuste(producto, mensaje);
-    if (extra?.contado !== undefined || cantidad === 0) {
+  function avisarConDeshacer(mensaje: string, cantidad: number, extra?: Extra) {
+    const titulo = avisoDelAjuste(nombre, mensaje);
+    if (extra?.contado !== undefined || extra?.pedido || cantidad === 0) {
       toast.success(titulo);
       return;
     }
@@ -106,7 +105,7 @@ export function AjusteRapido({
             const r = await ajustarStock(variantId, branchSlug, -cantidad, { motivo: "correccion" });
             if (r.error) toast.error(r.error, { duration: 10_000 });
             else {
-              if (r.ok) toast.success(avisoDelAjuste(producto, r.ok));
+              if (r.ok) toast.success(avisoDelAjuste(nombre, r.ok));
               router.refresh();
             }
           });
@@ -125,6 +124,7 @@ export function AjusteRapido({
       <RestaRapida
         paso={paso}
         nombrePaso={nombrePaso}
+        nombre={nombre}
         sucursal={sucursal}
         pendiente={pendiente}
         onRestar={(motivo, cerrar) => ajustar(-paso, cerrar, { motivo })}
@@ -133,21 +133,18 @@ export function AjusteRapido({
         onClick={() => ajustar(paso)}
         disabled={pendiente}
         className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-        aria-label={`Sumar ${nombrePaso} en ${sucursal}`}
+        aria-label={`Sumar ${nombrePaso} de ${nombre} en ${sucursal}`}
       >
-        {pendiente ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Plus className="h-4 w-4" />
-        )}
+        {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         {paso !== 1 && <span className="text-sm">media</span>}
       </button>
 
       <CargaPorMedida
+        nombre={nombre}
         unidad={unidad}
         largoMm={unidad === "metro_lineal" ? largoMm : null}
         sucursal={sucursal}
-        actual={actual}
+        galpon={galpon}
         pendiente={pendiente}
         onCargar={ajustar}
       />
@@ -156,45 +153,48 @@ export function AjusteRapido({
 }
 
 /**
- * Carga de una cantidad medida, sumando o restando.
+ * Carga de una cantidad medida: sumar, restar o contar.
  *
- * Con largo de pieza ofrece primero las piezas: el número que se tipea es el
- * que se contó, y la cuenta a metros la hace el sistema a la vista. Se puede
- * pasar a metros sueltos para un recorte que no es una pieza entera.
+ * Es un cuadro con el nombre del producto en el título, y no un globo pegado
+ * a la tarjeta: en el teléfono el globo tapaba justo el nombre y la medida, y
+ * con dos placas parecidas no había cómo confirmar cuál se tocaba (se
+ * restaron dos fenólicos en vez de dos lacas, H295 y H322). En el teléfono va
+ * arriba, así el teclado no tapa el botón (H398).
+ *
+ * Cada modo tiene su fila de motivos y cada motivo ejecuta. Solo «Ingreso»
+ * (sumando) y «Conteo» (contando) van con Enter: restando, el motivo se toca,
+ * porque el resaltado y el Enter eran «Ingreso» aunque uno hubiera entrado a
+ * descontar una rotura (H106).
  */
 function CargaPorMedida({
+  nombre,
   unidad,
   largoMm,
   sucursal,
-  actual,
+  galpon,
   pendiente,
   onCargar,
 }: {
+  nombre: string;
   unidad: string;
   largoMm: number | null;
   sucursal: string;
-  actual: number;
+  galpon: number;
   pendiente: boolean;
-  onCargar: (
-    cantidad: number,
-    alTerminar?: () => void,
-    extra?: { contado?: number; motivo?: MotivoDeAjuste },
-  ) => void;
+  onCargar: (cantidad: number, alTerminar?: () => void, extra?: Extra) => void;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [porPiezas, setPorPiezas] = useState(Boolean(largoMm));
   const [texto, setTexto] = useState("");
-  // Sumar y restar, o contar: dejar el número que hay en el estante.
-  const [modo, setModo] = useState<"mover" | "contar">("mover");
+  const [modo, setModo] = useState<ModoDelAjuste>("sumar");
+  // «A cliente» pide el número del pedido antes de restar.
+  const [pedido, setPedido] = useState<string | null>(null);
+  const campoPedido = useRef<HTMLInputElement>(null);
   const enteros = !admiteDecimales(unidad);
 
   const valor = leerCantidad(texto);
   const cantidad =
-    !Number.isFinite(valor) || valor <= 0
-      ? 0
-      : porPiezas && largoMm
-        ? metrosDePiezas(valor, largoMm)
-        : valor;
+    !Number.isFinite(valor) || valor <= 0 ? 0 : porPiezas && largoMm ? metrosDePiezas(valor, largoMm) : valor;
 
   const abreviatura = formatearUnidad(unidad);
   const largoTexto = largoMm ? formatearLargo(largoMm) : null;
@@ -202,151 +202,204 @@ function CargaPorMedida({
   const decimalMal = enteros && cantidad > 0 && !Number.isInteger(cantidad);
   const listo = () => {
     setTexto("");
+    setPedido(null);
     setAbierto(false);
   };
 
   const sePuedeMover = !pendiente && cantidad > 0 && !decimalMal;
+  const sePuedeContar = !pendiente && texto.trim() !== "" && Number.isFinite(valor) && valor >= 0 && !decimalMal;
+  const diferencia = modo === "contar" && sePuedeContar ? cantidad - galpon : 0;
 
   function cargar(signo: 1 | -1, motivo: MotivoDeAjuste) {
     if (!sePuedeMover) return;
+    if (motivo === "reposicion") {
+      if (pedido === null || pedido.trim() === "") {
+        setPedido(pedido ?? "");
+        requestAnimationFrame(() => campoPedido.current?.focus());
+        return;
+      }
+      onCargar(signo * cantidad, listo, { motivo, pedido: pedido.trim() });
+      return;
+    }
     onCargar(signo * cantidad, listo, { motivo });
   }
 
-  function contar() {
-    if (!Number.isFinite(cantidad) || cantidad < 0 || decimalMal || (texto.trim() === "" )) return;
-    onCargar(0, listo, { contado: cantidad, motivo: "conteo" });
+  function contar(motivo: MotivoDeAjuste = "conteo") {
+    if (!sePuedeContar) return;
+    onCargar(0, listo, { contado: cantidad, motivo });
   }
 
+  function cambiarModo(m: ModoDelAjuste) {
+    setModo(m);
+    setPedido(null);
+  }
+
+  const etiquetaDelCampo =
+    modo === "contar"
+      ? porPiezas && largoMm
+        ? "Piezas que hay"
+        : `Lo que hay, en ${formatearUnidadPlural(unidad)}`
+      : porPiezas && largoMm
+        ? "Piezas"
+        : `Cantidad, en ${formatearUnidadPlural(unidad)}`;
+
   return (
-    <Popover open={abierto} onOpenChange={setAbierto}>
-      <PopoverTrigger
-        className="flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        aria-label={`Cargar una cantidad en ${sucursal}`}
+    <>
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="flex h-11 items-center gap-1.5 rounded-md border px-3 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        aria-label={`Cargar una cantidad de ${nombre} en ${sucursal}`}
       >
-        <Ruler className="h-4 w-4" />
+        <Ruler className="h-4 w-4" aria-hidden="true" />
         Cargar
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] gap-3 p-4">
-        <p className="text-base font-medium">
-          {sucursal} · hay <span className="tabular">{formatearCantidad(actual)}</span>
-        </p>
+      </button>
+      <Dialog open={abierto} onOpenChange={setAbierto}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] gap-3 overflow-y-auto max-sm:top-4 max-sm:translate-y-0 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="pr-8 break-words">{nombre}</DialogTitle>
+            <p className="text-base text-muted-foreground">
+              {sucursal} · hay <span className="tabular font-medium text-foreground">{formatearCantidad(galpon)}</span>
+            </p>
+          </DialogHeader>
 
-        <div className="flex rounded-md bg-hundida p-0.5 text-sm" role="group">
-          <button
-            type="button"
-            onClick={() => setModo("mover")}
-            aria-pressed={modo === "mover"}
-            className={`flex-1 rounded px-2 py-1.5 ${modo === "mover" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
-          >
-            Sumar o restar
-          </button>
-          <button
-            type="button"
-            onClick={() => setModo("contar")}
-            aria-pressed={modo === "contar"}
-            className={`flex-1 rounded px-2 py-1.5 ${modo === "contar" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
-          >
-            Contar
-          </button>
-        </div>
-
-        {largoMm ? (
-          <div className="flex rounded-md border p-0.5 text-sm" role="group">
-            <button
-              type="button"
-              onClick={() => setPorPiezas(true)}
-              aria-pressed={porPiezas}
-              className={`flex-1 rounded px-2 py-1.5 ${porPiezas ? "bg-muted font-medium" : "text-muted-foreground"}`}
-            >
-              Piezas de {largoTexto}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPorPiezas(false)}
-              aria-pressed={!porPiezas}
-              className={`flex-1 rounded px-2 py-1.5 ${!porPiezas ? "bg-muted font-medium" : "text-muted-foreground"}`}
-            >
-              Metros sueltos
-            </button>
+          <div className="flex rounded-md bg-hundida p-0.5 text-base" role="group" aria-label="Qué hacer">
+            {(
+              [
+                ["sumar", "Sumar"],
+                ["restar", "Restar"],
+                ["contar", "Contar"],
+              ] as const
+            ).map(([m, t]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => cambiarModo(m)}
+                aria-pressed={modo === m}
+                className={`h-10 flex-1 rounded px-2 ${modo === m ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
-        ) : null}
 
-        <label className="block text-sm text-muted-foreground">
-          {/* «Cuántos unidades» no concuerda: la etiqueta nombra la unidad
-              sin el cuántos/cuántas. */}
-          {modo === "contar"
-            ? porPiezas && largoMm
-              ? "Piezas que hay"
-              : `Lo que hay, en ${formatearUnidadPlural(unidad)}`
-            : porPiezas && largoMm
-              ? "Piezas"
-              : `Cantidad, en ${formatearUnidadPlural(unidad)}`}
-          <input
-            autoFocus
-            inputMode="decimal"
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              // La regla, con su prueba, en `teclaDelAjuste`.
-              const accion = teclaDelAjuste(e, modo);
-              if (accion === null) return;
-              e.preventDefault();
-              if (accion === "contar") contar();
-              else if (accion === "ingreso") cargar(1, "ingreso");
-            }}
-            className="tabular mt-1 block h-11 w-full rounded-md border bg-background px-3 text-lg text-foreground"
-            placeholder={porPiezas && largoMm ? "12" : enteros ? "200" : "3,5"}
-          />
-        </label>
+          {largoMm ? (
+            <div className="flex rounded-md bg-hundida p-0.5 text-sm" role="group" aria-label="Cómo se cuenta">
+              <button
+                type="button"
+                onClick={() => setPorPiezas(true)}
+                aria-pressed={porPiezas}
+                className={`h-9 flex-1 rounded px-2 ${porPiezas ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
+              >
+                Piezas de {largoTexto}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPorPiezas(false)}
+                aria-pressed={!porPiezas}
+                className={`h-9 flex-1 rounded px-2 ${!porPiezas ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
+              >
+                Metros sueltos
+              </button>
+            </div>
+          ) : null}
 
-        <p className="tabular min-h-6 text-base" aria-live="polite">
-          {decimalMal ? (
-            <span className="text-destructive">Va sin decimales: se cuenta por {formatearUnidadPlural(unidad)}.</span>
-          ) : cantidad > 0 || (modo === "contar" && texto.trim() !== "" && cantidad === 0) ? (
+          <label className="block text-sm text-muted-foreground">
+            {etiquetaDelCampo}
+            <input
+              autoFocus
+              inputMode="decimal"
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              onKeyDown={(e) => {
+                // La regla, con su prueba, en `teclaDelAjuste`.
+                const accion = teclaDelAjuste(e, modo);
+                if (accion === null) return;
+                e.preventDefault();
+                if (accion === "contar") contar();
+                else if (accion === "ingreso") cargar(1, "ingreso");
+              }}
+              className="tabular mt-1 block h-12 w-full rounded-md bg-hundida px-3 text-xl text-foreground"
+              placeholder={porPiezas && largoMm ? "12" : enteros ? "200" : "3,5"}
+            />
+          </label>
+
+          <p className="tabular min-h-6 text-base" aria-live="polite">
+            {decimalMal ? (
+              <span className="text-destructive">Va sin decimales: se cuenta por {formatearUnidadPlural(unidad)}.</span>
+            ) : cantidad > 0 || (modo === "contar" && sePuedeContar) ? (
+              <>
+                {modo === "contar" ? "Queda en " : modo === "restar" ? "− " : "+ "}
+                <strong>
+                  {formatearCantidad(cantidad)} {abreviatura}
+                </strong>
+                {porPiezas && largoMm ? (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    ({formatearCantidad(valor)} × {largoTexto})
+                  </span>
+                ) : null}
+                {modo === "contar" && diferencia !== 0 && (
+                  <span className={diferencia < 0 ? "font-medium text-destructive" : "text-muted-foreground"}>
+                    {" "}
+                    · {diferencia > 0 ? "sobran" : "faltan"} {formatearCantidad(Math.abs(diferencia))}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-muted-foreground">
+                {Number.isFinite(valor) || texto === "" ? " " : "Eso no es un número."}
+              </span>
+            )}
+          </p>
+
+          {modo === "sumar" && (
+            <FilaDeMotivos motivos={MOTIVOS_QUE_SUMAN} principal="ingreso" habilitado={sePuedeMover} pendiente={pendiente}
+              onElegir={(m) => cargar(1, m)} />
+          )}
+
+          {modo === "restar" && (
             <>
-              {modo === "contar" ? "Queda en " : "= "}
-              <strong>{formatearCantidad(cantidad)} {abreviatura}</strong>
-              {porPiezas && largoMm ? (
-                <span className="text-muted-foreground">
-                  {" "}
-                  ({formatearCantidad(valor)} × {largoTexto})
-                </span>
-              ) : null}
-              {modo === "contar" && cantidad !== actual && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {cantidad > actual ? "sobran" : "faltan"} {formatearCantidad(Math.abs(cantidad - actual))}
-                </span>
+              <FilaDeMotivos motivos={MOTIVOS_QUE_RESTAN} habilitado={sePuedeMover} pendiente={pendiente}
+                elegido={pedido !== null ? "reposicion" : undefined} onElegir={(m) => cargar(-1, m)} />
+              {pedido !== null && (
+                <form
+                  className="flex items-end gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    cargar(-1, "reposicion");
+                  }}
+                >
+                  <label className="block flex-1 text-sm text-muted-foreground">
+                    Pedido del cliente
+                    <input
+                      ref={campoPedido}
+                      value={pedido}
+                      onChange={(e) => setPedido(e.target.value)}
+                      autoComplete="off"
+                      placeholder="PED-1098"
+                      className="tabular mt-1 block h-11 w-full rounded-md bg-hundida px-3 text-lg uppercase text-foreground"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={!sePuedeMover || pedido.trim() === ""}
+                    className="h-11 shrink-0 rounded-md bg-accion px-4 text-base font-medium text-white hover:bg-brand-orange-dark disabled:opacity-40"
+                  >
+                    {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reponer"}
+                  </button>
+                </form>
               )}
             </>
-          ) : (
-            <span className="text-muted-foreground">
-              {Number.isFinite(valor) || texto === "" ? " " : "Eso no es un número."}
-            </span>
           )}
-        </p>
 
-        {modo === "mover" ? (
-          <>
-            {/* Sin cantidad los chips están apagados: tocar «Rotura» antes de
-                poner el número no puede descontar nada. */}
-            <div className="space-y-2">
-              <FilaDeMotivos signo={1} motivos={MOTIVOS_QUE_SUMAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
-              <FilaDeMotivos signo={-1} motivos={MOTIVOS_QUE_RESTAN} habilitado={sePuedeMover} pendiente={pendiente} onElegir={cargar} />
-            </div>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={contar}
-            disabled={pendiente || texto.trim() === "" || cantidad < 0 || decimalMal}
-            className="h-10 rounded-md bg-accion text-base font-medium text-white transition-colors hover:bg-brand-orange-dark disabled:opacity-50"
-          >
-            {pendiente ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Dejar este número"}
-          </button>
-        )}
-      </PopoverContent>
-    </Popover>
+          {modo === "contar" && (
+            <FilaDeMotivos motivos={motivosDelConteo(diferencia)} principal="conteo" habilitado={sePuedeContar} pendiente={pendiente}
+              onElegir={(m) => contar(m)} />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -355,17 +408,20 @@ function CargaPorMedida({
  *
  * Restaba en el acto y el libro decía «Ajuste»: la placa rota no quedaba como
  * rotura (comité final). Ahora el − pregunta por qué, con los mismos motivos
- * de la carga por número, y el motivo elegido resta.
+ * de la carga por número salvo «A cliente», que va con su pedido desde
+ * «Cargar». El título dice qué producto es (H295).
  */
 function RestaRapida({
   paso,
   nombrePaso,
+  nombre,
   sucursal,
   pendiente,
   onRestar,
 }: {
   paso: number;
   nombrePaso: string;
+  nombre: string;
   sucursal: string;
   pendiente: boolean;
   onRestar: (motivo: MotivoDeAjuste, cerrar: () => void) => void;
@@ -376,63 +432,69 @@ function RestaRapida({
       <PopoverTrigger
         disabled={pendiente}
         className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-        aria-label={`Restar ${nombrePaso} en ${sucursal}`}
+        aria-label={`Restar ${nombrePaso} de ${nombre} en ${sucursal}`}
       >
         <Minus className="h-4 w-4" />
         {paso !== 1 && <span className="text-sm">media</span>}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-3">
-        {/* Cuánto resta, a la vista: el − de la placa que se vende partida
-            resta media. */}
-        <p className="mb-2 text-sm font-semibold">Restar {nombrePaso}</p>
+        <p className="text-base font-semibold leading-snug break-words">{nombre}</p>
+        <p className="mb-2 text-sm text-muted-foreground">
+          {sucursal} · − {nombrePaso}
+        </p>
         <FilaDeMotivos
-          signo={-1}
-          motivos={MOTIVOS_QUE_RESTAN}
+          motivos={MOTIVOS_QUE_RESTAN.filter((m) => m.valor !== "reposicion")}
           habilitado={!pendiente}
           pendiente={pendiente}
-          onElegir={(_, motivo) => onRestar(motivo, () => setAbierto(false))}
+          onElegir={(motivo) => onRestar(motivo, () => setAbierto(false))}
         />
       </PopoverContent>
     </Popover>
   );
 }
 
-/** Una fila de motivos: el signo adelante y un chip por motivo, que ejecuta. */
+/**
+ * Los motivos de un modo: un chip por motivo, que ejecuta. `principal` es el
+ * que va resaltado y con Enter; restando no hay ninguno.
+ */
 function FilaDeMotivos({
-  signo,
   motivos,
+  principal,
+  elegido,
   habilitado,
   pendiente,
   onElegir,
 }: {
-  signo: 1 | -1;
   motivos: { valor: MotivoDeAjuste; texto: string }[];
+  principal?: MotivoDeAjuste;
+  /** El que está esperando un dato (el pedido de «A cliente»). */
+  elegido?: MotivoDeAjuste;
   habilitado: boolean;
   pendiente: boolean;
-  onElegir: (signo: 1 | -1, motivo: MotivoDeAjuste) => void;
+  onElegir: (motivo: MotivoDeAjuste) => void;
 }) {
-  const Signo = signo === 1 ? Plus : Minus;
   return (
-    <div className="flex items-center gap-2" role="group" aria-label={signo === 1 ? "Suma" : "Resta"}>
-      <Signo className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-      {motivos.map((m, i) => (
-        <button
-          key={m.valor}
-          type="button"
-          onClick={() => onElegir(signo, m.valor)}
-          disabled={!habilitado}
-          className={`inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md text-base font-medium transition-colors disabled:opacity-40 ${
-            signo === 1 && i === 0
-              ? "bg-accion text-white hover:bg-brand-orange-dark"
-              : "border hover:bg-muted"
-          }`}
-        >
-          {pendiente && signo === 1 && i === 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : m.texto}
-          {signo === 1 && i === 0 && !pendiente && (
-            <kbd className="rounded border border-current px-1 text-[11px] font-medium opacity-70">Enter</kbd>
-          )}
-        </button>
-      ))}
+    <div className="grid grid-cols-3 gap-2" role="group" aria-label="Motivo">
+      {motivos.map((m) => {
+        const esPrincipal = m.valor === principal;
+        return (
+          <button
+            key={m.valor}
+            type="button"
+            onClick={() => onElegir(m.valor)}
+            disabled={!habilitado}
+            aria-pressed={elegido === m.valor || undefined}
+            className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-md px-2 text-base font-medium transition-colors disabled:opacity-40 ${
+              esPrincipal ? "col-span-3 bg-accion text-white hover:bg-brand-orange-dark sm:col-span-1" : "border hover:bg-muted"
+            }`}
+          >
+            {pendiente && esPrincipal ? <Loader2 className="h-4 w-4 animate-spin" /> : m.texto}
+            {esPrincipal && !pendiente && (
+              <kbd className="hidden rounded border border-current px-1 text-[11px] font-medium opacity-70 sm:inline">Enter</kbd>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -21,27 +21,71 @@ export const MOTIVOS_QUE_SUMAN: { valor: MotivoDeAjuste; texto: string }[] = [
 ];
 // Restando, la devolución es la que sale al proveedor: «Devolución» a secas
 // se leía como la del cliente, que suma (revisión del carril F).
+// «Taller» es lo que gasta la seccionadora sin una venta que lo descuente, y
+// «A cliente» lo que se le da a quien reclamó un faltante de su pedido: va
+// con el número del pedido (mes simulado, H220 y H275).
 export const MOTIVOS_QUE_RESTAN: { valor: MotivoDeAjuste; texto: string }[] = [
   { valor: "rotura", texto: "Rotura" },
   { valor: "faltante", texto: "Faltante" },
+  { valor: "taller", texto: "Taller" },
   { valor: "devolucion", texto: "Al proveedor" },
+  { valor: "reposicion", texto: "A cliente" },
 ];
+
+/**
+ * Los motivos de un conteo que no coincide, según para qué lado da la
+ * diferencia: «Conteo» primero, que es lo que pasa casi siempre, y los que la
+ * explican al lado. Un −18 se grababa sin preguntar por qué (H398).
+ */
+export function motivosDelConteo(diferencia: number): { valor: MotivoDeAjuste; texto: string }[] {
+  const conteo = { valor: "conteo" as const, texto: "Conteo" };
+  if (diferencia < 0) return [conteo, ...MOTIVOS_QUE_RESTAN.filter((m) => m.valor !== "devolucion" && m.valor !== "reposicion")];
+  if (diferencia > 0) return [conteo, ...MOTIVOS_QUE_SUMAN];
+  return [conteo];
+}
+
+/** Sumar, restar o contar: el cuadro del ajuste arranca en uno de los tres. */
+export type ModoDelAjuste = "sumar" | "restar" | "contar";
 
 /**
  * Qué hace una tecla en el campo del ajuste.
  *
- * Enter es «Ingreso», el chip que lo dice; restar se toca. Mayús+Enter no
- * hace nada: hasta T4 era «restar», el depósito lo aprendió así, y si ahora
- * sumara, el que quiere sacar 5 por rotura y lo aprieta por costumbre deja
- * el stock 10 arriba con un «Ingreso» en el libro (comité de T4).
+ * Sumando, Enter es «Ingreso», el chip que lo dice. Restando no hace nada: el
+ * motivo se toca, porque una rotura, un faltante y una devolución no son lo
+ * mismo en el libro, y con Enter el que entraba a descontar una rotura
+ * cargaba un ingreso (mes simulado, H106). Contando, Enter es «Conteo».
+ * Mayús+Enter no hace nada: hasta T4 era «restar», el depósito lo aprendió
+ * así, y si ahora sumara, el que quiere sacar 5 por rotura y lo aprieta por
+ * costumbre deja el stock 10 arriba con un «Ingreso» en el libro (comité de
+ * T4).
  */
 export function teclaDelAjuste(
   e: { key: string; shiftKey: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean },
-  modo: "mover" | "contar",
+  modo: ModoDelAjuste,
 ): "ingreso" | "contar" | "nada" | null {
   if (e.key !== "Enter") return null;
   if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return "nada";
-  return modo === "contar" ? "contar" : "ingreso";
+  if (modo === "contar") return "contar";
+  return modo === "sumar" ? "ingreso" : "nada";
+}
+
+/**
+ * Cómo está una sucursal, para el panel. `disponible` va con signo: menos de
+ * cero es lo vendido de más, y se dice «Faltan» (mes simulado, H218: con 135
+ * vendidas y 70 en el galpón, la tarjeta decía «0 · Sin stock»).
+ *
+ * «Va bajando» es hasta el doble del mínimo, no el triple que usa el sitio
+ * público: una corredera recién cargada con 2,5 veces su mínimo aparecía en
+ * amarillo (H013).
+ */
+export type EstadoEnSucursal = "faltante" | "sin-stock" | "reponer" | "va-bajando" | "bien";
+
+export function estadoEnSucursal(disponible: number, minimo: number): EstadoEnSucursal {
+  if (disponible < 0) return "faltante";
+  if (disponible === 0) return "sin-stock";
+  if (minimo > 0 && disponible <= minimo) return "reponer";
+  if (minimo > 0 && disponible <= minimo * 2) return "va-bajando";
+  return "bien";
 }
 
 /** El aviso de un ajuste, con el producto: dos avisos con «Deshacer» sin nombre se confundían. */

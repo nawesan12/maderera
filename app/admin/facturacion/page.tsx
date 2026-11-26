@@ -313,13 +313,19 @@ function Grupo({
                         </span>
                       </Link>
                     </td>
+                    {/* Nombre y CUIT van juntos en un solo bloque que toma
+                        lo que deja el rótulo: apilados en el teléfono, el
+                        nombre largo baja de renglón y ni el rótulo ni el
+                        CUIT se cortan (H135, H267). */}
                     <td className="px-3 py-3.5">
-                      <span className="block text-base">{c.receptorNombre}</span>
-                      {c.receptorCuit && (
-                        <span className="tabular block text-sm text-muted-foreground">
-                          {formatearCuit(c.receptorCuit)}
-                        </span>
-                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-base">{c.receptorNombre}</span>
+                        {c.receptorCuit && (
+                          <span className="tabular block whitespace-nowrap text-sm text-muted-foreground">
+                            {formatearCuit(c.receptorCuit)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="tabular whitespace-nowrap px-3 py-3.5 text-base text-muted-foreground">
                       {fechaCorta.format(c.fechaEmision)}
@@ -332,7 +338,9 @@ function Grupo({
                         saldo > 0 ? "text-brand-orange-dark" : "text-muted-foreground"
                       }`}
                     >
-                      {c.estado === "anulada" || c.tipo.startsWith("nota_credito")
+                      {c.ventaAnulada && c.estado !== "anulada"
+                        ? "Venta anulada"
+                        : c.estado === "anulada" || c.tipo.startsWith("nota_credito")
                         ? "—"
                         : saldo > 0
                           ? moneda.format(saldo)

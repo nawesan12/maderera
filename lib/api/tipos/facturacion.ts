@@ -747,6 +747,8 @@ export interface components {
             enCuenta: boolean;
             /** @description Número del pedido que factura */
             pedido: string | null;
+            /** @description El pedido que factura se canceló */
+            ventaAnulada: boolean;
         };
         /** @description Los renglones como los mandaba el FormData (getAll de cada campo, en paralelo) */
         LineasManuales: {

@@ -755,7 +755,7 @@ components:
         pendientesDeAutorizar: { type: integer }
     ComprobanteListado:
       type: object
-      required: [id, tipo, puntoVenta, numero, estado, receptorNombre, receptorCuit, total, cobrado, cae, fechaEmision, fechaVencimiento, medios, enCuenta, pedido]
+      required: [id, tipo, puntoVenta, numero, estado, receptorNombre, receptorCuit, total, cobrado, cae, fechaEmision, fechaVencimiento, medios, enCuenta, pedido, ventaAnulada]
       properties:
         id: { type: string }
         tipo: { $ref: "#/components/schemas/TipoComprobante" }
@@ -772,6 +772,7 @@ components:
         medios: { type: array, items: { type: string } }
         enCuenta: { type: boolean, description: La deuda vive en la cuenta corriente del cliente }
         pedido: { type: string, nullable: true, description: Número del pedido que factura }
+        ventaAnulada: { type: boolean, description: El pedido que factura se canceló }
     LineasManuales:
       description: Los renglones como los mandaba el FormData (getAll de cada campo, en paralelo)
       type: object

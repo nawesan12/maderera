@@ -44,6 +44,9 @@ type Listado struct {
 	EnCuenta bool `json:"enCuenta"`
 	// Pedido es el número del pedido que factura (PED-1046), si tiene.
 	Pedido *string `json:"pedido"`
+	// VentaAnulada: el pedido se canceló. Su saldo es cero, pero no por
+	// cobrada: la columna decía «Cobrado» (mes simulado).
+	VentaAnulada bool `json:"ventaAnulada"`
 }
 
 // SaldoDeFactura es, sobre la fila `i` de invoices, su `c` (los cobros de
@@ -156,7 +159,7 @@ const desdeListado = `FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) A
 // pantalla sigue restando total − cobrado.
 const columnasDeListado = `SELECT i.id, i.tipo::text, i.punto_venta, i.numero, i.estado::text, i.receptor_nombre, i.receptor_cuit,
 		i.total::float8, (i.total - ` + SaldoDeFactura + `)::float8, i.cae, i.fecha_emision, i.fecha_vencimiento, coalesce(c.medios, '{}'),
-		` + EnCuentaDeFactura + `, o.numero
+		` + EnCuentaDeFactura + `, o.numero, coalesce(o.estado = 'cancelado', false)
 		` + desdeListado
 
 func leerListado(filas pgx.Rows) ([]Listado, error) {
@@ -166,7 +169,7 @@ func leerListado(filas pgx.Rows) ([]Listado, error) {
 		var l Listado
 		var medios []*string
 		if err := filas.Scan(&l.ID, &l.Tipo, &l.PuntoVenta, &l.Numero, &l.Estado, &l.ReceptorNombre, &l.ReceptorCuit, &l.Total, &l.Cobrado,
-			&l.Cae, &l.FechaEmision, &l.FechaVencimiento, &medios, &l.EnCuenta, &l.Pedido); err != nil {
+			&l.Cae, &l.FechaEmision, &l.FechaVencimiento, &medios, &l.EnCuenta, &l.Pedido, &l.VentaAnulada); err != nil {
 			return nil, err
 		}
 		l.Medios = []string{}

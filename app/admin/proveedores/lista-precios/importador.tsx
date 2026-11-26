@@ -370,7 +370,7 @@ function Columna({
           id={nombre}
           name={nombre}
           defaultValue={defecto}
-          placeholder={opcional ? "Opcional" : ejemplo}
+          placeholder={ejemplo || (opcional ? "Opcional" : "")}
           className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
         />
       )}

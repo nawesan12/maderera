@@ -1,13 +1,19 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { guardarSierra, type EstadoTarifa } from "./actions";
 
 const inicial: EstadoTarifa = {};
 
 export function EditorDeSierra({ anchoSierraMm }: { anchoSierraMm: number }) {
   const [estado, guardar, guardando] = useActionState(guardarSierra, inicial);
+  // Guardado, con el aviso de todo el panel: el renglón gris al lado del
+  // botón no se veía (tercera prueba del mes).
+  useEffect(() => {
+    if (estado.ok) toast.success(estado.ok);
+  }, [estado]);
 
   return (
     <form action={guardar} className="flex flex-wrap items-end gap-3 tarjeta p-5">
@@ -33,7 +39,6 @@ export function EditorDeSierra({ anchoSierraMm }: { anchoSierraMm: number }) {
         Guardar
       </button>
       {estado.error && <p className="w-full text-base text-destructive">{estado.error}</p>}
-      {estado.ok && <p className="w-full text-base text-muted-foreground">{estado.ok}</p>}
     </form>
   );
 }

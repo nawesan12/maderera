@@ -377,7 +377,11 @@ export function FormularioCorte({
         ? "Falta elegir la placa."
         : esOtraPlaca && !otraPlaca
           ? "Confirmá que va en otra placa."
-          : null;
+          : // Con la placa elegida y sin piezas el botón quedaba apagado
+            // sin decir por qué (tercera prueba del mes).
+            validas.length === 0
+            ? "Faltan las piezas."
+            : null;
 
   function actualizar(
     indice: number,
@@ -887,7 +891,7 @@ export function FormularioCorte({
       <BarraGuardar error={estado.error ?? motivoParaNoEnviar}>
         <Button
           type="submit"
-          disabled={pendiente || validas.length === 0 || motivoParaNoEnviar !== null || Boolean(estado.ok)}
+          disabled={pendiente || motivoParaNoEnviar !== null || Boolean(estado.ok)}
           className="h-11 px-6"
         >
           {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}

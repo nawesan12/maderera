@@ -9,7 +9,6 @@ import {
 } from "@/lib/dal/admin/resumen";
 import type { resolverPeriodo } from "@/lib/periodos";
 import { MESES_PARA_EL_GRAFICO, mesesConVentas } from "@/lib/inicio";
-import { AvisoSinPin } from "./aviso-sin-pin";
 
 /**
  * Los números del negocio: lo que el dueño de una maderera pregunta cuando
@@ -44,8 +43,9 @@ export async function NumerosDelNegocio({
 
   return (
     <div className="space-y-4">
-      {controles.sinPin && <AvisoSinPin />}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {/* items-start: cada tarjeta mide lo suyo. Estiradas a la altura de
+          «Plata hoy», el detalle de las cortas quedaba lejos de su número. */}
+      <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Tarjeta
           titulo="Me deben"
           valor={meDeben.total}
@@ -114,16 +114,28 @@ export async function NumerosDelNegocio({
           href="/admin/caja"
           renglones={[
             ...(plata.cajas.length > 0
-              ? plata.cajas.map((c) => `Caja ${c.sucursal} ${moneda.format(c.esperado)}`)
+              ? plata.cajas.map((c) =>
+                  `Caja ${c.sucursal}${c.cerrada ? " · cerrada" : ""} ${moneda.format(c.esperado)}`,
+                )
               : ["Sin cajas abiertas"]),
-            [
-              plata.banco !== 0 && `Banco ${moneda.format(plata.banco)}`,
-              plata.mercadoPago !== 0 && `Mercado Pago ${moneda.format(plata.mercadoPago)}`,
-            ]
-              .filter(Boolean)
-              .join(" · "),
-            plata.tarjetas > 0 && `Tarjetas a acreditar ${moneda.format(plata.tarjetas)}`,
+            plata.cajaFuerte !== 0 && `Caja fuerte ${moneda.format(plata.cajaFuerte)}`,
+            // El banco es lo que se movió hoy, con su signo: lo que entró
+            // menos lo que se pagó (Go, PlataHoy). Sumaba solo lo cobrado.
+            (plata.bancoEntro !== 0 || plata.bancoSalio !== 0) &&
+              `Banco hoy ${conSigno(plata.banco)}`,
+            plata.bancoEntro !== 0 &&
+              plata.bancoSalio !== 0 &&
+              `Entró ${moneda.format(plata.bancoEntro)} · salió ${moneda.format(plata.bancoSalio)}`,
+            plata.mercadoPago !== 0 && `Mercado Pago hoy ${moneda.format(plata.mercadoPago)}`,
             plata.cheques.cantidad > 0 && `Cheques en cartera ${moneda.format(plata.cheques.total)}`,
+            plata.chequesDepositados.cantidad > 0 &&
+              `Cheques depositados ${moneda.format(plata.chequesDepositados.total)}`,
+            // De acá para abajo no suma al total: va separado, para que la
+            // cuenta de arriba cierre a la vista.
+            plata.tarjetas > 0 && {
+              texto: `Tarjetas a acreditar ${moneda.format(plata.tarjetas)}`,
+              aparte: true,
+            },
             // La plata que salió del cajón por anulaciones es la que importa;
             // la de una venta con tarjeta anulada nunca entró.
             anuladas.cantidad > 0 && {
@@ -133,6 +145,7 @@ export async function NumerosDelNegocio({
                   : `${plural(anuladas.cantidad, "anulada")} en 7 días`,
               problema: anuladas.devuelto > 0,
               href: "/admin/bitacora?accion=anular&q=mostrador",
+              aparte: true,
             },
             // Lleva a la lista de esas facturas, cada una con su nota de
             // crédito a un clic.
@@ -140,6 +153,7 @@ export async function NumerosDelNegocio({
               texto: `${plural(anuladas.conFacturaViva, "anulada", "anuladas")} con factura viva`,
               problema: true,
               href: "/admin/facturacion?estado=anulada-viva",
+              aparte: true,
             },
           ]}
         />
@@ -161,7 +175,7 @@ export async function NumerosDelNegocio({
             // del margen de Reportes, y se dice en plata: contado como
             // ganancia entera la inflaba.
             g.ventasSinCosto > 0 && {
-              texto: `${moneda.format(g.ventasSinCosto)} sin costo, afuera`,
+              texto: `${moneda.format(g.ventasSinCosto)} vendidos sin costo, fuera de la ganancia`,
               problema: true,
               href: "/admin/reportes?corte=producto#ventas",
             },
@@ -299,7 +313,19 @@ function ElPersonal({ personas }: { personas: Persona[] }) {
  * y, si hay dónde arreglarlo, con su propio enlace. `false`, `null` o `""` no
  * se dibujan: un cero no se muestra, en ninguna tarjeta.
  */
-type Renglon = string | { texto: string; problema?: boolean; href?: string } | false | null | undefined;
+type Renglon =
+  | string
+  // aparte: no forma parte de la cifra grande; va debajo de una raya.
+  | { texto: string; problema?: boolean; href?: string; aparte?: boolean }
+  | false
+  | null
+  | undefined;
+
+/** Un monto con su signo adelante: «+$ 1.000», «−$ 400». */
+function conSigno(n: number): string {
+  if (n === 0) return moneda.format(0);
+  return `${n > 0 ? "+" : "−"}${moneda.format(Math.abs(n))}`;
+}
 
 /**
  * Una pregunta del dueño: el número grande y, abajo, el desglose que sigue.
@@ -333,7 +359,9 @@ function Tarjeta({
       : variacion > 0
         ? ArrowUpRight
         : ArrowDownRight;
-  const visibles = renglones.flatMap((r) => (!r ? [] : typeof r === "string" ? [{ texto: r }] : [r]));
+  const visibles: { texto: string; problema?: boolean; href?: string; aparte?: boolean }[] =
+    renglones.flatMap((r) => (!r ? [] : typeof r === "string" ? [{ texto: r }] : [r]));
+  const primeroAparte = visibles.findIndex((r) => r.aparte);
   return (
     <div className="tarjeta tarjeta-activa relative flex flex-col gap-3 p-5 has-[>h3>a:focus-visible]:ring-2 has-[>h3>a:focus-visible]:ring-ring">
       <h3 className="text-base font-semibold text-texto-2">
@@ -369,9 +397,14 @@ function Tarjeta({
         </p>
       )}
       {visibles.length > 0 && (
-        <ul className="mt-auto space-y-1 text-base text-texto-2 [font-variant-numeric:tabular-nums]">
-          {visibles.map((r) => (
-            <li key={r.texto} className={r.problema ? "estado-problema font-semibold" : ""}>
+        <ul className="space-y-1 text-base text-texto-2 [font-variant-numeric:tabular-nums]">
+          {visibles.map((r, i) => (
+            <li
+              key={r.texto}
+              className={`${r.problema ? "estado-problema font-semibold" : ""} ${
+                i === primeroAparte && i > 0 ? "!mt-3 border-t border-dashed border-linea pt-3" : ""
+              }`}
+            >
               {r.href ? (
                 <Link
                   href={r.href}

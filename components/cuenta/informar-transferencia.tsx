@@ -5,9 +5,11 @@ import { AlertCircle, Check, Copy, Loader2, Upload } from "lucide-react";
 import { subirComprobante, type EstadoPago } from "@/app/(public)/pago-actions";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
 import { CampoArchivo } from "@/components/campo-archivo";
+import { sinRomper } from "@/lib/acciones/sin-romper";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 const inicial: EstadoPago = {};
+const subir = sinRomper(subirComprobante);
 
 /**
  * «Informar el pago» de un pedido por transferencia, en Mi cuenta.
@@ -33,7 +35,7 @@ export function InformarTransferencia({
    */
   pedirDatos: string;
 }) {
-  const [estado, accion] = useActionState(subirComprobante, inicial);
+  const [estado, accion] = useActionState(subir, inicial);
   const [enviando, empezar] = useTransition();
   const [copiado, setCopiado] = useState<string | null>(null);
 

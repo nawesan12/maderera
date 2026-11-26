@@ -6,6 +6,7 @@ import { puedeEntrar } from "@/lib/roles";
 import { esUuid } from "@/lib/uuid";
 import { fichaDeFacturaDeCompra } from "@/lib/dal/admin/compras-fiscal";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
+import { facturasConSaldo } from "@/lib/dal/admin/pagos-proveedor";
 import { fechaCorta, formatearMonto } from "@/lib/formato";
 import {
   daCreditoFiscal,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/fiscal/comprobantes-compra";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { NOMBRE_DEL_MEDIO } from "../../pagos/medios";
-import { AccionesDeFactura } from "./acciones";
+import { AccionesDeFactura, AplicarNota } from "./acciones";
 
 export const metadata: Metadata = { title: "Factura de compra" };
 
@@ -44,10 +45,19 @@ export default async function FacturaDeCompraPage({
 
   const saldo = Math.round((f.total - f.pagado) * 100) / 100;
   const esCredito = f.tipo.startsWith("nota_credito");
+  // La nota de crédito a favor se aplica desde acá a una factura con saldo.
+  const aplicables =
+    esCredito && !f.anuladaAt && !f.aplicaA
+      ? (await facturasConSaldo(f.supplierId)).filter(
+          (x) => !x.tipo.startsWith("nota_credito") && x.tipo !== "cheque_rechazado" && x.saldo - f.total > -0.01,
+        )
+      : [];
   const estado = f.anuladaAt
     ? { texto: "Anulada", clase: "text-saldo-debe" }
     : esCredito
-      ? { texto: "Nota de crédito", clase: "text-muted-foreground" }
+      ? f.aplicaA
+        ? { texto: `Aplicada a ${f.aplicaA}`, clase: "text-muted-foreground" }
+        : { texto: "A favor", clase: "text-saldo-favor" }
       : saldo <= 0.01
         ? { texto: "Pagada", clase: "text-saldo-favor" }
         : f.pagado > 0
@@ -87,7 +97,13 @@ export default async function FacturaDeCompraPage({
           </>
         }
         acciones={
-          !f.anuladaAt && !esCredito && saldo > 0.01 ? (
+          aplicables.length > 0 ? (
+            <AplicarNota
+              nota={f.id}
+              supplierId={f.supplierId}
+              facturas={aplicables.map((x) => ({ id: x.id, numero: x.numero, saldo: x.saldo }))}
+            />
+          ) : !f.anuladaAt && !esCredito && saldo > 0.01 ? (
             <Link
               href={`/admin/compras/pagos?proveedor=${f.supplierId}&factura=${f.id}`}
               className="boton-accion inline-flex h-11 items-center rounded-xl px-5 text-base font-semibold"

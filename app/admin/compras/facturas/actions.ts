@@ -36,6 +36,12 @@ export interface DatosFacturaCompra {
   observaciones?: string;
   /** La recepción que cubre: si está, la factura carga solo la diferencia. */
   receiptId?: string;
+  /** Los demás remitos que cubre la misma factura. */
+  receiptIds?: string[];
+  /** De una nota de crédito, la factura a la que se aplica. */
+  aplicaA?: string;
+  /** Si la diferencia con lo recibido pasa al costo de la mercadería. */
+  ajustarCosto?: boolean;
 }
 
 function refrescar(supplierId: string, id?: string) {
@@ -81,6 +87,23 @@ export async function anularFacturaDeCompra(
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo anular la factura.") };
   refrescar(supplierId, id);
+  revalidatePath("/admin/compras/pagos");
+  return { ok: r.data.ok };
+}
+
+/** Aplica una nota de crédito que quedó a favor a una factura con saldo. */
+export async function aplicarNotaDeCredito(
+  id: string,
+  supplierId: string,
+  facturaId: string,
+): Promise<{ error?: string; ok?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/compras/facturas/{id}/aplicar", {
+    params: { path: { id } },
+    body: { facturaId },
+  });
+  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No se pudo aplicar la nota de crédito.") };
+  refrescar(supplierId, id);
+  revalidatePath(`/admin/compras/facturas/${facturaId}`);
   revalidatePath("/admin/compras/pagos");
   return { ok: r.data.ok };
 }

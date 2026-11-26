@@ -8,6 +8,7 @@ import { listarFacturasDeCompra } from "@/lib/dal/admin/compras-fiscal";
 import { proveedoresParaElegir } from "@/lib/dal/admin/proveedores";
 import { listarRecepciones } from "@/lib/dal/admin/recepciones";
 import { diasHasta, fechaCorta, formatearMonto, plural } from "@/lib/formato";
+import type { components } from "@/lib/api/tipos/compras";
 import {
   nombreComprobanteCompra,
   numeroDeCompra,
@@ -16,6 +17,7 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Vacio } from "@/components/admin/vacio";
 import { CargarFactura } from "./cargar";
 import { FiltrosDeFacturas } from "./filtro";
+import { IrALaNueva } from "./ir-a-la-nueva";
 
 export const metadata: Metadata = { title: "Facturas de compra" };
 
@@ -43,12 +45,18 @@ export default async function FacturasDeCompraPage({
     desde?: string;
     hasta?: string;
     pagina?: string;
+    nueva?: string;
   }>;
 }) {
   const usuario = await requireStaff();
   if (!puedeEntrar("/admin/compras/facturas", usuario.staffRole)) notFound();
 
-  const { pago = "pagadas", proveedor, desde, hasta, pagina } = await searchParams;
+  /*
+   * Sin filtro se ve lo que falta pagar y, abajo, lo pagado; «Sin pagar»
+   * deja lo primero, «Pagadas» lo segundo y «Todas» suma las anuladas. Antes
+   * arrancaba con «Pagadas» marcada mostrando las dos cosas.
+   */
+  const { pago = "", proveedor, desde, hasta, pagina, nueva } = await searchParams;
   /*
    * Las fechas de emisión se guardan como día (medianoche UTC), así que el
    * rango va de la medianoche UTC del primero al último instante del otro.
@@ -91,10 +99,19 @@ export default async function FacturasDeCompraPage({
           .filter(Boolean)
           .join(" · ");
 
+  const verPorPagar = pago !== "pagadas";
+  const porPagar = pendientes.facturas.map((f) => ({
+    id: f.id,
+    supplierId: f.supplierId,
+    numero: numeroDeCompra(f.puntoVenta, f.numero),
+    saldo: Math.round((Number(f.total) - Number(f.pagado)) * 100) / 100,
+  }));
+  const cheques = pendientes.chequesAReponer.filter((c) => !proveedor || c.supplierId === proveedor);
+
   const enlacePagina = (n: number) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries({ pago, proveedor, desde, hasta })) {
-      if (v && !(k === "pago" && v === "pagadas")) p.set(k, v);
+      if (v) p.set(k, v);
     }
     if (n > 1) p.set("pagina", String(n));
     return `/admin/compras/facturas${p.size ? `?${p}` : ""}`;
@@ -111,7 +128,7 @@ export default async function FacturasDeCompraPage({
         </Link>
       </EncabezadoPanel>
 
-      <CargarFactura proveedores={proveedores} recepciones={sinFactura} />
+      <CargarFactura proveedores={proveedores} recepciones={sinFactura} porPagar={porPagar} />
 
       <FiltrosDeFacturas
         proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.nombre }))}
@@ -121,21 +138,25 @@ export default async function FacturasDeCompraPage({
         hasta={hasta}
       />
 
-      <section className="tarjeta overflow-hidden">
-        <h2 className="flex items-baseline gap-2 px-5 pt-5 text-[19px] font-bold tracking-tight">
-          Por pagar
-          <span className="tabular text-base font-medium text-muted-foreground">
-            {pendientes.facturas.length}
-          </span>
-        </h2>
-        {pendientes.facturas.length === 0 ? (
-          <Vacio icono={FileText} titulo="No queda ninguna factura sin pagar" />
-        ) : (
-          <TablaDeFacturas facturas={pendientes.facturas} porPagar />
-        )}
-      </section>
+      {verPorPagar && (
+        <section className="tarjeta overflow-hidden">
+          <h2 className="flex items-baseline gap-2 px-5 pt-5 text-[19px] font-bold tracking-tight">
+            Por pagar
+            <span className="tabular text-base font-medium text-muted-foreground">
+              {pendientes.facturas.length + cheques.length}
+            </span>
+          </h2>
+          {pendientes.facturas.length + cheques.length === 0 ? (
+            <Vacio icono={FileText} titulo="No queda ninguna factura sin pagar" />
+          ) : (
+            <ListaDeFacturas facturas={pendientes.facturas} cheques={cheques} porPagar nueva={nueva} />
+          )}
+        </section>
+      )}
 
-      {historial && (
+      {nueva && <IrALaNueva />}
+
+      {historial && pago !== "pendiente" && (
         <section className="tarjeta overflow-hidden">
           <h2 className="px-5 pt-5 text-[19px] font-bold tracking-tight">
             {pago === "todas" ? "Todas" : "Pagadas"}
@@ -150,7 +171,7 @@ export default async function FacturasDeCompraPage({
               }
             />
           ) : (
-            <TablaDeFacturas facturas={historial.facturas} />
+            <ListaDeFacturas facturas={historial.facturas} nueva={nueva} />
           )}
           {(numeroPagina > 1 || historial.hayMas) && (
             <nav className="flex items-center justify-between gap-3 px-5 py-4" aria-label="Páginas">
@@ -185,110 +206,210 @@ export default async function FacturasDeCompraPage({
   );
 }
 
-function TablaDeFacturas({
+type ChequeAReponer = components["schemas"]["FacturaConSaldo"];
+
+/** Cómo se dice el vencimiento de lo que falta pagar. */
+function Vence({ fecha }: { fecha: Date | null }) {
+  if (!fecha) return <span className="text-muted-foreground">—</span>;
+  const dias = diasHasta(fecha);
+  if (dias === 0) return <span className="font-semibold text-brand-orange-dark">Vence hoy</span>;
+  return (
+    <span className={dias !== null && dias < 0 ? "font-semibold text-saldo-debe" : undefined}>
+      {fechaCorta.format(fecha)}
+      {dias !== null && dias < 0 && <span className="font-normal"> · hace {plural(-dias, "día")}</span>}
+    </span>
+  );
+}
+
+/** Lo que dice la columna del pago: el saldo, «Pagada», o de una nota de crédito, a qué se aplicó. */
+function EstadoDePago({ f, porPagar }: { f: Factura; porPagar?: boolean }) {
+  const total = Number(f.total);
+  const pagado = Number(f.pagado);
+  const saldo = Math.round((total - pagado) * 100) / 100;
+  if (f.anuladaAt) return <span className="font-medium text-saldo-debe">Anulada</span>;
+  if (f.tipo.startsWith("nota_credito")) {
+    return f.aplicaA ? (
+      <span className="text-muted-foreground">Aplicada a {f.aplicaA}</span>
+    ) : (
+      <span className="font-medium text-saldo-favor">A favor</span>
+    );
+  }
+  if (porPagar) return <span className="tabular font-semibold">{formatearMonto(saldo)}</span>;
+  if (saldo <= 0.01) return <span className="font-medium text-saldo-favor">Pagada</span>;
+  return (
+    <span className="tabular text-muted-foreground">
+      {formatearMonto(pagado)} de {formatearMonto(total)}
+    </span>
+  );
+}
+
+/** El importe: una nota de crédito resta. */
+function Importe({ f }: { f: Factura }) {
+  const credito = f.tipo.startsWith("nota_credito");
+  return (
+    <span className="tabular">
+      {credito ? "−" : ""}
+      {formatearMonto(Number(f.total))}
+    </span>
+  );
+}
+
+function BotonPagar({ href }: { href: string }) {
+  return (
+    <Link href={href} className="boton-accion inline-flex h-10 shrink-0 items-center rounded-xl px-4 text-base font-semibold">
+      Pagar
+    </Link>
+  );
+}
+
+/**
+ * Las facturas, en tabla donde entra entera (el ancho del bloque, no el de
+ * la pantalla) y si no en tarjetas de tres renglones: el número de arriba
+ * como título, el proveedor, y la fecha con lo que falta y «Pagar» a mano.
+ * Apilada, cada factura medía 450 px con «Comprob…» cortado y una fila
+ * entera para «Acciones».
+ */
+function ListaDeFacturas({
   facturas,
+  cheques = [],
   porPagar,
+  nueva,
 }: {
   facturas: Factura[];
+  cheques?: ChequeAReponer[];
   porPagar?: boolean;
+  nueva?: string;
 }) {
+  const pagar = (f: Factura) => `/admin/compras/pagos?proveedor=${f.supplierId}&factura=${f.id}`;
+  const reponer = (c: ChequeAReponer) => `/admin/compras/pagos?proveedor=${c.supplierId}&cheque=${c.id}`;
+  const resaltada = (id: string) => (id === nueva ? "bg-hundida" : "");
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] text-base">
+    <div className="@container">
+      <table className="hidden w-full text-base @3xl:table" data-tabla="fija">
         <thead>
           <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
             <th className="px-5 py-2.5 font-semibold">{porPagar ? "Vence" : "Fecha"}</th>
             <th className="px-5 py-2.5 font-semibold">Comprobante</th>
             <th className="px-5 py-2.5 font-semibold">Proveedor</th>
             <th className="px-5 py-2.5 text-right font-semibold">Total</th>
-            <th className="px-5 py-2.5 text-right font-semibold">
-              {porPagar ? "Falta pagar" : "Pago"}
-            </th>
-            <th className="px-5 py-2.5">
-              <span className="sr-only">Acciones</span>
-            </th>
+            <th className="px-5 py-2.5 text-right font-semibold">{porPagar ? "Falta pagar" : "Pago"}</th>
+            {porPagar && (
+              <th className="px-5 py-2.5">
+                <span className="sr-only">Pagar</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-linea">
-          {facturas.map((f) => {
-            const total = Number(f.total);
-            const pagado = Number(f.pagado);
-            const saldo = Math.round((total - pagado) * 100) / 100;
-            const dias = diasHasta(f.fechaVencimiento);
-            return (
-              <tr key={f.id} className={f.anuladaAt ? "text-muted-foreground" : undefined}>
-                <td className="tabular px-5 py-3">
-                  {porPagar ? (
-                    f.fechaVencimiento ? (
-                      <>
-                        <span className={dias !== null && dias < 0 ? "font-semibold text-saldo-debe" : undefined}>
-                          {fechaCorta.format(f.fechaVencimiento)}
-                        </span>
-                        {dias !== null && dias < 0 && (
-                          <span className="block text-sm text-saldo-debe">
-                            hace {plural(-dias, "día")}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      "—"
-                    )
-                  ) : (
-                    fechaCorta.format(f.fechaEmision)
-                  )}
-                </td>
-                <td className="px-5 py-3">
-                  <Link
-                    href={`/admin/compras/facturas/${f.id}`}
-                    className={`tabular block font-medium hover:underline ${f.anuladaAt ? "line-through" : ""}`}
-                  >
-                    {numeroDeCompra(f.puntoVenta, f.numero)}
-                  </Link>
-                  <span className="block text-sm text-muted-foreground">
-                    {nombreComprobanteCompra(f.tipo)}
-                    {porPagar && ` · del ${fechaCorta.format(f.fechaEmision)}`}
-                  </span>
-                </td>
-                <td className="px-5 py-3">
-                  <Link href={`/admin/proveedores/${f.supplierId}`} className="hover:underline">
-                    {f.proveedor}
-                  </Link>
-                </td>
-                <td className="tabular px-5 py-3 text-right">{formatearMonto(total)}</td>
-                {/* Si está paga, a medias o sin tocar: sale de lo aplicado en
-                    los pagos, no de un estado que alguien marque. */}
-                <td className="tabular px-5 py-3 text-right">
-                  {f.anuladaAt ? (
-                    <span className="font-medium text-saldo-debe">Anulada</span>
-                  ) : porPagar ? (
-                    <span className="font-semibold">{formatearMonto(saldo)}</span>
-                  ) : saldo <= 0.01 ? (
-                    <span className="font-medium text-saldo-favor">Pagada</span>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {formatearMonto(pagado)} de {formatearMonto(total)}
-                    </span>
-                  )}
-                </td>
-                {/*
-                  La acción que la fila estaba pidiendo: el pago llega con el
-                  proveedor puesto y esta factura tildada por su saldo.
-                */}
+          {facturas.map((f) => (
+            <tr
+              key={f.id}
+              data-nueva={f.id === nueva || undefined}
+              className={`${f.anuladaAt ? "text-muted-foreground" : ""} ${resaltada(f.id)} scroll-mt-24`}
+            >
+              <td className="tabular px-5 py-3">
+                {porPagar ? <Vence fecha={f.fechaVencimiento} /> : fechaCorta.format(f.fechaEmision)}
+              </td>
+              <td className="px-5 py-3">
+                <Link
+                  href={`/admin/compras/facturas/${f.id}`}
+                  className={`codigo block font-medium hover:underline ${f.anuladaAt ? "line-through" : ""}`}
+                >
+                  {numeroDeCompra(f.puntoVenta, f.numero)}
+                </Link>
+                <span className="block text-sm text-muted-foreground">
+                  {nombreComprobanteCompra(f.tipo)}
+                  {porPagar && ` · del ${fechaCorta.format(f.fechaEmision)}`}
+                </span>
+              </td>
+              <td className="px-5 py-3">
+                <Link href={`/admin/proveedores/${f.supplierId}`} className="hover:underline">
+                  {f.proveedor}
+                </Link>
+              </td>
+              <td className="px-5 py-3 text-right">
+                <Importe f={f} />
+              </td>
+              <td className="px-5 py-3 text-right">
+                <EstadoDePago f={f} porPagar={porPagar} />
+              </td>
+              {porPagar && (
                 <td className="px-5 py-3 text-right">
-                  {porPagar && (
-                    <Link
-                      href={`/admin/compras/pagos?proveedor=${f.supplierId}&factura=${f.id}`}
-                      className="boton-accion inline-flex h-10 items-center rounded-xl px-4 text-base font-semibold"
-                    >
-                      Pagar
-                    </Link>
-                  )}
+                  <BotonPagar href={pagar(f)} />
                 </td>
-              </tr>
-            );
-          })}
+              )}
+            </tr>
+          ))}
+          {cheques.map((c) => (
+            <tr key={c.id}>
+              <td className="tabular px-5 py-3 font-semibold text-saldo-debe">Rechazado</td>
+              <td className="px-5 py-3">
+                <span className="codigo block font-medium">{c.numero}</span>
+              </td>
+              <td className="px-5 py-3">
+                <Link href={`/admin/proveedores/${c.supplierId}`} className="hover:underline">
+                  {c.proveedor}
+                </Link>
+              </td>
+              <td className="tabular px-5 py-3 text-right">{formatearMonto(c.total)}</td>
+              <td className="tabular px-5 py-3 text-right font-semibold">{formatearMonto(c.saldo)}</td>
+              <td className="px-5 py-3 text-right">
+                <BotonPagar href={reponer(c)} />
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
+
+      <ul className="divide-y divide-linea @3xl:hidden">
+        {facturas.map((f) => (
+          <li
+            key={f.id}
+            data-nueva={f.id === nueva || undefined}
+            className={`space-y-1 px-4 py-3 ${f.anuladaAt ? "text-muted-foreground" : ""} ${resaltada(f.id)} scroll-mt-24`}
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <Link
+                href={`/admin/compras/facturas/${f.id}`}
+                className={`codigo min-w-0 truncate text-[17px] font-semibold hover:underline ${f.anuladaAt ? "line-through" : ""}`}
+              >
+                {numeroDeCompra(f.puntoVenta, f.numero)}
+              </Link>
+              <span className="shrink-0 text-base">
+                <Importe f={f} />
+              </span>
+            </div>
+            <p className="truncate text-base text-muted-foreground">
+              {nombreComprobanteCompra(f.tipo)} · {f.proveedor}
+            </p>
+            <div className="flex min-h-10 items-center justify-between gap-3 text-base">
+              <span className="tabular min-w-0">
+                {porPagar ? <Vence fecha={f.fechaVencimiento} /> : fechaCorta.format(f.fechaEmision)}
+              </span>
+              <span className="flex shrink-0 items-center gap-3">
+                <EstadoDePago f={f} porPagar={porPagar} />
+                {porPagar && <BotonPagar href={pagar(f)} />}
+              </span>
+            </div>
+          </li>
+        ))}
+        {cheques.map((c) => (
+          <li key={c.id} className="space-y-1 px-4 py-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="codigo min-w-0 truncate text-[17px] font-semibold">{c.numero}</span>
+              <span className="tabular shrink-0 text-base">{formatearMonto(c.total)}</span>
+            </div>
+            <p className="truncate text-base text-muted-foreground">{c.proveedor}</p>
+            <div className="flex min-h-10 items-center justify-between gap-3 text-base">
+              <span className="font-semibold text-saldo-debe">Rechazado</span>
+              <span className="flex shrink-0 items-center gap-3">
+                <span className="tabular font-semibold">{formatearMonto(c.saldo)}</span>
+                <BotonPagar href={reponer(c)} />
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

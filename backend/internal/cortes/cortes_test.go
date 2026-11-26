@@ -177,7 +177,7 @@ func TestAltaColaYFicha(t *testing.T) {
 	// plano se arma de nuevo en cada lectura y no puede cambiar en la máquina.
 	var motorAlta int32
 	_ = e.pool.QueryRow(context.Background(), `select motor_plano from cutting_orders where id = $1`, id).Scan(&motorAlta)
-	if motorAlta != MotorMediaConSierra {
+	if motorAlta != MotorActual {
 		t.Errorf("motor del alta: %d", motorAlta)
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set mitad = 'largo' where id = $1`, id)
@@ -233,6 +233,9 @@ func TestAltaColaYFicha(t *testing.T) {
 		t.Errorf("segundo toque: %d %s", code, b)
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-cola' where id = $1`, id)
+	// Atado a un pedido: el suelto con cargo no se entrega sin cobrarlo (ver
+	// TestCorteSueltoSeCobraEnUnPedido).
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set order_id = $2 where id = $1`, id, e.pedido(t, "PED-1"))
 
 	// La cola: avanza hasta retirado y ahí se frena.
 	for _, quiere := range []string{"quedó en la máquina", "quedó terminado", "quedó retirado", "El corte ya está retirado."} {
@@ -242,7 +245,7 @@ func TestAltaColaYFicha(t *testing.T) {
 		}
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'cancelado' where id = $1`, id)
-	if code, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar", nil); code != 422 || !strings.Contains(b, "está cancelado") {
+	if code, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar", nil); code != 422 || !strings.Contains(b, "está anulado") {
 		t.Errorf("cancelado: %d %s", code, b)
 	}
 	if _, b := pedir(t, ven, "POST", u+"/"+id+"/urgente", nil); !strings.Contains(b, "volvió al orden normal") {
@@ -270,7 +273,7 @@ func TestAltaColaYFicha(t *testing.T) {
 	var motor int
 	var sierra float64
 	_ = e.pool.QueryRow(context.Background(), `select motor_plano, ancho_sierra_mm::float8 from cutting_orders where id = $1`, id).Scan(&motor, &sierra)
-	if motor != MotorMediaConSierra || sierra != 3.2 {
+	if motor != MotorActual || sierra != 3.2 {
 		t.Errorf("motor %d, sierra %v", motor, sierra)
 	}
 	// El acomodo a mano: se guarda y vuelve al automático con la lista vacía.

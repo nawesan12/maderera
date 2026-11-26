@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,6 +54,14 @@ type FormCorte struct {
 	// es la primera, la única que había antes.
 	ConsultaGrupo string            `json:"consultaGrupo"`
 	Piezas        []json.RawMessage `json:"piezas"`
+	// Reemplaza es el corte que este corrige: se anula en la misma
+	// transacción, con «Reemplazado por CRT-n» (mes simulado, H185).
+	Reemplaza string `json:"reemplaza"`
+	// SinCargo es una reposición: sale de un pedido y no se cobra (H283).
+	SinCargo bool `json:"sinCargo"`
+	// OtraPlaca confirma que el corte de un pedido va en una placa que el
+	// pedido no vende (H280).
+	OtraPlaca bool `json:"otraPlaca"`
 }
 
 type piezaNueva struct {
@@ -140,6 +149,13 @@ func validarPieza(crudo json.RawMessage) (piezaNueva, bool) {
 
 // Crear da de alta una orden de corte (crearCorte). Devuelve el número.
 func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (string, error) {
+	numero, _, err := s.Alta(ctx, ses, f)
+	return numero, err
+}
+
+// Alta es Crear con el id del corte nuevo: la pantalla va a su ficha
+// (mes simulado, H044: quedaba en el formulario lleno, con el aviso al pie).
+func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (string, string, error) {
 	// La cabecera, en el orden de las claves del esquema: el primer error es
 	// el que se muestra.
 	uuidOpcional := func(v string) string {
@@ -163,7 +179,7 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	var telefono *string
 	if t := strings.TrimSpace(f.ContactoTelefono); t != "" {
 		if len(t) > 40 {
-			return "", plataforma.Invalido(map[string]string{"contactoTelefono": "El teléfono es muy largo."})
+			return "", "", plataforma.Invalido(map[string]string{"contactoTelefono": "El teléfono es muy largo."})
 		}
 		telefono = &t
 	}
@@ -171,7 +187,7 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	if f.RetiraEl != "" {
 		d, err := time.Parse("2006-01-02", f.RetiraEl)
 		if err != nil {
-			return "", plataforma.Invalido(map[string]string{"retiraEl": "Revisá el día de retiro."})
+			return "", "", plataforma.Invalido(map[string]string{"retiraEl": "Revisá el día de retiro."})
 		}
 		retiraEl = &d
 	}
@@ -206,7 +222,7 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		uuidOpcional(f.VariantID), msgMaterial, msgLargo, msgAncho, msgMitad, msgPlacas, msgCanto, msgNotas, msgAcomodo,
 	} {
 		if msg != "" {
-			return "", error422(msg)
+			return "", "", error422(msg)
 		}
 	}
 
@@ -214,12 +230,12 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	for _, cruda := range f.Piezas {
 		p, ok := validarPieza(cruda)
 		if !ok {
-			return "", error422("Hay una pieza con medidas incompletas.")
+			return "", "", error422("Hay una pieza con medidas incompletas.")
 		}
 		piezas = append(piezas, p)
 	}
 	if len(piezas) == 0 {
-		return "", error422("Agregá al menos una pieza al despiece.")
+		return "", "", error422("Agregá al menos una pieza al despiece.")
 	}
 	// 500 renglones de 999 eran medio millón de piezas: el alta las
 	// guardaba y la ficha se colgaba armando el plano.
@@ -228,14 +244,14 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		unidades += int(p.cantidad)
 	}
 	if unidades > TopeDeUnidades {
-		return "", error422(msgDemasiadasPiezas)
+		return "", "", error422(msgDemasiadasPiezas)
 	}
 
 	grupo := 0
 	if f.ConsultaGrupo != "" {
 		n := jsmath.Numero(f.ConsultaGrupo)
 		if msg := validarNumero(n, reglaNumero{entero: true, min: pf(0), max: pf(MaximoDeGrupos - 1)}); msg != "" {
-			return "", error422(msg)
+			return "", "", error422(msg)
 		}
 		grupo = int(n)
 	}
@@ -244,13 +260,48 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 	if sierra == nil {
 		p, err := s.Parametros(ctx)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		sierra = &p.AnchoSierraMm
 	}
+	if f.Reemplaza != "" && !plataforma.UUIDValido(f.Reemplaza) {
+		return "", "", error422("No encontramos el corte que se corrige.")
+	}
+	if f.SinCargo && f.OrderID == "" {
+		return "", "", error422("Una reposición sin cargo sale de un pedido: cargala desde su ficha.")
+	}
 
-	var numero string
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	// El plano, acá: las placas y las pasadas que se guardan son las suyas
+	// (la tarjeta del taller decía 3 placas con un plano de 2, H113), y un
+	// trabajo con piezas que no entran no va a la cola (H043).
+	plano, err := s.planoDelAlta(ctx, f, piezas, largo, ancho, *sierra)
+	if err != nil {
+		return "", "", err
+	}
+	if n := len(plano.NoEntran); n > 0 {
+		medidas := make([]string, 0, n)
+		for _, p := range plano.NoEntran {
+			m := jsmath.Texto(p.LargoMm) + " × " + jsmath.Texto(p.AnchoMm)
+			if !slices.Contains(medidas, m) {
+				medidas = append(medidas, m)
+			}
+		}
+		return "", "", error422(strings.TrimSuffix(piezasQueNoEntran(n), ".") + " (" + strings.Join(medidas, ", ") + " mm). Corregí las medidas o elegí otra placa.")
+	}
+	if f.OrderID != "" && f.VariantID != "" && !f.OtraPlaca {
+		if msg, err := s.placaDelPedido(ctx, f.OrderID, f.VariantID); err != nil {
+			return "", "", err
+		} else if msg != "" {
+			return "", "", plataforma.Invalido(map[string]string{"otraPlaca": msg})
+		}
+	}
+	placasDelPlano := int32(len(plano.Placas))
+	if placasDelPlano == 0 {
+		placasDelPlano = int32(placasN)
+	}
+
+	var numero, id string
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
 		// La consulta primero, con candado: dos altas de la misma consulta a
 		// la vez daban dos órdenes de corte.
@@ -262,6 +313,11 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		if numero, err = numeracion.Corte(ctx, tx); err != nil {
 			return err
 		}
+		if f.Reemplaza != "" {
+			if _, err := anularEnLaTransaccion(ctx, tx, f.Reemplaza, "Reemplazado por "+numero); err != nil {
+				return err
+			}
+		}
 		branch := opcional(f.BranchID)
 		if branch == nil {
 			if err := tx.QueryRow(ctx, `SELECT id::text FROM branches WHERE active ORDER BY sort_order LIMIT 1`).Scan(&branch); err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -272,17 +328,16 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		if f.Urgente {
 			urgente = 1
 		}
-		var id string
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO cutting_orders (numero, customer_id, order_id, contacto_nombre, branch_id, variant_id,
 				material_descripcion, placa_largo_mm, placa_ancho_mm, mitad, placas, canto_descripcion,
 				acomodo_manual, ancho_sierra_mm, estado, urgente, notas, created_by_user_id, contacto_telefono, retira_el,
-				motor_plano)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12, $13, $14, 'en-cola', $15, $16, $17, $18, $19, $20)
+				motor_plano, pasadas, sin_cargo)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::mitad_placa, $11, $12, $13, $14, 'en-cola', $15, $16, $17, $18, $19, $20, $21, $22)
 			RETURNING id::text`,
 			numero, opcional(f.CustomerID), opcional(f.OrderID), contacto, branch, opcional(f.VariantID), material,
-			largo, ancho, opcional(f.Mitad), int32(placasN), canto, opcional(f.AcomodoManual), jsmath.Num(*sierra),
-			urgente, notas, ses.UserID, telefono, retiraEl, int32(MotorMediaConSierra)).Scan(&id); err != nil {
+			largo, ancho, opcional(f.Mitad), placasDelPlano, canto, opcional(f.AcomodoManual), jsmath.Num(*sierra),
+			urgente, notas, ses.UserID, telefono, retiraEl, int32(MotorActual), int32(plano.PasadasCobrables), f.SinCargo).Scan(&id); err != nil {
 			return err
 		}
 		for orden, p := range piezas {
@@ -315,11 +370,73 @@ func (s *Servicio) Crear(ctx context.Context, ses *auth.Sesion, f FormCorte) (st
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "corte", numero,
 		"Cargó el corte "+numero+" para "+contacto, nil)
-	return numero, nil
+	return numero, id, nil
+}
+
+// planoDelAlta es el plano del corte que se está dando de alta, como lo va a
+// dibujar la ficha: la medida de la variante (o la escrita), la mitad, el
+// disco, lo fijado a mano y el motor de hoy.
+func (s *Servicio) planoDelAlta(ctx context.Context, f FormCorte, piezas []piezaNueva, largo, ancho *int32, sierra float64) (Plano, error) {
+	var vl, va *float64
+	if f.VariantID != "" {
+		var l, a *int32
+		err := s.pool.QueryRow(ctx, `SELECT largo_mm, ancho_mm FROM product_variants WHERE id = $1`, f.VariantID).Scan(&l, &a)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return Plano{}, err
+		}
+		vl, va = i32f(l), i32f(a)
+	}
+	var mitad *string
+	if f.Mitad != "" {
+		mitad = &f.Mitad
+	}
+	medida := ResolverMedida(i32f(largo), i32f(ancho), vl, va, mitad, sierra)
+	paraElPlano := make([]PiezaAcortar, len(piezas))
+	for i, p := range piezas {
+		paraElPlano[i] = PiezaAcortar{LargoMm: float64(p.largo), AnchoMm: float64(p.ancho), Cantidad: float64(p.cantidad),
+			RespetaVeta: float64(p.veta), Etiqueta: p.etiqueta, CantoLargo: float64(p.cantoLargo), CantoAncho: float64(p.cantoAncho)}
+	}
+	return PlanoConLaHoja(DatosDelPlano{Piezas: paraElPlano, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(f.AcomodoManual)}), nil
+}
+
+// placaDelPedido avisa si el corte de un pedido va en una placa que el pedido
+// no vende (H280: PED-1094 vendía MDF 18 y el corte quedó en MDF 3 mm, sin
+// ningún aviso). Un pedido sin placas no frena nada.
+func (s *Servicio) placaDelPedido(ctx context.Context, pedido, variante string) (string, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT DISTINCT oi.variant_id::text, oi.descripcion, o.numero
+		FROM order_items oi
+		JOIN orders o ON o.id = oi.order_id
+		JOIN product_variants pv ON pv.id = oi.variant_id
+		WHERE oi.order_id = $1 AND pv.largo_mm IS NOT NULL AND pv.ancho_mm IS NOT NULL`, pedido)
+	if err != nil {
+		return "", err
+	}
+	defer filas.Close()
+	var nombres []string
+	numero := ""
+	for filas.Next() {
+		var id, desc, n string
+		if err := filas.Scan(&id, &desc, &n); err != nil {
+			return "", err
+		}
+		if id == variante {
+			return "", nil
+		}
+		numero = n
+		if !slices.Contains(nombres, desc) {
+			nombres = append(nombres, desc)
+		}
+	}
+	if err := filas.Err(); err != nil || len(nombres) == 0 {
+		return "", err
+	}
+	return "El pedido " + numero + " vende " + strings.Join(nombres, ", ") + ": esta es otra placa.", nil
 }
 
 // tomarConsulta bloquea la placa de la consulta que se pasa a corte y avisa

@@ -72,6 +72,12 @@ var Acceso = map[string][]sqlc.StaffRole{
 // cobrado sin recibo ni caja).
 var ManejanPlata = []sqlc.StaffRole{sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor}
 
+// DecidenEnLaCola es DECIDEN_EN_LA_COLA de lib/roles.ts: quién marca un corte
+// urgente, lo entrega, lo anula o lo corrige. Todos los de /admin/cortes
+// menos el aserradero, que empieza y termina (mes simulado, H115: la ficha
+// le dejaba marcar urgente y retirado aunque el taller se lo escondía).
+var DecidenEnLaCola = []sqlc.StaffRole{sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor, sqlc.StaffRoleDeposito}
+
 // QuienEntra son los roles de exactamente esa ruta, o nil si no está
 // declarada (quienEntra del TS).
 func QuienEntra(ruta string) []sqlc.StaffRole { return Acceso[ruta] }

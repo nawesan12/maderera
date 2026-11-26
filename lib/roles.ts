@@ -168,6 +168,13 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
  */
 export const MANEJAN_PLATA: readonly RolStaff[] = ["admin", "vendedor"];
 
+/**
+ * Quién decide en la cola de corte: marcarlo urgente, entregarlo, anularlo o
+ * corregirlo. Todos los de `/admin/cortes` menos el aserradero, que empieza y
+ * termina (mes simulado, H115).
+ */
+export const DECIDEN_EN_LA_COLA: readonly RolStaff[] = ["admin", "vendedor", "deposito"];
+
 /** Los roles que pueden entrar a una ruta, o `null` si la ve todo el personal. */
 export function quienEntra(ruta: string): readonly RolStaff[] | null {
   return ACCESO[ruta] ?? null;

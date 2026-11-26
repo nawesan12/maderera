@@ -12,6 +12,7 @@ import (
 type golden struct {
 	Acceso       map[string][]string `json:"acceso"`
 	ManejanPlata []string            `json:"manejanPlata"`
+	Decisiones   []string            `json:"decidenEnLaCola"`
 	QuienEntra   map[string][]string `json:"quienEntra"`
 	Inicio       map[string]string   `json:"inicio"`
 	Matriz       []struct {
@@ -42,6 +43,9 @@ func TestComoLibRoles(t *testing.T) {
 	}
 	if got := aTexto(ManejanPlata); !slices.Equal(got, g.ManejanPlata) {
 		t.Errorf("ManejanPlata = %v, el TS da %v", got, g.ManejanPlata)
+	}
+	if got := aTexto(DecidenEnLaCola); !slices.Equal(got, g.Decisiones) {
+		t.Errorf("DecidenEnLaCola = %v, el TS da %v", got, g.Decisiones)
 	}
 	for ruta, want := range g.QuienEntra {
 		if got := aTexto(QuienEntra(ruta)); !slices.Equal(got, want) && !(len(got) == 0 && want == nil) {

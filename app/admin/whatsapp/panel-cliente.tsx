@@ -34,7 +34,7 @@ export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleC
   const pegado = enDialogo ? "" : "lg:sticky lg:top-24";
   if (!detalle.customerId) {
     return (
-      <div className={`space-y-4 ${pegado}`}>
+      <div className={`min-w-0 space-y-4 ${pegado}`}>
         <SinFicha detalle={detalle} />
         <Avisos detalle={detalle} />
       </div>
@@ -44,12 +44,16 @@ export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleC
   const excedido = detalle.limiteCredito > 0 && detalle.saldo > detalle.limiteCredito;
 
   return (
-    <div className={`space-y-4 ${pegado}`}>
+    // `min-w-0`: en el diálogo (que vive fuera del panel) el nombre sin
+    // cortar empujaba las tarjetas más allá del borde («Activ», «Pendien»).
+    <div className={`min-w-0 space-y-4 ${pegado}`}>
       <section className="tarjeta p-4">
         <div className="flex items-start justify-between gap-2">
+          {/* En el diálogo el nombre ya es el título: dos renglones seguidos
+              con el mismo nombre (mes simulado). El correo, entero. */}
           <div className="min-w-0">
-            <h2 className="truncate text-base font-medium">{detalle.clienteNombre}</h2>
-            {detalle.clienteEmail && <p className="truncate text-sm text-muted-foreground">{detalle.clienteEmail}</p>}
+            {!enDialogo && <h2 className="break-words text-base font-medium">{detalle.clienteNombre}</h2>}
+            {detalle.clienteEmail && <p className="break-all text-sm text-muted-foreground">{detalle.clienteEmail}</p>}
           </div>
           {detalle.clienteEstado && <EtiquetaEstado estado={detalle.clienteEstado} />}
         </div>

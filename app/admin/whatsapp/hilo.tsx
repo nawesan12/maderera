@@ -228,7 +228,7 @@ export function Hilo({
       <Dialog open={verCliente} onOpenChange={setVerCliente}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="truncate">{detalle.clienteNombre ?? detalle.nombre}</DialogTitle>
+            <DialogTitle className="break-words pr-8">{detalle.clienteNombre ?? detalle.nombre}</DialogTitle>
           </DialogHeader>
           <PanelCliente detalle={detalle} enDialogo />
         </DialogContent>

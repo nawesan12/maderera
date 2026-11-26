@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"mjbj/internal/busqueda"
+	"mjbj/internal/cuit"
 	"net/http"
 	"strings"
 	"time"
@@ -120,6 +121,25 @@ func juntar(partes ...*string) string {
 	return strings.Join(out, " · ")
 }
 
+// distinta es la razón social solo si dice algo que el nombre no dice:
+// «Constructora del Sur SRL · Constructora del Sur SRL · …» repetía el
+// título como subtítulo (mes simulado).
+func distinta(razon *string, nombre string) *string {
+	if razon == nil || strings.EqualFold(strings.TrimSpace(*razon), strings.TrimSpace(nombre)) {
+		return nil
+	}
+	return razon
+}
+
+// conGuiones es el CUIT como se lee en el resto del panel: «30-71555444-1».
+func conGuiones(c *string) *string {
+	if c == nil {
+		return nil
+	}
+	f := cuit.FormatearLargo(*c)
+	return &f
+}
+
 // nombreComprobante es el de lib/fiscal/comprobantes.ts: «Factura A»,
 // «Nota de crédito B».
 func nombreComprobante(tipo string) string {
@@ -157,7 +177,7 @@ func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto stri
 				var id, nombre string
 				var razon, cuit, tel *string
 				err := r.Scan(&id, &nombre, &razon, &cuit, &tel)
-				return Resultado{id, "Cliente", nombre, juntar(razon, cuit, tel), "/admin/clientes/" + id}, err
+				return Resultado{id, "Cliente", nombre, juntar(distinta(razon, nombre), conGuiones(cuit), tel), "/admin/clientes/" + id}, err
 			})
 		}},
 		{"/admin/pedidos", func() ([]Resultado, error) {
@@ -229,7 +249,7 @@ func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto stri
 				var id, nombre string
 				var razon, cuit, rubro *string
 				err := r.Scan(&id, &nombre, &razon, &cuit, &rubro)
-				return Resultado{id, "Proveedor", nombre, juntar(razon, cuit, rubro), "/admin/proveedores/" + id}, err
+				return Resultado{id, "Proveedor", nombre, juntar(distinta(razon, nombre), conGuiones(cuit), rubro), "/admin/proveedores/" + id}, err
 			})
 		}},
 	}

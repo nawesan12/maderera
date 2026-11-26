@@ -52,10 +52,27 @@ func TestCierreCobrosDeFacturasSinCae(t *testing.T) {
 		'2026-10-03T15:00:00Z', $1, $2)`,
 		herrera, pedido)
 
+	// Ferreyra: la venta a cuenta con su Factura A esperando el CAE, cobrada
+	// desde la ficha de la factura, mientras tiene otro pedido abierto. Los
+	// destinos del recibo llevan los dos («i:» y «o:»), y sigue siendo el
+	// cobro de la factura (la vuelta en el navegador de H131).
+	ferreyra := e.id(t, `insert into customers (nombre) values ('Ferreyra') returning id`)
+	vendido := e.pedido(t, "PED-1181", e.central, "entregado", "mostrador", time.Date(2026, 10, 6, 12, 0, 0, 0, Argentina), &ferreyra)
+	e.exec(t, `update orders set total = 3150 where id = $1`, vendido)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'entregado', '2026-10-06T15:00:00Z')`, vendido)
+	factura := e.id(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado,
+		fecha_emision, created_at, customer_id, order_id) values ('factura_a', 15, 4, 'Ferreyra', 2603.31, 546.69, 0, 0, 0, 3150, 'emitida', '2026-10-06T15:00:00Z',
+		'2026-10-06T15:00:00Z', $1, $2) returning id`, ferreyra, vendido)
+	abierto := e.pedido(t, "PED-1182", e.central, "pendiente", "mostrador", time.Date(2026, 10, 5, 12, 0, 0, 0, Argentina), &ferreyra)
+	e.exec(t, `update orders set total = 800 where id = $1`, abierto)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'pendiente', '2026-10-05T15:00:00Z')`, abierto)
+	rec := e.recibir(t, &ferreyra, "REC-0005", "2026-10-07T15:00:00Z", [2]any{"efectivo", 3150.0})
+	e.exec(t, `insert into invoice_payments (invoice_id, medio, monto, receipt_id) values ($1, 'efectivo', 3150, $2)`, factura, rec)
+
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
 	p := pendientesDe(t, cuerpo)
 	cobro, ok := p["cobros-sin-cae"]
-	if !ok || cobro.Cantidad != 1 || !strings.Contains(cobro.Detalle, "1.210") || !strings.Contains(cobro.Donde, "/admin/facturacion") {
+	if !ok || cobro.Cantidad != 2 || !strings.Contains(cobro.Detalle, "4.360") || !strings.Contains(cobro.Donde, "/admin/facturacion") {
 		t.Fatalf("cobros de facturas sin CAE: %s", cuerpo)
 	}
 	if s, ok := p["senas-del-mes"]; !ok || s.Cantidad != 1 || s.Donde != "/admin/clientes/"+herrera {

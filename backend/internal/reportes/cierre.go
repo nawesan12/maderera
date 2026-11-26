@@ -652,21 +652,48 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 //     gasto en negro por transferencia): el extracto no va a conciliar.
 func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
 	out := []PendienteDelCierre{}
-	// La bolsa que solo espera facturas ya emitidas (destinos «i:») no es una
+	// La bolsa que espera facturas ya emitidas (destinos «i:») no es una
 	// seña: es la cobranza de una factura que espera el CAE, y queda en
 	// Anticipos hasta que ARCA la autorice. Con el aviso de la seña y su
 	// consejo de IVA, el contador leía anticipos donde hubo cobranza de deuda
 	// (simulación del mes, H131): van aparte, a Facturación.
+	//
+	// Los destinos son todo lo que el cliente tenía pendiente ese día, así
+	// que el cobro de una factura de un cliente con otro pedido abierto
+	// también lleva «o:». Es seña solo si el recibo es de un pedido que
+	// seguía abierto (su «o:» está entre los destinos) y no cobra una
+	// factura; el cobro desde la ficha de la factura o de la cuenta del
+	// cliente, sin pedido, es cobranza.
+	recibosDelPeriodo := []string{}
+	for _, b := range reparto.Bolsas {
+		if entre(b.Fecha, idesde, ihasta) {
+			recibosDelPeriodo = append(recibosDelPeriodo, b.Recibo)
+		}
+	}
+	pedidoDe, cobraFactura := map[string]string{}, map[string]bool{}
+	if len(recibosDelPeriodo) > 0 {
+		rs, err := s.pool.Query(ctx, `SELECT r.id::text, coalesce(r.order_id::text, ''),
+			EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.receipt_id = r.id)
+			FROM receipts r WHERE r.id = ANY($1::uuid[])`, recibosDelPeriodo)
+		if err != nil {
+			return nil, err
+		}
+		var id, pedido string
+		var cobra bool
+		if _, err := pgx.ForEachRow(rs, []any{&id, &pedido, &cobra}, func() error {
+			pedidoDe[id], cobraFactura[id] = pedido, cobra
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
 	soloFacturas := func(b cobros.Bolsa) bool {
-		if len(b.Destinos) == 0 {
-			return false
-		}
+		deFactura, delPedido := false, false
 		for _, d := range b.Destinos {
-			if !strings.HasPrefix(d, "i:") {
-				return false
-			}
+			deFactura = deFactura || strings.HasPrefix(d, "i:")
+			delPedido = delPedido || (pedidoDe[b.Recibo] != "" && d == "o:"+pedidoDe[b.Recibo])
 		}
-		return true
+		return deFactura && (cobraFactura[b.Recibo] || !delPedido)
 	}
 	var delMes, deFacturas float64
 	recibosDelMes, recibosDeFacturas := 0, 0

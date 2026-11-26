@@ -4,24 +4,67 @@ import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Loader2, Package, Send, ShoppingCart, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, Loader2, Mail, Package, PencilLine, ShoppingCart, X } from "lucide-react";
 import {
   cambiarEstadoPresupuesto,
   convertirEnPedido,
   type MedioDelPedido,
 } from "@/app/admin/ventas-actions";
-import { Confirmar } from "@/components/admin/confirmar";
 import { MEDIOS_DEL_PEDIDO, Opciones } from "@/components/admin/opciones";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { moneda } from "@/components/admin/formato";
+import { formatearMonto } from "@/components/admin/formato";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 
 export interface ZonaParaPedido {
   nombre: string;
   costo: number;
   aCotizar: boolean;
+}
+
+/** Por qué se perdió: los mismos de Go (pedidos.MotivosDeRechazo). */
+const MOTIVOS = ["Precio", "Se lo llevó otro", "No contestó", "Ya no lo necesita", "Otro"] as const;
+
+/**
+ * Cambia el estado y avisa qué pasó. El id del aviso es el del presupuesto:
+ * dos clics seguidos no apilan dos avisos iguales (mes simulado).
+ */
+function useCambiarEstado(id: string) {
+  const router = useRouter();
+  const [pendiente, startTransition] = useTransition();
+  function cambiar(estado: string, motivo?: string, despues?: () => void) {
+    startTransition(async () => {
+      const r = await cambiarEstadoPresupuesto(id, estado, motivo);
+      if (r.error) toast.error(r.error, { id: `presupuesto-${id}` });
+      else {
+        toast.success(r.ok ?? "Listo.", { id: `presupuesto-${id}` });
+        despues?.();
+        router.refresh();
+      }
+    });
+  }
+  return { cambiar, pendiente };
+}
+
+/**
+ * «Por correo»: pasa a enviado y Go le manda el aviso del presupuesto (el
+ * correo con el detalle y, si está prendido en /admin/avisos, el WhatsApp).
+ * Va con los otros canales en «Mandárselo», no entre las decisiones.
+ */
+export function EnviarAlCliente({ id }: { id: string }) {
+  const { cambiar, pendiente } = useCambiarEstado(id);
+  return (
+    <button
+      type="button"
+      onClick={() => cambiar("enviado")}
+      disabled={pendiente}
+      className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
+    >
+      {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mail className="h-5 w-5" />}
+      Por correo
+    </button>
+  );
 }
 
 export function AccionesPresupuesto({
@@ -35,6 +78,8 @@ export function AccionesPresupuesto({
   direccion,
   vencido = null,
   abrirPasar = false,
+  credito = null,
+  bajoCosto = 0,
 }: {
   /** Pasó su validez: al pasarlo a pedido se eligen los precios. */
   vencido?: { totalDeHoy: number } | null;
@@ -50,84 +95,43 @@ export function AccionesPresupuesto({
   /** Sin cliente cargado no puede ir a cuenta corriente. */
   conCliente: boolean;
   direccion?: string | null;
+  /**
+   * Lo que el cliente tiene disponible en la cuenta corriente, para decirlo
+   * al elegir «Cuenta corriente» y no después de crear (mes simulado). Go lo
+   * vuelve a mirar.
+   */
+  credito?: { disponible: number; bloqueada: boolean } | null;
+  /** Cuántos renglones quedan por debajo del costo. */
+  bajoCosto?: number;
 }) {
-  const router = useRouter();
-  const [pendiente, startTransition] = useTransition();
+  const { cambiar, pendiente } = useCambiarEstado(id);
   const [rechazando, setRechazando] = useState(false);
-
-  function accion(fn: () => Promise<{ ok?: string; error?: string }>, despues?: () => void) {
-    startTransition(async () => {
-      const resultado = await fn();
-      if (resultado.error) toast.error(resultado.error);
-      else {
-        toast.success(resultado.ok ?? "Listo.");
-        despues?.();
-        router.refresh();
-      }
-    });
-  }
+  const [motivo, setMotivo] = useState<(typeof MOTIVOS)[number] | null>(null);
 
   if (pedido) {
     return (
-      <Link
-        href={`/admin/pedidos/${pedido.id}`}
-        className="inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-      >
-        <Package className="h-5 w-5" aria-hidden="true" />
-        Pedido <span className="tabular">{pedido.numero}</span>
-      </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/admin/pedidos/${pedido.id}`}
+          className="boton-accion inline-flex h-11 items-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-base font-medium"
+        >
+          <Package className="h-5 w-5" aria-hidden="true" />
+          Pedido <span className="tabular">{pedido.numero}</span>
+        </Link>
+        <Duplicar id={id} />
+      </div>
     );
   }
 
   const decidible = ["pendiente", "revision", "enviado"].includes(estado);
-  // Armado y revisado, se le manda: pasa a «enviado» y Go le avisa al
-  // cliente por correo y por WhatsApp con el PDF (lo que esté prendido en
-  // /admin/avisos).
-  const enviable = ["pendiente", "revision"].includes(estado);
+  // Lo que todavía no vio el cliente se corrige en el lugar; lo demás se
+  // duplica (mes simulado: un renglón equivocado obligaba a rechazarlo).
+  const corregible = ["pendiente", "revision"].includes(estado);
+  const pasable = estado === "aceptado" || decidible || estado === "vencido";
 
   return (
-    <div className="flex flex-wrap items-center gap-2 [&>button]:whitespace-nowrap">
-      {enviable && (
-        <button
-          onClick={() => accion(() => cambiarEstadoPresupuesto(id, "enviado"))}
-          disabled={pendiente}
-          className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
-        >
-          <Send className="h-5 w-5" />
-          Enviar al cliente
-        </button>
-      )}
-      {decidible && (
-        <>
-          <button
-            onClick={() => setRechazando(true)}
-            disabled={pendiente}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-          >
-            <X className="h-5 w-5" />
-            Rechazar
-          </button>
-          <Confirmar
-            abierto={rechazando}
-            alCerrar={() => setRechazando(false)}
-            titulo={`Rechazar el presupuesto ${numero}`}
-            detalle="Pasa a cerrados. Si el cliente vuelve, se arma otro."
-            confirmar="Rechazar"
-            pendiente={pendiente}
-            alConfirmar={() => accion(() => cambiarEstadoPresupuesto(id, "rechazado"), () => setRechazando(false))}
-          />
-          <button
-            onClick={() => accion(() => cambiarEstadoPresupuesto(id, "aceptado"))}
-            disabled={pendiente}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
-            Aceptar
-          </button>
-        </>
-      )}
-
-      {(estado === "aceptado" || decidible || estado === "vencido") && (
+    <div className="flex flex-wrap items-center gap-2 [&>a]:whitespace-nowrap [&>button]:whitespace-nowrap">
+      {pasable && (
         <PasarAPedido
           id={id}
           numero={numero}
@@ -136,11 +140,98 @@ export function AccionesPresupuesto({
           zonas={zonas}
           conCliente={conCliente}
           direccion={direccion ?? ""}
-          destacado={estado === "aceptado"}
+          destacado
           abierto={abrirPasar}
+          credito={credito}
+          bajoCosto={bajoCosto}
         />
       )}
+      {decidible && estado !== "aceptado" && (
+        <button
+          onClick={() => cambiar("aceptado")}
+          disabled={pendiente}
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-hundida px-3.5 text-base font-medium transition-colors hover:bg-muted disabled:opacity-50"
+        >
+          {pendiente ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+          Aceptar
+        </button>
+      )}
+      {corregible ? (
+        <Link
+          href={`/admin/presupuestos/nuevo?editar=${id}`}
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-hundida px-3.5 text-base font-medium transition-colors hover:bg-muted"
+        >
+          <PencilLine className="h-5 w-5" aria-hidden="true" />
+          Corregir
+        </Link>
+      ) : (
+        <Duplicar id={id} />
+      )}
+      {decidible && (
+        <>
+          <button
+            onClick={() => setRechazando(true)}
+            disabled={pendiente}
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          >
+            <X className="h-5 w-5" />
+            Rechazar
+          </button>
+          {/* El motivo, de una lista: para ver después por qué se pierden
+              las ventas (mes simulado). */}
+          <Dialog
+            open={rechazando}
+            onOpenChange={(v) => {
+              setRechazando(v);
+              setMotivo(null);
+            }}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>¿Por qué se perdió {numero}?</DialogTitle>
+              </DialogHeader>
+              <Opciones
+                etiqueta="Por qué se perdió"
+                valor={motivo}
+                alCambiar={setMotivo}
+                opciones={MOTIVOS.map((m) => ({ valor: m, texto: m }))}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRechazando(false)}
+                  className="h-11 rounded-lg px-4 text-base font-medium hover:bg-hundida"
+                >
+                  Mejor no
+                </button>
+                <button
+                  type="button"
+                  disabled={!motivo || pendiente}
+                  onClick={() => motivo && cambiar("rechazado", motivo, () => setRechazando(false))}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
+                >
+                  {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Rechazar
+                </button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
+  );
+}
+
+/** Arranca uno nuevo con los mismos renglones (después de cancelar el pedido, o para corregir uno ya mandado). */
+function Duplicar({ id }: { id: string }) {
+  return (
+    <Link
+      href={`/admin/presupuestos/nuevo?desde=${id}`}
+      className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-hundida px-3.5 text-base font-medium transition-colors hover:bg-muted"
+    >
+      <Copy className="h-5 w-5" aria-hidden="true" />
+      Duplicar
+    </Link>
   );
 }
 
@@ -161,6 +252,8 @@ function PasarAPedido({
   destacado,
   vencido,
   abierto: abiertoDeEntrada = false,
+  credito,
+  bajoCosto,
 }: {
   abierto?: boolean;
   id: string;
@@ -171,6 +264,8 @@ function PasarAPedido({
   conCliente: boolean;
   direccion: string;
   destacado: boolean;
+  credito: { disponible: number; bloqueada: boolean } | null;
+  bajoCosto: number;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(abiertoDeEntrada);
@@ -179,6 +274,7 @@ function PasarAPedido({
   const [direccion, setDireccion] = useState(direccionDelCliente);
   const [zona, setZona] = useState("");
   const [costo, setCosto] = useState("");
+  const [sinCargo, setSinCargo] = useState(false);
   const [medio, setMedio] = useState<Medio | null>(null);
   const [entregarEl, setEntregarEl] = useState("");
   /*
@@ -198,20 +294,32 @@ function PasarAPedido({
   // «1.500» es mil quinientos y «1.500,50» lleva centavos: se sacan los
   // puntos de miles antes de leer la coma. Leído como venía, era $1,50.
   const costoLeido = Number(costo.trim().replace(/\./g, "").replace(",", "."));
-  const costoMal = tipo === "envio" && costo.trim() !== "" && !(Number.isFinite(costoLeido) && costoLeido >= 0);
-  const costoEnvio = tipo === "envio" && !costoMal ? costoLeido || 0 : 0;
+  const hayCosto = costo.trim() !== "";
+  const costoMal = tipo === "envio" && hayCosto && !(Number.isFinite(costoLeido) && costoLeido >= 0);
+  const costoEnvio = tipo === "envio" && hayCosto && !costoMal ? costoLeido : 0;
+  // Un envío sin flete no sale: se carga o se elige «Sin cargo» (mes
+  // simulado: se creaban pedidos con envío y $0 de flete sin aviso).
+  const faltaFlete = tipo === "envio" && !hayCosto && !sinCargo;
+  const totalPedido = totalBase + costoEnvio;
+  const aCuenta = medio === "cuenta_corriente";
+  const pasaElLimite = aCuenta && credito !== null && (credito.bloqueada || totalPedido > credito.disponible + 0.005);
 
   function elegirZona(nombre: string) {
     setZona(nombre);
     const z = zonas.find((x) => x.nombre === nombre);
-    if (z && !z.aCotizar) setCosto(String(z.costo));
+    if (z && !z.aCotizar && z.costo > 0) {
+      setCosto(String(z.costo).replace(".", ","));
+      setSinCargo(false);
+    }
   }
 
   function pasar(pin?: string) {
     startTransition(async () => {
       const r = await convertirEnPedido(id, {
         tipoEntrega: tipo,
-        ...(tipo === "envio" ? { direccion, zona: zona || undefined, costoEnvio } : {}),
+        ...(tipo === "envio"
+          ? { direccion, zona: zona || undefined, ...(hayCosto ? { costoEnvio } : {}), ...(sinCargo ? { sinCargo: true } : {}) }
+          : {}),
         medioPago: medio ?? undefined,
         entregarEl: entregarEl || undefined,
         ...(vencido ? { precios } : {}),
@@ -222,10 +330,10 @@ function PasarAPedido({
         return;
       }
       if (r.error) {
-        toast.error(r.error);
+        toast.error(r.error, { id: `pedido-${id}` });
         return;
       }
-      toast.success(r.ok ?? "Pedido creado.");
+      toast.success(r.ok ?? "Pedido creado.", { id: `pedido-${id}` });
       setAbierto(false);
       if (r.id) router.push(`/admin/pedidos/${r.id}`);
       else router.refresh();
@@ -237,30 +345,37 @@ function PasarAPedido({
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className={`inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-base font-medium transition-colors ${
-          destacado ? "boton-accion" : "border hover:bg-muted"
+        className={`inline-flex h-11 items-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-base font-medium transition-colors ${
+          destacado ? "boton-accion" : "bg-hundida hover:bg-muted"
         }`}
       >
         <ShoppingCart className="h-5 w-5" />
         Pasar a pedido
       </button>
       <Dialog open={abierto} onOpenChange={setAbierto}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Pasar {numero} a pedido</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-5">
+            {bajoCosto > 0 && (
+              <p className="estado-problema flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base font-medium text-[var(--estado-tinta)]">
+                <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
+                {bajoCosto === 1 ? "Un renglón va" : `${bajoCosto} renglones van`} por debajo del costo
+              </p>
+            )}
+
             {vencido && (
               <div className="space-y-2">
                 <p className="text-base font-medium">Venció: los precios</p>
                 <div role="radiogroup" aria-label="Los precios" className="grid gap-2 sm:grid-cols-2">
                   {[
-                    { valor: "actualizar" as const, texto: "Actualizar", cifra: moneda.format(vencido.totalDeHoy) },
+                    { valor: "actualizar" as const, texto: "Actualizar", cifra: formatearMonto(vencido.totalDeHoy) },
                     {
                       valor: "respetar" as const,
                       texto: "Respetar",
-                      cifra: `${total - vencido.totalDeHoy < 0 ? "−" : "+"}${moneda.format(Math.abs(total - vencido.totalDeHoy))}`,
+                      cifra: `${total - vencido.totalDeHoy < 0 ? "−" : "+"}${formatearMonto(Math.abs(total - vencido.totalDeHoy))}`,
                     },
                   ].map((o) => (
                     <button
@@ -285,8 +400,8 @@ function PasarAPedido({
                           entrega.current?.querySelector<HTMLElement>("button, [role=radio]")?.focus();
                         }
                       }}
-                      className={`flex h-14 items-center justify-between rounded-xl border px-4 text-base font-semibold transition-colors ${
-                        precios === o.valor ? "border-accion bg-accion text-white" : "border-linea hover:bg-hundida"
+                      className={`flex h-14 items-center justify-between rounded-xl px-4 text-base font-semibold transition-colors ${
+                        precios === o.valor ? "boton-accion" : "bg-hundida hover:bg-muted"
                       }`}
                     >
                       {o.texto}
@@ -322,33 +437,47 @@ function PasarAPedido({
                     autoFocus
                   />
                 </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
+                {/* La zona es una de las de envío (una escrita a mano, como
+                    «Centro», no la conoce el reparto); la de costo fijo
+                    propone el flete. */}
+                {zonas.length > 0 && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="pedido-zona">Zona</Label>
-                    <Input
-                      id="pedido-zona"
-                      list="pedido-zonas"
-                      value={zona}
-                      onChange={(e) => elegirZona(e.target.value)}
-                      maxLength={120}
+                    <p className="text-base font-medium">Zona</p>
+                    <Opciones
+                      etiqueta="Zona"
+                      valor={zona || null}
+                      alCambiar={elegirZona}
+                      opciones={zonas.map((z) => ({ valor: z.nombre, texto: z.nombre }))}
                     />
-                    <datalist id="pedido-zonas">
-                      {zonas.map((z) => (
-                        <option key={z.nombre} value={z.nombre} />
-                      ))}
-                    </datalist>
                   </div>
-                  <div className="space-y-1.5">
+                )}
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="w-40 space-y-1.5">
                     <Label htmlFor="pedido-costo">Flete</Label>
                     <Input
                       id="pedido-costo"
                       inputMode="decimal"
                       value={costo}
+                      disabled={sinCargo}
                       onChange={(e) => setCosto(e.target.value)}
-                      aria-invalid={costoMal}
+                      aria-invalid={costoMal || faltaFlete || undefined}
                       className="tabular"
                     />
                   </div>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={sinCargo}
+                    onClick={() => {
+                      setSinCargo((v) => !v);
+                      setCosto("");
+                    }}
+                    className={`h-10 rounded-lg px-3.5 text-base font-medium transition-colors ${
+                      sinCargo ? "boton-accion" : "bg-hundida hover:bg-muted"
+                    }`}
+                  >
+                    Sin cargo
+                  </button>
                 </div>
               </div>
             )}
@@ -369,11 +498,21 @@ function PasarAPedido({
             <div className="space-y-2">
               <p className="text-base font-medium">Cómo paga</p>
               <Opciones etiqueta="Cómo paga" valor={medio} alCambiar={setMedio} opciones={medios} />
+              {aCuenta && credito && (
+                <p
+                  className={`text-base ${pasaElLimite ? "estado-problema font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
+                >
+                  {credito.bloqueada
+                    ? "La cuenta corriente está bloqueada"
+                    : `Disponible ${formatearMonto(Math.max(credito.disponible, 0))}`}
+                  {!credito.bloqueada && pasaElLimite && ` · faltan ${formatearMonto(totalPedido - Math.max(credito.disponible, 0))}`}
+                </p>
+              )}
             </div>
 
-            <div className="flex items-baseline justify-between border-t pt-4">
+            <div className="flex items-baseline justify-between border-t border-linea pt-4">
               <span className="text-base text-muted-foreground">Total del pedido</span>
-              <span className="tabular text-xl font-semibold">{moneda.format(totalBase + costoEnvio)}</span>
+              <span className="tabular text-xl font-semibold">{formatearMonto(totalPedido)}</span>
             </div>
 
             {pidePin && (
@@ -395,7 +534,9 @@ function PasarAPedido({
               </button>
               <button
                 type="button"
-                disabled={pendiente || costoMal || (tipo === "envio" && !direccion.trim())}
+                disabled={
+                  pendiente || costoMal || faltaFlete || pasaElLimite || (tipo === "envio" && !direccion.trim())
+                }
                 onClick={() => pasar()}
                 className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
               >

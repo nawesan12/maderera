@@ -76,8 +76,8 @@ export function Entregas({
         <h2 className="text-base font-medium">Entregas y acopio</h2>
         {hayAcopio ? (
           <p className="text-base text-muted-foreground">
-            Quedan {conSaldo.length} de {pendientes.length} renglones por
-            retirar
+            {conSaldo.length === 1 ? "Queda" : "Quedan"} {conSaldo.length} de {pendientes.length}{" "}
+            {pendientes.length === 1 ? "renglón" : "renglones"} por retirar
           </p>
         ) : (
           <p className="text-base text-muted-foreground">

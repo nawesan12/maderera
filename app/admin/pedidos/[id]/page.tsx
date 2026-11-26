@@ -1,3 +1,4 @@
+import { cantidadConUnidad } from "@/lib/unidades";
 import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
@@ -229,7 +230,7 @@ export default async function FichaPedidoPage({
                 <tr key={item.id} className="border-b last:border-0">
                   <td className="px-5 py-3.5 text-base">{item.descripcion}</td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
-                    {Number(item.cantidad)} {item.unidad.replace("_", " ")}
+                    {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
                   </td>
                   <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
                     {moneda.format(Number(item.precioUnitario))}

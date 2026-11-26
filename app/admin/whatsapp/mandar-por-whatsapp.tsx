@@ -63,7 +63,9 @@ export function MandarPorWhatsapp({
         name="telefono"
         inputMode="tel"
         placeholder="El de la ficha, u otro"
-        className={`${alto} w-48 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-base`}
+        // Su renglón entero en el teléfono: al lado de «Mandar» y la cruz el
+        // texto de ayuda quedaba «El de la ficha, u…» (mes simulado).
+        className={`${alto} min-w-0 basis-full rounded-lg border bg-background px-2.5 text-base sm:basis-56 sm:flex-1`}
       />
       <button
         type="submit"

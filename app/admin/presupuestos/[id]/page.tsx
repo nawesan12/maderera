@@ -195,7 +195,9 @@ export default async function FichaPresupuestoPage({
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Correo</dt>
-                <dd className="truncate">{p.email ?? "—"}</dd>
+                {/* Entero, partido donde haga falta: cortado en la columna
+                    angosta no había forma de leerlo (mes simulado). */}
+                <dd className="min-w-0 break-all text-right">{p.email ?? "—"}</dd>
               </div>
               {p.asesor && (
                 <div className="flex justify-between gap-3">

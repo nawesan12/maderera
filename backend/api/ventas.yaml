@@ -467,8 +467,9 @@ components:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
         total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt, entregarEl, porEntregar, cortesSinTerminar,
-        comprobante, facturado]
+        comprobante, facturado, acopio]
       properties:
+        acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
         entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }
         porEntregar:
           type: array
@@ -603,8 +604,9 @@ components:
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
         notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar,
-        cobrado, aCobrar, recibos, comprobante]
+        cobrado, aCobrar, recibos, comprobante, acopio]
       properties:
+        acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
         cobrado: { type: number, format: double, description: Lo cobrado con recibos y en línea }
         aCobrar: { type: number, format: double, description: El total menos lo devuelto contra la deuda }
         recibos: { type: array, items: { $ref: "#/components/schemas/ReciboDelPedido" } }

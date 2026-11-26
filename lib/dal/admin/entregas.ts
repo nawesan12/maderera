@@ -28,6 +28,18 @@ export async function remitosDelPedido(orderId: string): Promise<RemitoListado[]
   }));
 }
 
+export type OtroAcopio = Esquemas["OtroAcopio"];
+
+/**
+ * Lo que el mismo cliente tiene en acopio en otros pedidos de retiro: la
+ * visita del albañil se lleva de todos con un solo remito y una firma.
+ */
+export async function otrosAcopios(orderId: string): Promise<OtroAcopio[]> {
+  return datos(
+    await (await api()).GET("/api/v1/admin/pedidos/{id}/otros-acopios", { params: { path: { id: orderId } } }),
+  );
+}
+
 type Crudo = Esquemas["RemitoCompleto"];
 type FacturaCruda = NonNullable<Crudo["factura"]>;
 

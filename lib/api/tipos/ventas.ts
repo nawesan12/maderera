@@ -377,6 +377,8 @@ export interface components {
             numeroPedido: string | null;
         };
         PedidoListado: {
+            /** @description Se retira de a partes (ya salió algo */
+            acopio: boolean;
             /** @description AAAA-MM-DD */
             entregarEl: string | null;
             /** @description Lo que falta de un pedido que ya salió en parte; vacío si no salió nada */
@@ -509,6 +511,8 @@ export interface components {
             }[];
         };
         FichaDePedido: {
+            /** @description Se retira de a partes (ya salió algo */
+            acopio: boolean;
             /**
              * Format: double
              * @description Lo cobrado con recibos y en línea

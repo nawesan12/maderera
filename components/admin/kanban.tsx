@@ -78,10 +78,13 @@ export function ColumnaTablero({
           : "@5xl:min-w-[132px] @5xl:flex-[1_1_0%]"
       }`}
     >
-      <header className="sticky top-0 z-[2] px-3.5 pb-2 pt-3">
+      {/* Vacía y en el teléfono, un renglón: «0 Sin preparar» y «0
+          Preparando» se llevaban media pantalla y el primer pedido para
+          atender quedaba abajo (mes simulado). */}
+      <header className={`sticky top-0 z-[2] px-3.5 pb-2 pt-3 ${cantidad > 0 ? "" : "@max-xl:py-2"}`}>
         <span
           className={`${claseDeFamilia(estado)} mb-2.5 block h-[3px] w-[34px] rounded-full ${
-            cantidad > 0 ? "bg-[var(--estado-acento)]" : "bg-linea"
+            cantidad > 0 ? "bg-[var(--estado-acento)]" : "bg-linea @max-xl:hidden"
           }`}
           aria-hidden="true"
         />
@@ -90,7 +93,7 @@ export function ColumnaTablero({
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span
             className={`tabular text-[28px] font-bold leading-none tracking-[-0.03em] ${
-              cantidad > 0 ? "text-foreground" : "text-texto-3"
+              cantidad > 0 ? "text-foreground" : "text-texto-3 @max-xl:text-lg"
             }`}
           >
             {cantidad}

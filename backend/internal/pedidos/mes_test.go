@@ -104,4 +104,8 @@ func TestFichaYTableroDicenLoCobradoYLoQueFalta(t *testing.T) {
 	if p == nil || len(p.PorEntregar) != 2 || p.PorEntregar[0].Pendiente != 1 || len(p.CortesSinTerminar) != 1 || p.CortesSinTerminar[0] != "CRT-3" {
 		t.Fatalf("listado: %+v", p)
 	}
+	// Ya salió algo y queda algo: es un acopio, y lo que sigue es un remito.
+	if !p.Acopio || !f.Acopio {
+		t.Errorf("acopio: listado %v, ficha %v", p.Acopio, f.Acopio)
+	}
 }

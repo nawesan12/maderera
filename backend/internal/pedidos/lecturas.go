@@ -404,7 +404,18 @@ type PedidoListado struct {
 	Comprobante *string `json:"comprobante"`
 	// Facturado: tiene una factura viva.
 	Facturado bool `json:"facturado"`
+	// Acopio: se retira de a partes (sqlAcopio).
+	Acopio bool `json:"acopio"`
 }
+
+// sqlAcopio: el pedido `o` es un acopio en curso, de los que se retiran de
+// a partes: ya salió algo con un remito, o es la venta del mostrador «en
+// acopio» (que reservó en vez de descontar el stock). En cada visita lo que
+// se hace es un remito con lo que se lleva, no «Marcar entregado», que se
+// lleva todo lo que queda (mes simulado).
+const sqlAcopio = `(o.estado NOT IN ('entregado', 'cancelado') AND o.tipo_entrega = 'retiro' AND (
+	EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
+	OR (o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM inventory_movements m WHERE m.note = 'Mostrador ' || o.numero AND m.type = 'venta'))))`
 
 // PorEntregar es un renglón que falta entregar.
 type PorEntregar struct {
@@ -510,7 +521,8 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		       CASE WHEN o.estado NOT IN ('entregado', 'cancelado') THEN (SELECT coalesce(array_agg(co.numero ORDER BY co.numero), '{}')
 		            FROM cutting_orders co WHERE co.order_id = o.id AND co.estado IN ('en-cola', 'en-proceso')) ELSE '{}' END,
 		       o.comprobante,
-		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%')
+		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'),
+		       `+sqlAcopio+`
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -529,11 +541,11 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		var salioAlgo bool
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.Sucursal, &p.SucursalSlug, &p.Estado, &p.TipoEntrega,
 			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio, &p.SinCobrar,
-			&p.PagoEnRevision, &p.EntregadoAt, &p.EntregarEl, &salioAlgo, &p.CortesSinTerminar, &p.Comprobante, &p.Facturado); err != nil {
+			&p.PagoEnRevision, &p.EntregadoAt, &p.EntregarEl, &salioAlgo, &p.CortesSinTerminar, &p.Comprobante, &p.Facturado, &p.Acopio); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)
-		if salioAlgo {
+		if salioAlgo || p.Acopio {
 			enParte[p.ID] = true
 		}
 		out = append(out, p)
@@ -637,6 +649,8 @@ type FichaDePedido struct {
 	Recibos []ReciboDelPedido `json:"recibos"`
 	// Comprobante: con qué salió la venta del mostrador (ver PedidoListado).
 	Comprobante *string `json:"comprobante"`
+	// Acopio: se retira de a partes (ver PedidoListado).
+	Acopio bool `json:"acopio"`
 }
 
 // ReciboDelPedido es un recibo que cobró el pedido.
@@ -662,7 +676,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		       CASE WHEN o.customer_id IS NULL THEN NULL
 		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END,
 		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8,
-		       `+fragmentos.CobradoDelPedido+`::float8, `+fragmentos.ACobrarDelPedido+`::float8, o.comprobante
+		       `+fragmentos.CobradoDelPedido+`::float8, `+fragmentos.ACobrarDelPedido+`::float8, o.comprobante, `+sqlAcopio+`
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -671,7 +685,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
 		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar,
-		&p.Cobrado, &p.ACobrar, &p.Comprobante)
+		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

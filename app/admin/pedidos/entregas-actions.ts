@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
+import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 
 export interface EstadoEntrega {
   error?: string;
@@ -9,6 +10,10 @@ export interface EstadoEntrega {
   /** Link de firma del remito recién creado, para mostrarlo o mandarlo. */
   linkFirma?: string;
   numero?: string;
+  /** Anular un remito firmado: falta el PIN de un admin. */
+  autorizacion?: Autorizacion;
+  /** En qué campo está el error (el motivo de la anulación). */
+  campo?: string;
 }
 
 /**
@@ -28,9 +33,16 @@ export async function prepararRemito(
 
   // Las cantidades llegan como `cantidad-<orderItemId>`, una por renglón.
   const cantidades: { orderItemId: string; valor: string }[] = [];
+  // Lo de otros acopios del mismo cliente que sale en la misma visita:
+  // `otro-<orderId>-<orderItemId>`.
+  const otros = new Map<string, { orderItemId: string; valor: string }[]>();
   for (const [clave, valor] of formData.entries()) {
     if (clave.startsWith("cantidad-")) {
       cantidades.push({ orderItemId: clave.slice("cantidad-".length), valor: String(valor) });
+    }
+    const otro = /^otro-([0-9a-f-]{36})-([0-9a-f-]{36})$/.exec(clave);
+    if (otro && String(valor).trim() !== "" && String(valor).trim() !== "0") {
+      otros.set(otro[1], [...(otros.get(otro[1]) ?? []), { orderItemId: otro[2], valor: String(valor) }]);
     }
   }
 
@@ -44,6 +56,7 @@ export async function prepararRemito(
       numeroSeguimiento: (formData.get("numeroSeguimiento") as string) || undefined,
       notas: (formData.get("notas") as string) || undefined,
       cantidades,
+      ...(otros.size > 0 ? { otros: [...otros].map(([id, c]) => ({ orderId: id, cantidades: c })) } : {}),
     },
   });
 
@@ -56,7 +69,9 @@ export async function prepararRemito(
 
   const entrega = r.data;
   revalidatePath(`/admin/pedidos/${orderId}`);
+  for (const id of otros.keys()) revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/pedidos");
+  revalidatePath("/admin/reparto");
   revalidatePath("/admin/stock");
 
   return { ok: entrega.ok, numero: entrega.numero, linkFirma: `/firmar/${entrega.firmaToken}` };
@@ -72,10 +87,33 @@ export async function anularRemito(
 
   if (!deliveryId) return { error: "Falta el remito." };
 
-  const r = await (await api()).POST("/api/v1/admin/remitos/{id}/anular", { params: { path: { id: deliveryId } } });
-  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  // Un remito firmado pide por qué y el PIN de un admin (Go, entregas).
+  const motivo = String(formData.get("motivo") ?? "").trim();
+  const pin = String(formData.get("pin") ?? "").trim();
+  const r = await (await api()).POST("/api/v1/admin/remitos/{id}/anular", {
+    params: { path: { id: deliveryId } },
+    body: { ...(motivo ? { motivo } : {}), ...(pin ? { pin } : {}) },
+  });
+  if (!r.data) {
+    const e = (r.error as Problema | undefined)?.errores;
+    if (e?.pin) {
+      return {
+        error: e.pin,
+        autorizacion: {
+          motivo: "remito",
+          monto: 0,
+          pinIncorrecto: e.pinIncorrecto === "si",
+          bloqueadoHasta: e.pinHasta,
+        },
+      };
+    }
+    if (e?.motivo) return { error: e.motivo, campo: "motivo" };
+    return { error: mensajeDe(r.error as Problema | undefined) };
+  }
 
   revalidatePath(`/admin/pedidos/${orderId}`);
+  revalidatePath("/admin/pedidos");
+  revalidatePath("/admin/reparto");
   revalidatePath("/admin/stock");
 
   return { ok: r.data.ok };

@@ -111,6 +111,8 @@ export function usePlano(pedido: PedidoDePlano): {
    */
   placasACobrar: number;
   pasadasACobrar: number;
+  /** Las placas que no pasan la mitad: no se venden, se cobra su corte. */
+  placasParciales: number;
   calculando: boolean;
   error: string | null;
 } {
@@ -122,10 +124,11 @@ export function usePlano(pedido: PedidoDePlano): {
     cuenta?: PresupuestoDeCorte;
     placasACobrar?: number;
     pasadasACobrar?: number;
+    placasParciales?: number;
   }>("/api/v1/cortes/plano", conPiezas ? pedido : null);
   const vacio = planoVacio(pedido.placaLargo, pedido.placaAncho, pedido.anchoSierra ?? 5);
   if (!conPiezas) {
-    return { plano: vacio, cuenta: null, placasACobrar: 0, pasadasACobrar: 0, calculando: false, error: null };
+    return { plano: vacio, cuenta: null, placasACobrar: 0, pasadasACobrar: 0, placasParciales: 0, calculando: false, error: null };
   }
   const plano = datos?.plano ?? vacio;
   return {
@@ -133,6 +136,7 @@ export function usePlano(pedido: PedidoDePlano): {
     cuenta: datos?.cuenta ?? null,
     placasACobrar: datos?.placasACobrar ?? plano.placasEnteras,
     pasadasACobrar: datos?.pasadasACobrar ?? plano.pasadasCobrables,
+    placasParciales: datos?.placasParciales ?? Math.max(0, plano.placas.length - plano.placasEnteras),
     calculando,
     error,
   };

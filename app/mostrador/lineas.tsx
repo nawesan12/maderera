@@ -127,7 +127,10 @@ export function Lineas({
                   {delCorte
                     ? esLineaDelCorte(l)
                       ? "del plano"
-                      : `${formatearCantidad(l.cantidad)} ${formatearUnidad(l.unidad)} · del plano`
+                      : // La media placa dice media placa, no «1 placa» (H035).
+                        `${formatearCantidad(l.cantidad)} ${
+                          l.presentacion ? (l.cantidad === 1 ? "media placa" : "medias placas") : formatearUnidad(l.unidad)
+                        } · del plano`
                     : l.presentacion
                       ? "cada media placa"
                       : `por ${formatearUnidad(l.unidad)}`}

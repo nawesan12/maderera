@@ -1529,6 +1529,8 @@ export interface operations {
                         placasACobrar: number;
                         /** @description Las pasadas del plano que se cobra */
                         pasadasACobrar: number;
+                        /** @description Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte */
+                        placasParciales?: number;
                         cuenta?: components["schemas"]["Presupuesto"];
                         hoja?: components["schemas"]["HojaDeCorte"];
                         superficies?: number[];

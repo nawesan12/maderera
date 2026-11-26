@@ -458,11 +458,11 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	// Lo que se cobra puede no ser lo que se dibuja: con piezas acomodadas a
 	// mano se cobra el plano libre, salvo que el manual gaste más placas
 	// (ACobrar). La pantalla lo dice antes de cobrar.
-	cobro := Cobro{Placas: plano.PlacasEnteras, Pasadas: plano.PasadasCobrables}
+	cobro := Cobro{Placas: plano.PlacasEnteras, Pasadas: plano.PasadasCobrables, Parciales: len(plano.Placas) - plano.PlacasEnteras}
 	if len(d.Fijadas) > 0 {
 		cobro = ACobrar(d)
 	}
-	out := map[string]any{"plano": plano, "placasACobrar": cobro.Placas, "pasadasACobrar": cobro.Pasadas}
+	out := map[string]any{"plano": plano, "placasACobrar": cobro.Placas, "pasadasACobrar": cobro.Pasadas, "placasParciales": cobro.Parciales}
 	// La hoja de la máquina, para el PDF que baja el mostrador antes de cobrar
 	// (18/11/2026). Solo el staff: al público no le sirve y cuesta armarla. Un
 	// plano que no se puede cortar en guillotina sale sin hoja, como en la

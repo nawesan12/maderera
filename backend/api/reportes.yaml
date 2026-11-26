@@ -595,22 +595,27 @@ components:
             aCubrir: { $ref: "#/components/schemas/Monto" }
         plataHoy:
           type: object
-          required: [cajas, efectivo, banco, mercadoPago, tarjetas, cheques, total]
+          required: [cajas, efectivo, cajaFuerte, banco, bancoEntro, bancoSalio, mercadoPago, tarjetas, cheques, chequesDepositados, total]
           properties:
             cajas:
               type: array
               items:
                 type: object
-                required: [branchId, sucursal, esperado]
+                required: [branchId, sucursal, esperado, cerrada]
                 properties:
                   branchId: { type: string }
                   sucursal: { type: string }
-                  esperado: { type: number, format: double }
+                  esperado: { type: number, format: double, description: Lo que tendría que haber, o lo contado si la caja de hoy ya se cerró }
+                  cerrada: { type: boolean }
             efectivo: { type: number, format: double }
-            banco: { type: number, format: double }
+            cajaFuerte: { type: number, format: double, description: Lo retirado hoy de las cajas que no fue al banco }
+            banco: { type: number, format: double, description: Lo que se movió hoy en el banco, entradas menos salidas }
+            bancoEntro: { type: number, format: double }
+            bancoSalio: { type: number, format: double }
             mercadoPago: { type: number, format: double }
-            tarjetas: { type: number, format: double }
+            tarjetas: { type: number, format: double, description: A acreditar; no suma al total }
             cheques: { $ref: "#/components/schemas/Monto" }
+            chequesDepositados: { $ref: "#/components/schemas/Monto" }
             total: { type: number, format: double }
         ganancia: { $ref: "#/components/schemas/ResultadoComparado" }
     Cobranzas:

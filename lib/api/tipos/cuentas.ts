@@ -819,6 +819,8 @@ export interface components {
                     ok: string;
                     aviso?: string;
                     receiptId?: string;
+                    /** @description la ficha guardada (el alta abre la ficha nueva) */
+                    id?: string;
                 };
             };
         };
@@ -1077,6 +1079,8 @@ export interface operations {
                     concepto?: string;
                     /** @description el JSON de las partes, como lo arma el formulario */
                     partes: string;
+                    /** @description la sucursal donde entra el efectivo (sin caja abierta se pide abrirla) */
+                    branchId?: string;
                     /** @description la del intento, generada al abrir el cobro: un reintento devuelve el mismo recibo */
                     clave?: string;
                 };

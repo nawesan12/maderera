@@ -40,6 +40,9 @@ func TestSenaDeUnPedidoDeContado(t *testing.T) {
 		_ = b.pool.QueryRow(ctx, `select estado_pago::text from orders where id = $1`, pedido).Scan(&e)
 		return e
 	}
+	// El efectivo entra a la caja de la sucursal del pedido: sin caja abierta
+	// no se cobra en efectivo.
+	_, _ = b.pool.Exec(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, 'admin', now())`, b.sucursal)
 	s := Nuevo(b.pool, silencio)
 
 	sena, err := s.CobrarACliente(ctx, ses, b.cliente, pedido, "", `[{"medio":"efectivo","importe":"30000"}]`, "")

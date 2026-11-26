@@ -185,6 +185,7 @@ paths:
                 orderId: { type: string }
                 concepto: { type: string }
                 partes: { type: string, description: "el JSON de las partes, como lo arma el formulario" }
+                branchId: { type: string, description: la sucursal donde entra el efectivo (sin caja abierta se pide abrirla) }
                 clave: { type: string, maxLength: 64, description: "la del intento, generada al abrir el cobro: un reintento devuelve el mismo recibo" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
@@ -542,6 +543,7 @@ components:
               ok: { type: string }
               aviso: { type: string }
               receiptId: { type: string }
+              id: { type: string, description: la ficha guardada (el alta abre la ficha nueva) }
   schemas:
     Problema:
       type: object

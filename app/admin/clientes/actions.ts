@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 /*
@@ -42,6 +43,10 @@ export async function guardarCliente(_previo: EstadoCliente, formData: FormData)
     },
   });
   if (r.data) revalidatePath("/admin/clientes", "layout");
+  // El alta abre la ficha nueva: el plazo, el presupuesto o la venta siguen
+  // desde ahí, y quedarse en la lista obligaba a buscarlo otra vez.
+  const nuevo = r.data && !campo(formData, "id") ? (r.data as { id?: string }).id : undefined;
+  if (nuevo) redirect(`/admin/clientes/${nuevo}`);
   return resultado(r, "Revisá los datos.");
 }
 

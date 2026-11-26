@@ -80,6 +80,17 @@ type ResultadoDeCobro struct {
 // `clave` la genera la pantalla al abrir el diálogo: un reintento devuelve
 // el mismo recibo (EmitirRecibo) y no vuelve a avisar ni a marcar el pedido.
 func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave string) (ResultadoDeCobro, error) {
+	return s.CobrarAClienteEn(ctx, ses, cliente, pedido, concepto, partesCrudas, clave, "")
+}
+
+// CobrarAClienteEn es CobrarACliente diciendo en qué sucursal entra el
+// efectivo (vacía: la del pedido, o la única caja abierta).
+//
+// Sin caja abierta, el efectivo no se cobra (mes simulado, H132): antes el
+// recibo salía igual y recién después avisaba que el efectivo «no entró al
+// arqueo», así que la plata quedaba en el recibo y en ningún cajón. Ahora
+// pide abrir la caja antes, como el cobro desde el pedido.
+func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave, sucursal string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(cliente) || (pedido != "" && !plataforma.UUIDValido(pedido)) || plataforma.LargoJS(strings.TrimSpace(concepto)) > 200 {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"customerId": "Falta el cliente."})
 	}
@@ -106,6 +117,30 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			p = &fila
 		}
 		c := Cobro{CustomerID: &cliente, Origen: "panel", Partes: partes, Caja: &Caja{Buscar: true}, UsuarioID: &ses.UserID, Clave: clave}
+		if hayEfectivo(partes) {
+			var donde *string
+			if p != nil && p.BranchID != nil {
+				donde = p.BranchID
+			} else if plataforma.UUIDValido(sucursal) {
+				donde = &sucursal
+			}
+			yaEsta := false
+			if clave != "" {
+				if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM receipts WHERE clave = $1)`, clave).Scan(&yaEsta); err != nil {
+					return err
+				}
+			}
+			if !yaEsta {
+				turno, err := turnoDelPedido(ctx, q, donde)
+				if err != nil {
+					return err
+				}
+				if turno == "" {
+					return sinCaja(ctx, tx, donde)
+				}
+				c.Caja = &Caja{TurnoID: turno}
+			}
+		}
 		texto := "Pago a cuenta"
 		if t := strings.TrimSpace(concepto); t != "" {
 			texto = t

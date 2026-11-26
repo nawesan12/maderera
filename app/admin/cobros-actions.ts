@@ -41,6 +41,17 @@ function leerSucursales(texto: string | undefined): SucursalParaCobrar[] | undef
   }
 }
 
+/** Lo que contesta un cobro que Go frenó: el motivo y, sin caja, cuál abrir. */
+function sinCobrar(p: Problema | undefined): EstadoCobro {
+  const fondo = Number(p?.errores?.fondoBase);
+  return {
+    error: mensajeDe(p),
+    sinCaja: p?.errores?.sinCaja,
+    fondoBase: Number.isFinite(fondo) ? fondo : undefined,
+    sucursales: leerSucursales(p?.errores?.sucursales),
+  };
+}
+
 const campo = (formData: FormData, nombre: string) => (formData.get(nombre) as string | null) || undefined;
 
 /**
@@ -58,9 +69,12 @@ export async function registrarCobroDeCliente(_previo: EstadoCobro, formData: Fo
       orderId: campo(formData, "orderId"),
       concepto: campo(formData, "concepto"),
       clave: campo(formData, "clave"),
+      branchId: campo(formData, "branchId"),
     },
   });
-  if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
+  // Sin caja abierta, el efectivo no se cobra: Go dice qué caja abrir y el
+  // diálogo la abre ahí mismo, como en el cobro del pedido.
+  if (!r.data) return sinCobrar(r.error as Problema | undefined);
   revalidatePath("/admin/clientes");
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin/cheques");
@@ -83,16 +97,7 @@ export async function cobrarPedido(_previo: EstadoCobro, formData: FormData): Pr
       branchId: campo(formData, "branchId"),
     },
   });
-  if (!r.data) {
-    const p = r.error as Problema | undefined;
-    const fondo = Number(p?.errores?.fondoBase);
-    return {
-      error: mensajeDe(p),
-      sinCaja: p?.errores?.sinCaja,
-      fondoBase: Number.isFinite(fondo) ? fondo : undefined,
-      sucursales: leerSucursales(p?.errores?.sucursales),
-    };
-  }
+  if (!r.data) return sinCobrar(r.error as Problema | undefined);
   revalidatePath("/admin");
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin/reparto");

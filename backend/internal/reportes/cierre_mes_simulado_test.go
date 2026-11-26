@@ -311,4 +311,9 @@ func TestCierreRecibosConParteEnB(t *testing.T) {
 	if f, ok := p["recibos-partidos"]; !ok || f.Cantidad != 1 || !strings.Contains(f.Detalle, "13.000") || f.Donde != "/admin/clientes/"+cons {
 		t.Fatalf("recibo partido: %s", cuerpo)
 	}
+	// La transferencia de Paz quedó en el B: «Resolver» lleva a las
+	// cobranzas del mes (H378).
+	if b, ok := p["banco-b"]; !ok || b.Donde != "/admin/pagos" {
+		t.Fatalf("banco en el B: %s", cuerpo)
+	}
 }

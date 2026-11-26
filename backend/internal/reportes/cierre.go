@@ -835,6 +835,11 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		if cuantos == 0 {
 			donde = "/admin/compras/pagos"
 		}
+		// Cobranzas abre en el mes en curso: el cierre del mes pasado lleva
+		// al mes pasado, no a uno sin esos recibos.
+		if cuantos > 0 && idesde.Equal(InicioDeMes(s.ahora(), 1)) {
+			donde += "?periodo=mes-pasado"
+		}
 		out = append(out, PendienteDelCierre{"banco-b", "Movimientos bancarios en el circuito B",
 			formato.Moneda(total) + " por banco o Mercado Pago van al archivo B: el extracto no va a conciliar.", cuantos + nPagos, donde})
 	}

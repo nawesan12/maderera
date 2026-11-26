@@ -17,3 +17,12 @@ func TestCobroCuentaLasParciales(t *testing.T) {
 		t.Errorf("corte grande: %+v", grande)
 	}
 }
+
+// Con la regla corte_chico_material en «cobrar» (H019), la placa parcial se
+// cobra como material y sus pasadas no.
+func TestCobroConMaterial(t *testing.T) {
+	c := Cobro{Placas: 1, Pasadas: 5, Parciales: 2}.ConMaterial()
+	if c.Placas != 3 || c.Pasadas != 0 || c.Parciales != 0 {
+		t.Errorf("con material: %+v", c)
+	}
+}

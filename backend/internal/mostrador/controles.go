@@ -306,6 +306,9 @@ func (s *Servicio) planoDelCorte(ctx context.Context, k CorteDeMostrador) (corte
 		d.Fijadas = cortes.LeerAcomodoManual(*k.AcomodoManual)
 	}
 	cobro := cortes.ACobrar(d)
+	if cortes.MaterialSeCobra(ctx, s.pool) {
+		cobro = cobro.ConMaterial()
+	}
 	if n := pasadasConfirmadas(ctx, s.pool, k); n > 0 && cobro.Pasadas > 0 {
 		cobro.Pasadas = n
 	}

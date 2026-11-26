@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/reglas"
 	"mjbj/internal/ventas"
 )
 
@@ -109,7 +110,7 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	// sin cargo y lo que sobra es del cliente. Contado sobre el plano, las
 	// cifras decían «1 se vende entera · 3 pasadas a cobrar» con las dos
 	// placas selladas «Se vende entera» (mes simulado, H052 y H184).
-	delCliente := RetalesDelCliente(c, plano, pedido, modo)
+	delCliente := RetalesDelCliente(c, plano, pedido, modo) || (modo == "suelto" && MaterialSeCobra(ctx, s.pool))
 	if delCliente {
 		plano = TodasDelCliente(plano)
 	}
@@ -143,6 +144,9 @@ func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plan
 		return false, err
 	}
 	modo := ModoDelCorte(c, delCorte)
+	if modo == "suelto" {
+		return MaterialSeCobra(ctx, s.pool), nil
+	}
 	if modo != "pedido" {
 		return false, nil
 	}
@@ -150,6 +154,15 @@ func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plan
 		return false, err
 	}
 	return RetalesDelCliente(c, plano, pedido, modo), nil
+}
+
+// MaterialSeCobra es la regla corte_chico_material (/admin/reglas, H019):
+// con «cobrar», la placa del corte que no pasa la mitad también se vende, y
+// el trabajo se cuenta como el de un pedido que vende todas sus placas
+// (TodasDelCliente). Con «sin_cargo» (el de arranque), por debajo de la
+// mitad se cobran las pasadas y el recorte queda en la maderera.
+func MaterialSeCobra(ctx context.Context, c reglas.Consultador) bool {
+	return reglas.Es(ctx, c, reglas.CorteChicoMaterial, "cobrar")
 }
 
 // TodasDelCliente marca todas las placas del plano como del cliente: el

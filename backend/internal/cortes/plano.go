@@ -723,6 +723,17 @@ type Cobro struct {
 	Manual bool `json:"-"`
 }
 
+// ConMaterial es el cobro con la regla corte_chico_material en «cobrar»
+// (H019): la placa que no pasa la mitad también se vende —entera, o media si
+// el trabajo sale de media placa—, así que como toda placa vendida no cobra
+// pasadas y el recorte es del cliente.
+func (c Cobro) ConMaterial() Cobro {
+	c.Placas += c.Parciales
+	c.Parciales = 0
+	c.Pasadas = 0
+	return c
+}
+
 // ACobrar es lo que se cobra de un despiece (T3, hallazgo 11). La regla de la
 // media placa —una placa que sale más de la mitad se vende entera y su corte
 // no se cobra— se esquivaba arrastrando piezas a otra placa: cada una quedaba

@@ -325,8 +325,13 @@ func TestRetiroParcialFirmaYAnulacion(t *testing.T) {
 	if c, _ := pedir(t, web, "POST", u+"admin/remitos/"+remito+"/anular", nil); c != 403 {
 		t.Errorf("el cliente anuló: %d", c)
 	}
+	// Está firmado: lo anula un admin, con el motivo (mes simulado).
+	if c, _ := pedir(t, ven, "POST", u+"admin/remitos/"+remito+"/anular", map[string]any{"motivo": "Prueba"}); c != 403 {
+		t.Errorf("el vendedor anuló un remito firmado sin PIN: %d", c)
+	}
+	adm, _ := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
 	for i := 0; i < 2; i++ {
-		if c, b := pedir(t, ven, "POST", u+"admin/remitos/"+remito+"/anular", nil); c != 200 || !strings.Contains(b, "Remito anulado.") {
+		if c, b := pedir(t, adm, "POST", u+"admin/remitos/"+remito+"/anular", map[string]any{"motivo": "Prueba"}); c != 200 || !strings.Contains(b, "Remito anulado.") {
 			t.Fatalf("anular: %d %s", c, b)
 		}
 	}

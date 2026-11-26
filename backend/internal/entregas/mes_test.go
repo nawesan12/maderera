@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/sqlc"
 )
 
@@ -132,5 +133,38 @@ func TestElRemitoDeUnaVentaQueYaDescontoNoSacaOtraVez(t *testing.T) {
 	}
 	if despues := e.uno(t, `select qty::text from inventory where variant_id = $1`, e.variante); despues != antes {
 		t.Errorf("el stock bajó otra vez: %s → %s", antes, despues)
+	}
+}
+
+// Un remito que ya firmó el cliente no se anula con un toque: pide el
+// motivo y el PIN de un admin, y el motivo queda en el historial.
+func TestAnularUnRemitoFirmadoPideMotivoYPin(t *testing.T) {
+	e := armar(t)
+	e.s.ConAutorizacion(autorizacion.Nuevo(e.pool, silencio, "secreto-del-pin-de-prueba"))
+	dep, _ := e.staff(t, "deposito@prueba.test", sqlc.StaffRoleDeposito)
+	adm, _ := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
+	pedido, r1, _ := e.pedido(t, "PED-2005", "listo", nil)
+	if c, b := pedir(t, dep, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
+		"receptorDocumento": "20111222", "cantidades": cantidades(r1, "10")}); c != 200 {
+		t.Fatalf("%d %s", c, b)
+	}
+	e.firmar(t, "REM-0001")
+	remito := e.uno(t, `select id::text from deliveries where numero = 'REM-0001'`)
+	u := e.srv.URL + "/api/v1/admin/remitos/" + remito + "/anular"
+
+	if c, b := pedir(t, dep, "POST", u, nil); c != 422 || !strings.Contains(b, "motivo") {
+		t.Fatalf("sin motivo: %d %s", c, b)
+	}
+	if c, b := pedir(t, dep, "POST", u, map[string]any{"motivo": "Se cargó dos veces"}); c != 422 || !strings.Contains(b, "pin") {
+		t.Fatalf("sin PIN: %d %s", c, b)
+	}
+	if s := e.uno(t, `select estado::text from deliveries where id = $1`, remito); s != "entregada" {
+		t.Fatalf("se anuló sin firma: %s", s)
+	}
+	if c, b := pedir(t, adm, "POST", u, map[string]any{"motivo": "Se cargó dos veces"}); c != 200 {
+		t.Fatalf("el admin: %d %s", c, b)
+	}
+	if n := e.uno(t, `select count(*)::text from order_status_history where order_id = $1 and nota like 'Remito REM-0001 firmado, anulado: Se cargó dos veces%'`, pedido); n != "1" {
+		t.Errorf("el motivo no quedó en el historial: %s", n)
 	}
 }

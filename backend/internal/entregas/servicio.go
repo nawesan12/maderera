@@ -31,6 +31,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
 	"mjbj/internal/numeracion"
@@ -39,6 +40,7 @@ import (
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
+	"mjbj/internal/zodjs"
 )
 
 // Los avisos al cliente que dejan el remito preparado y el firmado, en la
@@ -53,11 +55,61 @@ type Servicio struct {
 	pool *pgxpool.Pool
 	q    *sqlc.Queries
 	log  *slog.Logger
+	// aut firma la anulación de un remito ya firmado (el PIN de un admin).
+	// Sin él, la anula solo una sesión de administrador.
+	aut *autorizacion.Servicio
 }
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
 	return &Servicio{pool: pool, q: sqlc.New(pool), log: log}
+}
+
+// ConAutorizacion suma el PIN de los administradores.
+func (s *Servicio) ConAutorizacion(aut *autorizacion.Servicio) *Servicio {
+	s.aut = aut
+	return s
+}
+
+// Anulacion es lo que acompaña la anulación de un remito firmado: por qué,
+// y el PIN de un admin (o la ficha que devolvió uno anterior).
+type Anulacion struct {
+	Motivo, PIN, Ficha string
+}
+
+// MsjMotivoDeAnulacion es el 422 de un remito firmado que se anula sin decir
+// por qué.
+const MsjMotivoDeAnulacion = "Escribí por qué se anula: el cliente ya firmó que se lo llevó."
+
+// autorizarAnulacion: un remito firmado es la constancia de que la
+// mercadería salió; anularlo la devuelve al stock. Pide motivo y la firma de
+// un admin.
+func (s *Servicio) autorizarAnulacion(ctx context.Context, ses *auth.Sesion, id string, a Anulacion) (string, error) {
+	if zodjs.TrimJS(a.Motivo) == "" {
+		return "", plataforma.Invalido(map[string]string{"motivo": MsjMotivoDeAnulacion})
+	}
+	if s.aut == nil {
+		if ses.Tiene(sqlc.StaffRoleAdmin) {
+			return ses.Nombre, nil
+		}
+		return "", plataforma.NuevoProblema(http.StatusForbidden, "Un remito firmado lo anula un administrador.")
+	}
+	firma, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Remito, Clave: id, PIN: a.PIN, Ficha: a.Ficha})
+	var falta *autorizacion.Falta
+	if errors.As(err, &falta) {
+		e := map[string]string{"pin": falta.Mensaje(), "pinMonto": "0"}
+		if falta.PinIncorrecto {
+			e["pinIncorrecto"] = "si"
+		}
+		if falta.BloqueadoHasta != nil {
+			e["pinHasta"] = falta.BloqueadoHasta.UTC().Format(time.RFC3339)
+		}
+		return "", plataforma.Invalido(e)
+	}
+	if err != nil {
+		return "", err
+	}
+	return firma.Nombre, nil
 }
 
 // consultor es lo que tienen en común el pool y una transacción.
@@ -538,8 +590,25 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 // después la venta del mostrador la devolvía otra vez. Si el pedido estaba
 // entregado y ahora le queda saldo, vuelve a «listo».
 func (s *Servicio) AnularEntrega(ctx context.Context, ses *auth.Sesion, id string) error {
+	return s.AnularEntregaCon(ctx, ses, id, Anulacion{})
+}
+
+// AnularEntregaCon es AnularEntrega con el motivo y el PIN que pide un
+// remito ya firmado: el motivo queda en el historial del pedido.
+func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id string, a Anulacion) error {
 	if !plataforma.UUIDValido(id) {
 		return nil
+	}
+	var firmado *time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT firmado_at FROM deliveries WHERE id = $1 AND estado <> 'anulada'`, id).Scan(&firmado); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	var autorizo string
+	if firmado != nil {
+		var err error
+		if autorizo, err = s.autorizarAnulacion(ctx, ses, id, a); err != nil {
+			return err
+		}
 	}
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// El mismo orden que CrearEntrega: la serie, el remito, el pedido.
@@ -561,6 +630,14 @@ func (s *Servicio) AnularEntrega(ctx context.Context, ses *auth.Sesion, id strin
 		}
 		if _, err := tx.Exec(ctx, `UPDATE deliveries SET estado = 'anulada', updated_at = now() WHERE id = $1`, id); err != nil {
 			return err
+		}
+		if firmado != nil && pedido != nil {
+			nota := "Remito " + numero + " firmado, anulado: " + zodjs.TrimJS(a.Motivo) + " · autorizó " + autorizo
+			if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2, $3, $4)`,
+				pedidoID, pedido.estado, nota, ses.UserID); err != nil {
+				return err
+			}
+			bitacora.Anotar(ctx, s.q.WithTx(tx), s.log, ses, sqlc.AccionAuditoriaAnular, "remito", id, nota, nil)
 		}
 		// Lo que salió con este remito, por variante y sucursal. Se filtra
 		// por las variantes del remito para usar el índice.

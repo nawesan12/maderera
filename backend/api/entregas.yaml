@@ -65,11 +65,26 @@ paths:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
       operationId: AnularRemito
-      description: Anula el remito y devuelve la mercadería al stock. Anular uno ya anulado no hace nada.
+      description: |
+        Anula el remito y devuelve la mercadería al stock. Anular uno ya
+        anulado no hace nada. Uno que ya firmó quien recibió pide el motivo y
+        el PIN de un administrador (422 en `motivo` o en `pin`).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                motivo: { type: string, maxLength: 300 }
+                pin: { type: string, maxLength: 12 }
+                ficha: { type: string, maxLength: 400 }
       responses:
         "200": { $ref: "#/components/responses/HechoEntrega" }
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/pedidos/{id}/remito:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:

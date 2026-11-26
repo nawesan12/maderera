@@ -150,7 +150,19 @@ func (a *API) AnularRemito(ctx context.Context, r entregasapi.AnularRemitoReques
 	if err != nil {
 		return nil, err
 	}
-	if err := a.s.AnularEntrega(ctx, ses, r.Id); err != nil {
+	var an Anulacion
+	if b := r.Body; b != nil {
+		if b.Motivo != nil {
+			an.Motivo = *b.Motivo
+		}
+		if b.Pin != nil {
+			an.PIN = *b.Pin
+		}
+		if b.Ficha != nil {
+			an.Ficha = *b.Ficha
+		}
+	}
+	if err := a.s.AnularEntregaCon(ctx, ses, r.Id, an); err != nil {
 		return nil, err
 	}
 	return hecho("Remito anulado. La mercadería volvió al stock."), nil

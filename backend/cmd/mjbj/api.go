@@ -445,7 +445,7 @@ func correrAPI() error {
 
 	// Entregas, acopio, remitos, la firma y las zonas de envío (tanda 5).
 	entregasapi.HandlerWithOptions(
-		entregasapi.NewStrictHandlerWithOptions(entregas.NuevaAPI(entregas.Nuevo(pool, log), cfg.Interna),
+		entregasapi.NewStrictHandlerWithOptions(entregas.NuevaAPI(entregas.Nuevo(pool, log).ConAutorizacion(aut), cfg.Interna),
 			[]entregasapi.StrictMiddlewareFunc{plataforma.ConPedido[entregasapi.StrictHandlerFunc]},
 			entregasapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

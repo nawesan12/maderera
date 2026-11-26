@@ -6,6 +6,7 @@ import {
   formatearPeso,
   ABREVIATURA_UNIDAD,
   cantidadConUnidad,
+  documentoConTipo,
   formatearUnidad,
   primerNombre,
   whatsappDestino,
@@ -171,5 +172,14 @@ describe("cantidadConUnidad", () => {
     expect(cantidadConUnidad(4, null)).toBe("4");
     expect(cantidadConUnidad(2.5, "metro_cuadrado")).toBe("2,5 m²");
     expect(cantidadConUnidad(4, "pasada")).toBe("4 cortes");
+  });
+});
+
+describe("documentoConTipo", () => {
+  // Un CUIT con guiones salía «DNI 30-71234567-8» (mes simulado).
+  it("cuenta los dígitos", () => {
+    expect(documentoConTipo("30-71234567-8")).toBe("CUIT 30-71234567-8");
+    expect(documentoConTipo("20301112220")).toBe("CUIT 20-30111222-0");
+    expect(documentoConTipo("30111222")).toBe("DNI 30.111.222");
   });
 });

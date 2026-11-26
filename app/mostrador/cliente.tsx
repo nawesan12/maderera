@@ -20,7 +20,7 @@ import {
 import { enfocar } from "./atajos";
 import { SaldoDelCliente } from "./cuenta-del-cliente";
 import type { Cliente } from "./tipos";
-import { moneda } from "@/lib/formato";
+import { documentoConTipo, moneda } from "@/lib/formato";
 import { MONTO_IDENTIFICAR_CONSUMIDOR_FINAL } from "@/lib/fiscal/umbral";
 
 export function BuscadorDeCliente({
@@ -118,7 +118,7 @@ export function BuscadorDeCliente({
             <span className="block truncate text-base font-medium">{cliente.nombre}</span>
             {cliente.cuit && (
               <span className="tabular block text-sm text-muted-foreground">
-                {cliente.cuit.length === 11 ? "CUIT" : "DNI"} {cliente.cuit}
+                {documentoConTipo(cliente.cuit)}
               </span>
             )}
           </span>
@@ -226,7 +226,7 @@ export function BuscadorDeCliente({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base font-medium">{c.nombre}</span>
                   <span className="block text-sm text-muted-foreground">
-                    {c.cuit ? `${c.cuit.length === 11 ? "CUIT" : "DNI"} ${c.cuit}` : "sin documento"}
+                    {c.cuit ? documentoConTipo(c.cuit) : "sin documento"}
                     {c.estado === "moroso" && " · moroso"}
                   </span>
                 </span>

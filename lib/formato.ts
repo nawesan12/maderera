@@ -248,6 +248,20 @@ export function formatearCuit(cuit: string | null): string {
 }
 
 /**
+ * El documento con su nombre: «CUIT 30-71234567-8», «DNI 30.111.222».
+ *
+ * Se decidía por el largo del texto guardado, y un CUIT con guiones (13
+ * caracteres) salía «DNI 30-71234567-8», al lado de otro sin guiones
+ * («CUIT 20301112220»; mes simulado). Se cuentan los dígitos.
+ */
+export function documentoConTipo(documento: string): string {
+  const digitos = documento.replace(/\D/g, "");
+  if (digitos.length === 11) return `CUIT ${formatearCuit(digitos)}`;
+  if (digitos.length >= 7 && digitos.length <= 8) return `DNI ${Number(digitos).toLocaleString("es-AR")}`;
+  return documento;
+}
+
+/**
  * Unidad de venta como se dice en el mostrador.
  *
  * En la base se guarda `metro_cuadrado` porque la calculadora, el carrito y la

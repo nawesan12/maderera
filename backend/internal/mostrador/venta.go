@@ -595,14 +595,15 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		INSERT INTO orders (numero, clave_mostrador, numero_provisorio, cobrada_at, sincronizada_at, created_at,
 		                    customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen, tipo_entrega,
 		                    subtotal, descuento, descuento_motivo, total, medio_pago, estado_pago, seller_id, notas, created_by_user_id,
-		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar)
+		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar, comprobante)
 		VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), $7, $8, $9, $10, $11, 'mostrador', 'retiro',
-		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric)
+		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric, $26)
 		RETURNING id`,
 		numero, v.Clave, v.NumeroProvisorio, v.CobradaAt, sincronizada, cobrada,
 		v.CustomerID, v.ContactoNombre, v.ContactoTelefono, v.BranchID, estado,
 		jsmath.Fijo2(c.subtotal), jsmath.Fijo2(c.descuento), motivo, jsmath.Fijo2(c.total), c.medioPago, estadoPago,
-		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar)).Scan(&pedido)
+		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar),
+		comprobanteDeLaVenta(v.Comprobante)).Scan(&pedido)
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
@@ -751,6 +752,15 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	}
 
 	return ResultadoVenta{Ok: true, OrderID: pedido, Numero: numero, Total: c.total, Nueva: true, Lineas: c.lineas}, nil
+}
+
+// comprobanteDeLaVenta es con qué salió la venta: «interno» o «fiscal»
+// (migración 00230). Lo que no es ninguno de los dos queda nulo.
+func comprobanteDeLaVenta(c string) *string {
+	if c != "interno" && c != "fiscal" {
+		return nil
+	}
+	return &c
 }
 
 func nuloSiVacio(p *string) *string {

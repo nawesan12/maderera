@@ -279,6 +279,8 @@ export const orders = pgTable(
     entregarEl: date(),
     huellaMostrador: text(),
     mercaderiaNoVolvio: boolean().notNull().default(false),
+    /** Con qué salió la venta del mostrador: «interno» o «fiscal» (migración 00230). */
+    comprobante: text(),
   },
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),

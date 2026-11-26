@@ -5707,6 +5707,7 @@ type Order struct {
 	AnulacionAutorizadaPor *string      `json:"anulacionAutorizadaPor"`
 	MercaderiaNoVolvio     bool         `json:"mercaderiaNoVolvio"`
 	CreditoSinAutorizar    jsmath.Num   `json:"creditoSinAutorizar"`
+	Comprobante            *string      `json:"comprobante"`
 }
 
 type OrderItem struct {

@@ -377,6 +377,19 @@ export interface components {
             numeroPedido: string | null;
         };
         PedidoListado: {
+            /** @description AAAA-MM-DD */
+            entregarEl: string | null;
+            /** @description Lo que falta de un pedido que ya salió en parte; vacío si no salió nada */
+            porEntregar: components["schemas"]["PorEntregar"][];
+            /** @description Los cortes del pedido en cola o en la máquina */
+            cortesSinTerminar: string[];
+            /**
+             * @description Con qué salió la venta del mostrador
+             * @enum {string|null}
+             */
+            comprobante: "interno" | "fiscal" | null;
+            /** @description Tiene una factura viva */
+            facturado: boolean;
             id: string;
             numero: string;
             cliente: string;
@@ -403,6 +416,24 @@ export interface components {
              * @description El último paso a entregado del historial
              */
             entregadoAt: string | null;
+        };
+        PorEntregar: {
+            descripcion: string;
+            unidad: string;
+            /** Format: double */
+            pendiente: number;
+        };
+        ReciboDelPedido: {
+            id: string;
+            numero: string;
+            /** Format: double */
+            total: number;
+            estado: string;
+            /** @description Los medios del recibo separados por coma */
+            medios: string;
+            quien: string | null;
+            /** Format: date-time */
+            createdAt: string;
         };
         /**
          * Format: double
@@ -478,6 +509,19 @@ export interface components {
             }[];
         };
         FichaDePedido: {
+            /**
+             * Format: double
+             * @description Lo cobrado con recibos y en línea
+             */
+            cobrado: number;
+            /**
+             * Format: double
+             * @description El total menos lo devuelto contra la deuda
+             */
+            aCobrar: number;
+            recibos: components["schemas"]["ReciboDelPedido"][];
+            /** @enum {string|null} */
+            comprobante: "interno" | "fiscal" | null;
             id: string;
             numero: string;
             numeroProvisorio: string | null;

@@ -25,4 +25,9 @@ func TestLaVentaConCorteQuedaEnCurso(t *testing.T) {
 	if s := e.txt(t, `select string_agg(estado::text || ':' || nota, ',') from order_status_history where order_id = $1`, m["orderId"]); s != "preparando:Venta de mostrador" {
 		t.Errorf("historial: %s", s)
 	}
+	// Salió con el comprobante interno (el de siempre): queda guardado, y la
+	// dueña lo distingue de una venta que se olvidó de facturar.
+	if s := e.txt(t, `select coalesce(comprobante, '-') from orders where id = $1`, m["orderId"]); s != "interno" {
+		t.Errorf("comprobante: %s", s)
+	}
 }

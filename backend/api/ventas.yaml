@@ -466,8 +466,17 @@ components:
     PedidoListado:
       type: object
       required: [id, numero, cliente, empresa, sucursal, sucursalSlug, estado, tipoEntrega, direccionEntrega, medioPago, estadoPago,
-        total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt]
+        total, items, customerId, createdAt, zonaEnvio, sinCobrar, pagoEnRevision, entregadoAt, entregarEl, porEntregar, cortesSinTerminar,
+        comprobante, facturado]
       properties:
+        entregarEl: { type: string, nullable: true, description: AAAA-MM-DD }
+        porEntregar:
+          type: array
+          description: Lo que falta de un pedido que ya salió en parte; vacío si no salió nada
+          items: { $ref: "#/components/schemas/PorEntregar" }
+        cortesSinTerminar: { type: array, items: { type: string }, description: Los cortes del pedido en cola o en la máquina }
+        comprobante: { type: string, nullable: true, enum: [interno, fiscal, null], description: Con qué salió la venta del mostrador }
+        facturado: { type: boolean, description: Tiene una factura viva }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
@@ -487,6 +496,24 @@ components:
         sinCobrar: { $ref: "#/components/schemas/SinCobrar" }
         pagoEnRevision: { type: boolean, description: Una transferencia informada que nadie verificó todavía }
         entregadoAt: { type: string, format: date-time, nullable: true, description: El último paso a entregado del historial }
+    PorEntregar:
+      type: object
+      required: [descripcion, unidad, pendiente]
+      properties:
+        descripcion: { type: string }
+        unidad: { type: string }
+        pendiente: { type: number, format: double }
+    ReciboDelPedido:
+      type: object
+      required: [id, numero, total, estado, medios, quien, createdAt]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        total: { type: number, format: double }
+        estado: { type: string }
+        medios: { type: string, description: Los medios del recibo separados por coma }
+        quien: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
     SinCobrar:
       type: number
       format: double
@@ -575,8 +602,13 @@ components:
       type: object
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
-        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar]
+        notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar,
+        cobrado, aCobrar, recibos, comprobante]
       properties:
+        cobrado: { type: number, format: double, description: Lo cobrado con recibos y en línea }
+        aCobrar: { type: number, format: double, description: El total menos lo devuelto contra la deuda }
+        recibos: { type: array, items: { $ref: "#/components/schemas/ReciboDelPedido" } }
+        comprobante: { type: string, nullable: true, enum: [interno, fiscal, null] }
         id: { type: string }
         numero: { type: string }
         numeroProvisorio: { type: string, nullable: true }

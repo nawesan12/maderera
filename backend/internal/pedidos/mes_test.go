@@ -69,3 +69,39 @@ func TestElEnvioSaleConRemitoAlDespachar(t *testing.T) {
 		t.Fatalf("entregado con algo por llevar: %d %s", c, b)
 	}
 }
+
+// La ficha muestra lo cobrado y los recibos (un cobro parcial no se veía y
+// el historial no registraba el cobro); el tablero dice qué falta llevar de
+// un pedido que salió en parte y qué corte espera.
+func TestFichaYTableroDicenLoCobradoYLoQueFalta(t *testing.T) {
+	e := armar(t)
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	pedido := e.pedido(t, ses, 2)
+	e.exec(t, `update orders set estado = 'listo', medio_pago = 'transferencia' where id = $1`, pedido)
+	e.exec(t, `insert into receipts (numero, recibido_de, total, origen, order_id) values ('REC-0023', 'Marta', 1000, 'panel', $1)`, pedido)
+	e.exec(t, `insert into cutting_orders (numero, order_id, contacto_nombre, material_descripcion, estado) values ('CRT-3', $1, 'M', 'MDF', 'en-cola')`, pedido)
+	item := e.id(t, `select id from order_items where order_id = $1`, pedido)
+	remito := e.id(t, `insert into deliveries (numero, order_id, tipo, estado, firma_token) values ('REM-0001', $1, 'retiro', 'entregada', 'tok-mes-1') returning id`, pedido)
+	e.exec(t, `insert into delivery_items (delivery_id, order_item_id, cantidad) values ($1, $2, 1)`, remito, item)
+
+	f, err := e.s.Pedido(t.Context(), pedido, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Cobrado != 1000 || len(f.Recibos) != 1 || f.Recibos[0].Numero != "REC-0023" {
+		t.Errorf("cobrado %v, recibos %+v", f.Cobrado, f.Recibos)
+	}
+	lista, err := e.s.ListarPedidos(t.Context(), Filtros{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p *PedidoListado
+	for i := range lista {
+		if lista[i].ID == pedido {
+			p = &lista[i]
+		}
+	}
+	if p == nil || len(p.PorEntregar) != 2 || p.PorEntregar[0].Pendiente != 1 || len(p.CortesSinTerminar) != 1 || p.CortesSinTerminar[0] != "CRT-3" {
+		t.Fatalf("listado: %+v", p)
+	}
+}

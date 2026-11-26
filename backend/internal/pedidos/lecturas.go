@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/ventas"
@@ -388,6 +389,48 @@ type PedidoListado struct {
 	// EntregadoAt es el último paso a «entregado» del historial; nil si no
 	// se entregó. «Sin cobrar» cuenta los días desde ahí.
 	EntregadoAt *time.Time `json:"entregadoAt"`
+	// EntregarEl es el día comprometido (AAAA-MM-DD): el reparto ordena por
+	// él (mes simulado: el envío del 28 aparecía último).
+	EntregarEl *string `json:"entregarEl"`
+	// PorEntregar es lo que falta de un pedido que ya salió en parte (un
+	// acopio, el envío en dos viajes); vacío si no salió nada todavía. El
+	// reparto y el tablero lo muestran en vez del total.
+	PorEntregar []PorEntregar `json:"porEntregar"`
+	// CortesSinTerminar: los cortes del pedido en cola o en la máquina. Un
+	// pedido así no se marca listo.
+	CortesSinTerminar []string `json:"cortesSinTerminar"`
+	// Comprobante es con qué salió la venta del mostrador: «interno» o
+	// «fiscal» (nulo: anterior a la 00230, o de otro origen).
+	Comprobante *string `json:"comprobante"`
+	// Facturado: tiene una factura viva.
+	Facturado bool `json:"facturado"`
+}
+
+// PorEntregar es un renglón que falta entregar.
+type PorEntregar struct {
+	Descripcion string  `json:"descripcion"`
+	Unidad      string  `json:"unidad"`
+	Pendiente   float64 `json:"pendiente"`
+}
+
+// completarListado suma lo que falta entregar de los pedidos que salieron
+// en parte: son pocos, y el saldo es la misma cuenta de la ficha
+// (entregas.SaldoDeAcopio).
+func (s *Servicio) completarListado(ctx context.Context, out []PedidoListado, enParte map[string]bool) error {
+	for i := range out {
+		out[i].PorEntregar = []PorEntregar{}
+		if !enParte[out[i].ID] {
+			continue
+		}
+		saldo, err := entregas.SaldoDeAcopio(ctx, s.pool, out[i].ID)
+		if err != nil {
+			return err
+		}
+		for _, r := range entregas.SoloPendientes(saldo) {
+			out[i].PorEntregar = append(out[i].PorEntregar, PorEntregar{Descripcion: r.Descripcion, Unidad: r.Unidad, Pendiente: r.Pendiente})
+		}
+	}
+	return nil
 }
 
 // EstadoSinCobrar es el filtro del historial que lleva el renglón «N
@@ -461,7 +504,13 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 		       coalesce(conteo.items, 0), o.customer_id, o.zona_envio, `+fragmentos.SinCobrarDelPedido+`::float8,
 		       `+fragmentos.PagoEnRevision+`,
 		       CASE WHEN o.estado = 'entregado' THEN (SELECT max(h.created_at) FROM order_status_history h
-		                                             WHERE h.order_id = o.id AND h.estado = 'entregado') END
+		                                             WHERE h.order_id = o.id AND h.estado = 'entregado') END,
+		       to_char(o.entregar_el, 'YYYY-MM-DD'),
+		       o.estado NOT IN ('entregado', 'cancelado') AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada'),
+		       CASE WHEN o.estado NOT IN ('entregado', 'cancelado') THEN (SELECT coalesce(array_agg(co.numero ORDER BY co.numero), '{}')
+		            FROM cutting_orders co WHERE co.order_id = o.id AND co.estado IN ('en-cola', 'en-proceso')) ELSE '{}' END,
+		       o.comprobante,
+		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%')
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -473,18 +522,27 @@ func (s *Servicio) ListarPedidosEn(ctx context.Context, f Filtros, v VistaDePedi
 	}
 	defer filas.Close()
 	out := []PedidoListado{}
+	enParte := map[string]bool{}
 	for filas.Next() {
 		var p PedidoListado
 		var total string
+		var salioAlgo bool
 		if err := filas.Scan(&p.ID, &p.Numero, &p.Cliente, &p.Empresa, &p.Sucursal, &p.SucursalSlug, &p.Estado, &p.TipoEntrega,
 			&p.DireccionEntrega, &p.MedioPago, &p.EstadoPago, &total, &p.CreatedAt, &p.Items, &p.CustomerID, &p.ZonaEnvio, &p.SinCobrar,
-			&p.PagoEnRevision, &p.EntregadoAt); err != nil {
+			&p.PagoEnRevision, &p.EntregadoAt, &p.EntregarEl, &salioAlgo, &p.CortesSinTerminar, &p.Comprobante, &p.Facturado); err != nil {
 			return nil, err
 		}
 		p.Total = jsmath.Numero(total)
+		if salioAlgo {
+			enParte[p.ID] = true
+		}
 		out = append(out, p)
 	}
-	return out, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	filas.Close()
+	return out, s.completarListado(ctx, out, enParte)
 }
 
 // ItemDePedido es la fila entera de order_items, como la devolvía drizzle.
@@ -568,6 +626,28 @@ type FichaDePedido struct {
 	// FichaPorCorreo: sin cliente, la ficha con el correo del contacto, para
 	// unirlo a mano (unir.go).
 	FichaPorCorreo *FichaParaUnir `json:"fichaPorCorreo"`
+	// Cobrado es lo cobrado fuera de la caja del mostrador (los recibos y
+	// los pagos en línea: fragmentos.CobradoDelPedido); ACobrar, el total
+	// menos lo devuelto contra la deuda. Un cobro parcial no se veía: el
+	// pedido seguía «Sin cobrar» por el total (mes simulado).
+	Cobrado float64 `json:"cobrado"`
+	ACobrar float64 `json:"aCobrar"`
+	// Recibos son los recibos del pedido, el más viejo primero: van al
+	// bloque del cobro y al historial, que no registraba el cobro.
+	Recibos []ReciboDelPedido `json:"recibos"`
+	// Comprobante: con qué salió la venta del mostrador (ver PedidoListado).
+	Comprobante *string `json:"comprobante"`
+}
+
+// ReciboDelPedido es un recibo que cobró el pedido.
+type ReciboDelPedido struct {
+	ID        string    `json:"id"`
+	Numero    string    `json:"numero"`
+	Total     float64   `json:"total"`
+	Estado    string    `json:"estado"`
+	Medios    string    `json:"medios"`
+	Quien     *string   `json:"quien"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // Pedido es la ficha, o nil si no existe. Con `conMargen`, el margen de la
@@ -581,7 +661,8 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		       o.medio_pago::text, o.estado_pago::text, o.notas, o.created_at, o.quote_id, q.numero,
 		       CASE WHEN o.customer_id IS NULL THEN NULL
 		            ELSE (SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = o.customer_id) END,
-		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8
+		       to_char(o.entregar_el, 'YYYY-MM-DD'), `+fragmentos.SinCobrarDelPedido+`::float8,
+		       `+fragmentos.CobradoDelPedido+`::float8, `+fragmentos.ACobrarDelPedido+`::float8, o.comprobante
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -589,7 +670,8 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		WHERE o.id = $1`, id).Scan(&p.ID, &p.Numero, &p.NumeroProvisorio, &p.Cliente, &p.Email, &p.Telefono, &p.Empresa,
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
-		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar)
+		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar,
+		&p.Cobrado, &p.ACobrar, &p.Comprobante)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -671,6 +753,30 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 			return nil, err
 		}
 		p.Pagos = append(p.Pagos, x)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	filas, err = s.pool.Query(ctx, `
+		SELECT r.id::text, r.numero, r.total::float8, r.estado::text,
+		       coalesce((SELECT string_agg(DISTINCT rp.medio::text, ',') FROM receipt_parts rp WHERE rp.receipt_id = r.id), ''),
+		       u.name, r.created_at
+		FROM receipts r LEFT JOIN "user" u ON u.id = r.created_by_user_id
+		WHERE r.id IN `+fragmentos.RecibosDelPedido("$1::uuid")+`
+		ORDER BY r.created_at, r.numero`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Recibos = []ReciboDelPedido{}
+	for filas.Next() {
+		var r ReciboDelPedido
+		if err := filas.Scan(&r.ID, &r.Numero, &r.Total, &r.Estado, &r.Medios, &r.Quien, &r.CreatedAt); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		p.Recibos = append(p.Recibos, r)
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {

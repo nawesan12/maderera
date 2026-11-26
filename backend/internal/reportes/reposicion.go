@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 )
 
 // OpcionesDeReposicion son las de reporteDeReposicion.
@@ -52,7 +53,15 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 	}
 	if o.Rubro != "" && o.Rubro != "todos" {
 		args = append(args, o.Rubro)
-		cond = append(cond, fmt.Sprintf("sc.slug = $%d", len(args)))
+		// El rubro por su id: el slug se repite entre categorías
+		// («accesorios» en tres) y filtrar por él traía los de todas
+		// (tercera prueba del mes, H069). El slug sigue andando para los
+		// enlaces viejos.
+		if plataforma.UUIDValido(o.Rubro) {
+			cond = append(cond, fmt.Sprintf("sc.id = $%d::uuid", len(args)))
+		} else {
+			cond = append(cond, fmt.Sprintf("sc.slug = $%d", len(args)))
+		}
 	}
 	rs, err := s.lectura.Query(ctx, `
 		SELECT v.id, p.id, p.name, v.label, v.sku, p.unit, c.name, c.slug, sc.name,

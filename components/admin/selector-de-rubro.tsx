@@ -25,7 +25,7 @@ export function SelectorDeRubro({
    * lista plana se veía repetido sin saber cuál era cuál (simulación del
    * mes, H069).
    */
-  grupos: { categoria: string; rubros: { slug: string; name: string }[] }[];
+  grupos: { categoria: string; rubros: { id: string; slug: string; name: string }[] }[];
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
@@ -51,8 +51,10 @@ export function SelectorDeRubro({
         <option value="todos">Todos los rubros</option>
         {grupos.map((g) => (
           <optgroup key={g.categoria} label={g.categoria}>
+            {/* Por id: el slug se repite entre categorías y elegir
+                «Accesorios» de Placas traía los de las tres (H069). */}
             {g.rubros.map((r) => (
-              <option key={r.slug} value={r.slug}>
+              <option key={r.id} value={r.id}>
                 {r.name}
               </option>
             ))}

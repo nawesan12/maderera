@@ -42,6 +42,11 @@ export interface PagoDelPedido {
   total: number;
   /** Lo que falta pagar de un pedido a cuenta (null: no se cargó a la cuenta). */
   debeEnCuenta: number | null;
+  /**
+   * Lo que cuesta en la cuenta después de sus notas de crédito: una
+   * devolución baja lo que se debe sin que nadie pague (PED-1218).
+   */
+  cuestaEnCuenta?: number | null;
   /** Lo informado que se está verificando. */
   enRevision?: number | null;
 }
@@ -82,7 +87,7 @@ export function estadoDelPago(p: PagoDelPedido): EstadoDelPago | null {
   }
   if (p.debeEnCuenta !== null) {
     if (p.debeEnCuenta <= 0.005) return { clave: "pagado", etiqueta: "Pagado", sigue: null, falta: null };
-    if (p.debeEnCuenta < p.total - 0.005) {
+    if (p.debeEnCuenta < (p.cuestaEnCuenta ?? p.total) - 0.005) {
       return { clave: "parcial", etiqueta: "Pagado en parte", sigue: null, falta: p.debeEnCuenta };
     }
     return { clave: "cuenta", etiqueta: "A cuenta corriente", sigue: null, falta: p.debeEnCuenta };

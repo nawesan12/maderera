@@ -81,6 +81,8 @@ export interface PedidoPropio {
   enAcopio: boolean;
   /** Lo que falta pagar de un pedido a cuenta corriente (null: no es a cuenta). */
   debeEnCuenta: number | null;
+  /** Lo que cuesta en la cuenta después de sus notas de crédito. */
+  cuestaEnCuenta?: number | null;
   /** Lo informado que falta verificar (transferencia con comprobante). */
   enRevision: number | null;
   createdAt: Date;

@@ -67,6 +67,19 @@ describe("la tarjeta del pago", () => {
     expect(parte?.etiqueta).toBe("Pagado en parte");
     expect(parte?.falta).toBe(400);
   });
+  it("bajado solo por una nota de crédito no está pagado en parte (PED-1218)", () => {
+    const e = estadoDelPago({
+      ...base,
+      medioPago: "cuenta_corriente",
+      debeEnCuenta: 400,
+      cuestaEnCuenta: 400,
+    });
+    expect(e?.etiqueta).toBe("A cuenta corriente");
+    expect(e?.falta).toBe(400);
+    expect(
+      estadoDelPago({ ...base, medioPago: "cuenta_corriente", debeEnCuenta: 300, cuestaEnCuenta: 400 })?.etiqueta,
+    ).toBe("Pagado en parte");
+  });
   it("pagado dice pagado y nada más (H214)", () => {
     const e = estadoDelPago({
       ...base,

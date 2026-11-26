@@ -58,6 +58,7 @@ paths:
                     medioPago: { type: string, nullable: true }
                     enAcopio: { type: boolean }
                     debeEnCuenta: { type: number, format: double, nullable: true }
+                    cuestaEnCuenta: { type: number, format: double, nullable: true, description: lo que cuesta en la cuenta después de sus notas de crédito }
                     enRevision: { type: number, format: double, nullable: true }
                     tipoEntrega: { type: string, enum: [retiro, envio] }
                     total: { type: number, format: double }
@@ -321,6 +322,7 @@ components:
       properties:
         descuento: { type: number, format: double }
         debeEnCuenta: { type: number, format: double, nullable: true }
+        cuestaEnCuenta: { type: number, format: double, nullable: true, description: lo que cuesta en la cuenta después de sus notas de crédito }
         enRevision: { type: number, format: double, nullable: true }
         cortes:
           type: array

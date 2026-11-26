@@ -127,10 +127,12 @@ type PedidoPropio struct {
 	// renglones ya lo traen, y el subtotal guardado es el de antes (H209).
 	Descuento float64 `json:"descuento"`
 	// DebeEnCuenta: ver Pedido.DebeEnCuenta.
-	DebeEnCuenta *float64           `json:"debeEnCuenta"`
-	Cortes       []CorteDelPedido   `json:"cortes"`
-	Facturas     []FacturaDelPedido `json:"facturas"`
-	Recibos      []ReciboDelPedido  `json:"recibos"`
+	DebeEnCuenta *float64 `json:"debeEnCuenta"`
+	// CuestaEnCuenta: ver Pedido.CuestaEnCuenta.
+	CuestaEnCuenta *float64           `json:"cuestaEnCuenta"`
+	Cortes         []CorteDelPedido   `json:"cortes"`
+	Facturas       []FacturaDelPedido `json:"facturas"`
+	Recibos        []ReciboDelPedido  `json:"recibos"`
 	// Ajustes son las notas de crédito y de débito de la cuenta que nombran
 	// al pedido (un faltante, una anulación): sin esto el pedido seguía
 	// diciendo 120 m² y el cliente no veía la corrección (H302).
@@ -284,12 +286,13 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 		p.EnRevision = &revision
 	}
 	if p.MedioPago != nil && *p.MedioPago == "cuenta_corriente" {
-		debe, err := s.pendientesDeLaCuenta(ctx, c)
+		debe, neto, err := s.pendientesDeLaCuenta(ctx, c)
 		if err != nil {
 			return nil, err
 		}
 		if v, ok := debe[p.Numero]; ok {
-			p.DebeEnCuenta = &v
+			n := neto[p.Numero]
+			p.DebeEnCuenta, p.CuestaEnCuenta = &v, &n
 		}
 	}
 	return &p, nil

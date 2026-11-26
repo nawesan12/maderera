@@ -112,6 +112,7 @@ export default async function DetallePedidoPage({
     medioPago: pedido.medioPago,
     total: Number(pedido.total),
     debeEnCuenta: pedido.debeEnCuenta,
+    cuestaEnCuenta: pedido.cuestaEnCuenta,
     enRevision: pedido.enRevision,
   });
   const informar =

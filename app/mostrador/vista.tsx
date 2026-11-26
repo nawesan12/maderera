@@ -22,6 +22,7 @@ import {
   type MedioDeMostrador,
 } from "@/lib/mostrador/importes";
 import { useCopiaLocal } from "@/lib/mostrador/offline/use-copia-local";
+import { guardarVentaEnCurso, leerVentaEnCurso } from "@/lib/mostrador/venta-en-curso";
 import type {
   ResultadoDeMostrador,
   RenglonDelCierre,
@@ -77,6 +78,17 @@ import {
 } from "./tipos";
 
 /** Una clave nueva por venta: es lo que impide que el doble toque cobre dos veces. */
+/** Lo que se guarda de la venta en curso para que una recarga no la pierda. */
+interface VentaGuardada {
+  lineas: LineaDeVenta[];
+  cortes: CorteEnLaVenta<EstadoDelCorte, ResultadoDeMostrador>[];
+  cliente: Cliente | null;
+  medio: MedioDeMostrador;
+  acopio: boolean;
+  presupuesto: { id: string; numero: string } | null;
+  clave: string;
+}
+
 function claveNueva() {
   return crypto.randomUUID();
 }
@@ -328,6 +340,39 @@ export function VistaMostrador({
    * pedido.
    */
   const [acopio, setAcopio] = useState(false);
+
+  /*
+   * La venta a medio cargar sobrevive a una recarga (ver
+   * `lib/mostrador/venta-en-curso.ts`). Se lee después de montar —el servidor
+   * no tiene el navegador— y una venta que llega de un corte de la cola no se
+   * pisa con la guardada.
+   */
+  const ventaLeida = useRef(false);
+  useEffect(() => {
+    if (ventaLeida.current) return;
+    ventaLeida.current = true;
+    if (corteACobrar) return;
+    const v = leerVentaEnCurso<VentaGuardada>(sucursal.id);
+    if (!v || (v.lineas.length === 0 && v.cortes.length === 0)) return;
+    void Promise.resolve().then(() => {
+      setLineas(v.lineas);
+      setCortes(v.cortes);
+      setCliente(v.cliente);
+      setMedio(v.medio);
+      setAcopio(v.acopio);
+      setPresupuesto(v.presupuesto);
+      setClave(v.clave);
+    });
+  }, [corteACobrar, sucursal.id]);
+  useEffect(() => {
+    if (!ventaLeida.current) return;
+    guardarVentaEnCurso<VentaGuardada>(
+      sucursal.id,
+      lineas.length === 0 && cortes.length === 0
+        ? null
+        : { lineas, cortes, cliente, medio, acopio, presupuesto, clave },
+    );
+  }, [sucursal.id, lineas, cortes, cliente, medio, acopio, presupuesto, clave]);
 
   /*
    * Los datos de la terminal para un pago con tarjeta: lote, cupón y qué
@@ -747,18 +792,30 @@ export function VistaMostrador({
     if (ids.length === 0) return;
 
     const precios = await preciosDelCliente(ids, nuevo?.id ?? null);
-    // La lista contra la que se marca lo tocado a mano pasa a ser la de este
-    // cliente. La media placa no: el precio que vuelve es el de la entera.
+    /*
+     * El renglón que está a precio de lista pasa a la lista de este cliente
+     * solo: no lo tocó nadie, y dejarlo con el precio del anterior hacía que
+     * una venta rehecha para otro cliente pidiera el PIN por «$ 16.900 abajo
+     * del precio» (mes simulado). Lo tocado a mano no se pisa: se avisa y se
+     * ofrece «Aplicar su lista». La media placa queda: el precio que vuelve es
+     * el de la entera.
+     */
+    const aLaLista = (l: LineaDeVenta) =>
+      l.precioLista == null || Math.abs(l.precioUnitario - l.precioLista) <= 0.005;
     setLineas((prev) =>
       prev.map((l) =>
         l.variantId && !l.presentacion && precios[l.variantId] > 0
-          ? { ...l, precioLista: precios[l.variantId] }
+          ? aLaLista(l)
+            ? { ...l, precioUnitario: precios[l.variantId], precioLista: precios[l.variantId] }
+            : { ...l, precioLista: precios[l.variantId] }
           : l,
       ),
     );
     const distintos = lineas.some(
       (l) =>
         l.variantId &&
+        !l.presentacion &&
+        !aLaLista(l) &&
         precios[l.variantId] > 0 &&
         Math.abs(precios[l.variantId] - l.precioUnitario) > 0.005,
     );

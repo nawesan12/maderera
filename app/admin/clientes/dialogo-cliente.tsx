@@ -132,6 +132,10 @@ export function DialogoCliente({
   const [cuitMal, setCuitMal] = useState(false);
 
   const [tipo, setTipo] = useState(cliente?.tipo ?? "particular");
+  // Tocada la casilla, manda lo que se eligió: el rubro elegido después ya no
+  // la vuelve a marcar (mes simulado: una constructora quedaba «Profesional»
+  // con la casilla desmarcada antes de elegir el rubro).
+  const [tipoElegido, setTipoElegido] = useState(Boolean(cliente));
   const [rubro, setRubro] = useState(cliente?.rubro ?? "particular");
   const [condicion, setCondicion] = useState(cliente?.condicionIva ?? "consumidor_final");
   const [lista, setLista] = useState(cliente?.priceListId ?? "");
@@ -175,11 +179,11 @@ export function DialogoCliente({
     )?.esProfesional;
 
     if (delGremio) {
-      setTipo("profesional");
+      if (!tipoElegido) setTipo("profesional");
       if (condicion === "consumidor_final") {
         setCondicion("responsable_inscripto");
       }
-    } else {
+    } else if (!tipoElegido) {
       setTipo("particular");
     }
   }
@@ -311,9 +315,10 @@ export function DialogoCliente({
                 <Switch
                   id="cliente-profesional"
                   checked={tipo === "profesional"}
-                  onCheckedChange={(marcado) =>
-                    setTipo(marcado ? "profesional" : "particular")
-                  }
+                  onCheckedChange={(marcado) => {
+                    setTipoElegido(true);
+                    setTipo(marcado ? "profesional" : "particular");
+                  }}
                 />
               </label>
               <div className="space-y-2">

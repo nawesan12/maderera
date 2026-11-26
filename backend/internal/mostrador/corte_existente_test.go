@@ -2,6 +2,7 @@ package mostrador
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"mjbj/internal/sqlc"
@@ -41,5 +42,28 @@ func TestCobrarUnCorteDeLaCola(t *testing.T) {
 	v["cortes"] = []any{k}
 	if _, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v); m["ok"] != false {
 		t.Errorf("se cobró dos veces: %s", b)
+	}
+}
+
+// Ítem 9 del mes simulado: con comprobante fiscal, un CUIT mal tipeado frena
+// la venta antes de cobrarla; antes quedaba registrada sin comprobante.
+func TestElCuitDelComprobanteSeRevisaAntes(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	e.abrir(t, ven, e.central, 0)
+	v := e.venta("efectivo", e.lineaPlaca(1))
+	v["comprobante"] = "fiscal"
+	v["contactoNombre"] = "Carpintería Prueba"
+	v["cuit"] = "30-71234567-8"
+	_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
+	if m["ok"] != false || !strings.Contains(b, "El CUIT no es válido") {
+		t.Fatalf("venta con un CUIT mal tipeado: %s", b)
+	}
+	if n := e.num(t, `select count(*)::float8 from orders`); n != 0 {
+		t.Errorf("la venta quedó registrada: %v", n)
+	}
+	v["cuit"] = "30-71234567-1"
+	if _, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v); m["ok"] != true {
+		t.Errorf("con el CUIT bien: %s", b)
 	}
 }

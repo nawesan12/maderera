@@ -21,6 +21,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
+	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cortes"
 	"mjbj/internal/facturacion"
@@ -176,6 +177,18 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	}
 	if p := ventas.RevisarVenta(v.Lineas, v.MedioPago, v.CustomerID); p != "" {
 		return fallo(p), nil
+	}
+	// Con comprobante fiscal, el CUIT con que saldría se revisa antes de
+	// cobrar: la venta a «Carpintería Prueba» con 30-71234567-8 quedaba
+	// registrada y el comprobante no salía («El CUIT no es válido», mes
+	// simulado, ítem 9). Sin conexión la venta ya pasó: entra, y el
+	// comprobante se resuelve desde Facturación.
+	if !sinConexion && v.Comprobante == "fiscal" {
+		if p, err := revisarCuitDelComprobante(ctx, s.pool, v); err != nil {
+			return ResultadoVenta{}, err
+		} else if p != "" {
+			return fallo(p), nil
+		}
 	}
 	q := sqlc.New(s.pool)
 	ahora := s.ahora()
@@ -1068,4 +1081,28 @@ func desambiguarProvisorio(ctx context.Context, tx pgx.Tx, numero, clave string)
 		}
 	}
 	return "", false, fmt.Errorf("número provisorio %s repetido sin salida", numero)
+}
+
+// revisarCuitDelComprobante es el problema del CUIT con que saldría el
+// comprobante fiscal de la venta, o "": el tipeado si no hay ficha, el de la
+// ficha si la hay (como facturacion.EmitirParaLaVenta).
+func revisarCuitDelComprobante(ctx context.Context, db *pgxpool.Pool, v VentaPedida) (string, error) {
+	cuit := ""
+	if v.CustomerID != nil && *v.CustomerID != "" {
+		var c *string
+		err := db.QueryRow(ctx, `SELECT cuit FROM customers WHERE id = $1`, *v.CustomerID).Scan(&c)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return "", err
+		}
+		if c != nil {
+			cuit = *c
+		}
+	} else if v.Cuit != nil {
+		cuit = *v.Cuit
+	}
+	if strings.TrimSpace(cuit) == "" {
+		return "", nil
+	}
+	_, msj := clientes.LeerDocumento(cuit)
+	return msj, nil
 }

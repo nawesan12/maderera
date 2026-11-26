@@ -577,6 +577,11 @@ export interface components {
                 invoiceId: string;
                 /** Format: int64 */
                 numero: number;
+                /**
+                 * Format: int64
+                 * @description El primero sin CAE de la serie
+                 */
+                desde: number;
             } | null;
             corren: components["schemas"]["Corrimiento"][];
             /** Format: double */

@@ -800,7 +800,7 @@ func TestMasDeCincuentaSinCaeMandaAAutorizarLaSerie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if serie.AnterioresSinCae != 60 || serie.Tramo == nil || serie.Tramo.InvoiceID != ids[15] || serie.Tramo.Numero != 16 {
+	if serie.AnterioresSinCae != 60 || serie.Tramo == nil || serie.Tramo.InvoiceID != ids[15] || serie.Tramo.Numero != 16 || serie.Tramo.Desde != 1 {
 		t.Fatalf("serie: %+v %+v", serie, serie.Tramo)
 	}
 	if s, _ := e.s.Serie(ctx, ids[15]); s.Tramo != nil {

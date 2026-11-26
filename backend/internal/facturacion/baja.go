@@ -89,6 +89,10 @@ type SerieDelComprobante struct {
 type TramoDeLaSerie struct {
 	InvoiceID string `json:"invoiceId"`
 	Numero    int64  `json:"numero"`
+	// Desde es el primero sin CAE de la serie: autorizar el tramo manda
+	// del Desde al Numero. Con solo el Numero, «desde el 16» no decía qué
+	// pasaba con los de antes (simulación del mes).
+	Desde int64 `json:"desde"`
 }
 
 // ResultadoDeBaja es lo que se hizo.
@@ -197,6 +201,10 @@ func (s *Servicio) Serie(ctx context.Context, id string) (*SerieDelComprobante, 
 		var t TramoDeLaSerie
 		if err := s.pool.QueryRow(ctx, `SELECT id, numero FROM invoices WHERE punto_venta = $1 AND tipo = $2::tipo_comprobante
 			AND numero < $3 AND cae IS NULL ORDER BY numero OFFSET $4 LIMIT 1`, x.pv, x.tipo, x.numero, maxAnteriores).Scan(&t.InvoiceID, &t.Numero); err != nil {
+			return nil, err
+		}
+		if err := s.pool.QueryRow(ctx, `SELECT min(numero) FROM invoices WHERE punto_venta = $1 AND tipo = $2::tipo_comprobante
+			AND cae IS NULL`, x.pv, x.tipo).Scan(&t.Desde); err != nil {
 			return nil, err
 		}
 		out.Tramo = &t

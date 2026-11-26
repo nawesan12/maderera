@@ -610,10 +610,11 @@ components:
           description: Con más de 15 anteriores sin CAE, el comprobante desde el que se autoriza la serie (de a 15).
           type: object
           nullable: true
-          required: [invoiceId, numero]
+          required: [invoiceId, numero, desde]
           properties:
             invoiceId: { type: string }
             numero: { type: integer, format: int64 }
+            desde: { type: integer, format: int64, description: El primero sin CAE de la serie, el que sale primero. }
         corren: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
         deuda: { type: number, format: double }
         bloqueo: { type: string, nullable: true }

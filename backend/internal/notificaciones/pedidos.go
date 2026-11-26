@@ -58,9 +58,9 @@ func (s *Servicio) PedidoRecibido(ctx context.Context, id string) error {
 		return err
 	}
 	// Primero al negocio: es el que tiene que salir a preparar el pedido.
-	cuerpo := nombre + " · " + formato.MonedaEntera(jsmath.Numero(total)) + " · retira"
+	cuerpo := nombre + " · " + formato.Importe(jsmath.Numero(total)) + " · retira"
 	if tipoEntrega == "envio" {
-		cuerpo = nombre + " · " + formato.MonedaEntera(jsmath.Numero(total)) + " · con envío"
+		cuerpo = nombre + " · " + formato.Importe(jsmath.Numero(total)) + " · con envío"
 	}
 	s.alPanel(ctx, push.Aviso{Titulo: "Venta nueva · " + numero, Cuerpo: cuerpo, URL: "/admin/pedidos/" + id, Etiqueta: "venta_ecommerce"})
 	s.wa.AvisarCambioDePedido(ctx, id, "pedido_recibido")
@@ -187,7 +187,7 @@ func (s *Servicio) ResultadoDePago(ctx context.Context, c CargaResultadoDePago) 
 		}
 		// Una cosa es que entre el pedido y otra que la plata esté: es lo
 		// que habilita a preparar y entregar.
-		s.alPanel(ctx, push.Aviso{Titulo: "Pago acreditado · " + numero, Cuerpo: nombre + " · " + formato.MonedaEntera(jsmath.Numero(total)),
+		s.alPanel(ctx, push.Aviso{Titulo: "Pago acreditado · " + numero, Cuerpo: nombre + " · " + formato.Importe(jsmath.Numero(total)),
 			URL: "/admin/pedidos/" + id, Etiqueta: "pago_acreditado"})
 		if vacio(correo) {
 			return nil
@@ -296,7 +296,7 @@ func (s *Servicio) PresupuestoEnviado(ctx context.Context, id string) error {
 	}
 	aviso := whatsapp.OpcionesAviso{
 		Evento: "presupuesto_listo", Telefono: telefono, Nombre: &p.Cliente,
-		Valores:      map[string]string{"presupuesto": p.Numero, "total": whatsapp.Moneda(total), "vence": vence},
+		Valores:      map[string]string{"presupuesto": p.Numero, "total": formato.Importe(total), "vence": vence},
 		Entidad:      &whatsapp.Entidad{Tipo: "quote", ID: id},
 		ConDocumento: true,
 	}

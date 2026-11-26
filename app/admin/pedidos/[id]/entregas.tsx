@@ -20,7 +20,7 @@ import {
   prepararRemito,
   type EstadoEntrega,
 } from "../entregas-actions";
-import { fechaHora, moneda } from "@/components/admin/formato";
+import { fechaHora, formatearMonto } from "@/components/admin/formato";
 import type { RenglonPendiente } from "@/lib/entregas";
 import { formatearCantidad, llevaDecimales } from "@/lib/unidades";
 import { cantidadConUnidad, plural } from "@/lib/formato";
@@ -459,7 +459,7 @@ function FormularioDeRemito({
           <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>
-                {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+                {sinCobrar.numero} sin cobrar · <span className="tabular">{formatearMonto(sinCobrar.monto)}</span>
               </DialogTitle>
             </DialogHeader>
             {/* Lo mismo que «Marcar entregado»: quien cobra tiene a mano
@@ -497,7 +497,7 @@ function FormularioDeRemito({
                   }}
                   className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium"
                 >
-                  Cobrar <span className="tabular">{moneda.format(sinCobrar.monto)}</span> y entregar
+                  Cobrar <span className="tabular">{formatearMonto(sinCobrar.monto)}</span> y entregar
                 </button>
               )}
             </div>

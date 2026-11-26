@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -237,7 +238,7 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 		d.Conocidos["pedido"] = d.Pedidos[0].Numero
 	}
 	if d.Saldo > 0 {
-		d.Conocidos["saldo"] = Moneda(d.Saldo)
+		d.Conocidos["saldo"] = formato.Importe(d.Saldo)
 	}
 	d.Conocidos["fecha"] = FechaCorta(ahora)
 	d.Nombre = oTexto(primero(d.ClienteNombre, d.DisplayName), "Sin identificar")
@@ -371,7 +372,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				var total float64
 				var f time.Time
 				err := r.Scan(&d.ID, &numero, &total, &f)
-				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "presupuesto", "Presupuesto "+numero, "el presupuesto "+numero, Moneda(total), &f
+				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "presupuesto", "Presupuesto "+numero, "el presupuesto "+numero, formato.Importe(total), &f
 				return d, err
 			}},
 		{`select id, tipo::text, punto_venta, numero, total::float8, created_at from invoices where customer_id = $1 and estado <> 'borrador'
@@ -385,7 +386,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				err := r.Scan(&d.ID, &tipo, &pv, &n, &total, &f)
 				num := numeroFormateado(pv, n)
 				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "comprobante",
-					"Factura "+mayusculasJS(reemplazarPrimero(tipo, "factura_", ""))+" "+num, "la factura "+num, Moneda(total), &f
+					"Factura "+mayusculasJS(reemplazarPrimero(tipo, "factura_", ""))+" "+num, "la factura "+num, formato.Importe(total), &f
 				return d, err
 			}},
 		{`select d.id, d.numero, o.numero, d.created_at from deliveries d join orders o on o.id = d.order_id
@@ -405,7 +406,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				var total float64
 				var f time.Time
 				err := r.Scan(&d.ID, &numero, &total, &f)
-				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "recibo", "Recibo "+numero, "el recibo "+numero, Moneda(total), &f
+				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "recibo", "Recibo "+numero, "el recibo "+numero, formato.Importe(total), &f
 				return d, err
 			}},
 		{`select id, numero, created_at from cutting_orders where customer_id = $1 order by created_at desc limit 5`,

@@ -6,7 +6,7 @@ import {
   TarjetaTablero,
   Tablero,
 } from "@/components/admin/kanban";
-import { haceCuanto, moneda, plural } from "@/components/admin/formato";
+import { formatearMonto, haceCuanto, plural } from "@/components/admin/formato";
 import { cantidadConUnidad } from "@/lib/formato";
 import { diasDesde } from "@/lib/formato";
 import { BuscadorPedidos } from "./buscador";
@@ -81,7 +81,7 @@ export default async function PedidosPage({
               // etiquetas «Sin cobrar» de las tarjetas; «Me deben» del
               // inicio cuenta lo que ya salió (mes simulado: decían «sin
               // cobrar» los dos con números distintos).
-              `${plural(activos.length, "pedido")} en curso${porCobrar > 0 ? ` · ${moneda.format(porCobrar)} por cobrar` : ""}`
+              `${plural(activos.length, "pedido")} en curso${porCobrar > 0 ? ` · ${formatearMonto(porCobrar)} por cobrar` : ""}`
             : `${plural(pedidos.length, "pedido")} en total`
         }
       />
@@ -117,7 +117,7 @@ export default async function PedidosPage({
                   titulo={columna.titulo}
                   cantidad={enColumna.length}
                   detalle={
-                    enColumna.length > 0 ? moneda.format(monto) : undefined
+                    enColumna.length > 0 ? formatearMonto(monto) : undefined
                   }
                   estado={columna.estado}
                 >
@@ -134,7 +134,7 @@ export default async function PedidosPage({
               <h2 className="mb-2.5 text-base font-semibold">
                 Entregados sin cobrar{" "}
                 <span className="tabular estado-problema">
-                  {moneda.format(entregadosSinCobrar.reduce((s, p) => s + (p.sinCobrar ?? 0), 0))}
+                  {formatearMonto(entregadosSinCobrar.reduce((s, p) => s + (p.sinCobrar ?? 0), 0))}
                 </span>
               </h2>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -263,7 +263,7 @@ async function Historial({
         titulo="Pedidos"
         resumen={
           totalSinCobrar && totalSinCobrar.cantidad > 0
-            ? `${moneda.format(totalSinCobrar.total)} en ${plural(totalSinCobrar.cantidad, "pedido sin cobrar", "pedidos sin cobrar")}`
+            ? `${formatearMonto(totalSinCobrar.total)} en ${plural(totalSinCobrar.cantidad, "pedido sin cobrar", "pedidos sin cobrar")}`
             : "Historial"
         }
       />
@@ -390,7 +390,7 @@ function FilaCerrada({
               p.estado === "cancelado" ? "text-muted-foreground line-through" : ""
             }`}
           >
-            {moneda.format(monto ?? p.total)}
+            {formatearMonto(monto ?? p.total)}
           </span>
         </span>
       </Link>
@@ -425,7 +425,7 @@ function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso:
       )}
 
       <p className="tabular mt-2 text-lg font-semibold">
-        {moneda.format(pedido.total)}
+        {formatearMonto(pedido.total)}
       </p>
 
       <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">

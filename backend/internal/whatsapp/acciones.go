@@ -12,6 +12,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -232,7 +233,7 @@ func (s *Servicio) EnviarDocumento(ctx context.Context, ses *auth.Sesion, convID
 			var vence *time.Time
 			if err := s.pool.QueryRow(ctx, `select numero, total::float8, valido_hasta from quotes where id::text = $1`, id).
 				Scan(&numero, &total, &vence); err == nil {
-				conocidos["presupuesto"], conocidos["total"] = numero, Moneda(total)
+				conocidos["presupuesto"], conocidos["total"] = numero, formato.Importe(total)
 				if vence != nil {
 					conocidos["vence"] = vence.In(zonaArgentina).Format("02/01/2006")
 				}

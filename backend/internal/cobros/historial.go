@@ -157,15 +157,17 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			if p.PorMercadoPago {
 				porMP[p.ReceiptID] = true
 			}
+			// Con centavos cuando los hay: «Transferencia $ 46.691» de un recibo de
+			// $ 46.690,50 no cerraba (mes simulado, H034).
 			var t string
 			if p.Numero != nil {
 				tipo := ""
 				if p.Tipo != nil {
 					tipo = string(*p.Tipo)
 				}
-				t = NombreDelCheque(tipo, p.Banco, *p.Numero) + " " + formato.MonedaEntera(p.Importe)
+				t = NombreDelCheque(tipo, p.Banco, *p.Numero) + " " + formato.Importe(p.Importe)
 			} else {
-				t = NombreDelMedio[Medio(p.Medio)] + " " + formato.MonedaEntera(p.Importe)
+				t = NombreDelMedio[Medio(p.Medio)] + " " + formato.Importe(p.Importe)
 			}
 			if previo, ok := medios[p.ReceiptID]; ok {
 				medios[p.ReceiptID] = previo + " · " + t

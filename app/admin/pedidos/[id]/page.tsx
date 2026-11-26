@@ -184,7 +184,7 @@ export default async function FichaPedidoPage({
       cuando: new Date(r.createdAt),
       titulo: (
         <p className="text-base font-medium">
-          Cobro <span className="tabular">{moneda.format(r.total)}</span>
+          Cobro <span className="tabular">{formatearMonto(r.total)}</span>
           {r.estado === "anulado" && <span className="font-normal text-muted-foreground"> · anulado</span>}
         </p>
       ),
@@ -365,9 +365,9 @@ export default async function FichaPedidoPage({
                     {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
                   </td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
-                    {moneda.format(Number(item.precioUnitario))}
+                    {formatearMonto(Number(item.precioUnitario))}
                   </td>
-                  <td className="tabular px-5 py-3.5 text-right text-base">{moneda.format(Number(item.subtotal))}</td>
+                  <td className="tabular px-5 py-3.5 text-right text-base">{formatearMonto(Number(item.subtotal))}</td>
                 </tr>
               ))}
             </tbody>
@@ -377,17 +377,17 @@ export default async function FichaPedidoPage({
               <>
                 <div className="flex justify-between gap-3">
                   <dt>Subtotal</dt>
-                  <dd className="tabular">{moneda.format(Number(pedido.subtotal))}</dd>
+                  <dd className="tabular">{formatearMonto(Number(pedido.subtotal))}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt>Envío{pedido.zonaEnvio ? ` · ${pedido.zonaEnvio}` : ""}</dt>
-                  <dd className="tabular">{moneda.format(Number(pedido.costoEnvio))}</dd>
+                  <dd className="tabular">{formatearMonto(Number(pedido.costoEnvio))}</dd>
                 </div>
               </>
             )}
             <div className="flex items-baseline justify-between gap-3 pt-1">
               <dt className="font-medium">Total</dt>
-              <dd className="tabular text-xl font-semibold">{moneda.format(Number(pedido.total))}</dd>
+              <dd className="tabular text-xl font-semibold">{formatearMonto(Number(pedido.total))}</dd>
             </div>
           </dl>
 
@@ -516,7 +516,7 @@ export default async function FichaPedidoPage({
               {pedido.cobrado > 0.004 && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Cobrado</dt>
-                  <dd className="tabular">{moneda.format(pedido.cobrado)}</dd>
+                  <dd className="tabular">{formatearMonto(pedido.cobrado)}</dd>
                 </div>
               )}
               {/* Cancelado no se cobra: ni «Falta cobrar» ni «Sin cobrar»
@@ -524,7 +524,7 @@ export default async function FichaPedidoPage({
               {cancelado ? null : pedido.sinCobrar != null ? (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Falta cobrar</dt>
-                  <dd className="tabular estado-problema font-semibold">{moneda.format(pedido.sinCobrar)}</dd>
+                  <dd className="tabular estado-problema font-semibold">{formatearMonto(pedido.sinCobrar)}</dd>
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3">

@@ -218,7 +218,7 @@ func (s *Servicio) SubirComprobanteDeDeuda(ctx context.Context, x Extras, ses *a
 	}
 	if x.Push != nil {
 		go x.Push.Avisar(context.WithoutCancel(ctx), push.Aviso{
-			Titulo: titulo + " informada · " + c.nombre, Cuerpo: formato.MonedaEntera(importe) + " para su cuenta corriente. Verificala en Pagos.",
+			Titulo: titulo + " informada · " + c.nombre, Cuerpo: formato.Importe(importe) + " para su cuenta corriente. Verificala en Pagos.",
 			URL: "/admin/pagos", Etiqueta: "pago_informado",
 		})
 	}
@@ -289,7 +289,7 @@ func (s *Servicio) InformarCheques(ctx context.Context, x Extras, ses *auth.Sesi
 		}
 		go x.Push.Avisar(context.WithoutCancel(ctx), push.Aviso{
 			Titulo: titulo + " · " + c.nombre,
-			Cuerpo: formato.MonedaEntera(total) + " para su cuenta corriente. Aceptalos en Cheques cuando los tengas en mano.",
+			Cuerpo: formato.Importe(total) + " para su cuenta corriente. Aceptalos en Cheques cuando los tengas en mano.",
 			URL:    "/admin/cheques", Etiqueta: "cheque_informado",
 		})
 	}

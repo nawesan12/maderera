@@ -10,7 +10,7 @@ import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { moneda } from "@/components/admin/formato";
+import { formatearMonto } from "@/components/admin/formato";
 import type { MedioDeCobro } from "@/lib/cobros/partes";
 
 const SIGUIENTE: Record<string, string> = {
@@ -199,7 +199,7 @@ export function AccionesPedido({
               <DialogTitle>
                 {debe && sinCobrar ? (
                   <>
-                    {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+                    {sinCobrar.numero} sin cobrar · <span className="tabular">{formatearMonto(sinCobrar.monto)}</span>
                   </>
                 ) : entregaUnRetiro ? (
                   "Quién retira"
@@ -309,7 +309,7 @@ export function AccionesPedido({
                   disabled={pendiente || faltaDocumento}
                   className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
                 >
-                  Cobrar <span className="tabular">{moneda.format(sinCobrar.monto)}</span> y entregar
+                  Cobrar <span className="tabular">{formatearMonto(sinCobrar.monto)}</span> y entregar
                 </button>
               )}
             </div>

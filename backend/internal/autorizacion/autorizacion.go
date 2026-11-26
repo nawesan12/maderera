@@ -355,7 +355,7 @@ func (s *Servicio) primeraVez(ctx context.Context, clave string, ventana time.Ti
 // QueSeAutoriza es la cifra en el idioma del mostrador, la misma que muestra
 // el campo del PIN (components/autorizacion/campo-pin.tsx).
 func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
-	m := formato.MonedaEntera(monto)
+	m := formato.Importe(monto)
 	var t string
 	switch motivo {
 	case Credito:
@@ -372,7 +372,7 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 		t = m + " abajo del precio"
 	}
 	if credito > 0 {
-		t += " · " + formato.MonedaEntera(credito) + " a cuenta, pasado el límite"
+		t += " · " + formato.Importe(credito) + " a cuenta, pasado el límite"
 	}
 	return t
 }

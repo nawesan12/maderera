@@ -282,7 +282,7 @@ func (s *Servicio) Responder(ctx context.Context, c *Cliente, numero, respuesta 
 		// Que alguien de la casa se entere sin abrir la lista (H215).
 		if s.push != nil {
 			go s.push.Avisar(context.WithoutCancel(ctx), push.Aviso{
-				Titulo: "Presupuesto aceptado · " + numero, Cuerpo: c.Nombre + " aceptó " + formato.MonedaEntera(total) + " desde Mi cuenta.",
+				Titulo: "Presupuesto aceptado · " + numero, Cuerpo: c.Nombre + " aceptó " + formato.Importe(total) + " desde Mi cuenta.",
 				URL: "/admin/presupuestos/" + id, Pantalla: "/admin/presupuestos", Etiqueta: "presupuesto_aceptado",
 			})
 		}

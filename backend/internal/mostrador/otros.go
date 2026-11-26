@@ -246,7 +246,7 @@ func (s *Servicio) CobrarCuenta(ctx context.Context, ses *auth.Sesion, cliente, 
 		s.anotar(ctx, ses, sqlc.AccionAuditoriaCobrar, "cliente", cliente,
 			"Cobró la cuenta en el mostrador con el recibo "+r.Numero+" por "+formato.Importe(r.Total), map[string]any{"receiptId": r.ReceiptID})
 	}
-	return CobroDeCuenta{Ok: "Recibo " + r.Numero + " por " + formato.MonedaEntera(r.Total) + ".", ReceiptID: r.ReceiptID, Numero: r.Numero}, nil
+	return CobroDeCuenta{Ok: "Recibo " + r.Numero + " por " + formato.Importe(r.Total) + ".", ReceiptID: r.ReceiptID, Numero: r.Numero}, nil
 }
 
 // CajaFisica es una caja física para elegir al vincular la máquina.

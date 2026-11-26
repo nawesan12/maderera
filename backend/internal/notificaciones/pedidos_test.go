@@ -234,7 +234,7 @@ func TestPresupuestoEnviado(t *testing.T) {
 	// argentina.
 	para, asunto, html, texto := e.ultimo(t)
 	if para != "ana@prueba.test" || asunto != "Presupuesto P-2026-0050" || !strings.Contains(html, "14/11, 00:05") ||
-		!strings.Contains(texto, "Hola Ana,") || !strings.Contains(texto, "- Placa MDF 18 mm (2 u) $ 81.001\n- Tirante 2x4 (3.5 m) $ 3.500\n") ||
+		!strings.Contains(texto, "Hola Ana,") || !strings.Contains(texto, "- Placa MDF 18 mm (2 u) $ 81.000,50\n- Tirante 2x4 (3.5 m) $ 3.500\n") ||
 		!strings.Contains(texto, "https://mjbj.com.ar/mi-cuenta/presupuestos") {
 		t.Errorf("correo: %s %q %q", para, asunto, texto)
 	}
@@ -245,7 +245,7 @@ func TestPresupuestoEnviado(t *testing.T) {
 	}
 	if m := e.uno(t, `select coalesce(plantilla, '') || ' ' || coalesce(media_nombre, '') || ' ' || coalesce(media_tipo::text, '') || ' ' || cuerpo
 		from whatsapp_mensajes where direccion = 'saliente'`); !strings.HasPrefix(m, "presupuesto_enviado P-2026-0050.pdf document ") ||
-		!strings.Contains(m, "P-2026-0050") || !strings.Contains(m, "84.501") || !strings.Contains(m, "14/11/26") {
+		!strings.Contains(m, "P-2026-0050") || !strings.Contains(m, "84.500,50") || !strings.Contains(m, "14/11/26") {
 		t.Errorf("WhatsApp: %q", m)
 	}
 

@@ -129,6 +129,6 @@ func (s *Servicio) CargarRetencionSufrida(ctx context.Context, ses *auth.Sesion,
 		return "", comoProblema(err)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "retencion_sufrida", "",
-		"Cargó el certificado "+numero+" por "+formato.MonedaEntera(importe), map[string]any{"receiptId": r.ReceiptID})
-	return "Certificado cargado. La cuenta del cliente baja " + formato.MonedaEntera(importe) + ".", nil
+		"Cargó el certificado "+numero+" por "+formato.Importe(importe), map[string]any{"receiptId": r.ReceiptID})
+	return "Certificado cargado. La cuenta del cliente baja " + formato.Importe(importe) + ".", nil
 }

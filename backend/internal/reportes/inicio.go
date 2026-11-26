@@ -3,13 +3,16 @@ package reportes
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
+	"mjbj/internal/stock"
 )
 
 // El inicio del panel (lib/dal/admin/resumen.ts y lib/dal/admin/pendientes.ts):
@@ -332,51 +335,60 @@ func uno(n int, singular, plural string) string {
 
 // PendientesDelRol es pendientesDelRol: lo que hay que hacer hoy, solo lo
 // que el rol puede abrir (el mismo ACCESO que el menú), lo urgente arriba.
+//
+// Qué es urgente depende de quién mira (mes simulado, H285, H396): la cola
+// del taller es el trabajo de la mañana del depósito, y para quien atiende
+// es un dato; los presupuestos que esperan respuesta son al revés.
 func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]Pendiente, error) {
 	ve := func(ruta string) bool { return roles.PuedeEntrar(ruta, &rol) }
+	vende := rol == sqlc.StaffRoleVendedor
 	var c struct {
 		porPreparar, listos, cortes, chequesVencidos, chequesPorVencer int
-		comprasVencidas, comprasPorVencer, solicitudes, resenas        int
+		comprasPorVencer, solicitudes, resenas                         int
 		reponer, seguimientos, presupuestos                            int
 		chequesEn48, comprasEn48                                       int
 	}
 	ahora := s.ahora()
+	hoy := InicioDelDia(ahora)
 	// Las facturas de compra impagas se recorren una sola vez (comité
 	// final): antes eran tres subconsultas, cada una con su suma de
 	// imputaciones por factura. Sin permiso ($4 falso) el CTE no lee nada.
+	// Solo las de proveedores a los que el libro les debe algo, y con los
+	// cortes de día de «Debo» (lo vencido sale de ahí, más abajo): una
+	// factura cubierta por una nota de crédito figuraba vencida acá mientras
+	// «Debo» decía «Nada vencido» (H379).
 	err := s.pool.QueryRow(ctx, `
 		WITH compras AS (
-		  SELECT count(*) FILTER (WHERE fecha_vencimiento < now())::int AS vencidas,
-		         count(*) FILTER (WHERE fecha_vencimiento >= now() + interval '48 hours' AND fecha_vencimiento < now() + interval '7 days')::int AS por_vencer,
-		         count(*) FILTER (WHERE fecha_vencimiento >= now() AND fecha_vencimiento < now() + interval '48 hours')::int AS en48
+		  SELECT count(*) FILTER (WHERE fecha_vencimiento >= $10::timestamptz + interval '2 days'
+		                            AND fecha_vencimiento < $10::timestamptz + interval '7 days')::int AS por_vencer,
+		         count(*) FILTER (WHERE fecha_vencimiento >= $10 AND fecha_vencimiento < $10::timestamptz + interval '2 days')::int AS en48
 		  FROM purchase_invoices f
 		  WHERE $4 AND fecha_vencimiento IS NOT NULL AND f.anulada_at IS NULL AND f.tipo::text NOT LIKE 'nota_credito%'
-		    AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01)
+		    AND f.total - coalesce((SELECT sum(a.importe) FROM supplier_payment_allocations a WHERE a.purchase_invoice_id = f.id), 0) > 0.01
+		    AND (SELECT coalesce(sum(m.monto), 0) FROM supplier_movements m WHERE m.supplier_id = f.supplier_id) > 0.005)
 		SELECT
 		  CASE WHEN $1 THEN (SELECT count(*) FILTER (WHERE estado IN ('pendiente', 'preparando'))::int FROM orders) ELSE 0 END,
-		  CASE WHEN $1 THEN (SELECT count(*) FILTER (WHERE estado IN ('listo', 'en-camino'))::int FROM orders) ELSE 0 END,
+		  CASE WHEN $1 THEN (SELECT count(*) FILTER (WHERE estado = 'listo')::int FROM orders) ELSE 0 END,
 		  CASE WHEN $2 THEN (SELECT count(*)::int FROM cutting_orders WHERE estado = 'en-cola') ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*) FILTER (WHERE fecha_pago < now())::int FROM cheques
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*) FILTER (WHERE fecha_pago >= now() + interval '48 hours' AND fecha_pago < now() + interval '7 days')::int FROM cheques
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
-		  (SELECT vencidas FROM compras),
 		  (SELECT por_vencer FROM compras),
 		  CASE WHEN $5 THEN (SELECT count(*)::int FROM professional_applications WHERE estado = 'pendiente') ELSE 0 END,
 		  CASE WHEN $6 THEN (SELECT count(*)::int FROM product_reviews WHERE estado = 'pendiente') ELSE 0 END,
-		  CASE WHEN $7 THEN (SELECT count(*)::int FROM inventory i JOIN product_variants v ON v.id = i.variant_id
-		                     JOIN products p ON p.id = v.product_id
-		                     WHERE p.active AND v.active AND i.min_qty > 0 AND i.qty <= i.min_qty) ELSE 0 END,
+		  CASE WHEN $7 THEN (SELECT count(*)::int FROM product_variants v JOIN products p ON p.id = v.product_id
+		                     WHERE p.active AND v.active AND `+stock.CondicionReponer+`) ELSE 0 END,
 		  CASE WHEN $8 THEN (SELECT count(*)::int FROM customer_follow_ups
-		                     WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at <= $10) ELSE 0 END,
+		                     WHERE etapa <> 'cerrado' AND proxima_accion_at IS NOT NULL AND proxima_accion_at <= $11) ELSE 0 END,
 		  CASE WHEN $9 THEN (SELECT count(*)::int FROM quotes WHERE estado = 'enviado'
 		                     AND valido_hasta >= now() AND valido_hasta < now() + interval '3 days') ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*) FILTER (WHERE fecha_pago >= now() AND fecha_pago < now() + interval '48 hours')::int FROM cheques
 		                     WHERE estado IN ('cartera', 'entregado', 'depositado')) ELSE 0 END,
 		  (SELECT en48 FROM compras)`,
 		ve("/admin/pedidos"), ve("/admin/cortes"), ve("/admin/cheques"), ve("/admin/compras/facturas"),
-		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), ahora).
-		Scan(&c.porPreparar, &c.listos, &c.cortes, &c.chequesVencidos, &c.chequesPorVencer, &c.comprasVencidas, &c.comprasPorVencer,
+		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), hoy, ahora).
+		Scan(&c.porPreparar, &c.listos, &c.cortes, &c.chequesVencidos, &c.chequesPorVencer, &c.comprasPorVencer,
 			&c.solicitudes, &c.resenas, &c.reponer, &c.seguimientos, &c.presupuestos, &c.chequesEn48, &c.comprasEn48)
 	if err != nil {
 		return nil, err
@@ -385,6 +397,23 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	if err != nil {
 		return nil, err
 	}
+	// Lo vencido con los proveedores es el mismo número de «Debo».
+	comprasVencidas := 0
+	if ve("/admin/compras/facturas") {
+		d, err := s.Debo(ctx, ahora)
+		if err != nil {
+			return nil, err
+		}
+		comprasVencidas = d.FacturasVencidas
+	}
+	sinPIN := false
+	if rol == sqlc.StaffRoleAdmin {
+		hay, err := autorizacion.HayAdminConPIN(ctx, s.pool)
+		if err != nil {
+			return nil, err
+		}
+		sinPIN = !hay
+	}
 	f := []Pendiente{}
 	agregar := func(n int, p Pendiente) {
 		if n > 0 {
@@ -392,14 +421,26 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 			f = append(f, p)
 		}
 	}
+	// Sin PIN, todo lo que pide autorización en el mostrador queda trabado:
+	// es lo primero de la mañana (H067). La pantalla lo dibuja con su botón.
+	if sinPIN {
+		agregar(1, Pendiente{Clave: "pin", Texto: "Cargar tu PIN de autorización", Href: "/admin", Urgente: true})
+	}
 	agregar(c.seguimientos, Pendiente{Clave: "seguimiento", Texto: uno(c.seguimientos, "cliente para llamar hoy", "clientes para llamar hoy"),
 		Detalle: detalle("Seguimientos con la fecha cumplida"), Href: "/admin/clientes/seguimiento", Urgente: true})
 	agregar(c.porPreparar, Pendiente{Clave: "preparar", Texto: uno(c.porPreparar, "pedido por preparar", "pedidos por preparar"),
 		Detalle: detalle("Todavía no salieron a armarse"), Href: "/admin/pedidos", Urgente: true})
+	// Solo los listos: los que están en camino ya salieron, y Pedidos, a
+	// donde lleva, los muestra en otra columna (H102, H323). Para el
+	// depósito es el trabajo del día: entregar y despachar (H396).
 	agregar(c.listos, Pendiente{Clave: "entregar", Texto: uno(c.listos, "pedido listo sin entregar", "pedidos listos sin entregar"),
-		Detalle: detalle("Armados y esperando que los retiren o salgan"), Href: "/admin/pedidos"})
+		Detalle: detalle("Armados y esperando que los retiren o salgan"), Href: "/admin/pedidos", Urgente: rol == sqlc.StaffRoleDeposito})
 	agregar(c.cortes, Pendiente{Clave: "cortes", Texto: uno(c.cortes, "corte en la cola", "cortes en la cola"),
-		Detalle: detalle("Esperando la seccionadora"), Href: "/admin/cortes", Urgente: true})
+		Detalle: detalle("Esperando la seccionadora"), Href: "/admin/cortes", Urgente: !vende})
+	agregar(o.cortesHoy, Pendiente{Clave: "cortes-hoy", Texto: uno(o.cortesHoy, "corte para retirar hoy", "cortes para retirar hoy"),
+		Href: "/admin/cortes", Urgente: true})
+	agregar(o.chequesRechazados, Pendiente{Clave: "cheques-rechazados", Texto: uno(o.chequesRechazados, "cheque rechazado", "cheques rechazados"),
+		Href: "/admin/cheques", Urgente: true, Vencido: true})
 	agregar(c.chequesVencidos, Pendiente{Clave: "cheques-vencidos", Texto: uno(c.chequesVencidos, "cheque pasado de fecha", "cheques pasados de fecha"),
 		Detalle: detalle("Venció y sigue en cartera"), Href: "/admin/cheques", Urgente: true, Vencido: true})
 	// Lo que vence en las próximas 48 horas es de hoy: un cheque que vence
@@ -408,22 +449,43 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Detalle: detalle("Los recibidos hay que depositarlos; los entregados, cubrirlos"), Href: "/admin/cheques", Urgente: true})
 	agregar(c.chequesPorVencer, Pendiente{Clave: "cheques", Texto: uno(c.chequesPorVencer, "cheque vence esta semana", "cheques vencen esta semana"),
 		Detalle: detalle("Los recibidos hay que depositarlos; los entregados, cubrirlos"), Href: "/admin/cheques"})
-	agregar(c.comprasVencidas, Pendiente{Clave: "compras-vencidas", Texto: uno(c.comprasVencidas, "factura de compra vencida", "facturas de compra vencidas"),
+	// Lo que hay que aceptar o acreditar (H379): la transferencia que el
+	// cliente informó y el cheque que avisó que manda.
+	agregar(o.transferencias, Pendiente{Clave: "transferencias", Texto: uno(o.transferencias, "transferencia a verificar", "transferencias a verificar"),
+		Href: "/admin/pagos", Urgente: true})
+	agregar(o.chequesInformados, Pendiente{Clave: "cheques-por-recibir", Texto: uno(o.chequesInformados, "cheque por recibir", "cheques por recibir"),
+		Href: "/admin/cheques", Urgente: true})
+	agregar(comprasVencidas, Pendiente{Clave: "compras-vencidas", Texto: uno(comprasVencidas, "factura de compra vencida", "facturas de compra vencidas"),
 		Detalle: detalle("Pasó el vencimiento y sigue sin pagarse del todo"), Href: "/admin/compras/facturas", Urgente: true, Vencido: true})
 	agregar(c.comprasEn48, Pendiente{Clave: "compras-48h", Texto: uno(c.comprasEn48, "factura de compra vence en 48 horas", "facturas de compra vencen en 48 horas"),
 		Href: "/admin/compras/facturas", Urgente: true})
 	agregar(c.comprasPorVencer, Pendiente{Clave: "compras", Texto: uno(c.comprasPorVencer, "factura de compra vence esta semana", "facturas de compra vencen esta semana"),
 		Href: "/admin/compras/facturas"})
+	// Las órdenes de compra (H067, H201): la atrasada es para llamar al
+	// proveedor; la de hoy o mañana, para tener lugar y gente.
+	agregar(o.ordenesAtrasadas, Pendiente{Clave: "ordenes-atrasadas", Texto: uno(o.ordenesAtrasadas, "orden de compra atrasada", "órdenes de compra atrasadas"),
+		Href: "/admin/compras/ordenes", Urgente: true, Vencido: true})
+	agregar(o.ordenesPorLlegar, Pendiente{Clave: "ordenes-por-llegar", Texto: uno(o.ordenesPorLlegar, "orden de compra llega hoy o mañana", "órdenes de compra llegan hoy o mañana"),
+		Href: "/admin/compras/ordenes", Urgente: true})
+	agregar(o.recepcionesSinFactura, Pendiente{Clave: "recepciones-sin-factura", Texto: uno(o.recepcionesSinFactura,
+		"recepción sin factura de compra", "recepciones sin factura de compra"), Href: "/admin/compras/facturas"})
+	agregar(o.presupuestosEnviados, Pendiente{Clave: "presupuestos-enviados", Texto: uno(o.presupuestosEnviados,
+		"presupuesto enviado sin respuesta", "presupuestos enviados sin respuesta"), Href: "/admin/presupuestos?estado=enviado", Urgente: vende})
+	agregar(o.aceptadosSinPedido, Pendiente{Clave: "presupuestos-aceptados", Texto: uno(o.aceptadosSinPedido,
+		"presupuesto aceptado sin pedido", "presupuestos aceptados sin pedido"), Href: "/admin/presupuestos?estado=aceptado", Urgente: true})
 	agregar(c.presupuestos, Pendiente{Clave: "presupuestos", Texto: uno(c.presupuestos, "presupuesto enviado vence en 3 días", "presupuestos enviados vencen en 3 días"),
 		Detalle: detalle("Un llamado antes de que venza suele cerrar la venta"), Href: "/admin/presupuestos"})
 	agregar(c.solicitudes, Pendiente{Clave: "profesionales", Texto: uno(c.solicitudes, "profesional esperando respuesta", "profesionales esperando respuesta"),
 		Detalle: detalle("Pidieron la cuenta con precio de gremio"), Href: "/admin/profesionales"})
-	agregar(c.reponer, Pendiente{Clave: "reponer", Texto: uno(c.reponer, "producto bajo el mínimo", "productos bajo el mínimo"),
-		Detalle: detalle("Quedó en el mínimo o por debajo: hay que reponerlo"), Href: "/admin/stock"})
+	// Medidas, como Stock: contaba filas por sucursal y daba 30 contra 5.
+	agregar(c.reponer, Pendiente{Clave: "reponer", Texto: uno(c.reponer, "medida para reponer", "medidas para reponer"),
+		Detalle: detalle("Quedó en el mínimo o por debajo: hay que reponerla"), Href: "/admin/stock?estado=reponer"})
 	agregar(c.resenas, Pendiente{Clave: "resenas", Texto: uno(c.resenas, "reseña sin moderar", "reseñas sin moderar"),
 		Detalle: detalle("No se publican hasta que alguien las mire"), Href: "/admin/contenido"})
 	agregar(o.whatsapp, Pendiente{Clave: "whatsapp", Texto: uno(o.whatsapp, "conversación de WhatsApp sin contestar", "conversaciones de WhatsApp sin contestar"),
 		Href: "/admin/whatsapp?filtro=sin-leer", Urgente: true})
+	agregar(o.whatsappSinAsignar, Pendiente{Clave: "whatsapp-sin-asignar", Texto: uno(o.whatsappSinAsignar,
+		"conversación derivada sin asignar", "conversaciones derivadas sin asignar"), Href: "/admin/whatsapp?filtro=sin-asignar", Urgente: true})
 	agregar(o.presupuestosVencidos, Pendiente{Clave: "presupuestos-sin-responder", Texto: uno(o.presupuestosVencidos,
 		"presupuesto pasado del plazo de respuesta", "presupuestos pasados del plazo de respuesta"),
 		Href: "/admin/presupuestos?estado=abiertos", Urgente: true, Vencido: true})
@@ -433,16 +495,34 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		Href: "/admin/cortes"})
 	agregar(o.clientesConVencido, Pendiente{Clave: "deuda-vencida", Texto: uno(o.clientesConVencido, "cliente con deuda vencida", "clientes con deuda vencida"),
 		Href: "/admin/clientes", Urgente: true, Vencido: true})
+	// Sin CAE: no es urgente (no depende de la maderera), pero tiene que
+	// verse sin entrar a Facturación (H141).
+	agregar(o.sinCAE, Pendiente{Clave: "sin-cae", Texto: uno(o.sinCAE, "comprobante sin CAE", "comprobantes sin CAE"), Href: "/admin/facturacion"})
 	agregar(o.sinPrecio, Pendiente{Clave: "catalogo-precio", Texto: uno(o.sinPrecio, "medida sin precio", "medidas sin precio"), Href: "/admin/precios"})
 	agregar(o.sinFoto, Pendiente{Clave: "catalogo-foto", Texto: uno(o.sinFoto, "medida sin foto", "medidas sin foto"), Href: "/admin/productos"})
-	agregar(o.sinStock, Pendiente{Clave: "catalogo-stock", Texto: uno(o.sinStock, "medida sin stock", "medidas sin stock"), Href: "/admin/stock"})
+	agregar(o.sinStock, Pendiente{Clave: "catalogo-stock", Texto: uno(o.sinStock, "medida sin stock", "medidas sin stock"), Href: "/admin/stock?estado=sin-stock"})
+	OrdenarPendientes(f)
+	return f, nil
+}
+
+// OrdenarPendientes: lo urgente arriba; adentro de cada grupo, lo vencido
+// primero y después la cantidad. La carga del catálogo va siempre al final:
+// cuarenta medidas sin foto no pueden encabezar la lista de la mañana por
+// ser muchas (H298).
+func OrdenarPendientes(f []Pendiente) {
+	catalogo := func(p Pendiente) bool { return strings.HasPrefix(p.Clave, "catalogo-") }
 	sort.SliceStable(f, func(i, j int) bool {
 		if f[i].Urgente != f[j].Urgente {
 			return f[i].Urgente
 		}
+		if catalogo(f[i]) != catalogo(f[j]) {
+			return !catalogo(f[i])
+		}
+		if f[i].Vencido != f[j].Vencido {
+			return f[i].Vencido
+		}
 		return f[j].Cantidad-f[i].Cantidad < 0
 	})
-	return f, nil
 }
 
 // otros son los pendientes que se sumaron en la revisión del 17/11: los que
@@ -452,6 +532,10 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 type otros struct {
 	whatsapp, presupuestosVencidos, pedidosAtrasados, cortesSinRetirar, clientesConVencido int
 	sinPrecio, sinFoto, sinStock                                                           int
+	// Los del mes simulado (26/11).
+	cortesHoy, chequesRechazados, chequesInformados, transferencias   int
+	ordenesAtrasadas, ordenesPorLlegar, recepcionesSinFactura, sinCAE int
+	presupuestosEnviados, aceptadosSinPedido, whatsappSinAsignar      int
 }
 
 // otrosPendientes los cuenta, solo para lo que el rol puede abrir.
@@ -492,6 +576,46 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 	if err != nil {
 		return o, err
 	}
+	// Los del mes simulado (26/11):
+	//   - Corte para retirar hoy: el día que se le dijo al cliente, sin
+	//     retirar ni cancelar.
+	//   - Cheque rechazado: recibido o propio, rechazado en los últimos siete
+	//     días (el que rebotó a la mañana no figuraba en ningún lado).
+	//   - Cheque por recibir: el cliente lo informó y nadie lo tiene todavía.
+	//   - Transferencia a verificar: el cobro que el cliente informó y espera
+	//     que alguien lo mire contra el extracto (el «A verificar» de Cobros).
+	//   - Orden de compra enviada o con entrega parcial: atrasada si la fecha
+	//     prometida pasó; por llegar si es hoy o mañana (días argentinos).
+	//   - Recepción confirmada sin factura de compra, como el Cierre.
+	//   - Comprobante emitido sin CAE, como el Cierre.
+	//   - Presupuesto enviado y vigente, y aceptado sin pedido.
+	//   - WhatsApp derivado por el bot a una persona y sin nadie asignado.
+	err = s.pool.QueryRow(ctx, `
+		SELECT
+		  CASE WHEN $1 THEN (SELECT count(*)::int FROM cutting_orders WHERE estado NOT IN ('retirado', 'cancelado')
+		                     AND retira_el = ($9 AT TIME ZONE 'America/Argentina/Buenos_Aires')::date) ELSE 0 END,
+		  CASE WHEN $2 THEN (SELECT count(DISTINCT e.cheque_id)::int FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
+		                     WHERE e.hacia = 'rechazado' AND c.estado = 'rechazado' AND e.at >= $9::timestamptz - interval '6 days') ELSE 0 END,
+		  CASE WHEN $2 THEN (SELECT count(*)::int FROM cheques WHERE estado = 'informado') ELSE 0 END,
+		  CASE WHEN $3 THEN (SELECT count(*)::int FROM payments WHERE estado = 'en_revision') ELSE 0 END,
+		  CASE WHEN $4 THEN (SELECT count(*)::int FROM purchase_orders WHERE estado IN ('enviada', 'parcial') AND fecha_prometida < $9) ELSE 0 END,
+		  CASE WHEN $4 THEN (SELECT count(*)::int FROM purchase_orders WHERE estado IN ('enviada', 'parcial')
+		                     AND fecha_prometida >= $9 AND fecha_prometida < $10) ELSE 0 END,
+		  CASE WHEN $5 THEN (SELECT count(*)::int FROM goods_receipts g WHERE g.estado = 'confirmada'
+		                     AND NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.receipt_id = g.id AND f.anulada_at IS NULL)) ELSE 0 END,
+		  CASE WHEN $6 THEN (SELECT count(*)::int FROM invoices WHERE cae IS NULL AND estado IN ('emitida', 'rechazada')) ELSE 0 END,
+		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes WHERE estado = 'enviado' AND (valido_hasta IS NULL OR valido_hasta >= now())) ELSE 0 END,
+		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes q WHERE q.estado = 'aceptado'
+		                     AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado')) ELSE 0 END,
+		  CASE WHEN $8 THEN (SELECT count(*)::int FROM whatsapp_conversaciones WHERE estado = 'abierta'
+		                     AND asignado_a_user_id IS NULL AND bot_estado = 'derivada') ELSE 0 END`,
+		ve("/admin/cortes"), ve("/admin/cheques"), ve("/admin/pagos"), ve("/admin/compras/ordenes"), ve("/admin/compras/facturas"),
+		ve("/admin/facturacion"), ve("/admin/presupuestos"), ve("/admin/whatsapp"), hoy, hoy.AddDate(0, 0, 2)).
+		Scan(&o.cortesHoy, &o.chequesRechazados, &o.chequesInformados, &o.transferencias, &o.ordenesAtrasadas, &o.ordenesPorLlegar,
+			&o.recepcionesSinFactura, &o.sinCAE, &o.presupuestosEnviados, &o.aceptadosSinPedido, &o.whatsappSinAsignar)
+	if err != nil {
+		return o, err
+	}
 	if tienda != "si" && (ve("/admin/precios") || ve("/admin/productos") || ve("/admin/stock")) {
 		err = s.pool.QueryRow(ctx, `
 			WITH medidas AS (
@@ -503,8 +627,8 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 			    WHERE i.variant_id = m.id AND l.is_default AND i.price > 0)) ELSE 0 END,
 			  CASE WHEN $2 THEN (SELECT count(*)::int FROM medidas m WHERE NOT EXISTS (
 			    SELECT 1 FROM product_images f WHERE f.product_id = m.product_id)) ELSE 0 END,
-			  CASE WHEN $3 THEN (SELECT count(*)::int FROM medidas m WHERE NOT EXISTS (
-			    SELECT 1 FROM inventory i WHERE i.variant_id = m.id AND i.qty > 0)) ELSE 0 END`,
+			  CASE WHEN $3 THEN (SELECT count(*)::int FROM product_variants v JOIN products p ON p.id = v.product_id
+			    WHERE p.active AND v.active AND `+stock.CondicionSinStock+`) ELSE 0 END`,
 			ve("/admin/precios"), ve("/admin/productos"), ve("/admin/stock")).Scan(&o.sinPrecio, &o.sinFoto, &o.sinStock)
 		if err != nil {
 			return o, err

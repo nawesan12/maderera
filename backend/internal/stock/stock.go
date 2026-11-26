@@ -181,10 +181,19 @@ const (
 )
 
 var estadosDeStock = map[string]string{
-	"sin-stock": totalDeLaMedida + ` = 0`,
-	"reponer":   totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna,
+	"sin-stock": CondicionSinStock,
+	"reponer":   CondicionReponer,
 	"con-stock": `NOT (` + totalDeLaMedida + ` = 0) AND NOT (` + totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna + `)`,
 }
+
+// CondicionReponer y CondicionSinStock son los grupos «Hay que reponer» y
+// «Sin stock» de la pantalla, sobre una medida (alias v). Los usa también el
+// inicio del panel: contaba filas de inventario por sucursal (30) mientras
+// Stock, a donde lleva, decía 5 medidas.
+const (
+	CondicionReponer  = totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna
+	CondicionSinStock = totalDeLaMedida + ` = 0`
+)
 
 // Listar es listarStock, de a páginas: las medidas activas, por nombre.
 func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock, error) {

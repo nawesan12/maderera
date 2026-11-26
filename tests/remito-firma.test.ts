@@ -23,11 +23,14 @@ describe("el link de firma del remito", () => {
 describe("el encabezado del taller", () => {
   const pagina = readFileSync(join(__dirname, "..", "app", "taller", "page.tsx"), "utf8");
   it("el nombre se esconde en el teléfono y se recorta", () => {
-    expect(pagina).toMatch(/className="hidden min-w-0 truncate[^"]*sm:block"[^>]*>\{usuario\.name\}/);
+    expect(pagina).toMatch(/className="hidden min-w-0 [^"]*truncate[^"]*(?:sm|md|lg|xl):block"[^>]*>\{usuario\.name\}/);
   });
-  it("formato y ayuda van en un menú debajo de md", () => {
-    expect(pagina).toContain("<MenuDelTaller />");
-    expect(pagina.match(/className="hidden h-11[^"]*md:inline-flex/g)).toHaveLength(2);
+  // El formato del archivo salió del encabezado (mes simulado, H231 y H120):
+  // la ayuda y la vuelta al panel quedan como íconos hasta que hay lugar.
+  it("sin el formato del archivo, y ayuda y panel como íconos en el teléfono", () => {
+    expect(pagina).not.toContain("/admin/cortes/formato");
+    expect(pagina.match(/<span className="hidden whitespace-nowrap xl:inline">/g)).toHaveLength(2);
+    expect(pagina).toContain('aria-label="Cómo se usa"');
   });
   it("las acciones van a la derecha también en el teléfono", () => {
     // El que lleva ml-auto tiene que verse siempre: nada de hidden.

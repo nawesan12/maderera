@@ -13,7 +13,7 @@ describe("detalles del panel", () => {
 
   it("el despiece del corte baja de renglón y el total sigue a su columna", () => {
     const ficha = leer("app/admin/cortes/[id]/page.tsx");
-    expect(ficha).toContain('<div className="flex flex-wrap items-center gap-x-4 gap-y-2">');
+    expect(ficha).toMatch(/<div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">\s*<h2 className="text-base font-medium">Despiece<\/h2>/);
     expect(ficha).toMatch(/hidden px-4 py-4 text-right text-base font-medium sm:table-cell/);
   });
 

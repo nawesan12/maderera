@@ -520,13 +520,36 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 //     gasto en negro por transferencia): el extracto no va a conciliar.
 func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihasta time.Time, reparto cobros.ResultadoDelReparto) ([]PendienteDelCierre, error) {
 	out := []PendienteDelCierre{}
-	var delMes float64
-	recibosDelMes := 0
+	// La bolsa que solo espera facturas ya emitidas (destinos «i:») no es una
+	// seña: es la cobranza de una factura que espera el CAE, y queda en
+	// Anticipos hasta que ARCA la autorice. Con el aviso de la seña y su
+	// consejo de IVA, el contador leía anticipos donde hubo cobranza de deuda
+	// (simulación del mes, H131): van aparte, a Facturación.
+	soloFacturas := func(b cobros.Bolsa) bool {
+		if len(b.Destinos) == 0 {
+			return false
+		}
+		for _, d := range b.Destinos {
+			if !strings.HasPrefix(d, "i:") {
+				return false
+			}
+		}
+		return true
+	}
+	var delMes, deFacturas float64
+	recibosDelMes, recibosDeFacturas := 0, 0
 	destinos := map[string]bool{}
+	clientesDeSenas := map[string]bool{}
 	for _, b := range reparto.Bolsas {
 		if entre(b.Fecha, idesde, ihasta) {
-			delMes = float64(delMes + b.Monto)
-			recibosDelMes++
+			if soloFacturas(b) {
+				deFacturas = float64(deFacturas + b.Monto)
+				recibosDeFacturas++
+			} else {
+				delMes = float64(delMes + b.Monto)
+				recibosDelMes++
+				clientesDeSenas[b.Clave] = true
+			}
 		}
 		for _, d := range b.Destinos {
 			destinos[d] = false
@@ -534,7 +557,13 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 	}
 	if recibosDelMes > 0 {
 		out = append(out, PendienteDelCierre{"senas-del-mes", "Señas del mes sin factura",
-			formato.Moneda(jsmath.Redondear2(delMes)) + " en Anticipos de clientes. Si congelan precio, el IVA es de este mes.", recibosDelMes, "/admin/clientes"})
+			formato.Moneda(jsmath.Redondear2(delMes)) + " en Anticipos de clientes. Si congelan precio, el IVA es de este mes.", recibosDelMes,
+			fichaOClientes(clientesDeSenas)})
+	}
+	if recibosDeFacturas > 0 {
+		out = append(out, PendienteDelCierre{"cobros-sin-cae", "Cobros de facturas sin CAE",
+			formato.Moneda(jsmath.Redondear2(deFacturas)) + " en Anticipos de clientes hasta que ARCA autorice sus facturas.", recibosDeFacturas,
+			"/admin/facturacion?estado=emitida"})
 	}
 	// Qué destinos siguen vivos hoy: el pedido abierto sin factura con CAE,
 	// la factura que espera el CAE.
@@ -543,9 +572,15 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		for d := range destinos {
 			lista = append(lista, d)
 		}
+		// El pedido entregado cuya factura espera el CAE también sigue vivo:
+		// la seña se le aplica cuando llegue. Antes el de Herrera (entregado,
+		// con su B esperando) salía «sin aplicar» y el de Benítez, igual, no
+		// (simulación del mes, H353).
 		rs, err := s.pool.Query(ctx, `SELECT d FROM unnest($1::text[]) d WHERE
-			(d LIKE 'o:%' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = substr(d, 3)::uuid AND o.estado NOT IN ('cancelado', 'entregado')
-			  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion')))
+			(d LIKE 'o:%' AND EXISTS (SELECT 1 FROM orders o WHERE o.id = substr(d, 3)::uuid AND o.estado <> 'cancelado'
+			  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NOT NULL AND i.cae_ambiente IS DISTINCT FROM 'homologacion')
+			  AND (o.estado <> 'entregado' OR EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.cae IS NULL
+			    AND i.estado IN ('emitida', 'rechazada') AND i.tipo::text NOT LIKE 'nota_credito%'))))
 			OR (d LIKE 'i:%' AND EXISTS (SELECT 1 FROM invoices i WHERE i.id = substr(d, 3)::uuid AND i.cae IS NULL
 			  AND i.estado IN ('emitida', 'rechazada')))`, lista)
 		if err != nil {
@@ -578,7 +613,8 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 	}
 	if len(clientes) > 0 {
 		out = append(out, PendienteDelCierre{"anticipos-sin-aplicar", "Anticipos sin aplicar",
-			formato.Moneda(jsmath.Redondear2(varados)) + " de pedidos entregados o cancelados sin factura con CAE.", len(clientes), "/admin/clientes"})
+			formato.Moneda(jsmath.Redondear2(varados)) + " de pedidos entregados o cancelados sin factura con CAE.", len(clientes),
+			fichaOClientes(clientes)})
 	}
 
 	// Lo bancarizado en el B: los recibos del período, y los pagos y gastos en
@@ -626,10 +662,30 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		return nil, err
 	}
 	if total := jsmath.Redondear2(float64(enBanco + pagos)); cuantos+nPagos > 0 {
+		// «Resolver» lleva a lo que lo genera: los cobros del mes (los recibos)
+		// o, si son solo pagos y gastos, a los pagos. Antes llevaba a esta
+		// misma pantalla (H378).
+		donde := "/admin/pagos"
+		if cuantos == 0 {
+			donde = "/admin/compras/pagos"
+		}
 		out = append(out, PendienteDelCierre{"banco-b", "Movimientos bancarios en el circuito B",
-			formato.Moneda(total) + " por banco o Mercado Pago van al archivo B: el extracto no va a conciliar.", cuantos + nPagos, "/admin/cierre"})
+			formato.Moneda(total) + " por banco o Mercado Pago van al archivo B: el extracto no va a conciliar.", cuantos + nPagos, donde})
 	}
 	return out, nil
+}
+
+// fichaOClientes es a dónde lleva «Resolver» de un aviso por cliente: con un
+// solo cliente, a su ficha; si no, a la lista (H378).
+func fichaOClientes(claves map[string]bool) string {
+	if len(claves) == 1 {
+		for c := range claves {
+			if id, ok := strings.CutPrefix(c, "c:"); ok {
+				return "/admin/clientes/" + id
+			}
+		}
+	}
+	return "/admin/clientes"
 }
 
 // Totales es un total con su cantidad.
@@ -657,6 +713,11 @@ type ResumenDelMes struct {
 	Gastos                 Totales       `json:"gastos"`
 	RetencionesPracticadas Totales       `json:"retencionesPracticadas"`
 	RetencionesSufridas    Totales       `json:"retencionesSufridas"`
+	// PercepcionesIibb: las percepciones de Ingresos Brutos que nos hicieron
+	// los proveedores en sus facturas del mes, a computar en la DDJJ de IIBB.
+	// Estaban en el asiento de la compra y en el CSV del libro, y no en
+	// «Impuestos del período» (simulación del mes, H165).
+	PercepcionesIibb Totales `json:"percepcionesIibb"`
 	// PosicionIva: débito − crédito del mes, sin más (lo de antes).
 	PosicionIva float64 `json:"posicionIva"`
 	// Iva es la posición entera: con percepciones, retenciones y los dos
@@ -710,6 +771,14 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	if err != nil {
 		return r, err
 	}
+	var pi jsmath.Num
+	if err := s.lectura.QueryRow(ctx, `SELECT coalesce(sum(CASE WHEN tipo::text LIKE 'nota_credito%' THEN -1 ELSE 1 END * percepcion_iibb), 0),
+		count(*) FILTER (WHERE coalesce(percepcion_iibb, 0) <> 0)::int
+		FROM purchase_invoices WHERE fecha_emision >= $1 AND fecha_emision <= $2 AND anulada_at IS NULL`, desde, hasta).
+		Scan(&pi, &r.PercepcionesIibb.Cantidad); err != nil {
+		return r, err
+	}
+	r.PercepcionesIibb.Total = numero(pi)
 	r.Ventas.Neto, r.Ventas.Iva, r.Ventas.Total = numero(vn), numero(vi), numero(vt)
 	r.Compras.Neto, r.Compras.Iva, r.Compras.Total = numero(cn), numero(ci), numero(ct)
 	r.Gastos.Total, r.RetencionesPracticadas.Total, r.RetencionesSufridas.Total = numero(g), numero(rp), numero(rs)
@@ -744,30 +813,40 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 // la resta, así el redondeo no deja un centavo suelto. «Facturado neto», la
 // tarjeta de los comprobantes, sigue siendo lo fiscal: se corta por la
 // fecha de la factura y lleva el envío.
+//
+// **Sin CAE no es sin factura.** Lo que tiene su comprobante numerado y
+// espera el CAE (emitido o rechazado) va aparte, como SinCae: el contador
+// leía «sin factura $ 42 M» como ventas en negro cuando las 133 tenían
+// factura (simulación del mes, H422).
 type VendidoDelMes struct {
 	Total      float64 `json:"total"`
 	Facturado  Totales `json:"facturado"`
+	SinCae     Totales `json:"sinCae"`
 	Interno    Totales `json:"interno"`
 	SinFactura Totales `json:"sinFactura"`
 }
 
 func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) (VendidoDelMes, error) {
 	var v VendidoDelMes
-	var total, facturado, interno jsmath.Num
+	var total, facturado, sinCae, interno jsmath.Num
 	conDescuento := s.ajuste(ctx, "ganancia_descuento", "no") == "si"
 	err := s.lectura.QueryRow(ctx, `
 		SELECT `+ventasNetas(conDescuento, "margenes.neto")+`,
 		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'facturado'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'facturado'), 0)::int,
+		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'sin-cae'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'sin-cae'), 0)::int,
 		  `+ventasNetas(conDescuento, "margenes.neto", "o.papel = 'interno'")+`, coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'interno'), 0)::int,
 		  coalesce(sum(o.operaciones) FILTER (WHERE o.papel = 'sin-factura'), 0)::int
 		FROM (SELECT o.id, o.hecho, o.operaciones, o.total, o.subtotal, o.costo_envio,
 		        CASE WHEN EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.`+conCae+` AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'facturado'
+		             WHEN EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.cae IS NULL AND f.estado IN ('emitida', 'rechazada')
+		               AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'sin-cae'
 		             WHEN o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id) THEN 'interno'
 		             ELSE 'sin-factura' END AS papel
 		      FROM `+hechosDeVenta+` o WHERE o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2"),
-		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
+		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &sinCae, &v.SinCae.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
 	v.Total = jsmath.Redondear2(total.F())
 	v.Facturado.Total, v.Interno.Total = jsmath.Redondear2(facturado.F()), jsmath.Redondear2(interno.F())
-	v.SinFactura.Total = jsmath.Redondear2(float64(v.Total-v.Facturado.Total) - v.Interno.Total)
+	v.SinCae.Total = jsmath.Redondear2(sinCae.F())
+	v.SinFactura.Total = jsmath.Redondear2(float64(float64(v.Total-v.Facturado.Total)-v.SinCae.Total) - v.Interno.Total)
 	return v, err
 }

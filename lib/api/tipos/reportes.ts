@@ -433,11 +433,12 @@ export interface components {
             total: number;
             cantidad: number;
         };
-        /** @description facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado */
+        /** @description facturado + sinCae + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado */
         CierreVendido: {
             /** Format: double */
             total: number;
             facturado: components["schemas"]["CierreTotales"];
+            sinCae: components["schemas"]["CierreTotales"];
             interno: components["schemas"]["CierreTotales"];
             sinFactura: components["schemas"]["CierreTotales"];
         };
@@ -448,6 +449,7 @@ export interface components {
             gastos: components["schemas"]["CierreTotales"];
             retencionesPracticadas: components["schemas"]["CierreTotales"];
             retencionesSufridas: components["schemas"]["CierreTotales"];
+            percepcionesIibb: components["schemas"]["CierreTotales"];
             /**
              * Format: double
              * @description Débito menos crédito del mes

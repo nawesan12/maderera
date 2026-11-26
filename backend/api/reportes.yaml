@@ -362,16 +362,17 @@ components:
         cantidad: { type: integer }
     CierreVendido:
       type: object
-      description: facturado + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado
-      required: [total, facturado, interno, sinFactura]
+      description: facturado + sinCae + interno + sinFactura = total, exacto; la misma base que ventasNetas del resultado
+      required: [total, facturado, sinCae, interno, sinFactura]
       properties:
         total: { type: number, format: double }
         facturado: { $ref: "#/components/schemas/CierreTotales" }
+        sinCae: { $ref: "#/components/schemas/CierreTotales" }
         interno: { $ref: "#/components/schemas/CierreTotales" }
         sinFactura: { $ref: "#/components/schemas/CierreTotales" }
     CierreResumen:
       type: object
-      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, posicionIva, iva, resultado]
+      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado]
       properties:
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
         # Lo vendido en el mes sin IVA (el «Vendido sin IVA» del resultado) partido según su factura. No entra
@@ -381,6 +382,7 @@ components:
         gastos: { $ref: "#/components/schemas/CierreTotales" }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
+        percepcionesIibb: { $ref: "#/components/schemas/CierreTotales" }
         posicionIva: { type: number, format: double, description: Débito menos crédito del mes, sin percepciones ni saldos }
         iva:
           type: object

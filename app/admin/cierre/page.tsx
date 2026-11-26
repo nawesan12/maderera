@@ -218,6 +218,11 @@ export default async function CierrePage({
                 {resumen.vendido.facturado.cantidad > 0 && (
                   <span>con factura {formatearMonto(resumen.vendido.facturado.total)}</span>
                 )}
+                {resumen.vendido.sinCae.cantidad > 0 && (
+                  <span className="estado-espera font-medium">
+                    sin CAE {formatearMonto(resumen.vendido.sinCae.total)}
+                  </span>
+                )}
                 {resumen.vendido.interno.cantidad > 0 && (
                   <span>interno {formatearMonto(resumen.vendido.interno.total)}</span>
                 )}
@@ -300,16 +305,19 @@ export default async function CierrePage({
                   <dd className="text-right">{formatearMonto(v)}</dd>
                 </div>
               ))}
+            {/* Lo que queda a favor va con el mismo signo que el crédito de
+                arriba y dice a favor de quién: en positivo se leía como IVA a
+                pagar (H239). */}
             {resumen.iva.saldoTecnico > 0.005 && (
-              <div className="contents">
-                <dt>Saldo técnico</dt>
-                <dd className="text-right">{formatearMonto(resumen.iva.saldoTecnico)}</dd>
+              <div className="contents font-medium text-saldo-favor">
+                <dt>Saldo técnico a favor</dt>
+                <dd className="text-right">{formatearMonto(-resumen.iva.saldoTecnico)}</dd>
               </div>
             )}
             {resumen.iva.saldoLibre > 0.005 && (
-              <div className="contents">
-                <dt>Libre disponibilidad</dt>
-                <dd className="text-right">{formatearMonto(resumen.iva.saldoLibre)}</dd>
+              <div className="contents font-medium text-saldo-favor">
+                <dt>Libre disponibilidad a favor</dt>
+                <dd className="text-right">{formatearMonto(-resumen.iva.saldoLibre)}</dd>
               </div>
             )}
           </dl>
@@ -364,7 +372,12 @@ export default async function CierrePage({
           <Renglon
             titulo="Retenciones sufridas"
             detalle={`${resumen.retencionesSufridas.cantidad} certificados recibidos`}
-            valor={-resumen.retencionesSufridas.total}
+            valor={-resumen.retencionesSufridas.total || 0}
+          />
+          <Renglon
+            titulo="Percepciones de IIBB sufridas"
+            detalle={plural(resumen.percepcionesIibb.cantidad, "factura de compra", "facturas de compra")}
+            valor={-resumen.percepcionesIibb.total || 0}
           />
         </dl>
       </section>

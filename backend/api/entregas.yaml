@@ -42,6 +42,19 @@ paths:
               schema: { type: array, items: { $ref: "#/components/schemas/RemitoDelPedido" } }
         "401": { $ref: "#/components/responses/Problema" }
         "403": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/pedidos/{id}/otros-acopios:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: OtrosAcopios
+      description: Los demás pedidos de retiro del mismo cliente con algo por retirar (la misma visita se lleva de todos)
+      responses:
+        "200":
+          description: Cada pedido con lo que le queda
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OtroAcopio" } }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/remitos:
     post:
       operationId: PrepararRemito
@@ -254,6 +267,20 @@ components:
         entregado: { type: number, format: double }
         pendiente: { type: number, format: double }
         enteros: { type: boolean, description: El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso }
+    OtroAcopio:
+      type: object
+      required: [orderId, numero, renglones]
+      properties:
+        orderId: { type: string }
+        numero: { type: string }
+        renglones: { type: array, items: { $ref: "#/components/schemas/RenglonDeAcopio" } }
+    RemitoDeLaVisita:
+      type: object
+      required: [numero, pedidoNumero, lineas]
+      properties:
+        numero: { type: string }
+        pedidoNumero: { type: string }
+        lineas: { type: array, items: { $ref: "#/components/schemas/LineaDelRemito" } }
     RemitoDelPedido:
       type: object
       required: [id, numero, tipo, estado, receptorNombre, firmadoAt, firmaToken, createdAt, transportista, numeroSeguimiento, cantidadLineas, parcial]
@@ -318,8 +345,12 @@ components:
       type: object
       required: [id, numero, tipo, estado, receptorNombre, receptorDocumento, firmaUrl, firmadoAt, notas, createdAt, pedidoNumero, pedidoId,
         clienteNombre, clienteDireccion, customerId, estadoPago, medioPago, sucursal, sucursalDireccion, transportista, numeroSeguimiento,
-        lineas, pendientes, factura, sinCobrar]
+        lineas, pendientes, factura, sinCobrar, visita]
       properties:
+        visita:
+          type: array
+          description: Los remitos de otros pedidos que salieron en la misma visita y se firman con este enlace
+          items: { $ref: "#/components/schemas/RemitoDeLaVisita" }
         sinCobrar: { type: number, format: double, nullable: true, description: Lo que falta cobrar del pedido fuera de la cuenta corriente }
         id: { type: string }
         numero: { type: string }

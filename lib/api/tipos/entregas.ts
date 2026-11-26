@@ -41,6 +41,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pedidos/{id}/otros-acopios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Los demás pedidos de retiro del mismo cliente con algo por retirar (la misma visita se lleva de todos) */
+        get: operations["OtrosAcopios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/remitos": {
         parameters: {
             query?: never;
@@ -268,6 +287,16 @@ export interface components {
             /** @description El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso */
             enteros?: boolean;
         };
+        OtroAcopio: {
+            orderId: string;
+            numero: string;
+            renglones: components["schemas"]["RenglonDeAcopio"][];
+        };
+        RemitoDeLaVisita: {
+            numero: string;
+            pedidoNumero: string;
+            lineas: components["schemas"]["LineaDelRemito"][];
+        };
         RemitoDelPedido: {
             /** @description Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF) */
             parcial: boolean;
@@ -324,6 +353,8 @@ export interface components {
             caeVencimiento: string | null;
         };
         RemitoCompleto: {
+            /** @description Los remitos de otros pedidos que salieron en la misma visita y se firman con este enlace */
+            visita: components["schemas"]["RemitoDeLaVisita"][];
             /**
              * Format: double
              * @description Lo que falta cobrar del pedido fuera de la cuenta corriente
@@ -476,6 +507,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemitoDelPedido"][];
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+        };
+    };
+    OtrosAcopios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cada pedido con lo que le queda */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtroAcopio"][];
                 };
             };
             401: components["responses"]["Problema"];

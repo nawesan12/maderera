@@ -73,6 +73,8 @@ export const deliveries = pgTable(
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** El primer remito de la misma visita: se firman juntos (migración 00231). */
+    visitaDe: uuid(),
   },
   (t) => [
     uniqueIndex("deliveries_numero_idx").on(t.numero),

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -120,6 +121,16 @@ func (a *API) RemitosDelPedido(ctx context.Context, r entregasapi.RemitosDelPedi
 	return ok(v), err
 }
 
+func (a *API) OtrosAcopios(ctx context.Context, r entregasapi.OtrosAcopiosRequestObject) (entregasapi.OtrosAcopiosResponseObject, error) {
+	if err := a.pedidosOInterno(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.OtrosAcopios(ctx, r.Id)
+	return ok(v), err
+}
+
+func (o respuesta) VisitOtrosAcopiosResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
 func (a *API) PrepararRemito(ctx context.Context, r entregasapi.PrepararRemitoRequestObject) (entregasapi.PrepararRemitoResponseObject, error) {
 	ses, err := pedidos(ctx)
 	if err != nil {
@@ -132,6 +143,14 @@ func (a *API) PrepararRemito(ctx context.Context, r entregasapi.PrepararRemitoRe
 	e, err := a.s.CrearEntrega(ctx, ses, f)
 	if err != nil {
 		return nil, err
+	}
+	if len(e.Visita) > 0 {
+		numeros := []string{e.Numero}
+		for _, v := range e.Visita {
+			numeros = append(numeros, v.Numero)
+		}
+		m := "Remitos " + strings.Join(numeros, " y ") + " listos: se firman juntos."
+		return ok(map[string]any{"ok": m, "id": e.ID, "numero": e.Numero, "firmaToken": e.FirmaToken, "pedidoCompleto": e.PedidoCompleto}), nil
 	}
 	m := "Remito " + e.Numero + " listo. Todavía queda mercadería en acopio."
 	switch {

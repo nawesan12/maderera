@@ -203,3 +203,50 @@ func TestElRemitoDiceSiFueParcialYQueSeCorto(t *testing.T) {
 		t.Errorf("sin cobrar: %v", completo.SinCobrar)
 	}
 }
+
+// La obra con dos acopios: la misma visita se lleva de los dos con un solo
+// formulario y una sola firma (mes simulado: dos remitos, dos veces el
+// nombre y el documento, dos firmas). Lo de otro cliente no entra.
+func TestUnaVisitaDosAcopiosUnaFirma(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	_, cliente := e.web(t, "obra@prueba.test")
+	_, otroCliente := e.web(t, "otra-obra@prueba.test")
+	a, a1, _ := e.pedido(t, "PED-1018", "listo", &cliente)
+	b, b1, _ := e.pedido(t, "PED-1115", "listo", &cliente)
+	ajeno, x1, _ := e.pedido(t, "PED-1116", "listo", &otroCliente)
+
+	otros, err := e.s.OtrosAcopios(context.Background(), a)
+	if err != nil || len(otros) != 1 || otros[0].Numero != "PED-1115" || len(otros[0].Renglones) != 2 {
+		t.Fatalf("otros acopios: %+v %v", otros, err)
+	}
+
+	u := e.srv.URL + "/api/v1/admin/remitos"
+	if c, body := pedir(t, ven, "POST", u, map[string]any{"orderId": a, "tipo": "retiro", "receptorNombre": "Pablo Albañil",
+		"receptorDocumento": "20111222", "cantidades": cantidades(a1, "2"),
+		"otros": []any{map[string]any{"orderId": ajeno, "cantidades": cantidades(x1, "1")}}}); c != 422 || !strings.Contains(body, "otro cliente") {
+		t.Fatalf("lo de otro cliente: %d %s", c, body)
+	}
+	c, body := pedir(t, ven, "POST", u, map[string]any{"orderId": a, "tipo": "retiro", "receptorNombre": "Pablo Albañil",
+		"receptorDocumento": "20111222", "cantidades": cantidades(a1, "2"),
+		"otros": []any{map[string]any{"orderId": b, "cantidades": cantidades(b1, "3")}}})
+	if c != 200 || !strings.Contains(body, "REM-0001 y REM-0002") {
+		t.Fatalf("la visita: %d %s", c, body)
+	}
+	if v := e.uno(t, `select coalesce((select numero from deliveries d2 where d2.id = d.visita_de), '-') from deliveries d where numero = 'REM-0002'`); v != "REM-0001" {
+		t.Fatalf("visita de: %s", v)
+	}
+	token := e.uno(t, `select firma_token from deliveries where numero = 'REM-0001'`)
+	r, err := e.s.RemitoPorToken(context.Background(), token)
+	if err != nil || len(r.Visita) != 1 || r.Visita[0].PedidoNumero != "PED-1115" {
+		t.Fatalf("el enlace no trae la visita: %+v %v", r, err)
+	}
+	e.firmar(t, "REM-0001")
+	if n := e.uno(t, `select count(*)::text from deliveries where firmado_at is not null and receptor_nombre = 'Quien Recibe'`); n != "2" {
+		t.Errorf("firmados: %s", n)
+	}
+	if q := e.uno(t, `select reservado::text from inventory where variant_id = $1`, e.variante); q != "25.000" {
+		t.Errorf("reservado después de la visita (30 − 2 − 3): %s", q)
+	}
+	_ = ajeno
+}

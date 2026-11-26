@@ -82,6 +82,16 @@ type RemitoCompleto struct {
 	// contra entrega tiene que saber cuánto traer, y el remito decía solo
 	// «Pendiente de pago».
 	SinCobrar *float64 `json:"sinCobrar"`
+	// Visita son los remitos de otros pedidos que salieron en la misma
+	// visita y se firman con este enlace (solo en RemitoPorToken).
+	Visita []RemitoDeLaVisita `json:"visita"`
+}
+
+// RemitoDeLaVisita es otro remito que se firma junto con el del enlace.
+type RemitoDeLaVisita struct {
+	Numero       string           `json:"numero"`
+	PedidoNumero string           `json:"pedidoNumero"`
+	Lineas       []LineaDelRemito `json:"lineas"`
 }
 
 // cortesDelPedido son los cortes vivos del pedido por variante: qué parte
@@ -214,6 +224,7 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	if err := filas.Err(); err != nil {
 		return nil, err
 	}
+	r.Visita = []RemitoDeLaVisita{}
 	pendientes, err := SaldoAlRemito(ctx, s.pool, r.PedidoID, id)
 	if err != nil {
 		return nil, err
@@ -264,6 +275,21 @@ func (s *Servicio) RemitoPorToken(ctx context.Context, token string) (*RemitoCom
 		return r, err
 	}
 	r.ReceptorDocumento = DocumentoEnmascarado(r.ReceptorDocumento)
+	filas, err := s.pool.Query(ctx, `SELECT id::text FROM deliveries WHERE visita_de = $1 AND estado <> 'anulada' ORDER BY numero`, id)
+	if err != nil {
+		return nil, err
+	}
+	otros, err := pgx.CollectRows(filas, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	for _, otro := range otros {
+		o, err := s.RemitoCompleto(ctx, otro)
+		if err != nil {
+			return nil, err
+		}
+		r.Visita = append(r.Visita, RemitoDeLaVisita{Numero: o.Numero, PedidoNumero: o.PedidoNumero, Lineas: o.Lineas})
+	}
 	return r, nil
 }
 

@@ -200,6 +200,9 @@ type EntregaCreada struct {
 	Numero         string `json:"numero"`
 	FirmaToken     string `json:"firmaToken"`
 	PedidoCompleto bool   `json:"pedidoCompleto"`
+	// Visita son los remitos de los otros pedidos que salieron en la misma
+	// visita (se firman con el enlace de este).
+	Visita []EntregaCreada `json:"visita,omitempty"`
 }
 
 // tokenDeFirma son 24 bytes al azar en base64url (randomBytes(24)).
@@ -210,8 +213,9 @@ func tokenDeFirma() string {
 }
 
 type pedidoDelRemito struct {
-	sucursal *string
-	estado   string
+	sucursal, cliente *string
+	estado            string
+	tipoEntrega       string
 }
 
 // pedidoBloqueado lee el pedido y bloquea su fila (nadie lo cancela ni lo
@@ -221,7 +225,8 @@ func pedidoBloqueado(ctx context.Context, tx pgx.Tx, id string) (*pedidoDelRemit
 		return nil, nil
 	}
 	var p pedidoDelRemito
-	err := tx.QueryRow(ctx, `SELECT branch_id, estado::text FROM orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.sucursal, &p.estado)
+	err := tx.QueryRow(ctx, `SELECT branch_id, estado::text, customer_id::text, tipo_entrega::text FROM orders WHERE id = $1 FOR UPDATE`, id).
+		Scan(&p.sucursal, &p.estado, &p.cliente, &p.tipoEntrega)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -301,108 +306,175 @@ func sacarDelDeposito(ctx context.Context, tx pgx.Tx, pedido string, sucursal *s
 // CrearEntrega prepara un remito y saca la mercadería del depósito, todo en
 // una transacción: el remito, sus líneas, el descuento de stock y el consumo
 // de la reserva. Si con esto no queda nada pendiente, el pedido pasa a
-// entregado.
+// entregado (en un envío, a «en camino» hasta la firma).
+//
+// Con `Otros` (mes simulado), la misma visita se lleva cosas de otros
+// acopios del mismo cliente: sale un remito por pedido, con el mismo
+// receptor, y los demás apuntan al primero (visita_de) para firmarse todos
+// juntos con su enlace. Solo en un retiro.
 func (s *Servicio) CrearEntrega(ctx context.Context, ses *auth.Sesion, f FormRemito) (*EntregaCreada, error) {
 	usuario := &ses.UserID
+	partes := []FormRemito{}
+	for i, p := range append([]FormRemito{f}, f.otrosComoFormularios()...) {
+		// El principal va siempre si no hay otros: su validación da el
+		// mensaje de siempre («Elegí al menos un producto…»).
+		if conAlgo(p.Lineas) || (i == 0 && len(f.Otros) == 0) {
+			partes = append(partes, p)
+		}
+	}
+	if len(partes) == 0 {
+		return nil, ErrorDeEntrega("Elegí al menos un producto para entregar.")
+	}
+	if len(partes) > 1 && f.Tipo != "retiro" {
+		return nil, ErrorDeEntrega("Lo de otros pedidos sale junto solo en un retiro.")
+	}
 	var out *EntregaCreada
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
 			return err
 		}
-		pendientes, err := SaldoDeAcopio(ctx, tx, f.OrderID)
-		if err != nil {
-			return err
-		}
-		control := ValidarEntrega(pendientes, f.Lineas)
-		if control.Error != "" {
-			return ErrorDeEntrega(control.Error)
-		}
-		if msj := RevisarEnteros(pendientes, control.Lineas); msj != "" {
-			return ErrorDeEntrega(msj)
-		}
-		pedido, err := pedidoBloqueado(ctx, tx, f.OrderID)
-		if err != nil {
-			return err
-		}
-		if pedido == nil {
-			return ErrorDeEntrega("El pedido no existe.")
-		}
-		if pedido.estado == "cancelado" {
-			return ErrorDeEntrega("El pedido está cancelado.")
-		}
-		// Un pedido entregado con saldo es una venta directa del mostrador:
-		// la mercadería salió al cobrar y el stock ya bajó. Un remito común
-		// la descontaría otra vez; el de constancia no toca el inventario.
-		// (Los demás pedidos dejan de estar entregados al anular un remito.)
-		if pedido.estado == "entregado" {
-			return ErrorDeEntrega("Este pedido ya salió del depósito: emití el remito de constancia, que no vuelve a descontar el stock.")
-		}
-		// Lo que completa el pedido no sale con un corte sin terminar: las
-		// piezas todavía no existen.
-		if control.Completo {
-			if err := FaltaElCorte(ctx, tx, f.OrderID); err != nil {
-				return err
+		var cliente *string
+		for i, parte := range partes {
+			var visita *string
+			if i > 0 {
+				visita = &out.ID
 			}
-		}
-		yaSalio, err := SalioConLaVenta(ctx, tx, f.OrderID)
-		if err != nil {
-			return err
-		}
-		numero, err := numeracion.Remito(ctx, tx)
-		if err != nil {
-			return err
-		}
-		salida, err := sucursalDelRemito(ctx, tx, f.OrderID, pedido.sucursal)
-		if err != nil {
-			return err
-		}
-		token := tokenDeFirma()
-		id, err := insertarRemito(ctx, tx, numero, f.OrderID, salida, f.Tipo, "preparada",
-			f.ReceptorNombre, f.ReceptorDocumento, f.Notas, token, usuario, control.Lineas)
-		if err != nil {
-			return err
-		}
-		if f.Tipo == "envio" {
-			if _, err := tx.Exec(ctx, `INSERT INTO shipments (delivery_id, transportista, numero_seguimiento, estado) VALUES ($1, $2, $3, 'preparando')`,
-				id, textoONulo(f.Transportista), textoONulo(f.NumeroSeguimiento)); err != nil {
-				return err
-			}
-		}
-		if !yaSalio {
-			if err := sacarDelDeposito(ctx, tx, f.OrderID, salida, numero, usuario, control.Lineas, pendientes); err != nil {
-				return err
-			}
-		}
-		switch {
-		case f.Tipo == "envio" && pedido.estado != "en-camino":
-			// El remito de un envío acompaña al camión: el pedido queda «en
-			// camino» y se da por entregado cuando firma quien recibe
-			// (VueltaDelViaje). Quedaba entregado al cargar el camión, y el
-			// cobro contra entrega desaparecía del reparto.
-			nota := "Remito " + numero + ": salió en camino"
-			if !control.Completo {
-				nota = "Remito " + numero + ": salió en camino una parte"
-			}
-			if err := pasarA(ctx, tx, f.OrderID, "en-camino", nota, usuario, true); err != nil {
-				return err
-			}
-		case f.Tipo != "envio" && control.Completo:
-			// Como «Avanzar» a entregado: si falta cobrar, la nota lo dice con
-			// la misma cabecera, y queda quién soltó la mercadería.
-			nota, err := notaSinCobrar(ctx, tx, f.OrderID, "Remito "+numero+": se retiró todo lo que quedaba")
+			creada, delCliente, err := crearEnTransaccion(ctx, tx, parte, usuario, visita)
 			if err != nil {
 				return err
 			}
-			if err := pasarA(ctx, tx, f.OrderID, "entregado", nota, usuario, false); err != nil {
-				return err
+			if i == 0 {
+				out, cliente = creada, delCliente
+				continue
 			}
+			// Solo los acopios del mismo cliente: si no, una visita se
+			// llevaría lo de otra obra.
+			if cliente == nil || delCliente == nil || *cliente != *delCliente {
+				return ErrorDeEntrega("Ese pedido es de otro cliente.")
+			}
+			out.Visita = append(out.Visita, *creada)
 		}
-		out = &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: control.Completo}
-		// El enlace para firmar desde el celular.
-		_, err = cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{})
-		return err
+		return nil
 	})
 	return out, err
+}
+
+func conAlgo(ls []LineaAEntregar) bool {
+	for _, l := range ls {
+		if l.Cantidad > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// crearEnTransaccion es un remito de CrearEntrega: quien llama tiene el
+// candado de la serie. Devuelve también el cliente del pedido.
+func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, visitaDe *string) (*EntregaCreada, *string, error) {
+	pendientes, err := SaldoDeAcopio(ctx, tx, f.OrderID)
+	if err != nil {
+		return nil, nil, err
+	}
+	control := ValidarEntrega(pendientes, f.Lineas)
+	if control.Error != "" {
+		return nil, nil, ErrorDeEntrega(control.Error)
+	}
+	if msj := RevisarEnteros(pendientes, control.Lineas); msj != "" {
+		return nil, nil, ErrorDeEntrega(msj)
+	}
+	pedido, err := pedidoBloqueado(ctx, tx, f.OrderID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if pedido == nil {
+		return nil, nil, ErrorDeEntrega("El pedido no existe.")
+	}
+	if pedido.estado == "cancelado" {
+		return nil, nil, ErrorDeEntrega("El pedido está cancelado.")
+	}
+	// Un pedido entregado con saldo es una venta directa del mostrador:
+	// la mercadería salió al cobrar y el stock ya bajó. Un remito común
+	// la descontaría otra vez; el de constancia no toca el inventario.
+	// (Los demás pedidos dejan de estar entregados al anular un remito.)
+	if pedido.estado == "entregado" {
+		return nil, nil, ErrorDeEntrega("Este pedido ya salió del depósito: emití el remito de constancia, que no vuelve a descontar el stock.")
+	}
+	if visitaDe != nil && pedido.tipoEntrega != "retiro" {
+		return nil, nil, ErrorDeEntrega("Lo de otros pedidos sale junto solo en un retiro.")
+	}
+	// Lo que completa el pedido no sale con un corte sin terminar: las
+	// piezas todavía no existen.
+	if control.Completo {
+		if err := FaltaElCorte(ctx, tx, f.OrderID); err != nil {
+			return nil, nil, err
+		}
+	}
+	yaSalio, err := SalioConLaVenta(ctx, tx, f.OrderID)
+	if err != nil {
+		return nil, nil, err
+	}
+	numero, err := numeracion.Remito(ctx, tx)
+	if err != nil {
+		return nil, nil, err
+	}
+	salida, err := sucursalDelRemito(ctx, tx, f.OrderID, pedido.sucursal)
+	if err != nil {
+		return nil, nil, err
+	}
+	token := tokenDeFirma()
+	id, err := insertarRemito(ctx, tx, numero, f.OrderID, salida, f.Tipo, "preparada",
+		f.ReceptorNombre, f.ReceptorDocumento, f.Notas, token, usuario, control.Lineas)
+	if err != nil {
+		return nil, nil, err
+	}
+	if visitaDe != nil {
+		if _, err := tx.Exec(ctx, `UPDATE deliveries SET visita_de = $2 WHERE id = $1`, id, *visitaDe); err != nil {
+			return nil, nil, err
+		}
+	}
+	if f.Tipo == "envio" {
+		if _, err := tx.Exec(ctx, `INSERT INTO shipments (delivery_id, transportista, numero_seguimiento, estado) VALUES ($1, $2, $3, 'preparando')`,
+			id, textoONulo(f.Transportista), textoONulo(f.NumeroSeguimiento)); err != nil {
+			return nil, nil, err
+		}
+	}
+	if !yaSalio {
+		if err := sacarDelDeposito(ctx, tx, f.OrderID, salida, numero, usuario, control.Lineas, pendientes); err != nil {
+			return nil, nil, err
+		}
+	}
+	switch {
+	case f.Tipo == "envio" && pedido.estado != "en-camino":
+		// El remito de un envío acompaña al camión: el pedido queda «en
+		// camino» y se da por entregado cuando firma quien recibe
+		// (VueltaDelViaje). Quedaba entregado al cargar el camión, y el
+		// cobro contra entrega desaparecía del reparto.
+		nota := "Remito " + numero + ": salió en camino"
+		if !control.Completo {
+			nota = "Remito " + numero + ": salió en camino una parte"
+		}
+		if err := pasarA(ctx, tx, f.OrderID, "en-camino", nota, usuario, true); err != nil {
+			return nil, nil, err
+		}
+	case f.Tipo != "envio" && control.Completo:
+		// Como «Avanzar» a entregado: si falta cobrar, la nota lo dice con
+		// la misma cabecera, y queda quién soltó la mercadería.
+		nota, err := notaSinCobrar(ctx, tx, f.OrderID, "Remito "+numero+": se retiró todo lo que quedaba")
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := pasarA(ctx, tx, f.OrderID, "entregado", nota, usuario, false); err != nil {
+			return nil, nil, err
+		}
+	}
+	// El enlace para firmar desde el celular: el de la visita va con el
+	// primero, que lleva todo.
+	if visitaDe == nil {
+		if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
+			return nil, nil, err
+		}
+	}
+	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: control.Completo}, pedido.cliente, nil
 }
 
 // RemitoPorLoQueQueda es el remito que nace cuando un pedido pasa a
@@ -551,6 +623,14 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 			return err
 		}
 		firmo = true
+		// Los remitos de la misma visita se firman con el primero.
+		if _, err := tx.Exec(ctx, `
+			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
+			  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
+			  entregado_at = now(), updated_at = now()
+			WHERE visita_de = $1 AND estado = 'preparada'`, r.DeliveryID, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)); err != nil {
+			return err
+		}
 		// El envío se da por entregado cuando firma quien recibe en la obra.
 		if tipo == "envio" {
 			if _, err := pedidoBloqueado(ctx, tx, pedido); err != nil {
@@ -784,6 +864,55 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 			return nil, err
 		}
 		out[i].Parcial = len(quedaba) > 0
+	}
+	return out, nil
+}
+
+// OtroAcopio es lo que el mismo cliente tiene en acopio en otro pedido.
+type OtroAcopio struct {
+	OrderID   string    `json:"orderId"`
+	Numero    string    `json:"numero"`
+	Renglones []Renglon `json:"renglones"`
+}
+
+// OtrosAcopios son los demás pedidos de retiro del cliente del pedido con
+// algo por retirar: la visita del albañil se lleva cosas de todos (mes
+// simulado), y no había dónde ver todo lo que la obra tiene en acopio.
+func (s *Servicio) OtrosAcopios(ctx context.Context, pedido string) ([]OtroAcopio, error) {
+	out := []OtroAcopio{}
+	if !plataforma.UUIDValido(pedido) {
+		return out, nil
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT o.id::text, o.numero FROM orders o
+		WHERE o.customer_id = (SELECT customer_id FROM orders WHERE id = $1) AND o.id <> $1
+		  AND o.tipo_entrega = 'retiro' AND o.estado NOT IN ('entregado', 'cancelado')
+		ORDER BY o.created_at`, pedido)
+	if err != nil {
+		return nil, err
+	}
+	type fila struct{ id, numero string }
+	var pedidos []fila
+	for filas.Next() {
+		var f fila
+		if err := filas.Scan(&f.id, &f.numero); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		pedidos = append(pedidos, f)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	for _, p := range pedidos {
+		saldo, err := SaldoDeAcopio(ctx, s.pool, p.id)
+		if err != nil {
+			return nil, err
+		}
+		if quedan := SoloPendientes(saldo); len(quedan) > 0 {
+			out = append(out, OtroAcopio{OrderID: p.id, Numero: p.numero, Renglones: quedan})
+		}
 	}
 	return out, nil
 }

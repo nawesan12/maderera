@@ -293,6 +293,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"AnularRecibo":                   "plata",                         // POST /api/v1/admin/recibos/{id}/anular
 	"AnularRemito":                   "/admin/pedidos",                // POST /api/v1/admin/remitos/{id}/anular
 	"PrepararRemito":                 "/admin/pedidos",                // POST /api/v1/admin/remitos
+	"OtrosAcopios":                   "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/otros-acopios
 	"ReporteDeReposicionArchivo":     "/admin/reportes",               // GET /api/v1/admin/reportes/reposicion/archivo
 	"ReporteDeReposicion":            "/admin/reportes",               // GET /api/v1/admin/reportes/reposicion
 	"ReporteDeVentasArchivo":         "/admin/reportes",               // GET /api/v1/admin/reportes/ventas/archivo

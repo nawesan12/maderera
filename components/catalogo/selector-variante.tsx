@@ -260,6 +260,9 @@ export function SelectorVariante({
           aPedido={aPedido}
           stockVisible={tienda.stockVisible}
           enlace={(texto) => (numeroWhatsapp ? enlaceDeConsulta(numeroWhatsapp, texto) : whatsapp)}
+          // Con la tienda apagada el precio solo llega si es el propio del
+          // profesional y la regla lo deja (H086): Go no manda otro.
+          precio={sinPrecio ? null : mostrado}
         />
       ) : (
         <>
@@ -456,7 +459,9 @@ function ConsultaDeLaMedida({
   aPedido,
   stockVisible,
   enlace,
+  precio,
 }: {
+  precio: { principal: number; sufijo?: string | null } | null;
   productName: string;
   medida: VarianteDetalle;
   presentacion: Presentacion;
@@ -499,6 +504,14 @@ function ConsultaDeLaMedida({
         {/* Medidas en la sans con cifras tabulares (comité final, M21): la mono
             es para importes y códigos. */}
         <p className="text-2xl font-bold leading-tight tracking-[-0.02em] tabular-nums">{medida.label}</p>
+        {precio && (
+          <p className="mt-2 flex items-baseline gap-2">
+            <span className="tabular text-3xl font-bold leading-none tracking-[-0.03em]">
+              {formatearPrecio(String(precio.principal))}
+            </span>
+            {precio.sufijo && <span className="text-base font-semibold text-texto-2">{precio.sufijo}</span>}
+          </p>
+        )}
         <p className="mt-1.5 text-[14.5px] text-texto-2">
           {como ?? `Se vende por ${formatearUnidadLarga(unidad)}`}
           {detalles.map((d) => ` · ${d}`)}

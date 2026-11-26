@@ -23,9 +23,11 @@ export default async function MisPresupuestosPage() {
     mensajeDeConsulta("Hola! Quería pedir un presupuesto de...", cliente ? { nombre: cliente.nombre } : null),
   );
 
-  const aResponder = presupuestos.filter((p) => p.estado === "enviado");
+  // Go dice cuáles se contestan desde acá: los enviados y, si la regla lo
+  // deja, los pendientes (H085).
+  const aResponder = presupuestos.filter((p) => p.aResponder);
   const enCurso = presupuestos.filter(
-    (p) => p.estado === "pendiente" || p.estado === "revision",
+    (p) => !p.aResponder && (p.estado === "pendiente" || p.estado === "revision"),
   );
   const cerrados = presupuestos.filter(
     (p) =>
@@ -156,7 +158,7 @@ function Cabecera({ presupuesto }: { presupuesto: PresupuestoPropio }) {
         <p className="mt-0.5 text-sm text-muted-foreground">
           {plural(presupuesto.items, "producto")} ·{" "}
           {fechaCorta.format(presupuesto.createdAt)}
-          {dias !== null && presupuesto.estado === "enviado" && (
+          {dias !== null && presupuesto.aResponder && (
             <>
               {" · "}
               <span className={dias <= 3 ? "text-brand-orange-dark" : undefined}>

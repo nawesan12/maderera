@@ -20,6 +20,9 @@ export async function guardarRegla(clave: ClaveDeRegla, valor: string): Promise<
   });
   if (r.error) return { error: mensajeDe(r.error as Problema, "No se pudo guardar.") };
   updateTag(ETIQUETAS.ajustes);
+  // Los precios del profesional con la tienda apagada salen del catálogo
+  // guardado por lista (H086).
+  if (clave === "precios_profesional_sin_tienda") updateTag(ETIQUETAS.catalogo);
   // Una regla toca pantallas de todos lados (mostrador, cortes, cierre, Mi
   // cuenta): se cambia pocas veces y vale más que nada quede viejo.
   revalidatePath("/", "layout");

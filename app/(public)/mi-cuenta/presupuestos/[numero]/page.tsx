@@ -44,7 +44,7 @@ export default async function DetallePresupuestoPage({
   const dias = diasHasta(presupuesto.validoHasta);
   const vencido =
     presupuesto.estado === "vencido" || (dias !== null && dias < 0);
-  const esperaRespuesta = presupuesto.estado === "enviado" && !vencido;
+  const esperaRespuesta = presupuesto.aResponder && !vencido;
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { metadatosDePagina } from "@/lib/seo";
-import { tienda } from "@/lib/dal/contenido";
+import { ajustesDelSitio, tienda } from "@/lib/dal/contenido";
+import { preciosDelProfesional } from "@/lib/tienda";
+import { valorDeRegla } from "@/lib/reglas";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { EncabezadoPublico } from "@/components/encabezado-publico";
@@ -102,7 +104,7 @@ export default async function ProfesionalesPage() {
   /* El teléfono estaba escrito a mano —"(0223) 474-3328"— y no era el de
      ninguna de las dos sucursales. Sale de `branches` como el resto del sitio. */
   const [casaCentral] = await listarSucursalesPublicas();
-  const [estado, sesion, cliente, eventos, documentos, laTienda] =
+  const [estado, sesion, cliente, eventos, documentos, laTienda, ajustes] =
     await Promise.all([
       estadoProfesional(),
       getSession(),
@@ -110,6 +112,7 @@ export default async function ProfesionalesPage() {
       eventosProximos(),
       documentosVisibles(),
       tienda(),
+      ajustesDelSitio(),
     ]);
 
   return (
@@ -132,6 +135,11 @@ export default async function ProfesionalesPage() {
             limiteCredito={estado.limiteCredito}
             documentos={documentos.length}
             tiendaActiva={laTienda.activa}
+            conPrecios={preciosDelProfesional(
+              laTienda,
+              valorDeRegla(ajustes, "precios_profesional_sin_tienda"),
+              Boolean(estado.nombreLista),
+            )}
           />
         ) : (
           <div className="grid items-start gap-12 lg:grid-cols-[1fr_27rem]">
@@ -320,12 +328,15 @@ function PanelDelProfesional({
   limiteCredito,
   documentos,
   tiendaActiva,
+  conPrecios,
 }: {
   nombreLista: string | null;
   limiteCredito: number;
   documentos: number;
-  /** Apagada, la lista propia, el presupuesto y el PDF de precios esperan. */
+  /** Apagada, el presupuesto espera. */
   tiendaActiva: boolean;
+  /** Ve su lista en el catálogo y en PDF (`preciosDelProfesional`). */
+  conPrecios: boolean;
 }) {
   const todos = [
     {
@@ -371,8 +382,9 @@ function PanelDelProfesional({
     },
   ];
 
-  const conPrecios = new Set(["/catalogo", "/carrito", "/mi-lista-de-precios"]);
-  const accesos = tiendaActiva ? todos : todos.filter((a) => !conPrecios.has(a.href));
+  const accesos = todos.filter((a) =>
+    a.href === "/carrito" ? tiendaActiva : a.href === "/catalogo" || a.href === "/mi-lista-de-precios" ? conPrecios : true,
+  );
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

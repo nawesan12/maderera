@@ -227,6 +227,7 @@ export interface components {
             lista: string | null;
         } | null;
         PresupuestoDelPortal: {
+            aResponder: boolean;
             pedido: string | null;
             id: string;
             numero: string;
@@ -517,6 +518,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        aResponder: boolean;
                         id: string;
                         numero: string;
                         estado: string;

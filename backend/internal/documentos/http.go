@@ -105,15 +105,16 @@ func (a *API) MiListaDePreciosPdf(ctx context.Context, _ documentosapi.MiListaDe
 	// Con la tienda apagada no sale ningún precio, tampoco en el PDF: con
 	// solo registrarse, cualquiera se bajaba el catálogo entero con precios
 	// (revisión del 10/11/2026).
-	if err := a.catalogo.ExigirTienda(ctx); err != nil {
+	// El profesional la baja igual si la regla lo deja (H086).
+	l, err := a.catalogo.Vigente(ctx, ses)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.catalogo.ExigirTiendaPara(ctx, ses, l); err != nil {
 		return nil, err
 	}
 	if v := a.lim.Permitido(ctx, limites.ListaDePrecios, "usuario:"+ses.UserID); !v.Permitido {
 		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests, limites.AvisoDeEspera(v))
-	}
-	l, err := a.catalogo.Vigente(ctx, ses)
-	if err != nil {
-		return nil, err
 	}
 	filas, err := a.catalogo.FilasDeMiLista(ctx, l)
 	if err != nil {

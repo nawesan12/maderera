@@ -349,7 +349,7 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		porPreparar, listos, cortes, chequesVencidos, chequesPorVencer int
 		comprasPorVencer, solicitudes, resenas                         int
 		reponer, seguimientos, presupuestos                            int
-		chequesEn48, comprasEn48, bajoCosto                            int
+		chequesEn48, comprasEn48, bajoCosto, profesionalCaro           int
 	}
 	ahora := s.ahora()
 	// El vencimiento de una factura de compra es un día (medianoche UTC):
@@ -394,12 +394,18 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 		  (SELECT en48 FROM compras),
 		  CASE WHEN $12 THEN (SELECT count(*)::int FROM product_variants v JOIN products p ON p.id = v.product_id
 		                      WHERE p.active AND v.active AND `+precios.BajoCostoDe(`coalesce((SELECT pli.price FROM price_list_items pli
-		                        JOIN price_lists pl ON pl.id = pli.price_list_id AND pl.is_default WHERE pli.variant_id = v.id), 0)`)+`) ELSE 0 END`,
+		                        JOIN price_lists pl ON pl.id = pli.price_list_id AND pl.is_default WHERE pli.variant_id = v.id), 0)`)+`) ELSE 0 END,
+		  CASE WHEN $12 THEN (SELECT count(*)::int FROM product_variants v JOIN products p ON p.id = v.product_id
+		                      WHERE p.active AND v.active AND EXISTS (
+		                        SELECT 1 FROM price_list_items g JOIN price_lists gl ON gl.id = g.price_list_id AND gl.is_default
+		                        JOIN price_list_items pr ON pr.variant_id = g.variant_id
+		                        JOIN price_lists pl ON pl.id = pr.price_list_id AND pl.slug = 'profesional'
+		                        WHERE g.variant_id = v.id AND g.price > 0 AND pr.price > g.price)) ELSE 0 END`,
 		ve("/admin/pedidos"), ve("/admin/cortes"), ve("/admin/cheques"), ve("/admin/compras/facturas"),
 		ve("/admin/profesionales"), ve("/admin/contenido"), ve("/admin/stock"), ve("/admin/clientes"), ve("/admin/presupuestos"), hoy, ahora,
 		ve("/admin/precios")).
 		Scan(&c.porPreparar, &c.listos, &c.cortes, &c.chequesVencidos, &c.chequesPorVencer, &c.comprasPorVencer,
-			&c.solicitudes, &c.resenas, &c.reponer, &c.seguimientos, &c.presupuestos, &c.chequesEn48, &c.comprasEn48, &c.bajoCosto)
+			&c.solicitudes, &c.resenas, &c.reponer, &c.seguimientos, &c.presupuestos, &c.chequesEn48, &c.comprasEn48, &c.bajoCosto, &c.profesionalCaro)
 	if err != nil {
 		return nil, err
 	}
@@ -495,6 +501,12 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	// El precio de lista bajo el costo: cada venta pierde plata (H139).
 	agregar(c.bajoCosto, Pendiente{Clave: "bajo-costo", Texto: uno(c.bajoCosto, "medida con el precio bajo el costo", "medidas con el precio bajo el costo"),
 		Href: "/admin/precios?estado=bajo-costo", Urgente: true})
+	// El profesional pagando más que un consumidor final (mes simulado: los
+	// tirantes de pino a $25.650 en la profesional y $12.345 en la general).
+	// No se corrige solo: cuál de los dos precios es el bueno lo sabe la dueña.
+	agregar(c.profesionalCaro, Pendiente{Clave: "profesional-caro", Texto: uno(c.profesionalCaro,
+		"medida más cara para el profesional", "medidas más caras para el profesional"),
+		Href: "/admin/precios?estado=profesional-caro", Urgente: true})
 	agregar(c.resenas, Pendiente{Clave: "resenas", Texto: uno(c.resenas, "reseña sin moderar", "reseñas sin moderar"),
 		Detalle: detalle("No se publican hasta que alguien las mire"), Href: "/admin/contenido"})
 	agregar(o.whatsapp, Pendiente{Clave: "whatsapp", Texto: uno(o.whatsapp, "conversación de WhatsApp sin contestar", "conversaciones de WhatsApp sin contestar"),

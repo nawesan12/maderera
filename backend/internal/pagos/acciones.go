@@ -86,6 +86,13 @@ func revisarArchivo(a *Archivo) error {
 	if !TiposDeComprobante[a.Tipo] {
 		return fallo("Subí una imagen o un PDF.")
 	}
+	// Lo que dice el archivo por dentro, no su nombre: se guarda con el tipo
+	// real.
+	real := subidas.TipoDeComprobante(a.Datos)
+	if real == "" {
+		return fallo("Subí una imagen o un PDF.")
+	}
+	a.Tipo = real
 	return nil
 }
 

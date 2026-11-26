@@ -6,6 +6,7 @@
 package subidas
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -63,6 +64,26 @@ func formatoDeImagen(b []byte) string {
 		return "webp"
 	case strings.Contains(cab, "ftypavif"):
 		return "avif"
+	}
+	return ""
+}
+
+// TipoDeComprobante es el tipo real de un comprobante según sus primeros
+// bytes (jpeg, png, webp o pdf), sin creerle a lo que se declaró; vacío si no
+// es ninguno. Un .txt renombrado a .png o un PDF de bytes al azar pasaban
+// como comprobantes (mes simulado, tercera prueba).
+func TipoDeComprobante(datos []byte) string {
+	switch formatoDeImagen(datos) {
+	case "jpg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	case "webp":
+		return "image/webp"
+	}
+	// La norma deja basura antes de la cabecera, dentro del primer KB.
+	if bytes.Contains(datos[:min(len(datos), 1024)], []byte("%PDF-")) {
+		return "application/pdf"
 	}
 	return ""
 }

@@ -164,11 +164,21 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
                   <p className="text-sm text-muted-foreground">
                     {r.medida.medida} · <span className="tabular">{r.medida.sku}</span>
                   </p>
+                  {/* Lo que frena «Mandar» se dice en el renglón: el botón
+                      se apagaba sin decir por qué (mes simulado). */}
                   <p
-                    className={`tabular text-sm ${r.sinStock || r.hay <= 0 ? "font-medium text-destructive" : "text-muted-foreground"}`}
+                    id={`traslado-hay-${r.medida.id}`}
+                    className={`tabular text-sm ${r.sinStock || r.mal || r.hay <= 0 ? "font-medium text-destructive" : "text-muted-foreground"}`}
                   >
-                    {origenNombre}: {formatearCantidad(Math.max(r.hay, 0))}{" "}
-                    {unidadConcordada(Math.max(r.hay, 0), r.medida.unidad, `${r.medida.producto} ${r.medida.medida}`)}
+                    {r.mal
+                      ? Number.isFinite(r.n) && r.n > 0
+                        ? "Va sin decimales"
+                        : "Cantidad mal escrita"
+                      : `${r.sinStock ? "Solo hay " : `${origenNombre}: `}${formatearCantidad(Math.max(r.hay, 0))} ${unidadConcordada(
+                          Math.max(r.hay, 0),
+                          r.medida.unidad,
+                          `${r.medida.producto} ${r.medida.medida}`,
+                        )}${r.sinStock ? ` en ${origenNombre}` : ""}`}
                   </p>
                 </div>
                 <label className="sr-only" htmlFor={`traslado-cant-${r.medida.id}`}>
@@ -195,6 +205,7 @@ export function DialogoTraslado({ sucursales }: { sucursales: { id: string; name
                     }
                   }}
                   aria-invalid={r.mal || r.sinStock || undefined}
+                  aria-describedby={`traslado-hay-${r.medida.id}`}
                   placeholder={admiteDecimales(r.medida.unidad) ? "2,5" : "4"}
                   className="tabular h-11 w-20 shrink-0 text-right text-lg"
                 />

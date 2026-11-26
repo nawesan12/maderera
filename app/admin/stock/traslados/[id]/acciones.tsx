@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, PackageCheck, Printer } from "lucide-react";
@@ -13,22 +13,21 @@ import { recibirTraslado } from "../../actions";
 export function AccionesDelTraslado({ id, enCamino, destino }: { id: string; enCamino: boolean; destino: string }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
-  const [error, setError] = useState("");
 
   function recibir() {
     startTransition(async () => {
       const r = await recibirTraslado(id);
-      if (r.error) {
-        setError(r.error);
-        return;
-      }
-      toast.success(`Recibido en ${destino}`);
+      // Con error también se refresca: si lo recibió otra pestaña o el
+      // celular, la pantalla pasa a «Recibido» y el aviso dice por qué
+      // (mes simulado: la segunda pestaña no mostraba nada).
+      if (r.error) toast.error(r.error);
+      else toast.success(`Recibido en ${destino}`);
       router.refresh();
     });
   }
 
   return (
-    <div className="no-imprimir space-y-2">
+    <div className="no-imprimir">
       <div className="flex flex-wrap gap-2">
         {enCamino && (
           <button
@@ -54,11 +53,6 @@ export function AccionesDelTraslado({ id, enCamino, destino }: { id: string; enC
           Imprimir
         </button>
       </div>
-      {error && (
-        <p role="alert" className="text-base text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

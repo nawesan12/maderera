@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { CampoArchivo } from "@/components/campo-archivo";
 import { AlertCircle, Banknote, Check, Landmark, Loader2, ScrollText, Upload } from "lucide-react";
 import {
   informarChequesDeDeuda,
@@ -116,13 +117,12 @@ function Comprobante({
               <label htmlFor={`comprobante-${medio}`} className="block text-sm font-medium">
                 {medio === "deposito" ? "Foto de la boleta de depósito" : "Comprobante"}
               </label>
-              <input
+              <CampoArchivo
                 id={`comprobante-${medio}`}
                 name="comprobante"
-                type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 required
-                className="mt-1 h-11 w-full rounded-lg border px-3 py-2 text-sm"
+                className="mt-1 w-full"
               />
             </div>
           </div>

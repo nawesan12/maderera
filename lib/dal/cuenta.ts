@@ -230,6 +230,10 @@ export interface ComprobantePropio {
   total: number;
   cae: string | null;
   fechaEmision: Date;
+  /** El número del pedido que factura. */
+  pedido: string | null;
+  /** El pedido se canceló: sin CAE, esa factura no vale. */
+  ventaAnulada: boolean;
 }
 
 /**

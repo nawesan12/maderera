@@ -1,5 +1,5 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
-import { fechaCorta, formatearMonto } from "@/lib/formato";
+import { fechaCorta, formatearCuit, formatearMonto } from "@/lib/formato";
 import type { obtenerConfiguracionFiscal } from "@/lib/fiscal/emitir";
 
 type ConfiguracionFiscal = Awaited<ReturnType<typeof obtenerConfiguracionFiscal>>;
@@ -58,7 +58,7 @@ export function ResumenImpreso({
               <p className="fantasia">{emisor.nombreFantasia}</p>
             )}
             {emisor?.domicilio && <p className="chico">{emisor.domicilio}</p>}
-            {emisor?.cuit && <p className="chico">CUIT {emisor.cuit}</p>}
+            {emisor?.cuit && <p className="chico">CUIT {formatearCuit(emisor.cuit)}</p>}
           </div>
 
           <div className="der">
@@ -73,13 +73,13 @@ export function ResumenImpreso({
             <strong>{cliente.razonSocial ?? cliente.nombre}</strong>
           </p>
           {cliente.razonSocial && <p className="chico">{cliente.nombre}</p>}
-          {cliente.cuit && <p className="chico">CUIT {cliente.cuit}</p>}
+          {cliente.cuit && <p className="chico">CUIT {formatearCuit(cliente.cuit)}</p>}
           {cliente.direccion && <p className="chico">{cliente.direccion}</p>}
         </section>
 
         {movimientos.length === 0 ? (
           <p className="leyenda">
-            No hay movimientos en la cuenta corriente de este cliente.
+            Sin movimientos en la cuenta corriente.
           </p>
         ) : (
           <table className="detalle">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { CampoArchivo } from "@/components/campo-archivo";
 import {
   AlertCircle,
   Banknote,
@@ -13,7 +14,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatearPrecio } from "@/lib/formato";
 import {
@@ -315,10 +315,9 @@ function TransferenciaBancaria({
               <Label htmlFor="comprobante" className="text-sm">
                 Subí el comprobante
               </Label>
-              <Input
+              <CampoArchivo
                 id="comprobante"
                 name="comprobante"
-                type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 required
                 className="mt-1.5"

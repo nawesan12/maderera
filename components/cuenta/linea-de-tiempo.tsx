@@ -12,7 +12,10 @@ import type { ClaseDeMovimiento, MovimientoDelCliente } from "@/lib/dal/historia
  *
  * **Lo que no mueve la cuenta se ve, pero se distingue.** Una compra de
  * contado o una transferencia en revisión van con el importe en gris y sin
- * signo: están para que el cliente sepa que las vimos, no para que sume.
+ * signo: están para que el cliente sepa que las vimos, no para que sume. El
+ * rótulo «no mueve la cuenta» se sacó (simulación del mes, H095): a un
+ * consumidor final sin cuenta corriente le hablaba de una cuenta que no
+ * tiene, y el gris sin signo ya lo dice.
  */
 
 /** Cómo se dice cada clase y qué familia de color lleva (ver `globals.css`). */
@@ -175,7 +178,6 @@ function Fila({
         >
           {mueve ? (importe > 0 ? "+" : "−") : ""}
           {PESOS.format(Math.abs(importe))}
-          {!mueve && <span className="block text-xs">no mueve la cuenta</span>}
         </span>
       )}
     </li>

@@ -10,7 +10,7 @@ import {
   diasHasta,
   fechaLarga,
   formatearMonto,
-  formatearUnidad,
+  cantidadConUnidad,
   plural,
 } from "@/lib/formato";
 import { RespuestaPresupuesto } from "../respuesta";
@@ -149,7 +149,7 @@ export default async function DetallePresupuestoPage({
                 <div className="min-w-0">
                   <p>{item.descripcion}</p>
                   <p className="tabular mt-0.5 text-sm text-muted-foreground">
-                    {Number(item.cantidad)} {formatearUnidad(item.unidad)} ×{" "}
+                    {cantidadConUnidad(Number(item.cantidad), item.unidad)} ×{" "}
                     {formatearMonto(item.precioUnitario)}
                   </p>
                 </div>

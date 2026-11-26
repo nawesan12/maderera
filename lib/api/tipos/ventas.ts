@@ -376,6 +376,11 @@ export interface components {
             alicuotaIva: string | null;
             /** @description el precio no cubre el costo */
             bajoCosto?: boolean;
+            /**
+             * Format: double
+             * @description el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación
+             */
+            piso?: number | null;
         };
         /** @description La única ficha activa sin cuenta web con el correo del contacto. Con dos o más, ninguna: se busca a mano. */
         FichaParaUnir: {

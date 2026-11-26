@@ -124,6 +124,10 @@ func TestPresupuestosDelMesSimulado(t *testing.T) {
 	if !strings.Contains(b, `"bajoCosto":true`) {
 		t.Errorf("no marca el renglón bajo costo: %s", b)
 	}
+	// Y trae el piso, para que corregir o duplicar lo marque en el formulario.
+	if !strings.Contains(b, `"piso":48400.61`) {
+		t.Errorf("la ficha no trae el piso del renglón: %s", b)
+	}
 	_, b = pedir(t, ven, "GET", u+"presupuestos/"+aceptado, nil)
 	if strings.Contains(b, `"bajoCosto":true`) {
 		t.Errorf("marca bajo costo un precio que cubre el costo: %s", b)

@@ -548,6 +548,7 @@ components:
         orden: { type: integer }
         alicuotaIva: { type: string, nullable: true }
         bajoCosto: { type: boolean, description: el precio no cubre el costo }
+        piso: { type: number, format: double, nullable: true, description: "el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación" }
     FichaParaUnir:
       type: object
       description: >-

@@ -63,12 +63,14 @@ func (o respuesta) VisitChequesTerminadosResponse(w http.ResponseWriter) error {
 func (o respuesta) VisitCambiarEstadoDeChequeResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitListarClientesResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitGuardarClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitFichaDeClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitBloquearCuentaResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitCobrarAClienteResponse(w http.ResponseWriter) error     { return o.escribir(w) }
-func (o respuesta) VisitCajaDelCobroACuentaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitListarClientesResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitGuardarClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitFichaDeClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitBloquearCuentaResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCobrarAClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCajaDelCobroACuentaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitCreditoDeClienteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitVincularCuentaWebResponse(w http.ResponseWriter) error  { return o.escribir(w) }
 func (o respuesta) VisitHistorialDeClienteResponse(w http.ResponseWriter) error { return o.escribir(w) }

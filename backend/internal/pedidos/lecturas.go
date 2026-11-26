@@ -216,6 +216,10 @@ type ItemDePresupuesto struct {
 	// antes de mandarlo o pasarlo a pedido (mes simulado: el Fenólico a $100
 	// con costo de $75.000 salió sin aviso).
 	BajoCosto bool `json:"bajoCosto"`
+	// Piso es el de precios.PisoDeCosto, para que corregir o duplicar el
+	// presupuesto marque el renglón y pida «Guardar igual» como el alta
+	// (mes simulado: por ahí se salteaba el aviso). Nil sin costo cargado.
+	Piso *float64 `json:"piso"`
 	// ConPresentacion: el renglón es una presentación (media placa): su
 	// precio no se compara con el costo de la unidad de stock.
 	ConPresentacion bool `json:"-"`
@@ -320,6 +324,9 @@ func (s *Servicio) Presupuesto(ctx context.Context, id string) (*FichaDePresupue
 	for i, it := range p.Items {
 		if it.VariantID != nil && !p.Items[i].ConPresentacion {
 			p.Items[i].BajoCosto = precios.BajoCosto(jsmath.Numero(it.PrecioUnitario), pisos[*it.VariantID])
+			if piso, ok := pisos[*it.VariantID]; ok && piso > 0 {
+				p.Items[i].Piso = &piso
+			}
 		}
 	}
 	if p.CustomerID == nil {

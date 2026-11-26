@@ -52,6 +52,9 @@ export default async function NuevoPresupuestoPage({
           unidad: i.unidad,
           cantidad: Number(i.cantidad),
           precioUnitario: Number(i.precioUnitario),
+          // Con el piso, corregir o duplicar marca «Bajo costo» y pide
+          // «Guardar igual» como el alta (mes simulado: se salteaba).
+          piso: i.piso ?? null,
         })),
         contactoNombre: origen.cliente,
         contactoTelefono: origen.telefono,

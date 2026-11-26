@@ -18,7 +18,7 @@ const TOPE = 5;
  * quién era el pedido). Desde `sm` vuelven a la misma línea.
  */
 const RENGLON = "flex flex-col gap-2.5 px-4 py-3 sm:flex-row sm:items-center sm:gap-3";
-const BOTON = "shrink-0 [&_button]:max-sm:w-full";
+const BOTON = "shrink-0 [&_button]:max-sm:w-full [&_a]:max-sm:w-full";
 
 /**
  * Lo que el depósito hace en la mañana, en la primera pantalla: lo que hay
@@ -72,6 +72,7 @@ export async function InicioDelDeposito() {
                     tipoEntrega={p.tipoEntrega}
                     pedido={{ numero: p.numero, nombre: p.cliente }}
                     sinCobrar={p.sinCobrar ? { numero: p.numero, monto: p.sinCobrar } : null}
+                    acopio={p.acopio}
                   />
                 </div>
               </li>
@@ -97,6 +98,7 @@ export async function InicioDelDeposito() {
                     estadoPago={p.estadoPago}
                     tipoEntrega={p.tipoEntrega}
                     pedido={{ numero: p.numero, nombre: p.cliente }}
+                    acopio={p.acopio}
                   />
                 </div>
               </li>

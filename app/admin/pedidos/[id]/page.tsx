@@ -21,6 +21,7 @@ import { BotonFacturar } from "./facturar";
 import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
 import { Entregas } from "./entregas";
 import { saldoDeAcopio } from "@/lib/entregas";
+import { seOfreceLaFirma } from "@/lib/entregas/firma";
 import { otrosAcopios, remitosDelPedido } from "@/lib/dal/admin/entregas";
 import { cortesDelPedido } from "@/lib/dal/admin/cortes";
 import { requireStaff } from "@/lib/dal/session";
@@ -107,6 +108,12 @@ export default async function FichaPedidoPage({
   // botón principal es «Preparar remito» (mes simulado: era «Marcar
   // entregado», que se lleva todo lo que queda).
   const acopioEnCurso = pedido.acopio && porEntregar.length > 0;
+  // El remito del camión sin firmar: en un envío en camino con algo por
+  // llevar, firmarlo es lo que sigue (no «Marcar entregado»).
+  const remitoEnLaCalle = remitos.find((r) => r.tipo === "envio" && seOfreceLaFirma(r));
+  const firmaEnLaCalle = remitoEnLaCalle
+    ? `/firmar/${remitoEnLaCalle.firmaToken}?volver=${encodeURIComponent(`/admin/pedidos/${pedido.id}`)}`
+    : null;
   const cortesSinTerminar = cortes.filter((c) => c.estado === "en-cola" || c.estado === "en-proceso").map((c) => c.numero);
   const interno = pedido.comprobante === "interno" && !facturado;
   // Devolver y corregir: de quien mueve plata, y sin factura (con factura,
@@ -282,6 +289,8 @@ export default async function FichaPedidoPage({
               sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
               cortesSinTerminar={cortesSinTerminar}
               acopio={acopioEnCurso}
+              porLlevar={porEntregar.length > 0}
+              firmar={firmaEnLaCalle}
               enLaFicha
             />
           </>

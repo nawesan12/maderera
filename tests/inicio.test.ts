@@ -119,6 +119,12 @@ describe("paraEntregar", () => {
     expect(renglones[0].sinCobrar).toBe(500);
   });
 
+  // H104: el acopio en curso viaja al renglón para que el botón sea «Preparar remito».
+  it("dice si es un acopio en curso", () => {
+    const { renglones } = paraEntregar([{ ...pedido("PED-1", "listo", 1), acopio: true }, pedido("PED-2", "listo", 2)]);
+    expect(renglones.map((r) => r.acopio)).toEqual([true, false]);
+  });
+
   it("no manda el total al depósito", () => {
     const { renglones } = paraEntregar([pedido("PED-1", "listo", 1)]);
     expect(Object.keys(renglones[0])).not.toContain("total");

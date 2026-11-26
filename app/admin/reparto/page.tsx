@@ -189,6 +189,7 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
           cobro={cobra && p.sinCobrar != null ? cobroDelPedido(p) : null}
           sinCobrar={p.sinCobrar != null ? { numero: p.numero, monto: p.sinCobrar } : null}
           cortesSinTerminar={p.cortesSinTerminar}
+          porLlevar={p.porEntregar.length > 0}
         />
       </div>
     </li>

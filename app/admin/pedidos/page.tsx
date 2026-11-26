@@ -487,6 +487,7 @@ function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso:
           sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
           cortesSinTerminar={pedido.cortesSinTerminar}
           acopio={pedido.acopio}
+          porLlevar={pedido.porEntregar.length > 0}
           compacto
         />
       </div>

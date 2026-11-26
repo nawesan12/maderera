@@ -60,6 +60,11 @@ export interface RenglonParaPreparar {
   zonaEnvio: string | null;
   /** Si está pagado o no (sin el importe): el botón de avanzar lo pide. */
   estadoPago: string;
+  /**
+   * Un acopio que ya empezó a salir: el botón es «Preparar remito», no
+   * «Marcar entregado», que se llevaba todo lo que queda (H104).
+   */
+  acopio: boolean;
 }
 
 /**
@@ -78,6 +83,7 @@ export function paraPreparar(
     tipoEntrega: string;
     zonaEnvio: string | null;
     estadoPago: string;
+    acopio?: boolean;
     createdAt: Date;
   }[],
   tope = 5,
@@ -97,6 +103,7 @@ export function paraPreparar(
       tipoEntrega: p.tipoEntrega,
       zonaEnvio: p.zonaEnvio,
       estadoPago: p.estadoPago,
+      acopio: Boolean(p.acopio),
     })),
   };
 }
@@ -129,6 +136,7 @@ export function paraEntregar(
     tipoEntrega: string;
     zonaEnvio: string | null;
     estadoPago: string;
+    acopio?: boolean;
     sinCobrar: number | null;
     createdAt: Date;
   }[],
@@ -147,6 +155,7 @@ export function paraEntregar(
       tipoEntrega: p.tipoEntrega,
       zonaEnvio: p.zonaEnvio,
       estadoPago: p.estadoPago,
+      acopio: Boolean(p.acopio),
       sinCobrar: p.sinCobrar,
     })),
   };

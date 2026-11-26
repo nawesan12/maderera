@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Ban, FileText, Loader2, Scissors } from "lucide-react";
+import { ArrowRight, Ban, FileText, Loader2, PenLine, Scissors } from "lucide-react";
 import { avanzarPedido, cancelarPedido } from "@/app/admin/ventas-actions";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,6 +31,8 @@ export function AccionesPedido({
   cortesSinTerminar = [],
   acopio = false,
   enLaFicha = false,
+  porLlevar = false,
+  firmar = null,
 }: {
   id: string;
   estado: string;
@@ -72,6 +74,14 @@ export function AccionesPedido({
   acopio?: boolean;
   /** En la ficha, «Preparar remito» abre el formulario sin salir de la página. */
   enLaFicha?: boolean;
+  /**
+   * Queda algo que no salió en ningún remito. Un envío en camino así no se
+   * marca entregado (Go lo rechaza: «tiene productos por llevar»): lo que
+   * sigue es la firma del remito que va en el camión.
+   */
+  porLlevar?: boolean;
+  /** La firma del remito de envío que está en la calle (la ficha la tiene). */
+  firmar?: string | null;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -106,7 +116,12 @@ export function AccionesPedido({
   const entregaUnRetiro = estado === "listo" && tipoEntrega === "retiro";
   const esperaCorte =
     cortesSinTerminar.length > 0 && ["Marcar listo", "Despachar", "Marcar entregado"].includes(etiqueta ?? "");
-  const preparaRemito = acopio && etiqueta === "Marcar entregado" && tipoEntrega === "retiro";
+  // Un acopio que ya empezó a salir se atiende de a remitos, esté como esté
+  // el pedido: «Preparar» o «Marcar entregado» se llevaban todo lo que
+  // queda (mes simulado, H104).
+  const preparaRemito = acopio && tipoEntrega === "retiro" && ["pendiente", "preparando", "listo"].includes(estado);
+  // El envío en camino con algo por llevar: se firma el remito del camión.
+  const esperaFirma = estado === "en-camino" && porLlevar;
   const debe = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
   // «Marcar entregado» emite el remito y no tiene vuelta: siempre pregunta,
   // también cuando no hay nada que cobrar ni documento que pedir.
@@ -135,14 +150,7 @@ export function AccionesPedido({
         />
       )}
 
-      {esperaCorte ? (
-        <span
-          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida px-3 text-base font-medium text-muted-foreground ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
-        >
-          <Scissors className="h-5 w-5 shrink-0" aria-hidden="true" />
-          <span className="truncate">{cortesSinTerminar.join(", ")}</span>
-        </span>
-      ) : preparaRemito ? (
+      {preparaRemito ? (
         <Link
           href={enLaFicha ? "?remito=1#remito" : `/admin/pedidos/${id}?remito=1#remito`}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
@@ -150,6 +158,23 @@ export function AccionesPedido({
           <FileText className="h-5 w-5" />
           Preparar remito
         </Link>
+      ) : esperaFirma ? (
+        firmar || !enLaFicha ? (
+          <Link
+            href={firmar ?? `/admin/pedidos/${id}#remito`}
+            className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+          >
+            <PenLine className="h-5 w-5" aria-hidden="true" />
+            Firmar
+          </Link>
+        ) : null
+      ) : esperaCorte ? (
+        <span
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida px-3 text-base font-medium text-muted-foreground ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+        >
+          <Scissors className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{cortesSinTerminar.join(", ")}</span>
+        </span>
       ) : etiqueta && (
         <button
           onClick={() => (preguntar ? setConfirmando(true) : accion(avanzar))}
@@ -165,7 +190,7 @@ export function AccionesPedido({
         </button>
       )}
 
-      {preguntar && !esperaCorte && !preparaRemito && (
+      {preguntar && !esperaCorte && !preparaRemito && !esperaFirma && (
         <Dialog open={confirmando} onOpenChange={(abierto) => !pendiente && setConfirmando(abierto)}>
           <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
             <DialogHeader>
@@ -291,7 +316,7 @@ export function AccionesPedido({
         </Dialog>
       )}
 
-      {debe && sinCobrar && cobro && (
+      {debe && sinCobrar && cobro && !esperaFirma && !preparaRemito && (
         <DialogoCobro
           sinBoton
           abierto={cobrandoParaEntregar}

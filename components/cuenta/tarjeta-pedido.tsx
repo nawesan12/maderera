@@ -30,7 +30,7 @@ export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
   // La línea de abajo solo cuando hay algo que hacer o que saber: lo que
   // falta pagar (también de uno ya entregado, H393) o lo que queda en acopio.
   const avisaPago =
-    !cancelado && (pago.clave === "pendiente" || pago.clave === "parcial");
+    !cancelado && (pago?.clave === "pendiente" || pago?.clave === "parcial");
 
   return (
     <Link
@@ -95,8 +95,8 @@ export function TarjetaPedido({ pedido }: { pedido: PedidoPropio }) {
               ),
               avisaPago && (
                 <span key="pago" className="text-brand-orange-dark">
-                  {pago.etiqueta}
-                  {pago.falta !== null && pago.falta < pedido.total - 0.005 && (
+                  {pago?.etiqueta}
+                  {pago?.falta != null && pago.falta < pedido.total - 0.005 && (
                     <>
                       {" "}
                       · faltan{" "}

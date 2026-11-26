@@ -87,10 +87,16 @@ export default async function DetallePedidoPage({
 
   // Un solo `?text=`: enlaceWhatsapp ya lo arma (antes la página le sumaba
   // otro y el mensaje llegaba con basura, H081).
-  const [consulta, banco] = await Promise.all([
+  const [consulta, pedirDatos, banco] = await Promise.all([
     enlaceWhatsapp(
       mensajeDeConsulta(
         `Hola! Consulto por mi pedido ${pedido.numero}.`,
+        quien,
+      ),
+    ),
+    enlaceWhatsapp(
+      mensajeDeConsulta(
+        `Hola! Quiero transferir el pedido ${pedido.numero}: ¿me pasan los datos de la cuenta?`,
         quien,
       ),
     ),
@@ -110,11 +116,14 @@ export default async function DetallePedidoPage({
   const informar =
     !cancelado &&
     pedido.medioPago === "transferencia" &&
-    pago.clave === "pendiente";
+    pago?.clave === "pendiente";
 
-  // Lo entregado por renglón, para decir «110 de 120» cuando un remito llevó
-  // menos de lo pedido (H302).
+  // Lo entregado por renglón, para decir «110 de 120» cuando se entregó menos
+  // de lo pedido y ya no queda nada por retirar (H302). Se compara contra la
+  // cantidad del renglón y no contra la del acopio: la devolución de un
+  // faltante baja la del acopio, y ahí las dos daban 110.
   const entregadoPor = new Map(pedido.acopio.map((a) => [a.orderItemId, a]));
+  const huboRetiro = pedido.entregas.some((e) => e.estado !== "anulada");
   const sumaRenglones = pedido.items.reduce(
     (s, i) => s + Number(i.subtotal),
     0,
@@ -357,9 +366,11 @@ export default async function DetallePedidoPage({
               {pedido.items.map((item) => {
                 const r = entregadoPor.get(item.id);
                 const corto =
-                  pedido.estado === "entregado" &&
+                  !cancelado &&
+                  huboRetiro &&
                   r &&
-                  r.entregado < r.pedido - 0.001;
+                  r.pendiente <= 0.01 &&
+                  r.entregado < Number(item.cantidad) - 0.001;
                 return (
                   <li
                     key={item.id}
@@ -373,8 +384,8 @@ export default async function DetallePedidoPage({
                       </p>
                       {corto && (
                         <p className="tabular mt-0.5 text-sm text-brand-orange-dark">
-                          Entregado: {cantidadConUnidad(r.entregado, null)} de{" "}
-                          {cantidadConUnidad(r.pedido, r.unidad, r.descripcion)}
+                          Entregado {cantidadConUnidad(r.entregado, null)} de{" "}
+                          {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
                         </p>
                       )}
                     </div>
@@ -401,12 +412,8 @@ export default async function DetallePedidoPage({
                   </dd>
                 </div>
               )}
-              <div className="flex items-baseline justify-between pt-1.5">
-                <dt className="font-semibold">Total</dt>
-                <dd className="tabular text-xl font-bold">
-                  {formatearMonto(pedido.total)}
-                </dd>
-              </div>
+              {/* Lo ahorrado antes del total, como en un ticket: el total
+                  es la última línea. */}
               {pedido.descuento > 0.005 && (
                 <div className="flex justify-between text-saldo-favor">
                   <dt>Ahorraste</dt>
@@ -415,6 +422,12 @@ export default async function DetallePedidoPage({
                   </dd>
                 </div>
               )}
+              <div className="flex items-baseline justify-between pt-1.5">
+                <dt className="font-semibold">Total</dt>
+                <dd className="tabular text-xl font-bold">
+                  {formatearMonto(pedido.total)}
+                </dd>
+              </div>
             </dl>
           </section>
         </div>
@@ -423,40 +436,46 @@ export default async function DetallePedidoPage({
           {/* Pago: la etiqueta no se contradice con lo que dice abajo
               (H088, H208, H214, H310, H393), y por transferencia se informa
               desde acá (H387). */}
-          <section className="tarjeta rounded-xl bg-card p-5">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Pago
-              </h2>
-              <span
-                className={`${claseDeFamilia(pago.clave)} rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]`}
-              >
-                {pago.etiqueta}
-              </span>
-            </div>
-            {pago.falta !== null && (
-              <p className="mt-2 flex items-baseline justify-between gap-3">
-                <span className="text-sm text-muted-foreground">Falta</span>
-                <span className="tabular text-lg font-semibold text-saldo-debe">
-                  {formatearMonto(pago.falta)}
+          {pago && (
+            <section className="tarjeta rounded-xl bg-card p-5">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Pago
+                </h2>
+                <span
+                  className={`${claseDeFamilia(pago.clave)} rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]`}
+                >
+                  {pago.etiqueta}
                 </span>
-              </p>
-            )}
-            {pago.sigue && (
-              <p className="mt-2 text-sm text-muted-foreground">{pago.sigue}</p>
-            )}
-            {pago.clave === "cuenta" || pago.clave === "parcial" ? (
-              <Link
-                href="/mi-cuenta/cuenta-corriente"
-                className={`${BOTON} mt-3`}
-              >
-                Pagar tu cuenta
-              </Link>
-            ) : null}
-            {informar && (
-              <InformarTransferencia numero={pedido.numero} banco={banco} />
-            )}
-          </section>
+              </div>
+              {pago.falta !== null && (
+                <p className="mt-2 flex items-baseline justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Falta</span>
+                  <span className="tabular text-lg font-semibold text-saldo-debe">
+                    {formatearMonto(pago.falta)}
+                  </span>
+                </p>
+              )}
+              {pago.sigue && (
+                <p className="mt-2 text-sm text-muted-foreground">{pago.sigue}</p>
+              )}
+              {pago.clave === "cuenta" || pago.clave === "parcial" ? (
+                <Link
+                  href="/mi-cuenta/cuenta-corriente"
+                  className={`${BOTON} mt-3`}
+                >
+                  Pagar tu cuenta
+                </Link>
+              ) : null}
+              {informar && (
+                <InformarTransferencia
+                  numero={pedido.numero}
+                  banco={banco}
+                  pedirDatos={pedirDatos}
+                />
+              )}
+            </section>
+          )}
 
           {/* Facturas y recibos del pedido, para bajarlos sin pedirlos (H305). */}
           {(pedido.facturas.length > 0 ||

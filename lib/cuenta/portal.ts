@@ -64,18 +64,21 @@ const ABONA_AL_RETIRAR: Record<string, string> = {
 /**
  * Qué dice la tarjeta «Pago» de un pedido (H088, H208, H214, H310, H393).
  *
- * - Cancelado: lo que pasó con la plata y nada más.
+ * - Cancelado: lo que pasó con la plata y nada más; sin plata, null.
  * - A cuenta corriente: pagado, pagado en parte o «a tu cuenta», con lo que
  *   falta imputando los pagos a la deuda más vieja (lo hace Go).
  * - Pagado: «Pagado» y nada más.
  * - Pendiente: lo que sigue según el medio y la etapa; ya entregado, lo que
  *   se debe, sin la frase de «al retirar».
  */
-export function estadoDelPago(p: PagoDelPedido): EstadoDelPago {
+export function estadoDelPago(p: PagoDelPedido): EstadoDelPago | null {
   const entregado = p.estado === "entregado";
   if (p.estado === "cancelado") {
+    // Cancelado sin plata de por medio, no hay nada que decir del pago: «Sin
+    // cobrar» se leía como una deuda (H310).
     if (p.estadoPago === "reintegrado") return { clave: "reintegrado", etiqueta: "Reintegrado", sigue: null, falta: null };
-    return { clave: "pendiente", etiqueta: "Sin cobrar", sigue: null, falta: null };
+    if (p.estadoPago === "pagado") return { clave: "pagado", etiqueta: "Pagado", sigue: null, falta: null };
+    return null;
   }
   if (p.debeEnCuenta !== null) {
     if (p.debeEnCuenta <= 0.005) return { clave: "pagado", etiqueta: "Pagado", sigue: null, falta: null };
@@ -113,7 +116,16 @@ export function avisoDePagosEnVerificacion(n: number): string {
 export function mensajeDeConsulta(texto: string, cliente?: { nombre: string; cuit?: string | null } | null): string {
   if (!cliente?.nombre) return texto;
   const cuit = cliente.cuit ? ` (CUIT ${cliente.cuit})` : "";
-  return `${texto} Soy ${cliente.nombre.trim()}${cuit}.`;
+  return `${texto} Soy ${conPunto(`${cliente.nombre.trim()}${cuit}`)}`;
+}
+
+/**
+ * Cierra la frase con un punto, sin duplicarlo: «Soy Constructora S.R.L.» y
+ * no «S.R.L..» (mes simulado).
+ */
+export function conPunto(frase: string): string {
+  const f = frase.trimEnd();
+  return /[.!?]$/.test(f) ? f : `${f}.`;
 }
 
 /**

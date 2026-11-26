@@ -52,20 +52,20 @@ describe("la tarjeta del pago", () => {
       medioPago: "cuenta_corriente",
       debeEnCuenta: 1000,
     });
-    expect(e.etiqueta).toBe("A cuenta corriente");
+    expect(e?.etiqueta).toBe("A cuenta corriente");
   });
   it("a cuenta, pagado por imputación o en parte (H208)", () => {
     expect(
       estadoDelPago({ ...base, medioPago: "cuenta_corriente", debeEnCuenta: 0 })
-        .etiqueta,
+        ?.etiqueta,
     ).toBe("Pagado");
     const parte = estadoDelPago({
       ...base,
       medioPago: "cuenta_corriente",
       debeEnCuenta: 400,
     });
-    expect(parte.etiqueta).toBe("Pagado en parte");
-    expect(parte.falta).toBe(400);
+    expect(parte?.etiqueta).toBe("Pagado en parte");
+    expect(parte?.falta).toBe(400);
   });
   it("pagado dice pagado y nada más (H214)", () => {
     const e = estadoDelPago({
@@ -83,6 +83,9 @@ describe("la tarjeta del pago", () => {
     });
     expect(e).toMatchObject({ etiqueta: "Reintegrado", sigue: null });
   });
+  it("cancelado sin plata de por medio no dice nada del pago (H310)", () => {
+    expect(estadoDelPago({ ...base, estado: "cancelado" })).toBeNull();
+  });
   it("entregado y sin pagar dice cuánto falta, sin «al retirar» (H393)", () => {
     const e = estadoDelPago({
       ...base,
@@ -96,7 +99,7 @@ describe("la tarjeta del pago", () => {
     });
   });
   it("una transferencia informada se está verificando", () => {
-    expect(estadoDelPago({ ...base, enRevision: 1000 }).clave).toBe(
+    expect(estadoDelPago({ ...base, enRevision: 1000 })?.clave).toBe(
       "en_revision",
     );
   });
@@ -120,6 +123,11 @@ describe("la consulta por WhatsApp", () => {
       "Hola! Quería el precio de 20 placas. Soy Carpintería Sim (CUIT 20-12345678-6).",
     );
     expect(mensajeDeConsulta("Hola!", null)).toBe("Hola!");
+  });
+  it("un nombre que termina en punto no queda con dos", () => {
+    expect(
+      mensajeDeConsulta("Hola!", { nombre: "Constructora Atlántica del Sur S.R.L." }),
+    ).toBe("Hola! Soy Constructora Atlántica del Sur S.R.L.");
   });
 });
 

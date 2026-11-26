@@ -8,6 +8,7 @@ import { NovedadesPorCorreo } from "./novedades";
 import { Clave } from "./clave";
 import { api, datos } from "@/lib/api/servidor";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
+import { conPunto } from "@/lib/cuenta/portal";
 
 export const metadata: Metadata = { title: "Mis datos" };
 
@@ -20,7 +21,7 @@ export default async function MisDatosPage() {
     (await api()).GET("/api/v1/mi-cuenta/novedades").then(datos),
     (await api()).GET("/api/v1/sesion/clave").then(datos),
     enlaceWhatsapp(
-      `Hola! Soy ${cliente?.nombre ?? sesion.name}. Quiero cambiar mis datos para facturar.`,
+      `Hola! Soy ${conPunto((cliente?.nombre ?? sesion.name).trim())} Quiero cambiar mis datos para facturar.`,
     ),
   ]);
 

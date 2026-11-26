@@ -97,7 +97,12 @@ export async function miPedido(numero: string) {
   if (r.response.status === 404) return null;
   const p = datos(r);
   const pedido = { ...p, createdAt: new Date(p.createdAt) };
-  const historial = p.historial.map((h) => ({ ...h, createdAt: new Date(h.createdAt) }));
+  // Un paso que repite el estado del anterior (la devolución o una nota de la
+  // casa dejan su entrada con el mismo estado) no es un paso: se lista una
+  // vez, cuando se llegó a ese estado. Viene del más nuevo al más viejo.
+  const historial = p.historial
+    .filter((h, i, todos) => h.estado !== todos[i + 1]?.estado)
+    .map((h) => ({ ...h, createdAt: new Date(h.createdAt) }));
 
   // Los retiros ya hechos y lo que queda en acopio, renglón por renglón (la
   // pregunta que un cliente de maderera se hace todo el tiempo: "¿cuánto me
@@ -112,7 +117,12 @@ export async function miPedido(numero: string) {
     createdAt: new Date(e.createdAt),
   }));
   const acopio = retiros.acopio;
-  const enAcopio = acopio.filter((a) => a.pendiente > 0.01);
+  // «Te queda en acopio» es que ya retiró algo y le falta: sin ningún remito
+  // vivo todo el pedido está pendiente y no es un acopio; cancelado, no queda
+  // nada por retirar (mes simulado, PED-1129, PED-1130, PED-1133).
+  const retiro = entregas.some((e) => e.estado !== "anulada");
+  const enAcopio =
+    retiro && p.estado !== "cancelado" ? acopio.filter((a) => a.pendiente > 0.01) : [];
 
   return { ...pedido, items: p.items, historial, entregas, acopio, enAcopio };
 }

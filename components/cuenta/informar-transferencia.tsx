@@ -5,6 +5,7 @@ import { AlertCircle, Check, Copy, Loader2, Upload } from "lucide-react";
 import { subirComprobante, type EstadoPago } from "@/app/(public)/pago-actions";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
 import { CampoArchivo } from "@/components/campo-archivo";
+import { BotonWhatsapp } from "@/components/whatsapp/boton";
 
 const inicial: EstadoPago = {};
 
@@ -22,9 +23,15 @@ const inicial: EstadoPago = {};
 export function InformarTransferencia({
   numero,
   banco,
+  pedirDatos,
 }: {
   numero: string;
   banco: DatosParaTransferir | null;
+  /**
+   * WhatsApp para pedir la cuenta cuando la casa no cargó los datos
+   * bancarios: sin esto el cliente no tenía adónde transferir (mes simulado).
+   */
+  pedirDatos: string;
 }) {
   const [estado, accion] = useActionState(subirComprobante, inicial);
   const [enviando, empezar] = useTransition();
@@ -57,6 +64,11 @@ export function InformarTransferencia({
 
   return (
     <div className="mt-3 space-y-3">
+      {!banco && (
+        <BotonWhatsapp enlace={pedirDatos} variante="secundario" className="w-full">
+          Pedir los datos de la cuenta
+        </BotonWhatsapp>
+      )}
       {banco && (
         <dl className="space-y-1.5 rounded-lg bg-hundida p-3.5 text-sm">
           {(

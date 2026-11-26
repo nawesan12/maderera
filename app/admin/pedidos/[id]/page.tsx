@@ -1,4 +1,4 @@
-import { cantidadConUnidad } from "@/lib/unidades";
+import { cantidadConUnidad } from "@/lib/formato";
 import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
@@ -155,15 +155,28 @@ export default async function FichaPedidoPage({
       otros={otros}
       receptor={pedido.cliente}
       abrir={abrirRemito === "1" && !cancelado}
+      sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
+      cobro={manejaPlata ? cobroDelPedido(pedido) : null}
     />
   );
 
+  // Un renglón que no cambió el estado (una anulación, una reposición sin
+  // cargo) no lleva el chip: decía «Entregado» al lado de «Remito anulado»
+  // (mes simulado). Su nota es el título.
+  const cronologico = [...pedido.historial].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const sinCambio = new Set(
+    cronologico.filter((h, i) => i > 0 && h.nota && h.estado === cronologico[i - 1].estado).map((h) => h.id),
+  );
   const historial: { clave: string; cuando: Date; titulo: ReactNode; nota?: string | null; quien?: string | null }[] = [
     ...pedido.historial.map((h) => ({
       clave: h.id,
       cuando: h.createdAt,
-      titulo: <EtiquetaEstado estado={h.estado} contexto="pedido" />,
-      nota: h.nota,
+      titulo: sinCambio.has(h.id) ? (
+        <p className="text-base font-medium">{h.nota}</p>
+      ) : (
+        <EtiquetaEstado estado={h.estado} contexto="pedido" />
+      ),
+      nota: sinCambio.has(h.id) ? null : h.nota,
       quien: h.quien,
     })),
     ...pedido.recibos.map((r) => ({
@@ -285,7 +298,7 @@ export default async function FichaPedidoPage({
               estadoPago={pedido.estadoPago}
               tipoEntrega={pedido.tipoEntrega}
               pedido={{ numero: pedido.numero, nombre: pedido.cliente }}
-              cobro={usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole) ? cobroDelPedido(pedido) : null}
+              cobro={manejaPlata ? cobroDelPedido(pedido) : null}
               sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
               cortesSinTerminar={cortesSinTerminar}
               acopio={acopioEnCurso}

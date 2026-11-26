@@ -174,6 +174,9 @@ describe("cantidadConUnidad", () => {
     expect(cantidadConUnidad(4, null)).toBe("4");
     expect(cantidadConUnidad(2.5, "metro_cuadrado")).toBe("2,5 m²");
     expect(cantidadConUnidad(4, "pasada")).toBe("4 cortes");
+    // La ficha y Entregas dicen lo mismo que el remito (mes simulado, PED-1193).
+    expect(cantidadConUnidad(20, "metro_lineal")).toBe("20 ml");
+    expect(cantidadConUnidad(19, "m")).toBe("19 m");
   });
 
   // H110: la lata se cuenta por lata en la firma, el remito, el stock y el mostrador.

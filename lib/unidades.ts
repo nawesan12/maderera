@@ -1,5 +1,3 @@
-import { unidadDeVenta } from "@/lib/formato";
-
 /**
  * Cantidades de stock y de venta: cuándo admiten decimales y cómo se escriben.
  *
@@ -179,20 +177,4 @@ export function formatearDecimal(
   }).format(valor);
   // Intl conserva el signo del cero («-0», «-0,00»): se lo saca.
   return /^-0(,0*)?$/.test(texto) ? texto.slice(1) : texto;
-}
-
-/**
- * «3 placas», «1 placa», «2 u.»: la cantidad de un renglón como se lee.
- *
- * Una unidad de medida (litro, kilo) cuando el producto ya trae su tamaño
- * en el nombre («Laca — 4 litros») cuenta envases, no litros: «2 litro»
- * eran dos latas de cuatro (mes simulado). Ahí va «2 u.».
- */
-export function cantidadConUnidad(cantidad: number, unidad: string | null | undefined, descripcion = ""): string {
-  const n = formatearCantidad(cantidad);
-  const u = unidadDeVenta(unidad ?? null, descripcion);
-  // Lo que se cuenta por unidad dice «u.», como en las entregas, el remito y
-  // el ticket: la ficha decía «40 unidades» y Entregas «40 u.» (H110).
-  if (!u || u === "unidad") return `${n} u.`;
-  return `${n} ${cantidad === 1 ? formatearUnidadLarga(u) : formatearUnidadPlural(u)}`;
 }

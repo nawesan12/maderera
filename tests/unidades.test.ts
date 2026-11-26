@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   admiteDecimales,
-  cantidadConUnidad,
   cantidadDeStock,
   formatearCantidad,
   formatearDecimal,
@@ -117,22 +116,3 @@ describe("lo tipeado con decimales", () => {
   });
 });
 
-describe("cantidadConUnidad (mes simulado, H055)", () => {
-  it("pluraliza la unidad y no cuenta litros de una lata", () => {
-    expect(cantidadConUnidad(3, "placa")).toBe("3 placas");
-    expect(cantidadConUnidad(1, "placa")).toBe("1 placa");
-    expect(cantidadConUnidad(2, "litro", "Laca Poliuretánica — 4 litros — Brillante")).toBe("2 u.");
-    expect(cantidadConUnidad(2.5, "metro_lineal")).toBe("2,5 metros");
-    // Como en las entregas: «40 u.», no «40 unidades» (H110).
-    expect(cantidadConUnidad(40, "unidad")).toBe("40 u.");
-  });
-});
-
-describe("las líneas que arma un corte", () => {
-  // «19 ms» de tapacanto y «6 pasadas» al lado de «6 cortes» (mes simulado).
-  it("dicen metros y cortes", () => {
-    expect(cantidadConUnidad(19, "m")).toBe("19 metros");
-    expect(cantidadConUnidad(1, "m")).toBe("1 metro");
-    expect(cantidadConUnidad(6, "pasada")).toBe("6 cortes");
-  });
-});

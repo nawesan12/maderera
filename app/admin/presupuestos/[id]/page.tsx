@@ -11,7 +11,7 @@ import { AlertTriangle, FileDown } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { fechaCorta, formatearMonto } from "@/components/admin/formato";
-import { cantidadConUnidad } from "@/lib/unidades";
+import { cantidadConUnidad } from "@/lib/formato";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
 import { obtenerCliente } from "@/lib/dal/admin/clientes";
 import { AccionesPresupuesto, EnviarAlCliente } from "../acciones";

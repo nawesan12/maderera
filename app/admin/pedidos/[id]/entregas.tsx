@@ -20,7 +20,7 @@ import {
   prepararRemito,
   type EstadoEntrega,
 } from "../entregas-actions";
-import { fechaHora } from "@/components/admin/formato";
+import { fechaHora, moneda } from "@/components/admin/formato";
 import type { RenglonPendiente } from "@/lib/entregas";
 import { formatearCantidad, llevaDecimales } from "@/lib/unidades";
 import { cantidadConUnidad, plural } from "@/lib/formato";
@@ -31,6 +31,8 @@ import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import type { AvisoManualListo } from "@/lib/whatsapp/aviso-manual-datos";
 import { CampoPin } from "@/components/autorizacion/campo-pin";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
+import type { MedioDeCobro } from "@/lib/cobros/partes";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -61,6 +63,8 @@ export function Entregas({
   abrir = false,
   whatsapp = false,
   avisos = {},
+  sinCobrar = null,
+  cobro = null,
 }: {
   orderId: string;
   tipoEntrega: string;
@@ -78,6 +82,14 @@ export function Entregas({
   whatsapp?: boolean;
   /** El aviso gratis de cada remito, por id. */
   avisos?: Record<string, AvisoManualListo>;
+  /**
+   * Lo que falta cobrar del pedido (la regla de «Me deben»). Un retiro sin
+   * cobrar pregunta antes de generar el remito, como «Marcar entregado»
+   * (mes simulado: con «Generar remito» salía sin aviso).
+   */
+  sinCobrar?: { numero: string; monto: number } | null;
+  /** Para cobrar ahí mismo; sin esto (el depósito) solo se entrega o no. */
+  cobro?: { numero: string; aCobrar: number; customerId: string | null; nombre: string; medio?: MedioDeCobro } | null;
 }) {
   const cancelado = estado === "cancelado";
   const envio = tipoEntrega === "envio";
@@ -162,6 +174,8 @@ export function Entregas({
               conSaldo={conSaldo}
               otros={envio ? [] : otros}
               receptor={receptor ?? ""}
+              sinCobrar={envio || cancelado ? null : sinCobrar}
+              cobro={cobro}
               alCerrar={() => setAbierto(false)}
               alGenerar={(numero) => {
                 setAbierto(false);
@@ -270,6 +284,8 @@ function FormularioDeRemito({
   conSaldo,
   otros,
   receptor,
+  sinCobrar,
+  cobro,
   alCerrar,
   alGenerar,
 }: {
@@ -278,6 +294,8 @@ function FormularioDeRemito({
   conSaldo: RenglonPendiente[];
   otros: OtroAcopio[];
   receptor: string;
+  sinCobrar: { numero: string; monto: number } | null;
+  cobro: { numero: string; aCobrar: number; customerId: string | null; nombre: string; medio?: MedioDeCobro } | null;
   alCerrar: () => void;
   alGenerar: (numero: string) => void;
 }) {
@@ -289,6 +307,10 @@ function FormularioDeRemito({
   const [deOtros, setDeOtros] = useState<Record<string, string>>({});
   const [campos, setCampos] = useState({ receptorNombre: receptor, receptorDocumento: "", transportista: "", numeroSeguimiento: "" });
   const envio = tipoEntrega === "envio";
+  // Sin cobrar: se pregunta antes de que salga la mercadería.
+  const debe = sinCobrar != null && sinCobrar.monto > 0.009;
+  const [preguntando, setPreguntando] = useState(false);
+  const [cobrando, setCobrando] = useState(false);
 
   // Hecho el remito: se cierra el formulario y el remito nuevo queda arriba
   // con «Firmar» a mano.
@@ -308,6 +330,15 @@ function FormularioDeRemito({
 
   function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (preparando || malEscritos.length > 0) return;
+    if (debe) {
+      setPreguntando(true);
+      return;
+    }
+    generar();
+  }
+
+  function generar() {
     const datos = new FormData();
     datos.set("orderId", orderId);
     datos.set("tipo", tipoEntrega);
@@ -318,6 +349,7 @@ function FormularioDeRemito({
   }
 
   return (
+    <>
     <form onSubmit={enviar} className="space-y-4">
       <div className="space-y-2">
         {conSaldo.map((p) => (
@@ -419,6 +451,74 @@ function FormularioDeRemito({
         </button>
       </div>
     </form>
+
+      {/* Fuera del <form>: el submit del cobro (otro form, en un portal)
+          sube por el árbol de React y lo frenaba el de este. */}
+      {debe && sinCobrar && (
+        <Dialog open={preguntando} onOpenChange={setPreguntando}>
+          <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>
+                {sinCobrar.numero} sin cobrar · <span className="tabular">{moneda.format(sinCobrar.monto)}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {/* Lo mismo que «Marcar entregado»: quien cobra tiene a mano
+                cobrar y entregar; quien no, no soltar la mercadería. */}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              {!cobro && (
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setPreguntando(false)}
+                  className="inline-flex h-11 items-center rounded-lg px-4 text-base font-medium hover:bg-hundida"
+                >
+                  Mejor no
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setPreguntando(false);
+                  generar();
+                }}
+                className={`inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium ${
+                  cobro ? "hover:bg-hundida" : "estado-problema border"
+                }`}
+              >
+                Entregar sin cobrar
+              </button>
+              {cobro && (
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => {
+                    setPreguntando(false);
+                    setCobrando(true);
+                  }}
+                  className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium"
+                >
+                  Cobrar <span className="tabular">{moneda.format(sinCobrar.monto)}</span> y entregar
+                </button>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {debe && sinCobrar && cobro && (
+        <DialogoCobro
+          sinBoton
+          abierto={cobrando}
+          alCambiarAbierto={setCobrando}
+          customerId={cobro.customerId}
+          nombre={cobro.nombre}
+          aCobrar={sinCobrar.monto}
+          medio={cobro.medio}
+          pedido={{ id: orderId, numero: cobro.numero }}
+          alCobrar={generar}
+        />
+      )}
+    </>
   );
 }
 

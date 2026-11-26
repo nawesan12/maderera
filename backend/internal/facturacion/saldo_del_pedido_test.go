@@ -155,3 +155,46 @@ func TestFacturaSinCaeDeUnaVentaAnulada(t *testing.T) {
 		t.Fatalf("anuladas con factura viva: %s", b)
 	}
 }
+
+// La ficha de la factura de una venta anulada muestra la devolución junto
+// al cobro, y la de una nota de crédito no muestra los cobros del pedido de
+// la factura que corrige (mes simulado, tercera prueba).
+func TestCobrosDelPedidoEnLaAnuladaYEnLaNota(t *testing.T) {
+	e := armar(t, false)
+	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
+	var pedido, factura string
+	e.uno(t, `INSERT INTO orders (numero, contacto_nombre, origen, subtotal, total, estado, estado_pago, medio_pago)
+		VALUES ('PED-1300', 'Ana', 'mostrador', 33300, 33300, 'entregado', 'pagado', 'efectivo') RETURNING id`, &pedido)
+	e.exec(t, `INSERT INTO order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal) VALUES ($1, 'Placa', 'unidad', 1, 33300, 33300)`, pedido)
+	e.exec(t, `INSERT INTO order_payments (order_id, medio, importe) VALUES ($1, 'efectivo', 33300)`, pedido)
+	e.exec(t, `INSERT INTO payments (order_id, tipo, proveedor, medio, monto, estado) VALUES ($1, 'pedido', 'mostrador', 'efectivo', 33300, 'aprobado')`, pedido)
+	if st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/pedidos/"+pedido+"/facturar", nil); st != 200 {
+		t.Fatalf("facturar: %d %s", st, b)
+	}
+	e.uno(t, `SELECT id FROM invoices WHERE order_id = $1`, &factura, pedido)
+
+	// Viva: un solo cobro.
+	_, b := pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+factura, nil)
+	if f := leerJSON[Completo](t, b); len(f.CobrosDelPedido) != 1 {
+		t.Fatalf("antes de anular: %s", b)
+	}
+	// Anulada como lo hace el mostrador: el cobro pasa a reintegrado.
+	e.exec(t, `UPDATE orders SET estado = 'cancelado', estado_pago = 'reintegrado' WHERE id = $1`, pedido)
+	e.exec(t, `UPDATE payments SET estado = 'reintegrado' WHERE order_id = $1`, pedido)
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+factura, nil)
+	f := leerJSON[Completo](t, b)
+	if len(f.CobrosDelPedido) != 2 || f.CobrosDelPedido[0].Monto != 33300 || f.CobrosDelPedido[1].Monto != -33300 ||
+		f.CobrosDelPedido[1].Medio != "efectivo" {
+		t.Fatalf("la devolución de la anulada: %s", b)
+	}
+
+	// La nota del mismo pedido no lista sus cobros.
+	var nota string
+	e.uno(t, `INSERT INTO invoices (tipo, punto_venta, numero, estado, order_id, receptor_nombre, receptor_condicion_iva, neto, total, comprobante_origen_id, fecha_emision)
+		SELECT 'nota_credito_b', punto_venta, 999, estado, order_id, receptor_nombre, receptor_condicion_iva, neto, total, id, now()
+		FROM invoices WHERE id = $1 RETURNING id`, &nota, factura)
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+nota, nil)
+	if f := leerJSON[Completo](t, b); len(f.CobrosDelPedido) != 0 {
+		t.Fatalf("la nota con los cobros de la factura: %s", b)
+	}
+}

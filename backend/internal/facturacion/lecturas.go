@@ -365,8 +365,25 @@ type CobroDelPedido struct {
 // lo paga el recibo que venga después.
 func (s *Servicio) cobrosDelPedido(ctx context.Context, c *Completo) error {
 	c.CobrosDelPedido = []CobroDelPedido{}
-	if c.OrderID == nil {
+	// Una nota no se cobra: los cobros del pedido son de la factura que
+	// corrige, y en la ficha de la nota de crédito parecían un cobro de la
+	// nota (simulación del mes, tercera prueba).
+	if c.OrderID == nil || strings.HasPrefix(c.Tipo, "nota_") {
 		return nil
+	}
+	// La venta anulada devolvió lo cobrado: la ficha muestra la devolución
+	// junto al cobro, en negativo, y no solo el «Efectivo $ 33.300» que
+	// parecía plata que seguía adentro. Es lo que anularVenta pasó a
+	// reintegrado, menos lo que ya habían devuelto las devoluciones por
+	// afuera (que tienen su nota). El efectivo sale de la caja
+	// (cash_movements «devolucion» de la anulación); el resto, por el medio.
+	devueltos := ""
+	if c.VentaAnulada {
+		devueltos = `
+		  UNION ALL
+		  SELECT pg.medio, -(pg.monto - coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = pg.id AND t.devolucion_id IS NOT NULL), 0))::float8,
+		    pg.updated_at, NULL, NULL
+		    FROM payments pg WHERE pg.order_id = $1 AND pg.estado = 'reintegrado' AND coalesce(pg.medio, '') NOT IN ('', 'cuenta_corriente')`
 	}
 	filas, err := s.pool.Query(ctx, `SELECT medio, monto, fecha, recibo, recibo_id FROM (
 		  SELECT op.medio::text AS medio, op.importe::float8 AS monto, op.created_at AS fecha, NULL::text AS recibo, NULL::text AS recibo_id
@@ -378,8 +395,8 @@ func (s *Servicio) cobrosDelPedido(ctx context.Context, c *Completo) error {
 		      AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.receipt_id = r.id AND ip.invoice_id = $2)
 		  UNION ALL
 		  SELECT coalesce(pg.medio, 'mercado_pago'), pg.monto::float8, pg.created_at, NULL, NULL FROM payments pg WHERE pg.order_id = $1 AND pg.estado = 'aprobado'
-		    AND NOT (pg.proveedor = 'mostrador' AND EXISTS (SELECT 1 FROM order_payments opm WHERE opm.order_id = $1))
-		) x ORDER BY fecha`, *c.OrderID, c.ID)
+		    AND NOT (pg.proveedor = 'mostrador' AND EXISTS (SELECT 1 FROM order_payments opm WHERE opm.order_id = $1))`+devueltos+`
+		) x WHERE monto <> 0 ORDER BY fecha`, *c.OrderID, c.ID)
 	if err != nil {
 		return err
 	}

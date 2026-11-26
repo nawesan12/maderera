@@ -348,7 +348,8 @@ export default async function FichaComprobantePage({
                     <tr key={item.id}>
                       <td className="px-5 py-3 text-base">{item.descripcion}</td>
                       <td className="tabular px-3 py-3 text-right text-base">
-                        {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
+                        {/* Sin unidad es por unidad, como en el PDF: «10» solo no decía qué. */}
+                        {cantidadConUnidad(Number(item.cantidad), item.unidad || "unidad", item.descripcion)}
                       </td>
                       <td className="tabular px-3 py-3 text-right text-base">
                         {moneda.format(
@@ -450,6 +451,8 @@ export default async function FichaComprobantePage({
                   <li key={i} className="flex items-baseline justify-between gap-3 px-5 py-3">
                     <span className="text-base">
                       {MEDIOS[cobro.medio] ?? cobro.medio}
+                      {/* La venta anulada trae la devolución en negativo. */}
+                      {cobro.monto < 0 && <span className="ml-2 text-sm text-muted-foreground">devuelto</span>}
                       <span className="tabular ml-2 text-sm text-muted-foreground">
                         {fechaCorta.format(cobro.fecha)}
                       </span>

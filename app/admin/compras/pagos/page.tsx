@@ -153,9 +153,11 @@ function Medios({ p }: { p: Pago }) {
   return (
     <span className="flex flex-wrap gap-1.5">
       {partes.map((x, i) => (
-        <span key={i} className="tabular inline-flex max-w-full items-baseline gap-1 rounded-full bg-chip px-2.5 py-0.5 text-sm">
+        // La referencia es el dato para conciliar: se parte, no se corta
+        // (salía «Sim-TRF-9…», mes simulado H338).
+        <span key={i} className="tabular inline-flex max-w-full flex-wrap items-baseline gap-x-1 gap-y-0.5 rounded-xl bg-chip px-2.5 py-0.5 text-sm">
           <span className="font-medium">{NOMBRE_DEL_MEDIO[x.medio] ?? x.medio}</span>
-          {x.referencia && <span className="codigo truncate text-muted-foreground">{x.referencia}</span>}
+          {x.referencia && <span className="codigo min-w-0 break-all text-muted-foreground">{x.referencia}</span>}
           {partes.length > 1 && <span>{formatearMonto(x.importe)}</span>}
         </span>
       ))}

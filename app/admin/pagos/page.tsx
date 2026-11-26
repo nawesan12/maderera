@@ -225,15 +225,18 @@ export default async function PagosPage({
               {cobranzas.filas.map((c) => (
                 <li key={c.id} className={`space-y-1.5 px-4 py-3 ${c.anulado ? "opacity-60" : ""}`}>
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="tabular min-w-0 truncate text-sm text-muted-foreground">
-                      {fechaHora.format(c.fecha)} · <Origen c={c} />
-                    </span>
+                    <span className="tabular whitespace-nowrap text-sm text-muted-foreground">{fechaHora.format(c.fecha)}</span>
                     <span className="tabular shrink-0 text-lg font-semibold">{moneda.format(c.total)}</span>
                   </div>
-                  <p className="text-base font-semibold">
+                  <p className="break-words text-base font-semibold">
                     <Quien c={c} />
                   </p>
+                  {/* El origen baja con el comprobante: arriba, al lado de la
+                      fecha, se cortaba en «Pedido P…» (mes simulado, H338). */}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <span className="whitespace-nowrap text-sm text-muted-foreground">
+                      <Origen c={c} />
+                    </span>
                     <Comprobante c={c} />
                     <Medios c={c} />
                   </div>

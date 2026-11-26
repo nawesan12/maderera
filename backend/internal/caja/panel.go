@@ -1,7 +1,6 @@
 package caja
 
 import (
-	"mjbj/internal/formato"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -19,6 +18,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"

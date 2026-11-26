@@ -229,7 +229,9 @@ function Renglon({ presupuesto: p }: { presupuesto: PresupuestoListado }) {
         className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
       >
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-medium">{p.cliente}</span>
+          {/* Entero, en dos renglones si hace falta: a 375 px se cortaba
+              «RF Construcciones S…». */}
+          <span className="block break-words text-base font-medium">{p.cliente}</span>
           <span className="codigo block text-sm text-muted-foreground">
             {p.numero}
             {p.numeroPedido && ` · ${p.numeroPedido}`}

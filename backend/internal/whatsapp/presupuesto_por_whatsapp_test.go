@@ -56,6 +56,16 @@ func TestElPresupuestoPorWhatsapp(t *testing.T) {
 		t.Errorf("quedó una conversación vacía: %s → %s", antes, got)
 	}
 
+	// Avisado desde el teléfono, también queda enviado.
+	porTelefono := e.uno(t, `insert into quotes (numero, contacto_nombre, estado, subtotal, total)
+		values ('P-2026-0004', 'Otro', 'pendiente', 10, 10) returning id::text`)
+	if r, err := e.wa.RegistrarAvisoManual(e.ctx, ses, "presupuesto_listo", "quote", porTelefono, nil); err != nil || r.Error != "" {
+		t.Fatalf("aviso manual: %v %+v", err, r)
+	}
+	if got := e.uno(t, `select estado::text from quotes where id = $1`, porTelefono); got != "enviado" {
+		t.Errorf("avisado desde el teléfono quedó %s", got)
+	}
+
 	docs, err := e.wa.DocumentosDelCliente(e.ctx, cliente)
 	if err != nil {
 		t.Fatal(err)

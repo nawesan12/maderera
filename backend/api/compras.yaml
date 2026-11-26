@@ -972,7 +972,7 @@ components:
         porLlegar: { type: number, format: double }
     Orden:
       type: object
-      required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, items]
+      required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, borradorAbierto, items]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -985,6 +985,14 @@ components:
         proveedor: { type: string }
         branchId: { type: string }
         sucursal: { type: string, nullable: true }
+        borradorAbierto:
+          description: La recepción en borrador de esta orden, si hay una (se corrige esa en vez de hacer otra).
+          type: object
+          nullable: true
+          required: [id, numeroRemito]
+          properties:
+            id: { type: string }
+            numeroRemito: { type: string, nullable: true }
         items:
           type: array
           items:

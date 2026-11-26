@@ -80,18 +80,27 @@ type RenglonDeOrden struct {
 
 // Orden es una orden con sus renglones.
 type Orden struct {
-	ID             string           `json:"id"`
-	Numero         string           `json:"numero"`
-	Estado         string           `json:"estado"`
-	FechaPrometida *time.Time       `json:"fechaPrometida"`
-	Notas          *string          `json:"notas"`
-	CreatedAt      time.Time        `json:"createdAt"`
-	EnviadaAt      *time.Time       `json:"enviadaAt"`
-	SupplierID     string           `json:"supplierId"`
-	Proveedor      string           `json:"proveedor"`
-	BranchID       string           `json:"branchId"`
-	Sucursal       *string          `json:"sucursal"`
-	Items          []RenglonDeOrden `json:"items"`
+	ID             string     `json:"id"`
+	Numero         string     `json:"numero"`
+	Estado         string     `json:"estado"`
+	FechaPrometida *time.Time `json:"fechaPrometida"`
+	Notas          *string    `json:"notas"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	EnviadaAt      *time.Time `json:"enviadaAt"`
+	SupplierID     string     `json:"supplierId"`
+	Proveedor      string     `json:"proveedor"`
+	BranchID       string     `json:"branchId"`
+	Sucursal       *string    `json:"sucursal"`
+	// BorradorAbierto es la recepción en borrador de la orden, si hay: la
+	// ficha lleva a corregir esa en vez de ofrecer recibir otra vez.
+	BorradorAbierto *BorradorDeOrden `json:"borradorAbierto"`
+	Items           []RenglonDeOrden `json:"items"`
+}
+
+// BorradorDeOrden es la recepción en borrador que salió de una orden.
+type BorradorDeOrden struct {
+	ID           string  `json:"id"`
+	NumeroRemito *string `json:"numeroRemito"`
 }
 
 // ObtenerOrden es obtenerOrdenDeCompra.
@@ -118,7 +127,18 @@ func (s *Servicio) ObtenerOrden(ctx context.Context, id string) (*Orden, error) 
 		return nil, err
 	}
 	o.Items, err = pgx.CollectRows(filas, pgx.RowToStructByPos[RenglonDeOrden])
-	return &o, err
+	if err != nil {
+		return nil, err
+	}
+	var b BorradorDeOrden
+	err = s.pool.QueryRow(ctx, `SELECT id, numero_remito FROM goods_receipts WHERE purchase_order_id = $1 AND estado = 'borrador' ORDER BY created_at LIMIT 1`, id).
+		Scan(&b.ID, &b.NumeroRemito)
+	if err == nil {
+		o.BorradorAbierto = &b
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	return &o, nil
 }
 
 // PorLlegar es lo que falta recibir de una variante.

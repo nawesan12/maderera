@@ -25,10 +25,13 @@ export function AccionesDeOrden({
   falta,
   whatsapp,
   correo,
+  borrador,
 }: {
   id: string;
   estado: string;
   falta: boolean;
+  /** La recepción en borrador de esta orden: se corrige esa, no se hace otra. */
+  borrador: { id: string; numeroRemito: string | null } | null;
   /** La orden armada para mandarle al proveedor, si tiene teléfono o correo. */
   whatsapp: string | null;
   correo: string | null;
@@ -106,7 +109,23 @@ export function AccionesDeOrden({
         </button>
       )}
 
-      {recibible && (
+      {recibible && borrador && (
+        <Link
+          href={`/admin/recepciones/${borrador.id}`}
+          className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-base font-semibold sm:w-auto"
+        >
+          <Truck className="h-4 w-4" aria-hidden="true" />
+          {borrador.numeroRemito ? (
+            <>
+              Seguir con el remito <span className="codigo">{borrador.numeroRemito}</span>
+            </>
+          ) : (
+            "Seguir con la recepción"
+          )}
+        </Link>
+      )}
+
+      {recibible && !borrador && (
         <div className="grid gap-2 sm:flex sm:items-end">
           <label className="block min-w-0 sm:flex-1">
             <span className="text-base font-medium">Número de remito</span>

@@ -173,7 +173,14 @@ export default async function OrdenPage({
         <p className="text-base text-muted-foreground">{orden.notas}</p>
       )}
 
-      <AccionesDeOrden id={orden.id} estado={orden.estado} falta={falta} whatsapp={whatsapp} correo={correo} />
+      <AccionesDeOrden
+        id={orden.id}
+        estado={orden.estado}
+        falta={falta}
+        whatsapp={whatsapp}
+        correo={correo}
+        borrador={orden.borradorAbierto}
+      />
     </div>
   );
 }

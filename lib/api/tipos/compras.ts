@@ -993,6 +993,11 @@ export interface components {
             proveedor: string;
             branchId: string;
             sucursal: string | null;
+            /** @description La recepción en borrador de esta orden, si hay una (se corrige esa en vez de hacer otra). */
+            borradorAbierto: {
+                id: string;
+                numeroRemito: string | null;
+            } | null;
             items: {
                 id: string;
                 purchaseOrderId: string;

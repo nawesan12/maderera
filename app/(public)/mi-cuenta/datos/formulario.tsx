@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useTransition, type FormEvent } from "react";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,13 +38,24 @@ export function FormularioDatos({
   /** WhatsApp para pedir el cambio, con el mensaje armado. */
   pedirCambio: string;
 }) {
-  const [estado, accion, pendiente] = useActionState(
+  const [estado, accion, guardando] = useActionState(
     guardarMisDatos,
     estadoInicial,
   );
+  const [enviando, empezar] = useTransition();
+  const pendiente = guardando || enviando;
+
+  // Con `action`, React vacía el formulario al volver: un CUIT mal tipeado
+  // se perdía y el campo volvía al anterior junto con el error. Con
+  // `onSubmit` queda lo que escribió, para corregirlo (mes simulado).
+  function enviar(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const datos = new FormData(e.currentTarget);
+    empezar(() => accion(datos));
+  }
 
   return (
-    <form action={accion} className="space-y-6">
+    <form onSubmit={enviar} className="space-y-6">
       <section className="rounded-xl border bg-card p-5">
         <h2 className="mb-4 font-medium">Contacto</h2>
 

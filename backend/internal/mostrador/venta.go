@@ -184,7 +184,20 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
-	if v.CustomerID != nil && lista.Diferenciada() {
+	// «A precio de lista»: esta venta va con la general (mes simulado, H031).
+	if v.ALista {
+		if lista, err = ListaDelCliente(ctx, s.pool, nil); err != nil {
+			return ResultadoVenta{}, err
+		}
+	}
+	// La regla de contado vale cuando la lista del cliente le da un precio
+	// mejor en esta venta: una lista constructora con los precios de la
+	// general bloqueaba el cheque sin darle nada a cambio (H037).
+	conVentaja, err := listaConVentaja(ctx, s.pool, v.Lineas, lista)
+	if err != nil {
+		return ResultadoVenta{}, err
+	}
+	if v.CustomerID != nil && conVentaja {
 		medios := []string{v.MedioPago}
 		for _, p := range v.Pagos {
 			medios = append(medios, p.Medio)

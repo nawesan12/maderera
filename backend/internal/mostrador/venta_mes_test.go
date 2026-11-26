@@ -2,7 +2,10 @@ package mostrador
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"mjbj/internal/sqlc"
 )
@@ -57,5 +60,45 @@ func TestCobrosDelMesSimulado(t *testing.T) {
 	st, m, b = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
 	if st != 200 || m["ok"] != true || m["total"] != 45000.5 {
 		t.Errorf("partido sin escala: %d %s", st, b)
+	}
+}
+
+// La regla «el precio de profesional es de contado» vale cuando la lista le
+// da al cliente un precio mejor en esa venta (H037), y la venta puede ir «a
+// precio de lista» para cobrarse con cheque (H031).
+func TestListaDelClienteYCheque(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	cheque := func(cliente string, precio float64, aLista bool) map[string]any {
+		l := e.lineaPlaca(1)
+		l["precioUnitario"] = precio
+		v := e.venta("cheque", l)
+		v["customerId"] = cliente
+		v["pagos"] = []map[string]any{{"medio": "cheque", "importe": precio, "cheque": map[string]any{"numero": clave()[24:], "banco": "Nación",
+			"fechaPago": time.Now().AddDate(0, 0, 5).Format("2006-01-02")}}}
+		if aLista {
+			v["aLista"] = true
+		}
+		return v
+	}
+	u := e.u + "/api/v1/mostrador/ventas"
+	// El profesional (40.000 contra 45.000,50 de la general) con cheque: no.
+	if _, m, b := pedir(t, ven, "POST", u, cheque(e.mayor, 40000, false)); m["ok"] != false || !strings.Contains(fmt.Sprint(m["error"]), "de contado") {
+		t.Fatalf("profesional con cheque: %s", b)
+	}
+	// A precio de lista, sí.
+	if _, m, b := pedir(t, ven, "POST", u, cheque(e.mayor, 45000.5, true)); m["ok"] != true {
+		t.Fatalf("a precio de lista: %s", b)
+	}
+	// Una lista constructora con los mismos precios que la general no
+	// restringe el medio.
+	constructora := e.txt(t, `insert into price_lists (name, slug) values ('Constructora', 'constructora') returning id::text`)
+	cliente := e.txt(t, `insert into customers (nombre, price_list_id) values ('Constructora del Sur', $1) returning id::text`, constructora)
+	if _, err := e.pool.Exec(ctx, `insert into price_list_items (price_list_id, variant_id, price) values ($1, $2, 45000.50)`, constructora, e.placa); err != nil {
+		t.Fatal(err)
+	}
+	if _, m, b := pedir(t, ven, "POST", u, cheque(cliente, 45000.5, false)); m["ok"] != true {
+		t.Fatalf("constructora con cheque: %s", b)
 	}
 }

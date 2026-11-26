@@ -158,6 +158,19 @@ export function VistaMostrador({
   const [recibido, setRecibido] = useState("");
   const [aviso, setAviso] = useState<Aviso | null>(null);
   const [otrosPrecios, setOtrosPrecios] = useState<Record<string, number> | null>(null);
+  /*
+   * «A precio de lista»: el cliente con lista propia compra esta vez a la
+   * general, para pagar con cheque o en cuotas (mes simulado, H031). Go la
+   * vuelve a valuar con la general (`aLista`).
+   */
+  const [aLista, setALista] = useState(false);
+  /*
+   * Si la lista del cliente le da algún precio mejor en esta venta. Solo
+   * entonces es «de contado» (la misma regla que Go, `listaConVentaja`): una
+   * lista constructora con los precios de la general bloqueaba el cheque sin
+   * darle nada a cambio (H037). Null mientras no se sabe.
+   */
+  const [ventajaDeLista, setVentajaDeLista] = useState<{ clave: string; hay: boolean } | null>(null);
   const [comprobante, setComprobante] = useState<"interno" | "fiscal">("interno");
   const [cuit, setCuit] = useState("");
   const [tipoDesc, setTipoDesc] = useState<TipoDescuento>("porcentaje");
@@ -435,6 +448,10 @@ export function VistaMostrador({
     // Sin conexión, ni la cuenta bloqueada ni el que no tiene cuenta.
     !(medio === "cuenta_corriente" && !conexion.enLinea && cuentaSinConexion(cliente) !== null) &&
     !(partes !== null && Math.abs(restanteDePartes) > 0.01) &&
+    // La tarjeta, con lote y cupón: sin ellos no se concilia con el posnet
+    // (mes simulado, H032). Sin conexión se cobra igual.
+    !(conexion.enLinea && partes === null && (medio === "debito" || medio === "credito") && (!tarjeta.nroLote.trim() || !tarjeta.nroCupon.trim())) &&
+    !(conexion.enLinea && (partes?.some((p) => (p.medio === "debito" || p.medio === "credito") && importeDelCampo(p.importe) > 0 && (!p.nroLote.trim() || !p.nroCupon.trim())) ?? false)) &&
     // El cheque se cobra con sus datos: sin número no se lo encuentra en el banco.
     !(partes === null && medio === "cheque" && revisarChequeDePago(aChequeDePago(cheque)) !== null) &&
     !(partes?.some((p) => p.medio === "cheque" && revisarChequeDePago(aChequeDePago(p.cheque)) !== null) ?? false);
@@ -538,6 +555,7 @@ export function VistaMostrador({
 
   function limpiar() {
     setBorradorDelCorte(null);
+    setALista(false);
     setLineas([]);
     setCliente(null);
     setMedio("efectivo");
@@ -641,6 +659,7 @@ export function VistaMostrador({
    */
   async function alElegirCliente(nuevo: Cliente | null) {
     setCliente(nuevo);
+    setALista(false);
     // El corte a medio cargar era para el otro: con otro cliente no vuelve.
     if ((nuevo?.id ?? null) !== (cliente?.id ?? null)) setBorradorDelCorte(null);
     setOtrosPrecios(null);
@@ -700,6 +719,54 @@ export function VistaMostrador({
     }
     setCorrigiendo({ ...c, placa });
     setCortando(placa);
+  }
+
+  // Las variantes de la venta y el cliente: cuando cambian, se vuelve a ver
+  // si su lista le da algo mejor que la general.
+  const conListaPropia = Boolean(cliente?.priceListId && cliente.priceListId !== listaGeneral);
+  const idsDeLaVenta = lineas.map((l) => l.variantId).filter((v): v is string => !!v);
+  const claveDeVentaja = conListaPropia && cliente ? `${cliente.id}:${idsDeLaVenta.join(",")}` : "";
+  useEffect(() => {
+    if (!claveDeVentaja || !cliente || idsDeLaVenta.length === 0 || !conexion.enLinea) return;
+    let vigente = true;
+    const t = setTimeout(async () => {
+      try {
+        const [suyos, generales] = await Promise.all([
+          preciosDelCliente(idsDeLaVenta, cliente.id),
+          preciosDelCliente(idsDeLaVenta, null),
+        ]);
+        const hay = idsDeLaVenta.some((id) => suyos[id] > 0 && (!(generales[id] > 0) || suyos[id] < generales[id] - 0.005));
+        if (vigente) setVentajaDeLista({ clave: claveDeVentaja, hay });
+      } catch {
+        // Sin respuesta queda la regla de siempre: su lista es de contado.
+      }
+    }, 200);
+    return () => {
+      vigente = false;
+      clearTimeout(t);
+    };
+    // idsDeLaVenta y cliente salen de claveDeVentaja.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveDeVentaja, conexion.enLinea]);
+  // Sin renglones todavía, o sin saber, se aplica la regla: es de contado.
+  const listaDeContado =
+    conListaPropia && !aLista && !(ventajaDeLista?.clave === claveDeVentaja && !ventajaDeLista.hay && idsDeLaVenta.length > 0);
+
+  /** Pasa la venta a la lista general (y vuelve), con los precios de esa lista. */
+  async function alternarALista() {
+    const nuevo = !aLista;
+    const ids = lineas.map((l) => l.variantId).filter((v): v is string => !!v);
+    const precios = ids.length > 0 ? await preciosDelCliente(ids, nuevo ? null : (cliente?.id ?? null)) : {};
+    setALista(nuevo);
+    setLineas((prev) =>
+      prev.map((l) =>
+        // La media placa y lo del corte se dejan: el precio que vuelve es el
+        // de la placa entera.
+        l.variantId && !l.presentacion && !l.corteId && precios[l.variantId] > 0
+          ? { ...l, precioUnitario: precios[l.variantId], precioLista: precios[l.variantId] }
+          : l,
+      ),
+    );
   }
 
   function aplicarPrecios() {
@@ -776,6 +843,7 @@ export function VistaMostrador({
           descuento: descuentoManual,
           descuentoMotivo: motivoDesc || null,
           ...(partidoEnMedios ? { sinEscala: true } : {}),
+          ...(aLista ? { aLista: true } : {}),
           ...(pin ? { pin } : ficha ? { ficha } : {}),
         });
       } catch {
@@ -1062,7 +1130,9 @@ export function VistaMostrador({
             <Cobro
               branchId={sucursal.id}
               buscarClienteLocal={buscarClienteLocal}
-              listaGeneral={listaGeneral}
+              listaDeContado={listaDeContado}
+              aLista={aLista}
+              onALista={conListaPropia ? () => void alternarALista() : undefined}
               subtotal={subtotal}
               descuento={descuento}
               etiquetaDelDescuento={motivoDelDescuento}

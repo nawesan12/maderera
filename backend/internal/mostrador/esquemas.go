@@ -79,6 +79,10 @@ type VentaPedida struct {
 	// no corre (como con el pago partido), y el total no salta mientras se
 	// reparte (mes simulado, H025). Solo puede sacar un descuento.
 	SinEscala bool
+	// ALista: el cliente compra esta vez al precio de la lista general
+	// (para pagar con cheque o en cuotas, que su lista no admite). Solo
+	// puede subir los precios: Go los vuelve a poner con la general.
+	ALista bool
 
 	NumeroProvisorio *string
 	CobradaAt        *time.Time
@@ -230,6 +234,7 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	v := leerComun(l, false)
 	v.Autorizado = booleano(l.Booleano("autorizado", true))
 	v.SinEscala = booleano(l.Booleano("sinEscala", true))
+	v.ALista = booleano(l.Booleano("aLista", true))
 	// «corte» es el de antes, uno solo y sin renglones atados (lo arma
 	// atarRenglonesAlCorte); «cortes», la lista de ahora.
 	if c := l.Objeto("corte", true, false); c != nil {

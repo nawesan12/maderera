@@ -343,6 +343,32 @@ func fijo2ONulo(p *float64) *string {
 	return &s
 }
 
+// listaConVentaja dice si la lista del cliente le da, en estos renglones,
+// algún precio mejor que la general. Sin lista propia, no.
+func listaConVentaja(ctx context.Context, c precios.Consultador, lineas []ventas.LineaDeVenta, lista precios.Lista) (bool, error) {
+	if !lista.Diferenciada() {
+		return false, nil
+	}
+	renglones := make([]precios.RenglonConVariante, len(lineas))
+	for i, l := range lineas {
+		renglones[i] = precios.RenglonConVariante{VariantID: l.VariantID, Presentacion: l.Presentacion}
+	}
+	propios, err := precios.PreciosDeLista(ctx, c, renglones, lista)
+	if err != nil {
+		return false, err
+	}
+	generales, err := precios.PreciosDeLista(ctx, c, renglones, precios.Lista{ID: lista.GeneralID, GeneralID: lista.GeneralID, FactorDerivado: 1})
+	if err != nil {
+		return false, err
+	}
+	for i := range renglones {
+		if propios[i] != nil && (generales[i] == nil || *propios[i] < *generales[i]-0.005) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // bajoElCosto es lo que la venta cobra por debajo del costo promedio de cada
 // renglón (con el factor de la media placa), ya con el descuento repartido.
 // Cero si ningún renglón queda abajo o no hay costos cargados.

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Banknote, ClipboardList, Loader2, Plus, FileText, Printer } from "lucide-react";
 import type { PromoVigente } from "@/lib/dal/contenido";
-import { formatearMonto, importeIlegible } from "@/lib/formato";
+import { formatearMonto, importeDelCampo, importeIlegible } from "@/lib/formato";
 import type { TipoDescuento, MedioDeMostrador } from "@/lib/mostrador/importes";
 import { medioPermitido } from "@/lib/precios/medio-pago";
 import { BuscadorDeCliente, CuitSuelto } from "./cliente";
@@ -48,7 +48,9 @@ export function Cobro({
   letra,
   medio,
   onMedio,
-  listaGeneral,
+  listaDeContado,
+  aLista,
+  onALista,
   recibido,
   onRecibido,
   cambio,
@@ -105,8 +107,12 @@ export function Cobro({
   letra: string | null;
   medio: MedioDeMostrador;
   onMedio: (m: MedioDeMostrador) => void;
-  /** La lista general: lo que no sea esta es precio de profesional. */
-  listaGeneral: string | null;
+  /** La lista del cliente le da algo mejor en esta venta: es de contado. */
+  listaDeContado: boolean;
+  /** La venta va a la lista general aunque el cliente tenga la suya. */
+  aLista: boolean;
+  /** Pasar la venta a la lista general y volver; nulo sin lista propia. */
+  onALista?: () => void;
   recibido: string;
   onRecibido: (v: string) => void;
   cambio: number | null;
@@ -180,8 +186,7 @@ export function Cobro({
    * crédito se apaga apenas se elige el cliente, y el cartel dice cuál es la
    * salida —cobrar a consumidor final, que es precio de catálogo—.
    */
-  const precioProfesional =
-    cliente?.priceListId != null && cliente.priceListId !== listaGeneral;
+  const precioProfesional = listaDeContado;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -192,6 +197,7 @@ export function Cobro({
           branchId={branchId}
           enLinea={enLinea}
           buscarLocal={buscarClienteLocal}
+          aCuenta={medio === "cuenta_corriente" && !partes ? total : (partes?.filter((p) => p.medio === "cuenta_corriente").reduce((s, p) => s + importeDelCampo(p.importe), 0) ?? 0)}
         />
       </div>
 
@@ -227,16 +233,16 @@ export function Cobro({
                 type="button"
                 aria-pressed={activo}
                 onClick={() => onTipo(t.clave)}
-                className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                // Una sola línea: con la bajada de cada tarjeta, a 1024 «Qué
+                // se lleva» quedaba abajo del pliegue (mes simulado, H276).
+                title={t.detalle}
+                className={`h-11 rounded-xl border px-3 text-center text-base font-medium transition-colors ${
                   activo
                     ? "border-accion bg-accion/10"
                     : "border-linea hover:bg-hundida"
                 }`}
               >
-                <span className="block text-base font-medium">{t.texto}</span>
-                <span className="block text-sm text-muted-foreground">
-                  {t.detalle}
-                </span>
+                {t.texto}
               </button>
             );
           })}
@@ -294,11 +300,7 @@ export function Cobro({
                         key={valor}
                         onClick={() => !bloqueado && onMedio(valor)}
                         disabled={bloqueado}
-                        title={
-                          bloqueado
-                            ? "El precio de profesional es de contado."
-                            : `Alt + ${i + 1}`
-                        }
+                        title={bloqueado ? "Su lista es de contado." : `Alt + ${i + 1}`}
                         className={`inline-flex h-12 items-center justify-center gap-1.5 rounded-xl border px-2 text-base font-medium transition-colors ${
                           medio === valor
                             ? "border-accion bg-accion text-white"
@@ -316,11 +318,24 @@ export function Cobro({
                 </div>
 
 
-                {precioProfesional && (
-                  <p className="mt-2 rounded-lg bg-hundida px-3 py-2 text-sm text-muted-foreground">
-                    {/* En cuotas con tarjeta corre el precio de catálogo, así que la venta va a consumidor final. */}
-                    Precio de profesional: en cuotas va a consumidor final.
-                  </p>
+                {/* Lo que antes estaba solo en el title, a la vista, y la salida
+                    al lado: cobrar a precio de lista sin sacar al cliente
+                    (H031). Dice «su lista» y no «profesional»: también es la
+                    constructora (H182). */}
+                {onALista && (precioProfesional || aLista) && (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-hundida px-3 py-2">
+                    <span className="text-sm text-muted-foreground">
+                      {aLista ? "A precio de lista." : "Su lista es de contado."}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={onALista}
+                      aria-pressed={aLista}
+                      className="inline-flex h-9 items-center rounded-lg bg-background px-3 text-sm font-medium shadow-[var(--sombra-hoja)] transition-colors hover:bg-card"
+                    >
+                      {aLista ? "Volver a su lista" : "A precio de lista"}
+                    </button>
+                  </div>
                 )}
               </>
             )}
@@ -370,46 +385,9 @@ export function Cobro({
           </div>
 
           <div className="min-w-0">
+            {/* Antes que el descuento, que es de cada tantas ventas: el papel
+                se elige en todas (H276). */}
             <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Descuento
-            </p>
-            <div className="mt-2.5 flex gap-2">
-              <div className="flex shrink-0 overflow-hidden rounded-lg border border-linea">
-                {(["porcentaje", "monto"] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => onTipoDesc(t)}
-                    className={`h-12 px-3.5 text-base font-medium transition-colors ${
-                      tipoDesc === t ? "bg-accion text-white" : "hover:bg-hundida"
-                    }`}
-                  >
-                    {t === "porcentaje" ? "%" : "$"}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                inputMode="decimal"
-                aria-label="Descuento"
-                value={valorDesc}
-                aria-invalid={importeIlegible(valorDesc) || undefined}
-                onChange={(e) => onValorDesc(e.target.value)}
-                data-foco="descuento"
-                placeholder="0"
-                className="tabular h-12 min-w-0 flex-1 rounded-lg border border-linea bg-background px-3 text-right text-base"
-              />
-            </div>
-
-            {/* El motivo, en su propia línea: al lado del importe no entraba y
-                es lo que después explica el descuento en el cierre. */}
-            <input
-              value={motivoDesc}
-              onChange={(e) => onMotivoDesc(e.target.value)}
-              placeholder="Motivo del descuento"
-              className="mt-2 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
-            />
-
-            <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Qué se lleva
             </p>
             <div className="mt-2.5 grid grid-cols-2 gap-2">
@@ -449,6 +427,46 @@ export function Cobro({
                 obligatorio={pideDocumento}
               />
             )}
+
+            <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Descuento
+            </p>
+            <div className="mt-2.5 flex gap-2">
+              <div className="flex shrink-0 overflow-hidden rounded-lg border border-linea">
+                {(["porcentaje", "monto"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => onTipoDesc(t)}
+                    className={`h-12 px-3.5 text-base font-medium transition-colors ${
+                      tipoDesc === t ? "bg-accion text-white" : "hover:bg-hundida"
+                    }`}
+                  >
+                    {t === "porcentaje" ? "%" : "$"}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                inputMode="decimal"
+                aria-label="Descuento"
+                value={valorDesc}
+                aria-invalid={importeIlegible(valorDesc) || undefined}
+                onChange={(e) => onValorDesc(e.target.value)}
+                data-foco="descuento"
+                placeholder="0"
+                className="tabular h-12 min-w-0 flex-1 rounded-lg border border-linea bg-background px-3 text-right text-base"
+              />
+            </div>
+
+            {/* El motivo, en su propia línea: al lado del importe no entraba y
+                es lo que después explica el descuento en el cierre. */}
+            <input
+              value={motivoDesc}
+              onChange={(e) => onMotivoDesc(e.target.value)}
+              placeholder="Motivo del descuento"
+              className="mt-2 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
+            />
+
           </div>
         </div>
 

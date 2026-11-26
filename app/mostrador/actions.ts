@@ -68,6 +68,8 @@ export interface VentaDelMostrador {
   cortes?: CorteDeMostrador[];
   /** El pago partido en medios distintos: el descuento por forma de pago no corre. */
   sinEscala?: boolean;
+  /** El cliente con lista propia compra esta vez a la lista general. */
+  aLista?: boolean;
   /** El PIN de un admin, o la ficha de un PIN anterior para esta venta. */
   pin?: string;
   ficha?: string;

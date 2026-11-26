@@ -6,6 +6,9 @@ import { Vacio } from "@/components/admin/vacio";
 import { requireStaff } from "@/lib/dal/session";
 import { listarGestiones } from "@/lib/dal/admin/seguimiento";
 import { TableroDeSeguimiento } from "./vista";
+import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { esUuid } from "@/lib/uuid";
+import { moneda, plural } from "@/lib/formato";
 
 export const metadata: Metadata = { title: "Seguimiento" };
 
@@ -24,8 +27,16 @@ export const metadata: Metadata = { title: "Seguimiento" };
  * Lo vencido va arriba y en rojo, y además entra al «Para hoy» del panel: un
  * recordatorio que hay que venir a buscar no es un recordatorio.
  */
-export default async function SeguimientoPage() {
+export default async function SeguimientoPage({
+  searchParams,
+}: {
+  /* `cliente`: se llega desde lo que debe (la ficha o «Por cobrar») y el
+     seguimiento nuevo arranca con el cliente y la deuda puestos. */
+  searchParams: Promise<{ cliente?: string }>;
+}) {
   await requireStaff();
+  const { cliente: clienteId } = await searchParams;
+  const deudor = clienteId && esUuid(clienteId) ? await obtenerCliente(clienteId) : null;
 
   // El cliente de una gestión nueva se busca escribiendo
   // (components/admin/elegir-cliente.tsx): antes esta pantalla se bajaba la
@@ -49,8 +60,8 @@ export default async function SeguimientoPage() {
         titulo="Seguimiento"
         resumen={
           vencidas > 0
-            ? `${abiertas.length} gestiones abiertas · ${vencidas} para hoy o vencidas`
-            : `${abiertas.length} gestiones abiertas`
+            ? `${plural(abiertas.length, "gestión abierta", "gestiones abiertas")} · ${vencidas} para hoy o ${vencidas === 1 ? "vencida" : "vencidas"}`
+            : plural(abiertas.length, "gestión abierta", "gestiones abiertas")
         }
       />
 
@@ -65,7 +76,17 @@ export default async function SeguimientoPage() {
         </section>
       ) : null}
 
-      <TableroDeSeguimiento gestiones={gestiones} />
+      <TableroDeSeguimiento
+        gestiones={gestiones}
+        nueva={
+          deudor
+            ? {
+                cliente: { id: deudor.id, nombre: deudor.nombre, razonSocial: deudor.razonSocial, cuit: deudor.cuit },
+                asunto: deudor.saldo > 0 ? `Cobrar ${moneda.format(deudor.saldo)}` : "",
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

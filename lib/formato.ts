@@ -43,8 +43,17 @@ export function formatearMonto(valor: string | number | null): string {
   const numero = typeof valor === "string" ? Number(valor) : valor;
   if (!Number.isFinite(numero)) return "—";
 
-  return moneda.format(numero);
+  // Con centavos, los centavos (mes simulado): el mostrador decía «$ 203.567»
+  // y la cuenta del cliente «$ 203.566,50» para la misma venta.
+  return Math.round(numero * 100) % 100 !== 0 ? monedaConCentavos.format(numero) : moneda.format(numero);
 }
+
+const monedaConCentavos = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 const UN_DECIMAL = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 

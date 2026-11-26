@@ -300,7 +300,8 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		  c.importe::float8, `+fragmentos.CircuitoDelCheque("c")+`,
 		  c.fecha_pago, (SELECT p.fecha FROM supplier_payment_parts x JOIN supplier_payments p ON p.id = x.payment_id
 		    WHERE x.cheque_id = c.id ORDER BY p.fecha LIMIT 1),
-		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito')
+		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito'),
+		  c.order_payment_id IS NOT NULL
 		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
 		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')) x
 		WHERE x.asentado >= $1 AND x.asentado <= $2 ORDER BY x.asentado`, idesde, ihasta)
@@ -314,7 +315,7 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		var vence time.Time
 		var pagado *time.Time
 		if err := rs.Scan(&c.Fecha, &c.Numero, &c.Banco, &c.Sentido, &c.Desde, &c.Hacia, &c.Importe, &c.Circuito, &vence, &pagado,
-			&c.ADeudores); err != nil {
+			&c.ADeudores, &c.DelMostradorEnB); err != nil {
 			return nil, err
 		}
 		c.Diferido = c.Sentido == "entregado" && pagado != nil && ChequeDiferido(vence, *pagado)

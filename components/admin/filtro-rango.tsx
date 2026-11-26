@@ -103,8 +103,11 @@ function CampoFecha({
     setTexto(aPantalla(valor));
   }
   const invalido = texto.trim() !== "" && aIso(texto) === null;
+  // Se marca al salir del campo o con Enter, no mientras se escribe.
+  const [marcar, setMarcar] = useState(false);
 
   function aplicar() {
+    setMarcar(true);
     if (texto.trim() === "") {
       if (valor) alCambiar("");
       return;
@@ -122,17 +125,22 @@ function CampoFecha({
         placeholder="dd/mm/aaaa"
         maxLength={10}
         value={texto}
-        aria-invalid={invalido || undefined}
+        aria-invalid={(marcar && invalido) || undefined}
         onChange={(e) => {
+          setMarcar(false);
           const digitos = e.target.value.replace(/\D/g, "").slice(0, 8);
           const partes = [digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4)].filter(Boolean);
           setTexto(partes.join("/"));
         }}
         onBlur={aplicar}
         onKeyDown={(e) => {
-          if (e.key === "Enter") aplicar();
+          if (e.key !== "Enter") return;
+          // Una fecha que no existe (99/99/2026) no filtra: queda marcada y
+          // seleccionada para corregirla, en vez de no pasar nada.
+          aplicar();
+          if (invalido) e.currentTarget.select();
         }}
-        className="tabular h-10 w-[8.5rem] rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50 aria-[invalid]:border-[var(--estado-tinta)] estado-problema"
+        className="tabular h-10 w-[8.5rem] rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50 aria-[invalid]:border-[var(--estado-tinta)] aria-[invalid]:bg-[var(--estado-fondo)] aria-[invalid]:text-[var(--estado-tinta)] aria-[invalid]:ring-2 aria-[invalid]:ring-[var(--estado-tinta)]/30 estado-problema"
       />
     </label>
   );

@@ -51,10 +51,10 @@ type Filtros struct {
 	Rubro, Sucursal string
 }
 
-// condiciones es enElPeriodo: los pedidos no cancelados del período,
+// condiciones es enElPeriodo: los hechos de venta del período,
 // acotados si se pidió. Los parámetros empiezan en $1.
 func condiciones(p Periodo, f Filtros) (string, []any) {
-	c := []string{"o.estado <> 'cancelado'"}
+	c := []string{"true"}
 	args := []any{}
 	agregar := func(sql string, v any) {
 		args = append(args, v)
@@ -113,16 +113,34 @@ const (
 	// devolución), fecha, monto (con IVA, en negativo lo devuelto) y
 	// operaciones (1 la venta, 0 la devolución: no es otra operación).
 	//
-	// La venta es un hecho cuando se entrega o se factura, lo que pase
-	// primero (fechaDeLaVenta), no al confirmarse el pedido: el resultado del
-	// mes sumaba pedidos preparándose, sin cobrar ni facturar (mes simulado,
-	// H162; criterio prudente, a confirmar con el contador). Hasta entonces
-	// no está en ningún mes. La fecha la ponen los triggers de la 00275
-	// (orders.vendido_at, con índice).
+	// La venta es un hecho en la fecha que dice la regla «venta_reconocida»
+	// (H162): al entregar o facturar, lo primero (la de arranque), al tomar
+	// el pedido, solo al entregar o solo al facturar. Hasta entonces no está
+	// en ningún mes. La fecha la ponen los triggers de la 00320
+	// (orders.vendido_at, con índice), que nunca mueven una venta de un mes
+	// cerrado ni la meten en uno.
+	//
+	// El pedido cancelado después de contar como venta sigue en su mes y
+	// resta en el de la cancelación (cancelado_at), como una devolución, por
+	// lo que no se le había devuelto ya: borrarlo de su mes cambiaba un mes
+	// cerrado. El que se canceló antes de contar no es ningún hecho. Por eso
+	// los reportes no filtran «o.estado <> 'cancelado'»: lo que trae
+	// hechosDeVenta ya es lo que cuenta.
 	hechosDeVenta = `(SELECT o.*, o.id AS hecho, o.vendido_at AS fecha, o.total AS monto, 1 AS operaciones
-		  FROM orders o WHERE o.vendido_at IS NOT NULL
+		  FROM orders o WHERE o.vendido_at IS NOT NULL AND ` + cuentaComoVenta + `
 		UNION ALL
-		SELECT o.*, dv.id, dv.created_at, -dv.importe, 0 FROM devoluciones dv JOIN orders o ON o.id = dv.order_id)`
+		SELECT o.*, dv.id, dv.created_at, -dv.importe, 0 FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
+		  WHERE ` + cuentaComoVenta + `
+		UNION ALL
+		SELECT o.*, ` + hechoDeLaCancelacion + `, o.cancelado_at,
+		  -(o.total - coalesce((SELECT sum(dv.importe) FROM devoluciones dv WHERE dv.order_id = o.id), 0)), 0
+		  FROM orders o WHERE ` + canceladaDespues + `)`
+	// cuentaComoVenta: el pedido no se canceló, o se canceló después de
+	// contar como venta.
+	cuentaComoVenta  = `(o.estado <> 'cancelado' OR (o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at))`
+	canceladaDespues = `o.estado = 'cancelado' AND o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at`
+	// hechoDeLaCancelacion es el id del hecho que resta la cancelación.
+	hechoDeLaCancelacion = `md5('cancelacion:' || o.id::text)::uuid`
 	// renglonesVendidos son los renglones de cada hecho: los de la venta y,
 	// en negativo, lo que se llevó cada devolución, con el costo congelado
 	// del renglón que vuelve.
@@ -131,7 +149,14 @@ const (
 		UNION ALL
 		SELECT di.devolucion_id, oi.order_id, oi.variant_id, oi.descripcion, -di.cantidad, -di.importe,
 		       oi.costo_unitario, oi.alicuota_iva, true
-		FROM devolucion_items di JOIN order_items oi ON oi.id = di.order_item_id)`
+		FROM devolucion_items di JOIN order_items oi ON oi.id = di.order_item_id
+		UNION ALL
+		SELECT ` + hechoDeLaCancelacion + `, oi.order_id, oi.variant_id, oi.descripcion,
+		       -(oi.cantidad - coalesce(d.cantidad, 0)), -(oi.subtotal - coalesce(d.importe, 0)), oi.costo_unitario, oi.alicuota_iva, true
+		FROM orders o JOIN order_items oi ON oi.order_id = o.id
+		LEFT JOIN LATERAL (SELECT sum(di.cantidad) AS cantidad, sum(di.importe) AS importe FROM devolucion_items di
+		                   WHERE di.order_item_id = oi.id) d ON true
+		WHERE ` + canceladaDespues + `)`
 	costoConocido    = `oi.costo_unitario > 0`
 	netoDelRenglon   = `oi.subtotal / (1 + coalesce(oi.alicuota_iva, 21) / 100)`
 	costoDelRenglon  = `oi.cantidad * oi.costo_unitario`

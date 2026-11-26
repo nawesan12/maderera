@@ -285,6 +285,10 @@ export const orders = pgTable(
     comprobante: text(),
     /** Cuándo cuenta como vendida: la primera entrega o factura (migración 00275). */
     vendidoAt: timestamp({ withTimezone: true }),
+    /** La primera entrega, la primera factura y la cancelación: de ahí sale vendidoAt según la regla (migración 00320). */
+    entregadoAt: timestamp({ withTimezone: true }),
+    facturadoAt: timestamp({ withTimezone: true }),
+    canceladoAt: timestamp({ withTimezone: true }),
   },
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),

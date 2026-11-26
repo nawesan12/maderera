@@ -1117,7 +1117,7 @@ func (s *Servicio) vendidoDelMes(ctx context.Context, idesde, ihasta time.Time) 
 		               AND f.tipo::text NOT LIKE 'nota_credito%') THEN 'sin-cae'
 		             WHEN o.origen = 'mostrador' AND NOT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id) THEN 'interno'
 		             ELSE 'sin-factura' END AS papel
-		      FROM `+hechosDeVenta+` o WHERE o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.estado <> 'cancelado' AND o.fecha >= $1 AND o.fecha < $2"),
+		      FROM `+hechosDeVenta+` o WHERE o.fecha >= $1 AND o.fecha < $2) o `+margenesDe("o.fecha >= $1 AND o.fecha < $2"),
 		idesde, ihasta).Scan(&total, &facturado, &v.Facturado.Cantidad, &sinCae, &v.SinCae.Cantidad, &interno, &v.Interno.Cantidad, &v.SinFactura.Cantidad)
 	v.Total = jsmath.Redondear2(total.F())
 	v.Facturado.Total, v.Interno.Total = jsmath.Redondear2(facturado.F()), jsmath.Redondear2(interno.F())

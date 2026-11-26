@@ -9,6 +9,13 @@ import { EditorDeTarifa } from "./editor";
 import { EditorDeSierra } from "./sierra";
 import { anchoDeSierra } from "@/lib/dal/sierra";
 
+/**
+ * El precio como se escribe acá: «1.200» y «996», no «1200.00» y «996.00»
+ * (mes simulado, H014). Go lo lee igual (parsearImporte).
+ */
+const importe = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
+const comoSeEscribe = (v: string) => (Number.isFinite(Number(v)) && v !== "" ? importe.format(Number(v)) : v);
+
 export const metadata: Metadata = { title: "Tarifas de corte" };
 
 /**
@@ -69,8 +76,8 @@ export default async function TarifasDeCortePage() {
                 id: tarifa.id,
                 material: tarifa.material,
                 priceListId: tarifa.priceListId,
-                precioPorPasada: tarifa.precioPorPasada,
-                precioPorMetroCanto: tarifa.precioPorMetroCanto,
+                precioPorPasada: comoSeEscribe(tarifa.precioPorPasada),
+                precioPorMetroCanto: comoSeEscribe(tarifa.precioPorMetroCanto),
                 activo: tarifa.activo,
               }}
               listas={opciones}

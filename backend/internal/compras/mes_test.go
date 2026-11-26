@@ -46,3 +46,17 @@ func TestFacturaQueVenceHoyNoEstaVencida(t *testing.T) {
 		t.Errorf("al otro día: %+v", l)
 	}
 }
+
+// H143: un número de cheque con letras se rechaza en vez de perderlas.
+func TestNumeroDeChequeConLetras(t *testing.T) {
+	for _, n := range []string{"E-55500777", "Sim-CP-000101"} {
+		if RevisarNumeroDeCheque(n) == "" {
+			t.Errorf("%s pasó", n)
+		}
+	}
+	for _, n := range []string{"0012-3456", "12 345 678", "55500777"} {
+		if p := RevisarNumeroDeCheque(n); p != "" {
+			t.Errorf("%s: %s", n, p)
+		}
+	}
+}

@@ -25,6 +25,8 @@ export function normalizarNumeroDeCheque(texto: string): string {
  */
 export function revisarNumeroDeCheque(texto: string): string | null {
   const numero = normalizarNumeroDeCheque(texto);
+  // Con letras se rechaza: «E-55500777» se guardaba como 55500777 sin avisar.
+  if (/\p{L}/u.test(texto.replace(/^\s*n(?:ro|ú?m(?:ero)?)?\s*[.°º]?\s*/iu, ""))) return "El número del cheque lleva solo números. Revisalo contra el papel.";
   if (numero.length === 0) return "Poné el número del cheque: es como se lo encuentra en el banco.";
   if (numero.length < 4) return "El número del cheque es muy corto. Revisalo contra el papel.";
   if (numero.length > 20) return "El número del cheque es muy largo. Revisalo contra el papel.";

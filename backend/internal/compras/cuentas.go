@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/csvexcel"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
@@ -368,6 +369,8 @@ func NormalizarNumeroDeCheque(t string) string {
 func RevisarNumeroDeCheque(t string) string {
 	n := len(NormalizarNumeroDeCheque(t))
 	switch {
+	case cobros.ConLetras(t):
+		return cobros.MensajeConLetras
 	case n == 0:
 		return "Poné el número del cheque: es como se lo encuentra en el banco."
 	case n < 4:
@@ -635,14 +638,8 @@ func Vencimiento(emision time.Time, dias int) time.Time {
 	return emision.AddDate(0, 0, dias)
 }
 
-// zonaArgentina es la zona del negocio (con un respaldo fijo a −3 si el sistema
-// no trae la base de zonas).
-var zonaArgentina = func() *time.Location {
-	if l, err := time.LoadLocation("America/Argentina/Buenos_Aires"); err == nil {
-		return l
-	}
-	return time.FixedZone("ART", -3*3600)
-}()
+// zonaArgentina es la zona del negocio.
+var zonaArgentina = fiscal.Argentina
 
 // diaDeHoy es el día argentino de `ahora` a la medianoche UTC, como se
 // guardan los vencimientos. Vencida es la factura de un día anterior a este:

@@ -45,8 +45,15 @@ export function ColumnaTablero({
   detalle,
   estado,
   tope = TOPE_VISIBLE,
+  secundaria = false,
   children,
 }: {
+  /**
+   * Lo que ya pasó y se mira de reojo (los terminados del taller): con
+   * tarjetas, más angosta que las columnas del trabajo. En el taller las tres
+   * medían lo mismo y «Terminados» ocupaba tanto como la cola (H404).
+   */
+  secundaria?: boolean;
   titulo: string;
   cantidad: number;
   detalle?: string;
@@ -77,7 +84,9 @@ export function ColumnaTablero({
     <section
       className={`tarjeta-hundida flex min-w-0 flex-col overflow-hidden rounded-xl ${
         cantidad > 0
-          ? "@5xl:min-w-[240px] @5xl:flex-[3_1_0%]"
+          ? secundaria
+            ? "@5xl:min-w-[240px] @5xl:flex-[1.6_1_0%]"
+            : "@5xl:min-w-[240px] @5xl:flex-[3_1_0%]"
           : "@5xl:min-w-[132px] @5xl:flex-[1_1_0%]"
       }`}
     >

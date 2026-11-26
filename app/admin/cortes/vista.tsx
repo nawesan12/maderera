@@ -112,6 +112,7 @@ export function TableroDeCortes({
             }
             estado={columna.estado}
             tope={taller && columna.estado === "terminado" ? 3 : undefined}
+            secundaria={taller && columna.estado === "terminado"}
           >
             {enColumna.map((corte, i) => (
               <TarjetaCorte

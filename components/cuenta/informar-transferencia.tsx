@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition, type FormEvent } from "react";
 import { AlertCircle, Check, Copy, Loader2, Upload } from "lucide-react";
 import { subirComprobante, type EstadoPago } from "@/app/(public)/pago-actions";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
+import { CampoArchivo } from "@/components/campo-archivo";
 
 const inicial: EstadoPago = {};
 
@@ -103,13 +104,11 @@ export function InformarTransferencia({
         >
           Comprobante
         </label>
-        <input
+        <CampoArchivo
           id={`comprobante-${numero}`}
           name="comprobante"
-          type="file"
           accept="image/jpeg,image/png,image/webp,application/pdf"
           required
-          className="h-11 w-full rounded-lg bg-hundida px-3 py-2 text-sm"
         />
         {estado.error && (
           <p

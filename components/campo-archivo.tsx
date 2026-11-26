@@ -29,7 +29,7 @@ export function CampoArchivo({
   return (
     <label
       htmlFor={id}
-      className={`flex h-11 cursor-pointer items-center gap-3 rounded-lg border px-2 text-sm focus-within:ring-2 focus-within:ring-accion/40 ${className}`}
+      className={`flex h-11 cursor-pointer items-center gap-3 rounded-lg bg-hundida px-2 text-sm focus-within:ring-2 focus-within:ring-accion/40 ${className}`}
     >
       <input
         id={id}
@@ -40,7 +40,7 @@ export function CampoArchivo({
         className="sr-only"
         onChange={(e) => setNombre(e.target.files?.[0]?.name ?? null)}
       />
-      <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-hundida px-2.5 font-medium">
+      <span className="superficie inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-card px-2.5 font-medium">
         <Paperclip className="h-4 w-4" aria-hidden />
         Elegir archivo
       </span>

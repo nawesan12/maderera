@@ -368,7 +368,7 @@ func (a *API) ListarPerfiles(ctx context.Context, _ cortesapi.ListarPerfilesRequ
 }
 
 func (a *API) GuardarPerfil(ctx context.Context, r cortesapi.GuardarPerfilRequestObject) (cortesapi.GuardarPerfilResponseObject, error) {
-	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cortes/formato")...)
+	ses, err := gestion(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +388,7 @@ func (a *API) GuardarPerfil(ctx context.Context, r cortesapi.GuardarPerfilReques
 }
 
 func (a *API) BorrarPerfil(ctx context.Context, r cortesapi.BorrarPerfilRequestObject) (cortesapi.BorrarPerfilResponseObject, error) {
-	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cortes/formato")...)
+	ses, err := gestion(ctx)
 	if err != nil {
 		return nil, err
 	}

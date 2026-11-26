@@ -394,8 +394,9 @@ func TestLaColaPorSucursal(t *testing.T) {
 }
 
 // Ítem 7 del mes simulado: el aserradero no cambia lo que se cobra (las
-// pasadas, el acomodo, el disco) ni el formato del archivo de la máquina;
-// confirma sus pasadas al terminar.
+// pasadas, el acomodo, el disco); confirma sus pasadas al terminar. El
+// formato del archivo sí lo ajusta él, frente a la seccionadora (decisión
+// escrita en tests/acceso.test.ts).
 func TestElTallerNoCambiaLoQueSeCobra(t *testing.T) {
 	e := armar(t)
 	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
@@ -410,12 +411,6 @@ func TestElTallerNoCambiaLoQueSeCobra(t *testing.T) {
 	}
 	if code, _ := pedir(t, ase, "PUT", u+"/sierra", map[string]any{"valor": "3,2"}); code != 403 {
 		t.Errorf("disco desde el taller: %d", code)
-	}
-	if code, _ := pedir(t, ase, "POST", e.srv.URL+"/api/v1/admin/cortes/perfiles", map[string]any{
-		"nombre": "Cutty", "separador": "tab", "conEncabezado": false, "unidad": "cm", "decimal": ".",
-		"finDeLinea": "lf", "porDefecto": true, "columnas": []any{map[string]any{"clave": "largo", "encabezado": "L"}},
-	}); code != 403 {
-		t.Errorf("formato desde el taller: %d", code)
 	}
 	if code, b := pedir(t, ven, "POST", u+"/pasadas", map[string]any{"pasadas": 9}); code != 204 {
 		t.Errorf("pasadas desde el mostrador: %d %s", code, b)

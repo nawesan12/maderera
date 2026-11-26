@@ -151,9 +151,6 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
   // Las dos reglas que fijan cuánto entra por caja: tarifa de corte y
   // descuento por forma de pago. Son precios, no operación.
   "/admin/cortes/tarifas": ["admin"],
-  // El formato del archivo de la máquina se decide en el mostrador: el
-  // aserradero lo abría escribiendo la dirección (mes simulado, ítem 7).
-  "/admin/cortes/formato": ["admin", "vendedor", "deposito"],
   "/admin/precios/formas-de-pago": ["admin"],
   "/admin/migracion": ["admin"],
   "/admin/bitacora": ["admin"],

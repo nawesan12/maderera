@@ -248,7 +248,7 @@ func TestMotivosNuevos(t *testing.T) {
 	if doc := e.uno(t, `select documento_id::text from inventory_movements where documento_tipo = 'pedido' and variant_id = $1`, e.tornillo); doc != pedido {
 		t.Errorf("el movimiento no quedó atado al pedido: %s", doc)
 	}
-	if nota := e.uno(t, `select nota from order_status_history where order_id = $1`, pedido); !strings.Contains(nota, "Reposición sin cargo: 1 Tornillo 6x40, de Casa Central") {
+	if nota := e.uno(t, `select nota from order_status_history where order_id = $1`, pedido); !strings.Contains(nota, "Reposición sin cargo: 1 u. · Tornillo 6x40, de Casa Central") {
 		t.Errorf("historial del pedido: %q", nota)
 	}
 	m := movimientos(t, e, dep, "?busqueda=TOR")

@@ -28,6 +28,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/listado"
+	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
 	"mjbj/internal/sqlc"
@@ -707,13 +708,16 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, a Ajuste) (
 			t := "pedido"
 			docTipo, docID = &t, &pedido.id
 			// Queda en el historial del pedido: ahí se mira qué se le dio.
-			var producto string
-			if err := tx.QueryRow(ctx, `SELECT p.name || ' ' || v.label FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1`,
-				variante).Scan(&producto); err != nil {
+			// Con su unidad, como el remito: «1 par · Corredera…» (decía «1
+			// Corredera», mes simulado).
+			var producto, unidad string
+			if err := tx.QueryRow(ctx, `SELECT p.name || ' ' || v.label, p.unit::text FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1`,
+				variante).Scan(&producto, &unidad); err != nil {
 				return err
 			}
+			cuanto := formato.Cantidad(-cantidad) + " " + pdf.UnidadPara(unidad, -cantidad, producto)
 			if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2::estado_pedido, $3, $4)`,
-				pedido.id, pedido.estado, "Reposición sin cargo: "+formato.Cantidad(-cantidad)+" "+producto+", de "+suc.Name, ses.UserID); err != nil {
+				pedido.id, pedido.estado, "Reposición sin cargo: "+cuanto+" · "+producto+", de "+suc.Name, ses.UserID); err != nil {
 				return err
 			}
 		}

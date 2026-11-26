@@ -725,14 +725,17 @@ type Cobro struct {
 // libre y el del acomodo a mano, y se cobra el libre, salvo que el acomodo a
 // mano cobre más placas (alguien eligió gastar más material): las pasadas
 // son las del plano que se cobra.
+//
+// Se cuenta como la hoja (PlanoConLaHoja): lo que se cobra ahora nace con
+// MotorPasadasDeLaHoja.
 func ACobrar(d DatosDelPlano) Cobro {
-	manual := CalcularPlano(d)
+	manual := PlanoConLaHoja(d)
 	if len(d.Fijadas) == 0 {
 		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables}
 	}
 	sinFijar := d
 	sinFijar.Fijadas = nil
-	libre := CalcularPlano(sinFijar)
+	libre := PlanoConLaHoja(sinFijar)
 	if manual.PlacasEnteras > libre.PlacasEnteras {
 		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Manual: true}
 	}

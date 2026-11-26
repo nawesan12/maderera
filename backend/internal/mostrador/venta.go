@@ -875,7 +875,7 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMost
 		RETURNING id`,
 		numero, v.CustomerID, pedido, v.ContactoNombre, v.BranchID, k.VariantID, k.MaterialDescripcion,
 		k.PlacaLargoMm, k.PlacaAnchoMm, k.Mitad, k.Placas, k.Pasadas, k.CantoDescripcion, k.AcomodoManual,
-		jsmath.Texto(sierra), usuario, int32(cortes.MotorMediaConSierra)).Scan(&corte); err != nil {
+		jsmath.Texto(sierra), usuario, int32(cortes.MotorActual)).Scan(&corte); err != nil {
 		return err
 	}
 	for i, p := range k.Piezas {

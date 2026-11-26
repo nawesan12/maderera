@@ -247,7 +247,7 @@ func (s *Servicio) cotizar(ctx context.Context, l catalogo.Lista, placa *PlacaCo
 	}
 	sierra := params.AnchoSierraMm
 	medida := ResolverMedida(nil, nil, &placa.LargoMm, &placa.AnchoMm, mitad, sierra)
-	plano := CalcularPlano(DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra})
+	plano := PlanoConLaHoja(DatosDelPlano{Piezas: piezas, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho, AnchoSierra: &sierra})
 	pres := make([]PiezaPresupuestada, len(piezas))
 	for i, p := range piezas {
 		pres[i] = PiezaPresupuestada{p.LargoMm, p.AnchoMm, p.Cantidad, p.CantoLargo, p.CantoAncho}

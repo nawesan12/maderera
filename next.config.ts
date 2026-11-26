@@ -57,6 +57,10 @@ const CSP = [
 const nextConfig: NextConfig = {
   // Sin la cabecera `x-powered-by: Next.js`: no le dice a nadie qué corre.
   poweredByHeader: false,
+  // Sin el distintivo del modo desarrollo: tapaba contenido en las capturas
+  // de las pruebas a 375 px. Los errores de compilación y de ejecución
+  // siguen saliendo igual.
+  devIndicators: false,
   cacheComponents: true,
   /**
    * El prefetch de siempre, por enlace.

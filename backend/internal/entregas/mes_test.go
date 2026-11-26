@@ -277,6 +277,31 @@ func TestElServicioDelCorteNoQuedaEnAcopio(t *testing.T) {
 	}
 }
 
+// Los servicios que vienen de un presupuesto (sin corte atado) tampoco: las
+// pasadas, el canto y el armado figuraban «por retirar» (mes simulado). Un
+// renglón a mano que no dice un trabajo sigue siendo mercadería.
+func TestLosServiciosDelPresupuestoNoQuedanEnAcopio(t *testing.T) {
+	e := armar(t)
+	pedido, _, _ := e.pedido(t, "PED-2011", "listo", nil)
+	e.exec(t, `insert into order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden) values
+		($1, 'Corte de Placas (pasadas)', 'unidad', 12, 1, 12, 2),
+		($1, 'Corte de Placas', 'pasada', 4, 1, 4, 3),
+		($1, 'Canto de Placas (metros)', 'metro_lineal', 8, 1, 8, 4),
+		($1, 'Armado de cajonera', 'unidad', 1, 1, 1, 5),
+		($1, 'Escalera a medida', 'unidad', 1, 1, 1, 6)`, pedido)
+	saldo, err := SaldoDeAcopio(context.Background(), e.pool, pedido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nombres []string
+	for _, r := range saldo {
+		nombres = append(nombres, r.Descripcion)
+	}
+	if len(saldo) != 3 || saldo[2].Descripcion != "Escalera a medida" {
+		t.Fatalf("el acopio: %v", nombres)
+	}
+}
+
 // Segunda vuelta del mes simulado (depósito en el navegador, 26/11): el
 // remito total anulado seguía diciendo «Entrega total»; el acopio retirado
 // en parte quedaba «Sin preparar»; y anular el remito firmado de un envío

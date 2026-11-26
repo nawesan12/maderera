@@ -160,7 +160,17 @@ const vivas = `AND d.estado <> 'anulada'`
 // tapacanto de un corte (sin producto, del_corte). Se retiran las piezas,
 // que salen de la placa; el remito listaba «Corte a medida · 9 piezas | 12
 // cortes» como un renglón por retirar (mes simulado).
-const sinServicios = `AND NOT (oi.variant_id IS NULL AND oi.del_corte)`
+//
+// Tampoco los servicios que llegan de un presupuesto, que no tienen corte
+// atado (mes simulado: «Corte de Placas (pasadas) 12 u.», «Canto 8 ml» y
+// «Armado de cajonera» figuraban «por retirar» como la mercadería): las
+// pasadas, el canto en metros y los renglones a mano que dicen un trabajo
+// (armado, colocación, flete…). Un renglón a mano sin esas palabras sigue
+// siendo mercadería, como una escalera a medida.
+const sinServicios = `AND NOT (oi.variant_id IS NULL AND (oi.del_corte
+	OR oi.unidad = 'pasada'
+	OR (oi.unidad IN ('m', 'metro_lineal') AND oi.descripcion ~* '^(tapa)?canto')
+	OR oi.descripcion ~* '^(armado|colocaci[oó]n|instalaci[oó]n|flete|env[ií]o|mano de obra|corte|pegado)( |$)'))`
 
 func leerSaldo(ctx context.Context, db consultor, consulta string, args ...any) ([]Renglon, error) {
 	filas, err := db.Query(ctx, consulta, args...)

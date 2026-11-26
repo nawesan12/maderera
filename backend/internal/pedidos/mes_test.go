@@ -101,7 +101,8 @@ func TestFichaYTableroDicenLoCobradoYLoQueFalta(t *testing.T) {
 			p = &lista[i]
 		}
 	}
-	if p == nil || len(p.PorEntregar) != 2 || p.PorEntregar[0].Pendiente != 1 || len(p.CortesSinTerminar) != 1 || p.CortesSinTerminar[0] != "CRT-3" {
+	// El flete es un servicio: no queda por entregar (entregas.sinServicios).
+	if p == nil || len(p.PorEntregar) != 1 || p.PorEntregar[0].Pendiente != 1 || len(p.CortesSinTerminar) != 1 || p.CortesSinTerminar[0] != "CRT-3" {
 		t.Fatalf("listado: %+v", p)
 	}
 	// Ya salió algo y queda algo: es un acopio, y lo que sigue es un remito.

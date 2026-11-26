@@ -560,10 +560,13 @@ function AgregarCorte({
   function sumarCorte() {
     if (!tarifa) return;
     if (nPasadas > 0) {
+      // En pasadas y sin «(pasadas)» en el nombre: se lee «12 cortes» como
+      // el corte del mostrador, y no entra en Entregas como mercadería (Go,
+      // entregas.sinServicios). Decía «Corte de Placas (pasadas) 12 u.».
       onAgregar({
         variantId: null,
-        descripcion: `Corte de ${material} (pasadas)`,
-        unidad: "unidad",
+        descripcion: `Corte de ${material}`,
+        unidad: "pasada",
         cantidad: nPasadas,
         precioUnitario: tarifa.precioPorPasada,
       });
@@ -571,7 +574,7 @@ function AgregarCorte({
     if (nMetros > 0) {
       onAgregar({
         variantId: null,
-        descripcion: `Canto de ${material} (metros)`,
+        descripcion: `Canto de ${material}`,
         unidad: "metro_lineal",
         cantidad: nMetros,
         precioUnitario: tarifa.precioPorMetroCanto,

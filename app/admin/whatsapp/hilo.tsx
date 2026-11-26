@@ -14,6 +14,7 @@ import {
   Clock,
   FileText,
   FlaskConical,
+  IdCard,
   Loader2,
   MapPin,
   Paperclip,
@@ -46,6 +47,8 @@ import type { PlantillaDisponible } from "@/lib/dal/admin/whatsapp";
 import { restanteLegible } from "@/lib/whatsapp/ventana";
 import { enlaceWaMe } from "@/lib/whatsapp/aviso-manual";
 import { ConfirmarTope } from "./confirmar-tope";
+import { PanelCliente } from "./panel-cliente";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatearPeso } from "@/lib/formato";
 
 const estadoInicial: EstadoWhatsapp = {};
@@ -65,6 +68,7 @@ export function Hilo({
   usuarioId,
   modoDemo,
   alto = "max-h-[calc(100vh-16rem)] min-h-[32rem]",
+  clienteAlCostado = "2xl",
 }: {
   detalle: DetalleConversacion;
   plantillas: PlantillaDisponible[];
@@ -73,7 +77,14 @@ export function Hilo({
   modoDemo: boolean;
   /** Clases de alto: cambian entre el panel y el puesto de atención. */
   alto?: string;
+  /**
+   * Desde qué ancho el panel del cliente va en su columna. Por debajo se
+   * abre con el botón de la cabecera (mes simulado: en el teléfono no había
+   * cómo armar el presupuesto o el corte desde la conversación).
+   */
+  clienteAlCostado?: "xl" | "2xl";
 }) {
+  const [verCliente, setVerCliente] = useState(false);
   const pathname = usePathname();
   const parametros = useSearchParams();
 
@@ -158,46 +169,67 @@ export function Hilo({
   return (
     <section className={`tarjeta flex flex-col overflow-hidden ${alto}`}>
       {/* Cabecera */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
-        <Link
-          href={volverALista()}
-          className="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-muted lg:hidden"
-          aria-label="Volver a la lista"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
+      {/* El nombre manda: va solo en su renglón con la flecha y el botón del
+          cliente, y la asignación y «Resolver» bajan cuando no entran (mes
+          simulado: a 375 px el selector se comía el nombre y el teléfono, y
+          el chip «Profesional» lo tapaba). */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2.5 sm:px-4">
+        <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-2">
+          <Link
+            href={volverALista()}
+            className="-ml-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted lg:hidden"
+            aria-label="Volver a la lista"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
 
-        <div className="min-w-0 flex-1">
-          {/* El `truncate` va sobre el nombre y no sobre el `h2`: puesto en el
-              contenedor recortaba también la píldora. */}
-          <h2 className="flex items-center gap-2 text-base font-medium">
-            <span className="truncate">{detalle.nombre}</span>
-            {detalle.clienteTipo === "profesional" && (
-              <span className="shrink-0 rounded-full bg-naranja-claro px-2 py-0.5 text-sm font-semibold text-acento-sobre-claro">
-                Profesional
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-base font-medium">{detalle.nombre}</h2>
+            <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+              <span className="tabular truncate">
+                {detalle.sinNumero ? "WhatsApp no comparte su número" : jidCorto(detalle.waJid)}
               </span>
-            )}
-          </h2>
-          <p className="tabular truncate text-sm text-muted-foreground">
-            {detalle.sinNumero ? "WhatsApp no comparte su número" : jidCorto(detalle.waJid)}
-            {detalle.customerId ? (
-              <Link href={`/admin/clientes/${detalle.customerId}`} className="ml-2 font-sans text-brand-orange hover:underline">
-                ver ficha
-              </Link>
-            ) : (
-              <span className="ml-2 font-sans">· sin ficha de cliente</span>
-            )}
-          </p>
+              {detalle.clienteTipo === "profesional" && (
+                <span className="shrink-0 rounded-full bg-naranja-claro px-2 py-0.5 text-xs font-semibold text-acento-sobre-claro">
+                  Profesional
+                </span>
+              )}
+              {!detalle.customerId && <span className="shrink-0">· sin ficha</span>}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setVerCliente(true)}
+            aria-label="Cliente: presupuesto, corte y cuenta"
+            title="Cliente"
+            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-hundida transition-colors hover:bg-muted ${
+              clienteAlCostado === "xl" ? "xl:hidden" : "2xl:hidden"
+            }`}
+          >
+            <IdCard className="h-5 w-5" />
+          </button>
         </div>
 
-        <Asignar
-          conversacionId={detalle.id}
-          asignado={detalle.asignadoAUserId}
-          personal={personal}
-          usuarioId={usuarioId}
-        />
-        <FormularioEstado conversacionId={detalle.id} estado={detalle.estado} />
+        <div className="flex shrink-0 items-center gap-2 max-sm:w-full max-sm:[&>form:first-child]:flex-1 max-sm:[&_select]:max-w-none max-sm:[&_select]:flex-1">
+          <Asignar
+            conversacionId={detalle.id}
+            asignado={detalle.asignadoAUserId}
+            personal={personal}
+            usuarioId={usuarioId}
+          />
+          <FormularioEstado conversacionId={detalle.id} estado={detalle.estado} />
+        </div>
       </header>
+
+      <Dialog open={verCliente} onOpenChange={setVerCliente}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="truncate">{detalle.clienteNombre ?? detalle.nombre}</DialogTitle>
+          </DialogHeader>
+          <PanelCliente detalle={detalle} enDialogo />
+        </DialogContent>
+      </Dialog>
 
       {detalle.botEstado === "derivada" && <AvisoDerivada conversacionId={detalle.id} />}
 
@@ -210,7 +242,7 @@ export function Hilo({
       )}
 
       {/* Mensajes */}
-      <div tabIndex={0} role="log" aria-label="Mensajes de la conversación" className="flex-1 space-y-1 overflow-y-auto bg-brand-cream/25 px-4 py-4" aria-live="polite">
+      <div tabIndex={0} role="log" aria-label="Mensajes de la conversación" className="flex-1 space-y-1 overflow-y-auto bg-hundida px-3 py-3 sm:px-4 sm:py-4" aria-live="polite">
         {detalle.mensajes.length === 0 ? (
           <p className="py-10 text-center text-base text-muted-foreground">Todavía no hay mensajes en esta conversación.</p>
         ) : (
@@ -253,7 +285,9 @@ export function Hilo({
             </>
           ) : (
             <>
-              Pasaron más de 24 horas: solo se puede mandar un mensaje preparado.
+              {detalle.ultimoEntranteAt
+                ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
+                : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
               <button type="button" onClick={() => setModo("plantilla")} className="font-medium underline">
                 Elegir uno
               </button>
@@ -352,16 +386,22 @@ export function Hilo({
                 }
               }}
             />
-            <div className="flex items-center gap-2">
+            {/* Baja de renglón cuando no entra (mes simulado: a 1280, con las
+                tres columnas, «Enviar» quedaba cortado y el clip pisaba
+                «Documento»). Los rótulos aparecen según el ancho de la
+                columna, no de la pantalla. */}
+            <div className="@container">
+            <div className="flex flex-wrap items-center gap-2">
             <AdjuntarArchivo conversacionId={detalle.id} citado={citado?.waMessageId ?? null} />
             <button
               type="button"
               onClick={() => setModo("documento")}
+              aria-label="Documento"
               className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
               title="Mandar un presupuesto, una factura, un remito, un recibo o el resumen de cuenta"
             >
               <FileText className="h-5 w-5" />
-              <span className="hidden sm:inline">Documento</span>
+              <span className="hidden @lg:inline">Documento</span>
             </button>
               <span className="flex-1" />
             {gratis && (
@@ -379,8 +419,8 @@ export function Hilo({
                 className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10"
               >
                 <Smartphone className="h-5 w-5" />
-                <span className="hidden sm:inline">Contestar desde el teléfono</span>
-                <span className="text-sm font-normal">gratis</span>
+                <span>Teléfono</span>
+                <span className="hidden text-sm font-normal @md:inline">gratis</span>
               </a>
             )}
             <button
@@ -391,8 +431,9 @@ export function Hilo({
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               Enviar
-              <span className="hidden text-sm font-normal text-white/85 sm:inline">se cobra</span>
+              <span className="hidden text-sm font-normal text-white/85 @md:inline">se cobra</span>
             </button>
+            </div>
             </div>
           </div>
         </form>
@@ -440,7 +481,7 @@ function Burbuja({
               ? "rounded-br-sm bg-destructive/10 ring-1 ring-destructive/30"
               : saliente
                 ? "rounded-br-sm bg-brand-green/15"
-                : "rounded-bl-sm bg-background"
+                : "rounded-bl-sm bg-card"
           }`}
         >
           <Procedencia mensaje={mensaje} />
@@ -860,21 +901,21 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
   }, [pendiente, estado.error]);
 
   return (
-    <form ref={formRef} action={accion} className="flex items-center gap-2 border-t border-dashed bg-muted/40 px-3 py-2">
+    <form ref={formRef} action={accion} className="flex items-center gap-2 border-t border-dashed bg-muted/40 px-3 py-1.5">
       <input type="hidden" name="conversacionId" value={conversacionId} />
       <FlaskConical className="h-4 w-4 shrink-0 text-muted-foreground" />
       <input
         name="cuerpo"
         required
         maxLength={500}
-        placeholder="Simular un mensaje del cliente (solo en demostración)"
+        placeholder="Simular lo que escribe el cliente"
         aria-label="Simular un mensaje del cliente"
-        className="h-10 flex-1 rounded-lg border bg-background px-2.5 text-sm"
+        className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm"
       />
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-10 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60"
       >
         {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
         Simular

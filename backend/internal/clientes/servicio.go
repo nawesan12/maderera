@@ -123,6 +123,11 @@ func ValidarCliente(f FormCliente) (Cliente, error) {
 		if v != "" && !reCuitForma.MatchString(v) {
 			return c, mal("cuit", "El CUIT tiene que tener 11 dígitos, con o sin guiones.")
 		}
+		// El verificador (mes simulado): un CUIT mal tipeado se guardaba y la
+		// factura A la rechazaba ARCA en el mostrador, con el cliente enfrente.
+		if v != "" && !cuit.Valido(v) {
+			return c, mal("cuit", "El CUIT no es válido: revisá los números, el último es el verificador.")
+		}
 		c.Cuit = nulo(strings.ReplaceAll(v, "-", ""))
 	}
 	c.CondicionIva = f.CondicionIva
@@ -185,9 +190,16 @@ func ValidarCliente(f FormCliente) (Cliente, error) {
 // Guardar da de alta o edita la ficha. Un CUIT que ya es de otra ficha
 // frena el alta: se abre esa en vez de duplicar.
 func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormCliente) (string, error) {
+	_, m, err := s.GuardarConID(ctx, ses, f)
+	return m, err
+}
+
+// GuardarConID es Guardar devolviendo también el id de la ficha: después del
+// alta, el panel abre la ficha nueva (había que volver a buscarla).
+func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCliente) (string, string, error) {
 	c, err := ValidarCliente(f)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if c.Cuit != nil {
 		if doc, e := LeerDocumento(*c.Cuit); e == "" && doc.Tipo != "ninguno" {
@@ -197,9 +209,9 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormCliente)
 			}
 			otro, err := s.q.ClientePorCuit(ctx, formas)
 			if err == nil && otro.ID != c.ID {
-				return "", mal("cuit", "Ese CUIT ya es de "+otro.Nombre+". Abrí esa ficha en vez de crear otra.")
+				return "", "", mal("cuit", "Ese CUIT ya es de "+otro.Nombre+". Abrí esa ficha en vez de crear otra.")
 			} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-				return "", err
+				return "", "", err
 			}
 		}
 	}
@@ -218,7 +230,7 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormCliente)
 		})
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	accion, verbo := sqlc.AccionAuditoriaCrear, "Dio de alta"
 	if c.ID != "" {
@@ -227,9 +239,9 @@ func (s *Servicio) Guardar(ctx context.Context, ses *auth.Sesion, f FormCliente)
 	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "cliente", id, verbo+" a "+c.Nombre,
 		map[string]any{"limiteCredito": c.LimiteCredito, "tipo": c.Tipo})
 	if c.ID != "" {
-		return "Cliente actualizado.", nil
+		return id, "Cliente actualizado.", nil
 	}
-	return "Cliente creado.", nil
+	return id, "Cliente creado.", nil
 }
 
 // Movimiento es registrarMovimiento: una compra, nota o ajuste cargado a

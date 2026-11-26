@@ -24,7 +24,7 @@ export function AvisoConexion({
   esAdmin?: boolean;
 }) {
   if (compacto) {
-    return <AvisoCompacto estado={estado} />;
+    return <AvisoCompacto estado={estado} esAdmin={esAdmin} />;
   }
 
   // Conectado, pero al simulador: nada sale a WhatsApp y hay que decirlo igual
@@ -129,21 +129,26 @@ export function AvisoConexion({
  * demostración no se saca ni se puede cerrar: quien está contestando todo el
  * día tiene que saber en todo momento si lo que escribe está llegando.
  */
-function AvisoCompacto({ estado }: { estado: EstadoConexion }) {
+function AvisoCompacto({ estado, esAdmin }: { estado: EstadoConexion; esAdmin: boolean }) {
   if (estado.proveedor === "demo") {
+    // Un solo renglón: en el teléfono, cartel y cabecera se comían media
+    // pantalla. «Qué falta» lleva a la configuración, que es del admin: a
+    // la vendedora la rebotaba al panel (mes simulado).
     return (
-      <p className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-brand-orange/35 bg-brand-orange/[0.07] px-3.5 py-2 text-base">
+      <p className="flex shrink-0 items-center gap-2 rounded-lg border border-brand-orange/35 bg-brand-orange/[0.07] px-3 py-1.5 text-sm sm:text-base">
         <FlaskConical className="h-4 w-4 shrink-0 text-brand-orange" />
-        <span className="font-medium">Modo demostración:</span>
-        <span className="text-muted-foreground">
-          se guarda todo, pero los mensajes no salen a WhatsApp.
+        <span className="min-w-0 truncate">
+          <span className="font-medium">Modo demostración:</span>{" "}
+          <span className="text-muted-foreground">los mensajes no salen a WhatsApp.</span>
         </span>
-        <Link
-          href="/admin/whatsapp/configuracion"
-          className="font-medium text-brand-orange-dark underline underline-offset-2"
-        >
-          Qué falta
-        </Link>
+        {esAdmin && (
+          <Link
+            href="/admin/whatsapp/configuracion"
+            className="ml-auto shrink-0 font-medium text-brand-orange-dark underline underline-offset-2"
+          >
+            Qué falta
+          </Link>
+        )}
       </p>
     );
   }

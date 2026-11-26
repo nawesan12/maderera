@@ -29,6 +29,7 @@ const ESTILO: Record<ClaseDeMovimiento, { etiqueta: string; familia: string }> =
   pago_en_revision: { etiqueta: "En revisión", familia: "estado-espera" },
   pago_rechazado: { etiqueta: "No acreditado", familia: "estado-problema" },
   cheque_por_recibir: { etiqueta: "Cheque por recibir", familia: "estado-espera" },
+  cheque: { etiqueta: "Cheque", familia: "estado-cerrado" },
   cheque_rechazado: { etiqueta: "Cheque rechazado", familia: "estado-problema" },
 };
 

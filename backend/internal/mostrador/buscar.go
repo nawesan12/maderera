@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/ventas"
 	"mjbj/internal/ventas/fragmentos"
 	"mjbj/internal/zodjs"
@@ -36,6 +37,9 @@ type ResultadoDeMostrador struct {
 	Categoria      *string `json:"categoria"`
 	FormaDeVenta   string  `json:"formaDeVenta"`
 	PrecioMediaPct float64 `json:"precioMediaPct"`
+	// Piso es el precio final que apenas cubre el costo (precios.PisoDeCosto);
+	// nil sin costo cargado. El presupuesto marca un renglón por debajo.
+	Piso *float64 `json:"piso"`
 }
 
 // args junta los parámetros de una consulta armada a mano.
@@ -144,6 +148,19 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	pr := precio(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)
 	sueltos := numerosSueltos(&a, consulta)
+	// Lo que coincide por el nombre va antes que lo que coincide por la
+	// categoría o un pedazo de palabra (mes simulado: «laca» traía primero
+	// los fenólicos, porque «placa» contiene «laca», y «escalera», los
+	// decks). Primero el nombre que empieza con lo buscado, después el que
+	// tiene una palabra que empieza así, después el resto.
+	nombre := "f_unaccent(p.name || ' ' || coalesce(v.label, ''))"
+	primera := ""
+	if t := strings.FieldsFunc(consulta, zodjs.EspacioJS); len(t) > 0 {
+		primera = t[0]
+	}
+	empieza := a.poner(primera + "%")
+	palabra := a.poner("% " + primera + "%")
+	porNombre := "CASE WHEN " + nombre + " ILIKE f_unaccent(" + empieza + ") THEN 0 WHEN ' ' || " + nombre + " ILIKE f_unaccent(" + palabra + ") THEN 1 ELSE 2 END"
 	sql := `
 		SELECT v.id, v.sku, p.name, v.label, v.largo_mm, v.ancho_mm, v.color, c.name, p.unit::text,
 		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `,
@@ -157,7 +174,7 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		` + joins + `
 		LEFT JOIN inventory i ON i.variant_id = v.id AND i.branch_id = ` + suc + `::uuid
 		WHERE v.active = true AND p.active = true AND ` + cond + `
-		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, ` + sueltos + `, p.name, v.sort_order
+		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, ` + sueltos + `, ` + porNombre + `, p.name, v.sort_order
 		LIMIT ` + fmt.Sprint(tope)
 	// Plan a medida en cada búsqueda (QueryExecModeExec): con el plan genérico
 	// que Postgres arma después de cinco ejecuciones de la misma sentencia,
@@ -184,7 +201,24 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		r.Stock = stock.F()
 		out = append(out, r)
 	}
-	return out, filas.Err()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	filas.Close()
+	ids := make([]string, len(out))
+	for i, r := range out {
+		ids[i] = r.VariantID
+	}
+	pisos, err := precios.PisosDeCosto(ctx, s.pool, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if p, ok := pisos[out[i].VariantID]; ok {
+			out[i].Piso = &p
+		}
+	}
+	return out, nil
 }
 
 // PreciosPara son los precios de unas variantes para un cliente (cuando se lo

@@ -7,14 +7,26 @@ import { puedeEntrar } from "@/lib/roles";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
-import { FileDown } from "lucide-react";
+import { AlertTriangle, FileDown } from "lucide-react";
 import { EncabezadoFicha } from "@/components/admin/encabezado-ficha";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, moneda } from "@/components/admin/formato";
+import { fechaCorta, formatearMonto } from "@/components/admin/formato";
+import { cantidadConUnidad } from "@/lib/unidades";
 import { obtenerPresupuesto } from "@/lib/dal/admin/ventas";
-import { AccionesPresupuesto } from "../acciones";
+import { obtenerCliente } from "@/lib/dal/admin/clientes";
+import { AccionesPresupuesto, EnviarAlCliente } from "../acciones";
 import { zonasParaPedido } from "../zonas";
 
+/**
+ * La ficha de un presupuesto.
+ *
+ * Mes simulado: en el teléfono eran cinco botones apilados de a uno antes de
+ * ver qué llevaba y cuánto salía, y había tres maneras de mandarlo sin que se
+ * entendiera cuál. Ahora va arriba lo que se decide —el total, el cliente y
+ * la acción principal (pasarlo a pedido)— y los canales para mandárselo
+ * juntos en una fila: WhatsApp desde el teléfono, WhatsApp desde el sistema,
+ * correo y el PDF.
+ */
 export default async function FichaPresupuestoPage({
   params,
   searchParams,
@@ -34,124 +46,136 @@ export default async function FichaPresupuestoPage({
 
   if (!p) notFound();
   const verCliente = puedeEntrar("/admin/clientes", usuario.staffRole);
+  // El disponible de la cuenta corriente, para decirlo antes de crear el
+  // pedido a cuenta (Go lo vuelve a mirar).
+  const ficha = p.customerId && !p.pedidoId && verCliente ? await obtenerCliente(p.customerId) : null;
+  const limite = ficha ? Number(ficha.limiteCredito) : 0;
+  const credito = ficha ? { disponible: limite > 0 ? limite - ficha.saldo : 0, bloqueada: ficha.cuentaBloqueada } : null;
+
+  const bajoCosto = p.items.filter((i) => i.bajoCosto).length;
+  const abierto = !["rechazado"].includes(p.estado);
+  const empresa = p.empresa && p.empresa !== p.cliente ? p.empresa : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <EncabezadoFicha
         volverA="/admin/presupuestos"
         volverTexto="Volver a presupuestos"
         titulo={p.numero}
-        estado={<EtiquetaEstado estado={p.estado} />}
+        estado={
+          <>
+            <EtiquetaEstado estado={p.estado} />
+            {p.vencido && p.estado !== "vencido" && <EtiquetaEstado estado="vencido" />}
+          </>
+        }
         detalle={
           <>
             {fechaCorta.format(p.createdAt)}
             {p.validoHasta && ` · vale hasta ${fechaCorta.format(p.validoHasta)}`}
             {p.sucursal && ` · ${p.sucursal}`}
-          </>
-        }
-        acciones={
-          <>
-            {/* El papel que se le manda al cliente, con el modelo del sistema
-                viejo: número, vendedor, condición de IVA y datos bancarios. */}
-            <a
-              href={`/api/presupuestos/${p.id}/pdf`}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-            >
-              <FileDown className="h-5 w-5" />
-              Descargar PDF
-            </a>
-            <MandarPorWhatsapp tipo="presupuesto" id={p.id} />
-            <AccionesPresupuesto
-              id={p.id}
-              numero={p.numero}
-              estado={p.estado}
-              total={Number(p.total)}
-              pedido={p.pedidoId && p.numeroPedido ? { id: p.pedidoId, numero: p.numeroPedido } : null}
-              zonas={zonas}
-              conCliente={!!p.customerId}
-              direccion={p.clienteDireccion}
-              vencido={p.vencido ? { totalDeHoy: Number(p.totalDeHoy ?? p.total) } : null}
-              abrirPasar={pasar === "1"}
-            />
+            {p.motivoRechazo && ` · se perdió por: ${p.motivoRechazo.toLowerCase()}`}
           </>
         }
       />
 
-      {aviso && (
-        <section className="tarjeta p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Mandárselo por WhatsApp
+      {/* Lo que se decide: a quién, cuánto, y qué se hace ahora. */}
+      <section className="tarjeta space-y-4 p-5">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            {p.customerId && verCliente ? (
+              <Link
+                href={`/admin/clientes/${p.customerId}`}
+                className="text-lg font-medium hover:text-brand-orange"
+              >
+                {p.cliente}
+              </Link>
+            ) : (
+              <p className="text-lg font-medium">{p.cliente}</p>
+            )}
+            {empresa && <p className="text-base text-muted-foreground">{empresa}</p>}
+          </div>
+          <p className="tabular text-3xl font-semibold">{formatearMonto(Number(p.total))}</p>
+        </div>
+
+        {bajoCosto > 0 && (
+          <p className="estado-problema flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-base font-medium text-[var(--estado-tinta)]">
+            <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden="true" />
+            {bajoCosto === 1 ? "Un renglón va" : `${bajoCosto} renglones van`} por debajo del costo
+          </p>
+        )}
+
+        <AccionesPresupuesto
+          id={p.id}
+          numero={p.numero}
+          estado={p.estado}
+          total={Number(p.total)}
+          pedido={p.pedidoId && p.numeroPedido ? { id: p.pedidoId, numero: p.numeroPedido } : null}
+          zonas={zonas}
+          conCliente={!!p.customerId}
+          direccion={p.clienteDireccion}
+          vencido={p.vencido ? { totalDeHoy: Number(p.totalDeHoy ?? p.total) } : null}
+          abrirPasar={pasar === "1"}
+          credito={credito}
+          bajoCosto={bajoCosto}
+        />
+      </section>
+
+      {/* Mandárselo: los canales juntos, cada uno dice cuál es. */}
+      {abierto && (
+        <section className="tarjeta space-y-3 p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Mandárselo
           </h2>
-          <AvisarPorWhatsapp aviso={aviso} atajo />
+          <div className="flex flex-wrap items-start gap-2">
+            {aviso && <AvisarPorWhatsapp aviso={aviso} atajo compacto />}
+            <MandarPorWhatsapp tipo="presupuesto" id={p.id} />
+            {["pendiente", "revision"].includes(p.estado) && <EnviarAlCliente id={p.id} />}
+            <a
+              href={`/api/presupuestos/${p.id}/pdf`}
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-3.5 text-base font-medium transition-colors hover:bg-muted"
+            >
+              <FileDown className="h-5 w-5" aria-hidden="true" />
+              PDF
+            </a>
+          </div>
         </section>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        {/* Los renglones como lista y no como tabla: en el teléfono la tabla
+            apilada rotulaba «Subtotal» al total y al envío. */}
         <section className="tarjeta overflow-hidden">
-          <h2 className="px-5 py-4 text-base font-medium">Detalle</h2>
-          <table className="w-full border-t">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="px-5 py-3 text-sm font-medium text-muted-foreground">
-                  Producto
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
-                  Cantidad
-                </th>
-                {/* En el teléfono no entra: el subtotal quedaba cortado. */}
-                <th className="hidden px-4 py-3 text-right text-sm font-medium text-muted-foreground sm:table-cell">
-                  Unitario
-                </th>
-                <th className="px-5 py-3 text-right text-sm font-medium text-muted-foreground">
-                  Subtotal
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {p.items.map((item) => (
-                <tr key={item.id} className="border-b last:border-0">
-                  <td className="px-5 py-3.5 text-base">{item.descripcion}</td>
-                  <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
-                    {Number(item.cantidad)} {item.unidad.replace("_", " ")}
-                  </td>
-                  <td className="tabular hidden px-4 py-3.5 text-right text-base text-muted-foreground sm:table-cell">
-                    {moneda.format(Number(item.precioUnitario))}
-                  </td>
-                  <td className="tabular px-5 py-3.5 text-right text-base">
-                    {moneda.format(Number(item.subtotal))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t bg-muted/40">
-                <td colSpan={2} className="px-5 py-4 text-base font-medium">
-                  Total
-                </td>
-                <td className="hidden sm:table-cell" />
-                <td className="tabular px-5 py-4 text-right text-xl font-semibold">
-                  {moneda.format(Number(p.total))}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          <h2 className="px-5 py-4 text-base font-medium">Qué lleva</h2>
+          <ul className="divide-y divide-linea border-t border-linea">
+            {p.items.map((item) => (
+              <li key={item.id} className="flex items-start gap-3 px-5 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-base">{item.descripcion}</p>
+                  <p className="text-sm text-muted-foreground">
+                    <span className="tabular">
+                      {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)} ×{" "}
+                      {formatearMonto(Number(item.precioUnitario))}
+                    </span>
+                    {item.bajoCosto && (
+                      <span className="estado-problema ml-2 font-medium text-[var(--estado-tinta)]">bajo costo</span>
+                    )}
+                  </p>
+                </div>
+                <p className="tabular shrink-0 text-base font-medium">{formatearMonto(Number(item.subtotal))}</p>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-baseline justify-between border-t border-linea bg-hundida px-5 py-4">
+            <span className="text-base font-medium">Total</span>
+            <span className="tabular text-xl font-semibold">{formatearMonto(Number(p.total))}</span>
+          </div>
         </section>
 
         <aside className="space-y-4">
           <section className="tarjeta p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Cliente
+              Contacto
             </h2>
-            {p.customerId ? (
-              <Link
-                href={`/admin/clientes/${p.customerId}`}
-                className="text-base font-medium hover:text-brand-orange"
-              >
-                {p.cliente}
-              </Link>
-            ) : (
-              <p className="text-base font-medium">{p.cliente}</p>
-            )}
             {/* Como en el pedido: solo quien entra a Clientes (Go lo exige
                 igual y el botón daba 403). */}
             {p.fichaPorCorreo && verCliente && (
@@ -164,22 +188,15 @@ export default async function FichaPresupuestoPage({
                 ficha={p.fichaPorCorreo}
               />
             )}
-            {p.empresa && (
-              <p className="text-base text-muted-foreground">{p.empresa}</p>
-            )}
-            <dl className="mt-3 space-y-1.5 text-base">
-              {p.email && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Correo</dt>
-                  <dd className="truncate">{p.email}</dd>
-                </div>
-              )}
-              {p.telefono && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Teléfono</dt>
-                  <dd className="tabular">{p.telefono}</dd>
-                </div>
-              )}
+            <dl className="space-y-1.5 text-base">
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Teléfono</dt>
+                <dd className="tabular">{p.telefono ?? "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Correo</dt>
+                <dd className="truncate">{p.email ?? "—"}</dd>
+              </div>
               {p.asesor && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Asesor</dt>

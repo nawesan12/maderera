@@ -375,5 +375,13 @@ func (s *Servicio) RegistrarAvisoManual(ctx context.Context, ses *auth.Sesion, e
 		values ('whatsapp_manual', $1, $2, $3, $4, $5, 'enviada', $6)`, evento, destinatario, am.Titulo, entidadTipo, entidadID, ses.UserID); err != nil {
 		return Resultado{}, err
 	}
+	// El presupuesto que se le avisó desde el teléfono queda «enviado», como
+	// por cualquier otro canal (mes simulado: seguía «pendiente»).
+	if evento == "presupuesto_listo" && entidadTipo == "quote" {
+		if _, err := s.pool.Exec(ctx, `update quotes set estado = 'enviado', updated_at = now()
+			where id = $1 and estado in ('pendiente', 'revision')`, entidadID); err != nil {
+			return Resultado{}, err
+		}
+	}
 	return Resultado{Ok: "ok"}, nil
 }

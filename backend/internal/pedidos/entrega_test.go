@@ -15,6 +15,8 @@ func TestPresupuestoAPedidoConEnvioYACuenta(t *testing.T) {
 	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
 	_, cliente := e.web(t, "cliente@prueba.test")
 	u := e.srv.URL + "/api/v1/admin/"
+	// La zona tiene que ser una de las de envío.
+	e.exec(t, `insert into shipping_zones (nombre, costo, a_cotizar) values ('Tandil', 0, true)`)
 
 	nuevo := func() string {
 		c, b := pedir(t, ven, "POST", u+"presupuestos", e.alta("Obra Pérez", 1, map[string]any{"customerId": cliente}))

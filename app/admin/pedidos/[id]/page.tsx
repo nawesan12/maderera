@@ -1,3 +1,4 @@
+import { cantidadConUnidad } from "@/lib/unidades";
 import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
@@ -12,7 +13,6 @@ import {
   Pasos,
 } from "@/components/admin/pasos";
 import { fechaHora, formatearPorcentaje, moneda } from "@/components/admin/formato";
-import { cantidadConUnidad } from "@/lib/formato";
 import { obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
@@ -340,7 +340,7 @@ export default async function FichaPedidoPage({
                 <tr key={item.id} className="border-b last:border-0">
                   <td className="px-5 py-3.5 text-base">{item.descripcion}</td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
-                    {cantidadConUnidad(Number(item.cantidad), item.unidad)}
+                    {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
                   </td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {moneda.format(Number(item.precioUnitario))}

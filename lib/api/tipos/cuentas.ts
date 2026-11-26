@@ -638,7 +638,7 @@ export interface components {
             /** Format: date-time */
             fecha: string;
             /** @enum {string} */
-            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque_rechazado";
+            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque" | "cheque_rechazado";
             titulo: string;
             detalle: string | null;
             /** Format: double */
@@ -824,6 +824,8 @@ export interface components {
                     ok: string;
                     aviso?: string;
                     receiptId?: string;
+                    /** @description la ficha guardada (el alta abre la ficha nueva) */
+                    id?: string;
                 };
             };
         };
@@ -1082,6 +1084,8 @@ export interface operations {
                     concepto?: string;
                     /** @description el JSON de las partes, como lo arma el formulario */
                     partes: string;
+                    /** @description la sucursal donde entra el efectivo (sin caja abierta se pide abrirla) */
+                    branchId?: string;
                     /** @description la del intento, generada al abrir el cobro: un reintento devuelve el mismo recibo */
                     clave?: string;
                 };
@@ -1105,6 +1109,8 @@ export interface operations {
             content: {
                 "application/json": {
                     motivo: string;
+                    /** @description el de un admin, para quien no es admin (como anular una venta) */
+                    pin?: string;
                 };
             };
         };

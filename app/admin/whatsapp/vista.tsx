@@ -44,7 +44,9 @@ export async function VistaWhatsapp({
         usuarioId={usuario.userId}
         modoDemo={estado.proveedor === "demo"}
         pantallaCompleta={pantallaCompleta}
-        gasto={gasto}
+        // Lo que va del mes en Meta, en dólares, es del admin: para quien
+        // contesta era jerga (mes simulado).
+        gasto={usuario.staffRole === "admin" ? gasto : null}
         mensajes={mensajes}
       />
     </>

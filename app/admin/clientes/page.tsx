@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   MessageCircle,
+  MessageSquareText,
   Printer,
   Users,
 } from "lucide-react";
@@ -271,10 +272,13 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
           >
             {cliente.nombre}
           </Link>
-          {cliente.razonSocial && (
-            <p className="flex items-center gap-1 truncate text-sm text-muted-foreground">
-              <Building2 className="h-3.5 w-3.5 shrink-0" />
-              {cliente.razonSocial}
+          {/* La empresa entera, en dos renglones si hace falta: cortada
+              en una («Sim Carpinterí») no se sabía cuál era. Igual al
+              nombre, no se repite. */}
+          {cliente.razonSocial && cliente.razonSocial !== cliente.nombre && (
+            <p className="flex items-start gap-1 text-sm text-muted-foreground">
+              <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="line-clamp-2 break-words">{cliente.razonSocial}</span>
             </p>
           )}
           {/* El rubro, que es por donde se corta la lista. El tipo
@@ -318,6 +322,17 @@ function TarjetaCliente({ cliente }: { cliente: ClienteListado }) {
                   : undefined,
                 deshabilitada: !cliente.telefono,
               },
+              // Con deuda, la gestión de cobro arranca acá con el cliente y
+              // el importe puestos (mes simulado: se tipeaban a mano).
+              ...(cliente.saldo > 0
+                ? [
+                    {
+                      texto: "Seguimiento de cobro",
+                      icono: <MessageSquareText className="h-4 w-4" aria-hidden="true" />,
+                      href: `/admin/clientes/seguimiento?cliente=${cliente.id}`,
+                    },
+                  ]
+                : []),
               {
                 texto: "Resumen de cuenta",
                 icono: <Printer className="h-4 w-4" aria-hidden="true" />,

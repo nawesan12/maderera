@@ -24,15 +24,17 @@ const estadoInicial: EstadoWhatsapp = {};
  * lo mío?» y «¿cuánto debo?». Tenerlas contestadas antes de leer el mensaje es
  * la diferencia entre responder en diez segundos o abrir tres pantallas.
  */
-export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
+export function PanelCliente({ detalle, enDialogo = false }: { detalle: DetalleConversacion; enDialogo?: boolean }) {
   // El corte que se toma desde el chat vuelve al chat, con el número de la
   // conversación por si la ficha no tiene teléfono (mes simulado, H046).
   const ruta = usePathname();
   const volver = encodeURIComponent(`${ruta}?chat=${detalle.id}`);
   const telefono = detalle.sinNumero ? "" : `&telefono=${encodeURIComponent(detalle.waJid.split("@")[0])}`;
+  // En la columna queda pegado arriba al bajar; en el diálogo, no.
+  const pegado = enDialogo ? "" : "lg:sticky lg:top-24";
   if (!detalle.customerId) {
     return (
-      <div className="space-y-4 lg:sticky lg:top-24">
+      <div className={`space-y-4 ${pegado}`}>
         <SinFicha detalle={detalle} />
         <Avisos detalle={detalle} />
       </div>
@@ -42,7 +44,7 @@ export function PanelCliente({ detalle }: { detalle: DetalleConversacion }) {
   const excedido = detalle.limiteCredito > 0 && detalle.saldo > detalle.limiteCredito;
 
   return (
-    <div className="space-y-4 lg:sticky lg:top-24">
+    <div className={`space-y-4 ${pegado}`}>
       <section className="tarjeta p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

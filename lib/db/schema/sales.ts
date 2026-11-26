@@ -86,6 +86,8 @@ export const quotes = pgTable(
      * veces no es lo que entró primero.
      */
     necesitaPara: timestamp({ withTimezone: true }),
+    /** Por qué se perdió (al rechazarlo): Precio, Se lo llevó otro… */
+    motivoRechazo: text(),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

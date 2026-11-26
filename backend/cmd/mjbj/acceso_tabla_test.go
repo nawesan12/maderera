@@ -252,6 +252,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"FichaDePresupuesto":             "/admin/presupuestos",           // GET /api/v1/admin/presupuestos/{id}
 	"ListarPresupuestos":             "/admin/presupuestos",           // GET /api/v1/admin/presupuestos
 	"CrearPresupuesto":               "/admin/presupuestos",           // POST /api/v1/admin/presupuestos
+	"EditarPresupuesto":              "/admin/presupuestos",           // PUT /api/v1/admin/presupuestos/{id}
 	"CandidatosDeBaja":               "/admin/productos",              // GET /api/v1/admin/productos-candidatos
 	"GuardarMesesSinVender":          "admin",                         // PUT /api/v1/admin/productos-candidatos
 	"ImputacionesUsadas":             "/admin/productos",              // GET /api/v1/admin/productos-imputaciones

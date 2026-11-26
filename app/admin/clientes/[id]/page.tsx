@@ -4,15 +4,17 @@ import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
-import { ArrowLeft, ClipboardList, Download, MessageCircle, Printer, Scissors } from "lucide-react";
+import { ArrowLeft, CalendarClock, ClipboardList, Download, MessageCircle, MessageSquareText, Printer, Scissors } from "lucide-react";
 import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { enlaceDeWhatsapp, fechaSolaCorta } from "@/lib/formato";
 import {
   fechaCorta,
   formatearCuit,
-  moneda,
+  formatearMonto,
 } from "@/components/admin/formato";
+import { etiquetaDeRubro } from "@/lib/rubros-cliente";
+import { gestionesDelCliente } from "@/lib/dal/admin/seguimiento";
 import { obtenerCliente, type FichaDeCliente } from "@/lib/dal/admin/clientes";
 import { AvisoCuentaWeb } from "./aviso-cuenta-web";
 import { CreditoDelCliente } from "./credito";
@@ -26,6 +28,12 @@ import { requireStaff } from "@/lib/dal/session";
 import { DialogoCliente } from "../dialogo-cliente";
 import { listarListasParaClientes } from "@/lib/dal/admin/clientes";
 import { vendedoresActivos } from "@/lib/dal/admin/vendedores";
+
+const ETAPA_DE_GESTION: Record<string, string> = {
+  pendiente: "Para hacer",
+  hablando: "Hablando",
+  promesa: "Prometió",
+};
 
 const CONDICIONES: Record<string, string> = {
   consumidor_final: "Consumidor final",
@@ -47,12 +55,13 @@ export default async function FichaClientePage({
   const { periodo = "12m", ver } = await searchParams;
   const filtro = esFiltro(ver) ? ver : "todo";
 
-  const [cliente, historial, usuario, listas, vendedores] = await Promise.all([
+  const [cliente, historial, usuario, listas, vendedores, gestiones] = await Promise.all([
     obtenerCliente(id),
     historialDelCliente(id, { periodo, filtro }),
     requireStaff(),
     listarListasParaClientes(),
     vendedoresActivos(),
+    gestionesDelCliente(id),
   ]);
 
   if (!cliente) notFound();
@@ -61,13 +70,25 @@ export default async function FichaClientePage({
 
   const [recordatorio, resumenCuenta, recibo] = await Promise.all([
     cliente.saldo > 0
-      ? avisoManual("recordatorio_saldo", { tipo: "customer", id }, { saldo: moneda.format(cliente.saldo) })
+      ? avisoManual("recordatorio_saldo", { tipo: "customer", id }, { saldo: formatearMonto(cliente.saldo) })
       : null,
     avisoManual("documento", { tipo: "customer", id }),
     avisoDelUltimoRecibo(id),
   ]);
 
   const limite = Number(cliente.limiteCredito);
+  // La lista de precios a la vista: había que abrir «Editar datos» para saber
+  // cuál tenía (mes simulado). Sin lista propia es la general.
+  const lista = listas.find((l) => l.id === cliente.priceListId) ?? listas.find((l) => l.isDefault);
+  // El seguimiento abierto con este cliente (mes simulado: no aparecía en la
+  // ficha, al lado de la deuda que se está gestionando).
+  const abiertas = gestiones.filter((g) => g.etapa !== "cerrado");
+  // La razón social repetida debajo del nombre no dice nada, y el rubro va
+  // como se lee («Carpintería»), no como se guarda («carpintero»).
+  const subtitulo = [
+    cliente.razonSocial && cliente.razonSocial !== cliente.nombre ? cliente.razonSocial : null,
+    cliente.rubro && cliente.rubro !== "particular" ? etiquetaDeRubro(cliente.rubro) : null,
+  ].filter(Boolean);
   const excedido = limite > 0 && cliente.saldo > limite;
   const usoLimite = limite > 0 ? Math.min((cliente.saldo / limite) * 100, 100) : 0;
 
@@ -102,8 +123,7 @@ export default async function FichaClientePage({
             <EtiquetaEstado estado={cliente.estado} />
           </div>
           <p className="mt-0.5 text-base text-muted-foreground">
-            {[cliente.razonSocial, cliente.rubro].filter(Boolean).join(" · ") ||
-              "Cliente particular"}
+            {subtitulo.join(" · ") || "Particular"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -174,7 +194,7 @@ export default async function FichaClientePage({
                 excedido ? "text-saldo-debe" : ""
               }`}
             >
-              {moneda.format(cliente.saldo)}
+              {formatearMonto(cliente.saldo)}
             </p>
             <p className="mt-1 text-base text-muted-foreground">
               {cliente.saldo > 0
@@ -188,7 +208,7 @@ export default async function FichaClientePage({
               <div className="mt-4">
                 <div className="mb-1.5 flex items-baseline justify-between text-sm">
                   <span className="text-muted-foreground">Límite</span>
-                  <span className="tabular">{moneda.format(limite)}</span>
+                  <span className="tabular">{formatearMonto(limite)}</span>
                 </div>
                 <div
                   className="h-2 overflow-hidden rounded-full bg-muted"
@@ -206,23 +226,58 @@ export default async function FichaClientePage({
                   <p className="mt-1.5 text-sm text-saldo-debe">
                     Supera el límite en{" "}
                     <span className="tabular">
-                      {moneda.format(cliente.saldo - limite)}
+                      {formatearMonto(cliente.saldo - limite)}
                     </span>
                   </p>
                 )}
               </div>
             )}
-          </section>
 
-          {/* El plazo de pago y el corte de cuenta. Van acá, debajo del
-              saldo: es donde se mira cuando alguien pregunta por qué el
-              mostrador no le vende a cuenta. */}
-          <CreditoDelCliente
-            customerId={cliente.id}
-            diasCredito={cliente.diasCredito}
-            bloqueada={cliente.cuentaBloqueada}
-            motivo={cliente.motivoBloqueo}
-          />
+            {/* El plazo de pago y el corte de cuenta, en la misma tarjeta:
+                es donde se mira cuando alguien pregunta por qué el
+                mostrador no le vende a cuenta. */}
+            <CreditoDelCliente
+              customerId={cliente.id}
+              diasCredito={cliente.diasCredito}
+              bloqueada={cliente.cuentaBloqueada}
+              motivo={cliente.motivoBloqueo}
+              editable={esAdmin}
+            />
+
+            {/* La gestión de cobro arranca desde lo que debe: el cliente y el
+                importe ya puestos. Las abiertas, a la vista. */}
+            {(abiertas.length > 0 || cliente.saldo > 0) && (
+              <div className="mt-4 space-y-2 border-t border-linea pt-4">
+                {abiertas.map((g) => (
+                  <Link
+                    key={g.id}
+                    href="/admin/clientes/seguimiento"
+                    className="block rounded-lg bg-hundida px-3 py-2.5 transition-colors hover:bg-muted"
+                  >
+                    <span className="block text-base font-medium leading-snug">{g.asunto}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                      {ETAPA_DE_GESTION[g.etapa] ?? g.etapa}
+                      {g.proximaAccionAt && (
+                        <span className={`inline-flex items-center gap-1 ${g.vencida ? "font-medium text-destructive" : ""}`}>
+                          <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+                          {fechaCorta.format(g.proximaAccionAt)}
+                        </span>
+                      )}
+                    </span>
+                  </Link>
+                ))}
+                {cliente.saldo > 0 && (
+                  <Link
+                    href={`/admin/clientes/seguimiento?cliente=${cliente.id}`}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-base font-medium ring-1 ring-inset ring-linea transition-colors hover:bg-hundida"
+                  >
+                    <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+                    Seguimiento
+                  </Link>
+                )}
+              </div>
+            )}
+          </section>
 
           <section className="tarjeta p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -237,6 +292,7 @@ export default async function FichaClientePage({
               <Dato etiqueta="Correo" valor={cliente.email ?? "—"} />
               <Dato etiqueta="Teléfono" valor={cliente.telefono ?? "—"} tabular />
               <Dato etiqueta="Domicilio" valor={cliente.direccion ?? "—"} />
+              <Dato etiqueta="Lista de precios" valor={lista?.name ?? "General"} />
               {/* El vendedor asignado; `asesor` es el texto que dejó la
                   migración y se muestra solo si no hay uno de verdad. */}
               <Dato
@@ -268,13 +324,24 @@ export default async function FichaClientePage({
               <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Avisarle por WhatsApp
               </h2>
+              {/* Cada aviso con su rótulo: eran dos «Avisar por WhatsApp»
+                  seguidos y no se sabía cuál era el del recibo. */}
               {recibo && (
                 <div>
-                  <p className="mb-1.5 text-base font-medium">El recibo {recibo.referencia} que se acaba de hacer</p>
+                  <p className="mb-1.5 text-base font-medium">
+                    Último recibo · <span className="codigo">{recibo.referencia}</span>
+                  </p>
                   <AvisarPorWhatsapp aviso={recibo} atajo={!recordatorio} />
                 </div>
               )}
-              {recordatorio && <AvisarPorWhatsapp aviso={recordatorio} atajo />}
+              {recordatorio && (
+                <div>
+                  <p className="mb-1.5 text-base font-medium">
+                    Lo que debe · <span className="tabular">{formatearMonto(cliente.saldo)}</span>
+                  </p>
+                  <AvisarPorWhatsapp aviso={recordatorio} atajo />
+                </div>
+              )}
               {resumenCuenta && (
                 <div>
                   <p className="mb-1.5 text-base font-medium">El resumen de la cuenta</p>
@@ -454,7 +521,7 @@ function DelSistemaAnterior({ anterior }: { anterior: FichaDeCliente["anterior"]
           <div className="bg-card">
             <p className="px-4 pt-3 text-sm text-muted-foreground">
               {anterior.cantidadVentas} {anterior.cantidadVentas === 1 ? "venta" : "ventas"} por{" "}
-              <span className="tabular">{moneda.format(Number(anterior.totalVentas))}</span>
+              <span className="tabular">{formatearMonto(Number(anterior.totalVentas))}</span>
               {mas(anterior.cantidadVentas, anterior.ventas.length)}
             </p>
             <ul className="divide-y">
@@ -470,7 +537,7 @@ function DelSistemaAnterior({ anterior }: { anterior: FichaDeCliente["anterior"]
                       <span className="block truncate text-sm text-muted-foreground">{v.detalle}</span>
                     )}
                   </span>
-                  <span className="tabular text-base">{moneda.format(Number(v.total))}</span>
+                  <span className="tabular text-base">{formatearMonto(Number(v.total))}</span>
                 </li>
               ))}
             </ul>
@@ -481,7 +548,7 @@ function DelSistemaAnterior({ anterior }: { anterior: FichaDeCliente["anterior"]
             <p className="px-4 pt-3 text-sm text-muted-foreground">
               {anterior.cantidadComprobantes}{" "}
               {anterior.cantidadComprobantes === 1 ? "comprobante" : "comprobantes"} por{" "}
-              <span className="tabular">{moneda.format(Number(anterior.totalComprobantes))}</span>
+              <span className="tabular">{formatearMonto(Number(anterior.totalComprobantes))}</span>
               {mas(anterior.cantidadComprobantes, anterior.comprobantes.length)}
             </p>
             <ul className="divide-y">
@@ -501,7 +568,7 @@ function DelSistemaAnterior({ anterior }: { anterior: FichaDeCliente["anterior"]
                       <span className="tabular block text-sm text-muted-foreground">CAE {c.cae}</span>
                     )}
                   </span>
-                  <span className="tabular text-base">{moneda.format(Number(c.total))}</span>
+                  <span className="tabular text-base">{formatearMonto(Number(c.total))}</span>
                 </li>
               ))}
             </ul>
@@ -549,20 +616,24 @@ function Listado({
         <ul className="divide-y border-t">
           {filas.map((fila) => (
             <li key={fila.id}>
+              {/* Dos renglones: el número entero arriba; fecha, importe y
+                  estado abajo. En una sola fila, en las tarjetas angostas el número
+                  se partía («PED-» y «1061») y el importe pisaba el de la
+                  factura. */}
               <Link
                 href={fila.href}
-                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                className="block px-4 py-3 transition-colors hover:bg-muted/40"
               >
-                <span className="min-w-0 flex-1">
-                  <span className="tabular block text-base">{fila.numero}</span>
-                  <span className="block text-sm text-muted-foreground">
-                    {fechaCorta.format(fila.fecha)}
+                <span className="codigo block truncate whitespace-nowrap text-base">{fila.numero}</span>
+                <span className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="text-sm text-muted-foreground">{fechaCorta.format(fila.fecha)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="tabular whitespace-nowrap text-base font-medium">
+                      {fila.total !== undefined ? formatearMonto(Number(fila.total)) : fila.detalle}
+                    </span>
+                    <EtiquetaEstado estado={fila.estado} />
                   </span>
                 </span>
-                <span className="tabular text-base">
-                  {fila.total !== undefined ? moneda.format(Number(fila.total)) : fila.detalle}
-                </span>
-                <EtiquetaEstado estado={fila.estado} />
               </Link>
             </li>
           ))}

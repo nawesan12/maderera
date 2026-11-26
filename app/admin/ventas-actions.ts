@@ -75,10 +75,10 @@ export async function cancelarPedido(id: string, motivo?: string): Promise<Estad
   return { ok: r.data.ok };
 }
 
-export async function cambiarEstadoPresupuesto(id: string, estado: string): Promise<EstadoVenta> {
+export async function cambiarEstadoPresupuesto(id: string, estado: string, motivo?: string): Promise<EstadoVenta> {
   const r = await (await api()).POST("/api/v1/admin/presupuestos/{id}/estado", {
     params: { path: { id } },
-    body: { estado },
+    body: { estado, ...(motivo ? { motivo } : {}) },
   });
   if (!r.data) return fallo(r);
   refrescar();
@@ -120,6 +120,8 @@ export interface EntregaDelPedido {
   direccion?: string;
   zona?: string;
   costoEnvio?: number;
+  /** El envío va sin flete: sin flete escrito ni esto, Go no lo deja salir. */
+  sinCargo?: boolean;
   medioPago?: MedioDelPedido;
   /** AAAA-MM-DD: el día que se compromete la entrega. */
   entregarEl?: string;
@@ -176,7 +178,7 @@ const DIAS_DE_VALIDEZ = 15;
  * A Go le llega lo mismo que antes se le pasaba a zod: los campos del
  * FormData con sus `|| undefined`, y las líneas leídas con JSON.parse.
  */
-export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData): Promise<EstadoVenta> {
+function leerFormulario(formData: FormData) {
   const cabecera = {
     customerId: (formData.get("customerId") as string) || undefined,
     contactoNombre: formData.get("contactoNombre"),
@@ -189,6 +191,11 @@ export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData)
     necesitaPara: (formData.get("necesitaPara") as string) || undefined,
   };
   const lineas: unknown[] = formData.getAll("linea").map((cruda) => JSON.parse(String(cruda)));
+  return { cabecera, lineas };
+}
+
+export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData): Promise<EstadoVenta> {
+  const { cabecera, lineas } = leerFormulario(formData);
   // «Guardar y pasar a pedido» guarda y abre el paso a pedido en la ficha,
   // que pregunta cómo se entrega y cómo paga.
   const pasar = formData.get("convertir") === "si";
@@ -268,6 +275,24 @@ export async function corregirPedido(
   revalidatePath("/admin/reparto");
   revalidatePath("/admin/stock");
   return { ok: r.data.ok };
+}
+
+/**
+ * Corrige un presupuesto que todavía no se mandó: los mismos campos que el
+ * alta, con el mismo número (mes simulado: había que rechazarlo y cargarlo de
+ * nuevo). Go no deja si ya se mandó o tiene pedido.
+ */
+export async function editarPresupuesto(_previo: EstadoVenta, formData: FormData): Promise<EstadoVenta> {
+  const id = String(formData.get("id") ?? "");
+  const { cabecera, lineas } = leerFormulario(formData);
+  const r = await (await api()).PUT("/api/v1/admin/presupuestos/{id}", {
+    params: { path: { id } },
+    body: { cabecera, lineas },
+  });
+  if (!r.data) return fallo(r);
+  refrescar();
+  revalidatePath(`/admin/presupuestos/${id}`);
+  redirect(`/admin/presupuestos/${id}`);
 }
 
 /** Corrige el día comprometido de entrega; vacío lo saca. */

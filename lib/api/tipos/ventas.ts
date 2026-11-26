@@ -220,7 +220,12 @@ export interface paths {
             cookie?: never;
         };
         get: operations["FichaDePresupuesto"];
-        put?: never;
+        /**
+         * @description Corrige los renglones y los datos de un presupuesto que todavía no se
+         *     mandó (pendiente o en revisión) ni tiene pedido: el mismo cuerpo que
+         *     el alta, sin `convertir`. Mantiene el número.
+         */
+        put: operations["EditarPresupuesto"];
         post?: never;
         delete?: never;
         options?: never;
@@ -368,6 +373,8 @@ export interface components {
             subtotal: string;
             orden: number;
             alicuotaIva: string | null;
+            /** @description el precio no cubre el costo */
+            bajoCosto?: boolean;
         };
         /** @description La única ficha activa sin cuenta web con el correo del contacto. Con dos o más, ninguna: se busca a mano. */
         FichaParaUnir: {
@@ -381,6 +388,8 @@ export interface components {
         FichaDePresupuesto: {
             /** @description pasó su validez: para pasarlo a pedido hay que elegir los precios */
             vencido: boolean;
+            /** @description por qué se perdió */
+            motivoRechazo?: string | null;
             /** @description el total con los precios de lista de hoy, si venció */
             totalDeHoy: string | null;
             /** @description Sin cliente, la ficha con el correo del contacto (para unirlo a mano) */
@@ -1031,6 +1040,33 @@ export interface operations {
             404: components["responses"]["Problema"];
         };
     };
+    EditarPresupuesto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    cabecera: {
+                        [key: string]: unknown;
+                    };
+                    lineas: unknown[];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Hecho"];
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
     UnirPresupuestoAFicha: {
         parameters: {
             query?: never;
@@ -1068,6 +1104,8 @@ export interface operations {
             content: {
                 "application/json": {
                     estado: string;
+                    /** @description al rechazar, por qué se perdió (Precio, Se lo llevó otro, No contestó, Ya no lo necesita, Otro) */
+                    motivo?: string;
                 };
             };
         };
@@ -1097,6 +1135,8 @@ export interface operations {
                     zona?: string;
                     /** Format: double */
                     costoEnvio?: number;
+                    /** @description el envío va sin flete; un envío sin flete ni sinCargo no sale */
+                    sinCargo?: boolean;
                     medioPago?: components["schemas"]["MedioPago"];
                     /** @description AAAA-MM-DD */
                     entregarEl?: string;

@@ -224,6 +224,10 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	if c, b := pedir(t, ven, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "  "}); c != 422 || !strings.Contains(b, "Poné el motivo") {
 		t.Errorf("anular sin motivo: %d %s", c, b)
 	}
+	// El vendedor, como al anular una venta, con el PIN de un admin.
+	if c, b := pedir(t, ven, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "error"}); c != 422 || !strings.Contains(b, `"pin"`) {
+		t.Errorf("anular del vendedor sin PIN: %d %s", c, b)
+	}
 	if c, b := pedir(t, adm, "POST", u+"recibos/"+cobro.ReceiptID+"/anular", map[string]string{"motivo": "lo cargué mal"}); c != 200 {
 		t.Errorf("anular: %d %s", c, b)
 	}

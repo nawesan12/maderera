@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/autorizacion"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
 	"mjbj/internal/formato"
@@ -29,11 +30,19 @@ type Servicio struct {
 	pool *pgxpool.Pool
 	q    *sqlc.Queries
 	log  *slog.Logger
+	aut  *autorizacion.Servicio
 }
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool, log *slog.Logger) *Servicio {
-	return &Servicio{pool: pool, q: sqlc.New(pool), log: log}
+	return &Servicio{pool: pool, q: sqlc.New(pool), log: log, aut: autorizacion.Nuevo(pool, log, "")}
+}
+
+// ConAutorizacion le da el servicio del PIN compartido con el mostrador (la
+// clave de las fichas y el aviso al tercer error).
+func (s *Servicio) ConAutorizacion(a *autorizacion.Servicio) *Servicio {
+	s.aut = a
+	return s
 }
 
 // Los avisos al cliente (correo y WhatsApp con el PDF) los atiende el worker
@@ -81,6 +90,17 @@ type ResultadoDeCobro struct {
 // `clave` la genera la pantalla al abrir el diálogo: un reintento devuelve
 // el mismo recibo (EmitirRecibo) y no vuelve a avisar ni a marcar el pedido.
 func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave string) (ResultadoDeCobro, error) {
+	return s.CobrarAClienteEn(ctx, ses, cliente, pedido, concepto, partesCrudas, clave, "")
+}
+
+// CobrarAClienteEn es CobrarACliente diciendo en qué sucursal entra el
+// efectivo (vacía: la del pedido, o la única caja abierta).
+//
+// Sin caja abierta, el efectivo no se cobra (mes simulado, H132): antes el
+// recibo salía igual y recién después avisaba que el efectivo «no entró al
+// arqueo», así que la plata quedaba en el recibo y en ningún cajón. Ahora
+// pide abrir la caja antes, como el cobro desde el pedido.
+func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, cliente, pedido, concepto, partesCrudas, clave, sucursal string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(cliente) || (pedido != "" && !plataforma.UUIDValido(pedido)) || plataforma.LargoJS(strings.TrimSpace(concepto)) > 200 {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"customerId": "Falta el cliente."})
 	}
@@ -107,6 +127,30 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 			p = &fila
 		}
 		c := Cobro{CustomerID: &cliente, Origen: "panel", Partes: partes, Caja: &Caja{Buscar: true}, UsuarioID: &ses.UserID, Clave: clave}
+		if hayEfectivo(partes) {
+			var donde *string
+			if p != nil && p.BranchID != nil {
+				donde = p.BranchID
+			} else if plataforma.UUIDValido(sucursal) {
+				donde = &sucursal
+			}
+			yaEsta := false
+			if clave != "" {
+				if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM receipts WHERE clave = $1)`, clave).Scan(&yaEsta); err != nil {
+					return err
+				}
+			}
+			if !yaEsta {
+				turno, err := turnoDelPedido(ctx, q, donde)
+				if err != nil {
+					return err
+				}
+				if turno == "" {
+					return sinCaja(ctx, tx, donde)
+				}
+				c.Caja = &Caja{TurnoID: turno}
+			}
+		}
 		texto := "Pago a cuenta"
 		if t := strings.TrimSpace(concepto); t != "" {
 			texto = t
@@ -193,6 +237,53 @@ func cobradoPorMercadoPago(ctx context.Context, tx pgx.Tx, recibo string) (bool,
 // Anular es anularReciboDesdeElPanel: los roles que manejan plata, salvo el
 // recibo de un cobro de Mercado Pago (cobradoPorMercadoPago).
 func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, recibo, motivo string) (string, error) {
+	return s.AnularConPIN(ctx, ses, recibo, motivo, "")
+}
+
+// AnularConPIN es Anular con la firma de un admin (mes simulado, H278): la
+// vendedora anulaba un recibo de $1.880.100 con el motivo solo, mientras que
+// anular una venta pide el PIN. Ahora pide lo mismo que anular una venta: el
+// admin firma solo; el resto, con el PIN de un admin.
+func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, motivo, pin string) (string, error) {
+	if strings.TrimSpace(motivo) == "" {
+		return "", plataforma.Invalido(map[string]string{"motivo": "Poné el motivo de la anulación."})
+	}
+	// El cobro de Mercado Pago no se anula desde el panel, ni con PIN: se dice
+	// eso antes de pedir el PIN de algo que igual no se puede.
+	var porMP bool
+	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) (err error) {
+		porMP, err = cobradoPorMercadoPago(ctx, tx, recibo)
+		return err
+	}); err != nil {
+		return "", err
+	}
+	if porMP {
+		return "", comoProblema(errCobro("Este cobro entró por Mercado Pago: devolvelo desde Mercado Pago y el recibo se anula solo cuando llega el aviso."))
+	}
+	if !ses.Tiene(sqlc.StaffRoleAdmin) {
+		var total float64
+		err := s.pool.QueryRow(ctx, `SELECT total::float8 FROM receipts WHERE id::text = $1`, recibo).Scan(&total)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", plataforma.NuevoProblema(404, "No se encontró el recibo.")
+		}
+		if err != nil {
+			return "", err
+		}
+		if _, err := s.aut.Exigir(ctx, ses, autorizacion.Pedido{Motivo: autorizacion.Anular, Monto: total, Clave: recibo, PIN: pin}); err != nil {
+			var falta *autorizacion.Falta
+			if errors.As(err, &falta) {
+				e := map[string]string{"pin": falta.Mensaje(), "pinMonto": jsmath.Fijo2(falta.Monto)}
+				if falta.PinIncorrecto {
+					e["pinIncorrecto"] = "si"
+				}
+				if falta.BloqueadoHasta != nil {
+					e["pinHasta"] = falta.BloqueadoHasta.UTC().Format(time.RFC3339)
+				}
+				return "", plataforma.Invalido(e)
+			}
+			return "", err
+		}
+	}
 	limpio := strings.TrimSpace(motivo)
 	if r := []rune(limpio); len(r) > 300 {
 		limpio = string(r[:300])

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   enlaceDeWhatsapp,
+  formatearMonto,
   formatearDecimal,
   formatearPeso,
   ABREVIATURA_UNIDAD,
@@ -108,6 +109,15 @@ describe("formatearUnidad cubre todas las unidades de venta", () => {
 
   it("sin unidad no rompe", () => {
     expect(formatearUnidad(null)).toBe("u.");
+  });
+});
+
+describe("formatearMonto (mes simulado, H034)", () => {
+  it("muestra los centavos cuando los hay, como la cuenta del cliente", () => {
+    expect(formatearMonto(203566.5)).toBe(formatearMonto("203566.50"));
+    expect(formatearMonto(203566.5)).toMatch(/203\.566,50/);
+    expect(formatearMonto(203567)).toMatch(/203\.567$/);
+    expect(formatearMonto(0.1 + 0.2)).toMatch(/0,30/);
   });
 });
 

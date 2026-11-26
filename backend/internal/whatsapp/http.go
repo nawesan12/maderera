@@ -162,10 +162,10 @@ func (s *Servicio) AbrirBandeja(ctx context.Context, ses *auth.Sesion, filtro, c
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	// Sin ?chat= no se abre ninguna (mes simulado): en el teléfono la bandeja
+	// abría siempre la más reciente, «Volver a la lista» volvía a abrirla y
+	// esa charla se marcaba leída sola cada vez que alguien entraba.
 	elegida := chat
-	if elegida == "" && len(b.Conversaciones) > 0 {
-		elegida = b.Conversaciones[0].ID
-	}
 	if elegida != "" {
 		d, err := s.ObtenerConversacion(ctx, elegida)
 		if err != nil {

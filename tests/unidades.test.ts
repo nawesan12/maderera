@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   admiteDecimales,
+  cantidadConUnidad,
   cantidadDeStock,
   formatearCantidad,
   formatearDecimal,
@@ -113,5 +114,14 @@ describe("lo tipeado con decimales", () => {
     expect(llevaDecimales("2.")).toBe(true);
     expect(llevaDecimales("15")).toBe(false);
     expect(llevaDecimales("")).toBe(false);
+  });
+});
+
+describe("cantidadConUnidad (mes simulado, H055)", () => {
+  it("pluraliza la unidad y no cuenta litros de una lata", () => {
+    expect(cantidadConUnidad(3, "placa")).toBe("3 placas");
+    expect(cantidadConUnidad(1, "placa")).toBe("1 placa");
+    expect(cantidadConUnidad(2, "litro", "Laca Poliuretánica — 4 litros — Brillante")).toBe("2 u.");
+    expect(cantidadConUnidad(2.5, "metro_lineal")).toBe("2,5 metros");
   });
 });

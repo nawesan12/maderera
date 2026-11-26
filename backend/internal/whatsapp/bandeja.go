@@ -363,7 +363,8 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 		sql   string
 		armar func(pgx.Rows) (DocumentoListado, error)
 	}{
-		{`select id, numero, total::float8, created_at from quotes where customer_id = $1 order by created_at desc limit 5`,
+		{`select id, numero, total::float8, created_at from quotes where customer_id = $1
+			and estado not in ('rechazado', 'vencido') order by created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero string

@@ -43,7 +43,10 @@ export function MandarPorWhatsapp({
         className={`inline-flex ${alto} items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted`}
       >
         <MessageCircle className="h-4 w-4 text-brand-green" />
-        Mandar el PDF por WhatsApp
+        {/* «PDF por la API» era jerga (mes simulado): sale por WhatsApp con
+            el PDF adjunto, desde el sistema, y eso se cobra. */}
+        WhatsApp con el PDF
+        <span className="text-sm font-normal text-muted-foreground">se cobra</span>
       </button>
     );
   }

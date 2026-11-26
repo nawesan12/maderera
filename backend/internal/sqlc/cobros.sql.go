@@ -285,10 +285,12 @@ func (q *Queries) ChequesDelRecibo(ctx context.Context, receiptID string) ([]*st
 }
 
 const chequesSueltos = `-- name: ChequesSueltos :many
-SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo
+SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo,
+       (order_payment_id IS NOT NULL)::boolean AS de_una_venta
 FROM cheques
 WHERE customer_id = $1 AND sentido = 'recibido'
-  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL))
+  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL)
+       OR (order_payment_id IS NOT NULL AND receipt_id IS NULL AND estado <> 'anulado'))
   AND ($2::timestamptz IS NULL OR created_at >= $2)
 ORDER BY fecha_pago
 `
@@ -308,8 +310,12 @@ type ChequesSueltosRow struct {
 	Estado        string    `json:"estado"`
 	FechaPago     time.Time `json:"fechaPago"`
 	MotivoRechazo *string   `json:"motivoRechazo"`
+	DeUnaVenta    bool      `json:"deUnaVenta"`
 }
 
+// Los cheques que no tienen recibo: los informados, los rechazados al
+// recibirlos y los que se entregaron con una venta del mostrador (mes
+// simulado: esos no figuraban en ningún lado de la ficha, ni rebotados).
 func (q *Queries) ChequesSueltos(ctx context.Context, arg ChequesSueltosParams) ([]ChequesSueltosRow, error) {
 	rows, err := q.db.Query(ctx, chequesSueltos, arg.CustomerID, arg.Desde)
 	if err != nil {
@@ -329,6 +335,7 @@ func (q *Queries) ChequesSueltos(ctx context.Context, arg ChequesSueltosParams) 
 			&i.Estado,
 			&i.FechaPago,
 			&i.MotivoRechazo,
+			&i.DeUnaVenta,
 		); err != nil {
 			return nil, err
 		}

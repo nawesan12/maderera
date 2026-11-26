@@ -146,14 +146,14 @@ func (a *API) GuardarCliente(ctx context.Context, r cuentasapi.GuardarClienteReq
 		return nil, err
 	}
 	b := r.Body
-	m, err := a.clientes.Guardar(ctx, ses, clientes.FormCliente{ID: texto(b.Id), Nombre: b.Nombre, RazonSocial: texto(b.RazonSocial),
+	id, m, err := a.clientes.GuardarConID(ctx, ses, clientes.FormCliente{ID: texto(b.Id), Nombre: b.Nombre, RazonSocial: texto(b.RazonSocial),
 		Cuit: texto(b.Cuit), CondicionIva: texto(b.CondicionIva), Tipo: texto(b.Tipo), Email: texto(b.Email), Telefono: texto(b.Telefono),
 		Direccion: texto(b.Direccion), Rubro: texto(b.Rubro), Asesor: texto(b.Asesor), SellerID: texto(b.SellerId),
 		LimiteCredito: texto(b.LimiteCredito), PriceListID: texto(b.PriceListId), Notas: texto(b.Notas)})
 	if err != nil {
 		return nil, err
 	}
-	return mensaje(m), nil
+	return ok(map[string]string{"ok": m, "id": id}), nil
 }
 
 func (a *API) FichaDeCliente(ctx context.Context, r cuentasapi.FichaDeClienteRequestObject) (cuentasapi.FichaDeClienteResponseObject, error) {
@@ -269,7 +269,7 @@ func (a *API) CobrarACliente(ctx context.Context, r cuentasapi.CobrarAClienteReq
 	if err != nil {
 		return nil, err
 	}
-	v, err := a.cobros.CobrarACliente(ctx, ses, r.Id, texto(r.Body.OrderId), texto(r.Body.Concepto), r.Body.Partes, texto(r.Body.Clave))
+	v, err := a.cobros.CobrarAClienteEn(ctx, ses, r.Id, texto(r.Body.OrderId), texto(r.Body.Concepto), r.Body.Partes, texto(r.Body.Clave), texto(r.Body.BranchId))
 	return ok(v), err
 }
 
@@ -282,7 +282,7 @@ func (a *API) AnularRecibo(ctx context.Context, r cuentasapi.AnularReciboRequest
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.cobros.Anular(ctx, ses, r.Id, r.Body.Motivo)
+	m, err := a.cobros.AnularConPIN(ctx, ses, r.Id, r.Body.Motivo, texto(r.Body.Pin))
 	if err != nil {
 		return nil, err
 	}

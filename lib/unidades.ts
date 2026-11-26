@@ -170,3 +170,18 @@ export function formatearDecimal(
   // Intl conserva el signo del cero («-0», «-0,00»): se lo saca.
   return /^-0(,0*)?$/.test(texto) ? texto.slice(1) : texto;
 }
+
+/**
+ * «3 placas», «1 placa», «2 u.»: la cantidad de un renglón como se lee.
+ *
+ * Una unidad de medida (litro, kilo) cuando el producto ya trae su tamaño
+ * en el nombre («Laca — 4 litros») cuenta envases, no litros: «2 litro»
+ * eran dos latas de cuatro (mes simulado). Ahí va «2 u.».
+ */
+export function cantidadConUnidad(cantidad: number, unidad: string | null | undefined, descripcion = ""): string {
+  const n = formatearCantidad(cantidad);
+  if ((unidad === "litro" || unidad === "kg") && /\d\s*(l|lts?|litros?|kg|kilos?)\b/i.test(descripcion)) {
+    return `${n} u.`;
+  }
+  return `${n} ${cantidad === 1 ? formatearUnidadLarga(unidad) : formatearUnidadPlural(unidad)}`;
+}

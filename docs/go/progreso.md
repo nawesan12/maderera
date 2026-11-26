@@ -3056,3 +3056,42 @@ prueba. Migraciones 00220 y 00221.
   asiento del gasto con su IVA.
 - El depósito entra a `/admin/recepciones` (`/admin/recepciones/nueva` es
   del admin): recibe, corrige cantidades y confirma; Go le borra los costos.
+## 26/11/2026: el mes simulado, ventas y clientes (rama `mes-ventas-clientes`)
+
+Migración 00260 (`quotes.motivo_rechazo`). Lo que cambió en Go:
+
+- **CUIT con verificador** en la ficha (`clientes.ValidarCliente`): antes
+  solo se miraba la forma. El alta devuelve el `id` (el panel abre la ficha).
+- **Efectivo sin caja, desde la ficha** (`cobros.CobrarAClienteEn`): pide
+  abrir la caja antes (ErrSinCaja, como el cobro del pedido) en vez de
+  emitir el recibo y avisar después que el efectivo no entró a ningún arqueo.
+- **Anular un recibo** (`cobros.AnularConPIN`): quien no es admin, con el
+  PIN de uno (motivo `anular`), como anular una venta. El de Mercado Pago se
+  rechaza antes de pedir el PIN. El servicio de cobros toma el `aut`
+  compartido en `cmd/mjbj/api.go`.
+- **Historial del cliente**: el cheque entregado con una venta del mostrador
+  aparece (clase `cheque`, no mueve la cuenta) y rebotado dice «Rechazado por
+  el banco».
+- **Piso de costo** (`precios.PisoDeCosto` = costo promedio × (1 + IVA)): en
+  la búsqueda del mostrador (`piso`), en la grilla de precios (`piso`) y en
+  cada renglón del presupuesto (`bajoCosto`). No frena: lo marcan las
+  pantallas.
+- **Presupuestos**: `PUT /admin/presupuestos/{id}` corrige uno pendiente o en
+  revisión sin pedido (mismo número); el rechazo guarda el motivo (de
+  `MotivosDeRechazo`) y cada estado dice su mensaje; un renglón a $0 no se
+  guarda; el pedido cancelado no traba el presupuesto; «abiertos» suma los
+  aceptados sin pedido (primero); con envío, la zona tiene que ser de
+  `shipping_zones`, la de costo fijo propone el flete y sin flete hace falta
+  `sinCargo`.
+- **WhatsApp**: `presupuesto_enviado` se completa con número, total y
+  vencimiento; un envío que falla no deja una conversación vacía; mandado
+  por WhatsApp (por la API, «Documento» o avisado desde el teléfono) el
+  presupuesto pasa a enviado; «Documento» no ofrece rechazados ni vencidos;
+  sin `?chat=` la bandeja no abre ni marca leída ninguna conversación.
+- **Búsqueda del mostrador**: lo que coincide por el nombre va antes que lo
+  que coincide por la categoría («laca» ya no trae primero las placas).
+
+Quedó para decidir: dejar una parte del pedido a cuenta corriente y el resto
+por otro medio (hoy se ve el disponible antes de crear, y si no alcanza no
+se crea), y que la vendedora registre el rechazo de un cheque desde la
+ficha (hoy es de /admin/cheques, del admin).

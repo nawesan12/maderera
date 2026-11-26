@@ -6106,6 +6106,7 @@ type Quote struct {
 	RespondeHasta    *time.Time        `json:"respondeHasta"`
 	NecesitaPara     *time.Time        `json:"necesitaPara"`
 	SellerID         *string           `json:"sellerId"`
+	MotivoRechazo    *string           `json:"motivoRechazo"`
 }
 
 type QuoteItem struct {

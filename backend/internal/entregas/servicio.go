@@ -257,9 +257,17 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 // anteriores anulados después también (al hacerlo estaban vivos). Sin eso,
 // un remito que se llevó todo pasaba a decir «Entrega parcial» al anularlo
 // (mes simulado, REM-0017).
+//
+// El papel queda fijo al firmarse (o al anularse sin firma). Mientras nadie
+// lo firmó, un remito anterior anulado ya no cuenta: el envío REM-0011, que
+// iba en el camión, seguía diciendo «Entrega total» después de anular el
+// REM-0010 que se había llevado 20 placas, y eso firmaba quien recibía
+// (tercera prueba del mes simulado).
 func SaldoAlRemito(ctx context.Context, db consultor, pedido, remito string) ([]Renglon, error) {
 	rs, err := leerSaldo(ctx, db, sprintf(consultaSaldo,
-		`AND (d.estado <> 'anulada' OR d.id = $2 OR d.updated_at > (SELECT created_at FROM deliveries WHERE id = $2))
+		`AND (d.estado <> 'anulada' OR d.id = $2 OR d.updated_at > (
+		       SELECT coalesce(firmado_at, CASE WHEN estado = 'anulada' THEN updated_at END, 'infinity')
+		       FROM deliveries WHERE id = $2))
 		 AND d.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`,
 		`AND dv.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`, sinServicios), pedido, remito)
 	if err != nil {

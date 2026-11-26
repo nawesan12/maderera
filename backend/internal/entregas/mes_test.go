@@ -387,3 +387,46 @@ func sumarUno(n string) string {
 	i, _ := strconv.Atoi(n)
 	return strconv.Itoa(i + 1)
 }
+
+// Tercera prueba: anular un remito anterior cambia lo que dice el que todavía
+// no se firmó. El firmado queda como estaba el día de la firma.
+func TestElRemitoSinFirmarDiceLoQueFaltaHoy(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	pedido, r1, r2 := e.pedido(t, "PED-2012", "listo", nil)
+	u := e.srv.URL + "/api/v1/admin/remitos"
+	for _, c := range [][]map[string]string{cantidades(r1, "4"), cantidades(r1, "6", r2, "4")} {
+		if st, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "retiro", "receptorDocumento": "1", "cantidades": c}); st != 200 {
+			t.Fatalf("%d %s", st, b)
+		}
+	}
+	primero := e.uno(t, `select id::text from deliveries where order_id = $1 order by created_at limit 1`, pedido)
+	segundo := e.uno(t, `select id::text from deliveries where order_id = $1 order by created_at desc limit 1`, pedido)
+	parcial := func() bool {
+		rs, err := e.s.RemitosDelPedido(context.Background(), pedido)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rs {
+			if r.ID == segundo {
+				return r.Parcial
+			}
+		}
+		t.Fatal("no está el segundo")
+		return false
+	}
+	if parcial() {
+		t.Fatal("el segundo se llevó todo")
+	}
+	// Firmado, queda fijo aunque después se anule el primero.
+	e.exec(t, `update deliveries set estado = 'entregada', firmado_at = now() where id = $1`, segundo)
+	e.exec(t, `update deliveries set estado = 'anulada', updated_at = now() + interval '1 minute' where id = $1`, primero)
+	if parcial() {
+		t.Fatal("el firmado cambió")
+	}
+	// Sin firmar, dice lo que falta hoy.
+	e.exec(t, `update deliveries set estado = 'preparada', firmado_at = null where id = $1`, segundo)
+	if !parcial() {
+		t.Fatal("el remito sin firmar sigue diciendo entrega total")
+	}
+}

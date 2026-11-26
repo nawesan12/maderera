@@ -191,7 +191,16 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		return nil, err
 	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT m.id, m.tipo::text, m.monto, m.detalle, m.referencia, m.created_at, m.purchase_invoice_id, m.supplier_payment_id, m.goods_receipt_id,
+		SELECT m.id, m.tipo::text, m.monto,
+		  -- Los pagos de una sola parte anotados antes como «Pago cheque»: se
+		  -- leen con el número de esa parte (mes simulado). El renglón
+		  -- guardado no se toca.
+		  CASE WHEN m.tipo = 'pago' AND m.detalle IN ('Pago cheque', 'Pago echeq', 'Pago transferencia', 'Pago efectivo') THEN coalesce((
+		    SELECT 'Pago ' || CASE pp.medio WHEN 'echeq' THEN 'e-Cheq' ELSE pp.medio END || ' ' || coalesce(c.numero, nullif(pp.referencia, ''))
+		    FROM supplier_payment_parts pp LEFT JOIN cheques c ON c.id = pp.cheque_id
+		    WHERE pp.payment_id = m.supplier_payment_id AND (SELECT count(*) FROM supplier_payment_parts q WHERE q.payment_id = m.supplier_payment_id) = 1
+		    LIMIT 1), m.detalle) ELSE m.detalle END,
+		  m.referencia, m.created_at, m.purchase_invoice_id, m.supplier_payment_id, m.goods_receipt_id,
 		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
 		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1)
 		FROM supplier_movements m

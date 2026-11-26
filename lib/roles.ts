@@ -177,6 +177,8 @@ export const ACCESO: Record<string, readonly RolStaff[]> = {
  * facturarlo (T3, 18/11/2026). Pedidos lo abre también el depósito, que
  * prepara y entrega, y hasta ahora podía marcar un pedido como cobrado sin
  * recibo ni caja. La ficha se le sigue mostrando; los botones de plata, no.
+ * También registra, desde la ficha del cliente, que el banco rechazó un
+ * cheque (H272): quien no es admin, con el PIN de uno.
  */
 export const MANEJAN_PLATA: readonly RolStaff[] = ["admin", "vendedor"];
 

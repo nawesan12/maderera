@@ -149,6 +149,7 @@ ORDER BY fecha_pago;
 
 -- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
+       c.id AS cheque_id, c.estado AS cheque_estado,
        (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id

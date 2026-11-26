@@ -72,7 +72,8 @@ var Acceso = map[string][]sqlc.StaffRole{
 // ManejanPlata es MANEJAN_PLATA de lib/roles.ts: quién cobra, emite recibos
 // y factura desde la ficha de un pedido. Pedidos lo abre también el depósito,
 // que prepara y entrega pero no mueve plata (hasta T3 marcaba un pedido como
-// cobrado sin recibo ni caja).
+// cobrado sin recibo ni caja). También registran el rechazo de un cheque
+// desde la ficha del cliente (H272), con el PIN de un admin.
 var ManejanPlata = []sqlc.StaffRole{sqlc.StaffRoleAdmin, sqlc.StaffRoleVendedor}
 
 // DecidenEnLaCola es DECIDEN_EN_LA_COLA de lib/roles.ts: quién marca un corte

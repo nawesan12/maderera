@@ -22,6 +22,7 @@ import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { AnularRecibo } from "@/components/cobros/anular-recibo";
+import { RechazarCheque } from "@/components/cobros/rechazar-cheque";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
 import { historialDelCliente } from "@/lib/dal/historial-cliente";
@@ -410,6 +411,19 @@ export default async function FichaClientePage({
                           cliente={cliente.nombre}
                         />
                       )
+                  : undefined
+              }
+              accionDelCheque={
+                manejaPlata
+                  ? (c, unoDeVarios) => (
+                      <RechazarCheque
+                        id={c.id}
+                        nombre={c.nombre}
+                        importe={c.importe}
+                        cliente={cliente.nombre}
+                        conNombre={unoDeVarios}
+                      />
+                    )
                   : undefined
               }
             />

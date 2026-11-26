@@ -69,6 +69,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CategoriasAdmin":                "/admin/stock",                  // GET /api/v1/admin/categorias
 	"ChequesEnCartera":               "/admin/cheques",                // GET /api/v1/admin/cheques/cartera
 	"CambiarEstadoDeCheque":          "/admin/cheques",                // PUT /api/v1/admin/cheques/{id}/estado
+	"RechazarChequeDelCliente":       "plata",                         // POST /api/v1/admin/cheques/{id}/rechazo
 	"ListarCheques":                  "/admin/cheques",                // GET /api/v1/admin/cheques
 	"CargarCheque":                   "/admin/cheques",                // POST /api/v1/admin/cheques
 	"AsientosCsv":                    "/admin/cierre",                 // GET /api/v1/admin/cierre/asientos-csv

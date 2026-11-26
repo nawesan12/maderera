@@ -5031,6 +5031,7 @@ type CashMovement struct {
 	SupplierPaymentID *string            `json:"supplierPaymentId"`
 	DeclaradoAt       pgtype.Timestamptz `json:"declaradoAt"`
 	BajoLaBase        bool               `json:"bajoLaBase"`
+	Destino           *string            `json:"destino"`
 }
 
 type CashSession struct {

@@ -27,6 +27,17 @@ type MovimientoDelCliente struct {
 	ImporteInformativo *float64   `json:"importeInformativo"`
 	Pedido             *RefPedido `json:"pedido"`
 	Recibo             *RefRecibo `json:"recibo"`
+	// Cheques son los cheques del renglón que el banco todavía puede
+	// rechazar (en la cartera, depositados o endosados): la ficha ofrece
+	// registrar el rechazo desde ahí (H272).
+	Cheques []RefCheque `json:"cheques,omitempty"`
+}
+
+// RefCheque es un cheque que se puede rechazar desde la ficha.
+type RefCheque struct {
+	ID      string  `json:"id"`
+	Nombre  string  `json:"nombre"`
+	Importe float64 `json:"importe"`
 }
 
 // RefPedido es el pedido de un renglón.
@@ -151,6 +162,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 	}
 	medios := map[string]string{}
 	porMP := map[string]bool{}
+	chequesDe := map[string][]RefCheque{}
 	if len(recibos) > 0 {
 		partes, err := q.PartesDeRecibos(ctx, recibos)
 		if err != nil {
@@ -169,6 +181,9 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 					tipo = string(*p.Tipo)
 				}
 				t = NombreDelCheque(tipo, p.Banco, *p.Numero) + " " + formato.Importe(p.Importe)
+				if p.ChequeID != nil && p.ChequeEstado != nil && slices.Contains(RechazablesDesdeLaFicha, Estado(string(*p.ChequeEstado))) {
+					chequesDe[p.ReceiptID] = append(chequesDe[p.ReceiptID], RefCheque{*p.ChequeID, NombreDelCheque(tipo, p.Banco, *p.Numero), p.Importe})
+				}
 			} else {
 				t = NombreDelMedio[Medio(p.Medio)] + " " + formato.Importe(p.Importe)
 			}
@@ -214,6 +229,9 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		if m.ReciboID != nil {
 			x.Recibo = &RefRecibo{*m.ReciboID, deref(m.ReciboNumero), m.ReciboEstado != nil && *m.ReciboEstado == sqlc.EstadoReciboAnulado, porMP[*m.ReciboID],
 				rebotados[*m.ReciboID]}
+			if m.Tipo == "pago" && !x.Recibo.Anulado {
+				x.Cheques = chequesDe[*m.ReciboID]
+			}
 		}
 		movs = append(movs, x)
 	}
@@ -268,8 +286,12 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			// en el banco: no mueve la cuenta (la venta ya se pagó con él).
 			clase, detalle = "cheque", estadoDelCheque[c.Estado]+" · al "+fechaCorta(c.FechaPago)
 		}
-		movs = append(movs, MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: clase, Titulo: NombreDelCheque(c.Tipo, c.Banco, c.Numero),
-			Detalle: &detalle, ImporteInformativo: f64(c.Importe)})
+		x := MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: clase, Titulo: NombreDelCheque(c.Tipo, c.Banco, c.Numero),
+			Detalle: &detalle, ImporteInformativo: f64(c.Importe)}
+		if slices.Contains(RechazablesDesdeLaFicha, Estado(c.Estado)) {
+			x.Cheques = []RefCheque{{c.ID, x.Titulo, c.Importe}}
+		}
+		movs = append(movs, x)
 	}
 
 	filtrados := movs

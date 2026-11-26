@@ -159,6 +159,40 @@ export async function anularReciboDesdeElPanel(receiptId: string, motivo: string
   return { ok: r.data.ok };
 }
 
+/**
+ * El banco rechazó un cheque que entregó el cliente (H272): lo registra quien
+ * maneja plata desde la ficha, con el PIN de un admin si no es admin. Go hace
+ * lo mismo que /admin/cheques: la deuda vuelve con una nota de débito.
+ */
+export async function rechazarChequeDesdeLaFicha(chequeId: string, motivo: string, pin?: string): Promise<EstadoCobro> {
+  if (!motivo.trim()) return { error: "Poné el motivo del rechazo: lo lee el cliente." };
+  const r = await (await api()).POST("/api/v1/admin/cheques/{id}/rechazo", {
+    params: { path: { id: chequeId } },
+    body: { motivo, ...(pin ? { pin } : {}) },
+  });
+  if (!r.data) {
+    const e = (r.error as Problema | undefined)?.errores;
+    if (e?.pin) {
+      return {
+        error: e.pin,
+        autorizacion: {
+          motivo: "cheque",
+          monto: Number(e.pinMonto ?? 0),
+          pinIncorrecto: e.pinIncorrecto === "si",
+          bloqueadoHasta: e.pinHasta,
+          conClave: e.pinConClave === "si",
+          sinAdmins: e.pinSinAdmins === "si",
+        },
+      };
+    }
+    return { error: mensajeDe(r.error as Problema | undefined) };
+  }
+  revalidatePath("/admin/clientes");
+  revalidatePath("/admin/cheques");
+  revalidatePath("/admin");
+  return { ok: r.data.ok };
+}
+
 /** `anularReciboDesdeElPanel` desde un formulario (useActionState). */
 export async function anularRecibo(_previo: EstadoCobro, formData: FormData): Promise<EstadoCobro> {
   const id = campo(formData, "receiptId");

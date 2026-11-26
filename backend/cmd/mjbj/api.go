@@ -336,7 +336,7 @@ func correrAPI() error {
 
 	// Mi cuenta: el portal del cliente.
 	portalapi.HandlerWithOptions(
-		portalapi.NewStrictHandlerWithOptions(portal.NuevaAPI(portal.Nuevo(pool)),
+		portalapi.NewStrictHandlerWithOptions(portal.NuevaAPI(portal.Nuevo(pool).ConAvisos(push.Nuevo(cfg.Push, q, log))),
 			[]portalapi.StrictMiddlewareFunc{plataforma.ConPedido[portalapi.StrictHandlerFunc]},
 			portalapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

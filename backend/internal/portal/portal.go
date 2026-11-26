@@ -19,15 +19,26 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cuit"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/push"
 	"mjbj/internal/sqlc"
 )
 
 // Servicio son las lecturas y acciones del portal.
-type Servicio struct{ pool *pgxpool.Pool }
+type Servicio struct {
+	pool *pgxpool.Pool
+	push *push.Avisador
+}
 
 // Nuevo arma el servicio.
 func Nuevo(pool *pgxpool.Pool) *Servicio { return &Servicio{pool: pool} }
+
+// ConAvisos le da con qué avisarle al panel (un presupuesto aceptado).
+func (s *Servicio) ConAvisos(p *push.Avisador) *Servicio {
+	s.push = p
+	return s
+}
 
 // Cliente es la ficha del usuario de la sesión (clienteDeLaSesion).
 type Cliente struct {
@@ -242,15 +253,24 @@ func (s *Servicio) Responder(ctx context.Context, c *Cliente, numero, respuesta 
 	if numero == "" || (respuesta != "aceptado" && respuesta != "rechazado") {
 		return "", plataforma.Invalido(map[string]string{"respuesta": "No pudimos guardar tu respuesta. Probá de nuevo."})
 	}
-	tag, err := s.pool.Exec(ctx, `UPDATE quotes SET estado = $1::estado_presupuesto, updated_at = now()
-		WHERE numero = $2 AND customer_id = $3 AND estado = 'enviado'`, respuesta, numero, c.ID)
+	var id string
+	var total float64
+	err := s.pool.QueryRow(ctx, `UPDATE quotes SET estado = $1::estado_presupuesto, updated_at = now()
+		WHERE numero = $2 AND customer_id = $3 AND estado = 'enviado' RETURNING id, total::float8`, respuesta, numero, c.ID).Scan(&id, &total)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", plataforma.Invalido(map[string]string{"numero": "Ese presupuesto ya no está esperando respuesta. Escribinos y lo vemos."})
+	}
 	if err != nil {
 		return "", err
 	}
-	if tag.RowsAffected() == 0 {
-		return "", plataforma.Invalido(map[string]string{"numero": "Ese presupuesto ya no está esperando respuesta. Escribinos y lo vemos."})
-	}
 	if respuesta == "aceptado" {
+		// Que alguien de la casa se entere sin abrir la lista (H215).
+		if s.push != nil {
+			go s.push.Avisar(context.WithoutCancel(ctx), push.Aviso{
+				Titulo: "Presupuesto aceptado · " + numero, Cuerpo: c.Nombre + " aceptó " + formato.MonedaEntera(total) + " desde Mi cuenta.",
+				URL: "/admin/presupuestos/" + id, Pantalla: "/admin/presupuestos", Etiqueta: "presupuesto_aceptado",
+			})
+		}
 		return "Listo, avisamos al vendedor. Te contactamos para coordinar la entrega.", nil
 	}
 	return "Anotado. Si querés cambiar algo, escribinos y armamos otro.", nil

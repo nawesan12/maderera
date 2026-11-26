@@ -151,7 +151,13 @@ const consultaSaldo = `
 	FROM order_items oi
 	LEFT JOIN product_variants pv ON pv.id = oi.variant_id
 	LEFT JOIN products p ON p.id = pv.product_id
-	WHERE oi.order_id = $1 ORDER BY oi.orden`
+	WHERE oi.order_id = $1 %[3]s ORDER BY oi.orden`
+
+// sinServicios saca del acopio lo que no es mercadería: las pasadas y el
+// tapacanto de un corte (sin producto, del_corte). Se retiran las piezas,
+// que salen de la placa; el remito listaba «Corte a medida · 9 piezas | 12
+// cortes» como un renglón por retirar (mes simulado).
+const sinServicios = `AND NOT (oi.variant_id IS NULL AND oi.del_corte)`
 
 func leerSaldo(ctx context.Context, db consultor, consulta string, args ...any) ([]Renglon, error) {
 	filas, err := db.Query(ctx, consulta, args...)
@@ -177,7 +183,16 @@ func SaldoDeAcopio(ctx context.Context, db consultor, pedido string) ([]Renglon,
 	if !plataforma.UUIDValido(pedido) {
 		return []Renglon{}, nil
 	}
-	return leerSaldo(ctx, db, sprintf(consultaSaldo, "", ""), pedido)
+	return leerSaldo(ctx, db, sprintf(consultaSaldo, "", "", sinServicios), pedido)
+}
+
+// SaldoConServicios es SaldoDeAcopio con las líneas de servicio del corte:
+// la devolución las cuenta como pendientes mientras el pedido no salió.
+func SaldoConServicios(ctx context.Context, db consultor, pedido string) ([]Renglon, error) {
+	if !plataforma.UUIDValido(pedido) {
+		return []Renglon{}, nil
+	}
+	return leerSaldo(ctx, db, sprintf(consultaSaldo, "", "", ""), pedido)
 }
 
 // ConGalpon le suma a cada renglón con producto lo que hay en el galpón de
@@ -228,7 +243,7 @@ func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Ren
 func SaldoAlRemito(ctx context.Context, db consultor, pedido, remito string) ([]Renglon, error) {
 	rs, err := leerSaldo(ctx, db, sprintf(consultaSaldo,
 		`AND d.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`,
-		`AND dv.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`), pedido, remito)
+		`AND dv.created_at <= (SELECT created_at FROM deliveries WHERE id = $2)`, sinServicios), pedido, remito)
 	if err != nil {
 		return nil, err
 	}
@@ -611,6 +626,14 @@ func (s *Servicio) RemitoDeConstancia(ctx context.Context, ses *auth.Sesion, ped
 		}
 		lineas := LineasDeConstancia(pendientes)
 		if len(lineas) == 0 {
+			// Solo el corte (pasadas sin placa) no lleva mercadería.
+			var conRemito bool
+			if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada')`, pedidoID).Scan(&conRemito); err != nil {
+				return err
+			}
+			if !conRemito {
+				return ErrorDeEntrega("Esta venta no lleva mercadería: no hay remito que emitir.")
+			}
 			return ErrorDeEntrega("Esta venta ya tiene su remito emitido.")
 		}
 		numero, err := numeracion.Remito(ctx, tx)

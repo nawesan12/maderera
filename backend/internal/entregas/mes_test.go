@@ -250,3 +250,28 @@ func TestUnaVisitaDosAcopiosUnaFirma(t *testing.T) {
 	}
 	_ = ajeno
 }
+
+// Las pasadas y el tapacanto de un corte no son mercadería: no quedan en
+// acopio ni salen en el remito (mes simulado: «Corte a medida · 9 piezas |
+// 12 cortes» era un renglón por retirar). La devolución sí los ve.
+func TestElServicioDelCorteNoQuedaEnAcopio(t *testing.T) {
+	e := armar(t)
+	pedido, _, _ := e.pedido(t, "PED-2010", "listo", nil)
+	e.exec(t, `insert into order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden, del_corte)
+		values ($1, 'Corte a medida · 9 piezas', 'pasada', 12, 1, 12, 2, true)`, pedido)
+	ctx := context.Background()
+	saldo, err := SaldoDeAcopio(ctx, e.pool, pedido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saldo) != 2 {
+		t.Fatalf("el acopio lleva el corte: %+v", saldo)
+	}
+	todo, err := SaldoConServicios(ctx, e.pool, pedido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(todo) != 3 {
+		t.Fatalf("la devolución no ve el corte: %+v", todo)
+	}
+}

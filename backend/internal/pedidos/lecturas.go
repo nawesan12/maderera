@@ -472,6 +472,12 @@ func (s *Servicio) completarListado(ctx context.Context, out []PedidoListado, en
 		for _, r := range entregas.SoloPendientes(saldo) {
 			out[i].PorEntregar = append(out[i].PorEntregar, PorEntregar{Descripcion: r.Descripcion, Unidad: r.Unidad, Pendiente: r.Pendiente})
 		}
+		// Sin mercadería por retirar no hay remito que preparar: la venta del
+		// mostrador que es solo el corte (pasadas sin placa) quedaba como
+		// acopio con «Preparar remito» y un formulario vacío.
+		if len(out[i].PorEntregar) == 0 {
+			out[i].Acopio = false
+		}
 	}
 	return nil
 }

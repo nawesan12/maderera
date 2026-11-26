@@ -108,7 +108,7 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 			return fallo(MsjDevolverDesdeLaFactura)
 		}
 
-		saldo, err := entregas.SaldoDeAcopio(ctx, tx, pedido)
+		saldo, err := entregas.SaldoConServicios(ctx, tx, pedido)
 		if err != nil {
 			return err
 		}

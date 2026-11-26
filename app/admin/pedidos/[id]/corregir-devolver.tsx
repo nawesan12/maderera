@@ -192,6 +192,16 @@ export function CorregirPedido({
   const total =
     leidos.reduce((s, x) => s + Math.round(x.cantidad * x.precio * 100) / 100, 0) + (conEnvio ? fleteLeido : costoEnvio) - descuento;
 
+  /*
+   * El PIN firma estos números: cambiar uno lo deja sin efecto y vuelve
+   * «Guardar». Si no, volver el precio a la lista dejaba el diálogo pidiendo
+   * el PIN por «$ 37.800 abajo del precio» (mes simulado, H296).
+   */
+  function cambiar(fn: () => void) {
+    fn();
+    setPidePin(null);
+  }
+
   function guardar(pin?: string) {
     startTransition(async () => {
       const r = await corregirPedido(id, {
@@ -237,7 +247,7 @@ export function CorregirPedido({
                     <Input
                       inputMode="decimal"
                       value={valores[r.id]?.cantidad ?? ""}
-                      onChange={(e) => setValores((v) => ({ ...v, [r.id]: { ...v[r.id], cantidad: e.target.value } }))}
+                      onChange={(e) => cambiar(() => setValores((v) => ({ ...v, [r.id]: { ...v[r.id], cantidad: e.target.value } })))}
                       className="tabular h-11 text-right text-base text-foreground"
                     />
                   </label>
@@ -246,7 +256,7 @@ export function CorregirPedido({
                     <Input
                       inputMode="decimal"
                       value={valores[r.id]?.precio ?? ""}
-                      onChange={(e) => setValores((v) => ({ ...v, [r.id]: { ...v[r.id], precio: e.target.value } }))}
+                      onChange={(e) => cambiar(() => setValores((v) => ({ ...v, [r.id]: { ...v[r.id], precio: e.target.value } })))}
                       className="tabular h-11 text-right text-base text-foreground"
                     />
                   </label>
@@ -259,7 +269,7 @@ export function CorregirPedido({
                 <Input
                   inputMode="decimal"
                   value={flete}
-                  onChange={(e) => setFlete(e.target.value)}
+                  onChange={(e) => cambiar(() => setFlete(e.target.value))}
                   className="tabular h-11 text-right text-base"
                 />
               </label>

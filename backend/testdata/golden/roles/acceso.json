@@ -141,6 +141,11 @@
   "/admin/cortes/tarifas": [
    "admin"
   ],
+  "/admin/cortes/nuevo": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
   "/admin/precios/formas-de-pago": [
    "admin"
   ],
@@ -264,7 +269,14 @@
    "aserradero"
   ],
   "/admin/cortes/algo": null,
+  "/admin/cortes/nuevo": [
+   "admin",
+   "vendedor",
+   "deposito"
+  ],
   "/admin/cortes/nuevo/123": null,
+  "/admin/cortes/nuevo/algo": null,
+  "/admin/cortes/nuevo/nuevo/123": null,
   "/admin/cortes/tarifas": [
    "admin"
   ],
@@ -1710,6 +1722,31 @@
    "puede": false
   },
   {
+   "ruta": "/admin/cortes/nuevo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/nuevo",
+   "rol": null,
+   "puede": false
+  },
+  {
    "ruta": "/admin/cortes/nuevo/123",
    "rol": "admin",
    "puede": true
@@ -1727,10 +1764,60 @@
   {
    "ruta": "/admin/cortes/nuevo/123",
    "rol": "aserradero",
-   "puede": true
+   "puede": false
   },
   {
    "ruta": "/admin/cortes/nuevo/123",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/algo",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/algo",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/algo",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/algo",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/algo",
+   "rol": null,
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/nuevo/123",
+   "rol": "admin",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/nuevo/123",
+   "rol": "vendedor",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/nuevo/123",
+   "rol": "deposito",
+   "puede": true
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/nuevo/123",
+   "rol": "aserradero",
+   "puede": false
+  },
+  {
+   "ruta": "/admin/cortes/nuevo/nuevo/123",
    "rol": null,
    "puede": false
   },

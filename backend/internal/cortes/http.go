@@ -129,7 +129,8 @@ func mostrador(ctx context.Context) (*auth.Sesion, error) {
 }
 
 func (a *API) CrearCorte(ctx context.Context, r cortesapi.CrearCorteRequestObject) (cortesapi.CrearCorteResponseObject, error) {
-	ses, err := gestion(ctx)
+	// Quien entra al alta: el mostrador, no el aserradero (lib/roles.ts).
+	ses, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cortes/nuevo")...)
 	if err != nil {
 		return nil, err
 	}

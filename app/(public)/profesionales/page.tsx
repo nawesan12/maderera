@@ -21,6 +21,7 @@ import {
 import { getSession } from "@/lib/dal/session";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { clienteDeLaSesion } from "@/lib/dal/cuenta";
+import { saludoDelCliente } from "@/lib/cuenta/portal";
 import {
   documentosVisibles,
   estadoProfesional,
@@ -119,7 +120,7 @@ export default async function ProfesionalesPage() {
         titulo="Cuenta profesional"
         bajada={
           estado.aprobado
-            ? `Hola ${(estado.nombre ?? "").split(" ")[0]}, tu cuenta está activa.`
+            ? `Hola ${saludoDelCliente(cliente?.nombre ?? estado.nombre ?? "", cliente?.cuit)}, tu cuenta está activa.`
             : bajadaDelProfesional(laTienda.activa)
         }
       />

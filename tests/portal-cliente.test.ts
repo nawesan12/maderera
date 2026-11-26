@@ -20,6 +20,8 @@ describe("el saludo", () => {
     expect(
       saludoDelCliente("Constructora del Sur S.R.L.", "30-71234567-1"),
     ).toBe("Constructora del Sur S.R.L.");
+    // Sin CUIT, el nombre de la empresa tampoco se corta en «Constructora».
+    expect(saludoDelCliente("Constructora Costa Atlántica SRL", null)).toBe("Constructora Costa Atlántica");
   });
   it("el distintivo es el de su lista", () => {
     expect(distintivoDeLista("profesional", "Lista constructora")).toBe(

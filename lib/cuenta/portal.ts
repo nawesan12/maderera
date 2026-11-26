@@ -1,5 +1,6 @@
 import { primerNombre } from "@/lib/formato";
 import { soloDigitos } from "@/lib/cuit";
+import { nombreDeSaludo } from "@/lib/whatsapp/saludo";
 
 /**
  * Lo que «Mi cuenta» dice de cada cosa, en un solo lugar.
@@ -18,7 +19,9 @@ import { soloDigitos } from "@/lib/cuit";
 export function saludoDelCliente(nombre: string, cuit: string | null | undefined): string {
   const digitos = cuit ? soloDigitos(cuit) : "";
   if (/^3[034]/.test(digitos)) return nombre.trim();
-  return primerNombre(nombre);
+  // Sin CUIT de empresa, el nombre igual puede ser de una: «Constructora
+  // Costa Atlántica SRL» no se saluda «Hola Constructora».
+  return nombreDeSaludo(nombre, primerNombre);
 }
 
 /**

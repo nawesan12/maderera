@@ -147,6 +147,8 @@ export async function convertirEnPedido(
           motivo: "presupuesto",
           monto: Number(e.pinMonto ?? 0),
           pinIncorrecto: e.pinIncorrecto === "si",
+          sinAdmins: e.pinConClave === "si" || undefined,
+          conClave: e.pinConClave === "si" || undefined,
           bloqueadoHasta: e.pinHasta,
         },
       };

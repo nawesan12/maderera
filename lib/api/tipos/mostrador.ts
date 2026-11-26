@@ -335,6 +335,8 @@ export interface components {
             bloqueadoHasta?: string;
             /** @description ningún admin cargó su PIN */
             sinAdmins?: boolean;
+            /** @description sin PIN cargado, firma la contraseña de un admin */
+            conClave?: boolean;
         };
         /** @description Lo que Next necesita para emitir el comprobante (facturación sigue en TS) */
         MostradorFiscalPendiente: {

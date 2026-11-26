@@ -384,6 +384,7 @@ components:
         pinIncorrecto: { type: boolean }
         bloqueadoHasta: { type: string, format: date-time }
         sinAdmins: { type: boolean, description: ningún admin cargó su PIN }
+        conClave: { type: boolean, description: "sin PIN cargado, firma la contraseña de un admin" }
     MostradorFiscalPendiente:
       type: object
       description: Lo que Next necesita para emitir el comprobante (facturación sigue en TS)

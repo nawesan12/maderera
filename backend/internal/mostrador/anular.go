@@ -114,7 +114,7 @@ func mensajeDeFalta(a *Autorizacion) string {
 	if a == nil {
 		return ""
 	}
-	f := autorizacion.Falta{PinIncorrecto: a.PinIncorrecto, BloqueadoHasta: a.BloqueadoHasta, SinAdmins: a.SinAdmins}
+	f := autorizacion.Falta{PinIncorrecto: a.PinIncorrecto, BloqueadoHasta: a.BloqueadoHasta, SinAdmins: a.SinAdmins, ConClave: a.ConClave}
 	return f.Mensaje()
 }
 

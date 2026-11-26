@@ -93,12 +93,15 @@ type Autorizacion struct {
 	PinIncorrecto  bool       `json:"pinIncorrecto,omitempty"`
 	BloqueadoHasta *time.Time `json:"bloqueadoHasta,omitempty"`
 	SinAdmins      bool       `json:"sinAdmins,omitempty"`
+	// ConClave: sin PIN cargado, firma la contraseña de un admin.
+	ConClave bool `json:"conClave,omitempty"`
 }
 
 // faltaDeAutorizacion pasa la falta del PIN a lo que contesta la venta.
 func faltaDeAutorizacion(f *autorizacion.Falta) ResultadoVenta {
 	return ResultadoVenta{Error: f.Mensaje(), Autorizacion: &Autorizacion{
 		Motivo: string(f.Motivo), Monto: f.Monto, Credito: f.Credito, PinIncorrecto: f.PinIncorrecto, BloqueadoHasta: f.BloqueadoHasta, SinAdmins: f.SinAdmins,
+		ConClave: f.ConClave,
 	}}
 }
 

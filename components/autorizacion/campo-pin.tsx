@@ -13,6 +13,8 @@ export interface Autorizacion {
   pinIncorrecto?: boolean;
   bloqueadoHasta?: string;
   sinAdmins?: boolean;
+  /** Sin ningún PIN cargado, firma la contraseña de un admin. */
+  conClave?: boolean;
 }
 
 /**
@@ -63,8 +65,13 @@ export function CampoPin({
 }) {
   const [pin, setPin] = useState("");
   const [tiembla, setTiembla] = useState(false);
+  /** Enter con menos de seis números: tiembla y dice cuántos van. */
+  const [corto, setCorto] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
-  const bloqueado = Boolean(autorizacion.bloqueadoHasta) || Boolean(autorizacion.sinAdmins);
+  const conClave = Boolean(autorizacion.conClave);
+  const bloqueado =
+    Boolean(autorizacion.bloqueadoHasta) || (Boolean(autorizacion.sinAdmins) && !conClave);
+  const listo = conClave ? pin.length > 0 : pin.length >= 6;
 
   // Cada respuesta con el PIN equivocado vacía el campo y tiembla: el admin
   // está al lado, lo teclea de nuevo. (Se ajusta al renderizar, cuando llega
@@ -82,13 +89,17 @@ export function CampoPin({
     if (!enviando) campo.current?.focus();
   }, [enviando]);
 
-  const leyenda = autorizacion.sinAdmins
-    ? "Ningún admin cargó su PIN"
-    : autorizacion.bloqueadoHasta
-      ? `Bloqueado hasta las ${hora(autorizacion.bloqueadoHasta)}`
+  const leyenda = autorizacion.bloqueadoHasta
+    ? `Bloqueado hasta las ${hora(autorizacion.bloqueadoHasta)}`
+    : autorizacion.sinAdmins && !conClave
+      ? "Ningún admin cargó su PIN"
       : autorizacion.pinIncorrecto
-        ? "PIN incorrecto"
-        : queSeAutoriza(autorizacion);
+        ? conClave
+          ? "Contraseña incorrecta"
+          : "PIN incorrecto"
+        : corto
+          ? "De 6 a 8 números"
+          : queSeAutoriza(autorizacion);
 
   return (
     <div
@@ -96,7 +107,7 @@ export function CampoPin({
       onAnimationEnd={() => setTiembla(false)}
     >
       <label className="relative min-w-0 flex-1">
-        <span className="sr-only">PIN admin</span>
+        <span className="sr-only">{conClave ? "Contraseña admin" : "PIN admin"}</span>
         <KeyRound
           className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
           aria-hidden="true"
@@ -105,35 +116,47 @@ export function CampoPin({
           ref={campo}
           autoFocus
           type="password"
-          inputMode="numeric"
+          inputMode={conClave ? "text" : "numeric"}
           autoComplete="off"
-          maxLength={8}
+          maxLength={conClave ? 128 : 8}
           disabled={bloqueado || enviando}
           value={pin}
-          placeholder="PIN admin"
-          aria-invalid={autorizacion.pinIncorrecto || undefined}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+          placeholder={conClave ? "Contraseña admin" : "PIN admin"}
+          aria-invalid={autorizacion.pinIncorrecto || corto || undefined}
+          onChange={(e) => {
+            setCorto(false);
+            setPin(conClave ? e.target.value : e.target.value.replace(/\D/g, ""));
+          }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
               e.stopPropagation();
               onCancelar();
             }
-            if (e.key === "Enter" && pin.length >= 6 && !enviando) {
+            if (e.key === "Enter" && !enviando) {
               e.preventDefault();
               e.stopPropagation();
+              // Corto no se manda (no gasta un intento), pero tampoco se
+              // queda mudo: tiembla y dice cuántos números son.
+              if (!listo) {
+                if (pin.length > 0) {
+                  setCorto(true);
+                  setTiembla(true);
+                }
+                return;
+              }
               onEnviar(pin);
             }
           }}
-          className={`tabular w-full rounded-xl border bg-hundida pl-11 pr-3 tracking-[0.4em] placeholder:tracking-normal disabled:opacity-60 ${
+          className={`tabular w-full rounded-xl border bg-hundida pl-11 pr-3 placeholder:tracking-normal disabled:opacity-60 ${conClave ? "" : "tracking-[0.4em]"} ${
             grande ? "h-16 text-2xl" : "h-12 text-lg"
-          } ${autorizacion.pinIncorrecto ? "border-[var(--estado-acento)] estado-problema" : "border-linea"}`}
+          } ${autorizacion.pinIncorrecto || corto ? "border-[var(--estado-acento)] estado-problema" : "border-linea"}`}
         />
       </label>
       <span
         role="status"
         className={`shrink-0 text-right text-base font-semibold ${
-          bloqueado || autorizacion.pinIncorrecto ? "estado-problema" : "text-brand-orange"
+          bloqueado || autorizacion.pinIncorrecto || corto ? "estado-problema" : "text-brand-orange"
         }`}
       >
         {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : leyenda}

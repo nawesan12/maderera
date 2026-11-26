@@ -3158,3 +3158,24 @@ ficha (hoy es de /admin/cheques, del admin).
   `{{nombre}}` del documento fuera de la ventana (`presupuesto_enviado`), los
   avisos automáticos y el saludo de los correos (`notificaciones.primerNombre`).
   Las pruebas doradas no cambian: sus nombres son de personas.
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador de la dueña (rama `mes-simulado-arreglos`)
+
+- **Seña o cobranza** (cierre, H131): los destinos de un recibo son todo lo
+  que el cliente tenía pendiente ese día, así que el cobro de una factura sin
+  CAE de un cliente con otro pedido abierto lleva «i:» y «o:». Es seña solo
+  si el recibo es de un pedido que seguía abierto y no cobra una factura
+  (`invoice_payments.receipt_id`); si no, va a «Cobros de facturas sin CAE».
+- **Recibos con plata en el B** (cierre, H374 y H407, a decidir con el
+  contador): como el reparto no se recalcula, el cierre marca «Cobros en el B
+  de ventas facturadas después» y «Recibos partidos entre los dos archivos»,
+  con la ficha del cliente.
+- **La baja del personal borra su clave** (`auth.BajaDePersonal`): la persona
+  ya no entra a Mi cuenta con ella; si vuelve, el alta le pide una nueva.
+- **La factura que ya está en la cuenta corriente** no se pasa a cuenta otra
+  vez (`facturacion.Cobrar`, 422).
+- **`TramoDeLaSerie.Desde`**: el primero sin CAE de la serie, para que el
+  botón diga el tramo entero que se autoriza.
+- **Next 16.4 valida en `next dev` la navegación instantánea**: el panel y Mi
+  cuenta leen la sesión en el layout y exportan `instant = false` (la salida
+  de la guía de autenticación con Cache Components). Producción no cambia.

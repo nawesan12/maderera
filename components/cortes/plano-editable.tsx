@@ -68,6 +68,7 @@ export function PlanoEditable({
   fijadas,
   onFijadas,
   sencillo = false,
+  sinPasadas = false,
   girable = () => true,
   quien = {},
 }: {
@@ -80,6 +81,12 @@ export function PlanoEditable({
    * mostrador hay un cliente mirando la pantalla (T4, hallazgo 44).
    */
   sencillo?: boolean;
+  /**
+   * Sin las pasadas de cada placa: en la ficha la cifra de arriba es la que
+   * se cobra, y «4 pasadas» en el dibujo al lado de «3 pasadas a cobrar» se
+   * leía como un error (mes simulado, H052).
+   */
+  sinPasadas?: boolean;
   /** Si la pieza (por su índice en el despiece) se puede girar: con veta, no. */
   girable?: (indice: number) => boolean;
   /**
@@ -228,16 +235,16 @@ export function PlanoEditable({
               <span className="text-base font-medium">
                 {quien.media ? "Media" : "Placa"} {placa.numero}
               </span>
+              {/* La placa que vende el pedido es una placa vendida entera:
+                  el mismo sello, con el corte sin cargo (H184). */}
               <span
                 className={`inline-flex items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)] ${
                   (placa.seVendeEntera || quien.todasDelCliente) && !quien.sinCargo ? "estado-marca" : "estado-ok"
                 }`}
               >
-                {quien.todasDelCliente && !quien.sinCargo
-                  ? queSeHaceConLaPlaca(true, quien)
-                  : placa.seVendeEntera && !quien.sinCargo
-                    ? `${queSeHaceConLaPlaca(true, quien)} · corte sin cargo`
-                    : queSeHaceConLaPlaca(placa.seVendeEntera, quien)}
+                {(placa.seVendeEntera || quien.todasDelCliente) && !quien.sinCargo
+                  ? `${queSeHaceConLaPlaca(true, quien)} · corte sin cargo`
+                  : queSeHaceConLaPlaca(placa.seVendeEntera, quien)}
               </span>
               <span className="tabular w-full text-sm text-muted-foreground">
                 {sencillo ? (
@@ -245,9 +252,12 @@ export function PlanoEditable({
                 ) : (
                   <>
                     {Math.round(placa.aprovechado * 100)}% · {placa.piezas.length}{" "}
-                    {placa.piezas.length === 1 ? "pieza" : "piezas"} ·{" "}
-                    {placa.cortes.length}{" "}
-                    {placa.cortes.length === 1 ? "pasada" : "pasadas"}
+                    {placa.piezas.length === 1 ? "pieza" : "piezas"}
+                    {!sinPasadas && (
+                      <>
+                        {" "}· {placa.cortes.length} {placa.cortes.length === 1 ? "pasada" : "pasadas"}
+                      </>
+                    )}
                   </>
                 )}
               </span>

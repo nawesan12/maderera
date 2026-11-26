@@ -71,6 +71,7 @@ export function AcomodoDelCorte({
         plano={plano}
         fijadas={fijadas}
         quien={quien}
+        sinPasadas
         onFijadas={(f) => {
           setFijadas(f);
           setAviso(null);

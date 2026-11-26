@@ -61,6 +61,8 @@ export function CorregirOAnular({ id, numero, cliente }: { id: string; numero: s
         detalle="Sale de la cola del taller y no vuelve."
         confirmar="Anular el corte"
         anular={(motivo) => anularCorte(id, motivo)}
+        // Sin aviso, anular parecía no haber hecho nada (mes simulado).
+        alTerminar={(ok) => toast.success(ok || `${numero} quedó anulado.`)}
       />
     </div>
   );

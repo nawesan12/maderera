@@ -75,6 +75,12 @@ export default async function FichaCortePage({
     ? cuenta.placasEnteras === 1 ? "media placa" : "medias placas"
     : cuenta.placasEnteras === 1 ? "placa entera" : "placas enteras";
   const puedeCorregir = decide && (corte.estado === "en-cola" || corte.estado === "en-proceso") && modo !== "vendido";
+  // Lo que no se cobra (la reposición, el anulado) no dice «a cobrar» ni
+  // «se vende entera» (mes simulado: CRT-906 anulado seguía cobrando).
+  const noCobra = modo === "sinCargo" || modo === "anulado";
+  // El pedido, enlazado solo para quien entra a Pedidos: al aserradero lo
+  // devolvía al taller (mes simulado).
+  const vePedidos = puedeEntrar("/admin/pedidos", rol);
 
   return (
     <div className="space-y-6">
@@ -187,15 +193,16 @@ export default async function FichaCortePage({
                 />
               </div>
             </div>
-            {/* Los papeles del trabajo en una fila: la hoja de la
-                seccionadora y el plano a la vista, el resto en el menú. */}
-            {/* Al ancho de su texto: en mitades iguales «Hoja de corte» se
-                cortaba a 375 px (H327). */}
-            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            {/* Los papeles del trabajo en una sola fila, también a 375 px
+                (H330): la hoja de la seccionadora y el plano a la vista, el
+                resto en el menú. Sin partir el renglón: con el relleno de
+                antes «Más archivos» bajaba solo a otro. Cada botón al ancho
+                de su texto, para que «Hoja de corte» no se corte (H327). */}
+            <div className="flex w-full flex-nowrap items-center gap-1.5 sm:w-auto sm:gap-2">
               <Link
                 href={`/hoja-de-corte/${corte.id}`}
                 target="_blank"
-                className="inline-flex h-11 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
+                className="inline-flex h-11 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2.5 text-base font-medium transition-colors hover:bg-muted sm:flex-none sm:gap-1.5 sm:px-3"
               >
                 <ListChecks className="h-5 w-5 shrink-0" />
                 Hoja de corte
@@ -203,7 +210,7 @@ export default async function FichaCortePage({
               <Link
                 href={`/plano/${corte.id}`}
                 target="_blank"
-                className="inline-flex h-11 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
+                className="inline-flex h-11 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2.5 text-base font-medium transition-colors hover:bg-muted sm:flex-none sm:gap-1.5 sm:px-3"
               >
                 <Map className="h-5 w-5 shrink-0" />
                 Plano
@@ -214,17 +221,21 @@ export default async function FichaCortePage({
 
           {/* De a dos en el teléfono: uno por renglón empujaba el plano a
               1.600 px (H330). */}
-          <div className="grid grid-cols-2 gap-px bg-linea sm:grid-cols-4">
+          {/* Sin cargo o anulado, sin la cifra de lo que se vende: tres, y
+              el retal a lo ancho en el teléfono. */}
+          <div className={`grid grid-cols-2 gap-px bg-linea ${noCobra ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
             <Cifra valor={String(nPlacas)} rotulo={rotuloPlacas} />
-            <Cifra
-              valor={String(plano.placasEnteras)}
-              rotulo={rotuloEnteras}
-              destacada={plano.placasEnteras > 0}
-            />
+            {!noCobra && (
+              <Cifra
+                valor={String(plano.placasEnteras)}
+                rotulo={rotuloEnteras}
+                destacada={plano.placasEnteras > 0}
+              />
+            )}
             <Cifra
               valor={String(ficha.pasadasACobrar)}
               rotulo={
-                modo === "sinCargo"
+                noCobra
                   ? ficha.pasadasACobrar === 1 ? "pasada" : "pasadas"
                   : ficha.pasadasACobrar === 1 ? "pasada a cobrar" : "pasadas a cobrar"
               }
@@ -238,6 +249,7 @@ export default async function FichaCortePage({
               rotulo={
                 plano.recorteMayor ? "retal mayor, en mm" : "sin retal útil"
               }
+              ancha={noCobra}
             />
           </div>
 
@@ -266,9 +278,13 @@ export default async function FichaCortePage({
                   <dt className="text-base text-muted-foreground">Las placas</dt>
                   <dd className="text-base">
                     en{" "}
-                    <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
-                      {pedido.numero}
-                    </Link>
+                    {vePedidos ? (
+                      <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
+                        {pedido.numero}
+                      </Link>
+                    ) : (
+                      <span className="codigo">{pedido.numero}</span>
+                    )}
                   </dd>
                 </div>
                 <RenglonesDelCorte cuenta={cuenta} />
@@ -350,7 +366,7 @@ export default async function FichaCortePage({
                         .map((r) => `${r.ancho} × ${r.alto} mm`)
                         .join(" · ")}{" "}
                       <span className="text-muted-foreground">
-                        ({sobraDelCliente(placa.seVendeEntera || ficha.retalesDelCliente, { sinCargo: corte.sinCargo })
+                        ({sobraDelCliente(placa.seVendeEntera, { sinCargo: corte.sinCargo })
                           ? "del cliente"
                           : "al stock"})
                       </span>
@@ -566,12 +582,16 @@ export default async function FichaCortePage({
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Del pedido
               </h2>
-              <Link
-                href={`/admin/pedidos/${corte.orderId}`}
-                className="tabular text-base font-medium hover:text-brand-orange"
-              >
-                {corte.pedidoNumero}
-              </Link>
+              {vePedidos ? (
+                <Link
+                  href={`/admin/pedidos/${corte.orderId}`}
+                  className="tabular text-base font-medium hover:text-brand-orange"
+                >
+                  {corte.pedidoNumero}
+                </Link>
+              ) : (
+                <p className="tabular text-base font-medium">{corte.pedidoNumero}</p>
+              )}
             </section>
           )}
         </aside>
@@ -585,14 +605,17 @@ function Cifra({
   valor,
   rotulo,
   destacada,
+  ancha,
 }: {
   valor: string;
   rotulo: string;
   destacada?: boolean;
+  /** Ocupa el renglón entero en el teléfono (la tercera de tres). */
+  ancha?: boolean;
 }) {
   return (
     <div
-      className={`px-5 py-3.5 ${destacada ? "estado-marca bg-[var(--estado-fondo)]" : "bg-card"}`}
+      className={`px-5 py-3.5 ${ancha ? "col-span-2 sm:col-span-1" : ""} ${destacada ? "estado-marca bg-[var(--estado-fondo)]" : "bg-card"}`}
     >
       <p className="tabular text-2xl font-bold leading-none">{valor}</p>
       <p className="mt-1 text-sm text-muted-foreground">{rotulo}</p>

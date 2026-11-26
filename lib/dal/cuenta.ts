@@ -143,6 +143,8 @@ export interface PresupuestoPropio {
   items: number;
   validoHasta: Date | null;
   createdAt: Date;
+  /** Se acepta o rechaza desde Mi cuenta (Go aplica la regla de H085). */
+  aResponder: boolean;
 }
 
 export async function misPresupuestos(): Promise<PresupuestoPropio[]> {

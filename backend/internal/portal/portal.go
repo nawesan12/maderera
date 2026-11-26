@@ -23,6 +23,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/push"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -88,7 +89,25 @@ func (s *Servicio) ClienteDe(ctx context.Context, usuario string) (*Cliente, err
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return &c, err
+	if err != nil {
+		return nil, err
+	}
+	// Con la regla en «ninguno», lo fiscal lo cambia siempre la casa, haya
+	// facturado o no (H079).
+	if !c.DatosFiscalesFijos && reglas.Es(ctx, s.pool, reglas.DatosFiscalesDelCliente, "ninguno") {
+		c.DatosFiscalesFijos = true
+	}
+	return &c, nil
+}
+
+// estadosAResponder son los estados de un presupuesto que el cliente puede
+// aceptar o rechazar desde Mi cuenta: el enviado y, si la regla lo deja
+// (H085), también el pendiente que el vendedor todavía no mandó.
+func (s *Servicio) estadosAResponder(ctx context.Context) []string {
+	if reglas.Es(ctx, s.pool, reglas.AceptarPresupuestoPendiente, "si") {
+		return []string{"enviado", "pendiente"}
+	}
+	return []string{"enviado"}
 }
 
 // Resumen es lo de arriba de «Mi cuenta».
@@ -104,8 +123,8 @@ func (s *Servicio) ResumenDe(ctx context.Context, c *Cliente) (Resumen, error) {
 	r := Resumen{LimiteCredito: c.LimiteCredito}
 	err := s.pool.QueryRow(ctx, `SELECT
 		(SELECT count(*)::int FROM orders WHERE customer_id = $1 AND estado NOT IN ('entregado', 'cancelado')),
-		(SELECT count(*)::int FROM quotes WHERE customer_id = $1 AND estado = 'enviado'),
-		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1)`, c.ID).
+		(SELECT count(*)::int FROM quotes WHERE customer_id = $1 AND estado::text = ANY($2)),
+		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1)`, c.ID, s.estadosAResponder(ctx)).
 		Scan(&r.PedidosEnCurso, &r.PresupuestosAResponder, &r.Saldo)
 	return r, err
 }
@@ -193,6 +212,8 @@ type Presupuesto struct {
 	Items       int        `json:"items"`
 	ValidoHasta *time.Time `json:"validoHasta"`
 	CreatedAt   time.Time  `json:"createdAt"`
+	// AResponder: el cliente lo puede aceptar o rechazar (estadosAResponder).
+	AResponder bool `json:"aResponder"`
 }
 
 // Presupuestos es misPresupuestos. Los que armó el bot de WhatsApp y todavía
@@ -200,9 +221,9 @@ type Presupuesto struct {
 func (s *Servicio) Presupuestos(ctx context.Context, c *Cliente) ([]Presupuesto, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT q.id, q.numero, q.estado::text, q.total::float8, (SELECT count(*)::int FROM quote_items i WHERE i.quote_id = q.id),
-		  q.valido_hasta, q.created_at
+		  q.valido_hasta, q.created_at, q.estado::text = ANY($2)
 		FROM quotes q WHERE q.customer_id = $1 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')
-		ORDER BY q.created_at DESC`, c.ID)
+		ORDER BY q.created_at DESC`, c.ID, s.estadosAResponder(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +262,8 @@ type DetalleDePresupuesto struct {
 	// Pedido es el número del pedido que salió de este presupuesto, si ya
 	// se hizo (H215).
 	Pedido *string `json:"pedido"`
+	// AResponder: el cliente lo puede aceptar o rechazar (estadosAResponder).
+	AResponder bool `json:"aResponder"`
 }
 
 // ErrNoEsta es un presupuesto o una dirección que no es de este cliente.
@@ -252,10 +275,11 @@ func (s *Servicio) PresupuestoDe(ctx context.Context, c *Cliente, numero string)
 	err := s.pool.QueryRow(ctx, `SELECT q.id, q.numero, q.estado::text, q.subtotal::text, q.total::text, q.notas, q.asesor, q.valido_hasta,
 		b.name, q.created_at,
 		(SELECT o.numero FROM orders o WHERE o.quote_id = q.id AND o.customer_id = q.customer_id AND o.estado <> 'cancelado'
-		 ORDER BY o.created_at DESC LIMIT 1)
+		 ORDER BY o.created_at DESC LIMIT 1),
+		q.estado::text = ANY($3)
 		FROM quotes q LEFT JOIN branches b ON b.id = q.branch_id
-		WHERE q.numero = $1 AND q.customer_id = $2 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')`, numero, c.ID).
-		Scan(&p.ID, &p.Numero, &p.Estado, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.Sucursal, &p.CreatedAt, &p.Pedido)
+		WHERE q.numero = $1 AND q.customer_id = $2 AND NOT (q.origen = 'whatsapp' AND q.estado = 'revision')`, numero, c.ID, s.estadosAResponder(ctx)).
+		Scan(&p.ID, &p.Numero, &p.Estado, &p.Subtotal, &p.Total, &p.Notas, &p.Asesor, &p.ValidoHasta, &p.Sucursal, &p.CreatedAt, &p.Pedido, &p.AResponder)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -280,7 +304,8 @@ func (s *Servicio) Responder(ctx context.Context, c *Cliente, numero, respuesta 
 	var id string
 	var total float64
 	err := s.pool.QueryRow(ctx, `UPDATE quotes SET estado = $1::estado_presupuesto, updated_at = now()
-		WHERE numero = $2 AND customer_id = $3 AND estado = 'enviado' RETURNING id, total::float8`, respuesta, numero, c.ID).Scan(&id, &total)
+		WHERE numero = $2 AND customer_id = $3 AND estado::text = ANY($4) RETURNING id, total::float8`,
+		respuesta, numero, c.ID, s.estadosAResponder(ctx)).Scan(&id, &total)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", plataforma.Invalido(map[string]string{"numero": "Ese presupuesto ya no está esperando respuesta. Escribinos y lo vemos."})
 	}

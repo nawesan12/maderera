@@ -35,7 +35,7 @@ export default async function ResumenCuentaPage() {
   const enCurso = pedidos.filter(
     (p) => p.estado !== "entregado" && p.estado !== "cancelado",
   );
-  const aResponder = presupuestos.filter((p) => p.estado === "enviado");
+  const aResponder = presupuestos.filter((p) => p.aResponder);
   const operaACuenta = resumen.limiteCredito > 0 || resumen.saldo !== 0;
 
   // Cuenta recién creada y sin actividad: en vez de tres tarjetas vacías, se

@@ -77,8 +77,9 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, estado, total, items, validoHasta, createdAt]
+                  required: [id, numero, estado, total, items, validoHasta, createdAt, aResponder]
                   properties:
+                    aResponder: { type: boolean }
                     id: { type: string }
                     numero: { type: string }
                     estado: { type: string }
@@ -249,8 +250,9 @@ components:
         lista: { type: string, nullable: true }
     PresupuestoDelPortal:
       type: object
-      required: [id, numero, estado, subtotal, total, notas, asesor, validoHasta, sucursal, createdAt, items, pedido]
+      required: [id, numero, estado, subtotal, total, notas, asesor, validoHasta, sucursal, createdAt, items, pedido, aResponder]
       properties:
+        aResponder: { type: boolean }
         pedido: { type: string, nullable: true }
         id: { type: string }
         numero: { type: string }

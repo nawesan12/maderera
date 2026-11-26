@@ -10,6 +10,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -165,7 +166,7 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 	}
 	if !r.Repetido {
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "pedido", pedido,
-			"Cobró "+numero+" con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+			"Cobró "+numero+" con el recibo "+r.Numero+" por "+formato.Importe(r.Total), map[string]any{"receiptId": r.ReceiptID})
 	}
 	return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", Aviso: r.Aviso, ReceiptID: &r.ReceiptID}, nil
 }

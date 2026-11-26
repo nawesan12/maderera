@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/sqlc"
@@ -99,7 +100,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 		return ResultadoDeCobro{}, err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", c.id,
-		"Registró el cobro de "+et+" con el recibo "+r.Numero+" por "+jsmath.Fijo2(r.Total), map[string]any{"receiptId": r.ReceiptID})
+		"Registró el cobro de "+et+" con el recibo "+r.Numero+" por "+formato.Importe(r.Total), map[string]any{"receiptId": r.ReceiptID})
 	ok := "Cobro registrado con el recibo " + r.Numero + "."
 	if r.Aviso != nil && *r.Aviso != "" {
 		ok += " " + *r.Aviso

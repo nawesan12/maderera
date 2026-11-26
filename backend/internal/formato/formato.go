@@ -151,3 +151,25 @@ func Decimal(v float64, max int) string {
 	}
 	return signo + t
 }
+
+// Importe es la plata de la caja y de la bitácora en el formato del resto
+// del panel: «$ 50.000», y los centavos solo cuando los hay («$ 50.000,40»).
+// Lo que redondea a cero es «$ 0», nunca «-$ 0». Antes los mensajes de la
+// caja decían «$50000.00» (mes simulado, H033 y H409).
+func Importe(v float64) string {
+	c := jsmath.Round(v * 100)
+	if c == 0 {
+		return "$\u00a00"
+	}
+	signo := ""
+	if c < 0 {
+		signo, c = "-", -c
+	}
+	e := strconv.FormatFloat(math.Floor(c/100), 'f', 0, 64)
+	d := int64(c) % 100
+	t := signo + "$\u00a0" + Miles(e)
+	if d != 0 {
+		t += "," + strconv.FormatInt(d/10, 10) + strconv.FormatInt(d%10, 10)
+	}
+	return t
+}

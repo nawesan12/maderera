@@ -433,6 +433,16 @@ export interface components {
             otrosIngresos: number;
             /** Format: double */
             retiros: number;
+            /**
+             * Format: double
+             * @description anulaciones y devoluciones en efectivo (en negativo)
+             */
+            devoluciones: number;
+            /**
+             * Format: double
+             * @description gastos en efectivo cargados desde el panel (en negativo)
+             */
+            gastos: number;
             cantidadDeVentas: number;
         };
         MostradorMovimiento: {
@@ -469,6 +479,8 @@ export interface components {
             devolucion: boolean;
             /** @description Quién hizo las devoluciones parciales del renglón */
             quien: string | null;
+            /** @description lo cobrado por recibos de cuenta en el mostrador durante el turno */
+            cobranza: boolean;
         };
         MostradorPantalla: {
             turno: components["schemas"]["MostradorTurno"] | null;
@@ -483,6 +495,11 @@ export interface components {
              * @description lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)
              */
             descuentoLibrePct: number;
+            /**
+             * Format: double
+             * @description lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente
+             */
+            ultimoContado: number | null;
         };
     };
     responses: {
@@ -617,6 +634,7 @@ export interface operations {
                      * @default true
                      */
                     volvioLaMercaderia?: boolean;
+                    /** @description el PIN de un admin, o su contraseña si ninguno cargó PIN */
                     pin?: string;
                     ficha?: string;
                 };
@@ -638,6 +656,21 @@ export interface operations {
                         porAfuera?: number;
                         facturaPendiente?: string;
                         facturaSinCae?: boolean;
+                        /** @description la factura que quedó viva se le avisó a administración */
+                        avisado?: boolean;
+                        /** @description lo que tenía la venta, para rehacerla (sin los renglones de un corte) */
+                        renglones?: {
+                            variantId: string | null;
+                            descripcion: string;
+                            unidad: string;
+                            /** Format: double */
+                            cantidad: number;
+                            /** Format: double */
+                            precioUnitario: number;
+                            presentacion: string | null;
+                        }[];
+                        /** @description la venta tenía un corte, que no se rehace solo */
+                        conCorte?: boolean;
                         error?: string;
                         autorizacion?: components["schemas"]["MostradorAutorizacion"];
                     };
@@ -897,6 +930,10 @@ export interface operations {
                     branchId: string;
                     /** Format: double */
                     fondoInicial: number | null;
+                    /** @description adónde fue (o de dónde vino) la diferencia con lo contado al cerrar el turno anterior */
+                    motivo?: string;
+                    /** @description la caja física de la PC que abre, si tiene una */
+                    cajaId?: string;
                 };
             };
         };

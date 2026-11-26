@@ -83,7 +83,7 @@ export default async function MostradorPage({
     // el que va a registrar el servidor.
     escalasDePago(),
   ]);
-  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct } = pantalla;
+  const { turno, ventas, listaGeneral, fondoBase, movimientos, cierre, descuentoLibrePct, ultimoContado } = pantalla;
 
   return (
     <VistaMostrador
@@ -91,6 +91,7 @@ export default async function MostradorPage({
         nombre: usuario.name,
         userId: usuario.userId,
         administraCaja: puedeEntrar("/admin/caja", usuario.staffRole),
+        factura: puedeEntrar("/admin/facturacion", usuario.staffRole),
       }}
       listaGeneral={listaGeneral}
       sucursales={sucursales.map((s) => ({
@@ -105,6 +106,7 @@ export default async function MostradorPage({
       tarifasDeCorte={tarifas}
       anchoSierra={sierra}
       fondoBase={fondoBase}
+      ultimoContado={ultimoContado ?? null}
       descuentoLibrePct={descuentoLibrePct}
       promos={promos}
       escalasDePago={escalas}

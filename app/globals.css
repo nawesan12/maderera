@@ -1391,6 +1391,51 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   font-weight: 600;
 }
 
+/* El cierre del turno, impreso desde la caja del mostrador (mes simulado,
+   H024). Vive en el body, fuera del diálogo: en pantalla no se ve, y al
+   imprimir se ve solo él, en el ancho de la térmica. */
+.cierre-impreso {
+  display: none;
+}
+
+@media print {
+  body:has(> .cierre-impreso) > :not(.cierre-impreso) {
+    display: none !important;
+  }
+  .cierre-impreso {
+    display: block;
+    width: 100%;
+    max-width: 72mm;
+    color: #1a1a1a;
+    background: #fff;
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .cierre-impreso .razon {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .cierre-impreso .separador {
+    margin: 3mm 0;
+    border-top: 1px dashed #999;
+  }
+  .cierre-impreso .linea-datos {
+    display: flex;
+    justify-content: space-between;
+    gap: 4mm;
+  }
+  .cierre-impreso .total {
+    font-weight: 700;
+  }
+  .cierre-impreso .firma {
+    margin-top: 12mm;
+    border-top: 1px solid #999;
+    padding-top: 1mm;
+    text-align: center;
+  }
+}
+
 .ticket-hoja .total {
   display: flex;
   justify-content: space-between;

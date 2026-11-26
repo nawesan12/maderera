@@ -80,13 +80,19 @@ type TurnoAbierto struct {
 	VentasEnEfectivo float64   `json:"ventasEnEfectivo"`
 	OtrosIngresos    float64   `json:"otrosIngresos"`
 	Retiros          float64   `json:"retiros"`
-	CantidadDeVentas int       `json:"cantidadDeVentas"`
+	// Devoluciones (anulaciones y devoluciones parciales en efectivo) y
+	// Gastos (los que se cargan en efectivo desde el panel) también salen del
+	// cajón: sin ellos los recuadros no sumaban «Debería haber» y la plata
+	// salía sin que el vendedor la viera (mes simulado, H177 y H366).
+	Devoluciones     float64 `json:"devoluciones"`
+	Gastos           float64 `json:"gastos"`
+	CantidadDeVentas int     `json:"cantidadDeVentas"`
 }
 
 // Abierto es turnoAbierto: nil si la sucursal no tiene caja abierta.
 func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto, error) {
 	var t TurnoAbierto
-	var esperado, fondoBase, fondoInicial, ventas, ingresos, retiros jsmath.Num
+	var esperado, fondoBase, fondoInicial, ventas, ingresos, retiros, devoluciones, gastos jsmath.Num
 	err := c.QueryRow(ctx, `
 		SELECT s.id, s.branch_id, b.name, u.name, s.abierta_at,
 		       coalesce(sum(m.monto), 0), b.fondo_base,
@@ -94,6 +100,8 @@ func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'venta'), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'ingreso'), 0),
 		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'retiro'), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo = 'devolucion'), 0),
+		       coalesce(sum(m.monto) FILTER (WHERE m.tipo NOT IN ('apertura', 'venta', 'ingreso', 'retiro', 'devolucion')), 0),
 		       count(*) FILTER (WHERE m.tipo = 'venta')::int
 		FROM cash_sessions s
 		JOIN branches b ON b.id = s.branch_id
@@ -102,7 +110,7 @@ func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto
 		WHERE s.branch_id = $1 AND s.estado = 'abierta'
 		GROUP BY s.id, s.branch_id, b.name, b.fondo_base, u.name, s.abierta_at
 		LIMIT 1`, sucursal).Scan(&t.ID, &t.BranchID, &t.Sucursal, &t.AbiertaPor, &t.AbiertaAt,
-		&esperado, &fondoBase, &fondoInicial, &ventas, &ingresos, &retiros, &t.CantidadDeVentas)
+		&esperado, &fondoBase, &fondoInicial, &ventas, &ingresos, &retiros, &devoluciones, &gastos, &t.CantidadDeVentas)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -111,6 +119,7 @@ func Abierto(ctx context.Context, c Consultador, sucursal string) (*TurnoAbierto
 	}
 	t.Esperado, t.FondoBase, t.FondoInicial = esperado.F(), fondoBase.F(), fondoInicial.F()
 	t.VentasEnEfectivo, t.OtrosIngresos, t.Retiros = ventas.F(), ingresos.F(), retiros.F()
+	t.Devoluciones, t.Gastos = devoluciones.F(), gastos.F()
 	return &t, nil
 }
 
@@ -146,6 +155,24 @@ func MovimientosDelTurno(ctx context.Context, c Consultador, sesion string) ([]M
 		out = append(out, m)
 	}
 	return out, filas.Err()
+}
+
+// UltimoContado es lo que se contó al cerrar el último turno de la sucursal
+// (nil si nunca cerró uno). Es con lo que abre el turno siguiente: abrir con
+// la base y no con lo contado hacía desaparecer el efectivo que quedaba en el
+// cajón entre turnos, $301.374 en una semana (mes simulado, H024 y H249).
+func UltimoContado(ctx context.Context, c Consultador, sucursal string) (*float64, error) {
+	var n *jsmath.Num
+	err := c.QueryRow(ctx, `SELECT contado FROM cash_sessions WHERE branch_id = $1 AND estado = 'cerrada' AND contado IS NOT NULL
+		ORDER BY cerrada_at DESC LIMIT 1`, sucursal).Scan(&n)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && n == nil) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	v := n.F()
+	return &v, nil
 }
 
 // FondoBase es el cambio que tiene que quedar en el cajón de la sucursal.
@@ -220,6 +247,11 @@ type RenglonDelCierre struct {
 	// Quien hizo las devoluciones parciales del renglón (nil en las ventas y
 	// en las anulaciones): el control de las devoluciones es verlas.
 	Quien *string `json:"quien"`
+	// Cobranza: lo que entró por recibos de cuenta tomados en el mostrador
+	// durante el turno, por medio. El cheque y la transferencia de un cobro
+	// de cuenta no figuraban en ningún turno, y el vendedor no podía rendir
+	// lo que cobró por banco (mes simulado, H176 y H259).
+	Cobranza bool `json:"cobranza"`
 }
 
 // CierresDeTurnos es el cierre Z de cada turno: las ventas de la sucursal en
@@ -247,7 +279,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 	filas, err := c.Query(ctx, `
 		SELECT s.id, false, coalesce(p.medio::text, o.medio_pago::text),
 		       count(DISTINCT o.id)::int,
-		       coalesce(sum(coalesce(p.importe, o.total)), 0), NULL::text
+		       coalesce(sum(coalesce(p.importe, o.total)), 0), NULL::text, false
 		FROM cash_sessions s
 		JOIN orders o ON o.branch_id = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL
 		     AND o.created_at >= s.abierta_at
@@ -260,7 +292,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		       count(DISTINCT a.id)::int,
 		       -coalesce(sum(coalesce(p.importe, a.total) - coalesce((SELECT sum(d.importe) FROM devoluciones d WHERE d.order_id = a.id
 		          AND d.destino = CASE coalesce(p.medio::text, a.medio_pago::text) WHEN 'efectivo' THEN 'caja' WHEN 'cuenta_corriente' THEN 'cuenta' END), 0)), 0),
-		       NULL::text
+		       NULL::text, false
 		FROM cash_sessions s
 		JOIN LATERAL (
 		  SELECT o.id, o.medio_pago, o.total,
@@ -275,13 +307,21 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		GROUP BY s.id, coalesce(p.medio::text, a.medio_pago::text)
 		UNION ALL
 		SELECT s.id, true, CASE d.destino WHEN 'caja' THEN 'efectivo' ELSE 'cuenta_corriente' END,
-		       count(*)::int, -sum(d.importe), coalesce(u.name, 'Sin usuario')
+		       count(*)::int, -sum(d.importe), coalesce(u.name, 'Sin usuario'), false
 		FROM cash_sessions s
 		JOIN devoluciones d ON d.branch_id = s.branch_id AND d.created_at >= s.abierta_at
 		     AND (s.cerrada_at IS NULL OR d.created_at <= s.cerrada_at)
 		LEFT JOIN "user" u ON u.id = d.created_by_user_id
 		WHERE s.id = ANY($1::uuid[])
-		GROUP BY s.id, d.destino, u.name`, sesiones)
+		GROUP BY s.id, d.destino, u.name
+		UNION ALL
+		SELECT s.id, false, rp.medio::text, count(DISTINCT r.id)::int, coalesce(sum(rp.importe), 0), NULL::text, true
+		FROM cash_sessions s
+		JOIN receipts r ON r.branch_id = s.branch_id AND r.origen = 'mostrador' AND r.estado <> 'anulado'
+		     AND r.created_at >= s.abierta_at AND (s.cerrada_at IS NULL OR r.created_at <= s.cerrada_at)
+		JOIN receipt_parts rp ON rp.receipt_id = r.id
+		WHERE s.id = ANY($1::uuid[])
+		GROUP BY s.id, rp.medio`, sesiones)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +331,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		var medio *string
 		var r RenglonDelCierre
 		var total jsmath.Num
-		if err := filas.Scan(&id, &r.Devolucion, &medio, &r.Cantidad, &total, &r.Quien); err != nil {
+		if err := filas.Scan(&id, &r.Devolucion, &medio, &r.Cantidad, &total, &r.Quien, &r.Cobranza); err != nil {
 			return nil, err
 		}
 		r.MedioPago = "sin especificar"
@@ -304,12 +344,15 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 	if err := filas.Err(); err != nil {
 		return nil, err
 	}
-	// Primero las ventas, de la más grande a la más chica; después las
-	// devoluciones, igual.
+	// Primero las ventas, de la más grande a la más chica; después los
+	// cobros de cuenta y al final las devoluciones, igual.
 	for _, rs := range por {
 		sort.SliceStable(rs, func(i, j int) bool {
 			if rs[i].Devolucion != rs[j].Devolucion {
 				return !rs[i].Devolucion
+			}
+			if rs[i].Cobranza != rs[j].Cobranza {
+				return !rs[i].Cobranza
 			}
 			if rs[i].Devolucion {
 				return rs[i].Total < rs[j].Total

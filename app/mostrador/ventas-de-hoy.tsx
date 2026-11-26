@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Printer, Undo2 } from "lucide-react";
+import { Printer, RotateCcw, Undo2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
-import { formatearMonto, hora } from "@/lib/formato";
+import { formatearImporte, hora } from "@/lib/formato";
+import type { LineaDeVenta } from "@/lib/mostrador/importes";
 import { anularVenta } from "./actions";
 import { NOMBRE_DEL_MEDIO } from "./medios";
 import type { VentaDeHoy } from "./tipos";
@@ -18,7 +19,19 @@ import type { VentaDeHoy } from "./tipos";
  * tachadas y no escondidas, porque esconderlas hace que el mismo error se anule
  * dos veces.
  */
-export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
+export function VentasDeHoy({
+  ventas,
+  onRehacer,
+}: {
+  ventas: VentaDeHoy[];
+  /**
+   * «Anular y rehacer»: la venta se anula con la mercadería de vuelta y sus
+   * renglones quedan cargados para cobrarla de nuevo, por ejemplo a otro
+   * cliente. Antes había que anular con «Se la llevó» y volver a venderla, y
+   * el stock salía dos veces (mes simulado, H269).
+   */
+  onRehacer?: (renglones: LineaDeVenta[], conCorte: boolean) => void;
+}) {
   const router = useRouter();
   const [trabajando, empezar] = useTransition();
   const [anulando, setAnulando] = useState<VentaDeHoy | null>(null);
@@ -31,12 +44,17 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
    */
   const [volvio, setVolvio] = useState(true);
   const [pidePin, setPidePin] = useState<Autorizacion | null>(null);
+  /** Se está anulando para rehacer: lo recuerda mientras se pide el PIN. */
+  const [rehaciendo, setRehaciendo] = useState(false);
 
-  function anular(pin?: string) {
+  function anular(pin?: string, rehacer = rehaciendo) {
     if (!anulando || !motivo.trim()) return;
     const venta = anulando;
+    setRehaciendo(rehacer);
     empezar(async () => {
-      const r = await anularVenta(venta.id, motivo, { volvioLaMercaderia: volvio, pin });
+      // Rehacer es anular con la mercadería de vuelta: sale otra vez con la
+      // venta nueva, y así el stock baja una sola vez.
+      const r = await anularVenta(venta.id, motivo, { volvioLaMercaderia: rehacer ? true : volvio, pin });
       if (r.autorizacion) {
         setPidePin(r.autorizacion);
         return;
@@ -46,6 +64,7 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
       if (!r.error) {
         setAnulando(null);
         router.refresh();
+        if (rehacer && r.renglones) onRehacer?.(r.renglones, Boolean(r.conCorte));
       }
     });
   }
@@ -82,7 +101,7 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
               <span
                 className={`tabular shrink-0 font-semibold ${anulada ? "text-muted-foreground line-through" : ""}`}
               >
-                {formatearMonto(v.total)}
+                {formatearImporte(v.total)}
               </span>
 
               <Link
@@ -101,6 +120,7 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
                     setMotivo("");
                     setVolvio(true);
                     setPidePin(null);
+                    setRehaciendo(false);
                   }}
                   aria-label={`Anular ${v.numero}`}
                   className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-hundida hover:text-foreground"
@@ -134,6 +154,10 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
                 if (e.code === "KeyL") {
                   e.preventDefault();
                   setVolvio(false);
+                }
+                if (e.code === "KeyR" && onRehacer && !pidePin) {
+                  e.preventDefault();
+                  anular(undefined, true);
                 }
               }}
             >
@@ -188,14 +212,30 @@ export function VentasDeHoy({ ventas }: { ventas: VentaDeHoy[] }) {
                   onCancelar={() => setPidePin(null)}
                 />
               ) : (
-                <button
-                  disabled={trabajando || !motivo.trim()}
-                  onClick={() => anular()}
-                  className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
-                >
-                  <Undo2 className="h-5 w-5" />
-                  Anular la venta
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    disabled={trabajando || !motivo.trim()}
+                    onClick={() => anular(undefined, false)}
+                    className="inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
+                  >
+                    <Undo2 className="h-5 w-5" />
+                    Anular la venta
+                  </button>
+                  {/* Para cambiarle el cliente o corregir un renglón: la
+                      mercadería no vuelve al estante, sale con la nueva. */}
+                  {onRehacer && (
+                    <button
+                      type="button"
+                      disabled={trabajando || !motivo.trim()}
+                      onClick={() => anular(undefined, true)}
+                      className="inline-flex h-14 shrink-0 items-center justify-center gap-2 rounded-xl border border-linea px-4 text-base font-semibold transition-colors hover:bg-hundida disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Rehacer
+                      <kbd className="rounded border border-current/40 px-1 text-xs font-medium opacity-70">Alt + R</kbd>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </DialogContent>

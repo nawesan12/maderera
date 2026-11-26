@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
 	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -157,7 +158,7 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	if !res.Ok {
 		return nil, plataforma.Invalido(map[string]string{"error": res.Error})
 	}
-	desc := "Anuló la venta " + res.Numero + " ($" + f2(res.Total) + "): " + zodjs.TrimJS(b.Motivo)
+	desc := "Anuló la venta " + res.Numero + " (" + formato.Importe(res.Total) + "): " + zodjs.TrimJS(b.Motivo)
 	if !pedido.VolvioLaMercaderia {
 		desc += ". La mercadería no volvió"
 	}
@@ -173,8 +174,60 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	if res.FacturaPendiente != nil {
 		out["facturaPendiente"] = *res.FacturaPendiente
 		out["facturaSinCae"] = res.FacturaSinCAE
+		// El vendedor no entra a Facturación: la factura que quedó viva se
+		// le avisa a administración en el momento, en vez de mandarlo a una
+		// pantalla que no puede abrir (mes simulado, H178). En Caja queda
+		// marcada como «factura sin nota de crédito» hasta que se resuelva.
+		if !ses.Tiene(sqlc.StaffRoleAdmin) {
+			que := "emitirle la nota de crédito"
+			if res.FacturaSinCAE {
+				que = "darla de baja"
+			}
+			a.s.aut.Avisar(ctx, "Factura de una venta anulada", res.Numero+" se anuló en el mostrador ("+ses.Nombre+") y su factura quedó viva: hay que "+que+".")
+			out["avisado"] = true
+		}
 	}
+	// Lo que tenía la venta, para «Rehacer»: anular y volver a cargarla con
+	// otro cliente sin que el stock salga dos veces (H269). El precio es el de
+	// lista del renglón (el descuento de la venta ya estaba repartido en el
+	// precio, y rehacerla lo aplicaría otra vez). Los renglones de un corte
+	// no: el corte se vuelve a armar.
+	renglones, conCorte, err := renglonesParaRehacer(ctx, a.s, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	out["renglones"], out["conCorte"] = renglones, conCorte
 	return ok(out), nil
+}
+
+// renglonesParaRehacer son los renglones de la venta que no salen de un
+// corte, con su precio de lista si lo tienen.
+func renglonesParaRehacer(ctx context.Context, s *Servicio, pedido string) ([]map[string]any, bool, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT variant_id, descripcion, unidad, cantidad, coalesce(precio_lista, precio_unitario), presentacion, del_corte
+		FROM order_items WHERE order_id::text = $1 ORDER BY orden, id`, pedido)
+	if err != nil {
+		return nil, false, err
+	}
+	defer filas.Close()
+	out := []map[string]any{}
+	conCorte := false
+	for filas.Next() {
+		var variante, presentacion *string
+		var descripcion, unidad string
+		var cantidad, precio jsmath.Num
+		var delCorte bool
+		if err := filas.Scan(&variante, &descripcion, &unidad, &cantidad, &precio, &presentacion, &delCorte); err != nil {
+			return nil, false, err
+		}
+		if delCorte {
+			conCorte = true
+			continue
+		}
+		out = append(out, map[string]any{"variantId": variante, "descripcion": descripcion, "unidad": unidad,
+			"cantidad": cantidad.F(), "precioUnitario": precio.F(), "presentacion": presentacion})
+	}
+	return out, conCorte, filas.Err()
 }
 
 func (a *API) BuscarEnMostrador(ctx context.Context, r mostradorapi.BuscarEnMostradorRequestObject) (mostradorapi.BuscarEnMostradorResponseObject, error) {
@@ -310,7 +363,14 @@ func (a *API) AbrirCaja(ctx context.Context, r mostradorapi.AbrirCajaRequestObje
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.AbrirCaja(ctx, ses, r.Body.BranchId, numeroONaN(r.Body.FondoInicial))
+	motivo, puesto := "", ""
+	if r.Body.Motivo != nil {
+		motivo = *r.Body.Motivo
+	}
+	if r.Body.CajaId != nil {
+		puesto = *r.Body.CajaId
+	}
+	m, err := a.s.AbrirCaja(ctx, ses, r.Body.BranchId, numeroONaN(r.Body.FondoInicial), motivo, puesto)
 	if err != nil {
 		return nil, comoProblema(err)
 	}
@@ -354,6 +414,9 @@ type Pantalla struct {
 	// DescuentoLibrePct: la pantalla avisa apenas una venta lo pasa, antes
 	// de cobrar, para llamar al admin mientras se termina de cargar.
 	DescuentoLibrePct float64 `json:"descuentoLibrePct"`
+	// UltimoContado: lo que quedó contado al cerrar el último turno. La
+	// apertura lo propone (caja.UltimoContado).
+	UltimoContado *float64 `json:"ultimoContado"`
 }
 
 // Pantalla junta el turno, sus movimientos, el cierre Z, las ventas de hoy,
@@ -380,6 +443,11 @@ func (s *Servicio) Pantalla(ctx context.Context, sucursal string) (Pantalla, err
 	}
 	if p.DescuentoLibrePct, err = PorcentajeLibre(ctx, s.pool); err != nil {
 		return p, err
+	}
+	if p.Turno == nil {
+		if p.UltimoContado, err = caja.UltimoContado(ctx, s.pool, sucursal); err != nil {
+			return p, err
+		}
 	}
 	if p.Turno != nil {
 		if p.Movimientos, err = caja.MovimientosDelTurno(ctx, s.pool, p.Turno.ID); err != nil {
@@ -507,10 +575,10 @@ func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []Venta
 			if r.BajoLista {
 				// Ya pasó y no se rechaza, pero queda marcada: va en rojo en el
 				// inicio del panel.
-				desc += ": bajo lista sin autorizar ($" + f2(r.DejadoDeCobrar) + ")"
+				desc += ": bajo lista sin autorizar (" + formato.Importe(r.DejadoDeCobrar) + ")"
 			}
 			if r.CreditoSinAutorizar > 0 {
-				desc += ": a cuenta pasado el límite sin autorizar ($" + f2(r.CreditoSinAutorizar) + ")"
+				desc += ": a cuenta pasado el límite sin autorizar (" + formato.Importe(r.CreditoSinAutorizar) + ")"
 			}
 			s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, desc, controlDeLaVenta(r))
 			// Y se avisa en el momento, no a fin de semana: el número

@@ -67,4 +67,6 @@ export interface RenglonDelCierre {
   devolucion: boolean;
   /** Quién hizo las devoluciones parciales de la fila. */
   quien?: string | null;
+  /** Lo cobrado por recibos de cuenta en el mostrador durante el turno. */
+  cobranza?: boolean;
 }

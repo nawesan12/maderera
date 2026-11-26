@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -312,7 +313,7 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura", id, "Emitió un comprobante manual a "+nombre, nil)
 	if recibo != nil {
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", id,
-			"Cobró de contado con el recibo "+recibo.Numero+" por "+jsmath.Fijo2(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
+			"Cobró de contado con el recibo "+recibo.Numero+" por "+formato.Importe(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
 		if recibo.Aviso != nil && *recibo.Aviso != "" {
 			aviso = recibo.Aviso
 		}

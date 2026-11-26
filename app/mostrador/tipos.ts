@@ -19,6 +19,10 @@ export interface Turno {
   ventasEnEfectivo: number;
   otrosIngresos: number;
   retiros: number;
+  /** Anulaciones y devoluciones en efectivo, en negativo. */
+  devoluciones: number;
+  /** Gastos en efectivo cargados desde el panel, en negativo. */
+  gastos: number;
   cantidadDeVentas: number;
 }
 

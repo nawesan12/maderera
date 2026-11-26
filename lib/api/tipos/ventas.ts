@@ -935,6 +935,7 @@ export interface operations {
                      * @enum {string}
                      */
                     precios?: "actualizar" | "respetar";
+                    /** @description el PIN de un admin, o su contraseña si ninguno cargó PIN */
                     pin?: string;
                     ficha?: string;
                 };

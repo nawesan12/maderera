@@ -31,6 +31,10 @@ export interface EstadoMostrador {
    * Es distinto de `error`: la venta está, lo que falta es el papel.
    */
   avisoFiscal?: string;
+  /** Lo que tenía la venta anulada, para «Anular y rehacer». */
+  renglones?: LineaDeVenta[];
+  /** La venta anulada tenía un corte, que hay que volver a armar. */
+  conCorte?: boolean;
   /**
    * Falta el PIN de un admin: lo que se deja de cobrar pasa lo libre, la
    * cuenta corriente pasa el límite, o la anulación no es del vendedor. La
@@ -81,8 +85,23 @@ const error = (r: { error?: unknown }) => ({ error: mensajeDe(r.error as Problem
 /* Caja                                                                        */
 /* -------------------------------------------------------------------------- */
 
-export async function abrirCaja(branchId: string, fondoInicial: number): Promise<EstadoMostrador> {
-  const r = await (await api()).POST("/api/v1/mostrador/caja/abrir", { body: { branchId, fondoInicial } });
+/**
+ * Abre el turno. Si el fondo no es lo que quedó contado al cerrar el turno
+ * anterior, Go pide el motivo de la diferencia (`motivo`) y la deja como un
+ * retiro o ingreso «entre turnos». `cajaId` es la caja física de esta PC.
+ */
+export async function abrirCaja(
+  branchId: string,
+  fondoInicial: number,
+  extra: { motivo?: string; cajaId?: string | null } = {},
+): Promise<EstadoMostrador> {
+  const body = {
+    branchId,
+    fondoInicial,
+    ...(extra.motivo?.trim() ? { motivo: extra.motivo.trim() } : {}),
+    ...(extra.cajaId ? { cajaId: extra.cajaId } : {}),
+  };
+  const r = await (await api()).POST("/api/v1/mostrador/caja/abrir", { body });
   if (!r.data) return error(r);
   refrescar();
   return { ok: r.data.ok };
@@ -308,11 +327,25 @@ export async function anularVenta(
   refrescar();
   return {
     ok: r.data.ok,
+    // A quien no entra a Facturación no se lo manda ahí: Go ya le avisó a
+    // administración (mes simulado, H178).
     avisoFiscal: !r.data.facturaPendiente
       ? undefined
-      : r.data.facturaSinCae
-        ? "La venta tenía factura sin CAE. Dala de baja desde Facturación."
-        : "La venta tenía factura. Emitile la nota de crédito desde Facturación.",
+      : r.data.avisado
+        ? "Administración ya tiene el aviso de la factura."
+        : r.data.facturaSinCae
+          ? "La venta tenía factura sin CAE. Dala de baja desde Facturación."
+          : "La venta tenía factura. Emitile la nota de crédito desde Facturación.",
+    renglones: (r.data.renglones ?? []).map((l) => ({
+      variantId: l.variantId ?? null,
+      descripcion: l.descripcion,
+      unidad: l.unidad,
+      cantidad: l.cantidad,
+      precioUnitario: l.precioUnitario,
+      precioLista: l.variantId ? l.precioUnitario : null,
+      presentacion: (l.presentacion as LineaDeVenta["presentacion"]) ?? null,
+    })),
+    conCorte: r.data.conCorte ?? false,
   };
 }
 

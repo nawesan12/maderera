@@ -89,6 +89,9 @@ export const cashSessions = pgTable(
 
     estado: estadoCaja("estado").notNull().default("abierta"),
     notas: text("notas"),
+    /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
+    /** El puesto (caja física) desde el que se abrió el turno, si tenía uno. */
+    posDeviceId: uuid("pos_device_id"),
   },
   (t) => [
     /*

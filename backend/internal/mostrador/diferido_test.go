@@ -50,7 +50,7 @@ func TestRetiroTardioNoCambiaElArqueo(t *testing.T) {
 	if d := e.txt(t, `select (declarado_at is not null and created_at > now() - interval '1 minute')::text from cash_movements where clave = '8f2b5c1e-1d2a-4c3b-9a8e-0000000000bb'`); d != "true" {
 		t.Errorf("hora real y declarada: %s", d)
 	}
-	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like 'Retiro sin conexión de $500.00 % llegó con la caja ya cerrada%'`); n != 1 {
+	if n := e.num(t, `select count(*)::float8 from audit_log where descripcion like 'Retiro sin conexión de $%500 % llegó con la caja ya cerrada%'`); n != 1 {
 		t.Errorf("bitácora: %v", n)
 	}
 

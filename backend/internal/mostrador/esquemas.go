@@ -233,7 +233,8 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	l.Objetos("cortes", zodjs.Lista{Opcional: true, Max: TopeDeCortes}, func(_ int, c *zodjs.Lector) {
 		v.Cortes = append(v.Cortes, *leerCorte(c))
 	})
-	if p := l.Cadena("pin", zodjs.Texto{Opcional: true, Nulo: true, Max: 20}); p != nil {
+	// 128: sin ningún PIN cargado firma la contraseña de un admin.
+	if p := l.Cadena("pin", zodjs.Texto{Opcional: true, Nulo: true, Max: 128}); p != nil {
 		v.PIN = *p
 	}
 	if f := l.Cadena("ficha", zodjs.Texto{Opcional: true, Nulo: true, Max: 400}); f != nil {

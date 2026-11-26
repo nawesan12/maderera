@@ -92,12 +92,17 @@ export function VistaMostrador({
   tarifasDeCorte,
   anchoSierra,
   fondoBase,
+  ultimoContado,
   descuentoLibrePct,
   promos,
   escalasDePago,
 }: {
-  /** `administraCaja`: si puede dar de alta terminales (/admin/caja). */
-  usuario: { nombre: string; userId: string; administraCaja?: boolean };
+  /**
+   * `administraCaja`: si puede dar de alta terminales (/admin/caja).
+   * `factura`: si entra a Facturación; si no, el «Facturar» de la venta
+   * recién cobrada no aparece (llevaba a «No tenés acceso»; H022).
+   */
+  usuario: { nombre: string; userId: string; administraCaja?: boolean; factura?: boolean };
   /** La lista de precios general. Lo que no sea esta es precio diferenciado. */
   listaGeneral: string | null;
   sucursales: Sucursal[];
@@ -112,6 +117,8 @@ export function VistaMostrador({
   anchoSierra: number;
   /** El cambio que tiene que quedar en el cajón de esta sucursal. */
   fondoBase: number;
+  /** Lo contado al cerrar el último turno: con eso abre el siguiente. */
+  ultimoContado: number | null;
   /** Lo que se puede dejar de cobrar sin el PIN de un admin (/admin/reglas). */
   descuentoLibrePct: number;
   /** Las promociones vigentes. Se cuentan, no se descuentan. */
@@ -277,6 +284,19 @@ export function VistaMostrador({
    * y el admin no firma una cifra vieja. (Se ajusta al renderizar, como
    * CampoPin, y no en un efecto.)
    */
+  /*
+   * Empezó otra venta: el aviso de la anterior («Venta PED-1051 registrada…»,
+   * en rojo si la factura no salió) se va, y el papel de esa venta se achica a
+   * un botón. Quedaban fijos, tapaban el cheque de la venta nueva y parecía
+   * que el error era de esta (mes simulado, H179).
+   */
+  const ventaEmpezada = lineas.length > 0;
+  const [empezadaVista, setEmpezadaVista] = useState(ventaEmpezada);
+  if (empezadaVista !== ventaEmpezada) {
+    setEmpezadaVista(ventaEmpezada);
+    if (ventaEmpezada && ultima) setAviso(null);
+  }
+
   const queSeCobra = JSON.stringify([lineas, cliente?.id ?? null, medio, partes, tipoDesc, valorDesc]);
   const [cobroVisto, setCobroVisto] = useState(queSeCobra);
   if (cobroVisto !== queSeCobra) {
@@ -1057,6 +1077,8 @@ export function VistaMostrador({
               }}
               aviso={aviso}
               ultima={ultima}
+              ultimaCompacta={ventaEmpezada}
+              puedeFacturar={Boolean(usuario.factura)}
               acopio={acopio}
               onTipo={elegirTipo}
               onPartir={partirElPago}
@@ -1173,6 +1195,16 @@ export function VistaMostrador({
             sucursal={sucursal}
             turno={turno}
             fondoBase={fondoBase}
+            ultimoContado={ultimoContado}
+            cajaId={cajaFisica?.id ?? null}
+            onRehacer={(renglones, conCorte) => {
+              setLineas((prev) => [...prev, ...renglones]);
+              setCaja(false);
+              setCajaParaCobrar(false);
+              if (conCorte) setAviso({ tipo: "error", texto: "El corte de esa venta se vuelve a armar." });
+              // Rehacer es casi siempre cambiarle el cliente: el cursor va ahí.
+              requestAnimationFrame(() => enfocar("cliente"));
+            }}
             cierre={cierre}
             movimientos={movimientos}
             ventas={ventas}

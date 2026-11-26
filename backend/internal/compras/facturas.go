@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -405,7 +406,7 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	if err != nil {
 		return "", "", errorDeFactura(err)
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura_compra", id, "Cargó una factura de compra por $"+jsmath.Fijo2(total), nil)
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura_compra", id, "Cargó una factura de compra por "+formato.Importe(total), nil)
 	return id, d.SupplierID, nil
 }
 

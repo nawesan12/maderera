@@ -64,6 +64,8 @@ export function Cobro({
   onCancelarPin,
   aviso,
   ultima,
+  ultimaCompacta,
+  puedeFacturar,
   acopio,
   onTipo,
   onPartir,
@@ -127,6 +129,10 @@ export function Cobro({
   onCancelarPin: () => void;
   aviso: { tipo: "ok" | "error"; texto: string } | null;
   ultima: UltimaVenta | null;
+  /** Ya empezó otra venta: el papel de la anterior queda en un botón. */
+  ultimaCompacta: boolean;
+  /** Si entra a Facturación: sin eso, «Facturar» no aparece (H022). */
+  puedeFacturar: boolean;
   acopio: boolean;
   /** Elegir contado, cuenta corriente o acopio: acomoda el medio de pago. */
   onTipo: (t: TipoDeOperacion) => void;
@@ -511,7 +517,7 @@ export function Cobro({
           columna que había que scrollear, con el cliente esperando el ticket en
           la mano. */}
       {ultima && (
-        <div className="flex flex-wrap gap-2 border-t border-linea px-4 py-3">
+        <div className={`flex flex-wrap gap-2 border-t border-linea px-4 ${ultimaCompacta ? "py-2" : "py-3"}`}>
           {/* Si salió factura se imprime la factura, que es el papel que vale.
               Si no, el ticket del pedido, que dice expresamente que no es un
               comprobante fiscal. Las dos rutas piden ids distintos: la primera
@@ -519,7 +525,9 @@ export function Cobro({
           <Link
             href={papelDeLaVenta(ultima)}
             target="_blank"
-            className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida"
+            className={`inline-flex items-center gap-2 rounded-lg border border-linea font-medium transition-colors hover:bg-hundida ${
+              ultimaCompacta ? "h-9 px-3 text-sm text-muted-foreground" : "h-11 px-4 text-base"
+            }`}
           >
             <Printer className="h-4 w-4 shrink-0" />
             Imprimir {ultima.numero}
@@ -527,7 +535,7 @@ export function Cobro({
               Alt + I
             </kbd>
           </Link>
-          {!ultima.invoiceId && (
+          {!ultima.invoiceId && puedeFacturar && !ultimaCompacta && (
             <Link
               href={`/admin/facturacion?pedido=${ultima.orderId}`}
               target="_blank"
@@ -541,7 +549,7 @@ export function Cobro({
           {/* El remito del retiro: qué se llevó y si pagó. En un acopio no
               se llevó nada todavía; el retiro se registra en la ficha del
               pedido, que es lo que descuenta el stock. */}
-          {ultima.orderId &&
+          {ultima.orderId && !ultimaCompacta &&
             (ultima.acopio ? (
               <Link
                 href={`/admin/pedidos/${ultima.orderId}`}

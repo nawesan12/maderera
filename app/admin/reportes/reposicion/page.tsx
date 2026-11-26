@@ -402,7 +402,8 @@ function Tabla({
                       f.cobertura <= 7 ? "font-semibold text-brand-orange-dark" : ""
                     }
                   >
-                    {f.cobertura} días
+                    {/* 7620 días no dice nada que no diga «más de un año». */}
+                    {f.cobertura > 365 ? "Más de un año" : `${cantidad(f.cobertura)} días`}
                   </span>
                 )}
               </td>

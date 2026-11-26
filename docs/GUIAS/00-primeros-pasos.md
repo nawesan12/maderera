@@ -114,8 +114,10 @@ inicio.
 1. **No hay botón de guardar general.** Cada pantalla guarda lo suyo cuando
    aprieta *Guardar*. Si sale de una pantalla sin guardar, se pierde lo que
    escribió ahí y nada más.
-2. **No hay que cerrar el mes ni cerrar el día.** Los números se calculan
-   solos cada vez que se abre una pantalla.
+2. **Los números se calculan solos** cada vez que se abre una pantalla: no
+   hay que procesar nada para verlos. Lo único que se cierra es el turno de
+   caja y, cuando el contador ya tiene los números, el mes (ver *Cerrar el
+   mes*), para que nadie cargue algo con fecha de un mes ya presentado.
 3. **Varios pueden estar cargando a la vez.** Si dos personas tocan el mismo
    pedido, gana la última que guardó; la bitácora deja constancia de las dos.
 4. **Todo tiene su dirección.** La pantalla que está mirando tiene una URL: se

@@ -31,6 +31,14 @@ No bloquean nada: son las cosas que el contador va a preguntar.
 - **Recepciones sin factura de compra**: entró la mercadería y falta el papel, así
   que ese IVA todavía no se computa como crédito.
 
+## Cerrar el mes
+
+Cuando el mes ya terminó y el contador tiene los números, **Cerrar el mes** lo
+deja fijo: no se pueden cargar gastos, facturas de compra, recibos ni pagos con
+fecha de ese mes, ni dar de baja una factura suya. Si hace falta corregir algo,
+**Reabrir** lo destraba, y queda en la bitácora quién lo hizo. El mes en curso
+no se puede cerrar.
+
 ## Los asientos
 
 El botón **Asientos en CSV** baja el archivo que el estudio importa: un renglón

@@ -290,7 +290,8 @@ export function documentoConTipo(documento: string): string {
  */
 export const ABREVIATURA_UNIDAD: Record<string, string> = {
   unidad: "u.",
-  metro_lineal: "ml",
+  // «m» y no «ml»: «12 ml» se leía como mililitros (mes simulado).
+  metro_lineal: "m",
   metro_cuadrado: "m²",
   tabla: "tabla",
   placa: "placa",

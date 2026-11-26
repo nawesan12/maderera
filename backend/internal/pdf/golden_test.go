@@ -310,6 +310,8 @@ func diferencia(a, b string) (float64, error) {
 //     «Aclaración y documento» y no debajo de la firma.
 //   - corte y hoja-de-corte (26/11, mes simulado): con una sola pieza o una
 //     sola pasada, en singular («1 pieza», no «1 piezas»).
+//   - comprobante, presupuesto y remito (26/11, mes simulado): el metro
+//     lineal se abrevia «m» y no «ml», que se leía como mililitros.
 func TestActualizarGolden(t *testing.T) {
 	pedido := os.Getenv("PDF_ACTUALIZAR")
 	if pedido == "" {

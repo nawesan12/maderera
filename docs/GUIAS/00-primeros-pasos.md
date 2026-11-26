@@ -6,10 +6,10 @@ orden: 0
 
 ## Entrar
 
-El panel vive en la misma dirección que el sitio, con `/admin` al final. La
-primera vez se entra con el enlace que manda administración cuando le da el
-alta (*Sitio y configuración → Personal*); desde ahí se entra con el correo y
-la contraseña que cada uno elige. **No hay usuario compartido**: cada persona
+El panel vive en la misma dirección que el sitio, con `/admin` al final. Se
+entra con el correo y la contraseña que le dio administración al darle el alta
+(*Sitio y configuración → Personal*); la contraseña se cambia después desde
+*Mi cuenta*. **No hay usuario compartido**: cada persona
 tiene el suyo, y todo lo que se carga queda a nombre de quien lo cargó. Prestar
 la clave es prestar la firma.
 

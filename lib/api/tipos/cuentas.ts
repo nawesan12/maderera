@@ -374,6 +374,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/personal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListarPersonal"];
+        put?: never;
+        post: operations["AltaDePersonal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/personal/{id}/puesto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CambiarPuesto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/personal/{id}/baja": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["BajaDePersonal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/seguimiento": {
         parameters: {
             query?: never;
@@ -476,6 +528,8 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        Puesto: "admin" | "vendedor" | "deposito" | "aserradero";
         Problema: {
             title: string;
             status: number;
@@ -1401,6 +1455,92 @@ export interface operations {
         responses: {
             200: components["responses"]["Ok"];
             404: components["responses"]["Problema"];
+        };
+    };
+    ListarPersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El personal, por puesto y nombre */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        nombre: string;
+                        correo: string;
+                        rol: components["schemas"]["Puesto"];
+                    }[];
+                };
+            };
+        };
+    };
+    AltaDePersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    nombre: string;
+                    correo: string;
+                    rol: components["schemas"]["Puesto"];
+                    /** @description La contraseña inicial */
+                    clave: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    CambiarPuesto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rol: components["schemas"]["Puesto"];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Ok"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    BajaDePersonal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Ok"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     ListarGestiones: {

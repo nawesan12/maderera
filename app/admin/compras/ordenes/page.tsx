@@ -159,7 +159,7 @@ function ListaDeOrdenes({ ordenes }: { ordenes: Orden[] }) {
                 <span className="codigo text-[17px] font-semibold">{o.numero}</span>
                 <Estado estado={o.estado} />
               </span>
-              <span className="line-clamp-2 block break-words text-base">{o.proveedor}</span>
+              <span className="line-clamp-2 break-words text-base">{o.proveedor}</span>
               {/* La fecha primero y entera: es el dato del renglón; si no
                   entra, se corta la sucursal (mes simulado, H382). */}
               <span className="tabular flex items-baseline gap-3 text-base">

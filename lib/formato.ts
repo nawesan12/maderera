@@ -193,6 +193,16 @@ export const fechaHora = new Intl.DateTimeFormat("es-AR", {
   hour12: false,
 });
 
+/**
+ * El día y la hora de un instante, o solo el día si lo guardado es un día
+ * (un gasto): «04/11, 21:00» para algo del 5/11 era la medianoche UTC leída
+ * en hora argentina.
+ */
+export const fechaHoraODia = {
+  format: (fecha: Date) => (esDia(fecha) ? diaYMes.format(fecha) : fechaHora.format(fecha)),
+};
+const diaYMes = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC", day: "2-digit", month: "2-digit" });
+
 export const hora = new Intl.DateTimeFormat("es-AR", {
   timeZone: ZONA,
   hour: "2-digit",

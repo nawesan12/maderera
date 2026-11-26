@@ -489,7 +489,7 @@ func (p *Panel) EfectivoFueraDeCaja(ctx context.Context, desde, hasta time.Time)
 		  SELECT 'gasto', e.id::text, e.descripcion, b.name, -e.importe, e.fecha
 		  FROM expenses e
 		  LEFT JOIN branches b ON b.id = e.branch_id
-		  WHERE e.medio = 'efectivo' AND e.fecha >= $1 AND e.fecha <= $2 AND e.anulado_at IS NULL
+		  WHERE e.medio = 'efectivo' AND e.fecha >= $3 AND e.fecha <= $4 AND e.anulado_at IS NULL
 		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.expense_id = e.id)
 		  UNION ALL
 		  SELECT 'pago', sp.id::text, su.nombre, NULL, -ef.efectivo, sp.fecha
@@ -502,7 +502,7 @@ func (p *Panel) EfectivoFueraDeCaja(ctx context.Context, desde, hasta time.Time)
 		    AND NOT EXISTS (SELECT 1 FROM cash_movements m WHERE m.supplier_payment_id = sp.id)
 		) x
 		ORDER BY fecha DESC
-		LIMIT 100`, desde, hasta)
+		LIMIT 100`, desde, hasta, diaDelMes(desde), diaDelMes(hasta))
 	if err != nil {
 		return nil, err
 	}
@@ -518,6 +518,14 @@ func (p *Panel) EfectivoFueraDeCaja(ctx context.Context, desde, hasta time.Time)
 		out = append(out, f)
 	}
 	return out, filas.Err()
+}
+
+// diaDelMes es el día argentino de t guardado como día: medianoche UTC, como
+// guarda el gasto su fecha (`expenses.fecha`). Comparado con el instante, el
+// gasto del 1.º caía en el mes anterior, que empieza a las 3 de la mañana UTC.
+func diaDelMes(t time.Time) time.Time {
+	a := t.In(Argentina)
+	return time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // TurnoParaAsignar es un turno al que se puede mandar una venta suelta.

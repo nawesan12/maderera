@@ -11,7 +11,7 @@ import {
   turnosParaAsignar,
   ventasSinCaja,
 } from "@/lib/dal/admin/cajas-fisicas";
-import { fechaHora, formatearImporte, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
+import { fechaHora, fechaHoraODia, formatearImporte, formatearMonto, haceCuanto, hora, plural } from "@/lib/formato";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { Vacio } from "@/components/admin/vacio";
@@ -173,7 +173,7 @@ export default async function CajaPage({
                     {f.detalle}
                   </span>
                   <span className="block text-sm text-muted-foreground">
-                    {fechaHora.format(f.fecha)}
+                    {fechaHoraODia.format(f.fecha)}
                     {f.sucursal && ` · ${f.sucursal}`}
                   </span>
                 </span>
@@ -187,7 +187,16 @@ export default async function CajaPage({
       )}
 
       <CajasFisicas
-        cajas={cajas}
+        cajas={cajas.map((c) => ({
+          ...c,
+          // Desvincular borra el latido: sin el último turno, una caja usada
+          // decía «nunca se vinculó» (H243).
+          cuando: c.ultimaVezAt
+            ? `se conectó ${haceCuanto(new Date(c.ultimaVezAt))}`
+            : c.ultimoTurnoAt
+              ? `último turno ${haceCuanto(new Date(c.ultimoTurnoAt))}`
+              : "sin vincular",
+        }))}
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
       />
 

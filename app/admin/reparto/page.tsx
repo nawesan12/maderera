@@ -126,21 +126,21 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
           </Link>
           <p className="text-base text-muted-foreground">{p.direccionEntrega ?? "Sin dirección"}</p>
         </div>
-        {/* El día comprometido manda: el estado es el mismo en casi todas. */}
-        {p.entregarEl ? (
+        {/* El día comprometido manda: el estado es el mismo en casi todas.
+            El chip va siempre en la línea del número: arriba a la derecha
+            solo el día, para que todas las tarjetas se lean igual. */}
+        {p.entregarEl && (
           <span className="inline-flex items-center gap-1.5 text-base font-semibold">
             <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             {diaCorto.format(new Date(`${p.entregarEl}T12:00:00Z`))}
           </span>
-        ) : (
-          <EtiquetaEstado estado={p.estado} contexto="pedido" />
         )}
       </div>
 
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
         <span className="codigo">{p.numero}</span>
         {p.sucursal && <span>Sale de {p.sucursal}</span>}
-        {p.entregarEl && <EtiquetaEstado estado={p.estado} contexto="pedido" />}
+        <EtiquetaEstado estado={p.estado} contexto="pedido" />
       </p>
 
       {/* Ya salió una parte: lo que lleva el próximo viaje. */}
@@ -155,7 +155,10 @@ function FilaDeReparto({ pedido: p, cobra }: { pedido: PedidoListado; cobra: boo
         </ul>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Apilado en el teléfono y en un renglón desde sm, en todas las
+          tarjetas: con flex-wrap, unas se partían y otras no según el ancho
+          de los botones. */}
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Un solo importe: lo que hay que traer de vuelta si falta cobrar,
             con el medio al lado (el chofer vuelve con efectivo o no), y si
             no, el total. Una transferencia informada no se reclama otra vez. */}

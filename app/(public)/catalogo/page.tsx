@@ -4,6 +4,7 @@ import { AvisoGremio } from "@/components/catalogo/aviso-gremio";
 import { bannersDe } from "@/lib/dal/banners";
 import { Banner } from "@/components/banner";
 import { RailDeCategorias } from "@/components/catalogo/rail-categorias";
+import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 import { FranjaBeneficios } from "@/components/franja-beneficios";
 import { numeroWhatsapp } from "@/lib/whatsapp/enlace";
 import { Suspense } from "react";
@@ -576,6 +577,9 @@ async function Resultados({ params }: { params: Params }) {
   }
 
   const enOferta = productos.filter((p) => p.descuento !== null).length;
+  const marcasSinMoldava = marcas.filter(
+    (m) => m.nombre.trim().toLowerCase() !== "moldava",
+  );
 
   // En la página de una categoría, la lista de fichas en el orden en que se
   // ven. Solo ahí: una búsqueda o un orden distinto no se indexan.
@@ -597,51 +601,58 @@ async function Resultados({ params }: { params: Params }) {
       {/* La misma navegación de la portada, en la forma que corresponde acá.
           Sin esto el catálogo se sentía otro sitio: la lista de categorías
           quedaba escondida detrás de un botón en el teléfono. */}
-      <RailDeCategorias
-        categorias={categorias.map((c) => ({
-          slug: c.slug,
-          name: c.name,
-          productCount: c.productCount,
-        }))}
-        activa={params.cat ?? "todos"}
-      />
+      {/* En el teléfono el WhatsApp flotante tapaba el último chip de la
+          fila («Molduras»): se va mientras los chips se ven y vuelve al bajar
+          a los productos. */}
+      <ZonaSinFlotante soloEnCelular>
+        <RailDeCategorias
+          categorias={categorias.map((c) => ({
+            slug: c.slug,
+            name: c.name,
+            productCount: c.productCount,
+          }))}
+          activa={params.cat ?? "todos"}
+        />
 
-      {/*
-        Las marcas que trabajan.
+        {/*
+          Las marcas que trabajan.
 
-        La clienta pidió darles lugar y mandó la plancha de logos del sitio
-        anterior. Van por nombre hasta que lleguen los logos sueltos: una
-        imagen con todos juntos no se puede cortar en enlaces, y un logo que no
-        lleva a ningún lado es una figurita.
-      */}
-      {marcas.length > 1 && (
-        <nav aria-label="Marcas" className="mb-4 flex flex-wrap gap-2">
-          {marcas.map((m) => {
-            const activa = params.marca === m.nombre;
-            return (
-              <Link
-                key={m.nombre}
-                href={
-                  activa
-                    ? `/catalogo?${new URLSearchParams(limpiar({ ...params, marca: undefined }))}`
-                    : `/catalogo?${new URLSearchParams(limpiar({ ...params, marca: m.nombre }))}`
-                }
-                aria-current={activa ? "true" : undefined}
-                className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors ${
-                  activa
-                    ? "bg-accion text-white"
-                    : "bg-chip text-texto-2 hover:text-texto-1"
-                }`}
-              >
-                {m.nombre}
-                <span className="tabular text-xs font-normal opacity-70">
-                  {m.productCount}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
-      )}
+          La clienta pidió darles lugar y mandó la plancha de logos del sitio
+          anterior. Van por nombre hasta que lleguen los logos sueltos: una
+          imagen con todos juntos no se puede cortar en enlaces, y un logo que no
+          lleva a ningún lado es una figurita.
+        */}
+        {/* Moldava ya está en la fila de categorías, al lado de Molduras: como
+            marca salía dos veces. */}
+        {marcasSinMoldava.length > 1 && (
+          <nav aria-label="Marcas" className="mb-4 flex flex-wrap gap-2">
+            {marcasSinMoldava.map((m) => {
+              const activa = params.marca === m.nombre;
+              return (
+                <Link
+                  key={m.nombre}
+                  href={
+                    activa
+                      ? `/catalogo?${new URLSearchParams(limpiar({ ...params, marca: undefined }))}`
+                      : `/catalogo?${new URLSearchParams(limpiar({ ...params, marca: m.nombre }))}`
+                  }
+                  aria-current={activa ? "true" : undefined}
+                  className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors ${
+                    activa
+                      ? "bg-accion text-white"
+                      : "bg-chip text-texto-2 hover:text-texto-1"
+                  }`}
+                >
+                  {m.nombre}
+                  <span className="tabular text-xs font-normal opacity-70">
+                    {m.productCount}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        )}
+      </ZonaSinFlotante>
 
       {avisos.length > 0 && (
         <div className="mb-4 space-y-3">

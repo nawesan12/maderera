@@ -1780,6 +1780,14 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
   }
 }
 
+/* En el catálogo, mientras la fila de categorías se ve: en el teléfono el
+   flotante tapaba el último chip (ZonaSinFlotante soloEnCelular). */
+@media (max-width: 639px) {
+  html[data-zona-sin-flotante-celular] .flotante-whatsapp {
+    display: none;
+  }
+}
+
 /* En el teléfono, mientras se escribe en un campo, el flotante se va: con el
    teclado abierto quedaba encima del campo o del botón de mandar (comité
    final, a 390 px). Vuelve apenas se sale del campo. */

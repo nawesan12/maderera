@@ -110,15 +110,18 @@ export default async function RecepcionesPage() {
                       <span className="line-clamp-2 min-w-0 break-words text-[17px] font-semibold">{r.proveedor}</span>
                       <Estado estado={r.estado} />
                     </span>
-                    <span className="codigo block truncate text-base text-muted-foreground">
-                      {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"}
-                    </span>
-                    <span className="tabular flex items-baseline gap-3 text-base text-muted-foreground">
-                      <span className="flex min-w-0 flex-1 items-baseline">
-                        <span className="shrink-0 whitespace-nowrap">{fechaCorta.format(r.fecha)}</span>
-                        {r.sucursal && <span className="min-w-0 truncate">&nbsp;· {r.sucursal}</span>}
+                    {/* El neto va con el remito y la fecha con la sucursal,
+                        enteras: al lado del neto, a 375 px la sucursal
+                        quedaba en «Casa Centr…» (mes simulado). */}
+                    <span className="flex items-baseline justify-between gap-3 text-base">
+                      <span className="codigo min-w-0 truncate text-muted-foreground">
+                        {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"}
                       </span>
-                      {veCostos && <span className="shrink-0 font-semibold text-foreground">{formatearMonto(r.neto)}</span>}
+                      {veCostos && <span className="tabular shrink-0 font-semibold">{formatearMonto(r.neto)}</span>}
+                    </span>
+                    <span className="tabular block text-base text-muted-foreground">
+                      {fechaCorta.format(r.fecha)}
+                      {r.sucursal && ` · ${r.sucursal}`}
                     </span>
                   </Link>
                 </li>

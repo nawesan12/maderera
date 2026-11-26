@@ -159,19 +159,16 @@ function ListaDeOrdenes({ ordenes }: { ordenes: Orden[] }) {
                 <span className="codigo text-[17px] font-semibold">{o.numero}</span>
                 <Estado estado={o.estado} />
               </span>
-              <span className="line-clamp-2 break-words text-base">{o.proveedor}</span>
-              {/* La fecha primero y entera: es el dato del renglón; si no
-                  entra, se corta la sucursal (mes simulado, H382). */}
-              <span className="tabular flex items-baseline gap-3 text-base">
-                <span className="flex min-w-0 flex-1 items-baseline">
-                  <span className="shrink-0 whitespace-nowrap">
-                    <Prometida o={o} />
-                  </span>
-                  {o.sucursal && (
-                    <span className="min-w-0 truncate text-muted-foreground">&nbsp;· {o.sucursal}</span>
-                  )}
-                </span>
-                <span className="shrink-0 font-semibold">{formatearMonto(o.neto)}</span>
+              {/* El neto va con el proveedor y la fecha con la sucursal,
+                  enteras las dos: con el neto al lado, a 375 px la sucursal
+                  quedaba en «Casa Cen…» (mes simulado). */}
+              <span className="flex items-baseline justify-between gap-3 text-base">
+                <span className="line-clamp-2 min-w-0 break-words">{o.proveedor}</span>
+                <span className="tabular shrink-0 font-semibold">{formatearMonto(o.neto)}</span>
+              </span>
+              <span className="block text-base">
+                <Prometida o={o} />
+                {o.sucursal && <span className="text-muted-foreground"> · {o.sucursal}</span>}
               </span>
             </Link>
           </li>

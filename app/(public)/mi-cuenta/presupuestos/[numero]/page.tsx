@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarClock, Store } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarClock, Check, Download, Store } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_PRESUPUESTO, Pasos } from "@/components/admin/pasos";
-import { miPresupuesto } from "@/lib/dal/cuenta";
+import { clienteDeLaSesion, miPresupuesto } from "@/lib/dal/cuenta";
+import { mensajeDeConsulta } from "@/lib/cuenta/portal";
 import {
   diasHasta,
   fechaLarga,
@@ -31,28 +32,28 @@ export default async function DetallePresupuestoPage({
   params: Promise<{ numero: string }>;
 }) {
   const { numero } = await params;
-  const whatsapp = await enlaceWhatsapp(`Hola! Consulto por el presupuesto ${numero.slice(0, 20)}.`);
-  const presupuesto = await miPresupuesto(numero);
+  const [presupuesto, cliente] = await Promise.all([miPresupuesto(numero), clienteDeLaSesion()]);
 
   if (!presupuesto) notFound();
+
+  // Un solo `?text=` (H081): enlaceWhatsapp ya lo arma.
+  const whatsapp = await enlaceWhatsapp(
+    mensajeDeConsulta(`Hola! Consulto por el presupuesto ${presupuesto.numero}.`, cliente ? { nombre: cliente.nombre } : null),
+  );
 
   const dias = diasHasta(presupuesto.validoHasta);
   const vencido =
     presupuesto.estado === "vencido" || (dias !== null && dias < 0);
   const esperaRespuesta = presupuesto.estado === "enviado" && !vencido;
 
-  const mensaje = encodeURIComponent(
-    `Hola! Consulto por el presupuesto ${presupuesto.numero}.`,
-  );
-
   return (
     <div className="space-y-6">
       <Link
         href="/mi-cuenta/presupuestos"
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="-my-2 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
-        Volver a mis presupuestos
+        Mis presupuestos
       </Link>
 
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -83,12 +84,43 @@ export default async function DetallePresupuestoPage({
           {/* El papel para guardar o reenviar: mismo PDF que imprime la casa. */}
           <a
             href={`/api/presupuestos/${presupuesto.id}/pdf`}
-            className="text-sm font-medium text-acento-texto hover:underline"
+            className="inline-flex h-11 items-center gap-2 rounded-lg superficie px-4 text-sm font-medium transition-colors hover:bg-chip"
           >
-            Descargar en PDF
+            <Download className="h-4 w-4" />
+            PDF
           </a>
         </div>
       </header>
+
+      {/* La respuesta va pegada al total: era lo principal de la pantalla y
+          quedaba 1.900 px más abajo en el teléfono (H308). */}
+      {esperaRespuesta && (
+        <section className="tarjeta-atencion rounded-xl bg-card p-5">
+          <RespuestaPresupuesto numero={presupuesto.numero} />
+        </section>
+      )}
+
+      {/* Aceptado: queda a la vista qué sigue, y el pedido si ya se hizo
+          (H215). Antes el aviso se borraba al volver a dibujar la página. */}
+      {presupuesto.estado === "aceptado" && (
+        <section className="estado-ok flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--estado-fondo)] p-4">
+          <p className="flex items-start gap-2">
+            <Check className="mt-0.5 h-4 w-4 shrink-0" />
+            {presupuesto.pedido
+              ? `Lo pasamos a pedido: ${presupuesto.pedido}.`
+              : `Le avisamos a ${presupuesto.asesor ?? "tu vendedor"}: te escribimos para coordinar el retiro y el pago.`}
+          </p>
+          {presupuesto.pedido && (
+            <Link
+              href={`/mi-cuenta/pedidos/${presupuesto.pedido}`}
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-card px-4 text-sm font-medium text-foreground"
+            >
+              Ver el pedido
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
+        </section>
+      )}
 
       {presupuesto.estado !== "rechazado" && (
         <section className="rounded-xl border bg-card p-5">
@@ -183,20 +215,9 @@ export default async function DetallePresupuestoPage({
         </section>
       )}
 
-      {esperaRespuesta ? (
-        <section className="rounded-xl border-2 border-brand-orange/35 bg-card p-5">
-          <h2 className="font-medium">¿Lo confirmamos?</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Si lo aceptás avisamos al vendedor y te contactamos para coordinar la
-            entrega. No se cobra nada en este paso.
-          </p>
-          <div className="mt-4">
-            <RespuestaPresupuesto numero={presupuesto.numero} />
-          </div>
-        </section>
-      ) : (
-        <BotonWhatsapp enlace={`${whatsapp}?text=${mensaje}`}>Consultar por este presupuesto</BotonWhatsapp>
-      )}
+      <BotonWhatsapp enlace={whatsapp} variante={esperaRespuesta ? "secundario" : "lleno"}>
+        Consultar por este presupuesto
+      </BotonWhatsapp>
 
       {presupuesto.asesor && (
         <p className="text-sm text-muted-foreground">

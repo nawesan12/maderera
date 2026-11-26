@@ -194,11 +194,11 @@ type VentaDeHoy struct {
 	MedioPago *string `json:"medioPago"`
 	// Medios son todos los de un pago partido, del más grande al más chico:
 	// «Efectivo + Débito» y no solo el principal (mes simulado, H025).
-	Medios    []string  `json:"medios"`
+	Medios []string `json:"medios"`
 	// ConFactura: tiene factura viva, y se puede devolver una parte (H270).
-	ConFactura bool `json:"conFactura"`
-	Estado    string    `json:"estado"`
-	CreatedAt time.Time `json:"createdAt"`
+	ConFactura bool      `json:"conFactura"`
+	Estado     string    `json:"estado"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 // Argentina es la zona del negocio.

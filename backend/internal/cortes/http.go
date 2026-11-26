@@ -553,6 +553,10 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 	if len(d.Fijadas) > 0 {
 		cobro = ACobrar(d)
 	}
+	if MaterialSeCobra(ctx, a.s.pool) {
+		cobro = cobro.ConMaterial()
+		plano = TodasDelCliente(plano)
+	}
 	out := map[string]any{"plano": plano, "placasACobrar": cobro.Placas, "pasadasACobrar": cobro.Pasadas, "placasParciales": cobro.Parciales}
 	// La hoja de la máquina, para el PDF que baja el mostrador antes de cobrar
 	// (18/11/2026). Solo el staff: al público no le sirve y cuesta armarla. Un

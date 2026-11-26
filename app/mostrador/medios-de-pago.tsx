@@ -102,8 +102,11 @@ export function DatosDeTarjeta({
   tarjeta,
   onTarjeta,
   total,
+  obligatorio = true,
 }: {
   medio: MedioDeMostrador;
+  /** Regla lote_y_cupon: sin obligación, vacíos no se marcan. */
+  obligatorio?: boolean;
   tarjeta: { nroLote: string; nroCupon: string; marca: string; cuotas: number };
   onTarjeta: (v: {
     nroLote: string;
@@ -117,11 +120,12 @@ export function DatosDeTarjeta({
     <>
       {/* El lote y el cupón de la terminal, cuando se paga con tarjeta y el
           pago no está partido (partido, van por renglón). Son el dato fiscal
-          que después pide el contador; se pueden dejar vacíos. */}
+          que después pide el contador. */}
 
       {/* Con rótulo y no solo placeholder: una vez llenos no se sabía cuál
           era cuál (mes simulado, H032). El lote y el cupón son los que
-          concilian contra el posnet: se piden para cobrar. */}
+          concilian contra el posnet: se piden para cobrar si la regla
+          lote_y_cupon lo dice (de arranque, sí). */}
       {(medio === "debito" || medio === "credito") && (
         <div className="mt-4 grid grid-cols-3 gap-2">
           <CampoDeTarjeta rotulo="Tarjeta">
@@ -138,7 +142,7 @@ export function DatosDeTarjeta({
               value={tarjeta.nroLote}
               onChange={(e) => onTarjeta({ ...tarjeta, nroLote: e.target.value })}
               inputMode="numeric"
-              aria-invalid={!tarjeta.nroLote.trim() || undefined}
+              aria-invalid={(obligatorio && !tarjeta.nroLote.trim()) || undefined}
               className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
             />
           </CampoDeTarjeta>
@@ -147,7 +151,7 @@ export function DatosDeTarjeta({
               value={tarjeta.nroCupon}
               onChange={(e) => onTarjeta({ ...tarjeta, nroCupon: e.target.value })}
               inputMode="numeric"
-              aria-invalid={!tarjeta.nroCupon.trim() || undefined}
+              aria-invalid={(obligatorio && !tarjeta.nroCupon.trim()) || undefined}
               className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
             />
           </CampoDeTarjeta>
@@ -198,8 +202,11 @@ export function PagoPartido({
   partes,
   onPartes,
   restante,
+  loteObligatorio = true,
 }: {
   partes: ParteDePago[];
+  /** Regla lote_y_cupon: sin obligación, vacíos no se marcan. */
+  loteObligatorio?: boolean;
   onPartes: (v: ParteDePago[] | null) => void;
   /** Lo que falta repartir. Cero es "cierra". */
   restante: number;
@@ -282,7 +289,7 @@ export function PagoPartido({
                   )
                 }
                 inputMode="numeric"
-                aria-invalid={!parte.nroLote.trim() || undefined}
+                aria-invalid={(loteObligatorio && !parte.nroLote.trim()) || undefined}
                 className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
               />
               </CampoDeTarjeta>
@@ -297,7 +304,7 @@ export function PagoPartido({
                   )
                 }
                 inputMode="numeric"
-                aria-invalid={!parte.nroCupon.trim() || undefined}
+                aria-invalid={(loteObligatorio && !parte.nroCupon.trim()) || undefined}
                 className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
               />
               </CampoDeTarjeta>

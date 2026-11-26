@@ -48,6 +48,7 @@ export function Cobro({
   onCuit,
   pideDocumento,
   cuitMal = false,
+  loteObligatorio = true,
   letra,
   medio,
   onMedio,
@@ -109,6 +110,8 @@ export function Cobro({
   pideDocumento: boolean;
   /** Con factura, el CUIT de la ficha no pasa el verificador: no se cobra. */
   cuitMal?: boolean;
+  /** Regla lote_y_cupon: si la tarjeta se cobra con lote y cupón. */
+  loteObligatorio?: boolean;
   letra: string | null;
   medio: MedioDeMostrador;
   onMedio: (m: MedioDeMostrador) => void;
@@ -519,12 +522,13 @@ export function Cobro({
             tarjeta={tarjeta}
             onTarjeta={onTarjeta}
             total={total}
+            obligatorio={loteObligatorio}
           />
         )}
 
         {/* El pago partido, cada renglón con su medio y su importe. */}
         {partes !== null && (
-          <PagoPartido partes={partes} onPartes={onPartes} restante={restante} />
+          <PagoPartido partes={partes} onPartes={onPartes} restante={restante} loteObligatorio={loteObligatorio} />
         )}
 
         {/* Lo que se consulta de vez en cuando, plegado y junto: partir el pago

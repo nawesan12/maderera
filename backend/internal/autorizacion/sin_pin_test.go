@@ -3,6 +3,8 @@ package autorizacion
 import (
 	"context"
 	"testing"
+
+	"mjbj/internal/reglas"
 )
 
 // Sin ningún PIN cargado la venta no queda trabada: firma la contraseña del
@@ -54,5 +56,31 @@ func TestSinPINFirmaLaClave(t *testing.T) {
 	_, err = e.svc.Exigir(ctx, e.vendedor, e.pedido(""))
 	if f := falta(t, err); !f.SinAdmins || f.ConClave {
 		t.Fatalf("sin nadie: %+v", f)
+	}
+}
+
+// Con la regla firma_sin_pin en «solo_pin», sin PIN cargado la contraseña no
+// firma: el campo dice de entrada que falta cargar un PIN y una contraseña
+// correcta tampoco pasa.
+func TestSinPINSoloPIN(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	if err := reglas.Fijar(ctx, e.pool, reglas.FirmaSinPIN, "solo_pin"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.svc.Exigir(ctx, e.vendedor, e.pedido(""))
+	if f := falta(t, err); !f.SinAdmins || f.ConClave || f.Mensaje() != "Ningún administrador cargó su PIN: se carga desde su menú del panel." {
+		t.Fatalf("de entrada: %+v %q", f, f.Mensaje())
+	}
+	_, err = e.svc.Exigir(ctx, e.vendedor, e.pedido("una clave larga"))
+	if f := falta(t, err); !f.SinAdmins || f.ConClave || f.PinIncorrecto {
+		t.Fatalf("la clave firmó: %+v", f)
+	}
+	// Cargado el PIN, firma como siempre.
+	if err := e.ses.CargarPIN(ctx, e.admin, "una clave larga", "482915"); err != nil {
+		t.Fatal(err)
+	}
+	if f, err := e.svc.Exigir(ctx, e.vendedor, e.pedido("482915")); err != nil || f.UserID != e.adminID {
+		t.Fatalf("con PIN: %+v %v", f, err)
 	}
 }

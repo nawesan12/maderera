@@ -31,6 +31,7 @@ import (
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/productos"
+	"mjbj/internal/reglas"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -223,6 +224,11 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	if err != nil {
 		return ResultadoVenta{}, err
 	}
+	// Con la regla contado_por_lista en «siempre», la lista propia es de
+	// contado aunque en esta venta no dé mejor precio.
+	if !conVentaja && lista.Diferenciada() && reglas.Es(ctx, s.pool, reglas.ContadoPorLista, "siempre") {
+		conVentaja = true
+	}
 	if v.CustomerID != nil && conVentaja {
 		medios := []string{v.MedioPago}
 		for _, p := range v.Pagos {
@@ -301,10 +307,15 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	//
 	// La base de la escala es lo que se vende del catálogo y el corte: un
 	// renglón a mano (el flete) sale al precio tipeado (H168).
+	// Con la regla descuento_al_flete en «si», el renglón a mano también.
+	elegible := ventas.EsElegibleParaLaEscala
+	if reglas.Es(ctx, s.pool, reglas.DescuentoAlFlete, "si") {
+		elegible = ventas.TodoEsElegible
+	}
 	var escala *ventas.EscalaDePago
 	baseEscala := 0.0
 	for _, l := range v.Lineas {
-		if ventas.EsElegibleParaLaEscala(l) {
+		if elegible(l) {
 			baseEscala += ventas.ACentavos(float64(l.Cantidad * l.PrecioUnitario))
 		}
 	}
@@ -326,7 +337,7 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 			e := escala.Etiqueta
 			motivoAutomatico = &e
 		}
-		lineas, descuento = ventas.AplicarDescuentoSobre(v.Lineas, automatico, ventas.EsElegibleParaLaEscala)
+		lineas, descuento = ventas.AplicarDescuentoSobre(v.Lineas, automatico, elegible)
 	}
 	aDescontar := pedido
 	if pedido <= 0 {
@@ -346,6 +357,13 @@ func (s *Servicio) RegistrarVenta(ctx context.Context, v VentaPedida, ses *auth.
 	pagos := ventas.NormalizarPagos(v.Pagos, v.MedioPago, total)
 	if p := ventas.RevisarPagos(pagos, total, v.CustomerID); p != "" {
 		return fallo(p), nil
+	}
+	// La tarjeta en línea, con lote y cupón (regla lote_y_cupon, H032): sin
+	// ellos no se concilia contra el posnet. Sin conexión la venta ya pasó.
+	if !sinConexion && !reglas.Es(ctx, s.pool, reglas.LoteYCupon, "opcional") {
+		if p := ventas.FaltaLoteOCupon(pagos); p != "" {
+			return fallo(p), nil
+		}
 	}
 	// Contra la fecha de la venta: una de la cola con un cheque se cobró
 	// cuando se cobró.

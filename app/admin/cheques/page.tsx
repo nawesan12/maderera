@@ -268,6 +268,19 @@ function yaVencido(c: ChequeListado): string {
   return "ya se puede depositar";
 }
 
+
+/**
+ * El chip de origen. Un cheque que el cliente libró y entregó él mismo es
+ * «Del cliente»: «De tercero» es el que firmó otro (mes simulado: los del
+ * cobro, sin librador, salían como de tercero).
+ */
+function deQuien(c: { sentido: string; librador: string | null; cliente: string | null }) {
+  if (c.sentido !== "recibido") return "Propio";
+  const igual = (a: string, b: string) => a.trim().toLocaleLowerCase("es-AR") === b.trim().toLocaleLowerCase("es-AR");
+  if (c.cliente && (!c.librador || igual(c.librador, c.cliente))) return "Del cliente";
+  return c.librador ? "De tercero" : "Recibido";
+}
+
 function Tarjeta({
   cheque: c,
   dias,
@@ -318,7 +331,7 @@ function Tarjeta({
             c.sentido === "recibido" ? "bg-naranja-claro text-acento-sobre-claro" : "bg-muted text-muted-foreground"
           }`}
         >
-          {c.sentido === "recibido" ? "De tercero" : "Propio"}
+          {deQuien(c)}
         </span>
         <span className="whitespace-nowrap rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-muted-foreground">
           {ESTADOS[c.estado] ?? c.estado}
@@ -421,6 +434,7 @@ function Tarjeta({
           diasParaCobrar={diasHasta(c.fechaPago) ?? 0}
           cliente={c.cliente}
           saldoCliente={c.saldoCliente}
+          proveedor={c.proveedor}
         />
       )}
     </article>

@@ -97,6 +97,7 @@ export function AccionesDeCheque({
   diasParaCobrar = null,
   cliente = null,
   saldoCliente = null,
+  proveedor = null,
 }: {
   id: string;
   estado: string;
@@ -108,6 +109,8 @@ export function AccionesDeCheque({
   cliente?: string | null;
   /** Lo que debe hoy el cliente que lo informó. */
   saldoCliente?: number | null;
+  /** A quién se le endosó: si rebota, se le vuelve a deber. */
+  proveedor?: string | null;
 }) {
   const [pendiente, empezar] = useTransition();
   const [aviso, setAviso] = useState<string | null>(null);
@@ -229,7 +232,10 @@ export function AccionesDeCheque({
             {estado === "informado"
               ? "La cuenta del cliente no cambia: el cheque nunca bajó la deuda. Se le avisa con este motivo."
               : sentido === "recibido"
-                ? `Los ${importe.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 })} vuelven a la cuenta del cliente con una nota de débito, y se le avisa con este motivo.`
+                ? estado === "entregado"
+                  ? // Endosado: rebota en las dos cuentas (cobros.reabrirDeudaConElProveedor).
+                    `Los ${pesos(importe)} vuelven a la cuenta del cliente con una nota de débito, y ${proveedor ? `a ${proveedor}` : "al proveedor"} se le vuelven a deber.`
+                  : `Los ${pesos(importe)} vuelven a la cuenta del cliente con una nota de débito, y se le avisa con este motivo.`
                 : "Es un cheque nuestro: hay que reponérselo al proveedor."}
           </p>
           <form

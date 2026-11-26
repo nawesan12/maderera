@@ -109,12 +109,8 @@ y el nuevo reemplaza al viejo en la cola) o se **anula** con un motivo.
 ### Cobrar el corte
 
 El corte se cobra **por pasada de sierra**, y el precio depende del material y
-de si el cliente es mayorista:
-
-| Material | Público | Mayorista |
-|---|---|---|
-| Placas | $ 1.200 | $ 996 |
-| Tableros de madera | $ 1.400 | $ 1.162 |
+de si el cliente es mayorista. De una placa que se vende entera —también la que
+vende el pedido del corte— el corte va sin cargo.
 
 Las pasadas salen del plano, y el taller las confirma al terminar. Si la
 máquina dio otras, se corrigen en la ficha, en «Pasadas a cobrar».

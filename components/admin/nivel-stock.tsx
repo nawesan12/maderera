@@ -1,6 +1,6 @@
 import { estadoEnSucursal, type EstadoEnSucursal } from "@/lib/stock-ajuste";
 import { formatearCantidad, formatearLargo, piezasDeMetros } from "@/lib/unidades";
-import { formatearUnidad } from "@/lib/formato";
+import { unidadEnPlural } from "@/lib/formato";
 
 /** El color del número y del estado, el mismo en la fila corta y en el detalle. */
 export const TINTA_DEL_ESTADO: Record<EstadoEnSucursal, string> = {
@@ -87,6 +87,9 @@ export function NivelStock({
   const texto = textoDelEstado(estado, disponible);
   const galpon = cantidad - enReparto;
   const sinRetirar = reservado - enReparto;
+  // Concordada con el número: «95 pares», «1 placa», «57,5 placas» (decía
+  // «95par» y «12placa», mes simulado).
+  const unidadDicha = unidad ? (Math.abs(disponible) === 1 ? unidad : unidadEnPlural(unidad)) : "u.";
 
   return (
     <div>
@@ -94,14 +97,14 @@ export function NivelStock({
         <span className="text-sm text-muted-foreground">{sucursal}</span>
         <span className={`tabular text-lg font-semibold ${estado === "sin-stock" ? "text-muted-foreground" : TINTA_DEL_ESTADO[estado]}`}>
           {formatearCantidad(disponible)}
-          {unidad && <span className="ml-1 text-sm font-normal text-muted-foreground">{formatearUnidad(unidad)}</span>}
+          {unidad && <span className="text-sm font-normal text-muted-foreground"> {unidadDicha}</span>}
         </span>
       </div>
 
       <div
         className="mt-1 h-2 overflow-hidden rounded-full bg-muted"
         role="img"
-        aria-label={`${sucursal}: ${formatearCantidad(disponible)} ${unidad ?? "u."} disponibles, mínimo ${formatearCantidad(minimo)}. ${texto}.`}
+        aria-label={`${sucursal}: ${formatearCantidad(disponible)} ${unidadDicha} disponible${Math.abs(disponible) === 1 ? "" : "s"}, mínimo ${formatearCantidad(minimo)}. ${texto}.`}
       >
         <div
           className={`h-full rounded-full transition-[width] ${BARRA_DEL_ESTADO[estado]}`}

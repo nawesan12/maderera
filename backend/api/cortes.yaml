@@ -721,9 +721,11 @@ components:
         pedido:
           nullable: true
           type: object
-          required: [numero, estado, estadoPago, lineas, cobrado, placasDelPedido, cargo]
+          required: [numero, estado, estadoPago, lineas, cobrado, placasDelPedido, cargo, cargoId, cargoEstadoPago]
           properties:
-            cargo: { type: string, nullable: true }
+            cargo: { type: string, nullable: true, description: El pedido aparte con lo del corte }
+            cargoId: { type: string, nullable: true }
+            cargoEstadoPago: { type: string, nullable: true }
             numero: { type: string }
             estado: { type: string }
             estadoPago: { type: string }

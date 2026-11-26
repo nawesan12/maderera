@@ -71,7 +71,9 @@ type PedidoDelCorte struct {
 	PlacasDeOtrosCortes float64 `json:"-"`
 	// Cargo es el pedido aparte donde quedaron las pasadas del corte, si el
 	// suyo ya no se tocaba (H184).
-	Cargo *string `json:"cargo"`
+	Cargo           *string `json:"cargo"`
+	CargoID         *string `json:"cargoId"`
+	CargoEstadoPago *string `json:"cargoEstadoPago"`
 }
 
 // RenglonDelPedido es un renglón del pedido que es del corte.
@@ -342,8 +344,8 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 	if err != nil {
 		return nil, false, err
 	}
-	if err := s.pool.QueryRow(ctx, `SELECT o.numero FROM cutting_orders co JOIN orders o ON o.id = co.cargo_order_id
-		WHERE co.id = $1`, c.ID).Scan(&p.Cargo); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err := s.pool.QueryRow(ctx, `SELECT o.numero, o.id::text, o.estado_pago::text FROM cutting_orders co JOIN orders o ON o.id = co.cargo_order_id
+		WHERE co.id = $1`, c.ID).Scan(&p.Cargo, &p.CargoID, &p.CargoEstadoPago); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, err
 	}
 	// Los renglones del pedido, menos los que otro corte sumó (H184), y los

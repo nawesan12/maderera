@@ -81,7 +81,11 @@ export function RemitoImpreso({
 
           <div className="comprobante-datos">
             <p className="titulo">
-              {deAcopio ? "Remito de entrega parcial" : "Remito de entrega total"}
+              {remito.reposicion
+                ? "Reposición sin cargo"
+                : deAcopio
+                  ? "Remito de entrega parcial"
+                  : "Remito de entrega total"}
             </p>
             <p className="numero">{remito.numero}</p>
             <div className="datos">
@@ -89,9 +93,11 @@ export function RemitoImpreso({
               <div>Pedido {remito.pedidoNumero}</div>
               {/* La factura con su CAE: el CAE es de la factura, y el remito
                   dice con cuál viaja la mercadería. */}
-              {lineasDeLaFactura(remito.factura).map((linea) => (
-                <div key={linea}>{linea}</div>
-              ))}
+              {remito.reposicion ? (
+                <div>Corte {remito.reposicion}</div>
+              ) : (
+                lineasDeLaFactura(remito.factura).map((linea) => <div key={linea}>{linea}</div>)
+              )}
               <div>
                 {remito.tipo === "envio" ? "Envío a domicilio" : "Retiro en sucursal"}
               </div>
@@ -275,6 +281,7 @@ const MEDIO: Record<string, string> = {
 
 /** Gemelo de pdf.CondicionDePago (backend/internal/pdf/remito.go). */
 function condicionDePago(r: RemitoCompleto): string {
+  if (r.reposicion) return "Sin cargo";
   if (r.tipo === "envio" && r.sinCobrar != null && r.sinCobrar > 0.009 && r.medioPago !== "cuenta_corriente") {
     const medio = r.medioPago ? MEDIO[r.medioPago] : null;
     return `A cobrar ${formatearMonto(r.sinCobrar)}${medio ? ` · ${medio}` : ""}`;

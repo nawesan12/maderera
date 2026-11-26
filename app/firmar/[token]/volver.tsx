@@ -14,7 +14,8 @@ import { ArrowLeft } from "lucide-react";
  */
 export function VolverAlPedido() {
   const volver = useSearchParams().get("volver");
-  const volverA = volver && /^\/admin\/pedidos\/[0-9a-f-]{36}$/.test(volver) ? volver : null;
+  // También la ficha del corte: la reposición sin cargo se firma desde ahí (H321).
+  const volverA = volver && /^\/admin\/(pedidos|cortes)\/[0-9a-f-]{36}$/.test(volver) ? volver : null;
   if (!volverA) return null;
   return (
     <Link
@@ -22,7 +23,7 @@ export function VolverAlPedido() {
       className="boton-accion mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-base font-medium"
     >
       <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-      Volver al pedido
+      {volverA.startsWith("/admin/cortes/") ? "Volver al corte" : "Volver al pedido"}
     </Link>
   );
 }

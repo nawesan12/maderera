@@ -20,7 +20,7 @@ import { AccionesCorte, VolverUnPaso } from "../acciones";
 import { CargarPasadas } from "../pasadas";
 import { SierraDelTrabajo } from "./sierra";
 import { formatearSierra } from "@/lib/cortes/sierra";
-import { CobrarCorte, CorregirOAnular, MasArchivos } from "./gestion";
+import { CobrarCorte, CorregirOAnular, MasArchivos, RemitoDeLaReposicion, SumarAlPedido } from "./gestion";
 
 export default async function FichaCortePage({
   params,
@@ -130,11 +130,14 @@ export default async function FichaCortePage({
                  su pedido: «Marcar retirado» se rechazaba y «Cobrar en el
                  mostrador» abría el mostrador vacío (mes simulado, H173). */
               <Link
-                href={`/admin/pedidos/${corte.orderId}`}
+                href={`/admin/pedidos/${pedido.cargoId && pedido.cargoEstadoPago !== "pagado" ? pedido.cargoId : corte.orderId}`}
                 className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-base font-medium sm:w-auto"
               >
                 <ReceiptText className="h-5 w-5" aria-hidden="true" />
-                Cobrar <span className="codigo">{pedido.numero}</span>
+                Cobrar{" "}
+                <span className="codigo">
+                  {pedido.cargo && pedido.cargoEstadoPago !== "pagado" ? pedido.cargo : pedido.numero}
+                </span>
               </Link>
             ) : (
               <AccionesCorte
@@ -288,7 +291,19 @@ export default async function FichaCortePage({
                   </dd>
                 </div>
                 <RenglonesDelCorte cuenta={cuenta} />
-                {cuenta.total > 0 && <Total texto="Fuera del pedido" monto={cuenta.total} />}
+                {cuenta.total > 0 && (
+                  <Total texto="Fuera del pedido" monto={cuenta.total}>
+                    {cobra && ficha.sumar && !anulado && (
+                      <SumarAlPedido
+                        id={corte.id}
+                        numero={pedido.numero}
+                        total={ficha.sumar.total}
+                        aparte={ficha.sumar.aparte}
+                        motivo={ficha.sumar.motivo}
+                      />
+                    )}
+                  </Total>
+                )}
               </dl>
             )}
 
@@ -303,34 +318,46 @@ export default async function FichaCortePage({
                     H232): «Cobrado» lo dice el estado de pago del pedido, el
                     mismo que va al lado, y no que no quede nada para el
                     mostrador (un pedido a cuenta no está cobrado). */}
+                {/* Lo del corte que fue a un pedido aparte (H184): ese es el
+                    que se cobra. */}
                 <Total
                   texto={
                     <>
-                      {pedido.estadoPago === "pagado" ? "Cobrado en " : "Venta "}
-                      <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
-                        {pedido.numero}
+                      {(pedido.cargoEstadoPago ?? pedido.estadoPago) === "pagado" ? "Cobrado en " : "Venta "}
+                      <Link
+                        href={`/admin/pedidos/${pedido.cargoId ?? corte.orderId}`}
+                        className="codigo hover:text-brand-orange"
+                      >
+                        {pedido.cargo ?? pedido.numero}
                       </Link>
                     </>
                   }
                   monto={pedido.cobrado}
                 >
-                  <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
+                  <EtiquetaEstado estado={pedido.cargoEstadoPago ?? pedido.estadoPago} contexto="pago" />
                 </Total>
               </dl>
             )}
 
             {modo === "sinCargo" && (
-              <p className="flex flex-wrap items-baseline justify-between gap-2 text-base">
-                <span className="font-semibold">Sin cargo</span>
-                {pedido && corte.orderId && (
-                  <span className="text-muted-foreground">
-                    reposición de{" "}
-                    <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
-                      {pedido.numero}
-                    </Link>
-                  </span>
+              <div className="space-y-3">
+                <p className="flex flex-wrap items-baseline justify-between gap-2 text-base">
+                  <span className="font-semibold">Sin cargo</span>
+                  {pedido && corte.orderId && (
+                    <span className="text-muted-foreground">
+                      reposición de{" "}
+                      <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
+                        {pedido.numero}
+                      </Link>
+                    </span>
+                  )}
+                </p>
+                {/* Entregada, con su remito para firmar: la firma cierra el
+                    reclamo (H321). */}
+                {decide && corte.estado === "retirado" && (
+                  <RemitoDeLaReposicion id={corte.id} remito={ficha.remito} />
                 )}
-              </p>
+              </div>
             )}
 
             {cuenta.faltan.map((linea, i) => (

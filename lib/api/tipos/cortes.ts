@@ -654,7 +654,10 @@ export interface components {
             modo: "suelto" | "pedido" | "vendido" | "sinCargo" | "anulado";
             pasadasACobrar: number;
             pedido: {
+                /** @description El pedido aparte con lo del corte */
                 cargo: string | null;
+                cargoId: string | null;
+                cargoEstadoPago: string | null;
                 numero: string;
                 estado: string;
                 estadoPago: string;

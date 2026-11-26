@@ -329,7 +329,8 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		       co.ancho_sierra_mm, co.motor_plano, co.estado::text, co.urgente, co.notas, b.name, co.created_at,
 		       coalesce(co.contacto_telefono, o.contacto_telefono, cu.telefono), to_char(co.retira_el, 'YYYY-MM-DD'),
 		       p.forma_de_venta::text, p.unit::text,
-		       (o.id IS NOT NULL AND o.estado <> 'cancelado' AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) <= 0.009),
+		       (o.id IS NOT NULL AND o.estado <> 'cancelado' AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) <= 0.009
+		        AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.id = co.cargo_order_id AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) > 0.009)),
 		       co.sin_cargo, co.motivo_anulado, co.branch_id::text, to_char(o.entregar_el, 'YYYY-MM-DD')
 		FROM cutting_orders co
 		LEFT JOIN product_variants pv ON pv.id = co.variant_id

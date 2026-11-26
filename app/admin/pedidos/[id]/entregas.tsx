@@ -603,7 +603,13 @@ function FilaRemito({
           <span className={`codigo ${anulado ? "line-through" : ""}`}>{remito.numero}</span>
           {/* Completo o de acopio: lo calcula Go con lo que quedaba al
               hacerlo, lo mismo que sale en el PDF. */}
-          <span className="text-sm text-muted-foreground">{remito.parcial ? "Entrega parcial" : "Entrega total"}</span>
+          <span className="text-sm text-muted-foreground">
+            {remito.reposicion
+              ? `Reposición sin cargo · ${remito.reposicion}`
+              : remito.parcial
+                ? "Entrega parcial"
+                : "Entrega total"}
+          </span>
         </span>
         {anulado ? (
           <span className="text-base text-muted-foreground">Anulado</span>

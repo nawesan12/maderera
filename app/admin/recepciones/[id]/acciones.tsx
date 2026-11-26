@@ -65,11 +65,13 @@ export function BorradorDeRecepcion({
   const enCero = veCostos ? vienen.filter((r) => costo(r) === 0).length : 0;
   const mercaderia = items.reduce((t, r) => t + (cant(r) > 0 ? cant(r) * costo(r) : 0), 0);
 
+  const datos = () => ({
+    ...(veCostos ? { gastos: importeDelCampo(flete) } : {}),
+    lineas: items.map((r) => ({ id: r.id, cantidad: cant(r), ...(veCostos ? { costoUnitario: costo(r) } : {}) })),
+  });
+
   function guardar(): Promise<boolean> {
-    return editarRecepcion(id, {
-      ...(veCostos ? { gastos: importeDelCampo(flete) } : {}),
-      lineas: items.map((r) => ({ id: r.id, cantidad: cant(r), ...(veCostos ? { costoUnitario: costo(r) } : {}) })),
-    }).then((r) => {
+    return editarRecepcion(id, datos()).then((r) => {
       setResultado(r);
       return Boolean(r.ok);
     });
@@ -157,11 +159,9 @@ export function BorradorDeRecepcion({
                 type="button"
                 onClick={() =>
                   empezar(async () => {
-                    if (cambiado && !(await guardar())) {
-                      setSeguro(false);
-                      return;
-                    }
-                    const r = await confirmarRecepcion(id);
+                    // Una sola acción: guarda y confirma, y trae la pantalla
+                    // confirmada en la misma respuesta.
+                    const r = await confirmarRecepcion(id, cambiado ? datos() : undefined);
                     setResultado(r);
                     setSeguro(false);
                     if (r.ok) router.refresh();

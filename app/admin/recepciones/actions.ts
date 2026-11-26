@@ -57,9 +57,23 @@ export async function editarRecepcion(
   return { ok: r.data.ok };
 }
 
-/** Confirmar: entra el stock, se mezcla el costo y sube la deuda. */
-export async function confirmarRecepcion(id: string): Promise<EstadoRecepcion> {
-  const r = await (await api()).POST("/api/v1/admin/recepciones/{id}/confirmar", { params: { path: { id } } });
+/**
+ * Confirmar: entra el stock, se mezcla el costo y sube la deuda.
+ *
+ * Con `cambios`, guarda el borrador primero en la misma acción. Eran dos
+ * acciones seguidas desde el cliente y la segunda no traía la pantalla
+ * nueva: quedaba el borrador editable con el aviso de «confirmada» abajo.
+ */
+export async function confirmarRecepcion(
+  id: string,
+  cambios?: { gastos?: number; lineas: { id: string; cantidad: number; costoUnitario?: number }[] },
+): Promise<EstadoRecepcion> {
+  const cliente = await api();
+  if (cambios) {
+    const e = await cliente.PUT("/api/v1/admin/recepciones/{id}", { params: { path: { id } }, body: { ...cambios } });
+    if (!e.data) return { error: mensajeDe(e.error as Problema | undefined, "Revisá los datos.") };
+  }
+  const r = await cliente.POST("/api/v1/admin/recepciones/{id}/confirmar", { params: { path: { id } } });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   // El stock cambió y el catálogo público muestra disponibilidad.
   updateTag(ETIQUETAS.catalogo);

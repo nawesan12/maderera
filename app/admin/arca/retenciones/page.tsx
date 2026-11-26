@@ -8,7 +8,7 @@ import {
   listarRetencionesSufridas,
 } from "@/lib/dal/admin/retenciones-sufridas";
 import { leerPeriodoMensual } from "@/lib/periodos";
-import { formatearMonto } from "@/lib/formato";
+import { fechaCorta, formatearMonto } from "@/lib/formato";
 import { todosLosRegimenes } from "@/lib/dal/admin/pagos-proveedor";
 import { CargarSufrida } from "./cargar";
 import { Regimenes } from "./regimenes";
@@ -141,7 +141,7 @@ export default async function RetencionesSufridasPage({
                 {sufridas.map((r) => (
                   <tr key={r.id}>
                     <td className="tabular px-5 py-3 text-muted-foreground">
-                      {r.fecha.toLocaleDateString("es-AR")}
+                      {fechaCorta.format(r.fecha)}
                     </td>
                     <td className="tabular px-5 py-3">{r.numero}</td>
                     <td className="px-5 py-3">

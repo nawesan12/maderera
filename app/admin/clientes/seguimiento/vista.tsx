@@ -10,7 +10,7 @@ import {
 } from "@/components/admin/elegir-cliente";
 import type { GestionListada } from "@/lib/dal/admin/seguimiento";
 import { crearGestion, moverGestion } from "./actions";
-import { plural } from "@/lib/formato";
+import { fechaCorta, plural } from "@/lib/formato";
 
 /** Las cuatro etapas, con el color de estado que les corresponde. */
 const ETAPAS = [
@@ -111,7 +111,7 @@ function Tarjeta({ gestion }: { gestion: GestionListada }) {
         >
           <CalendarClock className="h-3.5 w-3.5" />
           {gestion.vencida ? "Vencía el" : "Volver el"}{" "}
-          {gestion.proximaAccionAt.toLocaleDateString("es-AR")}
+          {fechaCorta.format(gestion.proximaAccionAt)}
         </p>
       )}
 

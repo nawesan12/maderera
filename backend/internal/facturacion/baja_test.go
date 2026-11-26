@@ -101,8 +101,8 @@ func TestSinCAENoSeAnulaNiLlevaNotas(t *testing.T) {
 	}
 }
 
-// **La baja del 3 de 5.** El 3 sale de la serie, el 4 pasa a 3 y el 5 a 4;
-// el próximo que se emita es el 5. La deuda del 3 se va con él y los
+// **La baja del 3 de 5.** El 3 sale de la serie y el 5, el último, pasa a
+// 3; el 4 se queda con su número (H235). El próximo que se emita es el 5. La deuda del 3 se va con él y los
 // movimientos de los corridos cambian de etiqueta, sin que la cuenta muestre
 // dos «0003». Lo que era queda en el listado, con a quién se le corrió el
 // número.
@@ -121,7 +121,7 @@ func TestBajaDelTerceroDeCinco(t *testing.T) {
 
 	_, b := pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+ids[2]+"/serie", nil)
 	serie := leerJSON[SerieDelComprobante](t, b)
-	if serie.Bloqueo != nil || len(serie.Corren) != 2 || serie.Corren[0].De != 4 || serie.Corren[0].A != 3 || serie.AnterioresSinCae != 0 ||
+	if serie.Bloqueo != nil || len(serie.Corren) != 1 || serie.Corren[0].De != 5 || serie.Corren[0].A != 3 || serie.AnterioresSinCae != 0 ||
 		serie.Deuda != 3000 {
 		t.Fatalf("serie: %s", b)
 	}
@@ -133,7 +133,7 @@ func TestBajaDelTerceroDeCinco(t *testing.T) {
 		e.uno(t, `SELECT numero FROM invoices WHERE id = $1`, &n, id)
 		return n
 	}
-	if numero(ids[3]) != 3 || numero(ids[4]) != 4 {
+	if numero(ids[3]) != 4 || numero(ids[4]) != 3 {
 		t.Fatalf("corridos: %d %d", numero(ids[3]), numero(ids[4]))
 	}
 	var quedan int
@@ -144,7 +144,7 @@ func TestBajaDelTerceroDeCinco(t *testing.T) {
 	var refs string
 	e.uno(t, `SELECT string_agg(referencia || ' ' || detalle || ' ' || monto::text, ' | ' ORDER BY monto) FROM account_movements WHERE customer_id = $1`, &refs, cliente)
 	if refs != "Factura A 0003-00000001 Factura A 0003-00000001 1000.00 | Factura A 0003-00000002 Factura A 0003-00000002 2000.00 | "+
-		"Factura A 0003-00000003 Factura A 0003-00000003 4000.00 | Factura A 0003-00000004 Factura A 0003-00000004 5000.00" {
+		"Factura A 0003-00000004 Factura A 0003-00000004 4000.00 | Factura A 0003-00000003 Factura A 0003-00000003 5000.00" {
 		t.Fatalf("cuenta corriente: %s", refs)
 	}
 	// El próximo toma el 5, no el 6.
@@ -163,13 +163,13 @@ func TestBajaDelTerceroDeCinco(t *testing.T) {
 	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/dados-de-baja", nil)
 	lista := leerJSON[[]DadoDeBaja](t, b)
 	if len(lista) != 1 || lista[0].Numero != 3 || lista[0].Motivo != "Rechazado por ARCA" || lista[0].UsuarioNombre != "Persona" ||
-		len(lista[0].Renumerados) != 2 || lista[0].Renumerados[1].ReceptorNombre != "Gómez SRL" {
+		len(lista[0].Renumerados) != 1 || lista[0].Renumerados[0].ReceptorNombre != "Gómez SRL" {
 		t.Fatalf("listado: %s", b)
 	}
-	// La bitácora: la baja y una por cada corrimiento.
+	// La bitácora: la baja y la del que se movió.
 	var anotados int
 	e.uno(t, `SELECT count(*)::int FROM audit_log WHERE descripcion LIKE 'Dio de baja Factura A 0003-00000003%' OR descripcion LIKE '%por la baja del 0003-00000003'`, &anotados)
-	if anotados != 3 {
+	if anotados != 2 {
 		t.Fatalf("bitácora: %d", anotados)
 	}
 	// El doble clic: el segundo no encuentra nada.

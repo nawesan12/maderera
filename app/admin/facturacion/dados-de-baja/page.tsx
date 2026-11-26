@@ -70,23 +70,28 @@ export default async function DadosDeBajaPage() {
               {b.renumerados.length > 0 && (
                 <ul className="divide-y border-t bg-hundida">
                   {b.renumerados.map((r) => (
-                    <li key={r.invoiceId}>
+                    // A 375 px el cliente quedaba en una letra: va arriba y
+                    // entero, el número viejo tachado y el nuevo al lado, y
+                    // «Reenviar» es un botón de 44 px (H340).
+                    <li key={r.invoiceId} className="flex items-center gap-3 px-5 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base font-medium">{r.receptorNombre}</p>
+                        <p className="flex flex-wrap items-center gap-x-2 text-base">
+                          <span className="codigo text-muted-foreground line-through">
+                            {numeroFormateado(b.puntoVenta, r.de)}
+                          </span>
+                          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="pasó a" />
+                          <span className="codigo font-medium">{numeroFormateado(b.puntoVenta, r.a)}</span>
+                          {r.recibos?.length ? (
+                            <span className="text-sm text-muted-foreground">· {r.recibos.join(" · ")}</span>
+                          ) : null}
+                        </p>
+                      </div>
                       <Link
                         href={`/admin/facturacion/${r.invoiceId}`}
-                        className="flex flex-wrap items-center gap-x-2 gap-y-1 px-5 py-2.5 text-base transition-colors hover:bg-muted/60"
+                        className="tarjeta inline-flex h-11 shrink-0 items-center px-4 text-base font-medium"
                       >
-                        <span className="tabular text-muted-foreground">
-                          {numeroFormateado(b.puntoVenta, r.de)}
-                        </span>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" aria-label="pasó a" />
-                        <span className="tabular font-medium">{numeroFormateado(b.puntoVenta, r.a)}</span>
-                        <span className="min-w-0 flex-1 truncate">
-                          {r.receptorNombre}
-                          {r.recibos?.length ? (
-                            <span className="text-muted-foreground"> · {r.recibos.join(" · ")}</span>
-                          ) : null}
-                        </span>
-                        <span className="text-sm font-medium text-acento-texto">Reenviar</span>
+                        Reenviar
                       </Link>
                     </li>
                   ))}

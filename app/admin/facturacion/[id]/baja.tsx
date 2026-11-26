@@ -19,7 +19,8 @@ interface Corrimiento {
  * Dar de baja un comprobante que ARCA no autorizó.
  *
  * Es la salida de una serie trabada, y es irreversible: el número queda
- * libre y los pendientes que vienen detrás bajan uno. Por eso va plegado,
+ * libre y el último pendiente de la serie pasa a ocuparlo (los demás no
+ * cambian de número). Por eso va plegado,
  * como acción secundaria debajo de reintentar y corregir, y antes de
  * confirmar muestra lo que se corre y a quién (el que tenía el PDF del 0005
  * ahora tiene el 0004) y la deuda que se va con él. La lista viaja con el
@@ -104,12 +105,12 @@ export function DarDeBaja({
         <ul className="divide-y rounded-lg bg-hundida text-base">
           {corren.map((c) => (
             <li key={c.invoiceId} className="flex flex-wrap items-center gap-x-2 px-3 py-2">
-              <span className="tabular text-muted-foreground">
+              <span className="w-full font-medium">{c.receptorNombre}</span>
+              <span className="codigo text-muted-foreground line-through">
                 {numeroFormateado(puntoVenta, c.de)}
               </span>
               <ArrowRight className="h-4 w-4 text-muted-foreground" aria-label="pasa a" />
-              <span className="tabular font-medium">{numeroFormateado(puntoVenta, c.a)}</span>
-              <span className="min-w-0 truncate text-muted-foreground">· {c.receptorNombre}</span>
+              <span className="codigo font-medium">{numeroFormateado(puntoVenta, c.a)}</span>
             </li>
           ))}
         </ul>
@@ -145,9 +146,7 @@ export function DarDeBaja({
           className="inline-flex h-10 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-60"
         >
           {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
-          {corren.length > 0
-            ? `Liberar el ${propio} y correr ${corren.length}`
-            : `Liberar el ${propio}`}
+          {`Liberar el ${propio}`}
         </button>
         <button
           type="button"

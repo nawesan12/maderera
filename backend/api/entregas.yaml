@@ -284,8 +284,9 @@ components:
         lineas: { type: array, items: { $ref: "#/components/schemas/LineaDelRemito" } }
     RemitoDelPedido:
       type: object
-      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, firmaToken, createdAt, transportista, numeroSeguimiento, cantidadLineas, parcial]
+      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, firmaToken, createdAt, transportista, numeroSeguimiento, cantidadLineas, parcial, reposicion]
       properties:
+        reposicion: { type: string, nullable: true, description: El corte de una reposición sin cargo }
         parcial: { type: boolean, description: Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF) }
         id: { type: string }
         numero: { type: string }
@@ -346,8 +347,9 @@ components:
       type: object
       required: [id, numero, tipo, estado, receptorNombre, receptorDocumento, firmaUrl, firmadoAt, notas, createdAt, pedidoNumero, pedidoId,
         clienteNombre, clienteDireccion, customerId, estadoPago, medioPago, sucursal, sucursalDireccion, transportista, numeroSeguimiento,
-        lineas, pendientes, factura, sinCobrar, visita]
+        lineas, pendientes, factura, sinCobrar, visita, reposicion]
       properties:
+        reposicion: { type: string, nullable: true, description: El corte de una reposición sin cargo (las líneas son sus piezas) }
         visita:
           type: array
           description: Los remitos de otros pedidos que salieron en la misma visita y se firman con este enlace

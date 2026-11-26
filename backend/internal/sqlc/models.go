@@ -5312,6 +5312,7 @@ type CuttingOrder struct {
 	TerminadoAt         *time.Time  `json:"terminadoAt"`
 	SinCargo            bool        `json:"sinCargo"`
 	MotivoAnulado       *string     `json:"motivoAnulado"`
+	CargoOrderID        *string     `json:"cargoOrderId"`
 }
 
 type CuttingRate struct {
@@ -5355,6 +5356,7 @@ type Delivery struct {
 	CreatedAt         time.Time         `json:"createdAt"`
 	UpdatedAt         time.Time         `json:"updatedAt"`
 	VisitaDe          *string           `json:"visitaDe"`
+	CuttingOrderID    *string           `json:"cuttingOrderId"`
 }
 
 type DeliveryItem struct {
@@ -5742,6 +5744,7 @@ type OrderItem struct {
 	StockPorUnidad jsmath.Num  `json:"stockPorUnidad"`
 	PrecioLista    *jsmath.Num `json:"precioLista"`
 	DelCorte       bool        `json:"delCorte"`
+	CuttingOrderID *string     `json:"cuttingOrderId"`
 }
 
 type OrderPayment struct {

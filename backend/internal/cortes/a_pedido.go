@@ -44,44 +44,9 @@ func (s *Servicio) PasarAPedido(ctx context.Context, ses *auth.Sesion, id string
 	if len(f.Plano.NoEntran) > 0 {
 		return "", "", error422(piezasQueNoEntran(len(f.Plano.NoEntran)) + " Corregí el despiece antes de cobrarlo.")
 	}
-	k := f.Cuenta
-	type linea struct {
-		variante, presentacion *string
-		descripcion, unidad    string
-		cantidad, precio       float64
-	}
-	var lineas []linea
-	if k.PlacasEnteras > 0 && k.SubtotalPlacas > 0 && c.VariantID != nil {
-		var unidad string
-		if err := s.pool.QueryRow(ctx, `
-			SELECT p.unit::text FROM product_variants pv JOIN products p ON p.id = pv.product_id WHERE pv.id = $1`,
-			*c.VariantID).Scan(&unidad); err != nil {
-			return "", "", err
-		}
-		desc := c.Material
-		if c.Medida.Mitad != nil {
-			p := "media_" + *c.Medida.Mitad
-			lineas = append(lineas, linea{c.VariantID, &p, desc + " — " + lower(NombreDeLaMitad(c.Medida.Mitad)), unidad,
-				float64(k.PlacasEnteras), redondear(k.SubtotalPlacas / float64(k.PlacasEnteras))})
-		} else {
-			lineas = append(lineas, linea{c.VariantID, nil, desc, unidad, float64(k.PlacasEnteras), k.PrecioPorPlaca})
-		}
-	}
-	if k.SubtotalCorte > 0 {
-		piezas := int(UnidadesDelCorte(c))
-		nombre := "piezas"
-		if piezas == 1 {
-			nombre = "pieza"
-		}
-		lineas = append(lineas, linea{nil, nil, fmt.Sprintf("Corte a medida %s · %d %s", c.Numero, piezas, nombre), "pasada",
-			float64(k.PasadasCobrables), k.PrecioPorPasada})
-	}
-	if k.SubtotalCanto > 0 && f.Tarifa != nil {
-		desc := "Tapacanto pegado"
-		if c.CantoDescripcion != nil && *c.CantoDescripcion != "" {
-			desc += " — " + *c.CantoDescripcion
-		}
-		lineas = append(lineas, linea{nil, nil, desc, "m", k.MetrosCanto, f.Tarifa.PrecioPorMetroCanto})
+	lineas, err := s.lineasDeLaCuenta(ctx, f)
+	if err != nil {
+		return "", "", err
 	}
 	if len(lineas) == 0 {
 		return "", "", error422(c.Numero + " no tiene nada para cobrar.")
@@ -105,11 +70,7 @@ func (s *Servicio) PasarAPedido(ctx context.Context, ses *auth.Sesion, id string
 		if numero, err = numeracion.Pedido(ctx, tx); err != nil {
 			return err
 		}
-		total := 0.0
-		for _, l := range lineas {
-			total += ventas.ACentavos(float64(l.cantidad * l.precio))
-		}
-		total = ventas.ACentavos(total)
+		total := totalDe(lineas)
 		// Un corte cargado sin sucursal se retira donde se corta: el
 		// aserradero (Casa Central no corta; decisión del 19/11). El pedido
 		// sin sucursal decía «Retira en» y nada más, y su efectivo no sabía a
@@ -123,44 +84,8 @@ func (s *Servicio) PasarAPedido(ctx context.Context, ses *auth.Sesion, id string
 			numero, c.CustomerID, c.Cliente, c.Telefono, c.BranchID, jsmath.Fijo2(total), ses.UserID, c.RetiraEl).Scan(&pedido); err != nil {
 			return err
 		}
-		var variantes []string
-		conPresentacion := make([]reservas.LineaConPresentacion, len(lineas))
-		for i, l := range lineas {
-			if l.variante != nil {
-				variantes = append(variantes, *l.variante)
-			}
-			conPresentacion[i] = reservas.LineaConPresentacion{VariantID: l.variante, Presentacion: l.presentacion}
-		}
-		costos, err := reservas.CostosParaCongelar(ctx, tx, variantes)
-		if err != nil {
+		if err := insertarRenglones(ctx, tx, pedido, nil, lineas, 0); err != nil {
 			return err
-		}
-		factores, err := reservas.FactoresDeStock(ctx, tx, conPresentacion)
-		if errors.Is(err, ventas.ErrSinMedidas) {
-			return error422(err.Error())
-		}
-		if err != nil {
-			return err
-		}
-		for i, l := range lineas {
-			var costo, alicuota *string
-			if l.variante != nil {
-				if k, ok := costos[*l.variante]; ok {
-					costo = reservas.CostoPorUnidadDeVenta(k.CostoUnitario, factores[i].StockPorUnidad)
-					a := k.AlicuotaIva
-					alicuota = &a
-				}
-			}
-			precio := jsmath.Fijo2(l.precio)
-			if _, err := tx.Exec(ctx, `
-				INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
-				                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista, del_corte)
-				VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $6::numeric, true)`,
-				pedido, l.variante, l.descripcion, l.unidad, jsmath.Fijo2(l.cantidad), precio,
-				jsmath.Fijo2(ventas.ACentavos(float64(l.cantidad*l.precio))), factores[i].Presentacion,
-				jsmath.Texto(factores[i].StockPorUnidad), costo, alicuota, i); err != nil {
-				return err
-			}
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'pendiente', $2, $3)`,
 			pedido, "Generado desde el corte "+c.Numero, ses.UserID); err != nil {
@@ -188,4 +113,109 @@ func lower(s string) string {
 		r[0] += 'a' - 'A'
 	}
 	return string(r)
+}
+
+// linea es un renglón que el corte le pone a un pedido.
+type linea struct {
+	variante, presentacion *string
+	descripcion, unidad    string
+	cantidad, precio       float64
+}
+
+// lineasDeLaCuenta son los renglones de lo que cobra la ficha: las placas
+// que se venden enteras (si las cotiza), las pasadas y el tapacanto, a la
+// lista del cliente.
+func (s *Servicio) lineasDeLaCuenta(ctx context.Context, f *Ficha) ([]linea, error) {
+	c, k := f.Corte, f.Cuenta
+	var lineas []linea
+	if k.PlacasEnteras > 0 && k.SubtotalPlacas > 0 && c.VariantID != nil {
+		var unidad string
+		if err := s.pool.QueryRow(ctx, `
+			SELECT p.unit::text FROM product_variants pv JOIN products p ON p.id = pv.product_id WHERE pv.id = $1`,
+			*c.VariantID).Scan(&unidad); err != nil {
+			return nil, err
+		}
+		desc := c.Material
+		if c.Medida.Mitad != nil {
+			p := "media_" + *c.Medida.Mitad
+			lineas = append(lineas, linea{c.VariantID, &p, desc + " — " + lower(NombreDeLaMitad(c.Medida.Mitad)), unidad,
+				float64(k.PlacasEnteras), redondear(k.SubtotalPlacas / float64(k.PlacasEnteras))})
+		} else {
+			lineas = append(lineas, linea{c.VariantID, nil, desc, unidad, float64(k.PlacasEnteras), k.PrecioPorPlaca})
+		}
+	}
+	if k.SubtotalCorte > 0 {
+		piezas := int(UnidadesDelCorte(c))
+		nombre := "piezas"
+		if piezas == 1 {
+			nombre = "pieza"
+		}
+		lineas = append(lineas, linea{nil, nil, fmt.Sprintf("Corte a medida %s · %d %s", c.Numero, piezas, nombre), "pasada",
+			float64(k.PasadasCobrables), k.PrecioPorPasada})
+	}
+	if k.SubtotalCanto > 0 && f.Tarifa != nil {
+		desc := "Tapacanto pegado"
+		if c.CantoDescripcion != nil && *c.CantoDescripcion != "" {
+			desc += " — " + *c.CantoDescripcion
+		}
+		lineas = append(lineas, linea{nil, nil, desc, "m", k.MetrosCanto, f.Tarifa.PrecioPorMetroCanto})
+	}
+	return lineas, nil
+}
+
+// totalDe es la suma de los renglones, al centavo.
+func totalDe(lineas []linea) float64 {
+	total := 0.0
+	for _, l := range lineas {
+		total += ventas.ACentavos(float64(l.cantidad * l.precio))
+	}
+	return ventas.ACentavos(total)
+}
+
+// insertarRenglones escribe los renglones del corte en el pedido, atados al
+// despiece (del_corte) y, si se suman a un pedido que ya existía, al corte
+// (corte): el otro corte del mismo pedido sigue cobrando lo suyo aparte.
+// desde es el orden del primero.
+func insertarRenglones(ctx context.Context, tx pgx.Tx, pedido string, corte *string, lineas []linea, desde int) error {
+	var variantes []string
+	conPresentacion := make([]reservas.LineaConPresentacion, len(lineas))
+	for i, l := range lineas {
+		if l.variante != nil {
+			variantes = append(variantes, *l.variante)
+		}
+		conPresentacion[i] = reservas.LineaConPresentacion{VariantID: l.variante, Presentacion: l.presentacion}
+	}
+	costos, err := reservas.CostosParaCongelar(ctx, tx, variantes)
+	if err != nil {
+		return err
+	}
+	factores, err := reservas.FactoresDeStock(ctx, tx, conPresentacion)
+	if errors.Is(err, ventas.ErrSinMedidas) {
+		return error422(err.Error())
+	}
+	if err != nil {
+		return err
+	}
+	for i, l := range lineas {
+		var costo, alicuota *string
+		if l.variante != nil {
+			if k, ok := costos[*l.variante]; ok {
+				costo = reservas.CostoPorUnidadDeVenta(k.CostoUnitario, factores[i].StockPorUnidad)
+				a := k.AlicuotaIva
+				alicuota = &a
+			}
+		}
+		precio := jsmath.Fijo2(l.precio)
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
+			                         presentacion, stock_por_unidad, costo_unitario, alicuota_iva, orden, precio_lista, del_corte,
+			                         cutting_order_id)
+			VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9::numeric, $10::numeric, $11::numeric, $12, $6::numeric, true, $13)`,
+			pedido, l.variante, l.descripcion, l.unidad, jsmath.Fijo2(l.cantidad), precio,
+			jsmath.Fijo2(ventas.ACentavos(float64(l.cantidad*l.precio))), factores[i].Presentacion,
+			jsmath.Texto(factores[i].StockPorUnidad), costo, alicuota, desde+i, corte); err != nil {
+			return err
+		}
+	}
+	return nil
 }

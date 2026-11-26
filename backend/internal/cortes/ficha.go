@@ -45,6 +45,11 @@ type Ficha struct {
 	RetalesDelCliente bool `json:"retalesDelCliente"`
 	// SinPlata: la ficha del aserradero, sin importes ni teléfono.
 	SinPlata bool `json:"sinPlata"`
+	// Sumar es lo que hace «Sumar al pedido» (H184): nil si no hay nada
+	// fuera del pedido.
+	Sumar *SumaAlPedido `json:"sumar"`
+	// Remito es el de la reposición sin cargo (H321), si ya salió.
+	Remito *RemitoDeReposicion `json:"remito"`
 }
 
 // PedidoDelCorte es el pedido del trabajo, con los renglones que son suyos.
@@ -64,6 +69,9 @@ type PedidoDelCorte struct {
 	// PlacasDeOtrosCortes son las que usan los otros cortes vivos del pedido
 	// sobre la misma placa (no sale en la API).
 	PlacasDeOtrosCortes float64 `json:"-"`
+	// Cargo es el pedido aparte donde quedaron las pasadas del corte, si el
+	// suyo ya no se tocaba (H184).
+	Cargo *string `json:"cargo"`
 }
 
 // RenglonDelPedido es un renglón del pedido que es del corte.
@@ -115,13 +123,22 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	}
 	cuenta := CuentaDelCorte(c, plano, tarifa, pedido, modo)
 	aCobrar := PasadasACobrar(c, plano)
-	return &Ficha{
+	f := &Ficha{
 		Corte: c, Tarifa: tarifa, Cargo: CargoPorCorte(tarifa, float64(aCobrar)), MetrosCanto: metros,
 		CargoCanto: CargoPorTapacanto(tarifa, metros), Plano: plano, Superficies: sup,
 		Cuenta:  cuenta,
 		Fijadas: LeerAcomodoManual(texto(c.AcomodoManual)),
 		Modo:    modo, PasadasACobrar: aCobrar, Pedido: pedido, RetalesDelCliente: delCliente,
-	}, nil
+	}
+	if f.Sumar, err = s.sumaDeLaFicha(ctx, f); err != nil {
+		return nil, err
+	}
+	if modo == "sinCargo" {
+		if f.Remito, err = s.remitoDeLaFicha(ctx, c.ID); err != nil {
+			return nil, err
+		}
+	}
+	return f, nil
 }
 
 // RetalesDelCliente: lo que sobra del trabajo es del cliente porque el
@@ -325,9 +342,17 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 	if err != nil {
 		return nil, false, err
 	}
+	if err := s.pool.QueryRow(ctx, `SELECT o.numero FROM cutting_orders co JOIN orders o ON o.id = co.cargo_order_id
+		WHERE co.id = $1`, c.ID).Scan(&p.Cargo); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, err
+	}
+	// Los renglones del pedido, menos los que otro corte sumó (H184), y los
+	// que este corte sumó, en su pedido o en el aparte.
 	filas, err := s.pool.Query(ctx, `
 		SELECT descripcion, unidad, cantidad, subtotal, variant_id::text, presentacion, del_corte
-		FROM order_items WHERE order_id = $1 ORDER BY orden, id`, *c.OrderID)
+		FROM order_items
+		WHERE (order_id = $1 AND (cutting_order_id IS NULL OR cutting_order_id = $2)) OR cutting_order_id = $2
+		ORDER BY order_id = $1 DESC, orden, id`, *c.OrderID, c.ID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -393,4 +418,6 @@ func (f *Ficha) SinPlataParaElTaller() {
 	if f.Pedido != nil {
 		f.Pedido = &PedidoDelCorte{Numero: f.Pedido.Numero, Estado: f.Pedido.Estado, Lineas: []RenglonDelPedido{}}
 	}
+	f.Sumar = nil
+	f.Remito = nil
 }

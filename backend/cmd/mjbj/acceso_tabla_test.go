@@ -159,6 +159,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"AnularCorte":                    "cola",                          // POST /api/v1/admin/cortes/{id}/anular
 	"VolverCorte":                    "/admin/cortes",                 // POST /api/v1/admin/cortes/{id}/volver
 	"PasarCorteAPedido":              "plata",                         // POST /api/v1/admin/cortes/{id}/pedido
+	"SumarCorteAlPedido":             "plata",                         // POST /api/v1/admin/cortes/{id}/sumar-al-pedido
+	"RemitoDeLaReposicion":           "cola",                          // POST /api/v1/admin/cortes/{id}/remito
 	"FichaDeCorte":                   "/admin/cortes",                 // GET /api/v1/admin/cortes/{id}
 	"ListarCortes":                   "/admin/cortes",                 // GET /api/v1/admin/cortes
 	"CrearCorte":                     "cola",                          // POST /api/v1/admin/cortes

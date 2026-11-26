@@ -558,8 +558,11 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		if !sinCobrar && !sinCargo {
 			cobrado := true
 			if pedido != nil {
+				// Y el pedido aparte con sus pasadas, si lo tiene (H184).
 				if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM cutting_orders co JOIN orders o ON o.id = co.order_id
-					WHERE co.id = $1 AND o.estado <> 'cancelado' AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) <= 0.009)`, id).Scan(&cobrado); err != nil {
+					WHERE co.id = $1 AND o.estado <> 'cancelado' AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) <= 0.009)
+					AND NOT EXISTS (SELECT 1 FROM cutting_orders co JOIN orders o ON o.id = co.cargo_order_id
+					WHERE co.id = $1 AND coalesce(`+fragmentos.SinCobrarDelPedido+`, 0) > 0.009)`, id).Scan(&cobrado); err != nil {
 					return "", err
 				}
 			} else {
@@ -608,11 +611,10 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	}
 	// La reposición entregada queda escrita en el pedido que la originó: el
 	// reclamo se cierra con constancia (H321).
+	// Sale con su remito sin cargo, para firmar con el dedo: la firma es la
+	// constancia que cierra el reclamo.
 	if sig == "retirado" && sinCargo && pedido != nil {
-		if _, err := s.pool.Exec(ctx, `
-			INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id)
-			SELECT id, estado, $2, $3 FROM orders WHERE id = $1`,
-			*pedido, "Reposición sin cargo entregada: "+numero, ses.UserID); err != nil {
+		if _, err := s.RemitoDeLaReposicion(ctx, ses, id); err != nil {
 			return "", err
 		}
 	}
@@ -751,7 +753,10 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 		var vendido *string
 		err := tx.QueryRow(ctx, `
 			SELECT o.numero FROM orders o
-			WHERE o.id = $1 AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.del_corte)`, *pedido).Scan(&vendido)
+			WHERE (o.id = $1 AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.del_corte
+			         AND (oi.cutting_order_id IS NULL OR oi.cutting_order_id = $2)))
+			   OR o.id = (SELECT cargo_order_id FROM cutting_orders WHERE id = $2)
+			ORDER BY o.id = $1 DESC LIMIT 1`, *pedido, id).Scan(&vendido)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return "", err
 		}

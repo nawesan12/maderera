@@ -133,6 +133,37 @@ paths:
         "403": { $ref: "#/components/responses/Problema" }
         "404": { $ref: "#/components/responses/Problema" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/sumar-al-pedido:
+    post:
+      operationId: SumarCorteAlPedido
+      description: Suma al pedido del corte sus pasadas y su tapacanto; si el pedido ya está facturado, cobrado o en la cuenta corriente, van a un pedido aparte.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: El pedido donde quedó
+          content:
+            application/json:
+              schema: { type: object, required: [numero, aparte], properties: { numero: { type: string }, aparte: { type: boolean } } }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/cortes/{id}/remito:
+    post:
+      operationId: RemitoDeLaReposicion
+      description: El remito sin cargo de una reposición entregada, para firmar; si ya tiene uno vivo, ese.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: El remito
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, numero, firmaToken]
+                properties: { id: { type: string }, numero: { type: string }, firmaToken: { type: string } }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/urgente:
     post:
       operationId: AlternarUrgente
@@ -666,15 +697,33 @@ components:
     FichaCorte:
       type: object
       required: [corte, tarifa, cargo, metrosCanto, cargoCanto, plano, superficies, cuenta, fijadas, modo, pasadasACobrar,
-        pedido, retalesDelCliente, sinPlata]
+        pedido, retalesDelCliente, sinPlata, sumar, remito]
       properties:
+        remito:
+          nullable: true
+          type: object
+          required: [id, numero, firmaToken, firmado]
+          properties:
+            id: { type: string }
+            numero: { type: string }
+            firmaToken: { type: string, nullable: true }
+            firmado: { type: boolean }
+        sumar:
+          nullable: true
+          type: object
+          required: [total, aparte, motivo]
+          properties:
+            total: { type: number, format: double }
+            aparte: { type: boolean }
+            motivo: { type: string }
         modo: { type: string, enum: [suelto, pedido, vendido, sinCargo, anulado] }
         pasadasACobrar: { type: integer }
         pedido:
           nullable: true
           type: object
-          required: [numero, estado, estadoPago, lineas, cobrado, placasDelPedido]
+          required: [numero, estado, estadoPago, lineas, cobrado, placasDelPedido, cargo]
           properties:
+            cargo: { type: string, nullable: true }
             numero: { type: string }
             estado: { type: string }
             estadoPago: { type: string }

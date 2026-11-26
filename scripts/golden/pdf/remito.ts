@@ -80,6 +80,7 @@ const base: RemitoCompleto = {
   factura: null,
   sinCobrar: null,
   visita: [],
+  reposicion: null,
 };
 
 function lineas(n: number): RemitoCompleto["lineas"] {

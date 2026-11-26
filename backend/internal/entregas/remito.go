@@ -85,6 +85,9 @@ type RemitoCompleto struct {
 	// Visita son los remitos de otros pedidos que salieron en la misma
 	// visita y se firman con este enlace (solo en RemitoPorToken).
 	Visita []RemitoDeLaVisita `json:"visita"`
+	// Reposicion es el corte de una reposición sin cargo (H321): lo que sale
+	// son sus piezas, no renglones del pedido, y no se cobra nada.
+	Reposicion *string `json:"reposicion"`
 }
 
 // RemitoDeLaVisita es otro remito que se firma junto con el del enlace.
@@ -176,18 +179,18 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 		return nil, ErrNoEsta
 	}
 	var r RemitoCompleto
-	var slug, zona *string
+	var slug, zona, corte *string
 	err := s.pool.QueryRow(ctx, `
 		SELECT d.id, d.numero, d.tipo::text, d.estado::text, d.receptor_nombre, d.receptor_documento, d.firma_url, d.firmado_at,
 		  d.notas, d.created_at, o.numero, o.id, o.contacto_nombre, o.direccion_entrega, o.customer_id, o.estado_pago::text,
 		  o.medio_pago::text, b.name, b.slug, s.transportista, s.numero_seguimiento, `+fragmentos.SinCobrarDelPedido+`::float8,
-		  o.zona_envio
+		  o.zona_envio, d.cutting_order_id::text
 		FROM deliveries d JOIN orders o ON o.id = d.order_id
 		LEFT JOIN branches b ON b.id = d.branch_id
 		LEFT JOIN shipments s ON s.delivery_id = d.id
 		WHERE d.id = $1 LIMIT 1`, id).Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.ReceptorDocumento, &r.FirmaURL,
 		&r.FirmadoAt, &r.Notas, &r.CreatedAt, &r.PedidoNumero, &r.PedidoID, &r.ClienteNombre, &r.ClienteDireccion, &r.CustomerID,
-		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar, &zona)
+		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar, &zona, &corte)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -201,6 +204,9 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 		if d, ok := direcciones[*slug]; ok {
 			r.SucursalDireccion = &d
 		}
+	}
+	if corte != nil {
+		return s.completarReposicion(ctx, &r, *corte)
 	}
 	cortes, err := cortesDelPedido(ctx, s.pool, r.PedidoID)
 	if err != nil {
@@ -388,7 +394,43 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 	if f := r.Factura; f != nil {
 		out.Factura = &pdf.FacturaDelRemito{Etiqueta: f.Etiqueta, Cae: deTexto(f.Cae), CaeVencimiento: f.CaeVencimiento}
 	}
+	out.Reposicion = deTexto(r.Reposicion)
 	return out
+}
+
+// completarReposicion llena el remito de una reposición sin cargo con las
+// piezas de su corte: no cobra nada, no tiene factura y no dice lo que queda
+// en acopio del pedido (no es una entrega de su mercadería).
+func (s *Servicio) completarReposicion(ctx context.Context, r *RemitoCompleto, corte string) (*RemitoCompleto, error) {
+	var numero, material string
+	if err := s.pool.QueryRow(ctx, `SELECT numero, material_descripcion FROM cutting_orders WHERE id = $1`, corte).Scan(&numero, &material); err != nil {
+		return nil, err
+	}
+	r.Reposicion = &numero
+	r.SinCobrar = nil
+	r.Pendientes = []PendienteDelRemito{}
+	r.Visita = []RemitoDeLaVisita{}
+	filas, err := s.pool.Query(ctx, `
+		SELECT largo_mm, ancho_mm, cantidad, coalesce(etiqueta, '') FROM cutting_items
+		WHERE cutting_order_id = $1 ORDER BY orden, id`, corte)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	r.Lineas = []LineaDelRemito{}
+	for filas.Next() {
+		var largo, ancho, cantidad int32
+		var etiqueta string
+		if err := filas.Scan(&largo, &ancho, &cantidad, &etiqueta); err != nil {
+			return nil, err
+		}
+		d := fmt.Sprintf("%s — %d × %d mm", material, largo, ancho)
+		if etiqueta != "" {
+			d += " · " + etiqueta
+		}
+		r.Lineas = append(r.Lineas, LineaDelRemito{Descripcion: d, Unidad: "pieza", Cantidad: float64(cantidad)})
+	}
+	return r, filas.Err()
 }
 
 // DomicilioConZona suma la zona de envío al domicilio, salvo que ya la diga.

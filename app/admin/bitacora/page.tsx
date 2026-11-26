@@ -31,6 +31,15 @@ const ACCIONES: Record<AccionAuditoria, string> = {
 /** Lo que mueve plata o borra datos se marca: es lo que se busca al auditar. */
 const DELICADAS = new Set<string>(["eliminar", "anular", "cobrar", "importar"]);
 
+/**
+ * La plata de la descripción como en el resto del panel: los centavos solo
+ * cuando los hay. Lo anotado antes de unificar el formato decía «$ 18.700,00»
+ * al lado de «$ 50.000»; lo escrito no se toca, se muestra parejo.
+ */
+function sinCentavosCero(texto: string): string {
+  return texto.replace(/(\$\s?\d{1,3}(?:\.\d{3})*),00(?!\d)/g, "$1");
+}
+
 const PERIODOS = [
   { dias: 1, etiqueta: "Hoy" },
   { dias: 7, etiqueta: "7 días" },
@@ -198,7 +207,7 @@ export default async function BitacoraPage({
           {filas.map((fila) => (
             <li key={fila.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-3">
               <div className="min-w-[16rem] flex-1">
-                <p className="text-base">{fila.descripcion}</p>
+                <p className="text-base">{sinCentavosCero(fila.descripcion)}</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {fila.usuarioNombre}
                   {fila.usuarioRol ? ` · ${etiquetaDeRol(fila.usuarioRol)}` : ""} ·{" "}

@@ -233,7 +233,7 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 				return err
 			}
 			if falta != nil && *falta > 0.009 {
-				n := NotaEntregadoSinCobrar + " · " + formato.Moneda(*falta)
+				n := NotaEntregadoSinCobrar + " · " + formato.Importe(*falta)
 				nota = &n
 			}
 		}

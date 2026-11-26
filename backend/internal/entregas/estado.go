@@ -98,7 +98,7 @@ func notaSinCobrar(ctx context.Context, tx pgx.Tx, pedido, nota string) (string,
 		return "", err
 	}
 	if falta != nil && *falta > 0.009 {
-		return fragmentos.NotaEntregadoSinCobrar + " · " + formato.Moneda(*falta) + " · " + nota, nil
+		return fragmentos.NotaEntregadoSinCobrar + " · " + formato.Importe(*falta) + " · " + nota, nil
 	}
 	return nota, nil
 }

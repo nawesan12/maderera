@@ -2,10 +2,10 @@ import Link from "next/link";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
 import { requireStaff } from "@/lib/dal/session";
-import { puedeEntrar } from "@/lib/roles";
+import { DECIDEN_EN_LA_COLA, MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { notFound } from "next/navigation";
 import { esUuid } from "@/lib/uuid";
-import { ArrowLeft, Download, Flame, ListChecks, Map, Tags } from "lucide-react";
+import { ArrowLeft, Ban, Flame, ListChecks, Map } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { ETAPAS_CORTE, Pasos } from "@/components/admin/pasos";
 import { fechaHora, plural } from "@/components/admin/formato";
@@ -14,10 +14,11 @@ import { AcomodoDelCorte } from "../acomodo";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
-import { AccionesCorte } from "../acciones";
+import { AccionesCorte, VolverUnPaso } from "../acciones";
 import { CargarPasadas } from "../pasadas";
 import { SierraDelTrabajo } from "./sierra";
 import { formatearSierra } from "@/lib/cortes/sierra";
+import { CobrarCorte, CorregirOAnular, MasArchivos } from "./gestion";
 
 export default async function FichaCortePage({
   params,
@@ -28,19 +29,24 @@ export default async function FichaCortePage({
   if (!esUuid(id)) notFound();
   // La ficha llega armada de Go (backend/internal/cortes): la tarifa según
   // la categoría y la lista del cliente, el plano con el disco, lo fijado a
-  // mano y el motor con que nació el trabajo, y el presupuesto placa por
-  // placa (de la que sale más de la mitad se vende entera y el corte va sin
-  // cargo).
-  const ficha = await fichaDeCorte(id);
+  // mano y el motor con que nació el trabajo, el presupuesto placa por
+  // placa, de dónde sale la plata (`modo`) y, para el aserradero, sin
+  // importes ni teléfono.
+  const [ficha, usuario] = await Promise.all([fichaDeCorte(id), requireStaff()]);
 
   if (!ficha) notFound();
-  const { corte, tarifa, cargo, metrosCanto, cargoCanto, plano, cuenta } = ficha;
+  const { corte, tarifa, metrosCanto, cargoCanto, plano, cuenta, modo, pedido } = ficha;
+  const rol = usuario.staffRole;
+  const decide = rol !== null && DECIDEN_EN_LA_COLA.includes(rol);
+  const cobra = rol !== null && MANEJAN_PLATA.includes(rol);
+  const sinPlata = ficha.sinPlata;
+  const anulado = corte.estado === "cancelado";
 
   const totalPiezas = corte.piezas.reduce((s, p) => s + p.cantidad, 0);
 
   // Terminado: el cliente tiene que enterarse para venir a buscarlo.
   // Solo para quien atiende el WhatsApp de la maderera (no el aserradero ni depósito).
-  const atiende = puedeEntrar("/admin/whatsapp", (await requireStaff()).staffRole);
+  const atiende = puedeEntrar("/admin/whatsapp", rol);
   const aviso =
     atiende && corte.estado === "terminado"
       ? await avisoManual("corte_listo", { tipo: "cutting_order", id: corte.id })
@@ -52,24 +58,41 @@ export default async function FichaCortePage({
       0,
     ) ?? 0;
 
+  // Las placas del plano son medias cuando el trabajo sale de media placa:
+  // «2 placas, 1 se vende entera» se leía como dos placas enteras (H052).
+  const media = Boolean(corte.medida.mitad);
+  const nPlacas = plano.placas.length;
+  const rotuloPlacas = media ? (nPlacas === 1 ? "media placa" : "medias placas") : nPlacas === 1 ? "placa" : "placas";
+  const rotuloEnteras = media
+    ? plano.placasEnteras === 1 ? "media se vende" : "medias se venden"
+    : plano.placasEnteras === 1 ? "se vende entera" : "se venden enteras";
+  // Lo que se cobra de la placa en una sola cifra: «1 media placa ×
+  // $ 37.698», no «1 placa entera × $ 75.395 = $ 37.698» (H123).
+  const precioDeLaPlaca = cuenta.precioPorPlaca * cuenta.fraccion;
+  const queSeVende = media
+    ? cuenta.placasEnteras === 1 ? "media placa" : "medias placas"
+    : cuenta.placasEnteras === 1 ? "placa entera" : "placas enteras";
+  const puedeCorregir = decide && (corte.estado === "en-cola" || corte.estado === "en-proceso") && modo !== "vendido";
+
   return (
     <div className="space-y-6">
+      {/* El aserradero vuelve a su taller, no al panel (H127). */}
       <Link
-        href="/admin/cortes"
+        href={decide ? "/admin/cortes" : "/taller"}
         className="inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-5 w-5" />
-        Volver a cortes
+        {decide ? "Volver a cortes" : "Volver al taller"}
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">
               {corte.cliente}
             </h1>
             <EtiquetaEstado estado={corte.estado} />
-            {corte.urgente && (
+            {corte.urgente && !anulado && (
               <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/15 px-2.5 py-1 text-sm font-medium text-brand-orange-dark">
                 <Flame className="h-4 w-4" />
                 Urgente
@@ -87,16 +110,36 @@ export default async function FichaCortePage({
           </p>
         </div>
 
-        <AccionesCorte
-          id={corte.id}
-          estado={corte.estado}
-          urgente={corte.urgente}
-        />
+        {!anulado && (
+          <div className="flex flex-wrap items-center gap-2">
+            <VolverUnPaso id={corte.id} estado={corte.estado} />
+            {/* El suelto con algo para cobrar no se entrega con un clic: se
+                cobra (H348). */}
+            {corte.estado === "terminado" && modo === "suelto" && cuenta.total > 0 && cobra ? (
+              <CobrarCorte id={corte.id} />
+            ) : (
+              <AccionesCorte
+                id={corte.id}
+                estado={corte.estado}
+                urgente={corte.urgente}
+                pasadas={ficha.pasadasACobrar}
+                soloMaquina={!decide}
+              />
+            )}
+          </div>
+        )}
       </div>
 
-      <section className="tarjeta p-5">
-        <Pasos etapas={ETAPAS_CORTE} actual={corte.estado} />
-      </section>
+      {anulado ? (
+        <p className="tarjeta-hundida flex items-center gap-2.5 rounded-xl px-4 py-3 text-base">
+          <Ban className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {corte.motivoAnulado ?? "Anulado"}
+        </p>
+      ) : (
+        <section className="tarjeta p-5">
+          <Pasos etapas={ETAPAS_CORTE} actual={corte.estado} />
+        </section>
+      )}
 
       {aviso && (
         <section className={aviso.yaAvisado ? "tarjeta p-5" : "tarjeta-atencion p-5"}>
@@ -113,97 +156,63 @@ export default async function FichaCortePage({
           la placa entera, y cuánto es. */}
       {corte.piezas.length > 0 && (
         <section className="tarjeta overflow-hidden">
-          <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4">
-            <div>
+          <header className="flex flex-wrap items-start justify-between gap-3 border-b border-linea px-5 py-4">
+            <div className="min-w-0">
               <h2 className="text-base font-medium">Cómo entra en la placa</h2>
               <p className="text-sm text-muted-foreground">
                 {nombreDeLaMitad(corte.medida.mitad)} de {plano.placaLargo} ×{" "}
                 {plano.placaAncho} mm
-                {corte.medida.supuesta
-                  ? " (medida supuesta: la placa no salió del catálogo)"
-                  : ""}
+                {corte.medida.supuesta ? " · medida supuesta" : ""}
               </p>
               {/* Los milímetros que se lleva el disco, de este trabajo y
-                  editables mientras no se cortó. Estaban descontados desde
-                  siempre y no se decían en ninguna parte, así que nadie
-                  entendía por qué dos piezas de 900 no entraban en 1830. */}
+                  editables mientras no se cortó. */}
               <div className="text-sm text-muted-foreground">
                 <SierraDelTrabajo
                   id={corte.id}
                   anchoSierra={corte.anchoSierraMm}
-                  editable={corte.estado === "en-cola"}
+                  editable={corte.estado === "en-cola" && decide}
                 />
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {/* Lo que tipea el operario en el semiautomático de WinCut, en
-                  el orden de la máquina: reemplaza a Cutty, que no anda. */}
+            {/* Los papeles del trabajo en una fila: la hoja de la
+                seccionadora y el plano a la vista, el resto en el menú. */}
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <Link
                 href={`/hoja-de-corte/${corte.id}`}
                 target="_blank"
-                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
               >
-                <ListChecks className="h-4 w-4" />
-                Hoja para la seccionadora
+                <ListChecks className="h-5 w-5 shrink-0" />
+                <span className="truncate">Hoja de corte</span>
               </Link>
               <Link
                 href={`/plano/${corte.id}`}
                 target="_blank"
-                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted sm:flex-none"
               >
-                <Map className="h-4 w-4" />
-                Ver el plano para el taller
+                <Map className="h-5 w-5 shrink-0" />
+                <span className="truncate">Plano</span>
               </Link>
-              {/* El reporte completo, para guardar o mandar: la hoja del
-                  plano se imprime pero no se adjunta a nada. */}
-              <a
-                href={`/api/cortes/${corte.id}/pdf`}
-                className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-3.5 text-base font-medium transition-colors hover:bg-muted"
-              >
-                <Download className="h-4 w-4" />
-                Reporte en PDF
-              </a>
+              <MasArchivos id={corte.id} />
             </div>
           </header>
 
-          {/* El programa para WinCut, en prueba. Va aparte de los otros
-              botones y con su aviso a la vista: si la máquina lo lee mal,
-              corta mal una placa, y eso solo lo evita mirar el dibujo en la
-              pantalla de la máquina antes de arrancar. Ver docs/PTX.md. */}
-          {plano.placas.length > 0 && (
-            <div className="estado-marca flex flex-wrap items-center justify-between gap-3 border-b border-linea bg-[var(--estado-fondo)] px-5 py-3">
-              {/* El programa para la seccionadora todavía no se probó en la máquina del taller. */}
-              <p className="max-w-2xl text-base">
-                <strong>En prueba:</strong> antes de cortar, compará el dibujo
-                en WinCut con la hoja de corte.
-              </p>
-              <a
-                href={`/api/cortes/${corte.id}/ptx`}
-                className="inline-flex min-h-11 max-w-full shrink-0 items-center gap-1.5 rounded-lg border border-current bg-card px-3.5 py-2 text-base font-medium transition-colors hover:bg-muted"
-              >
-                <Download className="h-4 w-4" />
-                Programa para la máquina (.PTX) — prueba
-              </a>
-            </div>
-          )}
-
-          <div className="grid gap-px bg-linea sm:grid-cols-4">
-            <Cifra
-              valor={String(plano.placas.length)}
-              rotulo={plano.placas.length === 1 ? "placa" : "placas"}
-            />
+          {/* De a dos en el teléfono: uno por renglón empujaba el plano a
+              1.600 px (H330). */}
+          <div className="grid grid-cols-2 gap-px bg-linea sm:grid-cols-4">
+            <Cifra valor={String(nPlacas)} rotulo={rotuloPlacas} />
             <Cifra
               valor={String(plano.placasEnteras)}
-              rotulo={
-                plano.placasEnteras === 1
-                  ? "se vende entera"
-                  : "se venden enteras"
-              }
+              rotulo={rotuloEnteras}
               destacada={plano.placasEnteras > 0}
             />
             <Cifra
-              valor={String(plano.pasadasCobrables)}
-              rotulo="pasadas a cobrar"
+              valor={String(ficha.pasadasACobrar)}
+              rotulo={
+                modo === "sinCargo"
+                  ? ficha.pasadasACobrar === 1 ? "pasada" : "pasadas"
+                  : ficha.pasadasACobrar === 1 ? "pasada a cobrar" : "pasadas a cobrar"
+              }
             />
             <Cifra
               valor={
@@ -212,41 +221,82 @@ export default async function FichaCortePage({
                   : "—"
               }
               rotulo={
-                plano.recorteMayor ? "retal que queda, en mm" : "sin retal útil"
+                plano.recorteMayor ? "retal mayor, en mm" : "sin retal útil"
               }
             />
           </div>
 
           <div className="space-y-3 px-5 py-4">
-            <dl className="space-y-1.5">
-              {cuenta.placasEnteras > 0 && (
-                <Renglon
-                  que={`${cuenta.placasEnteras} ${cuenta.placasEnteras === 1 ? "placa entera" : "placas enteras"} × ${formatearMonto(cuenta.precioPorPlaca)}`}
-                  cuanto={cuenta.subtotalPlacas}
-                />
-              )}
-              {/* Sin tarifa no se muestra el renglón: "15 pasadas × $ 0" se
-                  lee como que el corte sale gratis, cuando lo que pasa es que
-                  falta cargar el precio. El aviso de abajo lo dice. */}
-              {cuenta.pasadasCobrables > 0 && cuenta.precioPorPasada > 0 && (
-                <Renglon
-                  que={`${cuenta.pasadasCobrables} ${cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"} × ${formatearMonto(cuenta.precioPorPasada)}`}
-                  cuanto={cuenta.subtotalCorte}
-                />
-              )}
-              {cuenta.subtotalCanto > 0 && (
-                <Renglon
-                  que={`${formatearDecimal(cuenta.metrosCanto)} m de tapacanto`}
-                  cuanto={cuenta.subtotalCanto}
-                />
-              )}
-              <div className="flex items-baseline justify-between gap-4 border-t border-linea pt-2">
-                <dt className="text-base font-semibold">Total del trabajo</dt>
-                <dd className="tabular text-xl font-bold">
-                  {formatearMonto(cuenta.total)}
-                </dd>
-              </div>
-            </dl>
+            {!sinPlata && modo === "suelto" && (
+              <dl className="space-y-1.5">
+                {cuenta.placasEnteras > 0 && (
+                  <Renglon
+                    que={`${cuenta.placasEnteras} ${queSeVende} × ${formatearMonto(precioDeLaPlaca)}`}
+                    cuanto={cuenta.subtotalPlacas}
+                  />
+                )}
+                <RenglonesDelCorte cuenta={cuenta} />
+                <Total texto="Total del trabajo" monto={cuenta.total}>
+                  {cobra && cuenta.total > 0 && corte.estado !== "terminado" && !anulado && <CobrarCorte id={corte.id} />}
+                </Total>
+              </dl>
+            )}
+
+            {/* Atado a un pedido que vende las placas: no se cotizan otra
+                vez, y lo del corte que el pedido no tiene se ve aparte
+                (H184). */}
+            {!sinPlata && modo === "pedido" && pedido && (
+              <dl className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-4">
+                  <dt className="text-base text-muted-foreground">Las placas</dt>
+                  <dd className="text-base">
+                    en{" "}
+                    <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
+                      {pedido.numero}
+                    </Link>
+                  </dd>
+                </div>
+                <RenglonesDelCorte cuenta={cuenta} />
+                {cuenta.total > 0 && <Total texto="Fuera del pedido" monto={cuenta.total} />}
+              </dl>
+            )}
+
+            {/* Vendido en el mostrador: lo que se cobró, con el descuento de
+                la venta, y no una cuenta nueva (H232, H114). */}
+            {!sinPlata && modo === "vendido" && pedido && (
+              <dl className="space-y-1.5">
+                {pedido.lineas.map((l, i) => (
+                  <Renglon key={i} que={l.descripcion} cuanto={l.subtotal} />
+                ))}
+                <Total
+                  texto={
+                    <>
+                      Cobrado en{" "}
+                      <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
+                        {pedido.numero}
+                      </Link>
+                    </>
+                  }
+                  monto={pedido.cobrado}
+                >
+                  <EtiquetaEstado estado={pedido.estadoPago} contexto="pago" />
+                </Total>
+              </dl>
+            )}
+
+            {modo === "sinCargo" && (
+              <p className="flex flex-wrap items-baseline justify-between gap-2 text-base">
+                <span className="font-semibold">Sin cargo</span>
+                {pedido && corte.orderId && (
+                  <span className="text-muted-foreground">
+                    reposición de{" "}
+                    <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
+                      {pedido.numero}
+                    </Link>
+                  </span>
+                )}
+              </p>
+            )}
 
             {cuenta.faltan.map((linea, i) => (
               <p
@@ -256,14 +306,12 @@ export default async function FichaCortePage({
                 {linea}
               </p>
             ))}
+
+            {puedeCorregir && <CorregirOAnular id={corte.id} numero={corte.numero} cliente={corte.cliente} />}
           </div>
 
-          {/* Lo que sobra, placa por placa.
-
-              El dibujo ya los muestra punteados y arriba está el mayor como
-              cifra, pero quien apila necesita la lista: qué guardar, de qué
-              medida y de cuál placa salió. Y de quién es, que no es un detalle
-              administrativo: de una placa vendida entera el recorte se lo
+          {/* Lo que sobra, placa por placa, y de quién es: de una placa
+              vendida entera —o que el pedido ya vende— el recorte se lo
               lleva el cliente. */}
           <div className="border-t border-linea px-5 py-4">
             <h3 className="text-base font-medium">Lo que sobra</h3>
@@ -271,7 +319,7 @@ export default async function FichaCortePage({
               {plano.placas.map((placa) => (
                 <li key={placa.numero} className="text-base">
                   <span className="text-muted-foreground">
-                    Placa {placa.numero}:
+                    {media ? "Media" : "Placa"} {placa.numero}:
                   </span>{" "}
                   {placa.recortes.length === 0 ? (
                     <span className="text-muted-foreground">
@@ -283,8 +331,8 @@ export default async function FichaCortePage({
                         .map((r) => `${r.ancho} × ${r.alto} mm`)
                         .join(" · ")}{" "}
                       <span className="text-muted-foreground">
-                        ({placa.seVendeEntera
-                          ? "del cliente: se lleva la placa entera"
+                        ({placa.seVendeEntera || ficha.retalesDelCliente
+                          ? "del cliente"
                           : "al stock"})
                       </span>
                     </>
@@ -292,18 +340,12 @@ export default async function FichaCortePage({
                 </li>
               ))}
             </ul>
-            {/* Lo que no sale en piezas se va entre estos sobrantes y lo que se
-                lleva la sierra en cada pasada. */}
             <p className="mt-2 text-sm text-muted-foreground">
               {Math.round(plano.aprovechadoTotal * 100)}% del material sale en
-              piezas · sierra de {formatearSierra(plano.anchoSierra)} ·{" "}
-              {plano.pasadas} {plano.pasadas === 1 ? "pasada" : "pasadas"}
+              piezas · sierra de {formatearSierra(plano.anchoSierra)}
             </p>
           </div>
 
-          {/* El dibujo va al final y reemplaza a la explicación escrita: cuatro
-              párrafos que repetían los mismos números de arriba. Lo que faltaba
-              no era explicar el acomodo, era verlo. */}
           {/* Editable, no solo mirable: la decisión de qué pieza sale de qué
               placa se toma muchas veces después de cargar el trabajo. */}
           <div className="border-t border-linea px-5 py-4">
@@ -324,35 +366,9 @@ export default async function FichaCortePage({
         <section className="tarjeta overflow-hidden">
           <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
             <h2 className="text-base font-medium">Despiece</h2>
-            {/* Con flex-wrap: el resumen y los dos botones en un renglón no
-                entraban a 390 px y quedaban apretados (comité final). */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <p className="text-base text-muted-foreground">
-                {plural(corte.piezas.length, "medida")} · {totalPiezas} piezas
-              </p>
-              {corte.piezas.length > 0 && (
-                <>
-                  {/* Una etiqueta por pieza, con los lados con canto marcados,
-                      para pegarla al apilar: es lo que evita que el pegado se
-                      haga en el lado equivocado. */}
-                  <Link
-                    href={`/etiquetas/${corte.id}`}
-                    target="_blank"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-                  >
-                    <Tags className="h-4 w-4" />
-                    Etiquetas
-                  </Link>
-                  <a
-                    href={`/api/cortes/${corte.id}/lista`}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted"
-                  >
-                    <Download className="h-4 w-4" />
-                    Para la máquina
-                  </a>
-                </>
-              )}
-            </div>
+            <p className="text-base text-muted-foreground">
+              {plural(corte.piezas.length, "medida")} · {plural(totalPiezas, "pieza")}
+            </p>
           </div>
 
           <table className="w-full border-t">
@@ -431,19 +447,11 @@ export default async function FichaCortePage({
               Material
             </h2>
             <p className="text-base">{corte.material}</p>
-            {/* Cuántas placas.
-                El campo lo escribe una persona al dar de alta el trabajo y el
-                plano lo calcula. Cuando no coinciden gana el plano —que midió—
-                y se dice que el cargado quedó viejo, en vez de mostrar los dos
-                números contradiciéndose en la misma pantalla. */}
+            {/* Una sola cifra de placas: la del plano, que es la que se
+                guarda desde el alta (H113). */}
             <p className="mt-1 text-base text-muted-foreground">
-              {plural(plano.placas.length, "placa")} a cortar
+              {nPlacas} {rotuloPlacas}
             </p>
-            {plano.placas.length !== corte.placas && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                En el alta se habían cargado {plural(corte.placas, "placa")}.
-              </p>
-            )}
             {corte.cantoDescripcion && (
               <p className="mt-1 text-base text-muted-foreground">
                 Tapacanto: {corte.cantoDescripcion}
@@ -451,8 +459,7 @@ export default async function FichaCortePage({
             )}
 
             {/* El pegado de tapacanto se cobra aparte del corte, por metro
-                lineal. Los metros salen del despiece: no hay nada que medir a
-                mano. */}
+                lineal. Los metros salen del despiece. */}
             {metrosCanto > 0 && (
               <div className="mt-3 border-t pt-3">
                 <p className="text-base">
@@ -461,45 +468,27 @@ export default async function FichaCortePage({
                   </span>{" "}
                   de tapacanto a pegar
                 </p>
-                <p className="mt-1 text-base text-muted-foreground">
-                  {cargoCanto > 0
-                    ? `${formatearMonto(tarifa?.precioPorMetroCanto ?? 0)} el metro · ${formatearMonto(cargoCanto)} en total`
-                    : "Sin precio de pegado para este material. Se carga en Cortes → Tarifas."}
-                </p>
+                {!sinPlata && cargoCanto > 0 && (
+                  <p className="mt-1 text-base text-muted-foreground">
+                    {formatearMonto(tarifa?.precioPorMetroCanto ?? 0)} el metro
+                  </p>
+                )}
               </div>
             )}
 
-            {/*
-              El corte se cobra por pasada de sierra, y cuántas lleva el
-              trabajo lo resuelve el optimizador de la máquina, no la
-              plataforma. Por eso el número lo carga quien opera, después de
-              optimizar; hasta entonces el cargo no se inventa.
-            */}
-            <div className="mt-3 border-t pt-3">
-              {corte.pasadas > 0 ? (
-                <>
-                  <p className="text-base">
-                    <span className="tabular font-medium">{corte.pasadas}</span>{" "}
-                    {corte.pasadas === 1 ? "pasada" : "pasadas"} de sierra
-                  </p>
-                  <p className="mt-1 text-base text-muted-foreground">
-                    {tarifa
-                      ? `${formatearMonto(tarifa.precioPorPasada)} por pasada · ${formatearMonto(cargo)} en total`
-                      : `No hay tarifa cargada para "${corte.material}". Se configura en Cortes.`}
-                  </p>
-                </>
-              ) : (
-                <p className="text-base text-muted-foreground">
-                  Sin pasadas cargadas: el corte todavía no se puede cobrar.
-                </p>
-              )}
-
-              <CargarPasadas
-                id={corte.id}
-                actuales={corte.pasadas}
-                sugeridas={plano.pasadasCobrables}
-              />
-            </div>
+            {/* Las pasadas a cobrar: las propone el plano y se corrigen acá
+                si la máquina dio otras. Al terminar las confirma el taller en
+                su tarjeta; esta corrección es del mostrador (H115). Solo donde
+                cambian lo que se cobra. */}
+            {decide && !sinPlata && (modo === "suelto" || modo === "pedido") && !anulado && (
+              <div className="mt-3 border-t pt-3">
+                <CargarPasadas
+                  id={corte.id}
+                  actuales={corte.pasadas}
+                  sugeridas={plano.pasadasCobrables}
+                />
+              </div>
+            )}
           </section>
 
           {corte.notas && (
@@ -515,7 +504,7 @@ export default async function FichaCortePage({
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Cliente
             </h2>
-            {corte.customerId ? (
+            {corte.customerId && !sinPlata ? (
               <Link
                 href={`/admin/clientes/${corte.customerId}`}
                 className="text-base font-medium hover:text-brand-orange"
@@ -542,8 +531,8 @@ export default async function FichaCortePage({
           </section>
 
           {/* De qué venta salió. Sin esto, quien está parado frente a la
-              seccionadora no puede saber si el pedido ya se cobró ni qué más
-              lleva el cliente en el mismo viaje. */}
+              seccionadora no puede saber qué más lleva el cliente en el mismo
+              viaje. */}
           {corte.orderId && (
             <section className="tarjeta p-5">
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -557,7 +546,6 @@ export default async function FichaCortePage({
               </Link>
             </section>
           )}
-
         </aside>
       </div>
     </div>
@@ -588,8 +576,44 @@ function Cifra({
 function Renglon({ que, cuanto }: { que: string; cuanto: number }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-base text-muted-foreground">{que}</dt>
-      <dd className="tabular text-base">{formatearMonto(cuanto)}</dd>
+      <dt className="min-w-0 text-base text-muted-foreground">{que}</dt>
+      <dd className="tabular shrink-0 text-base">{formatearMonto(cuanto)}</dd>
+    </div>
+  );
+}
+
+/** Las pasadas y el tapacanto de la cuenta. */
+function RenglonesDelCorte({
+  cuenta,
+}: {
+  cuenta: { pasadasCobrables: number; precioPorPasada: number; subtotalCorte: number; metrosCanto: number; subtotalCanto: number };
+}) {
+  return (
+    <>
+      {/* Sin tarifa no se muestra el renglón: "15 pasadas × $ 0" se lee
+          como que el corte sale gratis, cuando lo que pasa es que falta
+          cargar el precio. El aviso de abajo lo dice. */}
+      {cuenta.pasadasCobrables > 0 && cuenta.precioPorPasada > 0 && (
+        <Renglon
+          que={`${cuenta.pasadasCobrables} ${cuenta.pasadasCobrables === 1 ? "pasada" : "pasadas"} × ${formatearMonto(cuenta.precioPorPasada)}`}
+          cuanto={cuenta.subtotalCorte}
+        />
+      )}
+      {cuenta.subtotalCanto > 0 && (
+        <Renglon que={`${formatearDecimal(cuenta.metrosCanto)} m de tapacanto`} cuanto={cuenta.subtotalCanto} />
+      )}
+    </>
+  );
+}
+
+function Total({ texto, monto, children }: { texto: React.ReactNode; monto: number; children?: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-linea pt-2">
+      <dt className="text-base font-semibold">{texto}</dt>
+      <dd className="flex flex-wrap items-center gap-3">
+        <span className="tabular text-xl font-bold">{formatearMonto(monto)}</span>
+        {children}
+      </dd>
     </div>
   );
 }

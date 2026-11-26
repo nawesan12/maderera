@@ -18,6 +18,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/clientes"
 	"mjbj/internal/cobros"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -594,14 +595,22 @@ func (a *API) MiCuentaCorriente(ctx context.Context, _ cuentasapi.MiCuentaCorrie
 	// Lo cargado a la cuenta de pedidos que todavía no se entregaron: la
 	// deuda nace con el pedido (así se reserva el crédito), y el cliente veía
 	// una deuda sin comprobante (H082). Se distingue, no se descuenta.
+	//
+	// Del acopio que ya se retiró en parte cuenta solo lo que queda, a su
+	// precio y en la proporción del total (como fragmentos.SinCobrarDeLoQueSalio):
+	// con 35 de 40 placas retiradas sumaba el pedido entero.
 	var sinEntregar float64
-	if err := a.pool.QueryRow(ctx, `SELECT coalesce(sum(m.monto), 0)::float8 FROM account_movements m
+	if err := a.pool.QueryRow(ctx, `SELECT coalesce(sum(m.monto * greatest(1 - coalesce((
+		  SELECT sum(di.cantidad * oi.subtotal / nullif(oi.cantidad, 0)) FROM delivery_items di
+		  JOIN deliveries d ON d.id = di.delivery_id AND d.estado <> 'anulada' JOIN order_items oi ON oi.id = di.order_item_id
+		  WHERE d.order_id = o.id) / nullif((SELECT sum(oi.subtotal) FROM order_items oi WHERE oi.order_id = o.id), 0), 0), 0)), 0)::float8
+		FROM account_movements m
 		JOIN orders o ON o.numero = m.referencia AND o.customer_id = m.customer_id
 		WHERE m.customer_id = $1 AND m.tipo = 'compra' AND o.estado NOT IN ('entregado', 'cancelado')
 		  AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.estado <> 'borrador')`, c.id).Scan(&sinEntregar); err != nil {
 		return nil, err
 	}
-	return ok(miCuenta{v, sinEntregar}), nil
+	return ok(miCuenta{v, jsmath.Redondear2(sinEntregar)}), nil
 }
 
 type miCuenta struct {

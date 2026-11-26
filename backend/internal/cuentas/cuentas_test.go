@@ -311,6 +311,20 @@ func TestPortalYVinculo(t *testing.T) {
 	if _, b := pedir(t, web, "GET", u+"cuenta/corriente", nil); !strings.Contains(b, `"saldo":400`) || !strings.Contains(b, `"disponible":600`) {
 		t.Errorf("cuenta corriente: %s", b)
 	}
+	// Del acopio retirado en parte, «sin entregar» es solo lo que queda
+	// (mes simulado: con 35 de 40 placas retiradas sumaba el pedido entero).
+	var ped, renglon, remito string
+	_ = e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, subtotal, estado, origen, medio_pago)
+		values ('PED-9', 'Juan', $1, 400, 400, 'listo', 'mostrador', 'cuenta_corriente') returning id`, mostrador).Scan(&ped)
+	_ = e.pool.QueryRow(ctx, `insert into order_items (order_id, descripcion, cantidad, precio_unitario, subtotal) values ($1, 'Placa', 40, 10, 400) returning id`, ped).Scan(&renglon)
+	_ = e.pool.QueryRow(ctx, `insert into deliveries (numero, order_id) values ('REM-9', $1) returning id`, ped).Scan(&remito)
+	_, _ = e.pool.Exec(ctx, `insert into delivery_items (delivery_id, order_item_id, cantidad) values ($1, $2, 35)`, remito, renglon)
+	if _, err := e.pool.Exec(ctx, `update account_movements set referencia = 'PED-9' where customer_id = $1`, mostrador); err != nil {
+		t.Fatal(err)
+	}
+	if _, b := pedir(t, web, "GET", u+"cuenta/corriente", nil); !strings.Contains(b, `"sinEntregar":50`) {
+		t.Errorf("sin entregar del acopio en parte: %s", b)
+	}
 	if _, b := pedir(t, web, "GET", u+"cuenta/credito?monto=700", nil); !strings.Contains(b, "Tenés 600 disponibles.") {
 		t.Errorf("crédito: %s", b)
 	}

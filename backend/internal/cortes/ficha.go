@@ -30,8 +30,8 @@ type Ficha struct {
 	// Modo es de dónde sale la plata del trabajo (mes simulado, H052, H184,
 	// H232): «suelto» (se cobra lo de Cuenta, al pasarlo a pedido),
 	// «pedido» (el pedido vende las placas: Cuenta es lo que el pedido no
-	// tiene), «vendido» (se cobró en la venta que lo creó: ver Pedido) y
-	// «sinCargo» (una reposición). La ficha decía a la vez «Total del
+	// tiene), «vendido» (se cobró en la venta que lo creó: ver Pedido),
+	// «sinCargo» (una reposición) y «anulado» (no cobra nada). La ficha decía a la vez «Total del
 	// trabajo», «2 pasadas a cobrar» y «el corte todavía no se puede
 	// cobrar».
 	Modo string `json:"modo"`
@@ -105,6 +105,14 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 			return nil, err
 		}
 	}
+	// El pedido que vende todas las placas las vende enteras: el corte va
+	// sin cargo y lo que sobra es del cliente. Contado sobre el plano, las
+	// cifras decían «1 se vende entera · 3 pasadas a cobrar» con las dos
+	// placas selladas «Se vende entera» (mes simulado, H052 y H184).
+	delCliente := RetalesDelCliente(c, plano, pedido, modo)
+	if delCliente {
+		plano = TodasDelCliente(plano)
+	}
 	cuenta := CuentaDelCorte(c, plano, tarifa, pedido, modo)
 	aCobrar := PasadasACobrar(c, plano)
 	return &Ficha{
@@ -112,7 +120,7 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		CargoCanto: CargoPorTapacanto(tarifa, metros), Plano: plano, Superficies: sup,
 		Cuenta:  cuenta,
 		Fijadas: LeerAcomodoManual(texto(c.AcomodoManual)),
-		Modo:    modo, PasadasACobrar: aCobrar, Pedido: pedido, RetalesDelCliente: RetalesDelCliente(c, plano, pedido, modo),
+		Modo:    modo, PasadasACobrar: aCobrar, Pedido: pedido, RetalesDelCliente: delCliente,
 	}, nil
 }
 
@@ -146,7 +154,8 @@ func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plan
 
 // TodasDelCliente marca todas las placas del plano como del cliente: el
 // pedido las vende (la hoja y el plano rotulan de quién es lo que sobra con
-// SeVendeEntera). Copia las placas: el plano puede venir de un caché.
+// SeVendeEntera). Vendidas enteras, el corte va sin cargo: no quedan pasadas
+// a cobrar. Copia las placas: el plano puede venir de un caché.
 func TodasDelCliente(plano Plano) Plano {
 	placas := make([]PlacaDelPlano, len(plano.Placas))
 	for i, p := range plano.Placas {
@@ -155,7 +164,22 @@ func TodasDelCliente(plano Plano) Plano {
 	}
 	plano.Placas = placas
 	plano.PlacasEnteras = len(placas)
+	plano.PasadasCobrables = 0
 	return plano
+}
+
+// PlanoParaCobrar es el plano del trabajo con las placas que vende su pedido
+// ya marcadas: lo que muestran la ficha y la tarjeta del taller.
+func (s *Servicio) PlanoParaCobrar(ctx context.Context, c *Corte) (Plano, error) {
+	plano := PlanoDelCorte(c)
+	delCliente, err := s.RetalesDelClienteDe(ctx, c, plano)
+	if err != nil {
+		return plano, err
+	}
+	if delCliente {
+		plano = TodasDelCliente(plano)
+	}
+	return plano, nil
 }
 
 // placasDeOtrosCortes son las placas, en placas enteras, que usan los otros
@@ -225,7 +249,7 @@ func CuentaDelCorte(c *Corte, plano Plano, tarifa *TarifaDeCorte, pedido *Pedido
 			}
 		}
 		return cuenta
-	case "vendido", "sinCargo":
+	case "vendido", "sinCargo", "anulado":
 		cuenta := PresupuestoDeCorte{PlacasEnteras: plano.PlacasEnteras, Fraccion: fraccion,
 			PasadasCobrables: contado.PasadasCobrables, Faltan: []string{}}
 		if n := len(plano.NoEntran); n > 0 {
@@ -258,6 +282,10 @@ func piezasQueNoEntran(n int) string {
 // mostrador).
 func ModoDelCorte(c *Corte, delCorte bool) string {
 	switch {
+	// Anulado no cobra nada: la ficha de CRT-906 cancelado seguía diciendo
+	// «3 pasadas a cobrar · Fuera del pedido $3.600» (mes simulado).
+	case c.Estado == "cancelado":
+		return "anulado"
 	case c.SinCargo:
 		return "sinCargo"
 	case c.OrderID == nil:
@@ -269,8 +297,13 @@ func ModoDelCorte(c *Corte, delCorte bool) string {
 }
 
 // PasadasACobrar son las pasadas del trabajo: las que confirmó el taller (o
-// guardó el alta), y si no hay ninguna, las del plano.
+// guardó el alta), y si no hay ninguna, las del plano. Con todas las placas
+// vendidas enteras no hay ninguna: el corte va sin cargo (lo guardado por el
+// alta contaba el plano sin el pedido que las vende, H184).
 func PasadasACobrar(c *Corte, plano Plano) int {
+	if n := len(plano.Placas); n > 0 && plano.PlacasEnteras >= n {
+		return 0
+	}
 	if c.Pasadas > 0 {
 		return int(c.Pasadas)
 	}

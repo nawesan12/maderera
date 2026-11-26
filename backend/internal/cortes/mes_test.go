@@ -151,7 +151,12 @@ func TestElAserraderoNoDecideNiVePlata(t *testing.T) {
 func TestTerminarConPasadasYDeshacer(t *testing.T) {
 	e := armar(t)
 	ase := e.staff(t, "aserradero@prueba.test", "aserradero")
-	id := alta(t, e, ase, melamina(e))
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	// El alta es del mostrador: el aserradero no toma cortes (mes simulado).
+	if code, b := pedir(t, ase, "POST", e.srv.URL+"/api/v1/admin/cortes", melamina(e)); code != 403 {
+		t.Errorf("alta desde el taller: %d %s", code, b)
+	}
+	id := alta(t, e, ven, melamina(e))
 	u := e.srv.URL + "/api/v1/admin/cortes/" + id
 	if code, b := pedir(t, ase, "POST", u+"/volver?desde=en-cola", nil); code != 422 {
 		t.Errorf("volver desde la cola: %d %s", code, b)
@@ -221,8 +226,13 @@ func TestAnularYCorregir(t *testing.T) {
 	if code, b := pedir(t, ven, "POST", u, map[string]any{"motivo": "El cliente lo canceló"}); code != 200 {
 		t.Fatalf("anular: %d %s", code, b)
 	}
-	if code, b := pedir(t, ven, "POST", u, map[string]any{"motivo": "otra vez"}); code != 422 || !strings.Contains(b, "ya salió de la máquina") && !strings.Contains(b, "no se anula") {
+	if code, b := pedir(t, ven, "POST", u, map[string]any{"motivo": "otra vez"}); code != 422 || !strings.Contains(b, "ya está anulado") {
 		t.Errorf("anular dos veces: %d %s", code, b)
+	}
+	// Anulado no cobra nada (mes simulado, CRT-906).
+	f := leerFicha(t, e, ven, bueno)
+	if f["modo"] != "anulado" || f["cuenta"].(map[string]any)["total"].(float64) != 0 {
+		t.Errorf("el anulado cobra: %v %v", f["modo"], f["cuenta"])
 	}
 }
 
@@ -322,6 +332,16 @@ func TestLaFichaSabeDeSuPedido(t *testing.T) {
 	}
 	if f["retalesDelCliente"] != true {
 		t.Errorf("los retales de placas pagadas van al stock")
+	}
+	// Vendidas en el pedido, las placas se venden enteras y el corte va sin
+	// cargo: una sola cifra en las cifras, el dibujo y la cuenta (H052, H184).
+	plano := f["plano"].(map[string]any)
+	if f["pasadasACobrar"].(float64) != 0 || cuenta["pasadasCobrables"].(float64) != 0 || cuenta["subtotalCorte"].(float64) != 0 ||
+		plano["placasEnteras"].(float64) != float64(len(plano["placas"].([]any))) {
+		t.Errorf("las placas del pedido cobran el corte: %v %v %v", f["pasadasACobrar"], cuenta, plano["placasEnteras"])
+	}
+	if _, b := pedir(t, ven, "GET", e.srv.URL+"/api/v1/admin/cortes?estado=en-cola", nil); !strings.Contains(b, `"pasadas":0`) {
+		t.Errorf("la tarjeta del taller pide confirmar pasadas: %s", b)
 	}
 	// Otro corte del mismo pedido: el aviso cuenta los dos, y la hoja del
 	// operario dice lo mismo que la ficha (los retales son del cliente).

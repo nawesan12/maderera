@@ -186,7 +186,12 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		if c == nil || len(c.Piezas) == 0 {
 			continue
 		}
-		plano := PlanoDelCorte(c)
+		// Con las placas que vende su pedido marcadas: si las vende todas,
+		// no hay pasadas que confirmar (H184).
+		plano, err := s.PlanoParaCobrar(ctx, c)
+		if err != nil {
+			return nil, err
+		}
 		if n := len(plano.Placas); n > 0 {
 			out[i].Placas = int32(n)
 		}
@@ -730,6 +735,10 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 	}
 	if err != nil {
 		return "", err
+	}
+	// Uno ya anulado o reemplazado no «salió de la máquina» (mes simulado).
+	if estado == "cancelado" {
+		return "", error422(numero + " ya está anulado.")
 	}
 	if estado != "en-cola" && estado != "en-proceso" {
 		return "", error422(numero + " ya salió de la máquina: no se anula.")

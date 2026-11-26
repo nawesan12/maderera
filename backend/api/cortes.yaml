@@ -668,7 +668,7 @@ components:
       required: [corte, tarifa, cargo, metrosCanto, cargoCanto, plano, superficies, cuenta, fijadas, modo, pasadasACobrar,
         pedido, retalesDelCliente, sinPlata]
       properties:
-        modo: { type: string, enum: [suelto, pedido, vendido, sinCargo] }
+        modo: { type: string, enum: [suelto, pedido, vendido, sinCargo, anulado] }
         pasadasACobrar: { type: integer }
         pedido:
           nullable: true

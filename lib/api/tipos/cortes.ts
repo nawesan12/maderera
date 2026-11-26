@@ -605,7 +605,7 @@ export interface components {
         };
         FichaCorte: {
             /** @enum {string} */
-            modo: "suelto" | "pedido" | "vendido" | "sinCargo";
+            modo: "suelto" | "pedido" | "vendido" | "sinCargo" | "anulado";
             pasadasACobrar: number;
             pedido: {
                 numero: string;

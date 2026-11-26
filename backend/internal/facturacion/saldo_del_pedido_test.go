@@ -34,10 +34,14 @@ func TestSaldoDeLaFacturaSaleDelPedido(t *testing.T) {
 	}
 	contado := pedido("PED-1000", "pagado", "efectivo", 211500, false)
 	e.exec(t, `INSERT INTO order_payments (order_id, medio, importe) VALUES ($1, 'efectivo', 211500)`, contado)
+	// La venta del mostrador escribe el mismo pago en payments: no se cuenta
+	// dos veces (mes simulado, H130 vuelta 2).
+	e.exec(t, `INSERT INTO payments (order_id, tipo, proveedor, medio, monto, estado) VALUES ($1, 'pedido', 'mostrador', 'efectivo', 211500, 'aprobado')`, contado)
 	conRecibo := pedido("PED-1046", "pendiente", "transferencia", 437120, true)
 	e.exec(t, `INSERT INTO receipts (numero, customer_id, recibido_de, total, origen, order_id) VALUES ('REC-0016', $1, 'Constructora', 437120, 'panel', $2)`,
 		cliente, conRecibo)
 	aCuenta := pedido("PED-1006", "pendiente", "cuenta_corriente", 4113000, true)
+	e.exec(t, `INSERT INTO order_payments (order_id, medio, importe) VALUES ($1, 'cuenta_corriente', 4113000)`, aCuenta)
 	sinCobrar := pedido("PED-1066", "pendiente", "efectivo", 495400, false)
 
 	facturaDe := func(pedido string) string {
@@ -70,6 +74,12 @@ func TestSaldoDeLaFacturaSaleDelPedido(t *testing.T) {
 	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+facturaDe(conRecibo), nil)
 	if f := leerJSON[Completo](t, b); len(f.CobrosDelPedido) != 1 || f.CobrosDelPedido[0].Recibo == nil || *f.CobrosDelPedido[0].Recibo != "REC-0016" {
 		t.Fatalf("el recibo del pedido: %s", b)
+	}
+
+	// Lo cargado a la cuenta no es un cobro.
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+facturaDe(aCuenta), nil)
+	if f := leerJSON[Completo](t, b); len(f.CobrosDelPedido) != 0 {
+		t.Fatalf("la cuenta corriente como cobro: %s", b)
 	}
 
 	// Y no se deja cobrar otra vez.

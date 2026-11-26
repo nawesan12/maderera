@@ -356,7 +356,10 @@ type CobroDelPedido struct {
 
 // cobrosDelPedido llena CobrosDelPedido: lo de la caja (order_payments), los
 // recibos vivos del pedido que no están ya en los cobros de la factura y lo
-// aprobado en línea.
+// aprobado en línea. La venta del mostrador escribe cada pago en las dos
+// tablas (order_payments y payments «mostrador»): se lee una sola, o el
+// efectivo salía dos veces. Lo cargado a la cuenta corriente no es un cobro:
+// lo paga el recibo que venga después.
 func (s *Servicio) cobrosDelPedido(ctx context.Context, c *Completo) error {
 	c.CobrosDelPedido = []CobroDelPedido{}
 	if c.OrderID == nil {
@@ -364,7 +367,7 @@ func (s *Servicio) cobrosDelPedido(ctx context.Context, c *Completo) error {
 	}
 	filas, err := s.pool.Query(ctx, `SELECT medio, monto, fecha, recibo, recibo_id FROM (
 		  SELECT op.medio::text AS medio, op.importe::float8 AS monto, op.created_at AS fecha, NULL::text AS recibo, NULL::text AS recibo_id
-		    FROM order_payments op WHERE op.order_id = $1
+		    FROM order_payments op WHERE op.order_id = $1 AND op.medio <> 'cuenta_corriente'
 		  UNION ALL
 		  SELECT coalesce((SELECT rp.medio::text FROM receipt_parts rp WHERE rp.receipt_id = r.id ORDER BY rp.orden LIMIT 1), 'recibo'),
 		    r.total::float8, r.created_at, r.numero, r.id::text
@@ -372,6 +375,7 @@ func (s *Servicio) cobrosDelPedido(ctx context.Context, c *Completo) error {
 		      AND NOT EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.receipt_id = r.id AND ip.invoice_id = $2)
 		  UNION ALL
 		  SELECT coalesce(pg.medio, 'mercado_pago'), pg.monto::float8, pg.created_at, NULL, NULL FROM payments pg WHERE pg.order_id = $1 AND pg.estado = 'aprobado'
+		    AND NOT (pg.proveedor = 'mostrador' AND EXISTS (SELECT 1 FROM order_payments opm WHERE opm.order_id = $1))
 		) x ORDER BY fecha`, *c.OrderID, c.ID)
 	if err != nil {
 		return err

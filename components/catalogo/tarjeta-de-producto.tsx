@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Loader2, Plus } from "lucide-react";
-import type { ReactNode } from "react";
+import { Suspense, type ComponentProps, type ReactNode } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCarrito } from "@/lib/carrito-context";
 import { formatearUnidad } from "@/lib/formato";
@@ -11,6 +11,8 @@ import type { ProductoListado } from "@/lib/dal/catalog";
 import { PlacaDeProducto } from "@/components/catalogo/placa-de-producto";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { enlaceDeConsulta } from "@/lib/catalogo/consulta";
+import { mensajeDeConsulta } from "@/lib/cuenta/portal";
+import { useEstado } from "@/lib/estado-context";
 
 /**
  * Tarjeta de producto del catálogo.
@@ -88,12 +90,13 @@ export function TarjetaDeProducto({
   const rubroVisible = Boolean(product.image) && !rubroRedundante;
   // Con una sola medida, el mensaje ya la lleva: quien atiende contesta sin
   // preguntar cuál. Con varias, la elige en la ficha.
-  const consulta = enlaceDeConsulta(
+  const consulta = {
     whatsapp,
-    product.labels.length === 1
-      ? `Hola! Quería el precio de ${product.name} — ${product.labels[0]}.`
-      : `Hola! Quería consultar por ${product.name}.`,
-  );
+    texto:
+      product.labels.length === 1
+        ? `Hola! Quería el precio de ${product.name} — ${product.labels[0]}.`
+        : `Hola! Quería consultar por ${product.name}.`,
+  };
   /*
    * Sin precio, la acción de la tarjeta es preguntarlo, con nombre y a la
    * vista (lo pidió el dueño en el comité: la medida sola no dice si se puede
@@ -193,13 +196,13 @@ export function TarjetaDeProducto({
 
         {consultarPrecio ? (
           <div className={`mt-auto flex sm:border-t sm:border-linea-tenue sm:pt-3.5 ${renglon ? "max-sm:hidden" : ""}`}>
-            <BotonWhatsapp
-              enlace={consulta}
+            <ConsultaPorWhatsapp
+              consulta={consulta}
               className="min-w-0 flex-1"
               aria-label={`Consultar el precio de ${product.name} por WhatsApp`}
             >
               Consultar precio
-            </BotonWhatsapp>
+            </ConsultaPorWhatsapp>
           </div>
         ) : (
           /* Sin «Agregar», en el teléfono el WhatsApp sube a la altura del
@@ -243,8 +246,8 @@ export function TarjetaDeProducto({
               </Button>
             )}
 
-            <BotonWhatsapp
-              enlace={consulta}
+            <ConsultaPorWhatsapp
+              consulta={consulta}
               variante="secundario"
               tamano="icono"
               aria-label={`Consultar por ${product.name} por WhatsApp`}
@@ -255,8 +258,8 @@ export function TarjetaDeProducto({
 
       {/* En el renglón del teléfono, el WhatsApp al costado, de 44 px. */}
       {renglon && consultarPrecio && (
-        <BotonWhatsapp
-          enlace={consulta}
+        <ConsultaPorWhatsapp
+          consulta={consulta}
           tamano="icono"
           className="sm:hidden"
           aria-label={`Consultar el precio de ${product.name} por WhatsApp`}
@@ -264,4 +267,26 @@ export function TarjetaDeProducto({
       )}
     </article>
   );
+}
+
+type Consulta = { whatsapp: string; texto: string };
+type PropsDeConsulta = Omit<ComponentProps<typeof BotonWhatsapp>, "enlace"> & { consulta: Consulta };
+
+/**
+ * El WhatsApp de la tarjeta, con quién consulta si hay sesión: la ficha ya lo
+ * decía y el renglón del catálogo no (mes simulado). La sesión se resuelve
+ * aparte; mientras tanto, el mensaje de siempre.
+ */
+function ConsultaPorWhatsapp({ consulta, ...props }: PropsDeConsulta) {
+  return (
+    <Suspense fallback={<BotonWhatsapp {...props} enlace={enlaceDeConsulta(consulta.whatsapp, consulta.texto)} />}>
+      <ConsultaDeQuienMira consulta={consulta} {...props} />
+    </Suspense>
+  );
+}
+
+function ConsultaDeQuienMira({ consulta, ...props }: PropsDeConsulta) {
+  const { sesion } = useEstado();
+  const quien = sesion && !sesion.esStaff ? { nombre: sesion.nombre } : null;
+  return <BotonWhatsapp {...props} enlace={enlaceDeConsulta(consulta.whatsapp, mensajeDeConsulta(consulta.texto, quien))} />;
 }

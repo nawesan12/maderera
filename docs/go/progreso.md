@@ -3214,3 +3214,21 @@ ficha (hoy es de /admin/cheques, del admin).
   cortes.
 - Los PDF del corte y de la hoja dicen «1 pieza» y «1 pasada»; el golden de
   `corte` y `hoja-de-corte` pasa a ser el de Go.
+
+## 26/11/2026: el mes simulado, la vuelta en el navegador de atención
+
+- **`GET /admin/cobros/caja`** (`CajaDelCobroACuenta`, quien maneja plata):
+  la regla del cobro a cuenta sin pedido (la única caja abierta, o elegir),
+  para que el diálogo de la ficha diga qué caja abrir apenas se abre, como el
+  del pedido (H132).
+- **`ItemDePresupuesto.piso`** (`precios.PisoDeCosto`): corregir y duplicar
+  un presupuesto marcan «Bajo costo» y piden «Guardar igual» como el alta.
+- **`entregas.sinServicios`** también saca del acopio las pasadas, el canto
+  en metros y los renglones a mano que dicen un trabajo (armado, colocación,
+  flete…) sin corte atado: los de un presupuesto figuraban «por retirar».
+- **Los importes con centavos se dicen con centavos** (`formato.Importe`) en
+  las plantillas de WhatsApp, la lista de Documento del chat, los avisos al
+  panel, los medios del recibo en la ficha y los correos (`email`, con
+  `email.ComoElTS` para que los golden contra el TS sigan comparando).
+- **El buscador** no repite la razón social igual al nombre y escribe el
+  CUIT con guiones.

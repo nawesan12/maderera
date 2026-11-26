@@ -18,6 +18,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/clientes"
 	"mjbj/internal/cuit"
 	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
@@ -59,7 +60,10 @@ type Cliente struct {
 	// cliente con un clic (mes simulado, H079).
 	DatosFiscalesFijos bool `json:"datosFiscalesFijos"`
 	// Vinculada: la ficha existía antes que la cuenta web (la abrió el
-	// mostrador o vino de ISIS). A esa no se le ofrece «vincular» (H090).
+	// mostrador o vino de ISIS), o el local le ató la cuenta web después. A
+	// esa no se le ofrece «vincular» (H090). El vínculo hecho desde el panel
+	// se lee de la bitácora: la ficha del mostrador puede ser más nueva que
+	// la cuenta web, y por la fecha sola se seguía ofreciendo.
 	Vinculada bool `json:"vinculada"`
 	// Lista es el nombre de la lista de precios propia, si tiene una.
 	Lista *string `json:"lista"`
@@ -73,7 +77,9 @@ func (s *Servicio) ClienteDe(ctx context.Context, usuario string) (*Cliente, err
 		  c.limite_credito > 0
 		    OR EXISTS (SELECT 1 FROM invoices i WHERE i.customer_id = c.id AND i.estado <> 'borrador')
 		    OR EXISTS (SELECT 1 FROM account_movements m WHERE m.customer_id = c.id),
-		  c.codigo_legacy IS NOT NULL OR c.created_at < u.created_at - interval '1 minute',
+		  c.codigo_legacy IS NOT NULL OR c.created_at < u.created_at - interval '1 minute'
+		    OR EXISTS (SELECT 1 FROM audit_log a WHERE a.entidad = 'cliente' AND a.entidad_id = c.id::text
+		      AND a.descripcion = '`+clientes.DescripcionDeVinculo+`'),
 		  CASE WHEN l.is_default THEN NULL ELSE l.name END
 		FROM customers c JOIN "user" u ON u.id = c.user_id LEFT JOIN price_lists l ON l.id = c.price_list_id
 		WHERE c.user_id = $1 AND c.active LIMIT 1`, usuario).
@@ -128,16 +134,25 @@ type Pedido struct {
 // Una venta del mostrador anulada sin remito ni factura no se lista: casi
 // siempre es una venta cargada al cliente equivocado, y mostrársela le decía
 // a quién se le había vendido (H386). Su detalle se sigue abriendo por número
-// (la nota de crédito que la cancela lo enlaza).
+// (la nota de crédito que la cancela lo enlaza). Solo la del mostrador: un
+// pedido cancelado que salió de un presupuesto o se tomó por teléfono es del
+// cliente y sigue en su lista (H310).
+//
+// «En acopio» es que ya retiró algo y todavía le queda: con un remito vivo y
+// algún renglón con saldo (lo mismo que entregas.SaldoDeAcopio).
 func (s *Servicio) Pedidos(ctx context.Context, c *Cliente) ([]Pedido, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.total::float8,
 		  (SELECT count(*)::int FROM order_items i WHERE i.order_id = o.id), b.name,
-		  o.estado NOT IN ('entregado', 'cancelado') AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada'),
+		  o.estado NOT IN ('entregado', 'cancelado') AND EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
+		    AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND NOT (oi.variant_id IS NULL AND oi.del_corte)
+		      AND oi.cantidad - coalesce((SELECT sum(di.del_acopio) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)
+		        - coalesce((SELECT sum(di.cantidad) FROM delivery_items di JOIN deliveries d ON d.id = di.delivery_id
+		                    WHERE di.order_item_id = oi.id AND d.estado <> 'anulada'), 0) > 0.01),
 		  o.created_at
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.customer_id = $1
-		  AND NOT (o.estado = 'cancelado' AND o.origen <> 'tienda'
+		  AND NOT (o.estado = 'cancelado' AND o.origen = 'mostrador' AND o.quote_id IS NULL
 		    AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id AND d.estado <> 'anulada')
 		    AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = o.id AND i.estado <> 'borrador'))
 		ORDER BY o.created_at DESC`, c.ID)

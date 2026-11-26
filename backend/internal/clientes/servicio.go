@@ -280,6 +280,10 @@ func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, ti
 	return nil
 }
 
+// DescripcionDeVinculo es lo que anota la bitácora al vincular: el portal la
+// lee para no ofrecerle «vincular» a quien ya está vinculado (H090).
+const DescripcionDeVinculo = "Vinculó una cuenta web con la ficha del mostrador"
+
 // VincularCuentaWeb pasa la cuenta del sitio de una ficha web a la del
 // mostrador: sus pedidos, presupuestos, movimientos y direcciones se mudan, y
 // la ficha web queda apagada.
@@ -327,7 +331,7 @@ func (s *Servicio) VincularCuentaWeb(ctx context.Context, ses *auth.Sesion, clie
 	if err != nil {
 		return err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "cliente", cliente, "Vinculó una cuenta web con la ficha del mostrador",
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "cliente", cliente, DescripcionDeVinculo,
 		map[string]any{"customerId": cliente, "cuentaWebId": web, "userId": usuario})
 	return nil
 }

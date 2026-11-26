@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"mjbj/internal/clientes"
 )
 
 // Lo que encontró el mes simulado en producción (noviembre de 2026).
@@ -13,34 +15,34 @@ func TestImputarALaDeudaMasVieja(t *testing.T) {
 	// H208: la empresa compró dos pedidos a cuenta y pagó casi todo; los
 	// dos decían «Pago pendiente».
 	debe := Imputar([]Asiento{
-		{870400, "PED-1004"},
-		{4113000, "PED-1006"},
-		{-3483400, "REC-0001"},
+		{870400, "PED-1004", false},
+		{4113000, "PED-1006", false},
+		{-3483400, "REC-0001", false},
 	})
 	if debe["PED-1004"] != 0 || debe["PED-1006"] != 1500000 {
 		t.Errorf("FIFO: %v", debe)
 	}
 	// La nota de crédito de un faltante baja su pedido, no el más viejo.
 	debe = Imputar([]Asiento{
-		{1000, "PED-1"},
-		{2000, "PED-2"},
-		{-500, "PED-2"},
-		{-1000, "REC-1"},
+		{1000, "PED-1", false},
+		{2000, "PED-2", false},
+		{-500, "PED-2", false},
+		{-1000, "REC-1", false},
 	})
 	if debe["PED-1"] != 0 || debe["PED-2"] != 1500 {
 		t.Errorf("nota de crédito con referencia: %v", debe)
 	}
 	// Un ajuste suelto ocupa su lugar en la fila y no aparece.
 	debe = Imputar([]Asiento{
-		{300, ""},
-		{1000, "PED-1"},
-		{-800, "REC-1"},
+		{300, "", false},
+		{1000, "PED-1", false},
+		{-800, "REC-1", false},
 	})
 	if debe["PED-1"] != 500 || len(debe) != 1 {
 		t.Errorf("ajuste suelto: %v", debe)
 	}
 	// Pagar de más no deja negativos.
-	if debe = Imputar([]Asiento{{100, "PED-1"}, {-300, "REC-1"}}); debe["PED-1"] != 0 {
+	if debe = Imputar([]Asiento{{100, "PED-1", false}, {-300, "REC-1", false}}); debe["PED-1"] != 0 {
 		t.Errorf("a favor: %v", debe)
 	}
 }
@@ -103,6 +105,7 @@ func TestPedidosParaElCliente(t *testing.T) {
 	pedido("PED-1006", "pendiente", "mostrador", "cuenta_corriente", "", 4113000)
 	pedido("PED-1121", "cancelado", "mostrador", "cuenta_corriente", "Anulada: se cargó a la Mueblería y era de la Constructora", 100)
 	pedido("PED-1200", "cancelado", "tienda", "transferencia", "Tocar timbre\nAnulada: sin stock", 100)
+	pedido("PED-1130", "cancelado", "telefono", "transferencia", "", 100)
 	for _, m := range []struct {
 		tipo  string
 		monto float64
@@ -127,6 +130,14 @@ func TestPedidosParaElCliente(t *testing.T) {
 	}
 	if _, ok := porNumero["PED-1200"]; !ok {
 		t.Errorf("el pedido de la tienda cancelado tiene que seguir: %s", b)
+	}
+	// H310: el cancelado que se tomó por teléfono también es del cliente.
+	if _, ok := porNumero["PED-1130"]; !ok {
+		t.Errorf("el pedido por teléfono cancelado tiene que seguir: %s", b)
+	}
+	// Sin ningún retiro no hay «en acopio» (mes simulado, PED-1133).
+	if porNumero["PED-1006"].EnAcopio {
+		t.Errorf("PED-1006 no tuvo retiros: %+v", porNumero["PED-1006"])
 	}
 	// H208: lo que falta de cada pedido a cuenta.
 	if p := porNumero["PED-1004"]; p.DebeEnCuenta == nil || *p.DebeEnCuenta != 0 {
@@ -219,5 +230,49 @@ func TestPedidoConSuNotaDeCredito(t *testing.T) {
 	}
 	if _, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-1004", nil); !strings.Contains(b, `"debeEnCuenta":1000`) {
 		t.Errorf("la del faltante no es del pedido más viejo: %s", b)
+	}
+}
+
+// H302: el cheque que rebotó vuelve sobre el pedido que había pagado; no es
+// una deuda nueva al final de la fila.
+func TestImputarElChequeRechazado(t *testing.T) {
+	debe := Imputar([]Asiento{
+		{3168000, "PED-1128", false},
+		{-264000, "PED-1128", false},
+		{-1500000, "REC-0002", false},
+		{1000000, "55500321", true},
+	})
+	if debe["PED-1128"] != 2404000 {
+		t.Errorf("el pedido vuelve a deber lo del cheque: %v", debe)
+	}
+	if _, ok := debe["55500321"]; ok {
+		t.Errorf("el cheque no es un comprobante con deuda propia: %v", debe)
+	}
+	// Si rebota más de lo libre, lo que sobra no se le carga a otro pedido.
+	debe = Imputar([]Asiento{
+		{1000, "PED-1", false},
+		{-1000, "PED-1", false},
+		{500, "CH-1", true},
+	})
+	if debe["PED-1"] != 0 {
+		t.Errorf("lo revertido de más: %v", debe)
+	}
+}
+
+// H090: la cuenta web creada antes que la ficha del mostrador, vinculada
+// después desde el panel, ya está vinculada.
+func TestFichaVinculadaDespues(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	obra, idObra := e.web(t, "obra@prueba.test")
+	if _, b := pedir(t, obra, "GET", e.srv.URL+"/api/v1/cuenta/ficha", nil); !strings.Contains(b, `"vinculada":false`) {
+		t.Fatalf("recién creada: %s", b)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into audit_log (usuario_nombre, accion, entidad, entidad_id, descripcion) values ('Admin', 'editar', 'cliente', $1, $2)`,
+		idObra, clientes.DescripcionDeVinculo); err != nil {
+		t.Fatal(err)
+	}
+	if _, b := pedir(t, obra, "GET", e.srv.URL+"/api/v1/cuenta/ficha", nil); !strings.Contains(b, `"vinculada":true`) {
+		t.Errorf("vinculada desde el panel: %s", b)
 	}
 }

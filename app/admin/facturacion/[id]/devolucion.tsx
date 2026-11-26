@@ -298,7 +298,10 @@ export function Devolucion({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* Uno debajo del otro: la devolución va en la columna angosta de la
+          ficha, y en dos columnas la sucursal se cortaba («Casa Centra…») y
+          los botones de la plata quedaban apilados de a uno. */}
+      <div className="space-y-4">
         {datos.sucursales.length > 1 && (
           <label className="block">
             <span className="text-sm font-medium">Entra a</span>

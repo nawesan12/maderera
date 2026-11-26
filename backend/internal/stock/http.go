@@ -90,7 +90,10 @@ func (a *API) UltimosMovimientos(ctx context.Context, r stockapi.UltimosMovimien
 	if _, err := gestion(ctx); err != nil {
 		return nil, err
 	}
-	v, err := a.s.Movimientos(ctx, entero(r.Params.Limite, 10))
+	p := r.Params
+	f := listado.Filtros{Busqueda: texto(p.Busqueda), Categoria: texto(p.Categoria), Marca: texto(p.Marca),
+		Proveedor: listado.ProveedorSiCompra(ctx, texto(p.Proveedor))}
+	v, err := a.s.Movimientos(ctx, f, entero(p.Limite, 10))
 	return ok(v), err
 }
 
@@ -103,7 +106,8 @@ func (a *API) AjustarStock(ctx context.Context, r stockapi.AjustarStockRequestOb
 	if r.Body.Motivo != nil {
 		motivo = string(*r.Body.Motivo)
 	}
-	m, err := a.s.AjustarCon(ctx, ses, r.Body.VariantId, r.Body.BranchSlug, float64(r.Body.Cantidad), r.Body.Contado, motivo)
+	m, err := a.s.AjustarCon(ctx, ses, Ajuste{Variante: r.Body.VariantId, Sucursal: r.Body.BranchSlug, Delta: float64(r.Body.Cantidad),
+		Contado: r.Body.Contado, Motivo: motivo, Pedido: texto(r.Body.Pedido)})
 	if err != nil {
 		return nil, err
 	}
@@ -162,4 +166,56 @@ func (a *API) SinSucursalAsignada(ctx context.Context, _ stockapi.SinSucursalAsi
 	}
 	p, c, err := a.s.SinSucursal(ctx)
 	return ok(map[string]int{"pedidos": p, "cortes": c}), err
+}
+
+func (o respuesta) VisitTrasladosEnCaminoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCrearTrasladoResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitVerTrasladoResponse(w http.ResponseWriter) error       { return o.escribir(w) }
+func (o respuesta) VisitRecibirTrasladoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+
+func (a *API) TrasladosEnCamino(ctx context.Context, _ stockapi.TrasladosEnCaminoRequestObject) (stockapi.TrasladosEnCaminoResponseObject, error) {
+	if _, err := gestion(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.TrasladosEnCamino(ctx)
+	return ok(v), err
+}
+
+func (a *API) CrearTraslado(ctx context.Context, r stockapi.CrearTrasladoRequestObject) (stockapi.CrearTrasladoResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	f := FormTraslado{OrigenID: b.OrigenId, DestinoID: b.DestinoId, Nota: texto(b.Nota)}
+	for _, x := range b.Renglones {
+		f.Renglones = append(f.Renglones, RenglonDeTraslado{VariantID: x.VariantId, Cantidad: x.Cantidad})
+	}
+	v, err := a.s.CrearTraslado(ctx, ses, f)
+	if err != nil {
+		return nil, err
+	}
+	return respuesta{http.StatusCreated, v}, nil
+}
+
+func (a *API) VerTraslado(ctx context.Context, r stockapi.VerTrasladoRequestObject) (stockapi.VerTrasladoResponseObject, error) {
+	if _, err := gestion(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.VerTraslado(ctx, r.Id)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (a *API) RecibirTraslado(ctx context.Context, r stockapi.RecibirTrasladoRequestObject) (stockapi.RecibirTrasladoResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.s.RecibirTraslado(ctx, ses, r.Id); err != nil {
+		return nil, err
+	}
+	return respuesta{codigo: http.StatusNoContent}, nil
 }

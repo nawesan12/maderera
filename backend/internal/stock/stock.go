@@ -112,12 +112,24 @@ type Sucursal struct {
 }
 
 // StockEnSucursal es el stock de una medida en una sucursal.
+//
+// Disponible es físico − reservado *con signo*: negativo es lo vendido de
+// más, el faltante que hay que comprar (mes simulado, H218). La tarjeta
+// mostraba «0 · Sin stock» con 135 placas vendidas y 70 en el galpón.
+//
+// EnReparto es lo reservado de pedidos que ya salieron en el camión
+// («en camino») y todavía no tienen remito: sigue en el físico del sistema
+// pero no en el galpón (H166). Llegando es lo que viene de otra sucursal en
+// un traslado sin recibir.
 type StockEnSucursal struct {
 	Sucursal
-	Qty       float64             `json:"qty"`
-	Reservado float64             `json:"reservado"`
-	Min       float64             `json:"min"`
-	Nivel     catalogo.NivelStock `json:"nivel"`
+	Qty        float64             `json:"qty"`
+	Reservado  float64             `json:"reservado"`
+	Disponible float64             `json:"disponible"`
+	EnReparto  float64             `json:"enReparto"`
+	Llegando   float64             `json:"llegando"`
+	Min        float64             `json:"min"`
+	Nivel      catalogo.NivelStock `json:"nivel"`
 }
 
 // FilaStock es una medida con su stock en cada sucursal activa.
@@ -134,10 +146,17 @@ type FilaStock struct {
 	LargoMm      *int32            `json:"largoMm"`
 	Imagen       *string           `json:"imagen"`
 	Sucursales   []StockEnSucursal `json:"sucursales"`
-	Total        float64           `json:"total"`
+	// Total es la suma de lo disponible de cada sucursal, lo mismo que se
+	// muestra en cada una: sumaba el físico y «109 total» no cerraba con
+	// 65 + 30 (H198).
+	Total float64 `json:"total"`
+	// ParaReponer es catalogo.MedidaParaReponer, el mismo criterio que la
+	// pestaña y el inicio.
+	ParaReponer bool `json:"paraReponer"`
 }
 
 // ConteosDeStock son los totales de cada grupo con los mismos filtros.
+// Reponer, SinStock y ConStock no se pisan: suman Todas.
 type ConteosDeStock struct {
 	Todas    int `json:"todas"`
 	SinStock int `json:"sinStock"`
@@ -169,21 +188,31 @@ func (s *Servicio) Sucursales(ctx context.Context) ([]Sucursal, error) {
 	})
 }
 
-// Los grupos de la pantalla, en SQL. «Total» es la suma del físico en las
-// sucursales activas; «bajo» es catalogo.Nivel == Bajo en alguna: hay
-// disponible, hay mínimo y el disponible no lo supera. Una sucursal en cero
-// con otra con stock no cuenta como «reponer», igual que antes.
-const (
-	totalDeLaMedida = `coalesce((SELECT sum(i.qty) FROM inventory i JOIN branches b ON b.id = i.branch_id AND b.active WHERE i.variant_id = v.id), 0)`
-	bajoEnAlguna    = `EXISTS (SELECT 1 FROM inventory i JOIN branches b ON b.id = i.branch_id AND b.active
-		WHERE i.variant_id = v.id AND i.min_qty > 0 AND greatest(i.qty - i.reservado, 0) > 0
-		  AND greatest(i.qty - i.reservado, 0) <= i.min_qty)`
-)
-
+// Los grupos de la pantalla, en SQL, sin pisarse: «reponer» es la regla de
+// catalogo.MedidaParaReponer (la misma del inicio y de Sucursales); de lo
+// demás, «sin stock» es lo que no tiene nada para vender en ninguna
+// sucursal, y «con stock» el resto. Antes «reponer» excluía la sucursal en
+// cero y «sin stock» miraba el total del físico: la chapa sin stock en el
+// Aserradero, mínimo 50, no caía en ningún grupo para atender (H004).
 var estadosDeStock = map[string]string{
-	"sin-stock": totalDeLaMedida + ` = 0`,
-	"reponer":   totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna,
-	"con-stock": `NOT (` + totalDeLaMedida + ` = 0) AND NOT (` + totalDeLaMedida + ` > 0 AND ` + bajoEnAlguna + `)`,
+	"reponer":   catalogo.MedidaParaReponer,
+	"sin-stock": `NOT ` + catalogo.MedidaParaReponer + ` AND NOT ` + catalogo.MedidaConDisponible,
+	"con-stock": `NOT ` + catalogo.MedidaParaReponer + ` AND ` + catalogo.MedidaConDisponible,
+}
+
+// columnasDeBusqueda son las de la grilla y de los movimientos: nombre,
+// código, medida, material, color y categoría.
+var columnasDeBusqueda = []string{"p.name", "v.sku", "v.label", "v.material", "v.color", "c.name"}
+
+// filtrar arma el WHERE común de la grilla y de los movimientos.
+func filtrar(f listado.Filtros) *listado.Consulta {
+	var c listado.Consulta
+	c.Y("p.active")
+	c.Y("v.active")
+	c.Comunes(f, "v.id")
+	// El lector de código de barras escribe el número entero.
+	c.BusquedaFlexible(f.Busqueda, columnasDeBusqueda, "v.codigo_barras")
+	return &c
 }
 
 // Listar es listarStock, de a páginas: las medidas activas, por nombre.
@@ -194,12 +223,7 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 		return out, err
 	}
 	out.Sucursales = append(out.Sucursales, sucs...)
-	var c listado.Consulta
-	c.Y("p.active")
-	c.Y("v.active")
-	c.Comunes(f, "v.id")
-	// El lector de código de barras escribe el número entero.
-	c.Busqueda(f.Busqueda, []string{"p.name", "v.sku", "v.label", "v.material", "v.color", "c.name"}, "v.codigo_barras")
+	c := filtrar(f)
 	desde := ` FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id `
@@ -216,11 +240,15 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 		out.Total = k.Todas
 	}
 	limite, salto := f.Pagina(PorPaginaStock)
+	// Lo que empieza una palabra va primero: buscando «laca» salían todas las
+	// placas antes que la laca (H295).
+	primero := c.PrimeroPalabrasEnteras(f.Busqueda, `concat_ws(' ', p.name, v.label, v.sku)`)
 	filas, err := s.pool.Query(ctx, `
 		SELECT v.id, p.id, p.slug, p.name, v.label, v.sku, v.codigo_barras, c.name, p.unit::text, v.largo_mm,
-		  (SELECT i.url FROM product_images i WHERE i.product_id = p.id ORDER BY i.sort_order LIMIT 1)
+		  (SELECT i.url FROM product_images i WHERE i.product_id = p.id ORDER BY i.sort_order LIMIT 1),
+		  `+catalogo.MedidaParaReponer+`
 		`+desde+c.Donde()+`
-		ORDER BY p.name, v.sort_order, v.id
+		ORDER BY `+primero+` DESC, p.name, v.sort_order, v.id
 		LIMIT `+c.Arg(limite)+` OFFSET `+c.Arg(salto), c.Args()...)
 	if err != nil {
 		return out, err
@@ -228,7 +256,7 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 	pagina, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (FilaStock, error) {
 		var x FilaStock
 		err := r.Scan(&x.VariantID, &x.ProductID, &x.ProductSlug, &x.ProductName, &x.Label, &x.SKU, &x.CodigoBarras,
-			&x.CategoryName, &x.Unidad, &x.LargoMm, &x.Imagen)
+			&x.CategoryName, &x.Unidad, &x.LargoMm, &x.Imagen, &x.ParaReponer)
 		return x, err
 	})
 	if err != nil || len(pagina) == 0 {
@@ -259,15 +287,25 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 	if err := rs.Err(); err != nil {
 		return out, err
 	}
+	reparto, err := s.sumasPorSucursal(ctx, consultaEnReparto, ids)
+	if err != nil {
+		return out, err
+	}
+	llegando, err := s.sumasPorSucursal(ctx, consultaLlegando, ids)
+	if err != nil {
+		return out, err
+	}
 	for i := range pagina {
 		x := &pagina[i]
 		x.Sucursales = make([]StockEnSucursal, len(sucs))
 		suma := 0.0
 		for j, b := range sucs {
 			c := inv[clave{x.VariantID, b.ID}]
-			x.Sucursales[j] = StockEnSucursal{Sucursal: b, Qty: c.qty, Reservado: c.res, Min: c.min,
+			disponible := Cantidad(c.qty - c.res)
+			x.Sucursales[j] = StockEnSucursal{Sucursal: b, Qty: c.qty, Reservado: c.res, Disponible: disponible,
+				EnReparto: reparto[[2]string{x.VariantID, b.ID}], Llegando: llegando[[2]string{x.VariantID, b.ID}], Min: c.min,
 				Nivel: catalogo.Nivel(catalogo.Disponible(c.qty, c.res), c.min)}
-			suma += c.qty
+			suma += disponible
 		}
 		x.Total = Cantidad(suma)
 	}
@@ -299,30 +337,144 @@ func (s *Servicio) Alertas(ctx context.Context, limite int) ([]Alerta, error) {
 	return out, nil
 }
 
+// Lo reservado de pedidos que ya salieron en el camión y lo que viene en un
+// traslado, por medida y sucursal.
+const (
+	consultaEnReparto = `SELECT r.variant_id, r.branch_id, sum(r.cantidad)::float8
+		FROM stock_reservations r JOIN orders o ON o.id = r.order_id
+		WHERE r.estado = 'activa' AND o.estado = 'en-camino' AND r.variant_id = ANY($1::uuid[])
+		GROUP BY r.variant_id, r.branch_id`
+	consultaLlegando = `SELECT it.variant_id, t.destino_id, sum(it.cantidad)::float8
+		FROM stock_traslado_items it JOIN stock_traslados t ON t.id = it.traslado_id
+		WHERE t.estado = 'en-camino' AND it.variant_id = ANY($1::uuid[])
+		GROUP BY it.variant_id, t.destino_id`
+)
+
+func (s *Servicio) sumasPorSucursal(ctx context.Context, consulta string, ids []string) (map[[2]string]float64, error) {
+	out := map[[2]string]float64{}
+	rs, err := s.pool.Query(ctx, consulta, ids)
+	if err != nil {
+		return nil, err
+	}
+	var v, b string
+	var n float64
+	_, err = pgx.ForEachRow(rs, []any{&v, &b, &n}, func() error {
+		out[[2]string{v, b}] = Cantidad(n)
+		return nil
+	})
+	return out, err
+}
+
 // Movimiento es uno de los últimos.
+//
+// Concepto y Referencia dicen qué fue: el libro decía «Egreso» para una
+// rotura, un faltante y una devolución al proveedor (H106), y «Venta» para el
+// retiro de un acopio vendido hace semanas (H326). Salen del tipo, del
+// documento y de la nota, que escribe siempre el sistema.
 type Movimiento struct {
 	ID          string    `json:"id"`
+	VariantID   string    `json:"variantId"`
 	ProductID   string    `json:"productId"`
 	ProductName string    `json:"productName"`
 	Label       string    `json:"label"`
 	BranchName  string    `json:"branchName"`
 	Type        string    `json:"type"`
+	Concepto    string    `json:"concepto"`
+	Referencia  *string   `json:"referencia"`
 	Qty         float64   `json:"qty"`
 	Note        *string   `json:"note"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
-// Movimientos son los últimos.
-func (s *Servicio) Movimientos(ctx context.Context, limite int) ([]Movimiento, error) {
-	filas, err := s.q.UltimosMovimientos(ctx, int32(limite))
+// Movimientos son los últimos de las medidas que pasan el filtro de la
+// grilla: buscando un tirante, los de ese tirante y no los de todo el
+// negocio (H206). Con el filtro vacío, los de todo.
+func (s *Servicio) Movimientos(ctx context.Context, f listado.Filtros, limite int) ([]Movimiento, error) {
+	c := filtrar(f)
+	filas, err := s.pool.Query(ctx, `
+		SELECT m.id, v.id, p.id, p.name, v.label, b.name, m.type::text, m.qty::float8, m.note, m.documento_tipo, m.created_at
+		FROM inventory_movements m
+		JOIN product_variants v ON v.id = m.variant_id
+		JOIN products p ON p.id = v.product_id
+		JOIN categories c ON c.id = p.category_id
+		JOIN branches b ON b.id = m.branch_id
+		`+c.Donde()+`
+		ORDER BY m.created_at DESC, m.id
+		LIMIT `+c.Arg(limite), c.Args()...)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Movimiento, len(filas))
-	for i, f := range filas {
-		out[i] = Movimiento{f.ID, f.ProductID, f.ProductName, f.Label, f.BranchName, string(f.Type), float64(f.Qty), f.Note, f.CreatedAt}
+	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Movimiento, error) {
+		var x Movimiento
+		var documento *string
+		if err := r.Scan(&x.ID, &x.VariantID, &x.ProductID, &x.ProductName, &x.Label, &x.BranchName, &x.Type, &x.Qty, &x.Note, &documento, &x.CreatedAt); err != nil {
+			return x, err
+		}
+		concepto, ref := ConceptoDe(x.Type, deref(x.Note), deref(documento))
+		x.Concepto = concepto
+		if ref != "" {
+			x.Referencia = &ref
+		}
+		return x, nil
+	})
+}
+
+func deref(p *string) string {
+	if p == nil {
+		return ""
 	}
-	return out, nil
+	return *p
+}
+
+var etiquetaDeTipo = map[string]string{
+	"ingreso": "Ingreso", "egreso": "Egreso", "ajuste": "Ajuste", "transferencia_salida": "Traslado",
+	"transferencia_entrada": "Traslado", "venta": "Venta", "devolucion": "Devolución",
+}
+
+// Lo que AjustarCon escribe antes de « desde Stock», dicho corto.
+var conceptoDeAjuste = map[string]string{
+	"Ajuste rápido": "Ajuste", "Devolución de cliente": "Devolución", "Devolución al proveedor": "Al proveedor",
+}
+
+var reReferencia = regexp.MustCompile(`\b((?:PED|REM|TRA|OC|CRT)-\d+)\b`)
+
+// ConceptoDe es qué fue un movimiento y de qué comprobante, a partir del
+// tipo, la nota y el documento que lo generó.
+func ConceptoDe(tipo, nota, documento string) (concepto, referencia string) {
+	ref := ""
+	if m := reReferencia.FindStringSubmatch(nota); m != nil {
+		ref = m[1]
+	}
+	switch {
+	case documento == "recepcion":
+		if tipo == "ingreso" {
+			return "Recepción", strings.TrimPrefix(strings.TrimPrefix(nota, "Recepción de mercadería"), "Remito ")
+		}
+		return "Recepción corregida", ""
+	case documento == "devolucion":
+		return "Devolución", ref
+	case tipo == "venta" && strings.HasPrefix(nota, "Remito "):
+		// El retiro de lo vendido (un acopio, un envío): sale con su remito.
+		return "Entrega", strings.TrimPrefix(nota, "Remito ")
+	case tipo == "venta":
+		return "Venta", ref
+	case tipo == "devolucion" && strings.HasPrefix(nota, "Anulación"):
+		return "Anulación", ref
+	case strings.HasPrefix(nota, "Ajuste manual desde la ficha"):
+		return "Ajuste en la ficha", ""
+	case strings.HasPrefix(nota, "Existencia inicial"):
+		return "Existencia inicial", ""
+	}
+	if antes, _, ok := strings.Cut(nota, " desde Stock"); ok && (tipo == "ingreso" || tipo == "egreso") {
+		if c, ok := conceptoDeAjuste[antes]; ok {
+			return c, ref
+		}
+		return antes, ref
+	}
+	if e, ok := etiquetaDeTipo[tipo]; ok {
+		return e, ref
+	}
+	return tipo, ref
 }
 
 // --- el ajuste rápido ---
@@ -331,7 +483,7 @@ func (s *Servicio) Movimientos(ctx context.Context, limite int) ([]Movimiento, e
 // rápido de la grilla. Devuelve el mensaje («Casa Central: 3 → 5»), o "" si
 // la cantidad es cero (no hace nada).
 func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, variante, sucursal string, delta float64) (string, error) {
-	return s.AjustarCon(ctx, ses, variante, sucursal, delta, nil, "")
+	return s.AjustarCon(ctx, ses, Ajuste{Variante: variante, Sucursal: sucursal, Delta: delta})
 }
 
 // MotivosDeAjuste es por qué se tocó el stock a mano, para el libro de
@@ -340,46 +492,63 @@ func (s *Servicio) Ajustar(ctx context.Context, ses *auth.Sesion, variante, sucu
 // «correccion» es el «Deshacer» del ajuste rápido: el movimiento inverso de
 // uno que se cargó mal. Queda en el libro con su nombre, y no como «otro»: un
 // libro lleno de «otro» no le dice nada a nadie (T4, hallazgo 21).
+//
+// «taller» es lo que gasta la seccionadora sin una venta que lo descuente
+// (mes simulado, H220): el depósito lo conciliaba como «Egreso». «reposicion»
+// es lo que se le da a un cliente que reclamó un faltante de su pedido, y va
+// atado a ese pedido (H275).
 var MotivosDeAjuste = map[string]string{
 	"ingreso": "Ingreso", "rotura": "Rotura", "conteo": "Conteo", "devolucion": "Devolución",
-	"faltante": "Faltante", "correccion": "Corrección", "otro": "Ajuste",
+	"faltante": "Faltante", "correccion": "Corrección", "otro": "Ajuste", "taller": "Consumo del taller",
+	"reposicion": "Reposición a cliente",
 }
+
+// Los motivos que solo restan.
+var motivosQueRestan = map[string]bool{"rotura": true, "faltante": true, "taller": true, "reposicion": true}
 
 // revisarDireccion: el motivo dice para qué lado va el stock. Un ingreso que
 // resta o una rotura que suma dejan el libro diciendo lo contrario de lo que
 // pasó; la pantalla convertía en silencio una «rotura» que sumaba en «otro»
 // (T4, hallazgo 21). La devolución va para los dos lados —la del cliente
 // entra, la al proveedor sale—, y la corrección y «otro» también: deshacer
-// una rotura es sumar.
-func revisarDireccion(motivo string, delta float64, contado *float64) error {
+// una rotura es sumar. El conteo va para el lado que dé la diferencia.
+func revisarDireccion(motivo string, delta float64) error {
 	mal := func(m string) error { return plataforma.Invalido(map[string]string{"motivo": m}) }
-	if contado != nil {
-		if motivo != "" && motivo != "conteo" {
-			return mal("Lo contado va con el motivo «Conteo».")
-		}
-		return nil
-	}
-	switch motivo {
-	case "conteo":
-		return mal("Para contar hay que decir cuánto hay.")
-	case "ingreso":
-		if delta < 0 {
-			return mal("Un ingreso suma: para sacar, elegí otro motivo.")
-		}
-	case "rotura", "faltante":
-		if delta > 0 {
-			return mal("«" + MotivosDeAjuste[motivo] + "» resta: para sumar, elegí otro motivo.")
-		}
+	switch {
+	case motivo == "ingreso" && delta < 0:
+		return mal("Un ingreso suma: para sacar, elegí otro motivo.")
+	case motivosQueRestan[motivo] && delta > 0:
+		return mal("«" + MotivosDeAjuste[motivo] + "» resta: para sumar, elegí otro motivo.")
 	}
 	return nil
 }
+
+// Ajuste es lo que pide la pantalla: sumar o restar Delta, o, con Contado,
+// dejar en el galpón lo que se contó. Pedido es el número (PED-…) de la
+// reposición a un cliente.
+type Ajuste struct {
+	Variante, Sucursal string
+	Delta              float64
+	Contado            *float64
+	Motivo, Pedido     string
+}
+
+// pedidoDeLaReposicion es el pedido al que va atada una reposición.
+type pedidoDeLaReposicion struct{ id, numero, cliente, estado string }
 
 // AjustarCon es Ajustar con el motivo y, si viene `contado`, fijando el stock
 // en lo que se contó. La diferencia se calcula adentro, con el candado: si
 // se vendió algo mientras se contaba, el conteo no lo pisa con un número
 // viejo de la pantalla.
-func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, sucursal string, delta float64, contado *float64, motivo string) (string, error) {
-	cantidad := Cantidad(delta)
+//
+// Lo contado es lo del galpón: lo que salió en el camión de un pedido «en
+// camino» sigue en el físico del sistema hasta su remito, y contarlo como
+// faltante lo descontaría dos veces (H166). El conteo puede dejar lo
+// disponible por debajo de lo reservado: es lo que hay, y el faltante queda a
+// la vista para reponerlo (H218); un ajuste con motivo, en cambio, no.
+func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, a Ajuste) (string, error) {
+	variante, sucursal, motivo, contado := a.Variante, a.Sucursal, a.Motivo, a.Contado
+	cantidad := Cantidad(a.Delta)
 	if contado != nil {
 		c := Cantidad(*contado)
 		contado = &c
@@ -394,7 +563,13 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 	if _, ok := MotivosDeAjuste[motivo]; motivo != "" && !ok {
 		return "", plataforma.Invalido(map[string]string{"motivo": "Ese motivo no existe."})
 	}
-	if err := revisarDireccion(motivo, cantidad, contado); err != nil {
+	switch {
+	case contado == nil && motivo == "conteo":
+		return "", plataforma.Invalido(map[string]string{"motivo": "Para contar hay que decir cuánto hay."})
+	case contado != nil && (motivo == "correccion" || motivo == "otro" || motivo == "reposicion"):
+		return "", plataforma.Invalido(map[string]string{"motivo": "Lo contado va con «Conteo» o con lo que explica la diferencia."})
+	}
+	if err := revisarDireccion(motivo, cantidad); err != nil {
 		return "", err
 	}
 	if cantidad == 0 && contado == nil {
@@ -414,6 +589,29 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 	if err != nil {
 		return "", err
 	}
+	var pedido *pedidoDeLaReposicion
+	if motivo == "reposicion" {
+		numero := strings.ToUpper(strings.TrimSpace(a.Pedido))
+		if numero == "" {
+			return "", plataforma.Invalido(map[string]string{"pedido": "Poné el número del pedido del cliente."})
+		}
+		if !strings.HasPrefix(numero, "PED-") {
+			numero = "PED-" + numero
+		}
+		p := pedidoDeLaReposicion{}
+		err := s.pool.QueryRow(ctx, `SELECT o.id, o.numero, coalesce(c.nombre, o.contacto_nombre, ''), o.estado::text
+			FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.numero = $1`, numero).Scan(&p.id, &p.numero, &p.cliente, &p.estado)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", plataforma.Invalido(map[string]string{"pedido": "No hay ningún pedido " + numero + "."})
+		}
+		if err != nil {
+			return "", err
+		}
+		if p.estado == "cancelado" {
+			return "", plataforma.Invalido(map[string]string{"pedido": p.numero + " está anulado."})
+		}
+		pedido = &p
+	}
 	var ok string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
@@ -427,10 +625,22 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 			return err
 		}
 		if contado != nil {
-			cantidad = Cantidad(*contado - previo)
+			var reparto float64
+			if err := tx.QueryRow(ctx, `SELECT coalesce(sum(r.cantidad), 0)::float8 FROM stock_reservations r JOIN orders o ON o.id = r.order_id
+				WHERE r.estado = 'activa' AND o.estado = 'en-camino' AND r.variant_id = $1 AND r.branch_id = $2`, variante, suc.ID).Scan(&reparto); err != nil {
+				return err
+			}
+			galpon := Cantidad(previo - reparto)
+			cantidad = Cantidad(*contado - galpon)
 			if cantidad == 0 {
-				ok = suc.Name + ": el conteo coincide, " + formato.Cantidad(previo)
+				ok = suc.Name + ": el conteo coincide, " + formato.Cantidad(galpon)
 				return nil
+			}
+			if err := revisarDireccion(motivo, cantidad); err != nil {
+				return err
+			}
+			if motivo == "" {
+				motivo = "conteo"
 			}
 		}
 		nuevo := Cantidad(previo + cantidad)
@@ -439,8 +649,9 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 		}
 		// Lo reservado es de clientes que ya pagaron: un ajuste que baja el
 		// físico no puede dejar lo disponible en negativo (el TS miraba solo
-		// el físico, como la transferencia). Sumar siempre se puede.
-		if cantidad < 0 && nuevo < reservado {
+		// el físico, como la transferencia). Sumar siempre se puede, y lo
+		// contado también (ver arriba).
+		if contado == nil && cantidad < 0 && nuevo < reservado {
 			libre := catalogo.Disponible(previo, reservado)
 			m := "En " + suc.Name + " hay " + formato.Cantidad(previo) + " y " + formato.Cantidad(reservado) +
 				" está" + pluralN(reservado) + " reservado" + plural(reservado) + " para clientes"
@@ -473,9 +684,29 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, variante, s
 			}
 		}
 		nota := que + " (" + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo) + ")"
+		var docTipo, docID *string
+		if pedido != nil {
+			nota += " · " + pedido.numero
+			if pedido.cliente != "" {
+				nota += " · " + pedido.cliente
+			}
+			t := "pedido"
+			docTipo, docID = &t, &pedido.id
+			// Queda en el historial del pedido: ahí se mira qué se le dio.
+			var producto string
+			if err := tx.QueryRow(ctx, `SELECT p.name || ' ' || v.label FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1`,
+				variante).Scan(&producto); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2::estado_pedido, $3, $4)`,
+				pedido.id, pedido.estado, "Reposición sin cargo: "+formato.Cantidad(-cantidad)+" "+producto+", de "+suc.Name, ses.UserID); err != nil {
+				return err
+			}
+		}
 		ok = suc.Name + ": " + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo)
-		return q.RegistrarMovimiento(ctx, sqlc.RegistrarMovimientoParams{VariantID: variante, BranchID: suc.ID, Type: tipo,
-			Qty: jsmath.Num(cantidad), Note: &nota, CreatedByUserID: &ses.UserID})
+		_, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, documento_tipo, documento_id)
+			VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8)`, variante, suc.ID, tipo, jsmath.Texto(cantidad), nota, ses.UserID, docTipo, docID)
+		return err
 	})
 	return ok, err
 }

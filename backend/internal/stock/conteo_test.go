@@ -40,9 +40,15 @@ func TestConteoYMotivo(t *testing.T) {
 	if _, b := pedir(t, dep, "GET", e.srv.URL+"/api/v1/admin/stock?busqueda=7790001000025", nil); !strings.Contains(b, `"sku":"TOR"`) || strings.Contains(b, `"sku":"FEN18"`) {
 		t.Fatalf("búsqueda por código de barras: %s", b)
 	}
-	// El conteo de la placa no deja lo disponible por debajo de lo reservado.
-	if c, b := pedir(t, dep, "POST", u, map[string]any{"variantId": e.placa, "branchSlug": "casa-central", "cantidad": 0, "contado": 5}); c != 422 ||
+	// Un ajuste con motivo no deja lo disponible por debajo de lo reservado…
+	if c, b := pedir(t, dep, "POST", u, map[string]any{"variantId": e.placa, "branchSlug": "casa-central", "cantidad": -6, "motivo": "rotura"}); c != 422 ||
 		!strings.Contains(b, "reservado") {
+		t.Fatalf("rotura bajo lo reservado: %d %s", c, b)
+	}
+	// …pero lo contado es lo que hay: el sistema no puede negarse a
+	// registrarlo, y el faltante queda a la vista (mes simulado, H218).
+	if c, b := pedir(t, dep, "POST", u, map[string]any{"variantId": e.placa, "branchSlug": "casa-central", "cantidad": 0, "contado": 5}); c != 200 ||
+		!strings.Contains(b, "10 → 5") {
 		t.Fatalf("conteo bajo lo reservado: %d %s", c, b)
 	}
 }

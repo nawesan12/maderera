@@ -314,6 +314,10 @@ var pantallaDeCadaRuta = map[string]string{
 	"AlertasDeStock":                 "/admin/stock",                  // GET /api/v1/admin/stock/alertas
 	"UltimosMovimientos":             "/admin/stock",                  // GET /api/v1/admin/stock/movimientos
 	"TransferirStock":                "/admin/stock",                  // POST /api/v1/admin/stock/transferencia
+	"TrasladosEnCamino":              "/admin/stock",                  // GET /api/v1/admin/stock/traslados
+	"CrearTraslado":                  "/admin/stock",                  // POST /api/v1/admin/stock/traslados
+	"VerTraslado":                    "/admin/stock",                  // GET /api/v1/admin/stock/traslados/{id}
+	"RecibirTraslado":                "/admin/stock",                  // POST /api/v1/admin/stock/traslados/{id}/recibir
 	"GrillaDeStock":                  "/admin/stock",                  // GET /api/v1/admin/stock
 	"MetricasDeSucursales":           "/admin/sucursales",             // GET /api/v1/admin/sucursales/metricas
 	"SinSucursalAsignada":            "/admin/sucursales",             // GET /api/v1/admin/sucursales/sin-asignar

@@ -43,6 +43,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Los últimos de las medidas que pasan el mismo filtro que la grilla (sin filtro, los de todo) */
         get: operations["UltimosMovimientos"];
         put?: never;
         post?: never;
@@ -78,6 +79,54 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["TransferirStock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/stock/traslados": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TrasladosEnCamino"];
+        put?: never;
+        post: operations["CrearTraslado"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/stock/traslados/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["VerTraslado"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/stock/traslados/{id}/recibir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RecibirTraslado"];
         delete?: never;
         options?: never;
         head?: never;
@@ -159,6 +208,21 @@ export interface components {
             qty: number;
             /** Format: double */
             reservado: number;
+            /**
+             * Format: double
+             * @description físico − reservado
+             */
+            disponible: number;
+            /**
+             * Format: double
+             * @description lo reservado de pedidos en camino
+             */
+            enReparto: number;
+            /**
+             * Format: double
+             * @description lo que viene en un traslado sin recibir
+             */
+            llegando: number;
             /** Format: double */
             min: number;
             nivel: components["schemas"]["Nivel"];
@@ -176,8 +240,36 @@ export interface components {
             largoMm: number | null;
             imagen: string | null;
             sucursales: components["schemas"]["StockEnSucursal"][];
-            /** Format: double */
+            /**
+             * Format: double
+             * @description la suma de lo disponible de cada sucursal
+             */
             total: number;
+            paraReponer: boolean;
+        };
+        Traslado: {
+            id: string;
+            codigo: string;
+            origen: string;
+            destino: string;
+            nota: string | null;
+            /** @enum {string} */
+            estado: "en-camino" | "recibido";
+            creadoPor: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            recibidoPor: string | null;
+            /** Format: date-time */
+            recibidoAt: string | null;
+            renglones: {
+                variantId: string;
+                producto: string;
+                medida: string;
+                sku: string;
+                unidad: string;
+                /** Format: double */
+                cantidad: number;
+            }[];
         };
     };
     responses: {
@@ -273,6 +365,10 @@ export interface operations {
         parameters: {
             query?: {
                 limite?: number;
+                busqueda?: string;
+                categoria?: string;
+                marca?: string;
+                proveedor?: string;
             };
             header?: never;
             path?: never;
@@ -288,11 +384,16 @@ export interface operations {
                 content: {
                     "application/json": {
                         id: string;
+                        variantId: string;
                         productId: string;
                         productName: string;
                         label: string;
                         branchName: string;
                         type: string;
+                        /** @description Qué fue (Rotura */
+                        concepto: string;
+                        /** @description El comprobante (REM-0020 */
+                        referencia: string | null;
                         /** Format: double */
                         qty: number;
                         note: string | null;
@@ -322,11 +423,13 @@ export interface operations {
                     cantidad: number;
                     /**
                      * Format: double
-                     * @description Lo que se contó en el estante. El stock queda en este número, sea lo que sea que había
+                     * @description Lo que se contó en el galpón. Lo que salió en el camión de un pedido en camino se suma solo
                      */
                     contado?: number;
                     /** @enum {string} */
-                    motivo?: "ingreso" | "rotura" | "conteo" | "devolucion" | "faltante" | "correccion" | "otro";
+                    motivo?: "ingreso" | "rotura" | "conteo" | "devolucion" | "faltante" | "correccion" | "otro" | "taller" | "reposicion";
+                    /** @description El pedido (PED-…) de una reposición a un cliente */
+                    pedido?: string;
                 };
             };
         };
@@ -371,6 +474,107 @@ export interface operations {
                 };
                 content?: never;
             };
+            422: components["responses"]["Problema"];
+        };
+    };
+    TrasladosEnCamino: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los traslados que nadie recibió todavía, los más viejos primero */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Traslado"][];
+                };
+            };
+        };
+    };
+    CrearTraslado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    origenId: string;
+                    destinoId: string;
+                    nota?: string;
+                    renglones: {
+                        variantId: string;
+                        cantidad: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Salió del origen y quedó en camino */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        codigo: string;
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    VerTraslado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El comprobante */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Traslado"];
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    RecibirTraslado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recibido; el destino suma lo que llegó */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Problema"];
             422: components["responses"]["Problema"];
         };
     };

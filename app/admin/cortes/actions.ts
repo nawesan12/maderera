@@ -88,6 +88,30 @@ export async function pasarCorteAPedido(id: string): Promise<EstadoCorte> {
   return { ok: `Quedó en el pedido ${r.data.numero}.`, id: r.data.id };
 }
 
+/**
+ * Suma al pedido lo que el corte cobra aparte (sus pasadas, su tapacanto). Si
+ * el pedido ya no se toca, Go arma un pedido aparte (H184).
+ */
+export async function sumarCorteAlPedido(id: string): Promise<EstadoCorte & { aparte?: boolean }> {
+  const r = await (await api()).POST("/api/v1/admin/cortes/{id}/sumar-al-pedido", { params: { path: { id } } });
+  if (!r.data) return fallo(r, "No se pudo sumar al pedido.");
+  revalidatePath(`/admin/cortes/${id}`);
+  revalidatePath("/admin/pedidos", "layout");
+  return {
+    ok: r.data.aparte ? `Va en el pedido ${r.data.numero}.` : `Sumado a ${r.data.numero}.`,
+    aparte: r.data.aparte,
+  };
+}
+
+/** El remito sin cargo de una reposición, para firmar (H321). */
+export async function remitoDeLaReposicion(id: string): Promise<EstadoCorte & { firmaToken?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/cortes/{id}/remito", { params: { path: { id } } });
+  if (!r.data) return fallo(r, "No se pudo hacer el remito.");
+  revalidatePath(`/admin/cortes/${id}`);
+  revalidatePath("/admin/pedidos", "layout");
+  return { ok: `Remito ${r.data.numero}.`, id: r.data.id, firmaToken: r.data.firmaToken };
+}
+
 /** Marca o desmarca el corte como urgente, que es lo que ordena la cola. */
 export async function alternarUrgente(id: string): Promise<EstadoCorte> {
   const r = await (await api()).POST("/api/v1/admin/cortes/{id}/urgente", { params: { path: { id } } });

@@ -46,6 +46,11 @@ type Ficha struct {
 	RetalesDelCliente bool `json:"retalesDelCliente"`
 	// SinPlata: la ficha del aserradero, sin importes ni teléfono.
 	SinPlata bool `json:"sinPlata"`
+	// Sumar es lo que hace «Sumar al pedido» (H184): nil si no hay nada
+	// fuera del pedido.
+	Sumar *SumaAlPedido `json:"sumar"`
+	// Remito es el de la reposición sin cargo (H321), si ya salió.
+	Remito *RemitoDeReposicion `json:"remito"`
 }
 
 // PedidoDelCorte es el pedido del trabajo, con los renglones que son suyos.
@@ -65,6 +70,15 @@ type PedidoDelCorte struct {
 	// PlacasDeOtrosCortes son las que usan los otros cortes vivos del pedido
 	// sobre la misma placa (no sale en la API).
 	PlacasDeOtrosCortes float64 `json:"-"`
+	// Cargo es el pedido aparte donde quedaron las pasadas del corte, si el
+	// suyo ya no se tocaba (H184).
+	Cargo           *string `json:"cargo"`
+	CargoID         *string `json:"cargoId"`
+	CargoEstadoPago *string `json:"cargoEstadoPago"`
+	// Sumado: lo del corte se sumó con «Sumar al pedido» (H184). El
+	// pedido sigue vendiendo las placas: los retales siguen siendo del
+	// cliente aunque el modo pase a «vendido».
+	Sumado bool `json:"-"`
 }
 
 // RenglonDelPedido es un renglón del pedido que es del corte.
@@ -101,7 +115,8 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		return nil, err
 	}
 	modo := ModoDelCorte(c, delCorte)
-	if modo == "pedido" {
+	placas := modoDeLasPlacas(modo, pedido)
+	if placas == "pedido" {
 		if pedido.PlacasDeOtrosCortes, err = s.placasDeOtrosCortes(ctx, c); err != nil {
 			return nil, err
 		}
@@ -110,19 +125,28 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	// sin cargo y lo que sobra es del cliente. Contado sobre el plano, las
 	// cifras decían «1 se vende entera · 3 pasadas a cobrar» con las dos
 	// placas selladas «Se vende entera» (mes simulado, H052 y H184).
-	delCliente := RetalesDelCliente(c, plano, pedido, modo) || (modo == "suelto" && MaterialSeCobra(ctx, s.pool))
+	delCliente := RetalesDelCliente(c, plano, pedido, placas) || (modo == "suelto" && MaterialSeCobra(ctx, s.pool))
 	if delCliente {
 		plano = TodasDelCliente(plano)
 	}
 	cuenta := CuentaDelCorte(c, plano, tarifa, pedido, modo)
 	aCobrar := PasadasACobrar(c, plano)
-	return &Ficha{
+	f := &Ficha{
 		Corte: c, Tarifa: tarifa, Cargo: CargoPorCorte(tarifa, float64(aCobrar)), MetrosCanto: metros,
 		CargoCanto: CargoPorTapacanto(tarifa, metros), Plano: plano, Superficies: sup,
 		Cuenta:  cuenta,
 		Fijadas: LeerAcomodoManual(texto(c.AcomodoManual)),
 		Modo:    modo, PasadasACobrar: aCobrar, Pedido: pedido, RetalesDelCliente: delCliente,
-	}, nil
+	}
+	if f.Sumar, err = s.sumaDeLaFicha(ctx, f); err != nil {
+		return nil, err
+	}
+	if modo == "sinCargo" {
+		if f.Remito, err = s.remitoDeLaFicha(ctx, c.ID); err != nil {
+			return nil, err
+		}
+	}
+	return f, nil
 }
 
 // RetalesDelCliente: lo que sobra del trabajo es del cliente porque el
@@ -143,7 +167,7 @@ func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plan
 	if err != nil {
 		return false, err
 	}
-	modo := ModoDelCorte(c, delCorte)
+	modo := modoDeLasPlacas(ModoDelCorte(c, delCorte), pedido)
 	if modo == "suelto" {
 		return MaterialSeCobra(ctx, s.pool), nil
 	}
@@ -163,6 +187,16 @@ func (s *Servicio) RetalesDelClienteDe(ctx context.Context, c *Corte, plano Plan
 // mitad se cobran las pasadas y el recorte queda en la maderera.
 func MaterialSeCobra(ctx context.Context, c reglas.Consultador) bool {
 	return reglas.Es(ctx, c, reglas.CorteChicoMaterial, "cobrar")
+}
+
+// modoDeLasPlacas es de dónde salen las placas: un corte cuyas pasadas se
+// sumaron al pedido (o a uno aparte) cobra como vendido, pero sus placas las
+// sigue vendiendo el pedido (H184).
+func modoDeLasPlacas(modo string, pedido *PedidoDelCorte) string {
+	if modo == "vendido" && pedido != nil && pedido.Sumado {
+		return "pedido"
+	}
+	return modo
 }
 
 // TodasDelCliente marca todas las placas del plano como del cliente: el
@@ -338,9 +372,18 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 	if err != nil {
 		return nil, false, err
 	}
+	if err := s.pool.QueryRow(ctx, `SELECT o.numero, o.id::text, o.estado_pago::text FROM cutting_orders co JOIN orders o ON o.id = co.cargo_order_id
+		WHERE co.id = $1`, c.ID).Scan(&p.Cargo, &p.CargoID, &p.CargoEstadoPago); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, err
+	}
+	// Los renglones del pedido, menos los que otro corte sumó (H184), y los
+	// que este corte sumó, en su pedido o en el aparte.
 	filas, err := s.pool.Query(ctx, `
-		SELECT descripcion, unidad, cantidad, subtotal, variant_id::text, presentacion, del_corte
-		FROM order_items WHERE order_id = $1 ORDER BY orden, id`, *c.OrderID)
+		SELECT descripcion, unidad, cantidad, subtotal, variant_id::text, presentacion, del_corte,
+		       coalesce(cutting_order_id = $2, false)
+		FROM order_items
+		WHERE (order_id = $1 AND (cutting_order_id IS NULL OR cutting_order_id = $2)) OR cutting_order_id = $2
+		ORDER BY order_id = $1 DESC, orden, id`, *c.OrderID, c.ID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -350,11 +393,14 @@ func (s *Servicio) pedidoDelCorte(ctx context.Context, c *Corte) (*PedidoDelCort
 		var r RenglonDelPedido
 		var cantidad, sub jsmath.Num
 		var variante, presentacion *string
-		var esDelCorte bool
-		if err := filas.Scan(&r.Descripcion, &r.Unidad, &cantidad, &sub, &variante, &presentacion, &esDelCorte); err != nil {
+		var esDelCorte, sumado bool
+		if err := filas.Scan(&r.Descripcion, &r.Unidad, &cantidad, &sub, &variante, &presentacion, &esDelCorte, &sumado); err != nil {
 			return nil, false, err
 		}
 		r.Cantidad, r.Subtotal = cantidad.F(), sub.F()
+		if sumado {
+			p.Sumado = true
+		}
 		if esDelCorte {
 			delCorte = append(delCorte, r)
 		}
@@ -406,4 +452,6 @@ func (f *Ficha) SinPlataParaElTaller() {
 	if f.Pedido != nil {
 		f.Pedido = &PedidoDelCorte{Numero: f.Pedido.Numero, Estado: f.Pedido.Estado, Lineas: []RenglonDelPedido{}}
 	}
+	f.Sumar = nil
+	f.Remito = nil
 }

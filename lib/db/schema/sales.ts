@@ -359,6 +359,8 @@ export const orderItems = pgTable(
     /* Columnas que goose sumó después y el espejo no tenía (ver scripts/espejo-drizzle.ts). */
     delCorte: boolean().notNull().default(false),
     precioLista: numeric({ precision: 12, scale: 2 }),
+    /* 00340: el corte cuyas pasadas se sumaron al pedido (FK en goose). */
+    cuttingOrderId: uuid(),
   },
   (t) => [index("order_items_order_idx").on(t.orderId)],
 );
@@ -569,6 +571,8 @@ export const cuttingOrders = pgTable(
     terminadoAt: timestamp({ withTimezone: true }),
     sinCargo: boolean().notNull().default(false),
     motivoAnulado: text(),
+    /* 00340: el pedido aparte con las pasadas, si el suyo ya no se tocaba (FK en goose). */
+    cargoOrderId: uuid(),
   },
   (t) => [
     uniqueIndex("cutting_orders_numero_idx").on(t.numero),

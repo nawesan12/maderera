@@ -395,7 +395,7 @@ func TestReposicionSinCargo(t *testing.T) {
 			t.Fatalf("%s: %d %s", paso, code, b)
 		}
 	}
-	if n := e.txt(t, `select count(*)::text from order_status_history where order_id = $1 and nota = 'Reposición sin cargo entregada: CRT-1'`, pedido); n != "1" {
+	if n := e.txt(t, `select count(*)::text from order_status_history where order_id = $1 and nota = 'Reposición sin cargo entregada: CRT-1 · remito REM-0001'`, pedido); n != "1" {
 		t.Errorf("constancia en el pedido: %s", n)
 	}
 }

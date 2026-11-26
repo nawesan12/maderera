@@ -303,6 +303,8 @@ export interface components {
             lineas: components["schemas"]["LineaDelRemito"][];
         };
         RemitoDelPedido: {
+            /** @description El corte de una reposición sin cargo */
+            reposicion: string | null;
             /** @description Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF) */
             parcial: boolean;
             id: string;
@@ -358,6 +360,8 @@ export interface components {
             caeVencimiento: string | null;
         };
         RemitoCompleto: {
+            /** @description El corte de una reposición sin cargo (las líneas son sus piezas) */
+            reposicion: string | null;
             /** @description Los remitos de otros pedidos que salieron en la misma visita y se firman con este enlace */
             visita: components["schemas"]["RemitoDeLaVisita"][];
             /**

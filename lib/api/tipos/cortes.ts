@@ -119,6 +119,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cortes/{id}/sumar-al-pedido": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Suma al pedido del corte sus pasadas y su tapacanto; si el pedido ya está facturado, cobrado o en la cuenta corriente, van a un pedido aparte. */
+        post: operations["SumarCorteAlPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/cortes/{id}/remito": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description El remito sin cargo de una reposición entregada, para firmar; si ya tiene uno vivo, ese. */
+        post: operations["RemitoDeLaReposicion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/cortes/{id}/urgente": {
         parameters: {
             query?: never;
@@ -604,10 +638,26 @@ export interface components {
             updatedAt: string;
         };
         FichaCorte: {
+            remito: {
+                id: string;
+                numero: string;
+                firmaToken: string | null;
+                firmado: boolean;
+            } | null;
+            sumar: {
+                /** Format: double */
+                total: number;
+                aparte: boolean;
+                motivo: string;
+            } | null;
             /** @enum {string} */
             modo: "suelto" | "pedido" | "vendido" | "sinCargo" | "anulado";
             pasadasACobrar: number;
             pedido: {
+                /** @description El pedido aparte con lo del corte */
+                cargo: string | null;
+                cargoId: string | null;
+                cargoEstadoPago: string | null;
                 numero: string;
                 estado: string;
                 estadoPago: string;
@@ -1221,6 +1271,63 @@ export interface operations {
                     "application/json": {
                         numero: string;
                         id: string;
+                    };
+                };
+            };
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    SumarCorteAlPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El pedido donde quedó */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        numero: string;
+                        aparte: boolean;
+                    };
+                };
+            };
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    RemitoDeLaReposicion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El remito */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        numero: string;
+                        firmaToken: string;
                     };
                 };
             };

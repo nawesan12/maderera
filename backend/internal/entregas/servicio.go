@@ -667,7 +667,7 @@ func (s *Servicio) RemitoDeConstancia(ctx context.Context, ses *auth.Sesion, ped
 		if len(lineas) == 0 {
 			// Solo el corte (pasadas sin placa) no lleva mercadería.
 			var conRemito bool
-			if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada')`, pedidoID).Scan(&conRemito); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada' AND cutting_order_id IS NULL)`, pedidoID).Scan(&conRemito); err != nil {
 				return err
 			}
 			if !conRemito {
@@ -691,6 +691,55 @@ func (s *Servicio) RemitoDeConstancia(ctx context.Context, ses *auth.Sesion, ped
 		return nil
 	})
 	return out, err
+}
+
+// RemitoDeReposicion hace el remito de una reposición sin cargo (H321): del
+// pedido que la originó, sin renglones del pedido (lo que sale son las
+// piezas del corte, ver completarReposicion), preparado para firmarse con
+// el dedo. No mueve stock ni plata. Si la reposición ya tiene uno vivo,
+// devuelve ese (la llamada se repite sin duplicar).
+func RemitoDeReposicion(ctx context.Context, tx pgx.Tx, corte string, usuario *string) (*EntregaCreada, error) {
+	if err := numeracion.BloquearRemitos(ctx, tx); err != nil {
+		return nil, err
+	}
+	var ya EntregaCreada
+	var token *string
+	err := tx.QueryRow(ctx, `SELECT id::text, numero, firma_token FROM deliveries WHERE cutting_order_id = $1 AND estado <> 'anulada'`, corte).
+		Scan(&ya.ID, &ya.Numero, &token)
+	if err == nil {
+		ya.FirmaToken = deTexto(token)
+		return &ya, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	var numeroCorte string
+	var pedido, sucursal *string
+	var sinCargo bool
+	if err := tx.QueryRow(ctx, `SELECT order_id::text, branch_id::text, numero, sin_cargo FROM cutting_orders WHERE id = $1`, corte).
+		Scan(&pedido, &sucursal, &numeroCorte, &sinCargo); errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrorDeEntrega("Ese corte no existe.")
+	} else if err != nil {
+		return nil, err
+	}
+	if pedido == nil || !sinCargo {
+		return nil, ErrorDeEntrega(numeroCorte + " no es una reposición de un pedido.")
+	}
+	numero, err := numeracion.Remito(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	token2 := tokenDeFirma()
+	// Sin nota: el título y la cabecera del remito ya dicen la reposición.
+	var id string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO deliveries (numero, order_id, branch_id, tipo, estado, firma_token, created_by_user_id, cutting_order_id,
+		  created_at, updated_at)
+		VALUES ($1, $2, $3, 'retiro', 'preparada', $4, $5, $6, clock_timestamp(), clock_timestamp())
+		RETURNING id::text`, numero, *pedido, sucursal, token2, usuario, corte).Scan(&id); err != nil {
+		return nil, err
+	}
+	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token2}, nil
 }
 
 // FirmaRegistrada es el remito que se firmó.
@@ -728,6 +777,14 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 			return err
 		}
 		firmo = true
+		// La reposición firmada cierra el reclamo en el pedido (H321).
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO order_status_history (order_id, estado, nota)
+			SELECT o.id, o.estado, 'Reposición sin cargo ' || co.numero || ' firmada por ' || coalesce(nullif($2, ''), 'el cliente') || ' en el remito ' || d.numero || ': reclamo cerrado'
+			FROM deliveries d JOIN cutting_orders co ON co.id = d.cutting_order_id JOIN orders o ON o.id = d.order_id
+			WHERE d.id = $1`, r.DeliveryID, f.ReceptorNombre); err != nil {
+			return err
+		}
 		// Los remitos de la misma visita se firman con el primero.
 		if _, err := tx.Exec(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
@@ -954,6 +1011,8 @@ type RemitoListado struct {
 	// mismo que imprime el PDF). La ficha lo deducía y decía «Entrega
 	// parcial» de un remito que se llevó todo.
 	Parcial bool `json:"parcial"`
+	// Reposicion es el corte de una reposición sin cargo (H321).
+	Reposicion *string `json:"reposicion"`
 }
 
 // RemitosDelPedido son los remitos de un pedido, los más nuevos primero.
@@ -965,8 +1024,11 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 	filas, err := s.pool.Query(ctx, `
 		SELECT d.id, d.numero, d.tipo::text, d.estado::text, d.receptor_nombre, d.firmado_at, d.firma_token, d.created_at,
 		  s.transportista, s.numero_seguimiento,
-		  (SELECT count(*) FROM delivery_items di WHERE di.delivery_id = d.id)::int
+		  CASE WHEN d.cutting_order_id IS NULL THEN (SELECT count(*) FROM delivery_items di WHERE di.delivery_id = d.id)
+		       ELSE (SELECT count(*) FROM cutting_items ci WHERE ci.cutting_order_id = d.cutting_order_id) END::int,
+		  co.numero
 		FROM deliveries d LEFT JOIN shipments s ON s.delivery_id = d.id
+		LEFT JOIN cutting_orders co ON co.id = d.cutting_order_id
 		WHERE d.order_id = $1 ORDER BY d.created_at DESC`, pedido)
 	if err != nil {
 		return nil, err
@@ -975,7 +1037,7 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 	for filas.Next() {
 		var r RemitoListado
 		if err := filas.Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.FirmadoAt, &r.FirmaToken, &r.CreatedAt,
-			&r.Transportista, &r.NumeroSeguimiento, &r.CantidadLineas); err != nil {
+			&r.Transportista, &r.NumeroSeguimiento, &r.CantidadLineas, &r.Reposicion); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -985,6 +1047,10 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 	}
 	filas.Close()
 	for i := range out {
+		// La reposición no es una entrega de la mercadería del pedido.
+		if out[i].Reposicion != nil {
+			continue
+		}
 		quedaba, err := SaldoAlRemito(ctx, s.pool, pedido, out[i].ID)
 		if err != nil {
 			return nil, err

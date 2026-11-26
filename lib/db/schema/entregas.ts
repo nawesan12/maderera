@@ -75,6 +75,8 @@ export const deliveries = pgTable(
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     /** El primer remito de la misma visita: se firman juntos (migración 00231). */
     visitaDe: uuid(),
+    /** El remito de una reposición sin cargo: lo que sale son las piezas de ese corte (00340). */
+    cuttingOrderId: uuid(),
   },
   (t) => [
     uniqueIndex("deliveries_numero_idx").on(t.numero),

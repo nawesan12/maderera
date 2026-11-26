@@ -292,6 +292,41 @@ func (a *API) PasarCorteAPedido(ctx context.Context, r cortesapi.PasarCorteAPedi
 	return ok(map[string]string{"numero": numero, "id": id}), nil
 }
 
+// SumarCorteAlPedido suma lo que el corte cobra fuera de su pedido (H184),
+// con la confirmación de la ficha. Lo hace quien maneja plata, como pasar un
+// corte suelto a pedido.
+func (a *API) SumarCorteAlPedido(ctx context.Context, r cortesapi.SumarCorteAlPedidoRequestObject) (cortesapi.SumarCorteAlPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	numero, aparte, err := a.s.SumarAlPedido(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]any{"numero": numero, "aparte": aparte}), nil
+}
+
+func (o respuesta) VisitSumarCorteAlPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// RemitoDeLaReposicion es el remito sin cargo de una reposición (H321). Lo
+// hace el mostrador, que es quien la entrega.
+func (a *API) RemitoDeLaReposicion(ctx context.Context, r cortesapi.RemitoDeLaReposicionRequestObject) (cortesapi.RemitoDeLaReposicionResponseObject, error) {
+	ses, err := mostrador(ctx)
+	if err != nil {
+		return nil, err
+	}
+	e, err := a.s.RemitoDeLaReposicion(ctx, ses, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return ok(map[string]string{"id": e.ID, "numero": e.Numero, "firmaToken": e.FirmaToken}), nil
+}
+
+func (o respuesta) VisitRemitoDeLaReposicionResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
 func (a *API) AlternarUrgente(ctx context.Context, r cortesapi.AlternarUrgenteRequestObject) (cortesapi.AlternarUrgenteResponseObject, error) {
 	if _, err := mostrador(ctx); err != nil {
 		return nil, err

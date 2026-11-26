@@ -62,6 +62,9 @@ type RemitoCompleto struct {
 	Factura           *FacturaDelRemito    `json:"factura"`
 	// SinCobrar: lo que el chofer de un envío tiene que cobrar (0: nada).
 	SinCobrar float64 `json:"sinCobrar"`
+	// Reposicion es el corte de una reposición sin cargo (H321): el remito
+	// lo dice en el título y en la condición de pago.
+	Reposicion string `json:"reposicion,omitempty"`
 }
 
 // medioDelPedido es el medio de pago del pedido como lo lee el chofer.
@@ -75,6 +78,9 @@ var medioDelPedido = map[string]string{
 // «Pendiente de pago»). Gemelo de condicionDePago en
 // components/entregas/remito-impreso.tsx.
 func CondicionDePago(r RemitoCompleto) string {
+	if r.Reposicion != "" {
+		return "Sin cargo"
+	}
 	if r.Tipo == "envio" && r.SinCobrar > 0.009 && r.MedioPago != "cuenta_corriente" {
 		t := "A cobrar " + Moneda2(r.SinCobrar)
 		if m := medioDelPedido[r.MedioPago]; m != "" {
@@ -189,7 +195,10 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	y := AltoA4 - Margen - 10
 	deAcopio := len(r.Pendientes) > 0
 	titulo := "Remito de entrega total"
-	if deAcopio {
+	switch {
+	case r.Reposicion != "":
+		titulo = "Reposición sin cargo"
+	case deAcopio:
 		titulo = "Remito de entrega parcial"
 	}
 	h.Escribir(titulo, Opciones{X: derecha, Y: y, Tamano: 11, Fuente: Negrita, Derecha: true})
@@ -204,7 +213,13 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	}
 	// La fecha del remito es un instante: en la hora argentina (en UTC, uno
 	// hecho a la noche salía con la fecha de mañana).
-	for _, texto := range append([]string{"Fecha " + FechaCortaHoy(r.CreatedAt), "Pedido " + r.PedidoNumero, retiro}, LineasDeLaFactura(r.Factura)...) {
+	cabecera := []string{"Fecha " + FechaCortaHoy(r.CreatedAt), "Pedido " + r.PedidoNumero, retiro}
+	if r.Reposicion != "" {
+		cabecera = append(cabecera, "Corte "+r.Reposicion)
+	} else {
+		cabecera = append(cabecera, LineasDeLaFactura(r.Factura)...)
+	}
+	for _, texto := range cabecera {
 		h.Escribir(texto, Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
 		y -= 10
 	}

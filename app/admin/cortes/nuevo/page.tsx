@@ -12,6 +12,8 @@ import { anchoDeSierra } from "@/lib/dal/sierra";
 import { FormularioCorte } from "./formulario";
 import { consultaDeCorte } from "@/lib/dal/consultas-corte";
 import { placasCortablesPublicas } from "@/lib/dal/cortes-publico";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 
 export const metadata = { title: "Nuevo corte" };
 
@@ -57,7 +59,7 @@ export default async function NuevoCortePage({
   const pedidoId = sp.pedido ?? corregido?.corte.orderId ?? undefined;
   // De dónde se vino: el chat del cliente (H046).
   const volver = sp.volver && VUELTA_PERMITIDA.test(sp.volver) ? sp.volver : null;
-  const [sucursales, pedido, sierra, consulta, placas, cliente] = await Promise.all([
+  const [sucursales, pedido, sierra, consulta, placas, cliente, ajustes] = await Promise.all([
     listarSucursalesPublicas(),
     // Sin plata: el depósito también carga cortes de un pedido (el alta no
     // es del aserradero: lib/roles.ts).
@@ -66,6 +68,7 @@ export default async function NuevoCortePage({
     token ? consultaDeCorte(token) : Promise.resolve(null),
     token ? placasCortablesPublicas() : Promise.resolve([]),
     clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
+    ajustesDelSitio(),
   ]);
   if (token && !consulta) notFound();
   // El teléfono del cliente del pedido, para el aviso de «corte listo»
@@ -236,6 +239,7 @@ export default async function NuevoCortePage({
       )}
 
       <FormularioCorte
+        preguntarSucursal={valorDeRegla(ajustes, "sucursal_del_corte_suelto") === "preguntar"}
         sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre }))}
         desdeConsulta={
           consulta && grupo

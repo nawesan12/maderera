@@ -484,7 +484,7 @@ function FilaDeMotivos({
             onClick={() => onElegir(m.valor)}
             disabled={!habilitado}
             aria-pressed={elegido === m.valor || undefined}
-            className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-md px-2 text-base font-medium transition-colors disabled:opacity-40 ${
+            className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-md px-1.5 text-base leading-tight font-medium max-sm:text-[15px] transition-colors disabled:opacity-40 ${
               esPrincipal ? "col-span-3 bg-accion text-white hover:bg-brand-orange-dark sm:col-span-1" : "border hover:bg-muted"
             }`}
           >

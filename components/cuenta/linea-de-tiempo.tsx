@@ -2,6 +2,9 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import type { ClaseDeMovimiento, MovimientoDelCliente } from "@/lib/dal/historial-cliente";
+// Los centavos solo cuando los hay, como en el resto de la ficha (mes simulado:
+// «$ 339.100,00» acá y «$ 339.100» en Pedidos).
+import { formatearMonto } from "@/lib/formato";
 
 /**
  * Los movimientos de un cliente, agrupados por mes.
@@ -35,11 +38,6 @@ const ESTILO: Record<ClaseDeMovimiento, { etiqueta: string; familia: string }> =
 
 const MES = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" });
 const DIA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit" });
-const PESOS = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 2,
-});
 
 type ReciboDelMovimiento = NonNullable<MovimientoDelCliente["recibo"]>;
 
@@ -162,7 +160,7 @@ function Fila({
             }`}
           >
             {mueve ? (importe > 0 ? "+" : "−") : ""}
-            {PESOS.format(Math.abs(importe))}
+            {formatearMonto(Math.abs(importe))}
           </span>
         )}
       </div>

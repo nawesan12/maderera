@@ -334,7 +334,11 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 		if err != nil {
 			return err
 		}
-		if l := fiscal.LetraQueCorresponde(config.CondicionIva, cab.condicion); l != fiscal.LetraDe(tipo) {
+		l, err := letraPara(ctx, tx, config.CondicionIva, cab.condicion)
+		if err != nil {
+			return err
+		}
+		if l != fiscal.LetraDe(tipo) {
 			return errEmision("Con esa condición frente al IVA corresponde una " + fiscal.NombreComprobante(fiscal.TipoFactura(l)) +
 				", y este comprobante es " + fiscal.NombreComprobante(tipo) + ": la letra no se puede cambiar sobre el mismo número.")
 		}

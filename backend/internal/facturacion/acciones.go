@@ -19,6 +19,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -242,8 +243,11 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 			return "", nil, errEmision(msj)
 		}
 	}
-	if m := faltaCuitParaLaA(condicion, &cuit); m != "" {
-		return "", nil, errEmision(m)
+	// Con la regla en «b», al monotributista le sale B: no hace falta su CUIT.
+	if condicion != fiscal.Monotributista || !reglas.Es(ctx, s.pool, reglas.FacturaAlMonotributista, "b") {
+		if m := faltaCuitParaLaA(condicion, &cuit); m != "" {
+			return "", nil, errEmision(m)
+		}
 	}
 
 	var lineas []Linea
@@ -487,7 +491,8 @@ func (s *Servicio) LetraQueSaldria(ctx context.Context, customerID, cuitTipeado 
 			receptor = clientes.SugerirCondicionIva(doc)
 		}
 	}
-	return fiscal.LetraQueCorresponde(config.CondicionIva, receptor), receptor, nil
+	letra, err = letraPara(ctx, s.pool, config.CondicionIva, receptor)
+	return letra, receptor, err
 }
 
 // EmitirParaLaVenta es emitirParaLaVenta: el comprobante de una venta de

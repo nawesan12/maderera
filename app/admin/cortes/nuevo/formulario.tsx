@@ -357,6 +357,15 @@ export function FormularioCorte({
       : `El plano usa ${placasEnTexto(usadas)} y el pedido ${desdePedido.numero} vende ${placasEnTexto(delPedidoElegida.vendidas)}.`;
   })();
 
+  // El pedido vende todas las placas que usan sus cortes: se venden enteras
+  // y el corte va sin cargo, como lo va a decir la ficha (H184).
+  const todasDelPedido =
+    !sinCargo &&
+    Boolean(delPedidoElegida?.vendidas) &&
+    plano.placas.length > 0 &&
+    (delPedidoElegida?.vendidas ?? 0) + 1e-6 >=
+      plano.placas.length / (mitad ? 2 : 1) + (delPedidoElegida?.enOtrosCortes ?? 0);
+
   // Lo que frena el envío, dicho al lado del botón (H043, H188).
   const motivoParaNoEnviar =
     plano.noEntran.length > 0
@@ -813,6 +822,7 @@ export function FormularioCorte({
           medidaSupuesta={medidaPlaca.supuesta}
           fijadas={fijadas}
           onFijadas={setFijadas}
+          quien={{ sinCargo: sinCargo && Boolean(desdePedido), media: Boolean(mitad), todasDelCliente: todasDelPedido }}
         />
       </section>
 

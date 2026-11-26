@@ -59,7 +59,8 @@ export default async function NuevoCortePage({
   const volver = sp.volver && VUELTA_PERMITIDA.test(sp.volver) ? sp.volver : null;
   const [sucursales, pedido, sierra, consulta, placas, cliente] = await Promise.all([
     listarSucursalesPublicas(),
-    // Sin plata: el aserradero también carga cortes de un pedido.
+    // Sin plata: el depósito también carga cortes de un pedido (el alta no
+    // es del aserradero: lib/roles.ts).
     pedidoId ? pedidoParaElTaller(pedidoId) : Promise.resolve(null),
     anchoDeSierra(),
     token ? consultaDeCorte(token) : Promise.resolve(null),

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { moneda } from "@/components/admin/formato";
+import type { MedioDeCobro } from "@/lib/cobros/partes";
 
 const SIGUIENTE: Record<string, string> = {
   pendiente: "Preparar",
@@ -46,7 +47,7 @@ export function AccionesPedido({
    * sin recibo ni caja. Sin esto (el depósito, que no mueve plata), el botón
    * no aparece.
    */
-  cobro?: { numero: string; aCobrar: number; customerId: string | null; nombre: string } | null;
+  cobro?: { numero: string; aCobrar: number; customerId: string | null; nombre: string; medio?: MedioDeCobro } | null;
   /**
    * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` del
    * pedido, la misma regla que «Me deben»). Con algo, «Marcar entregado»
@@ -144,6 +145,7 @@ export function AccionesPedido({
           customerId={cobro.customerId}
           nombre={cobro.nombre}
           aCobrar={cobro.aCobrar}
+          medio={cobro.medio}
           pedido={{ id, numero: cobro.numero }}
           etiqueta="Cobrar"
           claseBoton={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-base font-medium transition-colors hover:bg-muted ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
@@ -324,6 +326,7 @@ export function AccionesPedido({
           customerId={cobro.customerId}
           nombre={cobro.nombre}
           aCobrar={sinCobrar.monto}
+          medio={cobro.medio}
           pedido={{ id, numero: cobro.numero }}
           alCobrar={() => accion(avanzar)}
         />

@@ -34,6 +34,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
 	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/productos"
@@ -127,6 +128,48 @@ func SaldoDeAcopio(ctx context.Context, db consultor, pedido string) ([]Renglon,
 		return []Renglon{}, nil
 	}
 	return leerSaldo(ctx, db, sprintf(consultaSaldo, "", ""), pedido)
+}
+
+// ConGalpon le suma a cada renglón con producto lo que hay en el galpón de
+// la sucursal de donde sale: la de su reserva, o la del pedido.
+func ConGalpon(ctx context.Context, db consultor, pedido string, renglones []Renglon) ([]Renglon, error) {
+	if len(renglones) == 0 || !plataforma.UUIDValido(pedido) {
+		return renglones, nil
+	}
+	filas, err := db.Query(ctx, `
+		WITH r AS (
+		  SELECT oi.id, oi.variant_id, oi.stock_por_unidad AS factor,
+		    coalesce((SELECT sr.branch_id FROM stock_reservations sr WHERE sr.order_item_id = oi.id AND sr.estado = 'activa'
+		              ORDER BY sr.created_at LIMIT 1), o.branch_id) AS sucursal
+		  FROM order_items oi JOIN orders o ON o.id = oi.order_id
+		  WHERE oi.order_id = $1 AND oi.variant_id IS NOT NULL
+		)
+		SELECT r.id, r.factor::float8,
+		  (coalesce((SELECT i.qty FROM inventory i WHERE i.variant_id = r.variant_id AND i.branch_id = r.sucursal), 0)
+		   - coalesce((SELECT sum(sr.cantidad) FROM stock_reservations sr JOIN orders o ON o.id = sr.order_id
+		               WHERE sr.estado = 'activa' AND o.estado = 'en-camino' AND sr.variant_id = r.variant_id AND sr.branch_id = r.sucursal), 0))::float8
+		FROM r WHERE r.sucursal IS NOT NULL`, pedido)
+	if err != nil {
+		return nil, err
+	}
+	galpon := map[string]float64{}
+	var id string
+	var factor, n float64
+	if _, err := pgx.ForEachRow(filas, []any{&id, &factor, &n}, func() error {
+		if factor > 0 {
+			n = n / factor
+		}
+		galpon[id] = jsmath.Round(n*1000) / 1000
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	for i := range renglones {
+		if g, ok := galpon[renglones[i].OrderItemID]; ok {
+			renglones[i].EnElGalpon = &g
+		}
+	}
+	return renglones, nil
 }
 
 // SaldoAlRemito es qué quedaba en acopio **cuando se hizo ese remito**: se
@@ -706,5 +749,9 @@ func (s *Servicio) DelPortal(ctx context.Context, ses *auth.Sesion, pedido strin
 		return nil, err
 	}
 	out.Acopio, err = SaldoDeAcopio(ctx, s.pool, pedido)
+	if err != nil {
+		return out, err
+	}
+	out.Acopio, err = ConGalpon(ctx, s.pool, pedido, out.Acopio)
 	return out, err
 }

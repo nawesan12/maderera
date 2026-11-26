@@ -27,6 +27,12 @@ type Renglon struct {
 	// a mano es texto libre («m» de tapacanto, «flete»). Sin producto, no se
 	// controla: no hay stock que dejar en 619,99.
 	Enteros bool `json:"enteros,omitempty"`
+	// EnElGalpon es lo que hay en el estante de la sucursal de donde sale el
+	// renglón, en la unidad del renglón: el físico menos lo que ya salió en
+	// el camión de un pedido en camino. Lo mira quien arma el remito: con 135
+	// placas vendidas y 70 en el galpón, el formulario no mostraba stock
+	// (mes simulado, H218). Sin producto, no hay.
+	EnElGalpon *float64 `json:"enElGalpon,omitempty"`
 }
 
 // maxCero es Math.max(x, 0) (NaN sigue siendo NaN).

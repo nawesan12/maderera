@@ -27,6 +27,8 @@ export interface FilaPrecio {
   actualizado: Date | null;
   /** Hace más de DIAS_PARA_REVISAR que no se toca. */
   desactualizado: boolean;
+  /** El precio final que apenas cubre el costo; null sin costo cargado. */
+  piso?: number | null;
 }
 
 export const DIAS_PARA_REVISAR = 60;

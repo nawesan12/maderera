@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CreditCard, Download, FileText, ImageOff, Tags } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { leerPagina, Paginador } from "@/components/admin/paginador";
-import { fechaHora, haceCuanto, moneda, plural } from "@/components/admin/formato";
+import { fechaHora, formatearMonto, haceCuanto, moneda, plural } from "@/components/admin/formato";
 import { BuscadorProductos } from "@/app/admin/productos/buscador";
 import { listarCategoriasAdmin, marcasDeProductos } from "@/lib/dal/admin/products";
 import {
@@ -315,14 +315,35 @@ function Grilla({
 function Brecha({ brecha }: { brecha: number | null }) {
   if (brecha === null) return null;
   const texto = Math.abs(brecha).toString().replace(".", ",");
+  // Un porcentaje de siete cifras no se lee y se montaba sobre el precio de
+  // al lado (mes simulado: «+10719900%» encima de «$100»). Pasado el 100 %
+  // es un error de carga: se dice eso.
   return brecha >= 0 ? (
     <span className="tabular whitespace-nowrap text-sm text-brand-orange">−{texto}%</span>
   ) : (
     <span
-      className="tabular estado-problema whitespace-nowrap text-sm font-semibold"
+      className="tabular estado-problema whitespace-nowrap text-sm font-semibold text-[var(--estado-tinta)]"
       title="El precio profesional es más alto que el de lista"
     >
-      +{texto}%
+      {brecha < -100 ? "Revisar" : `+${texto}%`}
+    </span>
+  );
+}
+
+/**
+ * «Bajo costo» debajo de un precio que no cubre el costo promedio con IVA
+ * (mes simulado: el Fenólico 18 mm a $100 con un costo de $75.000 neto, y
+ * nada lo decía). El piso lo calcula Go (precios.PisoDeCosto).
+ */
+function BajoCosto({ precio, piso }: { precio: string; piso?: number | null }) {
+  const n = Number(precio);
+  if (!piso || !(n > 0) || n >= piso - 0.005) return null;
+  return (
+    <span
+      className="estado-problema block whitespace-nowrap text-right text-sm font-semibold text-[var(--estado-tinta)]"
+      title={`Cubre el costo desde ${formatearMonto(piso)}`}
+    >
+      Bajo costo
     </span>
   );
 }
@@ -354,6 +375,7 @@ function RenglonDePrecio({
           {generalId && (
             <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" tactil />
           )}
+          <BajoCosto precio={fila.precioGeneral} piso={fila.piso} />
         </div>
         <div className="text-center">
           <Brecha brecha={fila.brecha} />
@@ -368,6 +390,7 @@ function RenglonDePrecio({
               tactil
             />
           )}
+          <BajoCosto precio={fila.precioProfesional} piso={fila.piso} />
         </div>
       </div>
     </li>
@@ -411,13 +434,17 @@ function FilaDePrecio({
         {generalId && (
           <PrecioEditable variantId={fila.variantId} priceListId={generalId} valor={fila.precioGeneral} rotulo="Lista" />
         )}
+        <BajoCosto precio={fila.precioGeneral} piso={fila.piso} />
       </td>
       <td className="px-3 py-1.5">
-        <div className="flex items-center justify-end gap-1.5">
-          <Brecha brecha={fila.brecha} />
+        {/* La brecha abajo del precio y no al costado: al lado no entraba
+            en la columna y pisaba el precio de lista. */}
+        <div className="flex flex-col items-end">
           {profesionalId && (
             <PrecioEditable variantId={fila.variantId} priceListId={profesionalId} valor={fila.precioProfesional} rotulo="Profesional" />
           )}
+          <Brecha brecha={fila.brecha} />
+          <BajoCosto precio={fila.precioProfesional} piso={fila.piso} />
         </div>
       </td>
       <td className="px-3 py-1.5 text-right text-sm text-muted-foreground">

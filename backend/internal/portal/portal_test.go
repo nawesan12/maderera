@@ -106,10 +106,10 @@ func TestMiCuenta(t *testing.T) {
 	if c, b := pedir(t, juan, "PUT", u+"datos", map[string]string{"nombre": "J", "condicionIva": "consumidor_final"}); c != 422 || !strings.Contains(b, "Escribí tu nombre.") {
 		t.Errorf("nombre corto: %d %s", c, b)
 	}
-	if c, b := pedir(t, juan, "PUT", u+"datos", map[string]string{"nombre": "Juan Pérez", "cuit": "20-12345678-9", "condicionIva": "monotributista"}); c != 200 {
+	if c, b := pedir(t, juan, "PUT", u+"datos", map[string]string{"nombre": "Juan Pérez", "cuit": "20-12345678-6", "condicionIva": "monotributista"}); c != 200 {
 		t.Fatalf("datos: %d %s", c, b)
 	}
-	if _, b := pedir(t, juan, "GET", u+"ficha", nil); !strings.Contains(b, `"cuit":"20123456789"`) || !strings.Contains(b, `"condicionIva":"monotributista"`) {
+	if _, b := pedir(t, juan, "GET", u+"ficha", nil); !strings.Contains(b, `"cuit":"20123456786"`) || !strings.Contains(b, `"condicionIva":"monotributista"`) {
 		t.Errorf("ficha: %s", b)
 	}
 
@@ -199,9 +199,10 @@ func TestSeguimientoDelPedido(t *testing.T) {
 		{"el personal", staff, "PED-0042/seguimiento", 200},
 		{"uno que no existe", http.DefaultClient, "PED-9999/seguimiento?t=" + token, 404},
 	}
-	// Mi pedido: el dueño lo ve con su historial; otro, 404; sin el costo.
+	// Mi pedido: el dueño lo ve con su historial (sin las notas de la casa,
+	// H084); otro, 404; sin el costo.
 	_, _ = e.pool.Exec(ctx, `insert into order_status_history (order_id, estado, nota) values ($1, 'pendiente', 'Recibido')`, pedido)
-	if c, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-0042", nil); c != 200 || !strings.Contains(b, "Recibido") ||
+	if c, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-0042", nil); c != 200 || strings.Contains(b, "Recibido") || !strings.Contains(b, `"estado":"pendiente"`) ||
 		!strings.Contains(b, "Fenólico 18 mm") || strings.Contains(b, "costoUnitario") {
 		t.Errorf("mi pedido: %d %s", c, b)
 	}

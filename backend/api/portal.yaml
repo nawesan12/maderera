@@ -49,12 +49,15 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, estado, estadoPago, tipoEntrega, total, items, sucursal, createdAt]
+                  required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, total, items, sucursal, enAcopio, createdAt, debeEnCuenta]
                   properties:
                     id: { type: string }
                     numero: { type: string }
                     estado: { type: string }
                     estadoPago: { type: string }
+                    medioPago: { type: string, nullable: true }
+                    enAcopio: { type: boolean }
+                    debeEnCuenta: { type: number, format: double, nullable: true }
                     tipoEntrega: { type: string, enum: [retiro, envio] }
                     total: { type: number, format: double }
                     items: { type: integer }
@@ -225,7 +228,8 @@ components:
     ClienteDelPortal:
       type: object
       nullable: true
-      required: [id, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, tipo, estado, limiteCredito]
+      required: [id, nombre, razonSocial, cuit, condicionIva, email, telefono, direccion, tipo, estado, limiteCredito, datosFiscalesFijos,
+        vinculada, lista]
       properties:
         id: { type: string }
         nombre: { type: string }
@@ -238,10 +242,14 @@ components:
         tipo: { type: string, enum: [particular, profesional] }
         estado: { type: string, enum: [activo, moroso, inactivo] }
         limiteCredito: { type: number, format: double }
+        datosFiscalesFijos: { type: boolean }
+        vinculada: { type: boolean }
+        lista: { type: string, nullable: true }
     PresupuestoDelPortal:
       type: object
-      required: [id, numero, estado, subtotal, total, notas, asesor, validoHasta, sucursal, createdAt, items]
+      required: [id, numero, estado, subtotal, total, notas, asesor, validoHasta, sucursal, createdAt, items, pedido]
       properties:
+        pedido: { type: string, nullable: true }
         id: { type: string }
         numero: { type: string }
         estado: { type: string }
@@ -308,8 +316,45 @@ components:
     PedidoPropio:
       type: object
       required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total, notas,
-        sucursal, sucursalSlug, createdAt, items, historial]
+        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, enRevision]
       properties:
+        descuento: { type: number, format: double }
+        debeEnCuenta: { type: number, format: double, nullable: true }
+        enRevision: { type: number, format: double, nullable: true }
+        cortes:
+          type: array
+          items:
+            type: object
+            required: [id, numero, estado, material, placas, retiraEl]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              estado: { type: string }
+              material: { type: string, nullable: true }
+              placas: { type: integer }
+              retiraEl: { type: string, format: date-time, nullable: true }
+        facturas:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, puntoVenta, numero, estado, total]
+            properties:
+              id: { type: string }
+              tipo: { type: string }
+              puntoVenta: { type: integer }
+              numero: { type: integer }
+              estado: { type: string }
+              total: { type: number, format: double }
+        recibos:
+          type: array
+          items:
+            type: object
+            required: [id, numero, estado, total]
+            properties:
+              id: { type: string }
+              numero: { type: string }
+              estado: { type: string }
+              total: { type: number, format: double }
         id: { type: string }
         numero: { type: string }
         estado: { type: string }

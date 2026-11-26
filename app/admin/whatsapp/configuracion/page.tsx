@@ -5,7 +5,7 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { configuracionWhatsapp } from "@/lib/dal/admin/whatsapp";
 import { requireStaffRole } from "@/lib/dal/session";
 import { PLANTILLAS_BASE } from "@/lib/whatsapp/plantillas-base";
-import { leerPlantilla, marcadores, nombreLegible } from "@/lib/whatsapp/plantillas";
+import { leerPlantilla, marcadores, nombreParaMostrar } from "@/lib/whatsapp/plantillas";
 import { numeroLegible } from "@/lib/whatsapp/numeros";
 import { urlBase } from "@/lib/pagos/config";
 import { fechaCorta, fechaHora } from "@/lib/formato";
@@ -356,7 +356,7 @@ export default async function ConfiguracionWhatsappPage() {
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span className="tabular text-base font-medium">{base.nombre}</span>
                   <span className="text-sm text-muted-foreground">
-                    {nombreLegible(base.nombre)} · {base.uso}
+                    {nombreParaMostrar(base.nombre)} · {base.uso}
                   </span>
                   {estadoMeta && (
                     <span

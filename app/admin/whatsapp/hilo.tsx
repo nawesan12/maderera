@@ -173,7 +173,7 @@ export function Hilo({
           cliente, y la asignación y «Resolver» bajan cuando no entran (mes
           simulado: a 375 px el selector se comía el nombre y el teléfono, y
           el chip «Profesional» lo tapaba). */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2.5 sm:px-4">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-3 py-2 sm:px-4 sm:py-2.5">
         <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-2">
           <Link
             href={volverALista()}
@@ -271,24 +271,26 @@ export function Hilo({
       {/* Ventana de 24 h: se dice siempre, porque decide qué se puede mandar. */}
       {!conPlantilla && modo !== "documento" && (
         <p
-          className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-t px-4 py-2 text-sm ${
+          className={`flex items-center gap-2 border-t px-3 py-1.5 text-sm sm:px-4 sm:py-2 ${
             ventanaAbierta ? "text-muted-foreground" : "estado-espera bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
           }`}
         >
           <Clock className="h-4 w-4 shrink-0" />
           {ventanaAbierta ? (
             <>
-              Podés contestar libremente por {restante} más.
-              <button type="button" onClick={() => setModo("plantilla")} className="font-medium text-brand-orange hover:underline">
+              <span className="min-w-0 flex-1 truncate">Podés contestar libremente por {restante} más.</span>
+              <button type="button" onClick={() => setModo("plantilla")} className="shrink-0 font-medium text-brand-orange hover:underline">
                 Usar un mensaje preparado
               </button>
             </>
           ) : (
             <>
-              {detalle.ultimoEntranteAt
-                ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
-                : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
-              <button type="button" onClick={() => setModo("plantilla")} className="font-medium underline">
+              <span className="min-w-0 flex-1">
+                {detalle.ultimoEntranteAt
+                  ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
+                  : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
+              </span>
+              <button type="button" onClick={() => setModo("plantilla")} className="shrink-0 font-medium underline">
                 Elegir uno
               </button>
             </>
@@ -302,6 +304,7 @@ export function Hilo({
           conversacionId={detalle.id}
           documentos={detalle.documentos}
           ventanaAbierta={ventanaAbierta}
+          escribio={!!detalle.ultimoEntranteAt}
           onCerrar={() => setModo("auto")}
           gratis={gratis}
         />
@@ -312,6 +315,7 @@ export function Hilo({
           nombre={detalle.nombre}
           plantillas={plantillas}
           ventanaAbierta={ventanaAbierta}
+          escribio={!!detalle.ultimoEntranteAt}
           conocidos={detalle.conocidos}
           documentos={detalle.documentos}
           onCerrar={ventanaAbierta ? () => setModo("texto") : null}
@@ -331,7 +335,7 @@ export function Hilo({
             setCitado(null);
             iniciarRespuesta(() => accionResponder(datos));
           }}
-          className="border-t p-3"
+          className="border-t p-2 sm:p-3"
         >
           <input type="hidden" name="conversacionId" value={detalle.id} />
           <input type="hidden" name="citado" value={citado?.waMessageId ?? ""} />
@@ -365,16 +369,18 @@ export function Hilo({
 
           {/* El texto ocupa todo el ancho: en la columna del medio, con los
               botones al costado, quedaba de tres palabras por renglón. */}
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
+            {/* Un renglón en el teléfono, dos en la computadora: cada renglón
+                del compositor es uno menos de mensajes a la vista (H048). */}
             <textarea
               ref={campoRef}
               name="cuerpo"
-              rows={2}
+              rows={1}
               required
               maxLength={4096}
               placeholder="Escribí tu respuesta…"
               aria-label="Respuesta"
-              className="block min-h-[2.75rem] w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-base"
+              className="block min-h-[2.75rem] w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-base sm:min-h-[4.25rem]"
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
               onKeyDown={(e) => {
@@ -391,7 +397,7 @@ export function Hilo({
                 «Documento»). Los rótulos aparecen según el ancho de la
                 columna, no de la pantalla. */}
             <div className="@container">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <AdjuntarArchivo conversacionId={detalle.id} citado={citado?.waMessageId ?? null} />
             <button
               type="button"
@@ -416,7 +422,7 @@ export function Hilo({
                 aria-keyshortcuts="Alt+W"
                 // Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra.
                 title="Alt + W"
-                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10"
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-2.5 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10 sm:px-3"
               >
                 <Smartphone className="h-5 w-5" />
                 <span>Teléfono</span>
@@ -427,7 +433,7 @@ export function Hilo({
               type="submit"
               disabled={enviando}
               // Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h.
-              className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand-green px-4 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50"
+              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50 sm:gap-2 sm:px-4"
             >
               {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               Enviar
@@ -901,7 +907,7 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
   }, [pendiente, estado.error]);
 
   return (
-    <form ref={formRef} action={accion} className="flex items-center gap-2 border-t border-dashed bg-muted/40 px-3 py-1.5">
+    <form ref={formRef} action={accion} className="flex items-center gap-2 border-t border-dashed bg-muted/40 px-3 py-1">
       <input type="hidden" name="conversacionId" value={conversacionId} />
       <FlaskConical className="h-4 w-4 shrink-0 text-muted-foreground" />
       <input
@@ -910,12 +916,12 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
         maxLength={500}
         placeholder="Simular lo que escribe el cliente"
         aria-label="Simular un mensaje del cliente"
-        className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm"
+        className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm sm:h-9"
       />
       <button
         type="submit"
         disabled={pendiente}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60 sm:h-9"
       >
         {pendiente ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquarePen className="h-4 w-4" />}
         Simular

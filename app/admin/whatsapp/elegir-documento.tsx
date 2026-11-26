@@ -22,12 +22,15 @@ export function ElegirDocumento({
   conversacionId,
   documentos,
   ventanaAbierta,
+  escribio = true,
   onCerrar,
   gratis = null,
 }: {
   conversacionId: string;
   documentos: DocumentoListado[];
   ventanaAbierta: boolean;
+  /** El cliente escribió alguna vez: si no, la ventana nunca se abrió. */
+  escribio?: boolean;
   onCerrar: () => void;
   /** El chat del cliente en la app del teléfono (wa.me), para mandarlo gratis. */
   gratis?: string | null;
@@ -111,7 +114,7 @@ export function ElegirDocumento({
           ) : (
             <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm text-[var(--estado-tinta)]">
               {/* Sale pegado al mensaje preparado «documento adjunto», que Meta cobra como de utilidad. */}
-              Pasaron más de 24 horas: sale con un mensaje preparado y se cobra.
+              {escribio ? "Pasaron más de 24 horas" : "Todavía no te escribió"}: sale con un mensaje preparado y se cobra.
             </p>
           )}
 

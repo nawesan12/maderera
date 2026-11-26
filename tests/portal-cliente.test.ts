@@ -7,6 +7,7 @@ import {
   pedidosEnCurso,
   importeAInformar,
   quienConsulta,
+  sumaAlNombre,
   saludoDelCliente,
   unaPorProducto,
 } from "@/lib/cuenta/portal";
@@ -171,5 +172,17 @@ describe("quién firma la consulta del catálogo", () => {
     expect(quienConsulta({ nombre: "Ana", esStaff: false, firma: null })).toEqual({ nombre: "Ana" });
     expect(quienConsulta({ nombre: "Vendedor", esStaff: true, firma: null })).toBeNull();
     expect(quienConsulta(null)).toBeNull();
+  });
+});
+
+describe("el encabezado del resumen impreso", () => {
+  it("no repite el nombre de fantasía igual a la razón social", () => {
+    expect(sumaAlNombre("Maderera Juan B. Justo S.R.L.", "Maderera Juan B. Justo")).toBe(false);
+    expect(sumaAlNombre("Constructora Costa Atlántica SRL", "Constructora Costa Atlántica SRL")).toBe(false);
+  });
+  it("sí muestra un nombre distinto", () => {
+    expect(sumaAlNombre("RF Construcciones SRL", "Roberto Fernández")).toBe(true);
+    expect(sumaAlNombre("Maderera Juan B. Justo S.R.L.", "MJBJ")).toBe(true);
+    expect(sumaAlNombre("Algo SA", "")).toBe(false);
   });
 });

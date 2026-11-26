@@ -134,6 +134,24 @@ export function mensajeDeConsulta(texto: string, cliente?: { nombre: string; cui
 }
 
 /**
+ * Si un segundo nombre suma algo debajo del primero en un papel: «Maderera
+ * Juan B. Justo» bajo «Maderera Juan B. Justo S.R.L.», o el nombre del cliente
+ * igual a su razón social, se leían dos veces (mes simulado). Se comparan sin
+ * la forma societaria, los puntos ni las mayúsculas.
+ */
+export function sumaAlNombre(principal: string | null | undefined, otro: string | null | undefined): boolean {
+  if (!otro?.trim()) return false;
+  const base = (n: string) => nombreDeSaludo(n.replace(/\b(S)\.\s*(R)\.\s*(L)\.?/gi, "SRL").replace(/\b(S)\.\s*(A)\.?(?=\s|$)/gi, "SA"), (x) => x.trim())
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return base(otro) !== base(principal ?? "");
+}
+
+/**
  * Quién firma la consulta del catálogo: el nombre de la ficha del cliente,
  * como el portal y /contacto, y el del usuario web solo si no tiene ficha.
  * Nadie si no hay sesión o es de la casa.

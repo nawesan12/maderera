@@ -853,7 +853,7 @@ components:
     ChequeListado:
       type: object
       required: [id, sentido, tipo, numero, banco, librador, fechaPago, importe, estado, cliente, customerId, circuito, proveedor, proveedorId,
-        notas, receiptId, recibo, motivoRechazo]
+        notas, receiptId, recibo, motivoRechazo, saldoCliente]
       properties:
         id: { type: string }
         sentido: { type: string, enum: [recibido, entregado] }
@@ -873,6 +873,7 @@ components:
         receiptId: { type: string, nullable: true }
         recibo: { type: string, nullable: true }
         motivoRechazo: { type: string, nullable: true }
+        saldoCliente: { type: number, format: double, nullable: true, description: lo que debe hoy el cliente (solo en los informados) }
     Gestion:
       type: object
       required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, createdAt]

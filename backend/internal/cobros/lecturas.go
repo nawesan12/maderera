@@ -35,6 +35,10 @@ type ChequeListado struct {
 	ReceiptID     *string   `json:"receiptId"`
 	Recibo        *string   `json:"recibo"`
 	MotivoRechazo *string   `json:"motivoRechazo"`
+	// SaldoCliente es lo que debe el cliente hoy, solo en los informados:
+	// aceptar uno de una cuenta ya saldada es cobrar de más (mes simulado,
+	// H240).
+	SaldoCliente *float64 `json:"saldoCliente"`
 }
 
 // EstadosVivos son los cheques que todavía mueven plata; el resto terminó.
@@ -45,7 +49,9 @@ const EstadosVivos = `('informado', 'cartera', 'depositado', 'entregado')`
 // en otro: un JOIN directo lo repetía una vez por pago).
 var columnasDeCheque = `
 		SELECT ch.id, ch.sentido::text, ch.tipo::text, ch.numero, ch.banco, ch.librador, ch.fecha_pago, ch.importe::float8,
-		  ch.estado::text, cu.nombre, ch.customer_id, ` + fragmentos.CircuitoDelCheque("ch") + `, pr.nombre, pr.id, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo
+		  ch.estado::text, cu.nombre, ch.customer_id, ` + fragmentos.CircuitoDelCheque("ch") + `, pr.nombre, pr.id, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo,
+		  CASE WHEN ch.estado = 'informado' AND ch.customer_id IS NOT NULL THEN
+		    (SELECT coalesce(sum(m.monto), 0)::float8 FROM account_movements m WHERE m.customer_id = ch.customer_id) END
 		FROM cheques ch
 		LEFT JOIN customers cu ON cu.id = ch.customer_id
 		LEFT JOIN LATERAL (
@@ -58,7 +64,7 @@ func leerCheques(filas pgx.Rows) ([]ChequeListado, error) {
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ChequeListado, error) {
 		var c ChequeListado
 		return c, r.Scan(&c.ID, &c.Sentido, &c.Tipo, &c.Numero, &c.Banco, &c.Librador, &c.FechaPago, &c.Importe, &c.Estado,
-			&c.Cliente, &c.CustomerID, &c.Circuito, &c.Proveedor, &c.ProveedorID, &c.Notas, &c.ReceiptID, &c.Recibo, &c.MotivoRechazo)
+			&c.Cliente, &c.CustomerID, &c.Circuito, &c.Proveedor, &c.ProveedorID, &c.Notas, &c.ReceiptID, &c.Recibo, &c.MotivoRechazo, &c.SaldoCliente)
 	})
 }
 

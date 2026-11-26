@@ -103,16 +103,20 @@ export default async function RecepcionesPage() {
               {recepciones.map((r) => (
                 <li key={r.id}>
                   <Link href={`/admin/recepciones/${r.id}`} className="block space-y-1 px-4 py-3 hover:bg-hundida">
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate text-[17px] font-semibold">{r.proveedor}</span>
+                    {/* El proveedor entero (hasta dos renglones) y la fecha
+                        entera: si algo no entra se corta la sucursal (mes
+                        simulado, H382). */}
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="line-clamp-2 min-w-0 break-words text-[17px] font-semibold">{r.proveedor}</span>
                       <Estado estado={r.estado} />
                     </span>
                     <span className="codigo block truncate text-base text-muted-foreground">
                       {r.numeroRemito ? `Remito ${r.numeroRemito}` : "Sin remito"}
                     </span>
-                    <span className="tabular flex items-baseline justify-between gap-3 text-base text-muted-foreground">
-                      <span className="min-w-0 truncate">
-                        {r.sucursal ?? "—"} · {fechaCorta.format(r.fecha)}
+                    <span className="tabular flex items-baseline gap-3 text-base text-muted-foreground">
+                      <span className="flex min-w-0 flex-1 items-baseline">
+                        <span className="shrink-0 whitespace-nowrap">{fechaCorta.format(r.fecha)}</span>
+                        {r.sucursal && <span className="min-w-0 truncate">&nbsp;· {r.sucursal}</span>}
                       </span>
                       {veCostos && <span className="shrink-0 font-semibold text-foreground">{formatearMonto(r.neto)}</span>}
                     </span>

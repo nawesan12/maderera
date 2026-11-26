@@ -30,6 +30,9 @@ type OrdenListada struct {
 	Lineas         int        `json:"lineas"`
 	Neto           float64    `json:"neto"`
 	Pendientes     int        `json:"pendientes"`
+	// PorLlegar es el neto de lo que falta recibir: «en camino» no cuenta
+	// lo que ya llegó de una orden parcial (mes simulado).
+	PorLlegar float64 `json:"porLlegar"`
 }
 
 // ListarOrdenes es listarOrdenesDeCompra: las últimas, con el neto y los
@@ -37,13 +40,14 @@ type OrdenListada struct {
 func (s *Servicio) ListarOrdenes(ctx context.Context, limite int) ([]OrdenListada, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT o.id, o.numero, o.estado::text, o.fecha_prometida, o.created_at, s.nombre, o.supplier_id, b.name,
-		  coalesce(t.lineas, 0), t.neto, coalesce(t.pendientes, 0)
+		  coalesce(t.lineas, 0), t.neto, coalesce(t.pendientes, 0), t.por_llegar
 		FROM purchase_orders o
 		JOIN suppliers s ON s.id = o.supplier_id
 		LEFT JOIN branches b ON b.id = o.branch_id
 		LEFT JOIN (
 		  SELECT purchase_order_id, count(*)::int AS lineas, sum(cantidad * costo_unitario) AS neto,
-		    count(*) FILTER (WHERE cantidad_recibida < cantidad)::int AS pendientes
+		    count(*) FILTER (WHERE cantidad_recibida < cantidad)::int AS pendientes,
+		    sum(greatest(cantidad - cantidad_recibida, 0) * costo_unitario) AS por_llegar
 		  FROM purchase_order_items GROUP BY purchase_order_id
 		) t ON t.purchase_order_id = o.id
 		ORDER BY o.created_at DESC LIMIT $1`, limite)
@@ -52,9 +56,10 @@ func (s *Servicio) ListarOrdenes(ctx context.Context, limite int) ([]OrdenListad
 	}
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (OrdenListada, error) {
 		var o OrdenListada
-		var neto *jsmath.Num
-		err := r.Scan(&o.ID, &o.Numero, &o.Estado, &o.FechaPrometida, &o.CreatedAt, &o.Proveedor, &o.SupplierID, &o.Sucursal, &o.Lineas, &neto, &o.Pendientes)
+		var neto, porLlegar *jsmath.Num
+		err := r.Scan(&o.ID, &o.Numero, &o.Estado, &o.FechaPrometida, &o.CreatedAt, &o.Proveedor, &o.SupplierID, &o.Sucursal, &o.Lineas, &neto, &o.Pendientes, &porLlegar)
 		o.Neto = numOCero(neto)
+		o.PorLlegar = numOCero(porLlegar)
 		return o, err
 	})
 }

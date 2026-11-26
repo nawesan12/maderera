@@ -42,7 +42,7 @@ export default async function OrdenesDeCompraPage() {
           {/* Sin nada en camino no hay bajada: decía «lo que se le pidió a cada proveedor y qué falta que llegue». */}
           {enCamino.length > 0 && (
             <p className="mt-1 text-base text-muted-foreground">
-              {`${enCamino.length} en camino por ${formatearMonto(enCamino.reduce((s, o) => s + o.neto, 0))}.`}
+              {`${enCamino.length} en camino por ${formatearMonto(enCamino.reduce((s, o) => s + o.porLlegar, 0))}.`}
             </p>
           )}
         </div>
@@ -159,10 +159,17 @@ function ListaDeOrdenes({ ordenes }: { ordenes: Orden[] }) {
                 <span className="codigo text-[17px] font-semibold">{o.numero}</span>
                 <Estado estado={o.estado} />
               </span>
-              <span className="block truncate text-base">{o.proveedor}</span>
-              <span className="tabular flex items-baseline justify-between gap-3 text-base">
-                <span className="min-w-0 truncate text-muted-foreground">
-                  {o.sucursal ?? "—"} · <Prometida o={o} />
+              <span className="line-clamp-2 block break-words text-base">{o.proveedor}</span>
+              {/* La fecha primero y entera: es el dato del renglón; si no
+                  entra, se corta la sucursal (mes simulado, H382). */}
+              <span className="tabular flex items-baseline gap-3 text-base">
+                <span className="flex min-w-0 flex-1 items-baseline">
+                  <span className="shrink-0 whitespace-nowrap">
+                    <Prometida o={o} />
+                  </span>
+                  {o.sucursal && (
+                    <span className="min-w-0 truncate text-muted-foreground">&nbsp;· {o.sucursal}</span>
+                  )}
                 </span>
                 <span className="shrink-0 font-semibold">{formatearMonto(o.neto)}</span>
               </span>

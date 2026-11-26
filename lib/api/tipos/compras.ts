@@ -952,6 +952,8 @@ export interface components {
             /** Format: double */
             neto: number;
             pendientes: number;
+            /** Format: double */
+            porLlegar: number;
         };
         Orden: {
             id: string;

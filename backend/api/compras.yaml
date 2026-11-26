@@ -944,7 +944,7 @@ components:
         error: { type: string }
     OrdenListada:
       type: object
-      required: [id, numero, estado, fechaPrometida, createdAt, proveedor, supplierId, sucursal, lineas, neto, pendientes]
+      required: [id, numero, estado, fechaPrometida, createdAt, proveedor, supplierId, sucursal, lineas, neto, pendientes, porLlegar]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -957,6 +957,7 @@ components:
         lineas: { type: integer }
         neto: { type: number, format: double }
         pendientes: { type: integer }
+        porLlegar: { type: number, format: double }
     Orden:
       type: object
       required: [id, numero, estado, fechaPrometida, notas, createdAt, enviadaAt, supplierId, proveedor, branchId, sucursal, items]

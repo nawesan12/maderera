@@ -136,6 +136,11 @@ fi
 
 # Go primero: la aplicación nueva le pide la sesión (y, tanda por tanda, los
 # datos), así que tiene que estar arriba antes de que Next arranque.
+# Los volúmenes los escriben Go (65532) y Next (1001): ver `permisos` en el compose.
+if ! "${COMPOSE[@]}" --profile herramientas run --rm permisos; then
+  echo "Aviso: no se pudieron ajustar los permisos de subidas y privado. Ver: dc --profile herramientas run --rm permisos" >&2
+fi
+
 echo "→ Cambiando la API y el worker por los nuevos"
 if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 120 api; then
   echo "La API nueva no arrancó. Ver: dc logs api" >&2

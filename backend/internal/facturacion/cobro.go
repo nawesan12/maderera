@@ -96,7 +96,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 			return ResultadoDeCobro{}, err
 		}
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", c.id,
-			"Pasó "+formato.Moneda(monto)+" de "+et+" a cuenta corriente", nil)
+			"Pasó "+formato.Importe(monto)+" de "+et+" a cuenta corriente", nil)
 		return ResultadoDeCobro{Ok: "Pasado a cuenta corriente."}, nil
 	}
 

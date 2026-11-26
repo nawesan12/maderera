@@ -165,7 +165,7 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 				n = append(n, jsmath.Texto(x.cantidad)+" → "+jsmath.Texto(cantidad))
 			}
 			if precio != x.precio {
-				n = append(n, formato.Moneda(x.precio)+" → "+formato.Moneda(precio))
+				n = append(n, formato.Importe(x.precio)+" → "+formato.Importe(precio))
 			}
 			notas = append(notas, x.descripcion+": "+strings.Join(n, ", "))
 			x.cantidad, x.precio = cantidad, precio
@@ -173,7 +173,7 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 		nuevoEnvio := envio
 		if c.CostoEnvio != nil && ventas.ACentavos(*c.CostoEnvio) != envio {
 			nuevoEnvio = ventas.ACentavos(*c.CostoEnvio)
-			notas = append(notas, "Flete: "+formato.Moneda(envio)+" → "+formato.Moneda(nuevoEnvio))
+			notas = append(notas, "Flete: "+formato.Importe(envio)+" → "+formato.Importe(nuevoEnvio))
 		}
 		if len(notas) == 0 {
 			return fallo("No cambió nada.")

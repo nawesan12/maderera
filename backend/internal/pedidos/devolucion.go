@@ -213,7 +213,7 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 				if falta <= 0.005 {
 					return fallo("El pedido ya está cobrado: la plata vuelve por la caja o el banco, no desde acá.")
 				}
-				return fallo("Lo devuelto (" + formato.Moneda(total) + ") pasa lo que falta cobrar (" + formato.Moneda(falta) + ").")
+				return fallo("Lo devuelto (" + formato.Importe(total) + ") pasa lo que falta cobrar (" + formato.Importe(falta) + ").")
 			}
 		}
 
@@ -284,13 +284,13 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 		for _, v := range vueltas {
 			partes = append(partes, jsmath.Texto(v.cantidad)+" "+v.descripcion)
 		}
-		renglon := "Devolución · " + strings.Join(partes, ", ") + " · " + formato.Moneda(total) + " · " + motivo
+		renglon := "Devolución · " + strings.Join(partes, ", ") + " · " + formato.Importe(total) + " · " + motivo
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2, $3, $4)`,
 			pedido, p.estado, renglon, ses.UserID); err != nil {
 			return err
 		}
 		out.Importe = total
-		out.Ok = "Devolución registrada: " + formato.Moneda(total) + "."
+		out.Ok = "Devolución registrada: " + formato.Importe(total) + "."
 		return nil
 	})
 	if err != nil {

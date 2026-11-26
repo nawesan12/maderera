@@ -180,7 +180,7 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	a.s.anotar(ctx, ses, sqlc.AccionAuditoriaAnular, "pedido", r.Id, desc, detalle)
 	out := map[string]any{"ok": "Venta anulada.", "porAfuera": res.PorAfuera}
 	if res.PorAfuera > 0.005 {
-		out["ok"] = "Venta anulada. Por afuera se devuelven " + formato.Moneda(res.PorAfuera) + "."
+		out["ok"] = "Venta anulada. Por afuera se devuelven " + formato.Importe(res.PorAfuera) + "."
 	}
 	if res.FacturaPendiente != nil {
 		out["facturaPendiente"] = *res.FacturaPendiente
@@ -636,7 +636,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, v VentaPedida) 
 		return r, nil
 	}
 	if r.Nueva {
-		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por "+formato.Moneda(r.Total), controlDeLaVenta(r))
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por "+formato.Importe(r.Total), controlDeLaVenta(r))
 	}
 	return r, nil
 }

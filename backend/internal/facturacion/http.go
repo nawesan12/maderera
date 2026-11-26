@@ -674,7 +674,7 @@ func (a *API) DevolucionParcial(ctx context.Context, r facturacionapi.Devolucion
 	}
 	if !d.Repetida {
 		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "factura", r.Id.String(),
-			"Devolución de "+formato.Moneda(d.Importe)+" por "+p.Destino+": "+trimJS(p.Motivo),
+			"Devolución de "+formato.Importe(d.Importe)+" por "+p.Destino+": "+trimJS(p.Motivo),
 			map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID, "sinStock": p.SinStock, "sucursalId": p.BranchID})
 	}
 	return ok(d), nil

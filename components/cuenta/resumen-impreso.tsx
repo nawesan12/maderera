@@ -95,23 +95,25 @@ export function ResumenImpreso({
             <tbody>
               {movimientos.map((m) => (
                 <tr key={m.id}>
-                  <td>{fechaCorta.format(m.fecha)}</td>
+                  <td className="fecha">{fechaCorta.format(m.fecha)}</td>
                   <td>
                     {m.detalle ?? NOMBRE_DEL_TIPO[m.tipo] ?? m.tipo}
-                    {m.referencia && m.referencia !== m.detalle && (
+                    {/* La referencia que el concepto ya nombra no se repite
+                        («PED-1004 · PED-1004», H388). */}
+                    {m.referencia && !(m.detalle ?? "").includes(m.referencia) && (
                       <span className="chico"> · {m.referencia}</span>
                     )}
                   </td>
                   {/* Debe y haber en columnas separadas, como en cualquier
                       resumen: un solo importe con signo obliga a fijarse en el
                       menos para saber si sumó o restó. */}
-                  <td className="der mono">
+                  <td className="der mono" data-label="Debe">
                     {m.monto > 0 ? formatearMonto(m.monto) : ""}
                   </td>
-                  <td className="der mono">
+                  <td className="der mono" data-label="Haber">
                     {m.monto < 0 ? formatearMonto(-m.monto) : ""}
                   </td>
-                  <td className="der mono">{formatearMonto(m.saldo)}</td>
+                  <td className="der mono" data-label="Saldo">{formatearMonto(m.saldo)}</td>
                 </tr>
               ))}
             </tbody>
@@ -152,7 +154,7 @@ export function ResumenImpreso({
               <tbody>
                 <tr>
                   {aging.tramos.map((t) => (
-                    <td key={t.etiqueta} className="der mono">
+                    <td key={t.etiqueta} className="der mono" data-label={t.etiqueta}>
                       {t.monto > 0 ? formatearMonto(t.monto) : "—"}
                     </td>
                   ))}

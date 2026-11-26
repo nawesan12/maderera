@@ -227,14 +227,15 @@ export async function ComprobanteImpreso({
               return (
                 <tr key={item.id}>
                   <td>{item.descripcion}</td>
-                  <td className="der mono">
+                  {/* data-label: en el teléfono la tabla se apila (globals.css). */}
+                  <td className="der mono" data-label="Cant.">
                     {cantidad} {item.unidad === "unidad" ? "" : formatearUnidad(item.unidad)}
                   </td>
-                  <td className="der mono">{moneda.format(unitario)}</td>
+                  <td className="der mono" data-label="P. unitario">{moneda.format(unitario)}</td>
                   {discrimina && (
-                    <td className="der mono">{Number(item.alicuotaIva)}%</td>
+                    <td className="der mono" data-label="IVA">{Number(item.alicuotaIva)}%</td>
                   )}
-                  <td className="der mono">
+                  <td className="der mono" data-label="Subtotal">
                     {moneda.format(Number(item.subtotal))}
                   </td>
                 </tr>

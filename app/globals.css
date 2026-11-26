@@ -1151,6 +1151,62 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   color: var(--tinta-suave);
 }
 
+/* En la pantalla del teléfono (no en el papel), la hoja va a todo el ancho y
+   las tablas se apilan: el resumen y la factura medían 510 px dentro de 375 y
+   el navegador los achicaba hasta dejar Haber y Saldo afuera (mes simulado,
+   H388). Cada celda con número lleva su `data-label`. */
+@media screen and (max-width: 639px) {
+  .comprobante-hoja .hoja {
+    margin: 0;
+    max-width: none;
+    padding: 1.25rem 1rem;
+    box-shadow: none;
+  }
+  .comprobante-hoja .cabecera {
+    grid-template-columns: auto 1fr;
+  }
+  .comprobante-hoja .cabecera > :first-child {
+    grid-column: 1 / -1;
+  }
+  .comprobante-hoja .receptor-grilla {
+    grid-template-columns: 1fr;
+  }
+  .comprobante-hoja .totales-caja {
+    width: 100%;
+  }
+  .comprobante-hoja .detalle,
+  .comprobante-hoja .detalle :is(tbody, tr) {
+    display: block;
+  }
+  .comprobante-hoja .detalle thead {
+    display: none;
+  }
+  .comprobante-hoja .detalle tr {
+    border-bottom: 1px solid var(--linea);
+    padding: 0.5rem 0;
+  }
+  .comprobante-hoja .detalle td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 0;
+    padding: 0.1rem 0;
+    font-size: 0.85rem;
+  }
+  .comprobante-hoja .detalle td:empty {
+    display: none;
+  }
+  .comprobante-hoja .detalle td[data-label]::before {
+    content: attr(data-label);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    color: var(--tinta-suave);
+  }
+  .comprobante-hoja .detalle td.fecha {
+    font-size: 0.75rem;
+    color: var(--tinta-suave);
+  }
+}
+
 /**
  * Cuerpo de una nota del blog.
  *

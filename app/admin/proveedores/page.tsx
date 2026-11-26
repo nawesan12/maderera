@@ -75,17 +75,15 @@ export default async function ProveedoresPage({
             accion={q ? undefined : <DialogoProveedor />}
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-base">
+          <div className="@container">
+            <table className="hidden w-full text-base @4xl:table" data-tabla="fija">
               <thead>
                 <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-2.5 font-semibold">Proveedor</th>
                   <th className="px-5 py-2.5 font-semibold">Contacto</th>
                   <th className="px-5 py-2.5 font-semibold">Rubro</th>
                   <th className="px-5 py-2.5 text-right font-semibold">Pago</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">
-                    Se le debe
-                  </th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Se le debe</th>
                   <th className="px-5 py-2.5 font-semibold">Último movimiento</th>
                 </tr>
               </thead>
@@ -93,63 +91,66 @@ export default async function ProveedoresPage({
                 {proveedores.map((p) => (
                   <tr key={p.id} className="hover:bg-hundida">
                     <td className="px-5 py-3">
-                      <Link
-                        href={`/admin/proveedores/${p.id}`}
-                        className="font-semibold hover:underline"
-                      >
+                      <Link href={`/admin/proveedores/${p.id}`} className="font-semibold hover:underline">
                         {p.nombre}
                       </Link>
-                      {p.estado === "inactivo" && (
-                        <span className="ml-2 text-sm text-muted-foreground">
-                          (inactivo)
-                        </span>
-                      )}
-                      {p.cuit && (
-                        <p className="tabular text-sm text-muted-foreground">
-                          {p.cuit}
-                        </p>
-                      )}
+                      {p.estado === "inactivo" && <span className="ml-2 text-sm text-muted-foreground">(inactivo)</span>}
+                      {p.cuit && <p className="tabular text-sm text-muted-foreground">{p.cuit}</p>}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {p.contacto ?? "—"}
-                      {p.telefono && (
-                        <p className="tabular text-sm">{p.telefono}</p>
-                      )}
+                      {p.telefono && <p className="tabular text-sm">{p.telefono}</p>}
                     </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {p.rubro ?? "—"}
-                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">{p.rubro ?? "—"}</td>
                     <td className="tabular px-5 py-3 text-right text-muted-foreground">
                       {p.diasPago === 0 ? "contado" : `${p.diasPago} días`}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {/* Positivo es lo que le debemos: el espejo del libro de
-                          clientes, con el mismo rojo para "plata que falta de
-                          este lado". */}
-                      <span
-                        className={`tabular font-semibold ${
-                          p.saldo > 0.005
-                            ? "text-saldo-debe"
-                            : p.saldo < -0.005
-                              ? "text-saldo-favor"
-                              : "text-saldo-cero"
-                        }`}
-                      >
-                        {formatearMonto(p.saldo)}
-                      </span>
+                      <Saldo saldo={p.saldo} />
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {p.ultimoMovimiento
-                        ? haceCuanto(new Date(p.ultimoMovimiento))
-                        : "—"}
+                      {p.ultimoMovimiento ? haceCuanto(new Date(p.ultimoMovimiento)) : "—"}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {/* En el teléfono: el nombre entero y lo que se le debe arriba, el
+                CUIT y el plazo abajo, en su renglón (se cortaba contra el borde). */}
+            <ul className="divide-y divide-linea @4xl:hidden">
+              {proveedores.map((p) => (
+                <li key={p.id}>
+                  <Link href={`/admin/proveedores/${p.id}`} className="block space-y-1 px-4 py-3 hover:bg-hundida">
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 text-[17px] font-semibold">
+                        {p.nombre}
+                        {p.estado === "inactivo" && <span className="ml-2 text-sm font-normal text-muted-foreground">(inactivo)</span>}
+                      </span>
+                      <Saldo saldo={p.saldo} />
+                    </span>
+                    <span className="tabular block text-base text-muted-foreground">
+                      {[p.cuit, p.diasPago === 0 ? "contado" : `a ${p.diasPago} días`, p.rubro].filter(Boolean).join(" · ")}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+/** Positivo es lo que le debemos: el mismo rojo que «plata que falta» en clientes. */
+function Saldo({ saldo }: { saldo: number }) {
+  return (
+    <span
+      className={`tabular shrink-0 font-semibold ${
+        saldo > 0.005 ? "text-saldo-debe" : saldo < -0.005 ? "text-saldo-favor" : "text-saldo-cero"
+      }`}
+    >
+      {formatearMonto(saldo)}
+    </span>
   );
 }

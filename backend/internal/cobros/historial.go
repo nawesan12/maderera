@@ -51,11 +51,14 @@ var ClasesPorFiltro = map[string][]string{
 	"todo":    nil,
 	"compras": {"compra", "compra_contado"},
 	"pagos":   {"pago", "pago_en_revision", "pago_rechazado"},
-	"cheques": {"cheque_por_recibir", "cheque_rechazado", "nota_debito"},
+	"cheques": {"cheque_por_recibir", "cheque", "cheque_rechazado", "nota_debito"},
 	"ajustes": {"ajuste", "nota_credito", "nota_debito"},
 }
 
 var tituloDelLibro = map[string]string{"compra": "Compra a cuenta", "pago": "Pago", "nota_credito": "Nota de crédito", "nota_debito": "Nota de débito", "ajuste": "Ajuste"}
+
+// estadoDelCheque es cómo se dice el estado de un cheque que ya se tomó.
+var estadoDelCheque = map[string]string{"cartera": "En cartera", "entregado": "Endosado", "depositado": "Depositado", "acreditado": "Acreditado"}
 
 var medioInformado = map[string]string{"transferencia": "Transferencia", "deposito": "Depósito"}
 
@@ -203,11 +206,20 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 	for _, c := range sueltos {
 		clase := "cheque_rechazado"
 		detalle := "No lo pudimos tomar"
-		if c.MotivoRechazo != nil && *c.MotivoRechazo != "" {
+		if c.DeUnaVenta {
+			// Se tomó con la venta y después lo rechazó el banco: la nota de
+			// débito del renglón de al lado es la que lo vuelve a cobrar.
+			detalle = "Rechazado por el banco"
+		} else if c.MotivoRechazo != nil && *c.MotivoRechazo != "" {
 			detalle += ": " + *c.MotivoRechazo
 		}
-		if c.Estado == "informado" {
+		switch {
+		case c.Estado == "informado":
 			clase, detalle = "cheque_por_recibir", "Por recibir · al "+fechaCorta(c.FechaPago)
+		case c.Estado != "rechazado":
+			// El de una venta del mostrador, mientras está en la cartera o
+			// en el banco: no mueve la cuenta (la venta ya se pagó con él).
+			clase, detalle = "cheque", estadoDelCheque[c.Estado]+" · al "+fechaCorta(c.FechaPago)
 		}
 		movs = append(movs, MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: clase, Titulo: NombreDelCheque(c.Tipo, c.Banco, c.Numero),
 			Detalle: &detalle, ImporteInformativo: f64(c.Importe)})

@@ -130,10 +130,15 @@ WHERE customer_id = $1 AND tipo = 'deuda' AND estado IN ('en_revision', 'rechaza
 ORDER BY created_at DESC;
 
 -- name: ChequesSueltos :many
-SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo
+-- Los cheques que no tienen recibo: los informados, los rechazados al
+-- recibirlos y los que se entregaron con una venta del mostrador (mes
+-- simulado: esos no figuraban en ningún lado de la ficha, ni rebotados).
+SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo,
+       (order_payment_id IS NOT NULL)::boolean AS de_una_venta
 FROM cheques
 WHERE customer_id = $1 AND sentido = 'recibido'
-  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL))
+  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL)
+       OR (order_payment_id IS NOT NULL AND receipt_id IS NULL AND estado <> 'anulado'))
   AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
 ORDER BY fecha_pago;
 

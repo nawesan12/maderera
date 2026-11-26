@@ -728,7 +728,7 @@ components:
         fecha: { type: string, format: date-time }
         clase:
           type: string
-          enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque_rechazado]
+          enum: [compra, pago, nota_credito, nota_debito, ajuste, compra_contado, pago_en_revision, pago_rechazado, cheque_por_recibir, cheque, cheque_rechazado]
         titulo: { type: string }
         detalle: { type: string, nullable: true }
         importe: { type: number, format: double, nullable: true }

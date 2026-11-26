@@ -31,8 +31,13 @@ export async function VistaWhatsapp({
   return (
     <>
       {/* En pantalla completa el cartel va compacto: el alto que ocupa se le
-          resta a los mensajes, que es lo que se vino a leer. */}
-      <AvisoConexion estado={estado} compacto={pantallaCompleta} esAdmin={usuario.staffRole === "admin"} />
+          resta a los mensajes, que es lo que se vino a leer. En el teléfono,
+          con una conversación abierta en demostración, ni eso: el renglón
+          del simulador (el frasco, al pie del chat) ya dice que es de
+          prueba, y el cartel era un renglón menos de mensajes (H048). */}
+      <div className={pantallaCompleta && detalle && estado.proveedor === "demo" ? "contents max-sm:hidden" : "contents"}>
+        <AvisoConexion estado={estado} compacto={pantallaCompleta} esAdmin={usuario.staffRole === "admin"} />
+      </div>
 
       <Bandeja
         conversaciones={conversaciones}

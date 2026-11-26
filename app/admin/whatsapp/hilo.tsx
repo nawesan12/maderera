@@ -17,6 +17,7 @@ import {
   IdCard,
   Loader2,
   MapPin,
+  MessageSquareText,
   Paperclip,
   Reply,
   RotateCw,
@@ -184,7 +185,9 @@ export function Hilo({
           </Link>
 
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-medium">{detalle.nombre}</h2>
+            {/* Entero, en dos renglones si hace falta: cortado
+                («Constructora del Sur Atención …») no se sabía quién era. */}
+            <h2 className="line-clamp-2 break-words text-base font-medium leading-snug">{detalle.nombre}</h2>
             <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
               <span className="tabular truncate">
                 {detalle.sinNumero ? "WhatsApp no comparte su número" : jidCorto(detalle.waJid)}
@@ -268,33 +271,24 @@ export function Hilo({
         <div ref={finRef} />
       </div>
 
-      {/* Ventana de 24 h: se dice siempre, porque decide qué se puede mandar. */}
-      {!conPlantilla && modo !== "documento" && (
+      {/* Ventana de 24 h: se dice siempre, porque decide qué se puede mandar.
+          Abierta, va en la barra del compositor (lo que queda y el botón del
+          mensaje preparado): un renglón aparte era uno menos de mensajes a
+          375 px y no entraba sin cortarse («Podés contestar li…»). Cerrada,
+          tiene su renglón, porque cambia lo que se puede hacer. */}
+      {!conPlantilla && modo !== "documento" && !ventanaAbierta && (
         <p
-          className={`flex items-center gap-2 border-t px-3 py-1.5 text-sm sm:px-4 sm:py-2 ${
-            ventanaAbierta ? "text-muted-foreground" : "estado-espera bg-[var(--estado-fondo)] text-[var(--estado-tinta)]"
-          }`}
+          className="estado-espera flex items-center gap-2 border-t bg-[var(--estado-fondo)] px-3 py-1.5 text-sm text-[var(--estado-tinta)] sm:px-4 sm:py-2"
         >
           <Clock className="h-4 w-4 shrink-0" />
-          {ventanaAbierta ? (
-            <>
-              <span className="min-w-0 flex-1 truncate">Podés contestar libremente por {restante} más.</span>
-              <button type="button" onClick={() => setModo("plantilla")} className="shrink-0 font-medium text-brand-orange hover:underline">
-                Usar un mensaje preparado
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="min-w-0 flex-1">
-                {detalle.ultimoEntranteAt
-                  ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
-                  : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
-              </span>
-              <button type="button" onClick={() => setModo("plantilla")} className="shrink-0 font-medium underline">
-                Elegir uno
-              </button>
-            </>
-          )}
+          <span className="min-w-0 flex-1">
+            {detalle.ultimoEntranteAt
+              ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
+              : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
+          </span>
+          <button type="button" onClick={() => setModo("plantilla")} className="shrink-0 font-medium underline">
+            Elegir uno
+          </button>
         </p>
       )}
 
@@ -368,78 +362,99 @@ export function Hilo({
           )}
 
           {/* El texto ocupa todo el ancho: en la columna del medio, con los
-              botones al costado, quedaba de tres palabras por renglón. */}
-          <div className="space-y-1.5 sm:space-y-2">
-            {/* Un renglón en el teléfono, dos en la computadora: cada renglón
-                del compositor es uno menos de mensajes a la vista (H048). */}
-            <textarea
-              ref={campoRef}
-              name="cuerpo"
-              rows={1}
-              required
-              maxLength={4096}
-              placeholder="Escribí tu respuesta…"
-              aria-label="Respuesta"
-              className="block min-h-[2.75rem] w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-base sm:min-h-[4.25rem]"
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={(e) => {
-                // Enter manda, Shift+Enter hace salto de línea: es lo que la
-                // mano ya sabe hacer de usar WhatsApp todo el día.
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-            />
-            {/* Baja de renglón cuando no entra (mes simulado: a 1280, con las
-                tres columnas, «Enviar» quedaba cortado y el clip pisaba
-                «Documento»). Los rótulos aparecen según el ancho de la
-                columna, no de la pantalla. */}
-            <div className="@container">
+              botones al costado, quedaba de tres palabras por renglón. En el
+              teléfono «Enviar» sube al lado del texto (un renglón menos de
+              compositor es uno más de mensajes, H048): el `order` y el corte
+              de renglón solo valen por debajo de `sm`. Los rótulos aparecen
+              según el ancho de la columna, no de la pantalla. */}
+          <div className="@container">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <AdjuntarArchivo conversacionId={detalle.id} citado={citado?.waMessageId ?? null} />
-            <button
-              type="button"
-              onClick={() => setModo("documento")}
-              aria-label="Documento"
-              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
-              title="Mandar un presupuesto, una factura, un remito, un recibo o el resumen de cuenta"
-            >
-              <FileText className="h-5 w-5" />
-              <span className="hidden @lg:inline">Documento</span>
-            </button>
-              <span className="flex-1" />
-            {gratis && (
-              <a
-                ref={telefonoRef}
-                href={gratis}
-                onClick={(e) => {
-                  e.currentTarget.href = conLoEscrito() ?? gratis;
+              {/* Un renglón en el teléfono, dos en la computadora. */}
+              <textarea
+                ref={campoRef}
+                name="cuerpo"
+                rows={1}
+                required
+                maxLength={4096}
+                placeholder="Escribí tu respuesta…"
+                aria-label="Respuesta"
+                className="block min-h-[2.75rem] w-full resize-y rounded-lg border bg-background px-3 py-2.5 text-base max-sm:order-1 max-sm:w-auto max-sm:min-w-0 max-sm:flex-1 sm:min-h-[4.25rem]"
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter manda, Shift+Enter hace salto de línea: es lo que la
+                  // mano ya sabe hacer de usar WhatsApp todo el día.
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
                 }}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-keyshortcuts="Alt+W"
-                // Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra.
-                title="Alt + W"
-                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-2.5 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10 sm:px-3"
+              />
+              <span className="hidden basis-full max-sm:order-3 max-sm:block" aria-hidden="true" />
+              <span className="contents max-sm:[&>*]:order-4">
+                <AdjuntarArchivo conversacionId={detalle.id} citado={citado?.waMessageId ?? null} />
+                <button
+                  type="button"
+                  onClick={() => setModo("documento")}
+                  aria-label="Documento"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
+                  title="Mandar un presupuesto, una factura, un remito, un recibo o el resumen de cuenta"
+                >
+                  <FileText className="h-5 w-5" />
+                  <span className="hidden @lg:inline">Documento</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo("plantilla")}
+                  aria-label="Mensaje preparado"
+                  title="Mensaje preparado"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
+                >
+                  <MessageSquareText className="h-5 w-5" />
+                  <span className="hidden @2xl:inline">Preparado</span>
+                </button>
+                {/* Lo que queda de las 24 h: corto, para que entre sin cortarse. */}
+                {restante && (
+                  <span
+                    className="tabular inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground"
+                    title={`Podés contestar libremente por ${restante} más`}
+                  >
+                    <Clock className="h-4 w-4" aria-hidden="true" />
+                    <span className="sr-only">Podés contestar libremente por</span>
+                    {restante}
+                  </span>
+                )}
+                <span className="flex-1" />
+                {gratis && (
+                  <a
+                    ref={telefonoRef}
+                    href={gratis}
+                    onClick={(e) => {
+                      e.currentTarget.href = conLoEscrito() ?? gratis;
+                    }}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-keyshortcuts="Alt+W"
+                    // Abre el chat en WhatsApp Business (teléfono, Desktop o Web) con lo que escribiste. No se cobra.
+                    title="Alt + W"
+                    className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-brand-green/40 px-2.5 text-base font-medium text-brand-green transition-colors hover:bg-brand-green/10 sm:px-3"
+                  >
+                    <Smartphone className="h-5 w-5" />
+                    <span>Teléfono</span>
+                    <span className="hidden text-sm font-normal @md:inline">gratis</span>
+                  </a>
+                )}
+              </span>
+              <button
+                type="submit"
+                disabled={enviando}
+                // Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h.
+                className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50 max-sm:order-2 sm:gap-2 sm:px-4"
               >
-                <Smartphone className="h-5 w-5" />
-                <span>Teléfono</span>
-                <span className="hidden text-sm font-normal @md:inline">gratis</span>
-              </a>
-            )}
-            <button
-              type="submit"
-              disabled={enviando}
-              // Sale por la Cloud API de Meta: desde el 1/10/2026 se cobra también dentro de las 24 h.
-              className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 text-base font-medium text-white transition-colors hover:bg-brand-green/90 disabled:opacity-50 sm:gap-2 sm:px-4"
-            >
-              {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-              Enviar
-              <span className="hidden text-sm font-normal text-white/85 @md:inline">se cobra</span>
-            </button>
-            </div>
+                {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                Enviar
+                <span className="hidden text-sm font-normal text-white/85 @md:inline">se cobra</span>
+              </button>
             </div>
           </div>
         </form>
@@ -843,9 +858,9 @@ function Asignar({
         Quién la atiende
       </label>
       {pendiente ? (
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground" />
       ) : (
-        <UserRound className="h-4 w-4 text-muted-foreground" />
+        <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
       <select
         id={`asignar-${conversacionId}`}
@@ -914,7 +929,7 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
         name="cuerpo"
         required
         maxLength={500}
-        placeholder="Simular lo que escribe el cliente"
+        placeholder="Mensaje del cliente"
         aria-label="Simular un mensaje del cliente"
         className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm sm:h-9"
       />

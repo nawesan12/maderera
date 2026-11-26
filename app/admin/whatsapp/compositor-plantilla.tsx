@@ -94,8 +94,11 @@ export function CompositorPlantilla({
   const gratis = waId && texto ? enlaceWaMe(`+${waId}`, texto) : null;
   const pdfs = documentos;
 
+  // En el teléfono, la mitad del alto como mucho: con dos tercios quedaban
+  // unos 90 px de conversación (H048). Lo que no entra se desplaza adentro y
+  // «Enviar» queda pegado abajo, siempre a mano.
   return (
-    <form action={accion} className="max-h-[65%] overflow-y-auto border-t bg-muted/30 p-3">
+    <form action={accion} className="max-h-[50%] overflow-y-auto border-t bg-muted/30 p-3 pb-0 sm:max-h-[65%]">
       <input type="hidden" name="conversacionId" value={conversacionId} />
       <input type="hidden" name="plantilla" value={elegida} />
       <input type="hidden" name="idioma" value={plantilla?.idioma ?? ""} />
@@ -104,8 +107,20 @@ export function CompositorPlantilla({
         .filter((c) => c.marcador !== "media")
         .map((c) => <input key={c.clave} type="hidden" name={`v:${c.clave}`} value={valores[c.clave] ?? ""} />)}
 
+      {/* Con la ventana cerrada, el porqué hace de título: «Mensaje
+          preparado» arriba de «solo se puede mandar un mensaje preparado»
+          era un renglón repetido. */}
       <div className="mb-2.5 flex items-center justify-between gap-3">
-        <h3 className="text-base font-medium">Mensaje preparado</h3>
+        {ventanaAbierta ? (
+          <h3 className="text-base font-medium">Mensaje preparado</h3>
+        ) : (
+          <h3 className="estado-espera w-full rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm font-normal text-[var(--estado-tinta)]">
+            {/* Cuando conteste, se vuelve a poder escribir libremente. */}
+            {escribio
+              ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
+              : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
+          </h3>
+        )}
         {onCerrar && (
           <button
             type="button"
@@ -118,17 +133,8 @@ export function CompositorPlantilla({
         )}
       </div>
 
-      {!ventanaAbierta && (
-        <p className="estado-espera mb-2.5 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm text-[var(--estado-tinta)]">
-          {/* Cuando conteste, se vuelve a poder escribir libremente. */}
-          {escribio
-            ? "Pasaron más de 24 horas: solo se puede mandar un mensaje preparado."
-            : "Todavía no te escribió: el primer mensaje tiene que ser uno preparado."}
-        </p>
-      )}
-
       {plantillas.length === 0 ? (
-        <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
+        <p className="estado-espera mb-3 rounded-lg bg-[var(--estado-fondo)] px-3 py-2.5 text-base text-[var(--estado-tinta)]">
           {/* Se cargan en Meta, se espera la aprobación y se sincronizan desde la configuración. */}
           No hay mensajes preparados aprobados.
         </p>
@@ -215,7 +221,7 @@ export function CompositorPlantilla({
           {/* La acción principal y, al lado, el mismo texto desde la app del
               teléfono: ahí no hay ventana de 24 h ni plantilla que aprobar, y
               no se cobra. */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="sticky bottom-0 -mx-3 flex flex-wrap items-center gap-2 bg-[color-mix(in_oklab,var(--muted)_30%,var(--card))] px-3 py-2.5">
             <button
               type="submit"
               disabled={enviando || faltan.length > 0 || faltaDocumento || !plantilla}

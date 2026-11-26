@@ -114,6 +114,19 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	joins := joinDePrecios(&a, lista, "propio", "general")
 	pr := precio(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)
+	// Lo que coincide por el nombre va antes que lo que coincide por la
+	// categoría o un pedazo de palabra (mes simulado: «laca» traía primero
+	// los fenólicos, porque «placa» contiene «laca», y «escalera», los
+	// decks). Primero el nombre que empieza con lo buscado, después el que
+	// tiene una palabra que empieza así, después el resto.
+	nombre := "f_unaccent(p.name || ' ' || coalesce(v.label, ''))"
+	primera := ""
+	if t := strings.FieldsFunc(consulta, zodjs.EspacioJS); len(t) > 0 {
+		primera = t[0]
+	}
+	empieza := a.poner(primera + "%")
+	palabra := a.poner("% " + primera + "%")
+	porNombre := "CASE WHEN " + nombre + " ILIKE f_unaccent(" + empieza + ") THEN 0 WHEN ' ' || " + nombre + " ILIKE f_unaccent(" + palabra + ") THEN 1 ELSE 2 END"
 	sql := `
 		SELECT v.id, v.sku, p.name, v.label, v.largo_mm, v.ancho_mm, v.color, c.name, p.unit::text,
 		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `, coalesce(i.qty, 0)
@@ -123,7 +136,7 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 		` + joins + `
 		LEFT JOIN inventory i ON i.variant_id = v.id AND i.branch_id = ` + suc + `::uuid
 		WHERE v.active = true AND p.active = true AND ` + cond + `
-		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, p.name, v.sort_order
+		ORDER BY CASE WHEN v.codigo_barras = ` + exacto + ` THEN 0 WHEN v.sku ILIKE ` + prefijo + ` THEN 1 ELSE 2 END, ` + porNombre + `, p.name, v.sort_order
 		LIMIT ` + fmt.Sprint(tope)
 	// Plan a medida en cada búsqueda (QueryExecModeExec): con el plan genérico
 	// que Postgres arma después de cinco ejecuciones de la misma sentencia,

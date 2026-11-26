@@ -199,6 +199,9 @@ var pantallaDeCadaRuta = map[string]string{
 	"LibroIvaDigital":                "/admin/arca",                   // GET /api/v1/admin/facturacion/libro-iva/digital
 	"FacturarPedido":                 "plata",                         // POST /api/v1/admin/facturacion/pedidos/{id}/facturar
 	"PedidoParaFacturar":             "plata",                         // GET /api/v1/admin/facturacion/pedidos/{id}
+	"DevolucionDesdeElPedido":        "plata",                         // GET /api/v1/admin/facturacion/pedidos/{id}/devolucion
+	"DevolverDesdeElPedido":          "plata",                         // POST /api/v1/admin/facturacion/pedidos/{id}/devolucion
+	"CalcularDevolucionDelPedido":    "plata",                         // POST /api/v1/admin/facturacion/pedidos/{id}/devolucion/calculo
 	"ListarPuntosDeVenta":            "/admin/facturacion",            // GET /api/v1/admin/facturacion/puntos-de-venta
 	"GuardarPuntoDeVenta":            "/admin/facturacion",            // POST /api/v1/admin/facturacion/puntos-de-venta
 	"ResumenDeFacturacion":           "/admin/facturacion",            // GET /api/v1/admin/facturacion/resumen

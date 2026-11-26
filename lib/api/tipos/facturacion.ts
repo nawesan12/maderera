@@ -469,6 +469,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/facturacion/pedidos/{id}/devolucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que se puede devolver de un pedido facturado desde el pedido (renglones de su factura, el destino de la plata y el tope). 404 si no tiene factura viva. De quien mueve plata. */
+        get: operations["DevolucionDesdeElPedido"];
+        put?: never;
+        /** @description La devolución de un pedido facturado con su nota de crédito, sin que salga plata (a la cuenta corriente o bajando lo que falta cobrar). La clave hace que el reintento devuelva la misma. De quien mueve plata. */
+        post: operations["DevolverDesdeElPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/facturacion/pedidos/{id}/devolucion/calculo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description El importe de la nota que saldría con esos renglones, sin hacer nada. De quien mueve plata. */
+        post: operations["CalcularDevolucionDelPedido"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cuenta/comprobantes": {
         parameters: {
             query?: never;
@@ -619,22 +658,28 @@ export interface components {
             /** Format: double */
             delAcopio?: number | null;
         }[];
+        RenglonesDelPedidoADevolver: {
+            itemId: string;
+            /** Format: double */
+            cantidad: number;
+        }[];
+        RenglonesDevolvibles: {
+            itemId: string;
+            descripcion: string;
+            unidad: string;
+            /** Format: double */
+            cantidad: number;
+            /** Format: double */
+            queda: number;
+            /** Format: double */
+            unitario: number;
+            alStock: boolean;
+            /** Format: double */
+            enAcopio: number;
+        }[];
         DatosDeDevolucion: {
             pedido: string;
-            renglones: {
-                itemId: string;
-                descripcion: string;
-                unidad: string;
-                /** Format: double */
-                cantidad: number;
-                /** Format: double */
-                queda: number;
-                /** Format: double */
-                unitario: number;
-                alStock: boolean;
-                /** Format: double */
-                enAcopio: number;
-            }[];
+            renglones: components["schemas"]["RenglonesDevolvibles"];
             /** Format: double */
             caja: number;
             /** Format: double */
@@ -1764,6 +1809,108 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Emitido"];
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolucionDesdeElPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los datos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        facturaId: string;
+                        factura: string;
+                        /** @enum {string} */
+                        destino: "cuenta" | "deuda";
+                        /** Format: double */
+                        tope: number;
+                        renglones: components["schemas"]["RenglonesDevolvibles"];
+                    };
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DevolverDesdeElPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    motivo: string;
+                    /** Format: double */
+                    importe?: number | null;
+                    renglones: components["schemas"]["RenglonesDelPedidoADevolver"];
+                };
+            };
+        };
+        responses: {
+            /** @description La devolución hecha (o la misma, si la clave ya se usó) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        notaId: string;
+                        /** Format: double */
+                        importe: number;
+                        repetida: boolean;
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    CalcularDevolucionDelPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    renglones: components["schemas"]["RenglonesDelPedidoADevolver"];
+                };
+            };
+        };
+        responses: {
+            /** @description El importe */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: double */
+                        importe: number;
+                    };
+                };
+            };
             422: components["responses"]["Problema"];
         };
     };

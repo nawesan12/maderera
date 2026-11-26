@@ -821,3 +821,71 @@ func validarAnulacion(c map[string]string) (string, error) {
 	motivo, _ := e.cadena("motivo", get(c, "motivo"), false, 4, "Escribí el motivo de la anulación.", 300)
 	return motivo, e.Problema()
 }
+
+func (o respuesta) VisitDevolucionDesdeElPedidoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitDevolverDesdeElPedidoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+func (o respuesta) VisitCalcularDevolucionDelPedidoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+func renglonesDelPedido(rs facturacionapi.RenglonesDelPedidoADevolver) []RenglonDelPedidoADevolver {
+	out := make([]RenglonDelPedidoADevolver, len(rs))
+	for i, x := range rs {
+		out[i] = RenglonDelPedidoADevolver{ItemID: x.ItemId, Cantidad: x.Cantidad}
+	}
+	return out
+}
+
+// DevolucionDesdeElPedido: el diálogo de la devolución de un pedido
+// facturado, de quien mueve plata (H279).
+func (a *API) DevolucionDesdeElPedido(ctx context.Context, r facturacionapi.DevolucionDesdeElPedidoRequestObject) (facturacionapi.DevolucionDesdeElPedidoResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	d, err := a.s.ParaDevolverDesdeElPedido(ctx, r.Id.String())
+	if errors.Is(err, ErrNoEsta) {
+		return nil, noEsta("El pedido no tiene una factura que devolver.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return ok(d), nil
+}
+
+func (a *API) CalcularDevolucionDelPedido(ctx context.Context, r facturacionapi.CalcularDevolucionDelPedidoRequestObject) (facturacionapi.CalcularDevolucionDelPedidoResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	total, err := a.s.CalcularDesdeElPedido(ctx, r.Id.String(), renglonesDelPedido(r.Body.Renglones))
+	if errors.Is(err, ErrNoEsta) {
+		return nil, noEsta("El pedido no tiene una factura que devolver.")
+	}
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	return ok(map[string]float64{"importe": total}), nil
+}
+
+// DevolverDesdeElPedido: la devolución con su nota de crédito, sin que salga
+// plata. Queda en la bitácora del pedido.
+func (a *API) DevolverDesdeElPedido(ctx context.Context, r facturacionapi.DevolverDesdeElPedidoRequestObject) (facturacionapi.DevolverDesdeElPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	b := r.Body
+	d, err := a.s.DevolverDesdeElPedido(ctx, ses.UserID, r.Id.String(), b.Clave, b.Motivo, renglonesDelPedido(b.Renglones), b.Importe)
+	if err != nil {
+		return nil, comoProblema(err)
+	}
+	if !d.Repetida {
+		bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaCrear, "pedido", r.Id.String(),
+			"Devolución con nota de crédito de "+formato.Importe(d.Importe)+": "+trimJS(b.Motivo),
+			map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID})
+	}
+	return ok(d), nil
+}

@@ -141,6 +141,12 @@ export function CargarGasto({
   const quedaria = enEfectivo && sucursal?.enCaja != null ? Math.round((sucursal.enCaja - total) * 100) / 100 : null;
   const piso = Math.max(0, sucursal?.cambioFijo ?? 0);
   const bajaDelCambio = quedaria !== null && sucursal !== undefined && quedaria < piso;
+  // Efectivo de hoy de una caja sin turno: Go lo rechaza (el efectivo no
+  // saldría de ningún arqueo). Se dice al elegirla y no después de tocar el
+  // botón: el rechazo quedaba abajo y parecía que no pasaba nada (mes
+  // simulado, tercera prueba). Para otro día decide Go, que mira los turnos
+  // de ese día.
+  const sinTurnoHoy = enEfectivo && sucursal !== undefined && !sucursal.conTurno && fecha === hoyEnArgentina();
 
   return (
     <Hoja>
@@ -299,6 +305,11 @@ export function CargarGasto({
                 ))}
               </select>
             )}
+            {sinTurnoHoy && sucursal && (
+              <span className="block text-base font-medium text-saldo-debe" role="alert">
+                {`No hay caja abierta en ${sucursal.nombre}`}
+              </span>
+            )}
             {bajaDelCambio && sucursal && (
               <span className="tabular block text-base font-medium text-saldo-debe" role="alert">
                 {piso > 0
@@ -385,6 +396,7 @@ export function CargarGasto({
               // Sin sucursal, el efectivo no saldría de ninguna caja.
               (enEfectivo && sucursales.length > 0 && !branchId) ||
               bajaDelCambio ||
+              sinTurnoHoy ||
               (conFactura && (!supplierId || !numero || importeIlegible(iva)))
             }
             className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50 sm:w-auto"

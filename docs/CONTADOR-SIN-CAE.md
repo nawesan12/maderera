@@ -136,3 +136,65 @@ digan otra cosa, cada una sigue como funcionaba: la de **arranque**.
 | El cobro de una factura sin CAE (H160) | Sin asiento hasta que llega el CAE | Contra una cuenta transitoria, que se cancela al llegar el CAE |
 | Al monotributista (H207) | Factura A con la leyenda de la Ley 27.618 (RG 5003/2021) | Factura B |
 | Cómo se nombra el circuito sin factura (H167) | «B» | «Sin factura» · «Interno» |
+
+Hay otras, del mostrador, los cortes y Mi cuenta, que decide la dueña y no
+tocan los asientos. Están en la misma pantalla: si el material de un corte
+de menos de media placa se cobra, si la lista del cliente exige contado
+siempre o solo cuando le da mejor precio, si el descuento por medio de pago
+alcanza al flete, si la tarjeta pide lote y cupón, si sin ningún PIN firma la
+contraseña de un admin, dónde se corta un corte suelto, si el profesional ve
+sus precios con la tienda apagada, si el cliente acepta un presupuesto que
+no se le envió y si el cliente cambia sus datos fiscales hasta su primera
+factura o nunca.
+
+**Un mes cerrado no cambia al cambiar una regla.** Si se cambia cuándo
+cuenta una venta, lo que ya contó en un mes cerrado se queda ahí. Lo que con
+la regla nueva caería en un mes cerrado cuenta desde el primer día del
+primer mes abierto. Un pedido cancelado después de contar como venta sigue
+en su mes y resta en el de la cancelación, como una devolución.
+
+**Lo cobrado sin destino, con Anticipos.** El cobro de un pedido sin factura
+queda en Anticipos de clientes atado a ese pedido, y se aplica a su factura
+cuando sale con CAE. Si nunca se factura, el cierre lo marca en «Anticipos
+sin aplicar». Lo que sobra de un cobro a cuenta es un saldo a favor que se
+aplica a la próxima factura del cliente; el cierre lo muestra en «Saldos a
+favor en Anticipos». Se decide al emitir el recibo: cambiar la regla después
+no mueve lo ya repartido.
+
+**Al monotributista.** De arranque, Factura A con el IVA discriminado y la
+leyenda de la Ley 27.618, y se pide su CUIT. Con la otra salida, Factura B,
+sin IVA discriminado y sin pedir CUIT. Vale para lo que se emita desde el
+cambio, no para lo ya emitido.
+
+**El nombre del circuito sin factura** cambia solo la palabra en pantallas,
+mensajes y cierre; el archivo de asientos del circuito B se sigue llamando
+igual.
+
+## Los asientos que se sumaron
+
+- El **costo de lo vendido** va a 5.2.01 Costo de mercaderías vendidas,
+  contra Mercaderías: en su archivo si la venta estaba facturada en su mes,
+  en el B si no.
+- El **cobro del mostrador** de un pedido sin factura va al B contra Ventas
+  sin factura (o a Anticipos con esa regla). El día de la factura con CAE
+  sale del B y entra a su archivo contra Deudores.
+- El cobro de una venta que **espera el CAE** espera el CAE (arranque), o va
+  contra 2.1.12 Cobros a imputar (facturas sin CAE) y se imputa a Deudores
+  cuando llega.
+- El **depósito** de la caja al banco va de Caja a Banco, y la extracción
+  del banco a la caja, de Banco a Caja. Cada retiro de caja guarda a dónde
+  fue (banco, caja fuerte u otro); los anteriores se leen por el motivo.
+- El faltante o sobrante de cada **arqueo** va contra 5.1.12 Diferencias de
+  caja.
+
+**A definir:** ¿a qué cuenta van las diferencias de arqueo? ¿Y los ingresos
+de caja que no vienen del banco? Hoy se toman como plata de la caja fuerte,
+que es la misma Caja, y no se asientan.
+
+## Devolución de una venta facturada
+
+Desde el pedido se elige el renglón y la cantidad, y sale la nota de crédito
+sobre la factura (misma letra y punto de venta; sin CAE si la factura todavía
+lo espera). La nota baja lo que falta cobrar o va a la cuenta corriente, y lo
+traído vuelve al stock atado a la devolución. Lo ya cobrado no se reintegra
+desde ahí: vuelve por caja o banco desde la factura.

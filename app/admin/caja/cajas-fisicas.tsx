@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { Loader2, Monitor, Plus } from "lucide-react";
-import { haceCuanto } from "@/lib/formato";
 import { Confirmar } from "@/components/admin/confirmar";
 import { crearCaja, darDeBajaCaja, type EstadoCajas } from "./actions";
 
@@ -15,6 +14,11 @@ interface CajaFisica {
   ultimaVezAt: Date | null;
   /** El último turno que se abrió desde esta caja. */
   ultimoTurnoAt?: Date | null;
+  /**
+   * «se conectó hace 2 min», escrito en el servidor: armado acá, el servidor
+   * decía «hace 2 min» y el navegador, al hidratar, «hace 1 min».
+   */
+  cuando: string;
   pendientes: number;
 }
 
@@ -168,13 +172,7 @@ export function CajasFisicas({
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {c.sucursal ?? "Sin sucursal"} ·{" "}
-                  {/* Desvincular borra el latido: sin el último turno, una
-                      caja usada decía «nunca se vinculó» (H243). */}
-                  {c.ultimaVezAt
-                    ? `se conectó ${haceCuanto(new Date(c.ultimaVezAt))}`
-                    : c.ultimoTurnoAt
-                      ? `último turno ${haceCuanto(new Date(c.ultimoTurnoAt))}`
-                      : "sin vincular"}
+                  {c.cuando}
                 </p>
               </div>
 

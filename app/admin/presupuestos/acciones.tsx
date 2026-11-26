@@ -454,7 +454,12 @@ function PasarAPedido({
                 )}
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="w-40 space-y-1.5">
-                    <Label htmlFor="pedido-costo">Flete</Label>
+                    <Label
+                      htmlFor="pedido-costo"
+                      className={faltaFlete || costoMal ? "estado-problema text-[var(--estado-tinta)]" : undefined}
+                    >
+                      Flete
+                    </Label>
                     <Input
                       id="pedido-costo"
                       inputMode="decimal"
@@ -542,7 +547,15 @@ function PasarAPedido({
                 className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
               >
                 {pendiente && <Loader2 className="h-4 w-4 animate-spin" />}
-                Crear el pedido
+                {/* El botón dice qué falta (mes simulado: se apagaba sin
+                    decir por qué). */}
+                {tipo === "envio" && !direccion.trim()
+                  ? "Falta la dirección"
+                  : faltaFlete
+                    ? "Falta el flete"
+                    : costoMal
+                      ? "Revisá el flete"
+                      : "Crear el pedido"}
               </button>
             </div>
           </div>

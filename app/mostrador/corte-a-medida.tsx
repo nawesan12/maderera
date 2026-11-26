@@ -438,9 +438,13 @@ export function CorteAMedida({
           )}
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        {/* Abajo de `lg` (la tablet, 800 px) todo el cuerpo scrollea junto:
+            con dos zonas de alto propio, la planilla se derramaba sobre el
+            plano y el renglón anterior se asomaba entre el tapacanto y los
+            títulos. */}
+        <div className="grid min-h-0 flex-1 overflow-y-auto overflow-x-hidden lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:overflow-hidden">
           <div
-            className="flex min-h-0 flex-col border-linea lg:border-r"
+            className="flex flex-col border-linea lg:min-h-0 lg:border-r"
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
               // Enter sobre un botón (Veta, un lado del canto, Quitar) hace lo
@@ -475,7 +479,9 @@ export function CorteAMedida({
               </label>
             </div>
 
-            <div className="@container min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-5 pt-1">
+            {/* Sin relleno arriba: el encabezado pegajoso se pega al borde
+                del relleno, y en esa franja se asomaba la pieza que subía. */}
+            <div className="@container px-6 pb-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overflow-x-hidden">
               {/* Encabezado de la planilla: una sola vez, no repetido por fila. */}
               <div className={`sticky top-0 z-10 hidden bg-background py-2 text-sm font-semibold text-muted-foreground shadow-[0_1px_0_var(--linea)] ${columnas}`}>
                 <span>Pieza</span>
@@ -617,7 +623,7 @@ export function CorteAMedida({
             </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto bg-hundida/40 px-6 py-5">
+          <div className="bg-hundida/40 px-6 py-5 lg:min-h-0 lg:overflow-y-auto">
             {validas.length > 0 ? (
               <PlanoEditable
                 plano={plano}
@@ -661,14 +667,21 @@ export function CorteAMedida({
         {/* La cuenta y las salidas abajo y fijas: el total se ve mientras se
             tipea, y no hay que bajar para encontrar el botón. */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-linea bg-background px-6 py-4">
-          <dl className="tabular mr-auto flex flex-wrap gap-x-5 gap-y-1 text-base">
+          {/* Mientras Go recalcula, la cuenta que se ve es la del despiece
+              anterior: se apaga, y lo que es una alerta (sin cargo, se
+              cobran) no aparece hasta saberlo. Al abrir se veía un momento
+              «$ 4.800 · Material sin cargo» antes de los $ 96.500. */}
+          <dl
+            aria-busy={calculando || undefined}
+            className={`tabular mr-auto flex flex-wrap gap-x-5 gap-y-1 text-base transition-opacity ${calculando ? "opacity-40" : ""}`}
+          >
             <div>
               <dt className="inline text-muted-foreground">Placas </dt>
               <dd className="inline font-semibold">{plano.placas.length}</dd>
             </div>
             {/* Acomodado a mano, lo que se cobra puede no ser lo que se dibuja:
                 se dice acá, antes de cobrar, y no como un PIN sorpresa. */}
-            {placasACobrar !== plano.placasEnteras && (
+            {!calculando && placasACobrar !== plano.placasEnteras && (
               <div className="text-brand-orange">
                 <dt className="inline">Se cobran </dt>
                 <dd className="inline font-semibold">
@@ -679,7 +692,7 @@ export function CorteAMedida({
             {/* Las placas que no pasan la mitad no se venden: se cobra el corte
                 y el recorte queda en la maderera (la regla de la media placa).
                 Se dice acá y no se descubre leyendo la venta (H019, H174). */}
-            {placasParciales > 0 && (
+            {!calculando && placasParciales > 0 && (
               <div className="estado-espera">
                 <dt className="inline">Material sin cargo </dt>
                 <dd className="inline font-semibold">

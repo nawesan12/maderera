@@ -565,6 +565,13 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	estado := "entregado"
 	if v.Acopio {
 		estado = "listo"
+	} else if len(v.Cortes) > 0 {
+		// Con un corte, el cliente se lleva las piezas cuando salen de la
+		// máquina (mes simulado): quedaba «entregado» con el corte en cola,
+		// fuera de En curso y con el aviso de entregado. El stock baja igual
+		// al cobrar, y el remito del retiro no lo vuelve a sacar
+		// (entregas.SalioConLaVenta). Al terminarse el corte pasa a listo.
+		estado = "preparando"
 	}
 	estadoPago := "pagado"
 	if c.parteCuenta >= c.total-0.009 {
@@ -597,6 +604,17 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		jsmath.Fijo2(c.subtotal), jsmath.Fijo2(c.descuento), motivo, jsmath.Fijo2(c.total), c.medioPago, estadoPago,
 		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar)).Scan(&pedido)
 	if err != nil {
+		return ResultadoVenta{}, err
+	}
+
+	// El alta en el historial del pedido: la ficha de una venta del
+	// mostrador o de un acopio quedaba con el historial vacío.
+	nota := "Venta de mostrador"
+	if v.Acopio {
+		nota = "Venta de mostrador en acopio"
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id, created_at)
+		VALUES ($1, $2, $3, $4, coalesce($5, now()))`, pedido, estado, nota, usuario, cobrada); err != nil {
 		return ResultadoVenta{}, err
 	}
 

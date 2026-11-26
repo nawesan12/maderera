@@ -100,6 +100,10 @@ export function Entregas({
   const hayAcopio = conSaldo.length > 0;
   const entregadoAlgo = pendientes.some((p) => p.entregado > 0);
   const vivos = remitos.filter((r) => r.estado !== "anulada");
+  // Un envío con remitos sin firmar está en la calle: no está entregado
+  // hasta que firma quien recibe (decía «Todo entregado» con el pedido en
+  // camino, mes simulado).
+  const enLaCalle = envio && estado === "en-camino";
   const [ultimo, ...anteriores] = remitos;
 
   // Un pedido cancelado sin remitos no tiene nada que mostrar acá.
@@ -119,9 +123,11 @@ export function Entregas({
           <p className="text-base text-muted-foreground">
             {hayAcopio
               ? `${plural(conSaldo.length, "renglón", "renglones")} por ${envio ? "llevar" : "retirar"}`
-              : vivos.length > 0
-                ? "Todo entregado"
-                : null}
+              : enLaCalle
+                ? "Todo en camino"
+                : vivos.length > 0
+                  ? "Todo entregado"
+                  : null}
           </p>
         )}
       </div>

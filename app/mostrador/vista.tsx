@@ -37,6 +37,7 @@ import {
   emitirRemitoDeVenta,
   letraDelComprobante,
   preciosDelCliente,
+  presupuestoParaLaVenta,
 } from "./actions";
 import { AltaAMano } from "./alta-a-mano";
 import { campoEnPantalla, enfocar, useAtajos, AyudaDeAtajos, type Campo } from "./atajos";
@@ -179,6 +180,8 @@ export function VistaMostrador({
   const [lineas, setLineas] = useState<LineaDeVenta[]>([]);
   const [clave, setClave] = useState(claveNueva);
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  /** El presupuesto que armó la venta (se tipeó su número en el buscador). */
+  const [presupuesto, setPresupuesto] = useState<{ id: string; numero: string } | null>(null);
   const [medio, setMedio] = useState<MedioDeMostrador>("efectivo");
   const [recibido, setRecibido] = useState("");
   const [aviso, setAviso] = useState<Aviso | null>(null);
@@ -602,6 +605,7 @@ export function VistaMostrador({
     setBorradorDelCorte(null);
     setALista(false);
     setCorteExistente(null);
+    setPresupuesto(null);
     setLineas([]);
     setCliente(null);
     setMedio("efectivo");
@@ -743,6 +747,41 @@ export function VistaMostrador({
         Math.abs(precios[l.variantId] - l.precioUnitario) > 0.005,
     );
     if (distintos) setOtrosPrecios(precios);
+  }
+
+  /**
+   * Trae un presupuesto a la venta: sus renglones (con los precios de hoy si
+   * venció) y su cliente. Se cobra con Ctrl+Enter como cualquier venta, el
+   * cobro entra al turno y se factura desde acá; al cobrar, el presupuesto
+   * queda aceptado y atado al pedido (mes simulado: eran doce clics en dos
+   * pantallas, fuera del mostrador). Reemplaza lo que había cargado: el
+   * presupuesto es la venta.
+   */
+  async function traerPresupuesto(numero: string) {
+    const r = await presupuestoParaLaVenta(numero);
+    if ("error" in r) {
+      setAviso({ tipo: "error", texto: r.error });
+      return;
+    }
+    setCortes([]);
+    setLineas(
+      r.lineas.map((l) => ({
+        variantId: l.variantId,
+        descripcion: l.descripcion,
+        unidad: l.unidad,
+        cantidad: l.cantidad,
+        precioUnitario: l.precioUnitario,
+        precioLista: l.precioLista,
+        presentacion: l.presentacion === "media_largo" || l.presentacion === "media_ancho" ? l.presentacion : null,
+      })),
+    );
+    setPresupuesto({ id: r.id, numero: r.numero });
+    if (r.customerId) {
+      const c = await clientePorId(r.customerId);
+      if (c) await alElegirCliente(c as Cliente);
+    }
+    setAviso({ tipo: "ok", texto: `${r.numero} cargado.` });
+    enfocar("buscador");
   }
 
   /**
@@ -904,6 +943,7 @@ export function VistaMostrador({
           ...(partidoEnMedios ? { sinEscala: true } : {}),
           ...(aLista ? { aLista: true } : {}),
           ...(pin ? { pin } : ficha ? { ficha } : {}),
+          ...(presupuesto ? { presupuestoId: presupuesto.id } : {}),
         });
       } catch {
         if (!(await conexion.latir())) {
@@ -1165,6 +1205,7 @@ export function VistaMostrador({
               onSuelta={setSuelta}
               onCortar={setCortando}
               onNoEntra={(texto) => setAviso({ tipo: "error", texto })}
+              onPresupuesto={(numero) => void traerPresupuesto(numero)}
               sePuedeCortar={conexion.enLinea}
               sinConexion={!conexion.enLinea}
             />

@@ -41,6 +41,32 @@ func (s *Servicio) AvisarFactura(ctx context.Context, id string) error {
 
 func ptr[T any](v T) *T { return &v }
 
+// devueltoSinFactura es lo que las devoluciones sin factura del pedido se
+// llevaron de cada renglón, y su importe.
+func (s *Servicio) devueltoSinFactura(ctx context.Context, pedido string) (map[string]float64, float64, error) {
+	filas, err := s.pool.Query(ctx, `
+		SELECT di.order_item_id::text, sum(di.cantidad)::float8, sum(di.importe)::float8
+		FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+		WHERE d.order_id = $1 AND d.invoice_id IS NULL AND di.order_item_id IS NOT NULL
+		GROUP BY di.order_item_id`, pedido)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer filas.Close()
+	out := map[string]float64{}
+	total := 0.0
+	for filas.Next() {
+		var id string
+		var cantidad, importe float64
+		if err := filas.Scan(&id, &cantidad, &importe); err != nil {
+			return nil, 0, err
+		}
+		out[id] = cantidad
+		total = jsmath.Redondear2(total + importe)
+	}
+	return out, total, filas.Err()
+}
+
 // FacturarPedido es facturarPedido: los renglones y la condición frente al
 // IVA salen del pedido y de la ficha, no de lo que se tipee; el envío entra
 // como un renglón más.
@@ -63,15 +89,31 @@ func (s *Servicio) FacturarPedido(ctx context.Context, ses *auth.Sesion, orderID
 		return "", yaFacturado(datos.YaFacturado.Numero)
 	}
 	p := datos.Pedido
+	// Lo que se devolvió antes de facturar (la devolución de un pedido sin
+	// factura, pedidos.DevolverSinFactura) no se factura: ni la cantidad ni
+	// su plata, que ya bajó lo que había que cobrar.
+	devueltos, importeDevuelto, err := s.devueltoSinFactura(ctx, orderID)
+	if err != nil {
+		return "", err
+	}
 	lineas := make([]Linea, 0, len(datos.Items)+1)
 	for _, i := range datos.Items {
 		alic := 21.0
 		if i.Alicuota != nil && *i.Alicuota != "" {
 			alic = jsmath.Numero(*i.Alicuota)
 		}
+		cantidad := jsmath.Numero(i.Cantidad)
+		if d := devueltos[i.ID]; d > 0 {
+			if cantidad = jsmath.Round(float64((cantidad-d)*1000)) / 1000; cantidad <= 0 {
+				continue
+			}
+		}
 		unidad, renglon := i.Unidad, i.ID
 		lineas = append(lineas, Linea{LineaEntrada: fiscal.LineaEntrada{Descripcion: i.Descripcion, Unidad: &unidad,
-			Cantidad: jsmath.Numero(i.Cantidad), PrecioFinalUnitario: jsmath.Numero(i.PrecioUnitario), Alicuota: &alic}, OrderItemID: &renglon})
+			Cantidad: cantidad, PrecioFinalUnitario: jsmath.Numero(i.PrecioUnitario), Alicuota: &alic}, OrderItemID: &renglon})
+	}
+	if len(lineas) == 0 {
+		return "", errEmision("Se devolvió todo: no queda nada para facturar.")
 	}
 	// Lo que se cobró manda. La tienda guarda los renglones a precio lleno y
 	// el descuento (el de la forma de pago) aparte, en el pedido: sin esto la
@@ -82,7 +124,7 @@ func (s *Servicio) FacturarPedido(ctx context.Context, ses *auth.Sesion, orderID
 	for _, l := range lineas {
 		mercaderia = float64(l.Cantidad*l.PrecioFinalUnitario) + mercaderia
 	}
-	if cobrado := jsmath.Numero(p.Total) - jsmath.Numero(p.CostoEnvio); mercaderia > 0 && cobrado > 0 && math.Abs(cobrado-mercaderia) > 0.005 {
+	if cobrado := jsmath.Numero(p.Total) - jsmath.Numero(p.CostoEnvio) - importeDevuelto; mercaderia > 0 && cobrado > 0 && math.Abs(cobrado-mercaderia) > 0.005 {
 		factor := cobrado / mercaderia
 		for i := range lineas {
 			lineas[i].PrecioFinalUnitario = jsmath.Round(float64(lineas[i].PrecioFinalUnitario*factor*100)) / 100

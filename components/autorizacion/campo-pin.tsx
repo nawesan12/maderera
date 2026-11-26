@@ -6,7 +6,7 @@ import { formatearMonto } from "@/lib/formato";
 
 /** Lo que contesta Go cuando falta el PIN de un admin (internal/autorizacion). */
 export interface Autorizacion {
-  motivo: "precio" | "credito" | "anular" | "presupuesto" | "costo";
+  motivo: "precio" | "credito" | "anular" | "presupuesto" | "costo" | "remito";
   monto: number;
   /** Con motivo precio: lo que además pasa el límite de cuenta corriente. */
   credito?: number;
@@ -34,6 +34,8 @@ function queSeAutoriza(a: Autorizacion): string {
       return `Anular ${formatearMonto(a.monto)}`;
     case "costo":
       return `${formatearMonto(a.monto)} abajo del costo${credito}`;
+    case "remito":
+      return "Anular un remito firmado";
   }
 }
 

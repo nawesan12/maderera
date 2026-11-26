@@ -73,6 +73,8 @@ export interface VentaDelMostrador {
   /** El PIN de un admin, o la ficha de un PIN anterior para esta venta. */
   pin?: string;
   ficha?: string;
+  /** El presupuesto que armó la venta: al cobrar queda aceptado y atado al pedido. */
+  presupuestoId?: string;
 }
 
 function refrescar() {
@@ -247,6 +249,18 @@ export async function crearClienteEnMostrador(alta: {
     return { ok: true, cliente: r.data.cliente };
   }
   return { ok: false, error: r.data.error ?? "Revisá los datos.", existente: r.data.existente };
+}
+
+/**
+ * El presupuesto que se trae a la venta por su número (mes simulado: desde el
+ * mostrador no había forma de cargarlo). Con lo que no se puede, el motivo.
+ */
+export async function presupuestoParaLaVenta(
+  numero: string,
+): Promise<Esquemas["MostradorPresupuesto"] | { error: string }> {
+  const r = await (await api()).GET("/api/v1/mostrador/presupuestos/{numero}", { params: { path: { numero } } });
+  if (!r.data) return error(r);
+  return r.data;
 }
 
 /** Un cliente por id, con lo que necesita la venta. Lo usa «usar el existente». */

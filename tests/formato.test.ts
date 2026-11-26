@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  cantidadConUnidad,
   enlaceDeWhatsapp,
   formatearDecimal,
   formatearPeso,
   ABREVIATURA_UNIDAD,
+  cantidadConUnidad,
   formatearUnidad,
   primerNombre,
   whatsappDestino,
@@ -148,15 +148,18 @@ describe("hayFiltro", () => {
   });
 });
 
-// «3 placas», no «3 placa»; la unidad suelta no se escribe; la línea del
-// corte dice «4 cortes» (simulación del mes, H095 y H145).
+// «3 placas», no «3 placa»; la línea del corte dice «4 cortes» (simulación
+// del mes, H095 y H145). El mes simulado también leyó «Quedan 25 placa».
 describe("cantidadConUnidad", () => {
-  it("pone en plural las unidades que son palabras", () => {
+  it("concuerda la unidad con la cantidad", () => {
     expect(cantidadConUnidad(3, "placa")).toBe("3 placas");
     expect(cantidadConUnidad(1, "placa")).toBe("1 placa");
+    expect(cantidadConUnidad(25, "placa")).toBe("25 placas");
+    expect(cantidadConUnidad(6, "rollo")).toBe("6 rollos");
     expect(cantidadConUnidad(2, "par")).toBe("2 pares");
+    expect(cantidadConUnidad(20, "unidad")).toBe("20 u.");
+    expect(cantidadConUnidad(4, null)).toBe("4");
     expect(cantidadConUnidad(2.5, "metro_cuadrado")).toBe("2,5 m²");
-    expect(cantidadConUnidad(4, "unidad")).toBe("4");
     expect(cantidadConUnidad(4, "pasada")).toBe("4 cortes");
   });
 });

@@ -156,9 +156,19 @@ type FacturaDelRemito struct {
 
 // LineaDelRemito defines model for LineaDelRemito.
 type LineaDelRemito struct {
-	Cantidad    float64 `json:"cantidad"`
+	Cantidad float64 `json:"cantidad"`
+
+	// Corte Qué parte sale cortada y según qué corte («Cortado según CRT-13: 14 piezas de 2 placas · 1 entera»)
+	Corte       *string `json:"corte"`
 	Descripcion string  `json:"descripcion"`
 	Unidad      string  `json:"unidad"`
+}
+
+// OtroAcopio defines model for OtroAcopio.
+type OtroAcopio struct {
+	Numero    string            `json:"numero"`
+	OrderId   string            `json:"orderId"`
+	Renglones []RenglonDeAcopio `json:"renglones"`
 }
 
 // PendienteDelRemito defines model for PendienteDelRemito.
@@ -198,10 +208,16 @@ type RemitoCompleto struct {
 	Pendientes        []PendienteDelRemito `json:"pendientes"`
 	ReceptorDocumento *string              `json:"receptorDocumento"`
 	ReceptorNombre    *string              `json:"receptorNombre"`
-	Sucursal          *string              `json:"sucursal"`
-	SucursalDireccion *string              `json:"sucursalDireccion"`
-	Tipo              RemitoCompletoTipo   `json:"tipo"`
-	Transportista     *string              `json:"transportista"`
+
+	// SinCobrar Lo que falta cobrar del pedido fuera de la cuenta corriente
+	SinCobrar         *float64           `json:"sinCobrar"`
+	Sucursal          *string            `json:"sucursal"`
+	SucursalDireccion *string            `json:"sucursalDireccion"`
+	Tipo              RemitoCompletoTipo `json:"tipo"`
+	Transportista     *string            `json:"transportista"`
+
+	// Visita Los remitos de otros pedidos que salieron en la misma visita y se firman con este enlace
+	Visita []RemitoDeLaVisita `json:"visita"`
 }
 
 // RemitoCompletoEstado defines model for RemitoCompleto.Estado.
@@ -217,6 +233,13 @@ type RemitoDeConstanciaEmitido struct {
 	RemitoNumero string `json:"remitoNumero"`
 }
 
+// RemitoDeLaVisita defines model for RemitoDeLaVisita.
+type RemitoDeLaVisita struct {
+	Lineas       []LineaDelRemito `json:"lineas"`
+	Numero       string           `json:"numero"`
+	PedidoNumero string           `json:"pedidoNumero"`
+}
+
 // RemitoDelPedido defines model for RemitoDelPedido.
 type RemitoDelPedido struct {
 	CantidadLineas    int                   `json:"cantidadLineas"`
@@ -227,9 +250,12 @@ type RemitoDelPedido struct {
 	Id                string                `json:"id"`
 	Numero            string                `json:"numero"`
 	NumeroSeguimiento *string               `json:"numeroSeguimiento"`
-	ReceptorNombre    *string               `json:"receptorNombre"`
-	Tipo              RemitoDelPedidoTipo   `json:"tipo"`
-	Transportista     *string               `json:"transportista"`
+
+	// Parcial Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF)
+	Parcial        bool                `json:"parcial"`
+	ReceptorNombre *string             `json:"receptorNombre"`
+	Tipo           RemitoDelPedidoTipo `json:"tipo"`
+	Transportista  *string             `json:"transportista"`
 }
 
 // RemitoDelPedidoEstado defines model for RemitoDelPedido.Estado.
@@ -321,6 +347,13 @@ type GuardarZonaDeEnvioJSONBody map[string]interface{}
 // PrepararRemitoJSONBody defines parameters for PrepararRemito.
 type PrepararRemitoJSONBody map[string]interface{}
 
+// AnularRemitoJSONBody defines parameters for AnularRemito.
+type AnularRemitoJSONBody struct {
+	Ficha  *string `json:"ficha,omitempty"`
+	Motivo *string `json:"motivo,omitempty"`
+	Pin    *string `json:"pin,omitempty"`
+}
+
 // FirmarRemitoJSONBody defines parameters for FirmarRemito.
 type FirmarRemitoJSONBody map[string]interface{}
 
@@ -334,6 +367,9 @@ type GuardarZonaDeEnvioJSONRequestBody GuardarZonaDeEnvioJSONBody
 
 // PrepararRemitoJSONRequestBody defines body for PrepararRemito for application/json ContentType.
 type PrepararRemitoJSONRequestBody PrepararRemitoJSONBody
+
+// AnularRemitoJSONRequestBody defines body for AnularRemito for application/json ContentType.
+type AnularRemitoJSONRequestBody AnularRemitoJSONBody
 
 // FirmarRemitoJSONRequestBody defines body for FirmarRemito for application/json ContentType.
 type FirmarRemitoJSONRequestBody FirmarRemitoJSONBody
@@ -352,6 +388,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/pedidos/{id}/acopio)
 	SaldoDeAcopio(w http.ResponseWriter, r *http.Request, id string)
+
+	// (GET /api/v1/admin/pedidos/{id}/otros-acopios)
+	OtrosAcopios(w http.ResponseWriter, r *http.Request, id string)
 
 	// (GET /api/v1/admin/pedidos/{id}/remitos)
 	RemitosDelPedido(w http.ResponseWriter, r *http.Request, id string)
@@ -438,6 +477,32 @@ func (siw *ServerInterfaceWrapper) SaldoDeAcopio(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SaldoDeAcopio(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OtrosAcopios operation middleware
+func (siw *ServerInterfaceWrapper) OtrosAcopios(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OtrosAcopios(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -805,6 +870,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/acopio", wrapper.SaldoDeAcopio)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/remitos", wrapper.RemitosDelPedido)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/pedidos/{id}/otros-acopios", wrapper.OtrosAcopios)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/remitos", wrapper.PrepararRemito)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/remitos/{id}/anular", wrapper.AnularRemito)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/mostrador/pedidos/{id}/remito", wrapper.RemitoDeConstancia)
@@ -995,6 +1061,58 @@ func (response SaldoDeAcopio403ApplicationProblemPlusJSONResponse) VisitSaldoDeA
 	return err
 }
 
+type OtrosAcopiosRequestObject struct {
+	Id string `json:"id"`
+}
+
+type OtrosAcopiosResponseObject interface {
+	VisitOtrosAcopiosResponse(w http.ResponseWriter) error
+}
+
+type OtrosAcopios200JSONResponse []OtroAcopio
+
+func (response OtrosAcopios200JSONResponse) VisitOtrosAcopiosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OtrosAcopios401ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response OtrosAcopios401ApplicationProblemPlusJSONResponse) VisitOtrosAcopiosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OtrosAcopios403ApplicationProblemPlusJSONResponse Problema
+
+func (response OtrosAcopios403ApplicationProblemPlusJSONResponse) VisitOtrosAcopiosResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RemitosDelPedidoRequestObject struct {
 	Id string `json:"id"`
 }
@@ -1114,7 +1232,8 @@ func (response PrepararRemito422ApplicationProblemPlusJSONResponse) VisitPrepara
 }
 
 type AnularRemitoRequestObject struct {
-	Id string `json:"id"`
+	Id   string `json:"id"`
+	Body *AnularRemitoJSONRequestBody
 }
 
 type AnularRemitoResponseObject interface {
@@ -1161,6 +1280,20 @@ func (response AnularRemito403ApplicationProblemPlusJSONResponse) VisitAnularRem
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AnularRemito422ApplicationProblemPlusJSONResponse Problema
+
+func (response AnularRemito422ApplicationProblemPlusJSONResponse) VisitAnularRemitoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1548,6 +1681,9 @@ type StrictServerInterface interface {
 	// (GET /api/v1/admin/pedidos/{id}/acopio)
 	SaldoDeAcopio(ctx context.Context, request SaldoDeAcopioRequestObject) (SaldoDeAcopioResponseObject, error)
 
+	// (GET /api/v1/admin/pedidos/{id}/otros-acopios)
+	OtrosAcopios(ctx context.Context, request OtrosAcopiosRequestObject) (OtrosAcopiosResponseObject, error)
+
 	// (GET /api/v1/admin/pedidos/{id}/remitos)
 	RemitosDelPedido(ctx context.Context, request RemitosDelPedidoRequestObject) (RemitosDelPedidoResponseObject, error)
 
@@ -1699,6 +1835,32 @@ func (sh *strictHandler) SaldoDeAcopio(w http.ResponseWriter, r *http.Request, i
 	}
 }
 
+// OtrosAcopios operation middleware
+func (sh *strictHandler) OtrosAcopios(w http.ResponseWriter, r *http.Request, id string) {
+	var request OtrosAcopiosRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OtrosAcopios(ctx, request.(OtrosAcopiosRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OtrosAcopios")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OtrosAcopiosResponseObject); ok {
+		if err := validResponse.VisitOtrosAcopiosResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RemitosDelPedido operation middleware
 func (sh *strictHandler) RemitosDelPedido(w http.ResponseWriter, r *http.Request, id string) {
 	var request RemitosDelPedidoRequestObject
@@ -1761,6 +1923,16 @@ func (sh *strictHandler) AnularRemito(w http.ResponseWriter, r *http.Request, id
 	var request AnularRemitoRequestObject
 
 	request.Id = id
+
+	var body AnularRemitoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.AnularRemito(ctx, request.(AnularRemitoRequestObject))
@@ -1984,53 +2156,61 @@ func (sh *strictHandler) RemitoPdf(w http.ResponseWriter, r *http.Request, id st
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"NhoB1PdwZkygWg7vaQaN4PL88cejsdXqvwMA",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

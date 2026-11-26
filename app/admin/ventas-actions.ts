@@ -203,6 +203,73 @@ export async function crearPresupuesto(_previo: EstadoVenta, formData: FormData)
   return { ok: r.data.ok };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Devolver y corregir un pedido sin factura                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * La devolución de un pedido sin factura (mes simulado): lo que vuelve al
+ * stock queda atado al pedido y baja lo que falta cobrar. Con factura, se
+ * devuelve desde la factura, con su nota de crédito. Lo hace Go
+ * (pedidos.DevolverSinFactura).
+ */
+export async function devolverPedido(
+  id: string,
+  renglones: { orderItemId: string; cantidad: number }[],
+  motivo: string,
+  clave: string,
+): Promise<EstadoVenta> {
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/devolucion", {
+    params: { path: { id } },
+    body: { renglones, motivo, clave },
+  });
+  if (!r.data) return fallo(r);
+  refrescar();
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/stock");
+  return { ok: r.data.ok };
+}
+
+/**
+ * Corrige los renglones y el flete de un pedido sin factura ni cobro (mes
+ * simulado: PED-1066 salió sin flete y no había cómo agregarlo). Un precio
+ * bajo la lista, pasado lo libre, pide el PIN de un admin.
+ */
+export async function corregirPedido(
+  id: string,
+  correccion: {
+    renglones: { orderItemId: string; cantidad: number; precioUnitario: number }[];
+    costoEnvio?: number;
+    motivo: string;
+    pin?: string;
+  },
+): Promise<EstadoVenta & { autorizacion?: Autorizacion }> {
+  const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/correccion", {
+    params: { path: { id } },
+    body: correccion,
+  });
+  if (!r.data) {
+    const e = (r.error as Problema | undefined)?.errores;
+    if (e?.pin) {
+      return {
+        error: e.pin,
+        autorizacion: {
+          motivo: "precio",
+          monto: Number(e.pinMonto ?? 0),
+          pinIncorrecto: e.pinIncorrecto === "si",
+          bloqueadoHasta: e.pinHasta,
+        },
+      };
+    }
+    return fallo(r);
+  }
+  refrescar();
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/reparto");
+  revalidatePath("/admin/stock");
+  return { ok: r.data.ok };
+}
+
 /** Corrige el día comprometido de entrega; vacío lo saca. */
 export async function cambiarEntrega(id: string, entregarEl: string): Promise<EstadoVenta> {
   const r = await (await api()).PUT("/api/v1/admin/pedidos/{id}/entrega", {

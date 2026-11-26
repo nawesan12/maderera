@@ -5034,15 +5034,16 @@ type CashMovement struct {
 }
 
 type CashSession struct {
-	ID         string      `json:"id"`
-	BranchID   string      `json:"branchId"`
-	AbiertaPor string      `json:"abiertaPor"`
-	AbiertaAt  time.Time   `json:"abiertaAt"`
-	CerradaPor *string     `json:"cerradaPor"`
-	CerradaAt  *time.Time  `json:"cerradaAt"`
-	Contado    *jsmath.Num `json:"contado"`
-	Estado     EstadoCaja  `json:"estado"`
-	Notas      *string     `json:"notas"`
+	ID          string      `json:"id"`
+	BranchID    string      `json:"branchId"`
+	AbiertaPor  string      `json:"abiertaPor"`
+	AbiertaAt   time.Time   `json:"abiertaAt"`
+	CerradaPor  *string     `json:"cerradaPor"`
+	CerradaAt   *time.Time  `json:"cerradaAt"`
+	Contado     *jsmath.Num `json:"contado"`
+	Estado      EstadoCaja  `json:"estado"`
+	Notas       *string     `json:"notas"`
+	PosDeviceID *string     `json:"posDeviceId"`
 }
 
 type Category struct {
@@ -5350,6 +5351,7 @@ type Delivery struct {
 	CreatedByUserID   *string           `json:"createdByUserId"`
 	CreatedAt         time.Time         `json:"createdAt"`
 	UpdatedAt         time.Time         `json:"updatedAt"`
+	VisitaDe          *string           `json:"visitaDe"`
 }
 
 type DeliveryItem struct {
@@ -5363,7 +5365,7 @@ type DeliveryItem struct {
 type DevolucionItem struct {
 	ID            string     `json:"id"`
 	DevolucionID  string     `json:"devolucionId"`
-	InvoiceItemID string     `json:"invoiceItemId"`
+	InvoiceItemID *string    `json:"invoiceItemId"`
 	OrderItemID   *string    `json:"orderItemId"`
 	Cantidad      jsmath.Num `json:"cantidad"`
 	DelAcopio     jsmath.Num `json:"delAcopio"`
@@ -5375,7 +5377,7 @@ type Devolucione struct {
 	ID                string             `json:"id"`
 	Clave             string             `json:"clave"`
 	OrderID           string             `json:"orderId"`
-	InvoiceID         string             `json:"invoiceId"`
+	InvoiceID         *string            `json:"invoiceId"`
 	NotaID            *string            `json:"notaId"`
 	Importe           jsmath.Num         `json:"importe"`
 	Destino           string             `json:"destino"`
@@ -5635,6 +5637,13 @@ type InvoicesDadasDeBaja struct {
 	Comprobante    json.RawMessage `json:"comprobante"`
 }
 
+type MesesCerrado struct {
+	Mes              string             `json:"mes"`
+	CerradoAt        pgtype.Timestamptz `json:"cerradoAt"`
+	CerradoPor       *string            `json:"cerradoPor"`
+	CerradoPorNombre *string            `json:"cerradoPorNombre"`
+}
+
 type MigrationRun struct {
 	ID              string           `json:"id"`
 	Entidad         EntidadMigracion `json:"entidad"`
@@ -5707,6 +5716,7 @@ type Order struct {
 	AnulacionAutorizadaPor *string      `json:"anulacionAutorizadaPor"`
 	MercaderiaNoVolvio     bool         `json:"mercaderiaNoVolvio"`
 	CreditoSinAutorizar    jsmath.Num   `json:"creditoSinAutorizar"`
+	Comprobante            *string      `json:"comprobante"`
 }
 
 type OrderItem struct {

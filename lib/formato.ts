@@ -266,34 +266,28 @@ export function formatearUnidad(unidad: string | null): string {
   return ABREVIATURA_UNIDAD[unidad] ?? unidad.replace(/_/g, " ");
 }
 
-/**
- * Las unidades que se dicen con una palabra van en plural: «3 placas», no
- * «3 placa» (simulación del mes, H095). Las abreviaturas (m², ml, kg, l, u.)
- * no cambian.
- */
-const PLURAL_DE_UNIDAD: Record<string, string> = {
-  placa: "placas",
-  tabla: "tablas",
-  rollo: "rollos",
-  par: "pares",
-  juego: "juegos",
-};
+/** La unidad en plural: «placas», «rollos», «pares»; lo abreviado no cambia. */
+export function unidadEnPlural(unidad: string): string {
+  if (/[.²\s]/.test(unidad) || unidad.length <= 2 || /s$/i.test(unidad)) return unidad;
+  return /[aeiouáéíóú]$/i.test(unidad) ? `${unidad}s` : `${unidad}es`;
+}
 
 const cantidadLegible = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 });
 
 /**
- * La cantidad con su unidad, como se lee: «4 placas», «2,5 m²», «3» (la
- * unidad suelta no se escribe).
+ * La cantidad con su unidad, concordada: «1 placa», «25 placas», «20 u.»,
+ * «2,5 m²». Se leía «Quedan 25 placa» y «4 rollo» en las entregas y «3 placa»
+ * en el papel del cliente (mes simulado, H095). Sin unidad, la cifra sola.
  */
 export function cantidadConUnidad(cantidad: number, unidad: string | null): string {
   const n = cantidadLegible.format(cantidad);
-  if (!unidad || unidad === "unidad") return n;
+  if (!unidad) return n;
   // La línea del corte se cobra por pasada de la sierra; en el papel del
   // cliente es «4 cortes», al lado de «Corte a medida · 3 piezas»: la
   // cantidad sola no se entendía (simulación del mes, H145).
   if (unidad === "pasada") return `${n} ${cantidad === 1 ? "corte" : "cortes"}`;
-  const corta = formatearUnidad(unidad);
-  return `${n} ${cantidad !== 1 ? (PLURAL_DE_UNIDAD[corta] ?? corta) : corta}`;
+  const u = formatearUnidad(unidad);
+  return `${n} ${cantidad === 1 ? u : unidadEnPlural(u)}`;
 }
 
 /** Pluraliza sin que quede "1 ítems". */

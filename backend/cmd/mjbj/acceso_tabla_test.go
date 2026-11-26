@@ -217,6 +217,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"AvanzarPedido":                  "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/avanzar
 	"CancelarPedido":                 "/admin/pedidos",                // POST /api/v1/admin/pedidos/{id}/cancelar
 	"CobrarPedido":                   "plata",                         // POST /api/v1/admin/pedidos/{id}/cobro
+	"DevolverPedido":                 "plata",                         // POST /api/v1/admin/pedidos/{id}/devolucion
+	"CorregirPedido":                 "plata",                         // POST /api/v1/admin/pedidos/{id}/correccion
 	"CambiarEntregaDelPedido":        "/admin/presupuestos",           // PUT /api/v1/admin/pedidos/{id}/entrega
 	"CortesDelPedido":                "/admin/cortes",                 // GET /api/v1/admin/pedidos/{id}/cortes
 	"RemitosDelPedido":               "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/remitos
@@ -294,6 +296,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"AnularRecibo":                   "plata",                         // POST /api/v1/admin/recibos/{id}/anular
 	"AnularRemito":                   "/admin/pedidos",                // POST /api/v1/admin/remitos/{id}/anular
 	"PrepararRemito":                 "/admin/pedidos",                // POST /api/v1/admin/remitos
+	"OtrosAcopios":                   "/admin/pedidos",                // GET /api/v1/admin/pedidos/{id}/otros-acopios
 	"ReporteDeReposicionArchivo":     "/admin/reportes",               // GET /api/v1/admin/reportes/reposicion/archivo
 	"ReporteDeReposicion":            "/admin/reportes",               // GET /api/v1/admin/reportes/reposicion
 	"ReporteDeVentasArchivo":         "/admin/reportes",               // GET /api/v1/admin/reportes/ventas/archivo
@@ -451,6 +454,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CobrarCuentaEnMostrador":        "/mostrador",                    // POST /api/v1/mostrador/clientes/{id}/cobro
 	"SaldoDeCuentaEnMostrador":       "/mostrador",                    // GET /api/v1/mostrador/clientes/{id}/saldo
 	"ClienteDelMostrador":            "/mostrador",                    // GET /api/v1/mostrador/clientes/{id}
+	"PresupuestoParaElMostrador":     "/mostrador",                    // GET /api/v1/mostrador/presupuestos/{numero}
 	"BuscarClientesEnMostrador":      "/mostrador",                    // GET /api/v1/mostrador/clientes
 	"AltaRapidaDeCliente":            "/mostrador",                    // POST /api/v1/mostrador/clientes
 	"DescargarVentas":                "/mostrador",                    // POST /api/v1/mostrador/descarga

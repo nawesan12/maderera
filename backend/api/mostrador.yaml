@@ -253,6 +253,19 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/MostradorCliente" } }
+  /api/v1/mostrador/presupuestos/{numero}:
+    parameters:
+      - { name: numero, in: path, required: true, schema: { type: string, maxLength: 20 } }
+    get:
+      operationId: PresupuestoParaElMostrador
+      description: El presupuesto que se trae a la venta por su número; uno vencido trae los precios de hoy
+      responses:
+        "200":
+          description: El presupuesto, para armar la venta
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MostradorPresupuesto" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/clientes/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -542,6 +555,29 @@ components:
         categoria: { type: string, nullable: true }
         formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
         precioMediaPct: { type: number, format: double }
+    MostradorPresupuesto:
+      type: object
+      required: [id, numero, customerId, contactoNombre, contactoTelefono, vencido, lineas]
+      properties:
+        id: { type: string }
+        numero: { type: string }
+        customerId: { type: string, nullable: true }
+        contactoNombre: { type: string }
+        contactoTelefono: { type: string, nullable: true }
+        vencido: { type: boolean }
+        lineas:
+          type: array
+          items:
+            type: object
+            required: [variantId, descripcion, unidad, cantidad, precioUnitario, presentacion, precioLista]
+            properties:
+              variantId: { type: string, nullable: true }
+              descripcion: { type: string }
+              unidad: { type: string }
+              cantidad: { type: number, format: double }
+              precioUnitario: { type: number, format: double }
+              presentacion: { type: string, nullable: true }
+              precioLista: { type: number, format: double, nullable: true }
     MostradorCliente:
       type: object
       required: [id, nombre, razonSocial, cuit, condicionIva, direccion, estado, priceListId, telefono, email]

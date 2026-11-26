@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
 	"mjbj/internal/zodjs"
 )
@@ -190,6 +191,28 @@ type FormRemito struct {
 	NumeroSeguimiento *string          `json:"numeroSeguimiento"`
 	Notas             *string          `json:"notas"`
 	Lineas            []LineaAEntregar `json:"lineas"`
+	// Otros son los acopios de otros pedidos del mismo cliente que salen en
+	// la misma visita (`otros`: [{orderId, cantidades}]).
+	Otros []OtroPedido `json:"otros,omitempty"`
+}
+
+// OtroPedido es lo que sale de otro acopio en la misma visita.
+type OtroPedido struct {
+	OrderID string           `json:"orderId"`
+	Lineas  []LineaAEntregar `json:"lineas"`
+}
+
+// otrosComoFormularios: cada otro pedido con el mismo receptor y las mismas
+// notas que el remito principal.
+func (f FormRemito) otrosComoFormularios() []FormRemito {
+	var out []FormRemito
+	for _, o := range f.Otros {
+		g := f
+		g.OrderID, g.Lineas, g.Otros = o.OrderID, o.Lineas, nil
+		g.Transportista, g.NumeroSeguimiento = nil, nil
+		out = append(out, g)
+	}
+	return out
 }
 
 // MsjFaltaDocumento es la regla del retiro: la firma sola no identifica.
@@ -257,6 +280,16 @@ func LeerRemito(m map[string]any) (FormRemito, string, string) {
 		return f, campo, msj
 	}
 	f.Lineas = Cantidades(m["cantidades"])
+	if xs, ok := m["otros"].([]any); ok {
+		for _, x := range xs {
+			o, _ := x.(map[string]any)
+			id, _ := o["orderId"].(string)
+			if !plataforma.UUIDValido(id) || id == f.OrderID {
+				return f, "otros", "Hay un pedido que no existe."
+			}
+			f.Otros = append(f.Otros, OtroPedido{OrderID: id, Lineas: Cantidades(o["cantidades"])})
+		}
+	}
 	return f, "", ""
 }
 

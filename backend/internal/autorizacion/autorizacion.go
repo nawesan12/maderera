@@ -68,6 +68,10 @@ const (
 	Presupuesto Motivo = "presupuesto"
 	// Costo: la venta cobra algo por debajo de su costo (mes simulado, H018).
 	Costo Motivo = "costo"
+	// Remito: anular un remito que ya firmó quien recibió (mes simulado: el
+	// depósito lo anulaba con un toque y la mercadería volvía al stock
+	// aunque el cliente se la había llevado).
+	Remito Motivo = "remito"
 )
 
 // Los topes de errores.
@@ -356,6 +360,8 @@ func QueSeAutoriza(motivo Motivo, monto, credito float64) string {
 		t = "anular " + m
 	case Costo:
 		t = m + " abajo del costo"
+	case Remito:
+		t = "anular un remito firmado"
 	default:
 		t = m + " abajo del precio"
 	}

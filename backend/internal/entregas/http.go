@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -120,6 +121,16 @@ func (a *API) RemitosDelPedido(ctx context.Context, r entregasapi.RemitosDelPedi
 	return ok(v), err
 }
 
+func (a *API) OtrosAcopios(ctx context.Context, r entregasapi.OtrosAcopiosRequestObject) (entregasapi.OtrosAcopiosResponseObject, error) {
+	if err := a.pedidosOInterno(ctx); err != nil {
+		return nil, err
+	}
+	v, err := a.s.OtrosAcopios(ctx, r.Id)
+	return ok(v), err
+}
+
+func (o respuesta) VisitOtrosAcopiosResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
 func (a *API) PrepararRemito(ctx context.Context, r entregasapi.PrepararRemitoRequestObject) (entregasapi.PrepararRemitoResponseObject, error) {
 	ses, err := pedidos(ctx)
 	if err != nil {
@@ -133,8 +144,21 @@ func (a *API) PrepararRemito(ctx context.Context, r entregasapi.PrepararRemitoRe
 	if err != nil {
 		return nil, err
 	}
+	if len(e.Visita) > 0 {
+		numeros := []string{e.Numero}
+		for _, v := range e.Visita {
+			numeros = append(numeros, v.Numero)
+		}
+		m := "Remitos " + strings.Join(numeros, " y ") + " listos: se firman juntos."
+		return ok(map[string]any{"ok": m, "id": e.ID, "numero": e.Numero, "firmaToken": e.FirmaToken, "pedidoCompleto": e.PedidoCompleto}), nil
+	}
 	m := "Remito " + e.Numero + " listo. Todavía queda mercadería en acopio."
-	if e.PedidoCompleto {
+	switch {
+	case f.Tipo == "envio" && e.PedidoCompleto:
+		m = "Remito " + e.Numero + " listo. El pedido sale en camino."
+	case f.Tipo == "envio":
+		m = "Remito " + e.Numero + " listo. El resto queda por llevar."
+	case e.PedidoCompleto:
 		m = "Remito " + e.Numero + " listo. Con esto el pedido queda entregado."
 	}
 	return ok(map[string]any{"ok": m, "id": e.ID, "numero": e.Numero, "firmaToken": e.FirmaToken, "pedidoCompleto": e.PedidoCompleto}), nil
@@ -145,7 +169,19 @@ func (a *API) AnularRemito(ctx context.Context, r entregasapi.AnularRemitoReques
 	if err != nil {
 		return nil, err
 	}
-	if err := a.s.AnularEntrega(ctx, ses, r.Id); err != nil {
+	var an Anulacion
+	if b := r.Body; b != nil {
+		if b.Motivo != nil {
+			an.Motivo = *b.Motivo
+		}
+		if b.Pin != nil {
+			an.PIN = *b.Pin
+		}
+		if b.Ficha != nil {
+			an.Ficha = *b.Ficha
+		}
+	}
+	if err := a.s.AnularEntregaCon(ctx, ses, r.Id, an); err != nil {
 		return nil, err
 	}
 	return hecho("Remito anulado. La mercadería volvió al stock."), nil

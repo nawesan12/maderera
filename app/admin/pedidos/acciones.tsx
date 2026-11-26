@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, Ban, Loader2 } from "lucide-react";
+import { ArrowRight, Ban, FileText, Loader2, Scissors } from "lucide-react";
 import { avanzarPedido, cancelarPedido } from "@/app/admin/ventas-actions";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +28,9 @@ export function AccionesPedido({
   cobro,
   sinCobrar,
   pedido,
+  cortesSinTerminar = [],
+  acopio = false,
+  enLaFicha = false,
 }: {
   id: string;
   estado: string;
@@ -55,6 +59,19 @@ export function AccionesPedido({
    * contacto: precarga «quién retira», que casi siempre es el mismo.
    */
   pedido?: { numero: string; nombre?: string | null };
+  /**
+   * Los cortes del pedido que todavía no salieron de la máquina: el pedido
+   * no se marca listo ni sale (Go lo rechaza). En el lugar del botón va el
+   * corte que espera (mes simulado: se marcaba listo con el corte en cola).
+   */
+  cortesSinTerminar?: string[];
+  /**
+   * Un acopio en curso: lo que se hace en cada visita es un remito con lo
+   * que se lleva, no «Marcar entregado», que se lleva todo lo que queda.
+   */
+  acopio?: boolean;
+  /** En la ficha, «Preparar remito» abre el formulario sin salir de la página. */
+  enLaFicha?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -87,6 +104,9 @@ export function AccionesPedido({
   }
 
   const entregaUnRetiro = estado === "listo" && tipoEntrega === "retiro";
+  const esperaCorte =
+    cortesSinTerminar.length > 0 && ["Marcar listo", "Despachar", "Marcar entregado"].includes(etiqueta ?? "");
+  const preparaRemito = acopio && etiqueta === "Marcar entregado" && tipoEntrega === "retiro";
   const debe = etiqueta === "Marcar entregado" && sinCobrar != null && sinCobrar.monto > 0;
   // «Marcar entregado» emite el remito y no tiene vuelta: siempre pregunta,
   // también cuando no hay nada que cobrar ni documento que pedir.
@@ -115,7 +135,22 @@ export function AccionesPedido({
         />
       )}
 
-      {etiqueta && (
+      {esperaCorte ? (
+        <span
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-hundida px-3 text-base font-medium text-muted-foreground ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+        >
+          <Scissors className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{cortesSinTerminar.join(", ")}</span>
+        </span>
+      ) : preparaRemito ? (
+        <Link
+          href={enLaFicha ? "?remito=1#remito" : `/admin/pedidos/${id}?remito=1#remito`}
+          className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${compacto ? "min-w-0 flex-1 basis-0" : ""}`}
+        >
+          <FileText className="h-5 w-5" />
+          Preparar remito
+        </Link>
+      ) : etiqueta && (
         <button
           onClick={() => (preguntar ? setConfirmando(true) : accion(avanzar))}
           disabled={pendiente}
@@ -130,7 +165,7 @@ export function AccionesPedido({
         </button>
       )}
 
-      {preguntar && (
+      {preguntar && !esperaCorte && !preparaRemito && (
         <Dialog open={confirmando} onOpenChange={(abierto) => !pendiente && setConfirmando(abierto)}>
           <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
             <DialogHeader>
@@ -146,7 +181,8 @@ export function AccionesPedido({
                 )}
               </DialogTitle>
             </DialogHeader>
-            {!debe && !entregaUnRetiro && (
+            {/* En camino, el remito ya salió con el camión. */}
+            {!debe && !entregaUnRetiro && estado !== "en-camino" && (
               <p className="text-base text-muted-foreground">Sale el remito. No se puede deshacer.</p>
             )}
             {/* Un <form>: Enter hace lo principal (entregar, o cobrar y
@@ -200,13 +236,30 @@ export function AccionesPedido({
               </div>
             )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
+              {/* Quien no cobra (el depósito) tiene dos caminos con peso: no
+                  soltar la mercadería, que es lo que queda a mano, o
+                  entregarla igual, que deja su nombre en el historial (mes
+                  simulado: era un solo botón de texto, sin jerarquía). */}
+              {debe && !cobro && (
+                <button
+                  type="button"
+                  autoFocus={!entregaUnRetiro}
+                  onClick={() => setConfirmando(false)}
+                  className="inline-flex h-11 items-center rounded-lg px-4 text-base font-medium hover:bg-hundida"
+                >
+                  Mejor no
+                </button>
+              )}
               {debe ? (
                 <button
                   type={cobro ? "button" : "submit"}
                   disabled={pendiente || faltaDocumento}
                   onClick={cobro ? () => accion(avanzar) : undefined}
-                  className="inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium hover:bg-hundida disabled:opacity-50"
+                  className={`inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50 ${
+                    cobro ? "hover:bg-hundida" : "estado-problema border"
+                  }`}
                 >
+                  {pendiente && !cobro && <Loader2 className="h-4 w-4 animate-spin" />}
                   Entregar sin cobrar
                 </button>
               ) : (

@@ -623,6 +623,13 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	estado := "entregado"
 	if v.Acopio {
 		estado = "listo"
+	} else if len(v.Cortes) > 0 {
+		// Con un corte, el cliente se lleva las piezas cuando salen de la
+		// máquina (mes simulado): quedaba «entregado» con el corte en cola,
+		// fuera de En curso y con el aviso de entregado. El stock baja igual
+		// al cobrar, y el remito del retiro no lo vuelve a sacar
+		// (entregas.SalioConLaVenta). Al terminarse el corte pasa a listo.
+		estado = "preparando"
 	}
 	estadoPago := "pagado"
 	if c.parteCuenta >= c.total-0.009 {
@@ -646,15 +653,38 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		INSERT INTO orders (numero, clave_mostrador, numero_provisorio, cobrada_at, sincronizada_at, created_at,
 		                    customer_id, contacto_nombre, contacto_telefono, branch_id, estado, origen, tipo_entrega,
 		                    subtotal, descuento, descuento_motivo, total, medio_pago, estado_pago, seller_id, notas, created_by_user_id,
-		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar)
+		                    huella_mostrador, dejado_de_cobrar, autorizado_por, bajo_lista_sin_autorizar, credito_sin_autorizar, comprobante)
 		VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), $7, $8, $9, $10, $11, 'mostrador', 'retiro',
-		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric)
+		        $12::numeric, $13::numeric, $14, $15::numeric, $16, $17, $18, $19, $20, $21, $22::numeric, $23, $24, $25::numeric, $26)
 		RETURNING id`,
 		numero, v.Clave, v.NumeroProvisorio, v.CobradaAt, sincronizada, cobrada,
 		v.CustomerID, v.ContactoNombre, v.ContactoTelefono, v.BranchID, estado,
 		jsmath.Fijo2(c.subtotal), jsmath.Fijo2(c.descuento), motivo, jsmath.Fijo2(c.total), c.medioPago, estadoPago,
-		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar)).Scan(&pedido)
+		c.vendedor, v.Notas, usuario, c.huella, jsmath.Fijo2(c.dejado), c.autorizadoPor, c.bajoLista, jsmath.Fijo2(c.creditoSinAutorizar),
+		comprobanteDeLaVenta(v.Comprobante)).Scan(&pedido)
 	if err != nil {
+		return ResultadoVenta{}, err
+	}
+
+	// El presupuesto que armó la venta queda aceptado y atado al pedido.
+	if v.PresupuestoID != nil {
+		if err := atarAlPresupuesto(ctx, tx, pedido, *v.PresupuestoID); err != nil {
+			var ep *ErrPresupuesto
+			if errors.As(err, &ep) {
+				return fallo(ep.Msj), nil
+			}
+			return ResultadoVenta{}, err
+		}
+	}
+
+	// El alta en el historial del pedido: la ficha de una venta del
+	// mostrador o de un acopio quedaba con el historial vacío.
+	nota := "Venta de mostrador"
+	if v.Acopio {
+		nota = "Venta de mostrador en acopio"
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id, created_at)
+		VALUES ($1, $2, $3, $4, coalesce($5, now()))`, pedido, estado, nota, usuario, cobrada); err != nil {
 		return ResultadoVenta{}, err
 	}
 
@@ -791,6 +821,15 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 	}
 
 	return ResultadoVenta{Ok: true, OrderID: pedido, Numero: numero, Total: c.total, Nueva: true, Lineas: c.lineas}, nil
+}
+
+// comprobanteDeLaVenta es con qué salió la venta: «interno» o «fiscal»
+// (migración 00230). Lo que no es ninguno de los dos queda nulo.
+func comprobanteDeLaVenta(c string) *string {
+	if c != "interno" && c != "fiscal" {
+		return nil
+	}
+	return &c
 }
 
 func nuloSiVacio(p *string) *string {

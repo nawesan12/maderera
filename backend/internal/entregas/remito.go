@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 func sprintf(f string, a ...any) string { return fmt.Sprintf(f, a...) }
@@ -31,6 +32,9 @@ type LineaDelRemito struct {
 	Descripcion string  `json:"descripcion"`
 	Unidad      string  `json:"unidad"`
 	Cantidad    float64 `json:"cantidad"`
+	// Corte dice qué parte del renglón sale cortada y según qué corte: el
+	// cliente firmaba «3 placas de MDF» y recibía 14 piezas (mes simulado).
+	Corte *string `json:"corte"`
 }
 
 // PendienteDelRemito es lo que quedaba en acopio.
@@ -73,6 +77,81 @@ type RemitoCompleto struct {
 	Lineas            []LineaDelRemito     `json:"lineas"`
 	Pendientes        []PendienteDelRemito `json:"pendientes"`
 	Factura           *FacturaDelRemito    `json:"factura"`
+	// SinCobrar es lo que falta cobrar del pedido fuera de la cuenta
+	// corriente (fragmentos.SinCobrarDelPedido): el chofer de un envío
+	// contra entrega tiene que saber cuánto traer, y el remito decía solo
+	// «Pendiente de pago».
+	SinCobrar *float64 `json:"sinCobrar"`
+	// Visita son los remitos de otros pedidos que salieron en la misma
+	// visita y se firman con este enlace (solo en RemitoPorToken).
+	Visita []RemitoDeLaVisita `json:"visita"`
+}
+
+// RemitoDeLaVisita es otro remito que se firma junto con el del enlace.
+type RemitoDeLaVisita struct {
+	Numero       string           `json:"numero"`
+	PedidoNumero string           `json:"pedidoNumero"`
+	Lineas       []LineaDelRemito `json:"lineas"`
+}
+
+// cortesDelPedido son los cortes vivos del pedido por variante: qué parte
+// de cada renglón sale cortada.
+func cortesDelPedido(ctx context.Context, db consultor, pedido string) (map[string][]corteDelRenglon, error) {
+	filas, err := db.Query(ctx, `
+		SELECT c.variant_id::text, c.numero, c.placas,
+		       coalesce((SELECT sum(ci.cantidad) FROM cutting_items ci WHERE ci.cutting_order_id = c.id), 0)::int
+		FROM cutting_orders c
+		WHERE c.order_id = $1 AND c.estado <> 'cancelado' AND c.variant_id IS NOT NULL
+		ORDER BY c.numero`, pedido)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	out := map[string][]corteDelRenglon{}
+	for filas.Next() {
+		var variante string
+		var c corteDelRenglon
+		if err := filas.Scan(&variante, &c.numero, &c.placas, &c.piezas); err != nil {
+			return nil, err
+		}
+		out[variante] = append(out[variante], c)
+	}
+	return out, filas.Err()
+}
+
+type corteDelRenglon struct {
+	numero         string
+	placas, piezas int
+}
+
+// TextoDelCorte es cómo se lee lo cortado de un renglón: «Cortado según
+// CRT-13: 14 piezas de 2 placas · 1 entera».
+func TextoDelCorte(cs []corteDelRenglon, cantidad float64) *string {
+	if len(cs) == 0 {
+		return nil
+	}
+	var partes []string
+	placas := 0
+	for _, c := range cs {
+		piezas := "piezas"
+		if c.piezas == 1 {
+			piezas = "pieza"
+		}
+		de := "placas"
+		if c.placas == 1 {
+			de = "placa"
+		}
+		partes = append(partes, "Cortado según "+c.numero+": "+fmt.Sprint(c.piezas)+" "+piezas+" de "+fmt.Sprint(c.placas)+" "+de)
+		placas += c.placas
+	}
+	t := strings.Join(partes, " · ")
+	if enteras := cantidad - float64(placas); enteras > 0.001 {
+		t += " · " + jsmath.Texto(enteras) + " entera"
+		if enteras != 1 {
+			t += "s"
+		}
+	}
+	return &t
 }
 
 // nombreComprobante es el de lib/fiscal/comprobantes.ts.
@@ -98,13 +177,13 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	err := s.pool.QueryRow(ctx, `
 		SELECT d.id, d.numero, d.tipo::text, d.estado::text, d.receptor_nombre, d.receptor_documento, d.firma_url, d.firmado_at,
 		  d.notas, d.created_at, o.numero, o.id, o.contacto_nombre, o.direccion_entrega, o.customer_id, o.estado_pago::text,
-		  o.medio_pago::text, b.name, b.slug, s.transportista, s.numero_seguimiento
+		  o.medio_pago::text, b.name, b.slug, s.transportista, s.numero_seguimiento, `+fragmentos.SinCobrarDelPedido+`::float8
 		FROM deliveries d JOIN orders o ON o.id = d.order_id
 		LEFT JOIN branches b ON b.id = d.branch_id
 		LEFT JOIN shipments s ON s.delivery_id = d.id
 		WHERE d.id = $1 LIMIT 1`, id).Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.ReceptorDocumento, &r.FirmaURL,
 		&r.FirmadoAt, &r.Notas, &r.CreatedAt, &r.PedidoNumero, &r.PedidoID, &r.ClienteNombre, &r.ClienteDireccion, &r.CustomerID,
-		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento)
+		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -116,8 +195,12 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 			r.SucursalDireccion = &d
 		}
 	}
+	cortes, err := cortesDelPedido(ctx, s.pool, r.PedidoID)
+	if err != nil {
+		return nil, err
+	}
 	filas, err := s.pool.Query(ctx, `
-		SELECT oi.descripcion, oi.unidad, di.cantidad::text
+		SELECT oi.descripcion, oi.unidad, di.cantidad::text, coalesce(oi.variant_id::text, '')
 		FROM delivery_items di JOIN order_items oi ON oi.id = di.order_item_id
 		WHERE di.delivery_id = $1 ORDER BY di.orden`, id)
 	if err != nil {
@@ -126,18 +209,22 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	r.Lineas = []LineaDelRemito{}
 	for filas.Next() {
 		var l LineaDelRemito
-		var c string
-		if err := filas.Scan(&l.Descripcion, &l.Unidad, &c); err != nil {
+		var c, variante string
+		if err := filas.Scan(&l.Descripcion, &l.Unidad, &c, &variante); err != nil {
 			filas.Close()
 			return nil, err
 		}
 		l.Cantidad = numeroJS(c)
+		if variante != "" {
+			l.Corte = TextoDelCorte(cortes[variante], l.Cantidad)
+		}
 		r.Lineas = append(r.Lineas, l)
 	}
 	filas.Close()
 	if err := filas.Err(); err != nil {
 		return nil, err
 	}
+	r.Visita = []RemitoDeLaVisita{}
 	pendientes, err := SaldoAlRemito(ctx, s.pool, r.PedidoID, id)
 	if err != nil {
 		return nil, err
@@ -188,6 +275,21 @@ func (s *Servicio) RemitoPorToken(ctx context.Context, token string) (*RemitoCom
 		return r, err
 	}
 	r.ReceptorDocumento = DocumentoEnmascarado(r.ReceptorDocumento)
+	filas, err := s.pool.Query(ctx, `SELECT id::text FROM deliveries WHERE visita_de = $1 AND estado <> 'anulada' ORDER BY numero`, id)
+	if err != nil {
+		return nil, err
+	}
+	otros, err := pgx.CollectRows(filas, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	for _, otro := range otros {
+		o, err := s.RemitoCompleto(ctx, otro)
+		if err != nil {
+			return nil, err
+		}
+		r.Visita = append(r.Visita, RemitoDeLaVisita{Numero: o.Numero, PedidoNumero: o.PedidoNumero, Lineas: o.Lineas})
+	}
 	return r, nil
 }
 
@@ -268,7 +370,10 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 		EstadoPago: r.EstadoPago, MedioPago: deTexto(r.MedioPago), Sucursal: deTexto(r.Sucursal), SucursalDireccion: deTexto(r.SucursalDireccion),
 		Transportista: deTexto(r.Transportista), NumeroSeguimiento: deTexto(r.NumeroSeguimiento)}
 	for _, l := range r.Lineas {
-		out.Lineas = append(out.Lineas, pdf.LineaDelRemito{Descripcion: l.Descripcion, Unidad: l.Unidad, Cantidad: l.Cantidad})
+		out.Lineas = append(out.Lineas, pdf.LineaDelRemito{Descripcion: l.Descripcion, Unidad: l.Unidad, Cantidad: l.Cantidad, Corte: deTexto(l.Corte)})
+	}
+	if r.SinCobrar != nil {
+		out.SinCobrar = *r.SinCobrar
 	}
 	for _, p := range r.Pendientes {
 		out.Pendientes = append(out.Pendientes, pdf.PendienteDelRemito{Descripcion: p.Descripcion, Unidad: p.Unidad, Pendiente: p.Pendiente})

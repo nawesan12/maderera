@@ -198,6 +198,45 @@ func (a *API) CobrarPedido(ctx context.Context, r ventasapi.CobrarPedidoRequestO
 	return ok(v), nil
 }
 
+func (o respuesta) VisitDevolverPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitCorregirPedidoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// DevolverPedido: la devolución de un pedido sin factura, de quien mueve
+// plata (baja lo que se cobra, como el cobro).
+func (a *API) DevolverPedido(ctx context.Context, r ventasapi.DevolverPedidoRequestObject) (ventasapi.DevolverPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	var renglones []RenglonDevuelto
+	for _, x := range r.Body.Renglones {
+		renglones = append(renglones, RenglonDevuelto{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad})
+	}
+	v, err := a.s.DevolverSinFactura(ctx, ses, r.Id.String(), renglones, r.Body.Motivo, r.Body.Clave)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+// CorregirPedido: los renglones y el flete de un pedido sin factura ni
+// cobro, de quien mueve plata.
+func (a *API) CorregirPedido(ctx context.Context, r ventasapi.CorregirPedidoRequestObject) (ventasapi.CorregirPedidoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
+	if err != nil {
+		return nil, err
+	}
+	c := Correccion{Motivo: r.Body.Motivo, CostoEnvio: r.Body.CostoEnvio, PIN: texto(r.Body.Pin), Ficha: texto(r.Body.Ficha)}
+	for _, x := range r.Body.Renglones {
+		c.Renglones = append(c.Renglones, RenglonCorregido{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad, PrecioUnitario: x.PrecioUnitario})
+	}
+	v, err := a.s.Corregir(ctx, ses, r.Id.String(), c)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
 /* ------------------------------ presupuestos ------------------------------ */
 
 func (a *API) ListarPresupuestos(ctx context.Context, r ventasapi.ListarPresupuestosRequestObject) (ventasapi.ListarPresupuestosResponseObject, error) {

@@ -21,6 +21,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/catalogo"
+	"mjbj/internal/cola"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -528,8 +529,53 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 		return "", yaCambio(numero, ahora)
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "corte", id, numero+": "+estado+" → "+sig, nil)
+	if sig == "terminado" {
+		if err := s.listoConElCorte(ctx, ses, id, numero); err != nil {
+			return "", err
+		}
+	}
 	texto := map[string]string{"en-proceso": "en la máquina", "terminado": "terminado", "retirado": "retirado"}[sig]
 	return numero + " quedó " + texto + ".", nil
+}
+
+// listoConElCorte: la venta del mostrador que lleva un corte queda en curso
+// hasta que el corte sale de la máquina (mes simulado); con el último corte
+// terminado pasa sola a «listo», con el aviso al cliente. Los pedidos de
+// otro origen los marca listos el depósito, que sabe qué más falta.
+func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte, numero string) error {
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var pedido, origen, estado string
+		err := tx.QueryRow(ctx, `
+			SELECT o.id::text, o.origen::text, o.estado::text FROM cutting_orders c JOIN orders o ON o.id = c.order_id
+			WHERE c.id = $1 FOR UPDATE OF o`, corte).Scan(&pedido, &origen, &estado)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if origen != "mostrador" || (estado != "pendiente" && estado != "preparando") {
+			return nil
+		}
+		var faltan int
+		if err := tx.QueryRow(ctx, `SELECT count(*)::int FROM cutting_orders WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`,
+			pedido).Scan(&faltan); err != nil || faltan > 0 {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedido); err != nil {
+			return err
+		}
+		var usuario *string
+		if ses != nil {
+			usuario = &ses.UserID
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'listo', $2, $3)`,
+			pedido, "Corte "+numero+" terminado", usuario); err != nil {
+			return err
+		}
+		_, err = cola.Encolar(ctx, sqlc.New(tx), "pedido.estado", map[string]string{"orderId": pedido, "estado": "listo"}, time.Time{})
+		return err
+	})
 }
 
 // yaCambio es el 409 de un avance sobre un estado que ya no es el que se vio.

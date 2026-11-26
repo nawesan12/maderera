@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { Check, Eraser, Loader2, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, Check, Eraser, Loader2, TriangleAlert } from "lucide-react";
 import { firmarRemito, type EstadoFirma } from "./actions";
 
 const inicial: EstadoFirma = {};
@@ -24,14 +26,25 @@ const inicial: EstadoFirma = {};
  */
 export function Pizarra({
   token,
+  envio = false,
   nombreSugerido,
   documentoSugerido,
 }: {
   token: string;
+  /** En un envío firma quien recibe, no quien retira. */
+  envio?: boolean;
   nombreSugerido: string | null;
   documentoSugerido: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Firmado en la tablet del mostrador, se vuelve al pedido (el panel pone
+  // `?volver=`): terminaba en la constancia, sin salida (mes simulado). Solo
+  // una ruta del panel, nunca una dirección de afuera.
+  const volver = useSearchParams().get("volver");
+  const volverA = volver && /^\/admin\/pedidos\/[0-9a-f-]{36}$/.test(volver) ? volver : null;
+  // El DNI cargado en el mostrador llega enmascarado: se muestra, y se
+  // cambia solo si firma otra persona.
+  const [cambiarDni, setCambiarDni] = useState(!documentoSugerido);
   const dibujando = useRef(false);
   const [hayTrazo, setHayTrazo] = useState(false);
   const [estado, firmar, enviando] = useActionState(firmarRemito, inicial);
@@ -120,7 +133,7 @@ export function Pizarra({
 
   if (estado.numero) {
     return (
-      <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-6 text-center">
+      <div className="p-1 text-center">
         <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-green">
           <Check className="h-6 w-6 text-white" strokeWidth={3} />
         </span>
@@ -129,6 +142,15 @@ export function Pizarra({
           Guardamos la constancia del remito {estado.numero}. Te la mandamos
           por correo.
         </p>
+        {volverA && (
+          <Link
+            href={volverA}
+            className="boton-accion mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-base font-medium"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+            Volver al pedido
+          </Link>
+        )}
       </div>
     );
   }
@@ -146,7 +168,7 @@ export function Pizarra({
 
       <div>
         <label htmlFor="receptorNombre" className="block font-medium">
-          Nombre y apellido de quien retira
+          {envio ? "Nombre y apellido de quien recibe" : "Nombre y apellido de quien retira"}
         </label>
         <input
           id="receptorNombre"
@@ -158,25 +180,37 @@ export function Pizarra({
         />
       </div>
 
-      <div>
-        <label htmlFor="receptorDocumento" className="block font-medium">
-          DNI{" "}
-          <span className="font-normal text-muted-foreground">
-            {/* Llega enmascarado («•••678», entregas.RemitoPorToken): el
-                enlace va por correo. Vacío conserva el del mostrador. */}
-            {documentoSugerido
-              ? `termina en ${documentoSugerido.replace(/^•+/, "")}; escribilo solo si no es el tuyo`
-              : "(opcional)"}
-          </span>
-        </label>
-        <input
-          id="receptorDocumento"
-          name="receptorDocumento"
-          placeholder={documentoSugerido ?? undefined}
-          inputMode="numeric"
-          className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
-        />
-      </div>
+      {/* Llega enmascarado («•••678», entregas.RemitoPorToken): el enlace
+          va por correo. Sin tocarlo se conserva el del mostrador; «Cambiar»
+          es para cuando firma otra persona. La frase «escribilo solo si no
+          es el tuyo» no se entendía (mes simulado). */}
+      {cambiarDni ? (
+        <div>
+          <label htmlFor="receptorDocumento" className="block font-medium">
+            DNI {!documentoSugerido && <span className="font-normal text-muted-foreground">(opcional)</span>}
+          </label>
+          <input
+            id="receptorDocumento"
+            name="receptorDocumento"
+            inputMode="numeric"
+            autoFocus={Boolean(documentoSugerido)}
+            className="tabular mt-1 h-12 w-full rounded-lg border bg-background px-3 text-base"
+          />
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <p>
+            <span className="font-medium">DNI</span> <span className="tabular text-muted-foreground">{documentoSugerido}</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => setCambiarDni(true)}
+            className="h-11 rounded-lg px-3 text-base font-medium text-muted-foreground hover:bg-hundida hover:text-foreground"
+          >
+            Cambiar
+          </button>
+        </div>
+      )}
 
       <div>
         <div className="flex items-baseline justify-between gap-2">

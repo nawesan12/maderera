@@ -60,6 +60,12 @@ func (e *ErrSinCaja) Error() string {
 //   - La clave hace repetible el cobro.
 //   - Un pedido sin sucursal cobra el efectivo en la que se elige
 //     (`sucursal`); sin elegir, en la única caja abierta.
+//   - El efectivo entra a la caja donde está la plata (mes simulado): el
+//     fletero trae a Casa Central el efectivo de un pedido del Aserradero,
+//     y cobrarlo pedía abrir un turno del Aserradero que nadie iba a
+//     contar. Si la sucursal del pedido no tiene la caja abierta y otra sí,
+//     se elige entre las abiertas (y la del pedido, para abrirla); la
+//     elegida (`sucursal`) manda.
 func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, partesCrudas, clave, sucursal string) (ResultadoDeCobro, error) {
 	if !plataforma.UUIDValido(pedido) {
 		return ResultadoDeCobro{}, plataforma.NuevoProblema(404, "No se encontró el pedido.")
@@ -119,12 +125,18 @@ func (s *Servicio) CobrarPedido(ctx context.Context, ses *auth.Sesion, pedido, p
 		var c *Caja
 		if hayEfectivo(partes) {
 			donde := p.sucursal
-			if donde == nil && plataforma.UUIDValido(sucursal) {
+			if plataforma.UUIDValido(sucursal) {
 				donde = &sucursal
 			}
 			turno, err := turnoDelPedido(ctx, q, donde)
 			if err != nil {
 				return err
+			}
+			if turno == "" && donde != nil && donde == p.sucursal {
+				// La del pedido está cerrada: si hay otra abierta, se elige.
+				if err := otrasCajas(ctx, tx, *donde); err != nil {
+					return err
+				}
 			}
 			if turno == "" {
 				return sinCaja(ctx, tx, donde)
@@ -197,6 +209,42 @@ func turnoDelPedido(ctx context.Context, q *sqlc.Queries, sucursal *string) (str
 		return turnos[0].ID, nil
 	}
 	return "", nil
+}
+
+// otrasCajas: la sucursal del pedido no tiene la caja abierta. Si otra sí,
+// devuelve el ErrSinCaja con las abiertas y la del pedido para elegir dónde
+// entra el efectivo; si no hay ninguna abierta, nil (se abre la del pedido).
+func otrasCajas(ctx context.Context, tx pgx.Tx, delPedido string) error {
+	filas, err := tx.Query(ctx, `
+		SELECT b.id::text, b.name, exists(SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = b.id AND cs.estado = 'abierta'), b.fondo_base
+		FROM branches b WHERE b.active ORDER BY b.sort_order, b.name`)
+	if err != nil {
+		return err
+	}
+	todas, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (SucursalParaCobrar, error) {
+		var o SucursalParaCobrar
+		var fondo jsmath.Num
+		err := r.Scan(&o.ID, &o.Nombre, &o.Abierta, &fondo)
+		o.Fondo = fondo.F()
+		return o, err
+	})
+	if err != nil {
+		return err
+	}
+	var opciones []SucursalParaCobrar
+	hayAbierta := false
+	for _, o := range todas {
+		if o.Abierta {
+			hayAbierta = true
+		}
+		if o.Abierta || o.ID == delPedido {
+			opciones = append(opciones, o)
+		}
+	}
+	if !hayAbierta {
+		return nil
+	}
+	return &ErrSinCaja{Sucursales: opciones}
 }
 
 // sinCaja arma el ErrSinCaja: con la sucursal y su fondo, o, sin sucursal,

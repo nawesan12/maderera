@@ -87,6 +87,9 @@ type VentaPedida struct {
 	// (para pagar con cheque o en cuotas, que su lista no admite). Solo
 	// puede subir los precios: Go los vuelve a poner con la general.
 	ALista bool
+	// PresupuestoID es el presupuesto que armó la venta (se tipeó su número
+	// en el buscador): al cobrar queda aceptado y atado al pedido.
+	PresupuestoID *string
 
 	NumeroProvisorio *string
 	CobradaAt        *time.Time
@@ -253,6 +256,7 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	if p := l.Cadena("pin", zodjs.Texto{Opcional: true, Nulo: true, Max: 128}); p != nil {
 		v.PIN = *p
 	}
+	v.PresupuestoID = l.Cadena("presupuestoId", zodjs.Texto{Opcional: true, Nulo: true, UUID: true})
 	if f := l.Cadena("ficha", zodjs.Texto{Opcional: true, Nulo: true, Max: 400}); f != nil {
 		v.Ficha = *f
 	}

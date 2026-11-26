@@ -7,6 +7,7 @@ import {
   Tablero,
 } from "@/components/admin/kanban";
 import { haceCuanto, moneda, plural } from "@/components/admin/formato";
+import { cantidadConUnidad } from "@/lib/formato";
 import { diasDesde } from "@/lib/formato";
 import { BuscadorPedidos } from "./buscador";
 import { listarPedidos, type PedidoListado } from "@/lib/dal/admin/ventas";
@@ -58,14 +59,17 @@ export default async function PedidosPage({
   // El entregado sin cobrar sigue en curso (Go lo trae aunque tenga más de
   // una semana): con su tarjeta y su «Cobrar», como los listos (H367).
   const entregadosSinCobrar = pedidos.filter((p) => p.estado === "entregado" && (p.sinCobrar ?? 0) > 0.009);
-  const entregados = pedidos.filter((p) => p.estado === "entregado" && !((p.sinCobrar ?? 0) > 0.009));
+  // Lo cerrado en la semana: lo entregado (y cobrado) y lo cancelado, cada uno marcado.
+  const entregados = pedidos.filter(
+    (p) => (p.estado === "entregado" && !((p.sinCobrar ?? 0) > 0.009)) || p.estado === "cancelado",
+  );
   const activos = pedidos.filter(
     (p) => !["entregado", "cancelado"].includes(p.estado),
   );
   // Lo que falta cobrar con la regla de «Me deben» (sinCobrar, de Go): sin
   // los pedidos a cuenta corriente, que ya están en la cuenta, y descontando
   // lo cobrado. Sumar el total de todo lo no pagado daba un tercer número.
-  const porCobrar = pedidos.reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
+  const porCobrar = activos.reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
 
   return (
     <div>
@@ -73,7 +77,11 @@ export default async function PedidosPage({
         titulo="Pedidos"
         resumen={
           activos.length > 0
-            ? `${plural(activos.length, "pedido")} en curso${porCobrar > 0 ? ` · ${moneda.format(porCobrar)} sin cobrar` : ""}`
+            ? // «Por cobrar» es lo de los pedidos en curso, la suma de las
+              // etiquetas «Sin cobrar» de las tarjetas; «Me deben» del
+              // inicio cuenta lo que ya salió (mes simulado: decían «sin
+              // cobrar» los dos con números distintos).
+              `${plural(activos.length, "pedido")} en curso${porCobrar > 0 ? ` · ${moneda.format(porCobrar)} por cobrar` : ""}`
             : `${plural(pedidos.length, "pedido")} en total`
         }
       />
@@ -144,26 +152,7 @@ export default async function PedidosPage({
               </h2>
               <ul className="overflow-hidden tarjeta">
                 {entregados.slice(0, 10).map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-5 py-3.5 last:border-0"
-                  >
-                    <Link
-                      href={`/admin/pedidos/${p.id}`}
-                      className="min-w-0 flex-1 text-base hover:text-brand-orange"
-                    >
-                      {p.cliente}
-                    </Link>
-                    <span className="codigo">
-                      {p.numero}
-                    </span>
-                    <span className="text-base text-muted-foreground">
-                      {haceCuanto(p.createdAt)}
-                    </span>
-                    <span className="tabular text-base font-medium">
-                      {moneda.format(p.total)}
-                    </span>
-                  </li>
+                  <FilaCerrada key={p.id} pedido={p} fecha={haceCuanto(p.createdAt)} />
                 ))}
               </ul>
             </section>
@@ -241,7 +230,7 @@ async function Historial({
   const desde = dias ? haceDias(dias) : undefined;
 
   const { staffRole } = await requireStaff();
-  const [filas, dueno] = await Promise.all([
+  const [filas, dueno, sucursales] = await Promise.all([
     listarPedidos({
       vista: "historial",
       busqueda: params.buscar,
@@ -253,6 +242,7 @@ async function Historial({
     // El total, el mismo número del renglón de «Me deben» (solo lo ve el
     // admin, como la tarjeta).
     sinCobrar && staffRole === "admin" ? numerosDelDueno() : null,
+    listarSucursalesPublicas(),
   ]);
   const totalSinCobrar = dueno?.meDeben.pedidosSinCobrar;
   const hayMas = filas.length > 50;
@@ -279,7 +269,15 @@ async function Historial({
       />
       <VistasDePedidos actual="historial" />
 
-      <div className="mb-4 flex flex-wrap gap-x-5 gap-y-2">
+      {/* El mismo buscador de En curso: el historial es una lista larga y el
+          número es lo que dice el cliente (mes simulado). */}
+      <BuscadorPedidos
+        busquedaActual={params.buscar ?? ""}
+        sucursalActual={params.sucursal ?? "todas"}
+        sucursales={sucursales.map((s) => ({ slug: s.slug, nombre: s.nombre }))}
+      />
+
+      <div className="mb-4 mt-4 flex flex-wrap gap-x-5 gap-y-2">
         <div className={`flex flex-wrap gap-1.5 ${sinCobrar ? "hidden" : ""}`} role="group" aria-label="Período">
           {Object.entries(PERIODOS).map(([valor, p]) => (
             <Link
@@ -317,27 +315,18 @@ async function Historial({
       ) : (
         <ul className="tarjeta overflow-hidden">
           {visibles.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-5 py-3.5 last:border-0">
-              <Link href={`/admin/pedidos/${p.id}`} className="min-w-0 flex-1 text-base hover:text-brand-orange">
-                {p.cliente}
-                {p.empresa && <span className="text-muted-foreground"> · {p.empresa}</span>}
-              </Link>
-              <span className="codigo">{p.numero}</span>
-              {/* Sin cobrar, lo que importa es cuánto hace que se entregó. */}
-              {sinCobrar && p.entregadoAt ? (
-                <span className="estado-problema text-base">{haceCuanto(p.entregadoAt)}</span>
-              ) : (
-                <span className="text-base text-muted-foreground">
-                  {p.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}
-                </span>
-              )}
-              <EtiquetaEstado estado={p.estado} contexto="pedido" />
-              {estado === "sin-cobrar" && p.sinCobrar != null ? (
-                <span className="tabular estado-problema w-32 text-right text-base font-semibold">{moneda.format(p.sinCobrar)}</span>
-              ) : (
-                <span className="tabular w-32 text-right text-base font-medium">{moneda.format(p.total)}</span>
-              )}
-            </li>
+            <FilaCerrada
+              key={p.id}
+              pedido={p}
+              // Sin cobrar, lo que importa es cuánto hace que se entregó.
+              fecha={
+                sinCobrar && p.entregadoAt
+                  ? haceCuanto(p.entregadoAt)
+                  : p.createdAt.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })
+              }
+              urgente={sinCobrar && Boolean(p.entregadoAt)}
+              monto={estado === "sin-cobrar" && p.sinCobrar != null ? p.sinCobrar : undefined}
+            />
           ))}
         </ul>
       )}
@@ -360,6 +349,52 @@ async function Historial({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Un pedido cerrado, en una fila que se toca entera (el número incluido: es
+ * lo que dice el cliente). El nombre va en su renglón y debajo el número, la
+ * fecha, el estado y el monto: a 375 px el número se montaba sobre el nombre
+ * (mes simulado).
+ */
+function FilaCerrada({
+  pedido: p,
+  fecha,
+  urgente = false,
+  monto,
+}: {
+  pedido: PedidoListado;
+  fecha: string;
+  urgente?: boolean;
+  /** Lo que falta cobrar, en el filtro «Sin cobrar». */
+  monto?: number;
+}) {
+  const interno = p.comprobante === "interno" && !p.facturado && p.estado !== "cancelado";
+  return (
+    <li className="border-b last:border-0">
+      <Link href={`/admin/pedidos/${p.id}`} className="block px-5 py-3.5 transition-colors hover:bg-hundida/60">
+        <span className="block truncate text-base font-medium">
+          {p.cliente}
+          {p.empresa && <span className="font-normal text-muted-foreground"> · {p.empresa}</span>}
+        </span>
+        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="codigo">{p.numero}</span>
+          <span className={`text-base ${urgente ? "estado-problema" : "text-muted-foreground"}`}>{fecha}</span>
+          <EtiquetaEstado estado={p.estado} contexto="pedido" />
+          {interno && (
+            <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">Interno</span>
+          )}
+          <span
+            className={`tabular ml-auto text-base ${monto != null ? "estado-problema font-semibold" : "font-medium"} ${
+              p.estado === "cancelado" ? "text-muted-foreground line-through" : ""
+            }`}
+          >
+            {moneda.format(monto ?? p.total)}
+          </span>
+        </span>
+      </Link>
+    </li>
   );
 }
 
@@ -412,6 +447,23 @@ function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso:
         </p>
       )}
 
+      {/* Lo que falta de un pedido que ya salió en parte: el segundo viaje o
+          el próximo retiro del acopio (mes simulado: se veía el total, como
+          si no hubiera salido nada). */}
+      {pedido.porEntregar.length > 0 && (
+        <ul className="mt-2 space-y-0.5 rounded-md bg-hundida px-2 py-1.5 text-sm">
+          {pedido.porEntregar.slice(0, 3).map((r, i) => (
+            <li key={i} className="flex justify-between gap-2">
+              <span className="truncate text-muted-foreground">{r.descripcion}</span>
+              <span className="tabular shrink-0 font-medium">{cantidadConUnidad(r.pendiente, r.unidad)}</span>
+            </li>
+          ))}
+          {pedido.porEntregar.length > 3 && (
+            <li className="text-muted-foreground">{plural(pedido.porEntregar.length - 3, "renglón más", "renglones más")}</li>
+          )}
+        </ul>
+      )}
+
       {sinCobrar && (
         <p className="estado-espera mt-2 inline-flex self-start rounded-full bg-[var(--estado-fondo)] px-2 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
           Sin cobrar
@@ -433,6 +485,8 @@ function TarjetaPedido({ pedido, aviso, cobra }: { pedido: PedidoListado; aviso:
           pedido={{ numero: pedido.numero, nombre: pedido.cliente }}
           cobro={cobra ? cobroDelPedido(pedido) : null}
           sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
+          cortesSinTerminar={pedido.cortesSinTerminar}
+          acopio={pedido.acopio}
           compacto
         />
       </div>

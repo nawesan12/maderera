@@ -801,12 +801,20 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		if numero, err = numeracion.Pedido(ctx, tx); err != nil {
 			return err
 		}
+		// Un retiro sin sucursal en el presupuesto se retira en la primera
+		// activa, la misma de donde reserva (reservas.sucursalDelPedido): la
+		// tarjeta decía «Retira en» sin decir dónde, y el efectivo no sabía a
+		// qué caja entrar (mes simulado).
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
 			                    dejado_de_cobrar, autorizado_por)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
+			VALUES ($1, $2, $3, $4, $5, $6,
+			        CASE WHEN $13::tipo_entrega = 'retiro'
+			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
+			             ELSE $7::uuid END,
+			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
 			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
 			        $19::numeric, $20)

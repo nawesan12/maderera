@@ -77,6 +77,18 @@ func TestPresupuestoAPedidoConEnvioYACuenta(t *testing.T) {
 		t.Fatalf("sin cuerpo: %s", tipo)
 	}
 
+	// Un retiro de un presupuesto sin sucursal se retira en la primera
+	// activa: la tarjeta decía «Retira en» sin decir dónde (mes simulado).
+	sinSucursal := nuevo()
+	e.exec(t, `update quotes set branch_id = null where id = $1`, sinSucursal)
+	c, b = pedir(t, ven, "POST", u+"presupuestos/"+sinSucursal+"/pedido", nil)
+	if c != 200 {
+		t.Fatalf("convertir sin sucursal: %d %s", c, b)
+	}
+	if suc := e.texto(t, `select coalesce(branch_id::text, '') from orders where id = $1`, leer[Resultado](t, b).ID); suc == "" {
+		t.Fatal("el retiro quedó sin sucursal")
+	}
+
 	// Cobrarlo con recibo: queda pagado por la suma de lo cobrado.
 	total = e.texto(t, `select total::text from orders where id = $1`, retiro.ID)
 	if c, b := pedir(t, ven, "POST", u+"pedidos/"+retiro.ID+"/cobro", map[string]any{"partes": `[{"medio":"transferencia","importe":"` + total + `"}]`}); c != 200 {

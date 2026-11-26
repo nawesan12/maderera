@@ -249,7 +249,10 @@ export function Cobro({
           Tipo de operación
         </p>
         <div
-          className="mt-2.5 grid grid-cols-3 gap-2"
+          // «Cuenta corriente» es la más larga: se lleva el sobrante. Con
+          // tres tercios iguales se partía en dos renglones a 1024 y se salía
+          // de los 44 px del botón (mes simulado, tercera prueba).
+          className="mt-2.5 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2"
           role="group"
           aria-label="Tipo de operación"
         >
@@ -264,7 +267,7 @@ export function Cobro({
                 // Una sola línea: con la bajada de cada tarjeta, a 1024 «Qué
                 // se lleva» quedaba abajo del pliegue (mes simulado, H276).
                 title={t.detalle}
-                className={`h-11 rounded-xl border px-3 text-center text-base font-medium transition-colors ${
+                className={`h-11 whitespace-nowrap rounded-xl border px-3 text-center text-base font-medium transition-colors ${
                   activo
                     ? "border-accion bg-accion/10"
                     : "border-linea hover:bg-hundida"

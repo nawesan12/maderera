@@ -347,7 +347,7 @@ export function CuitSuelto({
           inputMode="numeric"
           aria-invalid={Boolean(problema)}
           aria-required={obligatorio}
-          placeholder={obligatorio ? undefined : "Sin CUIT: sale a consumidor final"}
+          placeholder={obligatorio ? undefined : "Consumidor final"}
           className="tabular mt-1.5 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
         />
       </label>

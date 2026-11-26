@@ -128,6 +128,7 @@ export default async function DetallePedidoPage({
     (s, i) => s + Number(i.subtotal),
     0,
   );
+  const hayDescuento = pedido.descuento > 0.005;
 
   const reclamos = await Promise.all(
     pedido.entregas.map((e) =>
@@ -191,7 +192,9 @@ export default async function DetallePedidoPage({
           <h2 className="font-semibold">Te queda en acopio</h2>
           <ul className="mt-3 space-y-3.5">
             {pedido.enAcopio.map((r) => {
-              const retirado = Math.max(r.pedido - r.pendiente, 0);
+              // La barra mide lo mismo que el número grande: lo que queda.
+              // Llena con lo retirado, 5 de 40 se veía al 88 %.
+              const queda = Math.min(Math.max(r.pendiente, 0), r.pedido);
               return (
                 <li key={r.orderItemId}>
                   <div className="flex items-baseline justify-between gap-3">
@@ -209,12 +212,12 @@ export default async function DetallePedidoPage({
                   <div
                     className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-hundida"
                     role="img"
-                    aria-label={`Retiraste ${retirado} de ${r.pedido}`}
+                    aria-label={`Te quedan ${queda} de ${r.pedido}`}
                   >
                     <div
                       className="h-full rounded-full bg-brand-orange/50"
                       style={{
-                        width: `${r.pedido > 0 ? Math.min((retirado / r.pedido) * 100, 100) : 0}%`,
+                        width: `${r.pedido > 0 ? (queda / r.pedido) * 100 : 0}%`,
                       }}
                     />
                   </div>
@@ -398,10 +401,28 @@ export default async function DetallePedidoPage({
             </ul>
 
             <dl className="space-y-2 bg-hundida px-5 py-4 text-sm">
+              {/* El descuento ya está repartido en los precios de los
+                  renglones: el subtotal va antes del descuento, así la cuenta
+                  cierra al leerla de arriba abajo (Subtotal − Ahorraste =
+                  Total), como en un ticket. */}
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Subtotal</dt>
-                <dd className="tabular">{formatearMonto(sumaRenglones)}</dd>
+                <dd className="tabular">
+                  {formatearMonto(
+                    hayDescuento
+                      ? Math.round((sumaRenglones + pedido.descuento) * 100) / 100
+                      : sumaRenglones,
+                  )}
+                </dd>
               </div>
+              {hayDescuento && (
+                <div className="flex justify-between text-saldo-favor">
+                  <dt>Ahorraste</dt>
+                  <dd className="tabular">
+                    −{formatearMonto(pedido.descuento)}
+                  </dd>
+                </div>
+              )}
               {Number(pedido.costoEnvio) > 0 && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">
@@ -409,16 +430,6 @@ export default async function DetallePedidoPage({
                   </dt>
                   <dd className="tabular">
                     {formatearMonto(pedido.costoEnvio)}
-                  </dd>
-                </div>
-              )}
-              {/* Lo ahorrado antes del total, como en un ticket: el total
-                  es la última línea. */}
-              {pedido.descuento > 0.005 && (
-                <div className="flex justify-between text-saldo-favor">
-                  <dt>Ahorraste</dt>
-                  <dd className="tabular">
-                    {formatearMonto(pedido.descuento)}
                   </dd>
                 </div>
               )}

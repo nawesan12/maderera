@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { Banknote, ClipboardList, Loader2, Plus, FileText, Printer } from "lucide-react";
 import type { PromoVigente } from "@/lib/dal/contenido";
@@ -190,6 +191,26 @@ export function Cobro({
    * salida —cobrar a consumidor final, que es precio de catálogo—.
    */
   const precioProfesional = listaDeContado;
+
+  /*
+   * Lo que mide el pie fijo, para que la página deje ese lugar abajo. Con un
+   * `pb-80` fijo, el aviso y el papel de la venta lo hacían más alto y el pie
+   * tapaba a medias «Promociones vigentes» (mes simulado).
+   */
+  const pie = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = pie.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const raiz = document.documentElement;
+    const medir = () => raiz.style.setProperty("--pie-del-cobro", `${Math.ceil(el.getBoundingClientRect().height) + 16}px`);
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    medir();
+    return () => {
+      observador.disconnect();
+      raiz.style.removeProperty("--pie-del-cobro");
+    };
+  }, []);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -538,7 +559,7 @@ export function Cobro({
           de `lg` van fijos al pie de la pantalla: en la tablet vertical la
           página scrollea, y el aviso que quedaba al final de la página no se
           veía desde los renglones («no pasa nada», revisión del carril F). */}
-      <div className="fixed inset-x-0 bottom-0 z-30 bg-card shadow-[0_-8px_24px_rgb(0_0_0/0.08)] lg:static lg:z-auto lg:shadow-none">
+      <div ref={pie} className="fixed inset-x-0 bottom-0 z-30 bg-card shadow-[0_-8px_24px_rgb(0_0_0/0.08)] lg:static lg:z-auto lg:shadow-none">
       {/* Cómo salió la venta. Fuera del scroll a propósito: un "no se pudo
           cobrar" al final de una columna que hay que scrollear es un aviso que
           nadie lee. */}

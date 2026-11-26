@@ -1180,9 +1180,10 @@ export function VistaMostrador({
       {/* Abajo de `lg` (la tablet vertical) la venta y el cobro van uno abajo
           del otro, la página scrollea y el total con «Cobrar» queda fijo abajo
           (comité final, M15): a 768 px el panel de 420 dejaba el total en «$» y
-          cortaba los medios. El `pb-80` es el lugar de esa barra, con el aviso
-          y el papel de la venta que van con ella. */}
-      <div className="panel textura hidden min-h-screen flex-col bg-background pb-80 text-foreground sm:flex lg:h-screen lg:overflow-hidden lg:pb-0">
+          cortaba los medios. Abajo se deja lo que mide esa barra, con el aviso
+          y el papel de la venta que van con ella (`--pie-del-cobro`, lo
+          escribe `Cobro`). */}
+      <div className="panel textura hidden min-h-screen flex-col bg-background pb-[var(--pie-del-cobro,20rem)] text-foreground sm:flex lg:h-screen lg:overflow-hidden lg:pb-0">
         <BarraSuperior
           conexion={conexion}
           cola={cola}

@@ -63,8 +63,8 @@ export function SaldoDelCliente({
   const pasa = quedan !== null && aCuenta > 0 ? Math.round((aCuenta - quedan) * 100) / 100 : 0;
   const lineaDelLimite =
     quedan !== null ? (
-      <span className={`tabular ${pasa > 0 || quedan <= 0 ? "estado-problema font-semibold" : "text-muted-foreground"}`}>
-        {" · "}límite {formatearMonto(limite)} · {quedan > 0 ? `quedan ${formatearMonto(quedan)}` : "sin margen"}
+      <span className={`tabular block ${pasa > 0 || quedan <= 0 ? "estado-problema font-semibold" : "text-muted-foreground"}`}>
+        límite {formatearMonto(limite)} · {quedan > 0 ? `quedan ${formatearMonto(quedan)}` : "sin margen"}
         {pasa > 0 && ` · pasa ${formatearMonto(pasa)} · PIN admin`}
       </span>
     ) : null;
@@ -120,8 +120,11 @@ export function SaldoDelCliente({
 
   return (
     <div className="space-y-1.5">
-    <div className="flex items-center justify-between gap-3 px-1">
-      <p className="min-w-0 text-sm">
+    {/* El límite va en su renglón y el botón, sin partirse: con los dos en
+        uno, el botón quedaba apretado en tres renglones y el texto se le
+        salía. Si no entran juntos, el botón baja. */}
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1">
+      <p className="min-w-0 flex-1 basis-56 text-sm">
         Debe <strong className="tabular text-saldo-debe">{formatearMonto(monto)}</strong>
         {lineaDelLimite}
       </p>
@@ -129,7 +132,7 @@ export function SaldoDelCliente({
         type="button"
         data-foco="recibo"
         onClick={() => setAbierto(true)}
-        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-hundida"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-hundida"
       >
         Cobrar su cuenta
         <kbd className="rounded border border-linea px-1 text-xs text-muted-foreground">Alt + R</kbd>

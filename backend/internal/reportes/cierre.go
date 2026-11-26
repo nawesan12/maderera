@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"mjbj/internal/cobros"
 	"mjbj/internal/compras"
 	"mjbj/internal/facturacion"
@@ -408,11 +410,87 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 		out = append(out, PendienteDelCierre{"percepcion-apagada", "Percepción de IIBB apagada",
 			"Se apagó hasta cargar el padrón de ARBA: la alícuota única ya no se usa.", 1, "/admin/arca"})
 	}
+	repetidos, ejemplo, err := s.gastosRepetidos(ctx, desde, hasta)
+	if err != nil {
+		return nil, err
+	}
+	if repetidos > 0 {
+		out = append(out, PendienteDelCierre{"gastos-repetidos", "Gastos que parecen repetidos", ejemplo, repetidos,
+			"/admin/compras/gastos?periodo=" + desde.UTC().Format("2006-01")})
+	}
 	mas, err := s.pendientesDeLosCircuitos(ctx, desde, hasta)
 	if err != nil {
 		return nil, err
 	}
 	return append(out, mas...), nil
+}
+
+// gastosRepetidos cuenta los pares de gastos del mes que parecen el mismo:
+// misma categoría, sucursal y proveedor, y las palabras de uno contenidas en
+// las del otro (sin mayúsculas, tildes, números ni palabras de relleno). Dos
+// luces de EDEA de Casa Central «octubre» y «período octubre» entraron las
+// dos al resultado sin que nada avisara (simulación del mes, H426). El
+// ejemplo es el primer par, con sus importes.
+func (s *Servicio) gastosRepetidos(ctx context.Context, desde, hasta time.Time) (int, string, error) {
+	rs, err := s.lectura.Query(ctx, `SELECT categoria::text, coalesce(branch_id::text, ''), coalesce(supplier_id::text, ''), descripcion, importe::float8
+		FROM expenses WHERE fecha >= $1 AND fecha <= $2 ORDER BY fecha, created_at`, desde, hasta)
+	if err != nil {
+		return 0, "", err
+	}
+	type gasto struct {
+		clave, descripcion string
+		palabras           map[string]bool
+		importe            float64
+	}
+	var gastos []gasto
+	var cat, suc, prov, desc string
+	var imp float64
+	if _, err := pgx.ForEachRow(rs, []any{&cat, &suc, &prov, &desc, &imp}, func() error {
+		gastos = append(gastos, gasto{cat + "|" + suc + "|" + prov, desc, PalabrasDelGasto(desc), imp})
+		return nil
+	}); err != nil {
+		return 0, "", err
+	}
+	contenidas := func(a, b map[string]bool) bool {
+		for w := range a {
+			if !b[w] {
+				return false
+			}
+		}
+		return true
+	}
+	pares, ejemplo := 0, ""
+	for i := range gastos {
+		for j := i + 1; j < len(gastos); j++ {
+			a, b := gastos[i], gastos[j]
+			if a.clave != b.clave || len(a.palabras) < 2 || len(b.palabras) < 2 {
+				continue
+			}
+			if contenidas(a.palabras, b.palabras) || contenidas(b.palabras, a.palabras) {
+				pares++
+				if ejemplo == "" {
+					ejemplo = "«" + a.descripcion + "» (" + formato.Moneda(a.importe) + ") y «" + b.descripcion + "» (" + formato.Moneda(b.importe) + ")."
+				}
+			}
+		}
+	}
+	return pares, ejemplo, nil
+}
+
+var rellenoDelGasto = map[string]bool{"de": true, "del": true, "la": true, "el": true, "los": true, "las": true, "y": true, "a": true,
+	"en": true, "por": true, "para": true, "periodo": true, "mes": true, "pago": true, "factura": true}
+
+// PalabrasDelGasto son las palabras que identifican un gasto: en minúscula,
+// sin tildes, sin números ni palabras de relleno.
+func PalabrasDelGasto(texto string) map[string]bool {
+	sinTildes := strings.NewReplacer("á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ü", "u", "ñ", "n").Replace(strings.ToLower(texto))
+	out := map[string]bool{}
+	for _, w := range strings.FieldsFunc(sinTildes, func(r rune) bool { return !(r >= 'a' && r <= 'z') }) {
+		if len(w) > 1 && !rellenoDelGasto[w] {
+			out[w] = true
+		}
+	}
+	return out
 }
 
 // pendientesDeLosCircuitos son los que dejó la separación de los circuitos

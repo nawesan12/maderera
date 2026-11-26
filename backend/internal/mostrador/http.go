@@ -407,7 +407,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, v VentaPedida) 
 		return r, nil
 	}
 	if r.Nueva {
-		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por $"+f2(r.Total), controlDeLaVenta(r))
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por "+formato.Moneda(r.Total), controlDeLaVenta(r))
 	}
 	return r, nil
 }

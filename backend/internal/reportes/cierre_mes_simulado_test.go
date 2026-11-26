@@ -137,3 +137,20 @@ func TestPrecioBajoElCostoEnElInicio(t *testing.T) {
 		t.Fatalf("inicio: %s", cuerpo)
 	}
 }
+
+// Dos luces de EDEA de Casa Central por octubre: el cierre avisa (H426). Un
+// gasto parecido de otra sucursal o de otra categoría, no.
+func TestCierreAvisaGastosRepetidos(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	e.exec(t, `insert into expenses (fecha, categoria, descripcion, importe, branch_id) values
+		('2026-10-03', 'servicios', 'Luz EDEA Casa Central, octubre', 412350, $1),
+		('2026-10-17', 'servicios', 'luz EDEA Casa Central, período octubre', 427800, $1),
+		('2026-10-17', 'servicios', 'Luz EDEA Aserradero, octubre', 300000, $2),
+		('2026-10-20', 'otros', 'Luz EDEA Casa Central, octubre', 1000, $1)`, e.central, e.aserradero)
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	p, ok := pendientesDe(t, cuerpo)["gastos-repetidos"]
+	if !ok || p.Cantidad != 1 || !strings.Contains(p.Detalle, "412.350") || p.Donde != "/admin/compras/gastos?periodo=2026-10" {
+		t.Fatalf("gastos repetidos: %s", cuerpo)
+	}
+}

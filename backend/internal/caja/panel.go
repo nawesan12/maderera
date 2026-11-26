@@ -1,6 +1,7 @@
 package caja
 
 import (
+	"mjbj/internal/formato"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -711,7 +712,7 @@ func (p *Panel) GuardarFondoBase(ctx context.Context, ses *auth.Sesion, branchID
 	if err != nil {
 		return "", err
 	}
-	bitacora.Anotar(ctx, p.q, p.log, ses, sqlc.AccionAuditoriaEditar, "caja", "", "Fijó el cambio fijo de "+nombre+" en $"+jsmath.Fijo2(n), nil)
+	bitacora.Anotar(ctx, p.q, p.log, ses, sqlc.AccionAuditoriaEditar, "caja", "", "Fijó el cambio fijo de "+nombre+" en "+formato.Moneda(n), nil)
 	if n > 0 {
 		return "Listo: el mostrador no va a poder retirar por debajo de ese monto.", nil
 	}

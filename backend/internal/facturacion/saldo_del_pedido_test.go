@@ -100,6 +100,14 @@ func TestSaldoDeLaFacturaSaleDelPedido(t *testing.T) {
 		t.Fatalf("a cuenta: %s", b)
 	}
 
+	// La de cuenta corriente con la cuenta debiendo: debe hasta el saldo de
+	// la cuenta y se puede cobrar desde acá (la mixta del mostrador).
+	e.exec(t, `INSERT INTO account_movements (customer_id, tipo, monto, referencia) VALUES ($1, 'compra', 1000000, 'PED-1006')`, cliente)
+	_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+facturaDe(aCuenta), nil)
+	if f := leerJSON[Completo](t, b); f.Saldo != 1000000 || !f.EnCuenta {
+		t.Fatalf("a cuenta con saldo: %s", b)
+	}
+
 	// Un rechazo real: no suma ni cuenta en el encabezado, aunque está en la
 	// lista.
 	e.exec(t, `UPDATE invoices SET estado = 'rechazada' WHERE id = $1`, facturaDe(sinCobrar))

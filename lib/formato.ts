@@ -263,6 +263,10 @@ const cantidadLegible = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 
 export function cantidadConUnidad(cantidad: number, unidad: string | null): string {
   const n = cantidadLegible.format(cantidad);
   if (!unidad || unidad === "unidad") return n;
+  // La línea del corte se cobra por pasada de la sierra; en el papel del
+  // cliente es «4 cortes», al lado de «Corte a medida · 3 piezas»: la
+  // cantidad sola no se entendía (simulación del mes, H145).
+  if (unidad === "pasada") return `${n} ${cantidad === 1 ? "corte" : "cortes"}`;
   const corta = formatearUnidad(unidad);
   return `${n} ${cantidad !== 1 ? (PLURAL_DE_UNIDAD[corta] ?? corta) : corta}`;
 }

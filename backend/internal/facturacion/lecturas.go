@@ -47,8 +47,8 @@ type Listado struct {
 }
 
 // SaldoDeFactura es, sobre la fila `i` de invoices, su `c` (los cobros de
-// invoice_payments sumados) y su pedido `o` (LEFT JOIN), lo que falta cobrar
-// de la factura.
+// invoice_payments sumados: cobrado, y cobrado_contado sin el pase a cuenta
+// corriente) y su pedido `o` (LEFT JOIN), lo que falta cobrar de la factura.
 //
 // Antes salía solo de invoice_payments, y esa tabla la llena únicamente el
 // cobro desde Facturación: la venta cobrada en el mostrador (order_payments),
@@ -56,11 +56,14 @@ type Listado struct {
 // saldo, con «Registrar cobro» a mano para cobrarle dos veces al cliente
 // (simulación del mes, H130). Ahora la factura de un pedido debe, como
 // mucho, lo que el pedido debe (fragmentos.SinCobrarDelPedido: la misma
-// regla de «Me deben»). Lo que se pasó a cuenta corriente tampoco es saldo
-// de la factura: es deuda de la cuenta (EnCuentaDeFactura). Las notas de
-// crédito, las anuladas y los borradores no se cobran.
+// regla de «Me deben»). La que se debe en la cuenta corriente
+// (EnCuentaDeFactura) debe, como mucho, el saldo de esa cuenta: con la cuenta
+// en cero por los recibos está cobrada, y con saldo se puede cobrar desde acá
+// (el pase a cuenta no es un cobro). Las notas de crédito, las anuladas y los
+// borradores no se cobran.
 const SaldoDeFactura = `(CASE WHEN i.estado IN ('anulada', 'borrador') OR i.tipo::text LIKE 'nota_credito%' THEN 0
-	WHEN ` + EnCuentaDeFactura + ` THEN 0
+	WHEN ` + EnCuentaDeFactura + ` THEN least(greatest(i.total - coalesce(c.cobrado_contado, 0), 0),
+	  greatest(coalesce((SELECT sum(amc.monto) FROM account_movements amc WHERE amc.customer_id = i.customer_id), 0), 0))
 	WHEN i.order_id IS NULL OR i.tipo::text NOT LIKE 'factura%' THEN greatest(i.total - coalesce(c.cobrado, 0), 0)
 	ELSE least(greatest(i.total - coalesce(c.cobrado, 0), 0), coalesce(` + fragmentos.SinCobrarDelPedido + `, 0)) END)`
 
@@ -144,7 +147,7 @@ func condicionesDeListado(f Filtros) (string, []any) {
 // desdeListado es el FROM del listado y de su conteo: la factura, sus
 // cobros sumados (c) y su pedido (o), que usan SaldoDeFactura y el filtro
 // de la forma de cobro.
-const desdeListado = `FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, array_agg(DISTINCT medio::text) AS medios
+const desdeListado = `FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado, array_agg(DISTINCT medio::text) AS medios
 			FROM invoice_payments GROUP BY invoice_id) c ON c.invoice_id = i.id
 		LEFT JOIN orders o ON o.id = i.order_id
 		`
@@ -455,7 +458,7 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 	// otra vez.
 	var saldo jsmath.Num
 	if err := s.pool.QueryRow(ctx, `SELECT `+SaldoDeFactura+`, `+EnCuentaDeFactura+`, o.numero, coalesce(o.estado = 'cancelado', false)
-		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado FROM invoice_payments WHERE invoice_id = $1 GROUP BY invoice_id) c
+		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado FROM invoice_payments WHERE invoice_id = $1 GROUP BY invoice_id) c
 		  ON c.invoice_id = i.id
 		LEFT JOIN orders o ON o.id = i.order_id WHERE i.id = $1`, id).Scan(&saldo, &c.EnCuenta, &c.Pedido, &c.VentaAnulada); err != nil {
 		return nil, err

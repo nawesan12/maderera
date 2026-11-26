@@ -334,11 +334,9 @@ function Grupo({
                     >
                       {c.estado === "anulada" || c.tipo.startsWith("nota_credito")
                         ? "—"
-                        : c.enCuenta
-                          ? "En cuenta"
-                          : saldo > 0
-                            ? moneda.format(saldo)
-                            : "Cobrado"}
+                        : saldo > 0
+                          ? moneda.format(saldo)
+                          : "Cobrado"}
                     </td>
                     <td className="px-5 py-3.5">
                       <EtiquetaEstado estado={c.estado} />

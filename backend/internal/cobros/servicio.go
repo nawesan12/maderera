@@ -1,6 +1,7 @@
 package cobros
 
 import (
+	"mjbj/internal/formato"
 	"context"
 	"encoding/json"
 	"errors"
@@ -156,7 +157,14 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	if r.Repetido {
 		return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", ReceiptID: &r.ReceiptID}, nil
 	}
-	desc := "Emitió el recibo " + r.Numero + " por " + jsmath.Fijo2(r.Total)
+	// El monto con el formato del resto y el cliente: «Emitió el recibo
+	// REC-0035 por 2116200.00» no decía de quién (simulación del mes, H381).
+	var nombre string
+	_ = s.pool.QueryRow(ctx, `SELECT coalesce(razon_social, nombre) FROM customers WHERE id = $1`, cliente).Scan(&nombre)
+	desc := "Emitió el recibo " + r.Numero + " por " + formato.Moneda(r.Total)
+	if nombre != "" {
+		desc += " a " + nombre
+	}
 	if numeroPedido != "" {
 		desc += " (pedido " + numeroPedido + ")"
 	}
@@ -311,7 +319,7 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 		return err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "cheque", "",
-		"Cheque "+f.Sentido+" "+numero+" por $"+jsmath.Fijo2(importe)+", al "+fechaCorta(fecha), nil)
+		"Cheque "+f.Sentido+" "+numero+" por "+formato.Moneda(importe)+", al "+fechaCorta(fecha), nil)
 	return nil
 }
 

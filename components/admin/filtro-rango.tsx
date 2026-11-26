@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { CalendarRange, X } from "lucide-react";
 
 /**
@@ -44,25 +44,9 @@ export function FiltroRango({
   return (
     <div className="flex flex-wrap items-center gap-1.5" aria-busy={pendiente}>
       <CalendarRange className="h-[18px] w-[18px] text-texto-3" aria-hidden />
-      <label className="flex items-center gap-1.5">
-        <span className="sr-only">Desde</span>
-        <input
-          type="date"
-          value={desde ?? ""}
-          onChange={(e) => cambiar({ desde: e.target.value })}
-          className="h-10 rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50"
-        />
-      </label>
+      <CampoFecha etiqueta="Desde" valor={desde ?? ""} alCambiar={(v) => cambiar({ desde: v })} />
       <span className="text-sm text-texto-3">a</span>
-      <label className="flex items-center gap-1.5">
-        <span className="sr-only">Hasta</span>
-        <input
-          type="date"
-          value={hasta ?? ""}
-          onChange={(e) => cambiar({ hasta: e.target.value })}
-          className="h-10 rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50"
-        />
-      </label>
+      <CampoFecha etiqueta="Hasta" valor={hasta ?? ""} alCambiar={(v) => cambiar({ hasta: v })} />
 
       {hayRango && (
         <button
@@ -75,5 +59,81 @@ export function FiltroRango({
         </button>
       )}
     </div>
+  );
+}
+
+/** aaaa-mm-dd a dd/mm/aaaa. */
+function aPantalla(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+/** dd/mm/aaaa a aaaa-mm-dd; null si no es una fecha. */
+function aIso(texto: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(texto.trim());
+  if (!m) return null;
+  const [d, mes, a] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const f = new Date(Date.UTC(a, mes - 1, d));
+  if (f.getUTCFullYear() !== a || f.getUTCMonth() !== mes - 1 || f.getUTCDate() !== d) return null;
+  return `${a}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * Una fecha escrita como se escribe acá, dd/mm/aaaa.
+ *
+ * El `<input type="date">` la muestra en el formato del navegador: en uno en
+ * inglés salía «mm/dd/yyyy» (simulación del mes, H267). Se escribe de
+ * corrido —las barras se ponen solas— y se aplica al salir del campo o con
+ * Enter.
+ */
+function CampoFecha({
+  etiqueta,
+  valor,
+  alCambiar,
+}: {
+  etiqueta: string;
+  valor: string;
+  alCambiar: (iso: string) => void;
+}) {
+  const [texto, setTexto] = useState(aPantalla(valor));
+  const [deAntes, setDeAntes] = useState(valor);
+  // Si la URL cambió desde afuera (Quitar fechas), el campo la sigue.
+  if (valor !== deAntes) {
+    setDeAntes(valor);
+    setTexto(aPantalla(valor));
+  }
+  const invalido = texto.trim() !== "" && aIso(texto) === null;
+
+  function aplicar() {
+    if (texto.trim() === "") {
+      if (valor) alCambiar("");
+      return;
+    }
+    const iso = aIso(texto);
+    if (iso && iso !== valor) alCambiar(iso);
+  }
+
+  return (
+    <label className="flex items-center gap-1.5">
+      <span className="sr-only">{etiqueta}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="dd/mm/aaaa"
+        maxLength={10}
+        value={texto}
+        aria-invalid={invalido || undefined}
+        onChange={(e) => {
+          const digitos = e.target.value.replace(/\D/g, "").slice(0, 8);
+          const partes = [digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4)].filter(Boolean);
+          setTexto(partes.join("/"));
+        }}
+        onBlur={aplicar}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") aplicar();
+        }}
+        className="tabular h-10 w-[8.5rem] rounded-lg border border-linea bg-card px-2.5 text-[15px] outline-none transition-colors focus:border-accion/50 aria-[invalid]:border-[var(--estado-tinta)] estado-problema"
+      />
+    </label>
   );
 }

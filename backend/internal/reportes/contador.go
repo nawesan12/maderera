@@ -146,7 +146,7 @@ func (s *Servicio) deudaSinCae(ctx context.Context, reparto cobros.ResultadoDelR
 		SELECT CASE WHEN i.customer_id IS NOT NULL THEN 'c:' || i.customer_id::text
 		            WHEN i.order_id IS NOT NULL THEN 'p:' || i.order_id::text ELSE 'f:' || i.id::text END,
 		  (CASE WHEN `+facturacion.EnCuentaDeFactura+` THEN i.total ELSE `+facturacion.SaldoDeFactura+` END)::float8
-		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado FROM invoice_payments GROUP BY invoice_id) c ON c.invoice_id = i.id
+		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado FROM invoice_payments GROUP BY invoice_id) c ON c.invoice_id = i.id
 		LEFT JOIN orders o ON o.id = i.order_id
 		WHERE i.cae IS NULL AND i.estado IN ('emitida', 'rechazada') AND i.tipo::text LIKE 'factura%'
 		  AND (o.id IS NULL OR o.estado <> 'cancelado')`)

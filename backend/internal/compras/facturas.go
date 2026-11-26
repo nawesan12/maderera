@@ -1,6 +1,7 @@
 package compras
 
 import (
+	"mjbj/internal/formato"
 	"context"
 	"errors"
 	"math"
@@ -405,7 +406,7 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	if err != nil {
 		return "", "", errorDeFactura(err)
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura_compra", id, "Cargó una factura de compra por $"+jsmath.Fijo2(total), nil)
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura_compra", id, "Cargó una factura de compra por "+formato.Moneda(total), nil)
 	return id, d.SupplierID, nil
 }
 

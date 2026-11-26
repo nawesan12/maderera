@@ -210,7 +210,7 @@ func TestVentaEnLineaYAnulacion(t *testing.T) {
 	if n := e.num(t, `select count(*)::float8 from payments where order_id = $1 and estado = 'aprobado' and medio = 'efectivo'`, pedido); n != 1 {
 		t.Fatalf("pagos: %v", n)
 	}
-	if d := e.txt(t, `select descripcion from audit_log order by created_at desc limit 1`); d != "Venta de mostrador PED-1000 por $81000.90" {
+	if d := e.txt(t, `select descripcion from audit_log order by created_at desc limit 1`); d != "Venta de mostrador PED-1000 por $\u00a081.000,90" {
 		t.Fatalf("bitácora: %q", d)
 	}
 

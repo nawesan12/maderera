@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
-import { fechaCorta, fechaLarga, formatearCuit, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
+import { cantidadConUnidad, fechaCorta, fechaLarga, formatearCuit, hoyEnArgentina, moneda, plural, ZONA } from "@/lib/formato";
 import { datosDeDevolucion, obtenerComprobante, serieDelComprobante } from "@/lib/dal/admin/facturacion";
 import {
   discriminaIva,
@@ -339,7 +339,7 @@ export default async function FichaComprobantePage({
                     <tr key={item.id}>
                       <td className="px-5 py-3 text-base">{item.descripcion}</td>
                       <td className="tabular px-3 py-3 text-right text-base">
-                        {Number(item.cantidad)}
+                        {cantidadConUnidad(Number(item.cantidad), item.unidad)}
                       </td>
                       <td className="tabular px-3 py-3 text-right text-base">
                         {moneda.format(
@@ -428,11 +428,9 @@ export default async function FichaComprobantePage({
                 >
                   {comprobante.ventaAnulada
                     ? "venta anulada"
-                    : comprobante.enCuenta
-                      ? "en cuenta corriente"
-                      : comprobante.saldo > 0
-                        ? `saldo ${moneda.format(comprobante.saldo)}`
-                        : "cobrada"}
+                    : comprobante.saldo > 0
+                      ? `saldo ${moneda.format(comprobante.saldo)}${comprobante.enCuenta ? " en cuenta corriente" : ""}`
+                      : "cobrada"}
                 </span>
               )}
             </h2>

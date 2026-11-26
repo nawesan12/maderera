@@ -59,7 +59,7 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, id, modo, monto
 	var saldo jsmath.Num
 	var anulado bool
 	if err := s.pool.QueryRow(ctx, `SELECT `+SaldoDeFactura+`, coalesce(o.estado = 'cancelado', false)
-		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado FROM invoice_payments WHERE invoice_id = $1 GROUP BY invoice_id) c
+		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado FROM invoice_payments WHERE invoice_id = $1 GROUP BY invoice_id) c
 		  ON c.invoice_id = i.id
 		LEFT JOIN orders o ON o.id = i.order_id WHERE i.id = $1`, c.id).Scan(&saldo, &anulado); err != nil {
 		return ResultadoDeCobro{}, err

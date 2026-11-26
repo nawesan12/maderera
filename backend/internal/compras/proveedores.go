@@ -1,6 +1,7 @@
 package compras
 
 import (
+	"mjbj/internal/formato"
 	"context"
 	"errors"
 	"fmt"
@@ -326,7 +327,7 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 		ref = " (" + *x.Referencia + ")"
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "proveedor", x.SupplierID,
-		"Anotó un ajuste de $"+jsmath.Fijo2(conSigno)+ref+": "+*x.Detalle, nil)
+		"Anotó un ajuste de "+formato.Moneda(conSigno)+ref+": "+*x.Detalle, nil)
 	return x.SupplierID, nil
 }
 

@@ -617,7 +617,9 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 	if err != nil {
 		return out, err
 	}
-	desc := "Pagó " + Monto(d.Total) + " por " + d.Medio
+	// Con lo que salió de verdad: un pago con un e-Cheq endosado, un cheque
+	// propio y una transferencia decía «por transferencia» (H381).
+	desc := "Pagó " + Monto(d.Total) + " por " + mediosDelPago(d)
 	if len(certificados) > 0 {
 		desc += fmt.Sprintf(", con %d retenciones", len(certificados))
 	}
@@ -756,4 +758,41 @@ func (s *Servicio) GuardarRegimen(ctx context.Context, ses *auth.Sesion, form ma
 		return "Listo: queda cargado y no retiene.", nil
 	}
 	return "Régimen actualizado.", nil
+}
+
+// mediosDelPago nombra los medios de las partes del pago, en orden y sin
+// repetir: el cheque o e-Cheq de la cartera es «endosado» y el que se libra,
+// «propio». Sin partes, el medio del pago.
+func mediosDelPago(d FormPago) string {
+	var out []string
+	visto := map[string]bool{}
+	for _, p := range d.Partes {
+		if p.Importe <= 0 {
+			continue
+		}
+		n := strings.ReplaceAll(p.Medio, "_", " ")
+		switch p.Medio {
+		case "cheque", "echeq":
+			n = "cheque"
+			if p.Medio == "echeq" || p.Cheque != nil && p.Cheque.Tipo == "echeq" {
+				n = "e-Cheq"
+			}
+			if p.ChequeID != nil {
+				n += " endosado"
+			} else {
+				n += " propio"
+			}
+		}
+		if !visto[n] {
+			visto[n] = true
+			out = append(out, n)
+		}
+	}
+	if len(out) == 0 {
+		return strings.ReplaceAll(d.Medio, "_", " ")
+	}
+	if len(out) == 1 {
+		return out[0]
+	}
+	return strings.Join(out[:len(out)-1], ", ") + " y " + out[len(out)-1]
 }

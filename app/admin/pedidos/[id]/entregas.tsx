@@ -93,7 +93,10 @@ export function Entregas({
   // vez de un cartel aparte que repetía los mismos dos botones.
   const [recien, setRecien] = useState<string | null>(null);
 
-  const conSaldo = cancelado ? [] : pendientes.filter((p) => p.pendiente > 0.01);
+  // Entregado (la venta directa del mostrador, que salió al cobrar) o
+  // cancelado, no queda nada por retirar: decía «Quedan 1 de 1 renglones»
+  // de un pedido entregado (mes simulado).
+  const conSaldo = cancelado || estado === "entregado" ? [] : pendientes.filter((p) => p.pendiente > 0.01);
   const hayAcopio = conSaldo.length > 0;
   const entregadoAlgo = pendientes.some((p) => p.entregado > 0);
   const vivos = remitos.filter((r) => r.estado !== "anulada");

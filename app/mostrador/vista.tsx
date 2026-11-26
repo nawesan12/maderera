@@ -772,9 +772,12 @@ export function VistaMostrador({
 
       // El aviso del comprobante no es un error de la venta: la venta está
       // hecha y lo que falta es el papel. Se muestra distinto a propósito.
+      // Lo vendido de más tampoco: la venta está, y lo que falta hay que
+      // pedirlo (H218).
+      const avisos = [r.avisoFiscal, r.avisoStock].filter(Boolean).join(" ");
       setAviso(
-        r.avisoFiscal
-          ? { tipo: "error", texto: `${r.ok} ${r.avisoFiscal}` }
+        avisos
+          ? { tipo: "error", texto: `${r.ok} ${avisos}` }
           : { tipo: "ok", texto: r.ok ?? "Venta registrada." },
       );
       if (r.numero && r.orderId) {

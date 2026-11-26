@@ -312,6 +312,8 @@ export interface components {
             nueva: boolean;
             lineas?: components["schemas"]["MostradorLinea"][];
             error?: string;
+            /** @description la venta dejó medidas con lo disponible en negativo (se vendió más de lo que hay) */
+            avisoStock?: string;
             autorizacion?: components["schemas"]["MostradorAutorizacion"];
             /** @description un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha */
             ficha?: string;

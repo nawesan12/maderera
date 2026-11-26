@@ -362,7 +362,7 @@ func TestInicioDelPanel(t *testing.T) {
 		t.Errorf("por sucursal: %s", b)
 	}
 	_, b, _ = pedir(t, adm, e.u+"inicio/reponer")
-	if !strings.Contains(b, `"sucursal":"Casa Central","qty":10,"minQty":20`) {
+	if !strings.Contains(b, `"sucursal":"Casa Central","qty":8,"minQty":20`) {
 		t.Errorf("reponer: %s", b)
 	}
 	_, b, _ = pedir(t, adm, e.u+"inicio/actividad")

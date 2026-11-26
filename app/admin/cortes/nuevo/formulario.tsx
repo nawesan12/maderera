@@ -179,8 +179,22 @@ export function FormularioCorte({
     piezas: Pieza[];
   };
 }) {
-  const [estado, accion, pendiente] = useActionState(crearCorte, estadoInicial);
   const router = useRouter();
+  // Guardado: a la ficha del corte nuevo, con el aviso a la vista (H044).
+  // Quedarse con el formulario lleno y el aviso al pie invitaba a apretar de
+  // nuevo y duplicar el trabajo. Se navega desde la acción misma y no desde
+  // un efecto: al corregir, la revalidación vuelve a armar esta página con
+  // el corte viejo ya cancelado, el formulario se desmontaba antes de que
+  // corriera el efecto y la persona quedaba ahí creyendo que había fallado
+  // (mes simulado, H185).
+  const [estado, accion, pendiente] = useActionState(async (previo: EstadoCorte, datos: FormData) => {
+    const r = await crearCorte(previo, datos);
+    if (r.ok && r.id) {
+      toast.success(r.ok);
+      router.push(`/admin/cortes/${r.id}`);
+    }
+    return r;
+  }, estadoInicial);
 
   /*
    * Dónde se corta.
@@ -240,17 +254,6 @@ export function FormularioCorte({
     placasDelPedidoLista.length > 0 &&
     placa !== null &&
     !placasDelPedidoLista.some((p) => p.variantId === placa.variantId);
-
-  // Guardado: a la ficha del corte nuevo, con el aviso a la vista (H044).
-  // Quedarse con el formulario lleno y el aviso al pie invitaba a apretar de
-  // nuevo y duplicar el trabajo.
-  const yaFue = useRef<string | null>(null);
-  useEffect(() => {
-    if (!estado.ok || !estado.id || yaFue.current === estado.id) return;
-    yaFue.current = estado.id;
-    toast.success(estado.ok);
-    router.push(`/admin/cortes/${estado.id}`);
-  }, [estado, router]);
 
   const validas = piezas.filter(
     (p) => p.largoMm > 0 && p.anchoMm > 0 && p.cantidad > 0,

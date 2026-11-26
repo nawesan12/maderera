@@ -124,7 +124,12 @@ export default async function NuevoCortePage({
           Volver a {corregido.corte.numero}
         </Link>
         <h1 className="text-3xl font-bold text-foreground">Corregir {corregido.corte.numero}</h1>
-        <p className="tarjeta-hundida rounded-xl px-4 py-3 text-base">{corregido.corte.numero} ya salió de la máquina.</p>
+        {/* Uno anulado o reemplazado no «salió de la máquina» (H185). */}
+        <p className="tarjeta-hundida rounded-xl px-4 py-3 text-base">
+          {corregido.corte.estado === "cancelado"
+            ? (corregido.corte.motivoAnulado ?? "Anulado")
+            : `${corregido.corte.numero} ya salió de la máquina.`}
+        </p>
       </div>
     );
   }

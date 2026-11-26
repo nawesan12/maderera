@@ -183,6 +183,10 @@ if ! "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 180 app; then
   exit 1
 fi
 
+# Otra vez después de levantar Next: un volumen vacío se copia de la imagen al
+# crear el contenedor y puede volver al dueño de la imagen.
+"${COMPOSE[@]}" --profile herramientas run --rm permisos > /dev/null || true
+
 echo "→ Levantando el resto"
 "${COMPOSE[@]}" up -d --no-deps web respaldo
 

@@ -109,16 +109,24 @@ func (s *Servicio) CargarGasto(ctx context.Context, ses *auth.Sesion, m map[stri
 
 // AlcanzaElCajon dice si de un cajón con `enCaja` se pueden sacar `importe`
 // sin bajar del cambio fijo `base` (la regla del retiro del mostrador), y si
-// no, por qué.
+// no, por qué. Sin cambio fijo, el piso es cero: con `fondo_base` en 0 el
+// control no corría y un gasto podía dejar el cajón en negativo (mes
+// simulado).
 func AlcanzaElCajon(enCaja, base, importe float64) (bool, string) {
-	if base > 0 && float64(enCaja-importe)-base < -0.009 {
-		disponible := max(0, jsmath.Redondear2(enCaja-base))
-		if disponible > 0 {
-			return false, "Deja el cajón sin el cambio fijo (" + Monto(base) + "): de esa caja salen hasta " + Monto(disponible) + "."
-		}
-		return false, "En el cajón hay " + Monto(enCaja) + " y el cambio fijo es " + Monto(base) + ": de esa caja no sale."
+	piso := max(base, 0)
+	if float64(enCaja-importe)-piso >= -0.009 {
+		return true, ""
 	}
-	return true, ""
+	disponible := max(0, jsmath.Redondear2(enCaja-piso))
+	switch {
+	case piso > 0 && disponible > 0:
+		return false, "Deja el cajón sin el cambio fijo (" + Monto(base) + "): de esa caja salen hasta " + Monto(disponible) + "."
+	case piso > 0:
+		return false, "En el cajón hay " + Monto(enCaja) + " y el cambio fijo es " + Monto(base) + ": de esa caja no sale."
+	case disponible > 0:
+		return false, "En el cajón hay " + Monto(enCaja) + ": de esa caja salen hasta " + Monto(disponible) + "."
+	}
+	return false, "En el cajón de esa caja no hay efectivo."
 }
 
 // facturaDelGasto carga la factura de compra del gasto: entra al libro IVA

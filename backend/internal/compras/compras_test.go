@@ -498,6 +498,8 @@ func TestGastos(t *testing.T) {
 	var usuario string
 	_ = e.pool.QueryRow(ctx, `select id from "user" limit 1`).Scan(&usuario)
 	_, _ = e.pool.Exec(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, '2026-10-01T08:00:00Z')`, e.central, usuario)
+	// El cajón abre con $ 5.000: sin efectivo, el gasto no sale.
+	_, _ = e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto, created_at) select id, 'apertura', 5000, abierta_at from cash_sessions`)
 	gasto := map[string]any{"fecha": "2026-10-02", "categoria": "flete", "descripcion": "  Flete a obra ", "importe": 1500, "medio": "efectivo", "branchId": e.central}
 	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 200 || b != `{"ok":"Gasto anotado por $`+" "+`1.500."}`+"\n" {
 		t.Fatalf("gasto: %d %s", c, b)
@@ -534,6 +536,7 @@ func TestGastoDeHoySaleDelTurnoAbierto(t *testing.T) {
 	var usuario string
 	_ = e.pool.QueryRow(ctx, `select id from "user" limit 1`).Scan(&usuario)
 	_, _ = e.pool.Exec(ctx, `insert into cash_sessions (branch_id, abierta_por, abierta_at) values ($1, $2, now() - interval '1 minute')`, e.central, usuario)
+	_, _ = e.pool.Exec(ctx, `insert into cash_movements (session_id, tipo, monto, created_at) select id, 'apertura', 5000, abierta_at from cash_sessions`)
 	hoy := time.Now().In(caja.Argentina).Format("2006-01-02")
 	gasto := map[string]any{"fecha": hoy, "categoria": "flete", "descripcion": "Flete", "importe": 800, "medio": "efectivo", "branchId": e.central}
 	if c, b := pedir(t, adm, "POST", e.u+"compras/gastos", gasto); c != 200 || strings.Contains(b, "No había caja abierta") {

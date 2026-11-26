@@ -299,19 +299,25 @@ export function PanelDeCaja({
                            * esto, la regla que la clienta pidió se caía justo
                            * el día que se corta internet.
                            */
+                          // Sin base de cambio, el piso es cero: el
+                          // retiro no deja el cajón en negativo (como Go).
+                          const piso = Math.max(0, turno.fondoBase);
                           if (
                             t === "retiro" &&
-                            turno.fondoBase > 0 &&
-                            turno.esperado - importeDelMovimiento < turno.fondoBase
+                            turno.esperado - importeDelMovimiento - piso < -0.009
                           ) {
                             const disponible = Math.max(
                               0,
-                              turno.esperado - turno.fondoBase,
+                              Math.round((turno.esperado - piso) * 100) / 100,
                             );
                             setAviso(
-                              disponible > 0
+                              piso > 0 && disponible > 0
                                 ? `Ese retiro deja el cajón sin el cambio de la base (${formatearImporte(turno.fondoBase)}). Podés retirar hasta ${formatearImporte(disponible)}.`
-                                : `No se puede retirar: en el cajón hay ${formatearImporte(turno.esperado)} y la base de cambio es ${formatearImporte(turno.fondoBase)}.`,
+                                : piso > 0
+                                  ? `No se puede retirar: en el cajón hay ${formatearImporte(turno.esperado)} y la base de cambio es ${formatearImporte(turno.fondoBase)}.`
+                                  : disponible > 0
+                                    ? `En el cajón hay ${formatearImporte(turno.esperado)}. Podés retirar hasta ${formatearImporte(disponible)}.`
+                                    : "No se puede retirar: el cajón no tiene efectivo.",
                             );
                             return;
                           }

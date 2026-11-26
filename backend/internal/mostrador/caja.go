@@ -158,12 +158,20 @@ func (s *Servicio) MovimientoDeCaja(ctx context.Context, ses *auth.Sesion, sesio
 				return err
 			}
 			enCaja := esperado.F()
-			if base.F() > 0 && enCaja-monto < base.F() {
-				disponible := math.Max(0, enCaja-base.F())
-				if disponible > 0 {
+			// Sin base de cambio, el piso es cero: el retiro no deja el
+			// cajón en negativo (mes simulado).
+			piso := math.Max(0, base.F())
+			if float64(enCaja-monto)-piso < -0.009 {
+				disponible := math.Max(0, jsmath.Redondear2(enCaja-piso))
+				switch {
+				case piso > 0 && disponible > 0:
 					return rechazo("Ese retiro deja el cajón sin el cambio de la base (" + formato.Importe(base.F()) + "). Podés retirar hasta " + formato.Importe(disponible) + ".")
+				case piso > 0:
+					return rechazo("No se puede retirar: en el cajón hay " + formato.Importe(enCaja) + " y la base de cambio es " + formato.Importe(base.F()) + ".")
+				case disponible > 0:
+					return rechazo("En el cajón hay " + formato.Importe(enCaja) + ". Podés retirar hasta " + formato.Importe(disponible) + ".")
 				}
-				return rechazo("No se puede retirar: en el cajón hay " + formato.Importe(enCaja) + " y la base de cambio es " + formato.Importe(base.F()) + ".")
+				return rechazo("No se puede retirar: el cajón no tiene efectivo.")
 			}
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO cash_movements (session_id, tipo, monto, motivo, creado_por) VALUES ($1, $2, $3::numeric, $4, $5)`,

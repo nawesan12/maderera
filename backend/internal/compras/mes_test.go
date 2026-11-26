@@ -428,3 +428,25 @@ func TestElDepositoRecibeSinPrecios(t *testing.T) {
 		t.Errorf("a mano: %d", c)
 	}
 }
+
+// Sin cambio fijo, el piso del cajón es cero: un gasto en efectivo no lo deja
+// en negativo (mes simulado: con fondo_base en 0 el control no corría).
+func TestElGastoNoDejaElCajonEnNegativo(t *testing.T) {
+	casos := []struct {
+		enCaja, base, importe float64
+		ok                    bool
+		motivo                string
+	}{
+		{20000, 0, 20000, true, ""},
+		{20000, 0, 20000.5, false, "En el cajón hay $\u00a020.000: de esa caja salen hasta $\u00a020.000."},
+		{0, 0, 1, false, "En el cajón de esa caja no hay efectivo."},
+		{60000, 50000, 10000, true, ""},
+		{60000, 50000, 10001, false, "Deja el cajón sin el cambio fijo ($\u00a050.000): de esa caja salen hasta $\u00a010.000."},
+	}
+	for _, c := range casos {
+		ok, motivo := AlcanzaElCajon(c.enCaja, c.base, c.importe)
+		if ok != c.ok || motivo != c.motivo {
+			t.Errorf("AlcanzaElCajon(%v, %v, %v) = %v %q", c.enCaja, c.base, c.importe, ok, motivo)
+		}
+	}
+}

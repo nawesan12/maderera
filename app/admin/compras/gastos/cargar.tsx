@@ -136,9 +136,11 @@ export function CargarGasto({
   const total = importeDelCampo(importe);
   const ivaSugerido = total > 0 && tipo === "factura_a" ? Math.round((total - total / (1 + Number(alicuota) / 100)) * 100) / 100 : 0;
   const ivaFinal = iva === "" ? ivaSugerido : importeDelCampo(iva);
-  // Lo que deja el gasto en el cajón: no baja del cambio fijo.
+  // Lo que deja el gasto en el cajón: no baja del cambio fijo, y sin cambio
+  // fijo no queda en negativo (AlcanzaElCajon en Go).
   const quedaria = enEfectivo && sucursal?.enCaja != null ? Math.round((sucursal.enCaja - total) * 100) / 100 : null;
-  const bajaDelCambio = quedaria !== null && sucursal !== undefined && sucursal.cambioFijo > 0 && quedaria < sucursal.cambioFijo;
+  const piso = Math.max(0, sucursal?.cambioFijo ?? 0);
+  const bajaDelCambio = quedaria !== null && sucursal !== undefined && quedaria < piso;
 
   return (
     <Hoja>
@@ -299,7 +301,9 @@ export function CargarGasto({
             )}
             {bajaDelCambio && sucursal && (
               <span className="tabular block text-base font-medium text-saldo-debe" role="alert">
-                Deja {formatearMonto(quedaria)} con un cambio fijo de {formatearMonto(sucursal.cambioFijo)}
+                {piso > 0
+                  ? `Deja ${formatearMonto(quedaria)} con un cambio fijo de ${formatearMonto(sucursal.cambioFijo)}`
+                  : `En el cajón hay ${formatearMonto(sucursal.enCaja)}`}
               </span>
             )}
           </div>

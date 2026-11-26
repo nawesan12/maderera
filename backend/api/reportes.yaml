@@ -615,10 +615,14 @@ components:
         ganancia: { $ref: "#/components/schemas/ResultadoComparado" }
     Cobranzas:
       type: object
-      required: [filas, total, cobrado, porMedio]
+      required: [filas, total, cobrado, porMedio, ventas]
       properties:
         total: { type: integer, description: Cuántos renglones hay en el período }
-        cobrado: { type: number, format: double, description: Lo cobrado en el período, sin los recibos anulados }
+        cobrado:
+          type: number
+          format: double
+          description: Lo cobrado en el período (recibos, en línea y mostrador), sin los recibos anulados ni los cheques rechazados
+        ventas: { type: integer, description: Cuántas ventas del mostrador entran en lo cobrado }
         porMedio:
           type: array
           items:

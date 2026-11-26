@@ -829,10 +829,13 @@ func TestLaFacturaQueVenceHoyNoEstaVencida(t *testing.T) {
 			t.Errorf("%v: %+v", ahora, d)
 		}
 	}
+	// «Para hoy» mira el reloj de la base: la factura de contado de hoy.
+	e.exec(t, `update purchase_invoices set fecha_vencimiento = $1`, DiaDeHoy(time.Now()))
 	_, cuerpo, _ := pedir(t, adm, e.u+"inicio/pendientes")
 	if strings.Contains(cuerpo, "compras-vencidas") || !strings.Contains(cuerpo, `"clave":"compras-48h"`) {
 		t.Errorf("para hoy: %s", cuerpo)
 	}
+	e.exec(t, `update purchase_invoices set fecha_vencimiento = '2026-10-15T00:00:00Z'`)
 	// Al día siguiente, sí.
 	d, err := e.s.Debo(context.Background(), time.Date(2026, 10, 16, 0, 10, 0, 0, Argentina))
 	if err != nil {
@@ -840,5 +843,33 @@ func TestLaFacturaQueVenceHoyNoEstaVencida(t *testing.T) {
 	}
 	if d.Vencido != 800 || d.FacturasVencidas != 1 {
 		t.Errorf("al otro día: %+v", d)
+	}
+}
+
+// H137/H349: Cobros cuenta lo cobrado en el mostrador (sin la cuenta
+// corriente) y no cuenta el cheque que rebotó.
+func TestCobradoConElMostradorYSinElRechazado(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	cuando := time.Date(2026, 10, 10, 10, 0, 0, 0, Argentina)
+	venta := e.pedido(t, "M-1", e.central, "entregado", "mostrador", cuando, nil)
+	e.exec(t, `insert into order_payments (order_id, medio, importe, created_at) values ($1, 'efectivo', 1000, $2), ($1, 'debito', 500, $2), ($1, 'cuenta_corriente', 700, $2)`, venta, cuando)
+	cheque := e.pedido(t, "M-2", e.central, "entregado", "mostrador", cuando, nil)
+	pago := e.id(t, `insert into order_payments (order_id, medio, importe, created_at) values ($1, 'cheque', 400, $2) returning id`, cheque, cuando)
+	e.exec(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, order_payment_id) values ('recibido', '55500321', 'Nación', $1, 400, 'rechazado', $2)`, cuando, pago)
+	desde, hasta := time.Date(2026, 10, 1, 0, 0, 0, 0, Argentina), time.Date(2026, 11, 1, 0, 0, 0, 0, Argentina)
+	c, err := e.s.Cobranzas(ctx, Periodo{Desde: &desde, Hasta: &hasta}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Cobrado != 1500 || c.Ventas != 1 {
+		t.Errorf("cobrado %v en %d ventas", c.Cobrado, c.Ventas)
+	}
+	medios := map[string]float64{}
+	for _, m := range c.PorMedio {
+		medios[m.Medio] = m.Total
+	}
+	if medios["efectivo"] != 1000 || medios["tarjeta_debito"] != 500 || medios["cheque"] != 0 || medios["cuenta_corriente"] != 0 {
+		t.Errorf("por medio: %v", medios)
 	}
 }

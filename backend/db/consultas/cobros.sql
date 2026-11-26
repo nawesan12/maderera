@@ -120,8 +120,9 @@ LIMIT $2;
 
 -- name: ComprasDeContado :many
 -- El recibo, si la compra se cobró después con uno (una transferencia
--- conciliada): no fue «pagada en el momento» (H305).
-SELECT o.id, o.created_at, o.numero, o.total::float8 AS total, o.estado_pago::text AS estado_pago,
+-- conciliada): no fue «pagada en el momento» (H305). Del pedido partido
+-- (H047), el resto: la parte a cuenta es su «compra» en el libro.
+SELECT o.id, o.created_at, o.numero, (o.total - coalesce(o.a_cuenta, 0))::float8 AS total, o.estado_pago::text AS estado_pago,
   r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
 FROM orders o
 LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.order_id = o.id AND x.estado <> 'anulado'

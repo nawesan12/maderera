@@ -275,113 +275,119 @@ export function PanelDeCaja({
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Ingreso o retiro
                 </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={monto}
-                    aria-invalid={importeIlegible(monto) || undefined}
-                    onChange={(e) => setMonto(e.target.value)}
-                    placeholder="Monto"
-                    aria-label="Monto"
-                    className="tabular h-12 w-32 rounded-lg border border-linea bg-background px-3 text-right text-base"
-                  />
-                  <input
-                    value={motivo}
-                    onChange={(e) => setMotivo(e.target.value)}
-                    placeholder="Motivo"
-                    aria-label="Motivo"
-                    className="h-12 min-w-0 flex-1 rounded-lg border border-linea bg-background px-3 text-base"
-                  />
-                  {MOVIMIENTOS.map(({ tipo: t, destino, texto }) => (
-                    <button
-                      key={texto}
-                      disabled={
-                        trabajando ||
-                        !(importeDelMovimiento !== null && importeDelMovimiento > 0) ||
-                        (!motivo.trim() && (t === "ingreso" || destino === "otro"))
-                      }
-                      onClick={() =>
-                        empezar(async () => {
-                          if (importeDelMovimiento === null) return;
-                          /*
-                           * Sin conexión el movimiento se encola en vez de
-                           * perderse. La plata sale del cajón en el momento,
-                           * no cuando vuelve el wifi: si el retiro no queda
-                           * anotado, el arqueo de la noche muestra un faltante
-                           * que nadie va a poder explicar.
-                           */
-                          /*
-                           * El piso de cambio también sin conexión.
-                           *
-                           * El servidor lo controla al registrar el retiro,
-                           * pero sin conexión no hay servidor: acá la cuenta se
-                           * hace con el esperado que ya está en pantalla. Sin
-                           * esto, la regla que la clienta pidió se caía justo
-                           * el día que se corta internet.
-                           */
-                          // Sin base de cambio, el piso es cero: el
-                          // retiro no deja el cajón en negativo (como Go).
-                          const piso = Math.max(0, turno.fondoBase);
-                          if (
-                            t === "retiro" &&
-                            turno.esperado - importeDelMovimiento - piso < -0.009
-                          ) {
-                            const disponible = Math.max(
-                              0,
-                              Math.round((turno.esperado - piso) * 100) / 100,
-                            );
-                            setAviso(
-                              piso > 0 && disponible > 0
-                                ? `Ese retiro deja el cajón sin el cambio de la base (${formatearImporte(turno.fondoBase)}). Podés retirar hasta ${formatearImporte(disponible)}.`
-                                : piso > 0
-                                  ? `No se puede retirar: en el cajón hay ${formatearImporte(turno.esperado)} y la base de cambio es ${formatearImporte(turno.fondoBase)}.`
-                                  : disponible > 0
-                                    ? `En el cajón hay ${formatearImporte(turno.esperado)}. Podés retirar hasta ${formatearImporte(disponible)}.`
-                                    : "No se puede retirar: el cajón no tiene efectivo.",
-                            );
-                            return;
-                          }
+                {/* Monto y motivo en un renglón, los cuatro destinos abajo:
+                    en una sola fila el motivo quedaba sin ancho. */}
+                <div className="mt-2 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={monto}
+                      aria-invalid={importeIlegible(monto) || undefined}
+                      onChange={(e) => setMonto(e.target.value)}
+                      placeholder="Monto"
+                      aria-label="Monto"
+                      className="tabular h-12 w-32 rounded-lg border border-linea bg-background px-3 text-right text-base"
+                    />
+                    <input
+                      value={motivo}
+                      onChange={(e) => setMotivo(e.target.value)}
+                      placeholder="Motivo"
+                      aria-label="Motivo"
+                      className="h-12 min-w-0 flex-1 rounded-lg border border-linea bg-background px-3 text-base"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {MOVIMIENTOS.map(({ tipo: t, destino, texto }) => (
+                      <button
+                        key={texto}
+                        disabled={
+                          trabajando ||
+                          !(importeDelMovimiento !== null && importeDelMovimiento > 0) ||
+                          (!motivo.trim() && (t === "ingreso" || destino === "otro"))
+                        }
+                        onClick={() =>
+                          empezar(async () => {
+                            if (importeDelMovimiento === null) return;
+                            /*
+                             * Sin conexión el movimiento se encola en vez de
+                             * perderse. La plata sale del cajón en el momento,
+                             * no cuando vuelve el wifi: si el retiro no queda
+                             * anotado, el arqueo de la noche muestra un faltante
+                             * que nadie va a poder explicar.
+                             */
+                            /*
+                             * El piso de cambio también sin conexión.
+                             *
+                             * El servidor lo controla al registrar el retiro,
+                             * pero sin conexión no hay servidor: acá la cuenta se
+                             * hace con el esperado que ya está en pantalla. Sin
+                             * esto, la regla que la clienta pidió se caía justo
+                             * el día que se corta internet.
+                             */
+                            // Sin base de cambio, el piso es cero: el
+                            // retiro no deja el cajón en negativo (como Go).
+                            const piso = Math.max(0, turno.fondoBase);
+                            if (
+                              t === "retiro" &&
+                              turno.esperado - importeDelMovimiento - piso < -0.009
+                            ) {
+                              const disponible = Math.max(
+                                0,
+                                Math.round((turno.esperado - piso) * 100) / 100,
+                              );
+                              setAviso(
+                                piso > 0 && disponible > 0
+                                  ? `Ese retiro deja el cajón sin el cambio de la base (${formatearImporte(turno.fondoBase)}). Podés retirar hasta ${formatearImporte(disponible)}.`
+                                  : piso > 0
+                                    ? `No se puede retirar: en el cajón hay ${formatearImporte(turno.esperado)} y la base de cambio es ${formatearImporte(turno.fondoBase)}.`
+                                    : disponible > 0
+                                      ? `En el cajón hay ${formatearImporte(turno.esperado)}. Podés retirar hasta ${formatearImporte(disponible)}.`
+                                      : "No se puede retirar: el cajón no tiene efectivo.",
+                              );
+                              return;
+                            }
 
-                          if (!enLinea) {
-                            await encolarMovimiento({
-                              clave: crypto.randomUUID(),
-                              branchId: sucursal.id,
-                              tipo: t,
-                              monto: importeDelMovimiento,
-                              motivo: motivo.trim() || (destino ? DESTINO[destino].motivo : ""),
-                              ...(destino ? { destino } : {}),
-                              hechoAt: new Date().toISOString(),
-                            });
-                            setAviso(
-                              `${t === "retiro" ? "Retiro" : "Ingreso"} anotado. Se sube cuando vuelva la conexión.`,
-                            );
-                            setMonto("");
-                            setMotivo("");
-                            onEncolado();
-                            return;
-                          }
+                            if (!enLinea) {
+                              await encolarMovimiento({
+                                clave: crypto.randomUUID(),
+                                branchId: sucursal.id,
+                                tipo: t,
+                                monto: importeDelMovimiento,
+                                motivo: motivo.trim() || (destino ? DESTINO[destino].motivo : ""),
+                                ...(destino ? { destino } : {}),
+                                hechoAt: new Date().toISOString(),
+                              });
+                              setAviso(
+                                `${t === "retiro" ? "Retiro" : "Ingreso"} anotado. Se sube cuando vuelva la conexión.`,
+                              );
+                              setMonto("");
+                              setMotivo("");
+                              onEncolado();
+                              return;
+                            }
 
-                          const r = await registrarMovimientoDeCaja(
-                            turno.id,
-                            t,
-                            importeDelMovimiento,
-                            motivo,
-                            destino,
-                          );
-                          setAviso(r.error ?? r.ok ?? null);
-                          if (!r.error) {
-                            setMonto("");
-                            setMotivo("");
-                            router.refresh();
-                          }
-                        })
-                      }
-                      className="h-12 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-40"
-                    >
-                      {texto}
-                    </button>
-                  ))}
+                            const r = await registrarMovimientoDeCaja(
+                              turno.id,
+                              t,
+                              importeDelMovimiento,
+                              motivo,
+                              destino,
+                            );
+                            setAviso(r.error ?? r.ok ?? null);
+                            if (!r.error) {
+                              setMonto("");
+                              setMotivo("");
+                              router.refresh();
+                            }
+                          })
+                        }
+                        className="h-12 rounded-lg border border-linea px-4 text-base font-medium transition-colors hover:bg-hundida disabled:opacity-40"
+                      >
+                        {texto}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </section>
 

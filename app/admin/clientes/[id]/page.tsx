@@ -402,10 +402,11 @@ export default async function FichaClientePage({
                 manejaPlata
                   ? // El cobro de Mercado Pago se devuelve desde MP y su aviso
                     // anula el recibo: a mano, el cliente pagaría dos veces.
-                    // El renglón del cheque (filtro «Cheques») lleva el
-                    // recibo de referencia: se anula desde su pago.
+                    // El renglón del cheque (filtro «Cheques») y la nota de
+                    // débito de uno rechazado llevan el recibo de referencia:
+                    // se anula desde su pago.
                     (r, m) =>
-                      r.porMercadoPago || m.clase === "cheque" ? null : (
+                      r.porMercadoPago || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
                         <AnularRecibo
                           id={r.id}
                           numero={r.numero}

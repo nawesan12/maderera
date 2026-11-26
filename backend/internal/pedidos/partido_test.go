@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/facturacion"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
@@ -58,6 +59,23 @@ func TestPedidoPartidoEntreLaCuentaYOtroMedio(t *testing.T) {
 	}
 	if s := sinCobrar(); s != 46500.5 {
 		t.Fatalf("sin cobrar: %v", s)
+	}
+	// En la ficha del cliente, la compra de contado es el resto.
+	movs, _, err := cobros.Historial(t.Context(), sqlc.New(e.pool), cliente, nil, "compras", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contado := 0
+	for _, m := range movs {
+		if m.Clase == "compra_contado" {
+			contado++
+			if m.ImporteInformativo == nil || *m.ImporteInformativo != 46500.5 {
+				t.Errorf("compra de contado: %v", m.ImporteInformativo)
+			}
+		}
+	}
+	if contado != 1 {
+		t.Errorf("compras de contado: %d", contado)
 	}
 	// Su factura debe las dos cosas: el resto y lo que la cuenta debe.
 	e.exec(t, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id, customer_id)

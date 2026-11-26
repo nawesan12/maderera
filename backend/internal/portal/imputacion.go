@@ -97,7 +97,15 @@ func (s *Servicio) pendientesDeLaCuenta(ctx context.Context, c *Cliente) (map[st
 	// Revierte: un débito atado a un recibo cuyo pago está en este libro (el
 	// cheque rechazado de ese recibo, su anulación). El cheque de una venta de
 	// contado que rebotó no deshace ningún pago de la cuenta: es deuda nueva.
-	filas, err := s.pool.Query(ctx, `SELECT m.monto::float8, coalesce(m.referencia, ''),
+	//
+	// La nota de crédito de una devolución con comprobante fiscal lleva en la
+	// cuenta la etiqueta de la factura («Factura A 0015-00000002»), que es lo
+	// que el cliente lee en Movimientos. Para imputar es del pedido: sin esto
+	// el crédito iba a la deuda más vieja y el pedido devuelto en parte
+	// seguía diciendo que faltaba el total (simulación del mes, H302).
+	filas, err := s.pool.Query(ctx, `SELECT m.monto::float8,
+		  coalesce((SELECT o.numero FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
+		            WHERE dv.account_movement_id = m.id LIMIT 1), m.referencia, ''),
 		  m.monto > 0 AND m.receipt_id IS NOT NULL AND EXISTS (SELECT 1 FROM account_movements p
 		    WHERE p.customer_id = m.customer_id AND p.receipt_id = m.receipt_id AND p.monto < 0)
 		FROM account_movements m WHERE m.customer_id = $1 ORDER BY m.created_at, m.id`, c.ID)

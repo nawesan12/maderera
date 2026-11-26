@@ -150,6 +150,50 @@ func TestPedidosParaElCliente(t *testing.T) {
 		t.Errorf("un pedido sin cuenta no debe nada en la cuenta: %+v", p)
 	}
 
+	// H302 (segunda vuelta): la nota de crédito de una devolución con
+	// factura lleva la etiqueta de la factura en la cuenta, pero baja lo que
+	// falta de su pedido y no la deuda más vieja.
+	pedido("PED-1007", "entregado", "mostrador", "cuenta_corriente", "", 500000)
+	var idPed, factura, nota, mov string
+	if err := e.pool.QueryRow(ctx, `select id from orders where numero = 'PED-1007'`).Scan(&idPed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto, referencia) values ($1, 'compra', 500000, 'PED-1007')`, idJuan); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id)
+		values ('factura_a', 15, 2, 'Juan', 413223.14, 86776.86, 0, 0, 0, 500000, 'emitida', now(), $1) returning id`, idPed).Scan(&factura); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id, comprobante_origen_id)
+		values ('nota_credito_a', 15, 1, 'Juan', 82644.63, 17355.37, 0, 0, 0, 100000, 'emitida', now(), $1, $2) returning id`, idPed, factura).Scan(&nota); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into account_movements (customer_id, tipo, monto, detalle, referencia)
+		values ($1, 'nota_credito', -100000, 'Devolución de la venta PED-1007: faltante', 'Factura A 0015-00000002') returning id`, idJuan).Scan(&mov); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into devoluciones (clave, order_id, invoice_id, nota_id, importe, destino, motivo, account_movement_id)
+		values ('h302', $1, $2, $3, 100000, 'cuenta', 'faltante', $4)`, idPed, factura, nota, mov); err != nil {
+		t.Fatal(err)
+	}
+	_, b = pedir(t, juan, "GET", u+"pedidos", nil)
+	lista = nil
+	_ = json.Unmarshal([]byte(b), &lista)
+	for _, p := range lista {
+		porNumero[p.Numero] = p
+	}
+	if p := porNumero["PED-1007"]; p.DebeEnCuenta == nil || *p.DebeEnCuenta != 400000 {
+		t.Errorf("PED-1007 tras la nota de la devolución: %+v", p)
+	}
+	if p := porNumero["PED-1006"]; p.DebeEnCuenta == nil || *p.DebeEnCuenta != 1500000 {
+		t.Errorf("la nota de PED-1007 no es de PED-1006: %+v", p)
+	}
+	// Lo de abajo mira PED-1004 y PED-1200 solos.
+	if _, err := e.pool.Exec(ctx, `delete from devoluciones where clave = 'h302'`); err != nil {
+		t.Fatal(err)
+	}
+
 	// H084: las notas del vendedor no le llegan como «Tu nota».
 	if _, b := pedir(t, juan, "GET", u+"pedidos/PED-1004", nil); strings.Contains(b, "paga tarde") || !strings.Contains(b, `"debeEnCuenta":0`) {
 		t.Errorf("notas del vendedor: %s", b)

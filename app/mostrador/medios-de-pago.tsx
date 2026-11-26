@@ -115,29 +115,38 @@ export function DatosDeTarjeta({
           pago no está partido (partido, van por renglón). Son el dato fiscal
           que después pide el contador; se pueden dejar vacíos. */}
 
+      {/* Con rótulo y no solo placeholder: una vez llenos no se sabía cuál
+          era cuál (mes simulado, H032). El lote y el cupón son los que
+          concilian contra el posnet: se piden para cobrar. */}
       {(medio === "debito" || medio === "credito") && (
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <input
-            value={tarjeta.marca}
-            onChange={(e) => onTarjeta({ ...tarjeta, marca: e.target.value })}
-            data-foco="tarjeta"
-            placeholder="Tarjeta"
-            className="h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
-          />
-          <input
-            value={tarjeta.nroLote}
-            onChange={(e) => onTarjeta({ ...tarjeta, nroLote: e.target.value })}
-            inputMode="numeric"
-            placeholder="Lote"
-            className="tabular h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
-          />
-          <input
-            value={tarjeta.nroCupon}
-            onChange={(e) => onTarjeta({ ...tarjeta, nroCupon: e.target.value })}
-            inputMode="numeric"
-            placeholder="Cupón"
-            className="tabular h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
-          />
+          <CampoDeTarjeta rotulo="Tarjeta">
+            <input
+              value={tarjeta.marca}
+              onChange={(e) => onTarjeta({ ...tarjeta, marca: e.target.value })}
+              data-foco="tarjeta"
+              placeholder="Visa, Master…"
+              className="h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+            />
+          </CampoDeTarjeta>
+          <CampoDeTarjeta rotulo="Lote">
+            <input
+              value={tarjeta.nroLote}
+              onChange={(e) => onTarjeta({ ...tarjeta, nroLote: e.target.value })}
+              inputMode="numeric"
+              aria-invalid={!tarjeta.nroLote.trim() || undefined}
+              className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+            />
+          </CampoDeTarjeta>
+          <CampoDeTarjeta rotulo="Cupón">
+            <input
+              value={tarjeta.nroCupon}
+              onChange={(e) => onTarjeta({ ...tarjeta, nroCupon: e.target.value })}
+              inputMode="numeric"
+              aria-invalid={!tarjeta.nroCupon.trim() || undefined}
+              className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
+            />
+          </CampoDeTarjeta>
         </div>
       )}
 
@@ -244,6 +253,7 @@ export function PagoPartido({
           </div>
           {(parte.medio === "debito" || parte.medio === "credito") && (
             <div className="grid grid-cols-4 gap-2">
+              <CampoDeTarjeta rotulo="Tarjeta">
               <input
                 value={parte.tarjeta}
                 onChange={(e) =>
@@ -253,9 +263,11 @@ export function PagoPartido({
                     ),
                   )
                 }
-                placeholder="Tarjeta"
-                className="h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
+                placeholder="Visa, Master…"
+                className="h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
               />
+              </CampoDeTarjeta>
+              <CampoDeTarjeta rotulo="Lote">
               <input
                 value={parte.nroLote}
                 onChange={(e) =>
@@ -266,9 +278,11 @@ export function PagoPartido({
                   )
                 }
                 inputMode="numeric"
-                placeholder="Lote"
-                className="tabular h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
+                aria-invalid={!parte.nroLote.trim() || undefined}
+                className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
               />
+              </CampoDeTarjeta>
+              <CampoDeTarjeta rotulo="Cupón">
               <input
                 value={parte.nroCupon}
                 onChange={(e) =>
@@ -279,9 +293,10 @@ export function PagoPartido({
                   )
                 }
                 inputMode="numeric"
-                placeholder="Cupón"
-                className="tabular h-11 rounded-lg border border-linea bg-background px-2.5 text-base"
+                aria-invalid={!parte.nroCupon.trim() || undefined}
+                className="tabular h-11 w-full min-w-0 rounded-lg border border-linea bg-background px-2.5 text-base"
               />
+              </CampoDeTarjeta>
               {/* Las cuotas de este renglón, solo si es crédito. */}
               {parte.medio === "credito" ? (
                 <select
@@ -365,5 +380,15 @@ export function PagoPartido({
         </span>
       </div>
     </div>
+  );
+}
+
+/** Un campo de la tarjeta con su rótulo arriba, chico. */
+function CampoDeTarjeta({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+  return (
+    <label className="block min-w-0">
+      <span className="block pb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{rotulo}</span>
+      {children}
+    </label>
   );
 }

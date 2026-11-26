@@ -2933,3 +2933,55 @@ misma consulta al contador.
   devoluciones le dejaron sin tramo. Prueba:
   `TestLaDevolucionPorAfueraVaPrimeroAMercadoPago` (MP $600 + transferencia
   $400; devolver $300 y $800, Deudores en 0 y Banco en 900).
+
+## Mes simulado: mostrador, caja y ticket (26/11, rama `mes-mostrador-caja`)
+
+Lo que encontró el mes simulado en producción en `/mostrador`, `/admin/caja`
+y el ticket. Migración **00210** (`cash_sessions.pos_device_id`, el puesto del
+turno; el espejo drizzle al día a mano). Golden del mostrador regenerado
+(`aplicarDescuento` al centavo, igual en TS y en Go).
+
+- **Firma sin PIN cargado** (`autorizacion`): Go dice de entrada quién puede
+  firmar (`sinAdmins`, `conClave`); mientras ningún admin cargó su PIN, firma
+  la contraseña del panel de un admin, con los mismos topes y el aviso
+  («usó la contraseña de…»). Cargado un PIN, la contraseña deja de servir.
+  `TestSinPINFirmaLaClave`. El campo largo es de 128 en el contrato.
+- **Caja**: abre con lo contado al cerrar el anterior (`caja.UltimoContado`);
+  otro fondo pide el motivo y queda como retiro o ingreso «Entre turnos».
+  `TurnoAbierto` y `TurnoCerrado` traen devoluciones y gastos (los recuadros
+  suman el esperado); el cierre Z suma los recibos de cuenta del mostrador
+  (`Cobranza`); `EfectivoFueraDeCaja` lista recibos y gastos en efectivo sin
+  turno (el recibo se reconoce por el motivo «Recibo REC-… —»). Montos con
+  `formato.Importe` / `formatearImporte` (centavos solo si hay, nunca «-$ 0»).
+  `TestElTurnoArrancaConLoContado`, `TestLaCajaDelMesSimulado`.
+- **Venta**: bajo el costo pide firma (`autorizacion.Costo`); la escala por
+  forma de pago no toca los renglones a mano (`EsElegibleParaLaEscala`);
+  `sinEscala` (pago partido en medios distintos) y `aLista` (el cliente con
+  lista propia compra a la general). La regla de contado de la lista vale si
+  la lista le da algo mejor en esa venta (`listaConVentaja`).
+  `TestCobrosDelMesSimulado`, `TestListaDelClienteYCheque`, `TestDescuentoAlCentavo`.
+- **Buscador**: los números tipeados enteros ordenan primero
+  (`numerosSueltos`, y `buscarVariantes` en la copia local); stock disponible
+  (físico − reservado) en línea y en la copia. `TestBuscarDelMesSimulado`.
+- **Cortes**: `Cobro.Parciales` (placas que no pasan la mitad; el mostrador
+  dice «Material sin cargo»); retirar uno sin cobrar pide `sinCobrar`; el
+  mostrador cobra un corte de la cola (`cortes[].existente`, `/mostrador?corte=`).
+  `TestCobrarUnCorteDeLaCola`.
+- **Devolución parcial desde el mostrador**: `/api/v1/mostrador/ventas/{id}/devolucion`
+  (+ `/calculo`), la misma `facturacion.DevolucionParcial` con la instancia
+  compartida (`ConFacturacion`), y el PIN para el vendedor.
+  `TestDevolucionDesdeElMostrador`.
+- Anular devuelve los renglones (`renglones`) para «Rehacer» y avisa a los
+  admins de la factura que queda viva (`avisado`).
+
+### Decisiones a confirmar
+
+- [ ] **Firma con la contraseña** mientras no haya PIN (default prudente:
+      solo hasta que un admin cargue el suyo).
+- [ ] **El corte por debajo de la mitad** sigue sin cobrar material (la regla
+      de la media placa y A2); ahora se dice «Material sin cargo». Si se
+      quiere cobrar media placa, es otra regla en `revisarCobroDelCorte`.
+- [ ] **Lote y cupón** obligatorios para cobrar con tarjeta en línea.
+- [ ] **La regla de contado** de una lista propia, solo cuando le da un precio
+      mejor en la venta.
+- [ ] **Descuento por forma de pago** sin los renglones a mano (el flete).

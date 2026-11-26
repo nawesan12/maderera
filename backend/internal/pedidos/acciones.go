@@ -814,6 +814,9 @@ func faltaDePIN(f *autorizacion.Falta) error {
 	if f.PinIncorrecto {
 		e["pinIncorrecto"] = "si"
 	}
+	if f.ConClave {
+		e["pinConClave"] = "si"
+	}
 	if f.BloqueadoHasta != nil {
 		e["pinHasta"] = f.BloqueadoHasta.UTC().Format(time.RFC3339)
 	}

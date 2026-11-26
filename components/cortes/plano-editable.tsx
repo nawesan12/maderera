@@ -225,7 +225,7 @@ export function PlanoEditable({
                   placa.seVendeEntera ? "estado-marca" : "estado-ok"
                 }`}
               >
-                {placa.seVendeEntera ? "Se vende entera" : "Se cobra el corte"}
+                {placa.seVendeEntera ? "Se vende entera · corte sin cargo" : "Se cobra el corte"}
               </span>
               <span className="tabular w-full text-sm text-muted-foreground">
                 {sencillo ? (

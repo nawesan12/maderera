@@ -234,11 +234,16 @@ func TestAltaColaYFicha(t *testing.T) {
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-cola' where id = $1`, id)
 
-	// La cola: avanza hasta retirado y ahí se frena.
-	for _, quiere := range []string{"quedó en la máquina", "quedó terminado", "quedó retirado", "El corte ya está retirado."} {
-		_, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar", nil)
-		if !strings.Contains(b, quiere) {
-			t.Errorf("avanzar: %s (quería %q)", b, quiere)
+	// La cola: avanza hasta retirado y ahí se frena. Sin venta no está
+	// cobrado: retirarlo pide saberlo (mes simulado, H173).
+	for _, paso := range []struct{ query, quiere string }{
+		{"", "quedó en la máquina"}, {"", "quedó terminado"},
+		{"", "no está cobrado. Cobralo en el mostrador antes de entregarlo."},
+		{"?sinCobrar=true", "quedó retirado"}, {"", "El corte ya está retirado."},
+	} {
+		_, b := pedir(t, ven, "POST", u+"/"+id+"/avanzar"+paso.query, nil)
+		if !strings.Contains(b, paso.quiere) {
+			t.Errorf("avanzar: %s (quería %q)", b, paso.quiere)
 		}
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'cancelado' where id = $1`, id)

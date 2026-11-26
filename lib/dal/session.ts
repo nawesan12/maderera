@@ -1,7 +1,9 @@
 import "server-only";
 
 import { cache } from "react";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { rebote } from "@/components/admin/secciones";
 import { inicioDelRol, type RolStaff } from "@/lib/roles";
 import { api } from "@/lib/api/servidor";
 
@@ -91,7 +93,13 @@ export const requireStaffRole = cache(
     ...allowed: ReadonlyArray<RolStaff>
   ): Promise<SessionUser> => {
     const session = await requireStaff();
-    if (!allowed.includes(session.staffRole!)) redirect(inicioDelRol(session.staffRole));
+    if (!allowed.includes(session.staffRole!)) {
+      // Con la ruta que no pudo abrir, como el rebote del layout: la página y
+      // el layout se arman a la vez, y si ganaba este redirect el inicio no
+      // decía por qué (mes simulado, H372: «vuelve en silencio al Resumen»).
+      const ruta = (await headers()).get("x-ruta") ?? "";
+      redirect(rebote(inicioDelRol(session.staffRole), ruta));
+    }
     return session;
   },
 );

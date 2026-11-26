@@ -44,6 +44,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"TurnosParaAsignar":              "/admin/caja",                   // GET /api/v1/admin/caja/turnos-para-asignar
 	"AsignarVentaAlTurno":            "/admin/caja",                   // POST /api/v1/admin/caja/ventas-sueltas/{id}/asignar
 	"VentasSinCaja":                  "/admin/caja",                   // GET /api/v1/admin/caja/ventas-sueltas
+	"EfectivoFueraDeCaja":            "/admin/caja",                   // GET /api/v1/admin/caja/fuera-de-caja
 	"GuardarParametros":              "/admin/cortes/tarifas",         // PUT /api/v1/admin/calculadoras
 	"GuardarSierra":                  "/admin/cortes/tarifas",         // PUT /api/v1/admin/cortes/sierra
 	"GuardarConsultaDeCorte":         "publico",                       // POST /api/v1/cortes/consulta
@@ -458,6 +459,9 @@ var pantallaDeCadaRuta = map[string]string{
 	"PreciosDelCliente":              "/mostrador",                    // POST /api/v1/mostrador/precios
 	"PresupuestoDeMostrador":         "/mostrador",                    // POST /api/v1/mostrador/presupuestos
 	"AnularVentaDeMostrador":         "/mostrador",                    // POST /api/v1/mostrador/ventas/{id}/anular
+	"DevolucionDeMostradorDatos":     "/mostrador",                    // GET /api/v1/mostrador/ventas/{id}/devolucion
+	"DevolucionDeMostrador":          "/mostrador",                    // POST /api/v1/mostrador/ventas/{id}/devolucion
+	"DevolucionDeMostradorCalculo":   "/mostrador",                    // POST /api/v1/mostrador/ventas/{id}/devolucion/calculo
 	"CobrarVenta":                    "/mostrador",                    // POST /api/v1/mostrador/ventas
 	"InformarChequesDeDeuda":         "publico",                       // POST /api/v1/pagos/cheques
 	"SubirComprobanteDeDeuda":        "publico",                       // POST /api/v1/pagos/comprobante-deuda

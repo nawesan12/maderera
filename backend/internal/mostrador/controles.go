@@ -14,6 +14,7 @@ import (
 	"mjbj/internal/cortes"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
+	"mjbj/internal/reservas"
 	"mjbj/internal/ventas"
 )
 
@@ -340,4 +341,73 @@ func fijo2ONulo(p *float64) *string {
 	}
 	s := jsmath.Fijo2(*p)
 	return &s
+}
+
+// listaConVentaja dice si la lista del cliente le da, en estos renglones,
+// algún precio mejor que la general. Sin lista propia, no.
+func listaConVentaja(ctx context.Context, c precios.Consultador, lineas []ventas.LineaDeVenta, lista precios.Lista) (bool, error) {
+	if !lista.Diferenciada() {
+		return false, nil
+	}
+	renglones := make([]precios.RenglonConVariante, len(lineas))
+	for i, l := range lineas {
+		renglones[i] = precios.RenglonConVariante{VariantID: l.VariantID, Presentacion: l.Presentacion}
+	}
+	propios, err := precios.PreciosDeLista(ctx, c, renglones, lista)
+	if err != nil {
+		return false, err
+	}
+	generales, err := precios.PreciosDeLista(ctx, c, renglones, precios.Lista{ID: lista.GeneralID, GeneralID: lista.GeneralID, FactorDerivado: 1})
+	if err != nil {
+		return false, err
+	}
+	for i := range renglones {
+		if propios[i] != nil && (generales[i] == nil || *propios[i] < *generales[i]-0.005) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// bajoElCosto es lo que la venta cobra por debajo del costo promedio de cada
+// renglón (con el factor de la media placa), ya con el descuento repartido.
+// Cero si ningún renglón queda abajo o no hay costos cargados.
+func (s *Servicio) bajoElCosto(ctx context.Context, lineas []ventas.LineaDeVenta) (float64, error) {
+	total := 0.0
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		conPres := make([]reservas.LineaConPresentacion, len(lineas))
+		var variantes []string
+		for i, l := range lineas {
+			conPres[i] = reservas.LineaConPresentacion{VariantID: l.VariantID, Presentacion: l.Presentacion}
+			if l.VariantID != nil {
+				variantes = append(variantes, *l.VariantID)
+			}
+		}
+		if len(variantes) == 0 {
+			return nil
+		}
+		factores, err := reservas.FactoresDeStock(ctx, tx, conPres)
+		if err != nil {
+			return err
+		}
+		costos, err := reservas.CostosParaCongelar(ctx, tx, variantes)
+		if err != nil {
+			return err
+		}
+		for i, l := range lineas {
+			if l.VariantID == nil {
+				continue
+			}
+			k, ok := costos[*l.VariantID]
+			if !ok || k.CostoUnitario == nil {
+				continue
+			}
+			c := reservas.CostoPorUnidadDeVenta(k.CostoUnitario, factores[i].StockPorUnidad)
+			if dif := jsmath.Numero(*c) - l.PrecioUnitario; dif > 0.005 {
+				total += ventas.ACentavos(float64(dif * l.Cantidad))
+			}
+		}
+		return nil
+	})
+	return ventas.ACentavos(total), err
 }

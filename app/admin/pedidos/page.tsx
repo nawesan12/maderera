@@ -55,7 +55,10 @@ export default async function PedidosPage({
     : [{}, {}];
   const avisos = { ...avisosListo, ...avisosEnCamino };
 
-  const entregados = pedidos.filter((p) => p.estado === "entregado");
+  // El entregado sin cobrar sigue en curso (Go lo trae aunque tenga más de
+  // una semana): con su tarjeta y su «Cobrar», como los listos (H367).
+  const entregadosSinCobrar = pedidos.filter((p) => p.estado === "entregado" && (p.sinCobrar ?? 0) > 0.009);
+  const entregados = pedidos.filter((p) => p.estado === "entregado" && !((p.sinCobrar ?? 0) > 0.009));
   const activos = pedidos.filter(
     (p) => !["entregado", "cancelado"].includes(p.estado),
   );
@@ -117,6 +120,22 @@ export default async function PedidosPage({
               );
             })}
           </Tablero>
+
+          {entregadosSinCobrar.length > 0 && (
+            <section className="mt-8">
+              <h2 className="mb-2.5 text-base font-semibold">
+                Entregados sin cobrar{" "}
+                <span className="tabular estado-problema">
+                  {moneda.format(entregadosSinCobrar.reduce((s, p) => s + (p.sinCobrar ?? 0), 0))}
+                </span>
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {entregadosSinCobrar.map((pedido) => (
+                  <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} cobra={cobra} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {entregados.length > 0 && (
             <section className="mt-8">

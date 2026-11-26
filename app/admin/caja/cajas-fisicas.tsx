@@ -13,6 +13,8 @@ interface CajaFisica {
   sucursal: string | null;
   activo: boolean;
   ultimaVezAt: Date | null;
+  /** El último turno que se abrió desde esta caja. */
+  ultimoTurnoAt?: Date | null;
   pendientes: number;
 }
 
@@ -166,9 +168,13 @@ export function CajasFisicas({
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {c.sucursal ?? "Sin sucursal"} ·{" "}
+                  {/* Desvincular borra el latido: sin el último turno, una
+                      caja usada decía «nunca se vinculó» (H243). */}
                   {c.ultimaVezAt
                     ? `se conectó ${haceCuanto(new Date(c.ultimaVezAt))}`
-                    : "nunca se vinculó"}
+                    : c.ultimoTurnoAt
+                      ? `último turno ${haceCuanto(new Date(c.ultimoTurnoAt))}`
+                      : "sin vincular"}
                 </p>
               </div>
 

@@ -1,6 +1,6 @@
 import { formatearMonto } from "@/lib/formato";
 import { esLineaDelCorte } from "@/lib/mostrador/importes";
-import type { DocumentoTicket } from "@/lib/mostrador/ticket";
+import { fechaDelTicket, type DocumentoTicket } from "@/lib/mostrador/ticket";
 import { BotonImprimir } from "@/app/(impresion)/ticket/[id]/boton";
 
 const MEDIOS: Record<string, string> = {
@@ -28,10 +28,7 @@ const MEDIOS: Record<string, string> = {
  * igual sale bien: es una columna angosta centrada, no una hoja rota.
  */
 export function TicketImpreso({ documento }: { documento: DocumentoTicket }) {
-  const fecha = new Date(documento.fecha).toLocaleString("es-AR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  const fecha = fechaDelTicket(documento.fecha);
 
   return (
     <div className="ticket-hoja">

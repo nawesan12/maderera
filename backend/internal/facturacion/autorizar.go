@@ -75,6 +75,10 @@ func etiqueta(tipo string, pv, n int64) string {
 
 const sinValorFiscal = "Emitido sin autorización de ARCA. El comprobante no tiene valor fiscal hasta que se cargue el certificado y se lo reenvíe."
 
+// AvisoSinARCA es lo que lee el vendedor cuando la factura de una venta no
+// se pudo mandar a ARCA (no hay certificado): una sola línea.
+const AvisoSinARCA = "Factura sin autorizar en ARCA: sale sin valor fiscal."
+
 // maxAnteriores es cuántos comprobantes anteriores sin CAE se autorizan en un
 // solo pedido antes de mandar a autorizar la serie por tramos. Era 50: con el
 // mutex de s.cae y el candado de CAE tomados, un pedido podía hacer 51

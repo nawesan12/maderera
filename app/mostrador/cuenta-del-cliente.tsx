@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatearMonto } from "@/lib/formato";
 import {
   cobrarCuentaEnMostrador,
-  saldoDeCuenta,
+  cuentaDelCliente,
   type EstadoCobroDeCuenta,
 } from "./actions";
 import { enfocar } from "./atajos";
@@ -25,19 +25,26 @@ export function SaldoDelCliente({
   cliente,
   branchId,
   enLinea,
+  aCuenta = 0,
 }: {
   cliente: Cliente;
   branchId: string;
   enLinea: boolean;
+  /** Lo que la venta de ahora carga a cuenta corriente (0 si no carga). */
+  aCuenta?: number;
 }) {
-  const [saldo, setSaldo] = useState<{ de: string; monto: number } | null>(null);
+  const [saldo, setSaldo] = useState<{
+    de: string;
+    monto: number;
+    sinCobrar: { id: string; numero: string; monto: number }[];
+  } | null>(null);
   const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
     if (!enLinea) return;
     let vigente = true;
-    saldoDeCuenta(cliente.id).then((monto) => {
-      if (vigente) setSaldo({ de: cliente.id, monto });
+    cuentaDelCliente(cliente.id).then((c) => {
+      if (vigente) setSaldo({ de: cliente.id, monto: c.saldo, sinCobrar: c.sinCobrar });
     });
     return () => {
       vigente = false;
@@ -46,21 +53,77 @@ export function SaldoDelCliente({
 
   // El saldo es del cliente que se pidió: si se cambió en el medio, no se muestra.
   const monto = saldo?.de === cliente.id ? saldo.monto : null;
-  if (monto === null || Math.abs(monto) < 0.01) return null;
+  /*
+   * El límite y lo que queda, junto al «Debe», antes de armar la venta: el
+   * PIN aparecía recién al cobrar, con la venta hecha (mes simulado, H026).
+   * Lo que la venta de ahora pasa del límite se marca en el acto.
+   */
+  const limite = cliente.limiteCredito ?? 0;
+  const quedan = monto !== null && limite > 0 ? Math.round((limite - Math.max(monto, 0)) * 100) / 100 : null;
+  const pasa = quedan !== null && aCuenta > 0 ? Math.round((aCuenta - quedan) * 100) / 100 : 0;
+  const lineaDelLimite =
+    quedan !== null ? (
+      <span className={`tabular ${pasa > 0 || quedan <= 0 ? "estado-problema font-semibold" : "text-muted-foreground"}`}>
+        {" · "}límite {formatearMonto(limite)} · {quedan > 0 ? `quedan ${formatearMonto(quedan)}` : "sin margen"}
+        {pasa > 0 && ` · pasa ${formatearMonto(pasa)} · PIN admin`}
+      </span>
+    ) : null;
+  if (monto === null) return null;
+  /*
+   * Los pedidos entregados sin cobrar no están en la cuenta: se ven acá, con
+   * el enlace a su ficha, que es donde se cobran. Antes el pedido
+   * desaparecía para el vendedor (mes simulado, H367).
+   */
+  const pendientes = saldo?.de === cliente.id ? saldo.sinCobrar : [];
+  const sinCobrar =
+    pendientes.length > 0 ? (
+      <ul className="space-y-1 px-1">
+        {pendientes.map((p) => (
+          <li key={p.id} className="flex items-center justify-between gap-3 text-sm">
+            <span className="estado-problema">
+              <span className="codigo">{p.numero}</span> sin cobrar{" "}
+              <strong className="tabular">{formatearMonto(p.monto)}</strong>
+            </span>
+            <a
+              href={`/admin/pedidos/${p.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-hundida"
+            >
+              Cobrar
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : null;
+  if (Math.abs(monto) < 0.01) {
+    if (!sinCobrar && !(quedan !== null && aCuenta > 0)) return null;
+    return (
+      <div className="space-y-1.5">
+        {quedan !== null && aCuenta > 0 && <p className="px-1 text-sm">Sin deuda{lineaDelLimite}</p>}
+        {sinCobrar}
+      </div>
+    );
+  }
 
   if (monto < 0) {
     return (
-      <p className="px-1 text-sm text-muted-foreground">
-        Tiene <strong className="tabular text-saldo-favor">{formatearMonto(-monto)}</strong> a
-        favor: se usa cobrando con «Cuenta corriente».
-      </p>
+      <div className="space-y-1.5">
+        <p className="px-1 text-sm text-muted-foreground">
+          Tiene <strong className="tabular text-saldo-favor">{formatearMonto(-monto)}</strong> a
+          favor: se usa cobrando con «Cuenta corriente».
+        </p>
+        {sinCobrar}
+      </div>
     );
   }
 
   return (
+    <div className="space-y-1.5">
     <div className="flex items-center justify-between gap-3 px-1">
-      <p className="text-sm">
+      <p className="min-w-0 text-sm">
         Debe <strong className="tabular text-saldo-debe">{formatearMonto(monto)}</strong>
+        {lineaDelLimite}
       </p>
       <button
         type="button"
@@ -83,6 +146,8 @@ export function SaldoDelCliente({
         />
       )}
     </div>
+    {sinCobrar}
+    </div>
   );
 }
 
@@ -100,8 +165,21 @@ export function CobroDeCuenta({
   // Una por cobro (el diálogo nace al abrirse): si se pierde la respuesta y
   // se aprieta otra vez, Go devuelve el mismo recibo.
   const [clave] = useState(() => crypto.randomUUID());
+  /*
+   * Cobrar más de lo que debe pide un segundo toque: la única señal era una
+   * leyenda chica en ámbar, cobraba al primer clic y el cliente quedaba con
+   * plata a favor tomada de más (mes simulado, H368).
+   */
+  const [suma, setSuma] = useState(debe);
+  const excede = Math.round((suma - debe) * 100) / 100;
+  const [confirmaExceso, setConfirmaExceso] = useState<number | null>(null);
   const [estado, accion, pendiente] = useActionState(
     async (previo: EstadoCobroDeCuenta, formData: FormData) => {
+      // La acción es la del último render: ve la suma y la confirmación de ahora.
+      if (excede > 0.005 && confirmaExceso !== excede) {
+        setConfirmaExceso(excede);
+        return previo;
+      }
       const r = await cobrarCuentaEnMostrador(previo, formData);
       if (r.ok && r.receiptId) {
         toast.success(r.ok);
@@ -145,7 +223,7 @@ export function CobroDeCuenta({
           <input type="hidden" name="customerId" value={cliente.id} />
           <input type="hidden" name="branchId" value={branchId} />
           <input type="hidden" name="clave" value={clave} />
-          <CobroMultimedio aCobrar={debe} />
+          <CobroMultimedio aCobrar={debe} onTotal={setSuma} />
           {estado.error && (
             <p role="alert" className="estado-problema rounded-lg bg-[var(--estado-fondo)] px-3.5 py-2.5 text-base">
               {estado.error}
@@ -154,10 +232,16 @@ export function CobroDeCuenta({
           <button
             type="submit"
             disabled={pendiente}
-            className="boton-accion inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-base font-semibold disabled:opacity-60"
+            className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-base font-semibold disabled:opacity-60 ${
+              excede > 0.005 && confirmaExceso === excede
+                ? "bg-destructive text-white hover:bg-destructive/90"
+                : "boton-accion"
+            }`}
           >
             {pendiente && <Loader2 className="h-5 w-5 animate-spin" />}
-            Cobrar e imprimir el recibo
+            {excede > 0.005 && confirmaExceso === excede
+              ? `Cobrar igual: quedan ${formatearMonto(excede)} a favor`
+              : "Cobrar e imprimir el recibo"}
           </button>
         </form>
       </DialogContent>

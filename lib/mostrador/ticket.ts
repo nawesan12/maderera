@@ -18,6 +18,26 @@ import {
   type PagoDeVenta,
 } from "./importes";
 
+const FECHA_DEL_TICKET = new Intl.DateTimeFormat("es-AR", {
+  timeZone: "America/Argentina/Buenos_Aires",
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/**
+ * La fecha del papel, en hora argentina y en 24 h. El ticket se arma en el
+ * servidor, que corre en UTC, y salía tres horas adelantado («4:08 a. m.» de
+ * una venta de la 01:08; mes simulado, H029): una venta de las 22 salía con
+ * el día siguiente.
+ */
+export function fechaDelTicket(iso: string): string {
+  return FECHA_DEL_TICKET.format(new Date(iso));
+}
+
 export interface LineaDelTicket {
   descripcion: string;
   cantidad: number;

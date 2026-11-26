@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/cobros"
 	"mjbj/internal/cola"
 	"mjbj/internal/fiscal"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -312,7 +313,7 @@ func (s *Servicio) EmitirManual(ctx context.Context, ses *auth.Sesion, c map[str
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "factura", id, "Emitió un comprobante manual a "+nombre, nil)
 	if recibo != nil {
 		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCobrar, "factura", id,
-			"Cobró de contado con el recibo "+recibo.Numero+" por "+jsmath.Fijo2(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
+			"Cobró de contado con el recibo "+recibo.Numero+" por "+formato.Importe(recibo.Total), map[string]any{"receiptId": recibo.ReceiptID})
 		if recibo.Aviso != nil && *recibo.Aviso != "" {
 			aviso = recibo.Aviso
 		}
@@ -535,6 +536,12 @@ func (s *Servicio) EmitirParaLaVenta(ctx context.Context, p PedidoDeComprobante)
 		if m == "" {
 			m = "error desconocido"
 			s.log.Error("autorizando la venta", "invoiceId", id, "error", err)
+		}
+		// Sin certificado no hubo envío: el mostrador lo dice en una línea y
+		// sin la jerga del certificado, que el vendedor no maneja y que antes
+		// repetía la misma idea dos veces (mes simulado, H020).
+		if m == sinValorFiscal {
+			return ResultadoComprobante{InvoiceID: &id, Aviso: AvisoSinARCA}, nil
 		}
 		return ResultadoComprobante{InvoiceID: &id, Aviso: "Comprobante creado, pero sin autorizar en ARCA: " + m}, nil
 	}

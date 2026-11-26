@@ -31,6 +31,10 @@ export interface EstadoMostrador {
    * Es distinto de `error`: la venta está, lo que falta es el papel.
    */
   avisoFiscal?: string;
+  /** Lo que tenía la venta anulada, para «Anular y rehacer». */
+  renglones?: LineaDeVenta[];
+  /** La venta anulada tenía un corte, que hay que volver a armar. */
+  conCorte?: boolean;
   /**
    * Falta el PIN de un admin: lo que se deja de cobrar pasa lo libre, la
    * cuenta corriente pasa el límite, o la anulación no es del vendedor. La
@@ -62,6 +66,10 @@ export interface VentaDelMostrador {
   notas?: string | null;
   /** Los cortes de la venta; cada renglón de uno lleva su índice en `corte`. */
   cortes?: CorteDeMostrador[];
+  /** El pago partido en medios distintos: el descuento por forma de pago no corre. */
+  sinEscala?: boolean;
+  /** El cliente con lista propia compra esta vez a la lista general. */
+  aLista?: boolean;
   /** El PIN de un admin, o la ficha de un PIN anterior para esta venta. */
   pin?: string;
   ficha?: string;
@@ -81,8 +89,23 @@ const error = (r: { error?: unknown }) => ({ error: mensajeDe(r.error as Problem
 /* Caja                                                                        */
 /* -------------------------------------------------------------------------- */
 
-export async function abrirCaja(branchId: string, fondoInicial: number): Promise<EstadoMostrador> {
-  const r = await (await api()).POST("/api/v1/mostrador/caja/abrir", { body: { branchId, fondoInicial } });
+/**
+ * Abre el turno. Si el fondo no es lo que quedó contado al cerrar el turno
+ * anterior, Go pide el motivo de la diferencia (`motivo`) y la deja como un
+ * retiro o ingreso «entre turnos». `cajaId` es la caja física de esta PC.
+ */
+export async function abrirCaja(
+  branchId: string,
+  fondoInicial: number,
+  extra: { motivo?: string; cajaId?: string | null } = {},
+): Promise<EstadoMostrador> {
+  const body = {
+    branchId,
+    fondoInicial,
+    ...(extra.motivo?.trim() ? { motivo: extra.motivo.trim() } : {}),
+    ...(extra.cajaId ? { cajaId: extra.cajaId } : {}),
+  };
+  const r = await (await api()).POST("/api/v1/mostrador/caja/abrir", { body });
   if (!r.data) return error(r);
   refrescar();
   return { ok: r.data.ok };
@@ -308,18 +331,42 @@ export async function anularVenta(
   refrescar();
   return {
     ok: r.data.ok,
+    // A quien no entra a Facturación no se lo manda ahí: Go ya le avisó a
+    // administración (mes simulado, H178).
     avisoFiscal: !r.data.facturaPendiente
       ? undefined
-      : r.data.facturaSinCae
-        ? "La venta tenía factura sin CAE. Dala de baja desde Facturación."
-        : "La venta tenía factura. Emitile la nota de crédito desde Facturación.",
+      : r.data.avisado
+        ? "Administración ya tiene el aviso de la factura."
+        : r.data.facturaSinCae
+          ? "La venta tenía factura sin CAE. Dala de baja desde Facturación."
+          : "La venta tenía factura. Emitile la nota de crédito desde Facturación.",
+    renglones: (r.data.renglones ?? []).map((l) => ({
+      variantId: l.variantId ?? null,
+      descripcion: l.descripcion,
+      unidad: l.unidad,
+      cantidad: l.cantidad,
+      precioUnitario: l.precioUnitario,
+      precioLista: l.variantId ? l.precioUnitario : null,
+      presentacion: (l.presentacion as LineaDeVenta["presentacion"]) ?? null,
+    })),
+    conCorte: r.data.conCorte ?? false,
   };
 }
 
 /** Lo que debe un cliente, para ofrecer cobrarle la cuenta en el mostrador. */
 export async function saldoDeCuenta(customerId: string): Promise<number> {
-  const r = await (await api()).GET("/api/v1/mostrador/clientes/{id}/saldo", { params: { path: { id: customerId } } });
-  return datos(r).saldo;
+  return (await cuentaDelCliente(customerId)).saldo;
+}
+
+/**
+ * Lo que debe el cliente y sus pedidos entregados sin cobrar, que no están
+ * en la cuenta: se ven junto al «Debe» (mes simulado, H367).
+ */
+export async function cuentaDelCliente(
+  customerId: string,
+): Promise<{ saldo: number; sinCobrar: { id: string; numero: string; monto: number }[] }> {
+  const r = datos(await (await api()).GET("/api/v1/mostrador/clientes/{id}/saldo", { params: { path: { id: customerId } } }));
+  return { saldo: r.saldo, sinCobrar: r.sinCobrar ?? [] };
 }
 
 export interface EstadoCobroDeCuenta {
@@ -352,4 +399,56 @@ export async function cobrarCuentaEnMostrador(
   revalidatePath("/admin/clientes");
   revalidatePath("/admin/caja");
   return { ok: r.data.ok, receiptId: r.data.receiptId, numero: r.data.numero };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Devolución parcial                                                          */
+/* -------------------------------------------------------------------------- */
+
+type RenglonADevolverEnMostrador = { itemId: string; cantidad: number; alStock: boolean; delAcopio: number | null };
+
+/**
+ * Lo que se puede devolver de una venta de hoy con factura: la misma ficha de
+ * la devolución del panel (mes simulado, H270).
+ */
+export async function datosDeDevolucionDeVenta(orderId: string) {
+  const r = await (await api()).GET("/api/v1/mostrador/ventas/{id}/devolucion", { params: { path: { id: orderId } } });
+  if (!r.data) return { error: (error(r).error ?? "No se pudo abrir la devolución.") as string };
+  return { datos: r.data as unknown as import("@/lib/dal/admin/facturacion").DatosDeDevolucion };
+}
+
+export async function calcularDevolucionDeVenta(
+  orderId: string,
+  renglones: RenglonADevolverEnMostrador[],
+): Promise<{ importe?: number; error?: string }> {
+  const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/devolucion/calculo", {
+    params: { path: { id: orderId } },
+    body: { renglones },
+  });
+  if (!r.data) return { error: error(r).error };
+  return { importe: r.data.importe };
+}
+
+/** La devolución: al vendedor le pide la firma de un admin, como anular. */
+export async function devolverDeVenta(
+  orderId: string,
+  pedido: {
+    clave: string;
+    destino: "caja" | "cuenta" | "afuera" | "deuda";
+    motivo: string;
+    sinStock: "rota" | "otro" | null;
+    sucursalId: string | null;
+    importe: number;
+    renglones: RenglonADevolverEnMostrador[];
+  },
+  pin?: string,
+): Promise<{ ok?: string; error?: string; autorizacion?: Autorizacion }> {
+  const r = await (await api()).POST("/api/v1/mostrador/ventas/{id}/devolucion", {
+    params: { path: { id: orderId } },
+    body: { ...pedido, ...(pin ? { pin } : {}) },
+  });
+  if (!r.data) return { error: error(r).error };
+  if (r.data.autorizacion) return { error: r.data.error, autorizacion: r.data.autorizacion as Autorizacion };
+  refrescar();
+  return { ok: r.data.ok };
 }

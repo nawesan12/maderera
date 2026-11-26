@@ -80,7 +80,7 @@ paths:
               properties:
                 motivo: { type: string }
                 volvioLaMercaderia: { type: boolean, default: true, description: "false: el cliente se la llevó y el stock no vuelve (pide el PIN)" }
-                pin: { type: string, maxLength: 20 }
+                pin: { type: string, maxLength: 128, description: "el PIN de un admin, o su contraseña si ninguno cargó PIN" }
                 ficha: { type: string, maxLength: 400 }
       responses:
         "200":
@@ -94,8 +94,96 @@ paths:
                   porAfuera: { type: number, format: double, description: "Lo que falta devolver por el posnet o el banco (sin el efectivo, la cuenta corriente ni el cheque en cartera)" }
                   facturaPendiente: { type: string }
                   facturaSinCae: { type: boolean }
+                  avisado: { type: boolean, description: "la factura que quedó viva se le avisó a administración" }
+                  renglones:
+                    type: array
+                    description: "lo que tenía la venta, para rehacerla (sin los renglones de un corte)"
+                    items:
+                      type: object
+                      required: [variantId, descripcion, unidad, cantidad, precioUnitario, presentacion]
+                      properties:
+                        variantId: { type: string, nullable: true }
+                        descripcion: { type: string }
+                        unidad: { type: string }
+                        cantidad: { type: number, format: double }
+                        precioUnitario: { type: number, format: double }
+                        presentacion: { type: string, nullable: true }
+                  conCorte: { type: boolean, description: "la venta tenía un corte, que no se rehace solo" }
                   error: { type: string }
                   autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/ventas/{id}/devolucion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: DevolucionDeMostradorDatos
+      description: Lo que se puede devolver de una venta del mostrador con factura (la ficha de facturación, la misma de la devolución del panel)
+      responses:
+        "200":
+          description: Los renglones, la sucursal y por dónde puede volver la plata
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DevolucionDeMostrador
+      description: >-
+        La devolución parcial de una venta del mostrador (facturacion.DevolucionParcial): la nota,
+        el stock y la plata. A quien no es admin le pide el PIN, como anular.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, destino, motivo, importe, renglones]
+              properties:
+                clave: { type: string }
+                destino: { type: string, enum: [caja, cuenta, afuera, deuda] }
+                motivo: { type: string }
+                sinStock: { type: string, nullable: true, enum: [rota, otro, null] }
+                sucursalId: { type: string, nullable: true }
+                importe: { type: number, format: double }
+                renglones: { type: array, items: { $ref: "#/components/schemas/MostradorRenglonADevolver" } }
+                pin: { type: string, maxLength: 128 }
+                ficha: { type: string, maxLength: 400 }
+      responses:
+        "200":
+          description: Hecha, o el PIN que falta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: string }
+                  notaId: { type: string, nullable: true }
+                  error: { type: string }
+                  autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/ventas/{id}/devolucion/calculo:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: DevolucionDeMostradorCalculo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [renglones]
+              properties:
+                renglones: { type: array, items: { $ref: "#/components/schemas/MostradorRenglonADevolver" } }
+      responses:
+        "200":
+          description: Lo que se devolvería
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [importe]
+                properties:
+                  importe: { type: number, format: double }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/buscar:
     get:
@@ -193,6 +281,16 @@ paths:
                 required: [saldo]
                 properties:
                   saldo: { type: number, format: double }
+                  sinCobrar:
+                    type: array
+                    description: "pedidos del cliente con mercadería que salió y algo sin cobrar"
+                    items:
+                      type: object
+                      required: [id, numero, monto]
+                      properties:
+                        id: { type: string }
+                        numero: { type: string }
+                        monto: { type: number, format: double }
   /api/v1/mostrador/clientes/{id}/cobro:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -258,6 +356,8 @@ paths:
               properties:
                 branchId: { type: string }
                 fondoInicial: { type: number, format: double, nullable: true }
+                motivo: { type: string, description: "adónde fue (o de dónde vino) la diferencia con lo contado al cerrar el turno anterior" }
+                cajaId: { type: string, description: "la caja física de la PC que abre, si tiene una" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -373,17 +473,26 @@ components:
         error: { type: string }
         autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         ficha: { type: string, description: "un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha" }
+    MostradorRenglonADevolver:
+      type: object
+      required: [itemId, cantidad, alStock]
+      properties:
+        itemId: { type: string }
+        cantidad: { type: number, format: double }
+        alStock: { type: boolean }
+        delAcopio: { type: number, format: double, nullable: true }
     MostradorAutorizacion:
       type: object
       description: Hace falta el PIN de un administrador (internal/autorizacion)
       required: [motivo, monto]
       properties:
-        motivo: { type: string, enum: [precio, credito, anular, presupuesto] }
+        motivo: { type: string, enum: [precio, credito, anular, presupuesto, costo] }
         monto: { type: number, format: double, description: lo que se autoriza (lo dejado de cobrar, lo que pasa el límite, la venta que se anula) }
         credito: { type: number, format: double, description: con motivo precio, lo que además pasa el límite de cuenta corriente (el mismo PIN firma las dos cosas) }
         pinIncorrecto: { type: boolean }
         bloqueadoHasta: { type: string, format: date-time }
         sinAdmins: { type: boolean, description: ningún admin cargó su PIN }
+        conClave: { type: boolean, description: "sin PIN cargado, firma la contraseña de un admin" }
     MostradorFiscalPendiente:
       type: object
       description: Lo que Next necesita para emitir el comprobante (facturación sigue en TS)
@@ -474,7 +583,7 @@ components:
             nombre: { type: string }
     MostradorTurno:
       type: object
-      required: [id, sucursal, branchId, abiertaPor, abiertaAt, esperado, fondoInicial, fondoBase, ventasEnEfectivo, otrosIngresos, retiros, cantidadDeVentas]
+      required: [id, sucursal, branchId, abiertaPor, abiertaAt, esperado, fondoInicial, fondoBase, ventasEnEfectivo, otrosIngresos, retiros, devoluciones, gastos, cantidadDeVentas]
       properties:
         id: { type: string }
         sucursal: { type: string }
@@ -487,6 +596,8 @@ components:
         ventasEnEfectivo: { type: number, format: double }
         otrosIngresos: { type: number, format: double }
         retiros: { type: number, format: double }
+        devoluciones: { type: number, format: double, description: "anulaciones y devoluciones en efectivo (en negativo)" }
+        gastos: { type: number, format: double, description: "gastos en efectivo cargados desde el panel (en negativo)" }
         cantidadDeVentas: { type: integer }
     MostradorMovimiento:
       type: object
@@ -501,27 +612,30 @@ components:
         quien: { type: string, nullable: true }
     MostradorVentaDeHoy:
       type: object
-      required: [id, numero, cliente, total, medioPago, estado, createdAt]
+      required: [id, numero, cliente, total, medioPago, medios, conFactura, estado, createdAt]
       properties:
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
         total: { type: number, format: double }
         medioPago: { type: string, nullable: true }
+        medios: { type: array, items: { type: string }, description: "todos los medios de un pago partido, del más grande al más chico" }
+        conFactura: { type: boolean, description: "tiene factura viva: se puede devolver una parte" }
         estado: { type: string }
         createdAt: { type: string, format: date-time }
     MostradorRenglonDelCierre:
       type: object
-      required: [medioPago, cantidad, total, devolucion, quien]
+      required: [medioPago, cantidad, total, devolucion, quien, cobranza]
       properties:
         medioPago: { type: string }
         cantidad: { type: integer }
         total: { type: number, format: double, description: En negativo si es una devolución }
         devolucion: { type: boolean, description: Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) }
         quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
+        cobranza: { type: boolean, description: "lo cobrado por recibos de cuenta en el mostrador durante el turno" }
     MostradorPantalla:
       type: object
-      required: [turno, movimientos, cierre, ventas, listaGeneral, fondoBase, descuentoLibrePct]
+      required: [turno, movimientos, cierre, ventas, listaGeneral, fondoBase, descuentoLibrePct, ultimoContado]
       properties:
         turno:
           nullable: true
@@ -532,3 +646,4 @@ components:
         listaGeneral: { type: string, nullable: true }
         fondoBase: { type: number, format: double }
         descuentoLibrePct: { type: number, format: double, description: "lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)" }
+        ultimoContado: { type: number, format: double, nullable: true, description: "lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente" }

@@ -257,7 +257,7 @@ func TestTurnosVentasSueltasYFondo(t *testing.T) {
 	if tc.Esperado != 14000 || *tc.Contado != 14000 || tc.Tardios != 1 || tc.TardiosMonto != 1000 || tc.AbiertaPor != "Persona admin" || tc.Sucursal != "Casa Central" {
 		t.Errorf("turno: %+v", tc)
 	}
-	if fmt.Sprint(tc.Cierre) != "[{efectivo 2 6000 false <nil>} {debito 1 2000 false <nil>}]" {
+	if fmt.Sprint(tc.Cierre) != "[{efectivo 2 6000 false <nil> false} {debito 1 2000 false <nil> false}]" {
 		t.Errorf("cierre Z: %+v", tc.Cierre)
 	}
 	if c, _ := pedir(t, ven, "GET", e.u+"turnos-cerrados", nil); c != 403 {
@@ -367,14 +367,14 @@ func TestAnularNoCambiaElCierreDeOtroTurno(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(b), &pagina)
 	cerrados := pagina.Filas
-	if len(cerrados) != 1 || fmt.Sprint(cerrados[0].Cierre) != "[{efectivo 1 1000 false <nil>}]" {
+	if len(cerrados) != 1 || fmt.Sprint(cerrados[0].Cierre) != "[{efectivo 1 1000 false <nil> false}]" {
 		t.Errorf("el Z del turno cerrado no cambia con la anulación de hoy: %s", b)
 	}
 	z, err := CierreDelTurno(ctx, e.pool, hoy)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(z) != "[{efectivo 1 -1000 true <nil>}]" {
+	if fmt.Sprint(z) != "[{efectivo 1 -1000 true <nil> false}]" {
 		t.Errorf("la devolución se ve en el turno en que se hizo: %+v", z)
 	}
 }

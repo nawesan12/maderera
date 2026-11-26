@@ -43,7 +43,32 @@ export function formatearMonto(valor: string | number | null): string {
   const numero = typeof valor === "string" ? Number(valor) : valor;
   if (!Number.isFinite(numero)) return "—";
 
-  return moneda.format(numero);
+  // Lo que redondea a cero es «$ 0»: Intl dice «-$ 0» de un -0,40, y una
+  // caja que cierra se leía en rojo (mes simulado, H148).
+  return moneda.format(Math.round(numero) === 0 ? 0 : numero);
+}
+
+const MONEDA_CON_CENTAVOS = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * La plata de la caja: los pesos enteros como `formatearMonto` y los
+ * centavos solo cuando los hay («$ 50.000», «-$ 0,40»). El efectivo con el
+ * descuento del 10 % deja centavos, y redondeados a pesos el arqueo escondía
+ * diferencias («-$ 0» en rojo de 40 centavos que faltaban; mes simulado,
+ * H164, H263 y H363). Es `formato.Importe` de Go.
+ */
+export function formatearImporte(valor: string | number | null): string {
+  if (valor === null) return "—";
+  const numero = typeof valor === "string" ? Number(valor) : valor;
+  if (!Number.isFinite(numero)) return "—";
+  const centavos = Math.round(numero * 100);
+  if (centavos === 0) return moneda.format(0);
+  return centavos % 100 === 0 ? moneda.format(centavos / 100) : MONEDA_CON_CENTAVOS.format(centavos / 100);
 }
 
 const UN_DECIMAL = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });

@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
@@ -326,7 +327,7 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 		ref = " (" + *x.Referencia + ")"
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "proveedor", x.SupplierID,
-		"Anotó un ajuste de $"+jsmath.Fijo2(conSigno)+ref+": "+*x.Detalle, nil)
+		"Anotó un ajuste de "+formato.Importe(conSigno)+ref+": "+*x.Detalle, nil)
 	return x.SupplierID, nil
 }
 

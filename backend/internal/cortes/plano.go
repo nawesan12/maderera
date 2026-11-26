@@ -714,6 +714,11 @@ func sembrarFijadas(
 type Cobro struct {
 	Placas  int `json:"placasACobrar"`
 	Pasadas int `json:"pasadasACobrar"`
+	// Parciales son las placas del plano que no pasan la mitad: no se
+	// venden, se cobra su corte y el recorte queda en la maderera. El
+	// mostrador lo dice al armar el corte («Material sin cargo»): antes se
+	// descubría leyendo la venta (mes simulado, H019 y H174).
+	Parciales int `json:"placasParciales"`
 	// Manual: se cobra el acomodo a mano (cobra más placas que el libre).
 	Manual bool `json:"-"`
 }
@@ -728,13 +733,13 @@ type Cobro struct {
 func ACobrar(d DatosDelPlano) Cobro {
 	manual := CalcularPlano(d)
 	if len(d.Fijadas) == 0 {
-		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables}
+		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Parciales: len(manual.Placas) - manual.PlacasEnteras}
 	}
 	sinFijar := d
 	sinFijar.Fijadas = nil
 	libre := CalcularPlano(sinFijar)
 	if manual.PlacasEnteras > libre.PlacasEnteras {
-		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Manual: true}
+		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Manual: true, Parciales: len(manual.Placas) - manual.PlacasEnteras}
 	}
-	return Cobro{Placas: libre.PlacasEnteras, Pasadas: libre.PasadasCobrables}
+	return Cobro{Placas: libre.PlacasEnteras, Pasadas: libre.PasadasCobrables, Parciales: len(libre.Placas) - libre.PlacasEnteras}
 }

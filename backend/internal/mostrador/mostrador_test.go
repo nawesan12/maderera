@@ -181,7 +181,7 @@ func TestVentaEnLineaYAnulacion(t *testing.T) {
 	}
 	// Abrir con menos que la base avisa.
 	st, m, _ = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/caja/abrir", map[string]any{"branchId": e.central, "fondoInicial": 500})
-	if st != 200 || m["ok"] != "Caja abierta, pero el fondo quedó por debajo de la base de $1000.00. Reponé el cambio." {
+	if st != 200 || m["ok"] != "Caja abierta, pero el fondo quedó por debajo de la base de $\u00a01.000. Reponé el cambio." {
 		t.Fatalf("abrir: %d %v", st, m)
 	}
 	st, m, _ = pedir(t, ven, "POST", e.u+"/api/v1/mostrador/caja/abrir", map[string]any{"branchId": e.central, "fondoInicial": 500})
@@ -467,7 +467,7 @@ func TestCajaArqueoYMovimientos(t *testing.T) {
 		st, m, _ := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/caja/movimiento", map[string]any{"sessionId": sesion, "tipo": tipo, "monto": monto, "motivo": motivo})
 		return st, m
 	}
-	if st, m := mov("retiro", 600, "Proveedor"); st != 422 || fmt.Sprint(m["errores"]) != "map[error:Ese retiro deja el cajón sin el cambio de la base ($1000.00). Podés retirar hasta $500.00.]" {
+	if st, m := mov("retiro", 600, "Proveedor"); st != 422 || fmt.Sprint(m["errores"]) != "map[error:Ese retiro deja el cajón sin el cambio de la base ($\u00a01.000). Podés retirar hasta $\u00a0500.]" {
 		t.Fatalf("retiro de más: %d %v", st, m)
 	}
 	if st, m := mov("retiro", 500, "Proveedor"); st != 200 || m["ok"] != "Retiro registrado." {
@@ -490,10 +490,10 @@ func TestCajaArqueoYMovimientos(t *testing.T) {
 	if _, err := e.pool.Exec(context.Background(), `update pos_devices set pendientes = 0`); err != nil {
 		t.Fatal(err)
 	}
-	if st, m := cerrar(900, ""); st != 422 || fmt.Sprint(m["errores"]) != "map[error:Hay un faltante de $100.00. Escribí qué pasó antes de cerrar: mañana nadie se va a acordar.]" {
+	if st, m := cerrar(900, ""); st != 422 || fmt.Sprint(m["errores"]) != "map[error:Hay un faltante de $\u00a0100. Escribí qué pasó antes de cerrar: mañana nadie se va a acordar.]" {
 		t.Fatalf("faltante sin nota: %d %v", st, m)
 	}
-	if st, m := cerrar(900, "Un billete falso"); st != 200 || m["ok"] != "Caja cerrada con un faltante de $100.00. Ojo: quedan $900.00 en el cajón y la base de cambio es $1000.00." {
+	if st, m := cerrar(900, "Un billete falso"); st != 200 || m["ok"] != "Caja cerrada con un faltante de $\u00a0100. Ojo: quedan $\u00a0900 en el cajón y la base de cambio es $\u00a01.000." {
 		t.Fatalf("cierre: %d %v", st, m)
 	}
 	if st, m := cerrar(900, "otra"); st != 422 || fmt.Sprint(m["errores"]) != "map[error:Esa caja ya estaba cerrada.]" {

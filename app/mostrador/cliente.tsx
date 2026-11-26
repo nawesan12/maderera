@@ -29,7 +29,10 @@ export function BuscadorDeCliente({
   branchId,
   enLinea,
   buscarLocal,
+  aCuenta = 0,
 }: {
+  /** Lo que la venta de ahora carga a cuenta corriente: se mide contra el límite. */
+  aCuenta?: number;
   cliente: Cliente | null;
   onCliente: (c: Cliente | null) => void;
   branchId: string;
@@ -141,7 +144,7 @@ export function BuscadorDeCliente({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <SaldoDelCliente cliente={cliente} branchId={branchId} enLinea={enLinea} />
+        <SaldoDelCliente cliente={cliente} branchId={branchId} enLinea={enLinea} aCuenta={aCuenta} />
       </div>
     );
   }

@@ -16,6 +16,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/cola"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
@@ -156,7 +157,7 @@ func (s *Servicio) CobrarACliente(ctx context.Context, ses *auth.Sesion, cliente
 	if r.Repetido {
 		return ResultadoDeCobro{Ok: "Recibo " + r.Numero + " emitido.", ReceiptID: &r.ReceiptID}, nil
 	}
-	desc := "Emitió el recibo " + r.Numero + " por " + jsmath.Fijo2(r.Total)
+	desc := "Emitió el recibo " + r.Numero + " por " + formato.Importe(r.Total)
 	if numeroPedido != "" {
 		desc += " (pedido " + numeroPedido + ")"
 	}
@@ -311,7 +312,7 @@ func (s *Servicio) CargarCheque(ctx context.Context, ses *auth.Sesion, f FormChe
 		return err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "cheque", "",
-		"Cheque "+f.Sentido+" "+numero+" por $"+jsmath.Fijo2(importe)+", al "+fechaCorta(fecha), nil)
+		"Cheque "+f.Sentido+" "+numero+" por "+formato.Importe(importe)+", al "+fechaCorta(fecha), nil)
 	return nil
 }
 

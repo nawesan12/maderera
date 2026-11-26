@@ -80,6 +80,7 @@ paths:
       parameters:
         - { $ref: "#/components/parameters/Id" }
         - { name: desde, in: query, schema: { type: string, maxLength: 40 } }
+        - { name: sinCobrar, in: query, schema: { type: boolean }, description: "entregar un corte que no está cobrado, sabiéndolo" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "404": { $ref: "#/components/responses/Problema" }
@@ -383,6 +384,7 @@ paths:
                   plano: { $ref: "#/components/schemas/Plano" }
                   placasACobrar: { type: integer, description: "Las placas enteras que se cobran: con piezas acomodadas a mano, las del plano libre salvo que el manual gaste más" }
                   pasadasACobrar: { type: integer, description: Las pasadas del plano que se cobra }
+                  placasParciales: { type: integer, description: "Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte" }
                   cuenta: { $ref: "#/components/schemas/Presupuesto" }
                   hoja: { $ref: "#/components/schemas/HojaDeCorte" }
                   superficies: { type: array, items: { type: number, format: double } }
@@ -573,6 +575,9 @@ components:
         sucursal: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         piezas: { type: array, items: { $ref: "#/components/schemas/PiezaDelCorte" } }
+        formaDeVenta: { type: string, nullable: true }
+        unidad: { type: string, nullable: true }
+        cobrado: { type: boolean, description: "tiene venta y no le queda nada por cobrar" }
         precioPlaca: { type: number, format: double, nullable: true }
         medida: { $ref: "#/components/schemas/Medida" }
     TarifaDeCorte:

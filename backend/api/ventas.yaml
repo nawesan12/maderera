@@ -316,7 +316,7 @@ paths:
                 medioPago: { $ref: "#/components/schemas/MedioPago" }
                 entregarEl: { type: string, description: AAAA-MM-DD }
                 precios: { type: string, enum: [actualizar, respetar], description: "para un presupuesto vencido: los de hoy o los del presupuesto (pasado lo libre, con el PIN de un admin)" }
-                pin: { type: string, maxLength: 20 }
+                pin: { type: string, maxLength: 128, description: "el PIN de un admin, o su contraseña si ninguno cargó PIN" }
                 ficha: { type: string, maxLength: 400 }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }

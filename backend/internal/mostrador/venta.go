@@ -1008,7 +1008,11 @@ func insertarCorte(ctx context.Context, tx pgx.Tx, v VentaPedida, k *CorteDeMost
 		if tag.RowsAffected() == 0 {
 			return &cobros.ErrorDeCobro{Mensaje: "Ese corte ya está en otra venta, o se canceló."}
 		}
-		return nil
+		// El día que lo pasa a buscar es el del pedido: la venta nacía sin
+		// «Lo retira el» aunque el corte lo tenía (mes simulado, PED-1155).
+		_, err = tx.Exec(ctx, `UPDATE orders o SET entregar_el = co.retira_el FROM cutting_orders co
+			WHERE o.id = $2 AND co.id = $1 AND o.entregar_el IS NULL AND co.retira_el IS NOT NULL`, *k.Existente, pedido)
+		return err
 	}
 	numero, err := numeracion.Corte(ctx, tx)
 	if err != nil {

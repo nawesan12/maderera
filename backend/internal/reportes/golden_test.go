@@ -119,6 +119,11 @@ func TestGoldenAsientos(t *testing.T) {
 	for i, c := range casos {
 		a := asientoDe(c.Entrada)
 		c.Asiento.Balancea = c.Balancea
+		// El concepto del gasto lleva el nombre de la cuenta y no la clave de
+		// la categoría (mes simulado, M2S1-126): lo demás, idéntico al TS.
+		if c.Entrada.Tipo == "gasto" || c.Entrada.Tipo == "" {
+			c.Asiento.Concepto = ConceptoDeGasto(c.Entrada.Categoria, c.Entrada.Descripcion)
+		}
 		if !reflect.DeepEqual(a, c.Asiento) {
 			g, _ := json.Marshal(a)
 			w, _ := json.Marshal(c.Asiento)

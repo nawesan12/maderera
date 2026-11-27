@@ -155,3 +155,9 @@ func TestProveedoresContraElMayor(t *testing.T) {
 		t.Errorf("el aviso con su proveedor: %s", cuerpo)
 	}
 }
+
+func TestElArchivoLlevaElDiaArgentino(t *testing.T) {
+	if n := ArchivoDelDia("deudores", time.Date(2026, 11, 27, 2, 49, 0, 0, time.UTC)); n != "deudores-2026-11-26.csv" {
+		t.Error(n)
+	}
+}

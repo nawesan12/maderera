@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"mjbj/internal/api/reportesapi"
 	"mjbj/internal/auth"
@@ -422,7 +423,7 @@ func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestO
 	if err != nil {
 		return nil, err
 	}
-	return csv("deudores-"+ahora.Format("2006-01-02")+".csv", v), nil
+	return csv(ArchivoDelDia("deudores", ahora), v), nil
 }
 
 func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarCsvRequestObject) (reportesapi.CuentasAPagarCsvResponseObject, error) {
@@ -434,6 +435,13 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 	if err != nil {
 		return nil, err
 	}
-	return csv("cuentas-a-pagar-"+ahora.Format("2006-01-02")+".csv", v), nil
+	return csv(ArchivoDelDia("cuentas-a-pagar", ahora), v), nil
 }
 
+
+// ArchivoDelDia es el nombre del CSV con el día argentino: el de la API y el
+// del cierre se llamaban distinto bajados en el mismo minuto, a las 23:49 del
+// 26 (mes simulado, M2S3-082).
+func ArchivoDelDia(prefijo string, ahora time.Time) string {
+	return prefijo + "-" + ahora.In(Argentina).Format("2006-01-02") + ".csv"
+}

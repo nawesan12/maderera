@@ -740,8 +740,9 @@ func AsientoDeGasto(g GastoAAsentar) Asiento {
 	if !ok {
 		cuenta = Cuentas.Gastos
 	}
+	concepto := ConceptoDeGasto(g.Categoria, g.Descripcion)
 	if g.Iva == 0 && g.Percepciones == 0 {
-		return asiento(g.Fecha, g.Categoria+" · "+g.Descripcion, []RenglonDeAsiento{
+		return asiento(g.Fecha, concepto, []RenglonDeAsiento{
 			renglon(cuenta, g.Importe, 0), renglon(cuentaDeMedio(g.Medio), 0, g.Importe)})
 	}
 	r := []RenglonDeAsiento{renglon(cuenta, redondear(float64(g.Importe-g.Iva)-g.Percepciones), 0)}
@@ -751,7 +752,21 @@ func AsientoDeGasto(g GastoAAsentar) Asiento {
 	if g.Percepciones != 0 {
 		r = append(r, renglon(Cuentas.RetencionesSufridas, g.Percepciones, 0))
 	}
-	return asiento(g.Fecha, g.Categoria+" · "+g.Descripcion, append(r, renglon(cuentaDeMedio(g.Medio), 0, g.Importe)))
+	return asiento(g.Fecha, concepto, append(r, renglon(cuentaDeMedio(g.Medio), 0, g.Importe)))
+}
+
+// ConceptoDeGasto es «Fletes · Flete a Mar del Plata»: la categoría con el
+// nombre de su cuenta, no la clave («flete · …»; mes simulado, M2S1-126).
+func ConceptoDeGasto(categoria, descripcion string) string {
+	nombre := categoria
+	if c, ok := CuentaPorCategoria[categoria]; ok {
+		nombre = nombresDeCuenta[c]
+	} else if categoria == "" || categoria == "otros" || categoria == "varios" {
+		nombre = nombresDeCuenta[Cuentas.Gastos]
+	} else if categoria != "" {
+		nombre = strings.ToUpper(categoria[:1]) + categoria[1:]
+	}
+	return nombre + " · " + descripcion
 }
 
 // NombreComprobante es nombreComprobante de lib/fiscal/comprobantes.ts.

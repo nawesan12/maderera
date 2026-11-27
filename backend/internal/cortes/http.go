@@ -758,8 +758,23 @@ func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 				c.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z")})
 		}
 	}
+	// Los que están en la máquina: su archivo sigue haciendo falta. El
+	// agente saca de la carpeta los que no están ni en la cola ni acá
+	// (terminados, anulados o reemplazados por una corrección): CRT-28.csv
+	// quedaba con las medidas viejas al lado de CRT-30.csv (mes simulado,
+	// M2S4-004).
+	enMaquina, err := a.s.Listar(r.Context(), "", "en-proceso")
+	if err != nil {
+		a.s.log.Error("cortes en la máquina", "error", err)
+		textoPlano(w, http.StatusInternalServerError, "Error")
+		return
+	}
+	enProceso := make([]string, 0, len(enMaquina))
+	for _, c := range enMaquina {
+		enProceso = append(enProceso, c.ID)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"cortes": out})
+	_ = json.NewEncoder(w).Encode(map[string]any{"cortes": out, "enProceso": enProceso})
 }
 
 // lista_ es la lista de piezas en el formato del optimizador: el agente con

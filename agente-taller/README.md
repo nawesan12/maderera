@@ -43,6 +43,9 @@ disparador "al iniciar sesión"; en Linux, un servicio de systemd.
   archivo a medio escribir.
 - Vuelve a escribir un corte si le cambiaron las piezas después de bajarlo: en
   el mostrador se corrigen medidas y el archivo viejo cortaría mal.
+- Saca de la carpeta, a `hechos/`, el archivo de un corte que ya no está ni en
+  la cola ni en la máquina (terminado, anulado o reemplazado por una
+  corrección): el optimizador no tiene que ver dos versiones del mismo corte.
 - **No marca nada del lado del servidor.** Lleva su registro en `estado.json`,
   al lado del script. Si se reinstala, lo peor que pasa es que reescriba
   archivos que ya estaban; nunca que un corte quede como enviado sin haber

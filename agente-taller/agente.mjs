@@ -30,6 +30,7 @@
  */
 
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -90,16 +91,51 @@ function nombreDelArchivo(respuesta, numero) {
   return m ? m[1] : `corte-${numero}.csv`;
 }
 
-async function unaVuelta(estado) {
-  const { cortes } = await (await pedir("/api/cortes/pendientes")).json();
+/** Lo anotado de un corte: antes era solo la fecha; ahora también el archivo. */
+function anotado(valor) {
+  return typeof valor === "string" ? { actualizado: valor, archivo: null } : valor;
+}
 
-  let nuevos = 0;
+/**
+ * Saca de la carpeta los archivos de los cortes que ya no están ni en la cola
+ * ni en la máquina: terminados, anulados o reemplazados por una corrección
+ * (mes simulado: CRT-28.csv quedaba con 1200 mm al lado de CRT-30.csv con
+ * 1180, y el optimizador podía cortar el viejo). No se borran: van a
+ * `hechos/`, por si hay que mirar qué se mandó.
+ *
+ * Solo si la plataforma dice qué está en la máquina (`enProceso`): una más
+ * vieja no lo manda, y sin eso no se puede saber si el archivo sigue haciendo
+ * falta.
+ */
+async function sacarLosQueSalieron(estado, cortes, enProceso) {
+  if (!Array.isArray(enProceso)) return 0;
+  const siguen = new Set([...cortes.map((c) => c.id), ...enProceso]);
+  const hechos = join(CARPETA, "hechos");
+  let sacados = 0;
+  for (const [id, valor] of Object.entries(estado.escritos)) {
+    if (siguen.has(id)) continue;
+    const { archivo } = anotado(valor);
+    if (archivo && existsSync(join(CARPETA, archivo))) {
+      await mkdir(hechos, { recursive: true });
+      await rename(join(CARPETA, archivo), join(hechos, archivo));
+      console.log(`· ${archivo} → hechos/`);
+    }
+    delete estado.escritos[id];
+    sacados += 1;
+  }
+  return sacados;
+}
+
+async function unaVuelta(estado) {
+  const { cortes, enProceso } = await (await pedir("/api/cortes/pendientes")).json();
+
+  let nuevos = await sacarLosQueSalieron(estado, cortes, enProceso);
 
   for (const corte of cortes) {
-    const yaEscrito = estado.escritos[corte.id];
+    const yaEscrito = anotado(estado.escritos[corte.id]);
     // Si cambió el corte después de que lo bajamos, se vuelve a escribir: en el
     // mostrador se corrigen medidas y el archivo viejo cortaría mal.
-    if (yaEscrito === corte.actualizado) continue;
+    if (yaEscrito?.actualizado === corte.actualizado) continue;
 
     const respuesta = await pedir(`/api/cortes/${corte.id}/lista`);
     const contenido = Buffer.from(await respuesta.arrayBuffer());
@@ -110,7 +146,7 @@ async function unaVuelta(estado) {
     await writeFile(temporal, contenido);
     await rename(temporal, destino);
 
-    estado.escritos[corte.id] = corte.actualizado;
+    estado.escritos[corte.id] = { actualizado: corte.actualizado, archivo: nombre };
     nuevos += 1;
     console.log(`· ${corte.numero} → ${nombre}${corte.urgente ? "  (urgente)" : ""}`);
   }

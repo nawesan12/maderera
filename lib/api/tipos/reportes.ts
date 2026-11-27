@@ -783,7 +783,7 @@ export interface components {
             filas: {
                 id: string;
                 /** @enum {string} */
-                tipo: "recibo" | "en-linea";
+                tipo: "recibo" | "en-linea" | "devolucion";
                 numero: string | null;
                 /** Format: date-time */
                 fecha: string;

@@ -275,6 +275,8 @@ function Quien({ c }: { c: Cobranza }) {
 
 /** De dónde vino: un recibo de un pedido puntual no es «Cuenta corriente» (H268). */
 function Origen({ c }: { c: Cobranza }) {
+  // La plata que salió con una devolución (M2S3-046).
+  if (c.tipo === "devolucion") return <>Devolución{c.pedido ? ` · ${c.pedido}` : ""}</>;
   if (c.tipo === "recibo" && c.pedido) return <>Pedido {c.pedido}</>;
   return <>{ORIGENES[c.origen] ?? c.origen}</>;
 }
@@ -291,6 +293,14 @@ function Comprobante({ c }: { c: Cobranza }) {
         >
           Recibo {c.numero}
         </a>
+      ) : c.tipo === "devolucion" ? (
+        c.numero ? (
+          <Link href={`/admin/facturacion/${c.id}`} className="codigo whitespace-nowrap font-medium hover:text-brand-orange hover:underline">
+            NC {c.numero}
+          </Link>
+        ) : (
+          "Devolución"
+        )
       ) : c.orderId ? (
         <Link href={`/admin/pedidos/${c.orderId}`} className="whitespace-nowrap font-medium hover:text-brand-orange hover:underline">
           Pedido en línea

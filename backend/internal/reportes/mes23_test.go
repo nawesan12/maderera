@@ -84,3 +84,29 @@ func TestElCierreCuentaLasRecepcionesSinFacturaDeAntes(t *testing.T) {
 	}
 	t.Errorf("el cierre no las marca: %+v", pendientes)
 }
+
+// Un ajuste de stock sin costo (ni promedio ni lista: el conteo del yeso
+// RH) no tiene asiento: el cierre lo avisa, con el producto. La recepción,
+// que no lleva costo en el movimiento, no.
+func TestElCierreAvisaLosAjustesSinCosto(t *testing.T) {
+	e := armar(t)
+	cat := e.id(t, `insert into categories (slug, name) values ('placas-yeso', 'Placas de yeso') returning id`)
+	p := e.id(t, `insert into products (slug, name, category_id, description, unit) values ('yeso-rh', 'Yeso RH', $1, '', 'placa') returning id`, cat)
+	v := e.id(t, `insert into product_variants (product_id, sku, label) values ($1, 'YRH', '12,5 mm') returning id`, p)
+	e.exec(t, `insert into inventory_movements (variant_id, branch_id, type, qty, note, created_at) values ($1, $2, 'egreso', -2, 'Conteo desde Stock (10 → 8)', '2026-10-05T12:00:00Z')`, v, e.central)
+	e.exec(t, `insert into inventory_movements (variant_id, branch_id, type, qty, note, documento_tipo, created_at) values ($1, $2, 'ingreso', 10, 'Recepción', 'recepcion', '2026-10-04T12:00:00Z')`, v, e.central)
+	per := PeriodoDelCierre("2026-10", ahoraDePrueba)
+	pendientes, err := e.s.PendientesDelCierre(context.Background(), per.Desde, per.Hasta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range pendientes {
+		if x.Clave == "ajustes-sin-costo" {
+			if x.Cantidad != 1 || len(x.Casos) != 1 || x.Casos[0].Nombre != "Yeso RH 12,5 mm" || x.Donde != "/admin/productos/"+p {
+				t.Errorf("ajustes sin costo: %+v", x)
+			}
+			return
+		}
+	}
+	t.Errorf("el cierre no lo avisa: %+v", pendientes)
+}

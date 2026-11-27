@@ -367,7 +367,7 @@ func (s *Servicio) RecibirTraslado(ctx context.Context, ses *auth.Sesion, id str
 					}
 					nota := "Faltante desde Stock (" + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo) + ") · " + codigo
 					if _, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, transfer_group, costo_unitario)
-						VALUES ($1, $2, 'egreso', $3::numeric, $4, $5, $6, (SELECT costo_promedio FROM variant_costs WHERE variant_id = $1))`,
+						VALUES ($1, $2, 'egreso', $3::numeric, $4, $5, $6, `+catalogo.CostoDeAjuste("$1")+`)`,
 						v, origenID, jsmath.Texto(-diferencia), nota, ses.UserID, id); err != nil {
 						return err
 					}

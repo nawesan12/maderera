@@ -350,7 +350,7 @@ export default async function CierrePage({
                       aria-hidden
                     />
                   </summary>
-                  <p className="mt-1 text-sm text-muted-foreground">{p.detalle}</p>
+                  {p.detalle && <p className="mt-1 text-sm text-muted-foreground">{p.detalle}</p>}
                   {p.casos && p.casos.length > 0 && (
                     <ul className="mt-2 space-y-0.5">
                       {p.casos.map((c, i) => (

@@ -198,3 +198,26 @@ func TestBuscarMDF18TraeElDe18(t *testing.T) {
 		t.Fatalf("orden: %+v", g.Filas)
 	}
 }
+
+// Un conteo de un producto que nunca se recibió con costo (el yeso RH)
+// toma el último costo de la lista del proveedor; sin lista, queda sin
+// costo (y el cierre lo avisa).
+func TestElAjusteSinPromedioTomaLaListaDelProveedor(t *testing.T) {
+	e := armar(t)
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	u := e.srv.URL + "/api/v1/admin/stock/ajuste"
+	if c, b := pedir(t, dep, "POST", u, map[string]any{"variantId": e.tornillo, "branchSlug": "casa-central", "cantidad": 0, "contado": 5, "motivo": "conteo"}); c != 200 {
+		t.Fatalf("conteo sin costo: %d %s", c, b)
+	}
+	if costo := e.uno(t, `select coalesce(costo_unitario::text, 'nulo') from inventory_movements where variant_id = $1 order by created_at desc limit 1`, e.tornillo); costo != "nulo" {
+		t.Errorf("sin promedio ni lista: %s", costo)
+	}
+	prov := e.uno(t, `insert into suppliers (nombre) values ('Durlock Sur') returning id::text`)
+	e.exec(t, `insert into supplier_variant_codes (supplier_id, variant_id, codigo, costo_neto, costo_at) values ($1, $2, 'YRH', 812.5, now())`, prov, e.tornillo)
+	if c, b := pedir(t, dep, "POST", u, map[string]any{"variantId": e.tornillo, "branchSlug": "casa-central", "cantidad": 0, "contado": 3, "motivo": "conteo"}); c != 200 {
+		t.Fatalf("conteo con lista: %d %s", c, b)
+	}
+	if costo := e.uno(t, `select coalesce(costo_unitario::text, 'nulo') from inventory_movements where variant_id = $1 order by created_at desc limit 1`, e.tornillo); costo != "812.5000" {
+		t.Errorf("con la lista del proveedor: %s", costo)
+	}
+}

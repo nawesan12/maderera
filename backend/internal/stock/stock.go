@@ -815,10 +815,11 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, a Ajuste) (
 		}
 		ok = suc.Name + ": " + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo)
 		anotado = nota
-		// El costo promedio de hoy queda congelado en el movimiento: es el
-		// que asienta la baja (o el alta) contra Mercaderías (M3S3-013).
+		// El costo promedio de hoy (o el de la lista del proveedor) queda
+		// congelado en el movimiento: es el que asienta la baja (o el alta)
+		// contra Mercaderías (M3S3-013).
 		_, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, documento_tipo, documento_id, costo_unitario)
-			VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8, (SELECT costo_promedio FROM variant_costs WHERE variant_id = $1))`,
+			VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8, `+catalogo.CostoDeAjuste("$1")+`)`,
 			variante, suc.ID, tipo, jsmath.Texto(cantidad), nota, ses.UserID, docTipo, docID)
 		return err
 	})

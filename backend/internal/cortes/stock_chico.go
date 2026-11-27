@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/auth"
+	"mjbj/internal/catalogo"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
@@ -65,8 +66,10 @@ func (s *Servicio) StockDeLaPlacaChica(ctx context.Context, ses *auth.Sesion, id
 		if ses != nil {
 			usuario = &ses.UserID
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, documento_tipo, documento_id)
-			VALUES ($1, $2, $3, $4::numeric, $5, $6, 'corte', $7)`, *c.VariantID, *sucursal, tipo, jsmath.Texto(delta), nota, usuario, id)
+		// Con su costo, como cualquier ajuste: el consumo del taller va al
+		// asiento de inventario del cierre.
+		_, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, documento_tipo, documento_id, costo_unitario)
+			VALUES ($1, $2, $3, $4::numeric, $5, $6, 'corte', $7, `+catalogo.CostoDeAjuste("$1")+`)`, *c.VariantID, *sucursal, tipo, jsmath.Texto(delta), nota, usuario, id)
 		return err
 	})
 }

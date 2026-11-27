@@ -1056,6 +1056,35 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 			formato.Moneda(jsmath.Redondear2(montoAImputar))+" en la cuenta 2.1.13: retiros de caja sin destino, cheques sin cobro y devoluciones por otro medio.",
 			aImputar, "/admin/caja"))
 	}
+	// Los ajustes de stock que no tienen con qué costearse (ni promedio ni
+	// lista de proveedor, catalogo.CostoDeAjuste): sin costo no entran en
+	// asientosDeInventario y el ajuste no se veía en ningún lado (un conteo
+	// del yeso RH, mes simulado). Uno por producto, con lo que movió.
+	sinCosto := pendiente("ajustes-sin-costo", "Ajustes de stock sin costo", "", 0, "/admin/stock")
+	rsc, err := s.lectura.Query(ctx, `
+		SELECT p.id::text, p.name || ' ' || v.label, count(*)::int
+		FROM inventory_movements m
+		JOIN product_variants v ON v.id = m.variant_id JOIN products p ON p.id = v.product_id
+		WHERE m.costo_unitario IS NULL AND m.type IN ('ingreso', 'egreso')
+		  AND coalesce(m.documento_tipo, '') NOT IN ('recepcion', 'devolucion_proveedor')
+		  AND m.created_at >= $1 AND m.created_at <= $2
+		GROUP BY p.id, p.name, v.label ORDER BY p.name, v.label`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var prodID, prodNombre string
+	var veces int
+	if _, err := pgx.ForEachRow(rsc, []any{&prodID, &prodNombre, &veces}, func() error {
+		sinCosto.Cantidad += veces
+		sinCosto.Casos = append(sinCosto.Casos, CasoDelCierre{Nombre: prodNombre, Donde: "/admin/productos/" + prodID})
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if sinCosto.Cantidad > 0 {
+		sinCosto.Donde = dondeDeLosCasos(sinCosto)
+		out = append(out, sinCosto)
+	}
 	repetidos, ejemplo, err := s.gastosRepetidos(ctx, desde, hasta)
 	if err != nil {
 		return nil, err

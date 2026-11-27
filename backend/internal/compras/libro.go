@@ -128,7 +128,8 @@ func csvRetenciones(filas []RetencionDelPeriodo, conCalculo bool) string {
 	for i, f := range filas {
 		total += f.Importe
 		if conCalculo {
-			salida[i] = []string{fechaCsv(f.Fecha), texto(f.Numero), texto(f.Impuesto), texto(f.CodigoRegimen), texto(f.Proveedor),
+			// El día argentino del certificado, como el PDF y los asientos.
+			salida[i] = []string{fechaArgentina(f.Fecha), texto(f.Numero), texto(f.Impuesto), texto(f.CodigoRegimen), texto(f.Proveedor),
 				textoCsv(f.Cuit), numeroCsv(f.Base, 2), opcional(f.Acumulado), opcional(f.Imponible), numeroCsv(f.Alicuota, 3),
 				opcional(f.RetenidoAntes), numeroCsv(f.Importe, 2)}
 			continue

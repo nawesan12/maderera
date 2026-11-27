@@ -13,8 +13,10 @@ import (
 	"mjbj/internal/api/comprasapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/documentos"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
 )
@@ -769,8 +771,22 @@ func (a *API) RetencionesPracticadasCsv(ctx context.Context, r comprasapi.Retenc
 	if _, err := compras(ctx); err != nil {
 		return nil, err
 	}
-	p := LeerPeriodoMensual(deTexto(r.Params.Periodo), time.Now())
-	filas, err := a.s.RetencionesDelPeriodo(ctx, p.Desde, p.Hasta)
+	// El mes y las fechas, en hora argentina: un pago del 26 a las 22 salía
+	// fechado el 27 y uno del 30 a la noche caía en el mes siguiente
+	// (M2S2-012, M2S3-001, M2S3-004).
+	p := LeerPeriodoMensual(deTexto(r.Params.Periodo), time.Now().In(fiscal.Argentina))
+	desde, hasta := MesArgentino(p)
+	if r.Params.Formato != nil && *r.Params.Formato == comprasapi.Sicore {
+		if !reglas.Es(ctx, a.s.pool, reglas.ExportarSicore, "si") {
+			return nil, fallo("El TXT de SICORE está apagado en Reglas del negocio.")
+		}
+		filas, err := a.s.RetencionesParaSicore(ctx, desde, hasta)
+		if err != nil {
+			return nil, err
+		}
+		return respuesta{csv: TxtSicore(filas), nombre: "retenciones-sicore-" + p.Clave + ".txt"}, nil
+	}
+	filas, err := a.s.RetencionesDelPeriodo(ctx, desde, hasta.Add(-time.Microsecond))
 	if err != nil {
 		return nil, err
 	}

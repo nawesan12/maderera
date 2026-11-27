@@ -1344,6 +1344,8 @@ export interface components {
             retenidoAntes: string | null;
             /** Format: date-time */
             anuladaAt: string | null;
+            /** @description los que cancela el pago («Factura A 0003-00008811») */
+            comprobantes?: string;
         };
         Regimen: {
             id: string;
@@ -2474,6 +2476,8 @@ export interface operations {
             query?: {
                 /** @description aaaa-mm (si falta */
                 periodo?: string;
+                /** @description csv (de siempre) o sicore (el TXT de importación; con la regla exportar_sicore) */
+                formato?: "csv" | "sicore";
             };
             header?: never;
             path?: never;
@@ -2481,7 +2485,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Las retenciones practicadas del mes, en CSV */
+            /** @description Las retenciones practicadas del mes, en CSV o en el TXT de SICORE */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2490,6 +2494,7 @@ export interface operations {
                     "application/octet-stream": string;
                 };
             };
+            422: components["responses"]["Problema"];
         };
     };
     CertificadoDeRetencion: {

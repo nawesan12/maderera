@@ -115,19 +115,26 @@ function Fila({ regimen }: { regimen: RegimenEditable }) {
           />
         </label>
 
-        <label className="block">
-          <span className="text-sm text-muted-foreground">No inscripto %</span>
-          <input
-            name="alicuotaNoInscripto"
-            type="number"
-            min="0"
-            max="100"
-            step="0.001"
-            value={noInscripto}
-            onChange={(e) => setNoInscripto(e.target.value)}
-            className="tabular mt-1 h-10 w-28 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
-          />
-        </label>
+        {/* A IVA solo se le retiene a un responsable inscripto
+            (compras.SujetoARetencion): la alícuota de no inscripto no se usa
+            nunca y confundía (M3S2-027). Se manda igual, sin tocarla. */}
+        {regimen.impuesto === "iva" ? (
+          <input type="hidden" name="alicuotaNoInscripto" value={noInscripto} />
+        ) : (
+          <label className="block">
+            <span className="text-sm text-muted-foreground">No inscripto %</span>
+            <input
+              name="alicuotaNoInscripto"
+              type="number"
+              min="0"
+              max="100"
+              step="0.001"
+              value={noInscripto}
+              onChange={(e) => setNoInscripto(e.target.value)}
+              className="tabular mt-1 h-10 w-28 rounded-lg border border-linea bg-background px-2.5 text-right text-base"
+            />
+          </label>
+        )}
 
         {/* Los dos mínimos, en pesos. El no imponible se descuenta del
             acumulado del mes antes de aplicar la alícuota (solo al

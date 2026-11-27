@@ -657,12 +657,14 @@ paths:
       operationId: RetencionesPracticadasCsv
       parameters:
         - { name: periodo, in: query, description: aaaa-mm (si falta, el mes en curso), schema: { type: string } }
+        - { name: formato, in: query, description: csv (de siempre) o sicore (el TXT de importación; con la regla exportar_sicore), schema: { type: string, enum: [csv, sicore] } }
       responses:
         "200":
-          description: Las retenciones practicadas del mes, en CSV
+          description: Las retenciones practicadas del mes, en CSV o en el TXT de SICORE
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/certificados/{numero}:
     parameters: [{ name: numero, in: path, required: true, schema: { type: string } }]
     get:
@@ -1351,6 +1353,7 @@ components:
         imponible: { type: string, nullable: true, description: el monto sujeto a retención (acumulado − mínimo no imponible) }
         retenidoAntes: { type: string, nullable: true, description: lo retenido en el mes antes de este certificado }
         anuladaAt: { type: string, format: date-time, nullable: true }
+        comprobantes: { type: string, description: los que cancela el pago («Factura A 0003-00008811») }
     Regimen:
       type: object
       required: [id, codigo, nombre, impuesto, alicuota, alicuotaNoInscripto, minimoNoImponible, minimoRetencion, activo, createdAt, updatedAt, jurisdiccion]

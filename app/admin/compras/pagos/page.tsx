@@ -14,6 +14,8 @@ import { fechaCorta, formatearMonto, plural } from "@/lib/formato";
 import { EtiquetaDeCircuito } from "@/components/admin/circuito";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { Vacio } from "@/components/admin/vacio";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 import { FormularioPago } from "./formulario";
 import { NOMBRE_DEL_MEDIO } from "./medios";
 
@@ -48,7 +50,7 @@ export default async function PagosPage({
   const { proveedor: proveedorInicial, factura: facturaInicial, cheque: chequeInicial } =
     await searchParams;
 
-  const [pagos, proveedores, regimenes, sucursales] = await Promise.all([
+  const [pagos, proveedores, regimenes, sucursales, ajustes] = await Promise.all([
     listarPagosAProveedores(),
     // Todos, no solo los activos: dejar de comprarle a alguien no salda su
     // cuenta. Se ofrecen los activos y los inactivos que deben, así la
@@ -56,7 +58,9 @@ export default async function PagosPage({
     listarProveedores(),
     regimenesActivos(),
     sucursalesParaGasto(),
+    ajustesDelSitio(),
   ]);
+  const sicore = valorDeRegla(ajustes, "exportar_sicore") === "si";
 
   const vigentes = pagos.filter((p) => !p.anuladoAt);
   const anulados = pagos.filter((p) => p.anuladoAt);
@@ -98,6 +102,16 @@ export default async function PagosPage({
           <Download className="h-4 w-4" />
           Retenciones del mes
         </a>
+        {sicore && (
+          // eslint-disable-next-line @next/next/no-html-link-for-pages
+          <a
+            href="/admin/compras/pagos/exportar?formato=sicore"
+            className="tarjeta-hundida inline-flex h-11 items-center gap-1.5 rounded-xl px-4 text-base font-medium"
+          >
+            <Download className="h-4 w-4" />
+            SICORE
+          </a>
+        )}
       </EncabezadoPanel>
 
       <FormularioPago
@@ -118,6 +132,7 @@ export default async function PagosPage({
           minimoNoImponible: Number(r.minimoNoImponible),
         }))}
         sucursales={sucursales}
+        ivaSobreTotal={valorDeRegla(ajustes, "base_retencion_iva") === "total"}
         proveedorInicial={proveedorInicial}
         facturaInicial={facturaInicial}
         chequeInicial={chequeInicial}

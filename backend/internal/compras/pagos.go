@@ -329,6 +329,8 @@ type Certificado struct {
 	Imponible     *string    `json:"imponible"`
 	RetenidoAntes *string    `json:"retenidoAntes"`
 	AnuladaAt     *time.Time `json:"anuladaAt"`
+	// Comprobantes son los que cancela el pago («Factura A 0003-00008811»).
+	Comprobantes string `json:"comprobantes"`
 }
 
 // CertificadoParaImprimir es certificadoParaImprimir: por número, que es lo
@@ -349,7 +351,82 @@ func (s *Servicio) CertificadoParaImprimir(ctx context.Context, numero string) (
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return &c, err
+	if err != nil {
+		return nil, err
+	}
+	// Con qué se pagó, todos los medios con su número, y qué comprobantes
+	// cancela: decía «por echeq (SIM-TRF-0502)», con la clave cruda y el
+	// número de la transferencia, y no citaba la factura (M2S1-037,
+	// M3S1-030).
+	filas, err := s.pool.Query(ctx, `
+		SELECT p.medio, coalesce(c.numero, p.referencia, '')
+		FROM retenciones_practicadas r JOIN supplier_payment_parts p ON p.payment_id = r.payment_id
+		LEFT JOIN cheques c ON c.id = p.cheque_id
+		WHERE r.numero = $1 ORDER BY p.importe DESC`, numero)
+	if err != nil {
+		return nil, err
+	}
+	var medios []string
+	for filas.Next() {
+		var medio, ref string
+		if err := filas.Scan(&medio, &ref); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		if ref != "" {
+			medio = NombreDelMedio(medio) + " " + ref
+		} else {
+			medio = NombreDelMedio(medio)
+		}
+		medios = append(medios, medio)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	if len(medios) > 0 {
+		c.PagoMedio, c.PagoReferencia = unirConY(medios), nil
+	} else {
+		c.PagoMedio = NombreDelMedio(c.PagoMedio)
+	}
+	filas, err = s.pool.Query(ctx, `
+		SELECT f.tipo::text, f.punto_venta, f.numero
+		FROM retenciones_practicadas r
+		JOIN (SELECT payment_id, purchase_invoice_id FROM supplier_payment_allocations
+		      UNION ALL SELECT payment_id, purchase_invoice_id FROM supplier_payment_anulado_items WHERE purchase_invoice_id IS NOT NULL) a
+		  ON a.payment_id = r.payment_id
+		JOIN purchase_invoices f ON f.id = a.purchase_invoice_id
+		WHERE r.numero = $1 ORDER BY f.fecha_emision, f.numero`, numero)
+	if err != nil {
+		return nil, err
+	}
+	var comprobantes []string
+	for filas.Next() {
+		var tipo string
+		var pv, n int64
+		if err := filas.Scan(&tipo, &pv, &n); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		comprobantes = append(comprobantes, NombreComprobanteCompra(tipo)+" "+NumeroDeCompra(pv, n))
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	c.Comprobantes = unirConY(comprobantes)
+	return &c, nil
+}
+
+// unirConY es «a, b y c».
+func unirConY(xs []string) string {
+	switch len(xs) {
+	case 0:
+		return ""
+	case 1:
+		return xs[0]
+	}
+	return strings.Join(xs[:len(xs)-1], ", ") + " y " + xs[len(xs)-1]
 }
 
 // DatosDelCertificadoPdf pasa el certificado a lo que dibuja internal/pdf
@@ -371,7 +448,7 @@ func DatosDelCertificadoPdf(c *Certificado, emisor *pdf.Emisor) pdf.DatosDelCert
 	}
 	d.Proveedor.Nombre, d.Proveedor.RazonSocial = c.ProveedorNombre, de(c.ProveedorRazonSocial)
 	d.Proveedor.Cuit, d.Proveedor.Domicilio = de(c.ProveedorCuit), de(c.ProveedorDomicilio)
-	d.Pago.Fecha, d.Pago.Medio, d.Pago.Referencia = c.PagoFecha, c.PagoMedio, de(c.PagoReferencia)
+	d.Pago.Fecha, d.Pago.Medio, d.Pago.Referencia, d.Pago.Comprobantes = c.PagoFecha, c.PagoMedio, de(c.PagoReferencia), c.Comprobantes
 	if c.Acumulado != nil && c.Imponible != nil && c.RetenidoAntes != nil {
 		d.Calculo = &pdf.CalculoDelCertificado{Acumulado: jsmath.Numero(*c.Acumulado), Imponible: jsmath.Numero(*c.Imponible),
 			RetenidoAntes: jsmath.Numero(*c.RetenidoAntes)}
@@ -761,12 +838,17 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 			sinMonto = append(sinMonto, renglon)
 		}
 		// La referencia de la cabecera, si no vino: las de los renglones.
+		// Partido en varios medios, todos con su número: el asiento decía
+		// «Pago … · SIM-TRF-0002» de un pago con un e-Cheq (M2S1-037).
 		if d.Referencia == nil && len(partes) > 0 {
 			var refs []string
 			for _, parte := range partes {
 				if parte.Referencia != nil && *parte.Referencia != "" {
 					refs = append(refs, *parte.Referencia)
 				}
+			}
+			if len(partes) > 1 {
+				refs = []string{strings.Join(sinMonto, " y ")}
 			}
 			if len(refs) > 0 {
 				r := strings.Join(refs, " · ")
@@ -899,32 +981,43 @@ func anotarBasesSinRetener(ctx context.Context, tx pgx.Tx, pagoID, proveedor str
 	for i, imp := range imputaciones {
 		ids[i], importes[i] = imp.PurchaseInvoiceID, jsmath.Fijo2(imp.Importe)
 	}
-	var base jsmath.Num
+	var base, total jsmath.Num
 	if err := tx.QueryRow(ctx, `
-		SELECT coalesce(sum(x.importe::numeric * (`+netoProporcional("f")+`) / nullif(f.total, 0)), 0)
-		FROM unnest($1::uuid[], $2::text[]) AS x(id, importe) JOIN purchase_invoices f ON f.id = x.id`, ids, importes).Scan(&base); err != nil {
+		SELECT coalesce(sum(x.importe::numeric * (`+netoProporcional("f")+`) / nullif(f.total, 0)), 0), coalesce(sum(x.importe::numeric), 0)
+		FROM unnest($1::uuid[], $2::text[]) AS x(id, importe) JOIN purchase_invoices f ON f.id = x.id`, ids, importes).Scan(&base, &total); err != nil {
 		return err
 	}
 	b := jsmath.Redondear2(float64(base))
 	if b <= 0 {
 		return nil
 	}
+	ivaSobreTotal := reglas.Es(ctx, tx, reglas.BaseRetencionIva, "total")
 	filas, err := tx.Query(ctx, `
-		SELECT DISTINCT codigo_regimen FROM bases_de_retencion
-		WHERE supplier_id = $1 AND fecha >= $2 AND fecha < $3 AND payment_id <> $4`, proveedor, inicioDeMes(fecha), inicioDeMes(fecha).AddDate(0, 1, 0), pagoID)
+		SELECT DISTINCT b.codigo_regimen, coalesce((SELECT g.impuesto::text FROM regimenes_retencion g WHERE g.codigo = b.codigo_regimen LIMIT 1), '')
+		FROM bases_de_retencion b
+		WHERE b.supplier_id = $1 AND b.fecha >= $2 AND b.fecha < $3 AND b.payment_id <> $4`, proveedor, inicioDeMes(fecha), inicioDeMes(fecha).AddDate(0, 1, 0), pagoID)
 	if err != nil {
 		return err
 	}
-	codigos, err := pgx.CollectRows(filas, pgx.RowTo[string])
+	type codigoImpuesto struct{ codigo, impuesto string }
+	codigos, err := pgx.CollectRows(filas, func(r pgx.CollectableRow) (codigoImpuesto, error) {
+		var c codigoImpuesto
+		err := r.Scan(&c.codigo, &c.impuesto)
+		return c, err
+	})
 	if err != nil {
 		return err
 	}
 	for _, c := range codigos {
-		if pedidos[c] {
+		if pedidos[c.codigo] {
 			continue
 		}
+		esta := b
+		if c.impuesto == "iva" && ivaSobreTotal {
+			esta = jsmath.Redondear2(float64(total))
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO bases_de_retencion (payment_id, supplier_id, codigo_regimen, base, fecha)
-			VALUES ($1, $2, $3, $4::numeric, $5)`, pagoID, proveedor, c, jsmath.Fijo2(b), fecha); err != nil {
+			VALUES ($1, $2, $3, $4::numeric, $5)`, pagoID, proveedor, c.codigo, jsmath.Fijo2(esta), fecha); err != nil {
 			return err
 		}
 	}

@@ -38,8 +38,14 @@ export function sinImposibles(digitos: string): string {
   return digitos;
 }
 
-/** Lo que se tipeó, con las barras puestas solas: «2511» → «25/11». */
+/**
+ * Lo que se tipeó, con las barras puestas solas: «2511» → «25/11». Una fecha
+ * pegada como aaaa-mm-dd se da vuelta entera: leída como dígitos quedaba en
+ * «20/2» (M2S4-036, M3S4-020).
+ */
 export function conBarras(escrito: string): string {
+  const iso = /^\s*(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\s*$/.exec(escrito);
+  if (iso) return `${iso[3].padStart(2, "0")}/${iso[2].padStart(2, "0")}/${iso[1]}`;
   const digitos = sinImposibles(escrito.replace(/\D/g, "").slice(0, 8));
   return [digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4)]
     .filter(Boolean)

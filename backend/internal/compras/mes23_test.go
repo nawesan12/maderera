@@ -281,3 +281,73 @@ func TestAjusteAplicadoAUnaFactura(t *testing.T) {
 		t.Errorf("la factura tiene que quedar con 121.000 − 3.630: %s", b)
 	}
 }
+
+// M2S2-012, M2S3-001, M2S3-004: un certificado de las 22:42 del 26/11 (hora
+// argentina, 01:42Z del 27) sale con fecha 26/11 en el CSV, y uno del 30 a
+// la noche queda en noviembre.
+func TestCsvDeRetencionesEnHoraArgentina(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	gan := e.regimen(t, "78", "ganancias", 2)
+	var pago string
+	_ = e.pool.QueryRow(ctx, `insert into supplier_payments (supplier_id, fecha, total, neto, medio) values ($1, '2026-11-27T01:42:00Z', 1000, 980, 'transferencia') returning id`, e.proveedor).Scan(&pago)
+	for _, x := range []struct{ numero, fecha string }{{"GAN-2026-000004", "2026-11-27T01:42:00Z"}, {"GAN-2026-000009", "2026-12-01T01:30:00Z"}} {
+		if _, err := e.pool.Exec(ctx, `insert into retenciones_practicadas (payment_id, supplier_id, regimen_id, numero, codigo_regimen, impuesto, base, alicuota, importe, fecha)
+			values ($1, $2, $3, $4, '78', 'ganancias', 1000, 2, 20, $5)`, pago, e.proveedor, gan, x.numero, x.fecha); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv?periodo=2026-11", nil)
+	if !strings.Contains(b, `26/11/2026;"GAN-2026-000004"`) || !strings.Contains(b, `30/11/2026;"GAN-2026-000009"`) {
+		t.Errorf("csv: %s", b)
+	}
+	if _, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv?periodo=2026-12", nil); strings.Contains(b, "GAN-2026-000009") {
+		t.Errorf("el del 30 a la noche cayó en diciembre: %s", b)
+	}
+	// El TXT de SICORE, solo con la regla prendida.
+	if c, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv?periodo=2026-11&formato=sicore", nil); c != 422 {
+		t.Errorf("sicore sin la regla: %d %s", c, b)
+	}
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('exportar_sicore', 'si') on conflict (clave) do update set valor = 'si'`)
+	_, _ = e.pool.Exec(ctx, `update suppliers set cuit = '30-71234567-9', condicion_ganancias = 'inscripto' where id = $1`, e.proveedor)
+	c, b := pedir(t, adm, "GET", e.u+"compras/pagos/retenciones-csv?periodo=2026-11&formato=sicore", nil)
+	lineas := strings.Split(strings.TrimSuffix(b, "\r\n"), "\r\n")
+	if c != 200 || len(lineas) != 2 || !strings.HasPrefix(lineas[0], "0626/11/20260000002026000004") || len(lineas[0]) != 144 ||
+		!strings.Contains(lineas[0], "2170781") || !strings.Contains(lineas[0], "8030712345679") {
+		t.Errorf("sicore: %d %q", c, b)
+	}
+}
+
+// M3S2-027: la regla base_retencion_iva. En «neto» (la de arranque) la base
+// de IVA sin retener es el neto; en «total», lo pagado con IVA.
+func TestReglaDeLaBaseDeIva(t *testing.T) {
+	for _, caso := range []struct {
+		regla string
+		base  float64
+	}{{"neto", 100000}, {"total", 121000}} {
+		t.Run(caso.regla, func(t *testing.T) {
+			e := armar(t)
+			adm := e.staff(t, "admin@prueba.test", "admin")
+			ctx := context.Background()
+			iva := e.regimen(t, "IVA-B", "iva", 8.68)
+			_, _ = e.pool.Exec(ctx, `update suppliers set cuit = '30712345679', condicion_iva = 'responsable_inscripto' where id = $1`, e.proveedor)
+			_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('base_retencion_iva', $1) on conflict (clave) do update set valor = $1`, caso.regla)
+			f1, f2 := e.facturaDeCompra(t, adm, 1, nil), e.facturaDeCompra(t, adm, 2, nil)
+			if c, b := pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 121000, "medio": "transferencia",
+				"retenciones":  []any{map[string]any{"regimenId": iva, "base": 1}},
+				"imputaciones": []any{map[string]any{"purchaseInvoiceId": f1, "importe": 121000}}}); c != 200 {
+				t.Fatalf("primero: %d %s", c, b)
+			}
+			if c, b := pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 121000, "medio": "transferencia",
+				"retenciones":  []any{},
+				"imputaciones": []any{map[string]any{"purchaseInvoiceId": f2, "importe": 121000}}}); c != 200 {
+				t.Fatalf("segundo: %d %s", c, b)
+			}
+			if n := e.numero(t, `select b.base::float8 from bases_de_retencion b join supplier_payments p on p.id = b.payment_id
+				join supplier_payment_allocations a on a.payment_id = p.id where a.purchase_invoice_id = $1`, f2); n != caso.base {
+				t.Errorf("base de IVA con la regla %s: %v", caso.regla, n)
+			}
+		})
+	}
+}

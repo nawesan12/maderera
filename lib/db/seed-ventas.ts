@@ -35,12 +35,12 @@ const {
 } = schema;
 
 const CLIENTES = [
-  { nombre: "Arq. Carolina Méndez", razonSocial: "Estudio CM Arquitectura", cuit: "27-32456789-4", rubro: "Arquitectura", tipo: "profesional", asesor: "Martín", condicionIva: "responsable_inscripto", limite: "5000000", email: "carolina@estudiocm.com.ar", telefono: "223-5512345" },
-  { nombre: "Roberto Fernández", razonSocial: "RF Construcciones SRL", cuit: "30-71234567-8", rubro: "Construcción", tipo: "profesional", asesor: "Diego", condicionIva: "responsable_inscripto", limite: "8000000", email: "roberto@rfconstrucciones.com.ar", telefono: "223-5598765" },
-  { nombre: "Martín Pérez", razonSocial: "Carpintería Pérez", cuit: "20-28765432-1", rubro: "Carpintería", tipo: "profesional", asesor: "Diego", condicionIva: "monotributista", limite: "1500000", email: "carpinteriaperez@gmail.com", telefono: "223-5533221" },
-  { nombre: "Laura Gómez", razonSocial: "Constructora del Sur SA", cuit: "30-70998877-6", rubro: "Construcción", tipo: "profesional", asesor: "Martín", condicionIva: "responsable_inscripto", limite: "12000000", email: "compras@constructoradelsur.com.ar", telefono: "223-5544332" },
-  { nombre: "Ana Torres", razonSocial: "AT Diseño Interior", cuit: "27-34567890-2", rubro: "Diseño de interiores", tipo: "profesional", asesor: "Martín", condicionIva: "monotributista", limite: "2000000", email: "ana@atdiseno.com.ar", telefono: "223-5566778" },
-  { nombre: "Ing. Facundo López", razonSocial: "López & Asociados", cuit: "20-30112233-9", rubro: "Ingeniería Civil", tipo: "profesional", asesor: "Diego", condicionIva: "responsable_inscripto", limite: "6000000", email: "flopez@lopezasociados.com.ar", telefono: "223-5577889" },
+  { nombre: "Arq. Carolina Méndez", razonSocial: "Estudio CM Arquitectura", cuit: "27-32456789-0", rubro: "Arquitectura", tipo: "profesional", asesor: "Martín", condicionIva: "responsable_inscripto", limite: "5000000", email: "carolina@estudiocm.com.ar", telefono: "223-5512345" },
+  { nombre: "Roberto Fernández", razonSocial: "RF Construcciones SRL", cuit: "30-71234567-1", rubro: "Construcción", tipo: "profesional", asesor: "Diego", condicionIva: "responsable_inscripto", limite: "8000000", email: "roberto@rfconstrucciones.com.ar", telefono: "223-5598765" },
+  { nombre: "Martín Pérez", razonSocial: "Carpintería Pérez", cuit: "20-28765432-5", rubro: "Carpintería", tipo: "profesional", asesor: "Diego", condicionIva: "monotributista", limite: "1500000", email: "carpinteriaperez@gmail.com", telefono: "223-5533221" },
+  { nombre: "Laura Gómez", razonSocial: "Constructora del Sur SA", cuit: "30-70998877-4", rubro: "Construcción", tipo: "profesional", asesor: "Martín", condicionIva: "responsable_inscripto", limite: "12000000", email: "compras@constructoradelsur.com.ar", telefono: "223-5544332" },
+  { nombre: "Ana Torres", razonSocial: "AT Diseño Interior", cuit: "27-34567890-0", rubro: "Diseño de interiores", tipo: "profesional", asesor: "Martín", condicionIva: "monotributista", limite: "2000000", email: "ana@atdiseno.com.ar", telefono: "223-5566778" },
+  { nombre: "Ing. Facundo López", razonSocial: "López & Asociados", cuit: "20-30112233-1", rubro: "Ingeniería Civil", tipo: "profesional", asesor: "Diego", condicionIva: "responsable_inscripto", limite: "6000000", email: "flopez@lopezasociados.com.ar", telefono: "223-5577889" },
   { nombre: "Jorge Ruiz", razonSocial: null, cuit: null, rubro: null, tipo: "particular", asesor: "Martín", condicionIva: "consumidor_final", limite: "0", email: "jorgeruiz@gmail.com", telefono: "223-5511009" },
   { nombre: "Silvia Domínguez", razonSocial: null, cuit: null, rubro: null, tipo: "particular", asesor: "Diego", condicionIva: "consumidor_final", limite: "0", email: null, telefono: "223-5522110" },
 ] as const;

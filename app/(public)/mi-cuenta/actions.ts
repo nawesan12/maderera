@@ -26,7 +26,10 @@ export async function responderPresupuesto(
   if (!numero) return { error: "No pudimos guardar tu respuesta. Probá de nuevo." };
   const r = await (await api()).POST("/api/v1/cuenta/presupuestos/{numero}/respuesta", {
     params: { path: { numero } },
-    body: { respuesta: String(formData.get("respuesta") ?? "") },
+    body: {
+      respuesta: String(formData.get("respuesta") ?? ""),
+      motivo: String(formData.get("motivo") ?? "").slice(0, 60) || undefined,
+    },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "No pudimos guardar tu respuesta. Probá de nuevo.") };
   revalidatePath("/mi-cuenta", "layout");

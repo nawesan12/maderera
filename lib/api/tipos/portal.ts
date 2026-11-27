@@ -535,6 +535,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         aResponder: boolean;
+                        /** @description ya se pasó a un pedido que sigue vivo */
+                        conPedido: boolean;
                         id: string;
                         numero: string;
                         estado: string;
@@ -586,6 +588,8 @@ export interface operations {
             content: {
                 "application/json": {
                     respuesta: string;
+                    /** @description por qué lo rechaza (uno de portal.MotivosDelCliente) */
+                    motivo?: string;
                 };
             };
         };

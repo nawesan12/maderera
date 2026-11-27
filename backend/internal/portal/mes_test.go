@@ -352,6 +352,33 @@ func TestLaNotaDeCreditoNoEsUnPago(t *testing.T) {
 	}
 }
 
+// M2S2-114: el rechazo desde Mi cuenta guarda el motivo (y uno que no es de
+// la lista queda «Otro»).
+func TestRechazarConMotivo(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	for _, n := range []string{"P-2026-0009", "P-2026-0010"} {
+		if _, err := e.pool.Exec(ctx, `insert into quotes (numero, customer_id, contacto_nombre, estado, subtotal, total)
+			values ($1, $2, 'Juan', 'enviado', 1000, 1000)`, n, idJuan); err != nil {
+			t.Fatal(err)
+		}
+	}
+	u := e.srv.URL + "/api/v1/cuenta/presupuestos/"
+	if c, b := pedir(t, juan, "POST", u+"P-2026-0009/respuesta", map[string]string{"respuesta": "rechazado", "motivo": "Plazo de entrega"}); c != 200 {
+		t.Fatalf("rechazar: %d %s", c, b)
+	}
+	if c, b := pedir(t, juan, "POST", u+"P-2026-0010/respuesta", map[string]string{"respuesta": "rechazado", "motivo": "<script>"}); c != 200 {
+		t.Fatalf("rechazar: %d %s", c, b)
+	}
+	var m1, m2 string
+	_ = e.pool.QueryRow(ctx, `select coalesce(motivo_rechazo, '') from quotes where numero = 'P-2026-0009'`).Scan(&m1)
+	_ = e.pool.QueryRow(ctx, `select coalesce(motivo_rechazo, '') from quotes where numero = 'P-2026-0010'`).Scan(&m2)
+	if m1 != "Plazo de entrega" || m2 != "Otro" {
+		t.Errorf("motivos: %q %q", m1, m2)
+	}
+}
+
 // M3S1-046: el pedido dice lo devuelto de cada renglón y cuánto suman las
 // devoluciones, para el total neto.
 func TestPedidoConLoDevuelto(t *testing.T) {

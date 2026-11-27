@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
+import { PasadoAPedido } from "@/components/cuenta/pasado-a-pedido";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, CalendarClock, Check, Download, Store } from "lucide-react";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -62,7 +63,7 @@ export default async function DetallePresupuestoPage({
             <h1 className="tabular text-2xl font-bold tracking-tight">
               {presupuesto.numero}
             </h1>
-            <EtiquetaEstado estado={presupuesto.estado} />
+            {presupuesto.pedido ? <PasadoAPedido /> : <EtiquetaEstado estado={presupuesto.estado} />}
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
             <span>Del {fechaLarga.format(presupuesto.createdAt)}</span>
@@ -125,7 +126,13 @@ export default async function DetallePresupuestoPage({
       {presupuesto.estado !== "rechazado" && (
         <section className="rounded-xl border bg-card p-5">
           <Pasos
-            etapas={ETAPAS_PRESUPUESTO}
+            etapas={
+              presupuesto.pedido
+                ? ETAPAS_PRESUPUESTO.map((e) =>
+                    e.clave === "aceptado" ? { ...e, titulo: `Pedido ${presupuesto.pedido}` } : e,
+                  )
+                : ETAPAS_PRESUPUESTO
+            }
             actual={presupuesto.estado}
             cancelado={false}
           />

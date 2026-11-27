@@ -77,9 +77,10 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, estado, total, items, validoHasta, createdAt, aResponder]
+                  required: [id, numero, estado, total, items, validoHasta, createdAt, aResponder, conPedido]
                   properties:
                     aResponder: { type: boolean }
+                    conPedido: { type: boolean, description: ya se pasó a un pedido que sigue vivo }
                     id: { type: string }
                     numero: { type: string }
                     estado: { type: string }
@@ -114,6 +115,7 @@ paths:
               additionalProperties: false
               properties:
                 respuesta: { type: string }
+                motivo: { type: string, maxLength: 60, description: por qué lo rechaza (uno de portal.MotivosDelCliente) }
       responses:
         "200": { $ref: "#/components/responses/Hecho" }
         "401": { $ref: "#/components/responses/Problema" }

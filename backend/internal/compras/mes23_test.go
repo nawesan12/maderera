@@ -383,7 +383,7 @@ func TestBorrarCondicionDiceCual(t *testing.T) {
 	if c, b := pedir(t, adm, "DELETE", e.u+"proveedores/"+e.proveedor+"/condiciones/"+id, nil); c >= 300 {
 		t.Fatalf("borrar: %d %s", c, b)
 	}
-	if n := e.numero(t, `select count(*)::float8 from audit_log where descripcion = 'Borró la condición de pago «cheque a 60 días · 3 % de bonificación»'`); n != 1 {
+	if n := e.numero(t, `select count(*)::float8 from audit_log where descripcion like 'Borró la condición de pago «cheque a 60 días · 3 % de bonificación» de %'`); n != 1 {
 		t.Errorf("la bitácora no dice cuál")
 	}
 }
@@ -543,8 +543,10 @@ func TestDiferenciaPorCantidadNoPasaAlCosto(t *testing.T) {
 }
 
 // M2S2-024, M2S2-040: el cheque de una venta con factura A emitida que
-// espera el CAE es del B con la regla asiento_sin_cae de arranque (su
-// cobro todavía no está en el estudio) y blanco con «transitoria».
+// espera el CAE es blanco con las dos reglas de asiento_sin_cae: su cobro ya
+// entra al archivo del estudio, contra Anticipos hasta el CAE (la de
+// arranque, M2S1-007) o contra Cobros a imputar («transitoria»). La pantalla
+// igual dice que espera el CAE.
 func TestChequeDeUnaFacturaQueEsperaElCAE(t *testing.T) {
 	e := armar(t)
 	ctx := context.Background()
@@ -564,7 +566,7 @@ func TestChequeDeUnaFacturaQueEsperaElCAE(t *testing.T) {
 		}
 		return c
 	}
-	if c := circuito(); c != "negro" {
+	if c := circuito(); c != "blanco" {
 		t.Errorf("con la regla de arranque: %s", c)
 	}
 	var espera bool

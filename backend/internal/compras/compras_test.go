@@ -606,7 +606,7 @@ func TestListaDeProveedor(t *testing.T) {
 	}
 	// Queda en el historial de precios con el antes y el después (M2S2-005).
 	if n := e.numero(t, `select count(*) from price_history where variant_id = $1 and precio_anterior = 1000 and precio_nuevo = 1573
-		and origen = 'importacion' and motivo like 'Lista del proveedor%'`, e.placa); n != 1 {
+		and origen = 'importacion' and motivo like 'Lista de %'`, e.placa); n != 1 {
 		t.Errorf("historial de precios: %v", n)
 	}
 	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/perfil-lista", nil); !strings.Contains(b, `"margenPorcentaje":"30.00"`) {

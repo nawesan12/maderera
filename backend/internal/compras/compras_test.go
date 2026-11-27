@@ -737,6 +737,17 @@ func TestFacturaDeUnaRecepcionNoDuplicaLaDeuda(t *testing.T) {
 	if s := e.saldo(t); s != 1210+1331+121 {
 		t.Errorf("factura suelta: %v", s)
 	}
+	// Al anularla, la bitácora nombra la recepción por su remito, no por el
+	// uuid (mes 23).
+	var f1, d string
+	_ = e.pool.QueryRow(context.Background(), `select id::text from purchase_invoices where receipt_id = $1`, r1).Scan(&f1)
+	if c, b := pedir(t, adm, "POST", e.u+"compras/facturas/"+f1+"/anular", map[string]string{"motivo": "error"}); c != 200 {
+		t.Fatalf("anular: %d %s", c, b)
+	}
+	_ = e.pool.QueryRow(context.Background(), `select descripcion from audit_log where entidad = 'factura_compra' and entidad_id = $1 and accion = 'anular'`, f1).Scan(&d)
+	if !strings.Contains(d, "cubría la recepción del remito R-1 (") || strings.Contains(d, r1) {
+		t.Errorf("bitácora: %s", d)
+	}
 }
 
 // Una recepción cuya sucursal ya no existe se frena con un mensaje que dice

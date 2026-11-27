@@ -1053,8 +1053,16 @@ func (s *Servicio) AnularFactura(ctx context.Context, ses *auth.Sesion, id, moti
 	}
 	numero := NumeroDeCompra(int64(f.puntoVenta), int64(f.numero))
 	desc := "Anuló la factura " + numero + " de " + f.proveedor + " por " + Monto(f.total) + " (" + motivo + ")"
+	// La recepción con lo que se lee: el remito y el día, no el uuid crudo
+	// (mes 23). El id va en los datos de la bitácora.
 	if f.receiptID != nil {
-		desc += "; cubría la recepción " + *f.receiptID
+		var rotulo string
+		if err := s.pool.QueryRow(ctx, `SELECT CASE WHEN coalesce(trim(numero_remito), '') <> ''
+			  THEN 'del remito ' || trim(numero_remito) || ' (' || to_char(fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'DD/MM/YYYY') || ')'
+			  ELSE 'del ' || to_char(fecha AT TIME ZONE 'America/Argentina/Buenos_Aires', 'DD/MM/YYYY') END
+			FROM goods_receipts WHERE id = $1`, *f.receiptID).Scan(&rotulo); err == nil {
+			desc += "; cubría la recepción " + rotulo
+		}
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaAnular, "factura_compra", id, desc, struct {
 		Motivo    string  `json:"motivo"`

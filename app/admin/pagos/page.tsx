@@ -16,6 +16,7 @@ import {
 } from "@/lib/dal/admin/pagos";
 import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { AccionesCobro } from "./acciones";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 import { DatosBancarios } from "./banco";
 
 export const metadata: Metadata = { title: "Cobranzas" };
@@ -97,6 +98,8 @@ export default async function PagosPage({
   return (
     <div className="space-y-6">
       {/* El mismo nombre que el menú (mes simulado, H137). */}
+      {/* «A verificar» baja sola si se acredita en otra pestaña (M3S3-045). */}
+      <RefrescarEnVivo canales={["cobros"]} />
       <EncabezadoPanel titulo="Cobranzas" resumen={periodo.etiqueta}>
         <FiltroPeriodo actual={periodo.clave} />
         {/* Sin token, o con token y sin el secreto del webhook (los avisos se

@@ -19,6 +19,7 @@ import { avisosManuales, type AvisoManualListo } from "@/lib/whatsapp/aviso-manu
 import { numerosDelDueno } from "@/lib/dal/admin/resumen";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { AccionesPedido } from "./acciones";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 
 /** Las etapas por las que pasa un pedido, en orden. */
@@ -73,6 +74,8 @@ export default async function PedidosPage({
 
   return (
     <div>
+      {/* Un pedido cancelado o cobrado en otra pestaña sale solo (M3S3-045). */}
+      <RefrescarEnVivo canales={["estado_pedidos", "pedidos"]} />
       <EncabezadoPanel
         titulo="Pedidos"
         resumen={
@@ -259,6 +262,8 @@ async function Historial({
 
   return (
     <div>
+      {/* Un pedido cancelado o cobrado en otra pestaña sale solo (M3S3-045). */}
+      <RefrescarEnVivo canales={["estado_pedidos", "pedidos"]} />
       <EncabezadoPanel
         titulo="Pedidos"
         resumen={

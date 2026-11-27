@@ -35,16 +35,22 @@ const (
 	Taller   Canal = "taller"
 	Pedidos  Canal = "pedidos"
 	Precios  Canal = "precios"
+	// Cobros es cualquier cambio en los cobros (Cobranzas, M3S3-045) y
+	// EstadoPedidos el estado de un pedido (la lista de Pedidos).
+	Cobros        Canal = "cobros"
+	EstadoPedidos Canal = "estado_pedidos"
 )
 
 // Quién recibe cada canal: los roles de la pantalla que lo muestra
 // (PANTALLA_DEL_CANAL en lib/vivo/canales.ts), según el mapa de permisos del
 // panel. Una pantalla que no se puede abrir no recibe sus avisos.
 var rolesDelCanal = map[Canal][]sqlc.StaffRole{
-	WhatsApp: roles.QuienEntra("/admin/whatsapp"),
-	Taller:   roles.QuienEntra("/admin/cortes"),
-	Pedidos:  roles.QuienEntra("/admin/pedidos"),
-	Precios:  roles.QuienEntra("/mostrador"),
+	WhatsApp:      roles.QuienEntra("/admin/whatsapp"),
+	Taller:        roles.QuienEntra("/admin/cortes"),
+	Pedidos:       roles.QuienEntra("/admin/pedidos"),
+	Precios:       roles.QuienEntra("/mostrador"),
+	Cobros:        roles.QuienEntra("/admin/pagos"),
+	EstadoPedidos: roles.QuienEntra("/admin/pedidos"),
 }
 
 // Evento es lo que manda el trigger.

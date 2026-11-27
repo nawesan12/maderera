@@ -256,7 +256,19 @@ export default async function FichaComprobantePage({
               </details>
             </div>
           ))}
-          {autorizable && serie?.tramo && (
+          {/* Sin certificado no hay a quién pedirle el CAE: el botón solo
+              devolvía un error. Queda el camino a cargarlo (mes 23). */}
+          {autorizable && !comprobante.cae && comprobante.conArca === false && (
+            <div className="mt-3">
+              <Link
+                href="/admin/arca/configuracion"
+                className="inline-flex h-10 items-center rounded-lg border border-linea px-3.5 text-base font-medium hover:bg-hundida"
+              >
+                Cargar el certificado de ARCA
+              </Link>
+            </div>
+          )}
+          {autorizable && comprobante.conArca !== false && serie?.tramo && (
             // Con más de 15 sin CAE atrás (facturacion.maxAnteriores), ARCA no
             // se pide desde acá: la serie se autoriza de a 15, desde el que
             // tiene justo 15 atrás. El botón autoriza ese tramo desde acá
@@ -272,7 +284,7 @@ export default async function FichaComprobantePage({
               />
             </div>
           )}
-          {autorizable && !serie?.tramo && (
+          {autorizable && comprobante.conArca !== false && !serie?.tramo && (
             <div className="mt-3">
               <BotonAutorizar
                 id={comprobante.id}

@@ -207,3 +207,22 @@ func TestSaldoDeFacturasConLoAplicadoAUnaFactura(t *testing.T) {
 	}
 	cuadra("con el cobro anulado", 247383, 84500)
 }
+
+// Sin certificado la factura dice que no hay ARCA, y la pantalla no ofrece
+// «Autorizar en ARCA», que solo devolvía un error (mes 23).
+func TestElComprobanteDiceSiHayArca(t *testing.T) {
+	for _, conArca := range []bool{false, true} {
+		e := armar(t, conArca)
+		admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
+		campos := map[string]string{"receptorNombre": "Consumidor final", "receptorCondicionIva": "consumidor_final", "comoPaga": "contado", "medio": "transferencia"}
+		st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(campos, [4]string{"Flete", "1", "9000", "21"}))
+		if st != 200 {
+			t.Fatalf("manual: %d %s", st, b)
+		}
+		id := leerJSON[map[string]string](t, b)["invoiceId"]
+		_, b = pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+id, nil)
+		if f := leerJSON[Completo](t, b); f.ConArca != conArca {
+			t.Errorf("con ARCA %v: dice %v", conArca, f.ConArca)
+		}
+	}
+}

@@ -974,6 +974,7 @@ components:
         enCuenta: { type: boolean }
         pedido: { type: string, nullable: true }
         ventaAnulada: { type: boolean }
+        conArca: { type: boolean, description: Hay certificado y se le puede pedir el CAE }
         cobrosDelPedido:
           type: array
           items:

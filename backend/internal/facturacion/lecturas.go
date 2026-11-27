@@ -428,6 +428,9 @@ type Completo struct {
 	// Pedido y VentaAnulada: el número del pedido y si se canceló.
 	Pedido       *string `json:"pedido"`
 	VentaAnulada bool    `json:"ventaAnulada"`
+	// ConArca: hay certificado y se le puede pedir el CAE. Sin él, la factura
+	// no ofrece «Autorizar en ARCA», que solo devolvía un error (mes 23).
+	ConArca bool `json:"conArca"`
 	// CobrosDelPedido: con qué se cobró el pedido fuera de Facturación (la
 	// caja del mostrador, los recibos del pedido, lo cobrado en línea). La
 	// factura los muestra en vez de un saldo falso.
@@ -557,6 +560,7 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
+	c.ConArca = s.env != nil && s.env.UsaArca()
 	if err != nil {
 		return nil, err
 	}

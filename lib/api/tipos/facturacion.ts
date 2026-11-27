@@ -902,6 +902,8 @@ export interface components {
             enCuenta: boolean;
             pedido: string | null;
             ventaAnulada: boolean;
+            /** @description Hay certificado y se le puede pedir el CAE */
+            conArca?: boolean;
             cobrosDelPedido: {
                 medio: string;
                 /** Format: double */

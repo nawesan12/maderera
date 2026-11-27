@@ -76,11 +76,28 @@ export async function anulacionesPorPersona(periodo: string) {
   return datos(await (await api()).GET("/api/v1/admin/caja/anulaciones", { params: { query: { periodo } } }));
 }
 
-export async function emitidoPorCaja(periodo: string) {
-  const filas = datos(await (await api()).GET("/api/v1/admin/caja/emitido", { params: { query: { periodo } } }));
-  return filas.map((v) => ({
-    ...v,
-    createdAt: new Date(v.createdAt),
-    anuladaAt: v.anuladaAt ? new Date(v.anuladaAt) : null,
-  }));
+/**
+ * Con los totales del mes y no de la página: la lista cortaba en 200 sin
+ * decirlo (mes simulado, M3S2-040). `pagina` empieza en 1.
+ */
+export async function emitidoPorCaja(periodo: string, pagina = 1, porPagina = 200) {
+  const r = datos(
+    await (await api()).GET("/api/v1/admin/caja/emitido", {
+      params: { query: { periodo, limite: porPagina, desplazamiento: (pagina - 1) * porPagina } },
+    }),
+  );
+  return {
+    resumen: r.resumen,
+    filas: r.filas.map((v) => ({
+      ...v,
+      createdAt: new Date(v.createdAt),
+      anuladaAt: v.anuladaAt ? new Date(v.anuladaAt) : null,
+    })),
+  };
+}
+
+/** Lo que tiene la caja fuerte de cada sucursal (00350). */
+export async function cajasFuertes() {
+  const filas = datos(await (await api()).GET("/api/v1/admin/caja/cajas-fuertes"));
+  return filas.map((c) => ({ ...c, ultimoDeposito: c.ultimoDeposito ? new Date(c.ultimoDeposito) : null }));
 }

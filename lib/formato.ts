@@ -97,6 +97,20 @@ export function formatearImporte(valor: string | number | null): string {
   return centavos % 100 === 0 ? moneda.format(centavos / 100) : monedaConCentavos.format(centavos / 100);
 }
 
+/**
+ * Un importe contable: siempre con centavos («$ 1.744.020,00»), como los
+ * archivos para el estudio y los avisos del cierre. En una columna de cifras
+ * del cierre, unas con ,00 y otras sin, quedaban desalineadas (mes simulado,
+ * M3S3-034 y M2S4-013). Lo que redondea a cero es «$ 0,00», nunca «-$ 0,00».
+ */
+export function formatearMontoContable(valor: string | number | null): string {
+  if (valor === null) return "—";
+  const numero = typeof valor === "string" ? Number(valor) : valor;
+  if (!Number.isFinite(numero)) return "—";
+  const centavos = Math.round(numero * 100);
+  return monedaConCentavos.format(centavos === 0 ? 0 : centavos / 100);
+}
+
 const monedaConCentavos = new Intl.NumberFormat("es-AR", {
   style: "currency",
   currency: "ARS",

@@ -274,6 +274,12 @@ type TotalesDelReporte struct {
 	// renglón no lo llevan, y es la diferencia con «Vendido con IVA» del
 	// inicio (H138).
 	Envios float64 `json:"envios"`
+	// Renglones es lo que suman los renglones con IVA (los cortes por
+	// producto, rubro y elaboración). Total es siempre el de los pedidos, con
+	// envío y descuento, el mismo en todos los cortes y en el inicio (mes
+	// simulado, M2S4-030 y M3S1-028): la diferencia va en su propio renglón,
+	// «Envíos y descuentos».
+	Renglones float64 `json:"renglones"`
 }
 
 // MargenDelTotal es NetoCosteado − Costo; nil si nada tiene costo.
@@ -294,7 +300,7 @@ func porRenglon(corte string) bool {
 // corte (las listas con tope cuentan las suyas aparte).
 func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, args []any) (TotalesDelReporte, error) {
 	var t TotalesDelReporte
-	var total, cantidad, neto, costeado, envios jsmath.Num
+	var total, cantidad, neto, costeado, envios, deRenglones jsmath.Num
 	var costo *jsmath.Num
 	var sinCosto int
 	grupo := map[string]string{
@@ -312,20 +318,21 @@ func (s *Servicio) totalesDelReporte(ctx context.Context, corte, where string, a
 	unidades := "(SELECT coalesce(sum(oi.cantidad), 0) FROM " + deLosRenglones + " WHERE " + where + ")"
 	montoRenglones := "(SELECT coalesce(sum(oi.subtotal), 0) FROM " + deLosRenglones + " WHERE " + where + ")"
 	montos, cuantos := "coalesce(sum(o.monto), 0)", "coalesce(sum(o.operaciones), 0)"
+	renglones := montos
 	if porRenglon(corte) {
-		montos, cuantos = montoRenglones, unidades
+		cuantos, renglones = unidades, montoRenglones
 	}
 	err := s.pool.QueryRow(ctx, `
 		SELECT `+montos+`, `+cuantos+`, coalesce(sum(margenes.neto), 0), sum(margenes.costo),
 		       coalesce(sum(margenes.sin_costo), 0)::int, coalesce(sum(margenes.neto_costeado), 0), `+filas+`::int,
-		       coalesce(sum(o.costo_envio) FILTER (WHERE o.operaciones = 1), 0)
+		       coalesce(sum(o.costo_envio) FILTER (WHERE o.operaciones = 1), 0), `+renglones+`
 		FROM `+hechosDeVenta+` o `+margenesDe(where)+` WHERE `+where, args...).
-		Scan(&total, &cantidad, &neto, &costo, &sinCosto, &costeado, &t.Filas, &envios)
+		Scan(&total, &cantidad, &neto, &costo, &sinCosto, &costeado, &t.Filas, &envios, &deRenglones)
 	if err != nil {
 		return t, err
 	}
 	t.Total, t.Cantidad, t.NetoVenta, t.NetoCosteado, t.LineasSinCosto = total.F(), cantidad.F(), neto.F(), costeado.F(), float64(sinCosto)
-	t.Envios = envios.F()
+	t.Envios, t.Renglones = envios.F(), deRenglones.F()
 	if costo != nil {
 		c := costo.F()
 		t.Costo = &c
@@ -380,15 +387,23 @@ func (s *Servicio) filasDelCorte(ctx context.Context, corte, where string, args 
 			LEFT JOIN customers cu ON cu.id = o.customer_id
 			WHERE `+where+` GROUP BY 1, 2, cu.cuit ORDER BY sum(o.monto) DESC LIMIT 50`, args, false)
 	case "vendedor":
+		// Sin vendedor asignado, la venta va con quien la cargó si es del
+		// personal («Cargó la venta»), y abajo de los vendedores. La compra
+		// que el cliente hace en la tienda no es de nadie del personal: va a
+		// «Tienda web» y no con el nombre del cliente (mes simulado, M3S3-039).
 		return s.filas(ctx, `
-			SELECT coalesce(se.id::text, u.id, 'sin-vendedor'), coalesce(se.nombre, u.name, 'Sin vendedor'),
-			       CASE WHEN se.id IS NULL AND u.id IS NOT NULL THEN 'Cargó la venta' ELSE NULL END,
+			SELECT CASE WHEN se.id IS NOT NULL THEN se.id::text WHEN pr.role = 'staff' THEN u.id
+			            WHEN o.origen = 'tienda' THEN 'tienda' ELSE 'sin-vendedor' END,
+			       CASE WHEN se.id IS NOT NULL THEN se.nombre WHEN pr.role = 'staff' THEN u.name
+			            WHEN o.origen = 'tienda' THEN 'Tienda web' ELSE 'Sin vendedor' END,
+			       CASE WHEN se.id IS NULL AND pr.role = 'staff' THEN 'Cargó la venta' ELSE NULL END,
 			       sum(o.operaciones), sum(o.monto), `+margenPorPedido+`
 			FROM `+hechosDeVenta+` o `+margenesDe(where)+`
 			LEFT JOIN sellers se ON se.id = o.seller_id
 			LEFT JOIN "user" u ON u.id = o.created_by_user_id
+			LEFT JOIN profiles pr ON pr.user_id = u.id
 			WHERE `+where+`
-			GROUP BY 1, 2, 3 ORDER BY sum(o.monto) DESC`, args, false)
+			GROUP BY 1, 2, 3 ORDER BY bool_and(se.id IS NULL), sum(o.monto) DESC`, args, false)
 	case "sucursal":
 		return s.filas(ctx, `
 			SELECT coalesce(b.id::text, 'sin-sucursal'), coalesce(b.name, 'Sin sucursal'), NULL::text,

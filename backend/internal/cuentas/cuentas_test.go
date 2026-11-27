@@ -204,8 +204,10 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	// listado de cheques es de /admin/cheques: los dos, solo del admin.
 	// Cada cheque trae su circuito: la pantalla de pagos solo ofrece endosar
 	// los del circuito del pago.
+	// El 00123456 entró con un recibo que fue entero al B (no había nada
+	// facturado): queda del B (mes simulado, M3S3-001). Uno blanco, aparte.
 	if _, err := e.pool.Exec(context.Background(), `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito)
-		values ('recibido', 'fisico', '00999999', now(), 100, 'cartera', 'negro')`); err != nil {
+		values ('recibido', 'fisico', '00999999', now(), 100, 'cartera', 'blanco')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, b := pedir(t, adm, "GET", u+"cheques/cartera", nil); !strings.Contains(b, "00123456") ||
@@ -248,7 +250,7 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 		t.Errorf("retención repetida: %d %s", c, b)
 	}
 	var medio string
-	_ = e.pool.QueryRow(context.Background(), `select p.medio::text from receipt_parts p join receipts r on r.id = p.receipt_id where r.concepto like 'Retención de iibb%'`).Scan(&medio)
+	_ = e.pool.QueryRow(context.Background(), `select p.medio::text from receipt_parts p join receipts r on r.id = p.receipt_id where r.concepto like 'Retención de IIBB%'`).Scan(&medio)
 	if medio != "retencion" {
 		t.Errorf("el recibo de la retención: %q", medio)
 	}

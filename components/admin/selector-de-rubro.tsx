@@ -29,6 +29,9 @@ export function SelectorDeRubro({
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
+  const vistos = new Map<string, number>();
+  for (const g of grupos) for (const r of g.rubros) vistos.set(r.name, (vistos.get(r.name) ?? 0) + 1);
+  const repetidos = new Set([...vistos].filter(([, n]) => n > 1).map(([nombre]) => nombre));
   const [pendiente, iniciar] = useTransition();
 
   function elegir(valor: string) {
@@ -40,13 +43,13 @@ export function SelectorDeRubro({
   }
 
   return (
-    <label className="flex items-center gap-2">
+    <label className="flex w-full items-center gap-2 sm:w-auto">
       <span className="text-base text-muted-foreground">Rubro</span>
       <select
         value={actual}
         onChange={(e) => elegir(e.target.value)}
         aria-busy={pendiente}
-        className="h-11 rounded-lg border border-linea bg-card px-3 text-base outline-none transition-colors focus:border-accion/50"
+        className="h-11 min-w-0 flex-1 rounded-lg border border-linea bg-card px-3 text-base outline-none transition-colors focus:border-accion/50 sm:flex-none"
       >
         <option value="todos">Todos los rubros</option>
         {grupos.map((g) => (
@@ -55,7 +58,9 @@ export function SelectorDeRubro({
                 «Accesorios» de Placas traía los de las tres (H069). */}
             {g.rubros.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name}
+                {/* El nombre que se repite en otra categoría lleva la suya:
+                    el teléfono no siempre muestra el grupo (M2S4-034). */}
+                {repetidos.has(r.name) ? `${r.name} · ${g.categoria}` : r.name}
               </option>
             ))}
           </optgroup>

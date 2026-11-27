@@ -154,13 +154,13 @@ func TestElReintegroVaConLaNotaDeCredito(t *testing.T) {
 	d := c.afuera(t, 2)
 	e.exec(t, `UPDATE payment_refunds SET created_at = $2 WHERE devolucion_id = $1`, d.ID, time.Date(2026, 10, 31, 23, 30, 0, 0, caja.Argentina))
 	e.exec(t, `UPDATE invoices SET fecha_emision = $2 WHERE id = $1`, d.NotaID, time.Date(2026, 11, 1, 10, 0, 0, 0, caja.Argentina))
-	if r := reintegros(e.asientosDelMes(t, "2026-10")); r[reportes.Cuentas.Banco] != 0 {
+	if r := reintegros(e.asientosDelMes(t, "2026-10")); r[reportes.Cuentas.TarjetasAAcreditar] != 0 {
 		t.Errorf("octubre tiene reintegros: %v", r)
 	}
 	if s := reportes.SaldoDeCuenta(e.asientosDelMes(t, "2026-10"), reportes.Cuentas.Deudores); !cerca(s, 0) {
 		t.Errorf("Deudores de octubre: %v", s)
 	}
-	if r := reintegros(e.asientosDelMes(t, "2026-11")); !cerca(r[reportes.Cuentas.Banco], 200) {
+	if r := reintegros(e.asientosDelMes(t, "2026-11")); !cerca(r[reportes.Cuentas.TarjetasAAcreditar], 200) {
 		t.Errorf("noviembre: %v", r)
 	}
 }

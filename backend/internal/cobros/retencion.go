@@ -109,7 +109,7 @@ func (s *Servicio) CargarRetencionSufrida(ctx context.Context, ses *auth.Sesion,
 			f.CustomerID, numero, f.Impuesto, codigo, jsmath.Fijo2(base), alicuota, jsmath.Fijo2(importe), fecha, referencia, ses.UserID).Scan(&retencion); err != nil {
 			return err
 		}
-		concepto := "Retención de " + f.Impuesto + " · certificado " + numero
+		concepto := "Retención de " + formato.Impuesto(f.Impuesto) + " · certificado " + numero
 		var err error
 		r, err = EmitirRecibo(ctx, tx, Cobro{CustomerID: &f.CustomerID, Origen: "panel", Concepto: &concepto, UsuarioID: &ses.UserID,
 			Partes: []Parte{{Medio: "retencion", Importe: importe, Referencia: &numero}}})

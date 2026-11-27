@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 )
@@ -380,8 +381,14 @@ func TestFiscalComoTS(t *testing.T) {
 			filas[i] = RetencionDelPeriodo{Numero: f.Numero, Fecha: f.Fecha, Impuesto: f.Impuesto, CodigoRegimen: f.CodigoRegimen, Proveedor: f.Proveedor,
 				Cuit: f.Cuit, Base: jsmath.Numero(f.Base), Alicuota: jsmath.Numero(f.Alicuota), Importe: jsmath.Numero(f.Importe)}
 		}
-		if csv := csvRetenciones(filas, false); csv != c.Csv {
-			t.Errorf("retenciones %d: CSV\nGo %q\nTS %q", n, csv, c.Csv)
+		// El impuesto con su nombre («Ganancias», «IVA»; mes simulado,
+		// M2S1-126): lo demás, idéntico al TS.
+		esperado := c.Csv
+		for _, imp := range []string{"ganancias", "iva", "iibb", "suss"} {
+			esperado = strings.ReplaceAll(esperado, `;"`+imp+`";`, `;"`+formato.Impuesto(imp)+`";`)
+		}
+		if csv := csvRetenciones(filas, false); csv != esperado {
+			t.Errorf("retenciones %d: CSV\nGo %q\nTS %q", n, csv, esperado)
 		}
 	}
 	for n, l := range g.Libretas {

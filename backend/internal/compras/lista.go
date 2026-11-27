@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/planilla"
 	"mjbj/internal/plataforma"
@@ -326,6 +327,6 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 		return "", "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", perfil.SupplierID,
-		fmt.Sprintf("Importó %d precios desde la lista de un proveedor", len(filas)), nil)
+		"Importó "+formato.Cuantos(len(filas), "precio", "precios")+" de la lista de "+s.nombreDelProveedor(ctx, perfil.SupplierID), nil)
 	return fmt.Sprintf("Listo: %d precios actualizados. El mapeo quedó guardado.", len(filas)), perfil.SupplierID, nil
 }

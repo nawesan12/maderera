@@ -184,7 +184,7 @@ func (q *Queries) ChequeACartera(ctx context.Context, arg ChequeACarteraParams) 
 }
 
 const chequeCompleto = `-- name: ChequeCompleto :one
-SELECT id, sentido, tipo, numero, banco, librador, emision, fecha_pago, importe, estado, customer_id, order_payment_id, notas, created_by_user_id, created_at, updated_at, circuito, receipt_id, motivo_rechazo FROM cheques WHERE id = $1
+SELECT id, sentido, tipo, numero, banco, librador, emision, fecha_pago, importe, estado, customer_id, order_payment_id, notas, created_by_user_id, created_at, updated_at, circuito, receipt_id, motivo_rechazo, circuito_reparto FROM cheques WHERE id = $1
 `
 
 func (q *Queries) ChequeCompleto(ctx context.Context, id string) (Cheque, error) {
@@ -210,6 +210,7 @@ func (q *Queries) ChequeCompleto(ctx context.Context, id string) (Cheque, error)
 		&i.Circuito,
 		&i.ReceiptID,
 		&i.MotivoRechazo,
+		&i.CircuitoReparto,
 	)
 	return i, err
 }

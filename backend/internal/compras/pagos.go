@@ -781,9 +781,13 @@ func (s *Servicio) PagarAProveedor(ctx context.Context, ses *auth.Sesion, m map[
 	}
 	// Con lo que salió de verdad: un pago con un e-Cheq endosado, un cheque
 	// propio y una transferencia decía «por transferencia» (H381).
-	desc := "Pagó " + Monto(d.Total) + " por " + mediosDelPago(d)
+	desc := "Pago a " + s.nombreDelProveedor(ctx, d.SupplierID) + ": " + Monto(d.Total) + " por " + mediosDelPago(d)
 	if len(certificados) > 0 {
-		desc += fmt.Sprintf(", con %d retenciones", len(certificados))
+		numeros := make([]string, len(certificados))
+		for i, c := range certificados {
+			numeros[i] = c.Numero
+		}
+		desc += ", retención " + strings.Join(numeros, ", ")
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "pago_proveedor", pagoID, desc, nil)
 	out.ID, out.Certificados = pagoID, certificados

@@ -382,7 +382,12 @@ func (s *Servicio) Cancelar(ctx context.Context, ses *auth.Sesion, id string, mo
 	if err != nil {
 		return nil, err
 	}
-	desc := "Canceló el pedido"
+	var numero string
+	_ = s.pool.QueryRow(ctx, `SELECT numero FROM orders WHERE id = $1`, id).Scan(&numero)
+	desc := "Canceló " + numero
+	if numero == "" {
+		desc = "Canceló el pedido"
+	}
 	if motivo != nil && *motivo != "" {
 		desc += ": " + *motivo
 	}

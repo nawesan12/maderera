@@ -5,6 +5,8 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 )
@@ -61,6 +63,22 @@ func (s *Servicio) GuardarZona(ctx context.Context, ses *auth.Sesion, m map[stri
 	}
 	v := z.Valores
 	var err error
+	// Apagarla o prenderla no es «editar»: se dice (mes simulado, M2S2-087).
+	desc := z.Descripcion
+	if v.ACotizar {
+		desc = "Zona de envío «" + v.Nombre + "»: flete a cotizar"
+	} else {
+		desc = "Zona de envío «" + v.Nombre + "»: " + formato.Importe(jsmath.Numero(v.Costo))
+	}
+	if z.ID != nil {
+		var antes bool
+		if s.pool.QueryRow(ctx, `SELECT activa FROM shipping_zones WHERE id = $1`, *z.ID).Scan(&antes) == nil && antes != v.Activa {
+			desc = "Apagó la zona " + v.Nombre
+			if v.Activa {
+				desc = "Prendió la zona " + v.Nombre
+			}
+		}
+	}
 	if z.ID != nil {
 		_, err = s.pool.Exec(ctx, `
 			UPDATE shipping_zones SET nombre = $2, cobertura = $3, demora_estimada = $4, a_cotizar = $5, costo = $6::numeric,
@@ -79,6 +97,6 @@ func (s *Servicio) GuardarZona(ctx context.Context, ses *auth.Sesion, m map[stri
 	if z.ID != nil {
 		accion, id = sqlc.AccionAuditoriaEditar, *z.ID
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "zona_envio", id, z.Descripcion, v)
+	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "zona_envio", id, desc, v)
 	return nil
 }

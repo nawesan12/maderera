@@ -41,7 +41,10 @@ export function mesCorrido(clave: string, delta: number): string {
  * elegido si está fuera de ese rango (una dirección vieja tecleada a mano).
  */
 function mesesParaElegir(actual: string, hoy: string, desde?: string | null): string[] {
+  // Con `desde` (el primer mes con datos), la lista arranca ahí: treinta y
+  // seis meses vacíos no le sirven a nadie (mes simulado, M2S1-118, M3S4-035).
   const meses = Array.from({ length: 36 }, (_, i) => mesCorrido(hoy, -i)).filter((m) => !desde || m >= desde);
+  if (meses.length === 0) meses.push(hoy);
   if (!meses.includes(actual)) meses.push(actual);
   return meses.sort().reverse();
 }

@@ -60,6 +60,12 @@ export default async function ReportesPage({
   // vendieron, y sumarlas daba otro total según el corte.
   const total = totales.total;
   const operaciones = totales.cantidad;
+  // La participación de cada fila, sobre lo que suman las filas: en los
+  // cortes por renglón el total lleva además el envío y el descuento.
+  const base = totales.renglones || total;
+  // Lo que los renglones no llevan: el mismo total con IVA en todos los
+  // cortes y en el inicio (mes simulado, M2S4-030).
+  const enviosYDescuentos = total - totales.renglones;
 
   /*
    * Lo vendido, el costo y el margen del período.
@@ -110,7 +116,7 @@ export default async function ReportesPage({
                 porRenglon
                   ? plural(operaciones, "unidad", "unidades")
                   : plural(operaciones, "operación", "operaciones")
-              }${porRenglon && totales.envios > 0 ? ` · ${formatearMonto(totales.envios)} de envíos` : ""}`
+              }`
             : "Sin ventas en el período elegido"
         }
       >
@@ -214,7 +220,7 @@ export default async function ReportesPage({
         </div>
       ) : (
         <div id="ventas" className="scroll-mt-24 overflow-x-auto rounded-xl border">
-          <table className="w-full min-w-[560px] text-base">
+          <table className="w-full min-w-[640px] text-base">
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-5 py-2.5 font-semibold">
@@ -227,6 +233,11 @@ export default async function ReportesPage({
                 <th className="px-3 py-2.5 text-right font-semibold">Total</th>
                 {hayMargen && (
                   <>
+                    {/* El neto al lado del costo, como en el CSV: el total
+                        lleva IVA y el costo no (mes simulado, M2S1-039). */}
+                    <th className="px-3 py-2.5 text-right font-semibold">
+                      Sin IVA
+                    </th>
                     <th className="px-3 py-2.5 text-right font-semibold">
                       Costo
                     </th>
@@ -242,7 +253,7 @@ export default async function ReportesPage({
             </thead>
             <tbody className="divide-y">
               {filas.map((f) => {
-                const parte = total > 0 ? (f.total / total) * 100 : 0;
+                const parte = base > 0 ? (f.total / base) * 100 : 0;
 
                 return (
                   <tr key={f.clave}>
@@ -256,6 +267,14 @@ export default async function ReportesPage({
                           {f.detalle}
                         </span>
                       )}
+                      {/* Lo sin costo en su renglón, debajo del nombre: en la
+                          tarjeta del teléfono, al lado del margen, cortaba
+                          el rótulo en «Marg…» (mes simulado, M2S2-083). */}
+                      {hayMargen && f.costo !== null && f.lineasSinCosto > 0 && (
+                        <span className="estado-problema mt-0.5 block text-sm font-medium">
+                          {f.lineasSinCosto} sin costo
+                        </span>
+                      )}
                     </td>
                     <td className="tabular px-3 py-3 text-right">
                       {f.cantidad.toLocaleString("es-AR")}
@@ -265,6 +284,9 @@ export default async function ReportesPage({
                     </td>
                     {hayMargen && (
                       <>
+                        <td className="tabular px-3 py-3 text-right">
+                          {formatearMonto(f.netoVenta)}
+                        </td>
                         <td className="tabular px-3 py-3 text-right text-muted-foreground">
                           {f.costo === null ? "—" : formatearMonto(f.costo)}
                         </td>
@@ -284,15 +306,18 @@ export default async function ReportesPage({
                                 f.netoCosteado > 0
                                   ? (margen / f.netoCosteado) * 100
                                   : null;
+                              // Un margen bajo no se pinta como uno sano:
+                              // menos del 5 % va en el color de espera, y
+                              // el negativo en el de deuda (M2S1-039).
+                              const color =
+                                margen < 0 || (pct !== null && pct < 0)
+                                  ? "text-saldo-debe"
+                                  : pct !== null && pct < 5
+                                    ? "estado-espera"
+                                    : "text-saldo-favor";
                               return (
                                 <>
-                                  <span
-                                    className={`tabular whitespace-nowrap font-semibold ${
-                                      margen < 0
-                                        ? "text-saldo-debe"
-                                        : "text-saldo-favor"
-                                    }`}
-                                  >
+                                  <span className={`tabular whitespace-nowrap font-semibold ${color}`}>
                                     {formatearMonto(margen)}
                                     {/* Con su separador: en la tarjeta del
                                         teléfono se leía «$ 221.2499,2%». */}
@@ -307,11 +332,6 @@ export default async function ReportesPage({
                                       </span>
                                     )}
                                   </span>
-                                  {f.lineasSinCosto > 0 && (
-                                    <span className="estado-problema block text-sm font-medium">
-                                      {f.lineasSinCosto} sin costo
-                                    </span>
-                                  )}
                                 </>
                               );
                             })()
@@ -341,6 +361,21 @@ export default async function ReportesPage({
             {/* El período entero: con el tope de filas, la suma de lo que se
                 ve no es el total, y se dice cuántas faltan. */}
             <tfoot className="border-t-2 bg-muted/30 font-semibold">
+              {porRenglon && Math.abs(enviosYDescuentos) >= 0.005 && (
+                <tr className="font-normal text-muted-foreground">
+                  <td className="px-5 py-2.5">Envíos y descuentos</td>
+                  <td />
+                  <td className="tabular px-3 py-2.5 text-right">{formatearMonto(enviosYDescuentos)}</td>
+                  {hayMargen && (
+                    <>
+                      <td />
+                      <td />
+                      <td />
+                    </>
+                  )}
+                  <td />
+                </tr>
+              )}
               <tr>
                 <td className="px-5 py-3">
                   Total
@@ -354,6 +389,7 @@ export default async function ReportesPage({
                 <td className="tabular px-3 py-3 text-right">{formatearMonto(totales.total)}</td>
                 {hayMargen && (
                   <>
+                    <td className="tabular px-3 py-3 text-right">{formatearMonto(vendido)}</td>
                     <td className="tabular px-3 py-3 text-right">{formatearMonto(costoTotal)}</td>
                     <td
                       className={`tabular px-3 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}

@@ -424,7 +424,9 @@ func TestCostoCeroYUnSoloVendido(t *testing.T) {
 	_, cuerpo, _ = pedir(t, adm, e.u+"cierre/resumen?periodo=2026-10")
 	var r ResumenDelMes
 	_ = json.Unmarshal([]byte(cuerpo), &r)
-	if r.Resultado.Actual != quiere || r.Vendido.Total != vendido {
+	// Lo vendido del cierre, partido por factura, es lo que tiene costo: lo
+	// sin costo va aparte (M3S1-020).
+	if r.Resultado.Actual != quiere || r.Vendido.Total != rep.Totales.NetoCosteado {
 		t.Errorf("resultado del cierre: %+v, vendido %+v", r.Resultado.Actual, r.Vendido)
 	}
 }

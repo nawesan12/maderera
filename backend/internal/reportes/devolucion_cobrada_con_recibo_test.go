@@ -25,7 +25,7 @@ import (
 //     cierre asienta el reintegro con el reparto del recibo: Deudores
 //     cierra en cero.
 //   - Cobrado con recibo por transferencia: la caja no paga; vuelve por
-//     afuera y el reintegro sale del banco.
+//     afuera y el reintegro va a Movimientos a imputar.
 func TestDevolucionDeUnPedidoCobradoConRecibo(t *testing.T) {
 	e := armar(t)
 	e.staff(t, "admin@prueba.test", "admin")
@@ -165,8 +165,13 @@ func TestDevolucionDeUnPedidoCobradoConRecibo(t *testing.T) {
 	if c := cuenta(blanco, Cuentas.Caja); c != 605 {
 		t.Errorf("Caja: %v", c)
 	}
-	if b := cuenta(blanco, Cuentas.Banco); b != 605 {
+	// Lo devuelto «por otro medio» no se sabe de dónde salió: va a
+	// Movimientos a imputar, no al Banco (mes simulado, M3S1-052).
+	if b := cuenta(blanco, Cuentas.Banco); b != 1210 {
 		t.Errorf("Banco: %v", b)
+	}
+	if b := cuenta(blanco, Cuentas.MovimientosAImputar); b != -605 {
+		t.Errorf("Movimientos a imputar: %v", b)
 	}
 	if len(DelCircuito(asientos, CircuitoNegro)) != 0 {
 		t.Errorf("nada va al B")

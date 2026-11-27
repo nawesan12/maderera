@@ -31,6 +31,12 @@ func TestGananciaSegunLasReglas(t *testing.T) {
 		values ($1, 'factura_a', 1, 1, current_date, 100, 21, 121) returning id`, proveedor).Scan(&factura)
 	exec(`insert into expenses (fecha, categoria, descripcion, importe, medio, purchase_invoice_id)
 		values (current_date, 'flete', 'Flete', 121, 'efectivo', $1)`, factura)
+	// Una factura B: su IVA no da crédito fiscal.
+	var facturaB string
+	_ = pool.QueryRow(ctx, `insert into purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, total)
+		values ($1, 'factura_b', 1, 2, current_date, 100, 21, 121) returning id`, proveedor).Scan(&facturaB)
+	exec(`insert into expenses (fecha, categoria, descripcion, importe, medio, purchase_invoice_id)
+		values (current_date, 'flete', 'Flete B', 121, 'efectivo', $1)`, facturaB)
 
 	s := Nuevo(pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	desde := time.Now().AddDate(0, 0, -1)
@@ -47,14 +53,16 @@ func TestGananciaSegunLasReglas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.VentasNetas != 1000 || r.Gastos != 121 || r.Resultado != 379 {
+	// El IVA de la factura A es crédito fiscal: no es gasto (mes simulado,
+	// M2S2-003). El de la B, sí, con la regla de arranque.
+	if r.VentasNetas != 1000 || r.Gastos != 221 || r.Resultado != 279 {
 		t.Fatalf("como siempre: %+v", r)
 	}
 
 	exec(`update site_settings set valor = 'sin_iva' where clave = 'ganancia_gastos'`)
 	exec(`update site_settings set valor = 'si' where clave = 'ganancia_descuento'`)
 	r, _ = s.ResultadoEntre(ctx, desde, hasta, dia(desde), dia(hasta))
-	if r.VentasNetas != 900 || r.Gastos != 100 || r.Resultado != 300 {
+	if r.VentasNetas != 900 || r.Gastos != 200 || r.Resultado != 200 {
 		t.Fatalf("con las reglas: %+v", r)
 	}
 }

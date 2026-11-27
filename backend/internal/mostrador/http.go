@@ -177,6 +177,9 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	if !pedido.VolvioLaMercaderia {
 		desc += ". La mercadería no volvió"
 	}
+	if res.AutorizadoPor != "" {
+		desc += " · autorizó " + res.AutorizadoPor + " con PIN"
+	}
 	var detalle any
 	if res.AutorizadoPor != "" || !pedido.VolvioLaMercaderia {
 		detalle = map[string]any{"autorizadoPor": res.AutorizadoPor, "volvioLaMercaderia": pedido.VolvioLaMercaderia, "total": res.Total}
@@ -741,9 +744,23 @@ func (s *Servicio) Cobrar(ctx context.Context, ses *auth.Sesion, v VentaPedida) 
 		return r, nil
 	}
 	if r.Nueva {
-		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, "Venta de mostrador "+r.Numero+" por "+formato.Importe(r.Total), controlDeLaVenta(r))
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "pedido", r.OrderID, DescripcionDeLaVenta(r), controlDeLaVenta(r))
 	}
 	return r, nil
+}
+
+// DescripcionDeLaVenta es el renglón de la bitácora de una venta: con lo que
+// se dejó de cobrar y quién lo autorizó en la misma línea (mes simulado,
+// M2S2-004 y M2S3-053), que antes iba solo en el detalle y no se veía.
+func DescripcionDeLaVenta(r ResultadoVenta) string {
+	desc := "Venta de mostrador " + r.Numero + " por " + formato.Importe(r.Total)
+	if r.DejadoDeCobrar > 0.005 {
+		desc += " · descuento de " + formato.Importe(r.DejadoDeCobrar)
+	}
+	if r.AutorizadoPor != "" {
+		desc += " · autorizó " + r.AutorizadoPor + " con PIN"
+	}
+	return desc
 }
 
 // controlDeLaVenta es el detalle de la bitácora: lo dejado de cobrar y quién

@@ -438,7 +438,8 @@ func (s *Servicio) BorrarCondicion(ctx context.Context, ses *auth.Sesion, id, su
 	if _, err := s.pool.Exec(ctx, `DELETE FROM supplier_terms WHERE id = $1 AND supplier_id = $2`, id, supplierID); err != nil {
 		return err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEliminar, "condicion_proveedor", id, "Borró una condición de pago del proveedor", nil)
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEliminar, "proveedor", supplierID,
+		"Borró una condición de pago de "+s.nombreDelProveedor(ctx, supplierID), nil)
 	return nil
 }
 

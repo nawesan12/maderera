@@ -445,8 +445,18 @@ func (s *Servicio) ConfirmarRecepcion(ctx context.Context, ses *auth.Sesion, id 
 	if err != nil {
 		return 0, 0, err
 	}
+	var remito, proveedor string
+	_ = s.pool.QueryRow(ctx, `SELECT coalesce(g.numero_remito, ''), coalesce(s.nombre, '') FROM goods_receipts g
+		LEFT JOIN suppliers s ON s.id = g.supplier_id WHERE g.id = $1`, id).Scan(&remito, &proveedor)
+	quien := "Recepción"
+	if remito != "" {
+		quien = "Remito " + remito
+	}
+	if proveedor != "" {
+		quien += " · " + proveedor
+	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "recepcion", id,
-		"Confirmó la recepción: "+formato.Cuantos(lineas, "renglón", "renglones")+" por "+formato.Importe(neto)+" netos", nil)
+		quien+": confirmó "+formato.Cuantos(lineas, "renglón", "renglones")+" por "+formato.Importe(neto)+" netos", nil)
 	return lineas, neto, nil
 }
 

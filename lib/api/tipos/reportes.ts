@@ -197,6 +197,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cierre/liquidaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Lo que liquidó la tarjeta, neto de su comisión (pasa de Tarjetas a acreditar al Banco) */
+        post: operations["CargarLiquidacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/metricas": {
         parameters: {
             query?: never;
@@ -350,9 +367,14 @@ export interface components {
         ReporteTotales: {
             /**
              * Format: double
-             * @description Con IVA; subtotales de renglones o total de los pedidos
+             * @description Con IVA
              */
             total: number;
+            /**
+             * Format: double
+             * @description Lo que suman con IVA las filas del corte; en los cortes por renglón
+             */
+            renglones: number;
             /**
              * Format: double
              * @description Unidades o operaciones
@@ -394,7 +416,7 @@ export interface components {
             disponibleCentral: number;
             /** Format: double */
             disponibleAserradero: number;
-            /** @description El proveedor habitual (el último con el que se cargó un código) */
+            /** @description El proveedor al que se le compró por última vez la medida (o el último con el que se cargó un código) */
             proveedorId?: string | null;
             proveedor?: string | null;
             /** Format: double */
@@ -403,8 +425,27 @@ export interface components {
             vendido: number;
             /** Format: double */
             cobertura: number | null;
-            /** Format: double */
+            /**
+             * Format: double
+             * @description Lo que se compra en la vista elegida
+             */
             sugerido: number;
+            /** Format: double */
+            comprarCentral: number;
+            /** Format: double */
+            comprarAserradero: number;
+            /**
+             * Format: double
+             * @description Lo que conviene traer del Aserradero en vez de comprar
+             */
+            trasladoACentral: number;
+            /**
+             * Format: double
+             * @description Lo que conviene traer de Casa Central en vez de comprar
+             */
+            trasladoAAserradero: number;
+            /** @description Alguna sucursal tiene la medida en negativo */
+            negativo: boolean;
         };
         Reposicion: {
             filas: components["schemas"]["ReposicionFila"][];
@@ -443,6 +484,13 @@ export interface components {
             detalle: string;
             cantidad: number;
             donde: string;
+            /** @description Los casos del aviso uno por uno, con su importe y a dónde se resuelve cada uno */
+            casos?: {
+                nombre: string;
+                /** Format: double */
+                importe?: number;
+                donde: string;
+            }[];
         };
         CierreTotales: {
             /** Format: double */
@@ -479,6 +527,14 @@ export interface components {
             vendido: components["schemas"]["CierreVendido"];
             compras: components["schemas"]["CierreTotalesConIva"];
             gastos: components["schemas"]["CierreTotales"];
+            gastosB: components["schemas"]["CierreTotales"];
+            /** @description El primer mes con algún movimiento (YYYY-MM) */
+            primerMes: string;
+            /**
+             * Format: double
+             * @description Lo cobrado con tarjeta hasta el fin del mes que todavía no liquidó
+             */
+            tarjetasSinLiquidar: number;
             retencionesPracticadas: components["schemas"]["CierreTotales"];
             retencionesSufridas: components["schemas"]["CierreTotales"];
             percepcionesIibb: components["schemas"]["CierreTotales"];
@@ -1125,6 +1181,8 @@ export interface operations {
                 "application/json": {
                     periodo: string;
                     cerrado: boolean;
+                    /** @description Por qué se reabre; obligatorio para reabrir */
+                    motivo?: string;
                 };
             };
         };
@@ -1137,6 +1195,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MesCerrado"];
                 };
+            };
+        };
+    };
+    CargarLiquidacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fecha: string;
+                    /** Format: double */
+                    bruto: number;
+                    /** Format: double */
+                    comision: number;
+                    referencia?: string;
+                    /** @enum {string} */
+                    circuito?: "blanco" | "negro";
+                };
+            };
+        };
+        responses: {
+            /** @description Cargada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

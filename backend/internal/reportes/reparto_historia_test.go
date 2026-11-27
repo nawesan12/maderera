@@ -103,9 +103,18 @@ func TestLaSenaNoCancelaOtraVenta(t *testing.T) {
 	if buscarAsiento(octubre, "Aplica anticipo") != nil {
 		t.Fatal("la seña se aplicó a otra venta")
 	}
+	// El pedido se entregó sin factura: la seña vuelve al B, como venta sin
+	// factura (mes simulado, M3S3-003), y no queda varada en Anticipos.
 	_, pend, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
-	if !strings.Contains(pend, `"clave":"anticipos-sin-aplicar"`) || !strings.Contains(pend, `"clave":"senas-del-mes"`) {
+	if strings.Contains(pend, `"clave":"anticipos-sin-aplicar"`) {
 		t.Fatalf("pendientes: %s", pend)
+	}
+	if x := buscarAsiento(octubre, "Recibo R-SEÑA · P-50 entregado sin factura"); x == nil || x.Circuito != "" ||
+		cuenta([]Asiento{*x}, Cuentas.AnticiposDeClientes) != 300 || cuenta([]Asiento{*x}, Cuentas.Caja) != -300 {
+		t.Fatalf("la seña sale del estudio: %+v", x)
+	}
+	if n := cuenta(DelCircuito(octubre, CircuitoNegro), Cuentas.VentasSinFactura); n != -300 {
+		t.Fatalf("y entra al B como venta sin factura: %v", n)
 	}
 
 	// El acopio de 200 abierto y un pago de 1000 sin nada facturado: 200 de

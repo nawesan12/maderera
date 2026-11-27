@@ -31,11 +31,12 @@ func TestInterruptoresDeLaTienda(t *testing.T) {
 	if desc != "Encendió la tienda online" || quien != "admin@prueba.test" {
 		t.Errorf("bitácora: %q %q", desc, quien)
 	}
-	// Un texto común no pasa por la bitácora.
+	// Un texto del sitio también deja su renglón, con lo que dice ahora (mes
+	// simulado, M2S3-017: la franja de arriba se publicó sin rastro).
 	_, _ = e.pool.Exec(context.Background(), `insert into site_settings (clave, valor) values ('telefono', '223 000')`)
 	pedir(t, adm, "PUT", u+"telefono", map[string]string{"valor": "223 590-3118"})
 	var n int
-	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log`).Scan(&n)
+	_ = e.pool.QueryRow(context.Background(), `select count(*) from audit_log where entidad = 'sitio' and descripcion = 'Cambió «telefono»: 223 590-3118'`).Scan(&n)
 	if n != 1 {
 		t.Errorf("líneas en la bitácora: %d", n)
 	}
@@ -112,7 +113,8 @@ func TestReglasQueEsperanAlContador(t *testing.T) {
 	if err := e.pool.QueryRow(ctx, `select max(descripcion), count(*) from audit_log where entidad = 'regla' and entidad_id = 'venta_reconocida'`).Scan(&desc, &n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 || desc != "Regla «venta_reconocida»: entregar_o_facturar → tomar" {
+	// Con las palabras de /admin/reglas (mes simulado, M2S4-052).
+	if n != 1 || desc != "Una venta cuenta…: Al entregar o facturar → Al tomar el pedido" {
 		t.Errorf("bitácora: %d %q", n, desc)
 	}
 	if !reglasdel.Es(ctx, e.pool, reglasdel.VentaReconocida, "tomar") {
@@ -122,5 +124,32 @@ func TestReglasQueEsperanAlContador(t *testing.T) {
 	_, _ = e.pool.Exec(ctx, `update site_settings set valor = 'x' where clave = 'venta_reconocida'`)
 	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.VentaReconocida); v != "entregar_o_facturar" {
 		t.Errorf("basura: %q", v)
+	}
+}
+
+// Cada ajuste del sitio que cambia deja su renglón (el tope del bot, el
+// número humano, la franja de arriba); guardar lo mismo, ninguno (mes
+// simulado, M2S3-036 y M2S4-053).
+func TestLosAjustesDejanRenglon(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/"
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_numero_humano', '') on conflict (clave) do nothing`)
+	for _, x := range [][2]string{{"whatsapp_tope_mensajes", "25"}, {"whatsapp_tope_mensajes", "25"}, {"whatsapp_numero_humano", "5492235550999"}} {
+		if c, b := pedir(t, adm, "PUT", u+x[0], map[string]string{"valor": x[1]}); c != 204 {
+			t.Fatalf("%s: %d %s", x[0], c, b)
+		}
+	}
+	var n int
+	var desc string
+	if err := e.pool.QueryRow(ctx, `select count(*), coalesce(min(descripcion), '') from audit_log where entidad = 'whatsapp' and entidad_id = 'whatsapp_tope_mensajes'`).Scan(&n, &desc); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || !strings.HasPrefix(desc, "Tope de mensajes del bot de WhatsApp: ") || !strings.HasSuffix(desc, " → 25") {
+		t.Errorf("el tope: %d %q", n, desc)
+	}
+	if err := e.pool.QueryRow(ctx, `select count(*) from audit_log where entidad = 'whatsapp' and entidad_id = 'whatsapp_numero_humano'`).Scan(&n); err != nil || n != 1 {
+		t.Errorf("el número humano: %d %v", n, err)
 	}
 }

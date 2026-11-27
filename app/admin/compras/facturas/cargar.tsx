@@ -244,7 +244,7 @@ export function CargarFactura({
         puntoVenta: Number(puntoVenta || 0),
         numero: Number(numero || 0),
         fechaEmision,
-        fechaVencimiento: vence || undefined,
+        fechaVencimiento: esCredito ? undefined : vence || undefined,
         cae,
         neto: n(neto),
         iva21: n(iva21),
@@ -343,15 +343,18 @@ export function CargarFactura({
             />
           </label>
 
-          <label className="block">
-            <span className="text-base font-medium">Vence</span>
-            <CampoFecha
-              value={vence}
-              min={fechaEmision}
-              onChange={(e) => setVence(e.target.value || null)}
-              className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-            />
-          </label>
+          {/* Una nota de crédito no vence: resta (mes simulado, M2S1-126). */}
+          {!esCredito && (
+            <label className="block">
+              <span className="text-base font-medium">Vence</span>
+              <CampoFecha
+                value={vence}
+                min={fechaEmision}
+                onChange={(e) => setVence(e.target.value || null)}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+          )}
 
           <Campo etiqueta="CAE" valor={cae} onCambio={setCae} />
 
@@ -501,7 +504,7 @@ export function CargarFactura({
           className="boton-accion inline-flex h-12 items-center gap-2 rounded-xl px-5 text-base font-semibold disabled:opacity-50"
         >
           {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}
-          {corregir ? "Guardar la corrección" : "Cargar la factura"}
+          {corregir ? "Guardar la corrección" : esCredito ? "Cargar la nota de crédito" : "Cargar la factura"}
         </button>
         <button
           type="button"

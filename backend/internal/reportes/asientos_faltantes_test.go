@@ -82,8 +82,12 @@ func TestElCobroDelMostradorSinCae(t *testing.T) {
 
 			oct := e.asientosDe(t, "2026-10")
 			if caso.sinCae == "al_cae" {
-				if x := buscarAsiento(oct, "Cobro del pedido M-1"); x != nil {
-					t.Errorf("con «al_cae» no hay asiento hasta el CAE: %+v", x)
+				// La plata entra a la Caja del estudio el día que entró, contra
+				// Anticipos de clientes (mes simulado, M2S1-007): sin esto el
+				// depósito de la caja dejaba la Caja en negativo.
+				if x := buscarAsiento(oct, "Cobro del pedido M-1"); x == nil || x.Circuito != "" ||
+					cuenta([]Asiento{*x}, Cuentas.Caja) != 1210 || cuenta([]Asiento{*x}, Cuentas.AnticiposDeClientes) != -1210 {
+					t.Errorf("con «al_cae», a Anticipos hasta el CAE: %+v", x)
 				}
 				if x := buscarAsiento(oct, "Cobro del pedido M-2"); x == nil || x.Circuito != CircuitoNegro ||
 					cuenta([]Asiento{*x}, Cuentas.VentasSinFactura) != -2420 {
@@ -106,9 +110,13 @@ func TestElCobroDelMostradorSinCae(t *testing.T) {
 			e.facturaConCae(t, nil, 2, 2420, "2026-11-03T15:00:00Z", &pedido)
 			oct, nov := e.asientosDe(t, "2026-10"), e.asientosDe(t, "2026-11")
 			if caso.sinCae == "al_cae" {
-				// Como siempre: el cobro aparece en su mes cuando llega el CAE.
-				if x := buscarAsiento(oct, "Cobro Factura B 0003-00000001"); x == nil || cuenta([]Asiento{*x}, Cuentas.Deudores) != -1210 {
+				// Con el CAE, el anticipo se imputa a la factura.
+				if x := buscarAsiento(oct, "Imputa cobro Factura B 0003-00000001"); x == nil || cuenta([]Asiento{*x}, Cuentas.Deudores) != -1210 ||
+					cuenta([]Asiento{*x}, Cuentas.AnticiposDeClientes) != 1210 {
 					t.Errorf("con el CAE: %+v", x)
+				}
+				if n := cuenta(DelCircuito(oct, ""), Cuentas.AnticiposDeClientes); n != 0 {
+					t.Errorf("Anticipos se cancela con el CAE: %v", n)
 				}
 				if x := buscarAsiento(nov, "Pasa al archivo del estudio · Factura B 0003-00000002"); x == nil || x.Circuito != CircuitoNegro {
 					t.Errorf("del B al estudio: %+v", x)

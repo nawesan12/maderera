@@ -77,13 +77,18 @@ func TestAsientosDeLosCheques(t *testing.T) {
 		{Sentido: "entregado", Desde: "entregado", Hacia: "acreditado"},
 		{Sentido: "recibido", Desde: "cartera", Hacia: "rechazado"},
 		{Sentido: "recibido", Desde: "cartera", Hacia: "anulado"},
-		// El rechazo del cheque de una venta del mostrador que quedó en el B:
-		// esa venta no tiene asiento de cobro (H419).
-		{Sentido: "recibido", Desde: "depositado", Hacia: "rechazado", ADeudores: true, Circuito: CircuitoNegro, DelMostradorEnB: true},
 	} {
 		if _, ok := AsientoDeCheque(c); ok {
 			t.Errorf("asentó %+v", c)
 		}
+	}
+	// El rechazo del cheque de una venta del mostrador que quedó en el B da
+	// vuelta su cobro en el B (mes simulado): la venta sin factura se cobró
+	// con Valores a depositar y ahora vuelve a deberse.
+	if a, ok := AsientoDeCheque(ChequeAAsentar{Sentido: "recibido", Desde: "depositado", Hacia: "rechazado", ADeudores: true, Importe: 300,
+		Circuito: CircuitoNegro, DelMostradorEnB: true}); !ok || a.Circuito != CircuitoNegro ||
+		a.Renglones[0] != renglon(Cuentas.VentasSinFactura, 300, 0) || a.Renglones[1] != renglon(Cuentas.ValoresADepositar, 0, 300) {
+		t.Errorf("el rechazo del cheque B del mostrador: %v %+v", ok, a)
 	}
 }
 

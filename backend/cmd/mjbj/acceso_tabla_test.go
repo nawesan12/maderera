@@ -77,6 +77,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CargarCheque":                    "/admin/cheques",                // POST /api/v1/admin/cheques
 	"AsientosCsv":                     "/admin/cierre",                 // GET /api/v1/admin/cierre/asientos-csv
 	"CerrarElMes":                     "/admin/cierre",                 // POST /api/v1/admin/cierre/cerrado
+	"CargarLiquidacion":               "/admin/cierre",                 // POST /api/v1/admin/cierre/liquidaciones
 	"AsientosDelPeriodo":              "/admin/cierre",                 // GET /api/v1/admin/cierre/asientos
 	"PendientesDelCierre":             "/admin/cierre",                 // GET /api/v1/admin/cierre/pendientes
 	"ResumenDelMes":                   "/admin/cierre",                 // GET /api/v1/admin/cierre/resumen

@@ -69,9 +69,16 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 		       coalesce(sum(CASE WHEN b.slug = 'aserradero' THEN i.qty - coalesce(i.reservado, 0) END), 0),
 		       coalesce(sum(CASE WHEN b.slug = 'casa-central' THEN i.min_qty END), 0),
 		       coalesce(sum(CASE WHEN b.slug = 'aserradero' THEN i.min_qty END), 0),
-		       (SELECT sc.supplier_id::text FROM supplier_variant_codes sc WHERE sc.variant_id = v.id ORDER BY sc.created_at DESC LIMIT 1),
-		       (SELECT su.nombre FROM supplier_variant_codes sc JOIN suppliers su ON su.id = sc.supplier_id
-		        WHERE sc.variant_id = v.id ORDER BY sc.created_at DESC LIMIT 1)
+		       -- El proveedor: al que se le compró por última vez esa medida
+		       -- (la última recepción confirmada) o, si nunca se recibió, el
+		       -- último con el que se cargó un código (mes simulado, M2S1-034).
+		       coalesce((SELECT gr.supplier_id::text FROM goods_receipt_items gi JOIN goods_receipts gr ON gr.id = gi.receipt_id
+		                 WHERE gi.variant_id = v.id AND gr.estado = 'confirmada' ORDER BY gr.fecha DESC, gr.created_at DESC LIMIT 1),
+		                (SELECT sc.supplier_id::text FROM supplier_variant_codes sc WHERE sc.variant_id = v.id ORDER BY sc.created_at DESC LIMIT 1)),
+		       coalesce((SELECT su.nombre FROM goods_receipt_items gi JOIN goods_receipts gr ON gr.id = gi.receipt_id JOIN suppliers su ON su.id = gr.supplier_id
+		                 WHERE gi.variant_id = v.id AND gr.estado = 'confirmada' ORDER BY gr.fecha DESC, gr.created_at DESC LIMIT 1),
+		                (SELECT su.nombre FROM supplier_variant_codes sc JOIN suppliers su ON su.id = sc.supplier_id
+		                 WHERE sc.variant_id = v.id ORDER BY sc.created_at DESC LIMIT 1))
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
@@ -109,12 +116,6 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 	}
 
 	desde := s.ahora().Add(-time.Duration(o.DiasDelPeriodo) * 24 * time.Hour)
-	ventaArgs := []any{desde, ids}
-	sucursal := ""
-	if o.Sucursal != "" && o.Sucursal != "todos" {
-		ventaArgs = append(ventaArgs, o.Sucursal)
-		sucursal = " AND o.branch_id = (SELECT id FROM branches WHERE slug = $3)"
-	}
 	// Lo devuelto se resta del renglón de la venta, sin importar cuándo se
 	// devolvió. Es lo contrario de hechosDeVenta (ventas.go), que lo resta
 	// en el mes de la devolución para no tocar un mes ya cerrado: acá se
@@ -123,90 +124,151 @@ func (s *Servicio) Reposicion(ctx context.Context, o OpcionesDeReposicion) (Repo
 	// (al_stock = false): el cliente no lo usó. Lo devuelto sin renglón del
 	// pedido queda vendido, igual que en ventas. Y la sucursal es la del
 	// pedido aunque lo devuelto entre al stock de otra: se mide dónde se
-	// pidió, no dónde quedó la placa.
+	// pidió, no dónde quedó la placa. Por sucursal, para saber qué le falta a
+	// cada una; y en pesos, para comparar categorías (las unidades sumaban
+	// m² de chapa con tornillos sueltos: M2S3-058).
 	rs, err = s.lectura.Query(ctx, `
-		SELECT oi.variant_id::text,
+		SELECT oi.variant_id::text, coalesce(b.slug, ''),
 		       coalesce(sum(greatest(oi.cantidad - coalesce((SELECT sum(di.cantidad) FROM devolucion_items di
-		                                                     WHERE di.order_item_id = oi.id), 0), 0)), 0)
-		FROM order_items oi JOIN orders o ON o.id = oi.order_id
-		WHERE o.created_at >= $1 AND o.estado <> 'cancelado' AND oi.variant_id = ANY($2::uuid[])`+sucursal+`
-		GROUP BY oi.variant_id`, ventaArgs...)
+		                                                     WHERE di.order_item_id = oi.id), 0), 0)), 0),
+		       coalesce(sum(oi.subtotal * greatest(1 - coalesce((SELECT sum(di.cantidad) FROM devolucion_items di
+		                                                         WHERE di.order_item_id = oi.id), 0) / nullif(oi.cantidad, 0), 0)), 0)::float8
+		FROM order_items oi JOIN orders o ON o.id = oi.order_id LEFT JOIN branches b ON b.id = o.branch_id
+		WHERE o.created_at >= $1 AND o.estado <> 'cancelado' AND oi.variant_id = ANY($2::uuid[])
+		GROUP BY oi.variant_id, b.slug`, desde, ids)
 	if err != nil {
 		return ReporteDeReposicion{}, err
 	}
 	defer rs.Close()
 	vendido := map[string]float64{}
+	porSucursal := map[string][2]float64{}
+	pesos := map[string]float64{}
 	for rs.Next() {
-		var id string
+		var id, slug string
 		var n jsmath.Num
-		if err := rs.Scan(&id, &n); err != nil {
+		var plata float64
+		if err := rs.Scan(&id, &slug, &n, &plata); err != nil {
 			return ReporteDeReposicion{}, err
 		}
-		vendido[id] = n.F()
+		x := porSucursal[id]
+		switch slug {
+		case "casa-central":
+			x[0] = float64(x[0] + n.F())
+		case "aserradero":
+			x[1] = float64(x[1] + n.F())
+		}
+		porSucursal[id] = x
+		if o.Sucursal == "" || o.Sucursal == "todos" || o.Sucursal == slug {
+			vendido[id] = float64(vendido[id] + n.F())
+			pesos[id] = float64(pesos[id] + plata)
+		}
 	}
 	if err := rs.Err(); err != nil {
 		return ReporteDeReposicion{}, err
 	}
-	return HastaElMinimo(ArmarReposicion(stock, vendido, o.DiasDelPeriodo, o.CoberturaObjetivo, o.Sucursal), minimos, o.Sucursal), nil
+	r := PorSucursal(ArmarReposicion(stock, vendido, o.DiasDelPeriodo, o.CoberturaObjetivo, o.Sucursal), minimos, porSucursal,
+		o.DiasDelPeriodo, o.CoberturaObjetivo, o.Sucursal)
+	r.PorCategoria = vendidoEnPesos(r.Filas, pesos)
+	return r, nil
 }
 
-// HastaElMinimo suma a la sugerencia lo que falta para llegar al mínimo de
-// cada sucursal. La sugerencia salía solo de lo vendido: lo que estaba bajo
-// el mínimo y no se había vendido en el período decía «Para comprar 0 ·
-// Nada por acá» mientras Stock pedía reponerlo y el inicio lo contaba
-// (simulación del mes, H062). Lo que falta en una sucursal no lo tapa el
-// sobrante de la otra (es otro local), con la regla de Stock y del inicio
-// (catalogo.ReponerEnFila): una sucursal pide lo que le falta para llegar a
-// su mínimo, también en cero, y lo vendido de más (disponible en negativo)
-// aunque no tenga mínimo. La chapa con -30 en Casa Central quedaba en «el
-// stock alcanza» porque el Aserradero tenía (H062, segunda vuelta). Va
-// después de ArmarReposicion, que sigue siendo la del TS.
-func HastaElMinimo(r ReporteDeReposicion, minimos map[string][2]float64, sucursal string) ReporteDeReposicion {
-	cambio := false
+// vendidoEnPesos es lo vendido por categoría en pesos, de mayor a menor.
+func vendidoEnPesos(filas []FilaDeReposicion, pesos map[string]float64) []VendidoPorCategoria {
+	orden := []string{}
+	suma := map[string]float64{}
+	for _, f := range filas {
+		if _, ya := suma[f.Categoria]; !ya {
+			orden = append(orden, f.Categoria)
+		}
+		suma[f.Categoria] = float64(suma[f.Categoria] + pesos[f.VariantID])
+	}
+	out := []VendidoPorCategoria{}
+	for _, nombre := range orden {
+		if suma[nombre] > 0.005 {
+			out = append(out, VendidoPorCategoria{nombre, jsmath.Redondear2(suma[nombre])})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[j].Vendido-out[i].Vendido < 0 })
+	return out
+}
+
+// PorSucursal decide, medida por medida, qué le falta a cada sucursal y de
+// dónde sale (mes simulado, M2S1-029, M2S1-032, M2S1-033 y M3S1-010):
+//
+//   - Lo que le falta a una sucursal es lo que necesita para cubrir la
+//     cobertura objetivo al ritmo de lo que vendió ella, o para quedar **por
+//     encima** de su mínimo (justo en el mínimo, Stock vuelve a pedir
+//     reponer y el que sigue el reporte compraba dos veces), o para salir del
+//     negativo.
+//   - Si la otra sucursal tiene de sobra (por encima de lo que necesita
+//     ella), primero se trae de ahí; se compra el resto.
+//   - Con las dos sucursales, lo que se compra es la suma de lo que compra
+//     cada una: el total ya no descuenta el stock del otro local en unas
+//     medidas y en otras no.
+//
+// Lo que se vendió de más (disponible en negativo) va arriba de todo.
+func PorSucursal(r ReporteDeReposicion, minimos map[string][2]float64, vendido map[string][2]float64, dias, objetivo float64, sucursal string) ReporteDeReposicion {
+	necesita := func(disponible, minimo, vendidas float64) (falta, sobra float64) {
+		porVenta := SugerenciaDeCompra(disponible, vendidas, dias, objetivo)
+		porMinimo := 0.0
+		switch {
+		case minimo > 0 && disponible <= minimo:
+			porMinimo = math.Floor(float64(minimo-disponible)) + 1
+		case disponible < 0:
+			porMinimo = math.Ceil(-disponible)
+		}
+		falta = max(porVenta, porMinimo)
+		guardar := math.Ceil(float64(VentaDiaria(vendidas, dias) * objetivo))
+		if minimo > 0 {
+			guardar = max(guardar, math.Floor(minimo)+1)
+		}
+		if falta == 0 && disponible > guardar {
+			sobra = math.Floor(disponible - guardar)
+		}
+		return falta, sobra
+	}
 	for i := range r.Filas {
 		f := &r.Filas[i]
-		m := minimos[f.VariantID]
-		falta := func(disponible, minimo float64) float64 {
-			if (minimo > 0 && disponible <= minimo) || disponible < 0 {
-				// Justo en el mínimo, Stock ya pide reponer: se pide otro
-				// tanto, o el contador de acá decía uno menos.
-				if n := math.Ceil(float64(max(minimo, 0) - disponible)); n > 0 {
-					return n
-				}
-				return math.Ceil(minimo)
-			}
-			return 0
-		}
-		var n float64
+		m, v := minimos[f.VariantID], vendido[f.VariantID]
+		faltaC, sobraC := necesita(f.DisponibleCentral, m[0], v[0])
+		faltaA, sobraA := necesita(f.DisponibleAserradero, m[1], v[1])
+		f.TrasladoACentral = min(faltaC, sobraA)
+		f.TrasladoAAserradero = min(faltaA, sobraC)
+		f.ComprarCentral = faltaC - f.TrasladoACentral
+		f.ComprarAserradero = faltaA - f.TrasladoAAserradero
+		f.Negativo = f.DisponibleCentral < 0 || f.DisponibleAserradero < 0
 		switch sucursal {
 		case "casa-central":
-			n = falta(f.DisponibleCentral, m[0])
+			f.Sugerido = f.ComprarCentral
+			f.TrasladoAAserradero, f.ComprarAserradero = 0, 0
 		case "aserradero":
-			n = falta(f.DisponibleAserradero, m[1])
+			f.Sugerido = f.ComprarAserradero
+			f.TrasladoACentral, f.ComprarCentral = 0, 0
 		default:
-			n = float64(falta(f.DisponibleCentral, m[0]) + falta(f.DisponibleAserradero, m[1]))
-		}
-		if n > f.Sugerido {
-			f.Sugerido, cambio = n, true
+			f.Sugerido = float64(f.ComprarCentral + f.ComprarAserradero)
 		}
 	}
-	if cambio {
-		cero := func(p *float64) float64 {
-			if p == nil {
-				return 0
-			}
-			return *p
+	cero := func(p *float64) float64 {
+		if p == nil {
+			return 0
 		}
-		sort.SliceStable(r.Filas, func(i, j int) bool {
-			a, b := r.Filas[i], r.Filas[j]
-			if (a.Sugerido > 0) != (b.Sugerido > 0) {
-				return a.Sugerido > 0
-			}
-			if a.Sugerido > 0 && b.Sugerido > 0 {
-				return cero(a.Cobertura)-cero(b.Cobertura) < 0
-			}
-			return b.Vendido-a.Vendido < 0
-		})
+		return *p
 	}
+	hay := func(f FilaDeReposicion) bool {
+		return f.Sugerido > 0 || f.TrasladoACentral > 0 || f.TrasladoAAserradero > 0
+	}
+	sort.SliceStable(r.Filas, func(i, j int) bool {
+		a, b := r.Filas[i], r.Filas[j]
+		if a.Negativo != b.Negativo {
+			return a.Negativo
+		}
+		if hay(a) != hay(b) {
+			return hay(a)
+		}
+		if hay(a) && hay(b) {
+			return cero(a.Cobertura)-cero(b.Cobertura) < 0
+		}
+		return b.Vendido-a.Vendido < 0
+	})
 	return r
 }

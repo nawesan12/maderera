@@ -171,12 +171,34 @@ paths:
               properties:
                 periodo: { type: string, pattern: '^\d{4}-\d{2}$' }
                 cerrado: { type: boolean }
+                motivo: { type: string, maxLength: 300, description: Por qué se reabre; obligatorio para reabrir }
       responses:
         "200":
           description: Cómo quedó el mes
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MesCerrado" }
+  /api/v1/admin/cierre/liquidaciones:
+    post:
+      operationId: CargarLiquidacion
+      description: Lo que liquidó la tarjeta, neto de su comisión (pasa de Tarjetas a acreditar al Banco)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fecha, bruto, comision]
+              additionalProperties: false
+              properties:
+                fecha: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+                bruto: { type: number, format: double, minimum: 0.01 }
+                comision: { type: number, format: double, minimum: 0 }
+                referencia: { type: string, maxLength: 120 }
+                circuito: { type: string, enum: [blanco, negro] }
+      responses:
+        "204":
+          description: Cargada
   /api/v1/admin/inicio/metricas:
     get:
       operationId: MetricasDelResumen
@@ -292,9 +314,10 @@ components:
     ReporteTotales:
       type: object
       description: El período entero con los mismos filtros, sin el tope de filas del corte
-      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas, envios]
+      required: [total, cantidad, netoVenta, netoCosteado, costo, lineasSinCosto, filas, envios, renglones]
       properties:
-        total: { type: number, format: double, description: Con IVA; subtotales de renglones o total de los pedidos, según el corte }
+        total: { type: number, format: double, description: Con IVA, el total de los pedidos (con envío y descuento), el mismo en todos los cortes }
+        renglones: { type: number, format: double, description: Lo que suman con IVA las filas del corte; en los cortes por renglón, total − renglones son los envíos y descuentos }
         cantidad: { type: number, format: double, description: Unidades o operaciones, según el corte }
         netoVenta: { type: number, format: double }
         netoCosteado: { type: number, format: double }
@@ -311,7 +334,7 @@ components:
         total: { type: number, format: double }
     ReposicionFila:
       type: object
-      required: [variantId, productId, producto, medida, sku, unidad, categoria, categoriaSlug, rubro, disponibleCentral, disponibleAserradero, disponible, vendido, cobertura, sugerido]
+      required: [variantId, productId, producto, medida, sku, unidad, categoria, categoriaSlug, rubro, disponibleCentral, disponibleAserradero, disponible, vendido, cobertura, sugerido, comprarCentral, comprarAserradero, trasladoACentral, trasladoAAserradero, negativo]
       properties:
         variantId: { type: string }
         productId: { type: string }
@@ -324,12 +347,17 @@ components:
         rubro: { type: string, nullable: true }
         disponibleCentral: { type: number, format: double }
         disponibleAserradero: { type: number, format: double }
-        proveedorId: { type: string, nullable: true, description: El proveedor habitual (el último con el que se cargó un código) }
+        proveedorId: { type: string, nullable: true, description: El proveedor al que se le compró por última vez la medida (o el último con el que se cargó un código) }
         proveedor: { type: string, nullable: true }
         disponible: { type: number, format: double }
         vendido: { type: number, format: double }
         cobertura: { type: number, format: double, nullable: true }
-        sugerido: { type: number, format: double }
+        sugerido: { type: number, format: double, description: Lo que se compra en la vista elegida }
+        comprarCentral: { type: number, format: double }
+        comprarAserradero: { type: number, format: double }
+        trasladoACentral: { type: number, format: double, description: Lo que conviene traer del Aserradero en vez de comprar }
+        trasladoAAserradero: { type: number, format: double, description: Lo que conviene traer de Casa Central en vez de comprar }
+        negativo: { type: boolean, description: Alguna sucursal tiene la medida en negativo }
     Reposicion:
       type: object
       required: [filas, porCategoria, diasDelPeriodo, coberturaObjetivo]
@@ -372,6 +400,16 @@ components:
         detalle: { type: string }
         cantidad: { type: integer }
         donde: { type: string }
+        casos:
+          type: array
+          description: Los casos del aviso uno por uno, con su importe y a dónde se resuelve cada uno
+          items:
+            type: object
+            required: [nombre, donde]
+            properties:
+              nombre: { type: string }
+              importe: { type: number, format: double }
+              donde: { type: string }
     CierreTotales:
       type: object
       required: [total, cantidad]
@@ -405,7 +443,7 @@ components:
         por: { type: string, nullable: true }
     CierreResumen:
       type: object
-      required: [ventas, vendido, compras, gastos, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado]
+      required: [ventas, vendido, compras, gastos, gastosB, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado, primerMes, tarjetasSinLiquidar]
       properties:
         cerrado: { $ref: "#/components/schemas/MesCerrado" }
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
@@ -413,7 +451,11 @@ components:
         # en los asientos ni en ningún archivo.
         vendido: { $ref: "#/components/schemas/CierreVendido" }
         compras: { $ref: "#/components/schemas/CierreTotalesConIva" }
+        # Los gastos del archivo del estudio; gastosB, los del circuito B.
         gastos: { $ref: "#/components/schemas/CierreTotales" }
+        gastosB: { $ref: "#/components/schemas/CierreTotales" }
+        primerMes: { type: string, description: El primer mes con algún movimiento (YYYY-MM), vacío si no hay ninguno }
+        tarjetasSinLiquidar: { type: number, format: double, description: Lo cobrado con tarjeta hasta el fin del mes que todavía no liquidó }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
         percepcionesIibb: { $ref: "#/components/schemas/CierreTotales" }

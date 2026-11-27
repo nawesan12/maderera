@@ -2488,6 +2488,9 @@ const (
 	MedioCobroTarjeta         MedioCobro = "tarjeta"
 	MedioCobroCheque          MedioCobro = "cheque"
 	MedioCobroCuentaCorriente MedioCobro = "cuenta_corriente"
+	MedioCobroDeposito        MedioCobro = "deposito"
+	MedioCobroEcheq           MedioCobro = "echeq"
+	MedioCobroRetencion       MedioCobro = "retencion"
 )
 
 func (e *MedioCobro) Scan(src interface{}) error {
@@ -2532,7 +2535,10 @@ func (e MedioCobro) Valid() bool {
 		MedioCobroMercadoPago,
 		MedioCobroTarjeta,
 		MedioCobroCheque,
-		MedioCobroCuentaCorriente:
+		MedioCobroCuentaCorriente,
+		MedioCobroDeposito,
+		MedioCobroEcheq,
+		MedioCobroRetencion:
 		return true
 	}
 	return false
@@ -2546,6 +2552,9 @@ func AllMedioCobroValues() []MedioCobro {
 		MedioCobroTarjeta,
 		MedioCobroCheque,
 		MedioCobroCuentaCorriente,
+		MedioCobroDeposito,
+		MedioCobroEcheq,
+		MedioCobroRetencion,
 	}
 }
 
@@ -4931,6 +4940,17 @@ type BusinessReview struct {
 	UpdatedAt time.Time    `json:"updatedAt"`
 }
 
+type CajaFuerteMovimiento struct {
+	ID              string             `json:"id"`
+	BranchID        string             `json:"branchId"`
+	Tipo            string             `json:"tipo"`
+	Monto           jsmath.Num         `json:"monto"`
+	Motivo          string             `json:"motivo"`
+	Clave           string             `json:"clave"`
+	CreatedByUserID *string            `json:"createdByUserId"`
+	CreatedAt       pgtype.Timestamptz `json:"createdAt"`
+}
+
 type CalculatorSetting struct {
 	ID                  string     `json:"id"`
 	MermaMachimbre      jsmath.Num `json:"mermaMachimbre"`
@@ -5035,16 +5055,20 @@ type CashMovement struct {
 }
 
 type CashSession struct {
-	ID          string      `json:"id"`
-	BranchID    string      `json:"branchId"`
-	AbiertaPor  string      `json:"abiertaPor"`
-	AbiertaAt   time.Time   `json:"abiertaAt"`
-	CerradaPor  *string     `json:"cerradaPor"`
-	CerradaAt   *time.Time  `json:"cerradaAt"`
-	Contado     *jsmath.Num `json:"contado"`
-	Estado      EstadoCaja  `json:"estado"`
-	Notas       *string     `json:"notas"`
-	PosDeviceID *string     `json:"posDeviceId"`
+	ID               string             `json:"id"`
+	BranchID         string             `json:"branchId"`
+	AbiertaPor       string             `json:"abiertaPor"`
+	AbiertaAt        time.Time          `json:"abiertaAt"`
+	CerradaPor       *string            `json:"cerradaPor"`
+	CerradaAt        *time.Time         `json:"cerradaAt"`
+	Contado          *jsmath.Num        `json:"contado"`
+	Estado           EstadoCaja         `json:"estado"`
+	Notas            *string            `json:"notas"`
+	PosDeviceID      *string            `json:"posDeviceId"`
+	ContadoCorregido *jsmath.Num        `json:"contadoCorregido"`
+	CorreccionMotivo *string            `json:"correccionMotivo"`
+	CorregidoPor     *string            `json:"corregidoPor"`
+	CorregidoAt      pgtype.Timestamptz `json:"corregidoAt"`
 }
 
 type Category struct {
@@ -5080,6 +5104,7 @@ type Cheque struct {
 	Circuito        Circuito      `json:"circuito"`
 	ReceiptID       *string       `json:"receiptId"`
 	MotivoRechazo   *string       `json:"motivoRechazo"`
+	CircuitoReparto *string       `json:"circuitoReparto"`
 }
 
 type ChequeEstado struct {
@@ -5394,6 +5419,7 @@ type Devolucione struct {
 	AccountMovementID *string            `json:"accountMovementId"`
 	CreatedByUserID   *string            `json:"createdByUserId"`
 	CreatedAt         pgtype.Timestamptz `json:"createdAt"`
+	Origen            *string            `json:"origen"`
 }
 
 type EmailAviso struct {
@@ -5646,6 +5672,18 @@ type InvoicesDadasDeBaja struct {
 	Comprobante    json.RawMessage `json:"comprobante"`
 }
 
+type LiquidacionesTarjetum struct {
+	ID              string             `json:"id"`
+	Fecha           pgtype.Timestamptz `json:"fecha"`
+	Bruto           jsmath.Num         `json:"bruto"`
+	Comision        jsmath.Num         `json:"comision"`
+	Referencia      *string            `json:"referencia"`
+	Circuito        Circuito           `json:"circuito"`
+	CreatedByUserID *string            `json:"createdByUserId"`
+	CreatedAt       pgtype.Timestamptz `json:"createdAt"`
+	AnuladaAt       pgtype.Timestamptz `json:"anuladaAt"`
+}
+
 type MesesCerrado struct {
 	Mes              string             `json:"mes"`
 	CerradoAt        pgtype.Timestamptz `json:"cerradoAt"`
@@ -5731,6 +5769,7 @@ type Order struct {
 	EntregadoAt            pgtype.Timestamptz `json:"entregadoAt"`
 	FacturadoAt            pgtype.Timestamptz `json:"facturadoAt"`
 	CanceladoAt            pgtype.Timestamptz `json:"canceladoAt"`
+	EfectivoRecibido       *jsmath.Num        `json:"efectivoRecibido"`
 }
 
 type OrderItem struct {
@@ -6119,6 +6158,7 @@ type Quote struct {
 	NecesitaPara     *time.Time        `json:"necesitaPara"`
 	SellerID         *string           `json:"sellerId"`
 	MotivoRechazo    *string           `json:"motivoRechazo"`
+	ClaveMostrador   *string           `json:"claveMostrador"`
 }
 
 type QuoteItem struct {

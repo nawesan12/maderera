@@ -39,7 +39,10 @@ function FilaAjuste({ ajuste: a }: { ajuste: SiteSetting }) {
           id={`ajuste-${a.clave}`}
           name="valor"
           defaultValue={a.valor}
+          // El número de WhatsApp con el teclado de teléfono.
+          inputMode={a.clave.startsWith("whatsapp") ? "tel" : undefined}
           aria-invalid={estado.error ? true : undefined}
+          aria-describedby={estado.error ? `ajuste-${a.clave}-error` : undefined}
           className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
         />
       </div>
@@ -60,7 +63,7 @@ function FilaAjuste({ ajuste: a }: { ajuste: SiteSetting }) {
         </p>
       )}
       {estado.error && (
-        <p role="alert" className="basis-full text-base text-destructive">
+        <p id={`ajuste-${a.clave}-error`} role="alert" className="basis-full text-base text-destructive">
           {estado.error}
         </p>
       )}

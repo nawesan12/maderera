@@ -193,6 +193,14 @@ func (s *Servicio) autorizar(ctx context.Context, id string, a *arca) (string, e
 		// mandó, con el botón de corregir los datos del cliente.
 		return "", errEmision(sinValorFiscal)
 	}
+	// Lo que la RG 1415 pide impreso en el comprobante y que el papel saca de
+	// Configuración de ARCA: sin el N° de Ingresos Brutos o el inicio de
+	// actividades, el comprobante autorizado sale incompleto (mes simulado,
+	// M2S1-016). Se frena acá, antes de pedir el CAE: emitir sin CAE sigue
+	// igual.
+	if m := faltaDelEmisor(ctx, s); m != "" {
+		return "", errEmision(m)
+	}
 	cfg := s.env.Leer()
 
 	s.cae.Lock()
@@ -745,4 +753,24 @@ func (b bitacoraArca) Despues(ctx context.Context, id string, exito bool, respue
 		return
 	}
 	_, _ = b.pool.Exec(ctx, `UPDATE arca_log SET exito = $2, respuesta = $3 WHERE id = $1`, id, exito, respuesta)
+}
+
+// faltaDelEmisor dice qué le falta al emisor para un comprobante con CAE, o
+// "" si está completo.
+func faltaDelEmisor(ctx context.Context, s *Servicio) string {
+	e, err := s.ObtenerEmisor(ctx)
+	if err != nil {
+		return ""
+	}
+	var falta []string
+	if e.IngresosBrutos == nil || strings.TrimSpace(*e.IngresosBrutos) == "" {
+		falta = append(falta, "el N° de Ingresos Brutos")
+	}
+	if e.InicioActividades == nil {
+		falta = append(falta, "el inicio de actividades")
+	}
+	if len(falta) == 0 {
+		return ""
+	}
+	return "Falta " + strings.Join(falta, " y ") + " en Configuración de ARCA: van impresos en el comprobante."
 }

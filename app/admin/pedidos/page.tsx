@@ -427,6 +427,9 @@ function FilaCerrada({
   monto?: number;
 }) {
   const interno = p.comprobante === "interno" && !p.facturado && p.estado !== "cancelado";
+  // El acopio que se debe lleva la marca, como la tarjeta del tablero (mes
+  // 23: PED-1169 debía $ 1.077.840 sin ninguna marca).
+  const debe = monto == null && p.estado !== "cancelado" && (p.sinCobrar ?? 0) > 0.009;
   return (
     <li className="border-b last:border-0">
       <Link href={`/admin/pedidos/${p.id}`} className="block px-5 py-3.5 transition-colors hover:bg-hundida/60">
@@ -440,6 +443,11 @@ function FilaCerrada({
           <EtiquetaEstado estado={p.estado} contexto="pedido" />
           {interno && (
             <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">{circuito}</span>
+          )}
+          {debe && (
+            <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
+              Sin cobrar
+            </span>
           )}
           <span
             className={`tabular ml-auto text-base ${monto != null ? "estado-problema font-semibold" : "font-medium"} ${

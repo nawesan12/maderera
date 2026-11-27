@@ -1,4 +1,7 @@
 import { cantidadConUnidad } from "@/lib/formato";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
+import { rotuloDelCircuito } from "@/lib/circuito";
 import Link from "next/link";
 import { UnirAFicha } from "@/components/admin/unir-a-ficha";
 import { notFound } from "next/navigation";
@@ -117,6 +120,9 @@ export default async function FichaPedidoPage({
     : null;
   const cortesSinTerminar = cortes.filter((c) => c.estado === "en-cola" || c.estado === "en-proceso").map((c) => c.numero);
   const interno = pedido.comprobante === "interno" && !facturado;
+  // El mismo nombre que eligió la dueña en /admin/reglas (decía «Interno»
+  // con la regla en «B», mes simulado 2).
+  const circuito = rotuloDelCircuito(valorDeRegla(await ajustesDelSitio(), "etiqueta_del_circuito"));
   // Devolver y corregir: de quien mueve plata, y sin factura (con factura,
   // por la factura y su nota). Corregir, además, sin nada cobrado y fuera
   // del mostrador (la venta del mostrador se anula desde ahí).
@@ -263,7 +269,7 @@ export default async function FichaPedidoPage({
             {/* Salió con el comprobante interno a propósito: no es una venta
                 que se olvidó de facturar. */}
             {interno && (
-              <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">Comprobante interno</span>
+              <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">{circuito}</span>
             )}
           </>
         }

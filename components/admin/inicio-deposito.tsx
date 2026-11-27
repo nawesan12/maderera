@@ -57,9 +57,9 @@ export async function InicioDelDeposito() {
     <div className="grid gap-6 lg:grid-cols-2">
       <RefrescarSolo />
       <Lista titulo="Para entregar" total={entregar.total} href="/admin/pedidos">
-        {entregar.total === 0 ? (
+        {entregar.total === 0 && entregar.enAcopio === 0 ? (
           <Vacio titulo="Nada para entregar" />
-        ) : (
+        ) : entregar.total === 0 ? null : (
           <ul className="divide-y divide-linea-suave">
             {entregar.renglones.map((p) => (
               <li key={p.id} className={RENGLON}>
@@ -78,6 +78,16 @@ export async function InicioDelDeposito() {
               </li>
             ))}
           </ul>
+        )}
+        {/* El acopio con saldo, en gris al pie: está guardado, nadie lo
+            pidió hoy. */}
+        {entregar.enAcopio > 0 && (
+          <Link
+            href="/admin/pedidos#acopio"
+            className="mt-2 flex h-11 items-center rounded-lg bg-hundida px-3 text-base text-muted-foreground hover:text-foreground"
+          >
+            {entregar.enAcopio === 1 ? "1 acopio con saldo" : `${entregar.enAcopio} acopios con saldo`}
+          </Link>
         )}
       </Lista>
 

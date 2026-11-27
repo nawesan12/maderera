@@ -20,6 +20,14 @@ import { numerosDelDueno } from "@/lib/dal/admin/resumen";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { AccionesPedido } from "./acciones";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
+import { etiquetasDelCircuito } from "@/lib/circuito";
+
+/** El chip del circuito sin factura, con la palabra de la regla («B», «Sin factura», «Interno»). */
+function rotuloCorto(nombre: "b" | "sin_factura" | "interno"): string {
+  return etiquetasDelCircuito(nombre).negro;
+}
 
 /** Las etapas por las que pasa un pedido, en orden. */
 const COLUMNAS = [
@@ -66,10 +74,16 @@ export default async function PedidosPage({
   const activos = pedidos.filter(
     (p) => !["entregado", "cancelado"].includes(p.estado),
   );
+  // El saldo de un acopio, aparte y en gris: está guardado a nombre del
+  // cliente, no es lo que hay que entregar hoy (mes simulado 2).
+  const enAcopio = activos.filter((p) => p.acopio && p.estado === "listo");
   // Lo que falta cobrar con la regla de «Me deben» (sinCobrar, de Go): sin
   // los pedidos a cuenta corriente, que ya están en la cuenta, y descontando
-  // lo cobrado. Sumar el total de todo lo no pagado daba un tercer número.
-  const porCobrar = activos.reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
+  // lo cobrado; con lo entregado sin cobrar, que también se cobra desde acá
+  // (decía $ 836.680 con $ 481.900 más abajo, mes simulado 2).
+  const porCobrar = [...activos, ...entregadosSinCobrar].reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
+  const [ajustes] = await Promise.all([ajustesDelSitio()]);
+  const circuito = rotuloCorto(valorDeRegla(ajustes, "etiqueta_del_circuito"));
 
   return (
     <div>
@@ -107,7 +121,7 @@ export default async function PedidosPage({
           <Tablero>
             {COLUMNAS.map((columna) => {
               const enColumna = pedidos.filter(
-                (p) => p.estado === columna.estado,
+                (p) => p.estado === columna.estado && !enAcopio.includes(p),
               );
               const monto = enColumna.reduce((s, p) => s + p.total, 0);
 
@@ -128,6 +142,19 @@ export default async function PedidosPage({
               );
             })}
           </Tablero>
+
+          {enAcopio.length > 0 && (
+            <section id="acopio" className="mt-8 scroll-mt-24">
+              <h2 className="mb-2.5 text-base font-semibold text-muted-foreground">
+                En acopio <span className="tabular font-normal">{enAcopio.length}</span>
+              </h2>
+              <ul className="tarjeta-hundida overflow-hidden rounded-xl">
+                {enAcopio.map((p) => (
+                  <FilaCerrada key={p.id} pedido={p} fecha={haceCuanto(p.createdAt)} circuito={circuito} />
+                ))}
+              </ul>
+            </section>
+          )}
 
           {entregadosSinCobrar.length > 0 && (
             <section className="mt-8">
@@ -152,7 +179,7 @@ export default async function PedidosPage({
               </h2>
               <ul className="overflow-hidden tarjeta">
                 {entregados.slice(0, 10).map((p) => (
-                  <FilaCerrada key={p.id} pedido={p} fecha={haceCuanto(p.createdAt)} />
+                  <FilaCerrada key={p.id} pedido={p} fecha={haceCuanto(p.createdAt)} circuito={circuito} />
                 ))}
               </ul>
             </section>
@@ -363,10 +390,13 @@ function FilaCerrada({
   fecha,
   urgente = false,
   monto,
+  circuito = "B",
 }: {
   pedido: PedidoListado;
   fecha: string;
   urgente?: boolean;
+  /** Cómo se llama el circuito sin factura (regla etiqueta_del_circuito). */
+  circuito?: string;
   /** Lo que falta cobrar, en el filtro «Sin cobrar». */
   monto?: number;
 }) {
@@ -383,7 +413,7 @@ function FilaCerrada({
           <span className={`text-base ${urgente ? "estado-problema" : "text-muted-foreground"}`}>{fecha}</span>
           <EtiquetaEstado estado={p.estado} contexto="pedido" />
           {interno && (
-            <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">Interno</span>
+            <span className="estado-cerrado rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium">{circuito}</span>
           )}
           <span
             className={`tabular ml-auto text-base ${monto != null ? "estado-problema font-semibold" : "font-medium"} ${

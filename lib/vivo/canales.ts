@@ -24,6 +24,9 @@ export interface EventoEnVivo {
   id?: string;
   numero?: string;
   estado?: string;
+  /** En «pedidos»: recién creado, y de dónde vino. */
+  nuevo?: boolean;
+  origen?: string;
 }
 
 export function esEventoEnVivo(valor: unknown): valor is EventoEnVivo {

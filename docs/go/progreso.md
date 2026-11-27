@@ -3290,7 +3290,8 @@ Espejo drizzle al día (`caja_fuerte_movimientos` es solo de Go).
   mal» al abrir corrige el arqueo anterior (`AbrirCaja(…, corregir)`), sin
   retiro ni caja fuerte; el ingreso dice de dónde viene; el retiro «otro» con
   categoría es un gasto en efectivo, y el ingreso y el retiro «otro» sin
-  cuenta van contra Diferencias de caja (`asientosDeCaja`); la caja fuerte
+  cuenta van contra Movimientos a imputar (`asientosAImputar`, al integrar
+  con el cierre); la caja fuerte
   tiene saldo y depósito (`caja.CajasFuertes`, `DepositarDeLaCajaFuerte`); el
   recibo fuera de caja se asigna a un turno (`AsignarReciboAlTurno`); lo
   emitido pagina con los totales del mes; dentro del peso el cierre dice los
@@ -3309,8 +3310,9 @@ Espejo drizzle al día (`caja_fuerte_movimientos` es solo de Go).
 
 ### Decisiones a confirmar
 
-- [ ] **El ingreso y el retiro «otro» sin categoría** van contra Diferencias
-      de caja (5.1.12), como el arqueo, hasta que el contador diga la cuenta.
+- [ ] **El ingreso y el retiro «otro» sin categoría** van contra Movimientos
+      a imputar (2.1.13), como el cheque sin cobro, hasta que el contador
+      diga la cuenta (la rama del cierre ya los mandaba ahí).
 - [ ] **«Se contó mal»** corrige solo el último turno cerrado y si su mes no
       está cerrado; lo contado de entonces queda a la vista.
 - [ ] **El gasto pagado del cajón** nace en el circuito de arranque de los

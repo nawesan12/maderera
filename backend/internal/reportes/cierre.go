@@ -383,9 +383,12 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 // depositar (M3S2-004).
 func (s *Servicio) asientosAImputar(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
 	var out []Asiento
-	rs, err := s.lectura.Query(ctx, `SELECT m.created_at, -m.monto::float8, coalesce(m.motivo, ''), coalesce(b.name, '')
+	// El ingreso «otro» (00350: el cambio que trajo alguien) es lo mismo al
+	// revés: plata que entró al cajón sin saber de dónde (M3S1-005,
+	// M3S3-014). Un solo asiento por movimiento: asientosDeCaja no los toma.
+	rs, err := s.lectura.Query(ctx, `SELECT m.created_at, m.monto::float8, coalesce(m.motivo, ''), coalesce(b.name, '')
 		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
-		WHERE m.tipo = 'retiro' AND m.destino = 'otro' AND m.created_at >= $1 AND m.created_at <= $2
+		WHERE m.tipo IN ('ingreso', 'retiro') AND m.destino = 'otro' AND m.created_at >= $1 AND m.created_at <= $2
 		ORDER BY m.created_at`, idesde, ihasta)
 	if err != nil {
 		return nil, err
@@ -394,18 +397,26 @@ func (s *Servicio) asientosAImputar(ctx context.Context, idesde, ihasta time.Tim
 	var importe float64
 	var motivo, sucursal string
 	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &motivo, &sucursal}, func() error {
+		ingreso := importe > 0
 		importe = math.Abs(importe)
 		if importe < toleranciaAsiento {
 			return nil
 		}
 		concepto := "Retiro de la caja"
+		if ingreso {
+			concepto = "Ingreso a la caja"
+		}
 		if sucursal != "" {
 			concepto += " de " + sucursal
 		}
 		if motivo != "" {
 			concepto += " · " + motivo
 		}
-		a := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.MovimientosAImputar, importe, 0), renglon(Cuentas.Caja, 0, importe)})
+		renglones := []RenglonDeAsiento{renglon(Cuentas.MovimientosAImputar, importe, 0), renglon(Cuentas.Caja, 0, importe)}
+		if ingreso {
+			renglones = []RenglonDeAsiento{renglon(Cuentas.Caja, importe, 0), renglon(Cuentas.MovimientosAImputar, 0, importe)}
+		}
+		a := asiento(fecha, concepto, renglones)
 		a.Instante = true
 		out = append(out, a)
 		return nil
@@ -657,39 +668,9 @@ func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time)
 	}
 	// Lo contado, o lo corregido al abrir el turno siguiente («conté mal»,
 	// 00350): el sobrante de un conteo equivocado no es plata (M2S3-002).
-	// El ingreso y el retiro «otro» (00350): plata que entró o salió del
-	// cajón sin una cuenta que la explique (el cambio que trajo alguien, la
-	// plata que se llevó el dueño). No dejaban asiento y el mayor de Caja no
-	// conciliaba con el arqueo aunque la caja cerrara al peso (mes simulado,
-	// M3S1-005 y M3S3-014). Van contra Diferencias de caja, como el arqueo,
-	// hasta que el contador diga a qué cuenta; el retiro que es un pago va
-	// como gasto (mostrador.MovimientoDeCaja con categoría).
-	rs, err = s.lectura.Query(ctx, `SELECT m.created_at, m.monto::float8, coalesce(m.motivo, ''), coalesce(b.name, '')
-		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
-		WHERE m.tipo IN ('ingreso', 'retiro') AND m.destino = 'otro' AND m.created_at >= $1 AND m.created_at <= $2
-		ORDER BY m.created_at`, idesde, ihasta)
-	if err != nil {
-		return nil, err
-	}
-	var motivo string
-	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &motivo, &sucursal}, func() error {
-		concepto := "Ingreso a la caja"
-		if importe < 0 {
-			concepto = "Retiro de la caja"
-		}
-		if sucursal != "" {
-			concepto += " de " + sucursal
-		}
-		if motivo != "" {
-			concepto += ": " + motivo
-		}
-		a := AsientoDeDiferenciaDeCaja(fecha, concepto, jsmath.Redondear2(importe))
-		a.Instante = true
-		out = append(out, a)
-		return nil
-	}); err != nil {
-		return nil, err
-	}
+	// El ingreso y el retiro «otro» (00350) van a Movimientos a imputar
+	// (asientosAImputar); el retiro que es un pago va como gasto
+	// (mostrador.MovimientoDeCaja con categoría).
 	// Lo que sale de la caja fuerte al banco (00350): la caja fuerte es la
 	// misma Caja, así que el depósito es Banco a Caja, como el de un cajón.
 	rs, err = s.lectura.Query(ctx, `SELECT f.created_at, f.monto::float8, coalesce(b.name, '')
@@ -894,11 +875,7 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito'),
 		  c.order_payment_id IS NOT NULL, c.id::text, coalesce(`+cobros.ReciboDelCheque("c")+`, '')
 		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
-		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')
-		  -- Un cheque recibido sin origen (sin cliente, recibo ni venta) nunca
-		  -- entró a Valores a depositar: su acreditación cancelaba algo que no
-		  -- existía (M3S2-012). No se asienta y el cierre lo marca.
-		  AND NOT (`+chequeSinOrigen("c")+`)) x
+		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')) x
 		WHERE x.asentado >= $1 AND x.asentado <= $2 ORDER BY x.asentado`, idesde, ihasta)
 	if err != nil {
 		return nil, err
@@ -976,15 +953,6 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	if cajas > 0 {
 		out = append(out, pendiente("caja", "Turnos de caja sin cerrar",
 			"Efectivo sin arquear: la diferencia del mes no se puede calcular.", cajas, "/admin/caja"))
-	}
-	var sinOrigen int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM cheques c WHERE `+chequeSinOrigen("c")+` AND c.estado NOT IN ('anulado')
-		AND c.created_at <= $1`, ihasta).Scan(&sinOrigen); err != nil {
-		return nil, err
-	}
-	if sinOrigen > 0 {
-		out = append(out, pendiente("cheques-sin-origen", "Cheques recibidos sin origen",
-			"Se cargaron sin cliente ni recibo: no entran a los asientos hasta saber de dónde vino la plata.", sinOrigen, "/admin/cheques"))
 	}
 	if sinFactura > 0 {
 		p := pendiente("facturas", "Recepciones sin factura de compra",

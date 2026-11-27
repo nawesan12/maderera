@@ -37,7 +37,11 @@ export async function guardarTarifaDeCorte(_previo: EstadoTarifa, formData: Form
 
 /** El ancho de sierra con que nacen los cortes (ver `lib/dal/sierra.ts`). */
 export async function guardarSierra(_previo: EstadoTarifa, formData: FormData): Promise<EstadoTarifa> {
-  const mm = Number(String(formData.get("anchoSierraMm") ?? "").replace(",", "."));
+  const texto = String(formData.get("anchoSierraMm") ?? "").trim().replace(",", ".");
+  const mm = Number(texto);
+  // «abc» llegaba a Go como null y volvía el error del contrato, en inglés
+  // (mes simulado, M2S1-128).
+  if (texto === "" || !Number.isFinite(mm)) return { error: "Escribí el ancho en milímetros." };
   const r = await (await api()).PUT("/api/v1/admin/cortes/sierra", { body: { anchoSierraMm: mm } });
   if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "Revisá el ancho.") };
   // El cortador del sitio la lee de la caché del catálogo.

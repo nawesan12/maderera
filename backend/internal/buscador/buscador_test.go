@@ -39,4 +39,19 @@ func TestBuscar(t *testing.T) {
 			t.Errorf("el aserradero vio %s", x.Tipo)
 		}
 	}
+
+	// El aserradero encuentra el corte por el número de su pedido, con el
+	// estado como lo dice la cola (M3S4-024).
+	_, _ = pool.Exec(ctx, `insert into cutting_orders (numero, contacto_nombre, material_descripcion, order_id, estado)
+		select 'CRT-59', 'Carla', 'MDF', id, 'terminado' from orders where numero = 'PED-0042'`)
+	r, _ = Buscar(ctx, pool, rol(sqlc.StaffRoleAserradero), "PED-0042")
+	encontrado := false
+	for _, x := range r {
+		if x.Tipo == "Corte" && x.Titulo == "CRT-59 · Carla" && x.Detalle == "MDF · Terminado" {
+			encontrado = true
+		}
+	}
+	if !encontrado {
+		t.Errorf("el corte del pedido: %v", r)
+	}
 }

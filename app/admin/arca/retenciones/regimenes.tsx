@@ -7,6 +7,7 @@ import { CampoImporte } from "@/components/admin/campo-importe";
 import { guardarRegimen, type EstadoRegimen } from "./actions";
 
 const inicial: EstadoRegimen = {};
+const inicialDelAlta: EstadoRegimen & { codigo?: string } = {};
 
 export interface RegimenEditable {
   id: string;
@@ -263,7 +264,7 @@ function Alta() {
       }
       return { ...r, codigo: String(fd.get("codigo") ?? "") };
     },
-    inicial,
+    inicialDelAlta,
   );
 
   if (!abierto) {

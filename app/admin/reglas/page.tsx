@@ -209,6 +209,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
           { valor: "bloquear", texto: "No se puede: primero se anulan los pagos" },
         ],
       },
+      {
+        clave: "cae_en_compras",
+        pregunta: "La factura A de compra sin CAE",
+        opciones: [
+          { valor: "opcional", texto: "Entra igual" },
+          { valor: "exigido", texto: "No entra sin CAE" },
+        ],
+      },
     ],
   },
 ];

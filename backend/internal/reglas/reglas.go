@@ -58,6 +58,9 @@ const (
 	DatosFiscalesDelCliente = "datos_fiscales_del_cliente"
 	// H032: si la tarjeta en línea pide lote y cupón.
 	LoteYCupon = "lote_y_cupon"
+	// M2S2-039 (00362): si la factura de compra que da crédito fiscal (A, M)
+	// se carga sin CAE. «opcional» es lo de siempre; «exigido» la frena.
+	CaeEnCompras = "cae_en_compras"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -77,6 +80,7 @@ var Opciones = map[string][]string{
 	EtiquetaDelCircuito:         {"b", "sin_factura", "interno"},
 	DatosFiscalesDelCliente:     {"hasta_facturar", "ninguno"},
 	LoteYCupon:                  {"obligatorio", "opcional"},
+	CaeEnCompras:                {"opcional", "exigido"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

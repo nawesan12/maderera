@@ -139,14 +139,20 @@ func facturaDelGasto(ctx context.Context, tx pgx.Tx, ses *auth.Sesion, d FormGas
 	x := d.Factura
 	iva := jsmath.Redondear2(float64(x.Iva21+x.Iva105) + x.Iva27)
 	neto := jsmath.Redondear2(float64(d.Importe-iva) - x.Percepciones)
+	// El CAE con los mismos controles que la factura de compra: entraba al
+	// libro IVA compras como crédito sin CAE (M2S2-039).
+	cae, err := revisarCae(ctx, tx, x.Tipo, x.Cae, "")
+	if err != nil {
+		return "", err
+	}
 	var id string
-	err := tx.QueryRow(ctx, `
-		INSERT INTO purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, fecha_vencimiento, neto, iva21, iva105, iva27,
+	err = tx.QueryRow(ctx, `
+		INSERT INTO purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, fecha_vencimiento, cae, neto, iva21, iva105, iva27,
 		  exento, percepciones, total, observaciones, created_by_user_id)
-		VALUES ($1, $2::tipo_comprobante_compra, $3, $4, $5, $5, $6::numeric, $7::numeric, $8::numeric, $9::numeric, 0, $10::numeric, $11::numeric,
+		VALUES ($1, $2::tipo_comprobante_compra, $3, $4, $5, $5, $14, $6::numeric, $7::numeric, $8::numeric, $9::numeric, 0, $10::numeric, $11::numeric,
 		  $12, $13) RETURNING id`,
 		*d.SupplierID, x.Tipo, int64(x.PuntoVenta), int64(x.Numero), fecha, jsmath.Fijo2(neto), jsmath.Fijo2(x.Iva21), jsmath.Fijo2(x.Iva105),
-		jsmath.Fijo2(x.Iva27), jsmath.Fijo2(x.Percepciones), jsmath.Fijo2(d.Importe), "Gasto: "+trimJS(d.Descripcion), ses.UserID).Scan(&id)
+		jsmath.Fijo2(x.Iva27), jsmath.Fijo2(x.Percepciones), jsmath.Fijo2(d.Importe), "Gasto: "+trimJS(d.Descripcion), ses.UserID, cae).Scan(&id)
 	return id, err
 }
 

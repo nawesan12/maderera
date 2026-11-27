@@ -25,3 +25,25 @@ export async function cerrarElMes(_previo: EstadoDelCierre, formData: FormData):
   revalidatePath("/admin/cierre");
   return {};
 }
+
+/** «12.345,67» o «12345.67» a número; vacío es 0. */
+function importe(v: FormDataEntryValue | null): number {
+  const t = String(v ?? "").trim().replace(/\s|\$/g, "");
+  if (!t) return 0;
+  const normal = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+  return Number(normal);
+}
+
+/** Anota lo que liquidó la tarjeta: pasa de Tarjetas a acreditar al Banco. */
+export async function cargarLiquidacion(_previo: EstadoDelCierre, formData: FormData): Promise<EstadoDelCierre> {
+  const fecha = String(formData.get("fecha") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { error: "Elegí la fecha de la liquidación." };
+  const bruto = importe(formData.get("bruto"));
+  const comision = importe(formData.get("comision"));
+  if (!Number.isFinite(bruto) || bruto <= 0) return { error: "Escribí lo que liquidó la tarjeta." };
+  if (!Number.isFinite(comision) || comision < 0 || comision >= bruto) return { error: "La comisión tiene que ser menor que lo liquidado." };
+  const r = await (await api()).POST("/api/v1/admin/cierre/liquidaciones", { body: { fecha, bruto, comision } });
+  if (!r.response.ok) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los importes.") };
+  revalidatePath("/admin/cierre");
+  return {};
+}

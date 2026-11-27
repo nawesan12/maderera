@@ -360,6 +360,10 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		return nil, err
 	}
 	asientos = append(asientos, mas...)
+	if mas, err = s.asientosDeLiquidaciones(ctx, idesde, ihasta); err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, mas...)
 
 	OrdenarAsientos(asientos)
 	return asientos, nil
@@ -502,6 +506,75 @@ func (s *Servicio) asientosDeDeudaSinComprobante(ctx context.Context, idesde, ih
 		return nil, err
 	}
 	return out, nil
+}
+
+// asientosDeLiquidaciones son las liquidaciones de tarjeta del período, y la
+// anulación de una, al revés, en su fecha.
+func (s *Servicio) asientosDeLiquidaciones(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	rs, err := s.lectura.Query(ctx, `SELECT fecha, coalesce(referencia, ''), bruto::float8, comision::float8, circuito::text, anulada_at
+		FROM liquidaciones_tarjeta WHERE (fecha >= $1 AND fecha <= $2) OR (anulada_at >= $1 AND anulada_at <= $2) ORDER BY fecha`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var out []Asiento
+	var fecha time.Time
+	var anulada *time.Time
+	var referencia, circuito string
+	var bruto, comision float64
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &referencia, &bruto, &comision, &circuito, &anulada}, func() error {
+		a := AsientoDeLiquidacion(fecha, referencia, bruto, comision)
+		if circuito == CircuitoNegro {
+			a.Circuito = CircuitoNegro
+		}
+		if entre(fecha, idesde, ihasta) {
+			out = append(out, a)
+		}
+		if anulada != nil && entre(*anulada, idesde, ihasta) {
+			x := asiento(*anulada, "Anulación · "+a.Concepto, invertir(a.Renglones))
+			x.Circuito, x.Instante = a.Circuito, true
+			out = append(out, x)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Liquidacion es una liquidación de tarjeta para cargar.
+type Liquidacion struct {
+	Fecha      time.Time
+	Bruto      float64
+	Comision   float64
+	Referencia string
+	Circuito   string
+}
+
+// CargarLiquidacion anota lo que liquidó la tarjeta.
+func (s *Servicio) CargarLiquidacion(ctx context.Context, l Liquidacion, usuario string) error {
+	if !(l.Bruto > 0) || l.Comision < 0 || l.Comision >= l.Bruto {
+		return plataforma.Invalido(map[string]string{"bruto": "El importe tiene que ser mayor que la comisión."})
+	}
+	if l.Circuito != CircuitoNegro {
+		l.Circuito = "blanco"
+	}
+	_, err := s.pool.Exec(ctx, `INSERT INTO liquidaciones_tarjeta (fecha, bruto, comision, referencia, circuito, created_by_user_id)
+		VALUES ($1, $2::numeric, $3::numeric, nullif($4, ''), $5::circuito, $6)`, l.Fecha, jsmath.Fijo2(l.Bruto), jsmath.Fijo2(l.Comision),
+		l.Referencia, l.Circuito, usuario)
+	return err
+}
+
+// TarjetasSinLiquidar es lo cobrado con tarjeta hasta `hasta` que todavía no
+// liquidó (lo de los dos circuitos).
+func (s *Servicio) TarjetasSinLiquidar(ctx context.Context, hasta time.Time) (float64, error) {
+	var v float64
+	err := s.lectura.QueryRow(ctx, `SELECT (
+		  coalesce((SELECT sum(x.importe) FROM receipt_parts x JOIN receipts r ON r.id = x.receipt_id
+		            WHERE x.medio IN ('tarjeta_debito', 'tarjeta_credito') AND r.anulado_at IS NULL AND r.created_at <= $1), 0)
+		+ coalesce((SELECT sum(p.monto) FROM payments p WHERE p.medio = 'tarjeta' AND p.estado = 'aprobado' AND p.created_at <= $1
+		            AND NOT EXISTS (SELECT 1 FROM receipt_parts x WHERE x.payment_id = p.id)), 0)
+		- coalesce((SELECT sum(bruto) FROM liquidaciones_tarjeta WHERE anulada_at IS NULL AND fecha <= $1), 0))::float8`, hasta).Scan(&v)
+	return jsmath.Redondear2(v), err
 }
 
 // diferenciaConProveedores es, de cada proveedor, el libro sin lo recibido
@@ -1046,6 +1119,27 @@ func (s *Servicio) pendientesDeLosCircuitos(ctx context.Context, desde, hasta ti
 			"El saldo de Deudores por ventas del archivo difiere en "+formato.Moneda(dif)+" de lo que suman las cuentas.", 1,
 			"/admin/cierre"))
 	}
+	// Caja, Banco y Valores a depositar del archivo del estudio nunca pueden
+	// quedar en negativo: si quedan, algo entró por un archivo y salió por el
+	// otro, o salió sin haber entrado (mes simulado, M3S1-002 y M3S3-001).
+	// Con todo lo asentado hasta el fin del mes, en el renglón de avisos.
+	fondos, err := s.asientosDelPeriodoCon(ctx, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), hasta, reparto)
+	if err != nil {
+		return nil, err
+	}
+	var enRojo []CasoDelCierre
+	for _, c := range []string{Cuentas.Caja, Cuentas.Banco, Cuentas.ValoresADepositar} {
+		if saldo := SaldoDeCuenta(DelCircuito(fondos, "blanco"), c); saldo < -0.009 {
+			x := saldo
+			enRojo = append(enRojo, CasoDelCierre{Nombre: c + " " + nombresDeCuenta[c], Importe: &x, Donde: "/admin/cierre/exportar?periodo=" + desde.UTC().Format("2006-01")})
+		}
+	}
+	if len(enRojo) > 0 {
+		p := pendiente("fondos-negativos", "Caja o Banco en negativo en el archivo del estudio",
+			"Salió más de lo que entró: revisar qué cobro o depósito quedó en el otro archivo.", len(enRojo), "/admin/cierre")
+		p.Casos = enRojo
+		out = append(out, p)
+	}
 	// Lo mismo con los proveedores: el libro de cada uno contra lo que el
 	// archivo del estudio tiene en Proveedores, proveedor por proveedor (mes
 	// simulado, M3S1-019 y M3S4-006). La diferencia que queda es lo pagado en
@@ -1472,6 +1566,9 @@ type ResumenDelMes struct {
 	// PrimerMes es el primer mes con algún movimiento («2026-09»): el
 	// selector de la pantalla arranca ahí (mes simulado, M3S4-035).
 	PrimerMes string `json:"primerMes"`
+	// TarjetasSinLiquidar es lo cobrado con tarjeta hasta el fin del mes que
+	// la tarjeta todavía no liquidó.
+	TarjetasSinLiquidar float64 `json:"tarjetasSinLiquidar"`
 }
 
 // MesCerrado es si un mes está cerrado, desde cuándo y quién lo cerró.
@@ -1581,6 +1678,9 @@ func (s *Servicio) ResumenDelMes(ctx context.Context, desde, hasta time.Time) (R
 	}
 	if primero != nil {
 		r.PrimerMes = primero.In(Argentina).Format("2006-01")
+	}
+	if r.TarjetasSinLiquidar, err = s.TarjetasSinLiquidar(ctx, ihasta); err != nil {
+		return r, err
 	}
 	r.Ventas.Neto, r.Ventas.Iva, r.Ventas.Total = numero(vn), numero(vi), numero(vt)
 	r.Compras.Neto, r.Compras.Iva, r.Compras.Total = numero(cn), numero(ci), numero(ct)

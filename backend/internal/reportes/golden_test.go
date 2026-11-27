@@ -124,6 +124,15 @@ func TestGoldenAsientos(t *testing.T) {
 		if c.Entrada.Tipo == "gasto" || c.Entrada.Tipo == "" {
 			c.Asiento.Concepto = ConceptoDeGasto(c.Entrada.Categoria, c.Entrada.Descripcion)
 		}
+		// Lo cobrado con tarjeta entra a Tarjetas a acreditar, no al Banco
+		// (M2S1-058).
+		if c.Entrada.Tipo == "cobro" && cuentaDeCobro(c.Entrada.Medio) == Cuentas.TarjetasAAcreditar {
+			for k := range c.Asiento.Renglones {
+				if c.Asiento.Renglones[k].Cuenta == Cuentas.Banco {
+					c.Asiento.Renglones[k].Cuenta, c.Asiento.Renglones[k].Nombre = Cuentas.TarjetasAAcreditar, nombresDeCuenta[Cuentas.TarjetasAAcreditar]
+				}
+			}
+		}
 		if !reflect.DeepEqual(a, c.Asiento) {
 			g, _ := json.Marshal(a)
 			w, _ := json.Marshal(c.Asiento)

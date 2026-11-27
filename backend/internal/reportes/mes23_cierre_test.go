@@ -197,3 +197,45 @@ func TestLosCortesDanElMismoTotal(t *testing.T) {
 		t.Errorf("el CSV: %s", csv)
 	}
 }
+
+// M3S1-002: si Caja queda en negativo en el archivo del estudio, el cierre lo
+// avisa con la cuenta y el saldo.
+func TestElCierreAvisaLaCajaEnNegativo(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	sesion := e.id(t, `insert into cash_sessions (branch_id, abierta_por, estado) select $1, id, 'abierta' from "user" limit 1 returning id`, e.central)
+	e.exec(t, `insert into cash_movements (session_id, tipo, monto, motivo, destino, created_at) values
+		($1, 'retiro', -1000, 'Depósito', 'banco', '2026-10-10T15:00:00Z')`, sesion)
+	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
+	p, ok := pendientesDe(t, cuerpo)["fondos-negativos"]
+	if !ok || len(p.Casos) != 1 || !strings.HasPrefix(p.Casos[0].Nombre, "1.1.01") || *p.Casos[0].Importe != -1000 {
+		t.Errorf("el aviso: %s", cuerpo)
+	}
+}
+
+// M2S1-058: lo cobrado con tarjeta va a Tarjetas a acreditar y pasa al Banco,
+// neto de la comisión, cuando la tarjeta liquida.
+func TestLaTarjetaPasaAlBancoAlLiquidar(t *testing.T) {
+	e := armar(t)
+	placa, _ := e.catalogo(t)
+	pedido := e.pedido(t, "PED-1001", e.central, "entregado", "mostrador", time.Date(2026, 10, 3, 12, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 97200.0, 0.0})
+	e.exec(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado, created_at)
+		values ($1, 'pedido', 'mostrador', 'tarjeta', 97200, 'aprobado', '2026-10-03T15:00:00Z')`, pedido)
+	e.facturaConCae(t, nil, 1, 97200, "2026-10-03T15:00:00Z", &pedido)
+	if err := e.s.CargarLiquidacion(context.Background(), Liquidacion{Fecha: time.Date(2026, 10, 6, 12, 0, 0, 0, Argentina), Bruto: 97200, Comision: 1944}, ""); err != nil {
+		t.Fatal(err)
+	}
+	a := DelCircuito(e.asientosDe(t, "2026-10"), "")
+	if n := cuenta(a, Cuentas.TarjetasAAcreditar); n != 0 {
+		t.Errorf("Tarjetas a acreditar después de liquidar: %v", n)
+	}
+	if n := cuenta(a, Cuentas.Banco); n != 95256 {
+		t.Errorf("Banco, neto de la comisión: %v", n)
+	}
+	if n := cuenta(a, Cuentas.Comisiones); n != 1944 {
+		t.Errorf("comisión: %v", n)
+	}
+	if v, err := e.s.TarjetasSinLiquidar(context.Background(), time.Date(2026, 10, 31, 23, 0, 0, 0, Argentina)); err != nil || v != 0 {
+		t.Errorf("sin liquidar: %v %v", v, err)
+	}
+}

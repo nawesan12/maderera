@@ -178,6 +178,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MesCerrado" }
+  /api/v1/admin/cierre/liquidaciones:
+    post:
+      operationId: CargarLiquidacion
+      description: Lo que liquidó la tarjeta, neto de su comisión (pasa de Tarjetas a acreditar al Banco)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fecha, bruto, comision]
+              additionalProperties: false
+              properties:
+                fecha: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+                bruto: { type: number, format: double, minimum: 0.01 }
+                comision: { type: number, format: double, minimum: 0 }
+                referencia: { type: string, maxLength: 120 }
+                circuito: { type: string, enum: [blanco, negro] }
+      responses:
+        "204":
+          description: Cargada
   /api/v1/admin/inicio/metricas:
     get:
       operationId: MetricasDelResumen
@@ -422,7 +443,7 @@ components:
         por: { type: string, nullable: true }
     CierreResumen:
       type: object
-      required: [ventas, vendido, compras, gastos, gastosB, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado, primerMes]
+      required: [ventas, vendido, compras, gastos, gastosB, retencionesPracticadas, retencionesSufridas, percepcionesIibb, posicionIva, iva, resultado, cerrado, primerMes, tarjetasSinLiquidar]
       properties:
         cerrado: { $ref: "#/components/schemas/MesCerrado" }
         ventas: { $ref: "#/components/schemas/CierreTotalesConIva" }
@@ -434,6 +455,7 @@ components:
         gastos: { $ref: "#/components/schemas/CierreTotales" }
         gastosB: { $ref: "#/components/schemas/CierreTotales" }
         primerMes: { type: string, description: El primer mes con algún movimiento (YYYY-MM), vacío si no hay ninguno }
+        tarjetasSinLiquidar: { type: number, format: double, description: Lo cobrado con tarjeta hasta el fin del mes que todavía no liquidó }
         retencionesPracticadas: { $ref: "#/components/schemas/CierreTotales" }
         retencionesSufridas: { $ref: "#/components/schemas/CierreTotales" }
         percepcionesIibb: { $ref: "#/components/schemas/CierreTotales" }

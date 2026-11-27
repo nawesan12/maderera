@@ -129,3 +129,23 @@ export const cheques = pgTable(
 );
 
 export type Cheque = typeof cheques.$inferSelect;
+
+/**
+ * Lo que liquidó la tarjeta (migración 00372): lo cobrado con tarjeta queda en
+ * Tarjetas a acreditar hasta acá, y pasa al Banco neto de la comisión.
+ */
+export const liquidacionesTarjeta = pgTable(
+  "liquidaciones_tarjeta",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    fecha: timestamp({ withTimezone: true }).notNull(),
+    bruto: numeric({ precision: 14, scale: 2 }).notNull(),
+    comision: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
+    referencia: text(),
+    circuito: circuito().notNull().default("blanco"),
+    createdByUserId: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    anuladaAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index("liquidaciones_tarjeta_fecha_idx").on(t.fecha)],
+);

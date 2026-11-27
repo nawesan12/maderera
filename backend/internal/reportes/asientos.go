@@ -61,13 +61,16 @@ var Cuentas = struct {
 	// a mano del libro de un proveedor), a definir por el estudio
 	// (M3S1-019, M3S4-006).
 	SaldosIniciales string
+	// TarjetasAAcreditar: lo cobrado con tarjeta hasta que la tarjeta
+	// liquida (liquidaciones_tarjeta, M2S1-058).
+	TarjetasAAcreditar string
 }{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
 	"2.1.06", "4.1.02",
 	"1.1.07", "1.1.08", "1.1.09", "1.1.10", "1.1.11", "1.1.12",
 	"2.1.07",
 	"2.1.08", "2.1.09", "2.1.10", "2.1.11",
 	"5.1.11",
-	"5.2.01", "2.1.12", "5.1.12", "2.1.13", "3.1.01"}
+	"5.2.01", "2.1.12", "5.1.12", "2.1.13", "3.1.01", "1.1.13"}
 
 // CuentaDeRetencionSufrida es la cuenta del crédito por una retención que
 // nos practicaron, según el impuesto ("" o desconocido: 1.1.06).
@@ -121,7 +124,7 @@ var nombresDeCuenta = map[string]string{
 	"5.1.10": "Publicidad", "5.1.11": "Comisiones y gastos bancarios",
 	"5.2.01": "Costo de mercaderías vendidas", "2.1.12": "Cobros a imputar (facturas sin CAE)",
 	"5.1.12": "Diferencias de caja (a definir)", "2.1.13": "Movimientos de fondos a imputar (a definir)",
-	"3.1.01": "Saldos iniciales y ajustes (a definir)",
+	"3.1.01": "Saldos iniciales y ajustes (a definir)", "1.1.13": "Tarjetas a acreditar",
 }
 
 // RenglonDeAsiento es RenglonDeAsiento.
@@ -248,6 +251,8 @@ func cuentaDeCobro(medio string) string {
 		return Cuentas.RetencionesSufridas
 	case MedioAImputar:
 		return Cuentas.MovimientosAImputar
+	case "tarjeta", "tarjeta_debito", "tarjeta_credito", "debito", "credito":
+		return Cuentas.TarjetasAAcreditar
 	}
 	return cuentaDeMedio(medio)
 }
@@ -1152,4 +1157,20 @@ func ConPase(rep cobros.Reparto, pasado float64) cobros.Reparto {
 		rep.Anticipo, rep.B = redondear(rep.Anticipo+pasado), redondear(rep.B-pasado)
 	}
 	return rep
+}
+
+// AsientoDeLiquidacion es lo que liquida la tarjeta: entra al Banco el neto,
+// la comisión a su cuenta, contra Tarjetas a acreditar por el bruto.
+func AsientoDeLiquidacion(fecha time.Time, referencia string, bruto, comision float64) Asiento {
+	r := []RenglonDeAsiento{renglon(Cuentas.Banco, redondear(bruto-comision), 0)}
+	if comision > toleranciaAsiento {
+		r = append(r, renglon(Cuentas.Comisiones, comision, 0))
+	}
+	concepto := "Liquidación de tarjetas"
+	if referencia != "" {
+		concepto += " · " + referencia
+	}
+	a := asiento(fecha, concepto, append(r, renglon(Cuentas.TarjetasAAcreditar, 0, bruto)))
+	a.Instante = true
+	return a
 }

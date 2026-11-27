@@ -197,6 +197,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/cierre/liquidaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Lo que liquidó la tarjeta, neto de su comisión (pasa de Tarjetas a acreditar al Banco) */
+        post: operations["CargarLiquidacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/metricas": {
         parameters: {
             query?: never;
@@ -513,6 +530,11 @@ export interface components {
             gastosB: components["schemas"]["CierreTotales"];
             /** @description El primer mes con algún movimiento (YYYY-MM) */
             primerMes: string;
+            /**
+             * Format: double
+             * @description Lo cobrado con tarjeta hasta el fin del mes que todavía no liquidó
+             */
+            tarjetasSinLiquidar: number;
             retencionesPracticadas: components["schemas"]["CierreTotales"];
             retencionesSufridas: components["schemas"]["CierreTotales"];
             percepcionesIibb: components["schemas"]["CierreTotales"];
@@ -1173,6 +1195,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MesCerrado"];
                 };
+            };
+        };
+    };
+    CargarLiquidacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fecha: string;
+                    /** Format: double */
+                    bruto: number;
+                    /** Format: double */
+                    comision: number;
+                    referencia?: string;
+                    /** @enum {string} */
+                    circuito?: "blanco" | "negro";
+                };
+            };
+        };
+        responses: {
+            /** @description Cargada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

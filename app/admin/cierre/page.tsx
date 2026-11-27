@@ -13,6 +13,7 @@ import { fechaCorta, formatearMontoContable as formatearMonto, hoyEnArgentina, p
 import { ExportarAsientos } from "./exportar-asientos";
 import { SelectorDeMes } from "@/components/admin/selector-de-mes";
 import { CerrarMes } from "./cerrar-mes";
+import { LiquidarTarjetas } from "./liquidar-tarjetas";
 import { nombreDelCircuito } from "@/lib/dal/circuito";
 import { etiquetasDelCircuito, rotuloDelCircuito } from "@/lib/circuito";
 
@@ -380,7 +381,7 @@ export default async function CierrePage({
         </details>
       )}
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {/* Lo facturado, no lo vendido: con el mismo nombre que el
             «Vendido sin IVA» de arriba, «Ventas netas $0» parecía un error.
             Lo vendido sin factura va arriba, partiendo lo vendido: acá se
@@ -403,6 +404,7 @@ export default async function CierrePage({
           detalle={`${resumen.gastos.cantidad} anotados`}
           href={`/admin/compras/gastos?periodo=${periodo.clave}`}
         />
+        <LiquidarTarjetas saldo={resumen.tarjetasSinLiquidar} hoy={hoyEnArgentina()} />
       </section>
 
       <section className="tarjeta overflow-hidden">

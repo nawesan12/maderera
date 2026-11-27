@@ -354,7 +354,7 @@ func CsvReporteDeVentas(corte string, filas []FilaDeReporte, t TotalesDelReporte
 	}
 	// Lo que los renglones no llevan (el envío y el descuento del pedido),
 	// para que el total sea el mismo en todos los cortes.
-	if dif := jsmath.Redondear2(t.Total - t.Renglones); porRenglon(corte) && (dif > 0.005 || dif < -0.005) {
+	if dif := jsmath.Redondear2(t.Total - t.Renglones); porRenglon(corte) && t.Renglones != 0 && (dif > 0.005 || dif < -0.005) {
 		lineas = append(lineas, strings.Join([]string{tx("Envíos y descuentos"), tx(""), tx(""), numero(dif), "", "", "", "", ""}, ";"))
 	}
 	lineas = append(lineas, strings.Join([]string{tx("Total"), tx(""), tx(""), numero(t.Total), numero(t.NetoVenta),

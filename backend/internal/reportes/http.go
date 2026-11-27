@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/documentos"
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
@@ -443,4 +444,30 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 // 26 (mes simulado, M2S3-082).
 func ArchivoDelDia(prefijo string, ahora time.Time) string {
 	return prefijo + "-" + ahora.In(Argentina).Format("2006-01-02") + ".csv"
+}
+
+// CargarLiquidacion anota lo que liquidó la tarjeta (M2S1-058): la fecha es
+// el día argentino de la acreditación.
+func (a *API) CargarLiquidacion(ctx context.Context, r reportesapi.CargarLiquidacionRequestObject) (reportesapi.CargarLiquidacionResponseObject, error) {
+	ses, err := pantalla(ctx, "/admin/cierre")
+	if err != nil {
+		return nil, err
+	}
+	dia, err := time.ParseInLocation("2006-01-02", r.Body.Fecha, Argentina)
+	if err != nil {
+		return nil, plataforma.Invalido(map[string]string{"fecha": "Elegí la fecha de la liquidación."})
+	}
+	l := Liquidacion{Fecha: dia.Add(12 * time.Hour), Bruto: r.Body.Bruto, Comision: r.Body.Comision}
+	if r.Body.Referencia != nil {
+		l.Referencia = strings.TrimSpace(*r.Body.Referencia)
+	}
+	if r.Body.Circuito != nil {
+		l.Circuito = string(*r.Body.Circuito)
+	}
+	if err := a.s.CargarLiquidacion(ctx, l, ses.UserID); err != nil {
+		return nil, err
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaCrear, "cierre", "",
+		"Liquidación de tarjetas del "+dia.Format("02/01/2006")+": "+formato.Importe(l.Bruto)+", comisión "+formato.Importe(l.Comision), nil)
+	return reportesapi.CargarLiquidacion204Response{}, nil
 }

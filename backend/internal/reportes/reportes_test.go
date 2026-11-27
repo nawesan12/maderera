@@ -327,7 +327,7 @@ func TestCierreDelMes(t *testing.T) {
 	if len(asientos) != 6 {
 		t.Fatalf("asientos: %s", b)
 	}
-	if asientos[0].Concepto != "flete · Flete \"Oeste\"" || asientos[1].Concepto != "Factura B 0001-00000009 · Maderas del Sur" ||
+	if asientos[0].Concepto != "Fletes · Flete \"Oeste\"" || asientos[1].Concepto != "Factura B 0001-00000009 · Maderas del Sur" ||
 		asientos[2].Concepto != "Factura A 0003-00000127 · Constructora" || !asientos[2].Balancea {
 		t.Errorf("orden y conceptos: %s", b)
 	}
@@ -344,7 +344,7 @@ func TestCierreDelMes(t *testing.T) {
 		t.Errorf("pendientes: %s", b)
 	}
 	c, b, h := pedir(t, adm, e.u+"cierre/asientos-csv?periodo=2026-10")
-	if c != 200 || !strings.Contains(h.Get("Content-Disposition"), "asientos-2026-10.csv") || !strings.Contains(b, "\"00001\";01/10/2026;\"flete · Flete \"\"Oeste\"\"\"") ||
+	if c != 200 || !strings.Contains(h.Get("Content-Disposition"), "asientos-2026-10.csv") || !strings.Contains(b, "\"00001\";01/10/2026;\"Fletes · Flete \"\"Oeste\"\"\"") ||
 		!strings.Contains(b, "\"Totales\"") {
 		t.Errorf("csv: %d %q", c, b)
 	}

@@ -188,7 +188,76 @@ paths:
                   error: { type: string }
                   autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/mostrador/ventas/{id}/devolucion-sin-factura:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: DevolucionSinFacturaDatos
+      description: Lo que se puede devolver de una venta del mostrador sin factura, y cuánto queda por cada camino de la plata
+      responses:
+        "200":
+          description: Los renglones y los topes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [numero, renglones, efectivo, afuera]
+                properties:
+                  numero: { type: string }
+                  efectivo: { type: number, format: double, description: "lo cobrado en efectivo que todavía no se devolvió" }
+                  afuera: { type: number, format: double, description: "lo cobrado con los otros medios que todavía no se devolvió" }
+                  renglones:
+                    type: array
+                    items:
+                      type: object
+                      required: [orderItemId, descripcion, unidad, cantidad, devuelto, precioUnitario]
+                      properties:
+                        orderItemId: { type: string }
+                        descripcion: { type: string }
+                        unidad: { type: string }
+                        cantidad: { type: number, format: double }
+                        devuelto: { type: number, format: double }
+                        precioUnitario: { type: number, format: double }
+        "404": { $ref: "#/components/responses/Problema" }
+    post:
+      operationId: DevolucionSinFacturaDeMostrador
+      description: La devolución de una parte de una venta sin factura (pedidos.DevolverSinFacturaPor). A quien no es admin le pide el PIN.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave, destino, motivo, renglones]
+              additionalProperties: false
+              properties:
+                clave: { type: string, maxLength: 80 }
+                destino: { type: string, enum: [caja, afuera] }
+                motivo: { type: string }
+                renglones:
+                  type: array
+                  items:
+                    type: object
+                    required: [orderItemId, cantidad]
+                    properties:
+                      orderItemId: { type: string }
+                      cantidad: { type: number, format: double }
+                pin: { type: string, maxLength: 128 }
+                ficha: { type: string, maxLength: 400 }
+      responses:
+        "200":
+          description: Hecha, o el PIN que falta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: string }
+                  error: { type: string }
+                  autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/ventas/{id}/devolucion/calculo:
+
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
     post:

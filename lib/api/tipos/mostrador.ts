@@ -90,6 +90,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mostrador/ventas/{id}/devolucion-sin-factura": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lo que se puede devolver de una venta del mostrador sin factura, y cuánto queda por cada camino de la plata */
+        get: operations["DevolucionSinFacturaDatos"];
+        put?: never;
+        /** @description La devolución de una parte de una venta sin factura (pedidos.DevolverSinFacturaPor). A quien no es admin le pide el PIN. */
+        post: operations["DevolucionSinFacturaDeMostrador"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mostrador/ventas/{id}/devolucion/calculo": {
         parameters: {
             query?: never;
@@ -913,6 +933,95 @@ export interface operations {
                     "application/json": {
                         ok?: string;
                         notaId?: string | null;
+                        error?: string;
+                        autorizacion?: components["schemas"]["MostradorAutorizacion"];
+                    };
+                };
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    DevolucionSinFacturaDatos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los renglones y los topes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        numero: string;
+                        /**
+                         * Format: double
+                         * @description lo cobrado en efectivo que todavía no se devolvió
+                         */
+                        efectivo: number;
+                        /**
+                         * Format: double
+                         * @description lo cobrado con los otros medios que todavía no se devolvió
+                         */
+                        afuera: number;
+                        renglones: {
+                            orderItemId: string;
+                            descripcion: string;
+                            unidad: string;
+                            /** Format: double */
+                            cantidad: number;
+                            /** Format: double */
+                            devuelto: number;
+                            /** Format: double */
+                            precioUnitario: number;
+                        }[];
+                    };
+                };
+            };
+            404: components["responses"]["Problema"];
+        };
+    };
+    DevolucionSinFacturaDeMostrador: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clave: string;
+                    /** @enum {string} */
+                    destino: "caja" | "afuera";
+                    motivo: string;
+                    renglones: {
+                        orderItemId: string;
+                        /** Format: double */
+                        cantidad: number;
+                    }[];
+                    pin?: string;
+                    ficha?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Hecha, o el PIN que falta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: string;
                         error?: string;
                         autorizacion?: components["schemas"]["MostradorAutorizacion"];
                     };

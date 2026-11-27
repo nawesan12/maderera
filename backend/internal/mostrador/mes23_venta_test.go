@@ -269,6 +269,68 @@ func TestMes23PresupuestoUnaVez(t *testing.T) {
 	}
 }
 
+// M3S2-060: una venta del mostrador sin factura se devuelve por una parte:
+// en efectivo por la caja (hasta lo cobrado en efectivo) o por el medio de
+// pago, con el PIN para el vendedor.
+func TestMes23DevolucionSinFactura(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	e.conPIN(t)
+	e.abrir(t, ven, e.central, 1000)
+	tornillos := func(medio string) string {
+		_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas",
+			e.venta(medio, map[string]any{"variantId": e.tornillo, "descripcion": "Tornillo", "unidad": "unidad", "cantidad": 4, "precioUnitario": 150}))
+		if m["ok"] != true {
+			t.Fatalf("venta: %s", b)
+		}
+		return m["orderId"].(string)
+	}
+	efectivo := tornillos("efectivo")
+	u := e.u + "/api/v1/mostrador/ventas/" + efectivo + "/devolucion-sin-factura"
+	st, datos, b := pedir(t, ven, "GET", u, nil)
+	if st != 200 || datos["efectivo"] != 600.0 {
+		t.Fatalf("datos: %d %s", st, b)
+	}
+	item := datos["renglones"].([]any)[0].(map[string]any)["orderItemId"]
+	pedido := map[string]any{"clave": "dev-sf-0001", "destino": "caja", "motivo": "Le sobró uno",
+		"renglones": []any{map[string]any{"orderItemId": item, "cantidad": 1}}}
+	if _, m, b := pedir(t, ven, "POST", u, pedido); m["autorizacion"] == nil {
+		t.Fatalf("sin PIN devolvió: %s", b)
+	}
+	pedido["pin"] = pinDeLaDuena
+	if st, m, b := pedir(t, ven, "POST", u, pedido); st != 200 || m["ok"] == nil {
+		t.Fatalf("con PIN: %d %s", st, b)
+	}
+	ab, _ := caja.Abierto(context.Background(), e.pool, e.central)
+	if ab.Devoluciones != -150 {
+		t.Errorf("la caja no devolvió: %+v", ab)
+	}
+	// La de transferencia no sale de la caja.
+	transf := tornillos("transferencia")
+	u = e.u + "/api/v1/mostrador/ventas/" + transf + "/devolucion-sin-factura"
+	_, datos, _ = pedir(t, ven, "GET", u, nil)
+	item = datos["renglones"].([]any)[0].(map[string]any)["orderItemId"]
+	pedido = map[string]any{"clave": "dev-sf-0002", "destino": "caja", "motivo": "Le sobró uno", "pin": pinDeLaDuena,
+		"renglones": []any{map[string]any{"orderItemId": item, "cantidad": 1}}}
+	if st, _, b := pedir(t, ven, "POST", u, pedido); st != 422 {
+		t.Fatalf("efectivo de una transferencia: %d %s", st, b)
+	}
+	pedido["destino"], pedido["clave"] = "afuera", "dev-sf-0003"
+	if st, m, b := pedir(t, ven, "POST", u, pedido); st != 200 || m["ok"] == nil {
+		t.Fatalf("por afuera: %d %s", st, b)
+	}
+	z, _ := caja.CierreDelTurno(context.Background(), e.pool, e.sesionAbierta(t))
+	var medios []string
+	for _, r := range z {
+		if r.Devolucion {
+			medios = append(medios, r.MedioPago)
+		}
+	}
+	if strings.Join(medios, ",") != "efectivo,transferencia" && strings.Join(medios, ",") != "transferencia,efectivo" {
+		t.Errorf("el Z: %+v", z)
+	}
+}
+
 // M3S1-064: «se vendió más de lo que hay» dice para quién está apartado lo
 // que queda en el estante.
 func TestMes23VendidoDeMasDiceLasReservas(t *testing.T) {

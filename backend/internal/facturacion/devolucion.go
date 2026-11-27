@@ -1028,7 +1028,14 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 // no lo toca y la anulación lo puede devolver entero. Los cobros de una venta
 // del mostrador nacen en la misma transacción, con el mismo created_at: entre
 // débito y transferencia decide el id, y da igual porque los dos van a Banco.
+// TramosDeLosPagos es tramosDeLosPagos para la devolución sin factura del
+// mostrador (pedidos.DevolverSinFacturaPor): la misma regla del tramo.
+func TramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string, enEfectivo bool) (float64, error) {
+	return tramosDeLosPagos(ctx, tx, pedido, devolucion, importe, referencia, enEfectivo)
+}
+
 func tramosDeLosPagos(ctx context.Context, tx pgx.Tx, pedido, devolucion string, importe float64, referencia string, enEfectivo bool) (float64, error) {
+
 	filas, err := tx.Query(ctx, `SELECT p.id, p.monto::float8, coalesce((SELECT sum(t.importe) FROM payment_refunds t WHERE t.payment_id = p.id), 0)::float8,
 		coalesce(p.medio = $5, false)
 		FROM payments p WHERE p.order_id = $1 AND p.estado = 'aprobado'

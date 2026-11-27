@@ -193,6 +193,36 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		return nil, err
 	}
 
+	// Los ajustes anotados a mano en la cuenta de un proveedor (no los que
+	// dejan una anulación, un cheque rechazado, una corrección o el saldo
+	// inicial que trajo la migración).
+	rs, err = s.lectura.Query(ctx, `
+		SELECT m.created_at, s.nombre, coalesce(m.detalle, ''), m.monto
+		FROM supplier_movements m JOIN suppliers s ON s.id = m.supplier_id
+		WHERE m.tipo = 'ajuste' AND m.created_at >= $1 AND m.created_at <= $2
+		  AND m.cheque_id IS NULL AND m.supplier_payment_id IS NULL AND m.purchase_invoice_id IS NULL AND m.goods_receipt_id IS NULL
+		  AND coalesce(m.referencia, '') <> 'SALDO-INICIAL-PROV'
+		ORDER BY m.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	for rs.Next() {
+		var fecha time.Time
+		var proveedor, detalle string
+		var monto jsmath.Num
+		if err := rs.Scan(&fecha, &proveedor, &detalle, &monto); err != nil {
+			rs.Close()
+			return nil, err
+		}
+		a := AsientoDeAjusteDeProveedor(fecha, proveedor, detalle, monto.F())
+		a.Instante = true
+		asientos = append(asientos, a)
+	}
+	rs.Close()
+	if err := rs.Err(); err != nil {
+		return nil, err
+	}
+
 	// Cada pago con sus partes (con qué salió la plata: el cheque endosado
 	// sale de Valores a depositar y el propio diferido va a Cheques
 	// diferidos, no al banco) y lo retenido de cada impuesto.

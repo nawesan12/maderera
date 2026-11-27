@@ -50,13 +50,33 @@ var Cuentas = struct {
 	// DiferenciasDeCaja: el faltante o sobrante del arqueo. La cuenta la
 	// tiene que definir el contador; mientras tanto va acá, a la vista.
 	DiferenciasDeCaja string
+	// AjustesConProveedores: un ajuste anotado a mano en la cuenta de un
+	// proveedor (una bonificación, un redondeo). No tenía asiento y
+	// Proveedores del archivo no coincidía con la ficha (M3S2-028). Como las
+	// diferencias de caja, la cuenta la define el contador.
+	AjustesConProveedores string
 }{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
 	"2.1.06", "4.1.02",
 	"1.1.07", "1.1.08", "1.1.09", "1.1.10", "1.1.11", "1.1.12",
 	"2.1.07",
 	"2.1.08", "2.1.09", "2.1.10", "2.1.11",
 	"5.1.11",
-	"5.2.01", "2.1.12", "5.1.12"}
+	"5.2.01", "2.1.12", "5.1.12", "5.1.13"}
+
+// AsientoDeAjusteDeProveedor es el de un ajuste a mano en la cuenta de un
+// proveedor: el que baja la deuda, Proveedores contra Ajustes; el que la
+// sube, al revés.
+func AsientoDeAjusteDeProveedor(fecha time.Time, proveedor, detalle string, monto float64) Asiento {
+	concepto := "Ajuste con " + proveedor
+	if detalle != "" {
+		concepto += ": " + detalle
+	}
+	m := redondear(math.Abs(monto))
+	if monto < 0 {
+		return asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Proveedores, m, 0), renglon(Cuentas.AjustesConProveedores, 0, m)})
+	}
+	return asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.AjustesConProveedores, m, 0), renglon(Cuentas.Proveedores, 0, m)})
+}
 
 // chequeSinOrigen es, sobre la fila de cheques `c`, uno recibido que no
 // entró con un cliente, un recibo, una venta ni un movimiento de cuenta.
@@ -117,6 +137,7 @@ var nombresDeCuenta = map[string]string{
 	"5.1.10": "Publicidad", "5.1.11": "Comisiones y gastos bancarios",
 	"5.2.01": "Costo de mercaderías vendidas", "2.1.12": "Cobros a imputar (facturas sin CAE)",
 	"5.1.12": "Diferencias de caja (a definir)",
+	"5.1.13": "Ajustes con proveedores (a definir)",
 }
 
 // RenglonDeAsiento es RenglonDeAsiento.

@@ -31,3 +31,20 @@ func TestChequeSinOrigenNoSeAsienta(t *testing.T) {
 		t.Errorf("el cierre no lo marca: %+v", pendientes)
 	}
 }
+
+// M3S2-028: un ajuste a mano en la cuenta de un proveedor (la bonificación)
+// tiene asiento: Proveedores del archivo coincide con la ficha.
+func TestAjusteDeProveedorSeAsienta(t *testing.T) {
+	e := armar(t)
+	prov := e.id(t, `insert into suppliers (nombre) values ('Sim Pinturería') returning id`)
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto, detalle, created_at) values ($1, 'ajuste', -32442.12, 'bonificación 3 %', '2026-10-10T15:00:00Z')`, prov)
+	// El saldo inicial migrado no es un ajuste del mes.
+	e.exec(t, `insert into supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_at) values ($1, 'ajuste', 1000, 'Saldo inicial', 'SALDO-INICIAL-PROV', '2026-10-10T15:00:00Z')`, prov)
+	octubre := e.asientosDe(t, "2026-10")
+	if v := SaldoDeCuenta(octubre, Cuentas.Proveedores); v != 32442.12 {
+		t.Errorf("Proveedores: %v", v)
+	}
+	if v := SaldoDeCuenta(octubre, Cuentas.AjustesConProveedores); v != -32442.12 {
+		t.Errorf("Ajustes con proveedores: %v", v)
+	}
+}

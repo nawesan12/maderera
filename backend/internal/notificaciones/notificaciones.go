@@ -239,6 +239,20 @@ func (s *Servicio) Recibo(ctx context.Context, id string) error {
 	return nil
 }
 
+// chequeEnLaPlantilla es el cheque para la plantilla de WhatsApp, que ya dice
+// «el cheque {{cheque}}»: con el nombre entero quedaba «el cheque Cheque
+// Banco Nación N° …» (mes 23).
+func chequeEnLaPlantilla(tipo string, banco *string, numero string) string {
+	var partes []string
+	if tipo == "echeq" {
+		partes = append(partes, "electrónico")
+	}
+	if banco != nil && strings.TrimSpace(*banco) != "" {
+		partes = append(partes, strings.TrimSpace(*banco))
+	}
+	return strings.Join(append(partes, "N° "+numero), " ")
+}
+
 // ChequeRechazado es notificarChequeRechazado.
 func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bool) error {
 	var tipo, numero, nombre string
@@ -271,7 +285,7 @@ func (s *Servicio) ChequeRechazado(ctx context.Context, id string, porElBanco bo
 	if porElBanco {
 		s.wa.AvisarPorWhatsapp(ctx, whatsapp.OpcionesAviso{
 			Evento: "cheque_rechazado", Telefono: telefono, Nombre: &nombre,
-			Valores: map[string]string{"cheque": cheque, "importe": formato.Importe(importe), "motivo": paraWa},
+			Valores: map[string]string{"cheque": chequeEnLaPlantilla(tipo, banco, numero), "importe": formato.Importe(importe), "motivo": paraWa},
 			Entidad: &whatsapp.Entidad{Tipo: "cheque", ID: id},
 		})
 	}

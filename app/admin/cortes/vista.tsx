@@ -274,12 +274,19 @@ function TarjetaCorte({
         </span>
       </div>
 
-      {((corte.urgente && pendiente) || (verSucursal && corte.sucursal)) && (
+      {((corte.urgente && pendiente) || corte.sinCargo || (verSucursal && corte.sucursal)) && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {corte.urgente && pendiente && (
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/15 px-2 py-0.5 text-sm font-medium text-brand-orange-dark">
               <Flame className="h-3.5 w-3.5" />
               Urgente
+            </span>
+          )}
+          {/* La reposición no se cobra: la tarjeta lo dice como la ficha
+              (mes 23, CRT-16). */}
+          {corte.sinCargo && (
+            <span className="inline-flex items-center rounded-full bg-hundida px-2 py-0.5 text-sm font-semibold text-foreground">
+              Sin cargo
             </span>
           )}
           {/* De qué taller y de qué depósito sale la placa (H122). */}

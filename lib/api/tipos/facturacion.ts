@@ -1224,6 +1224,10 @@ export interface operations {
                 hasta?: string;
                 cobro?: "contado" | "cuenta" | "todos";
                 busqueda?: string;
+                /** @description las de esa ficha */
+                cliente?: string;
+                /** @description solo las que todavía deben algo */
+                conSaldo?: boolean;
                 limite?: number;
                 desplazamiento?: number;
             };

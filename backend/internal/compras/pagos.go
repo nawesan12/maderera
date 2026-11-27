@@ -898,6 +898,9 @@ func (s *Servicio) registrarParte(ctx context.Context, tx pgx.Tx, ses *auth.Sesi
 // debajo, no se retiene). Los mínimos los actualiza ARCA o la provincia cada
 // tanto y antes solo se cambiaban con SQL. Devuelve el mensaje.
 func (s *Servicio) GuardarRegimen(ctx context.Context, ses *auth.Sesion, form map[string]*string) (string, error) {
+	if v := form["id"]; v == nil || trimJS(*v) == "" {
+		return s.altaDeRegimen(ctx, ses, form)
+	}
 	r, ok := leerRegimen(form)
 	if !ok {
 		return "", fallo("Revisá los números: las alícuotas van en porcentaje, de 0 a 100, y los mínimos en pesos, de cero para arriba.")
@@ -941,6 +944,76 @@ func (s *Servicio) GuardarRegimen(ctx context.Context, ses *auth.Sesion, form ma
 		return "Listo: queda cargado y no retiene.", nil
 	}
 	return "Régimen actualizado.", nil
+}
+
+// altaDeRegimen suma un régimen nuevo (sin id en el formulario): el código
+// que va impreso en el certificado, el nombre, el impuesto, la jurisdicción
+// y las mismas alícuotas y mínimos que se editan después. Solo se podían
+// editar los que venían sembrados, y el IIBB que la clienta sí retiene no se
+// podía cargar (mes simulado, M2S1-031).
+func (s *Servicio) altaDeRegimen(ctx context.Context, ses *auth.Sesion, form map[string]*string) (string, error) {
+	campo := func(k string) string {
+		if v := form[k]; v != nil {
+			return trimJS(*v)
+		}
+		return ""
+	}
+	codigo, nombre, impuesto, jurisdiccion := campo("codigo"), campo("nombre"), campo("impuesto"), campo("jurisdiccion")
+	switch {
+	case codigo == "":
+		return "", plataforma.Invalido(map[string]string{"codigo": "Poné el código del régimen."})
+	case plataforma.LargoJS(codigo) > 20:
+		return "", plataforma.Invalido(map[string]string{"codigo": "El código no puede pasar de 20 letras."})
+	case nombre == "":
+		return "", plataforma.Invalido(map[string]string{"nombre": "Poné el nombre del régimen."})
+	case plataforma.LargoJS(nombre) > 80:
+		return "", plataforma.Invalido(map[string]string{"nombre": "El nombre no puede pasar de 80 letras."})
+	case plataforma.LargoJS(jurisdiccion) > 40:
+		return "", plataforma.Invalido(map[string]string{"jurisdiccion": "La jurisdicción no puede pasar de 40 letras."})
+	}
+	switch impuesto {
+	case "ganancias", "iva", "suss", "iibb":
+	default:
+		return "", plataforma.Invalido(map[string]string{"impuesto": "Elegí el impuesto."})
+	}
+	// Las alícuotas y los mínimos, con la misma lectura que la edición (un
+	// id cualquiera para que pase la del uuid).
+	conID := map[string]*string{}
+	for k, v := range form {
+		conID[k] = v
+	}
+	ficticio := "00000000-0000-4000-8000-000000000000"
+	conID["id"] = &ficticio
+	r, ok := leerRegimen(conID)
+	if !ok {
+		return "", fallo("Revisá los números: las alícuotas van en porcentaje, de 0 a 100, y los mínimos en pesos, de cero para arriba.")
+	}
+	cero := func(p *float64) string {
+		if p == nil {
+			return "0"
+		}
+		return jsmath.Fijo2(*p)
+	}
+	var jur *string
+	if jurisdiccion != "" {
+		jur = &jurisdiccion
+	}
+	var id string
+	err := s.pool.QueryRow(ctx, `INSERT INTO regimenes_retencion (codigo, nombre, impuesto, jurisdiccion, alicuota, alicuota_no_inscripto,
+		  minimo_no_imponible, minimo_retencion, activo)
+		VALUES ($1, $2, $3::impuesto_retenido, $4, $5::numeric, $6::numeric, $7::numeric, $8::numeric, true)
+		ON CONFLICT (codigo) DO NOTHING RETURNING id`,
+		codigo, nombre, impuesto, jur, jsmath.ToFixed(r.Alicuota, 3), jsmath.ToFixed(r.AlicuotaNoInscripto, 3),
+		cero(r.MinimoNoImponible), cero(r.MinimoRetencion)).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", plataforma.Invalido(map[string]string{"codigo": "Ya hay un régimen con ese código."})
+	}
+	if err != nil {
+		return "", err
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "retencion", id,
+		"Dio de alta el régimen "+codigo+" · "+nombre+" al "+jsmath.Texto(r.Alicuota)+"%", map[string]any{"impuesto": impuesto})
+	return "Régimen agregado.", nil
 }
 
 // mediosDelPago nombra los medios de las partes del pago, en orden y sin

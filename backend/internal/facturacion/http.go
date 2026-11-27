@@ -253,9 +253,12 @@ func (a *API) ListarComprobantesPagina(ctx context.Context, r facturacionapi.Lis
 		return nil, err
 	}
 	p := r.Params
-	f := Filtros{Estado: texto2(p.Estado), Desde: p.Desde, Hasta: p.Hasta, Busqueda: texto2(p.Busqueda)}
+	f := Filtros{Estado: texto2(p.Estado), Desde: p.Desde, Hasta: p.Hasta, Busqueda: texto2(p.Busqueda), ConSaldo: p.ConSaldo != nil && *p.ConSaldo}
 	if p.Cobro != nil {
 		f.Cobro = string(*p.Cobro)
+	}
+	if p.Cliente != nil {
+		f.Cliente = p.Cliente.String()
 	}
 	limite, desplazamiento := 50, 0
 	if p.Limite != nil {

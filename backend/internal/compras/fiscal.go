@@ -56,14 +56,18 @@ type RetencionSufrida struct {
 	Cliente       string    `json:"cliente"`
 	CustomerID    string    `json:"customerId"`
 	Cuit          *string   `json:"cuit"`
+	// El recibo con el que bajó la cuenta: la lista lo anula desde la misma
+	// fila, con el PIN (M3S1-027). Antes había que buscarlo en la ficha.
+	ReciboID *string `json:"reciboId"`
+	Recibo   *string `json:"recibo"`
 }
 
 // ListarRetencionesSufridas es listarRetencionesSufridas.
 func (s *Servicio) ListarRetencionesSufridas(ctx context.Context, limite int) ([]RetencionSufrida, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT r.id, r.numero, r.fecha, r.impuesto::text, r.codigo_regimen, r.base::text, r.alicuota::text, r.importe::text, r.referencia,
-		  c.nombre, r.customer_id, c.cuit
-		FROM retenciones_sufridas r JOIN customers c ON c.id = r.customer_id
+		  c.nombre, r.customer_id, c.cuit, r.receipt_id::text, rc.numero
+		FROM retenciones_sufridas r JOIN customers c ON c.id = r.customer_id LEFT JOIN receipts rc ON rc.id = r.receipt_id AND rc.estado = 'emitido'
 		WHERE r.anulada_at IS NULL
 		ORDER BY r.fecha DESC LIMIT $1`, limite)
 	if err != nil {

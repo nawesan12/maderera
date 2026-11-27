@@ -127,6 +127,11 @@ type Filtros struct {
 	Cobro    string // contado | cuenta | todos
 	Busqueda string
 	Tope     int
+	// Cliente: solo las de esa ficha. ConSaldo: solo las que deben algo
+	// (SaldoDeFactura). Los usa la carga de una retención sufrida para
+	// proponer la factura sobre la que retuvieron (M2S1-113).
+	Cliente  string
+	ConSaldo bool
 }
 
 // condicionesDeListado arma el WHERE de los filtros. El de la forma de
@@ -165,6 +170,12 @@ func condicionesDeListado(f Filtros) (string, []any) {
 			o = append(o, "i.receptor_cuit LIKE "+p, "i.numero::text LIKE "+p)
 		}
 		cond = append(cond, "("+strings.Join(o, " OR ")+")")
+	}
+	if f.Cliente != "" {
+		cond = append(cond, "i.customer_id = "+arg(f.Cliente)+"::uuid")
+	}
+	if f.ConSaldo {
+		cond = append(cond, SaldoDeFactura+" > 0.005")
 	}
 	// La forma de cobro: «cuenta» es la que se debe en la cuenta corriente
 	// (EnCuentaDeFactura); «contado», la que tiene un cobro de contado desde

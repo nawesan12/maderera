@@ -2528,6 +2528,9 @@ export interface operations {
                         cliente: string;
                         customerId: string;
                         cuit: string | null;
+                        /** @description el recibo con el que bajó la cuenta; anularlo anula el certificado */
+                        reciboId: string | null;
+                        recibo: string | null;
                     }[];
                 };
             };

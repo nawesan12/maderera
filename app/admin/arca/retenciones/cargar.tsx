@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
@@ -24,7 +24,7 @@ import {
   ElegirCliente,
   type ClienteElegido,
 } from "@/components/admin/elegir-cliente";
-import { cargarSufrida, type EstadoSufrida } from "./actions";
+import { cargarSufrida, deudaParaRetener, type EstadoSufrida, type FacturaParaRetener } from "./actions";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
 const IMPUESTOS = {
@@ -65,6 +65,30 @@ export function CargarSufrida() {
   const [fecha, setFecha] = useState(hoyEnArgentina);
   const [referencia, setReferencia] = useState("");
 
+  // Lo que debe el cliente elegido y sus facturas con saldo: se propone la
+  // factura sobre la que retuvieron, y si no debe nada se ve antes de cargar
+  // que el certificado le deja saldo a favor (M2S1-113).
+  const [deuda, setDeuda] = useState<{ id: string; saldo: number; facturas: FacturaParaRetener[] } | null>(null);
+  useEffect(() => {
+    if (!cliente) return;
+    let vigente = true;
+    deudaParaRetener(cliente.id)
+      .then((d) => vigente && setDeuda({ id: cliente.id, ...d }))
+      .catch(() => vigente && setDeuda(null));
+    return () => {
+      vigente = false;
+    };
+  }, [cliente]);
+  const deudaDelElegido = cliente && deuda?.id === cliente.id ? deuda : null;
+
+  const errorDe = (campo: string) =>
+    estado.error && estado.campo === campo ? (
+      <span role="alert" className="mt-1 block text-sm font-medium text-saldo-debe">
+        {estado.error}
+      </span>
+    ) : null;
+  const errorSuelto = estado.error && !["customerId", "numero", "fecha", "referencia", "codigoRegimen", "base", "importe"].includes(estado.campo ?? "");
+
   const n = importeDelCampo;
   const ilegible = importeIlegible(base) || importeIlegible(importe);
 
@@ -77,6 +101,7 @@ export function CargarSufrida() {
       <Seccion titulo="Certificado" icono={BadgeCheck}>
         <div className="md:col-span-2">
           <ElegirCliente elegido={cliente} onElegir={setCliente} chico />
+          {errorDe("customerId")}
         </div>
 
         <label className="block">
@@ -84,8 +109,10 @@ export function CargarSufrida() {
           <input
             value={numero}
             onChange={(e) => setNumero(e.target.value)}
+            maxLength={40}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           />
+          {errorDe("numero")}
         </label>
 
         <label className="block">
@@ -95,17 +122,38 @@ export function CargarSufrida() {
             onChange={(e) => setFecha(e.target.value)}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           />
+          {errorDe("fecha")}
         </label>
 
-        <label className="block md:col-span-2">
-          <span className="text-sm font-medium">Comprobante</span>
-          <input
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-            placeholder="Factura sobre la que retuvieron"
-            className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
-          />
-        </label>
+        <div className="md:col-span-2">
+          <label className="block">
+            <span className="text-sm font-medium">Comprobante</span>
+            <input
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value)}
+              placeholder="Factura sobre la que retuvieron"
+              maxLength={60}
+              className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+            />
+          </label>
+          {errorDe("referencia")}
+          {deudaDelElegido && deudaDelElegido.facturas.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Facturas con saldo">
+              {deudaDelElegido.facturas.map((f) => (
+                <button
+                  key={f.etiqueta}
+                  type="button"
+                  aria-pressed={referencia === f.etiqueta}
+                  onClick={() => setReferencia(f.etiqueta)}
+                  className="tarjeta inline-flex min-h-10 items-center gap-2 px-3 text-sm aria-pressed:bg-hundida"
+                >
+                  <span className="codigo">{f.etiqueta.replace(/^Factura /, "")}</span>
+                  <span className="tabular text-muted-foreground">{formatearMonto(f.saldo)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </Seccion>
 
       <Seccion titulo="Retención" icono={Landmark} columnas={3}>
@@ -125,8 +173,10 @@ export function CargarSufrida() {
             value={codigoRegimen}
             onChange={(e) => setCodigo(e.target.value)}
             placeholder="78"
+            maxLength={20}
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
           />
+          {errorDe("codigoRegimen")}
         </label>
 
         <label className="block">
@@ -137,6 +187,7 @@ export function CargarSufrida() {
             placeholder="0"
             className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-right text-base"
           />
+          {errorDe("base")}
         </label>
 
         <label className="block">
@@ -152,12 +203,14 @@ export function CargarSufrida() {
               da {formatearDecimal(alicuota, 2)}%
             </span>
           )}
+          {errorDe("importe")}
         </label>
       </Seccion>
 
       <div className="space-y-3 py-6">
-        {(estado.error || estado.ok) && (
+        {(errorSuelto || estado.ok) && (
           <p
+            role={estado.error ? "alert" : "status"}
             className={`text-base ${estado.error ? "text-saldo-debe" : "text-saldo-favor"}`}
           >
             {estado.error ?? estado.ok}
@@ -165,10 +218,20 @@ export function CargarSufrida() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            {n(importe) > 0 &&
-              `La cuenta del cliente baja ${formatearMonto(n(importe))}.`}
-          </p>
+          {/* Lo que el certificado le hace a la cuenta. Si el cliente debe
+              menos de lo retenido, lo que sobra queda a su favor, y se ve
+              antes de cargar. */}
+          {n(importe) > 0 && deudaDelElegido && n(importe) > Math.max(0, deudaDelElegido.saldo) + 0.005 ? (
+            <p className="estado-espera text-base font-medium text-[var(--estado-tinta)]">
+              {deudaDelElegido.saldo > 0.005
+                ? `Baja ${formatearMonto(deudaDelElegido.saldo)} y quedan ${formatearMonto(n(importe) - deudaDelElegido.saldo)} a favor del cliente.`
+                : `No debe nada: quedan ${formatearMonto(n(importe))} a favor del cliente.`}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {n(importe) > 0 && `La cuenta del cliente baja ${formatearMonto(n(importe))}.`}
+            </p>
+          )}
 
           <button
             type="button"
@@ -188,10 +251,15 @@ export function CargarSufrida() {
                 });
                 setEstado(r);
                 if (r.ok) {
+                  // Todo en blanco, también el cliente y el régimen: el que
+                  // sigue es otro papel (quedaban puestos y el resto vacío).
+                  setCliente(null);
                   setNumero("");
+                  setCodigo("");
                   setBase("");
                   setImporte("");
                   setReferencia("");
+                  setFecha(hoyEnArgentina());
                   router.refresh();
                 }
               })

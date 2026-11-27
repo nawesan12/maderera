@@ -95,6 +95,9 @@ export default async function PedidosPage({
   // los pedidos a cuenta corriente, que ya están en la cuenta, y descontando
   // lo cobrado; con lo entregado sin cobrar, que también se cobra desde acá
   // (decía $ 836.680 con $ 481.900 más abajo, mes simulado 2).
+  const enLaColumna = (estado: string) => pedidos.filter((p) => p.estado === estado && !enAcopio.includes(p));
+  const conAcopio = Boolean(soloColumnas?.includes("listo")) && enAcopio.length > 0;
+  const columnasVisibles = conAcopio ? columnas.filter((c) => enLaColumna(c.estado).length > 0) : columnas;
   const porCobrar = [...activos, ...entregadosSinCobrar].reduce((s, p) => s + (p.sinCobrar ?? 0), 0);
   const [ajustes] = await Promise.all([ajustesDelSitio()]);
   const circuito = rotuloCorto(valorDeRegla(ajustes, "etiqueta_del_circuito"));
@@ -136,30 +139,33 @@ export default async function PedidosPage({
         </div>
       ) : (
         <>
-          <Tablero>
-            {columnas.map((columna) => {
-              const enColumna = pedidos.filter(
-                (p) => p.estado === columna.estado && !enAcopio.includes(p),
-              );
-              const monto = enColumna.reduce((s, p) => s + p.total, 0);
+          {/* Filtrado («Listos» desde el inicio), una columna vacía con el
+              pedido abajo en «En acopio» decía «0 Listos» y mostraba uno
+              (mes 23): la vacía no se muestra si el acopio tiene algo. */}
+          {columnasVisibles.length > 0 && (
+            <Tablero>
+              {columnasVisibles.map((columna) => {
+                const enColumna = enLaColumna(columna.estado);
+                const monto = enColumna.reduce((s, p) => s + p.total, 0);
 
-              return (
-                <ColumnaTablero
-                  key={columna.estado}
-                  titulo={columna.titulo}
-                  cantidad={enColumna.length}
-                  detalle={
-                    enColumna.length > 0 ? formatearMonto(monto) : undefined
-                  }
-                  estado={columna.estado}
-                >
-                  {enColumna.map((pedido) => (
-                    <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} cobra={cobra} />
-                  ))}
-                </ColumnaTablero>
-              );
-            })}
-          </Tablero>
+                return (
+                  <ColumnaTablero
+                    key={columna.estado}
+                    titulo={columna.titulo}
+                    cantidad={enColumna.length}
+                    detalle={
+                      enColumna.length > 0 ? formatearMonto(monto) : undefined
+                    }
+                    estado={columna.estado}
+                  >
+                    {enColumna.map((pedido) => (
+                      <TarjetaPedido key={pedido.id} pedido={pedido} aviso={avisos[pedido.id] ?? null} cobra={cobra} />
+                    ))}
+                  </ColumnaTablero>
+                );
+              })}
+            </Tablero>
+          )}
 
           {(!soloColumnas || soloColumnas.includes("listo")) && enAcopio.length > 0 && (
             <section id="acopio" className="mt-8 scroll-mt-24">

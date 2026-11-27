@@ -331,6 +331,10 @@ type ParaAvisar struct {
 	Email        *string `json:"email"`
 	EmailCliente *string `json:"emailCliente"`
 	EstadoPedido string  `json:"estadoPedido"`
+	// Tipo (retiro o envío) y Firmado: el aviso de firmar dice «de tu
+	// entrega» en un envío y no sale si el remito ya se firmó (M2S2-113).
+	Tipo    string `json:"tipo"`
+	Firmado bool   `json:"firmado"`
 }
 
 // DatosParaAvisar lee el remito, su pedido y el correo del cliente.
@@ -340,9 +344,11 @@ func (s *Servicio) DatosParaAvisar(ctx context.Context, id string) (*ParaAvisar,
 	}
 	var a ParaAvisar
 	err := s.pool.QueryRow(ctx, `
-		SELECT d.firma_token, d.numero, o.numero, o.contacto_nombre, o.contacto_email, c.email, o.estado::text
+		SELECT d.firma_token, d.numero, o.numero, o.contacto_nombre, o.contacto_email, c.email, o.estado::text,
+		  d.tipo::text, d.firmado_at IS NOT NULL
 		FROM deliveries d JOIN orders o ON o.id = d.order_id LEFT JOIN customers c ON c.id = o.customer_id
-		WHERE d.id = $1`, id).Scan(&a.FirmaToken, &a.Numero, &a.PedidoNumero, &a.Nombre, &a.Email, &a.EmailCliente, &a.EstadoPedido)
+		WHERE d.id = $1`, id).Scan(&a.FirmaToken, &a.Numero, &a.PedidoNumero, &a.Nombre, &a.Email, &a.EmailCliente, &a.EstadoPedido,
+		&a.Tipo, &a.Firmado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}

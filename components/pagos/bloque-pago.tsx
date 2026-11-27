@@ -48,11 +48,25 @@ interface Props {
   /** Token del pedido: es lo que autoriza a pagarlo o a subirle un comprobante. */
   token: string;
   total: number;
+  /**
+   * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` de Go). Un
+   * pedido cobrado en el mostrador o con un recibo queda en cero aunque el
+   * pago en línea no exista: pedirle que transfiera era cobrarle dos veces
+   * (mes simulado, M2S3-010).
+   */
+  saldo: number;
+  /** La etapa del pedido: «Ya estamos preparando» no se le dice a uno entregado. */
+  estadoPedido: string;
   medioPago: string | null;
   estadoPago: string;
   cobro: EstadoDelPago | null;
   banco: DatosParaTransferir | null;
   enVivo: boolean;
+  /**
+   * Hay con qué cobrar en línea (Mercado Pago o el de demostración). Sin
+   * eso no se ofrece «Pagar»: se cobra por transferencia (M2S3-051).
+   */
+  online: boolean;
 }
 
 const inicial: EstadoPago = {};
@@ -64,13 +78,25 @@ export function BloquePago({
   numero,
   token,
   total,
+  saldo,
+  estadoPedido,
   medioPago,
   estadoPago,
   cobro,
   banco,
   enVivo,
+  online,
 }: Props) {
-  if (estadoPago === "pagado") {
+  const enCurso = estadoPedido === "pendiente" || estadoPedido === "preparando";
+  const rechazado = cobro?.estado === "rechazado";
+  const motivo = cobro?.motivoRechazo ?? null;
+  // Lo que se pide transferir es lo que falta: una parte ya cobrada no se
+  // vuelve a pedir.
+  const aPagar = saldo > 0.009 && saldo < total ? saldo : total;
+  if (
+    estadoPago === "pagado" ||
+    (saldo <= 0.009 && cobro?.estado !== "en_revision" && medioPago !== "cuenta_corriente")
+  ) {
     return (
       <Card className="border-0 bg-brand-green/5 shadow-sm">
         <CardContent className="flex items-start gap-3 p-5">
@@ -80,8 +106,8 @@ export function BloquePago({
           <div className="text-sm">
             <p className="font-semibold">Pago acreditado</p>
             <p className="text-muted-foreground">
-              Recibimos {formatearPrecio(cobro?.monto ?? total)}. Ya estamos
-              preparando tu pedido.
+              Recibimos {formatearPrecio(cobro?.estado === "aprobado" ? cobro.monto : total)}.
+              {enCurso && " Ya estamos preparando tu pedido."}
             </p>
           </div>
         </CardContent>
@@ -136,13 +162,17 @@ export function BloquePago({
     );
   }
 
-  if (medioPago === "transferencia") {
+  // Sin pago en línea, el pedido de Mercado Pago se cobra por
+  // transferencia: el botón «Pagar» fallaba y, al recargar, volvía.
+  if (medioPago === "transferencia" || !online) {
     return (
       <TransferenciaBancaria
         numero={numero}
         token={token}
-        total={total}
+        total={aPagar}
         banco={banco}
+        rechazado={rechazado}
+        motivo={motivo}
       />
     );
   }
@@ -151,10 +181,10 @@ export function BloquePago({
     <PagoOnline
       numero={numero}
       token={token}
-      total={total}
+      total={aPagar}
       enVivo={enVivo}
-      rechazado={cobro?.estado === "rechazado"}
-      motivo={cobro?.motivoRechazo ?? null}
+      rechazado={rechazado}
+      motivo={motivo}
     />
   );
 }
@@ -226,7 +256,7 @@ function PagoOnline({
           </Button>
         </form>
 
-        {!enVivo && (
+        {!enVivo && !estado.error && (
           <p className="mt-3 text-xs text-muted-foreground">
             Los cobros están en modo de prueba: todavía no se cargaron las
             credenciales de Mercado Pago, así que no se mueve plata.
@@ -242,11 +272,15 @@ function TransferenciaBancaria({
   token,
   total,
   banco,
+  rechazado,
+  motivo,
 }: {
   numero: string;
   token: string;
   total: number;
   banco: DatosParaTransferir | null;
+  rechazado: boolean;
+  motivo: string | null;
 }) {
   const [estado, accion] = useActionState(subir, inicial);
   const [pendiente, empezar] = useTransition();
@@ -284,6 +318,16 @@ function TransferenciaBancaria({
             </p>
           </div>
         </div>
+
+        {/* El comprobante que no se aceptó, con el motivo (M3S2-014). */}
+        {rechazado && !estado.ok && (
+          <p role="alert" className="mb-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              No pudimos acreditar el pago{motivo ? `: ${motivo}` : ""}.
+            </span>
+          </p>
+        )}
 
         {banco ? (
           <dl className="mb-4 space-y-2 rounded-lg bg-brand-cream/60 p-4 text-sm">

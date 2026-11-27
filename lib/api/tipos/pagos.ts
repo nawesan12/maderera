@@ -464,6 +464,8 @@ export interface operations {
                     "application/json": {
                         cobro: components["schemas"]["CobroDelPedido"];
                         enVivo: boolean;
+                        /** @description Hay con qué cobrar en línea (Mercado Pago o el de demostración) */
+                        online: boolean;
                     };
                 };
             };

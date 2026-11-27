@@ -26,13 +26,13 @@ export interface CobroDelPedido {
 export async function cobroDelPedido(
   numero: string,
   token?: string,
-): Promise<{ cobro: CobroDelPedido | null; enVivo: boolean } | null> {
+): Promise<{ cobro: CobroDelPedido | null; enVivo: boolean; online: boolean } | null> {
   const r = await (await api()).GET("/api/v1/pagos/pedido/{numero}/cobro", {
     params: { path: { numero: numero.slice(0, 40) }, query: token ? { t: token.slice(0, 64) } : {} },
   });
   if (r.response.status === 404) return null;
-  const { cobro, enVivo } = datos(r);
-  return { cobro: cobro ? { ...cobro, createdAt: new Date(cobro.createdAt) } : null, enVivo };
+  const { cobro, enVivo, online } = datos(r);
+  return { cobro: cobro ? { ...cobro, createdAt: new Date(cobro.createdAt) } : null, enVivo, online };
 }
 
 export type DatosParaTransferir = NonNullable<Esquemas["DatosBancariosDelPanel"]>;

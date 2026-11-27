@@ -63,6 +63,10 @@ type Despacho struct {
 	// Adjuntos: el PDF del recibo o del comprobante. Si el correo rebota
 	// temporalmente, viajan con el reintento.
 	Adjuntos []email.Adjunto
+	// AsuntoPropio: el asunto del correo manda sobre el de /admin/avisos.
+	// Lo usan las variantes que el asunto configurado no describe (el envío
+	// con el asunto «listo para retirar», M2S1-074).
+	AsuntoPropio bool
 }
 
 // Reintento es la carga de `email.reintento` (ReintentoDeEmail del TS).
@@ -117,7 +121,7 @@ func (s *Servicio) Despachar(ctx context.Context, d Despacho) {
 		s.registrar(ctx, d.Evento, d.Para, asunto, d.EntidadTipo, d.EntidadID, sqlc.EstadoNotificacionOmitida, "", "El aviso está apagado en /admin/avisos.")
 		return
 	}
-	if hayConfig && asuntoConfig != "" {
+	if hayConfig && asuntoConfig != "" && !d.AsuntoPropio {
 		asunto = asuntoConfig
 	}
 	r := s.envio.Enviar(ctx, email.Mensaje{Para: d.Para, Asunto: asunto, HTML: d.Correo.HTML, Texto: d.Correo.Texto, Adjuntos: d.Adjuntos})

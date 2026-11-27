@@ -72,10 +72,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [cobro, enVivo]
+                required: [cobro, enVivo, online]
                 properties:
                   cobro: { $ref: "#/components/schemas/CobroDelPedido" }
                   enVivo: { type: boolean }
+                  online: { type: boolean, description: "Hay con qué cobrar en línea (Mercado Pago o el de demostración)" }
         "404": { $ref: "#/components/responses/Problema" }
   /api/v1/pagos/comprobante:
     post:

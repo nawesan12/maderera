@@ -12,7 +12,9 @@ import { SENAL_ESTADO } from "@/lib/senal-navegador";
  * La verificación real (¿la sesión es válida?, ¿es personal de la empresa?) vive
  * en `requireStaff()` de `lib/dal/session.ts`, pegada al dato y sin atajos.
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/pedido/")) return seguimiento(request);
+
   /*
    * El manifiesto del panel pasa sin sesión.
    *
@@ -73,8 +75,52 @@ export function proxy(request: NextRequest) {
   return salida;
 }
 
+/** La API de Go, como `lib/api/servidor.ts` (que no se importa acá: lee la petición con `next/headers`). */
+const API_URL = process.env.API_URL ?? "http://127.0.0.1:8080";
+
+/**
+ * El seguimiento público de un pedido, `/pedido/<número>?t=<token>`.
+ *
+ * Un enlace sin token o con el token mal escrito tiene que dar 404, igual que
+ * un número que no existe (mes simulado, M2S1-202, M3S2-046): la página
+ * decide adentro de un `<Suspense>`, con la respuesta ya empezada en 200, y
+ * la diferencia entre 200 y 404 decía qué pedidos existen. La guía de Next
+ * (`node_modules/next/dist/docs/01-app/02-guides/streaming.md`, «Status
+ * codes») manda el 404 de una decisión del momento al Proxy.
+ *
+ * Le pregunta a Go lo mismo que la página, con la cookie (el dueño con
+ * sesión entra sin token); si dice que no, reescribe a `/pedido/0`, el
+ * número del build que no existe, que sale con su 404 y su «No encontramos
+ * ese pedido». Si Go no contesta, deja pasar: la página tiene su propio
+ * `notFound()`.
+ */
+async function seguimiento(request: NextRequest): Promise<NextResponse> {
+  const numero = decodeURIComponent(request.nextUrl.pathname.slice("/pedido/".length).split("/")[0] ?? "");
+  if (numero === "0") return NextResponse.next();
+  const token = request.nextUrl.searchParams.get("t") ?? "";
+  const url = new URL(`/api/v1/pedidos/${encodeURIComponent(numero.slice(0, 40))}/seguimiento`, API_URL);
+  if (token) url.searchParams.set("t", token.slice(0, 64));
+  const cabeceras: Record<string, string> = {};
+  const cookie = request.headers.get("cookie");
+  if (cookie) cabeceras.cookie = cookie;
+  const agente = request.headers.get("user-agent");
+  if (agente) cabeceras["user-agent"] = agente;
+  const ip = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip");
+  if (ip) cabeceras["x-forwarded-for"] = ip;
+  try {
+    const r = await fetch(url, { headers: cabeceras, cache: "no-store", signal: AbortSignal.timeout(4000) });
+    if (r.status === 404 || r.status === 400) {
+      return NextResponse.rewrite(new URL("/pedido/0", request.url));
+    }
+  } catch {
+    // Go no contestó: decide la página.
+  }
+  return NextResponse.next();
+}
+
 export const config = {
   matcher: [
+    "/pedido/:path*",
     "/admin/:path*",
     "/atencion/:path*",
     "/taller/:path*",

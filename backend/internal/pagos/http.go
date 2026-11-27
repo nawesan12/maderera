@@ -126,7 +126,9 @@ func (a *API) CobroDelPedido(ctx context.Context, r pagosapi.CobroDelPedidoReque
 	if !puede {
 		return nil, noEsta("No encontramos ese pedido.")
 	}
-	return ok(map[string]any{"cobro": c, "enVivo": a.s.EnVivo()}), nil
+	// online: hay con qué cobrar (Mercado Pago o el de demostración). Sin
+	// eso la página no ofrece «Pagar» (mes simulado, M2S3-051, M2S3-078).
+	return ok(map[string]any{"cobro": c, "enVivo": a.s.EnVivo(), "online": a.s.elegido() != nil}), nil
 }
 
 // formulario lee un multipart con el comprobante (16 MB más los textos).

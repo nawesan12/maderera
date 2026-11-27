@@ -297,8 +297,12 @@ components:
     PedidoSeguido:
       type: object
       required: [id, numero, publicToken, cliente, telefono, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total,
-        medioPago, estadoPago, estado, sucursal, sucursalSlug, createdAt, items]
+        medioPago, estadoPago, estado, sucursal, sucursalSlug, createdAt, items, descuento, sinCobrar, entregadoAt, conCuenta]
       properties:
+        descuento: { type: number, format: double, description: El repartido en los renglones }
+        sinCobrar: { type: number, format: double, description: Lo que falta cobrar fuera de la cuenta corriente; 0 si nada o en revisión }
+        entregadoAt: { type: string, format: date-time, nullable: true }
+        conCuenta: { type: boolean, description: El cliente ya tiene usuario en el sitio }
         id: { type: string }
         numero: { type: string }
         publicToken: { type: string }
@@ -320,8 +324,9 @@ components:
     PedidoPropio:
       type: object
       required: [id, numero, estado, estadoPago, medioPago, tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, total, notas,
-        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, ajustes, enRevision]
+        sucursal, sucursalSlug, createdAt, items, historial, descuento, debeEnCuenta, cortes, facturas, recibos, ajustes, enRevision, publicToken]
       properties:
+        publicToken: { type: string, description: El del enlace de seguimiento }
         descuento: { type: number, format: double }
         debeEnCuenta: { type: number, format: double, nullable: true }
         cuestaEnCuenta: { type: number, format: double, nullable: true, description: lo que cuesta en la cuenta después de sus notas de crédito }

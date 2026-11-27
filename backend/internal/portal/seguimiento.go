@@ -12,6 +12,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/cobros"
 	"mjbj/internal/roles"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Seguimiento es la página pública de un pedido (lib/dal/seguimiento.ts):
@@ -41,7 +42,23 @@ type Seguimiento struct {
 	SucursalSlug     *string            `json:"sucursalSlug"`
 	CreatedAt        time.Time          `json:"createdAt"`
 	Items            []RenglonDelPedido `json:"items"`
-	customerID       *string
+	// Lo que la página necesitaba para decir en qué está el pedido (mes
+	// simulado, M2S1-103, M2S2-110, M2S3-010, M3S4-043): decía «Listo,
+	// recibimos tu pedido» y pedía transferir uno entregado y cobrado.
+	//
+	// Descuento: el repartido en los renglones (como Mi cuenta, H209).
+	Descuento float64 `json:"descuento"`
+	// SinCobrar: lo que falta cobrar fuera de la cuenta corriente, con la
+	// regla de «Me deben» (cobrado en el mostrador o con un recibo no se
+	// vuelve a pedir). Cero si no falta nada o está en revisión.
+	SinCobrar float64 `json:"sinCobrar"`
+	// EntregadoAt: cuándo se entregó o se retiró (el último paso a
+	// «entregado»).
+	EntregadoAt *time.Time `json:"entregadoAt"`
+	// ConCuenta: el cliente ya tiene usuario en el sitio; no se le ofrece
+	// crear una cuenta.
+	ConCuenta  bool `json:"conCuenta"`
+	customerID *string
 }
 
 // RenglonDelPedido es lo que la página muestra de cada renglón: ni el costo
@@ -64,11 +81,15 @@ func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token s
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.public_token::text, o.customer_id::text, o.contacto_nombre, o.contacto_telefono, o.tipo_entrega::text,
 		  o.direccion_entrega, o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.medio_pago::text,
-		  o.estado_pago::text, o.estado::text, b.name, b.slug, o.created_at
+		  o.estado_pago::text, o.estado::text, b.name, b.slug, o.created_at,
+		  coalesce(o.descuento, 0)::float8, coalesce(`+fragmentos.SinCobrarDelPedido+`, 0)::float8,
+		  CASE WHEN o.estado = 'entregado' THEN (SELECT max(h.created_at) FROM order_status_history h
+		    WHERE h.order_id = o.id AND h.estado = 'entregado') END,
+		  EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id AND c.user_id IS NOT NULL)
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.numero = $1`, numero).Scan(&p.ID, &p.Numero, &p.PublicToken, &p.customerID, &p.Cliente, &p.Telefono, &p.TipoEntrega,
 		&p.DireccionEntrega, &p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Total, &p.MedioPago, &p.EstadoPago, &p.Estado,
-		&p.Sucursal, &p.SucursalSlug, &p.CreatedAt)
+		&p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.SinCobrar, &p.EntregadoAt, &p.ConCuenta)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -126,6 +147,9 @@ type PedidoPropio struct {
 	// Descuento es el que se repartió en los precios de los renglones: los
 	// renglones ya lo traen, y el subtotal guardado es el de antes (H209).
 	Descuento float64 `json:"descuento"`
+	// PublicToken: el del enlace de seguimiento, para compartirlo con quien
+	// retira o recibe (mes simulado, M2S1-109). Solo lo ve el dueño.
+	PublicToken string `json:"publicToken"`
 	// DebeEnCuenta: ver Pedido.DebeEnCuenta.
 	DebeEnCuenta *float64 `json:"debeEnCuenta"`
 	// CuestaEnCuenta: ver Pedido.CuestaEnCuenta.
@@ -203,11 +227,11 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.direccion_entrega,
 		  o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.notas, b.name, b.slug, o.created_at,
-		  coalesce(o.descuento, 0)::float8, o.origen::text
+		  coalesce(o.descuento, 0)::float8, o.origen::text, o.public_token::text
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.numero = $1 AND o.customer_id = $2`, numero, c.ID).
 		Scan(&p.ID, &p.Numero, &p.Estado, &p.EstadoPago, &p.MedioPago, &p.TipoEntrega, &p.DireccionEntrega, &p.ZonaEnvio,
-			&p.CostoEnvio, &p.Subtotal, &p.Total, &p.Notas, &p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.origen)
+			&p.CostoEnvio, &p.Subtotal, &p.Total, &p.Notas, &p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.origen, &p.PublicToken)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}

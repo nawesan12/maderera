@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -13,6 +14,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/checkout"
 	"mjbj/internal/cobros"
+	"mjbj/internal/cola"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/limites"
@@ -393,6 +395,19 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 	bitacora.Anotar(ctx, sqlc.New(s.pool), s.log, ses, accion, "pago", pagoID, desc, nil)
 	if aprueba {
 		return Resultado{Ok: "Cobro acreditado.", Trabajo: r.Trabajo}, nil
+	}
+	// El rechazo también se avisa, como la acreditación (mes simulado,
+	// M3S2-014): el panel decía «el cliente lo ve en su pedido» y nadie se
+	// lo decía; la persona creía haber pagado.
+	if r.Cambio && r.Estado == Rechazado {
+		m := remoto.MotivoRechazo
+		id, err := cola.Encolar(ctx, sqlc.New(s.pool), TipoResultado, map[string]any{
+			"orderId": r.OrderID, "customerId": r.CustomerID, "tipo": r.Tipo, "detalle": "rechazado", "motivo": m,
+		}, time.Time{})
+		if err != nil {
+			return Resultado{}, err
+		}
+		return Resultado{Ok: "Cobro rechazado. Le avisamos al cliente y lo ve en su pedido.", Trabajo: &id}, nil
 	}
 	return Resultado{Ok: "Cobro rechazado. El cliente lo ve en su pedido."}, nil
 }

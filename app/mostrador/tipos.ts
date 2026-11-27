@@ -41,6 +41,8 @@ export interface Movimiento {
   anulado?: boolean;
   /** Lo cargó alguien que no abrió el turno (un recibo desde el panel). */
   otroPuesto?: boolean;
+  /** La venta del renglón, si es de una venta o de su devolución. */
+  orderId?: string | null;
 }
 
 /**

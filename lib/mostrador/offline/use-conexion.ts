@@ -25,11 +25,19 @@ export interface EstadoConexion {
   ultimoContacto: Date | null;
   /** Desfasaje del reloj de esta máquina contra el servidor, en minutos. */
   desfasajeMin: number | null;
-  latir: () => Promise<boolean>;
+  /** Un latido ya; sin `false`, su respuesta manda sobre la marca. */
+  latir: (directo?: boolean) => Promise<boolean>;
 }
 
 const CADA_MS = 20_000;
 const TOPE_MS = 4_000;
+/**
+ * Un latido solo que no contesta no alcanza para decir «Sin conexión»: con el
+ * servidor cargado, uno tardaba más del tope un minuto después de subir la
+ * cola, y la barra y la caja volvían a «Sin conexión» con la red andando
+ * (mes 23). Se reintenta enseguida y recién el segundo seguido baja la marca.
+ */
+const REINTENTO_MS = 3_000;
 
 /** Más de esto y la hora de las ventas offline saldría mal. */
 const DESFASAJE_QUE_IMPORTA_MIN = 5;
@@ -66,16 +74,11 @@ export function useConexion(
     perderRef.current = alPerderLaCaja;
   }, [informe, alPerderLaCaja]);
 
-  const latir = useCallback(async () => {
-    // Salir del pulso sincrónico: si no, la primera llamada desde el efecto
-    // escribe estado durante el render y dispara cascada.
-    await Promise.resolve();
-
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      setEnLinea(false);
-      return false;
-    }
-
+  /*
+   * Un latido: true si el servidor contestó. Solo escribe lo que trae la
+   * respuesta; bajar la marca lo decide `latir`.
+   */
+  const unLatido = useCallback(async (): Promise<boolean> => {
     try {
       const informe = informeRef.current?.();
       const respuesta = await fetch("/api/mostrador/latido", {
@@ -88,8 +91,9 @@ export function useConexion(
       if (!respuesta.ok) {
         // Un 401 es "no sos vos" y no "no hay red": la pantalla lo trata
         // distinto, pero para la conexión cuenta como que el servidor contestó.
-        setEnLinea(respuesta.status === 401);
-        return respuesta.status === 401;
+        if (respuesta.status !== 401) return false;
+        setEnLinea(true);
+        return true;
       }
 
       const datos = await respuesta.json();
@@ -113,10 +117,36 @@ export function useConexion(
 
       return true;
     } catch {
-      setEnLinea(false);
       return false;
     }
   }, [branchId]);
+
+  /*
+   * `directo`: lo pidió la pantalla (una venta que no salió) y la respuesta
+   * de este latido manda. El del reloj, antes de bajar la marca, espera un
+   * momento y prueba otra vez.
+   */
+  const latir = useCallback(
+    async (directo = true): Promise<boolean> => {
+      // Salir del pulso sincrónico: si no, la primera llamada desde el efecto
+      // escribe estado durante el render y dispara cascada.
+      await Promise.resolve();
+
+      // El negativo del sistema no miente: no se espera otro.
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setEnLinea(false);
+        return false;
+      }
+      if (await unLatido()) return true;
+      if (!directo) {
+        await new Promise((listo) => setTimeout(listo, REINTENTO_MS));
+        if (await unLatido()) return true;
+      }
+      setEnLinea(false);
+      return false;
+    },
+    [unLatido],
+  );
 
   useEffect(() => {
     /*
@@ -127,10 +157,10 @@ export function useConexion(
      * pulso lo vuelve evidente para la regla y para quien lea esto, y el costo
      * es un cuadro de animación en el peor caso.
      */
-    const primero = setTimeout(() => void latir(), 0);
+    const primero = setTimeout(() => void latir(false), 0);
 
-    const cada = setInterval(() => void latir(), CADA_MS);
-    const alVolver = () => void latir();
+    const cada = setInterval(() => void latir(false), CADA_MS);
+    const alVolver = () => void latir(false);
 
     window.addEventListener("online", alVolver);
     window.addEventListener("visibilitychange", alVolver);

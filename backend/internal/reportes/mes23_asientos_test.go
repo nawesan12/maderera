@@ -143,6 +143,35 @@ func TestElChequeDelReciboBVaPorElB(t *testing.T) {
 	}
 }
 
+// M2S1-012: el cheque de un recibo que fue al B rebota en el B: el archivo
+// del estudio no debita Deudores ni acredita unos Valores a depositar que
+// nunca tuvo, y en el B no quedan Valores a depositar colgados.
+func TestElRechazoDelChequeDelBVaPorElB(t *testing.T) {
+	e := armar(t)
+	cli := e.id(t, `insert into customers (nombre) values ('Constructora del Sur') returning id`)
+	r, rep := e.reciboDe(t, &cli, nil, "REC-0005", "2026-11-11T15:00:00Z", [2]any{"echeq", 300000.0})
+	if rep.B != 300000 {
+		t.Fatalf("sin nada facturado va al B: %+v", rep)
+	}
+	ch := e.id(t, `insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, customer_id, receipt_id) values ('recibido', '00098765', 'Galicia', '2026-11-12', 300000, 'cartera', $1, $2) returning id`, cli, r)
+	e.exec(t, `update receipt_parts set cheque_id = $1 where receipt_id = $2`, ch, r)
+	e.refijar(t, r)
+	e.exec(t, `update cheques set estado = 'rechazado' where id = $1`, ch)
+	e.exec(t, `update cheque_estados set at = '2026-11-13T15:00:00Z' where cheque_id = $1`, ch)
+	e.exec(t, `insert into account_movements (customer_id, tipo, monto, cheque_id, created_at) values ($1, 'nota_debito', 300000, $2, '2026-11-13T15:00:00Z')`, cli, ch)
+	a := e.asientosDe(t, "2026-11")
+	blanco, negro := DelCircuito(a, ""), DelCircuito(a, CircuitoNegro)
+	if n := cuenta(blanco, Cuentas.ValoresADepositar); n != 0 {
+		t.Errorf("Valores a depositar del estudio: %v", n)
+	}
+	if n := cuenta(blanco, Cuentas.Deudores); n != 0 {
+		t.Errorf("Deudores del estudio sin factura que lo respalde: %v", n)
+	}
+	if n := cuenta(negro, Cuentas.ValoresADepositar); n != 0 {
+		t.Errorf("Valores a depositar colgados en el B: %v", n)
+	}
+}
+
 // M2S2-006: el cobro de la conciliación que fue al B pasa al archivo del
 // estudio el día que se emite la factura, aunque espere el CAE, y se imputa
 // a Deudores cuando llega.

@@ -69,14 +69,23 @@ func TestCierreCobrosDeFacturasSinCae(t *testing.T) {
 	rec := e.recibir(t, &ferreyra, "REC-0005", "2026-10-07T15:00:00Z", [2]any{"efectivo", 3150.0})
 	e.exec(t, `insert into invoice_payments (invoice_id, medio, monto, receipt_id) values ($1, 'efectivo', 3150, $2)`, factura, rec)
 
+	// Una seña de verdad: el pedido de Gómez sigue abierto y sin factura.
+	gomez := e.id(t, `insert into customers (nombre) values ('Gómez') returning id`)
+	senado := e.pedido(t, "PED-1190", e.central, "pendiente", "mostrador", time.Date(2026, 10, 8, 12, 0, 0, 0, Argentina), &gomez)
+	e.exec(t, `update orders set total = 700 where id = $1`, senado)
+	e.exec(t, `insert into order_status_history (order_id, estado, created_at) values ($1, 'pendiente', '2026-10-08T15:00:00Z')`, senado)
+	e.recibir(t, &gomez, "REC-0006", "2026-10-09T15:00:00Z", [2]any{"efectivo", 200.0})
+
 	_, cuerpo, _ := pedir(t, adm, e.u+"cierre/pendientes?periodo=2026-10")
 	p := pendientesDe(t, cuerpo)
+	// La seña de Herrera ya tiene su Factura B esperando el CAE: es el cobro
+	// de esa factura, no una seña sin factura (mes simulado, M2S1-059).
 	cobro, ok := p["cobros-sin-cae"]
-	if !ok || cobro.Cantidad != 2 || !strings.Contains(cobro.Detalle, "4.360") || !strings.Contains(cobro.Donde, "/admin/facturacion") {
+	if !ok || cobro.Cantidad != 3 || !strings.Contains(cobro.Detalle, "4.860") || !strings.Contains(cobro.Donde, "/admin/facturacion") {
 		t.Fatalf("cobros de facturas sin CAE: %s", cuerpo)
 	}
-	if s, ok := p["senas-del-mes"]; !ok || s.Cantidad != 1 || s.Donde != "/admin/clientes/"+herrera {
-		t.Fatalf("la seña de Herrera es la única seña, con su ficha: %s", cuerpo)
+	if s, ok := p["senas-del-mes"]; !ok || s.Cantidad != 1 || s.Donde != "/admin/clientes/"+gomez {
+		t.Fatalf("la seña de Gómez es la única seña, con su ficha: %s", cuerpo)
 	}
 	if _, ok := p["anticipos-sin-aplicar"]; ok {
 		t.Fatalf("la seña de un pedido con la factura esperando el CAE no está sin aplicar: %s", cuerpo)

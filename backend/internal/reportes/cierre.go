@@ -1315,7 +1315,22 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 			recibosDelPeriodo = append(recibosDelPeriodo, b.Recibo)
 		}
 	}
+	//
+	// La seña de un pedido que a fin de mes ya tiene su factura emitida
+	// (esperando el CAE) tampoco es «sin factura»: es el cobro de esa factura
+	// (mes simulado, M2S1-059: PED-1010 con su Factura B figuraba como seña).
 	pedidoDe, cobraFactura := map[string]string{}, map[string]bool{}
+	pedidosDeSenas := []string{}
+	for _, b := range reparto.Bolsas {
+		if entre(b.Fecha, idesde, ihasta) {
+			for _, d := range b.Destinos {
+				if strings.HasPrefix(d, "o:") && plataforma.UUIDValido(d[2:]) {
+					pedidosDeSenas = append(pedidosDeSenas, d[2:])
+				}
+			}
+		}
+	}
+	facturado := map[string]bool{}
 	if len(recibosDelPeriodo) > 0 {
 		rs, err := s.pool.Query(ctx, `SELECT r.id::text, coalesce(r.order_id::text, ''),
 			EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.receipt_id = r.id)
@@ -1327,12 +1342,40 @@ func (s *Servicio) pendientesDeAnticiposYBanco(ctx context.Context, idesde, ihas
 		var cobra bool
 		if _, err := pgx.ForEachRow(rs, []any{&id, &pedido, &cobra}, func() error {
 			pedidoDe[id], cobraFactura[id] = pedido, cobra
+			if pedido != "" {
+				pedidosDeSenas = append(pedidosDeSenas, pedido)
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		rs, err = s.pool.Query(ctx, `SELECT DISTINCT f.order_id::text FROM invoices f WHERE f.order_id = ANY($1::uuid[])
+			AND f.tipo::text LIKE 'factura%' AND f.estado IN ('emitida', 'autorizada', 'rechazada') AND f.fecha_emision <= $2`, pedidosDeSenas, ihasta)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := pgx.ForEachRow(rs, []any{&pedido}, func() error {
+			facturado[pedido] = true
 			return nil
 		}); err != nil {
 			return nil, err
 		}
 	}
 	soloFacturas := func(b cobros.Bolsa) bool {
+		// Todos los pedidos que la seña esperaba ya tienen su factura.
+		if p := pedidoDe[b.Recibo]; p != "" && facturado[p] {
+			return true
+		}
+		todos, alguno := true, false
+		for _, d := range b.Destinos {
+			if strings.HasPrefix(d, "o:") {
+				alguno = true
+				todos = todos && facturado[d[2:]]
+			}
+		}
+		if alguno && todos {
+			return true
+		}
 		deFactura, delPedido := false, false
 		for _, d := range b.Destinos {
 			deFactura = deFactura || strings.HasPrefix(d, "i:")

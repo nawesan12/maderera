@@ -3273,3 +3273,48 @@ después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
 
 Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
 Next: las pruebas de pantalla la cambian desde `/admin/reglas`.
+
+## 27/11/2026: el segundo y el tercer mes simulado, mostrador y caja (rama `mes23-mostrador-caja`)
+
+Migraciones **00350** (`devoluciones.origen`, el destino del ingreso,
+`cash_sessions.contado_corregido`, `orders.efectivo_recibido`,
+`quotes.clave_mostrador` y `caja_fuerte_movimientos`) y **00351** (las reglas
+`descuento_con_escala` y `redondeo_efectivo`, con el comportamiento de antes).
+Espejo drizzle al día (`caja_fuerte_movimientos` es solo de Go).
+
+- **Caja**: el Z dice el medio real y el pedido de cada devolución
+  (`caja.MedioDeLaDevolucion`) y no suma las que hizo otra persona desde el
+  panel a la cuenta; el cobro de un pedido y el que tomó otra persona van con
+  su recibo y quién (`DePedido`, `Pedidos`, `Movimiento.OtroPuesto`); el
+  gasto anulado deja de contar dos veces (`caja.DevuelveUnGasto`); «se contó
+  mal» al abrir corrige el arqueo anterior (`AbrirCaja(…, corregir)`), sin
+  retiro ni caja fuerte; el ingreso dice de dónde viene; el retiro «otro» con
+  categoría es un gasto en efectivo, y el ingreso y el retiro «otro» sin
+  cuenta van contra Diferencias de caja (`asientosDeCaja`); la caja fuerte
+  tiene saldo y depósito (`caja.CajasFuertes`, `DepositarDeLaCajaFuerte`); el
+  recibo fuera de caja se asigna a un turno (`AsignarReciboAlTurno`); lo
+  emitido pagina con los totales del mes; dentro del peso el cierre dice los
+  centavos. `TestMes23*` en `internal/mostrador/mes23_caja_test.go`.
+- **Venta**: Rehacer devuelve el cliente, el papel, la tarjeta, el cheque y
+  el corte que no se cortó (queda en la cola sin venta: `PedidoDeAnulacion.Rehacer`);
+  el corte de la cola trae a su cliente o el contacto anotado
+  (`clienteDelCorte`); la venta igual al mismo cliente de recién se pregunta
+  (`repetida`/`repetidaOk`); con cuánto pagó queda en la venta; «laca» no
+  trae placas (`coincidePalabra`, y en la copia local `coincidePorPalabra`);
+  lo vendido de más dice para quién está apartado; el presupuesto tiene clave
+  por intento; la cola sin conexión sube en el orden en que se cobró. La venta
+  sin factura se devuelve por una parte desde el mostrador
+  (`pedidos.DevolverSinFacturaPor`, `/api/v1/mostrador/ventas/{id}/devolucion-sin-factura`).
+  `TestMes23*` en `internal/mostrador/mes23_venta_test.go`.
+
+### Decisiones a confirmar
+
+- [ ] **El ingreso y el retiro «otro» sin categoría** van contra Diferencias
+      de caja (5.1.12), como el arqueo, hasta que el contador diga la cuenta.
+- [ ] **«Se contó mal»** corrige solo el último turno cerrado y si su mes no
+      está cerrado; lo contado de entonces queda a la vista.
+- [ ] **El gasto pagado del cajón** nace en el circuito de arranque de los
+      gastos (blanco), como el que se carga en Compras sin factura.
+- [ ] **Las reglas nuevas** arrancan como antes: el descuento tipeado
+      reemplaza al de la forma de pago, y el efectivo va con centavos.
+

@@ -357,7 +357,6 @@ func LeerPresupuesto(crudo any) (PresupuestoPedido, *zodjs.Lector) {
 	return p, l
 }
 
-
 // AltaRapida es el cliente que se da de alta sin salir de la venta.
 type AltaRapida struct {
 	Nombre       string

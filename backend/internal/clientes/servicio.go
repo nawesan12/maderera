@@ -216,6 +216,28 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 		}
 	}
 	id := c.ID
+	// Lo que cambió de la ficha, para la bitácora (mes simulado, M2S2-087):
+	// «Editó a Constructora» no decía que le habían cambiado la lista.
+	var cambios []string
+	if id != "" {
+		var lista, limite, vendedor string
+		if err := s.pool.QueryRow(ctx, `SELECT coalesce((SELECT name FROM price_lists WHERE id = c.price_list_id), 'general'),
+			coalesce(c.limite_credito::text, ''), coalesce((SELECT nombre FROM sellers WHERE id = c.seller_id), '')
+			FROM customers c WHERE c.id = $1`, id).Scan(&lista, &limite, &vendedor); err == nil {
+			var nueva, nuevoVendedor string
+			_ = s.pool.QueryRow(ctx, `SELECT coalesce((SELECT name FROM price_lists WHERE id::text = $1), 'general'),
+				coalesce((SELECT nombre FROM sellers WHERE id::text = $2), '')`, deref(c.PriceListID), deref(c.SellerID)).Scan(&nueva, &nuevoVendedor)
+			if nueva != lista {
+				cambios = append(cambios, "lista de precios: "+lista+" → "+nueva)
+			}
+			if nuevoVendedor != vendedor {
+				cambios = append(cambios, "vendedor: "+vacioComo(vendedor, "ninguno")+" → "+vacioComo(nuevoVendedor, "ninguno"))
+			}
+			if l := c.LimiteCredito; jsmath.Numero(l) != jsmath.Numero(limite) && !(l == "" && limite == "") {
+				cambios = append(cambios, "límite de crédito: "+vacioComo(limite, "sin límite")+" → "+vacioComo(l, "sin límite"))
+			}
+		}
+	}
 	if id != "" {
 		err = s.q.EditarCliente(ctx, sqlc.EditarClienteParams{
 			ID: id, Nombre: c.Nombre, RazonSocial: c.RazonSocial, Cuit: c.Cuit, CondicionIva: sqlc.CondicionIva(c.CondicionIva),
@@ -236,7 +258,11 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 	if c.ID != "" {
 		accion, verbo = sqlc.AccionAuditoriaEditar, "Editó"
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "cliente", id, verbo+" a "+c.Nombre,
+	desc := verbo + " a " + c.Nombre
+	if len(cambios) > 0 {
+		desc += ": " + strings.Join(cambios, " · ")
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, accion, "cliente", id, desc,
 		map[string]any{"limiteCredito": c.LimiteCredito, "tipo": c.Tipo})
 	if c.ID != "" {
 		return id, "Cliente actualizado.", nil
@@ -533,4 +559,18 @@ func (s *Servicio) MoverGestion(ctx context.Context, ses *auth.Sesion, id, etapa
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "cliente", g.CustomerID, desc, nil)
 	return g.CustomerID, nil
+}
+
+func deref(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+func vacioComo(s, siVacio string) string {
+	if s == "" {
+		return siVacio
+	}
+	return s
 }

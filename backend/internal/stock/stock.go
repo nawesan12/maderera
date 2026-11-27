@@ -654,8 +654,9 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, a Ajuste) (
 		}
 		pedido = &p
 	}
-	var ok string
+	var ok, anotado string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		anotado = ""
 		q := s.q.WithTx(tx)
 		if err := q.BloquearStock(ctx, sqlc.BloquearStockParams{Variante: variante, Sucursal: suc.ID}); err != nil {
 			return err
@@ -750,10 +751,19 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, a Ajuste) (
 			}
 		}
 		ok = suc.Name + ": " + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo)
+		anotado = nota
 		_, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, documento_tipo, documento_id)
 			VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8)`, variante, suc.ID, tipo, jsmath.Texto(cantidad), nota, ses.UserID, docTipo, docID)
 		return err
 	})
+	// Toda baja o alta a mano (rotura, faltante, conteo) queda en la
+	// bitácora con quién, cuánto y por qué: es lo que pide el estudio para
+	// justificar el costo de lo perdido (mes simulado, M2S4-019).
+	if err == nil && anotado != "" {
+		var producto string
+		_ = s.pool.QueryRow(ctx, `SELECT p.name || ' ' || v.label FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = $1`, variante).Scan(&producto)
+		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "stock", variante, producto+" en "+suc.Name+": "+anotado, nil)
+	}
 	return ok, err
 }
 

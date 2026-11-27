@@ -649,13 +649,21 @@ func (s *Servicio) CambiarAviso(ctx context.Context, ses *auth.Sesion, id string
 }
 
 // GuardarTextoAviso edita el texto que se manda dentro de la ventana.
-func (s *Servicio) GuardarTextoAviso(ctx context.Context, id, texto string) (Resultado, error) {
+func (s *Servicio) GuardarTextoAviso(ctx context.Context, ses *auth.Sesion, id, texto string) (Resultado, error) {
 	t := trimJS(texto)
 	if !plataforma.UUIDValido(id) || largoJS(t) > 1000 {
 		return conError("Revisá el texto."), nil
 	}
+	var evento, antes *string
+	_ = s.pool.QueryRow(ctx, `select evento, texto_libre from whatsapp_avisos where id = $1`, id).Scan(&evento, &antes)
 	if _, err := s.pool.Exec(ctx, `update whatsapp_avisos set texto_libre = $2, updated_at = now() where id = $1`, id, nulo(&t)); err != nil {
 		return Resultado{}, err
+	}
+	// El texto que le llega al cliente queda en la bitácora con quién lo
+	// cambió (mes simulado, M2S3-017); guardar lo mismo no deja renglón.
+	if oTexto(antes, "") != t {
+		bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "whatsapp", id,
+			"Cambió el texto del aviso de WhatsApp «"+oTexto(evento, "")+"»", map[string]any{"antes": oTexto(antes, ""), "despues": t})
 	}
 	return Resultado{Ok: "Texto guardado."}, nil
 }

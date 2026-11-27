@@ -2,6 +2,7 @@ package mostrador
 
 import (
 	"context"
+	"mjbj/internal/formato"
 	"net/http"
 	"testing"
 	"time"
@@ -477,5 +478,15 @@ func TestPINConPrecioYCredito(t *testing.T) {
 	_, m, b := pedir(t, ven, "POST", e.u+"/api/v1/mostrador/ventas", v)
 	if a := autorizacionDe(t, m); a["motivo"] != "precio" || a["monto"] != 15000.5 || a["credito"] != float64(30000) {
 		t.Fatalf("las dos cifras: %s", b)
+	}
+}
+
+func TestLaVentaDiceQuienAutorizo(t *testing.T) {
+	r := ResultadoVenta{Numero: "PED-1012", Total: 354211.5, DejadoDeCobrar: 118070.5, AutorizadoPor: "Sim Dueña"}
+	if d := DescripcionDeLaVenta(r); d != "Venta de mostrador PED-1012 por "+formato.Importe(354211.5)+" · descuento de "+formato.Importe(118070.5)+" · autorizó Sim Dueña con PIN" {
+		t.Error(d)
+	}
+	if d := DescripcionDeLaVenta(ResultadoVenta{Numero: "PED-1", Total: 100}); d != "Venta de mostrador PED-1 por "+formato.Importe(100) {
+		t.Error(d)
 	}
 }

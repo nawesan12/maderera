@@ -51,6 +51,20 @@ const LISTADOS: Record<string, string> = {
   tienda: "/admin/contenido",
   vendedor: "/admin/clientes/vendedores",
   zona_envio: "/admin/envios",
+  campana: "/admin/campanas",
+  cierre: "/admin/cierre",
+  evento: "/admin/eventos",
+  libro_iva: "/admin/arca/libro-iva",
+  recibo: "/admin/pagos",
+  regla: "/admin/reglas",
+  resena: "/admin/contenido",
+  resena_producto: "/admin/contenido",
+  retencion: "/admin/arca/retenciones",
+  sitio: "/admin/contenido",
+  traslado: "/admin/stock",
+  whatsapp: "/admin/whatsapp",
+  documento: "/admin/documentacion",
+  usuario: "/admin/personal",
 };
 
 export function rutaDeEntidad(
@@ -113,6 +127,22 @@ const ETIQUETAS: Record<string, string> = {
   tienda: "Tienda online",
   vendedor: "Vendedor",
   zona_envio: "Zona de envío",
+  // Con su tilde: «Campana», «Resena» y «Retencion» salían como la clave
+  // (mes simulado, M2S2-088).
+  campana: "Campaña",
+  cierre: "Cierre del mes",
+  documento: "Documento",
+  evento: "Evento",
+  libro_iva: "Libro IVA",
+  recibo: "Recibo",
+  regla: "Regla del negocio",
+  resena: "Reseña del negocio",
+  resena_producto: "Reseña de producto",
+  retencion: "Retención",
+  sitio: "Textos del sitio",
+  traslado: "Traslado",
+  usuario: "Usuario",
+  whatsapp: "WhatsApp",
 };
 
 /**

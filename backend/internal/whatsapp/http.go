@@ -447,10 +447,11 @@ func (a *API) CambiarAviso(ctx context.Context, r whatsappapi.CambiarAvisoReques
 }
 
 func (a *API) GuardarTextoAviso(ctx context.Context, r whatsappapi.GuardarTextoAvisoRequestObject) (whatsappapi.GuardarTextoAvisoResponseObject, error) {
-	if _, err := admin(ctx); err != nil {
+	ses, err := admin(ctx)
+	if err != nil {
 		return nil, err
 	}
-	v, err := a.s.GuardarTextoAviso(ctx, r.Id, r.Body.TextoLibre)
+	v, err := a.s.GuardarTextoAviso(ctx, ses, r.Id, r.Body.TextoLibre)
 	return ok(v), err
 }
 

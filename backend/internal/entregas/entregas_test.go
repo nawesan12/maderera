@@ -591,7 +591,8 @@ func TestZonasDeEnvio(t *testing.T) {
 	}
 	var detalle, desc string
 	_ = e.pool.QueryRow(context.Background(), `select detalle, descripcion from audit_log where accion = 'editar' and entidad = 'zona_envio'`).Scan(&detalle, &desc)
-	if desc != `Zona de envío "Centro": flete a cotizar` ||
+	// Estaba prendida y se apagó: se dice así (mes simulado, M2S2-087).
+	if desc != `Apagó la zona Centro` ||
 		detalle != `{"nombre":"Centro","cobertura":"","demoraEstimada":null,"aCotizar":true,"costo":"0.00","envioGratisDesde":"0.00","orden":"0","activa":false}` {
 		t.Errorf("bitácora: %s %s", desc, detalle)
 	}

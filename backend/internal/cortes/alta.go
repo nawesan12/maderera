@@ -863,6 +863,12 @@ func (s *Servicio) GuardarSierra(ctx context.Context, ses *auth.Sesion, mm float
 		return error422(msg)
 	}
 	sierra := jsmath.Num(jsmath.Round(float64(mm*10)) / 10)
+	// Guardar el mismo ancho no deja renglón (mes simulado, M2S4-053).
+	var antes *jsmath.Num
+	_ = s.pool.QueryRow(ctx, `SELECT ancho_sierra_mm FROM calculator_settings LIMIT 1`).Scan(&antes)
+	if antes != nil && *antes == sierra {
+		return nil
+	}
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE calculator_settings SET ancho_sierra_mm = $1, updated_at = now()`, sierra)
 		if err != nil || tag.RowsAffected() > 0 {

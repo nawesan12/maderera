@@ -529,7 +529,10 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	if err != nil {
 		return "", "", errorDeFactura(err)
 	}
-	desc := "Cargó una factura de compra por " + formato.Importe(total)
+	// Con el comprobante y el proveedor adelante, como lo busca el que audita
+	// (mes simulado, M2S4-010): la nota de crédito decía «factura».
+	desc := NombreComprobanteCompra(d.Tipo) + " " + NumeroDeCompra(int64(d.PuntoVenta), int64(d.Numero)) + " · " +
+		s.nombreDelProveedor(ctx, d.SupplierID) + ": cargó " + formato.Importe(total)
 	if ajuste.variantes > 0 {
 		desc += "; pasó " + Monto(ajuste.diferencia) + " de diferencia al costo de " + formato.Cuantos(ajuste.variantes, "producto", "productos")
 	}
@@ -962,3 +965,10 @@ func (s *Servicio) AnularFactura(ctx context.Context, ses *auth.Sesion, id, moti
 
 // diaArgentino es el aaaa-mm-dd argentino de un instante.
 func diaArgentino(t time.Time) string { return t.In(fiscal.Argentina).Format("2006-01-02") }
+
+// nombreDelProveedor es el nombre para la bitácora («» si no está).
+func (s *Servicio) nombreDelProveedor(ctx context.Context, id string) string {
+	var nombre string
+	_ = s.pool.QueryRow(ctx, `SELECT nombre FROM suppliers WHERE id::text = $1`, id).Scan(&nombre)
+	return nombre
+}

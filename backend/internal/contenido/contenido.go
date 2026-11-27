@@ -333,6 +333,19 @@ func (s *Servicio) Moderar(ctx context.Context, ses *auth.Sesion, id, estado, mo
 		return "", err
 	}
 	slug, _ := s.q.SlugDeProducto(ctx, productID)
+	// La moderación de una reseña de producto queda en la bitácora, como la
+	// del negocio (mes simulado, M2S3-017).
+	var producto string
+	_ = s.pool.QueryRow(ctx, `SELECT name FROM products WHERE id = $1`, productID).Scan(&producto)
+	que := map[string]string{"publicada": "Publicó", "rechazada": "Rechazó", "pendiente": "Volvió a pendiente"}[estado]
+	if que == "" {
+		que = "Cambió"
+	}
+	desc := que + " una reseña de " + producto
+	if motivoRechazo != nil {
+		desc += ": " + *motivoRechazo
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "resena_producto", id, desc, nil)
 	return slug, nil
 }
 

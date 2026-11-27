@@ -380,7 +380,22 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 	if _, err := s.pool.Exec(ctx, `UPDATE payments SET conciliado_por = $2, conciliado_at = now() WHERE id = $1`, pagoID, ses.UserID); err != nil {
 		return Resultado{}, err
 	}
-	desc := "Acreditó una transferencia en la conciliación"
+	// Con el importe, el pedido y el cliente: tres acreditaciones seguidas
+	// eran tres renglones iguales (mes simulado, M2S2-038).
+	var monto float64
+	var pedido, cliente string
+	_ = s.pool.QueryRow(ctx, `SELECT p.monto::float8, coalesce(o.numero, ''),
+		  coalesce(nullif(c.razon_social, ''), c.nombre, nullif(o.contacto_nombre, ''), '')
+		FROM payments p LEFT JOIN orders o ON o.id = p.order_id LEFT JOIN customers c ON c.id = coalesce(p.customer_id, o.customer_id)
+		WHERE p.id = $1`, pagoID).Scan(&monto, &pedido, &cliente)
+	de := formato.Importe(monto)
+	if pedido != "" {
+		de += " de " + pedido
+	}
+	if cliente != "" {
+		de += " (" + cliente + ")"
+	}
+	desc := "Acreditó " + de
 	accion := sqlc.AccionAuditoriaCobrar
 	if !aprueba {
 		accion = sqlc.AccionAuditoriaAnular
@@ -388,7 +403,7 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 		if motivo != nil {
 			m = *motivo
 		}
-		desc = "Rechazó una transferencia: " + m
+		desc = "Rechazó la transferencia de " + de + ": " + m
 	}
 	bitacora.Anotar(ctx, sqlc.New(s.pool), s.log, ses, accion, "pago", pagoID, desc, nil)
 	if aprueba {

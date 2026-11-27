@@ -35,6 +35,12 @@ func TestConteoYMotivo(t *testing.T) {
 	if notas != "Conteo desde Stock (0 → 200) | Rotura desde Stock (200 → 197)" {
 		t.Fatalf("libro: %s", notas)
 	}
+	// Y en la bitácora, con quién, cuánto y por qué (mes simulado, M2S4-019).
+	var renglon string
+	_ = e.pool.QueryRow(context.Background(), `select coalesce(max(descripcion), '') from audit_log where entidad = 'stock' and entidad_id = $1 and descripcion like '%Rotura%'`, e.tornillo).Scan(&renglon)
+	if !strings.Contains(renglon, "Casa Central: Rotura desde Stock (200 → 197)") {
+		t.Fatalf("bitácora: %q", renglon)
+	}
 	// El lector de código de barras encuentra la medida en la grilla.
 	_, _ = e.pool.Exec(context.Background(), `update product_variants set codigo_barras = '7790001000025' where id = $1`, e.tornillo)
 	if _, b := pedir(t, dep, "GET", e.srv.URL+"/api/v1/admin/stock?busqueda=7790001000025", nil); !strings.Contains(b, `"sku":"TOR"`) || strings.Contains(b, `"sku":"FEN18"`) {

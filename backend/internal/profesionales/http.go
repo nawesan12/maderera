@@ -8,9 +8,11 @@ import (
 
 	"mjbj/internal/api/profesionalesapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/bitacora"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
+	"mjbj/internal/sqlc"
 )
 
 // API son los handlers de api/profesionales.yaml.
@@ -195,7 +197,8 @@ func (a *API) AsistentesDeEvento(ctx context.Context, r profesionalesapi.Asisten
 }
 
 func (a *API) CrearEvento(ctx context.Context, r profesionalesapi.CrearEventoRequestObject) (profesionalesapi.CrearEventoResponseObject, error) {
-	if _, err := panelEventos(ctx); err != nil {
+	ses, err := panelEventos(ctx)
+	if err != nil {
 		return nil, err
 	}
 	f, l := ValidarEvento(*r.Body)
@@ -206,6 +209,13 @@ func (a *API) CrearEvento(ctx context.Context, r profesionalesapi.CrearEventoReq
 	if err != nil {
 		return nil, err
 	}
+	// Los eventos tienen cupo y cobran: quién los carga y los publica queda en
+	// la bitácora (mes simulado, M2S3-017).
+	accion, verbo := sqlc.AccionAuditoriaCrear, "Cargó el evento «"
+	if editado {
+		accion, verbo = sqlc.AccionAuditoriaEditar, "Editó el evento «"
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, accion, "evento", f.ID, verbo+f.Titulo+"»", nil)
 	if editado {
 		return listo("Evento actualizado."), nil
 	}
@@ -213,16 +223,21 @@ func (a *API) CrearEvento(ctx context.Context, r profesionalesapi.CrearEventoReq
 }
 
 func (a *API) CambiarEstadoEvento(ctx context.Context, r profesionalesapi.CambiarEstadoEventoRequestObject) (profesionalesapi.CambiarEstadoEventoResponseObject, error) {
-	if _, err := panelEventos(ctx); err != nil {
+	ses, err := panelEventos(ctx)
+	if err != nil {
 		return nil, err
 	}
 	id, estado, l := ValidarEstadoEvento(*r.Body)
 	if !l.Ok() {
 		return nil, invalido("No pudimos identificar ese evento. Recargá la pantalla y probá de nuevo.")
 	}
+	var titulo string
+	_ = a.s.pool.QueryRow(ctx, `select titulo from events where id = $1`, id).Scan(&titulo)
 	if err := a.s.CambiarEstadoEvento(ctx, id, estado); err != nil {
 		return nil, err
 	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "evento", id,
+		"Evento «"+titulo+"»: "+estado, nil)
 	return listo(TextoDeEstado[estado]), nil
 }
 

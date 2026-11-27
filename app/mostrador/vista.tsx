@@ -107,6 +107,12 @@ interface VentaGuardada {
   tarjeta?: { nroLote: string; nroCupon: string; marca: string; cuotas: number };
   cheque?: ChequeEnPantalla;
   partes?: ParteDePago[] | null;
+  /**
+   * La letra que ya se sabía: después de recargar, el botón decía «Factura»
+   * a secas hasta que el servidor volviera a contestar, y con el servidor
+   * lento no volvía (mes 23). Se vuelve a pedir igual.
+   */
+  letra?: string | null;
 }
 
 /** El corte de la cola sin venta que se cobra (desde su ficha o al rehacer). */
@@ -286,6 +292,10 @@ export function VistaMostrador({
    * vuelve a valuar con la general (`aLista`).
    */
   const [aLista, setALista] = useState(false);
+  // Cada cambio de lista lleva su número: el precio que llega tarde de un
+  // cambio anterior no pisa al último (ver `ponerALista`).
+  const pedidoDeLista = useRef(0);
+  const [preciandoLista, setPreciandoLista] = useState(false);
   /*
    * Si la lista del cliente le da algún precio mejor en esta venta. Solo
    * entonces es «de contado» (la misma regla que Go, `listaConVentaja`): una
@@ -448,6 +458,7 @@ export function VistaMostrador({
       if (v.tarjeta) setTarjeta(v.tarjeta);
       if (v.cheque) setCheque(v.cheque);
       if (v.partes) setPartes(v.partes);
+      if (v.letra) setLetra(v.letra);
     });
   }, [corteACobrar, sucursal.id]);
   useEffect(() => {
@@ -458,10 +469,10 @@ export function VistaMostrador({
         ? null
         : {
             lineas, cortes, cliente, medio, acopio, presupuesto, clave,
-            comprobante, cuit, tipoDesc, valorDesc, motivoDesc, tarjeta, cheque, partes,
+            comprobante, cuit, tipoDesc, valorDesc, motivoDesc, tarjeta, cheque, partes, letra,
           },
     );
-  }, [sucursal.id, lineas, cortes, cliente, medio, acopio, presupuesto, clave, comprobante, cuit, tipoDesc, valorDesc, motivoDesc, tarjeta, cheque, partes]);
+  }, [sucursal.id, lineas, cortes, cliente, medio, acopio, presupuesto, clave, comprobante, cuit, tipoDesc, valorDesc, motivoDesc, tarjeta, cheque, partes, letra]);
 
 
 
@@ -708,16 +719,19 @@ export function VistaMostrador({
 
     let vigente = true;
     // Un error de red dejaba la letra sin pedir: el papel decía «Factura» a
-    // secas con un responsable inscripto (mes 23). Se reintenta una vez.
+    // secas con un responsable inscripto (mes 23). Se reintenta, cada vez
+    // más espaciado: recién recargada la página, las primeras acciones
+    // pueden no contestar.
+    let t: ReturnType<typeof setTimeout>;
     const pedir = async (intento: number): Promise<void> => {
       try {
         const r = await letraDelComprobante(cliente?.id ?? null, cuit || null);
         if (vigente) setLetra(r.letra);
       } catch {
-        if (vigente && intento === 0) await pedir(1);
+        if (vigente && intento < 3) t = setTimeout(() => void pedir(intento + 1), 1000 * (intento + 1));
       }
     };
-    const t = setTimeout(() => void pedir(0), 150);
+    t = setTimeout(() => void pedir(0), 150);
     return () => {
       vigente = false;
       clearTimeout(t);
@@ -761,6 +775,8 @@ export function VistaMostrador({
 
   function limpiar() {
     setBorradorDelCorte(null);
+    pedidoDeLista.current++;
+    setPreciandoLista(false);
     setALista(false);
     setCorteExistente(null);
     setCorteTraido(null);
@@ -817,7 +833,7 @@ export function VistaMostrador({
    * hacía nada (mes simulado, M3S4-017).
    */
   function elegirMedioOLista(m: MedioDeMostrador) {
-    if (listaDeContado && conListaPropia && !medioPermitido(m, true)) void alternarALista();
+    if (listaDeContado && conListaPropia && !medioPermitido(m, true)) void ponerALista(true);
     elegirMedio(m);
   }
 
@@ -901,6 +917,8 @@ export function VistaMostrador({
     }
     setPorCambiar(null);
     setCliente(nuevo);
+    const vuelta = ++pedidoDeLista.current;
+    setPreciandoLista(false);
     setALista(false);
     // El corte a medio cargar era para el otro: con otro cliente no vuelve.
     if ((nuevo?.id ?? null) !== (cliente?.id ?? null)) setBorradorDelCorte(null);
@@ -922,7 +940,18 @@ export function VistaMostrador({
     const ids = lineas.map((l) => l.variantId).filter((v): v is string => !!v);
     if (ids.length === 0) return;
 
-    const precios = await preciosDelCliente(ids, nuevo?.id ?? null);
+    setPreciandoLista(true);
+    let precios: Record<string, number>;
+    try {
+      precios = await preciosDelCliente(ids, nuevo?.id ?? null);
+    } catch {
+      // Quedan los precios que había: Go igual valúa con la lista del cliente.
+      if (vuelta === pedidoDeLista.current) setPreciandoLista(false);
+      return;
+    }
+    // Alt + 3 o «A precio de lista» llegaron antes que estos precios: mandan.
+    if (vuelta !== pedidoDeLista.current) return;
+    setPreciandoLista(false);
     /*
      * El renglón que está a precio de lista pasa a la lista de este cliente
      * solo: no lo tocó nadie, y dejarlo con el precio del anterior hacía que
@@ -1070,14 +1099,21 @@ export function VistaMostrador({
         : null;
   const usaLaCuenta =
     medio === "cuenta_corriente" || (partes?.some((p) => p.medio === "cuenta_corriente" && importeDelCampo(p.importe) > 0) ?? false);
-  const sePuedeCobrar = puedeCobrar && !medioBloqueado && !(usaLaCuenta && cuentaNoDisponible !== null);
+  const sePuedeCobrar = puedeCobrar && !medioBloqueado && !preciandoLista && !(usaLaCuenta && cuentaNoDisponible !== null);
 
   // Lo que cobró otra persona y entró a este cajón (un recibo desde el
   // panel): se ve en el chip de la caja (M2S2-063).
+  // Neto: lo que esa persona cobró menos lo que se devolvió de esas ventas
+  // (lo anulara quien lo anulara) y sus propias devoluciones. Sumaba en
+  // bruto, con ventas ya anuladas adentro (mes 23).
   const deOtros = useMemo(() => {
-    const suyos = movimientos.filter((m) => m.otroPuesto && m.monto > 0);
-    if (suyos.length === 0) return null;
-    return { monto: suyos.reduce((s, m) => s + m.monto, 0), quien: [...new Set(suyos.map((m) => m.quien).filter(Boolean))].join(", ") };
+    const plata = (m: Movimiento) => !m.anulado && (m.tipo === "venta" || m.tipo === "ingreso" || m.tipo === "devolucion");
+    const deEllos = new Set(movimientos.filter((m) => m.otroPuesto && plata(m) && m.monto > 0 && m.orderId).map((m) => m.orderId));
+    const cuentan = movimientos.filter((m) => plata(m) && (m.otroPuesto || (m.tipo === "devolucion" && m.orderId && deEllos.has(m.orderId))));
+    const monto = Math.round(cuentan.reduce((s, m) => s + m.monto, 0) * 100) / 100;
+    if (monto <= 0.005) return null;
+    const quien = [...new Set(cuentan.filter((m) => m.otroPuesto && m.monto > 0).map((m) => m.quien).filter(Boolean))].join(", ");
+    return { monto, quien };
   }, [movimientos]);
 
   /*
@@ -1146,12 +1182,36 @@ export function VistaMostrador({
     requestAnimationFrame(() => enfocar(datos?.customerId ? "buscador" : "cliente"));
   }
 
-  /** Pasa la venta a la lista general (y vuelve), con los precios de esa lista. */
-  async function alternarALista() {
-    const nuevo = !aLista;
-    const ids = lineas.map((l) => l.variantId).filter((v): v is string => !!v);
-    const precios = ids.length > 0 ? await preciosDelCliente(ids, nuevo ? null : (cliente?.id ?? null)) : {};
+  /*
+   * Pasa la venta a la lista general (y vuelve), con los precios de esa lista.
+   *
+   * La marca cambia en el acto y los precios llegan después. Antes esperaba
+   * los precios para marcar: las acciones de Next van en fila, y con el
+   * servidor lento Alt + 3 dejaba Crédito elegido con «Su lista es de
+   * contado» y Cobrar apagado; un clic en Cheque durante «Volver a su lista»
+   * leía la marca vieja y no pasaba a lista (mes simulado, M3S4-017).
+   * Mientras los precios no llegan no se cobra: el total sería el de la otra
+   * lista. Si no llegan, la venta vuelve a como estaba.
+   */
+  async function ponerALista(nuevo: boolean) {
+    const vuelta = ++pedidoDeLista.current;
     setALista(nuevo);
+    const ids = lineas.map((l) => l.variantId).filter((v): v is string => !!v);
+    if (ids.length === 0) return setPreciandoLista(false);
+    setPreciandoLista(true);
+    let precios: Record<string, number>;
+    try {
+      precios = await preciosDelCliente(ids, nuevo ? null : (cliente?.id ?? null));
+    } catch {
+      if (vuelta !== pedidoDeLista.current) return;
+      setPreciandoLista(false);
+      setALista(!nuevo);
+      setAviso({ tipo: "error", texto: "No llegaron los precios de lista. Probá de nuevo." });
+      return;
+    }
+    // Otro cambio de lista (o de cliente) llegó después: manda ese.
+    if (vuelta !== pedidoDeLista.current) return;
+    setPreciandoLista(false);
     setLineas((prev) =>
       prev.map((l) =>
         // La media placa y lo del corte se dejan: el precio que vuelve es el
@@ -1162,6 +1222,7 @@ export function VistaMostrador({
       ),
     );
   }
+  const alternarALista = () => ponerALista(!aLista);
 
   // El cliente del corte traído, si tiene: se busca al traerlo, y entra como
   // si se lo eligiera (su lista y su factura). Ponerlo a mano lo perdía en el

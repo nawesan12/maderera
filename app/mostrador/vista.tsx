@@ -707,10 +707,17 @@ export function VistaMostrador({
     if (comprobante !== "fiscal") return;
 
     let vigente = true;
-    const t = setTimeout(async () => {
-      const r = await letraDelComprobante(cliente?.id ?? null, cuit || null);
-      if (vigente) setLetra(r.letra);
-    }, 150);
+    // Un error de red dejaba la letra sin pedir: el papel decía «Factura» a
+    // secas con un responsable inscripto (mes 23). Se reintenta una vez.
+    const pedir = async (intento: number): Promise<void> => {
+      try {
+        const r = await letraDelComprobante(cliente?.id ?? null, cuit || null);
+        if (vigente) setLetra(r.letra);
+      } catch {
+        if (vigente && intento === 0) await pedir(1);
+      }
+    };
+    const t = setTimeout(() => void pedir(0), 150);
     return () => {
       vigente = false;
       clearTimeout(t);
@@ -1130,8 +1137,13 @@ export function VistaMostrador({
       }
     }
     if (conCorte) setAviso({ tipo: "error", texto: "El corte de esa venta se vuelve a armar." });
-    // Rehacer es casi siempre cambiarle el cliente: el cursor va ahí.
-    requestAnimationFrame(() => enfocar("cliente"));
+    /*
+     * Sin cliente, el cursor va al cliente: rehacer es casi siempre
+     * ponérselo. Con cliente, a la venta: el foco en «Cambiar» abría la
+     * búsqueda y tapaba la ficha —Debe, límite— hasta salir del campo (mes
+     * 23, Techos Costa); Alt + C lo cambia igual.
+     */
+    requestAnimationFrame(() => enfocar(datos?.customerId ? "buscador" : "cliente"));
   }
 
   /** Pasa la venta a la lista general (y vuelve), con los precios de esa lista. */

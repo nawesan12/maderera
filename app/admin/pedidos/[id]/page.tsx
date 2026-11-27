@@ -16,7 +16,7 @@ import {
   ETAPAS_RETIRO,
   Pasos,
 } from "@/components/admin/pasos";
-import { fechaHora, formatearMonto, formatearPorcentaje, moneda } from "@/components/admin/formato";
+import { fechaHora, formatearMonto, formatearPorcentaje, moneda, plural } from "@/components/admin/formato";
 import { datosDeDevolucion, obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
@@ -564,7 +564,7 @@ export default async function FichaPedidoPage({
                     {moneda.format(margen.neto)} netos menos{" "}
                     {moneda.format(margen.costo)} de costo
                     {margen.sinCosto > 0 &&
-                      ` · ${margen.sinCosto} renglones sin costo, fuera de la cuenta`}
+                      ` · ${plural(margen.sinCosto, "renglón", "renglones")} sin costo, fuera de la cuenta`}
                   </p>
                 </div>
                 <p
@@ -656,7 +656,12 @@ export default async function FichaPedidoPage({
                     cotizarlo (mes simulado 2). */}
                 {/* Con la zona de la lista también, como el reparto: la del
                     panel no lleva «(a cotizar)» en el nombre (M2S2-054). */}
-                {Number(pedido.costoEnvio) === 0 && (await zonaACotizar(pedido.zonaEnvio)) && (
+                {/* «Sin cargo» elegido a propósito no se cotiza, y lo
+                    entregado ya no se cotiza (mes 23, depósito). */}
+                {Number(pedido.costoEnvio) === 0 &&
+                  !pedido.fleteSinCargo &&
+                  !["entregado", "cancelado"].includes(pedido.estado) &&
+                  (await zonaACotizar(pedido.zonaEnvio)) && (
                   <span className="estado-problema mt-2 inline-block rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
                     Flete sin cotizar
                   </span>

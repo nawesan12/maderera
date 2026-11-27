@@ -476,8 +476,17 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 		}
 		total := ventas.ACentavos(subtotal + nuevoEnvio - descuento)
 		viejo := jsmath.Numero(p.total)
+		// «Sin cargo» a propósito (mes 23): el pedido que pasa a envío lo
+		// elige o no; un flete con plata lo apaga; si no, queda como estaba.
+		sinCargo := "flete_sin_cargo AND $3::numeric = 0"
+		switch {
+		case nuevaEntrega == "envio" && ent.SinCargo && !ent.ConCosto:
+			sinCargo = "$3::numeric = 0"
+		case nuevaEntrega != "":
+			sinCargo = "false"
+		}
 		if _, err := tx.Exec(ctx, `UPDATE orders SET subtotal = $2::numeric, costo_envio = $3::numeric, total = $4::numeric,
-			dejado_de_cobrar = $5::numeric, updated_at = now() WHERE id = $1`,
+			dejado_de_cobrar = $5::numeric, flete_sin_cargo = `+sinCargo+`, updated_at = now() WHERE id = $1`,
 			pedido, jsmath.Fijo2(subtotal), jsmath.Fijo2(nuevoEnvio), jsmath.Fijo2(total), jsmath.Fijo2(d.Total)); err != nil {
 			return err
 		}

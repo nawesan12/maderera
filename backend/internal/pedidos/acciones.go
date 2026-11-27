@@ -973,7 +973,7 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			INSERT INTO orders (numero, customer_id, quote_id, contacto_nombre, contacto_email, contacto_telefono, branch_id,
 			                    estado, origen, subtotal, total, notas, seller_id, created_by_user_id,
 			                    tipo_entrega, direccion_entrega, zona_envio, costo_envio, medio_pago, entregar_el,
-			                    dejado_de_cobrar, autorizado_por, a_cuenta)
+			                    dejado_de_cobrar, autorizado_por, a_cuenta, flete_sin_cargo)
 			VALUES ($1, $2, $3, $4, $5, $6,
 			        CASE WHEN $13::tipo_entrega = 'retiro'
 			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
@@ -981,10 +981,10 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric - $22::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
 			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
-			        $19::numeric, $20, $21::numeric)
+			        $19::numeric, $20, $21::numeric, $23)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
 			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido,
-			jsmath.Fijo2(descuento)).Scan(&pedidoID); err != nil {
+			jsmath.Fijo2(descuento), ent.Envio && ent.SinCargo && !ent.ConCosto).Scan(&pedidoID); err != nil {
 			return err
 		}
 		if descuento > 0 {

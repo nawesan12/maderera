@@ -216,6 +216,8 @@ export const orders = pgTable(
     /** Zona de envío elegida, para poder explicar el costo cobrado. */
     zonaEnvio: text(),
     costoEnvio: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
+    /** El envío se pasó a pedido con «Sin cargo»: no es un flete por cotizar. */
+    fleteSinCargo: boolean().notNull().default(false),
     subtotal: numeric({ precision: 12, scale: 2 }).notNull().default("0"),
     /**
      * Descuento sobre el total, en plata.

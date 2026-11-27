@@ -634,6 +634,8 @@ export interface components {
             efectivoRecibido?: number | null;
             /** @description la factura viva de la venta: el papel que vale */
             facturaId?: string | null;
+            /** @description el envío se pasó a pedido con «Sin cargo» a propósito */
+            fleteSinCargo?: boolean;
             devoluciones: components["schemas"]["DevolucionEnLaFicha"][];
             comprobantes: components["schemas"]["ComprobanteDelPedido"][];
             /** @description Se retira de a partes (ya salió algo */

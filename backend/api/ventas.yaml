@@ -857,6 +857,7 @@ components:
         facturado: { type: boolean, description: Tiene una factura viva }
         efectivoRecibido: { type: number, format: double, nullable: true, description: "con cuánto pagó en efectivo en el mostrador (el vuelto del ticket)" }
         facturaId: { type: string, nullable: true, description: "la factura viva de la venta: el papel que vale" }
+        fleteSinCargo: { type: boolean, description: "el envío se pasó a pedido con «Sin cargo» a propósito" }
         devoluciones: { type: array, items: { $ref: "#/components/schemas/DevolucionEnLaFicha" } }
         comprobantes: { type: array, items: { $ref: "#/components/schemas/ComprobanteDelPedido" } }
         acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }

@@ -659,7 +659,7 @@ func (s *Servicio) completarEnvios(ctx context.Context, out []PedidoListado) err
 	}
 	filas, err = s.pool.Query(ctx, `
 		SELECT o.id::text FROM orders o
-		WHERE o.id = ANY($1::uuid[]) AND o.costo_envio = 0 AND (o.zona_envio ~* 'a cotizar'
+		WHERE o.id = ANY($1::uuid[]) AND o.costo_envio = 0 AND NOT o.flete_sin_cargo AND (o.zona_envio ~* 'a cotizar'
 		  OR EXISTS (SELECT 1 FROM shipping_zones z WHERE z.a_cotizar AND lower(z.nombre) = lower(trim(o.zona_envio))))`, ids)
 	if err != nil {
 		return err
@@ -925,9 +925,11 @@ type FichaDePedido struct {
 	EfectivoRecibido *float64 `json:"efectivoRecibido"`
 	// FacturaID: la factura viva de la venta, si tiene: el papel que vale es
 	// ese y no el ticket (M2S1-083).
-	FacturaID    *string                `json:"facturaId"`
-	Devoluciones []DevolucionEnLaFicha  `json:"devoluciones"`
-	Comprobantes []ComprobanteDelPedido `json:"comprobantes"`
+	FacturaID *string `json:"facturaId"`
+	// FleteSinCargo: el envío se pasó a pedido con «Sin cargo» a propósito.
+	FleteSinCargo bool                   `json:"fleteSinCargo"`
+	Devoluciones  []DevolucionEnLaFicha  `json:"devoluciones"`
+	Comprobantes  []ComprobanteDelPedido `json:"comprobantes"`
 }
 
 // ReciboDelPedido es un recibo que cobró el pedido.
@@ -957,7 +959,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		       EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'),
 		       o.a_cuenta::float8, o.efectivo_recibido::float8,
 		       (SELECT f.id::text FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'
-		        ORDER BY f.created_at LIMIT 1)
+		        ORDER BY f.created_at LIMIT 1), o.flete_sin_cargo
 		FROM orders o
 		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = o.branch_id
@@ -966,7 +968,7 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 		&p.BranchID, &p.CustomerID, &p.Sucursal, &p.Estado, &p.Origen, &p.TipoEntrega, &p.DireccionEntrega,
 		&p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Descuento, &p.DescuentoMotivo, &p.Total,
 		&p.MedioPago, &p.EstadoPago, &p.Notas, &p.CreatedAt, &p.QuoteID, &p.NumeroPresupuesto, &p.SaldoCliente, &p.EntregarEl, &p.SinCobrar,
-		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado, &p.ACuenta, &p.EfectivoRecibido, &p.FacturaID)
+		&p.Cobrado, &p.ACobrar, &p.Comprobante, &p.Acopio, &p.Facturado, &p.ACuenta, &p.EfectivoRecibido, &p.FacturaID, &p.FleteSinCargo)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

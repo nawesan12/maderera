@@ -216,3 +216,26 @@ func TestAnularSinFirmarDejaElMotivo(t *testing.T) {
 		t.Fatalf("historial: %q %q", estado, nota)
 	}
 }
+
+// M3S2-022: si firma otra persona sin escribir su DNI, la constancia no se
+// queda con el DNI del que figuraba; si firma el mismo, se conserva.
+func TestLaFirmaDeOtraPersonaNoHeredaElDNI(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	for i, quien := range []string{"Sim Hugo Ferreyra", "sim martín ferreyra "} {
+		pedido, r1, _ := e.pedido(t, "PED-12"+string(rune('0'+i)), "listo", nil)
+		e.exec(t, `update orders set estado_pago = 'pagado' where id = $1`, pedido)
+		if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
+			"receptorNombre": "Sim Martín Ferreyra", "receptorDocumento": "30555011", "cantidades": cantidades(r1, "1")}); c != 200 {
+			t.Fatalf("%d %s", c, b)
+		}
+		token := e.uno(t, `select firma_token from deliveries where order_id = $1`, pedido)
+		if _, err := e.s.RegistrarFirma(context.Background(), FormFirma{Token: token, ReceptorNombre: quien, Firma: "data:image/png;base64,AAAA"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		dni := e.uno(t, `select coalesce(receptor_documento, '') from deliveries where order_id = $1`, pedido)
+		if (i == 0) != (dni == "") {
+			t.Errorf("%s: DNI %q", quien, dni)
+		}
+	}
+}

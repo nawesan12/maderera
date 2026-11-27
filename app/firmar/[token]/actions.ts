@@ -7,6 +7,8 @@ import { apiInterna, mensajeDe, type Problema } from "@/lib/api/servidor";
 export interface EstadoFirma {
   error?: string;
   numero?: string;
+  /** Ya estaba firmado (otra firma, el mostrador, un doble toque): se muestra la constancia. */
+  yaFirmado?: boolean;
 }
 
 /**
@@ -42,6 +44,14 @@ export async function firmarRemito(
     },
   });
 
+  // Ya firmado (o anulado) cuando llegó esta firma: no es un error de quien
+  // firma. Se vuelve a leer la página, que muestra la constancia (mes
+  // simulado 2: la firma quedaba guardada y la pantalla decía «el link
+  // venció, pedí otro»).
+  if (r.response.status === 409) {
+    revalidatePath(`/firmar/${formData.get("token")}`);
+    return { yaFirmado: true };
+  }
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined, "Revisá los datos.") };
 
   const resultado = r.data;

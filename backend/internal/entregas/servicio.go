@@ -57,7 +57,7 @@ const (
 	// mandaba al cliente un pedido de firma (y después otro), sin avisar de
 	// la anulación (mes simulado 2).
 	EsperaDelPedidoDeFirma = 3 * time.Minute
-	TrabajoRemitoFirmado    = "remito.firmado"
+	TrabajoRemitoFirmado   = "remito.firmado"
 )
 
 // Servicio son las entregas.
@@ -844,7 +844,8 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 		var pedido, tipo string
 		err := tx.QueryRow(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
-			  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
+			  receptor_nombre = $4, receptor_documento = CASE WHEN nullif($5, '') IS NOT NULL THEN $5
+			    WHEN lower(trim(coalesce(receptor_nombre, ''))) = lower(trim($4)) THEN receptor_documento END,
 			  entregado_at = now(), updated_at = now()
 			WHERE firma_token = $1 AND estado = 'preparada'
 			RETURNING id, numero, order_id, tipo::text`, f.Token, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)).
@@ -867,7 +868,8 @@ func (s *Servicio) RegistrarFirma(ctx context.Context, f FormFirma, ip *string) 
 		// Los remitos de la misma visita se firman con el primero.
 		if _, err := tx.Exec(ctx, `
 			UPDATE deliveries SET estado = 'entregada', firma_url = $2, firmado_at = now(), firmado_ip = $3,
-			  receptor_nombre = $4, receptor_documento = coalesce(nullif($5, ''), receptor_documento),
+			  receptor_nombre = $4, receptor_documento = CASE WHEN nullif($5, '') IS NOT NULL THEN $5
+			    WHEN lower(trim(coalesce(receptor_nombre, ''))) = lower(trim($4)) THEN receptor_documento END,
 			  entregado_at = now(), updated_at = now()
 			WHERE visita_de = $1 AND estado = 'preparada'`, r.DeliveryID, f.Firma, ip, f.ReceptorNombre, textoONulo(f.ReceptorDocumento)); err != nil {
 			return err

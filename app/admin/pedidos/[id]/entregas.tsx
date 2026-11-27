@@ -13,6 +13,7 @@ import {
   Loader2,
   PenLine,
   Printer,
+  Scissors,
   Truck,
   TriangleAlert,
 } from "lucide-react";
@@ -84,9 +85,10 @@ export function Entregas({
   /** El aviso gratis de cada remito, por id. */
   avisos?: Record<string, AvisoManualListo>;
   /**
-   * Lo que falta cobrar del pedido (la regla de «Me deben»). Un retiro sin
-   * cobrar pregunta antes de generar el remito, como «Marcar entregado»
-   * (mes simulado: con «Generar remito» salía sin aviso).
+   * Lo que falta cobrar del pedido (la regla de «Me deben»). Un retiro o
+   * un envío sin cobrar pregunta antes de generar el remito, como «Marcar
+   * entregado» y «Despachar» del reparto (mes simulado: con «Generar
+   * remito» salía sin aviso; mes 23: el envío salía «En camino» igual).
    */
   sinCobrar?: { numero: string; monto: number } | null;
   /** Para cobrar ahí mismo; sin esto (el depósito) solo se entrega o no. */
@@ -111,6 +113,13 @@ export function Entregas({
   // de un pedido entregado (mes simulado).
   const conSaldo = cancelado || estado === "entregado" ? [] : pendientes.filter((p) => p.pendiente > 0.01);
   const hayAcopio = conSaldo.length > 0;
+  // Lo que espera un corte en la cola o en la máquina no sale: el remito
+  // ofrece el resto del renglón y, si no queda nada, no se ofrece (M2S3-020).
+  const salen = conSaldo.flatMap((p) => {
+    const libre = Math.round((p.pendiente - (p.enCorteCantidad ?? 0)) * 1000) / 1000;
+    return libre > 0.0005 ? [{ ...p, pendiente: libre }] : [];
+  });
+  const cortesQueFaltan = [...new Set(conSaldo.flatMap((p) => (p.enCorte ? p.enCorte.split(", ") : [])))];
   const entregadoAlgo = pendientes.some((p) => p.entregado > 0);
   const vivos = remitos.filter((r) => r.estado !== "anulada");
   // Un envío con remitos sin firmar está en la calle: no está entregado
@@ -153,14 +162,31 @@ export function Entregas({
         <ul className="mt-3 space-y-1 px-5">
           {conSaldo.map((p) => (
             <li key={p.orderItemId} className="flex items-baseline justify-between gap-3">
-              <span className="min-w-0 text-base">{p.descripcion}</span>
+              <span className="min-w-0 text-base">
+                {p.descripcion}
+                {p.enCorte && (
+                  <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground">
+                    <Scissors className="h-4 w-4" aria-hidden="true" />
+                    {p.enCorte}
+                  </span>
+                )}
+              </span>
               <span className="tabular shrink-0 text-lg font-semibold">{cantidadConUnidad(p.pendiente, p.unidad, p.descripcion)}</span>
             </li>
           ))}
         </ul>
       )}
 
-      {hayAcopio && (
+      {hayAcopio && salen.length === 0 && (
+        <div className="px-5 py-4">
+          <span className="inline-flex h-11 items-center gap-2 rounded-lg bg-hundida px-4 text-base font-medium text-muted-foreground">
+            <Scissors className="h-5 w-5 shrink-0" aria-hidden="true" />
+            {cortesQueFaltan.join(", ")}
+          </span>
+        </div>
+      )}
+
+      {hayAcopio && salen.length > 0 && (
         <div className="px-5 py-4">
           {!abierto ? (
             <button
@@ -175,10 +201,10 @@ export function Entregas({
             <FormularioDeRemito
               orderId={orderId}
               tipoEntrega={tipoEntrega}
-              conSaldo={conSaldo}
+              conSaldo={salen}
               otros={envio ? [] : otros}
               receptor={receptor ?? ""}
-              sinCobrar={envio || cancelado ? null : sinCobrar}
+              sinCobrar={cancelado ? null : sinCobrar}
               cobro={cobro}
               alCerrar={() => setAbierto(false)}
               alGenerar={(numero) => {
@@ -520,7 +546,7 @@ function FormularioDeRemito({
                   cobro ? "hover:bg-hundida" : "estado-problema border"
                 }`}
               >
-                Entregar sin cobrar
+                {envio ? "Despachar sin cobrar" : "Entregar sin cobrar"}
               </button>
               {cobro && (
                 <button
@@ -532,7 +558,7 @@ function FormularioDeRemito({
                   }}
                   className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium"
                 >
-                  Cobrar <span className="tabular">{formatearMonto(sinCobrar.monto)}</span> y entregar
+                  Cobrar <span className="tabular">{formatearMonto(sinCobrar.monto)}</span> {envio ? "y despachar" : "y entregar"}
                 </button>
               )}
             </div>

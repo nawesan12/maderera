@@ -38,6 +38,12 @@ type Renglon struct {
 	// es una presentación: de una media placa, «66 en el galpón» eran 33
 	// placas (mes simulado 2).
 	GalponEnStock *float64 `json:"galponEnStock,omitempty"`
+	// EnCorte es el corte del renglón que sigue en la cola o en la máquina, y
+	// EnCorteCantidad lo que se lleva de lo pendiente: esas piezas todavía no
+	// existen y el remito no las ofrece (M2S3-020: con el corte de vuelta en
+	// la máquina se ofrecía la media placa). El resto sale sin cortar.
+	EnCorte         string   `json:"enCorte,omitempty"`
+	EnCorteCantidad *float64 `json:"enCorteCantidad,omitempty"`
 }
 
 // maxCero es Math.max(x, 0) (NaN sigue siendo NaN).

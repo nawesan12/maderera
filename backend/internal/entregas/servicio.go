@@ -540,6 +540,21 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 	if msj := RevisarEnteros(pendientes, control.Lineas); msj != "" {
 		return nil, nil, ErrorDeEntrega(msj)
 	}
+	// Lo que espera un corte no sale: las piezas todavía no existen
+	// (M2S3-020).
+	conCortes, err := ConCortes(ctx, tx, f.OrderID, append([]Renglon(nil), pendientes...))
+	if err != nil {
+		return nil, nil, err
+	}
+	lleva := map[string]float64{}
+	for _, l := range control.Lineas {
+		lleva[l.OrderItemID] += l.Cantidad
+	}
+	for _, r := range conCortes {
+		if r.EnCorteCantidad != nil && lleva[r.OrderItemID] > r.Pendiente-*r.EnCorteCantidad+0.0005 {
+			return nil, nil, ErrorDeEntrega(r.Descripcion + " espera el corte " + r.EnCorte + ".")
+		}
+	}
 	pedido, err := pedidoBloqueado(ctx, tx, f.OrderID)
 	if err != nil {
 		return nil, nil, err

@@ -113,7 +113,10 @@ func (a *API) SaldoDeAcopio(ctx context.Context, r entregasapi.SaldoDeAcopioRequ
 	if err != nil {
 		return nil, err
 	}
-	v, err = ConGalpon(ctx, a.pool, r.Id, v)
+	if v, err = ConGalpon(ctx, a.pool, r.Id, v); err != nil {
+		return nil, err
+	}
+	v, err = ConCortes(ctx, a.pool, r.Id, v)
 	return ok(v), err
 }
 

@@ -2,6 +2,7 @@ package entregas
 
 import (
 	"context"
+	"math"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"mjbj/internal/cola"
 	"mjbj/internal/formato"
+	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -32,6 +34,47 @@ func CortesSinTerminar(ctx context.Context, db consultor, pedido string) ([]stri
 		SELECT coalesce(array_agg(numero ORDER BY numero), '{}') FROM cutting_orders
 		WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`, pedido).Scan(&numeros)
 	return numeros, err
+}
+
+// ConCortes marca cada renglón con su corte sin terminar (el del mismo
+// producto) y cuánto del renglón se lleva: las placas del corte, en la unidad
+// del renglón (las medias de un corte de medias placas son media placa cada
+// una). Lo demás del renglón sale igual, sin cortar.
+func ConCortes(ctx context.Context, db consultor, pedido string, renglones []Renglon) ([]Renglon, error) {
+	if len(renglones) == 0 {
+		return renglones, nil
+	}
+	filas, err := db.Query(ctx, `
+		SELECT oi.id::text, string_agg(c.numero, ', ' ORDER BY c.numero),
+		       sum(c.placas * CASE WHEN c.mitad IS NOT NULL THEN 0.5 ELSE 1 END / coalesce(nullif(oi.stock_por_unidad, 0), 1))::float8
+		FROM order_items oi
+		JOIN cutting_orders c ON c.order_id = oi.order_id AND c.estado IN ('en-cola', 'en-proceso')
+		  AND c.variant_id IS NOT NULL AND c.variant_id = oi.variant_id
+		WHERE oi.order_id = $1 GROUP BY oi.id`, pedido)
+	if err != nil {
+		return nil, err
+	}
+	type enCorte struct {
+		numeros  string
+		cantidad float64
+	}
+	cortes := map[string]enCorte{}
+	var id, numeros string
+	var cantidad float64
+	if _, err := pgx.ForEachRow(filas, []any{&id, &numeros, &cantidad}, func() error {
+		cortes[id] = enCorte{numeros, cantidad}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	for i := range renglones {
+		if c, ok := cortes[renglones[i].OrderItemID]; ok {
+			renglones[i].EnCorte = c.numeros
+			n := math.Min(jsmath.Round(c.cantidad*1000)/1000, renglones[i].Pendiente)
+			renglones[i].EnCorteCantidad = &n
+		}
+	}
+	return renglones, nil
 }
 
 // FaltaElCorte es el 422 de un pedido que quiere quedar listo o salir con

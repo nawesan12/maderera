@@ -269,6 +269,8 @@ components:
         enteros: { type: boolean, description: El producto no se fracciona; sale entero (salvo exactamente lo pendiente). Ausente es falso }
         enElGalpon: { type: number, format: double, description: Lo que hay en el estante de la sucursal de donde sale, en la unidad del renglón. Ausente sin producto }
         galponEnStock: { type: number, format: double, description: "Lo mismo en la unidad del stock (placas enteras), cuando el renglón es una presentación (media placa). Ausente si es la misma" }
+        enCorte: { type: string, description: "Los cortes sin terminar del renglón (en cola o en la máquina). Ausente si no tiene" }
+        enCorteCantidad: { type: number, format: double, description: "Lo pendiente que se lleva el corte, en la unidad del renglón: no sale hasta que se termine. El resto sale sin cortar" }
     OtroAcopio:
       type: object
       required: [orderId, numero, renglones]

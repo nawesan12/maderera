@@ -296,6 +296,13 @@ export interface components {
              * @description Lo mismo en la unidad del stock (placas enteras), cuando el renglón es una presentación (media placa). Ausente si es la misma
              */
             galponEnStock?: number;
+            /** @description Los cortes sin terminar del renglón (en cola o en la máquina). Ausente si no tiene */
+            enCorte?: string;
+            /**
+             * Format: double
+             * @description Lo pendiente que se lleva el corte, en la unidad del renglón: no sale hasta que se termine. El resto sale sin cortar
+             */
+            enCorteCantidad?: number;
         };
         OtroAcopio: {
             orderId: string;

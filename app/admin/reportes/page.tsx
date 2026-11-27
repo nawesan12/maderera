@@ -233,10 +233,12 @@ export default async function ReportesPage({
                 <th className="px-3 py-2.5 text-right font-semibold">Total</th>
                 {hayMargen && (
                   <>
-                    {/* El neto al lado del costo, como en el CSV: el total
-                        lleva IVA y el costo no (mes simulado, M2S1-039). */}
+                    {/* El neto de lo que tiene costo al lado del costo,
+                        como el PDF: el total lleva IVA y el costo no
+                        (M2S1-039), y con renglones sin costo el neto entero
+                        no cerraba contra el margen (mes 23, M2S1-045). */}
                     <th className="px-3 py-2.5 text-right font-semibold">
-                      Sin IVA
+                      Neto con costo
                     </th>
                     <th className="px-3 py-2.5 text-right font-semibold">
                       Costo
@@ -261,20 +263,24 @@ export default async function ReportesPage({
                         un nombre largo la tabla no entraba a 1280 px y se
                         apilaba en tarjetas (mes simulado). */}
                     <td className="px-5 py-3 [overflow-wrap:anywhere]">
-                      {f.etiqueta}
-                      {f.detalle && (
-                        <span className="block text-sm text-muted-foreground">
-                          {f.detalle}
-                        </span>
-                      )}
-                      {/* Lo sin costo en su renglón, debajo del nombre: en la
-                          tarjeta del teléfono, al lado del margen, cortaba
-                          el rótulo en «Marg…» (mes simulado, M2S2-083). */}
-                      {hayMargen && f.costo !== null && f.lineasSinCosto > 0 && (
-                        <span className="estado-problema mt-0.5 block text-sm font-medium">
-                          {f.lineasSinCosto} sin costo
-                        </span>
-                      )}
+                      {/* En un solo bloque: apilada en el teléfono la celda
+                          es flex, y el nombre, el detalle y lo sin costo
+                          salían en tres columnas (mes 23, M2S2-083). */}
+                      <div className="min-w-0">
+                        {f.etiqueta}
+                        {f.detalle && (
+                          <span className="block text-sm font-normal text-muted-foreground">
+                            {f.detalle}
+                          </span>
+                        )}
+                        {/* Lo que quedó fuera del margen, en su renglón y en
+                            pesos, como la tarjeta de arriba. */}
+                        {hayMargen && f.costo !== null && f.netoVenta - f.netoCosteado >= 0.5 && (
+                          <span className="estado-problema mt-0.5 block text-sm font-medium whitespace-nowrap">
+                            {formatearMonto(f.netoVenta - f.netoCosteado)} sin costo
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="tabular px-3 py-3 text-right">
                       {f.cantidad.toLocaleString("es-AR")}
@@ -285,7 +291,7 @@ export default async function ReportesPage({
                     {hayMargen && (
                       <>
                         <td className="tabular px-3 py-3 text-right">
-                          {formatearMonto(f.netoVenta)}
+                          {f.costo === null ? "—" : formatearMonto(f.netoCosteado)}
                         </td>
                         <td className="tabular px-3 py-3 text-right text-muted-foreground">
                           {f.costo === null ? "—" : formatearMonto(f.costo)}
@@ -389,7 +395,7 @@ export default async function ReportesPage({
                 <td className="tabular px-3 py-3 text-right">{formatearMonto(totales.total)}</td>
                 {hayMargen && (
                   <>
-                    <td className="tabular px-3 py-3 text-right">{formatearMonto(vendido)}</td>
+                    <td className="tabular px-3 py-3 text-right">{formatearMonto(conCosto)}</td>
                     <td className="tabular px-3 py-3 text-right">{formatearMonto(costoTotal)}</td>
                     <td
                       className={`tabular px-3 py-3 text-right ${margenTotal < 0 ? "text-saldo-debe" : "text-saldo-favor"}`}

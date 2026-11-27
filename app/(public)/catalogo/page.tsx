@@ -450,7 +450,7 @@ async function SobreLaCategoria({
  * sus dos consultas están memoizadas, así que a la base se le pide una vez.
  */
 async function armarPanel(params: Params) {
-  const [categorias, ofertas, rubros] = await Promise.all([
+  const [categorias, ofertas, rubros, marcas] = await Promise.all([
     listarCategorias(),
     cantidadDeOfertas(),
     // Los rubros son de adentro de una categoría: sin una elegida no hay qué
@@ -458,10 +458,13 @@ async function armarPanel(params: Params) {
     params.cat && params.cat !== "todos"
       ? rubrosDeCategoria(params.cat)
       : Promise.resolve([]),
+    marcasDelCatalogo(undefined),
   ]);
 
   return (
     <PanelCategorias
+      // Moldava, con su cantidad como las otras filas (M2S1-204).
+      cantidadMoldava={marcas.find((m) => m.nombre.trim().toLowerCase() === "moldava")?.productCount ?? null}
       categorias={categorias.map((c) => ({
         slug: c.slug,
         name: c.name,
@@ -497,6 +500,9 @@ async function Lateral({ params }: { params: Params }) {
   );
 }
 
+/** Lo que falta por ver que se muestra sin «Ver más»: menos que esto no vale otra página. */
+const RESTO_QUE_SE_MUESTRA = 6;
+
 /**
  * La grilla.
  *
@@ -515,6 +521,11 @@ async function Lateral({ params }: { params: Params }) {
  */
 async function Resultados({ params }: { params: Params }) {
   const pagina = Math.max(1, Number(params.pagina) || 1);
+  // Sin precios a la vista no se ordena por precio, ni con la dirección
+  // escrita a mano (M2S1-203).
+  const conPrecios = (await tienda()).activa;
+  const ordenPedido = (params.orden as OrdenCatalogo) ?? "relevancia";
+  const orden: OrdenCatalogo = !conPrecios && ordenPedido.startsWith("precio") ? "relevancia" : ordenPedido;
 
   /*
    * Todo junto y no de a uno.
@@ -534,7 +545,7 @@ async function Resultados({ params }: { params: Params }) {
      * ferretería mientras alguien mira placas no ayuda a nadie.
      */
     marcas,
-    { productos, total, hayMas, topeAlcanzado },
+    primera,
   ] = await Promise.all([
     numeroWhatsapp(),
     bannersDe("catalogo"),
@@ -548,13 +559,31 @@ async function Resultados({ params }: { params: Params }) {
         subcategoria: params.rubro,
         busqueda: params.buscar,
         stock: params.stock as never,
-        orden: (params.orden as OrdenCatalogo) ?? "relevancia",
+        orden,
         soloOfertas: params.ofertas === "1",
         marca: params.marca,
       },
       pagina,
     ),
   ]);
+  // Si lo que falta es poco, se muestra entero: «Viste 24 de 25 · Ver más»
+  // por un solo producto (mes simulado, M2S1-205). La página siguiente trae
+  // también las anteriores.
+  const { productos, total, hayMas, topeAlcanzado } =
+    primera.hayMas && primera.total - primera.productos.length <= RESTO_QUE_SE_MUESTRA
+      ? await paginaDeProductosPublica(
+          {
+            categoria: params.cat,
+            subcategoria: params.rubro,
+            busqueda: params.buscar,
+            stock: params.stock as never,
+            orden,
+            soloOfertas: params.ofertas === "1",
+            marca: params.marca,
+          },
+          pagina + 1,
+        )
+      : primera;
 
   if (productos.length === 0) {
     return (
@@ -605,14 +634,18 @@ async function Resultados({ params }: { params: Params }) {
           fila («Molduras»): se va mientras los chips se ven y vuelve al bajar
           a los productos. */}
       <ZonaSinFlotante soloEnCelular>
-        <RailDeCategorias
-          categorias={categorias.map((c) => ({
-            slug: c.slug,
-            name: c.name,
-            productCount: c.productCount,
-          }))}
-          activa={params.cat ?? "todos"}
-        />
+        {/* Desde lg las categorías están en la columna de la izquierda: la
+            fila de arriba las repetía (M2S1-204). */}
+        <div className="lg:hidden">
+          <RailDeCategorias
+            categorias={categorias.map((c) => ({
+              slug: c.slug,
+              name: c.name,
+              productCount: c.productCount,
+            }))}
+            activa={params.cat ?? "todos"}
+          />
+        </div>
 
         {/*
           Las marcas que trabajan.
@@ -625,7 +658,10 @@ async function Resultados({ params }: { params: Params }) {
         {/* Moldava ya está en la fila de categorías, al lado de Molduras: como
             marca salía dos veces. */}
         {marcasSinMoldava.length > 1 && (
-          <nav aria-label="Marcas" className="mb-4 flex flex-wrap gap-2">
+          <nav aria-label="Marcas" className="mb-4 flex flex-wrap items-center gap-2">
+            {/* Con su rótulo, como las demás secciones: el renglón suelto
+                no se sabía qué era (M2S1-204). */}
+            <h2 className="mr-1 text-[11.5px] font-bold uppercase tracking-[0.11em] text-texto-3">Marcas</h2>
             {marcasSinMoldava.map((m) => {
               const activa = params.marca === m.nombre;
               return (

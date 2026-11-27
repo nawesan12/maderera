@@ -384,6 +384,13 @@ export interface components {
              * @description el precio final que apenas cubre el costo (precios.PisoDeCosto); null sin costo cargado o en una presentación
              */
             piso?: number | null;
+            /** @description Lo que hay para vender en cada sucursal activa */
+            disponible?: {
+                sucursal: string;
+                nombre: string;
+                /** Format: double */
+                disponible: number;
+            }[];
         };
         /** @description La única ficha activa sin cuenta web con el correo del contacto. Con dos o más, ninguna: se busca a mano. */
         FichaParaUnir: {
@@ -401,6 +408,13 @@ export interface components {
             motivoRechazo?: string | null;
             /** @description el total con los precios de lista de hoy, si venció */
             totalDeHoy: string | null;
+            /** @description el correo de la ficha del cliente */
+            emailFicha?: string | null;
+            /** @description Los pedidos que salieron de él y se cancelaron */
+            pedidosCancelados?: {
+                id: string;
+                numero: string;
+            }[];
             /** @description Sin cliente, la ficha con el correo del contacto (para unirlo a mano) */
             fichaPorCorreo?: components["schemas"]["FichaParaUnir"] | null;
             id: string;
@@ -1318,6 +1332,8 @@ export interface operations {
                     /** @description el PIN de un admin, o su contraseña si ninguno cargó PIN */
                     pin?: string;
                     ficha?: string;
+                    /** @description el slug de la sucursal de donde sale, si no es la del presupuesto */
+                    sucursal?: string;
                 };
             };
         };

@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/pagos"
 	"mjbj/internal/pedidos"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/precios"
 	"mjbj/internal/productos"
 	"mjbj/internal/profesionales"
 	"mjbj/internal/push"
@@ -136,6 +137,16 @@ func correrWorker() error {
 		Ejecutar: func(ctx context.Context) (map[string]any, error) {
 			err := revalidar.Encolar(ctx, q, revalidar.Aviso{Etiquetas: []string{"contenido", "eventos"}})
 			return map[string]any{"invalidadas": 2}, err
+		},
+	}, tareas.Tarea{
+		// Las ofertas que vencieron vuelven al precio de antes (M2S2-030).
+		Nombre: "vencer-ofertas", Frecuencia: tareas.Hora,
+		Ejecutar: func(ctx context.Context) (map[string]any, error) {
+			n, err := precios.Nuevo(pool, log).VencerOfertas(ctx)
+			if err == nil && n > 0 {
+				err = revalidar.Encolar(ctx, q, revalidar.Aviso{Etiquetas: []string{"catalogo"}})
+			}
+			return map[string]any{"vencidas": n}, err
 		},
 	}, tareas.Tarea{
 		// El parte del día al panel (lo pendiente del admin, lo urgente

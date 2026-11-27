@@ -9,6 +9,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
 	"mjbj/internal/clientes"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/sqlc"
 )
@@ -44,7 +45,8 @@ func (s *Servicio) CrearFicha(ctx context.Context, ses *auth.Sesion, convID stri
 	}
 	var telefono *string
 	if !SinNumero(c.WaJid) {
-		t := NumeroLegible(c.WaJid)
+		// Como las demás fichas, «223 555-0312», no «+54 9 223…» (M2S3-071).
+		t := formato.Telefono(WaIdDeJid(c.WaJid))
 		telefono = &t
 	}
 	var rubro *string
@@ -59,6 +61,14 @@ func (s *Servicio) CrearFicha(ctx context.Context, ses *auth.Sesion, convID stri
 			CondicionIva: clientes.SugerirCondicionIva(doc), Telefono: telefono, Rubro: rubro, Notas: &notas})
 		if err != nil {
 			return err
+		}
+		// Quien la crea queda de vendedora, si está en la lista de vendedores
+		// con su nombre (M2S3-071): la ficha quedaba «Vendedor —».
+		if ses != nil && strings.TrimSpace(ses.Nombre) != "" {
+			if _, err := tx.Exec(ctx, `UPDATE customers SET seller_id = (SELECT s.id FROM sellers s WHERE s.activo
+				AND lower(f_unaccent(s.nombre)) = lower(f_unaccent($2)) LIMIT 1) WHERE id = $1 AND seller_id IS NULL`, id, strings.TrimSpace(ses.Nombre)); err != nil {
+				return err
+			}
 		}
 		if correo := strings.TrimSpace(f.Email); correo != "" && plataforma.CorreoValido(correo) {
 			if _, err := tx.Exec(ctx, `UPDATE customers SET email = $2 WHERE id = $1`, id, correo); err != nil {

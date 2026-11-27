@@ -56,8 +56,10 @@ export function FilaDeVendedor({ vendedor }: { vendedor: VendedorConCartera }) {
 
   return (
     <li className="flex flex-wrap items-center gap-3 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-base font-medium">{vendedor.nombre}</p>
+      {/* En el teléfono el nombre va a lo ancho y los botones abajo: al lado
+          quedaba en tres renglones (M2S1-117). */}
+      <div className="min-w-0 flex-1 max-sm:basis-full">
+        <p className="text-base font-medium [overflow-wrap:anywhere]">{vendedor.nombre}</p>
         <p className="text-sm text-muted-foreground">
           {TIPOS[vendedor.tipo]}
           {vendedor.clientes > 0 && (

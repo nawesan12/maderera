@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"mjbj/internal/api/profesionalesapi"
 	"mjbj/internal/auth"
@@ -121,7 +123,20 @@ func (a *API) AprobarSolicitud(ctx context.Context, r profesionalesapi.AprobarSo
 	if !l.Ok() {
 		return nil, invalido("No pudimos identificar esa solicitud. Recargá la pantalla y probá de nuevo.")
 	}
-	m, err := a.s.Aprobar(ctx, ses, id, lista, limite)
+	// La condición frente al IVA y el plazo viajan en el mismo formulario
+	// (M2S1-020, M2S1-137); fuera del esquema de zod del TS, que no los tenía.
+	var op Aprobacion
+	if v, ok := (*r.Body)["condicionIva"].(string); ok {
+		op.CondicionIva = strings.TrimSpace(v)
+	}
+	if v, ok := (*r.Body)["diasCredito"].(string); ok && strings.TrimSpace(v) != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return nil, invalido("Revisá a cuántos días paga.")
+		}
+		op.DiasCredito = &n
+	}
+	m, err := a.s.Aprobar(ctx, ses, id, lista, limite, op)
 	if err != nil {
 		return nil, err
 	}

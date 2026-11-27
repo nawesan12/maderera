@@ -16,8 +16,9 @@ UPDATE customers SET nombre = $2, razon_social = $3, cuit = $4, condicion_iva = 
 WHERE id = $1;
 
 -- name: MovimientoManual :exec
-INSERT INTO account_movements (customer_id, tipo, monto, detalle, created_by_user_id)
-VALUES ($1, $2, sqlc.arg(monto)::text::numeric, $3, $4);
+-- La fecha, si es de otro día (una deuda vieja que se carga hoy, M3S3-017).
+INSERT INTO account_movements (customer_id, tipo, monto, detalle, created_by_user_id, created_at)
+VALUES ($1, $2, sqlc.arg(monto)::text::numeric, $3, $4, coalesce(sqlc.narg(fecha)::timestamptz, now()));
 
 -- name: UsuarioDeLaFicha :one
 SELECT id, user_id FROM customers WHERE id = $1;

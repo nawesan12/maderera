@@ -114,3 +114,32 @@ func TestUnirNoOfreceFichasDudosas(t *testing.T) {
 		t.Fatalf("con dos fichas unió: %d %s", c, b)
 	}
 }
+
+// M2S2-069 y M2S1-193: el presupuesto armado en el panel con el correo de
+// un cliente que tiene cuenta web se ofrece unir a su ficha, y al unirlo
+// toma el nombre y el teléfono de la ficha. Uno que llegó del sitio, no.
+func TestUnirPresupuestoDelPanelAFichaConCuentaWeb(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	e.exec(t, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('web', 'Diego', 'sim.monotributo@ejemplo.test', true, now(), now())`)
+	ficha := e.id(t, `insert into customers (nombre, email, telefono, user_id) values ('Sim Diego Monotributista', 'sim.monotributo@ejemplo.test', '223 555-0102', 'web') returning id`)
+	delPanel := e.id(t, `insert into quotes (numero, contacto_nombre, contacto_email, origen) values ('P-5', 'Rocío (consulta web)', 'sim.monotributo@ejemplo.test', 'telefono') returning id`)
+	delSitio := e.id(t, `insert into quotes (numero, contacto_nombre, contacto_email, origen) values ('P-4', 'Diego (consulta web)', 'sim.monotributo@ejemplo.test', 'sitio') returning id`)
+	u := e.srv.URL + "/api/v1/admin/"
+	_, b := pedir(t, ven, "GET", u+"presupuestos/"+delSitio, nil)
+	if f := leer[FichaDePresupuesto](t, b).FichaPorCorreo; f != nil {
+		t.Fatalf("el del sitio ofrece la ficha con cuenta web: %s", b)
+	}
+	_, b = pedir(t, ven, "GET", u+"presupuestos/"+delPanel, nil)
+	if f := leer[FichaDePresupuesto](t, b).FichaPorCorreo; f == nil || f.ID != ficha {
+		t.Fatalf("el del panel no ofrece la ficha: %s", b)
+	}
+	if c, b := pedir(t, ven, "POST", u+"presupuestos/"+delPanel+"/ficha", map[string]any{"customerId": ficha}); c != 200 {
+		t.Fatalf("unir: %d %s", c, b)
+	}
+	var nombre, tel string
+	_ = e.pool.QueryRow(t.Context(), `select contacto_nombre, coalesce(contacto_telefono, '') from quotes where id = $1`, delPanel).Scan(&nombre, &tel)
+	if nombre != "Sim Diego Monotributista" || tel != "223 555-0102" {
+		t.Errorf("el presupuesto quedó %q %q", nombre, tel)
+	}
+}

@@ -53,10 +53,24 @@ export async function guardarCliente(_previo: EstadoCliente, formData: FormData)
 export async function registrarMovimiento(_previo: EstadoCliente, formData: FormData): Promise<EstadoCliente> {
   const r = await (await api()).POST("/api/v1/admin/clientes/{id}/movimientos", {
     params: { path: { id: campo(formData, "customerId") ?? "" } },
-    body: { tipo: campo(formData, "tipo") ?? "", monto: campo(formData, "monto") ?? "", detalle: campo(formData, "detalle") },
+    body: {
+      tipo: campo(formData, "tipo") ?? "",
+      monto: campo(formData, "monto") ?? "",
+      detalle: campo(formData, "detalle"),
+      fecha: campo(formData, "fecha"),
+    },
   });
   if (r.data) revalidatePath("/admin/clientes");
   return resultado(r, "Revisá los datos.");
+}
+
+/** Le abre la cuenta web a un cliente del panel y le manda el link (M2S1-097). */
+export async function invitarAlPortal(customerId: string): Promise<EstadoCliente> {
+  const r = await (await api()).POST("/api/v1/admin/clientes/{id}/invitacion", {
+    params: { path: { id: customerId } },
+  });
+  if (r.data) revalidatePath(`/admin/clientes/${customerId}`);
+  return resultado(r, "No se pudo mandar la invitación.");
 }
 
 export async function vincularCuentaWeb(_previo: EstadoCliente, formData: FormData): Promise<EstadoCliente> {

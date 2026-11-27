@@ -12,6 +12,9 @@ const RUBROS = new Set([
   "carpinteria", "maderera", "maderas", "constructora", "construcciones", "corralon", "aberturas", "muebles",
   "amoblamientos", "ferreteria", "herreria", "taller", "fabrica", "distribuidora", "comercial", "grupo",
   "industrias", "estudio", "inmobiliaria", "empresa", "obras", "cooperativa", "aserradero", "metalurgica",
+  // Del mes simulado: «Hola Sim» a «Sim Mueblería Atlántica» y a «Sim Obra Barrio Parque».
+  "muebleria", "obra", "barraca", "pintureria", "vivero", "techos", "estructuras", "arquitectura", "viviendas",
+  "desarrollos",
 ]);
 
 function clave(palabra: string): string {
@@ -34,6 +37,8 @@ export function nombreDeSaludo(nombre: string | null | undefined, primera: (n: s
       break;
     }
   }
-  if (corte === palabras.length && !RUBROS.has(clave(palabras[0]))) return primera(nombre ?? "");
+  // El rubro va primero («Carpintería Ferreyra») o segundo, detrás de una sigla o un apodo («Sim Mueblería»).
+  const esNegocio = RUBROS.has(clave(palabras[0])) || (palabras.length > 2 && RUBROS.has(clave(palabras[1])));
+  if (corte === palabras.length && !esNegocio) return primera(nombre ?? "");
   return palabras.slice(0, corte).join(" ").replace(/[,;]+$/, "");
 }

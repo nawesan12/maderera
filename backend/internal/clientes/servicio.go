@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"mjbj/internal/formato"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/auth"
@@ -201,6 +203,12 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 	if err != nil {
 		return "", "", err
 	}
+	// «2235550483» tipeado de corrido se guarda como las demás fichas:
+	// «223 555-0483» (M3S1-069).
+	if c.Telefono != nil {
+		t := formato.Telefono(*c.Telefono)
+		c.Telefono = &t
+	}
 	if c.Cuit != nil {
 		if doc, e := LeerDocumento(*c.Cuit); e == "" && doc.Tipo != "ninguno" {
 			formas := []string{doc.Digitos}
@@ -272,7 +280,7 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 
 // Movimiento es registrarMovimiento: una compra, nota o ajuste cargado a
 // mano (solo el admin). El signo lo pone el tipo.
-func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, tipo, monto, detalle string) error {
+func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, tipo, monto, detalle string, fecha ...string) error {
 	if !plataforma.UUIDValido(cliente) {
 		return mal("customerId", "Invalid UUID")
 	}
@@ -293,11 +301,40 @@ func (s *Servicio) Movimiento(ctx context.Context, ses *auth.Sesion, cliente, ti
 		m = -m
 	}
 	texto := jsmath.Fijo2(m)
+	// Una deuda vieja que se carga hoy lleva su fecha (M3S3-017): entraba
+	// como de hoy, vencía dentro de 15 días y el seguimiento no la contaba
+	// atrasada. Hasta un año para atrás, nunca para adelante; un mes cerrado
+	// lo frena la base (00221).
+	var cuando pgtype.Timestamptz
+	dia := ""
+	if len(fecha) > 0 {
+		dia = strings.TrimSpace(fecha[0])
+	}
+	if dia != "" {
+		t, err := time.ParseInLocation("2006-01-02", dia, argentina)
+		if err != nil {
+			return mal("fecha", "Revisá la fecha.")
+		}
+		hoy := time.Now().In(argentina)
+		hoyDia := time.Date(hoy.Year(), hoy.Month(), hoy.Day(), 0, 0, 0, 0, argentina)
+		switch {
+		case t.After(hoyDia):
+			return mal("fecha", "La fecha no puede ser de mañana en adelante.")
+		case t.Before(hoyDia.AddDate(-1, 0, 0)):
+			return mal("fecha", "La fecha es de hace más de un año: revisala.")
+		case t.Before(hoyDia):
+			// Al mediodía de ese día: cae en ese día en cualquier zona.
+			cuando = pgtype.Timestamptz{Time: t.Add(12 * time.Hour), Valid: true}
+		}
+	}
 	if err := s.q.MovimientoManual(ctx, sqlc.MovimientoManualParams{CustomerID: cliente, Tipo: sqlc.TipoMovimientoCuenta(tipo),
-		Monto: texto, Detalle: nulo(d), CreatedByUserID: &ses.UserID}); err != nil {
+		Monto: texto, Detalle: nulo(d), CreatedByUserID: &ses.UserID, Fecha: cuando}); err != nil {
 		return err
 	}
 	det := map[string]any{"tipo": tipo, "monto": texto}
+	if cuando.Valid {
+		det["fecha"] = dia
+	}
 	if d != "" {
 		det["detalleCarga"] = d
 	}

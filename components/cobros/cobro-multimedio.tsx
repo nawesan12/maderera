@@ -33,7 +33,17 @@ type Renglon = {
   numero: string;
   fechaPago: string;
   librador: string;
+  /** El impuesto de una retención sufrida; el certificado va en la referencia. */
+  impuesto: string;
 };
+
+/** Los impuestos de una retención sufrida, como se escriben (M2S3-061). */
+const IMPUESTOS = [
+  { valor: "ganancias", texto: "Ganancias" },
+  { valor: "iva", texto: "IVA" },
+  { valor: "iibb", texto: "IIBB" },
+  { valor: "suss", texto: "SUSS" },
+];
 
 const MEDIOS_POR_OMISION: MedioDeCobro[] = [
   "efectivo",
@@ -50,6 +60,7 @@ function pideReferencia(medio: MedioDeCobro): string | null {
   if (medio === "transferencia" || medio === "deposito") return "N° de operación";
   if (medio === "tarjeta_debito" || medio === "tarjeta_credito") return "Lote y cupón";
   if (medio === "mercado_pago") return "N° de operación";
+  if (medio === "retencion") return "N° de certificado";
   return null;
 }
 
@@ -65,6 +76,7 @@ function renglonNuevo(medio: MedioDeCobro, importe: number): Renglon {
     numero: "",
     fechaPago: "",
     librador: "",
+    impuesto: "iibb",
   };
 }
 
@@ -137,6 +149,7 @@ export function CobroMultimedio({
       medio: r.medio,
       importe: r.importe,
       referencia: r.referencia || null,
+      ...(r.medio === "retencion" ? { impuesto: r.impuesto } : {}),
       cheque: esCheque(r.medio)
         ? { numero: r.numero, banco: r.banco, librador: r.librador || null, fechaPago: r.fechaPago }
         : null,
@@ -241,7 +254,38 @@ export function CobroMultimedio({
                 </div>
               )}
 
-              {referencia && (
+              {/* La retención sufrida: el impuesto y el certificado, como el
+                  papel que entrega el cliente (M2S1-093). */}
+              {r.medio === "retencion" && (
+                <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2.5">
+                  <label className="text-sm text-muted-foreground">
+                    Impuesto
+                    <select
+                      value={r.impuesto}
+                      onChange={(e) => cambiar(r.clave, "impuesto", e.target.value)}
+                      className="mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-2.5 text-base text-foreground"
+                    >
+                      {IMPUESTOS.map((x) => (
+                        <option key={x.valor} value={x.valor}>
+                          {x.texto}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm text-muted-foreground">
+                    N° de certificado
+                    <input
+                      value={r.referencia}
+                      onChange={(e) => cambiar(r.clave, "referencia", e.target.value)}
+                      required
+                      maxLength={40}
+                      className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {referencia && r.medio !== "retencion" && (
                 <label className="block text-sm text-muted-foreground">
                   {referencia} <span className="font-normal">(opcional)</span>
                   <input

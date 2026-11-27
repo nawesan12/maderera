@@ -343,7 +343,7 @@ func TestBotTopeDeMensajes(t *testing.T) {
 		t.Errorf("en ahorro no saluda: %q", r)
 	}
 	b.texto(jid, "asdf qwer")
-	if r := b.delBot(jid); len(r) != 1 || !strings.Contains(r[0], "wa.me") {
+	if r := b.delBot(jid); len(r) != 1 || !strings.Contains(r[0], "/api/whatsapp/hablar/") {
 		t.Errorf("en ahorro deriva a la primera: %q", r)
 	}
 
@@ -352,6 +352,11 @@ func TestBotTopeDeMensajes(t *testing.T) {
 	b.texto(jid, "a qué hora abren?")
 	if r := b.delBot(jid); len(r) != 0 {
 		t.Errorf("con el tope, el bot no manda: %q", r)
+	}
+	// Pero la conversación pasa a una persona, a la vista (M2S2-032).
+	var estado string
+	if err := b.pool.QueryRow(ctx, `select bot_estado from whatsapp_conversaciones where wa_jid = $1`, jid).Scan(&estado); err != nil || estado != "derivada" {
+		t.Errorf("con el tope, la conversación queda %q (%v)", estado, err)
 	}
 	if !b.wa.TopeAlcanzado(ctx) {
 		t.Error("la bandeja tendría que pedir confirmación")

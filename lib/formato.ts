@@ -226,6 +226,21 @@ function fechaSegunTipo(opciones: Intl.DateTimeFormatOptions) {
 
 export const fechaCorta = fechaSegunTipo({ day: "2-digit", month: "2-digit", year: "2-digit" });
 
+/** «26/11» de un instante, en hora argentina (los movimientos de la cuenta). */
+export const diaYMesAR = fechaSegunTipo({ day: "2-digit", month: "2-digit" });
+
+/** «noviembre de 2026» de un instante, en hora argentina. */
+export const mesYAnioAR = fechaSegunTipo({ month: "long", year: "numeric" });
+
+/**
+ * La clave del mes argentino de un instante («2026-10»): lo de las 22 h del
+ * 30/11 es de noviembre, no de diciembre (M2S2-023). El servidor corre en UTC
+ * y `getMonth()` daba el mes siguiente.
+ */
+export function claveDeMesAR(fecha: Date): string {
+  return mesYAnioAR.format(fecha);
+}
+
 export const fechaLarga = fechaSegunTipo({ day: "numeric", month: "long", year: "numeric" });
 
 export const fechaHora = new Intl.DateTimeFormat("es-AR", {

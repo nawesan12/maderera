@@ -129,15 +129,21 @@ type FilaPrecio struct {
 	Imagen         *string  `json:"imagen"`
 	Medida         string   `json:"medida"`
 
+	// OfertaHasta en oferta: cuándo termina
+	OfertaHasta *time.Time `json:"ofertaHasta,omitempty"`
+
 	// Piso el precio final que apenas cubre el costo (sin costo cargado, null)
-	Piso              *float64 `json:"piso,omitempty"`
-	PrecioGeneral     string   `json:"precioGeneral"`
-	PrecioProfesional string   `json:"precioProfesional"`
-	ProductId         string   `json:"productId"`
-	Producto          string   `json:"producto"`
-	Sku               string   `json:"sku"`
-	Unidad            string   `json:"unidad"`
-	VariantId         string   `json:"variantId"`
+	Piso *float64 `json:"piso,omitempty"`
+
+	// PrecioAnterior en oferta: el precio de antes (lista general)
+	PrecioAnterior    *string `json:"precioAnterior,omitempty"`
+	PrecioGeneral     string  `json:"precioGeneral"`
+	PrecioProfesional string  `json:"precioProfesional"`
+	ProductId         string  `json:"productId"`
+	Producto          string  `json:"producto"`
+	Sku               string  `json:"sku"`
+	Unidad            string  `json:"unidad"`
+	VariantId         string  `json:"variantId"`
 }
 
 // ListaDePrecios defines model for ListaDePrecios.
@@ -301,6 +307,20 @@ type FijarPorcentajeDeListaJSONBody struct {
 	Porcentaje string `json:"porcentaje"`
 }
 
+// OfertarPrecioJSONBody defines parameters for OfertarPrecio.
+type OfertarPrecioJSONBody struct {
+	Hasta       string `json:"hasta"`
+	Precio      string `json:"precio"`
+	PriceListId string `json:"priceListId"`
+	VariantId   string `json:"variantId"`
+}
+
+// TerminarOfertaJSONBody defines parameters for TerminarOferta.
+type TerminarOfertaJSONBody struct {
+	PriceListId string `json:"priceListId"`
+	VariantId   string `json:"variantId"`
+}
+
 // AjustarPreciosJSONRequestBody defines body for AjustarPrecios for application/json ContentType.
 type AjustarPreciosJSONRequestBody AjustarPreciosJSONBody
 
@@ -321,6 +341,12 @@ type PrevisualizarImportacionMultipartRequestBody PrevisualizarImportacionMultip
 
 // FijarPorcentajeDeListaJSONRequestBody defines body for FijarPorcentajeDeLista for application/json ContentType.
 type FijarPorcentajeDeListaJSONRequestBody FijarPorcentajeDeListaJSONBody
+
+// OfertarPrecioJSONRequestBody defines body for OfertarPrecio for application/json ContentType.
+type OfertarPrecioJSONRequestBody OfertarPrecioJSONBody
+
+// TerminarOfertaJSONRequestBody defines body for TerminarOferta for application/json ContentType.
+type TerminarOfertaJSONRequestBody TerminarOfertaJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -363,6 +389,12 @@ type ServerInterface interface {
 
 	// (PUT /api/v1/admin/precios/listas/{id}/porcentaje)
 	FijarPorcentajeDeLista(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (POST /api/v1/admin/precios/oferta)
+	OfertarPrecio(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/admin/precios/oferta/fin)
+	TerminarOferta(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/admin/precios/rubros)
 	RubrosParaAjuste(w http.ResponseWriter, r *http.Request)
@@ -687,6 +719,34 @@ func (siw *ServerInterfaceWrapper) FijarPorcentajeDeLista(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// OfertarPrecio operation middleware
+func (siw *ServerInterfaceWrapper) OfertarPrecio(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OfertarPrecio(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TerminarOferta operation middleware
+func (siw *ServerInterfaceWrapper) TerminarOferta(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TerminarOferta(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RubrosParaAjuste operation middleware
 func (siw *ServerInterfaceWrapper) RubrosParaAjuste(w http.ResponseWriter, r *http.Request) {
 
@@ -827,6 +887,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/admin/precios/listas/{id}/porcentaje", wrapper.FijarPorcentajeDeLista)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/precios/rubros", wrapper.RubrosParaAjuste)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/editar", wrapper.EditarPrecio)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/oferta", wrapper.OfertarPrecio)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/oferta/fin", wrapper.TerminarOferta)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/ajuste", wrapper.AjustarPrecios)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/precios/ajuste/previa", wrapper.PrevisualizarAjuste)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/admin/precios/ajuste/ultimo", wrapper.DeshacerUltimoAjuste)
@@ -1257,6 +1319,70 @@ func (response FijarPorcentajeDeLista422ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type OfertarPrecioRequestObject struct {
+	Body *OfertarPrecioJSONRequestBody
+}
+
+type OfertarPrecioResponseObject interface {
+	VisitOfertarPrecioResponse(w http.ResponseWriter) error
+}
+
+type OfertarPrecio204Response struct {
+}
+
+func (response OfertarPrecio204Response) VisitOfertarPrecioResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type OfertarPrecio422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response OfertarPrecio422ApplicationProblemPlusJSONResponse) VisitOfertarPrecioResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TerminarOfertaRequestObject struct {
+	Body *TerminarOfertaJSONRequestBody
+}
+
+type TerminarOfertaResponseObject interface {
+	VisitTerminarOfertaResponse(w http.ResponseWriter) error
+}
+
+type TerminarOferta204Response struct {
+}
+
+func (response TerminarOferta204Response) VisitTerminarOfertaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type TerminarOferta422ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response TerminarOferta422ApplicationProblemPlusJSONResponse) VisitTerminarOfertaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RubrosParaAjusteRequestObject struct {
 }
 
@@ -1323,6 +1449,12 @@ type StrictServerInterface interface {
 
 	// (PUT /api/v1/admin/precios/listas/{id}/porcentaje)
 	FijarPorcentajeDeLista(ctx context.Context, request FijarPorcentajeDeListaRequestObject) (FijarPorcentajeDeListaResponseObject, error)
+
+	// (POST /api/v1/admin/precios/oferta)
+	OfertarPrecio(ctx context.Context, request OfertarPrecioRequestObject) (OfertarPrecioResponseObject, error)
+
+	// (POST /api/v1/admin/precios/oferta/fin)
+	TerminarOferta(ctx context.Context, request TerminarOfertaRequestObject) (TerminarOfertaResponseObject, error)
 
 	// (GET /api/v1/admin/precios/rubros)
 	RubrosParaAjuste(ctx context.Context, request RubrosParaAjusteRequestObject) (RubrosParaAjusteResponseObject, error)
@@ -1734,6 +1866,68 @@ func (sh *strictHandler) FijarPorcentajeDeLista(w http.ResponseWriter, r *http.R
 	}
 }
 
+// OfertarPrecio operation middleware
+func (sh *strictHandler) OfertarPrecio(w http.ResponseWriter, r *http.Request) {
+	var request OfertarPrecioRequestObject
+
+	var body OfertarPrecioJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OfertarPrecio(ctx, request.(OfertarPrecioRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OfertarPrecio")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OfertarPrecioResponseObject); ok {
+		if err := validResponse.VisitOfertarPrecioResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TerminarOferta operation middleware
+func (sh *strictHandler) TerminarOferta(w http.ResponseWriter, r *http.Request) {
+	var request TerminarOfertaRequestObject
+
+	var body TerminarOfertaJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TerminarOferta(ctx, request.(TerminarOfertaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TerminarOferta")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TerminarOfertaResponseObject); ok {
+		if err := validResponse.VisitTerminarOfertaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RubrosParaAjuste operation middleware
 func (sh *strictHandler) RubrosParaAjuste(w http.ResponseWriter, r *http.Request) {
 	var request RubrosParaAjusteRequestObject
@@ -1763,49 +1957,52 @@ func (sh *strictHandler) RubrosParaAjuste(w http.ResponseWriter, r *http.Request
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"7FrNbhy5EX4VopMFZKSlkb02goxPXmnteGE7A292LysjqGnWjCizyRZ/Bhkbc885b+DjIshJhwDZm+dN",
-	"8iQByf6dZrfGsuzdDQIYsKabLBaLX1V9Vey3SSbzQgoURifTt4lCXUih0f+YKTnnmIP7O5PCoDDuTygK",
-	"zjIwTIpJEYb87kJL4d7p7Lyc8FuFi2Sa/GbSLDAJb/WkFrzZbNKEos4UK5y8ZJp8rZRU5ODl4xPyh/sP",
-	"fn8ncUPKiU7uCeRzJk9xpjBj0j0plCxQGRaUzhSCQfrIq7qQKgeTTBMKBg8NyzFJE7MuMJkm2igmlskm",
-	"TRh1Y3uPOdMGom9ypIwOvJKGrbxawnIOc47J1CiLkWWlYkv0VkNh82T6Q5KDsMCTNIELqw3+JQfthKUJ",
-	"ywupDGTORK8iogpvjEfCoGJS7bV6mPLCYtA28l5Sm5n4S/3aRp5v0kThpWUKqdsNo0kY2RJW264yb0/3",
-	"rma1lWrLpq0Tbkwh5xeYGafaY8ZhCBuQGQucvQEqB9FxreHmCrNzf/hd4L7/BwdSKLlAzaQATlCTF+QL",
-	"km/faTIHBQbe/5SkrVWlnfORJYXN56jckhkYXErF4pCr337L7TI6gqLe2Xo5ZC4lRxBuDMuhROO1FhiB",
-	"f8G07JsGOQmHShbMWebSIoECBWiS2blCgpxkUhtJDjQT5Z8ZqCVQmRKnz52bGS6s+gQFKuADMHcjZs2x",
-	"jTnDU3pbrpImVjAKcXkrUAxEfLUdH2uGtpUcc7sGS7vIqXWqwbBrwJi5aodIO+7VA13MV58xbaAK5Trq",
-	"r2yFcbzeXpxn+hQXYLkZcAyDuZ4pWZQqdqHNpS6x7f73gyrk6ocO1wodmDVwJBQJB7KsjVmuxYTBZcCr",
-	"gBzjEJMqQ2HgAr+Vc4UtRF/rrToeFaLBOsDAa9G2S1qdRNvsg0rtmCx28M9RaLjA/onL19erKl9HZbbZ",
-	"SlcoRQMs7tiolFRhFFDKjMf0rDO7N6e3sjZgbHts60QNMxyv31MYVouK7e87blguH3lm0N9jZkGMZLVY",
-	"SjiHjM05RkD9TGofozVbWhTE/asjOEVOAj2JIphLgwNh8gOoUdFEhN0ldgxXrpdWBmjxhEpId7Mx034f",
-	"4tCQbXOL2igPLI/s/ggQZgAsFHVhB97diGCOJJsd04yRrqBwo17MKuUDUArW7rdm4kRqI2OnkiZGZi7m",
-	"7XFk1ciWxLS28eDxzBSuWMS5M1cPgIgr5d07asYF46BHTtTFDM7jwRi1KWlURdyDEkmasGUg8JqJw5CD",
-	"gwox0l4mgkc+SUYXKkcMk3TOBEJ86zeDkH9Z5fYRzVqjhrXbq0oIW6gYS2nafeDoTY0DYbesS2EfPAYo",
-	"pDWSGtFtOX2VnBwmFhG++8xleW3Y9kq4pF/xAxc6CxDIp54HKMY5kEwKwkETKjXx3qlTgvxMnDNtpGLA",
-	"U4KUGVDEilJSSuoYTEKJmDqBdZEYlj0TBQfh1tCpXyFIJxQVWwEFTdaEe610ZlEYR2CkIg430msNS3l0",
-	"Js7EDFXOtNQtrb0GtYZkTfz250yl5NIynzKMAgJnYgI0Z2ISFNfkwGnuntx52NJpZxYpJ2WcoYtT5IDD",
-	"mViw7By8DcvnBDlbekql7Ro82fLziHEHuf0x2NVqcAnMgGIL0HeOztwBl1k5ef7NV9+Q9/8iszpVrFDp",
-	"cIh3fY3uqpSCJdPky6Pjoy8dIsCce1RNoGCT1d3uBt2LJXom6aKJb5K4dJg88XZruK4TpCBHg0on0x/e",
-	"JsyteWlRrSsGNk3mVl9a9IG7aazk8NdnKJbmPJneOz5O++4Vl9Xm/Y2wPSeXbtmeWYU+IymUsfwwGKHc",
-	"26EL2BpUkibAD6lfeA4X8jArQ34rhhxmoGQkSA7pk4PKBq1y997+VimUXCFSqTrC9pzMWc4MdmbSqpJ4",
-	"cJw6nVhu8/KccibCr7tpJCLFV3DpmcMbyB3gZXyltujjiOhXaberd+/4eKSh12/k7aRbNy1aq/FTNpCK",
-	"3KmPMAcHlpclVoaCeQWUE1ADUjQTTdun/zrAdB9yUsN51kbzyxaYT2ssn/ShfNJFcpO/+oxjrEXaamNF",
-	"cp+RBvgeu6lSWxif1qcXT2bdJPadAFJs3y2ZgFC5ahI4hSa+GnTNGymItnUB7LOCX8qH6QXjRskyy5Qr",
-	"O0kZUJdHbCHdsps0Hkkn0LBxqSMR1bN1UE1AdRtHbb6SdP1BAI8XfgvgGtMdkM9B43gPbpjoD3bnQjAb",
-	"r5hGGgJD/KyMaz1ywmggItWIh52jdWWfYSjQnSzJtleULWWsgFRIpaAY107ZudqnQmk2EUdkM9gVipuP",
-	"jGRj/lZ1JCKOcGK37zw9CgRRSd8Wun/v3pDMWsnORcc1QJ8UTYFT4n23KCc507n0R1QTwJS4jmlFv4gA",
-	"Ckek1riiXUZmQNbECiBloeUdcXsVxFEQR0m641++4NKhf6ceVRX//51swMn+1x2k2yOJuMkzICs3hpRA",
-	"/hQ+Yn0PLPgGx5Adulp8b5GvkEDdr4LyYonw2nO2//ZiqhLKu/X2iqyd9zB0zrK9Ir4zsv1R9x3j1HeT",
-	"UHUacj9zaFpJvmJ409CUxmuW29wgcP6nhS90xrbaWdEx126nMHZd3DvOqiIuQAEpJEVFaHliXJIDJ5Fo",
-	"RoQk57C+M4q6pjQerOtO6yGnOIOl/Fg7DTUYs50g9XE3IRQ1xedSDPSA0LBLiwO9yYFbFN83+PAoGruG",
-	"CKI6WnaktBRMK8tcdy3cZdB9HP1Z+gaM1C6XApcCddrqh6xJ7vXwM+N89IkFRUHVgGjh4ZOnzDF4/GLP",
-	"+ibHfLMseL+fJ8JpUXm7aSp06oZrlq8pq0uWz4OMYrcmbtMXlqG7gn16y9fQjdjqEuaXfm51K3Mwzv+x",
-	"GvGBLbyxHtH9do/owbU9ole3lVrGMvDO51V7RE53WVim4LJEknrU2GWfesRNTqRYMJWDetr67umzuEul",
-	"/3Am7t3aDH3q4shmLrVR2yvCu9z4oSMgFe304c+1vqXI0LfqXecEiEbiP6x4A0l6g6uhz32P4wbtkXi7",
-	"kypz/xqqf40EvPxbbwBUDhFpAYyU5Pv6Ru6KpgKUmThueEgh5PqhBi+o7LzkEjWXnDMBPqj1IfDz16Tl",
-	"xXDs6Jr+Rmg6er9yKytwbuYaDeRAupLQ39L6NidmxioYrwvCrdVgrvCfNel2ovj0cXvnU6r9GG+4Gay+",
-	"SCKFYjkqucfWJ28Z3Uy6ZK+wEVM8ZhegZvW4U08MYCB1uqu1JnP6UqCLpXYWrcFprR+5C81Xn4dedUyw",
-	"+0FoZdj//O3vL8gX7396SFaQbf/prlcvfAcu3MUqjVHf+vW1Sjvs7Pj+kKRYfLzNgOq7a8P++dK/noGC",
-	"2+ltDDCFsl25HuxJDn7tt98ne92v9Tqr3aQCdjwuGC7c77j7HN9D8fc4oJqes7f9ZvPfAQA=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

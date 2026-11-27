@@ -505,7 +505,10 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Ficha, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.UserID == nil && c.Email != nil && *c.Email != "" {
+	// La ficha apagada (la que quedó al unir su cuenta web con otra) no
+	// ofrece vincular: un clic le sacaba la cuenta a la ficha con la deuda
+	// (M3S1-025).
+	if c.UserID == nil && c.Active && c.Email != nil && *c.Email != "" {
 		var w CuentaWeb
 		err := s.pool.QueryRow(ctx, `SELECT id, nombre, created_at FROM customers
 			WHERE email = $1 AND active AND user_id IS NOT NULL AND id <> $2 LIMIT 1`, *c.Email, c.ID).Scan(&w.ID, &w.Nombre, &w.CreatedAt)

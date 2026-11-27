@@ -5,6 +5,8 @@ import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 import { ArrowLeft, CalendarClock, ClipboardList, Download, MessageCircle, MessageSquareText, Printer, Scissors } from "lucide-react";
 import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -22,6 +24,7 @@ import { CreditoDelCliente } from "./credito";
 import { DialogoMovimiento } from "./dialogo-movimiento";
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import { AnularRecibo } from "@/components/cobros/anular-recibo";
+import { InvitarAlPortal } from "./invitar-portal";
 import { RechazarCheque } from "@/components/cobros/rechazar-cheque";
 import { LineaDeTiempo } from "@/components/cuenta/linea-de-tiempo";
 import { FiltrosDeMovimientos, esFiltro } from "@/components/cuenta/filtros-de-movimientos";
@@ -70,15 +73,18 @@ export default async function FichaClientePage({
   const esAdmin = usuario.staffRole === "admin";
   const manejaPlata = usuario.staffRole != null && MANEJAN_PLATA.includes(usuario.staffRole);
 
-  const [recordatorio, resumenCuenta, recibo] = await Promise.all([
+  const [recordatorio, resumenCuenta, recibo, ajustes] = await Promise.all([
     cliente.saldo > 0
       ? avisoManual("recordatorio_saldo", { tipo: "customer", id }, { saldo: formatearMonto(cliente.saldo) })
       : null,
     avisoManual("documento", { tipo: "customer", id }),
     avisoDelUltimoRecibo(id),
+    ajustesDelSitio(),
   ]);
 
   const limite = Number(cliente.limiteCredito);
+  // Una ficha nueva, sin deuda ni movimientos, no tiene resumen que mandar.
+  const tieneMovimientos = historial.movimientos.length > 0 || cliente.saldo !== 0;
   // La lista de precios a la vista: había que abrir «Editar datos» para saber
   // cuál tenía (mes simulado). Sin lista propia es la general.
   const lista = listas.find((l) => l.id === cliente.priceListId) ?? listas.find((l) => l.isDefault);
@@ -90,6 +96,8 @@ export default async function FichaClientePage({
   const subtitulo = [
     cliente.razonSocial && cliente.razonSocial !== cliente.nombre ? cliente.razonSocial : null,
     cliente.rubro && cliente.rubro !== "particular" ? etiquetaDeRubro(cliente.rubro) : null,
+    // Que es profesional se dice acá, junto al rubro (M3S1-072).
+    cliente.tipo === "profesional" ? "Profesional" : null,
   ].filter(Boolean);
   const excedido = limite > 0 && cliente.saldo > limite;
   const usoLimite = limite > 0 ? Math.min((cliente.saldo / limite) * 100, 100) : 0;
@@ -149,6 +157,7 @@ export default async function FichaClientePage({
             customerId={cliente.id}
             nombre={cliente.nombre}
             aCobrar={Math.max(cliente.saldo, 0)}
+            conRetencion={esAdmin || valorDeRegla(ajustes, "retencion_en_el_cobro") === "quien_cobra"}
           />
         </div>
       </div>
@@ -244,6 +253,7 @@ export default async function FichaClientePage({
               bloqueada={cliente.cuentaBloqueada}
               motivo={cliente.motivoBloqueo}
               editable={esAdmin}
+              sinCuenta={limite <= 0}
             />
 
             {/* La gestión de cobro arranca desde lo que debe: el cliente y el
@@ -316,6 +326,12 @@ export default async function FichaClientePage({
                 valor={cliente.userId ? "Sí, con acceso al portal" : "No tiene"}
               />
             </dl>
+            {/* Con el correo cargado, se lo invita desde acá (M2S1-097). */}
+            {!cliente.userId && cliente.email && (
+              <div className="mt-2 flex justify-end">
+                <InvitarAlPortal customerId={cliente.id} />
+              </div>
+            )}
             {cliente.notas && (
               <p className="mt-4 border-t pt-3 text-base text-muted-foreground">
                 {cliente.notas}
@@ -328,7 +344,9 @@ export default async function FichaClientePage({
         <div className="space-y-4">
           {/* Lo que se le manda por WhatsApp desde el teléfono, gratis: el
               recordatorio del saldo si debe, y el resumen de la cuenta. */}
-          {(recordatorio || resumenCuenta || recibo) && (
+          {/* El resumen se manda desde Movimientos: eran dos grupos para lo
+              mismo, también en una ficha nueva sin nada (M2S4-068). */}
+          {(recordatorio || recibo) && (
             <section className="tarjeta space-y-4 p-5">
               <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Avisarle por WhatsApp
@@ -351,12 +369,6 @@ export default async function FichaClientePage({
                   <AvisarPorWhatsapp aviso={recordatorio} atajo />
                 </div>
               )}
-              {resumenCuenta && (
-                <div>
-                  <p className="mb-1.5 text-base font-medium">El resumen de la cuenta</p>
-                  <AvisarPorWhatsapp aviso={resumenCuenta} compacto />
-                </div>
-              )}
             </section>
           )}
 
@@ -367,6 +379,7 @@ export default async function FichaClientePage({
               {/* El resumen trae el libro entero con el saldo corrido y la
                   antigüedad de la deuda: es lo que se le manda al cliente
                   cuando pregunta cuánto debe. */}
+              {tieneMovimientos && (
               <span className="flex flex-wrap items-center gap-3">
                 <Link
                   href={`/cuenta/${cliente.id}`}
@@ -383,8 +396,10 @@ export default async function FichaClientePage({
                   <Download className="h-4 w-4" />
                   Resumen en PDF
                 </a>
+                {resumenCuenta && <AvisarPorWhatsapp aviso={resumenCuenta} compacto />}
                 <MandarPorWhatsapp tipo="cuenta" id={cliente.id} compacto />
               </span>
+              )}
             </div>
 
             {/* Lo mismo que ve el cliente en Mi cuenta → Movimientos, con los
@@ -406,7 +421,9 @@ export default async function FichaClientePage({
                     // débito de uno rechazado llevan el recibo de referencia:
                     // se anula desde su pago.
                     (r, m) =>
-                      r.porMercadoPago || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
+                      // Con un cheque rechazado tampoco: ya volvió a la cuenta
+                      // con su nota de débito (M2S3-070).
+                      r.porMercadoPago || r.chequeRechazado || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
                         <AnularRecibo
                           id={r.id}
                           numero={r.numero}
@@ -425,6 +442,7 @@ export default async function FichaClientePage({
                         importe={c.importe}
                         cliente={cliente.nombre}
                         conNombre={unoDeVarios}
+                        devolver={c.devolver}
                       />
                     )
                   : undefined

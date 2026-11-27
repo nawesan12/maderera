@@ -110,8 +110,22 @@ func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, clien
 	if e != "" {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"partes": e})
 	}
-	if ConRetencion(partes) && (ses.RolStaff == nil || *ses.RolStaff != sqlc.StaffRoleAdmin) {
+	// La retención que trae el cliente va en el mismo recibo (M2S1-093). Quién
+	// la carga lo dice la regla retencion_en_el_cobro (de arranque, el admin).
+	if ConRetencion(partes) && (ses.RolStaff == nil || *ses.RolStaff != sqlc.StaffRoleAdmin) &&
+		!reglas.Es(ctx, s.pool, reglas.RetencionEnElCobro, "quien_cobra") {
 		return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"partes": "Una retención la carga un administrador, con su certificado."})
+	}
+	for _, p := range partes {
+		if p.Medio != "retencion" {
+			continue
+		}
+		if NombreDelImpuesto[p.Impuesto] == "" {
+			return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"partes": "Elegí el impuesto de la retención."})
+		}
+		if p.Referencia == nil || plataforma.LargoJS(*p.Referencia) > 40 {
+			return ResultadoDeCobro{}, plataforma.Invalido(map[string]string{"partes": "Poné el número del certificado de la retención."})
+		}
 	}
 	var r ReciboEmitido
 	var numeroPedido string
@@ -176,6 +190,22 @@ func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, clien
 		}
 		if r.Repetido {
 			return nil
+		}
+		// Cada retención queda como certificado, atada al recibo: si se
+		// anula el recibo, se anula con él (como CargarRetencionSufrida).
+		for _, p := range partes {
+			if p.Medio != "retencion" {
+				continue
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO retenciones_sufridas
+				(customer_id, numero, impuesto, base, importe, fecha, created_by_user_id, receipt_id)
+				VALUES ($1, $2, $3, 0, $4::numeric, $5, $6, $7)`,
+				cliente, *p.Referencia, p.Impuesto, jsmath.Fijo2(p.Importe), time.Now().In(argentina).Format("2006-01-02"), ses.UserID, r.ReceiptID); err != nil {
+				if strings.Contains(err.Error(), "retenciones_sufridas_numero_idx") {
+					return errCobro("El certificado " + *p.Referencia + " ya está cargado para este cliente.")
+				}
+				return err
+			}
 		}
 		// Pagado cuando lo cobrado cubre el total: este recibo, los
 		// anteriores del mismo pedido y lo cobrado en línea. Mirar solo este
@@ -259,6 +289,16 @@ func (s *Servicio) AnularConPIN(ctx context.Context, ses *auth.Sesion, recibo, m
 	}
 	if porMP {
 		return "", comoProblema(errCobro("Este cobro entró por Mercado Pago: devolvelo desde Mercado Pago y el recibo se anula solo cuando llega el aviso."))
+	}
+	// Un cheque que ya salió de la cartera (o se rechazó) lo traba igual: se
+	// dice antes de pedir el PIN (M2S3-070).
+	var traba *sqlc.EstadoCheque
+	if err := s.pool.QueryRow(ctx, `SELECT c.estado FROM receipt_parts p JOIN cheques c ON c.id = p.cheque_id
+		WHERE p.receipt_id::text = $1 AND c.estado <> 'cartera' ORDER BY c.estado = 'rechazado' DESC LIMIT 1`, recibo).Scan(&traba); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+	if traba != nil {
+		return "", comoProblema(errCobro(MotivoDelChequeQueTraba(*traba)))
 	}
 	if !ses.Tiene(sqlc.StaffRoleAdmin) {
 		var total float64
@@ -449,6 +489,17 @@ func reabrirDeudaConElProveedor(ctx context.Context, tx pgx.Tx, cheque sqlc.Cheq
 // banco), depositado o endosado a un proveedor.
 var RechazablesDesdeLaFicha = []Estado{"cartera", "depositado", "entregado"}
 
+// SinVencer: la fecha de pago del cheque es posterior a hoy, en hora
+// argentina. Uno así en la cartera no se depositó nunca: si vuelve, es que se
+// le devolvió al cliente, no que lo rechazó el banco.
+func SinVencer(fechaPago, ahora time.Time) bool {
+	if fechaPago.IsZero() {
+		return false
+	}
+	// La fecha de pago es un día (medianoche UTC): se lee en UTC.
+	return fechaPago.UTC().Format("2006-01-02") > ahora.In(argentina).Format("2006-01-02")
+}
+
 // RechazarConPIN registra que el banco rechazó un cheque de un cliente,
 // desde su ficha (H272): quien no es admin, con el PIN de uno (motivo
 // cheque, por el importe), porque vuelve la deuda. Después es el mismo
@@ -513,7 +564,7 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 	var desde Estado
 	var cheque sqlc.Cheque
 	var recibo ReciboEmitido
-	debitado := false
+	debitado, devuelto := false, false
 	err := plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		// Quién: lo lee el trigger que anota el cambio en cheque_estados.
@@ -532,6 +583,8 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 			return err
 		}
 		desde = Estado(cheque.Estado)
+		// Desde la cartera nunca llegó al banco, venza o no: se le devuelve.
+		devuelto = hacia == "rechazado" && desde == "cartera"
 		if !PuedePasar(desde, hacia) {
 			nombre := ParaElCliente[hacia]
 			if nombre == "" {
@@ -623,8 +676,8 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 		if efecto == "debitar" && cheque.CustomerID != nil {
 			detalle := NombreDelCheque(string(cheque.Tipo), cheque.Banco, cheque.Numero) + " rechazado por el banco"
 			// Desde la cartera el banco nunca lo tuvo: se le devolvió al
-			// cliente (M2S3-088).
-			if desde == "cartera" {
+			// cliente (M2S3-069, M2S3-088, M3S3-010).
+			if devuelto {
 				detalle = NombreDelCheque(string(cheque.Tipo), cheque.Banco, cheque.Numero) + " devuelto al cliente"
 			}
 			if m != "" {
@@ -647,10 +700,10 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 				return err
 			}
 		}
-		// Devuelto desde la cartera, el cliente lo tiene en la mano: no se le
-		// avisa que lo rechazó el banco.
-		if hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido && desde != "cartera" {
-			if _, err := cola.Encolar(ctx, q, TrabajoChequeRechazado, map[string]any{"chequeId": id, "porElBanco": desde != "informado"}, time.Time{}); err != nil {
+		// Devuelto desde la cartera, el cliente lo tiene en la mano: el aviso
+		// no dice que lo rechazó el banco.
+		if hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido {
+			if _, err := cola.Encolar(ctx, q, TrabajoChequeRechazado, map[string]any{"chequeId": id, "porElBanco": desde != "informado" && !devuelto}, time.Time{}); err != nil {
 				return err
 			}
 		}
@@ -667,10 +720,10 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 	switch {
 	case recibo.Numero != "":
 		return ResultadoDeCobro{Ok: "Cheque aceptado. Se emitió el recibo " + recibo.Numero + ".", ReceiptID: &recibo.ReceiptID}, nil
-	case debitado && desde == "cartera":
-		return ResultadoDeCobro{Ok: "Devuelto: la deuda volvió a la cuenta del cliente."}, nil
 	case debitado && desde == "entregado":
 		return ResultadoDeCobro{Ok: "Rechazado: la deuda volvió a la cuenta del cliente. El cheque estaba endosado: hay que reponérselo al proveedor."}, nil
+	case debitado && devuelto:
+		return ResultadoDeCobro{Ok: "Devuelto al cliente: la deuda volvió a su cuenta y se le avisó."}, nil
 	case debitado:
 		return ResultadoDeCobro{Ok: "Rechazado: la deuda volvió a la cuenta del cliente y se le avisó."}, nil
 	case hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido:

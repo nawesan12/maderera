@@ -39,13 +39,19 @@ type FichaParaUnir struct {
 //   - con dos o más fichas con ese correo no se elige ninguna: elegir la más
 //     vieja era adivinar, y el error deja datos de una persona en la ficha de
 //     otra. Se busca a mano.
-func (s *Servicio) fichaConElCorreo(ctx context.Context, correo *string) (*FichaParaUnir, error) {
+//
+// conCuentaWeb (M2S2-069): el presupuesto lo armó alguien del panel (no
+// llegó anónimo del sitio): el correo lo escribió una persona del local, así
+// que también se ofrece la ficha que tiene cuenta web. Lo anónimo sigue con
+// la regla del comité.
+func (s *Servicio) fichaConElCorreo(ctx context.Context, correo *string, conCuentaWeb ...bool) (*FichaParaUnir, error) {
 	if correo == nil || *correo == "" {
 		return nil, nil
 	}
+	web := len(conCuentaWeb) > 0 && conCuentaWeb[0]
 	filas, err := s.pool.Query(ctx, `SELECT id, nombre, nullif(trim(telefono), '') FROM customers
-		WHERE lower(trim(email)) = lower(trim($1)) AND active AND user_id IS NULL
-		ORDER BY created_at, id LIMIT 2`, *correo)
+		WHERE lower(trim(email)) = lower(trim($1)) AND active AND ($2 OR user_id IS NULL)
+		ORDER BY created_at, id LIMIT 2`, *correo, web)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +108,9 @@ func (s *Servicio) UnirAFicha(ctx context.Context, ses *auth.Sesion, tabla, id, 
 	var numero, ficha string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var actual, correo *string
-		err := tx.QueryRow(ctx, `SELECT numero, customer_id::text, contacto_email FROM `+tabla+` WHERE id = $1 FOR UPDATE`, id).
-			Scan(&numero, &actual, &correo)
+		var origen string
+		err := tx.QueryRow(ctx, `SELECT numero, customer_id::text, contacto_email, origen::text FROM `+tabla+` WHERE id = $1 FOR UPDATE`, id).
+			Scan(&numero, &actual, &correo, &origen)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return plataforma.NuevoProblema(http.StatusNotFound, "No se encontró.")
 		}
@@ -113,13 +120,14 @@ func (s *Servicio) UnirAFicha(ctx context.Context, ses *auth.Sesion, tabla, id, 
 		if actual != nil {
 			return noSeUne(msjYaTiene)
 		}
-		var vendedor *string
-		// La misma regla que fichaConElCorreo: sin cuenta web y la única con
-		// ese correo.
-		err = tx.QueryRow(ctx, `SELECT nombre, seller_id::text FROM customers c
-			WHERE id = $1 AND active AND user_id IS NULL AND $2::text IS NOT NULL AND lower(trim(email)) = lower(trim($2))
-			  AND NOT EXISTS (SELECT 1 FROM customers o WHERE o.id <> c.id AND o.active AND o.user_id IS NULL
-			                  AND lower(trim(o.email)) = lower(trim($2)))`, cliente, correo).Scan(&ficha, &vendedor)
+		var vendedor, telefonoFicha *string
+		// La misma regla que fichaConElCorreo: sin cuenta web (salvo un
+		// presupuesto armado en el panel) y la única con ese correo.
+		web := tabla == "quotes" && ArmadoEnElPanel(origen)
+		err = tx.QueryRow(ctx, `SELECT nombre, seller_id::text, nullif(trim(telefono), '') FROM customers c
+			WHERE id = $1 AND active AND ($3 OR user_id IS NULL) AND $2::text IS NOT NULL AND lower(trim(email)) = lower(trim($2))
+			  AND NOT EXISTS (SELECT 1 FROM customers o WHERE o.id <> c.id AND o.active AND ($3 OR o.user_id IS NULL)
+			                  AND lower(trim(o.email)) = lower(trim($2)))`, cliente, correo, web).Scan(&ficha, &vendedor, &telefonoFicha)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return noSeUne(msjFichaAjena)
 		}
@@ -140,7 +148,12 @@ func (s *Servicio) UnirAFicha(ctx context.Context, ses *auth.Sesion, tabla, id, 
 			return err
 		}
 		if tabla != "orders" {
-			return nil
+			// El presupuesto toma el nombre y el teléfono de la ficha
+			// (M2S1-193): seguía «Rocío (consulta web)», sin teléfono, y el
+			// pedido que salía de él lo heredaba.
+			_, err := tx.Exec(ctx, `UPDATE quotes SET contacto_nombre = $2, contacto_telefono = coalesce($3, contacto_telefono) WHERE id = $1`,
+				id, ficha, telefonoFicha)
+			return err
 		}
 		// Lo que la compra anónima insertó sin cliente (checkout.compra) va
 		// con el pedido: sus pagos (Cobranzas, la lista de Pagos y los

@@ -226,6 +226,18 @@ func TestAjusteMasivo(t *testing.T) {
 	if c, b := pedir(t, adm, "POST", u, map[string]string{"porcentaje": "5", "categoria": "no-existe"}); c != 422 || !strings.Contains(b, "No se encontraron precios") {
 		t.Errorf("sin nada que ajustar: %d %s", c, b)
 	}
+	// Un producto apagado también aumenta (M2S4-023): si no, volvía al
+	// catálogo con el precio viejo.
+	if _, err := e.pool.Exec(context.Background(), `update products set active = false where id = (select product_id from product_variants where id = $1)`, e.fen18); err != nil {
+		t.Fatal(err)
+	}
+	antes := e.precio(t, e.fen18, e.general)
+	if c, b := pedir(t, adm, "POST", u, map[string]string{"porcentaje": "10", "listaSlug": "general"}); c != 200 {
+		t.Fatalf("ajuste con un inactivo: %d %s", c, b)
+	}
+	if p := e.precio(t, e.fen18, e.general); p == antes {
+		t.Errorf("el inactivo quedó en %s", p)
+	}
 }
 
 func TestImportacion(t *testing.T) {
@@ -299,10 +311,20 @@ func TestImportacion(t *testing.T) {
 	if detalle(0) != "Repetido en la línea "+l2+"." || detalle(1) != "Repetido en la línea "+l1+"." {
 		t.Errorf("repetido: %q %q", detalle(0), detalle(1))
 	}
-	for i := 2; i < 4; i++ {
-		if detalle(i) != "El precio tiene que ser mayor a cero y con hasta dos decimales." {
-			t.Errorf("precio inválido (%d): %q", i, detalle(i))
-		}
+	// Cada uno dice cuál de los dos precios está mal (M2S1-044).
+	if detalle(2) != "El precio de lista tiene que ser mayor a cero y con hasta dos decimales." {
+		t.Errorf("precio de lista en cero: %q", detalle(2))
+	}
+	if detalle(3) != "El precio profesional tiene que ser mayor a cero y con hasta dos decimales." {
+		t.Errorf("precio profesional negativo: %q", detalle(3))
+	}
+	// La planilla exportada sin precio profesional trae «0»: vuelve a entrar
+	// sin tocarla (M2S1-044).
+	_, b = subir("FEN18;90000;0")
+	v = VistaPrevia{}
+	_ = json.Unmarshal([]byte(b), &v)
+	if v.Problemas != 0 {
+		t.Fatalf("el profesional en cero no entra: %s", b)
 	}
 	if !precioImportable(ptr("84500.55")) || precioImportable(ptr("84500.555")) || precioImportable(ptr("0")) || precioImportable(ptr("NaN")) {
 		t.Error("precioImportable")

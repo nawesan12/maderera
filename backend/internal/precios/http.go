@@ -60,6 +60,8 @@ func (o respuesta) VisitFijarPorcentajeDeListaResponse(w http.ResponseWriter) er
 }
 func (o respuesta) VisitRubrosParaAjusteResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitEditarPrecioResponse(w http.ResponseWriter) error     { return o.escribir(w) }
+func (o respuesta) VisitOfertarPrecioResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitTerminarOfertaResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitAjustarPreciosResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitPrevisualizarAjusteResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
@@ -156,6 +158,22 @@ func (a *API) EditarPrecio(ctx context.Context, r preciosapi.EditarPrecioRequest
 		return nil, err
 	}
 	return listo(), a.s.Editar(ctx, ses, r.Body.VariantId, r.Body.PriceListId, r.Body.Precio)
+}
+
+func (a *API) OfertarPrecio(ctx context.Context, r preciosapi.OfertarPrecioRequestObject) (preciosapi.OfertarPrecioResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.Ofertar(ctx, ses, r.Body.VariantId, r.Body.PriceListId, r.Body.Precio, r.Body.Hasta, time.Now())
+}
+
+func (a *API) TerminarOferta(ctx context.Context, r preciosapi.TerminarOfertaRequestObject) (preciosapi.TerminarOfertaResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return listo(), a.s.TerminarOferta(ctx, ses, r.Body.VariantId, r.Body.PriceListId)
 }
 
 func (a *API) AjustarPrecios(ctx context.Context, r preciosapi.AjustarPreciosRequestObject) (preciosapi.AjustarPreciosResponseObject, error) {

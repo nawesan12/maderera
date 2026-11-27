@@ -50,7 +50,8 @@ export function EditorDeLista({
           defaultValue={
             lista.porcentaje === null ? "" : String(Number(lista.porcentaje))
           }
-          placeholder="−5"
+          // Sin texto de muestra: «−5» en gris parecía un descuento cargado
+          // (M3S3-041). Vacío es igual que la general.
           inputMode="decimal"
           className="tabular mt-1 h-10 w-28 rounded-lg border bg-background px-3 text-right text-base"
         />

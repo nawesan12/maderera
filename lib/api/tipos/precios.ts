@@ -100,6 +100,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/precios/oferta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Pone el precio en oferta hasta un día (AAAA-MM-DD); el de antes queda tachado y vuelve solo al vencer (M2S2-030). */
+        post: operations["OfertarPrecio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/precios/oferta/fin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Termina la oferta en el momento y vuelve al precio de antes. */
+        post: operations["TerminarOferta"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/precios/ajuste": {
         parameters: {
             query?: never;
@@ -234,6 +268,13 @@ export interface components {
             ok: string;
         };
         FilaPrecio: {
+            /** @description en oferta: el precio de antes (lista general) */
+            precioAnterior?: string | null;
+            /**
+             * Format: date-time
+             * @description en oferta: cuándo termina
+             */
+            ofertaHasta?: string | null;
             variantId: string;
             productId: string;
             sku: string;
@@ -472,6 +513,60 @@ export interface operations {
                     variantId: string;
                     priceListId: string;
                     precio: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Guardado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    OfertarPrecio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    variantId: string;
+                    priceListId: string;
+                    precio: string;
+                    hasta: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Guardado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Problema"];
+        };
+    };
+    TerminarOferta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    variantId: string;
+                    priceListId: string;
                 };
             };
         };

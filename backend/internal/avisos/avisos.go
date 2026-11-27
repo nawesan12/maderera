@@ -97,7 +97,7 @@ func nulo(s string) *string {
 }
 
 // conLinkDeAcceso son los eventos cuyo correo lleva un link de entrar.
-var conLinkDeAcceso = map[string]bool{"enlace_ingreso": true, "profesional_aprobado": true}
+var conLinkDeAcceso = map[string]bool{"enlace_ingreso": true, "profesional_aprobado": true, "invitacion_portal": true}
 
 // Despachar manda un correo y lo registra. No falla nunca: un aviso que no
 // sale queda anotado y la operación que lo originó sigue.

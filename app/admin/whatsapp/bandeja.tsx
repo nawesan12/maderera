@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BellOff, MessageSquarePlus, Search } from "lucide-react";
+import { BellOff, BotOff, MessageSquarePlus, Search } from "lucide-react";
 import { haceCuanto, jidCorto } from "./formato-wa";
 import { Hilo } from "./hilo";
 import { PanelCliente } from "./panel-cliente";
@@ -49,6 +49,7 @@ export function Bandeja({
   pantallaCompleta = false,
   gasto = null,
   mensajes = null,
+  botApagado = false,
 }: {
   conversaciones: ConversacionListada[];
   detalle: DetalleConversacion | null;
@@ -63,6 +64,8 @@ export function Bandeja({
   gasto?: { usd: number; tope: number; proporcion: number; alcanzado: boolean } | null;
   /** Los mensajes del mes contra el tope (el bot ahorra desde el 80 %). */
   mensajes?: { usados: number; tope: number; ahorro: boolean; alcanzado: boolean } | null;
+  /** El bot está apagado en la configuración: nadie contesta solo. */
+  botApagado?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -181,7 +184,14 @@ export function Bandeja({
               {gasto.alcanzado ? " · tope alcanzado: contestá desde el teléfono" : " · desde el teléfono es gratis"}
             </p>
           )}
-          {mensajes && (
+          {/* Fija, para que nadie espere una respuesta del bot (M2S1-101). */}
+          {botApagado && (
+            <p className="estado-espera inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]" data-bot-apagado>
+              <BotOff className="h-4 w-4" aria-hidden="true" />
+              Bot apagado
+            </p>
+          )}
+          {mensajes && !botApagado && (
             <p
               className={`text-sm ${mensajes.alcanzado ? "estado-problema font-medium text-[var(--estado-tinta)]" : mensajes.ahorro ? "estado-espera font-medium text-[var(--estado-tinta)]" : "text-muted-foreground"}`}
               data-mensajes-whatsapp

@@ -143,14 +143,16 @@ ORDER BY created_at DESC;
 -- Los cheques que no tienen recibo: los informados, los rechazados al
 -- recibirlos y los que se entregaron con una venta del mostrador (mes
 -- simulado: esos no figuraban en ningún lado de la ficha, ni rebotados).
-SELECT id, updated_at, tipo::text AS tipo, numero, banco, importe::float8 AS importe, estado::text AS estado, fecha_pago, motivo_rechazo,
-       (order_payment_id IS NOT NULL)::boolean AS de_una_venta
-FROM cheques
-WHERE customer_id = $1 AND sentido = 'recibido'
-  AND (estado = 'informado' OR (estado = 'rechazado' AND receipt_id IS NULL)
-       OR (order_payment_id IS NOT NULL AND receipt_id IS NULL AND estado <> 'anulado'))
-  AND (sqlc.narg(desde)::timestamptz IS NULL OR created_at >= sqlc.narg(desde))
-ORDER BY fecha_pago;
+-- con_nota_de_debito: el rechazo ya volvió a la cuenta con su nota de débito.
+SELECT c.id, c.updated_at, c.tipo::text AS tipo, c.numero, c.banco, c.importe::float8 AS importe, c.estado::text AS estado, c.fecha_pago,
+       c.motivo_rechazo, (c.order_payment_id IS NOT NULL)::boolean AS de_una_venta,
+       (SELECT count(*) > 0 FROM account_movements am WHERE am.cheque_id = c.id AND am.tipo = 'nota_debito')::boolean AS con_nota_de_debito
+FROM cheques c
+WHERE c.customer_id = $1 AND c.sentido = 'recibido'
+  AND (c.estado = 'informado' OR (c.estado = 'rechazado' AND c.receipt_id IS NULL)
+       OR (c.order_payment_id IS NOT NULL AND c.receipt_id IS NULL AND c.estado <> 'anulado'))
+  AND (sqlc.narg(desde)::timestamptz IS NULL OR c.created_at >= sqlc.narg(desde))
+ORDER BY c.fecha_pago;
 
 -- name: ChequesDeRecibos :many
 -- Los cheques que entraron con un recibo y el banco todavía puede devolver:
@@ -166,7 +168,7 @@ ORDER BY c.fecha_pago;
 
 -- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
-       c.id AS cheque_id, c.estado AS cheque_estado,
+       c.id AS cheque_id, c.estado AS cheque_estado, c.fecha_pago AS cheque_fecha_pago,
        (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id

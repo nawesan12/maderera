@@ -108,6 +108,7 @@ paths:
                 tipo: { type: string }
                 monto: { type: string }
                 detalle: { type: string }
+                fecha: { type: string, description: "AAAA-MM-DD, si es de otro día; vacío es hoy" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -128,6 +129,26 @@ paths:
                 cuentaWebId: { type: string }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/clientes/{id}/invitacion:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: InvitarAlPortal
+      description: |
+        Le abre la cuenta web a un cliente cargado en el panel, con el correo
+        de la ficha, y le manda el link de activación (M2S1-097).
+      responses:
+        "200":
+          description: Lo que pasó y el link, para mandarlo también por WhatsApp
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, url]
+                properties:
+                  ok: { type: string }
+                  url: { type: string }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/clientes/{id}/bloqueo:
     parameters:
@@ -868,8 +889,12 @@ components:
           description: Los cheques del renglón que el banco todavía puede rechazar (H272)
           items:
             type: object
-            required: [id, nombre, importe]
-            properties: { id: { type: string }, nombre: { type: string }, importe: { type: number, format: double } }
+            required: [id, nombre, importe, devolver]
+            properties:
+              id: { type: string }
+              nombre: { type: string }
+              importe: { type: number, format: double }
+              devolver: { type: boolean, description: En la cartera y sin vencer, se devuelve al cliente }
     Historial:
       type: object
       required: [movimientos, hayMas, saldo]

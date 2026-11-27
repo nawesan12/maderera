@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { diasHasta, fechaCorta, fechaHora, fechaLarga, hora } from "@/lib/formato";
+import { claveDeMesAR, diaYMesAR, diasHasta, fechaCorta, fechaHora, fechaLarga, hora } from "@/lib/formato";
 import { etiquetaDia, horaMensaje } from "@/app/admin/whatsapp/formato-wa";
 
 // El servidor corre en UTC y el navegador en la Argentina: las horas tienen
@@ -55,5 +55,17 @@ describe("diasHasta de un instante", () => {
     expect(diasHasta(new Date("2026-11-27T02:59:00Z"), ahora)).toBe(0); // 23:59
     expect(diasHasta(new Date("2026-11-27T03:01:00Z"), ahora)).toBe(1);
     expect(diasHasta(new Date("2026-11-25T20:00:00Z"), ahora)).toBe(-1);
+  });
+});
+
+// M2S2-023: los movimientos de la cuenta, en el día y el mes argentinos.
+describe("los movimientos de la cuenta, en hora argentina", () => {
+  it("lo cargado a las 21:05 del 26/11 es del 26/11", () => {
+    expect(diaYMesAR.format(new Date("2026-11-27T00:05:00Z"))).toBe("26/11");
+  });
+  it("lo de las 22 h del 30/11 es de noviembre", () => {
+    const noche = new Date("2026-12-01T01:00:00Z");
+    expect(claveDeMesAR(noche)).toBe(claveDeMesAR(new Date("2026-11-15T15:00:00Z")));
+    expect(claveDeMesAR(noche)).not.toBe(claveDeMesAR(new Date("2026-12-02T15:00:00Z")));
   });
 });

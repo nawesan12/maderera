@@ -121,6 +121,44 @@ paths:
       responses:
         "204": { description: Guardado }
         "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/oferta:
+    post:
+      operationId: OfertarPrecio
+      description: Pone el precio en oferta hasta un día (AAAA-MM-DD); el de antes queda tachado y vuelve solo al vencer (M2S2-030).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, priceListId, precio, hasta]
+              additionalProperties: false
+              properties:
+                variantId: { type: string }
+                priceListId: { type: string }
+                precio: { type: string }
+                hasta: { type: string }
+      responses:
+        "204": { description: Guardado }
+        "422": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/precios/oferta/fin:
+    post:
+      operationId: TerminarOferta
+      description: Termina la oferta en el momento y vuelve al precio de antes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, priceListId]
+              additionalProperties: false
+              properties:
+                variantId: { type: string }
+                priceListId: { type: string }
+      responses:
+        "204": { description: Guardado }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/precios/ajuste:
     post:
       operationId: AjustarPrecios
@@ -339,6 +377,8 @@ components:
       required: [variantId, productId, sku, producto, medida, categoria, categoriaSlug, unidad, imagen, precioGeneral,
         precioProfesional, brecha, actualizado, desactualizado]
       properties:
+        precioAnterior: { type: string, nullable: true, description: "en oferta: el precio de antes (lista general)" }
+        ofertaHasta: { type: string, format: date-time, nullable: true, description: "en oferta: cuándo termina" }
         variantId: { type: string }
         productId: { type: string }
         sku: { type: string }

@@ -85,6 +85,8 @@ const (
 	// neto (como Ganancias) o el total con IVA (8,68 % = 10,5/121 es la
 	// mitad del IVA expresada sobre el total).
 	BaseRetencionIva = "base_retencion_iva"
+	// M2S1-093: quién carga la retención sufrida dentro de un cobro.
+	RetencionEnElCobro = "retencion_en_el_cobro"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -112,6 +114,7 @@ var Opciones = map[string][]string{
 	EntregarSinCobrar:           {"deposito", "fuera_de_la_cuenta"},
 	ExportarSicore:              {"no", "si"},
 	BaseRetencionIva:            {"neto", "total"},
+	RetencionEnElCobro:          {"admin", "quien_cobra"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

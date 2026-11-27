@@ -55,6 +55,9 @@ func okTexto(m string) respuesta { return ok(map[string]string{"ok": m}) }
 
 var sinContenido = respuesta{codigo: http.StatusNoContent}
 
+func (o respuesta) VisitContactoDeLaConsultaResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
 func (o respuesta) VisitAlternarUrgenteResponse(w http.ResponseWriter) error   { return o.escribir(w) }
 func (o respuesta) VisitAvanzarCorteResponse(w http.ResponseWriter) error      { return o.escribir(w) }
 func (o respuesta) VisitVolverCorteResponse(w http.ResponseWriter) error       { return o.escribir(w) }
@@ -672,6 +675,17 @@ func (a *API) GuardarConsultaDeCorte(ctx context.Context, r cortesapi.GuardarCon
 		return nil, err
 	}
 	return ok(map[string]string{"token": token}), nil
+}
+
+func (a *API) ContactoDeLaConsulta(ctx context.Context, r cortesapi.ContactoDeLaConsultaRequestObject) (cortesapi.ContactoDeLaConsultaResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.QuienEntra("/admin/cortes/nuevo")...); err != nil {
+		return nil, err
+	}
+	c, err := a.s.ContactoDeLaConsulta(ctx, r.Token)
+	if err != nil {
+		return nil, err
+	}
+	return ok(c), nil
 }
 
 func (a *API) ConsultaDeCorte(ctx context.Context, r cortesapi.ConsultaDeCorteRequestObject) (cortesapi.ConsultaDeCorteResponseObject, error) {

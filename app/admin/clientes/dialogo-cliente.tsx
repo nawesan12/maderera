@@ -171,6 +171,19 @@ export function DialogoCliente({
    * año— así que las dos cosas quedan marcadas y se pueden desmarcar: es el
    * mismo criterio con el que ya se proponía la condición frente al IVA.
    */
+  // La cuenta profesional va con la lista profesional (M3S1-072): prendida
+  // con la lista general, el portal le decía «Profesional» y le cobraba
+  // como a cualquiera.
+  const listaProfesional =
+    listas.find((l) => !l.isDefault && /profesional/i.test(l.name)) ?? listas.find((l) => !l.isDefault);
+  function cambiarTipo(nuevo: string) {
+    setTipo(nuevo);
+    if (nuevo === "profesional" && lista === "" && listaProfesional) setLista(listaProfesional.id);
+  }
+
+  // El rubro propone la cuenta profesional, pero no toca la condición frente
+  // al IVA (M2S1-099): pasaba a «Responsable inscripto» sin que se notara, y a
+  // un monotributista se le facturaba A.
   function cambiarRubro(valor: string) {
     setRubro(valor);
 
@@ -179,10 +192,7 @@ export function DialogoCliente({
     )?.esProfesional;
 
     if (delGremio) {
-      if (!tipoElegido) setTipo("profesional");
-      if (condicion === "consumidor_final") {
-        setCondicion("responsable_inscripto");
-      }
+      if (!tipoElegido) cambiarTipo("profesional");
     } else if (!tipoElegido) {
       setTipo("particular");
     }
@@ -317,7 +327,7 @@ export function DialogoCliente({
                   checked={tipo === "profesional"}
                   onCheckedChange={(marcado) => {
                     setTipoElegido(true);
-                    setTipo(marcado ? "profesional" : "particular");
+                    cambiarTipo(marcado ? "profesional" : "particular");
                   }}
                 />
               </label>

@@ -11,6 +11,13 @@ import type { ListaAsignable } from "@/lib/dal/admin/profesionales";
 
 const inicial: EstadoProfesionales = {};
 
+const CONDICIONES = [
+  { valor: "responsable_inscripto", texto: "Responsable inscripto" },
+  { valor: "monotributista", texto: "Monotributista" },
+  { valor: "exento", texto: "Exento" },
+  { valor: "consumidor_final", texto: "Consumidor final" },
+];
+
 /**
  * Aprobar o rechazar una solicitud.
  *
@@ -24,11 +31,14 @@ export function ResolverSolicitud({
   nombre,
   listas,
   clienteExistente,
+  cuit = null,
 }: {
   id: string;
   nombre: string;
   listas: ListaAsignable[];
   clienteExistente: { id: string; nombre: string } | null;
+  /** El CUIT de la solicitud: decide qué condición frente al IVA se propone. */
+  cuit?: string | null;
 }) {
   const [estadoAprobar, aprobar, aprobando] = useActionState(
     aprobarSolicitud,
@@ -45,6 +55,14 @@ export function ResolverSolicitud({
   const profesional =
     listas.find((l) => !l.esGeneral && /profesional/i.test(l.nombre)) ??
     listas.find((l) => !l.esGeneral);
+  // La condición frente al IVA la elige quien aprueba (M2S1-020, M3S2-092):
+  // un CUIT 30/33/34 es de una sociedad (inscripta); uno de persona (20, 23,
+  // 24, 27) puede ser monotributista o inscripto y no se supone; sin CUIT,
+  // consumidor final.
+  const digitos = (cuit ?? "").replace(/\D/g, "");
+  const condicionPropuesta =
+    digitos.length !== 11 ? "consumidor_final" : /^3[034]/.test(digitos) ? "responsable_inscripto" : "";
+  const [limite, setLimite] = useState("0");
 
   if (modo === "cerrado") {
     return (
@@ -121,13 +139,54 @@ export function ResolverSolicitud({
               id={`limite-${id}`}
               name="limiteCredito"
               inputMode="decimal"
-              defaultValue="0"
+              value={limite}
+              onChange={(e) => setLimite(e.target.value)}
               className="tabular mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
             />
             <p className="mt-1 text-base text-muted-foreground">
               Cero deja la cuenta corriente sin habilitar.
             </p>
           </div>
+
+          <div>
+            <label htmlFor={`iva-${id}`} className="block text-base font-medium">
+              Condición frente al IVA
+            </label>
+            <select
+              id={`iva-${id}`}
+              name="condicionIva"
+              required
+              defaultValue={condicionPropuesta}
+              className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+            >
+              <option value="" disabled>
+                Elegí una
+              </option>
+              {CONDICIONES.map((c) => (
+                <option key={c.valor} value={c.valor}>
+                  {c.texto}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* El plazo va con el límite: sin él, la ficha decía «Paga a __
+              días» (M2S1-137). */}
+          {Number(limite.replace(/\D/g, "")) > 0 && (
+            <div>
+              <label htmlFor={`plazo-${id}`} className="block text-base font-medium">
+                Paga a (días)
+              </label>
+              <input
+                id={`plazo-${id}`}
+                name="diasCredito"
+                inputMode="numeric"
+                maxLength={3}
+                defaultValue="30"
+                className="tabular mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"
+              />
+            </div>
+          )}
         </div>
 
         {estadoAprobar.error && (

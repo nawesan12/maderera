@@ -110,7 +110,23 @@ export async function guardarTopeMensajes(_previo: EstadoAviso, formData: FormDa
   if (!texto || !Number.isSafeInteger(tope) || tope > 1_000_000) {
     return { error: "Poné un número de mensajes: 1000, por ejemplo." };
   }
+  // Un tope de 0 dejaba «0 de 0» y el bot callado sin decirlo (M2S1-050):
+  // para que no conteste está el interruptor.
+  if (tope === 0) return { error: "Tiene que ser más de 0. Para que el bot no conteste, apagalo." };
   return guardarAjusteDelBot("whatsapp_tope_mensajes", String(tope));
+}
+
+/**
+ * El tope del mes en un solo formulario (M2S1-050): los mensajes del bot y
+ * los dólares de la API con sus tarifas. Primero los mensajes: si no valen,
+ * no se toca nada.
+ */
+export async function guardarTopes(previo: EstadoAviso, formData: FormData): Promise<EstadoAviso> {
+  const mensajes = new FormData();
+  mensajes.set("tope", String(formData.get("topeMensajes") ?? ""));
+  const m = await guardarTopeMensajes(previo, mensajes);
+  if (m.error) return m;
+  return guardarTope(previo, formData);
 }
 
 export async function cambiarBot(encender: boolean): Promise<EstadoAviso> {

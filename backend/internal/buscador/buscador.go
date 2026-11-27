@@ -168,8 +168,10 @@ func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto stri
 	todas := []busqueda{
 		{"/admin/clientes", func() ([]Resultado, error) {
 			var a []any
-			filas, err := pool.Query(ctx, `SELECT id, nombre, razon_social, cuit, telefono FROM customers WHERE `+
-				coincideONumero(texto, &a, []string{"cuit", "telefono"}, "nombre", "razon_social", "cuit", "telefono")+` ORDER BY nombre LIMIT 4`, a...)
+			// Solo las vivas: la ficha que se apagó al unirla con otra
+			// aparecía como un segundo cliente (M3S1-025).
+			filas, err := pool.Query(ctx, `SELECT id, nombre, razon_social, cuit, telefono FROM customers WHERE active AND (`+
+				coincideONumero(texto, &a, []string{"cuit", "telefono"}, "nombre", "razon_social", "cuit", "telefono")+`) ORDER BY nombre LIMIT 4`, a...)
 			if err != nil {
 				return nil, err
 			}

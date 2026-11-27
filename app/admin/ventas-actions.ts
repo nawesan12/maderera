@@ -150,6 +150,8 @@ export interface EntregaDelPedido {
   /** Un presupuesto vencido: los precios de hoy o los suyos (con PIN). */
   precios?: "actualizar" | "respetar";
   pin?: string;
+  /** El slug de la sucursal de donde sale, si no es la del presupuesto. */
+  sucursal?: string;
 }
 
 export async function convertirEnPedido(

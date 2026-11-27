@@ -2,6 +2,7 @@ package cobros
 
 import (
 	"context"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -38,6 +39,19 @@ type RefCheque struct {
 	ID      string  `json:"id"`
 	Nombre  string  `json:"nombre"`
 	Importe float64 `json:"importe"`
+	// Devolver: está en la cartera y todavía no vence; el banco no lo vio.
+	// La ficha ofrece «Devolver al cliente», no «Marcar rechazado»
+	// (M3S3-010, M2S3-069).
+	Devolver bool `json:"devolver"`
+}
+
+// refCheque arma el cheque rechazable de un renglón.
+func refCheque(id, nombre string, importe float64, estado string, fechaPago *time.Time) RefCheque {
+	r := RefCheque{ID: id, Nombre: nombre, Importe: importe}
+	if estado == "cartera" && fechaPago != nil {
+		r.Devolver = SinVencer(*fechaPago, time.Now())
+	}
+	return r
 }
 
 // RefPedido es el pedido de un renglón.
@@ -117,9 +131,19 @@ func conceptoDelPago(detalle, recibo *string) string {
 		s = strings.Replace(s, "Recibo "+*recibo, "", 1)
 	}
 	if t := strings.TrimSpace(s); t != "" {
-		return t
+		return conImpuestoEscrito(t)
 	}
 	return "Pago"
+}
+
+var reRetencionVieja = regexp.MustCompile(`Retención de (ganancias|iva|suss|iibb)\b`)
+
+// conImpuestoEscrito arregla el impuesto de las retenciones cargadas antes
+// (M2S3-061): «Retención de iibb» es «Retención de IIBB».
+func conImpuestoEscrito(s string) string {
+	return reRetencionVieja.ReplaceAllStringFunc(s, func(m string) string {
+		return "Retención de " + NombreDelImpuesto[strings.TrimPrefix(m, "Retención de ")]
+	})
 }
 
 // Historial es historialDelCliente: desde una fecha (o todo), con un filtro
@@ -182,7 +206,8 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 				}
 				t = NombreDelCheque(tipo, p.Banco, *p.Numero) + " " + formato.Importe(p.Importe)
 				if p.ChequeID != nil && p.ChequeEstado != nil && slices.Contains(RechazablesDesdeLaFicha, Estado(string(*p.ChequeEstado))) {
-					chequesDe[p.ReceiptID] = append(chequesDe[p.ReceiptID], RefCheque{*p.ChequeID, NombreDelCheque(tipo, p.Banco, *p.Numero), p.Importe})
+					chequesDe[p.ReceiptID] = append(chequesDe[p.ReceiptID], refCheque(*p.ChequeID, NombreDelCheque(tipo, p.Banco, *p.Numero), p.Importe,
+						string(*p.ChequeEstado), p.ChequeFechaPago))
 				}
 			} else {
 				t = NombreDelMedio[Medio(p.Medio)] + " " + formato.Importe(p.Importe)
@@ -279,10 +304,16 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 			movs = append(movs, MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: "cheque", Titulo: titulo,
 				Detalle: &detalle, ImporteInformativo: f64(c.Importe),
 				Recibo:  &RefRecibo{ID: c.ReciboID, Numero: c.ReciboNumero},
-				Cheques: []RefCheque{{c.ID, titulo, c.Importe}}})
+				Cheques: []RefCheque{refCheque(c.ID, titulo, c.Importe, c.Estado, &c.FechaPago)}})
 		}
 	}
 	for _, c := range sueltos {
+		// El que rebotó y volvió a la cuenta ya está en la nota de débito que
+		// lo vuelve a cobrar: un segundo renglón con el mismo importe
+		// confundía el resumen (M3S3-081).
+		if c.Estado == "rechazado" && c.ConNotaDeDebito {
+			continue
+		}
 		clase := "cheque_rechazado"
 		detalle := "No lo pudimos tomar"
 		if c.DeUnaVenta {
@@ -303,7 +334,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		x := MovimientoDelCliente{ID: c.ID, Fecha: c.UpdatedAt, Clase: clase, Titulo: NombreDelCheque(c.Tipo, c.Banco, c.Numero),
 			Detalle: &detalle, ImporteInformativo: f64(c.Importe)}
 		if slices.Contains(RechazablesDesdeLaFicha, Estado(c.Estado)) {
-			x.Cheques = []RefCheque{{c.ID, x.Titulo, c.Importe}}
+			x.Cheques = []RefCheque{refCheque(c.ID, x.Titulo, c.Importe, c.Estado, &c.FechaPago)}
 		}
 		movs = append(movs, x)
 	}

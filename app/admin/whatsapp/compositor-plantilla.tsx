@@ -53,6 +53,7 @@ export function CompositorPlantilla({
   escribio = true,
   onCerrar,
   waId = null,
+  amplio = false,
 }: {
   conversacionId: string;
   nombre: string;
@@ -66,6 +67,8 @@ export function CompositorPlantilla({
   escribio?: boolean;
   /** Null cuando no hay alternativa: fuera de la ventana no se puede escribir libre. */
   onCerrar: (() => void) | null;
+  /** La conversación no tiene mensajes: el compositor puede ocupar más. */
+  amplio?: boolean;
 }) {
   const [estado, accion, enviando] = useActionState(enviarPlantilla, estadoInicial);
 
@@ -86,7 +89,14 @@ export function CompositorPlantilla({
 
   // Elegido el PDF, ya se sabe cómo nombrarlo en el texto.
   const descripcion = documentos.find((d) => `${d.tipo}:${d.id}` === documento)?.descripcion;
-  const conDocumento = descripcion ? { ...sugeridos, documento: descripcion } : sugeridos;
+  // Los datos de una plantilla en particular («cheque_rechazado:importe»):
+  // el último cheque rechazado de la ficha, sin pisar el importe de otras.
+  const propios = Object.fromEntries(
+    Object.entries(conocidos)
+      .filter(([k]) => k.startsWith(`${elegida}:`))
+      .map(([k, v]) => [k.slice(elegida.length + 1), v]),
+  );
+  const conDocumento = { ...sugeridos, ...propios, ...(descripcion ? { documento: descripcion } : {}) };
   const valores = plantilla ? { ...sugerirValores(plantilla, conDocumento), ...editados } : {};
   const faltan = plantilla ? camposFaltantes(plantilla, valores) : [];
   const faltaDocumento = plantilla?.encabezadoMedia === "document" && !documento;
@@ -98,7 +108,10 @@ export function CompositorPlantilla({
   // unos 90 px de conversación (H048). Lo que no entra se desplaza adentro y
   // «Enviar» queda pegado abajo, siempre a mano.
   return (
-    <form action={accion} className="max-h-[50%] overflow-y-auto border-t bg-muted/30 p-3 pb-0 sm:max-h-[65%]">
+    <form
+      action={accion}
+      className={`overflow-y-auto border-t bg-muted/30 p-3 pb-0 ${amplio ? "max-h-[85%]" : "max-h-[50%] sm:max-h-[65%]"}`}
+    >
       <input type="hidden" name="conversacionId" value={conversacionId} />
       <input type="hidden" name="plantilla" value={elegida} />
       <input type="hidden" name="idioma" value={plantilla?.idioma ?? ""} />
@@ -158,6 +171,26 @@ export function CompositorPlantilla({
             ))}
           </select>
 
+          {/* El documento primero: es lo que se viene a mandar, y abajo
+              quedaba escondido detrás de «Enviar» a 375 px (M2S4-074). */}
+          {plantilla?.encabezadoMedia === "document" && (
+            <label className="block">
+              <span className="text-sm text-muted-foreground">Documento que va pegado</span>
+              <select
+                value={documento}
+                onChange={(e) => setDocumento(e.target.value)}
+                className="mt-0.5 h-10 w-full rounded-lg border bg-background px-2.5 text-base"
+              >
+                <option value="">{pdfs.length ? "Elegí el PDF" : "La conversación no tiene ficha: no hay documentos"}</option>
+                {pdfs.map((d) => (
+                  <option key={`${d.tipo}:${d.id}`} value={`${d.tipo}:${d.id}`}>
+                    {d.titulo} — {d.detalle}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {plantilla && plantilla.campos.some((c) => c.marcador !== "media") && (
             <div className="grid gap-2 sm:grid-cols-2">
               {plantilla.campos
@@ -180,24 +213,6 @@ export function CompositorPlantilla({
                   );
                 })}
             </div>
-          )}
-
-          {plantilla?.encabezadoMedia === "document" && (
-            <label className="block">
-              <span className="text-sm text-muted-foreground">Documento que va pegado</span>
-              <select
-                value={documento}
-                onChange={(e) => setDocumento(e.target.value)}
-                className="mt-0.5 h-10 w-full rounded-lg border bg-background px-2.5 text-base"
-              >
-                <option value="">{pdfs.length ? "Elegí el PDF" : "La conversación no tiene ficha: no hay documentos"}</option>
-                {pdfs.map((d) => (
-                  <option key={`${d.tipo}:${d.id}`} value={`${d.tipo}:${d.id}`}>
-                    {d.titulo} — {d.detalle}
-                  </option>
-                ))}
-              </select>
-            </label>
           )}
 
           <p className="whitespace-pre-wrap rounded-lg bg-brand-green/10 px-3.5 py-2.5 text-base" aria-label="Así lo va a leer">

@@ -50,6 +50,8 @@ export interface ResumenCuenta {
   presupuestosAResponder: number;
   saldo: number;
   limiteCredito: number;
+  /** La cuenta corriente está bloqueada: no se ofrece el disponible. */
+  cuentaPausada?: boolean;
 }
 
 /**

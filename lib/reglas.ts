@@ -29,6 +29,7 @@ export const OPCIONES_DE_REGLAS = {
   entregar_sin_cobrar: ["deposito", "fuera_de_la_cuenta"],
   exportar_sicore: ["no", "si"],
   base_retencion_iva: ["neto", "total"],
+  retencion_en_el_cobro: ["admin", "quien_cobra"],
 } as const;
 
 

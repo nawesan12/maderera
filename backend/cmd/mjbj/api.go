@@ -263,7 +263,24 @@ func correrAPI() error {
 
 	servicioCobros := cobros.Nuevo(pool, log)
 	cuentasapi.HandlerWithOptions(
-		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), servicioCobros, cfg.Interna),
+		cuentasapi.NewStrictHandlerWithOptions(cuentas.NuevaAPI(pool, clientes.Nuevo(pool, log), servicioCobros, cfg.Interna).
+			// La invitación al portal de un cliente del panel (M2S1-097): el link
+			// de activación, por el mismo correo de los avisos.
+			ConInvitacion(cfg.Campanas.URLDelSitio(), func(ctx context.Context, correo, nombre, url string) {
+				html, texto := email.Envolver(cfg.Campanas.URLDelSitio(), email.Opciones{
+					Titulo:   "Tu cuenta en la maderera",
+					Adelanto: "Mirá tus pedidos y tu cuenta corriente desde el sitio.",
+					Saludo:   nombre,
+					Parrafos: []string{"Te abrimos una cuenta para que veas tus pedidos, tus presupuestos y tu cuenta corriente. Tocá el botón para entrar; el link vence en 7 días."},
+					CTA:      &email.Enlace{Texto: "Entrar a mi cuenta", URL: url},
+				})
+				go func() {
+					ctx, cancelar := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+					defer cancelar()
+					avisosDeSesion.Despachar(ctx, avisos.Despacho{Evento: "invitacion_portal", Para: correo,
+						Correo: avisos.Correo{Asunto: "Tu cuenta en la maderera", HTML: html, Texto: texto}})
+				}()
+			}),
 			[]cuentasapi.StrictMiddlewareFunc{plataforma.ConPedido[cuentasapi.StrictHandlerFunc]},
 			cuentasapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

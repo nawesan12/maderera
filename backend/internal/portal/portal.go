@@ -116,6 +116,9 @@ type Resumen struct {
 	PresupuestosAResponder int     `json:"presupuestosAResponder"`
 	Saldo                  float64 `json:"saldo"`
 	LimiteCredito          float64 `json:"limiteCredito"`
+	// CuentaPausada: la cuenta corriente está bloqueada. El portal no
+	// ofrece el disponible (M3S1-017).
+	CuentaPausada bool `json:"cuentaPausada"`
 }
 
 // ResumenDe es resumenCuenta.
@@ -124,8 +127,9 @@ func (s *Servicio) ResumenDe(ctx context.Context, c *Cliente) (Resumen, error) {
 	err := s.pool.QueryRow(ctx, `SELECT
 		(SELECT count(*)::int FROM orders WHERE customer_id = $1 AND estado NOT IN ('entregado', 'cancelado')),
 		(SELECT count(*)::int FROM quotes WHERE customer_id = $1 AND estado::text = ANY($2)),
-		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1)`, c.ID, s.estadosAResponder(ctx)).
-		Scan(&r.PedidosEnCurso, &r.PresupuestosAResponder, &r.Saldo)
+		(SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1),
+		(SELECT coalesce(cuenta_bloqueada, false) FROM customers WHERE id = $1)`, c.ID, s.estadosAResponder(ctx)).
+		Scan(&r.PedidosEnCurso, &r.PresupuestosAResponder, &r.Saldo, &r.CuentaPausada)
 	return r, err
 }
 

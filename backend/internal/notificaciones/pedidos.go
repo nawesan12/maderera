@@ -14,6 +14,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/pdf"
+	"mjbj/internal/pedidos"
 	"mjbj/internal/push"
 	"mjbj/internal/whatsapp"
 )
@@ -349,6 +350,34 @@ func (s *Servicio) PresupuestoEnviado(ctx context.Context, id string) error {
 		s.wa.AvisarPorWhatsapp(ctx, aviso)
 	}
 
+	return s.correoDelPresupuesto(ctx, p, correoCliente)
+}
+
+// PresupuestoPorCorreo es solo el correo de un presupuesto que ya salió
+// (pedidos.TrabajoPresupuestoPorCorreo, M2S1-098).
+func (s *Servicio) PresupuestoPorCorreo(ctx context.Context, id string) error {
+	p, err := s.pedidos.Presupuesto(ctx, id)
+	if err != nil || p == nil || p.Estado == "rechazado" {
+		return err
+	}
+	var correoCliente *string
+	if p.CustomerID != nil {
+		c, err := s.cliente(ctx, *p.CustomerID)
+		if err != nil {
+			return err
+		}
+		if c != nil {
+			correoCliente = c.email
+		}
+	}
+	return s.correoDelPresupuesto(ctx, p, correoCliente)
+}
+
+// correoDelPresupuesto manda el correo con el detalle y el PDF: al del
+// presupuesto o, si no tiene, al de la ficha.
+func (s *Servicio) correoDelPresupuesto(ctx context.Context, p *pedidos.FichaDePresupuesto, correoCliente *string) error {
+	id := p.ID
+	total := jsmath.Numero(p.Total)
 	correo := p.Email
 	if vacio(correo) {
 		correo = correoCliente
@@ -361,9 +390,16 @@ func (s *Servicio) PresupuestoEnviado(ctx context.Context, id string) error {
 		unidad, sub := it.Unidad, it.Subtotal
 		lineas = append(lineas, avisos.LineaDeCorreo(it.Descripcion, jsmath.Numero(it.Cantidad), &unidad, &sub))
 	}
+	// Con el PDF adjunto (M2S1-195): el cliente lo reenvía a quien le paga la
+	// obra. Es el mismo que va por WhatsApp y se descarga del panel.
+	archivo, err := s.pedidos.PresupuestoPdf(ctx, p)
+	if err != nil {
+		return err
+	}
 	s.correo.Despachar(ctx, avisos.Despacho{
 		Evento: "presupuesto_listo", Para: *correo, EntidadTipo: "quote", EntidadID: id,
-		Correo: avisos.PresupuestoListo(s.sitio, primerNombre(p.Cliente), p.Numero, total, p.ValidoHasta, lineas),
+		Correo:   avisos.PresupuestoListo(s.sitio, primerNombre(p.Cliente), p.Numero, total, p.ValidoHasta, lineas),
+		Adjuntos: []email.Adjunto{{Nombre: p.Numero + ".pdf", Contenido: archivo, Tipo: "application/pdf"}},
 	})
 	return nil
 }

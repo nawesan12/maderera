@@ -32,7 +32,13 @@ function resultado(r: { data?: { ok: string }; error?: unknown }): EstadoProfesi
 export async function aprobarSolicitud(_previo: EstadoProfesionales, formData: FormData): Promise<EstadoProfesionales> {
   return resultado(
     await (await api()).POST("/api/v1/admin/profesionales/aprobacion", {
-      body: { id: formData.get("id"), priceListId: formData.get("priceListId"), limiteCredito: formData.get("limiteCredito") },
+      body: {
+        id: formData.get("id"),
+        priceListId: formData.get("priceListId"),
+        limiteCredito: formData.get("limiteCredito"),
+        condicionIva: formData.get("condicionIva"),
+        diasCredito: formData.get("diasCredito"),
+      },
     }),
   );
 }

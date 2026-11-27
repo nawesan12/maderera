@@ -691,6 +691,7 @@ export interface components {
             clienteEmail: string | null;
             clienteLimite: string | null;
             clienteEstado: string | null;
+            clienteBloqueado: boolean;
             conocidos: {
                 [key: string]: string;
             };
@@ -880,7 +881,7 @@ export interface components {
         };
         Historia: {
             /** @enum {string} */
-            canal: "whatsapp" | "whatsapp_manual" | "email";
+            canal: "whatsapp" | "whatsapp_manual" | "email" | "whatsapp_pdf";
             estado: string;
             texto: string;
             atencion: boolean;

@@ -399,6 +399,14 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 		return "", "", fallo("No hay una lista de precios general.")
 	}
 	precios, costos := 0, 0
+	// Lo que cambió, para la bitácora: qué producto, de cuánto a cuánto
+	// (M2S2-005).
+	type cambio struct {
+		Sku     string  `json:"sku"`
+		Antes   *string `json:"antes"`
+		Despues string  `json:"despues"`
+	}
+	var cambios []cambio
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var existe string
 		err := tx.QueryRow(ctx, `SELECT id FROM supplier_price_profiles WHERE supplier_id = $1 LIMIT 1`, perfil.SupplierID).Scan(&existe)
@@ -445,8 +453,9 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 			// mostraba y el deshacer no tenía de dónde volver.
 			precio := jsmath.Fijo2(f.PrecioSugerido)
 			var anterior *string
-			err := tx.QueryRow(ctx, `SELECT price::text FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2 FOR UPDATE`,
-				general, f.VariantID).Scan(&anterior)
+			var sku string
+			err := tx.QueryRow(ctx, `SELECT (SELECT price::text FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2 FOR UPDATE),
+				coalesce((SELECT sku FROM product_variants WHERE id = $2), '')`, general, f.VariantID).Scan(&anterior, &sku)
 			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
@@ -465,6 +474,7 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 				f.VariantID, general, anterior, precio, motivo, lote, ses.UserID); err != nil {
 				return err
 			}
+			cambios = append(cambios, cambio{Sku: sku, Antes: anterior, Despues: precio})
 			precios++
 		}
 		return nil
@@ -473,7 +483,7 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 		return "", "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", perfil.SupplierID,
-		"Importó "+formato.Cuantos(precios, "precio", "precios")+" de la lista de "+s.nombreDelProveedor(ctx, perfil.SupplierID), nil)
+		"Importó "+formato.Cuantos(precios, "precio", "precios")+" de la lista de "+s.nombreDelProveedor(ctx, perfil.SupplierID), map[string]any{"cambios": cambios})
 	texto := "Listo: " + plural(precios, "precio actualizado", "precios actualizados")
 	if costos > 0 {
 		texto += " y " + plural(costos, "costo guardado", "costos guardados")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -178,20 +179,23 @@ type DetalleConversacion struct {
 	ClienteTipo      *string    `json:"clienteTipo"`
 	// ClienteLista es la lista de precios propia, si no es la general: el
 	// chip dice «Constructora» y no «Profesional» a todos (como el portal).
-	ClienteLista    *string              `json:"clienteLista"`
-	ClienteTelefono *string              `json:"clienteTelefono"`
-	ClienteEmail    *string              `json:"clienteEmail"`
-	ClienteLimite   *string              `json:"clienteLimite"`
-	ClienteEstado   *string              `json:"clienteEstado"`
-	Conocidos       map[string]string    `json:"conocidos"`
-	Nombre          string               `json:"nombre"`
-	SinNumero       bool                 `json:"sinNumero"`
-	VentanaAbierta  bool                 `json:"ventanaAbierta"`
-	Mensajes        []MensajeDeLaBandeja `json:"mensajes"`
-	Saldo           float64              `json:"saldo"`
-	LimiteCredito   float64              `json:"limiteCredito"`
-	Pedidos         []PedidoDelCliente   `json:"pedidos"`
-	Documentos      []DocumentoListado   `json:"documentos"`
+	ClienteLista    *string `json:"clienteLista"`
+	ClienteTelefono *string `json:"clienteTelefono"`
+	ClienteEmail    *string `json:"clienteEmail"`
+	ClienteLimite   *string `json:"clienteLimite"`
+	ClienteEstado   *string `json:"clienteEstado"`
+	// ClienteBloqueado: la cuenta corriente está bloqueada; el costado lo
+	// dice en vez del límite (M3S1-017).
+	ClienteBloqueado bool                 `json:"clienteBloqueado"`
+	Conocidos        map[string]string    `json:"conocidos"`
+	Nombre           string               `json:"nombre"`
+	SinNumero        bool                 `json:"sinNumero"`
+	VentanaAbierta   bool                 `json:"ventanaAbierta"`
+	Mensajes         []MensajeDeLaBandeja `json:"mensajes"`
+	Saldo            float64              `json:"saldo"`
+	LimiteCredito    float64              `json:"limiteCredito"`
+	Pedidos          []PedidoDelCliente   `json:"pedidos"`
+	Documentos       []DocumentoListado   `json:"documentos"`
 }
 
 // ObtenerConversacion es el detalle; nil si no existe.
@@ -204,12 +208,12 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 		select c.id, c.wa_jid, c.display_name, c.customer_id, c.order_id, c.estado::text, c.notas, c.ultimo_entrante_at, c.no_leidos,
 		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado,
 		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text,
-		       CASE WHEN pl.is_default THEN NULL ELSE pl.name END
+		       CASE WHEN pl.is_default THEN NULL ELSE pl.name END, coalesce(cu.cuenta_bloqueada, false)
 		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id
 		  left join price_lists pl on pl.id = cu.price_list_id
 		 where c.id = $1`, id).Scan(&d.ID, &d.WaJid, &d.DisplayName, &d.CustomerID, &d.OrderID, &d.Estado, &d.Notas, &d.UltimoEntranteAt,
 		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado,
-		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado, &d.ClienteLista)
+		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado, &d.ClienteLista, &d.ClienteBloqueado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -244,6 +248,38 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 	}
 	if d.Saldo > 0 {
 		d.Conocidos["saldo"] = formato.Importe(d.Saldo)
+	}
+	// El último cheque rechazado de la ficha, para la plantilla «Cheque
+	// rechazado» (M3S3-029): había que tipear el banco, el número, el
+	// importe y el motivo que ya estaban cargados. Se dice como el aviso
+	// automático (notificaciones.ChequeRechazado). Van con el nombre de la
+	// plantilla adelante: el {{importe}} del recibo no es el del cheque.
+	if d.CustomerID != nil {
+		var tipo, numero string
+		var banco, motivo *string
+		var importe float64
+		err := s.pool.QueryRow(ctx, `select tipo::text, numero, banco, importe::float8, motivo_rechazo from cheques
+			where customer_id = $1 and estado = 'rechazado' order by updated_at desc, created_at desc limit 1`, *d.CustomerID).
+			Scan(&tipo, &numero, &banco, &importe, &motivo)
+		switch {
+		case err == nil:
+			clase := "Cheque"
+			if tipo == "echeq" {
+				clase = "e-Cheq"
+			}
+			if banco != nil && *banco != "" {
+				clase += " " + *banco
+			}
+			d.Conocidos["cheque_rechazado:cheque"] = clase + " N° " + numero
+			d.Conocidos["cheque_rechazado:importe"] = formato.Importe(importe)
+			if motivo != nil && strings.TrimSpace(*motivo) != "" {
+				d.Conocidos["cheque_rechazado:motivo"] = strings.TrimSpace(*motivo)
+			} else {
+				d.Conocidos["cheque_rechazado:motivo"] = "lo rechazó el banco"
+			}
+		case !errors.Is(err, pgx.ErrNoRows):
+			return nil, err
+		}
 	}
 	d.Conocidos["fecha"] = FechaCorta(ahora)
 	d.Nombre = oTexto(primero(d.ClienteNombre, d.DisplayName), "Sin identificar")
@@ -395,7 +431,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				return d, err
 			}},
 		{`select d.id, d.numero, o.numero, d.created_at from deliveries d join orders o on o.id = d.order_id
-			where o.customer_id = $1 order by d.created_at desc limit 5`,
+			where o.customer_id = $1 and d.estado <> 'anulada' order by d.created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero, pedido string
@@ -414,7 +450,7 @@ func (s *Servicio) DocumentosDelCliente(ctx context.Context, customerID string) 
 				d.Tipo, d.Titulo, d.Descripcion, d.Detalle, d.Fecha = "recibo", "Recibo "+numero, "el recibo "+numero, formato.Importe(total), &f
 				return d, err
 			}},
-		{`select id, numero, created_at from cutting_orders where customer_id = $1 order by created_at desc limit 5`,
+		{`select id, numero, created_at from cutting_orders where customer_id = $1 and estado <> 'cancelado' order by created_at desc limit 5`,
 			func(r pgx.Rows) (DocumentoListado, error) {
 				var d DocumentoListado
 				var numero string

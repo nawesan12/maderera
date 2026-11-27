@@ -418,6 +418,7 @@ func (a *API) ConvertirPresupuestoEnPedido(ctx context.Context, r ventasapi.Conv
 			ent.Precios = string(*b.Precios)
 		}
 		ent.PIN, ent.Ficha = texto(b.Pin), texto(b.Ficha)
+		ent.Sucursal = texto(b.Sucursal)
 		if b.ACuenta != nil {
 			ent.ACuenta = *b.ACuenta
 		}

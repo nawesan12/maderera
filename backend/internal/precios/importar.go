@@ -106,6 +106,12 @@ func (s *Servicio) Comparar(ctx context.Context, leidas []FilaLeida) (VistaPrevi
 	}
 	v := VistaPrevia{Filas: []FilaPrevia{}}
 	for _, l := range leidas {
+		// Un precio profesional en cero es «sin precio profesional»: así
+		// salía de la planilla exportada, y la misma planilla no volvía a
+		// entrar (M2S1-044). El general en cero sigue siendo un error.
+		if l.PrecioProfesional != nil && jsmath.Numero(*l.PrecioProfesional) == 0 {
+			l.PrecioProfesional = nil
+		}
 		f := FilaPrevia{Linea: l.Linea, SKU: l.SKU}
 		variante, ok := porSKU[l.SKU]
 		switch {
@@ -119,8 +125,11 @@ func (s *Servicio) Comparar(ctx context.Context, leidas []FilaLeida) (VistaPrevi
 			}
 			f.Estado, f.Detalle = "error", ptr("Repetido en la línea "+strconv.Itoa(otra)+".")
 			v.Problemas++
-		case !precioImportable(l.PrecioGeneral) || !precioImportable(l.PrecioProfesional):
-			f.Estado, f.Detalle = "error", ptr("El precio tiene que ser mayor a cero y con hasta dos decimales.")
+		case !precioImportable(l.PrecioGeneral):
+			f.Estado, f.Detalle = "error", ptr("El precio de lista tiene que ser mayor a cero y con hasta dos decimales.")
+			v.Problemas++
+		case !precioImportable(l.PrecioProfesional):
+			f.Estado, f.Detalle = "error", ptr("El precio profesional tiene que ser mayor a cero y con hasta dos decimales.")
 			v.Problemas++
 		case !ok:
 			f.Estado, f.Detalle = "sin-sku", ptr("No hay ningún producto con ese código.")

@@ -42,6 +42,14 @@ const TrabajoCambioDeEstado = "pedido.estado"
 // correo con el detalle y el WhatsApp con el PDF (presupuesto_listo).
 const TrabajoPresupuestoEnviado = "presupuesto.enviado"
 
+// TrabajoPresupuestoPorCorreo es solo el correo de un presupuesto que ya
+// salió (por WhatsApp, por ejemplo): el cliente lo pide también por mail
+// (M2S1-098). No vuelve a mandar el WhatsApp ni cambia el estado.
+const TrabajoPresupuestoPorCorreo = "presupuesto.correo"
+
+// MotivoPorCorreo es lo que manda «Por correo» de un presupuesto ya enviado.
+const MotivoPorCorreo = "por_correo"
+
 // EncolarPresupuestoEnviado deja el aviso del presupuesto armado en la
 // cola, dentro de la transacción de quien lo pasa a «enviado».
 func EncolarPresupuestoEnviado(ctx context.Context, tx pgx.Tx, quoteID string) error {
@@ -517,6 +525,7 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 	// solo cuando el presupuesto llega a «enviado» desde otro estado, y dos
 	// clics seguidos en «enviado» dan un solo aviso (el segundo espera al
 	// primero y ya lo encuentra enviado).
+	soloCorreo := false
 	err := s.enTransaccion(ctx, func(tx pgx.Tx) error {
 		var anterior string
 		err := tx.QueryRow(ctx, `SELECT estado::text FROM quotes WHERE id = $1 FOR UPDATE`, id).Scan(&anterior)
@@ -525,6 +534,34 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 			return noEsta("No se encontró el presupuesto.")
 		}
 		if err != nil {
+			return err
+		}
+		// Con un pedido vivo no se rechaza: el cliente ya compró. Con el pedido
+		// cancelado, sí (M2S4-066: quedaba «Aceptado» para siempre).
+		if estado == "rechazado" {
+			var vivo bool
+			if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM orders WHERE quote_id = $1 AND estado <> 'cancelado')`, id).Scan(&vivo); err != nil {
+				return err
+			}
+			if vivo {
+				return fallo("Este presupuesto ya es un pedido: cancelá el pedido primero.")
+			}
+		}
+		// «Por correo» de uno que ya salió (por WhatsApp): solo el correo, y
+		// el estado queda como estaba. Lo pide el botón (motivo «por_correo»):
+		// un segundo clic en «enviado» sigue sin mandar nada. Dos clics en
+		// dos minutos, un correo.
+		if estado == "enviado" && anterior == "enviado" && motivo == MotivoPorCorreo {
+			soloCorreo = true
+			var reciente bool
+			if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM trabajos WHERE tipo = $1 AND carga->>'quoteId' = $2
+				AND created_at > now() - interval '2 minutes')`, TrabajoPresupuestoPorCorreo, id).Scan(&reciente); err != nil {
+				return err
+			}
+			if reciente {
+				return nil
+			}
+			_, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoPresupuestoPorCorreo, map[string]string{"quoteId": id}, time.Time{})
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE quotes SET estado = $2, motivo_rechazo = $3, updated_at = now() WHERE id = $1`, id, estado, motivoRechazo); err != nil {
@@ -537,6 +574,10 @@ func (s *Servicio) CambiarEstadoPresupuestoConMotivo(ctx context.Context, ses *a
 	})
 	if err != nil {
 		return nil, err
+	}
+	if soloCorreo {
+		s.anotar(ctx, ses, sqlc.AccionAuditoriaEditar, "presupuesto", id, "Mandó el presupuesto por correo", nil)
+		return &Resultado{Ok: "Le mandamos el presupuesto por correo.", Estado: estado}, nil
 	}
 	desc := "Pasó el presupuesto a " + estado
 	if motivoRechazo != nil {
@@ -581,6 +622,9 @@ type Entrega struct {
 	// un admin). Vacío en uno vigente.
 	Precios    string
 	PIN, Ficha string
+	// Sucursal es el slug de la sucursal de donde sale, si no es la del
+	// presupuesto: lo que falta en una y hay en otra (M2S1-089).
+	Sucursal string
 	// ACuenta es la parte que va a la cuenta corriente de un pedido partido
 	// (H047); el resto se paga con MedioPago. Cero: el pedido no se parte.
 	ACuenta float64
@@ -705,6 +749,17 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 		}
 		if err != nil {
 			return err
+		}
+		if strings.TrimSpace(ent.Sucursal) != "" {
+			var otra string
+			err := tx.QueryRow(ctx, `SELECT id FROM branches WHERE slug = $1 AND active`, strings.TrimSpace(ent.Sucursal)).Scan(&otra)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fallo("Esa sucursal no existe.")
+			}
+			if err != nil {
+				return err
+			}
+			q.branchID = &otra
 		}
 		// Un pedido cancelado no traba (mes simulado): el presupuesto vuelve
 		// a pasarse a pedido, corregido, sin cargarlo todo de nuevo.

@@ -257,6 +257,12 @@ func (s *Servicio) contestarTurno(ctx context.Context, convID, waJid string, est
 		s.log.Warn("whatsapp: no se pudo contar el uso del mes", "error", err)
 	}
 	d := DatosBot{Ahora: s.ahora(), Sitio: s.cfg.URLBase, NumeroHumano: est.ajustes.numeroHumano, StockVisible: est.ajustes.stockVisible, Ahorro: uso.Ahorro}
+	// El enlace corto de la derivación: se guarda solo si se deriva.
+	tokenDerivacion := ""
+	if d.Sitio != "" && d.NumeroHumano != "" {
+		tokenDerivacion = nuevoTokenDeDerivacion()
+		d.EnlaceHumano = strings.TrimRight(d.Sitio, "/") + "/api/whatsapp/hablar/" + tokenDerivacion
+	}
 	recientes, err := s.textosRecientesDelBot(ctx, convID)
 	if err != nil {
 		return false, err
@@ -278,7 +284,7 @@ func (s *Servicio) contestarTurno(ctx context.Context, convID, waJid string, est
 		case entranteNoVisible:
 			noVisible = true
 		case entranteTexto:
-			if EsPedidoDeBaja(texto) || EsPedidoDeAlta(texto) || esEco(texto, recientes) {
+			if PideLaBaja(texto) || EsPedidoDeAlta(texto) || esEco(texto, recientes) {
 				continue
 			}
 			p, err := s.resolverTexto(ctx, convID, waJid, m.id, texto, estado, d)
@@ -358,6 +364,11 @@ func (s *Servicio) contestarTurno(ctx context.Context, convID, waJid string, est
 	}
 	if derivada {
 		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null where id = $1`, convID)
+		if err == nil && t.Derivar && tokenDerivacion != "" && texto != "" {
+			// Lo que escribió en la última hora, para que el número humano
+			// lo reciba entero: el «persona» solo perdía el reclamo de antes.
+			err = s.guardarDerivacion(ctx, convID, tokenDerivacion)
+		}
 	} else {
 		var c *string
 		if t.Estado.Consulta != "" {
@@ -551,7 +562,7 @@ func (s *Servicio) avisarCerrado(ctx context.Context, convID, waJid string) erro
 	for _, t := range textos {
 		t = trimJS(t)
 		if t != "" && !esAcuse(t) && !esAutorespuesta(t) && asistente.Entender(t).Intencion != asistente.Gracias &&
-			!EsPedidoDeBaja(t) && !EsPedidoDeAlta(t) {
+			!PideLaBaja(t) && !EsPedidoDeAlta(t) {
 			consulta = true
 		}
 	}

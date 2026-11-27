@@ -143,7 +143,7 @@ func (q *Queries) FijarPorcentajeDeLista(ctx context.Context, arg FijarPorcentaj
 const fijarPrecio = `-- name: FijarPrecio :exec
 INSERT INTO price_list_items (variant_id, price_list_id, price, updated_at)
 VALUES ($1, $2, $3::text::numeric, now())
-ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = excluded.price, updated_at = now()
+ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = excluded.price, precio_anterior = NULL, oferta_hasta = NULL, updated_at = now()
 `
 
 type FijarPrecioParams struct {
@@ -152,6 +152,8 @@ type FijarPrecioParams struct {
 	Price       string `json:"price"`
 }
 
+// Un precio nuevo termina la oferta que hubiera: si no, al vencer volvía el
+// precio de antes de la oferta y pisaba el que se cargó (M2S2-030).
 func (q *Queries) FijarPrecio(ctx context.Context, arg FijarPrecioParams) error {
 	_, err := q.db.Exec(ctx, fijarPrecio, arg.VariantID, arg.PriceListID, arg.Price)
 	return err
@@ -449,7 +451,7 @@ JOIN products p ON p.id = v.product_id
 JOIN categories c ON c.id = p.category_id
 LEFT JOIN subcategories s ON s.id = p.subcategory_id
 LEFT JOIN variant_costs vc ON vc.variant_id = v.id
-WHERE p.active AND v.active
+WHERE v.active
   AND ($1::text IS NULL OR c.slug = $1)
   AND ($2::text IS NULL OR s.slug = $2)
   -- Lo que trae un proveedor: el aumento llega por proveedor, no por rubro.
@@ -471,6 +473,9 @@ type VariantesParaAjusteRow struct {
 	Recargo *jsmath.Num `json:"recargo"`
 }
 
+// También los productos apagados (M2S4-023): uno de temporada que estaba
+// inactivo en un aumento general volvía al catálogo con el precio viejo.
+// La planilla los toma igual. Las medidas dadas de baja, no.
 func (q *Queries) VariantesParaAjuste(ctx context.Context, arg VariantesParaAjusteParams) ([]VariantesParaAjusteRow, error) {
 	rows, err := q.db.Query(ctx, variantesParaAjuste,
 		arg.Categoria,

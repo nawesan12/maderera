@@ -26,6 +26,10 @@ var rubros = map[string]bool{
 	"fabrica": true, "distribuidora": true, "comercial": true, "grupo": true,
 	"industrias": true, "estudio": true, "inmobiliaria": true, "empresa": true,
 	"obras": true, "cooperativa": true, "aserradero": true, "metalurgica": true,
+	// Del mes simulado: «Hola Sim» a «Sim Mueblería Atlántica» y a «Sim Obra
+	// Barrio Parque».
+	"muebleria": true, "obra": true, "barraca": true, "pintureria": true, "vivero": true,
+	"techos": true, "estructuras": true, "arquitectura": true, "viviendas": true, "desarrollos": true,
 }
 
 func sinTildes(s string) string {
@@ -58,7 +62,10 @@ func NombreDeSaludo(nombre string) string {
 			break
 		}
 	}
-	if corte == len(palabras) && !rubros[clavePalabra(palabras[0])] {
+	// El rubro va primero («Carpintería Ferreyra») o segundo, detrás de una
+	// sigla o un apodo («RF Carpintería», «Sim Mueblería»).
+	esNegocio := rubros[clavePalabra(palabras[0])] || (len(palabras) > 2 && rubros[clavePalabra(palabras[1])])
+	if corte == len(palabras) && !esNegocio {
 		return primeraPalabraJS(nombre)
 	}
 	return strings.TrimRight(strings.Join(palabras[:corte], " "), ",;")

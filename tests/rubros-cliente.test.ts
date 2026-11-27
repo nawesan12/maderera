@@ -43,8 +43,8 @@ describe("cómo se muestra", () => {
   });
 
   it("sin rubro lo dice", () => {
-    expect(etiquetaDeRubro(null)).toBe("Sin rubro");
-    expect(etiquetaDeRubro("")).toBe("Sin rubro");
+    expect(etiquetaDeRubro(null)).toBe("Particular");
+    expect(etiquetaDeRubro("")).toBe("Particular");
   });
 
   it("lo que no conoce lo muestra igual", () => {

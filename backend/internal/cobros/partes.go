@@ -43,7 +43,13 @@ type Parte struct {
 	ChequeID   *string
 	Cheque     *ChequeNuevo
 	PaymentID  *string
+	// Impuesto de una retención que entra con el cobro (M2S1-093).
+	Impuesto string
 }
+
+// NombreDelImpuesto es cómo se escribe el impuesto de una retención:
+// «Retención de iibb» salía en minúsculas en la ficha (M2S3-061).
+var NombreDelImpuesto = map[string]string{"ganancias": "Ganancias", "iva": "IVA", "suss": "SUSS", "iibb": "IIBB"}
 
 // EsCheque: cheque o e-Cheq.
 func EsCheque(m Medio) bool { return m == "cheque" || m == "echeq" }

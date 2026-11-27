@@ -27,12 +27,14 @@ describe("partirPendientes", () => {
         { clave: "preparar", urgente: true },
         { clave: "cortes", urgente: true },
         { clave: "pedidos-atrasados", urgente: true },
+        // Los cortes terminados van en «Para entregar» (M2S4-047).
         { clave: "cortes-sin-retirar" },
+        { clave: "reponer" },
       ],
       CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO,
     );
     expect(paraHoy.map((p) => p.clave)).toEqual(["pedidos-atrasados"]);
-    expect(pendientes.map((p) => p.clave)).toEqual(["cortes-sin-retirar"]);
+    expect(pendientes.map((p) => p.clave)).toEqual(["reponer"]);
   });
 
   it("sin urgentes, «Para hoy» queda vacío", () => {

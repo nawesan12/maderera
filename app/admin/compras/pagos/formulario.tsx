@@ -199,6 +199,12 @@ export function FormularioPago({
   const [branchId, setBranchId] = useState(() => sucursalPropuesta(sucursales));
 
   const [facturas, setFacturas] = useState<FacturaConSaldo[]>([]);
+  /**
+   * De qué proveedor son las facturas cargadas. Mientras no son del elegido,
+   * se están trayendo: mostraba «No tiene facturas pendientes» medio segundo
+   * antes de que llegaran (mes 23).
+   */
+  const [facturasDe, setFacturasDe] = useState<string | null>(null);
   /** Las tildadas, con cuánto se paga de cada una. */
   const [aplicado, setAplicado] = useState<Record<string, string>>({});
   /** null: el total es la suma de lo tildado. Si se escribe, manda. */
@@ -234,6 +240,7 @@ export function FormularioPago({
     void verFacturasConSaldo(supplierId).then((filas) => {
       if (!vivo) return;
       setFacturas(filas);
+      setFacturasDe(supplierId);
       // Si se llegó desde una factura, viene tildada por su saldo entero.
       const objetivo = filas.find((f) => f.id === facturaInicial || f.id === chequeInicial);
       setAplicado(objetivo ? { [objetivo.id]: importeParaElCampo(objetivo.saldo) } : {});
@@ -429,7 +436,12 @@ export function FormularioPago({
 
         {supplierId && (
           <Seccion titulo="Qué facturas se pagan" icono={ReceiptText} columnas={1}>
-            {facturas.length === 0 ? (
+            {facturasDe !== supplierId ? (
+              <div aria-busy="true" className="space-y-2">
+                <div className="h-16 animate-pulse rounded-xl bg-hundida" />
+                <div className="h-16 animate-pulse rounded-xl bg-hundida" />
+              </div>
+            ) : facturas.length === 0 ? (
               <p className="text-base text-muted-foreground">No tiene facturas pendientes</p>
             ) : (
               <ul className="space-y-2">
@@ -819,6 +831,9 @@ export function FormularioPago({
             <div className="grid gap-4 md:grid-cols-2">
               {regimenesDelProveedor.map((r) => {
                 const sim = simuladas[r.id];
+                // Sin acumulado ni mínimo, «$ X = $ X × 8,68 %» repetía la
+                // base: va directo a la alícuota (mes 23).
+                const conPasos = Boolean(sim && (sim.acumulado - sim.base > 0.009 || sim.minimo > 0));
                 return (
                   <div key={r.id} className="space-y-2">
                     <Interruptor
@@ -846,10 +861,10 @@ export function FormularioPago({
                     {retener[r.id] && sim && (
                       <div className="tabular px-1">
                         <p className="text-sm text-muted-foreground">
-                          {formatearMonto(sim.base)}
+                          {conPasos && formatearMonto(sim.base)}
                           {sim.acumulado - sim.base > 0.009 && ` + ${formatearMonto(sim.acumulado - sim.base)} del mes`}
                           {sim.minimo > 0 && ` − ${formatearMonto(sim.minimo)} mínimo`}
-                          {` = ${formatearMonto(sim.imponible)} × ${sim.alicuota.toLocaleString("es-AR")} %`}
+                          {`${conPasos ? " = " : ""}${formatearMonto(sim.imponible)} × ${sim.alicuota.toLocaleString("es-AR")} %`}
                           {sim.retenidoAntes > 0.009 && ` − ${formatearMonto(sim.retenidoAntes)} ya retenido`}
                         </p>
                         <p className="text-base">

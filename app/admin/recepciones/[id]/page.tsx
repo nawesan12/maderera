@@ -40,6 +40,8 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
   const usuario = await requireStaff();
   if (!puedeEntrar("/admin/recepciones", usuario.staffRole)) notFound();
   const veCostos = puedeEntrar("/admin/recepciones/nueva", usuario.staffRole);
+  // El depósito no entra a las órdenes: el número va sin enlace (mes 23).
+  const veOrdenes = puedeEntrar("/admin/compras/ordenes", usuario.staffRole);
 
   const { id } = await params;
   if (!esUuid(id)) notFound();
@@ -74,14 +76,18 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
                 .join(" · ")}
             </p>
             {/* La orden de la que salió, para reclamar desde ahí (M3S3-026). */}
-            {recepcion.purchaseOrderId && recepcion.ordenNumero && (
-              <Link
-                href={`/admin/compras/ordenes/${recepcion.purchaseOrderId}`}
-                className="codigo mt-1 inline-block text-base font-medium hover:underline"
-              >
-                {recepcion.ordenNumero}
-              </Link>
-            )}
+            {recepcion.purchaseOrderId &&
+              recepcion.ordenNumero &&
+              (veOrdenes ? (
+                <Link
+                  href={`/admin/compras/ordenes/${recepcion.purchaseOrderId}`}
+                  className="codigo mt-1 inline-block text-base font-medium hover:underline"
+                >
+                  {recepcion.ordenNumero}
+                </Link>
+              ) : (
+                <p className="codigo mt-1 text-base font-medium">{recepcion.ordenNumero}</p>
+              ))}
           </div>
           <span
             className={`${estado.clase} inline-flex items-center rounded-lg bg-[var(--estado-fondo)] px-3 py-1.5 text-base font-semibold`}
@@ -128,25 +134,29 @@ export default async function RecepcionPage({ params }: { params: Promise<{ id: 
                       <span className="text-base font-medium">{descripcion}</span>
                       {/* La cantidad con su unidad y a la derecha, como en el
                           remito y el stock: decía «20 ·» (M3S4-037). */}
-                      <span className="tabular shrink-0 text-base font-semibold">
+                      {/* «faltan N» va con la cantidad, que ven todos: en el
+                          renglón del precio se perdía para el depósito (mes 23). */}
+                      <span className="tabular shrink-0 text-right text-base font-semibold">
                         {cantidadConUnidad(vino, i.unidad ?? null, descripcion)}
                         {pedido !== null && pedido !== vino && (
                           <span className="font-normal text-muted-foreground"> de {cantidad(pedido)}</span>
                         )}
+                        {recepcion.estado === "confirmada" && faltan > 0 && (
+                          <span className="block text-saldo-debe">faltan {cantidad(faltan)}</span>
+                        )}
                       </span>
                     </p>
-                    <p className="text-base text-muted-foreground">
-                      {i.sku && <span className="codigo text-sm">{i.sku}</span>}
-                      {veCostos && (
-                        <span className="tabular">
-                          {i.sku ? " · " : ""}
-                          {formatearMonto(Number(i.costoUnitario))} · IVA {Number(i.alicuotaIva)}%
-                        </span>
-                      )}
-                      {recepcion.estado === "confirmada" && faltan > 0 && (
-                        <span className="font-semibold text-saldo-debe"> · faltan {cantidad(faltan)}</span>
-                      )}
-                    </p>
+                    {(i.sku || veCostos) && (
+                      <p className="text-base text-muted-foreground">
+                        {i.sku && <span className="codigo text-sm">{i.sku}</span>}
+                        {veCostos && (
+                          <span className="tabular">
+                            {i.sku ? " · " : ""}
+                            {formatearMonto(Number(i.costoUnitario))} · IVA {Number(i.alicuotaIva)}%
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
                   {veCostos && recepcion.estado === "confirmada" && (
                     // En el teléfono, un dato por renglón con su rótulo al

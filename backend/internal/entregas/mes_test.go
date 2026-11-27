@@ -355,7 +355,8 @@ func TestElAcopioRetiradoEnParteQuedaListo(t *testing.T) {
 		"receptorDocumento": "20111222", "cantidades": cantidades(o1, "1")}); c != 200 {
 		t.Fatalf("%d %s", c, b)
 	}
-	if estado := e.uno(t, `select estado::text from orders where id = $1`, otro); estado != "pendiente" {
+	// Pero tampoco «Sin preparar»: ya salió una parte (PED-1153).
+	if estado := e.uno(t, `select estado::text from orders where id = $1`, otro); estado != "preparando" {
 		t.Errorf("con el corte en cola quedó %q", estado)
 	}
 }

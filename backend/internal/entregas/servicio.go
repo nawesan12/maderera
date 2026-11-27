@@ -638,6 +638,13 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 			if err := pasarA(ctx, tx, f.OrderID, "listo", "Remito "+numero+": se retiró una parte", usuario, false); err != nil {
 				return nil, nil, err
 			}
+		} else if pedido.estado == "pendiente" {
+			// Pero ya no está «Sin preparar»: salió una parte y lo que
+			// queda espera el corte (mes simulado, PED-1153: quedaba «Sin
+			// preparar», con una entrega firmada y sin «Preparar»).
+			if err := pasarA(ctx, tx, f.OrderID, "preparando", "Remito "+numero+": se retiró una parte", usuario, false); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	// El enlace para firmar desde el celular: el de la visita va con el

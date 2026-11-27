@@ -21,6 +21,7 @@ import { CargarPasadas } from "../pasadas";
 import { SierraDelTrabajo } from "./sierra";
 import { formatearSierra } from "@/lib/cortes/sierra";
 import { CobrarCorte, CorregirOAnular, MasArchivos, RemitoDeLaReposicion, SumarAlPedido } from "./gestion";
+import { listarPerfiles } from "@/lib/dal/admin/cortes-exportacion";
 
 export default async function FichaCortePage({
   params,
@@ -34,7 +35,13 @@ export default async function FichaCortePage({
   // mano y el motor con que nació el trabajo, el presupuesto placa por
   // placa, de dónde sale la plata (`modo`) y, para el aserradero, sin
   // importes ni teléfono.
-  const [ficha, usuario] = await Promise.all([fichaDeCorte(id), requireStaff()]);
+  // Los formatos guardados: los que no usa el agente se prueban desde acá
+  // sobre este corte, sin pasarlos a «por defecto» (mes simulado, M3S3-018).
+  const [ficha, usuario, perfiles] = await Promise.all([
+    fichaDeCorte(id),
+    requireStaff(),
+    listarPerfiles().catch(() => []),
+  ]);
 
   if (!ficha) notFound();
   const { corte, tarifa, metrosCanto, cargoCanto, plano, cuenta, modo, pedido } = ficha;
@@ -218,7 +225,10 @@ export default async function FichaCortePage({
                 <Map className="h-5 w-5 shrink-0" />
                 Plano
               </Link>
-              <MasArchivos id={corte.id} />
+              <MasArchivos
+                id={corte.id}
+                formatos={perfiles.filter((p) => !p.porDefecto).map((p) => ({ id: p.id, nombre: p.nombre }))}
+              />
             </div>
           </header>
 

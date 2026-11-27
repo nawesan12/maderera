@@ -38,11 +38,15 @@ import {
 
 const inicial: EstadoPerfil = {};
 
-/** Un corte de mentira para la vista previa. Medidas reales de una placa. */
+/**
+ * Un corte de mentira para la vista previa, escrito como sale uno real (el
+ * material con el nombre del catálogo). El archivo de un corte de verdad con
+ * este formato se baja desde la ficha, en «Más archivos» (M3S3-018).
+ */
 const EJEMPLO = {
-  numero: "C-1042",
+  numero: "CRT-1042",
   cliente: "Carpintería Pérez",
-  material: "Melamina blanca 18mm",
+  material: "Melamina Blanca — 2600 × 1830 mm — 18mm",
   piezas: [
     {
       largoMm: 1229,
@@ -83,7 +87,7 @@ export function EditorDeFormato({
             >
               <div className="min-w-[12rem] flex-1">
                 <p className="text-base font-medium">
-                  {p.nombre}
+                  {p.nombre}{" "}
                   {p.porDefecto && (
                     <span className="ml-2 rounded-full bg-brand-orange/12 px-2 py-0.5 text-sm font-medium text-brand-orange-dark">
                       por defecto
@@ -235,7 +239,7 @@ function Formulario({ perfil }: { perfil?: CuttingExportProfile }) {
               nombre="porDefecto"
               etiqueta="Usar este al apretar «Para la máquina»"
               icono={Star}
-              defecto={perfil?.porDefecto ?? true}
+              defecto={perfil?.porDefecto ?? false}
             />
           </div>
         </Seccion>

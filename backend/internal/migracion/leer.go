@@ -192,8 +192,8 @@ type Fila struct {
 	Datos   map[string]string `json:"datos"`
 	Errores []string          `json:"errores"`
 	Avisos  []string          `json:"avisos"`
-	// Vacios son los campos que no vinieron en el archivo (y quedaron con su
-	// valor por defecto). Al re-migrar, uno vacío no pisa lo que la ficha
+	// Vacios son los campos que no vinieron en el archivo, o que vinieron con
+	// algo que no se reconoció (y quedaron con su valor por defecto). Al re-migrar, uno vacío no pisa lo que la ficha
 	// ya tenía: el límite de crédito por defecto, 0, dejaba sin cuenta a
 	// clientes con límite cargado a mano (mes 23). No viaja en el JSON.
 	Vacios map[string]bool `json:"-"`
@@ -293,6 +293,10 @@ func InterpretarFecha(texto string) (string, bool) {
 
 type leido struct {
 	valor, error, aviso string
+	// porDefecto: lo escrito no se reconoció y quedó el valor por defecto.
+	// Para una ficha que ya existe cuenta como no venido: «Constructura»
+	// en el tipo pasaba a particular a un profesional (mes 23).
+	porDefecto bool
 }
 
 func leerCampo(c Campo, bruto string) leido {
@@ -350,7 +354,7 @@ func leerCampo(c Campo, bruto string) leido {
 			if c.porDefecto() != "" {
 				queda = ", queda en " + strings.ReplaceAll(c.porDefecto(), "_", " ")
 			}
-			return leido{valor: c.porDefecto(), aviso: fmt.Sprintf(`%s: no se reconoció "%s"%s.`, c.Etiqueta, texto, queda)}
+			return leido{valor: c.porDefecto(), aviso: fmt.Sprintf(`%s: no se reconoció "%s"%s.`, c.Etiqueta, texto, queda), porDefecto: c.porDefecto() != ""}
 		}
 		return leido{valor: v}
 	}
@@ -441,7 +445,7 @@ func NormalizarFilas(e Entidad, m Mapeo, filas [][]string) []Fila {
 			}
 			l := leerCampo(c, bruto)
 			f.Datos[c.Clave] = l.valor
-			if trimJS(bruto) == "" {
+			if trimJS(bruto) == "" || l.porDefecto {
 				if f.Vacios == nil {
 					f.Vacios = map[string]bool{}
 				}

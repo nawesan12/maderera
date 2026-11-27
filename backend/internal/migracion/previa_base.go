@@ -65,20 +65,41 @@ func (s *Servicio) Previsualizar(ctx context.Context, e Entidad, m Mapeo, filas 
 				continue
 			}
 			vistos[id] = true
-			var nombre, direccion, cuitBase, email, telefono, condicion string
+			var nombre, direccion, cuitBase, email, telefono, condicion, tipo string
+			tipoCol := "''"
+			if e.Clave == "clientes" {
+				tipoCol = "tipo::text"
+			}
 			if err := tx.QueryRow(ctx, `SELECT nombre, coalesce(direccion, ''), coalesce(cuit, ''), coalesce(email, ''),
-				coalesce(telefono, ''), condicion_iva::text FROM `+tabla+` WHERE id = $1`, id).
-				Scan(&nombre, &direccion, &cuitBase, &email, &telefono, &condicion); err != nil {
+				coalesce(telefono, ''), condicion_iva::text, `+tipoCol+` FROM `+tabla+` WHERE id = $1`, id).
+				Scan(&nombre, &direccion, &cuitBase, &email, &telefono, &condicion, &tipo); err != nil {
 				return err
 			}
-			sobre[f.Linea] = Sobre{Actualiza: true, Cambios: cambios([][3]string{
+			// Lo mismo que escribe aplicarClientes: lo que el archivo no trae
+			// no pisa lo que había, así que no es un cambio. El tipo que cae en
+			// «particular» por defecto tampoco; el que viene escrito, o el que
+			// sale del rubro, sí (mes 23: una ficha pasaba de profesional a
+			// particular sin que la vista previa lo dijera).
+			condicionNueva := d["condicionIva"]
+			if f.Vacios["condicionIva"] {
+				condicionNueva = ""
+			}
+			campos := [][3]string{
 				{"Nombre", nombre, d["nombre"]},
 				{"Domicilio", direccion, d["direccion"]},
 				{"CUIT", cuit.FormatearLargo(cuitBase), cuit.FormatearLargo(d["cuit"])},
 				{"Correo", email, d["email"]},
 				{"Teléfono", telefono, d["telefono"]},
-				{"Condición frente al IVA", strings.ReplaceAll(condicion, "_", " "), strings.ReplaceAll(d["condicionIva"], "_", " ")},
-			})}
+				{"Condición frente al IVA", strings.ReplaceAll(condicion, "_", " "), strings.ReplaceAll(condicionNueva, "_", " ")},
+			}
+			if e.Clave == "clientes" {
+				tipoNuevo := d["tipo"]
+				if f.Vacios["tipo"] && tipoNuevo == "particular" {
+					tipoNuevo = ""
+				}
+				campos = append(campos, [3]string{"Tipo", etiquetaDeTipo(tipo), etiquetaDeTipo(tipoNuevo)})
+			}
+			sobre[f.Linea] = Sobre{Actualiza: true, Cambios: cambios(campos)}
 		}
 		return nil
 	})
@@ -89,20 +110,17 @@ func (s *Servicio) Previsualizar(ctx context.Context, e Entidad, m Mapeo, filas 
 }
 
 // cambios son los campos que la fila cambia: «Domicilio: A → B». Un campo que
-// el archivo trae vacío también se pisa (la escritura no lo conserva), así que
-// se muestra.
+// el archivo trae vacío no se pisa (la escritura conserva lo que había), así
+// que no es un cambio: decía «Teléfono → vacío» y el teléfono quedaba.
 func cambios(campos [][3]string) []string {
 	out := []string{}
 	for _, c := range campos {
 		antes, despues := strings.TrimSpace(c[1]), strings.TrimSpace(c[2])
-		if comparable(antes) == comparable(despues) {
+		if despues == "" || comparable(antes) == comparable(despues) {
 			continue
 		}
 		if antes == "" {
 			antes = "vacío"
-		}
-		if despues == "" {
-			despues = "vacío"
 		}
 		out = append(out, c[0]+": "+antes+" → "+despues)
 	}
@@ -123,4 +141,14 @@ func buscarProveedor(ctx context.Context, tx pgx.Tx, d map[string]string, nombre
 		}
 	}
 	return nombres.buscar(ctx, tx, d["nombre"], "")
+}
+
+// etiquetaDeTipo es el tipo de cliente como lo dice la ficha.
+func etiquetaDeTipo(tipo string) string {
+	for _, o := range tiposCliente {
+		if o.Valor == tipo {
+			return o.Etiqueta
+		}
+	}
+	return tipo
 }

@@ -2,6 +2,7 @@ package migracion
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"mjbj/internal/sqlc"
@@ -43,5 +44,59 @@ func TestMes23ReMigrarNoBorraElLimite(t *testing.T) {
 	if err := e.pool.QueryRow(ctx, `SELECT limite_credito::float8, condicion_iva::text, tipo::text FROM customers WHERE nombre = 'Sim Patricia Díaz'`).Scan(&limite, &condicion, &tipo); err != nil ||
 		limite != 0 || condicion != "consumidor_final" || tipo != "particular" {
 		t.Errorf("alta: %v %s %s %v", limite, condicion, tipo, err)
+	}
+}
+
+// Mes 23: la fila que pisa una ficha decía «Teléfono → vacío» (y el teléfono
+// quedaba), no decía que el tipo pasaba de profesional a particular, y un
+// tipo que no se reconocía dejaba particular a un profesional.
+func TestMes23LaVistaPreviaDiceLoQueEscribe(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)
+	ctx := context.Background()
+	u := e.srv.URL + "/api/v1/admin/migracion/"
+	if _, err := e.pool.Exec(ctx, `INSERT INTO customers (nombre, cuit, tipo, telefono, direccion)
+		VALUES ('Sim Techos', '30-71555022-5', 'profesional', '223 555-0101', 'Sim Ruta 11 km 5')`); err != nil {
+		t.Fatal(err)
+	}
+	previa := func(archivo string) []string {
+		t.Helper()
+		var a ArchivoAnalizado
+		if s := subir(t, adm, u+"analizar", "clientes", "c.csv", []byte(archivo), &a); s != 200 || a.Error != "" {
+			t.Fatalf("analizar: %d %q", s, a.Error)
+		}
+		var v VistaPrevia
+		if s := pedir(t, adm, "POST", u+"previa", map[string]any{"entidad": "clientes", "mapeo": a.Mapeo, "filas": a.Filas}, &v); s != 200 || v.Muestra == nil || len(*v.Muestra) != 1 {
+			t.Fatalf("previa: %d %+v", s, v)
+		}
+		return (*v.Muestra)[0].Cambios
+	}
+	tipoYTelefono := func() (string, string) {
+		var tipo, tel string
+		if err := e.pool.QueryRow(ctx, `SELECT tipo::text, coalesce(telefono, '') FROM customers`).Scan(&tipo, &tel); err != nil {
+			t.Fatal(err)
+		}
+		return tipo, tel
+	}
+
+	// Sin la columna del teléfono y con un tipo que no se reconoce: solo
+	// cambia el domicilio, y así queda.
+	sinTel := "Nombre;CUIT;Domicilio;Tipo\r\nSim Techos;30715550225;Sim Ruta 11;Galáctico\r\n"
+	if c := strings.Join(previa(sinTel), "|"); c != "Domicilio: Sim Ruta 11 km 5 → Sim Ruta 11" {
+		t.Errorf("cambios sin teléfono: %q", c)
+	}
+	migrar(t, e, adm, "clientes", "c.csv", []byte(sinTel))
+	if tipo, tel := tipoYTelefono(); tipo != "profesional" || tel != "223 555-0101" {
+		t.Errorf("después de migrar: %s %q", tipo, tel)
+	}
+
+	// Con el tipo escrito, el cambio se anuncia y se hace.
+	conTipo := "Nombre;CUIT;Tipo\r\nSim Techos;30715550225;Particular\r\n"
+	if c := strings.Join(previa(conTipo), "|"); c != "Tipo: Profesional → Particular" {
+		t.Errorf("cambios con el tipo: %q", c)
+	}
+	migrar(t, e, adm, "clientes", "c.csv", []byte(conTipo))
+	if tipo, tel := tipoYTelefono(); tipo != "particular" || tel != "223 555-0101" {
+		t.Errorf("con el tipo: %s %q", tipo, tel)
 	}
 }

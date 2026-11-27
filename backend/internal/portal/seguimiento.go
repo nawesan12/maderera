@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/cobros"
+	"mjbj/internal/cortes"
 	"mjbj/internal/roles"
 	"mjbj/internal/ventas/fragmentos"
 )
@@ -282,6 +283,10 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 		return nil, err
 	}
 	for i := range p.Cortes {
+		if m := p.Cortes[i].Material; m != nil {
+			o := cortes.MaterialEnOrden(*m, nil, nil)
+			p.Cortes[i].Material = &o
+		}
 		filas, err = s.pool.Query(ctx, `SELECT largo_mm, ancho_mm, cantidad, etiqueta FROM cutting_items
 			WHERE cutting_order_id = $1 ORDER BY orden`, p.Cortes[i].ID)
 		if err != nil {

@@ -99,3 +99,16 @@ export function nombreDeLaMitad(mitad: Mitad): string {
 export function fraccionDePlaca(mitad: Mitad, pctMedia = 50): number {
   return mitad ? pctMedia / 100 : 1;
 }
+
+/**
+ * La medida de la etiqueta con el lado largo primero, como la da el sitio:
+ * «1830 x 2600mm» → «2600 × 1830 mm». Es lo mismo que hace Go al leer
+ * (cortes.MaterialEnOrden), para que la placa que trae el cliente se guarde
+ * con el mismo nombre que la del catálogo (mes simulado, M2S3-067).
+ */
+export function medidaEnOrden(etiqueta: string): string {
+  return etiqueta.replace(/(\d{3,5})\s*[xX×]\s*(\d{3,5})(\s*mm)?/, (_m, a: string, b: string) => {
+    const [l, n] = Number(b) > Number(a) ? [b, a] : [a, b];
+    return `${l} × ${n} mm`;
+  });
+}

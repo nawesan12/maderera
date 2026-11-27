@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crearCorte, type EstadoCorte } from "../actions";
 import { buscarClientes, buscarEnMostrador } from "@/app/mostrador/actions";
-import { medidaDePlaca, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
+import { medidaDePlaca, medidaEnOrden, nombreDeLaMitad, type Mitad } from "@/lib/cortes/placa";
 import type { PiezaFijada } from "@/lib/cortes/tipos";
 import { usePlano } from "@/lib/cortes/en-vivo";
 import { PlanoEnVivo } from "@/components/cortes/plano-en-vivo";
@@ -1151,7 +1151,7 @@ function BuscadorDePlaca({
                     largoMm: r.largoMm ?? null,
                     anchoMm: r.anchoMm ?? null,
                     color: r.color ?? null,
-                    descripcion: `${r.producto} — ${r.medida}`,
+                    descripcion: `${r.producto} — ${medidaEnOrden(r.medida)}`,
                   });
                   setTexto("");
                 }}
@@ -1159,7 +1159,7 @@ function BuscadorDePlaca({
               >
                 <Plus className="h-4 w-4 text-muted-foreground" />
                 <span className="font-medium">{r.producto}</span>
-                <span className="text-muted-foreground">{r.medida}</span>
+                <span className="text-muted-foreground">{medidaEnOrden(r.medida)}</span>
               </button>
             </li>
           ))}

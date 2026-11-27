@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"mjbj/internal/busqueda"
+	"mjbj/internal/cortes"
 	"mjbj/internal/cuit"
 	"net/http"
 	"strings"
@@ -390,15 +391,20 @@ func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto stri
 			var a []any
 			// También por el pedido: el aserradero tiene el «PED-1368» del
 			// papel y el corte no aparecía (mes simulado, M3S4-024).
-			filas, err := pool.Query(ctx, `SELECT co.id, co.numero, co.contacto_nombre, co.material_descripcion, co.estado::text
-				FROM cutting_orders co LEFT JOIN orders o ON o.id = co.order_id WHERE `+
+			filas, err := pool.Query(ctx, `SELECT co.id, co.numero, co.contacto_nombre, co.material_descripcion, co.estado::text,
+				       pv.largo_mm, pv.ancho_mm
+				FROM cutting_orders co LEFT JOIN orders o ON o.id = co.order_id
+				LEFT JOIN product_variants pv ON pv.id = co.variant_id WHERE `+
 				coincide(texto, &a, "co.numero", "co.contacto_nombre", "co.material_descripcion", "o.numero")+` ORDER BY co.created_at DESC LIMIT 4`, a...)
 			if err != nil {
 				return nil, err
 			}
 			return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Resultado, error) {
 				var id, numero, contacto, material, e string
-				err := r.Scan(&id, &numero, &contacto, &material, &e)
+				var largo, ancho *int32
+				err := r.Scan(&id, &numero, &contacto, &material, &e, &largo, &ancho)
+				// Con la medida en orden, como en la cola (CRT-21).
+				material = cortes.MaterialEnOrden(material, largo, ancho)
 				return Resultado{id, "Corte", numero + " · " + contacto, material + " · " + estado("corte", e), "/admin/cortes/" + id}, err
 			})
 		}},

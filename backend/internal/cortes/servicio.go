@@ -255,6 +255,7 @@ func (s *Servicio) DelPedido(ctx context.Context, orderID string) ([]CorteDelPed
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (CorteDelPedido, error) {
 		var c CorteDelPedido
 		err := r.Scan(&c.ID, &c.Numero, &c.Material, &c.Estado, &c.Urgente, &c.CreatedAt, &c.VariantID, &c.PlacasEnteras, &c.SinCargo, &c.Piezas)
+		c.Material = MaterialEnOrden(c.Material, nil, nil)
 		return c, err
 	})
 }

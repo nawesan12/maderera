@@ -42,6 +42,54 @@ func TestPendientesDelTaller(t *testing.T) {
 	}
 }
 
+// M2S4-008: las pasadas son el precio. El depósito no las cambia, y bajarlas
+// del plano lo hace un administrador.
+func TestPasadasLasCambiaQuienCobra(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	dep := e.staff(t, "deposito@prueba.test", "deposito")
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	id := alta(t, e, ven, melamina(e, "piezas", []any{pieza(600, 300, 3)}))
+	u := e.srv.URL + "/api/v1/admin/cortes/" + id + "/pasadas"
+	sugeridas := leerFicha(t, e, ven, id)["pasadasACobrar"].(float64)
+	if sugeridas < 2 {
+		t.Fatalf("el plano propone %v pasadas", sugeridas)
+	}
+	if code, _ := pedir(t, dep, "POST", u, map[string]any{"pasadas": sugeridas + 1}); code != 403 {
+		t.Errorf("el depósito cambió las pasadas: %d", code)
+	}
+	if code, _ := pedir(t, ven, "POST", u, map[string]any{"pasadas": sugeridas - 1}); code != 403 {
+		t.Errorf("el vendedor bajó las pasadas sin autorización: %d", code)
+	}
+	if code, b := pedir(t, ven, "POST", u, map[string]any{"pasadas": sugeridas + 1}); code != 204 {
+		t.Errorf("el vendedor no pudo subirlas: %d %s", code, b)
+	}
+	if code, b := pedir(t, adm, "POST", u, map[string]any{"pasadas": 1}); code != 204 {
+		t.Errorf("el admin no pudo bajarlas: %d %s", code, b)
+	}
+}
+
+// M2S2-045: con el acomodo a mano guardado, las pasadas a cobrar son las del
+// plano que se dibuja, si no esquiva la media placa.
+func TestElAcomodoCobraSusPasadas(t *testing.T) {
+	sierra := 4.0
+	d := DatosDelPlano{Piezas: []PiezaAcortar{{LargoMm: 900, AnchoMm: 400, Cantidad: 2}, {LargoMm: 500, AnchoMm: 300, Cantidad: 1}},
+		PlacaLargo: 2750, PlacaAncho: 1830, AnchoSierra: &sierra}
+	libre := PlanoConLaHoja(d)
+	d.Fijadas = []PiezaFijada{{Indice: 1, Unidad: 1, Placa: 1, Girada: ptr(true)}}
+	manual := PlanoConLaHoja(d)
+	c := ACobrar(d)
+	if len(manual.Placas) == len(libre.Placas) && manual.PlacasEnteras == libre.PlacasEnteras && c.Pasadas != manual.PasadasCobrables {
+		t.Errorf("cobra %d pasadas y el plano dice %d (libre %d)", c.Pasadas, manual.PasadasCobrables, libre.PasadasCobrables)
+	}
+	if !SeCobraElManual(Plano{PlacasEnteras: 1, Placas: make([]PlacaDelPlano, 2)}, Plano{PlacasEnteras: 1, Placas: make([]PlacaDelPlano, 2)}) {
+		t.Error("las mismas placas: se cobra el manual")
+	}
+	if SeCobraElManual(Plano{PlacasEnteras: 0, Placas: make([]PlacaDelPlano, 2)}, Plano{PlacasEnteras: 1, Placas: make([]PlacaDelPlano, 1)}) {
+		t.Error("esquivar la media placa cobra el manual")
+	}
+}
+
 // M2S1-064 y M2S2-106: el espesor del PTX es el del tablero, no la primera
 // medida con «mm».
 func TestEspesorConLaMedidaDeLaPlaca(t *testing.T) {

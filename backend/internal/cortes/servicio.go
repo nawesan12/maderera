@@ -807,6 +807,11 @@ func (s *Servicio) AlternarUrgente(ctx context.Context, id string) (string, erro
 }
 
 // CargarPasadas anota las pasadas que dio la máquina.
+//
+// Lo que se cobra lo cambia el mostrador (ManejanPlata, en el handler): el
+// depósito veía el campo y podía bajar el cobro de un corte sin cobrar antes
+// de entregarlo (mes simulado, M2S4-008). Bajarlas de lo que dice el plano
+// es un descuento, y lo hace un administrador.
 func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id string, pasadas float64) error {
 	cantidad := 0.0
 	if !math.IsNaN(pasadas) {
@@ -814,6 +819,19 @@ func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id strin
 	}
 	if cantidad > math.MaxInt32 {
 		return error422("Son demasiadas pasadas.")
+	}
+	if ses == nil || ses.RolStaff == nil || *ses.RolStaff != sqlc.StaffRoleAdmin {
+		c, err := s.Obtener(ctx, id)
+		if err != nil {
+			return err
+		}
+		if c == nil {
+			return plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+		}
+		if sugeridas := PlanoDelCorte(c).PasadasCobrables; int(cantidad) < sugeridas {
+			return plataforma.NuevoProblema(http.StatusForbidden,
+				fmt.Sprintf("El plano dice %d: cobrar menos pasadas lo autoriza un administrador.", sugeridas))
+		}
 	}
 	var numero string
 	var previas int32
@@ -844,11 +862,31 @@ func (s *Servicio) GuardarAcomodo(ctx context.Context, ses *auth.Sesion, id stri
 		}
 		guardado = &b
 	}
+	// Las pasadas y las placas a cobrar pasan a ser las del plano acomodado:
+	// la ficha cobraba 10 pasadas del automático mientras el plano y la hoja
+	// decían 8 (mes simulado, M2S2-045).
+	c, err := s.Obtener(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if c == nil {
+		return "", plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+	}
+	libre := PlanoDelCorte(c)
+	if c.AcomodoManual != nil {
+		c.AcomodoManual = nil
+		libre = PlanoDelCorte(c)
+	}
+	c.AcomodoManual = guardado
+	plano := PlanoDelCorte(c)
+	if guardado != nil && !SeCobraElManual(plano, libre) {
+		plano = libre
+	}
 	var numero string
 	// El estado va en el mismo UPDATE: entre leerlo y escribir, el taller
 	// puede haberlo pasado a la máquina.
-	err := s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, updated_at = now()
-		WHERE id = $1 AND estado = 'en-cola' RETURNING numero`, id, guardado).Scan(&numero)
+	err = s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, placas = $3, pasadas = $4, updated_at = now()
+		WHERE id = $1 AND estado = 'en-cola' RETURNING numero`, id, guardado, len(plano.Placas), plano.PasadasCobrables).Scan(&numero)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var hay bool
 		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM cutting_orders WHERE id = $1)`, id).Scan(&hay); err != nil {

@@ -744,6 +744,11 @@ func (c Cobro) ConMaterial() Cobro {
 //
 // Se cuenta como la hoja (PlanoConLaHoja): lo que se cobra ahora nace con
 // MotorPasadasDeLaHoja.
+//
+// Con las mismas placas enteras y sin gastar más placas, se cobra el manual:
+// es un plano mejor de verdad (la pieza que entra en el sobrante de una placa
+// vendida), y cobrar las pasadas del libre hacía que la ficha cobrara 10
+// mientras el plano y la hoja decían 8 (mes simulado, M2S2-045).
 func ACobrar(d DatosDelPlano) Cobro {
 	manual := PlanoConLaHoja(d)
 	if len(d.Fijadas) == 0 {
@@ -752,8 +757,18 @@ func ACobrar(d DatosDelPlano) Cobro {
 	sinFijar := d
 	sinFijar.Fijadas = nil
 	libre := PlanoConLaHoja(sinFijar)
-	if manual.PlacasEnteras > libre.PlacasEnteras {
+	if SeCobraElManual(manual, libre) {
 		return Cobro{Placas: manual.PlacasEnteras, Pasadas: manual.PasadasCobrables, Manual: true, Parciales: len(manual.Placas) - manual.PlacasEnteras}
 	}
 	return Cobro{Placas: libre.PlacasEnteras, Pasadas: libre.PasadasCobrables, Parciales: len(libre.Placas) - libre.PlacasEnteras}
+}
+
+// SeCobraElManual dice si lo que se cobra es el plano acomodado a mano o el
+// libre (ACobrar): el manual, si vende más placas enteras, o las mismas sin
+// usar más placas. Menos enteras es esquivar la media placa: el libre.
+func SeCobraElManual(manual, libre Plano) bool {
+	if manual.PlacasEnteras != libre.PlacasEnteras {
+		return manual.PlacasEnteras > libre.PlacasEnteras
+	}
+	return len(manual.Placas) <= len(libre.Placas)
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
@@ -68,8 +67,8 @@ type PedidoDelCorte struct {
 	// pedido, en placas enteras (una media es 0,5).
 	PlacasDelPedido float64 `json:"placasDelPedido"`
 	// PlacasDeOtrosCortes son las que usan los otros cortes vivos del pedido
-	// sobre la misma placa (no sale en la API).
-	PlacasDeOtrosCortes float64 `json:"-"`
+	// sobre la misma placa: con ellas la ficha dice «usa 1 de 3» en un acopio.
+	PlacasDeOtrosCortes float64 `json:"placasDeOtrosCortes"`
 	// Cargo es el pedido aparte donde quedaron las pasadas del corte, si el
 	// suyo ya no se tocaba (H184).
 	Cargo           *string `json:"cargo"`
@@ -285,7 +284,10 @@ func CuentaDelCorte(c *Corte, plano Plano, tarifa *TarifaDeCorte, pedido *Pedido
 		// (mes simulado, H184). El alta dice lo mismo.
 		if pedido != nil && pedido.PlacasDelPedido > 0 {
 			usadas := placasUsadas(c, plano)
-			if total := usadas + pedido.PlacasDeOtrosCortes; math.Abs(total-pedido.PlacasDelPedido) > 1e-6 {
+			// Solo si usan más de lo que vende: usar una de tres en un acopio
+			// es lo normal, y la ficha lo dice como dato en «Las placas»,
+			// no en rojo (mes simulado, M3S3-051).
+			if total := usadas + pedido.PlacasDeOtrosCortes; total-pedido.PlacasDelPedido > 1e-6 {
 				if pedido.PlacasDeOtrosCortes > 0 {
 					cuenta.Faltan = append(cuenta.Faltan, fmt.Sprintf("Los cortes de %s usan %s y el pedido vende %s.",
 						pedido.Numero, placasEnTexto(total), placasEnTexto(pedido.PlacasDelPedido)))

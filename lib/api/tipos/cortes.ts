@@ -665,6 +665,8 @@ export interface components {
                 cobrado: number;
                 /** Format: double */
                 placasDelPedido: number;
+                /** Format: double */
+                placasDeOtrosCortes?: number;
                 lineas: {
                     descripcion: string;
                     unidad: string;
@@ -1377,7 +1379,9 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     GuardarAcomodo: {

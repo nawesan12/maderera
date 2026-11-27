@@ -339,7 +339,9 @@ func (a *API) AlternarUrgente(ctx context.Context, r cortesapi.AlternarUrgenteRe
 }
 
 func (a *API) CargarPasadas(ctx context.Context, r cortesapi.CargarPasadasRequestObject) (cortesapi.CargarPasadasResponseObject, error) {
-	ses, err := mostrador(ctx)
+	// Las pasadas son el precio: las cambia quien cobra, no el depósito
+	// (mes simulado, M2S4-008).
+	ses, err := auth.Exigir(ctx, roles.ManejanPlata...)
 	if err != nil {
 		return nil, err
 	}

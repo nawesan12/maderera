@@ -188,6 +188,8 @@ paths:
       responses:
         "204": { description: Cargadas }
         "404": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/acomodo:
     put:
       operationId: GuardarAcomodo
@@ -731,6 +733,7 @@ components:
             estadoPago: { type: string }
             cobrado: { type: number, format: double }
             placasDelPedido: { type: number, format: double }
+            placasDeOtrosCortes: { type: number, format: double }
             lineas:
               type: array
               items:

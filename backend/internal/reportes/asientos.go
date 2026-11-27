@@ -69,6 +69,10 @@ var Cuentas = struct {
 	// Proveedores del archivo no coincidía con la ficha (M3S2-028). Como las
 	// diferencias de caja, la cuenta la define el contador.
 	AjustesConProveedores string
+	// DiferenciasDeInventario: la baja (o el alta) de mercadería sin venta
+	// —rotura, faltante, conteo, consumo del taller—, contra Mercaderías
+	// (M3S3-013). La cuenta la define el contador; mientras tanto va acá.
+	DiferenciasDeInventario string
 }{"1.1.01", "1.1.02", "1.1.03", "1.1.05", "1.1.06", "1.2.01", "2.1.01", "2.1.03", "2.1.04", "2.1.05", "4.1.01", "5.1.01", "1.1.04",
 	"2.1.06", "4.1.02",
 	"1.1.07", "1.1.08", "1.1.09", "1.1.10", "1.1.11", "1.1.12",
@@ -76,7 +80,8 @@ var Cuentas = struct {
 	"2.1.08", "2.1.09", "2.1.10", "2.1.11",
 	"5.1.11",
 	"5.2.01", "2.1.12", "5.1.12", "2.1.13", "3.1.01", "1.1.13",
-	"5.1.13"}
+	"5.1.13",
+	"5.1.14"}
 
 // AsientoDeAjusteDeProveedor es el de un ajuste a mano en la cuenta de un
 // proveedor: el que baja la deuda, Proveedores contra Ajustes; el que la
@@ -154,6 +159,7 @@ var nombresDeCuenta = map[string]string{
 	"5.1.12": "Diferencias de caja (a definir)", "2.1.13": "Movimientos de fondos a imputar (a definir)",
 	"3.1.01": "Saldos iniciales y ajustes (a definir)", "1.1.13": "Tarjetas a acreditar",
 	"5.1.13": "Ajustes con proveedores (a definir)",
+	"5.1.14": "Diferencias de inventario (a definir)",
 }
 
 // RenglonDeAsiento es RenglonDeAsiento.
@@ -937,6 +943,17 @@ func AsientoDeCosto(fecha time.Time, concepto string, costo float64) Asiento {
 		r = []RenglonDeAsiento{renglon(Cuentas.Mercaderias, -costo, 0), renglon(Cuentas.CostoDeVentas, 0, -costo)}
 	}
 	return asiento(fecha, "Costo de lo vendido · "+concepto, r)
+}
+
+// AsientoDeInventario es una baja (importe negativo) o un alta de
+// mercadería sin venta, al costo congelado en el movimiento: la baja va al
+// debe de `cuenta` y sale de Mercaderías; el alta, al revés (M3S3-013).
+func AsientoDeInventario(fecha time.Time, concepto, cuenta string, importe float64) Asiento {
+	r := []RenglonDeAsiento{renglon(Cuentas.Mercaderias, importe, 0), renglon(cuenta, 0, importe)}
+	if importe < 0 {
+		r = []RenglonDeAsiento{renglon(cuenta, -importe, 0), renglon(Cuentas.Mercaderias, 0, -importe)}
+	}
+	return asiento(fecha, concepto, r)
 }
 
 // AsientoDeDiferenciaDeCaja es el faltante (negativo) o el sobrante del

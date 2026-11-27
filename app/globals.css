@@ -2214,6 +2214,24 @@ html[data-zona-sin-flotante] .flotante-whatsapp {
     box-shadow: none;
     border: 1px solid #ccc;
   }
+  /* La hoja sale siempre en claro, como el remito: con el panel en oscuro,
+     el traslado salía blanco sobre blanco y la tabla como un bloque negro
+     (M2S1-076). Los tokens vuelven a los del tema claro dentro de la hoja. */
+  .hoja-sola {
+    color-scheme: light;
+    --foreground: oklch(0.15 0.01 60);
+    --card: #fff;
+    --card-foreground: oklch(0.15 0.01 60);
+    --muted: oklch(0.95 0.008 75);
+    --muted-foreground: oklch(0.45 0.01 60);
+    --border: oklch(0.90 0.01 75);
+    --hundida: #efedea;
+    --texto-2: #6b6660;
+    --texto-3: #70665b;
+    --textura-superficie: none;
+    color: var(--foreground);
+    background: #fff;
+  }
 }
 
 /* En oscuro, el verde de WhatsApp detrás de texto blanco va más oscuro: con

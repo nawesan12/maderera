@@ -28,6 +28,8 @@ type Params = {
   estado?: string;
   marca?: string;
   prov?: string;
+  /** Los grupos de una sola sucursal (su slug). */
+  suc?: string;
   pagina?: string;
 };
 
@@ -55,7 +57,7 @@ export default async function AdminStockPage({
 
   const [grilla, categorias, marcas, proveedores, movimientos, enCamino, traslados] =
     await Promise.all([
-      listarStock({ ...filtros, estado: params.estado, pagina }),
+      listarStock({ ...filtros, estado: params.estado, sucursal: params.suc, pagina }),
       listarCategoriasAdmin(),
       marcasDeProductos(),
       conProveedores ? proveedoresParaElegir() : Promise.resolve(undefined),
@@ -127,12 +129,17 @@ export default async function AdminStockPage({
         marcaActual={params.marca ?? "todas"}
         proveedores={proveedores?.map((p) => ({ id: p.id, nombre: p.nombre }))}
         proveedorActual={params.prov ?? "todos"}
+        sucursales={sucursales.map((s) => ({ slug: s.slug, nombre: s.nombre }))}
+        sucursalActual={params.suc ?? "todas"}
         estadoActual={estado}
+        /* «Bien» y no «Con stock»: el grupo es lo que no pide reponer y
+           tiene, y «Con stock 10» con 38 medidas con stock se leía mal
+           (M2S1-028). Con una sucursal elegida, los grupos miran solo esa. */
         estados={[
           { valor: "todos", texto: "Todas", cantidad: conteos.todas },
           { valor: "reponer", texto: "Para reponer", cantidad: conteos.reponer, atencion: true },
           { valor: "sin-stock", texto: "Sin stock", cantidad: conteos.sinStock },
-          { valor: "con-stock", texto: "Con stock", cantidad: conteos.conStock },
+          { valor: "con-stock", texto: "Bien", cantidad: conteos.conStock },
         ]}
       />
 
@@ -226,8 +233,19 @@ export default async function AdminStockPage({
                             </>
                           )}
                           <span className="text-muted-foreground"> · {m.branchName}</span>
+                          {/* El antes y el después de un ajuste o un conteo
+                              (M2S1-169). */}
+                          {m.antes !== null && m.despues !== null && (
+                            <span className="tabular text-muted-foreground">
+                              {" · "}
+                              {formatearCantidad(m.antes)} → {formatearCantidad(m.despues)}
+                            </span>
+                          )}
                         </p>
-                        <p className="tabular text-sm text-muted-foreground">{fechaHora.format(m.createdAt)}</p>
+                        <p className="tabular truncate text-sm text-muted-foreground">
+                          {fechaHora.format(m.createdAt)}
+                          {m.usuario && ` · ${m.usuario}`}
+                        </p>
                       </div>
                       <span
                         className={`tabular shrink-0 text-base font-medium ${

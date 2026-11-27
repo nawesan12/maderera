@@ -52,12 +52,36 @@ export async function crearTraslado(datos: {
   return { id: r.data.id, codigo: r.data.codigo };
 }
 
-/** Quien recibe confirma: el destino suma lo que llegó. */
-export async function recibirTraslado(id: string): Promise<{ error?: string }> {
-  const r = await (await api()).POST("/api/v1/admin/stock/traslados/{id}/recibir", { params: { path: { id } } });
+/**
+ * Quien recibe confirma lo que llegó de cada medida: el destino suma eso, y
+ * lo que falta vuelve al origen o se da por perdido (`faltante`).
+ */
+export async function recibirTraslado(
+  id: string,
+  recepcion?: { renglones: RenglonDeTraslado[]; faltante: "origen" | "perdido" },
+): Promise<{ error?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/stock/traslados/{id}/recibir", {
+    params: { path: { id } },
+    ...(recepcion
+      ? { body: { renglones: recepcion.renglones.slice(0, 100), faltante: recepcion.faltante === "perdido" ? "perdido" : "origen" } }
+      : {}),
+  });
   if (!r.response.ok) {
     return { error: mensajeDe(r.error as Problema | undefined, "No se pudo registrar la recepción.") };
   }
+  return revalidarTraslado(id);
+}
+
+/** Un traslado que salió mal y sigue en camino se anula: todo vuelve al origen. */
+export async function anularTraslado(id: string): Promise<{ error?: string }> {
+  const r = await (await api()).POST("/api/v1/admin/stock/traslados/{id}/anular", { params: { path: { id } } });
+  if (!r.response.ok) {
+    return { error: mensajeDe(r.error as Problema | undefined, "No se pudo anular el traslado.") };
+  }
+  return revalidarTraslado(id);
+}
+
+function revalidarTraslado(id: string) {
   revalidatePath("/admin/stock");
   revalidatePath(`/admin/stock/traslados/${id}`);
   updateTag(ETIQUETAS.catalogo);

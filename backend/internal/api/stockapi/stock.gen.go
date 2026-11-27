@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -49,6 +50,7 @@ func (e Nivel) Valid() bool {
 
 // Defines values for TrasladoEstado.
 const (
+	Anulado  TrasladoEstado = "anulado"
 	EnCamino TrasladoEstado = "en-camino"
 	Recibido TrasladoEstado = "recibido"
 )
@@ -56,9 +58,29 @@ const (
 // Valid indicates whether the value is a known member of the TrasladoEstado enum.
 func (e TrasladoEstado) Valid() bool {
 	switch e {
+	case Anulado:
+		return true
 	case EnCamino:
 		return true
 	case Recibido:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TrasladoFaltante.
+const (
+	TrasladoFaltanteOrigen  TrasladoFaltante = "origen"
+	TrasladoFaltantePerdido TrasladoFaltante = "perdido"
+)
+
+// Valid indicates whether the value is a known member of the TrasladoFaltante enum.
+func (e TrasladoFaltante) Valid() bool {
+	switch e {
+	case TrasladoFaltanteOrigen:
+		return true
+	case TrasladoFaltantePerdido:
 		return true
 	default:
 		return false
@@ -128,21 +150,42 @@ func (e AjustarStockJSONBodyMotivo) Valid() bool {
 	}
 }
 
+// Defines values for RecibirTrasladoJSONBodyFaltante.
+const (
+	RecibirTrasladoJSONBodyFaltanteOrigen  RecibirTrasladoJSONBodyFaltante = "origen"
+	RecibirTrasladoJSONBodyFaltantePerdido RecibirTrasladoJSONBodyFaltante = "perdido"
+)
+
+// Valid indicates whether the value is a known member of the RecibirTrasladoJSONBodyFaltante enum.
+func (e RecibirTrasladoJSONBodyFaltante) Valid() bool {
+	switch e {
+	case RecibirTrasladoJSONBodyFaltanteOrigen:
+		return true
+	case RecibirTrasladoJSONBodyFaltantePerdido:
+		return true
+	default:
+		return false
+	}
+}
+
 // FilaStock defines model for FilaStock.
 type FilaStock struct {
-	CategoryName string            `json:"categoryName"`
-	CodigoBarras *string           `json:"codigoBarras"`
-	Imagen       *string           `json:"imagen"`
-	Label        string            `json:"label"`
-	LargoMm      *int              `json:"largoMm"`
-	ParaReponer  bool              `json:"paraReponer"`
-	ProductId    string            `json:"productId"`
-	ProductName  string            `json:"productName"`
-	ProductSlug  string            `json:"productSlug"`
-	Sku          string            `json:"sku"`
-	Sucursales   []StockEnSucursal `json:"sucursales"`
+	CategoryName string  `json:"categoryName"`
+	CodigoBarras *string `json:"codigoBarras"`
 
-	// Total la suma de lo disponible de cada sucursal
+	// Faltante lo vendido de más
+	Faltante    float64           `json:"faltante"`
+	Imagen      *string           `json:"imagen"`
+	Label       string            `json:"label"`
+	LargoMm     *int              `json:"largoMm"`
+	ParaReponer bool              `json:"paraReponer"`
+	ProductId   string            `json:"productId"`
+	ProductName string            `json:"productName"`
+	ProductSlug string            `json:"productSlug"`
+	Sku         string            `json:"sku"`
+	Sucursales  []StockEnSucursal `json:"sucursales"`
+
+	// Total la suma de lo disponible de las sucursales que tienen (un negativo no resta)
 	Total     float64 `json:"total"`
 	Unidad    string  `json:"unidad"`
 	VariantId string  `json:"variantId"`
@@ -190,38 +233,54 @@ type Sucursal struct {
 
 // Traslado defines model for Traslado.
 type Traslado struct {
-	Codigo      string         `json:"codigo"`
-	CreadoPor   *string        `json:"creadoPor"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	Destino     string         `json:"destino"`
-	Estado      TrasladoEstado `json:"estado"`
-	Id          string         `json:"id"`
-	Nota        *string        `json:"nota"`
-	Origen      string         `json:"origen"`
-	RecibidoAt  *time.Time     `json:"recibidoAt"`
-	RecibidoPor *string        `json:"recibidoPor"`
+	AnuladoAt  *time.Time     `json:"anuladoAt"`
+	AnuladoPor *string        `json:"anuladoPor"`
+	Codigo     string         `json:"codigo"`
+	CreadoPor  *string        `json:"creadoPor"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	Destino    string         `json:"destino"`
+	Estado     TrasladoEstado `json:"estado"`
+
+	// Faltante Qué pasó con lo que no llegó
+	Faltante    *TrasladoFaltante `json:"faltante"`
+	Id          string            `json:"id"`
+	Nota        *string           `json:"nota"`
+	Origen      string            `json:"origen"`
+	OrigenId    string            `json:"origenId"`
+	RecibidoAt  *time.Time        `json:"recibidoAt"`
+	RecibidoPor *string           `json:"recibidoPor"`
 	Renglones   []struct {
-		Cantidad  float64 `json:"cantidad"`
-		Medida    string  `json:"medida"`
-		Producto  string  `json:"producto"`
-		Sku       string  `json:"sku"`
-		Unidad    string  `json:"unidad"`
-		VariantId string  `json:"variantId"`
+		// Cantidad Lo que se mandó
+		Cantidad float64 `json:"cantidad"`
+		Medida   string  `json:"medida"`
+		Producto string  `json:"producto"`
+
+		// Recibido Lo que llegó
+		Recibido  *float64 `json:"recibido"`
+		Sku       string   `json:"sku"`
+		Unidad    string   `json:"unidad"`
+		VariantId string   `json:"variantId"`
 	} `json:"renglones"`
 }
 
 // TrasladoEstado defines model for Traslado.Estado.
 type TrasladoEstado string
 
+// TrasladoFaltante Qué pasó con lo que no llegó
+type TrasladoFaltante string
+
 // GrillaDeStockParams defines parameters for GrillaDeStock.
 type GrillaDeStockParams struct {
-	Busqueda       *string                    `form:"busqueda,omitempty" json:"busqueda,omitempty"`
-	Categoria      *string                    `form:"categoria,omitempty" json:"categoria,omitempty"`
-	Estado         *GrillaDeStockParamsEstado `form:"estado,omitempty" json:"estado,omitempty"`
-	Marca          *string                    `form:"marca,omitempty" json:"marca,omitempty"`
-	Proveedor      *string                    `form:"proveedor,omitempty" json:"proveedor,omitempty"`
-	Limite         *int                       `form:"limite,omitempty" json:"limite,omitempty"`
-	Desplazamiento *int                       `form:"desplazamiento,omitempty" json:"desplazamiento,omitempty"`
+	Busqueda  *string                    `form:"busqueda,omitempty" json:"busqueda,omitempty"`
+	Categoria *string                    `form:"categoria,omitempty" json:"categoria,omitempty"`
+	Estado    *GrillaDeStockParamsEstado `form:"estado,omitempty" json:"estado,omitempty"`
+	Marca     *string                    `form:"marca,omitempty" json:"marca,omitempty"`
+	Proveedor *string                    `form:"proveedor,omitempty" json:"proveedor,omitempty"`
+
+	// Sucursal El slug de una sucursal; los grupos miran solo esa
+	Sucursal       *string `form:"sucursal,omitempty" json:"sucursal,omitempty"`
+	Limite         *int    `form:"limite,omitempty" json:"limite,omitempty"`
+	Desplazamiento *int    `form:"desplazamiento,omitempty" json:"desplazamiento,omitempty"`
 }
 
 // GrillaDeStockParamsEstado defines parameters for GrillaDeStock.
@@ -280,6 +339,21 @@ type CrearTrasladoJSONBody struct {
 	} `json:"renglones"`
 }
 
+// RecibirTrasladoJSONBody defines parameters for RecibirTraslado.
+type RecibirTrasladoJSONBody struct {
+	// Faltante Lo que no llegó vuelve al origen o se perdió
+	Faltante *RecibirTrasladoJSONBodyFaltante `json:"faltante,omitempty"`
+
+	// Renglones Lo que llegó de cada medida. Sin renglones, llegó todo lo del comprobante
+	Renglones *[]struct {
+		Cantidad  string `json:"cantidad"`
+		VariantId string `json:"variantId"`
+	} `json:"renglones,omitempty"`
+}
+
+// RecibirTrasladoJSONBodyFaltante defines parameters for RecibirTraslado.
+type RecibirTrasladoJSONBodyFaltante string
+
 // AjustarStockJSONRequestBody defines body for AjustarStock for application/json ContentType.
 type AjustarStockJSONRequestBody AjustarStockJSONBody
 
@@ -288,6 +362,9 @@ type TransferirStockJSONRequestBody TransferirStockJSONBody
 
 // CrearTrasladoJSONRequestBody defines body for CrearTraslado for application/json ContentType.
 type CrearTrasladoJSONRequestBody CrearTrasladoJSONBody
+
+// RecibirTrasladoJSONRequestBody defines body for RecibirTraslado for application/json ContentType.
+type RecibirTrasladoJSONRequestBody RecibirTrasladoJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -315,6 +392,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/admin/stock/traslados/{id})
 	VerTraslado(w http.ResponseWriter, r *http.Request, id string)
+
+	// (POST /api/v1/admin/stock/traslados/{id}/anular)
+	AnularTraslado(w http.ResponseWriter, r *http.Request, id string)
 
 	// (POST /api/v1/admin/stock/traslados/{id}/recibir)
 	RecibirTraslado(w http.ResponseWriter, r *http.Request, id string)
@@ -408,6 +488,19 @@ func (siw *ServerInterfaceWrapper) GrillaDeStock(w http.ResponseWriter, r *http.
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "proveedor"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "proveedor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sucursal" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sucursal", r.URL.Query(), &params.Sucursal, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sucursal"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sucursal", Err: err})
 		}
 		return
 	}
@@ -649,6 +742,32 @@ func (siw *ServerInterfaceWrapper) VerTraslado(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// AnularTraslado operation middleware
+func (siw *ServerInterfaceWrapper) AnularTraslado(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnularTraslado(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RecibirTraslado operation middleware
 func (siw *ServerInterfaceWrapper) RecibirTraslado(w http.ResponseWriter, r *http.Request) {
 
@@ -846,6 +965,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/traslados", wrapper.CrearTraslado)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/stock/traslados/{id}", wrapper.VerTraslado)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/traslados/{id}/recibir", wrapper.RecibirTraslado)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/admin/stock/traslados/{id}/anular", wrapper.AnularTraslado)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales", wrapper.SucursalesDelPanel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales/metricas", wrapper.MetricasDeSucursales)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/admin/sucursales/sin-asignar", wrapper.SinSucursalAsignada)
@@ -966,22 +1086,30 @@ type UltimosMovimientosResponseObject interface {
 }
 
 type UltimosMovimientos200JSONResponse []struct {
-	BranchName string `json:"branchName"`
+	// Antes El stock de la sucursal antes de un ajuste o un conteo
+	Antes      *float64 `json:"antes"`
+	BranchName string   `json:"branchName"`
 
 	// Concepto Qué fue (Rotura
-	Concepto    string    `json:"concepto"`
-	CreatedAt   time.Time `json:"createdAt"`
-	Id          string    `json:"id"`
-	Label       string    `json:"label"`
-	Note        *string   `json:"note"`
-	ProductId   string    `json:"productId"`
-	ProductName string    `json:"productName"`
-	Qty         float64   `json:"qty"`
+	Concepto  string    `json:"concepto"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Despues Y después
+	Despues     *float64 `json:"despues"`
+	Id          string   `json:"id"`
+	Label       string   `json:"label"`
+	Note        *string  `json:"note"`
+	ProductId   string   `json:"productId"`
+	ProductName string   `json:"productName"`
+	Qty         float64  `json:"qty"`
 
 	// Referencia El comprobante (REM-0020
 	Referencia *string `json:"referencia"`
 	Type       string  `json:"type"`
-	VariantId  string  `json:"variantId"`
+
+	// Usuario Quién lo hizo
+	Usuario   *string `json:"usuario"`
+	VariantId string  `json:"variantId"`
 }
 
 func (response UltimosMovimientos200JSONResponse) VisitUltimosMovimientosResponse(w http.ResponseWriter) error {
@@ -1128,8 +1256,55 @@ func (response VerTraslado404ApplicationProblemPlusJSONResponse) VisitVerTraslad
 	return err
 }
 
-type RecibirTrasladoRequestObject struct {
+type AnularTrasladoRequestObject struct {
 	Id string `json:"id"`
+}
+
+type AnularTrasladoResponseObject interface {
+	VisitAnularTrasladoResponse(w http.ResponseWriter) error
+}
+
+type AnularTraslado204Response struct {
+}
+
+func (response AnularTraslado204Response) VisitAnularTrasladoResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AnularTraslado404ApplicationProblemPlusJSONResponse struct {
+	ProblemaApplicationProblemPlusJSONResponse
+}
+
+func (response AnularTraslado404ApplicationProblemPlusJSONResponse) VisitAnularTrasladoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AnularTraslado422ApplicationProblemPlusJSONResponse Problema
+
+func (response AnularTraslado422ApplicationProblemPlusJSONResponse) VisitAnularTrasladoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RecibirTrasladoRequestObject struct {
+	Id   string `json:"id"`
+	Body *RecibirTrasladoJSONRequestBody
 }
 
 type RecibirTrasladoResponseObject interface {
@@ -1287,6 +1462,9 @@ type StrictServerInterface interface {
 
 	// (GET /api/v1/admin/stock/traslados/{id})
 	VerTraslado(ctx context.Context, request VerTrasladoRequestObject) (VerTrasladoResponseObject, error)
+
+	// (POST /api/v1/admin/stock/traslados/{id}/anular)
+	AnularTraslado(ctx context.Context, request AnularTrasladoRequestObject) (AnularTrasladoResponseObject, error)
 
 	// (POST /api/v1/admin/stock/traslados/{id}/recibir)
 	RecibirTraslado(ctx context.Context, request RecibirTrasladoRequestObject) (RecibirTrasladoResponseObject, error)
@@ -1561,11 +1739,47 @@ func (sh *strictHandler) VerTraslado(w http.ResponseWriter, r *http.Request, id 
 	}
 }
 
+// AnularTraslado operation middleware
+func (sh *strictHandler) AnularTraslado(w http.ResponseWriter, r *http.Request, id string) {
+	var request AnularTrasladoRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AnularTraslado(ctx, request.(AnularTrasladoRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AnularTraslado")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AnularTrasladoResponseObject); ok {
+		if err := validResponse.VisitAnularTrasladoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RecibirTraslado operation middleware
 func (sh *strictHandler) RecibirTraslado(w http.ResponseWriter, r *http.Request, id string) {
 	var request RecibirTrasladoRequestObject
 
 	request.Id = id
+
+	var body RecibirTrasladoJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.RecibirTraslado(ctx, request.(RecibirTrasladoRequestObject))
@@ -1664,51 +1878,56 @@ func (sh *strictHandler) SinSucursalAsignada(w http.ResponseWriter, r *http.Requ
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -43,8 +43,10 @@ export interface FilaStock {
   imagen: string | null;
   /** Una por sucursal activa, en el orden de la base. */
   sucursales: StockEnSucursal[];
-  /** La suma de lo disponible de cada sucursal: lo mismo que se ve en cada una. */
+  /** La suma de lo disponible de las sucursales que tienen: un negativo no resta. */
   total: number;
+  /** Lo vendido de más, sumado de las sucursales en negativo. */
+  faltante: number;
   /** El mismo criterio que la pestaña «Para reponer» y el inicio. */
   paraReponer: boolean;
 }
@@ -64,9 +66,14 @@ export function estadoDeStock(v: string | undefined): EstadoDeStock | undefined 
  * y las sucursales activas (las columnas). `porPagina` lo cambia quien busca
  * una medida para elegirla (la transferencia, las etiquetas).
  */
-export async function listarStock(filtros: FiltrosDeCatalogo = {}, porPagina = STOCK_POR_PAGINA) {
+export async function listarStock(
+  filtros: FiltrosDeCatalogo & { sucursal?: string } = {},
+  porPagina = STOCK_POR_PAGINA,
+) {
   const estado = estadoDeStock(filtros.estado);
-  const query = { ...consultaDeCatalogo(filtros, porPagina), ...(estado ? { estado } : {}) };
+  // Los grupos de una sola sucursal (M2S1-028): el slug, o todas.
+  const sucursal = filtros.sucursal && filtros.sucursal !== "todas" ? filtros.sucursal.slice(0, 80) : undefined;
+  const query = { ...consultaDeCatalogo(filtros, porPagina), ...(estado ? { estado } : {}), ...(sucursal ? { sucursal } : {}) };
   const r = datos(await (await api()).GET("/api/v1/admin/stock", { params: { query } }));
   return { ...r, filas: r.filas as FilaStock[] };
 }
@@ -105,6 +112,7 @@ export async function verTraslado(id: string) {
     ...t,
     createdAt: new Date(t.createdAt),
     recibidoAt: t.recibidoAt ? new Date(t.recibidoAt) : null,
+    anuladoAt: t.anuladoAt ? new Date(t.anuladoAt) : null,
   };
 }
 

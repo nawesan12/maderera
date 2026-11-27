@@ -351,6 +351,7 @@ var pantallaDeCadaRuta = map[string]string{
 	"CrearTraslado":                   "/admin/stock",                  // POST /api/v1/admin/stock/traslados
 	"VerTraslado":                     "/admin/stock",                  // GET /api/v1/admin/stock/traslados/{id}
 	"RecibirTraslado":                 "/admin/stock",                  // POST /api/v1/admin/stock/traslados/{id}/recibir
+	"AnularTraslado":                  "/admin/stock",                  // POST /api/v1/admin/stock/traslados/{id}/anular
 	"GrillaDeStock":                   "/admin/stock",                  // GET /api/v1/admin/stock
 	"MetricasDeSucursales":            "/admin/sucursales",             // GET /api/v1/admin/sucursales/metricas
 	"SinSucursalAsignada":             "/admin/sucursales",             // GET /api/v1/admin/sucursales/sin-asignar

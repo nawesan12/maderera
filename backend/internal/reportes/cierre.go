@@ -315,6 +315,11 @@ func (s *Servicio) asientosDelPeriodoCon(ctx context.Context, desde, hasta time.
 		return nil, err
 	}
 	asientos = append(asientos, costo...)
+	inventario, err := s.asientosDeInventario(ctx, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	asientos = append(asientos, inventario...)
 
 	rs, err = s.lectura.Query(ctx, `
 		SELECT e.fecha, e.descripcion, e.categoria::text, e.importe, e.medio::text, e.circuito::text,
@@ -808,6 +813,56 @@ func (s *Servicio) asientosDeCosto(ctx context.Context, idesde, ihasta time.Time
 			}
 			conCae()
 		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// asientosDeInventario son las bajas y altas de stock sin venta del período
+// (los ajustes de Stock: rotura, faltante, conteo, consumo del taller,
+// reposición sin cargo, ingreso suelto), cada una al costo que se congeló al
+// hacerla (M3S3-013). Sin esto, Mercaderías del archivo quedaba por encima
+// del stock real con cada rotura. La reposición a un cliente es mercadería
+// que se le entregó: va a Costo de mercaderías vendidas; el resto, a
+// Diferencias de inventario.
+func (s *Servicio) asientosDeInventario(ctx context.Context, idesde, ihasta time.Time) ([]Asiento, error) {
+	var out []Asiento
+	rs, err := s.lectura.Query(ctx, `
+		SELECT m.created_at, m.note, p.name || ' ' || v.label, b.name, (m.qty * m.costo_unitario)::float8, m.documento_tipo = 'pedido'
+		FROM inventory_movements m
+		JOIN product_variants v ON v.id = m.variant_id JOIN products p ON p.id = v.product_id
+		JOIN branches b ON b.id = m.branch_id
+		WHERE m.costo_unitario IS NOT NULL AND m.type IN ('ingreso', 'egreso')
+		  AND m.created_at >= $1 AND m.created_at <= $2
+		ORDER BY m.created_at, m.id`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var fecha time.Time
+	var nota *string
+	var producto, sucursal string
+	var importe float64
+	var reposicion *bool
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &nota, &producto, &sucursal, &importe, &reposicion}, func() error {
+		importe = jsmath.Redondear2(importe)
+		if math.Abs(importe) < toleranciaAsiento {
+			return nil
+		}
+		que := "Ajuste de stock"
+		if nota != nil {
+			if antes, _, ok := strings.Cut(*nota, " desde Stock"); ok && antes != "" {
+				que = antes
+			}
+		}
+		cuenta := Cuentas.DiferenciasDeInventario
+		if reposicion != nil && *reposicion {
+			cuenta = Cuentas.CostoDeVentas
+		}
+		a := AsientoDeInventario(fecha, que+" · "+producto+" · "+sucursal, cuenta, importe)
+		a.Instante = true
+		out = append(out, a)
 		return nil
 	}); err != nil {
 		return nil, err

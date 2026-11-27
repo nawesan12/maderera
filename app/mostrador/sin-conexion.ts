@@ -127,6 +127,12 @@ export interface AlCobrarSinConexion {
   limpiar: () => void;
   /** Lo vendido, para que el buscador lo descuente mientras espera en la cola. */
   apartar: (lineas: LineaDeVenta[]) => void;
+  /**
+   * Vuelve a leer la cola. Sin esto, el chip y «N ventas sin enviar» se
+   * enteraban de la venta en el ciclo siguiente, cada 20 s, y quedaban una
+   * venta atrasados (mes 23, M2S1-086).
+   */
+  refrescarCola: () => Promise<void>;
 }
 
 /**
@@ -161,7 +167,7 @@ export async function cobrarSinConexion(
     avanzarContador,
     contextoDelTicket,
   }: VentaSinConexion,
-  { setAviso, setUltima, limpiar, apartar }: AlCobrarSinConexion,
+  { setAviso, setUltima, limpiar, apartar, refrescarCola }: AlCobrarSinConexion,
 ) {
   const problema = revisarVenta(lineas, medio, cliente?.id ?? null);
 
@@ -250,6 +256,7 @@ export async function cobrarSinConexion(
       },
       ticket,
     );
+    await refrescarCola();
 
     await avanzarContador();
 

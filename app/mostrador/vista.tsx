@@ -748,7 +748,7 @@ export function VistaMostrador({
         avanzarContador,
         contextoDelTicket,
       },
-      { setAviso, setUltima, limpiar, apartar: (l) => copia.apartar(l, true) },
+      { setAviso, setUltima, limpiar, apartar: (l) => copia.apartar(l, true), refrescarCola: cola.refrescar },
     );
   }
 

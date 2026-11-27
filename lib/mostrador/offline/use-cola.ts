@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { drenar, efectivoEnCola, leerCola, limpiarConfirmadas, type EfectivoEnCola } from "./cola";
 import { resumir } from "./cola-estado";
 import type { ResumenDeCola } from "./cola-estado";
@@ -38,9 +38,17 @@ export function useCola(enLinea: boolean, branchId = ""): EstadoCola {
   const [faltaSesion, setFaltaSesion] = useState(false);
   const [efectivo, setEfectivo] = useState<EfectivoEnCola>({ ventas: 0, ingresos: 0, retiros: 0 });
 
+  /*
+   * Solo la última lectura pisa el estado. Dos lecturas a la vez (la del
+   * ciclo y la de recién cobrar) podían terminar al revés, y la vieja dejaba
+   * el chip y «N ventas sin enviar» una venta atrasados (mes 23, M2S1-086).
+   */
+  const lectura = useRef(0);
   const refrescar = useCallback(async () => {
+    const esta = ++lectura.current;
     try {
       const filas = await leerCola();
+      if (esta !== lectura.current) return;
       setResumen(resumir(filas));
       setEfectivo(efectivoEnCola(filas, branchId));
     } catch {

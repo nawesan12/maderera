@@ -665,6 +665,22 @@ no se tocan**: el correo sigue llegando allá, y las casillas nuevas se
 llenan con una copia. Con el PTR y los puertos del paso 3, el resto es
 [Encenderlo](#encenderlo) igual.
 
+**Instalado y cerrado, antes de todo eso.** Con `CORREO_ESCUCHA="127.0.0.1"`
+en `.env.produccion`, Stalwart y el webmail se instalan y se prueban sin que
+25, 465, 587 ni 993 queden abiertos a internet (Docker publica por encima de
+`ufw`: no abrirlos en el cortafuegos no alcanza). Así quedó la VPS el
+27/11/2026. Caddy no le pide a Let's Encrypt los certificados de `correo.` ni
+de `autoconfig.` hasta la primera visita (`on_demand`, con el permiso en el
+Caddyfile), así que esos dos andan apenas se carga su registro A. El de
+`mail.` sí se pide al arrancar y se reintenta cada vez más espaciado: el día
+que se carga su registro A, `dc restart web` lo pide al toque, y después
+`scripts/correo.sh iniciar` (otra vez) se lo pasa a Stalwart. Hasta entonces
+el webmail muestra la pantalla de entrada pero no puede entrar: verifica el
+certificado de `mail.` y Stalwart tiene uno provisorio.
+
+El día del MX: sacar `CORREO_ESCUCHA` de `.env.produccion`, abrir los puertos
+en `ufw` (paso 3) y `dc up -d --no-deps correo`.
+
 ### Mudar las casillas desde otro proveedor
 
 Por cada casilla: crearla acá (`scripts/correo.sh alta`) y copiar su correo

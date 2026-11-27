@@ -275,6 +275,12 @@ export function AccionesDeCheque({
               ? "La cuenta del cliente no cambia: el cheque nunca bajó la deuda. Se le avisa con este motivo."
               : estado === "cartera"
                 ? `Los ${pesos(importe)} vuelven a la cuenta del cliente con una nota de débito.`
+              : sentido === "recibido" && !cliente
+                ? // Cargado sin cliente (un tercero, un endoso): no hay cuenta
+                  // de cliente que reabrir (mes 23).
+                  estado === "entregado"
+                  ? `A ${proveedor ?? "el proveedor"} se le vuelven a deber los ${pesos(importe)}.`
+                  : "No tiene cliente: ninguna cuenta cambia."
               : sentido === "recibido"
                 ? estado === "entregado"
                   ? // Endosado: rebota en las dos cuentas (cobros.reabrirDeudaConElProveedor).
@@ -293,7 +299,7 @@ export function AccionesDeCheque({
                 casa («Los Pinos avisa…») le llegaba textual (mes simulado,
                 H304). Los motivos del banco, a un toque. */}
             <label htmlFor={idMotivo} className="block text-base font-medium">
-              {estado === "cartera" ? "Motivo" : "Motivo que lee el cliente"}
+              {estado === "cartera" || !cliente ? "Motivo" : "Motivo que lee el cliente"}
             </label>
             {estado !== "informado" && estado !== "cartera" && sentido === "recibido" && (
               <div role="group" aria-label="Motivos del banco" className="flex flex-wrap gap-2">

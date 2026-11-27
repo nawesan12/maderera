@@ -734,6 +734,16 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 		return ResultadoDeCobro{Ok: "Devuelto al cliente: la deuda volvió a su cuenta y se le avisó."}, nil
 	case debitado:
 		return ResultadoDeCobro{Ok: "Rechazado: la deuda volvió a la cuenta del cliente y se le avisó."}, nil
+	case hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido && cheque.CustomerID == nil:
+		// Cargado sin cliente (un tercero, un endoso): no hay cuenta ni
+		// aviso de cliente; decía «la cuenta del cliente no cambió y se le
+		// avisó» (mes 23).
+		if desde == "entregado" {
+			return ResultadoDeCobro{Ok: "Rechazado: al proveedor se le vuelve a deber."}, nil
+		}
+		return ResultadoDeCobro{Ok: "Rechazado."}, nil
+	case hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido && desde == "entregado":
+		return ResultadoDeCobro{Ok: "Rechazado: al proveedor se le vuelve a deber. La cuenta del cliente no cambió y se le avisó."}, nil
 	case hacia == "rechazado" && cheque.Sentido == sqlc.SentidoChequeRecibido:
 		return ResultadoDeCobro{Ok: "Rechazado. La cuenta del cliente no cambió y se le avisó."}, nil
 	}

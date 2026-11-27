@@ -1,8 +1,13 @@
 package facturacion
 
 import (
+	"context"
+	"strconv"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
+	"mjbj/internal/cobros"
 	"mjbj/internal/sqlc"
 )
 
@@ -94,4 +99,111 @@ func TestSaldoDeFacturasACuentaPorAntiguedad(t *testing.T) {
 		map[string]string{"modo": "cuenta_corriente", "monto": "9000"}); st != 422 {
 		t.Fatalf("pasarla a cuenta otra vez: %d %s", st, b)
 	}
+}
+
+// Lo aplicado a una factura (una nota de crédito, un cobro desde ella) baja
+// la cuenta y esa factura, no también la más vieja: la columna Saldo tiene
+// que sumar lo que debe la cuenta. La anulación de un recibo devuelve la
+// deuda, no es un cargo nuevo que deje todo «Cobrado» (mes 23, M2S1-013).
+func TestSaldoDeFacturasConLoAplicadoAUnaFactura(t *testing.T) {
+	e := armar(t, false)
+	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
+	var cliente string
+	e.uno(t, `INSERT INTO customers (nombre, cuit, condicion_iva, limite_credito) VALUES ('Jorge', '30712345671', 'responsable_inscripto', 100000000) RETURNING id`, &cliente)
+	// La A 0001 manual a cuenta corriente, por 247.383.
+	campos := map[string]string{"receptorNombre": "Jorge", "receptorCuit": "30-71234567-1", "receptorCondicionIva": "responsable_inscripto",
+		"customerId": cliente, "comoPaga": "cuenta_corriente"}
+	st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes", manual(campos, [4]string{"Placas", "1", "247383", "21"}))
+	if st != 200 {
+		t.Fatalf("manual: %d %s", st, b)
+	}
+	vieja := leerJSON[map[string]string](t, b)["invoiceId"]
+	// La A 0003 de un pedido a cuenta, por 88.700.
+	var pedido string
+	e.uno(t, `INSERT INTO orders (numero, contacto_nombre, origen, subtotal, total, estado, estado_pago, medio_pago, customer_id)
+		VALUES ('PED-1130', 'Jorge', 'mostrador', 88700, 88700, 'entregado', 'pendiente', 'cuenta_corriente', $1) RETURNING id`, &pedido, cliente)
+	e.exec(t, `INSERT INTO order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal) VALUES ($1, 'Bisagra', 'unidad', 1, 88700, 88700)`, pedido)
+	e.exec(t, `INSERT INTO account_movements (customer_id, tipo, monto, referencia) VALUES ($1, 'compra', 88700, 'PED-1130')`, cliente)
+	if st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/pedidos/"+pedido+"/facturar", nil); st != 200 {
+		t.Fatalf("facturar: %d %s", st, b)
+	}
+	var nueva string
+	e.uno(t, `SELECT id FROM invoices WHERE order_id = $1`, &nueva, pedido)
+
+	saldo := func(id string) float64 {
+		st, b := pedir(t, admin, "GET", e.srv.URL+"/api/v1/comprobantes/"+id, nil)
+		if st != 200 {
+			t.Fatalf("leer %s: %d %s", id, st, b)
+		}
+		return leerJSON[Completo](t, b).Saldo
+	}
+	cuenta := func() float64 {
+		var d float64
+		e.uno(t, `SELECT coalesce(sum(monto), 0)::float8 FROM account_movements WHERE customer_id = $1`, &d, cliente)
+		return d
+	}
+	cuadra := func(paso string, vieja0, nueva0 float64) {
+		t.Helper()
+		v, n := saldo(vieja), saldo(nueva)
+		if v != vieja0 || n != nueva0 {
+			t.Fatalf("%s: la vieja debe %v (esperado %v) y la nueva %v (esperado %v)", paso, v, vieja0, n, nueva0)
+		}
+		if d := cuenta(); v+n != d {
+			t.Fatalf("%s: la columna suma %v y la cuenta debe %v", paso, v+n, d)
+		}
+	}
+	cuadra("al empezar", 247383, 88700)
+
+	// Una bisagra devuelta a la cuenta: nota de crédito por 4.200 sobre la nueva.
+	e.exec(t, `UPDATE invoices SET acreditado = 4200 WHERE id = $1`, nueva)
+	e.exec(t, `INSERT INTO account_movements (customer_id, tipo, monto, referencia) VALUES ($1, 'nota_credito', -4200, 'NC A 0002')`, cliente)
+	cuadra("con la nota de crédito", 247383, 84500)
+
+	// Un cobro de 10.000 desde la nueva.
+	if st, b := pedir(t, admin, "POST", e.srv.URL+"/api/v1/admin/facturacion/comprobantes/"+nueva+"/cobros",
+		map[string]string{"modo": "recibo", "partes": `[{"medio":"transferencia","importe":"10000"}]`}); st != 200 {
+		t.Fatalf("cobro: %d %s", st, b)
+	}
+	cuadra("con el cobro desde la factura", 247383, 74500)
+
+	// Un pago general de 80.000 cancela primero la vieja.
+	pagar := func(importe string) string {
+		t.Helper()
+		var r string
+		err := pgx.BeginFunc(context.Background(), e.pool, func(tx pgx.Tx) error {
+			v, err := strconv.ParseFloat(importe, 64)
+			if err != nil {
+				return err
+			}
+			rec, err := cobros.EmitirRecibo(context.Background(), tx, cobros.Cobro{CustomerID: &cliente, RecibidoDe: "Jorge", Origen: "panel",
+				Partes: []cobros.Parte{{Medio: "retencion", Importe: v}}})
+			r = rec.ReceiptID
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	rec := pagar("80000")
+	cuadra("con un pago a cuenta", 167383, 74500)
+	// Anularlo devuelve la deuda: no deja las dos facturas «Cobrado».
+	if err := pgx.BeginFunc(context.Background(), e.pool, func(tx pgx.Tx) error {
+		_, _, err := cobros.AnularRecibo(context.Background(), tx, rec, "mal cargado", nil)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cuadra("con el pago anulado", 247383, 74500)
+
+	// Anular el recibo del cobro desde la factura le devuelve la deuda a ella.
+	var delCobro string
+	e.uno(t, `SELECT receipt_id FROM invoice_payments WHERE invoice_id = $1 AND receipt_id IS NOT NULL`, &delCobro, nueva)
+	if err := pgx.BeginFunc(context.Background(), e.pool, func(tx pgx.Tx) error {
+		_, _, err := cobros.AnularRecibo(context.Background(), tx, delCobro, "mal cargado", nil)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cuadra("con el cobro anulado", 247383, 84500)
 }

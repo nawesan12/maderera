@@ -74,8 +74,7 @@ func (s *Servicio) CsvDeudores(ctx context.Context, ahora time.Time) (string, er
 		SELECT CASE WHEN i.customer_id IS NOT NULL THEN 'c:' || i.customer_id::text
 		            WHEN i.order_id IS NOT NULL THEN 'p:' || i.order_id::text ELSE 'f:' || i.id::text END,
 		  (`+facturacion.SaldoDeFactura+`)::float8, i.fecha_emision
-		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado
-		                           FROM invoice_payments GROUP BY invoice_id) c ON c.invoice_id = i.id
+		FROM invoices i LEFT JOIN `+facturacion.CobrosDeFacturas+` c ON c.invoice_id = i.id
 		LEFT JOIN orders o ON o.id = i.order_id
 		WHERE i.tipo::text LIKE 'factura%' AND i.estado IN ('emitida', 'autorizada', 'rechazada') AND i.fecha_emision <= $1
 		  AND (o.id IS NULL OR o.estado <> 'cancelado') AND NOT `+facturacion.EnCuentaDeFactura+`
@@ -235,7 +234,7 @@ func (s *Servicio) deudaSinCae(ctx context.Context, reparto cobros.ResultadoDelR
 		SELECT CASE WHEN i.customer_id IS NOT NULL THEN 'c:' || i.customer_id::text
 		            WHEN i.order_id IS NOT NULL THEN 'p:' || i.order_id::text ELSE 'f:' || i.id::text END,
 		  (CASE WHEN `+facturacion.EnCuentaDeFactura+` THEN i.total ELSE `+facturacion.SaldoDeFactura+` END)::float8
-		FROM invoices i LEFT JOIN (SELECT invoice_id, sum(monto) AS cobrado, sum(monto) FILTER (WHERE medio <> 'cuenta_corriente') AS cobrado_contado FROM invoice_payments GROUP BY invoice_id) c ON c.invoice_id = i.id
+		FROM invoices i LEFT JOIN `+facturacion.CobrosDeFacturas+` c ON c.invoice_id = i.id
 		LEFT JOIN orders o ON o.id = i.order_id
 		WHERE i.cae IS NULL AND i.estado IN ('emitida', 'rechazada') AND i.tipo::text LIKE 'factura%'
 		  AND (o.id IS NULL OR o.estado <> 'cancelado')`)

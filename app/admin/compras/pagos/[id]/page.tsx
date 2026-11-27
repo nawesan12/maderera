@@ -98,8 +98,10 @@ export default async function PagoPage({
         </p>
       )}
 
-      <section className="tarjeta grid gap-5 p-5 sm:grid-cols-3">
-        <Cifra titulo="Baja la deuda" valor={p.total} grande />
+      {/* Anulado ya no baja nada: los importes quedan tachados y la primera
+          cifra se llama por lo que era (mes 23). */}
+      <section className={`tarjeta grid gap-5 p-5 sm:grid-cols-3 ${anulado ? "text-muted-foreground line-through" : ""}`}>
+        <Cifra titulo={anulado ? "Total" : "Baja la deuda"} valor={p.total} grande />
         <Cifra titulo="Retenido" valor={retenido} />
         <Cifra titulo="Salió" valor={p.neto} />
       </section>

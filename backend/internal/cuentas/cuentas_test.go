@@ -248,7 +248,7 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 		t.Errorf("retención repetida: %d %s", c, b)
 	}
 	var medio string
-	_ = e.pool.QueryRow(context.Background(), `select p.medio::text from receipt_parts p join receipts r on r.id = p.receipt_id where r.concepto like 'Retención de iibb%'`).Scan(&medio)
+	_ = e.pool.QueryRow(context.Background(), `select p.medio::text from receipt_parts p join receipts r on r.id = p.receipt_id where r.concepto like 'Retención de IIBB%'`).Scan(&medio)
 	if medio != "retencion" {
 		t.Errorf("el recibo de la retención: %q", medio)
 	}

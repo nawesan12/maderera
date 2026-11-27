@@ -3273,3 +3273,58 @@ después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
 
 Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
 Next: las pruebas de pantalla la cambian desde `/admin/reglas`.
+
+## 27/11/2026: el segundo mes simulado, ventas, clientes y WhatsApp (rama `mes23-ventas-clientes`)
+
+Migraciones 00410 (`bot_devuelto_at`, la derivación corta y
+`consultas_corte.whatsapp_conversacion_id`) y 00411 (regla
+`retencion_en_el_cobro`). Lo que cambió:
+
+- **Bot** (`whatsapp/bot_entender.go`, sin tocar el motor del asistente, que
+  tiene que entender lo mismo que el TS): el «gracias» del principio no calla
+  la pregunta; «persona» en cualquier parte, un reclamo o algo de la cuenta
+  (cheque, deuda) derivan; el catálogo se ordena por las palabras del nombre
+  (`rankearProductos`) y el stock es el de la medida pedida
+  (`ProductoListado.StockPorMedida`, sin JSON); un pedido de precio de varios
+  rubros pasa a una persona con los renglones; el enlace `/corte/c/<token>`
+  se reconoce y se ata a la conversación; Batán (un lugar fuera de las zonas)
+  deriva; el día y la sucursal nombrados se contestan primero; el segundo «no
+  lo encontré» deriva; la baja dentro de una frase (`PideLaBaja`; la golden
+  sigue siendo `EsPedidoDeBaja`); el tope del mes deriva y avisa.
+- **Derivación corta**: `/api/whatsapp/hablar/<token>` redirige al número
+  humano con todo lo que el cliente escribió en la última hora.
+- **«Devolver al bot»** (`bot_devuelto_at`): lo que escribió una persona antes
+  ya no lo calla 12 horas.
+- **Consultas de corte**: `GET /admin/cortes/consulta/{token}/contacto` trae
+  cliente y teléfono al alta; el corte que corrige a otro se lleva la
+  consulta.
+- **Cuenta del cliente**: la línea de tiempo en hora argentina; «Otro
+  movimiento» con fecha (hasta un año atrás; el mes cerrado lo frena la
+  base); el cheque de la cartera sin vencer se «devuelve al cliente»
+  (`cobros.SinVencer`, la nota de débito lo dice); el rechazo con nota de
+  débito es un renglón; anular un recibo con un cheque fuera de la cartera se
+  frena antes del PIN; la retención sufrida entra en el mismo recibo del
+  cobro (regla `retencion_en_el_cobro`, arranca en `admin`); el aviso del
+  último recibo es el del último cobro de plata.
+- **Fichas**: el teléfono se guarda «223 555-0483» (`formato.Telefono`); la
+  ficha creada desde el chat lleva a quien la creó de vendedora si está en
+  `sellers` con su nombre; invitar al portal
+  (`POST /admin/clientes/{id}/invitacion`, cuenta sin clave y link de 7
+  días); la ficha apagada no sale en el buscador ni ofrece vincular; el
+  portal dice «Cuenta corriente pausada» (`Resumen.cuentaPausada`).
+- **Profesionales**: aprobar pasa el CUIT a la ficha que no tenía, la
+  condición frente al IVA la elige quien aprueba y el plazo va con el límite
+  (fuera del esquema de zod: `condicionIva` y `diasCredito` del cuerpo libre).
+- **Presupuestos**: `disponible` por sucursal en cada renglón y
+  `Entrega.Sucursal` para pasar a pedido desde otra; el correo lleva el PDF;
+  «Por correo» de uno ya enviado manda solo el correo
+  (`presupuesto.correo`, motivo `por_correo`); rechazar un aceptado sin pedido
+  vivo; `pedidosCancelados` y `emailFicha` en la ficha; unir a una ficha con
+  cuenta web solo lo armado en el panel (mostrador, teléfono), y unirlo pasa
+  el nombre y el teléfono de la ficha; la línea «WhatsApp con el PDF» en la
+  historia del aviso.
+- **Precios**: ofertas (`POST /admin/precios/oferta` y `/oferta/fin`, la
+  tarea `vencer-ofertas` cada hora; un precio a mano termina la oferta); la
+  lista del proveedor anota `price_history` (origen `importacion`, motivo
+  «Lista del proveedor …»); el aumento por porcentaje alcanza a los
+  productos apagados; el profesional en cero de la planilla es «sin precio».

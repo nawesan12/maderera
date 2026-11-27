@@ -59,6 +59,11 @@ func (s *Servicio) CargarRetencionSufrida(ctx context.Context, ses *auth.Sesion,
 	if err != nil {
 		return "", err
 	}
+	// Sin régimen el certificado no entra en el libro de retenciones del
+	// contador ni se puede controlar contra la alícuota (mes 23, M2S1-113).
+	if codigo == nil {
+		return "", malRet("codigoRegimen", "Poné el régimen del certificado.")
+	}
 	nan := "Invalid input: expected number, received NaN"
 	base := jsmath.Numero(f.Base)
 	switch {

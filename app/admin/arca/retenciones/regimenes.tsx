@@ -89,11 +89,18 @@ export function Regimenes({ regimenes }: { regimenes: RegimenEditable[] }) {
   );
 }
 
-/** «78 · Ganancias»; el SUSS, cuyo código es su nombre, no lo repite. */
-function rotulo(r: { codigo: string; impuesto: string; jurisdiccion: string | null }) {
+/**
+ * «78 · Ganancias» debajo del nombre, sin repetir lo que el nombre ya dice:
+ * «Ingresos Brutos · Buenos Aires» llevaba abajo «IIBB-BA · Ingresos Brutos ·
+ * Buenos Aires» (mes 23). El SUSS, cuyo código es su nombre, tampoco lo repite.
+ */
+function rotulo(r: { codigo: string; nombre: string; impuesto: string; jurisdiccion: string | null }) {
+  const nombre = r.nombre.toLowerCase();
   const impuesto = IMPUESTOS[r.impuesto] ?? r.impuesto;
-  const partes = r.codigo.toLowerCase() === impuesto.toLowerCase() ? [impuesto] : [r.codigo, impuesto];
-  if (r.jurisdiccion) partes.push(r.jurisdiccion);
+  const partes = r.codigo.toLowerCase() === impuesto.toLowerCase() ? [] : [r.codigo];
+  for (const p of [impuesto, r.jurisdiccion]) {
+    if (p && !nombre.includes(p.toLowerCase())) partes.push(p);
+  }
   return partes.join(" · ");
 }
 
@@ -230,15 +237,34 @@ function Numeros(p: {
  */
 function Alta() {
   const [abierto, setAbierto] = useState(false);
-  const [estado, guardar, guardando] = useActionState(async (previo: EstadoRegimen, fd: FormData) => {
-    const r = await guardarRegimen(previo, fd);
-    if (r.ok) setAbierto(false);
-    return r;
-  }, inicial);
+  // Controlados: el formulario de una acción se vacía al volver, y con el
+  // código repetido se perdían el nombre, la jurisdicción y las alícuotas
+  // (mes 23). Al volver a escribir el código, el error se va.
+  const [codigo, setCodigo] = useState("");
+  const [impuesto, setImpuesto] = useState("iibb");
+  const [nombre, setNombre] = useState("");
+  const [jurisdiccion, setJurisdiccion] = useState("");
   const [alicuota, setAlicuota] = useState("0");
   const [noInscripto, setNoInscripto] = useState("0");
   const [minimoNoImponible, setMinimoNoImponible] = useState("0");
   const [minimoRetencion, setMinimoRetencion] = useState("0");
+  const [estado, guardar, guardando] = useActionState(
+    async (previo: EstadoRegimen & { codigo?: string }, fd: FormData) => {
+      const r = await guardarRegimen(previo, fd);
+      if (r.ok) {
+        setAbierto(false);
+        setCodigo("");
+        setNombre("");
+        setJurisdiccion("");
+        setAlicuota("0");
+        setNoInscripto("0");
+        setMinimoNoImponible("0");
+        setMinimoRetencion("0");
+      }
+      return { ...r, codigo: String(fd.get("codigo") ?? "") };
+    },
+    inicial,
+  );
 
   if (!abierto) {
     return (
@@ -272,11 +298,20 @@ function Alta() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <label className="block">
           <span className="text-sm text-muted-foreground">Código</span>
-          <input name="codigo" required maxLength={20} placeholder="IIBB-BA" className={`${CAMPO} text-left`} />
+          <input
+            name="codigo"
+            required
+            maxLength={20}
+            placeholder="IIBB-BA"
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+            aria-invalid={Boolean(estado.error && estado.codigo === codigo)}
+            className={`${CAMPO} text-left`}
+          />
         </label>
         <label className="block">
           <span className="text-sm text-muted-foreground">Impuesto</span>
-          <select name="impuesto" defaultValue="iibb" className="mt-1 h-10 w-full rounded-lg border border-linea bg-background px-2 text-base">
+          <select name="impuesto" value={impuesto} onChange={(e) => setImpuesto(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-linea bg-background px-2 text-base">
             {Object.entries(IMPUESTOS).map(([valor, texto]) => (
               <option key={valor} value={valor}>
                 {texto}
@@ -286,11 +321,26 @@ function Alta() {
         </label>
         <label className="col-span-2 block">
           <span className="text-sm text-muted-foreground">Nombre</span>
-          <input name="nombre" required maxLength={80} placeholder="Ingresos Brutos · ARBA" className={`${CAMPO} text-left`} />
+          <input
+            name="nombre"
+            required
+            maxLength={80}
+            placeholder="Ingresos Brutos · ARBA"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className={`${CAMPO} text-left`}
+          />
         </label>
         <label className="col-span-2 block">
           <span className="text-sm text-muted-foreground">Jurisdicción</span>
-          <input name="jurisdiccion" maxLength={40} placeholder="Buenos Aires" className={`${CAMPO} text-left`} />
+          <input
+            name="jurisdiccion"
+            maxLength={40}
+            placeholder="Buenos Aires"
+            value={jurisdiccion}
+            onChange={(e) => setJurisdiccion(e.target.value)}
+            className={`${CAMPO} text-left`}
+          />
         </label>
       </div>
       <Numeros
@@ -319,7 +369,7 @@ function Alta() {
         >
           Cancelar
         </button>
-        {estado.error && (
+        {estado.error && estado.codigo === codigo && (
           <span role="alert" className="text-sm text-saldo-debe">
             {estado.error}
           </span>

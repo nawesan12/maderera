@@ -240,6 +240,10 @@ func TestCarteraCobroYRecibo(t *testing.T) {
 	// Una retención sufrida baja la deuda con su recibo; el mismo certificado
 	// dos veces, no.
 	ret := map[string]string{"customerId": id, "numero": "0001-123", "impuesto": "iibb", "base": "100000", "alicuota": "3", "importe": "3000", "fecha": "2026-10-20"}
+	if c, b := pedir(t, adm, "POST", u+"retenciones-sufridas", ret); c != 422 || !strings.Contains(b, "Poné el régimen") {
+		t.Errorf("retención sin régimen: %d %s", c, b)
+	}
+	ret["codigoRegimen"] = "6"
 	if c, b := pedir(t, ven, "POST", u+"retenciones-sufridas", ret); c != 403 {
 		t.Errorf("retención del vendedor: %d %s", c, b)
 	}

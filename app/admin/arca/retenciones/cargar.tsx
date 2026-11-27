@@ -264,7 +264,7 @@ export function CargarSufrida() {
                 }
               })
             }
-            disabled={enCurso || ilegible || !cliente || !numero.trim() || n(importe) <= 0}
+            disabled={enCurso || ilegible || !cliente || !numero.trim() || !codigoRegimen.trim() || n(importe) <= 0}
             className="inline-flex h-12 items-center gap-2 rounded-xl bg-accion px-5 text-base font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {enCurso && <Loader2 className="h-4 w-4 animate-spin" />}

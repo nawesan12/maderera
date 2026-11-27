@@ -1228,7 +1228,7 @@ func (s *Servicio) GuardarRegimen(ctx context.Context, ses *auth.Sesion, form ma
 	if err != nil {
 		return "", err
 	}
-	desc := "Dejó " + nombre + " al " + jsmath.Texto(r.Alicuota) + "%, mínimo no imponible " + Monto(float64(mni)) +
+	desc := "Dejó " + nombre + " al " + formato.Decimal(r.Alicuota, 3) + "%, mínimo no imponible " + Monto(float64(mni)) +
 		" y mínimo de retención " + Monto(float64(mr))
 	if !r.Activo {
 		desc += " y lo apagó"
@@ -1313,7 +1313,7 @@ func (s *Servicio) altaDeRegimen(ctx context.Context, ses *auth.Sesion, form map
 		return "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "retencion", id,
-		"Dio de alta el régimen "+codigo+" · "+nombre+" al "+jsmath.Texto(r.Alicuota)+"%", map[string]any{"impuesto": impuesto})
+		"Dio de alta el régimen "+codigo+" · "+nombre+" al "+formato.Decimal(r.Alicuota, 3)+"%", map[string]any{"impuesto": impuesto})
 	return "Régimen agregado.", nil
 }
 

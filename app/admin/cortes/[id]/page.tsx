@@ -107,7 +107,9 @@ export default async function FichaCortePage({
               {corte.cliente}
             </h1>
             <EtiquetaEstado estado={corte.estado} />
-            {corte.urgente && !anulado && (
+            {/* Terminado ya no apura: en el taller la marca desaparece y acá
+                también. */}
+            {corte.urgente && (corte.estado === "en-cola" || corte.estado === "en-proceso") && (
               <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/15 px-2.5 py-1 text-sm font-medium text-brand-orange-dark">
                 <Flame className="h-4 w-4" />
                 Urgente

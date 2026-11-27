@@ -426,5 +426,11 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 	if c, b := pedir(t, adm, "PUT", u+"productos-candidatos", map[string]int{"meses": 1}); c != 200 || !strings.Contains(b, "hace 1 mes.") {
 		t.Errorf("1 mes: %d %s", c, b)
 	}
+	// Con el umbral en 1, el producto a pedido tampoco entra por «Nunca se
+	// vendió» (mes 23), aunque esté cargado hace dos años.
+	_, _ = e.pool.Exec(ctx, `update products set created_at = now() - interval '2 years' where id = $1`, ids[0])
+	if _, b := pedir(t, ven, "GET", u+"productos-candidatos", nil); strings.Contains(b, ids[0]) {
+		t.Errorf("el producto a pedido entra con el umbral en 1: %s", b)
+	}
 	_ = time.Now
 }

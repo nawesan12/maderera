@@ -806,6 +806,12 @@ func (s *Servicio) Candidatos(ctx context.Context, meses int, ahora time.Time) (
 	// informativo de «Nunca se vendió» no suma.
 	peso := map[string]int{}
 	for _, f := range filas {
+		// Lo hecho a medida no es candidato: no tiene stock ni precio por
+		// naturaleza y se vende de vez en cuando; con el umbral en 1 la
+		// escalera a medida volvía por «Nunca se vendió» (M2S4-033, mes 23).
+		if f.APedido {
+			continue
+		}
 		c := Candidato{ID: f.ID, Nombre: f.Nombre, Slug: f.Slug, Categoria: f.Categoria, Stock: f.Stock,
 			Variantes: f.Variantes, VariantesSinPrecio: f.VariantesSinPrecio, Motivos: []string{}}
 		// Lo que entró hace poco no es un candidato aunque no se haya vendido:
@@ -825,12 +831,10 @@ func (s *Servicio) Candidatos(ctx context.Context, meses int, ahora time.Time) (
 		} else if referencia.Before(corte) {
 			c.Motivos = append(c.Motivos, "Nunca se vendió")
 		}
-		// Un producto a pedido no tiene stock ni precio por naturaleza: por eso
-		// solo, la escalera a medida volvía en cada aviso (M2S4-033).
-		if c.Stock <= 0 && !f.APedido {
+		if c.Stock <= 0 {
 			c.Motivos = append(c.Motivos, "Sin stock en ninguna sucursal")
 		}
-		if c.Variantes > 0 && c.VariantesSinPrecio == c.Variantes && !f.APedido {
+		if c.Variantes > 0 && c.VariantesSinPrecio == c.Variantes {
 			c.Motivos = append(c.Motivos, "Ninguna medida tiene precio")
 		}
 		// «Nunca se vendió» se dice con cualquier umbral: con 12 meses no salía

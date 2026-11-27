@@ -222,9 +222,13 @@ func aplicarClientes(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultad
 		if err != nil {
 			return err
 		}
-		limite := d["limiteCredito"]
-		if limite == "" {
-			limite = "0"
+		// Sin límite en el archivo, el alta nace en 0 y la ficha que ya
+		// estaba conserva el suyo: re-migrar dejaba en 0 los límites
+		// cargados a mano (mes 23, Sim Techos Costa de 2.000.000 a 0).
+		var limite *string
+		if d["limiteCredito"] != "" && !f.Vacios["limiteCredito"] {
+			l := d["limiteCredito"]
+			limite = &l
 		}
 		// El vendedor se busca por nombre entre los activos; el texto queda
 		// en «asesor» como estaba. Se perdía aunque la vista previa lo
@@ -237,20 +241,33 @@ func aplicarClientes(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultad
 			}
 			vendedor = nulo(v)
 		}
-		args := []any{d["nombre"], nulo(d["razonSocial"]), nulo(cuit.FormatearLargo(d["cuit"])), d["condicionIva"], nulo(d["email"]),
-			nulo(d["telefono"]), nulo(d["direccion"]), d["tipo"], limite, nulo(d["asesor"]), nulo(d["notas"]), nulo(d["codigo"]),
+		// La condición frente al IVA y el tipo que no vienen tampoco: un
+		// responsable inscripto pasaba a consumidor final.
+		condicion, tipo := nulo(d["condicionIva"]), nulo(d["tipo"])
+		if f.Vacios["condicionIva"] {
+			condicion = nil
+		}
+		if f.Vacios["tipo"] && d["tipo"] == "particular" {
+			tipo = nil
+		}
+		args := []any{d["nombre"], nulo(d["razonSocial"]), nulo(cuit.FormatearLargo(d["cuit"])), condicion, nulo(d["email"]),
+			nulo(d["telefono"]), nulo(d["direccion"]), tipo, limite, nulo(d["asesor"]), nulo(d["notas"]), nulo(d["codigo"]),
 			nulo(d["rubro"]), vendedor}
 		if id != "" {
-			// El rubro y el vendedor que no vienen no borran los que había.
-			_, err = tx.Exec(ctx, `UPDATE customers SET nombre = $1, razon_social = $2, cuit = $3, condicion_iva = $4::condicion_iva,
-				email = $5, telefono = $6, direccion = $7, tipo = $8::tipo_cliente, limite_credito = $9::numeric, asesor = $10,
-				notas = $11, codigo_legacy = $12, rubro = coalesce($13, rubro), seller_id = coalesce($14::uuid, seller_id),
+			// Lo que no viene (el límite, la condición, el tipo, el CUIT, el
+			// correo, el teléfono, la dirección, el asesor, las notas, el
+			// rubro y el vendedor) no borra lo que había.
+			_, err = tx.Exec(ctx, `UPDATE customers SET nombre = $1, razon_social = coalesce($2, razon_social), cuit = coalesce($3, cuit),
+				condicion_iva = coalesce($4::condicion_iva, condicion_iva),
+				email = coalesce($5, email), telefono = coalesce($6, telefono), direccion = coalesce($7, direccion), tipo = coalesce($8::tipo_cliente, tipo),
+				limite_credito = coalesce($9::numeric, limite_credito), asesor = coalesce($10, asesor),
+				notas = coalesce($11, notas), codigo_legacy = coalesce($12, codigo_legacy), rubro = coalesce($13, rubro), seller_id = coalesce($14::uuid, seller_id),
 				updated_at = now() WHERE id = $15`, append(args, id)...)
 			res.Actualizados++
 		} else {
 			err = tx.QueryRow(ctx, `INSERT INTO customers (nombre, razon_social, cuit, condicion_iva, email, telefono, direccion,
 				tipo, limite_credito, asesor, notas, codigo_legacy, rubro, seller_id, updated_at)
-				VALUES ($1, $2, $3, $4::condicion_iva, $5, $6, $7, $8::tipo_cliente, $9::numeric, $10, $11, $12, $13, $14::uuid, now())
+				VALUES ($1, $2, $3, coalesce($4::condicion_iva, 'consumidor_final'), $5, $6, $7, coalesce($8::tipo_cliente, 'particular'), coalesce($9::numeric, 0), $10, $11, $12, $13, $14::uuid, now())
 				RETURNING id::text`, args...).Scan(&id)
 			res.Creados++
 		}

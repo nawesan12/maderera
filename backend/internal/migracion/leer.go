@@ -192,6 +192,11 @@ type Fila struct {
 	Datos   map[string]string `json:"datos"`
 	Errores []string          `json:"errores"`
 	Avisos  []string          `json:"avisos"`
+	// Vacios son los campos que no vinieron en el archivo (y quedaron con su
+	// valor por defecto). Al re-migrar, uno vacío no pisa lo que la ficha
+	// ya tenía: el límite de crédito por defecto, 0, dejaba sin cuenta a
+	// clientes con límite cargado a mano (mes 23). No viaja en el JSON.
+	Vacios map[string]bool `json:"-"`
 }
 
 func interpretarOpcion(bruto string, opciones []Opcion) (string, bool) {
@@ -436,6 +441,12 @@ func NormalizarFilas(e Entidad, m Mapeo, filas [][]string) []Fila {
 			}
 			l := leerCampo(c, bruto)
 			f.Datos[c.Clave] = l.valor
+			if trimJS(bruto) == "" {
+				if f.Vacios == nil {
+					f.Vacios = map[string]bool{}
+				}
+				f.Vacios[c.Clave] = true
+			}
 			if l.error != "" {
 				f.Errores = append(f.Errores, l.error)
 			}

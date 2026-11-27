@@ -131,8 +131,9 @@ export async function cortePdf(
 
   const cifras: [string, string][] = [
     [String(plano.placas.length), plano.placas.length === 1 ? "placa" : "placas"],
-    [String(plano.totalPiezas), "piezas"],
-    [String(plano.pasadas), "pasadas"],
+    // En singular con uno, como Go (mes simulado, CRT-904).
+    [String(plano.totalPiezas), plano.totalPiezas === 1 ? "pieza" : "piezas"],
+    [String(plano.pasadas), plano.pasadas === 1 ? "pasada" : "pasadas"],
     [`${Math.round(plano.aprovechadoTotal * 100)}%`, "aprovechado"],
     [formatearSierra(plano.anchoSierra), "se lleva la sierra"],
     [`${metros(corte.metrosCanto)} m`, "de tapacanto"],

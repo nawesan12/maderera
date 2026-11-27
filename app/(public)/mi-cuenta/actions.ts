@@ -72,15 +72,21 @@ export async function repetirPedido(
     if (vaciado.error) return { error: vaciado.error };
   }
 
-  const resultado = await agregarVarios(
-    pedido.items.map((item) => ({
+  // Lo que se devolvió no se repite: PED-1125 llevó 2 latas, devolvió 1, y
+  // «Volver a pedir» cargaba 2 (mes 23).
+  const devuelto = new Map(pedido.devuelto.map((d) => [d.orderItemId, d.cantidad]));
+  const renglones = pedido.items
+    .map((item) => ({
       variantId: item.variantId ?? undefined,
       descripcion: item.descripcion,
       unidad: item.unidad,
-      cantidad: Number(item.cantidad),
+      cantidad: Math.round((Number(item.cantidad) - (devuelto.get(item.id) ?? 0)) * 100) / 100,
       origen: "repetido",
-    })),
-  );
+    }))
+    .filter((r) => r.cantidad > 0);
+  if (renglones.length === 0) return { error: "Devolviste todo lo de este pedido." };
+
+  const resultado = await agregarVarios(renglones);
 
   if (resultado.error) return { error: resultado.error };
 

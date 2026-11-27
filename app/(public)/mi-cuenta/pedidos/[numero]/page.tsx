@@ -169,20 +169,25 @@ export default async function DetallePedidoPage({
 
   // Con la tienda apagada no hay carrito: «Volver a pedir» manda lo mismo
   // por WhatsApp (H307).
-  const repetir = laTienda.activa
-    ? null
-    : await enlaceWhatsapp(
-        mensajeDeConsulta(
-          `Hola! Quiero volver a pedir lo del pedido ${pedido.numero}: ${pedido.items
-            .slice(0, 12)
-            .map(
-              (i) =>
-                `${cantidadConUnidad(Number(i.cantidad), i.unidad, i.descripcion)} ${i.descripcion}`,
-            )
-            .join("; ")}.`,
-          quien,
-        ),
-      );
+  // Lo que se devolvió no se vuelve a pedir (mes 23, PED-1125).
+  const sinDevolver = pedido.items
+    .map((i) => ({
+      ...i,
+      queda: Math.round((Number(i.cantidad) - (devueltoPor.get(i.id)?.cantidad ?? 0)) * 100) / 100,
+    }))
+    .filter((i) => i.queda > 0);
+  const repetir =
+    laTienda.activa || sinDevolver.length === 0
+      ? null
+      : await enlaceWhatsapp(
+          mensajeDeConsulta(
+            `Hola! Quiero volver a pedir lo del pedido ${pedido.numero}: ${sinDevolver
+              .slice(0, 12)
+              .map((i) => `${cantidadConUnidad(i.queda, i.unidad, i.descripcion)} ${i.descripcion}`)
+              .join("; ")}.`,
+            quien,
+          ),
+        );
 
   return (
     <div className="space-y-5">
@@ -732,7 +737,7 @@ export default async function DetallePedidoPage({
             «13 pasada · A cotizar» sin el despiece y no se podía comprar
             (M3S4-012). Se consulta por WhatsApp. */}
         {laTienda.activa ? (
-          pedido.cortes.length === 0 && (
+          pedido.cortes.length === 0 && sinDevolver.length > 0 && (
             <VolverAPedir numero={pedido.numero} carritoConCosas={carritoConCosas} />
           )
         ) : (

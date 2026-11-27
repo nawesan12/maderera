@@ -77,9 +77,9 @@ export default async function MisPedidosPage() {
               {plural(cerrados.length, "pedido")}
             </span>
           </h2>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {cerrados.map((pedido) => (
-              <TarjetaPedido key={pedido.id} pedido={pedido} />
+              <TarjetaPedido key={pedido.id} pedido={pedido} compacta />
             ))}
           </div>
         </section>

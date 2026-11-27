@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatearMonto } from "@/components/admin/formato";
 import type { MedioDeCobro } from "@/lib/cobros/partes";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
+import { revisarDocumentoDeRetiro } from "@/lib/entregas/documento";
 
 type ResultadoDeAvance = { ok?: string; error?: string; autorizacion?: Autorizacion; firmaToken?: string; campo?: string };
 
@@ -174,7 +175,11 @@ export function AccionesPedido({
   const firmaDelCamion = estado === "en-camino" && !porLlevar && firmar ? firmar : null;
   const preguntar = debe || entregaUnRetiro || firmaDelCamion != null;
   const numero = pedido?.numero ?? sinCobrar?.numero ?? cobro?.numero;
-  const faltaDocumento = entregaUnRetiro && receptorDocumento.trim() === "";
+  // El documento entero se revisa antes de cobrar o entregar, como Go
+  // (entregas.RevisarDocumento): uno mal escrito se avisaba recién después
+  // de cobrar o de la pregunta «sin cobrar».
+  const problemaDocumento = entregaUnRetiro ? revisarDocumentoDeRetiro(receptorDocumento) : null;
+  const faltaDocumento = problemaDocumento != null;
 
   function avanzar(pin?: string) {
     return avanzarPedido(id, estado, {
@@ -344,7 +349,7 @@ export function AccionesPedido({
                     </label>
                     {((intento && faltaDocumento) || errorDocumento) && (
                       <p id="falta-documento" role="alert" className="estado-problema text-sm font-medium sm:col-span-2">
-                        {errorDocumento ?? "Falta el documento de quien retira."}
+                        {errorDocumento ?? problemaDocumento}
                       </p>
                     )}
                   </div>

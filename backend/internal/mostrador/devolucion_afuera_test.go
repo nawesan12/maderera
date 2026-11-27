@@ -145,7 +145,7 @@ func TestLaDevolucionPorAfueraConTarjetaTieneReintegro(t *testing.T) {
 		}
 	}
 	if reintegro == nil || len(reintegro.Renglones) != 2 || reintegro.Renglones[0].Cuenta != reportes.Cuentas.Deudores ||
-		reintegro.Renglones[0].Debe != 242 || reintegro.Renglones[1].Cuenta != reportes.Cuentas.Banco || reintegro.Renglones[1].Haber != 242 {
+		reintegro.Renglones[0].Debe != 242 || reintegro.Renglones[1].Cuenta != reportes.Cuentas.TarjetasAAcreditar || reintegro.Renglones[1].Haber != 242 {
 		t.Fatalf("reintegro: %+v", reintegro)
 	}
 	if s := reportes.SaldoDeCuenta(asientos, reportes.Cuentas.Deudores); !cerca(s, 0) {
@@ -170,8 +170,8 @@ func TestLaDevolucionPorAfueraConTarjetaTieneReintegro(t *testing.T) {
 		t.Errorf("por afuera vuelven %v, quería 968", an.PorAfuera)
 	}
 	asientos = e.asientosDeTodo(t)
-	if r := reintegros(asientos); !cerca(r[reportes.Cuentas.Banco], 1210) {
-		t.Errorf("reintegros por Banco: %v, quería 1210", r)
+	if r := reintegros(asientos); !cerca(r[reportes.Cuentas.TarjetasAAcreditar], 1210) {
+		t.Errorf("reintegros de la tarjeta: %v, quería 1210", r)
 	}
 	// La anulación no toca la factura: hasta la nota de crédito del resto,
 	// Deudores tiene los 968 y el cierre avisa la factura viva.
@@ -202,7 +202,8 @@ func TestLaDevolucionDeUnaMixtaTocaCadaCobro(t *testing.T) {
 		t.Errorf("tramos de la devolución por afuera: %v", tr)
 	}
 	asientos := e.asientosDeTodo(t)
-	if r := reintegros(asientos); !cerca(r[reportes.Cuentas.Caja], 20) || !cerca(r[reportes.Cuentas.Banco], 30) {
+	// Lo de la tarjeta vuelve de Tarjetas a acreditar (M2S1-058).
+	if r := reintegros(asientos); !cerca(r[reportes.Cuentas.Caja], 20) || !cerca(r[reportes.Cuentas.TarjetasAAcreditar], 30) {
 		t.Errorf("reintegros: %v", r)
 	}
 	if s := reportes.SaldoDeCuenta(asientos, reportes.Cuentas.Deudores); !cerca(s, 0) {
@@ -264,7 +265,10 @@ func TestLaDevolucionPorAfueraConCheque(t *testing.T) {
 		t.Errorf("la que llega al cheque: %v", tr)
 	}
 	asientos := e.asientosDeTodo(t)
-	if r := reintegros(asientos); !cerca(r[reportes.Cuentas.Banco], 600) || r[reportes.Cuentas.ValoresADepositar] != 0 {
+	// Lo de la tarjeta vuelve de Tarjetas a acreditar (M2S1-058) y lo del
+	// cheque por el banco.
+	if r := reintegros(asientos); !cerca(r[reportes.Cuentas.TarjetasAAcreditar], 500) || !cerca(r[reportes.Cuentas.Banco], 100) ||
+		r[reportes.Cuentas.ValoresADepositar] != 0 {
 		t.Errorf("reintegros: %v", r)
 	}
 

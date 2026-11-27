@@ -12,7 +12,6 @@ import { fechaHora, plural } from "@/components/admin/formato";
 import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { AcomodoDelCorte } from "../acomodo";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
-import { sobraDelCliente } from "@/lib/cortes/de-quien";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
@@ -22,6 +21,7 @@ import { SierraDelTrabajo } from "./sierra";
 import { formatearSierra } from "@/lib/cortes/sierra";
 import { CobrarCorte, CorregirOAnular, MasArchivos, RemitoDeLaReposicion, SumarAlPedido } from "./gestion";
 import { listarPerfiles } from "@/lib/dal/admin/cortes-exportacion";
+import { PlanoVivo, RetalMayorVivo, SobrantesVivos } from "./plano-vivo";
 
 export default async function FichaCortePage({
   params,
@@ -192,6 +192,7 @@ export default async function FichaCortePage({
           pregunta por un corte en el mostrador: cuántas placas, si se le vende
           la placa entera, y cuánto es. */}
       {corte.piezas.length > 0 && (
+        <PlanoVivo>
         <section className="tarjeta overflow-hidden">
           <header className="flex flex-wrap items-start justify-between gap-3 border-b border-linea px-5 py-4">
             <div className="min-w-0">
@@ -261,17 +262,7 @@ export default async function FichaCortePage({
                   : ficha.pasadasACobrar === 1 ? "pasada a cobrar" : "pasadas a cobrar"
               }
             />
-            <Cifra
-              valor={
-                plano.recorteMayor
-                  ? `${plano.recorteMayor.ancho}×${plano.recorteMayor.alto}`
-                  : "—"
-              }
-              rotulo={
-                plano.recorteMayor ? "retal mayor, en mm" : "sin retal útil"
-              }
-              ancha={noCobra}
-            />
+            <RetalMayorVivo guardado={plano} ancha={noCobra} />
           </div>
 
           <div className="space-y-3 px-5 py-4">
@@ -409,31 +400,7 @@ export default async function FichaCortePage({
               lleva el cliente. */}
           <div className="border-t border-linea px-5 py-4">
             <h3 className="text-base font-medium">Lo que sobra</h3>
-            <ul className="mt-2 space-y-1.5">
-              {plano.placas.map((placa) => (
-                <li key={placa.numero} className="text-base">
-                  <span className="text-muted-foreground">
-                    {media ? "Media" : "Placa"} {placa.numero}:
-                  </span>{" "}
-                  {placa.recortes.length === 0 ? (
-                    <span className="text-muted-foreground">
-                      sin pedazos enteros que valga guardar
-                    </span>
-                  ) : (
-                    <>
-                      {placa.recortes
-                        .map((r) => `${r.ancho} × ${r.alto} mm`)
-                        .join(" · ")}{" "}
-                      <span className="text-muted-foreground">
-                        ({sobraDelCliente(placa.seVendeEntera, { sinCargo: corte.sinCargo })
-                          ? "del cliente"
-                          : "al stock"})
-                      </span>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <SobrantesVivos guardado={plano} media={media} sinCargo={corte.sinCargo} todasDelCliente={ficha.retalesDelCliente} />
             <p className="mt-2 text-sm text-muted-foreground">
               {Math.round(plano.aprovechadoTotal * 100)}% del material sale en
               piezas · sierra de {formatearSierra(plano.anchoSierra)}
@@ -463,6 +430,7 @@ export default async function FichaCortePage({
             )}
           </div>
         </section>
+        </PlanoVivo>
       )}
 
       {/* El despiece a todo el ancho y los datos del trabajo en una fila de

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Loader2, Save } from "lucide-react";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
 import type { PiezaAcortar, PiezaFijada } from "@/lib/cortes/tipos";
 import type { QuienSeQueda } from "@/lib/cortes/de-quien";
 import { piezasParaElPlano, usePlano } from "@/lib/cortes/en-vivo";
 import { guardarAcomodoManual } from "./actions";
+import { usePublicarPlano } from "./[id]/plano-vivo";
 
 /**
  * Corregir el acomodo de un corte ya cargado.
@@ -65,6 +67,13 @@ export function AcomodoDelCorte({
   // cambia salvo que alguien mueva algo, que es justamente lo que se detecta.
   const sinGuardar = JSON.stringify(fijadas) !== JSON.stringify(inicial);
 
+  // Las cifras de arriba de la ficha siguen al plano que se prueba (M2S2-138).
+  const publicar = usePublicarPlano();
+  const router = useRouter();
+  useEffect(() => {
+    publicar?.(sinGuardar && plano.placas.length > 0 ? plano : null);
+  }, [publicar, sinGuardar, plano]);
+
   return (
     <div className="space-y-3">
       <PlanoEditable
@@ -91,6 +100,8 @@ export function AcomodoDelCorte({
                     ? { texto: r.error, mal: true }
                     : { texto: r.ok ?? "Guardado.", mal: false },
                 );
+                // Las cifras y la cuenta guardadas, sin recargar a mano.
+                if (!r.error) router.refresh();
               })
             }
             className="inline-flex h-11 items-center gap-2 rounded-lg boton-accion px-4 text-base font-medium disabled:opacity-60"

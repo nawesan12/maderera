@@ -235,3 +235,34 @@ func TestReglaDeListoConElCorte(t *testing.T) {
 		t.Errorf("bitácora: %q", descs)
 	}
 }
+
+// M2S2-040: si el cheque de una factura que espera el CAE se endosa es una
+// regla: arranca en «si», va a «al_cae» y vuelve, con la bitácora.
+func TestReglaDelEndosoQueEsperaElCAE(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/admin/contenido/ajustes/endoso_espera_cae"
+	if v, _ := reglasdel.Valor(ctx, e.pool, reglasdel.EndosoEsperaCAE); v != "si" {
+		t.Fatalf("arranca en %q", v)
+	}
+	for _, valor := range []string{"al_cae", "si"} {
+		if c, b := pedir(t, adm, "PUT", u, map[string]string{"valor": valor}); c != 204 {
+			t.Fatalf("%s: %d %s", valor, c, b)
+		}
+		if !reglasdel.Es(ctx, e.pool, reglasdel.EndosoEsperaCAE, valor) {
+			t.Errorf("no quedó en %s", valor)
+		}
+	}
+	var descs []string
+	rs, _ := e.pool.Query(ctx, `select descripcion from audit_log where entidad = 'regla' and entidad_id = 'endoso_espera_cae' order by created_at`)
+	for rs.Next() {
+		var d string
+		_ = rs.Scan(&d)
+		descs = append(descs, d)
+	}
+	rs.Close()
+	if strings.Join(descs, "|") != "El cheque de una factura sin CAE se endosa: Sí, como blanco → Recién con el CAE|El cheque de una factura sin CAE se endosa: Recién con el CAE → Sí, como blanco" {
+		t.Errorf("bitácora: %q", descs)
+	}
+}

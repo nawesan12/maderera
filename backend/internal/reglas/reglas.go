@@ -98,6 +98,11 @@ const (
 	// terminado. «mostrador» es lo de siempre (los de otro origen los marca
 	// listos el depósito, que sabe qué más falta); «todos», cualquiera.
 	ListoConElCorte = "listo_con_el_corte"
+	// M2S2-040 (00456): el cheque de una venta con su factura esperando el
+	// CAE. «si» es lo de siempre: es blanco (su cobro ya está en Anticipos o
+	// en la transitoria) y se endosa a una factura A; «al_cae» lo deja en la
+	// cartera hasta que llegue el CAE.
+	EndosoEsperaCAE = "endoso_espera_cae"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -129,6 +134,7 @@ var Opciones = map[string][]string{
 	EscalaConLista:              {"si", "no"},
 	AltaDeProducto:              {"activo", "inactivo"},
 	ListoConElCorte:             {"mostrador", "todos"},
+	EndosoEsperaCAE:             {"si", "al_cae"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

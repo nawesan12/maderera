@@ -79,6 +79,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "endoso_espera_cae",
+        pregunta: "El cheque de una factura sin CAE se endosa",
+        opciones: [
+          { valor: "si", texto: "Sí, como blanco" },
+          { valor: "al_cae", texto: "Recién con el CAE" },
+        ],
+      },
+      {
         clave: "deuda_sin_comprobante",
         pregunta: "La deuda cargada a mano en la cuenta",
         opciones: [

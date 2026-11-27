@@ -17,6 +17,13 @@ import { valorDeRegla } from "@/lib/reglas";
 
 export const metadata = { title: "Nuevo corte" };
 
+/*
+ * Fuera de la validación de navegación instantánea de `next dev`: el globo
+ * «1 Insight» tapaba la barra de guardar a 375 px (mes 23). El `instant` del
+ * layout del panel no alcanza a sus páginas. No cambia producción.
+ */
+export const instant = false;
+
 /** Solo se vuelve a pantallas propias: el chat del panel o de atención. */
 const VUELTA_PERMITIDA = /^\/(admin\/whatsapp|atencion)(\?|$)/;
 

@@ -12,10 +12,15 @@ import { sitioIndexable } from "./lib/seo";
  * Sale del commit: en el servidor propio lo pasa `scripts/desplegar.sh` como
  * `GIT_SHA` —adentro del build de Docker no hay `.git` del que leerlo—, y en
  * Vercel lo pone la plataforma. En local, de la hora del build.
+ *
+ * En `next dev`, fijo: cada vez que se vuelve a leer esta configuración la
+ * hora es otra, y con ella `NEXT_PUBLIC_BUILD_ID`, que va adentro del código
+ * del navegador. En desarrollo no hay nada que reinstalar (mes 23, la
+ * instancia que recargaba la página sola).
  */
 const idDeBuild =
   (process.env.GIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA)?.slice(0, 12) ||
-  `local-${Date.now()}`;
+  (process.env.NODE_ENV === "development" ? "dev" : `local-${Date.now()}`);
 
 /*
  * Qué puede cargar el navegador, y de dónde.
@@ -86,11 +91,11 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "20mb" },
     proxyClientMaxBodySize: "20mb",
-    // La validación de navegación instantánea (dev) solo en los segmentos
-    // que exportan `instant`: con la de todas las páginas, el globo «1
-    // Insight» tapaba la barra de guardar a 375 px (mes 23). Adoptar
-    // `partialPrefetching` es una decisión aparte (ver arriba).
-    instantInsights: { validationLevel: "manual-warning" },
+    // La validación de navegación instantánea (dev) queda la de fábrica:
+    // con «manual-warning» cada ruta tiraba «unstable value Date.now()
+    // while prerendering» (ver fa44919c, y otra vez en el mes 23). El globo
+    // que tapaba la barra de guardar del alta se apaga en esa página con
+    // `instant = false`.
   },
   /**
    * Empaquetado para servidor propio.

@@ -33,6 +33,20 @@ export function proxy(request: NextRequest) {
     request.cookies.get("__Secure-better-auth.session_token") ??
     request.cookies.get("better-auth.session_token");
 
+  // El sitio público no pide sesión: solo prende la señal si falta, en el
+  // pedido y en la respuesta, para que el encabezado y el aviso al gremio
+  // sepan quién mira desde la primera página. Sin esto, quien entraba con la
+  // sesión abierta pero sin la señal veía «Ingresar» y «Estos son los precios
+  // de público» en la portada, el catálogo y los eventos, hasta pasar por Mi
+  // cuenta (mes simulado, M2S3-094 y M2S2-059).
+  if (!esProtegida(request.nextUrl.pathname)) {
+    if (!sessionCookie || request.cookies.has(SENAL_ESTADO)) return NextResponse.next();
+    request.cookies.set(SENAL_ESTADO, "1");
+    const salida = NextResponse.next({ request: { headers: new Headers(request.headers) } });
+    prenderSenal(salida);
+    return salida;
+  }
+
   if (!sessionCookie) {
     const url = new URL("/ingresar", request.url);
     url.searchParams.set("volver", request.nextUrl.pathname);
@@ -60,17 +74,25 @@ export function proxy(request: NextRequest) {
   // encendiera— y por si se perdió sola: la cookie de sesión dura más. Sin
   // esto, alguien con la sesión abierta veía "Ingresar" en el menú hasta
   // volver a entrar. Cuesta una cabecera; no es una decisión de acceso.
-  if (!request.cookies.has(SENAL_ESTADO)) {
-    salida.cookies.set(SENAL_ESTADO, "1", {
-      httpOnly: false,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 60,
-      secure: process.env.NODE_ENV === "production",
-    });
-  }
+  if (!request.cookies.has(SENAL_ESTADO)) prenderSenal(salida);
 
   return salida;
+}
+
+const PROTEGIDAS = ["/admin", "/atencion", "/taller", "/mi-cuenta"];
+
+function esProtegida(ruta: string): boolean {
+  return PROTEGIDAS.some((p) => ruta === p || ruta.startsWith(`${p}/`));
+}
+
+function prenderSenal(salida: NextResponse) {
+  salida.cookies.set(SENAL_ESTADO, "1", {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 60,
+    secure: process.env.NODE_ENV === "production",
+  });
 }
 
 export const config = {
@@ -79,5 +101,7 @@ export const config = {
     "/atencion/:path*",
     "/taller/:path*",
     "/mi-cuenta/:path*",
+    // Las páginas del sitio: todo menos la API, los archivos y lo de Next.
+    "/((?!api/|_next/|subidas/|fichas/|og/|feeds/|.*\\.[a-zA-Z0-9]+$).*)",
   ],
 };

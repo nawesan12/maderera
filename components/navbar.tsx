@@ -537,7 +537,11 @@ export function Navbar({
           </div>
 
           {/* Acciones */}
-          <div className="ml-auto flex items-center gap-2">
+          {/* A 375 con la tienda prendida no entraban tema, carrito y menú:
+              el documento medía 381 a 409 px (mes simulado, M2S1-102). En
+              el teléfono el tema va en el menú y el número del carrito va
+              sobre el ícono, sin sumar ancho. */}
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
             {/* El asistente en la barra de escritorio (corrección de T5):
                 sin el flotante, en una computadora solo se abría desde el
                 catálogo y el 404, y quien estaba en la portada, una ficha o
@@ -559,7 +563,9 @@ export function Navbar({
               <span className="whitespace-nowrap text-[13px] font-bold uppercase tracking-[0.045em]">Ayuda</span>
             </button>
 
-            <ThemeToggle />
+            <span className="hidden sm:contents">
+              <ThemeToggle />
+            </span>
 
             <Suspense fallback={<SesionDeEscritorio sesion={undefined} />}>
               <SesionDeEscritorioVigente />
@@ -739,6 +745,11 @@ export function Navbar({
                   <Suspense fallback={null}>
                     <CrearCuentaDelTelefono cerrar={() => setMobileMenuOpen(false)} />
                   </Suspense>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-linea-tenue px-3 pt-3 sm:hidden">
+                    <span className="text-[13px] font-bold uppercase tracking-[0.045em]">Tema</span>
+                    <ThemeToggle />
+                  </div>
                 </div>
               </SheetContent>
             </Sheet>
@@ -789,7 +800,19 @@ function SesionDeEscritorio({ sesion }: { sesion: SesionConocida }) {
           sesion ? "text-acento-texto" : "text-foreground"
         }`}
       >
-        <Icono className="h-[18px] w-[18px]" />
+        {/* Con sesión, la inicial en lugar del ícono: entre lg y 2xl solo
+            queda el ícono, y el de quien entró se veía igual al de un
+            visitante (mes simulado, M2S3-094). */}
+        {sesion && !sesion.esStaff ? (
+          <span
+            aria-hidden="true"
+            className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-accion text-[12px] font-bold uppercase leading-none text-white"
+          >
+            {primerNombre(sesion.nombre).charAt(0)}
+          </span>
+        ) : (
+          <Icono className="h-[18px] w-[18px]" />
+        )}
         {/* El ancho de «Ingresar» queda reservado mientras no se sabe, para
             que el botón no cambie de tamaño cuando llega el nombre. */}
         {/* Entre lg y 2xl la barra no da para todo: queda el ícono, y el
@@ -837,17 +860,21 @@ function EnlaceAlCarrito({ cantidad }: { cantidad: number }) {
       }
       className="relative flex h-10 items-center gap-2 rounded-[11px] px-2.5 text-texto-2 transition-colors hover:bg-sitio-alt hover:text-acento-texto"
     >
-      <ShoppingCart className="h-[19px] w-[19px] shrink-0" />
+      {/* El número va sobre el ícono y no al lado: al lado sumaba ancho y
+          «Pedir Presupuesto» se salía 5 px a 1280 (M2S4-075). */}
+      <span className="relative shrink-0">
+        <ShoppingCart className="h-[19px] w-[19px]" />
+        {cantidad > 0 && (
+          <span className="tabular absolute -right-2.5 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accion px-1 text-[10.5px] font-bold leading-none text-white ring-2 ring-[var(--chrome-fondo)]">
+            {cantidad}
+          </span>
+        )}
+      </span>
       {/* Entre lg y 2xl no entra todo en la barra (desde xl se suma «Crear
           cuenta»): el carrito queda en ícono, con su aria-label. */}
       <span className="hidden text-[13px] font-bold uppercase tracking-[0.045em] sm:inline lg:hidden 2xl:inline">
         Carrito
       </span>
-      {cantidad > 0 && (
-        <span className="tabular flex h-5 min-w-5 items-center justify-center rounded-full bg-accion px-[5px] text-[11px] font-bold text-white">
-          {cantidad}
-        </span>
-      )}
     </Link>
   );
 }

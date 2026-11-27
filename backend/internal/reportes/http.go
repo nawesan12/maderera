@@ -438,7 +438,6 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 	return csv(ArchivoDelDia("cuentas-a-pagar", ahora), v), nil
 }
 
-
 // ArchivoDelDia es el nombre del CSV con el día argentino: el de la API y el
 // del cierre se llamaban distinto bajados en el mismo minuto, a las 23:49 del
 // 26 (mes simulado, M2S3-082).

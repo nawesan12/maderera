@@ -161,3 +161,39 @@ func TestElArchivoLlevaElDiaArgentino(t *testing.T) {
 		t.Error(n)
 	}
 }
+
+// M2S4-030, M3S3-039 y M2S1-045: el total con IVA es el mismo en todos los
+// cortes (lo que los renglones no llevan va en «Envíos y descuentos») y la
+// compra de un cliente en la tienda va a «Tienda web», no con su nombre.
+func TestLosCortesDanElMismoTotal(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	placa, _ := e.catalogo(t)
+	e.exec(t, `insert into "user" (id, name, email, email_verified, created_at, updated_at) values ('u-ignacio', 'Ignacio Ebanista', 'ignacio@prueba.test', true, now(), now())`)
+	web := e.pedido(t, "PED-1238", e.central, "entregado", "tienda", time.Date(2026, 10, 10, 12, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 17280.0, 9000.0})
+	e.exec(t, `update orders set created_by_user_id = 'u-ignacio', costo_envio = 1210, total = 18490 where id = $1`, web)
+	e.pedido(t, "PED-1239", e.central, "entregado", "mostrador", time.Date(2026, 10, 11, 12, 0, 0, 0, Argentina), nil, [4]any{placa, 1.0, 1210.0, 500.0})
+	var totales []float64
+	for _, corte := range []string{"producto", "rubro", "vendedor", "canal"} {
+		_, b, _ := pedir(t, adm, e.u+"reportes/ventas?corte="+corte+"&periodo=mes")
+		var rep ReporteDeVentas
+		_ = json.Unmarshal([]byte(b), &rep)
+		totales = append(totales, rep.Totales.Total)
+		if corte == "vendedor" && (len(rep.Filas) == 0 || rep.Filas[0].Etiqueta != "Tienda web") {
+			t.Errorf("la compra en la tienda: %s", b)
+		}
+		if corte == "producto" && rep.Totales.Renglones != 18490 {
+			t.Errorf("lo que suman los renglones: %+v", rep.Totales)
+		}
+	}
+	for _, x := range totales {
+		if x != 19700 {
+			t.Errorf("el total con IVA cambia según el corte: %v", totales)
+			break
+		}
+	}
+	csv := CsvReporteDeVentas("producto", nil, TotalesDelReporte{Total: 19700, Renglones: 18490})
+	if !strings.Contains(csv, `"Envíos y descuentos";"";"";1210,00`) {
+		t.Errorf("el CSV: %s", csv)
+	}
+}

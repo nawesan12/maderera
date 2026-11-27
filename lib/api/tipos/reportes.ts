@@ -350,9 +350,14 @@ export interface components {
         ReporteTotales: {
             /**
              * Format: double
-             * @description Con IVA; subtotales de renglones o total de los pedidos
+             * @description Con IVA
              */
             total: number;
+            /**
+             * Format: double
+             * @description Lo que suman con IVA las filas del corte; en los cortes por renglón
+             */
+            renglones: number;
             /**
              * Format: double
              * @description Unidades o operaciones

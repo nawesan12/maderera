@@ -163,11 +163,32 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 
 	encabezado()
 
+	// Por vendedor, las ventas sin vendedor asignado van al final, bajo su
+	// título, con quien las cargó en gris (mes simulado, M2S4-031): en el PDF
+	// «Sim Mostrador» se leía como otro vendedor.
+	var conVendedor, sinVendedor []FilaDeReporte
 	for _, f := range d.Filas {
+		if f.Detalle != nil && *f.Detalle == "Cargó la venta" {
+			sinVendedor = append(sinVendedor, f)
+		} else {
+			conVendedor = append(conVendedor, f)
+		}
+	}
+	filas := append(append([]FilaDeReporte(nil), conVendedor...), sinVendedor...)
+	for i, f := range filas {
 		if y < Margen+Mm(18) {
 			h.NuevaPagina()
 			y = AltoA4 - Margen
 			encabezado()
+		}
+		tinta := Tinta
+		if i >= len(conVendedor) {
+			if i == len(conVendedor) {
+				y -= 4
+				h.Escribir("Sin vendedor asignado · cargó la venta", Opciones{X: Margen, Y: y, Tamano: 7, Fuente: Negrita, Color: TintaSuave})
+				y -= 12
+			}
+			tinta = TintaSuave
 		}
 		margen, costeado := "—", "—"
 		if f.Costo != nil {
@@ -193,7 +214,7 @@ func ReporteDeVentas(d DatosReporteVentas, _ time.Time) ([]byte, error) {
 			if c.derecha {
 				x = cx + c.ancho
 			}
-			h.Escribir(recortarReporte(celda, c.ancho-4), Opciones{X: x, Y: y, Tamano: 8, Color: Tinta, Derecha: c.derecha})
+			h.Escribir(recortarReporte(celda, c.ancho-4), Opciones{X: x, Y: y, Tamano: 8, Color: tinta, Derecha: c.derecha})
 			cx += c.ancho
 		}
 		y -= 12

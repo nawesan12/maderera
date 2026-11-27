@@ -35,6 +35,9 @@ const (
 	Taller   Canal = "taller"
 	Pedidos  Canal = "pedidos"
 	Precios  Canal = "precios"
+	// Ventas: se facturó, se cobró con un recibo o un pedido cambió de
+	// estado (00363). Lo escuchan Facturación, Cobranzas y Pedidos.
+	Ventas Canal = "ventas"
 )
 
 // Quién recibe cada canal: los roles de la pantalla que lo muestra
@@ -45,6 +48,22 @@ var rolesDelCanal = map[Canal][]sqlc.StaffRole{
 	Taller:   roles.QuienEntra("/admin/cortes"),
 	Pedidos:  roles.QuienEntra("/admin/pedidos"),
 	Precios:  roles.QuienEntra("/mostrador"),
+	Ventas:   unirRoles(roles.QuienEntra("/admin/pedidos"), roles.QuienEntra("/admin/facturacion"), roles.QuienEntra("/admin/pagos")),
+}
+
+// unirRoles junta listas de roles sin repetir.
+func unirRoles(listas ...[]sqlc.StaffRole) []sqlc.StaffRole {
+	var out []sqlc.StaffRole
+	visto := map[sqlc.StaffRole]bool{}
+	for _, l := range listas {
+		for _, r := range l {
+			if !visto[r] {
+				visto[r] = true
+				out = append(out, r)
+			}
+		}
+	}
+	return out
 }
 
 // Evento es lo que manda el trigger.

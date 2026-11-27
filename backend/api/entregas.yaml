@@ -289,6 +289,7 @@ components:
       properties:
         reposicion: { type: string, nullable: true, description: El corte de una reposición sin cargo }
         parcial: { type: boolean, description: Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF) }
+        final: { type: boolean, description: Se llevó lo último de un pedido que ya había salido en parte }
         id: { type: string }
         numero: { type: string }
         tipo: { type: string, enum: [retiro, envio] }
@@ -351,6 +352,10 @@ components:
         lineas, pendientes, factura, sinCobrar, visita, reposicion]
       properties:
         reposicion: { type: string, nullable: true, description: El corte de una reposición sin cargo (las líneas son sus piezas) }
+        clienteRazonSocial: { type: string, nullable: true }
+        clienteCuit: { type: string, nullable: true }
+        clienteCondicionIva: { type: string, nullable: true }
+        final: { type: boolean, description: Se llevó lo último de un pedido que ya había salido en parte }
         visita:
           type: array
           description: Los remitos de otros pedidos que salieron en la misma visita y se firman con este enlace
@@ -393,6 +398,7 @@ components:
         email: { type: string, nullable: true }
         emailCliente: { type: string, nullable: true }
         estadoPedido: { type: string }
+        estadoRemito: { type: string, description: "preparada, entregada o anulada: el pedido de firma sale solo si sigue preparada" }
     RemitoDelPortal:
       type: object
       required: [id, numero, tipo, estado, receptorNombre, firmadoAt, createdAt]

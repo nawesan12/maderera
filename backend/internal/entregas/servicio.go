@@ -51,6 +51,12 @@ import (
 // misma transacción (los manda el worker, internal/notificaciones).
 const (
 	TrabajoRemitoParaFirmar = "remito.para-firmar"
+	// EsperaDelPedidoDeFirma: el correo «Firmá el remito» sale unos minutos
+	// después de prepararlo, y solo si sigue sin firmar: el remito que se
+	// anuló por un error, o que se firmó ahí mismo en el mostrador, no le
+	// mandaba al cliente un pedido de firma (y después otro), sin avisar de
+	// la anulación (mes simulado 2).
+	EsperaDelPedidoDeFirma = 3 * time.Minute
 	TrabajoRemitoFirmado    = "remito.firmado"
 )
 
@@ -637,7 +643,7 @@ func crearEnTransaccion(ctx context.Context, tx pgx.Tx, f FormRemito, usuario, v
 	// El enlace para firmar desde el celular: el de la visita va con el
 	// primero, que lleva todo.
 	if visitaDe == nil {
-		if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
+		if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Now().Add(EsperaDelPedidoDeFirma)); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -703,7 +709,7 @@ func RemitoPorLoQueQueda(ctx context.Context, tx pgx.Tx, pedidoID string, sucurs
 			return nil, err
 		}
 	}
-	if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Time{}); err != nil {
+	if _, err := cola.Encolar(ctx, sqlc.New(tx), TrabajoRemitoParaFirmar, map[string]string{"deliveryId": id}, time.Now().Add(EsperaDelPedidoDeFirma)); err != nil {
 		return nil, err
 	}
 	return &EntregaCreada{ID: id, Numero: numero, FirmaToken: token, PedidoCompleto: true}, nil
@@ -950,10 +956,16 @@ func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id st
 		// pedido vuelve a «listo», es un solo renglón con el cambio de
 		// estado: eran dos, y el del motivo salía con el chip «Entregado»
 		// (mes simulado).
+		// Sin firmar también queda por qué (mes simulado 2: el historial no
+		// decía por qué se anuló).
 		notaFirma := ""
-		if firmado != nil && pedido != nil {
-			notaFirma = "Remito " + numero + " firmado, anulado: " + zodjs.TrimJS(a.Motivo) + " · autorizó " + autorizo
+		motivo := zodjs.TrimJS(a.Motivo)
+		switch {
+		case firmado != nil && pedido != nil:
+			notaFirma = "Remito " + numero + " firmado, anulado: " + motivo + " · autorizó " + autorizo
 			bitacora.Anotar(ctx, s.q.WithTx(tx), s.log, ses, sqlc.AccionAuditoriaAnular, "remito", id, notaFirma, nil)
+		case pedido != nil && motivo != "":
+			notaFirma = "Remito " + numero + " anulado: " + motivo
 		}
 		anotarFirma := func() error {
 			if notaFirma == "" {
@@ -1050,14 +1062,11 @@ func (s *Servicio) AnularEntregaCon(ctx context.Context, ses *auth.Sesion, id st
 		if _, err := tx.Exec(ctx, `UPDATE orders SET estado = 'listo', updated_at = now() WHERE id = $1`, pedidoID); err != nil {
 			return err
 		}
-		// Un envío no tiene acopio: lo que vuelve queda por llevar.
-		queda := "vuelve a quedar mercadería en acopio"
-		if pedido.tipoEntrega == "envio" {
-			queda = "vuelve a quedar mercadería por llevar"
-		}
-		nota := "Remito " + numero + " anulado: " + queda
+		// «Listo» ya dice lo que falta: la nota no habla de acopio (lo decía
+		// de un pedido web de un tirante, mes simulado 2).
+		nota := "Remito " + numero + " anulado"
 		if notaFirma != "" {
-			nota = notaFirma + " · " + queda
+			nota = notaFirma
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, 'listo', $2, $3)`,
 			pedidoID, nota, ses.UserID)
@@ -1086,6 +1095,9 @@ type RemitoListado struct {
 	Parcial bool `json:"parcial"`
 	// Reposicion es el corte de una reposición sin cargo (H321).
 	Reposicion *string `json:"reposicion"`
+	// Final: completa un pedido que ya había salido en parte (decía
+	// «Entrega total» con 2 juegos, mes simulado 2).
+	Final bool `json:"final"`
 }
 
 // RemitosDelPedido son los remitos de un pedido, los más nuevos primero.
@@ -1129,6 +1141,14 @@ func (s *Servicio) RemitosDelPedido(ctx context.Context, pedido string) ([]Remit
 			return nil, err
 		}
 		out[i].Parcial = len(quedaba) > 0
+		if !out[i].Parcial {
+			for _, antes := range out[i+1:] {
+				if antes.Reposicion == nil && antes.Estado != "anulada" {
+					out[i].Final = true
+					break
+				}
+			}
+		}
 	}
 	return out, nil
 }

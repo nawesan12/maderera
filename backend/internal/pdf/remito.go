@@ -65,6 +65,33 @@ type RemitoCompleto struct {
 	// Reposicion es el corte de una reposición sin cargo (H321): el remito
 	// lo dice en el título y en la condición de pago.
 	Reposicion string `json:"reposicion,omitempty"`
+	// Los datos fiscales del cliente (un remito R los lleva) y si completa
+	// un pedido que salió en partes.
+	ClienteRazonSocial  string `json:"clienteRazonSocial,omitempty"`
+	ClienteCuit         string `json:"clienteCuit,omitempty"`
+	ClienteCondicionIva string `json:"clienteCondicionIva,omitempty"`
+	Final               bool   `json:"final,omitempty"`
+}
+
+// condicionIva es cómo se lee la condición frente al IVA.
+var condicionIva = map[string]string{
+	"responsable_inscripto": "Responsable inscripto", "monotributista": "Monotributista",
+	"exento": "Exento", "consumidor_final": "Consumidor final",
+}
+
+// TituloDelRemito es el título del papel: parcial si queda algo, final si
+// se llevó lo último de un pedido que ya había salido en parte, total si
+// salió todo de una vez.
+func TituloDelRemito(r RemitoCompleto) string {
+	switch {
+	case r.Reposicion != "":
+		return "Reposición sin cargo"
+	case len(r.Pendientes) > 0:
+		return "Remito de entrega parcial"
+	case r.Final:
+		return "Remito de entrega final"
+	}
+	return "Remito de entrega total"
 }
 
 // medioDelPedido es el medio de pago del pedido como lo lee el chofer.
@@ -197,14 +224,7 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 
 	y := AltoA4 - Margen - 10
 	deAcopio := len(r.Pendientes) > 0
-	titulo := "Remito de entrega total"
-	switch {
-	case r.Reposicion != "":
-		titulo = "Reposición sin cargo"
-	case deAcopio:
-		titulo = "Remito de entrega parcial"
-	}
-	h.Escribir(titulo, Opciones{X: derecha, Y: y, Tamano: 11, Fuente: Negrita, Derecha: true})
+	h.Escribir(TituloDelRemito(r), Opciones{X: derecha, Y: y, Tamano: 11, Fuente: Negrita, Derecha: true})
 	y -= 15
 
 	h.Escribir(r.Numero, Opciones{X: derecha, Y: y, Tamano: 13, Fuente: Mono, Derecha: true})
@@ -244,11 +264,20 @@ func Remito(d DatosRemito, _ time.Time) ([]byte, error) {
 	if r.Tipo == "envio" {
 		quien = "Recibe"
 	}
+	cliente := r.ClienteNombre
+	if r.ClienteRazonSocial != "" && !strings.EqualFold(r.ClienteRazonSocial, r.ClienteNombre) {
+		cliente = r.ClienteRazonSocial
+	}
 	datos := []Dato{
-		{"Cliente", r.ClienteNombre},
+		{"Cliente", cliente},
 		{quien, oGuion(r.ReceptorNombre)},
 		{domicilio, oGuion(r.ClienteDireccion)},
-		{"Documento", oGuion(r.ReceptorDocumento)},
+		{"Documento de quien " + strings.ToLower(quien), oGuion(r.ReceptorDocumento)},
+	}
+	// Un remito R lleva el CUIT y la condición de IVA del destinatario.
+	if r.ClienteCuit != "" {
+		iva := condicionIva[r.ClienteCondicionIva]
+		datos = append(datos, Dato{"CUIT", Cuit(r.ClienteCuit)}, Dato{"Condición frente al IVA", oGuion(iva)})
 	}
 	if r.Transportista != "" {
 		t := r.Transportista

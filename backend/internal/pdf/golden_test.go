@@ -312,6 +312,10 @@ func diferencia(a, b string) (float64, error) {
 //     sola pasada, en singular («1 pieza», no «1 piezas»).
 //   - comprobante, presupuesto y remito (26/11, mes simulado): el metro
 //     lineal se abrevia «m» y no «ml», que se leía como mililitros.
+//   - remito (27/11, mes simulado 2): «Documento de quien retira» (se leía
+//     como el del cliente), el CUIT y la condición de IVA del destinatario,
+//     «Remito de entrega final» al completar un pedido que salió en partes
+//     y la media placa en medias.
 func TestActualizarGolden(t *testing.T) {
 	pedido := os.Getenv("PDF_ACTUALIZAR")
 	if pedido == "" {

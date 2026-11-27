@@ -1,6 +1,7 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -34,7 +35,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DialogoCobro } from "@/components/cobros/dialogo-cobro";
 import type { MedioDeCobro } from "@/lib/cobros/partes";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 
 const inicial: EstadoEntrega = {};
 
@@ -116,7 +116,10 @@ export function Entregas({
   // hasta que firma quien recibe (decía «Todo entregado» con el pedido en
   // camino, mes simulado).
   const enLaCalle = envio && estado === "en-camino";
-  const [ultimo, ...anteriores] = remitos;
+  // El último vigente arriba y los anulados al fondo, plegados: la tarjeta
+  // destacada era un remito anulado y el firmado quedaba escondido.
+  const ordenados = [...vivos, ...remitos.filter((r) => r.estado === "anulada")];
+  const [ultimo, ...anteriores] = ordenados;
 
   // Un pedido cancelado sin remitos no tiene nada que mostrar acá.
   if (cancelado && remitos.length === 0) return null;
@@ -207,7 +210,6 @@ export function Entregas({
             whatsapp={whatsapp}
             aviso={avisos[ultimo.id] ?? null}
             destacado={recien === ultimo.numero || seOfreceLaFirma(ultimo)}
-            envio={envio}
           />
         </ul>
       )}
@@ -226,7 +228,6 @@ export function Entregas({
                 orderId={orderId}
                 whatsapp={whatsapp}
                 aviso={avisos[remito.id] ?? null}
-                envio={envio}
               />
             ))}
           </ul>
@@ -628,7 +629,6 @@ function FilaRemito({
   whatsapp,
   aviso,
   destacado = false,
-  envio,
 }: {
   remito: RemitoListado;
   orderId: string;
@@ -636,7 +636,6 @@ function FilaRemito({
   aviso: AvisoManualListo | null;
   /** El último, sin firmar o recién hecho: «Firmar» es lo principal. */
   destacado?: boolean;
-  envio: boolean;
 }) {
   const anulado = remito.estado === "anulada";
   const firmable = seOfreceLaFirma(remito);
@@ -653,7 +652,9 @@ function FilaRemito({
               ? `Reposición sin cargo · ${remito.reposicion}`
               : remito.parcial
                 ? "Entrega parcial"
-                : "Entrega total"}
+                : remito.final
+                  ? "Completa el pedido"
+                  : "Entrega total"}
           </span>
         </span>
         {anulado ? (
@@ -703,7 +704,7 @@ function FilaRemito({
           PDF
         </a>
         {whatsapp && !anulado && <MandarPorWhatsapp tipo="remito" id={remito.id} compacto />}
-        {!anulado && <AnularRemito remito={remito} orderId={orderId} envio={envio} />}
+        {!anulado && <AnularRemito remito={remito} orderId={orderId} />}
       </div>
 
       {aviso && <AvisarPorWhatsapp aviso={aviso} compacto />}
@@ -717,66 +718,69 @@ function FilaRemito({
  * devuelve la mercadería al stock (mes simulado: el depósito lo anulaba con
  * un toque).
  */
-function AnularRemito({ remito, orderId, envio }: { remito: RemitoListado; orderId: string; envio: boolean }) {
-  const [estado, anular, anulando] = useActionState(anularRemito, inicial);
+function AnularRemito({ remito, orderId }: { remito: RemitoListado; orderId: string }) {
+  const router = useRouter();
+  const [estado, setEstado] = useState<EstadoEntrega>(inicial);
+  const [anulando, startAnular] = useTransition();
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
   const firmado = Boolean(remito.firmadoAt);
-
-  // Anulado, el diálogo se cierra (ajuste al renderizar) y avisa.
-  const [visto, setVisto] = useState(estado);
-  if (estado !== visto) {
-    setVisto(estado);
-    if (estado.ok) setAbierto(false);
-  }
-  useEffect(() => {
-    if (estado.ok) toast.success(estado.ok);
-  }, [estado]);
 
   function mandar(pin?: string) {
     const datos = new FormData();
     datos.set("deliveryId", remito.id);
     datos.set("orderId", orderId);
-    if (motivo.trim()) datos.set("motivo", motivo.trim());
+    datos.set("motivo", motivo.trim());
     if (pin) datos.set("pin", pin);
-    startTransition(() => anular(datos));
+    startAnular(async () => {
+      const r = await anularRemito(inicial, datos);
+      setEstado(r);
+      if (r.ok || !r.error) {
+        // El aviso sale acá: con el efecto del estado, el remito se movía
+        // al fondo al refrescar y el aviso salía vacío (mes simulado 2).
+        toast.success(r.ok || `Remito ${remito.numero} anulado.`);
+        setAbierto(false);
+        setMotivo("");
+        router.refresh();
+      }
+    });
   }
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setAbierto(true)}
+        onClick={() => {
+          setEstado(inicial);
+          setAbierto(true);
+        }}
         className="ml-auto inline-flex h-10 items-center rounded-lg px-3 text-base font-medium text-muted-foreground hover:bg-hundida hover:text-foreground"
       >
         Anular
       </button>
       <Dialog open={abierto} onOpenChange={(v) => !anulando && setAbierto(v)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>
               Anular el remito <span className="tabular whitespace-nowrap">{remito.numero}</span>
             </DialogTitle>
           </DialogHeader>
-          <p className="text-base text-muted-foreground">
-            {envio ? "La mercadería vuelve al depósito." : "La mercadería vuelve al depósito y el pedido la vuelve a esperar."}
-          </p>
-          {firmado && (
-            <div className="space-y-1.5">
-              <label htmlFor={`motivo-${remito.id}`} className="text-base font-medium">
-                Por qué
-              </label>
-              <Textarea
-                id={`motivo-${remito.id}`}
-                value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
-                maxLength={300}
-                rows={2}
-                autoFocus
-                aria-invalid={estado.campo === "motivo" || undefined}
-              />
-            </div>
-          )}
+          {/* El motivo siempre: queda en el historial del pedido. */}
+          <div className="space-y-1.5">
+            <label htmlFor={`motivo-${remito.id}`} className="text-base font-medium">
+              Por qué
+            </label>
+            <Input
+              id={`motivo-${remito.id}`}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              maxLength={300}
+              autoFocus
+              autoComplete="off"
+              className="h-11 text-base"
+              aria-invalid={estado.campo === "motivo" || undefined}
+            />
+          </div>
           {estado.error && !estado.autorizacion && (
             <p role="alert" className="text-base text-destructive">
               {estado.error}
@@ -790,17 +794,10 @@ function AnularRemito({ remito, orderId, envio }: { remito: RemitoListado; order
               onCancelar={() => setAbierto(false)}
             />
           ) : (
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
-                onClick={() => setAbierto(false)}
-                className="h-11 rounded-lg px-4 text-base font-medium hover:bg-hundida"
-              >
-                Mejor no
-              </button>
-              <button
-                type="button"
-                disabled={anulando || (firmado && !motivo.trim())}
+                disabled={anulando || motivo.trim().length < 3 || (firmado && !motivo.trim())}
                 onClick={() => mandar()}
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-destructive px-4 text-base font-medium text-white disabled:opacity-50"
               >

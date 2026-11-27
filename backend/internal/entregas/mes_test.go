@@ -381,7 +381,7 @@ func TestAnularElEnvioFirmadoEsUnSoloRenglon(t *testing.T) {
 		t.Errorf("renglones del historial: %s → %s", antes, despues)
 	}
 	if estado, nota := e.estadoYNota(t, pedido); estado != "listo" ||
-		!strings.HasPrefix(nota, "Remito REM-0001 firmado, anulado: Volvió roto") || !strings.HasSuffix(nota, "vuelve a quedar mercadería por llevar") {
+		!strings.HasPrefix(nota, "Remito REM-0001 firmado, anulado: Volvió roto") || strings.Contains(nota, "vuelve a quedar") {
 		t.Fatalf("anulado: %q %q", estado, nota)
 	}
 }

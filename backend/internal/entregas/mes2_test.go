@@ -163,3 +163,56 @@ func TestOtroAcopioSinCobrarNoSeOfrece(t *testing.T) {
 		t.Fatalf("lo sumó igual: %d %s", c, body)
 	}
 }
+
+// M2S4-020, M2S1-158, M2S1-160: el remito R lleva el CUIT y la condición
+// de IVA del cliente, el domicilio de su ficha en un retiro, y el que
+// completa un pedido que salió en partes es el «final».
+func TestElRemitoLlevaLosDatosDelCliente(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	cliente := e.uno(t, `insert into customers (nombre, razon_social, cuit, condicion_iva) values ('Sim Constructora', 'Sim Constructora del Sur SRL', '30715550101', 'responsable_inscripto') returning id::text`)
+	e.exec(t, `insert into addresses (customer_id, etiqueta, calle) values ($1, 'Sim Casa', 'Av. Sim Colón 1234')`, cliente)
+	pedido, r1, r2 := e.pedido(t, "PED-1159", "listo", &cliente)
+	e.exec(t, `update orders set estado_pago = 'pagado' where id = $1`, pedido)
+	u := e.srv.URL + "/api/v1/admin/remitos"
+	for _, c := range [][]map[string]string{cantidades(r1, "10"), cantidades(r2, "4")} {
+		if st, b := pedir(t, ven, "POST", u, map[string]any{"orderId": pedido, "tipo": "retiro", "receptorDocumento": "27365550", "cantidades": c}); st != 200 {
+			t.Fatalf("%d %s", st, b)
+		}
+	}
+	ultimo := e.uno(t, `select id::text from deliveries where order_id = $1 order by created_at desc limit 1`, pedido)
+	r, err := e.s.RemitoCompleto(context.Background(), ultimo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ClienteCuit == nil || *r.ClienteCuit != "30715550101" || r.ClienteCondicionIva == nil || *r.ClienteCondicionIva != "responsable_inscripto" ||
+		r.ClienteRazonSocial == nil || *r.ClienteRazonSocial != "Sim Constructora del Sur SRL" {
+		t.Errorf("datos fiscales: %v %v %v", r.ClienteCuit, r.ClienteCondicionIva, r.ClienteRazonSocial)
+	}
+	if r.ClienteDireccion == nil || !strings.Contains(*r.ClienteDireccion, "Sim Colón 1234") {
+		t.Errorf("domicilio: %v", r.ClienteDireccion)
+	}
+	if !r.Final || r.Notas != nil {
+		t.Errorf("final %v, notas %v", r.Final, r.Notas)
+	}
+}
+
+// M2S3-087, M2S4-046: anular sin firmar deja el motivo en el historial, sin
+// hablar de acopio.
+func TestAnularSinFirmarDejaElMotivo(t *testing.T) {
+	e := armar(t)
+	ven, _ := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	pedido, r1, r2 := e.pedido(t, "PED-1059", "listo", nil)
+	e.exec(t, `update orders set estado_pago = 'pagado' where id = $1`, pedido)
+	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos", map[string]any{"orderId": pedido, "tipo": "retiro",
+		"receptorDocumento": "27365550", "cantidades": cantidades(r1, "10", r2, "4")}); c != 200 {
+		t.Fatalf("%d %s", c, b)
+	}
+	remito := e.uno(t, `select id::text from deliveries where order_id = $1`, pedido)
+	if c, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/remitos/"+remito+"/anular", map[string]any{"motivo": "Otra persona"}); c != 200 {
+		t.Fatalf("anular: %d %s", c, b)
+	}
+	if estado, nota := e.estadoYNota(t, pedido); estado != "listo" || nota != "Remito REM-0001 anulado: Otra persona" {
+		t.Fatalf("historial: %q %q", estado, nota)
+	}
+}

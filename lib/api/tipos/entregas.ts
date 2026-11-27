@@ -312,6 +312,8 @@ export interface components {
             reposicion: string | null;
             /** @description Cuando se hizo quedaba algo por entregar (lo mismo que dice el PDF) */
             parcial: boolean;
+            /** @description Se llevó lo último de un pedido que ya había salido en parte */
+            final?: boolean;
             id: string;
             numero: string;
             /** @enum {string} */
@@ -367,6 +369,11 @@ export interface components {
         RemitoCompleto: {
             /** @description El corte de una reposición sin cargo (las líneas son sus piezas) */
             reposicion: string | null;
+            clienteRazonSocial?: string | null;
+            clienteCuit?: string | null;
+            clienteCondicionIva?: string | null;
+            /** @description Se llevó lo último de un pedido que ya había salido en parte */
+            final?: boolean;
             /** @description Los remitos de otros pedidos que salieron en la misma visita y se firman con este enlace */
             visita: components["schemas"]["RemitoDeLaVisita"][];
             /**
@@ -411,6 +418,8 @@ export interface components {
             email: string | null;
             emailCliente: string | null;
             estadoPedido: string;
+            /** @description preparada, entregada o anulada: el pedido de firma sale solo si sigue preparada */
+            estadoRemito?: string;
         };
         RemitoDelPortal: {
             id: string;

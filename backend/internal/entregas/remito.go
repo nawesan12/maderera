@@ -89,6 +89,14 @@ type RemitoCompleto struct {
 	// Reposicion es el corte de una reposición sin cargo (H321): lo que sale
 	// son sus piezas, no renglones del pedido, y no se cobra nada.
 	Reposicion *string `json:"reposicion"`
+	// Los datos fiscales del cliente, como pide un remito R (mes simulado 2:
+	// no llevaba CUIT ni condición de IVA).
+	ClienteRazonSocial  *string `json:"clienteRazonSocial"`
+	ClienteCuit         *string `json:"clienteCuit"`
+	ClienteCondicionIva *string `json:"clienteCondicionIva"`
+	// Final: se llevó lo último de un pedido que ya había salido en parte
+	// (decía «Remito de entrega total» con 2 juegos).
+	Final bool `json:"final"`
 }
 
 // RemitoDeLaVisita es otro remito que se firma junto con el del enlace.
@@ -230,18 +238,26 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 		return nil, ErrNoEsta
 	}
 	var r RemitoCompleto
-	var slug, zona, corte *string
+	var slug, zona, corte, dirCliente *string
+	var anteriores bool
 	err := s.pool.QueryRow(ctx, `
 		SELECT d.id, d.numero, d.tipo::text, d.estado::text, d.receptor_nombre, d.receptor_documento, d.firma_url, d.firmado_at,
 		  d.notas, d.created_at, o.numero, o.id, o.contacto_nombre, o.direccion_entrega, o.customer_id, o.estado_pago::text,
 		  o.medio_pago::text, b.name, b.slug, s.transportista, s.numero_seguimiento, `+fragmentos.SinCobrarDelPedido+`::float8,
-		  o.zona_envio, d.cutting_order_id::text
+		  o.zona_envio, d.cutting_order_id::text,
+		  nullif(c.razon_social, ''), nullif(c.cuit, ''), CASE WHEN c.id IS NOT NULL THEN c.condicion_iva::text END,
+		  coalesce(nullif(trim(c.direccion), ''), (SELECT a.calle || ', ' || a.localidad FROM addresses a WHERE a.customer_id = c.id
+		    ORDER BY a.predeterminada DESC, a.created_at LIMIT 1)),
+		  EXISTS (SELECT 1 FROM deliveries d2 WHERE d2.order_id = d.order_id AND d2.id <> d.id AND d2.estado <> 'anulada'
+		    AND d2.cutting_order_id IS NULL AND d2.created_at < d.created_at)
 		FROM deliveries d JOIN orders o ON o.id = d.order_id
+		LEFT JOIN customers c ON c.id = o.customer_id
 		LEFT JOIN branches b ON b.id = d.branch_id
 		LEFT JOIN shipments s ON s.delivery_id = d.id
 		WHERE d.id = $1 LIMIT 1`, id).Scan(&r.ID, &r.Numero, &r.Tipo, &r.Estado, &r.ReceptorNombre, &r.ReceptorDocumento, &r.FirmaURL,
 		&r.FirmadoAt, &r.Notas, &r.CreatedAt, &r.PedidoNumero, &r.PedidoID, &r.ClienteNombre, &r.ClienteDireccion, &r.CustomerID,
-		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar, &zona, &corte)
+		&r.EstadoPago, &r.MedioPago, &r.Sucursal, &slug, &r.Transportista, &r.NumeroSeguimiento, &r.SinCobrar, &zona, &corte,
+		&r.ClienteRazonSocial, &r.ClienteCuit, &r.ClienteCondicionIva, &dirCliente, &anteriores)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -250,6 +266,11 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	}
 	if r.Tipo == "envio" {
 		r.ClienteDireccion = DomicilioConZona(r.ClienteDireccion, zona)
+	} else if r.ClienteDireccion == nil || strings.TrimSpace(*r.ClienteDireccion) == "" {
+		// En un retiro, el domicilio de la ficha del cliente (o su primera
+		// dirección): decía «Domicilio del cliente: -» con «Sim Casa»
+		// cargada en Mi cuenta (mes simulado 2).
+		r.ClienteDireccion = dirCliente
 	}
 	if slug != nil {
 		if d, ok := direcciones[*slug]; ok {
@@ -297,6 +318,7 @@ func (s *Servicio) RemitoCompleto(ctx context.Context, id string) (*RemitoComple
 	for _, p := range pendientes {
 		r.Pendientes = append(r.Pendientes, PendienteDelRemito{Descripcion: p.Descripcion, Unidad: p.Unidad, Pendiente: p.Pendiente})
 	}
+	r.Final = len(r.Pendientes) == 0 && anteriores
 	// La última factura vigente del pedido; una rechazada se nombra igual
 	// (es la emitida sin certificado: «sin CAE, sin valor fiscal»).
 	var tipo string
@@ -382,6 +404,8 @@ type ParaAvisar struct {
 	Email        *string `json:"email"`
 	EmailCliente *string `json:"emailCliente"`
 	EstadoPedido string  `json:"estadoPedido"`
+	// EstadoRemito: el pedido de firma sale solo si sigue «preparada».
+	EstadoRemito string `json:"estadoRemito"`
 }
 
 // DatosParaAvisar lee el remito, su pedido y el correo del cliente.
@@ -391,9 +415,9 @@ func (s *Servicio) DatosParaAvisar(ctx context.Context, id string) (*ParaAvisar,
 	}
 	var a ParaAvisar
 	err := s.pool.QueryRow(ctx, `
-		SELECT d.firma_token, d.numero, o.numero, o.contacto_nombre, o.contacto_email, c.email, o.estado::text
+		SELECT d.firma_token, d.numero, o.numero, o.contacto_nombre, o.contacto_email, c.email, o.estado::text, d.estado::text
 		FROM deliveries d JOIN orders o ON o.id = d.order_id LEFT JOIN customers c ON c.id = o.customer_id
-		WHERE d.id = $1`, id).Scan(&a.FirmaToken, &a.Numero, &a.PedidoNumero, &a.Nombre, &a.Email, &a.EmailCliente, &a.EstadoPedido)
+		WHERE d.id = $1`, id).Scan(&a.FirmaToken, &a.Numero, &a.PedidoNumero, &a.Nombre, &a.Email, &a.EmailCliente, &a.EstadoPedido, &a.EstadoRemito)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -446,6 +470,8 @@ func (r *RemitoCompleto) ParaElPdf() pdf.RemitoCompleto {
 		out.Factura = &pdf.FacturaDelRemito{Etiqueta: f.Etiqueta, Cae: deTexto(f.Cae), CaeVencimiento: f.CaeVencimiento}
 	}
 	out.Reposicion = deTexto(r.Reposicion)
+	out.ClienteRazonSocial, out.ClienteCuit, out.ClienteCondicionIva = deTexto(r.ClienteRazonSocial), deTexto(r.ClienteCuit), deTexto(r.ClienteCondicionIva)
+	out.Final = r.Final
 	return out
 }
 

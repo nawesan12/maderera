@@ -340,6 +340,11 @@ func (s *Servicio) RemitoParaFirmar(ctx context.Context, id string) error {
 	if err != nil || vacio(d.FirmaToken) || vacio(d.Email) {
 		return err
 	}
+	// Anulado o ya firmado (en el mostrador) antes de que saliera: no se
+	// pide la firma (entregas.EsperaDelPedidoDeFirma).
+	if d.EstadoRemito != "" && d.EstadoRemito != "preparada" {
+		return nil
+	}
 	s.correo.Despachar(ctx, avisos.Despacho{
 		Evento: "remito_para_firmar", Para: *d.Email, EntidadTipo: "delivery", EntidadID: id,
 		Correo: avisos.PedidoParaFirmar(s.sitio, primerNombre(d.Nombre), d.PedidoNumero, d.Numero, strings.TrimSuffix(s.sitio, "/")+"/firmar/"+*d.FirmaToken),

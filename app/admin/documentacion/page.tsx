@@ -163,6 +163,7 @@ function Grupo({
             </div>
 
             <DestinosDocumento
+              key={`${doc.id}:${doc.productos.map((p) => p.id).join(",")}:${doc.categorias.map((c) => c.id).join(",")}`}
               id={doc.id}
               titulo={doc.titulo}
               productos={doc.productos}

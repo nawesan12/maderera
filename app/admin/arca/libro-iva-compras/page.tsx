@@ -153,8 +153,8 @@ export default async function LibroIvaComprasPage({
                 <div className="shrink-0 text-right">
                   <p className="tabular text-base font-medium">{moneda.format(f.total)}</p>
                   <p className="tabular text-sm text-muted-foreground">neto {moneda.format(f.neto)}</p>
-                  {iva > 0 && <p className="tabular text-sm text-muted-foreground">IVA {moneda.format(iva)}</p>}
-                  {f.percepciones > 0 && (
+                  {iva !== 0 && <p className="tabular text-sm text-muted-foreground">IVA {moneda.format(iva)}</p>}
+                  {f.percepciones !== 0 && (
                     <p className="tabular text-sm text-muted-foreground">perc. {moneda.format(f.percepciones)}</p>
                   )}
                 </div>

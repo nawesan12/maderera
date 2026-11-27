@@ -144,3 +144,16 @@ func MedidaEnOrden(etiqueta string, largo, ancho int32) string {
 		return m
 	})
 }
+
+// MaterialEnOrden es el material de un corte del catálogo con la medida
+// escrita como la da el sitio («Melamina Blanca — 2600 × 1830 mm — 18mm»):
+// el panel guardaba la etiqueta de la variante («1830 x 2600mm») y el sitio
+// la medida en orden, así que la misma placa salía con dos nombres en la
+// cola, el archivo de la máquina y los materiales del PTX (mes simulado,
+// M2S1-063). Se arregla al leer: lo guardado antes también sale igual.
+func MaterialEnOrden(material string, largo, ancho *int32) string {
+	if largo == nil || ancho == nil {
+		return material
+	}
+	return MedidaEnOrden(material, *largo, *ancho)
+}

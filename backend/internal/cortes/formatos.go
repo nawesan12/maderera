@@ -158,16 +158,32 @@ func escapar(valor, separador string) string {
 // Los textos (material, etiqueta, cliente) pasan por SinFormula, como los CSV
 // de precios: el genérico es una planilla que se abre en Excel, y la etiqueta
 // la escribe cualquiera desde el /corte del sitio.
+//
+// Los cantos van siempre en número (0, 1 o 2 lados), como la planilla de
+// cortes del taller: con «No» para 0, «Sí» para 1 y «2» para 2 la misma
+// columna mezclaba texto y números y el optimizador no la importaba (mes
+// simulado, M3S1-041). La pieza sin etiqueta lleva su medida, para que la
+// etiqueta impresa en la máquina no salga en blanco (M2S3-067).
 func ArmarArchivoDeCorte(corte CorteParaExportar, perfil PerfilDeExportacion) string {
+	return armarArchivo(corte, perfil, false)
+}
+
+// armarArchivo con comoElTS es el archivo de antes de M3S1-041 y M2S3-067
+// (cantos con Sí/No y etiqueta vacía): lo que congeló el golden del TS, que
+// sigue probando todo lo demás.
+func armarArchivo(corte CorteParaExportar, perfil PerfilDeExportacion, comoElTS bool) string {
 	si, no := perfil.SiNo[0], perfil.SiNo[1]
 	canto := func(n float64) string {
-		if n >= 2 {
-			return "2"
+		if comoElTS {
+			if n >= 2 {
+				return "2"
+			}
+			if n == 1 {
+				return si
+			}
+			return no
 		}
-		if n == 1 {
-			return si
-		}
-		return no
+		return jsmath.Texto(math.Min(math.Max(truncOCero(n), 0), 2))
 	}
 	valorDe := func(p PiezaParaExportar, clave string) string {
 		switch clave {
@@ -180,8 +196,11 @@ func ArmarArchivoDeCorte(corte CorteParaExportar, perfil PerfilDeExportacion) st
 		case "material":
 			return csvexcel.SinFormula(corte.Material)
 		case "etiqueta":
-			if p.Etiqueta == nil {
+			if comoElTS && p.Etiqueta == nil {
 				return ""
+			}
+			if !comoElTS && (p.Etiqueta == nil || strings.TrimSpace(*p.Etiqueta) == "") {
+				return jsmath.Texto(jsmath.Round(p.LargoMm)) + " x " + jsmath.Texto(jsmath.Round(p.AnchoMm))
 			}
 			return csvexcel.SinFormula(*p.Etiqueta)
 		case "veta":
@@ -231,4 +250,15 @@ func NombreDeArchivo(numero, separador string) string {
 		return limpio + ".txt"
 	}
 	return limpio + ".csv"
+}
+
+// MaterialParaLaMaquina es el material del archivo: el de medias placas dice
+// de qué tablero parte («— media placa 2440 × 607 mm»), así el optimizador
+// planifica sobre la media por la que se cobró y no sobre una entera (mes
+// simulado, M2S1-065).
+func MaterialParaLaMaquina(c *Corte) string {
+	if c.Medida.Mitad == nil || *c.Medida.Mitad == "" {
+		return c.Material
+	}
+	return c.Material + " — media placa " + jsmath.Texto(c.Medida.Largo) + " × " + jsmath.Texto(c.Medida.Ancho) + " mm"
 }

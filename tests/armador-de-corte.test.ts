@@ -138,6 +138,14 @@ describe("el mensaje de WhatsApp", () => {
     );
   });
 
+  it("sin ninguna pieza con canto no nombra el tapacanto (M2S2-145)", () => {
+    const texto = textoDelPedido(
+      [{ placa: "Melamina 18", mitad: null, canto: "Blanco 22 mm", piezas: [pieza({ etiqueta: "Sim Lateral" })] }],
+      "https://mjbj.test/corte/c/abc",
+    );
+    expect(texto).not.toContain("Tapacanto");
+  });
+
   it("con varias, cada placa con sus piezas y su canto", () => {
     const texto = textoDelPedido(
       [

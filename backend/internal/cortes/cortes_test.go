@@ -365,7 +365,7 @@ func TestAgenteYArchivos(t *testing.T) {
 	}
 	// La lista: con el genérico, BOM y CRLF.
 	code, b = pedir(t, http.DefaultClient, "GET", u+"/api/cortes/"+id+"/lista", nil, "Authorization", "Bearer "+tokenAgente)
-	quiere := "\xef\xbb\xbfLargo;Ancho;Cantidad;Material;Etiqueta;Veta;Canto largo;Canto ancho\r\n1229;600;2;\"Melamina 18mm; blanca\";Lateral;No;2;No\r\n"
+	quiere := "\xef\xbb\xbfLargo;Ancho;Cantidad;Material;Etiqueta;Veta;Canto largo;Canto ancho\r\n1229;600;2;\"Melamina 18mm; blanca\";Lateral;No;2;0\r\n"
 	if code != 200 || b != quiere {
 		t.Errorf("lista: %d %q", code, b)
 	}

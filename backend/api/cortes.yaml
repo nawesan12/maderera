@@ -188,6 +188,8 @@ paths:
       responses:
         "204": { description: Cargadas }
         "404": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/cortes/{id}/acomodo:
     put:
       operationId: GuardarAcomodo
@@ -447,6 +449,8 @@ paths:
                 fijadas: { type: array, maxItems: 5000, items: { $ref: "#/components/schemas/PiezaFijada" } }
                 busqueda: { type: boolean }
                 hoja: { type: boolean, description: Solo para el staff, la hoja de la máquina y lo que se lleva la sierra por placa }
+                variantId: { type: string, maxLength: 40, description: "Solo para el staff: la placa del catálogo, para devolver el precio de la pasada" }
+                customerId: { type: string, maxLength: 40, description: Con variantId, la lista de este cliente }
                 presupuesto:
                   type: object
                   required: [precioPorPlaca, fraccion]
@@ -467,6 +471,7 @@ paths:
                   plano: { $ref: "#/components/schemas/Plano" }
                   placasACobrar: { type: integer, description: "Las placas enteras que se cobran: con piezas acomodadas a mano, las del plano libre salvo que el manual gaste más" }
                   pasadasACobrar: { type: integer, description: Las pasadas del plano que se cobra }
+                  precioPorPasada: { type: number, format: double, description: "Con variantId (staff): la pasada con la tarifa de la placa y la lista del cliente" }
                   placasParciales: { type: integer, description: "Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte" }
                   cuenta: { $ref: "#/components/schemas/Presupuesto" }
                   hoja: { $ref: "#/components/schemas/HojaDeCorte" }
@@ -563,6 +568,7 @@ components:
         sinCargo: { type: boolean }
         branchId: { type: string, nullable: true }
         salioAt: { type: string, format: date-time, nullable: true, description: Cuándo salió de la máquina }
+        orderId: { type: string, nullable: true, description: "El pedido del corte: se entrega desde ahí" }
         id: { type: string }
         numero: { type: string }
         cliente: { type: string }
@@ -732,6 +738,7 @@ components:
             estadoPago: { type: string }
             cobrado: { type: number, format: double }
             placasDelPedido: { type: number, format: double }
+            placasDeOtrosCortes: { type: number, format: double }
             lineas:
               type: array
               items:
@@ -744,6 +751,7 @@ components:
                   subtotal: { type: number, format: double }
         retalesDelCliente: { type: boolean }
         sinPlata: { type: boolean }
+        totalTomado: { type: number, format: double, nullable: true, description: "Lo que se le dijo al cliente al tomar el corte suelto" }
         corte: { $ref: "#/components/schemas/Corte" }
         tarifa: { allOf: [{ $ref: "#/components/schemas/TarifaDeCorte" }], nullable: true }
         cargo: { type: number, format: double }
@@ -1089,6 +1097,7 @@ components:
         precioMediaPct: { type: number, format: double }
         precioPorPasada: { type: number, format: double }
         precioPorMetroCanto: { type: number, format: double }
+        hayStock: { type: boolean, description: Hay alguna disponible en alguna sucursal }
     CorteCotizado:
       type: object
       required: [variantId, materialDescripcion, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, placas, pasadas, total]

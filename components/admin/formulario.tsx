@@ -209,7 +209,9 @@ export function BarraGuardar({
   error?: string | null;
 }) {
   return (
-    <div className="sticky bottom-0 z-20 -mx-4 border-t border-linea bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+    // Con fondo propio y opaco, y una sombra arriba: translúcida, a 375 px
+    // el botón parecía flotar sobre los campos (mes simulado, M2S4-069).
+    <div className="sticky bottom-0 z-20 -mx-4 border-t border-linea bg-background px-4 py-3 shadow-[0_-10px_18px_-14px_rgb(0_0_0/0.35)] sm:-mx-6 sm:px-6">
       <div className="flex flex-wrap items-center gap-3">
         {children}
         {error && <p className="text-base text-destructive">{error}</p>}

@@ -189,7 +189,9 @@ async function PanelConSesion({
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="textura sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-linea bg-background/90 px-4 backdrop-blur-lg sm:gap-4 lg:px-7">
           <div className="flex min-w-0 max-w-[420px] flex-1 items-center gap-3 pl-12 lg:pl-0">
-            <BuscadorGlobal />
+            <BuscadorGlobal
+              queBusca={usuario.staffRole === "aserradero" ? "Buscar corte o pedido…" : undefined}
+            />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3.5">
             {/* El interruptor de tema también acá: el único que había estaba en

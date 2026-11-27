@@ -198,9 +198,13 @@ export function VistaDelCarrito({
                             Corte a medida — {corte.material}
                           </p>
                           <p className="mt-0.5 text-sm text-texto-2">
+                            {/* «Sobre», no «Placa de»: con la regla de la
+                                media placa un corte chico cobra las pasadas y
+                                no la placa, y el renglón parecía incluirla
+                                (mes simulado, M3S1-008). */}
                             {corte.mitad
-                              ? `Media placa de ${corte.placaLargoMm} × ${corte.placaAnchoMm} mm`
-                              : `Placa de ${corte.placaLargoMm} × ${corte.placaAnchoMm} mm`}
+                              ? `Sobre media placa de ${corte.placaLargoMm} × ${corte.placaAnchoMm} mm`
+                              : `Sobre placa de ${corte.placaLargoMm} × ${corte.placaAnchoMm} mm`}
                             {" · "}
                             {corte.piezas}{" "}
                             {corte.piezas === 1 ? "pieza" : "piezas"}

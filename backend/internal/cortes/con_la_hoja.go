@@ -23,9 +23,15 @@ import (
 // cobro ya está hecho.
 const MotorPasadasDeLaHoja = 4
 
+// MotorRelleno es el motor desde el que la pieza de una placa que se cobra
+// por pasadas va al sobrante de una que se vende entera, si entra (mes
+// simulado, M2S4-039: el segundo zócalo cortaba la placa de la casa con dos
+// pasadas de más, y entraba en el retal de la placa vendida).
+const MotorRelleno = 5
+
 // MotorActual es con el que nacen los trabajos nuevos (las tres altas y el
 // cambio de disco).
-const MotorActual = MotorPasadasDeLaHoja
+const MotorActual = MotorRelleno
 
 // PlanoConLaHoja es el plano de algo que se va a cobrar ahora: el del motor,
 // contado y dibujado como lo corta la hoja.

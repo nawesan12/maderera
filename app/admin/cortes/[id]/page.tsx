@@ -12,7 +12,6 @@ import { fechaHora, plural } from "@/components/admin/formato";
 import { fichaDeCorte } from "@/lib/dal/admin/cortes";
 import { AcomodoDelCorte } from "../acomodo";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
-import { sobraDelCliente } from "@/lib/cortes/de-quien";
 import { nombreDeLaMitad } from "@/lib/cortes/placa";
 import { formatearMonto } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
@@ -21,6 +20,8 @@ import { CargarPasadas } from "../pasadas";
 import { SierraDelTrabajo } from "./sierra";
 import { formatearSierra } from "@/lib/cortes/sierra";
 import { CobrarCorte, CorregirOAnular, MasArchivos, RemitoDeLaReposicion, SumarAlPedido } from "./gestion";
+import { listarPerfiles } from "@/lib/dal/admin/cortes-exportacion";
+import { PlanoVivo, RetalMayorVivo, SobrantesVivos } from "./plano-vivo";
 
 export default async function FichaCortePage({
   params,
@@ -34,7 +35,13 @@ export default async function FichaCortePage({
   // mano y el motor con que nació el trabajo, el presupuesto placa por
   // placa, de dónde sale la plata (`modo`) y, para el aserradero, sin
   // importes ni teléfono.
-  const [ficha, usuario] = await Promise.all([fichaDeCorte(id), requireStaff()]);
+  // Los formatos guardados: los que no usa el agente se prueban desde acá
+  // sobre este corte, sin pasarlos a «por defecto» (mes simulado, M3S3-018).
+  const [ficha, usuario, perfiles] = await Promise.all([
+    fichaDeCorte(id),
+    requireStaff(),
+    listarPerfiles().catch(() => []),
+  ]);
 
   if (!ficha) notFound();
   const { corte, tarifa, metrosCanto, cargoCanto, plano, cuenta, modo, pedido } = ficha;
@@ -112,7 +119,10 @@ export default async function FichaCortePage({
                 nulo —`branchId` lo admite— y concatenarla sin preguntar
                 imprimía "null" en el encabezado de la ficha. */}
             <span className="tabular">{corte.numero}</span>
-            {corte.empresa && ` · ${corte.empresa}`}
+            {/* La empresa solo si dice otra cosa que el título: «Sim
+                Mueblería Atlántica · Sim Mueblería Atlántica SRL» repetía el
+                nombre y partía el renglón a 375 px (mes simulado, M3S3-028). */}
+            {corte.empresa && !mismoNombre(corte.empresa, corte.cliente) && ` · ${corte.empresa}`}
             {corte.sucursal && ` · ${corte.sucursal}`}
             {` · ${fechaHora.format(corte.createdAt)}`}
           </p>
@@ -120,7 +130,6 @@ export default async function FichaCortePage({
 
         {!anulado && (
           <div className="flex flex-wrap items-center gap-2">
-            <VolverUnPaso id={corte.id} estado={corte.estado} />
             {/* El suelto con algo para cobrar no se entrega con un clic: se
                 cobra (H348). */}
             {corte.estado === "terminado" && modo === "suelto" && cuenta.total > 0 && cobra ? (
@@ -145,6 +154,8 @@ export default async function FichaCortePage({
                 estado={corte.estado}
                 urgente={corte.urgente}
                 pasadas={ficha.pasadasACobrar}
+                pedidoId={corte.orderId}
+                sinCargo={corte.sinCargo}
                 soloMaquina={!decide}
               />
             )}
@@ -160,6 +171,12 @@ export default async function FichaCortePage({
       ) : (
         <section className="tarjeta p-5">
           <Pasos etapas={ETAPAS_CORTE} actual={corte.estado} />
+          {/* Deshacer va con la barra que deshace, como botón (M3S2-047). */}
+          {(corte.estado === "en-proceso" || corte.estado === "terminado") && (
+            <div className="mt-4 flex justify-end">
+              <VolverUnPaso id={corte.id} estado={corte.estado} />
+            </div>
+          )}
         </section>
       )}
 
@@ -177,6 +194,7 @@ export default async function FichaCortePage({
           pregunta por un corte en el mostrador: cuántas placas, si se le vende
           la placa entera, y cuánto es. */}
       {corte.piezas.length > 0 && (
+        <PlanoVivo>
         <section className="tarjeta overflow-hidden">
           <header className="flex flex-wrap items-start justify-between gap-3 border-b border-linea px-5 py-4">
             <div className="min-w-0">
@@ -218,7 +236,10 @@ export default async function FichaCortePage({
                 <Map className="h-5 w-5 shrink-0" />
                 Plano
               </Link>
-              <MasArchivos id={corte.id} />
+              <MasArchivos
+                id={corte.id}
+                formatos={perfiles.filter((p) => !p.porDefecto).map((p) => ({ id: p.id, nombre: p.nombre }))}
+              />
             </div>
           </header>
 
@@ -243,17 +264,7 @@ export default async function FichaCortePage({
                   : ficha.pasadasACobrar === 1 ? "pasada a cobrar" : "pasadas a cobrar"
               }
             />
-            <Cifra
-              valor={
-                plano.recorteMayor
-                  ? `${plano.recorteMayor.ancho}×${plano.recorteMayor.alto}`
-                  : "—"
-              }
-              rotulo={
-                plano.recorteMayor ? "retal mayor, en mm" : "sin retal útil"
-              }
-              ancha={noCobra}
-            />
+            <RetalMayorVivo guardado={plano} ancha={noCobra} />
           </div>
 
           <div className="space-y-3 px-5 py-4">
@@ -266,7 +277,7 @@ export default async function FichaCortePage({
                   />
                 )}
                 <RenglonesDelCorte cuenta={cuenta} />
-                <Total texto="Total del trabajo" monto={cuenta.total}>
+                <Total texto="Total del trabajo" monto={cuenta.total} antes={ficha.totalTomado}>
                   {cobra && cuenta.total > 0 && corte.estado !== "terminado" && !anulado && <CobrarCorte id={corte.id} conPlaca={corte.variantId != null} />}
                 </Total>
               </dl>
@@ -280,6 +291,14 @@ export default async function FichaCortePage({
                 <div className="flex items-baseline justify-between gap-4">
                   <dt className="text-base text-muted-foreground">Las placas</dt>
                   <dd className="text-base">
+                    {/* En un acopio usar una de tres es lo normal: un dato,
+                        no un aviso en rojo (mes simulado, M3S3-051). */}
+                    {pedido.placasDelPedido > 0 && (
+                      <span className="tabular">
+                        {formatearDecimal((media ? nPlacas / 2 : nPlacas) + (pedido.placasDeOtrosCortes ?? 0))} de{" "}
+                        {formatearDecimal(pedido.placasDelPedido)}{" "}
+                      </span>
+                    )}
                     en{" "}
                     {vePedidos ? (
                       <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
@@ -346,8 +365,9 @@ export default async function FichaCortePage({
                   {pedido && corte.orderId && (
                     <span className="text-muted-foreground">
                       reposición de{" "}
-                      {/* El aserradero no abre pedidos: el enlace lo llevaba
-                          a «Esta pantalla no cargó» (mes simulado 2). */}
+                      {/* El aserradero no abre pedidos: sin enlace para quien
+                          no entra a Pedidos, como «Del pedido» (mes simulado
+                          2, M3S2-015). */}
                       {vePedidos ? (
                         <Link href={`/admin/pedidos/${corte.orderId}`} className="codigo hover:text-brand-orange">
                           {pedido.numero}
@@ -383,31 +403,7 @@ export default async function FichaCortePage({
               lleva el cliente. */}
           <div className="border-t border-linea px-5 py-4">
             <h3 className="text-base font-medium">Lo que sobra</h3>
-            <ul className="mt-2 space-y-1.5">
-              {plano.placas.map((placa) => (
-                <li key={placa.numero} className="text-base">
-                  <span className="text-muted-foreground">
-                    {media ? "Media" : "Placa"} {placa.numero}:
-                  </span>{" "}
-                  {placa.recortes.length === 0 ? (
-                    <span className="text-muted-foreground">
-                      sin pedazos enteros que valga guardar
-                    </span>
-                  ) : (
-                    <>
-                      {placa.recortes
-                        .map((r) => `${r.ancho} × ${r.alto} mm`)
-                        .join(" · ")}{" "}
-                      <span className="text-muted-foreground">
-                        ({sobraDelCliente(placa.seVendeEntera, { sinCargo: corte.sinCargo })
-                          ? "del cliente"
-                          : "al stock"})
-                      </span>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <SobrantesVivos guardado={plano} media={media} sinCargo={corte.sinCargo} todasDelCliente={ficha.retalesDelCliente} placaDelCliente={corte.variantId == null} />
             <p className="mt-2 text-sm text-muted-foreground">
               {Math.round(plano.aprovechadoTotal * 100)}% del material sale en
               piezas · sierra de {formatearSierra(plano.anchoSierra)}
@@ -430,17 +426,22 @@ export default async function FichaCortePage({
                 anchoSierra={plano.anchoSierra}
                 busqueda={corte.motorPlano >= 2}
                 inicial={ficha.fijadas}
-                quien={{ sinCargo: corte.sinCargo, media, todasDelCliente: ficha.retalesDelCliente }}
+                quien={{ sinCargo: corte.sinCargo, media, todasDelCliente: ficha.retalesDelCliente, placaDelCliente: corte.variantId == null }}
               />
             ) : (
-              <PlanoSimple plano={plano} media={media} />
+              <PlanoSimple plano={plano} media={media} piezas={corte.piezas} />
             )}
           </div>
         </section>
+        </PlanoVivo>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-        <section className="tarjeta overflow-hidden">
+      {/* El despiece a todo el ancho y los datos del trabajo en una fila de
+          tarjetas arriba: al costado, la tabla quedaba en media pantalla y
+          «720 × 560 mm» se partía en tres renglones a 1024 px (mes simulado,
+          M2S1-151 y M3S1-039). */}
+      <div className="flex flex-col gap-4">
+        <section className="tarjeta order-2 overflow-hidden">
           <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-4">
             <h2 className="text-base font-medium">Despiece</h2>
             <p className="text-base text-muted-foreground">
@@ -468,7 +469,7 @@ export default async function FichaCortePage({
             <tbody>
               {corte.piezas.map((pieza) => (
                 <tr key={pieza.id} className="border-b last:border-0">
-                  <td className="tabular px-5 py-3.5 text-base">
+                  <td className="tabular whitespace-nowrap px-5 py-3.5 text-base">
                     {pieza.largoMm} × {pieza.anchoMm} mm
                   </td>
                   <td className="tabular px-4 py-3.5 text-right text-base">
@@ -518,7 +519,7 @@ export default async function FichaCortePage({
           </table>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="order-1 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <section className="tarjeta p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Material
@@ -557,7 +558,7 @@ export default async function FichaCortePage({
                 si la máquina dio otras. Al terminar las confirma el taller en
                 su tarjeta; esta corrección es del mostrador (H115). Solo donde
                 cambian lo que se cobra. */}
-            {decide && !sinPlata && (modo === "suelto" || modo === "pedido") && !anulado && (
+            {cobra && !sinPlata && (modo === "suelto" || modo === "pedido") && !anulado && (
               <div className="mt-3 border-t pt-3">
                 <CargarPasadas
                   id={corte.id}
@@ -690,14 +691,40 @@ function RenglonesDelCorte({
   );
 }
 
-function Total({ texto, monto, children }: { texto: React.ReactNode; monto: number; children?: React.ReactNode }) {
+function Total({
+  texto,
+  monto,
+  antes,
+  children,
+}: {
+  texto: React.ReactNode;
+  monto: number;
+  /** Lo que se le dijo al cliente al tomarlo: si cambió, va tachado al lado (M3S2-030). */
+  antes?: number | null;
+  children?: React.ReactNode;
+}) {
+  const cambio = antes != null && Math.abs(antes - monto) > 0.009;
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-linea pt-2">
       <dt className="text-base font-semibold">{texto}</dt>
       <dd className="flex flex-wrap items-center gap-3">
+        {cambio && (
+          <s className="tabular text-base text-muted-foreground" title="Al tomarlo">
+            {formatearMonto(antes)}
+          </s>
+        )}
         <span className="tabular text-xl font-bold">{formatearMonto(monto)}</span>
         {children}
       </dd>
     </div>
   );
+}
+
+/** Dos nombres que dicen lo mismo («Mueblería Atlántica» y «Mueblería Atlántica SRL»). */
+function mismoNombre(a: string, b: string) {
+  const limpio = (t: string) =>
+    t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const x = limpio(a);
+  const y = limpio(b);
+  return x === y || x.startsWith(y) || y.startsWith(x);
 }

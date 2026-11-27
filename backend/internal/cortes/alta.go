@@ -251,6 +251,21 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	if len(piezas) == 0 {
 		return "", "", error422("Agregá al menos una pieza al despiece.")
 	}
+	// Un tapacanto sin ningún lado marcado no llega a ningún lado: el
+	// archivo, las etiquetas y el cobro salen de los lados de cada pieza, y
+	// «en frentes» quedaba solo en el texto (mes simulado, M2S2-044).
+	if canto != nil && strings.TrimSpace(*canto) != "" {
+		conCanto := false
+		for _, p := range piezas {
+			if p.cantoLargo > 0 || p.cantoAncho > 0 {
+				conCanto = true
+				break
+			}
+		}
+		if !conCanto {
+			return "", "", plataforma.Invalido(map[string]string{"cantoDescripcion": "Marcá en qué lados de cada pieza va el tapacanto, o dejalo vacío."})
+		}
+	}
 	// 500 renglones de 999 eran medio millón de piezas: el alta las
 	// guardaba y la ficha se colgaba armando el plano.
 	unidades := 0
@@ -363,6 +378,16 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 				return err
 			}
 		}
+		// El reemplazo hereda la hora del trabajo que corrige: su lugar en
+		// la cola y cuánto viene esperando el cliente. Corregir una etiqueta
+		// mandaba un urgente de media hora al final, como recién llegado
+		// (mes simulado, M2S2-104 y M3S4-023).
+		if f.Reemplaza != "" {
+			if _, err := tx.Exec(ctx, `UPDATE cutting_orders n SET created_at = v.created_at
+				FROM cutting_orders v WHERE n.id = $1 AND v.id = $2`, id, f.Reemplaza); err != nil {
+				return err
+			}
+		}
 		if f.Consulta != "" {
 			sql := `UPDATE consultas_corte SET cutting_order_id = $1
 				WHERE token = $2 AND cutting_order_id IS NULL`
@@ -388,6 +413,13 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "corte", numero,
 		"Cargó el corte "+numero+" para "+contacto, nil)
+	// El total con que se tomó el corte suelto, el que se le dice al
+	// cliente: si la tarifa cambia, la ficha muestra los dos (M3S2-030).
+	if f, err := s.Ficha(ctx, id); err == nil && f != nil && f.Modo == "suelto" && f.Cuenta.Total > 0 {
+		if _, err := s.pool.Exec(ctx, `UPDATE cutting_orders SET total_tomado = $2 WHERE id = $1`, id, jsmath.Num(f.Cuenta.Total)); err != nil {
+			s.log.Error("total tomado del corte", "error", err)
+		}
+	}
 	return numero, id, nil
 }
 
@@ -414,8 +446,12 @@ func (s *Servicio) planoDelAlta(ctx context.Context, f FormCorte, piezas []pieza
 		paraElPlano[i] = PiezaAcortar{LargoMm: float64(p.largo), AnchoMm: float64(p.ancho), Cantidad: float64(p.cantidad),
 			RespetaVeta: float64(p.veta), Etiqueta: p.etiqueta, CantoLargo: float64(p.cantoLargo), CantoAncho: float64(p.cantoAncho)}
 	}
-	return PlanoConLaHoja(DatosDelPlano{Piezas: paraElPlano, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho,
-		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(f.AcomodoManual)}), nil
+	plano := PlanoConLaHoja(DatosDelPlano{Piezas: paraElPlano, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(f.AcomodoManual)})
+	if f.VariantID == "" {
+		plano = ConPlacaDelCliente(plano)
+	}
+	return plano, nil
 }
 
 // placaDelPedido avisa si el corte de un pedido va en una placa que el pedido

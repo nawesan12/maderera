@@ -584,6 +584,8 @@ export const cuttingOrders = pgTable(
     motivoAnulado: text(),
     /* 00340: el pedido aparte con las pasadas, si el suyo ya no se tocaba (FK en goose). */
     cargoOrderId: uuid(),
+    /* 00390: el total que se le dijo al cliente al tomar el corte suelto. */
+    totalTomado: numeric({ precision: 14, scale: 2, mode: "number" }),
   },
   (t) => [
     uniqueIndex("cutting_orders_numero_idx").on(t.numero),

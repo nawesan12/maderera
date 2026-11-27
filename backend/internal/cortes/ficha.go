@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/reglas"
 	"mjbj/internal/ventas"
 )
@@ -46,6 +46,10 @@ type Ficha struct {
 	RetalesDelCliente bool `json:"retalesDelCliente"`
 	// SinPlata: la ficha del aserradero, sin importes ni teléfono.
 	SinPlata bool `json:"sinPlata"`
+	// TotalTomado es lo que se le dijo al cliente al tomar el corte suelto:
+	// si la tarifa cambió después, la ficha lo muestra al lado del total de
+	// hoy (mes simulado, M3S2-030). Nulo en lo de antes de la 00390.
+	TotalTomado *float64 `json:"totalTomado"`
 	// Sumar es lo que hace «Sumar al pedido» (H184): nil si no hay nada
 	// fuera del pedido.
 	Sumar *SumaAlPedido `json:"sumar"`
@@ -68,8 +72,8 @@ type PedidoDelCorte struct {
 	// pedido, en placas enteras (una media es 0,5).
 	PlacasDelPedido float64 `json:"placasDelPedido"`
 	// PlacasDeOtrosCortes son las que usan los otros cortes vivos del pedido
-	// sobre la misma placa (no sale en la API).
-	PlacasDeOtrosCortes float64 `json:"-"`
+	// sobre la misma placa: con ellas la ficha dice «usa 1 de 3» en un acopio.
+	PlacasDeOtrosCortes float64 `json:"placasDeOtrosCortes"`
 	// Cargo es el pedido aparte donde quedaron las pasadas del corte, si el
 	// suyo ya no se tocaba (H184).
 	Cargo           *string `json:"cargo"`
@@ -104,8 +108,18 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		cat = *c.Categoria
 	}
 	tarifa := BuscarTarifa(tarifas, []string{cat, c.Material}, c.PriceListID)
+	// La placa que trae el cliente (escrita a mano, sin variante) no tiene
+	// categoría: se cobra con la tarifa «Placa del cliente» si el admin la
+	// cargó, y si no con la de «Placas». Sin esto quedaba en $ 0, sin
+	// «Cobrar», y el taller la cortaba gratis (mes simulado, M3S2-009).
+	if tarifa == nil && c.VariantID == nil {
+		tarifa = BuscarTarifa(tarifas, []string{TarifaPlacaDelCliente, "Placas"}, c.PriceListID)
+	}
 	metros := MetrosDeTapacanto(piezasConCanto(c))
 	plano := PlanoDelCorte(c)
+	if c.VariantID == nil {
+		plano = ConPlacaDelCliente(plano)
+	}
 	sup := make([]float64, len(plano.Placas))
 	for i, p := range plano.Placas {
 		sup[i] = SuperficieDeSierra(p.Cortes, plano.AnchoSierra)
@@ -140,6 +154,16 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	}
 	if f.Sumar, err = s.sumaDeLaFicha(ctx, f); err != nil {
 		return nil, err
+	}
+	if modo == "suelto" {
+		var tomado *jsmath.Num
+		if err := s.pool.QueryRow(ctx, `SELECT total_tomado FROM cutting_orders WHERE id = $1`, c.ID).Scan(&tomado); err != nil {
+			return nil, err
+		}
+		if tomado != nil {
+			v := tomado.F()
+			f.TotalTomado = &v
+		}
 	}
 	if modo == "sinCargo" {
 		if f.Remito, err = s.remitoDeLaFicha(ctx, c.ID); err != nil {
@@ -219,6 +243,9 @@ func TodasDelCliente(plano Plano) Plano {
 // ya marcadas: lo que muestran la ficha y la tarjeta del taller.
 func (s *Servicio) PlanoParaCobrar(ctx context.Context, c *Corte) (Plano, error) {
 	plano := PlanoDelCorte(c)
+	if c.VariantID == nil {
+		return ConPlacaDelCliente(plano), nil
+	}
 	delCliente, err := s.RetalesDelClienteDe(ctx, c, plano)
 	if err != nil {
 		return plano, err
@@ -285,7 +312,10 @@ func CuentaDelCorte(c *Corte, plano Plano, tarifa *TarifaDeCorte, pedido *Pedido
 		// (mes simulado, H184). El alta dice lo mismo.
 		if pedido != nil && pedido.PlacasDelPedido > 0 {
 			usadas := placasUsadas(c, plano)
-			if total := usadas + pedido.PlacasDeOtrosCortes; math.Abs(total-pedido.PlacasDelPedido) > 1e-6 {
+			// Solo si usan más de lo que vende: usar una de tres en un acopio
+			// es lo normal, y la ficha lo dice como dato en «Las placas»,
+			// no en rojo (mes simulado, M3S3-051).
+			if total := usadas + pedido.PlacasDeOtrosCortes; total-pedido.PlacasDelPedido > 1e-6 {
 				if pedido.PlacasDeOtrosCortes > 0 {
 					cuenta.Faltan = append(cuenta.Faltan, fmt.Sprintf("Los cortes de %s usan %s y el pedido vende %s.",
 						pedido.Numero, placasEnTexto(total), placasEnTexto(pedido.PlacasDelPedido)))
@@ -454,4 +484,56 @@ func (f *Ficha) SinPlataParaElTaller() {
 	}
 	f.Sumar = nil
 	f.Remito = nil
+	f.TotalTomado = nil
+}
+
+// TarifaDeLaPlaca es la tarifa de corte de una variante con la lista de un
+// cliente (o la general), como la busca la ficha: por la categoría y, de
+// respaldo, por el nombre.
+func (s *Servicio) TarifaDeLaPlaca(ctx context.Context, variantID, customerID string) (*TarifaDeCorte, error) {
+	if !plataforma.UUIDValido(variantID) {
+		return nil, nil
+	}
+	var cat, producto string
+	err := s.pool.QueryRow(ctx, `
+		SELECT coalesce(c.name, ''), p.name FROM product_variants pv
+		JOIN products p ON p.id = pv.product_id LEFT JOIN categories c ON c.id = p.category_id
+		WHERE pv.id = $1`, variantID).Scan(&cat, &producto)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var lista *string
+	if plataforma.UUIDValido(customerID) {
+		if err := s.pool.QueryRow(ctx, `SELECT price_list_id::text FROM customers WHERE id = $1`, customerID).Scan(&lista); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+	}
+	tarifas, err := s.TarifasActivas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return BuscarTarifa(tarifas, []string{cat, producto}, lista), nil
+}
+
+// TarifaPlacaDelCliente es el nombre de la tarifa de corte para el material
+// que trae el cliente; sin ella, la de «Placas».
+const TarifaPlacaDelCliente = "Placa del cliente"
+
+// ConPlacaDelCliente es el plano de un corte sobre la placa que trae el
+// cliente (sin variante del catálogo): no se vende ninguna placa, se cobran
+// todas las pasadas y lo que sobra es suyo (mes simulado, M3S2-009, M2S1-024
+// y M2S3-008). Copia las placas: el plano puede venir de un caché.
+func ConPlacaDelCliente(plano Plano) Plano {
+	placas := make([]PlacaDelPlano, len(plano.Placas))
+	for i, p := range plano.Placas {
+		p.SeVendeEntera = false
+		placas[i] = p
+	}
+	plano.Placas = placas
+	plano.PlacasEnteras = 0
+	plano.PasadasCobrables = plano.Pasadas
+	return plano
 }

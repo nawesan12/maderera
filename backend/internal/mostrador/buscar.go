@@ -172,7 +172,10 @@ func (s *Servicio) buscar(ctx context.Context, texto, sucursal string, cliente *
 	prefijo := a.poner(consulta + "%")
 	exacto := a.poner(consulta)
 	// El lector de código de barras escribe el número entero y un Enter.
-	cond := "(v.sku = " + exacto + " OR v.codigo_barras = " + exacto + " OR v.sku ILIKE " + prefijo + ")"
+	// Y el código sin su familia: «MEL-BLA-18» encuentra «PLA-MEL-BLA-18»
+	// (mes simulado, M3S1-067: el armador de cortes no la encontraba).
+	tramo := a.poner("%-" + consulta + "%")
+	cond := "(v.sku = " + exacto + " OR v.codigo_barras = " + exacto + " OR v.sku ILIKE " + prefijo + " OR v.sku ILIKE " + tramo + ")"
 	coincide := a.coincide
 	if porPalabra {
 		coincide = a.coincidePalabra

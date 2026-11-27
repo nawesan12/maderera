@@ -62,6 +62,7 @@ export function CobrarCorte({ id, conPlaca }: { id: string; conPlaca: boolean })
 
 /** Corregir o anular un corte cargado mal (H185, H228). */
 export function CorregirOAnular({ id, numero, cliente }: { id: string; numero: string; cliente: string }) {
+  const router = useRouter();
   return (
     <div className="flex flex-wrap gap-2">
       <Link
@@ -77,7 +78,12 @@ export function CorregirOAnular({ id, numero, cliente }: { id: string; numero: s
         confirmar="Anular el corte"
         anular={(motivo) => anularCorte(id, motivo)}
         // Sin aviso, anular parecía no haber hecho nada (mes simulado).
-        alTerminar={(ok) => toast.success(ok || `${numero} quedó anulado.`)}
+        // Y la ficha pasa a anulada en el momento: seguía «En cola» con
+        // «Empezar» hasta recargar (mes simulado, M2S1-141).
+        alTerminar={(ok) => {
+          toast.success(ok || `${numero} quedó anulado.`);
+          router.refresh();
+        }}
       />
     </div>
   );
@@ -90,7 +96,14 @@ export function CorregirOAnular({ id, numero, cliente }: { id: string; numero: s
  * «Formato del archivo…») y cada uno ocupaba un renglón en el teléfono
  * (H327, H330).
  */
-export function MasArchivos({ id }: { id: string }) {
+export function MasArchivos({
+  id,
+  formatos = [],
+}: {
+  id: string;
+  /** Los formatos guardados que no son el del agente, para probarlos acá. */
+  formatos?: { id: string; nombre: string }[];
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -104,6 +117,15 @@ export function MasArchivos({ id }: { id: string }) {
           <Download className="h-5 w-5" />
           Archivo para la máquina
         </DropdownMenuItem>
+        {formatos.map((f) => (
+          <DropdownMenuItem
+            key={f.id}
+            className="min-h-11 pl-10 text-base"
+            render={<a href={`/api/cortes/${id}/lista?perfil=${encodeURIComponent(f.id)}`} />}
+          >
+            {f.nombre}
+          </DropdownMenuItem>
+        ))}
         <DropdownMenuItem className="min-h-11 text-base" render={<a href={`/api/cortes/${id}/ptx`} />}>
           <FileCode2 className="h-5 w-5" />
           Programa .PTX (en prueba)

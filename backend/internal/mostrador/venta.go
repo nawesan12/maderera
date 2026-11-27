@@ -730,6 +730,15 @@ func (s *Servicio) ventaEnTransaccion(ctx context.Context, tx pgx.Tx, v VentaPed
 		// al cobrar, y el remito del retiro no lo vuelve a sacar
 		// (entregas.SalioConLaVenta). Al terminarse el corte pasa a listo.
 		estado = "preparando"
+		// Cobrar un corte que ya salió de la máquina: el pedido nace listo
+		// para entregar, no en «Preparando» (mes simulado, M3S4-040).
+		listos, err := cortesYaTerminados(ctx, tx, v.Cortes)
+		if err != nil {
+			return ResultadoVenta{}, err
+		}
+		if listos {
+			estado = "listo"
+		}
 	}
 	estadoPago := "pagado"
 	if c.parteCuenta >= c.total-0.009 {
@@ -1342,4 +1351,20 @@ func revisarCuitDelComprobante(ctx context.Context, db *pgxpool.Pool, v VentaPed
 	}
 	_, msj := clientes.LeerDocumento(cuit)
 	return msj, nil
+}
+
+// cortesYaTerminados dice si todos los cortes de la venta son de la cola y ya
+// salieron de la máquina. Uno nuevo, que nace con la venta, todavía no.
+func cortesYaTerminados(ctx context.Context, tx pgx.Tx, ks []CorteDeMostrador) (bool, error) {
+	ids := make([]string, 0, len(ks))
+	for _, k := range ks {
+		if k.Existente == nil {
+			return false, nil
+		}
+		ids = append(ids, *k.Existente)
+	}
+	var todos bool
+	err := tx.QueryRow(ctx, `SELECT count(*) = $2 FROM cutting_orders WHERE id::text = ANY($1) AND estado IN ('terminado', 'retirado')`,
+		ids, len(ids)).Scan(&todos)
+	return todos, err
 }

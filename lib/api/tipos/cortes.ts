@@ -489,6 +489,8 @@ export interface components {
              * @description Cuándo salió de la máquina
              */
             salioAt: string | null;
+            /** @description El pedido del corte: se entrega desde ahí */
+            orderId?: string | null;
             id: string;
             numero: string;
             cliente: string;
@@ -665,6 +667,8 @@ export interface components {
                 cobrado: number;
                 /** Format: double */
                 placasDelPedido: number;
+                /** Format: double */
+                placasDeOtrosCortes?: number;
                 lineas: {
                     descripcion: string;
                     unidad: string;
@@ -676,6 +680,11 @@ export interface components {
             } | null;
             retalesDelCliente: boolean;
             sinPlata: boolean;
+            /**
+             * Format: double
+             * @description Lo que se le dijo al cliente al tomar el corte suelto
+             */
+            totalTomado?: number | null;
             corte: components["schemas"]["Corte"];
             tarifa: components["schemas"]["TarifaDeCorte"] | null;
             /** Format: double */
@@ -1031,6 +1040,8 @@ export interface components {
             precioPorPasada: number;
             /** Format: double */
             precioPorMetroCanto: number;
+            /** @description Hay alguna disponible en alguna sucursal */
+            hayStock?: boolean;
         };
         CorteCotizado: {
             variantId: string;
@@ -1377,7 +1388,9 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Problema"];
             404: components["responses"]["Problema"];
+            422: components["responses"]["Problema"];
         };
     };
     GuardarAcomodo: {
@@ -1792,6 +1805,10 @@ export interface operations {
                     busqueda?: boolean;
                     /** @description Solo para el staff */
                     hoja?: boolean;
+                    /** @description Solo para el staff: la placa del catálogo, para devolver el precio de la pasada */
+                    variantId?: string;
+                    /** @description Con variantId */
+                    customerId?: string;
                     presupuesto?: {
                         tarifa?: components["schemas"]["TarifaDeCorte"];
                         /** Format: double */
@@ -1815,6 +1832,11 @@ export interface operations {
                         placasACobrar: number;
                         /** @description Las pasadas del plano que se cobra */
                         pasadasACobrar: number;
+                        /**
+                         * Format: double
+                         * @description Con variantId (staff): la pasada con la tarifa de la placa y la lista del cliente
+                         */
+                        precioPorPasada?: number;
                         /** @description Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte */
                         placasParciales?: number;
                         cuenta?: components["schemas"]["Presupuesto"];

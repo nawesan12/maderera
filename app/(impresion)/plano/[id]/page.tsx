@@ -68,6 +68,7 @@ async function Contenido({
         // taller es lo primero que hay que saber antes de bajar la placa.
         deQueSale: nombreDeLaMitad(corte.medida.mitad),
         sinCargo: corte.sinCargo,
+        placaDelCliente: corte.variantId == null,
         media: Boolean(corte.medida.mitad),
       }}
     />

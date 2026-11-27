@@ -3434,3 +3434,25 @@ de pedidos avisa todo pedido nuevo y cada cambio de estado, con `origen` y
 Quedó para decidir: el pedido web cobrado en línea no lleva recibo (el pago
 es la constancia; un recibo encima lo contaría dos veces en el cierre), y un
 retiro pasa a «entregado» al generar el remito, con la firma enseguida.
+### Mes simulado 2–3: cortes y taller (`mes23-cortes-taller`, 00390 y 00391)
+
+- **Motor 5** (`MotorRelleno`, `cortes/relleno.go`): después del acomodo, la
+  pieza de una placa que se cobra por pasadas se prueba en una que se vende
+  entera; se queda si no vende menos placas, no usa más y cobra menos
+  pasadas. En el banco de 200 despieces, 70 cobran menos (1031 → 542
+  pasadas cobrables). Los trabajos de antes siguen con su motor; el golden
+  del TS corre sin relleno (`Relleno: false`).
+- **`corte_chico_stock`** (00391, «no_mueve» de arranque): con «descuenta»,
+  la placa de la casa de un corte que no pasa la media placa sale del stock
+  al terminarlo y vuelve si se devuelve a la máquina
+  (`cortes.StockDeLaPlacaChica`, documento «corte»).
+- **`cutting_orders.total_tomado`** (00390): el total con que se tomó el
+  corte suelto; la ficha lo muestra tachado si la tarifa cambió.
+- La placa sin variante es la que trae el cliente (`ConPlacaDelCliente`): no
+  vende placa, cobra todas las pasadas con la tarifa «Placa del cliente» o la
+  de «Placas», y lo que sobra es suyo.
+- El agente del taller: `MJBJ_SUCURSAL` (`/api/cortes/pendientes?sucursal=`),
+  `enLaMaquina`, la subcarpeta `fuera-de-cola` y reescribe solo si cambió el
+  contenido.
+- Las pasadas a cobrar las cambia `ManejanPlata`; bajarlas del plano, solo
+  un admin.

@@ -74,6 +74,9 @@ type CorteListado struct {
 	// SalioAt es cuándo salió de la máquina: terminado_at, o para lo de antes
 	// de la 00240 la última modificación. Nulo mientras está en la cola.
 	SalioAt *time.Time `json:"salioAt"`
+	// OrderID: el corte de un pedido se entrega con el pedido, con quién
+	// retira y su remito (mes simulado, M3S2-026 y M3S4-040).
+	OrderID *string `json:"orderId"`
 	// UpdatedAt es lo que compara el agente del taller para volver a bajar
 	// un corte corregido. No sale en la cola.
 	UpdatedAt time.Time `json:"-"`
@@ -136,9 +139,11 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		SELECT co.id::text, co.numero, co.contacto_nombre, co.material_descripcion, co.placas, co.pasadas,
 		       co.estado::text, co.urgente, co.notas, b.name, co.created_at, co.updated_at, r.piezas, r.superficie,
 		       co.mitad::text, co.sin_cargo, co.branch_id::text,
-		       CASE WHEN co.estado IN ('terminado', 'retirado') THEN coalesce(co.terminado_at, co.updated_at) END
+		       CASE WHEN co.estado IN ('terminado', 'retirado') THEN coalesce(co.terminado_at, co.updated_at) END,
+		       pv.largo_mm, pv.ancho_mm, co.order_id::text
 		FROM cutting_orders co
 		LEFT JOIN branches b ON b.id = co.branch_id
+		LEFT JOIN product_variants pv ON pv.id = co.variant_id
 		LEFT JOIN (
 			-- Las piezas solo de los cortes del tablero: antes se agrupaba
 			-- cutting_items entero, con todo lo cortado desde el primer día.
@@ -160,10 +165,12 @@ func (s *Servicio) Listar(ctx context.Context, busqueda, estado string, sucursal
 		var urgente int32
 		var piezas *int32
 		var sup *jsmath.Num
+		var vl, va *int32
 		if err := filas.Scan(&c.ID, &c.Numero, &c.Cliente, &c.Material, &c.Placas, &c.Pasadas, &c.Estado, &urgente,
-			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt); err != nil {
+			&c.Notas, &c.Sucursal, &c.CreatedAt, &c.UpdatedAt, &piezas, &sup, &c.Mitad, &c.SinCargo, &c.BranchID, &c.SalioAt, &vl, &va, &c.OrderID); err != nil {
 			return nil, err
 		}
+		c.Material = MaterialEnOrden(c.Material, vl, va)
 		c.Urgente = urgente == 1
 		if piezas != nil {
 			c.Piezas = *piezas
@@ -358,6 +365,7 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Corte, error) {
 		return nil, err
 	}
 	c.VarianteLargoMm, c.VarianteAnchoMm, c.PropiaLargoMm, c.PropiaAnchoMm, c.PrecioMediaPct = i32f(vl), i32f(va), i32f(pl), i32f(pa), i32f(pct)
+	c.Material = MaterialEnOrden(c.Material, vl, va)
 	c.AnchoSierraMm = sierra.F()
 	c.Urgente = urgente == 1
 
@@ -470,9 +478,10 @@ func PlanoDelMotor(c *Corte) Plano {
 	}
 	sierra := c.AnchoSierraMm
 	busqueda := c.MotorPlano >= 2
+	relleno := c.MotorPlano >= MotorRelleno
 	return CalcularPlano(DatosDelPlano{
 		Piezas: piezas, PlacaLargo: c.Medida.Largo, PlacaAncho: c.Medida.Ancho,
-		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda, Relleno: &relleno,
 	})
 }
 
@@ -613,6 +622,9 @@ func (s *Servicio) Avanzar(ctx context.Context, ses *auth.Sesion, id, desde stri
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCambiarEstado, "corte", id, desc, nil)
 	if sig == "terminado" {
 		if err := s.listoConElCorte(ctx, ses, id, numero); err != nil {
+			return "", err
+		}
+		if err := s.StockDeLaPlacaChica(ctx, ses, id); err != nil {
 			return "", err
 		}
 	}
@@ -801,6 +813,10 @@ func (s *Servicio) Volver(ctx context.Context, ses *auth.Sesion, id, desde strin
 		if err := s.noEstaListoSinElCorte(ctx, ses, id, numero); err != nil {
 			return "", err
 		}
+		// Lo que salió del stock al terminarlo vuelve con él a la máquina.
+		if err := s.StockDeLaPlacaChica(ctx, ses, id); err != nil {
+			return "", err
+		}
 	}
 	texto := map[string]string{"en-cola": "volvió a la cola", "en-proceso": "volvió a la máquina"}[anterior]
 	return numero + " " + texto + ".", nil
@@ -837,8 +853,9 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 	}
 	var estado, numero string
 	var pedido *string
-	err := tx.QueryRow(ctx, `SELECT estado::text, numero, order_id::text FROM cutting_orders WHERE id = $1 FOR UPDATE`, id).
-		Scan(&estado, &numero, &pedido)
+	var sinCargo bool
+	err := tx.QueryRow(ctx, `SELECT estado::text, numero, order_id::text, sin_cargo FROM cutting_orders WHERE id = $1 FOR UPDATE`, id).
+		Scan(&estado, &numero, &pedido, &sinCargo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", noEncontrado
 	}
@@ -852,7 +869,11 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 	if estado != "en-cola" && estado != "en-proceso" {
 		return "", error422(numero + " ya salió de la máquina: no se anula.")
 	}
-	if pedido != nil {
+	// Una reposición sin cargo no se cobró en ninguna venta: los renglones
+	// del pedido son los del corte original, y por ellos CRT-56 decía «se
+	// cobró en la venta PED-1231» y no se podía corregir ni anular (mes
+	// simulado, M3S3-023).
+	if pedido != nil && !sinCargo {
 		var vendido *string
 		err := tx.QueryRow(ctx, `
 			SELECT o.numero FROM orders o
@@ -904,6 +925,11 @@ func (s *Servicio) AlternarUrgente(ctx context.Context, id string) (string, erro
 }
 
 // CargarPasadas anota las pasadas que dio la máquina.
+//
+// Lo que se cobra lo cambia el mostrador (ManejanPlata, en el handler): el
+// depósito veía el campo y podía bajar el cobro de un corte sin cobrar antes
+// de entregarlo (mes simulado, M2S4-008). Bajarlas de lo que dice el plano
+// es un descuento, y lo hace un administrador.
 func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id string, pasadas float64) error {
 	cantidad := 0.0
 	if !math.IsNaN(pasadas) {
@@ -911,6 +937,19 @@ func (s *Servicio) CargarPasadas(ctx context.Context, ses *auth.Sesion, id strin
 	}
 	if cantidad > math.MaxInt32 {
 		return error422("Son demasiadas pasadas.")
+	}
+	if ses == nil || ses.RolStaff == nil || *ses.RolStaff != sqlc.StaffRoleAdmin {
+		c, err := s.Obtener(ctx, id)
+		if err != nil {
+			return err
+		}
+		if c == nil {
+			return plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+		}
+		if sugeridas := PlanoDelCorte(c).PasadasCobrables; int(cantidad) < sugeridas {
+			return plataforma.NuevoProblema(http.StatusForbidden,
+				fmt.Sprintf("El plano dice %d: cobrar menos pasadas lo autoriza un administrador.", sugeridas))
+		}
 	}
 	var numero string
 	var previas int32
@@ -941,11 +980,31 @@ func (s *Servicio) GuardarAcomodo(ctx context.Context, ses *auth.Sesion, id stri
 		}
 		guardado = &b
 	}
+	// Las pasadas y las placas a cobrar pasan a ser las del plano acomodado:
+	// la ficha cobraba 10 pasadas del automático mientras el plano y la hoja
+	// decían 8 (mes simulado, M2S2-045).
+	c, err := s.Obtener(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if c == nil {
+		return "", plataforma.NuevoProblema(http.StatusNotFound, "No encontramos la orden de corte.")
+	}
+	libre := PlanoDelCorte(c)
+	if c.AcomodoManual != nil {
+		c.AcomodoManual = nil
+		libre = PlanoDelCorte(c)
+	}
+	c.AcomodoManual = guardado
+	plano := PlanoDelCorte(c)
+	if guardado != nil && !SeCobraElManual(plano, libre) {
+		plano = libre
+	}
 	var numero string
 	// El estado va en el mismo UPDATE: entre leerlo y escribir, el taller
 	// puede haberlo pasado a la máquina.
-	err := s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, updated_at = now()
-		WHERE id = $1 AND estado = 'en-cola' RETURNING numero`, id, guardado).Scan(&numero)
+	err = s.pool.QueryRow(ctx, `UPDATE cutting_orders SET acomodo_manual = $2, placas = $3, pasadas = $4, updated_at = now()
+		WHERE id = $1 AND estado = 'en-cola' RETURNING numero`, id, guardado, len(plano.Placas), plano.PasadasCobrables).Scan(&numero)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var hay bool
 		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM cutting_orders WHERE id = $1)`, id).Scan(&hay); err != nil {

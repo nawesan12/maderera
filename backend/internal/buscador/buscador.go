@@ -227,15 +227,18 @@ func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto stri
 		}},
 		{"/admin/cortes", func() ([]Resultado, error) {
 			var a []any
-			filas, err := pool.Query(ctx, `SELECT id, numero, contacto_nombre, material_descripcion, estado::text FROM cutting_orders WHERE `+
-				coincide(texto, &a, "numero", "contacto_nombre", "material_descripcion")+` ORDER BY created_at DESC LIMIT 4`, a...)
+			// También por el pedido: el aserradero tiene el «PED-1368» del
+			// papel y el corte no aparecía (mes simulado, M3S4-024).
+			filas, err := pool.Query(ctx, `SELECT co.id, co.numero, co.contacto_nombre, co.material_descripcion, co.estado::text
+				FROM cutting_orders co LEFT JOIN orders o ON o.id = co.order_id WHERE `+
+				coincide(texto, &a, "co.numero", "co.contacto_nombre", "co.material_descripcion", "o.numero")+` ORDER BY co.created_at DESC LIMIT 4`, a...)
 			if err != nil {
 				return nil, err
 			}
 			return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Resultado, error) {
 				var id, numero, contacto, material, estado string
 				err := r.Scan(&id, &numero, &contacto, &material, &estado)
-				return Resultado{id, "Corte", numero + " · " + contacto, material + " · " + estado, "/admin/cortes/" + id}, err
+				return Resultado{id, "Corte", numero + " · " + contacto, material + " · " + estadoDelCorte(estado), "/admin/cortes/" + id}, err
 			})
 		}},
 		{"/admin/proveedores", func() ([]Resultado, error) {
@@ -292,4 +295,22 @@ func (a *API) BuscarEnElPanel(ctx context.Context, r buscadorapi.BuscarEnElPanel
 		return nil, err
 	}
 	return respuesta(v), nil
+}
+
+// estadoDelCorte es el estado como lo dice la cola, no el valor crudo
+// («terminado», «cancelado»).
+func estadoDelCorte(e string) string {
+	switch e {
+	case "en-cola":
+		return "En cola"
+	case "en-proceso":
+		return "En la máquina"
+	case "terminado":
+		return "Terminado"
+	case "retirado":
+		return "Retirado"
+	case "cancelado":
+		return "Anulado"
+	}
+	return e
 }

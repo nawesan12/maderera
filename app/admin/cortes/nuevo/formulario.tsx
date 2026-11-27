@@ -144,6 +144,9 @@ export function FormularioCorte({
     branchId: string | null;
     sinCargo: boolean;
     piezas: Pieza[];
+    /** El disco y el acomodo a mano del corte: corregir los perdía (M2S1-090, M2S2-071). */
+    anchoSierraMm: number;
+    fijadas: PiezaFijada[];
   };
   /** Desde la ficha del cliente: llega con el cliente ya elegido. */
   clienteInicial?: { id: string; nombre: string; razonSocial: string | null; telefono: string | null };
@@ -182,6 +185,8 @@ export function FormularioCorte({
     entregarEl?: string | null;
     /** Las placas que vende: el corte arranca con la primera. */
     placas?: PlacaDelPedido[];
+    /** Sin placas vendidas, la de sus cortes (la reposición, M3S3-032). */
+    placaDeSusCortes?: PlacaElegida;
   };
   /**
    * El corte que alguien mandó por WhatsApp desde el sitio (`?consulta=`):
@@ -191,6 +196,7 @@ export function FormularioCorte({
     token: string;
     /** Cuál de las placas de la consulta; 0 es la primera. */
     grupo: number;
+    branchId: string | null;
     placa: PlacaElegida | null;
     mitad: Mitad;
     cantoDescripcion: string;
@@ -230,6 +236,7 @@ export function FormularioCorte({
   const [sucursal, setSucursal] = useState(
     desdePedido?.branchId ??
       corregir?.branchId ??
+      desdeConsulta?.branchId ??
       (preguntarSucursal && sucursales.length > 1 ? "" : (sucursales[0]?.id ?? "")),
   );
   const [cliente, setCliente] = useState<{
@@ -248,29 +255,37 @@ export function FormularioCorte({
   // La placa del pedido de entrada: arrancar con una medida supuesta armaba
   // el plano sobre una placa que no era (H188).
   const placaDelPedido = corregir ? undefined : desdePedido?.placas?.[0];
+  const placaDeSusCortes = corregir ? undefined : desdePedido?.placaDeSusCortes;
   const [placa, setPlaca] = useState<PlacaElegida | null>(
-    desdeConsulta?.placa ?? corregir?.placa ?? placaDelPedido ?? null,
+    desdeConsulta?.placa ?? corregir?.placa ?? placaDelPedido ?? placaDeSusCortes ?? null,
   );
   /** La medida de la placa, en milímetros, como está en pantalla. */
   const [largoPlaca, setLargoPlaca] = useState(
-    String(corregir?.largoMm ?? (placaDelPedido?.largoMm || "")),
+    String(corregir?.largoMm ?? (placaDelPedido?.largoMm || placaDeSusCortes?.largoMm || "")),
   );
   const [anchoPlaca, setAnchoPlaca] = useState(
-    String(corregir?.anchoMm ?? (placaDelPedido?.anchoMm || "")),
+    String(corregir?.anchoMm ?? (placaDelPedido?.anchoMm || placaDeSusCortes?.anchoMm || "")),
   );
   /** Si sale de media placa, y en qué sentido se parte. */
   const [mitad, setMitad] = useState<Mitad>(
     desdeConsulta?.mitad ?? corregir?.mitad ?? placaDelPedido?.mitad ?? null,
   );
   const [material, setMaterial] = useState(
-    desdeConsulta?.placa?.descripcion ?? corregir?.material ?? placaDelPedido?.descripcion ?? "",
+    desdeConsulta?.placa?.descripcion ?? corregir?.material ?? placaDelPedido?.descripcion ?? placaDeSusCortes?.descripcion ?? "",
   );
   const [piezas, setPiezas] = useState<Pieza[]>(
     desdeConsulta?.piezas.length ? desdeConsulta.piezas : corregir?.piezas.length ? corregir.piezas : [piezaVacia()],
   );
   /** Las piezas que alguien mandó a mano a una placa. */
-  const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
+  const [fijadas, setFijadas] = useState<PiezaFijada[]>(corregir?.fijadas ?? []);
   const [sinCargo, setSinCargo] = useState(corregir?.sinCargo ?? (reponer && puedeReponer));
+  /**
+   * La placa elegida del catálogo la trae el cliente: el corte va sin
+   * variante, cobra solo las pasadas y lo que sobra es suyo. El corte de la
+   * consulta o del teléfono daba por hecho que era de la casa (mes simulado,
+   * M2S1-024 y M2S3-008).
+   */
+  const [laTraeElCliente, setLaTraeElCliente] = useState(false);
   /** Confirmado que el corte del pedido va en otra placa (H280). */
   const [otraPlaca, setOtraPlaca] = useState(false);
   const placasDelPedidoLista = desdePedido?.placas ?? [];
@@ -324,7 +339,7 @@ export function FormularioCorte({
   // El disco de este trabajo: arranca con el general y se puede cambiar. El
   // trabajo lo guarda, así su plano no cambia si después se toca el general.
   const [sierraTexto, setSierraTexto] = useState(
-    String(anchoSierraGeneral).replace(".", ","),
+    String(corregir?.anchoSierraMm ?? anchoSierraGeneral).replace(".", ","),
   );
   const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
 
@@ -343,12 +358,14 @@ export function FormularioCorte({
    * necesita para dos cosas: mostrarlo y proponer cuántas placas. Lo calcula
    * Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
    */
-  const { plano } = usePlano({
+  const { plano, precioPorPasada } = usePlano({
     piezas: paraElPlano,
     placaLargo: medidaPlaca.largo,
     placaAncho: medidaPlaca.ancho,
     anchoSierra,
     fijadas,
+    ...(placa && !laTraeElCliente ? { variantId: placa.variantId } : {}),
+    ...(cliente ? { customerId: cliente.id } : {}),
   });
 
   // Las placas son las del plano: el campo para pisarlas dejaba la tarjeta
@@ -436,7 +453,7 @@ export function FormularioCorte({
         <input type="hidden" name="consultaGrupo" value={desdeConsulta.grupo} />
       )}
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
-      {placa && (
+      {placa && !laTraeElCliente && (
         <input type="hidden" name="variantId" value={placa.variantId} />
       )}
       {/* El acomodo corregido a mano viaja con el formulario: sin esto, mover
@@ -525,6 +542,16 @@ export function FormularioCorte({
               }}
             />
           </div>
+
+          {placa && !desdePedido && (
+            <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5 md:col-span-2">
+              <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                <UserRound className="h-5 w-5" />
+              </span>
+              <span className="flex-1 text-[15px] font-semibold leading-tight">La trae el cliente</span>
+              <Switch checked={laTraeElCliente} onCheckedChange={(v) => setLaTraeElCliente(v === true)} />
+            </label>
+          )}
 
           {/* El pedido vende otra placa: se confirma, no se guarda callado
               (H280: el pedido vendía MDF 18 y el corte quedó en MDF 3 mm). */}
@@ -841,7 +868,13 @@ export function FormularioCorte({
           medidaSupuesta={medidaPlaca.supuesta}
           fijadas={fijadas}
           onFijadas={setFijadas}
-          quien={{ sinCargo: sinCargo && Boolean(desdePedido), media: Boolean(mitad), todasDelCliente: todasDelPedido }}
+          precioPorPasada={precioPorPasada}
+          quien={{
+            sinCargo: sinCargo && Boolean(desdePedido),
+            media: Boolean(mitad),
+            todasDelCliente: todasDelPedido,
+            placaDelCliente: !placa || laTraeElCliente,
+          }}
         />
       </section>
 

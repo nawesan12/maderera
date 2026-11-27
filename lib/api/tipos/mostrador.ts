@@ -548,10 +548,14 @@ export interface components {
             createdAt: string;
             quien: string | null;
             /**
-             * @description a dónde fue un retiro
+             * @description a dónde fue un retiro, o de dónde vino un ingreso
              * @enum {string|null}
              */
             destino?: "banco" | "caja_fuerte" | "otro" | null;
+            /** @description el gasto o el pago del renglón se anuló después */
+            anulado?: boolean;
+            /** @description lo cargó alguien que no es quien abrió el turno */
+            otroPuesto?: boolean;
         };
         MostradorVentaDeHoy: {
             id: string;
@@ -583,10 +587,14 @@ export interface components {
             total: number;
             /** @description Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) */
             devolucion: boolean;
-            /** @description Quién hizo las devoluciones parciales del renglón */
+            /** @description Quién cobró el recibo si no es quien abrió el turno */
             quien: string | null;
-            /** @description lo cobrado por recibos de cuenta en el mostrador durante el turno */
+            /** @description lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón) */
             cobranza: boolean;
+            /** @description el cobro es de un pedido, no de la cuenta */
+            dePedido?: boolean;
+            /** @description los pedidos de las devoluciones parciales, o los recibos que cobró otra persona */
+            pedidos?: string | null;
         };
         MostradorPantalla: {
             turno: components["schemas"]["MostradorTurno"] | null;
@@ -606,6 +614,36 @@ export interface components {
              * @description lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente
              */
             ultimoContado: number | null;
+            /** @description el último turno cerrado hoy, para reimprimir su papel */
+            ultimoCierre?: components["schemas"]["MostradorTurnoCerrado"] | null;
+        };
+        MostradorTurnoCerrado: {
+            id: string;
+            sucursal: string;
+            /** Format: date-time */
+            abiertaAt: string;
+            /** Format: date-time */
+            cerradaAt: string | null;
+            /** Format: double */
+            contado: number | null;
+            notas: string | null;
+            abiertaPor: string;
+            /** Format: double */
+            esperado: number;
+            /** Format: double */
+            fondo: number;
+            /** Format: double */
+            ventas: number;
+            /** Format: double */
+            otrosIngresos: number;
+            /** Format: double */
+            retiros: number;
+            /** Format: double */
+            devoluciones: number;
+            /** Format: double */
+            gastos: number;
+            cierre: components["schemas"]["MostradorRenglonDelCierre"][];
+            movimientos: components["schemas"]["MostradorMovimiento"][];
         };
     };
     responses: {
@@ -1172,6 +1210,8 @@ export interface operations {
                     motivo?: string;
                     /** @description la caja física de la PC que abre, si tiene una */
                     cajaId?: string;
+                    /** @description la diferencia es un conteo mal hecho: se corrige el arqueo del turno anterior en vez de cargar un movimiento entre turnos */
+                    corregir?: boolean;
                 };
             };
         };
@@ -1197,10 +1237,12 @@ export interface operations {
                     monto: number | null;
                     motivo: string;
                     /**
-                     * @description a dónde va un retiro; sin él se clasifica por el motivo
+                     * @description a dónde va un retiro, o de dónde viene un ingreso; sin él se clasifica por el motivo
                      * @enum {string}
                      */
                     destino?: "banco" | "caja_fuerte" | "otro";
+                    /** @description con destino otro, la categoría de gasto: el retiro es un gasto en efectivo */
+                    categoria?: string;
                 };
             };
         };

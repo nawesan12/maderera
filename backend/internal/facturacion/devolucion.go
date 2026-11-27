@@ -91,6 +91,9 @@ type PedidoDeDevolucion struct {
 	Renglones []RenglonADevolver
 	// Importe es lo que la persona confirmó (nil: no se controla).
 	Importe *float64
+	// DelMostrador: la hace el puesto del mostrador (devoluciones.origen). El
+	// cierre Z de un turno cuenta solo las suyas, además de las de la caja.
+	DelMostrador bool
 }
 
 // Devolucion es lo que quedó hecho.
@@ -812,9 +815,13 @@ func (s *Servicio) devolverEnTransaccion(ctx context.Context, tx pgx.Tx, pedido,
 		sinStock = &p.SinStock
 	}
 	var id string
+	origen := "panel"
+	if p.DelMostrador {
+		origen = "mostrador"
+	}
 	if err := tx.QueryRow(ctx, `INSERT INTO devoluciones (clave, order_id, invoice_id, nota_id, importe, destino, branch_id, sin_stock, motivo,
-		created_by_user_id) VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8, $9, $10) RETURNING id`,
-		p.Clave, pedido, o.id, nota, jsmath.Fijo2(total), p.Destino, sucursalID, sinStock, p.Motivo, userID).Scan(&id); err != nil {
+		created_by_user_id, origen) VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8, $9, $10, $11) RETURNING id`,
+		p.Clave, pedido, o.id, nota, jsmath.Fijo2(total), p.Destino, sucursalID, sinStock, p.Motivo, userID, origen).Scan(&id); err != nil {
 		return Devolucion{}, err
 	}
 	// Lo que se llevó cada renglón, según la nota.

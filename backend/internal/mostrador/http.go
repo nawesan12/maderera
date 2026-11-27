@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"math"
 	"net/http"
+	"strings"
 
 	"mjbj/internal/api/mostradorapi"
 	"mjbj/internal/auth"
@@ -342,7 +343,7 @@ func (a *API) DevolucionDeMostrador(ctx context.Context, r mostradorapi.Devoluci
 		return nil, err
 	}
 	p := facturacion.PedidoDeDevolucion{InvoiceID: factura, Clave: b.Clave, Destino: string(b.Destino), Motivo: b.Motivo,
-		Importe: &b.Importe, Renglones: renglonesDelMostrador(b.Renglones)}
+		Importe: &b.Importe, Renglones: renglonesDelMostrador(b.Renglones), DelMostrador: true}
 	if b.SinStock != nil {
 		p.SinStock = string(*b.SinStock)
 	}
@@ -357,13 +358,32 @@ func (a *API) DevolucionDeMostrador(ctx context.Context, r mostradorapi.Devoluci
 		return nil, err
 	}
 	if !d.Repetida {
-		desc := "Devolución de " + formato.Importe(d.Importe) + " por " + p.Destino + " desde el mostrador: " + zodjs.TrimJS(p.Motivo)
+		desc := "Devolución de " + formato.Importe(d.Importe) + " por " + a.porDondeVuelve(ctx, d.ID, p.Destino) + " desde el mostrador: " + zodjs.TrimJS(p.Motivo)
 		if firma != nil && firma.UserID != ses.UserID {
 			desc += " (autorizó " + firma.Nombre + ")"
 		}
 		a.s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "factura", factura, desc, map[string]any{"devolucionId": d.ID, "notaDeCreditoId": d.NotaID})
 	}
 	return ok(map[string]any{"ok": "Devolución de " + formato.Importe(d.Importe) + " hecha.", "notaId": d.NotaID}), nil
+}
+
+// porDondeVuelve es el medio en palabras de una devolución: la bitácora decía
+// «por afuera» de una que volvió por transferencia (mes simulado, M3S1-060).
+func (a *API) porDondeVuelve(ctx context.Context, devolucion, destino string) string {
+	var medio string
+	if err := a.s.pool.QueryRow(ctx, `SELECT `+caja.MedioDeLaDevolucion+` FROM devoluciones d WHERE d.id::text = $1`, devolucion).Scan(&medio); err != nil {
+		return destino
+	}
+	if n, ok := nombreDelMedio[medio]; ok {
+		return n
+	}
+	return strings.ReplaceAll(medio, "_", " ")
+}
+
+// nombreDelMedio es el medio en minúscula, para una frase.
+var nombreDelMedio = map[string]string{
+	"efectivo": "efectivo", "debito": "débito", "credito": "crédito", "transferencia": "transferencia",
+	"cuenta_corriente": "cuenta corriente", "cheque": "cheque", "mercado_pago": "Mercado Pago",
 }
 
 func (a *API) BuscarEnMostrador(ctx context.Context, r mostradorapi.BuscarEnMostradorRequestObject) (mostradorapi.BuscarEnMostradorResponseObject, error) {
@@ -531,7 +551,7 @@ func (a *API) AbrirCaja(ctx context.Context, r mostradorapi.AbrirCajaRequestObje
 	if r.Body.CajaId != nil {
 		puesto = *r.Body.CajaId
 	}
-	m, err := a.s.AbrirCaja(ctx, ses, r.Body.BranchId, numeroONaN(r.Body.FondoInicial), motivo, puesto)
+	m, err := a.s.AbrirCaja(ctx, ses, r.Body.BranchId, numeroONaN(r.Body.FondoInicial), motivo, puesto, r.Body.Corregir != nil && *r.Body.Corregir)
 	if err != nil {
 		return nil, comoProblema(err)
 	}
@@ -548,7 +568,7 @@ func (a *API) MovimientoDeCaja(ctx context.Context, r mostradorapi.MovimientoDeC
 		d := string(*r.Body.Destino)
 		destino = &d
 	}
-	m, err := a.s.MovimientoDeCaja(ctx, ses, r.Body.SessionId, string(r.Body.Tipo), numeroONaN(r.Body.Monto), r.Body.Motivo, destino)
+	m, err := a.s.MovimientoDeCaja(ctx, ses, r.Body.SessionId, string(r.Body.Tipo), numeroONaN(r.Body.Monto), r.Body.Motivo, destino, r.Body.Categoria)
 	if err != nil {
 		return nil, comoProblema(err)
 	}
@@ -583,6 +603,8 @@ type Pantalla struct {
 	// UltimoContado: lo que quedó contado al cerrar el último turno. La
 	// apertura lo propone (caja.UltimoContado).
 	UltimoContado *float64 `json:"ultimoContado"`
+	// UltimoCierre: el último turno cerrado hoy, para reimprimir su papel.
+	UltimoCierre *caja.TurnoCerrado `json:"ultimoCierre"`
 }
 
 // Pantalla junta el turno, sus movimientos, el cierre Z, las ventas de hoy,
@@ -614,6 +636,9 @@ func (s *Servicio) Pantalla(ctx context.Context, sucursal string) (Pantalla, err
 		if p.UltimoContado, err = caja.UltimoContado(ctx, s.pool, sucursal); err != nil {
 			return p, err
 		}
+	}
+	if p.UltimoCierre, err = caja.UltimoCierreDeHoy(ctx, s.pool, sucursal, s.ahora()); err != nil {
+		return p, err
 	}
 	if p.Turno != nil {
 		if p.Movimientos, err = caja.MovimientosDelTurno(ctx, s.pool, p.Turno.ID); err != nil {

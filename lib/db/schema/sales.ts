@@ -91,6 +91,8 @@ export const quotes = pgTable(
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** La clave por intento del presupuesto del mostrador: el doble toque no emite dos (00350). */
+    claveMostrador: text(),
   },
   (t) => [
     uniqueIndex("quotes_numero_idx").on(t.numero),
@@ -291,7 +293,10 @@ export const orders = pgTable(
     canceladoAt: timestamp({ withTimezone: true }),
     /** Lo que un pedido partido cargó a la cuenta corriente; el resto, con medioPago (00311). */
     aCuenta: numeric({ precision: 12, scale: 2 }),
+    /** Con cuánto pagó en efectivo, para el vuelto del ticket (00350). */
+    efectivoRecibido: numeric({ precision: 12, scale: 2 }),
   },
+
   (t) => [
     uniqueIndex("orders_numero_idx").on(t.numero),
     uniqueIndex("orders_clave_mostrador_idx").on(t.claveMostrador),

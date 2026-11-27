@@ -371,6 +371,7 @@ paths:
                 fondoInicial: { type: number, format: double, nullable: true }
                 motivo: { type: string, description: "adónde fue (o de dónde vino) la diferencia con lo contado al cerrar el turno anterior" }
                 cajaId: { type: string, description: "la caja física de la PC que abre, si tiene una" }
+                corregir: { type: boolean, description: "la diferencia es un conteo mal hecho: se corrige el arqueo del turno anterior en vez de cargar un movimiento entre turnos" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -390,7 +391,8 @@ paths:
                 tipo: { type: string, enum: [ingreso, retiro] }
                 monto: { type: number, format: double, nullable: true }
                 motivo: { type: string }
-                destino: { type: string, enum: [banco, caja_fuerte, otro], description: "a dónde va un retiro; sin él se clasifica por el motivo" }
+                destino: { type: string, enum: [banco, caja_fuerte, otro], description: "a dónde va un retiro, o de dónde viene un ingreso; sin él se clasifica por el motivo" }
+                categoria: { type: string, description: "con destino otro, la categoría de gasto: el retiro es un gasto en efectivo" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "422": { $ref: "#/components/responses/Problema" }
@@ -649,7 +651,9 @@ components:
         orderId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         quien: { type: string, nullable: true }
-        destino: { type: string, nullable: true, enum: [banco, caja_fuerte, otro], description: "a dónde fue un retiro" }
+        destino: { type: string, nullable: true, enum: [banco, caja_fuerte, otro], description: "a dónde fue un retiro, o de dónde vino un ingreso" }
+        anulado: { type: boolean, description: "el gasto o el pago del renglón se anuló después" }
+        otroPuesto: { type: boolean, description: "lo cargó alguien que no es quien abrió el turno" }
     MostradorVentaDeHoy:
       type: object
       required: [id, numero, cliente, total, devuelto, medioPago, medios, conFactura, estado, createdAt]
@@ -672,8 +676,10 @@ components:
         cantidad: { type: integer }
         total: { type: number, format: double, description: En negativo si es una devolución }
         devolucion: { type: boolean, description: Ventas anuladas o devoluciones parciales durante el turno (la venta queda en el Z de su turno) }
-        quien: { type: string, nullable: true, description: Quién hizo las devoluciones parciales del renglón }
-        cobranza: { type: boolean, description: "lo cobrado por recibos de cuenta en el mostrador durante el turno" }
+        quien: { type: string, nullable: true, description: Quién cobró el recibo si no es quien abrió el turno }
+        cobranza: { type: boolean, description: "lo cobrado por recibos durante el turno (los del mostrador, y el efectivo de los del panel que entró a este cajón)" }
+        dePedido: { type: boolean, description: "el cobro es de un pedido, no de la cuenta" }
+        pedidos: { type: string, nullable: true, description: "los pedidos de las devoluciones parciales, o los recibos que cobró otra persona" }
     MostradorPantalla:
       type: object
       required: [turno, movimientos, cierre, ventas, listaGeneral, fondoBase, descuentoLibrePct, ultimoContado]
@@ -688,3 +694,27 @@ components:
         fondoBase: { type: number, format: double }
         descuentoLibrePct: { type: number, format: double, description: "lo que se puede dejar de cobrar sin el PIN de un admin (regla del negocio)" }
         ultimoContado: { type: number, format: double, nullable: true, description: "lo contado al cerrar el último turno de la sucursal: con eso abre el siguiente" }
+        ultimoCierre:
+          nullable: true
+          description: "el último turno cerrado hoy, para reimprimir su papel"
+          allOf: [{ $ref: "#/components/schemas/MostradorTurnoCerrado" }]
+    MostradorTurnoCerrado:
+      type: object
+      required: [id, sucursal, abiertaAt, cerradaAt, contado, notas, abiertaPor, esperado, fondo, ventas, otrosIngresos, retiros, devoluciones, gastos, cierre, movimientos]
+      properties:
+        id: { type: string }
+        sucursal: { type: string }
+        abiertaAt: { type: string, format: date-time }
+        cerradaAt: { type: string, format: date-time, nullable: true }
+        contado: { type: number, format: double, nullable: true }
+        notas: { type: string, nullable: true }
+        abiertaPor: { type: string }
+        esperado: { type: number, format: double }
+        fondo: { type: number, format: double }
+        ventas: { type: number, format: double }
+        otrosIngresos: { type: number, format: double }
+        retiros: { type: number, format: double }
+        devoluciones: { type: number, format: double }
+        gastos: { type: number, format: double }
+        cierre: { type: array, items: { $ref: "#/components/schemas/MostradorRenglonDelCierre" } }
+        movimientos: { type: array, items: { $ref: "#/components/schemas/MostradorMovimiento" } }

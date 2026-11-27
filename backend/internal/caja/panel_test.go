@@ -257,7 +257,7 @@ func TestTurnosVentasSueltasYFondo(t *testing.T) {
 	if tc.Esperado != 14000 || *tc.Contado != 14000 || tc.Tardios != 1 || tc.TardiosMonto != 1000 || tc.AbiertaPor != "Persona admin" || tc.Sucursal != "Casa Central" {
 		t.Errorf("turno: %+v", tc)
 	}
-	if fmt.Sprint(tc.Cierre) != "[{efectivo 2 6000 false <nil> false} {debito 1 2000 false <nil> false}]" {
+	if fmt.Sprint(tc.Cierre) != "[{efectivo 2 6000 false <nil> false false <nil>} {debito 1 2000 false <nil> false false <nil>}]" {
 		t.Errorf("cierre Z: %+v", tc.Cierre)
 	}
 	if c, _ := pedir(t, ven, "GET", e.u+"turnos-cerrados", nil); c != 403 {
@@ -367,14 +367,14 @@ func TestAnularNoCambiaElCierreDeOtroTurno(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(b), &pagina)
 	cerrados := pagina.Filas
-	if len(cerrados) != 1 || fmt.Sprint(cerrados[0].Cierre) != "[{efectivo 1 1000 false <nil> false}]" {
+	if len(cerrados) != 1 || fmt.Sprint(cerrados[0].Cierre) != "[{efectivo 1 1000 false <nil> false false <nil>}]" {
 		t.Errorf("el Z del turno cerrado no cambia con la anulación de hoy: %s", b)
 	}
 	z, err := CierreDelTurno(ctx, e.pool, hoy)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(z) != "[{efectivo 1 -1000 true <nil> false}]" {
+	if fmt.Sprint(z) != "[{efectivo 1 -1000 true <nil> false false <nil>}]" {
 		t.Errorf("la devolución se ve en el turno en que se hizo: %+v", z)
 	}
 }
@@ -463,9 +463,18 @@ func TestEmitidoConLaAnulacion(t *testing.T) {
 			values ($1, 3, $2, 'X', 100, 21, 0, 0, 0, 121, 'autorizada', '2026-10-15T15:00:00Z', '761', $3) returning id`, tipo, i+1, anulada)
 	}
 	_, b := pedir(t, adm, "GET", e.u+"emitido?periodo=2026-10", nil)
-	var filas []Emitido
-	if err := json.Unmarshal([]byte(b), &filas); err != nil {
+	var pagina struct {
+		Filas   []Emitido          `json:"filas"`
+		Resumen ResumenDeLoEmitido `json:"resumen"`
+	}
+	if err := json.Unmarshal([]byte(b), &pagina); err != nil {
 		t.Fatal(b)
+	}
+	filas := pagina.Filas
+	// Los totales del mes: lo vendido sin la anulada, y la anulada aparte
+	// (M2S2-096).
+	if pagina.Resumen != (ResumenDeLoEmitido{Cantidad: 2, Importe: 100, Anuladas: 1, ImporteAnuladas: 200}) {
+		t.Errorf("resumen: %+v", pagina.Resumen)
 	}
 	if len(filas) != 2 {
 		t.Fatalf("la anulada con factura y nota sale una vez: %s", b)
@@ -524,10 +533,22 @@ func TestAnulacionesPorPersonaSinTope(t *testing.T) {
 	anular(tarde, time.Date(2026, 11, 2, 10, 0, 0, 0, Argentina), 0)
 
 	_, b := pedir(t, adm, "GET", e.u+"emitido?periodo=2026-10", nil)
-	var emitido []Emitido
-	_ = json.Unmarshal([]byte(b), &emitido)
+	var pagina struct {
+		Filas   []Emitido          `json:"filas"`
+		Resumen ResumenDeLoEmitido `json:"resumen"`
+	}
+	_ = json.Unmarshal([]byte(b), &pagina)
+	emitido := pagina.Filas
 	if len(emitido) != 200 || strings.Contains(b, `"numero":"M-1"`) {
 		t.Fatalf("lo emitido corta en 200 y las anuladas del 2 quedaron afuera: %d", len(emitido))
+	}
+	// La página dice cuántas hay en el mes, y la siguiente trae el resto
+	// (M3S2-040).
+	if pagina.Resumen.Cantidad <= 200 {
+		t.Errorf("el total del mes: %+v", pagina.Resumen)
+	}
+	if _, b2 := pedir(t, adm, "GET", e.u+"emitido?periodo=2026-10&desplazamiento=200", nil); !strings.Contains(b2, `"numero":"M-1"`) {
+		t.Errorf("la segunda página no trae las primeras ventas del mes")
 	}
 	leer := func(periodo string) []AnulacionesDeUnaPersona {
 		_, b := pedir(t, adm, "GET", e.u+"anulaciones?periodo="+periodo, nil)

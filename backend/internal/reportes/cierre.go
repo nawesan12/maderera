@@ -352,7 +352,11 @@ const retiroAlBanco = RetiroAlBanco
 // ingresoDelBanco: el ingreso de caja `m` vino del banco (una extracción, lo
 // dice el motivo). Los demás ingresos vienen de la caja fuerte (la misma
 // Caja) o devuelven un gasto o un pago anulado (que ya no se asientan).
-const ingresoDelBanco = `(m.motivo ~* '(banco|extracci)')`
+//
+// Desde la 00350 el ingreso dice de dónde viene (destino): «banco» es la
+// extracción; «caja_fuerte», la misma Caja; «otro», plata que entró sin
+// explicación de cuenta (asientosDeCaja la manda a Diferencias de caja).
+const ingresoDelBanco = `(m.destino = 'banco' OR (m.destino IS NULL AND m.motivo ~* '(banco|extracci)'))`
 
 // asientosDeCaja son los movimientos de las cajas que no salen de una venta,
 // un cobro o un gasto (H160): la extracción del banco que entra a la caja
@@ -384,11 +388,66 @@ func (s *Servicio) asientosDeCaja(ctx context.Context, idesde, ihasta time.Time)
 	}); err != nil {
 		return nil, err
 	}
-	rs, err = s.lectura.Query(ctx, `SELECT s.cerrada_at, coalesce(b.name, ''), (s.contado - coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at
+	// Lo contado, o lo corregido al abrir el turno siguiente («conté mal»,
+	// 00350): el sobrante de un conteo equivocado no es plata (M2S3-002).
+	// El ingreso y el retiro «otro» (00350): plata que entró o salió del
+	// cajón sin una cuenta que la explique (el cambio que trajo alguien, la
+	// plata que se llevó el dueño). No dejaban asiento y el mayor de Caja no
+	// conciliaba con el arqueo aunque la caja cerrara al peso (mes simulado,
+	// M3S1-005 y M3S3-014). Van contra Diferencias de caja, como el arqueo,
+	// hasta que el contador diga a qué cuenta; el retiro que es un pago va
+	// como gasto (mostrador.MovimientoDeCaja con categoría).
+	rs, err = s.lectura.Query(ctx, `SELECT m.created_at, m.monto::float8, coalesce(m.motivo, ''), coalesce(b.name, '')
+		FROM cash_movements m JOIN cash_sessions cs ON cs.id = m.session_id LEFT JOIN branches b ON b.id = cs.branch_id
+		WHERE m.tipo IN ('ingreso', 'retiro') AND m.destino = 'otro' AND m.created_at >= $1 AND m.created_at <= $2
+		ORDER BY m.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	var motivo string
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &motivo, &sucursal}, func() error {
+		concepto := "Ingreso a la caja"
+		if importe < 0 {
+			concepto = "Retiro de la caja"
+		}
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		if motivo != "" {
+			concepto += ": " + motivo
+		}
+		a := AsientoDeDiferenciaDeCaja(fecha, concepto, jsmath.Redondear2(importe))
+		a.Instante = true
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	// Lo que sale de la caja fuerte al banco (00350): la caja fuerte es la
+	// misma Caja, así que el depósito es Banco a Caja, como el de un cajón.
+	rs, err = s.lectura.Query(ctx, `SELECT f.created_at, f.monto::float8, coalesce(b.name, '')
+		FROM caja_fuerte_movimientos f LEFT JOIN branches b ON b.id = f.branch_id
+		WHERE f.tipo = 'deposito' AND f.created_at >= $1 AND f.created_at <= $2 ORDER BY f.created_at`, idesde, ihasta)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pgx.ForEachRow(rs, []any{&fecha, &importe, &sucursal}, func() error {
+		concepto := "Depósito de la caja fuerte"
+		if sucursal != "" {
+			concepto += " de " + sucursal
+		}
+		a := asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.Banco, importe, 0), renglon(Cuentas.Caja, 0, importe)})
+		a.Instante = true
+		out = append(out, a)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	rs, err = s.lectura.Query(ctx, `SELECT s.cerrada_at, coalesce(b.name, ''), (coalesce(s.contado_corregido, s.contado) - coalesce(sum(m.monto) FILTER (WHERE m.created_at <= s.cerrada_at
 		  OR (m.monto > 0 AND m.declarado_at IS NOT NULL AND m.declarado_at <= s.cerrada_at)), 0))::float8
 		FROM cash_sessions s LEFT JOIN branches b ON b.id = s.branch_id LEFT JOIN cash_movements m ON m.session_id = s.id
 		WHERE s.estado = 'cerrada' AND s.contado IS NOT NULL AND s.cerrada_at >= $1 AND s.cerrada_at <= $2
-		GROUP BY s.id, s.cerrada_at, b.name, s.contado ORDER BY s.cerrada_at`, idesde, ihasta)
+		GROUP BY s.id, s.cerrada_at, b.name, s.contado, s.contado_corregido ORDER BY s.cerrada_at`, idesde, ihasta)
 	if err != nil {
 		return nil, err
 	}

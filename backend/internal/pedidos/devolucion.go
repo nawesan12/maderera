@@ -217,8 +217,8 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 			}
 		}
 
-		if err := tx.QueryRow(ctx, `INSERT INTO devoluciones (clave, order_id, importe, destino, motivo, created_by_user_id)
-			VALUES ($1, $2, $3::numeric, $4, $5, $6) RETURNING id::text`,
+		if err := tx.QueryRow(ctx, `INSERT INTO devoluciones (clave, order_id, importe, destino, motivo, created_by_user_id, origen)
+			VALUES ($1, $2, $3::numeric, $4, $5, $6, 'panel') RETURNING id::text`,
 			clave, pedido, jsmath.Fijo2(total), destino, motivo, ses.UserID).Scan(&out.ID); err != nil {
 			return err
 		}

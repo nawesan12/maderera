@@ -301,7 +301,7 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 		t.Errorf("rubro repetido: %d %s", c, b)
 	}
 	_, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil)
-	if !strings.Contains(b, `"productos":0,"sueltos":1`) {
+	if !strings.Contains(b, `"productos":0,"inactivos":0,"sueltos":1`) {
 		t.Errorf("antes de enganchar: %s", b)
 	}
 	var rubro string
@@ -309,9 +309,15 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 	if _, b := pedir(t, ven, "POST", u+"rubros/"+rubro+"/enganchar", nil); !strings.Contains(b, `1 producto enganchado a \"Fenolicos\".`) {
 		t.Errorf("enganchar: %s", b)
 	}
-	if _, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil); !strings.Contains(b, `"productos":1,"sueltos":0`) {
+	if _, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil); !strings.Contains(b, `"productos":1,"inactivos":0,"sueltos":0`) {
 		t.Errorf("después de enganchar: %s", b)
 	}
+	// Apagado, el producto sigue contando en su rubro (M3S2-065).
+	_, _ = e.pool.Exec(ctx, `update products set active = false where id = $1`, ids[0])
+	if _, b := pedir(t, ven, "GET", u+"rubros/por-categoria", nil); !strings.Contains(b, `"productos":0,"inactivos":1,"sueltos":0`) {
+		t.Errorf("con el producto apagado: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update products set active = true where id = $1`, ids[0])
 
 	// Sugeridos.
 	if c, b := pedir(t, ven, "POST", u+"productos/"+ids[0]+"/sugeridos", map[string]string{"relatedProductId": ids[0], "tipo": "similar"}); c != 422 || !strings.Contains(b, "a sí mismo") {

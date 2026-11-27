@@ -321,14 +321,19 @@ func (q *Queries) CategoriasOrdenadas(ctx context.Context) ([]CategoriasOrdenada
 }
 
 const conteoPorRubro = `-- name: ConteoPorRubro :many
-SELECT subcategory_id, count(*)::int AS cuantos FROM products WHERE active GROUP BY subcategory_id
+SELECT subcategory_id, (count(*) FILTER (WHERE active))::int AS cuantos,
+  (count(*) FILTER (WHERE NOT active))::int AS inactivos
+FROM products GROUP BY subcategory_id
 `
 
 type ConteoPorRubroRow struct {
 	SubcategoryID *string `json:"subcategoryId"`
 	Cuantos       int32   `json:"cuantos"`
+	Inactivos     int32   `json:"inactivos"`
 }
 
+// Los apagados también: un rubro con un producto inactivo decía «sin
+// productos» (mes simulado, M3S2-065).
 func (q *Queries) ConteoPorRubro(ctx context.Context) ([]ConteoPorRubroRow, error) {
 	rows, err := q.db.Query(ctx, conteoPorRubro)
 	if err != nil {
@@ -338,7 +343,7 @@ func (q *Queries) ConteoPorRubro(ctx context.Context) ([]ConteoPorRubroRow, erro
 	items := []ConteoPorRubroRow{}
 	for rows.Next() {
 		var i ConteoPorRubroRow
-		if err := rows.Scan(&i.SubcategoryID, &i.Cuantos); err != nil {
+		if err := rows.Scan(&i.SubcategoryID, &i.Cuantos, &i.Inactivos); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1287,7 +1292,7 @@ func (q *Queries) SucursalesTodas(ctx context.Context) ([]Branch, error) {
 
 const sueltosPorTexto = `-- name: SueltosPorTexto :many
 SELECT category_id, lower(unaccent(subcategory))::text AS texto, count(*)::int AS cuantos
-FROM products WHERE active AND subcategory_id IS NULL AND subcategory IS NOT NULL
+FROM products WHERE subcategory_id IS NULL AND subcategory IS NOT NULL
 GROUP BY category_id, 2
 `
 

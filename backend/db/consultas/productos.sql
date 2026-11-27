@@ -38,12 +38,16 @@ SELECT id, slug, name FROM categories ORDER BY sort_order;
 SELECT id, category_id, slug, name, active FROM subcategories ORDER BY sort_order, name;
 
 -- name: ConteoPorRubro :many
-SELECT subcategory_id, count(*)::int AS cuantos FROM products WHERE active GROUP BY subcategory_id;
+-- Los apagados también: un rubro con un producto inactivo decía «sin
+-- productos» (mes simulado, M3S2-065).
+SELECT subcategory_id, (count(*) FILTER (WHERE active))::int AS cuantos,
+  (count(*) FILTER (WHERE NOT active))::int AS inactivos
+FROM products GROUP BY subcategory_id;
 
 -- name: SueltosPorTexto :many
 -- Los que nombran un rubro como texto y no lo tienen asignado.
 SELECT category_id, lower(unaccent(subcategory))::text AS texto, count(*)::int AS cuantos
-FROM products WHERE active AND subcategory_id IS NULL AND subcategory IS NOT NULL
+FROM products WHERE subcategory_id IS NULL AND subcategory IS NOT NULL
 GROUP BY category_id, 2;
 
 -- name: CategoriasOrdenadas :many

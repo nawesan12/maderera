@@ -2056,8 +2056,11 @@ type RubrosPorCategoria200JSONResponse []struct {
 	Id     string `json:"id"`
 	Name   string `json:"name"`
 	Rubros []struct {
-		Active    bool   `json:"active"`
-		Id        string `json:"id"`
+		Active bool   `json:"active"`
+		Id     string `json:"id"`
+
+		// Inactivos Los productos apagados del rubro
+		Inactivos int    `json:"inactivos"`
 		Name      string `json:"name"`
 		Productos int    `json:"productos"`
 		Slug      string `json:"slug"`
@@ -3058,9 +3061,10 @@ var swaggerSpec = []string{
 	"zr1VETOidHmjbpPBfSCLeIybEk6Bmg3dyx1rrc6v5QZNiw1dfuBf+GIWRH5HmKY5NPvvnWjcjWdpVfFH",
 	"K0xP/Xduiml00prZLXvoCJjxO66k/8U1rNBTNuigfvKv77Kfaln384qPe+6wFav/ZWCvv7dieJOAc153",
 	"ZrHbqm3Hr65tUQDdVl/UuRSi/4jjD+nvsULWMWqn+Q7B/+MLn44qFUeqvlQgZqVi7rZRZ6geJMvT9169",
-	"9+MyV+hyXHtPTy130Ci2JZcWDtV+qWi3B46WHLFzNddQ9ed3LrauYYOju+5ivVp6pEo4/IkgDtUlo8ix",
-	"9/lL04Hf6x6qZtzsA+NqgUp2G6HSud5fV7dzfVBNt3JdH1xieetkB2of8PdODWwvlgbho5y6r0SBhuV/",
-	"WpPcrwbuHy/+aGd/sBL07PMmcu7Gx2MtptJ3vXpZM5gr2Pj/4NA5PaEJX4VgC7LzsbpX4P8NAA==",
+	"9+MyV+hyXHtPTy130Ci2JZcWDtV+qWi3B46WHLFzNddQ9ed3LrauYYOjO7BYY8yRNuNe6hVK8IDDV6qo",
+	"MtPF+uCSjw46tfnFcUs+OcShOmcUifY+p2k6+stO2qzdcjv7Zh8vV4tVetkI8c71FbuaoOuxajqh69rj",
+	"EqteJ/NQ+5e/d9phe3E6CB/l1H2BCjQs/9Oa5H41cP9Y9Ec7+4OVoGefN5FzN/YeazGVvqPWy5rBXDHI",
+	"/3eIzukJDf4qBHKQnQ/hvQL/bwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

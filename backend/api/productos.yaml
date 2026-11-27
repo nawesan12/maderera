@@ -312,13 +312,14 @@ paths:
                       type: array
                       items:
                         type: object
-                        required: [id, name, slug, active, productos, sueltos]
+                        required: [id, name, slug, active, productos, inactivos, sueltos]
                         properties:
                           id: { type: string }
                           name: { type: string }
                           slug: { type: string }
                           active: { type: boolean }
                           productos: { type: integer }
+                          inactivos: { type: integer, description: Los productos apagados del rubro }
                           sueltos: { type: integer }
   /api/v1/admin/rubros/{id}/activo:
     post:

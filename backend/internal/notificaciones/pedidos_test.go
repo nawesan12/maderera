@@ -150,11 +150,14 @@ func TestCambioDeEstado(t *testing.T) {
 	if r := e.registro(t, "entregado"); r != "email:omitida" {
 		t.Errorf("registro apagado: %s", r)
 	}
-	// Mes simulado 2: un envío listo no recibe «listo para retirar».
+	// Mes simulado 2: un envío listo no recibe «listo para retirar»: el
+	// correo dice que sale para la entrega (M2S1-074).
 	envio := e.pedido(t, "PED-000201", "ana@prueba.test", "envio")
-	antes = e.correos()
-	if err := e.s.CambioDeEstado(ctx, envio, "listo"); err != nil || e.correos() != antes {
-		t.Errorf("envío listo: %v, %d correos", err, e.correos()-antes)
+	if err := e.s.CambioDeEstado(ctx, envio, "listo"); err != nil {
+		t.Fatal(err)
+	}
+	if _, asunto, _, texto := e.ultimo(t); strings.Contains(asunto+texto, "retirar") {
+		t.Errorf("envío listo: %q %q", asunto, texto)
 	}
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition, type FormEvent } from "react";
+import { useActionState, useTransition, type FormEvent } from "react";
 import { sinRomper } from "@/lib/acciones/sin-romper";
 import { CampoArchivo } from "@/components/campo-archivo";
 import {
@@ -8,7 +8,6 @@ import {
   Banknote,
   Check,
   Clock,
-  Copy,
   CreditCard,
   Loader2,
   Upload,
@@ -23,6 +22,7 @@ import {
   type EstadoPago,
 } from "@/app/(public)/pago-actions";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
+import { DatosBancarios } from "@/components/pagos/datos-bancarios";
 
 /**
  * El bloque de pago de la pantalla de confirmación del pedido.
@@ -289,7 +289,6 @@ function TransferenciaBancaria({
 }) {
   const [estado, accion] = useActionState(subir, inicial);
   const [pendiente, empezar] = useTransition();
-  const [copiado, setCopiado] = useState<string | null>(null);
 
   // Con `onSubmit` y no con `action`: con `action`, React vacía el formulario
   // al volver, y un error se llevaba el archivo elegido (H076).
@@ -297,16 +296,6 @@ function TransferenciaBancaria({
     e.preventDefault();
     const datos = new FormData(e.currentTarget);
     empezar(() => accion(datos));
-  }
-
-  async function copiar(valor: string, etiqueta: string) {
-    try {
-      await navigator.clipboard.writeText(valor);
-      setCopiado(etiqueta);
-      setTimeout(() => setCopiado(null), 2000);
-    } catch {
-      // Sin portapapeles disponible, el dato igual está visible para copiarlo a mano.
-    }
   }
 
   return (
@@ -335,28 +324,7 @@ function TransferenciaBancaria({
         )}
 
         {banco ? (
-          <dl className="mb-4 space-y-2 rounded-lg bg-brand-cream/60 p-4 text-sm">
-            <Dato etiqueta="Titular" valor={banco.titular} />
-            <Dato etiqueta="Banco" valor={banco.banco} />
-            <Dato etiqueta="CUIT" valor={banco.cuit} />
-            <Dato
-              etiqueta="CBU"
-              valor={banco.cbu}
-              onCopiar={() => copiar(banco.cbu, "CBU")}
-              copiado={copiado === "CBU"}
-            />
-            <Dato
-              etiqueta="Alias"
-              valor={banco.alias}
-              onCopiar={() => copiar(banco.alias, "Alias")}
-              copiado={copiado === "Alias"}
-            />
-            {banco.instrucciones && (
-              <p className="pt-1 text-xs text-muted-foreground">
-                {banco.instrucciones}
-              </p>
-            )}
-          </dl>
+          <DatosBancarios banco={banco} className="mb-4" />
         ) : null}
 
         {estado.ok ? (
@@ -414,42 +382,5 @@ function TransferenciaBancaria({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function Dato({
-  etiqueta,
-  valor,
-  onCopiar,
-  copiado,
-}: {
-  etiqueta: string;
-  valor: string;
-  onCopiar?: () => void;
-  copiado?: boolean;
-}) {
-  if (!valor) return null;
-
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="text-muted-foreground">{etiqueta}</dt>
-      <dd className="flex items-center gap-2 font-medium tabular">
-        {valor}
-        {onCopiar && (
-          <button
-            type="button"
-            onClick={onCopiar}
-            aria-label={`Copiar ${etiqueta}`}
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground"
-          >
-            {copiado ? (
-              <Check className="h-3.5 w-3.5 text-brand-green" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" />
-            )}
-          </button>
-        )}
-      </dd>
-    </div>
   );
 }

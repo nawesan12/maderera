@@ -12,6 +12,7 @@ import { sinRomper } from "@/lib/acciones/sin-romper";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
 import { formatearMonto, importeParaElCampo } from "@/lib/formato";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
+import { DatosBancarios } from "@/components/pagos/datos-bancarios";
 
 const inicial: EstadoPago = {};
 const subirDeDeuda = sinRomper(subirComprobanteDeDeuda);
@@ -128,13 +129,7 @@ function Comprobante({
   return (
     <div className="space-y-4 p-5">
       {banco ? (
-        <dl className="space-y-1.5 rounded-lg bg-sitio-alt p-4 text-sm">
-          <Fila etiqueta="Titular" valor={banco.titular} />
-          <Fila etiqueta="Banco" valor={banco.banco} />
-          <Fila etiqueta="CBU" valor={banco.cbu} />
-          <Fila etiqueta="Alias" valor={banco.alias} />
-          <Fila etiqueta="CUIT" valor={banco.cuit} />
-        </dl>
+        <DatosBancarios banco={banco} />
       ) : null}
 
       {estado.ok ? (
@@ -280,16 +275,5 @@ function Pestana({
       <Icono className="hidden h-4 w-4 shrink-0 sm:block" />
       {children}
     </button>
-  );
-}
-
-function Fila({ etiqueta, valor }: { etiqueta: string; valor: string }) {
-  if (!valor) return null;
-
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-muted-foreground">{etiqueta}</dt>
-      <dd className="tabular font-medium">{valor}</dd>
-    </div>
   );
 }

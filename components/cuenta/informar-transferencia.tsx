@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState, useTransition, type FormEvent } from "react";
-import { AlertCircle, Check, Copy, Loader2, Upload } from "lucide-react";
+import { useActionState, useTransition, type FormEvent } from "react";
+import { AlertCircle, Check, Loader2, Upload } from "lucide-react";
 import { subirComprobante, type EstadoPago } from "@/app/(public)/pago-actions";
 import type { DatosParaTransferir } from "@/lib/dal/pagos";
+import { DatosBancarios } from "@/components/pagos/datos-bancarios";
 import { CampoArchivo } from "@/components/campo-archivo";
 import { sinRomper } from "@/lib/acciones/sin-romper";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
@@ -37,22 +38,11 @@ export function InformarTransferencia({
 }) {
   const [estado, accion] = useActionState(subir, inicial);
   const [enviando, empezar] = useTransition();
-  const [copiado, setCopiado] = useState<string | null>(null);
 
   function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const datos = new FormData(e.currentTarget);
     empezar(() => accion(datos));
-  }
-
-  async function copiar(valor: string) {
-    try {
-      await navigator.clipboard.writeText(valor);
-      setCopiado(valor);
-      setTimeout(() => setCopiado(null), 2000);
-    } catch {
-      // Sin portapapeles el dato sigue a la vista para copiarlo a mano.
-    }
   }
 
   if (estado.ok) {
@@ -72,42 +62,7 @@ export function InformarTransferencia({
         </BotonWhatsapp>
       )}
       {banco && (
-        <dl className="space-y-1.5 rounded-lg bg-hundida p-3.5 text-sm">
-          {(
-            [
-              ["Titular", banco.titular, false],
-              ["CBU", banco.cbu, true],
-              ["Alias", banco.alias, true],
-              ["CUIT", banco.cuit, false],
-            ] as const
-          )
-            .filter(([, valor]) => Boolean(valor))
-            .map(([etiqueta, valor, copiable]) => (
-              <div
-                key={etiqueta}
-                className="flex items-center justify-between gap-3"
-              >
-                <dt className="text-muted-foreground">{etiqueta}</dt>
-                <dd className="tabular flex min-w-0 items-center gap-1 font-medium [overflow-wrap:anywhere]">
-                  {valor}
-                  {copiable && (
-                    <button
-                      type="button"
-                      onClick={() => copiar(valor)}
-                      aria-label={`Copiar ${etiqueta}`}
-                      className="-my-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/5 hover:text-foreground"
-                    >
-                      {copiado === valor ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </button>
-                  )}
-                </dd>
-              </div>
-            ))}
-        </dl>
+        <DatosBancarios banco={banco} />
       )}
 
       <form onSubmit={enviar} className="space-y-3">

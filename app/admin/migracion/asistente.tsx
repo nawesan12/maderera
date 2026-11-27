@@ -399,13 +399,35 @@ export function AsistenteMigracion({
       <div>
         {encabezado}
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Indicador
-            titulo="Entran"
-            valor={previa.validas ?? 0}
-            detalle="Filas que se van a escribir"
-            tono="bien"
-          />
+        {/* Nuevas y las que pisan una ficha que ya existe, por separado:
+            «Entran 3» no decía que una le cambiaba el nombre y el domicilio
+            a un cliente que ya estaba (mes simulado, M2S1-030). */}
+        <div
+          className={`grid gap-3 sm:grid-cols-2 ${previa.actualizan !== undefined ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
+        >
+          {previa.actualizan === undefined ? (
+            <Indicador
+              titulo="Entran"
+              valor={previa.validas ?? 0}
+              detalle="Filas que se van a escribir"
+              tono="bien"
+            />
+          ) : (
+            <>
+              <Indicador
+                titulo="Nuevas"
+                valor={(previa.validas ?? 0) - previa.actualizan}
+                detalle="Fichas que se crean"
+                tono="bien"
+              />
+              <Indicador
+                titulo="Actualizan"
+                valor={previa.actualizan}
+                detalle="Caen sobre una ficha que ya existe"
+                tono={previa.actualizan ? "aviso" : "neutro"}
+              />
+            </>
+          )}
           <Indicador
             titulo="Entran con reparos"
             valor={previa.conAviso ?? 0}
@@ -440,7 +462,17 @@ export function AsistenteMigracion({
                   <span className="text-base text-muted-foreground">
                     {fila.resumen}
                   </span>
+                  {fila.actualiza && (
+                    <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                      Actualiza
+                    </span>
+                  )}
                 </div>
+                {fila.cambios?.map((cambio) => (
+                  <p key={cambio} className="mt-1 text-sm text-foreground">
+                    {cambio}
+                  </p>
+                ))}
                 {fila.errores.map((error) => (
                   <p
                     key={error}
@@ -466,7 +498,8 @@ export function AsistenteMigracion({
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <Button onClick={correr} disabled={(previa.validas ?? 0) === 0}>
-            Migrar {(previa.validas ?? 0).toLocaleString("es-AR")} filas
+            Migrar {(previa.validas ?? 0).toLocaleString("es-AR")}{" "}
+            {(previa.validas ?? 0) === 1 ? "fila" : "filas"}
           </Button>
           <button
             onClick={() => setPaso("mapeo")}
@@ -567,7 +600,9 @@ export function AsistenteMigracion({
             <div key={control.titulo} className="tarjeta p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="text-base font-medium">
-                  {control.ok ? (
+                  {/* «—» es un dato del archivo sin nada con qué
+                      compararlo: no lleva tilde verde (M3S2-034). */}
+                  {control.enElSistema === "—" ? null : control.ok ? (
                     <CircleCheck className="mr-1.5 inline h-5 w-5 text-brand-green" />
                   ) : (
                     <CircleAlert className="mr-1.5 inline h-5 w-5 text-brand-orange" />
@@ -592,7 +627,8 @@ export function AsistenteMigracion({
         <div className="mt-5">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
             <p className="text-base font-semibold">
-              {rechazos.length.toLocaleString("es-AR")} filas quedaron afuera
+              {rechazos.length.toLocaleString("es-AR")}{" "}
+              {rechazos.length === 1 ? "fila quedó afuera" : "filas quedaron afuera"}
             </p>
             <button
               onClick={() => descargarRechazos(entidad, rechazos)}

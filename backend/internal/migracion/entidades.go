@@ -32,6 +32,22 @@ var tiposCliente = []Opcion{
 	{Valor: "profesional", Etiqueta: "Profesional", Alias: []string{"profesional", "mayorista", "gremio", "constructor", "carpintero", "arquitecto", "empresa"}},
 }
 
+// rubrosCliente son los de lib/rubros-cliente.ts. «Carpintero» en la columna
+// del tipo de cliente se perdía: el tipo quedaba en profesional y la ficha
+// «Sin rubro» (mes simulado, M2S1-046).
+var rubrosCliente = []Opcion{
+	{Valor: "particular", Etiqueta: "Particular", Alias: []string{"particular", "consumidor", "consumidorfinal", "minorista", "publico", "comun"}},
+	{Valor: "arquitecto", Etiqueta: "Arquitectura", Alias: []string{"arquitecto", "arquitecta", "arquitectos", "arquitectura", "arq", "estudio"}},
+	{Valor: "carpintero", Etiqueta: "Carpintería", Alias: []string{"carpintero", "carpintera", "carpinteros", "carpinteria", "mueblero", "muebleria", "ebanista"}},
+	{Valor: "cementista", Etiqueta: "Cementista", Alias: []string{"cementista", "albanil", "albanileria", "corralon"}},
+	{Valor: "constructora", Etiqueta: "Constructora", Alias: []string{"constructora", "constructor", "construccion", "empresaconstructora"}},
+	{Valor: "woodframer", Etiqueta: "Wood frame", Alias: []string{"woodframe", "woodframer", "steelframe"}},
+	{Valor: "moldava", Etiqueta: "Moldava", Alias: []string{"moldava", "revendedor", "reventa"}},
+	{Valor: "disenador", Etiqueta: "Diseño de interiores", Alias: []string{"disenador", "disenadora", "disenodeinteriores", "interiorismo", "interiorista", "decorador", "decoradora"}},
+	{Valor: "instalador", Etiqueta: "Instalación y colocación", Alias: []string{"instalador", "instaladora", "colocador", "instalacion", "colocacion"}},
+	{Valor: "otro", Etiqueta: "Otro", Alias: []string{"otro", "otros", "varios"}},
+}
+
 var unidades = []Opcion{
 	{Valor: "unidad", Etiqueta: "Unidad", Alias: []string{"unidad", "u", "un", "cu", "cadauno", "pieza", "pza"}},
 	{Valor: "metro_lineal", Etiqueta: "Metro lineal", Alias: []string{"metrolineal", "ml", "metro", "metros", "m", "mlineal", "lineal", "lineales"}},
@@ -65,6 +81,7 @@ var Entidades = []Entidad{
 			{Clave: "telefono", Etiqueta: "Teléfono", Tipo: "texto", Alias: []string{"telefono", "tel", "celular", "movil", "contacto", "telefonos"}},
 			{Clave: "direccion", Etiqueta: "Domicilio", Tipo: "texto", Alias: []string{"direccion", "domicilio", "calle", "domiciliofiscal", "direccionfiscal"}},
 			{Clave: "tipo", Etiqueta: "Tipo de cliente", Tipo: "opcion", Opciones: tiposCliente, PorDefecto: p("particular"), Alias: []string{"tipo", "tipocliente", "clase", "categoria", "segmento"}},
+			{Clave: "rubro", Etiqueta: "Rubro", Tipo: "opcion", Opciones: rubrosCliente, Ayuda: "A qué se dedica. Si no hay columna, sale del tipo de cliente cuando dice el oficio («Carpintero»).", Alias: []string{"rubro", "rubrocliente", "actividad", "oficio", "gremio", "profesion"}},
 			{Clave: "limiteCredito", Etiqueta: "Límite de cuenta corriente", Tipo: "numero", PorDefecto: p("0"), Alias: []string{"limitecredito", "limite", "creditomaximo", "topecuentacorriente", "limitecuentacorriente"}},
 			{Clave: "asesor", Etiqueta: "Vendedor asignado", Tipo: "texto", Alias: []string{"asesor", "vendedor", "responsable", "vendedorasignado"}},
 			{Clave: "notas", Etiqueta: "Observaciones", Tipo: "texto", Alias: []string{"notas", "observaciones", "comentarios", "obs"}},

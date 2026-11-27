@@ -236,6 +236,15 @@ func TestGoldenControles(t *testing.T) {
 	t.Logf("%d informes", len(casos))
 }
 
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 // TestActualizarGolden reescribe los golden con lo que da Go, con las mismas
 // entradas. El TS de la migración ya no existe: desde el 17/11 el golden
 // cuida que Go no cambie sin querer, no que se parezca al TS.
@@ -246,6 +255,11 @@ func TestGoldenControles(t *testing.T) {
 // aceptan decimales (28,8 m de zócalo quedaban en 29), y los productos
 // suman color, material, terminación, calidad, código de barras, costo y
 // proveedor; «proveedor» dejó de ser sinónimo de marca.
+//
+// Y el 27/11 (mes simulado): los clientes suman el rubro (y lo sacan del tipo
+// cuando nombra un oficio), los textos de una línea juntan sus renglones, y el
+// informe da los importes en pesos, compara contra lo del archivo y no aplica
+// la suma de saldos de proveedores sin saldos.
 func TestActualizarGolden(t *testing.T) {
 	if os.Getenv("MIGRACION_ACTUALIZAR") == "" {
 		t.Skip("solo con MIGRACION_ACTUALIZAR=1")
@@ -311,6 +325,21 @@ func TestActualizarGolden(t *testing.T) {
 			e := definicion(t, c["entidad"].(string))
 			m, f := mapeo(c["mapeo"]), filas(c["filas"])
 			c["normalizadas"], c["previa"] = a(NormalizarFilas(e, m, f)), a(Previsualizar(e, m, f))
+		}
+		return v
+	})
+	reescribir("controles.json.gz", func(v any) any {
+		for _, c := range v.([]any) {
+			c := c.(map[string]any)
+			var normalizadas []Fila
+			var base EnLaBase
+			if err := json.Unmarshal(mustJSON(t, c["normalizadas"]), &normalizadas); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(mustJSON(t, c["base"]), &base); err != nil {
+				t.Fatal(err)
+			}
+			c["controles"] = a(Controles(c["entidad"].(string), normalizadas, base))
 		}
 		return v
 	})

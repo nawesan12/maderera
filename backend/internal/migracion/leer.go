@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -336,6 +337,9 @@ func leerCampo(c Campo, bruto string) leido {
 		return leido{valor: f}
 	case "opcion":
 		v, ok := interpretarOpcion(texto, c.Opciones)
+		if !ok && c.porDefecto() == "" && c.Clave == "rubro" {
+			return leido{aviso: fmt.Sprintf(`%s: no se reconoció "%s", queda sin rubro.`, c.Etiqueta, texto)}
+		}
 		if !ok {
 			queda := ""
 			if c.porDefecto() != "" {
@@ -345,7 +349,30 @@ func leerCampo(c Campo, bruto string) leido {
 		}
 		return leido{valor: v}
 	}
-	return leido{valor: texto}
+	return leido{valor: unRenglon(c.Clave, texto)}
+}
+
+// multilinea son los campos de texto que pueden tener varios renglones.
+var multilinea = map[string]bool{"notas": true, "descripcion": true, "detalle": true}
+
+// unRenglon junta los renglones de un campo de una línea: «Alem 3400⏎Piso 2»
+// se guardaba con el salto y la vista previa lo mostraba en una línea
+// (mes simulado, M2S3-018). El domicilio los separa con coma.
+func unRenglon(clave, texto string) string {
+	if multilinea[clave] || !strings.ContainsAny(texto, "\r\n") {
+		return texto
+	}
+	var partes []string
+	for _, r := range strings.FieldsFunc(texto, func(r rune) bool { return r == '\n' || r == '\r' }) {
+		if r = trimJS(r); r != "" {
+			partes = append(partes, r)
+		}
+	}
+	sep := " "
+	if clave == "direccion" {
+		sep = ", "
+	}
+	return strings.Join(partes, sep)
 }
 
 // validarFila son las reglas que miran la fila entera.
@@ -376,6 +403,26 @@ func validarFila(e Entidad, d map[string]string) (errores, avisos []string) {
 	return errores, avisos
 }
 
+// rubroDelTipo completa el rubro con lo que dice la columna del tipo de
+// cliente cuando nombra un oficio, y el tipo con el rubro cuando la columna
+// del tipo no vino (M2S1-046).
+func rubroDelTipo(m Mapeo, fila []string, d map[string]string) {
+	bruto := func(clave string) string {
+		if j := m.de(clave); j >= 0 && j < len(fila) {
+			return trimJS(fila[j])
+		}
+		return ""
+	}
+	if d["rubro"] == "" {
+		if r, ok := interpretarOpcion(bruto("tipo"), rubrosCliente); ok {
+			d["rubro"] = r
+		}
+	}
+	if bruto("tipo") == "" && d["rubro"] != "" && d["rubro"] != "particular" {
+		d["tipo"] = "profesional"
+	}
+}
+
 // NormalizarFilas convierte las filas crudas en registros listos para
 // escribir, con lo que está mal en cada una. No toca la base.
 func NormalizarFilas(e Entidad, m Mapeo, filas [][]string) []Fila {
@@ -395,6 +442,9 @@ func NormalizarFilas(e Entidad, m Mapeo, filas [][]string) []Fila {
 			if l.aviso != "" {
 				f.Avisos = append(f.Avisos, l.aviso)
 			}
+		}
+		if e.Clave == "clientes" {
+			rubroDelTipo(m, fila, f.Datos)
 		}
 		errs, avs := validarFila(e, f.Datos)
 		f.Errores = append(f.Errores, errs...)
@@ -420,6 +470,17 @@ type FilaPrevia struct {
 	Resumen       string   `json:"resumen"`
 	Errores       []string `json:"errores"`
 	Avisos        []string `json:"avisos"`
+	// Actualiza dice que la fila cae sobre una ficha que ya existe, y Cambios
+	// qué le cambiaría («Domicilio: Ruta 11 km 5 → Ruta 11»). Los pone la
+	// vista previa que mira la base (Servicio.Previsualizar).
+	Actualiza bool     `json:"actualiza,omitempty"`
+	Cambios   []string `json:"cambios,omitempty"`
+}
+
+// Sobre es lo que la base dice de una fila antes de migrarla.
+type Sobre struct {
+	Actualiza bool
+	Cambios   []string
 }
 
 // VistaPrevia es lo que va a pasar si se migra, sin escribir nada.
@@ -430,6 +491,8 @@ type VistaPrevia struct {
 	ConError *int          `json:"conError,omitempty"`
 	Muestra  *[]FilaPrevia `json:"muestra,omitempty"`
 	Rechazos *[]Rechazo    `json:"rechazos,omitempty"`
+	// Actualizan son las válidas que caen sobre una ficha que ya existe.
+	Actualizan *int `json:"actualizan,omitempty"`
 }
 
 func primero(xs ...string) string {
@@ -474,7 +537,12 @@ func Previsualizar(e Entidad, m Mapeo, filas [][]string) VistaPrevia {
 	if sin := Faltantes(e, m); len(sin) > 0 {
 		return VistaPrevia{Error: "Falta indicar qué columna es " + strings.Join(sin, ", ") + "."}
 	}
-	normalizadas := NormalizarFilas(e, m, filas)
+	return armarVista(e, NormalizarFilas(e, m, filas), nil)
+}
+
+// armarVista es la vista previa de filas ya normalizadas; sobre (por línea)
+// es lo que dijo la base, o nil.
+func armarVista(e Entidad, normalizadas []Fila, sobre map[int]Sobre) VistaPrevia {
 	var conError, conAviso, bien []Fila
 	for _, f := range normalizadas {
 		switch {
@@ -486,6 +554,19 @@ func Previsualizar(e Entidad, m Mapeo, filas [][]string) VistaPrevia {
 			bien = append(bien, f)
 		}
 	}
+	if sobre != nil {
+		// Las que pisan una ficha, primero entre las buenas: es lo que hay que
+		// mirar antes de migrar (M2S1-030).
+		slices.SortStableFunc(bien, func(a, b Fila) int {
+			switch {
+			case sobre[a.Linea].Actualiza && !sobre[b.Linea].Actualiza:
+				return -1
+			case !sobre[a.Linea].Actualiza && sobre[b.Linea].Actualiza:
+				return 1
+			}
+			return 0
+		})
+	}
 	orden := append(append(append([]Fila{}, conError...), conAviso...), bien...)
 	if len(orden) > 60 {
 		orden = orden[:60]
@@ -494,6 +575,9 @@ func Previsualizar(e Entidad, m Mapeo, filas [][]string) VistaPrevia {
 	for i, f := range orden {
 		id, res := describir(e.Clave, f.Datos)
 		muestra[i] = FilaPrevia{Linea: f.Linea, Identificador: id, Resumen: res, Errores: f.Errores, Avisos: f.Avisos}
+		if x, ok := sobre[f.Linea]; ok && len(f.Errores) == 0 {
+			muestra[i].Actualiza, muestra[i].Cambios = x.Actualiza, x.Cambios
+		}
 	}
 	rechazos := make([]Rechazo, len(conError))
 	for i, f := range conError {
@@ -501,7 +585,17 @@ func Previsualizar(e Entidad, m Mapeo, filas [][]string) VistaPrevia {
 		rechazos[i] = Rechazo{Linea: f.Linea, Identificador: id, Motivo: strings.Join(f.Errores, " ")}
 	}
 	validas, avisos, errores := len(normalizadas)-len(conError), len(conAviso), len(conError)
-	return VistaPrevia{Validas: &validas, ConAviso: &avisos, ConError: &errores, Muestra: &muestra, Rechazos: &rechazos}
+	v := VistaPrevia{Validas: &validas, ConAviso: &avisos, ConError: &errores, Muestra: &muestra, Rechazos: &rechazos}
+	if sobre != nil {
+		n := 0
+		for _, f := range normalizadas {
+			if len(f.Errores) == 0 && sobre[f.Linea].Actualiza {
+				n++
+			}
+		}
+		v.Actualizan = &n
+	}
+	return v
 }
 
 // alicuotaDeArca dice si el porcentaje es una de las alícuotas de IVA que

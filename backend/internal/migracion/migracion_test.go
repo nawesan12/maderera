@@ -21,6 +21,7 @@ import (
 
 	"mjbj/internal/api/migracionapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/formato"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/pruebas"
 	"mjbj/internal/sqlc"
@@ -308,9 +309,10 @@ func TestInformeDeIntegridad(t *testing.T) {
 
 	// Del archivo (12.345,67 − 1.500 − 200 = 10.645,67) solo entró la 00012:
 	// la 00013 no tiene ficha (su límite era negativo) y el CUIT de la
-	// última tampoco. El sistema tiene más de lo que suma el archivo, así que
-	// la suma «cuadra»; la cantidad de clientes con saldo, no.
-	if len(controles) != 2 || controles[0].SegunElArchivo != "10645.67" || controles[0].EnElSistema != "12345.67" || !controles[0].Ok ||
+	// última tampoco. El sistema se cuenta sobre las fichas del archivo y la
+	// diferencia es deuda de alguien: ni la suma ni la cantidad cuadran
+	// (antes «cuadraba» porque el sistema tenía más, M3S2-034).
+	if len(controles) != 2 || controles[0].SegunElArchivo != formato.Moneda(10645.67) || controles[0].EnElSistema != formato.Moneda(12345.67) || controles[0].Ok ||
 		controles[1].SegunElArchivo != "3" || controles[1].EnElSistema != "1" || controles[1].Ok {
 		t.Errorf("controles: %+v", controles)
 	}

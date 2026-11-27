@@ -168,6 +168,11 @@ func (s *Servicio) CobrarAClienteEn(ctx context.Context, ses *auth.Sesion, clien
 			}
 		}
 		texto := "Pago a cuenta"
+		if r := conceptoDeRetenciones(partes); r != "" {
+			// Solo retenciones: el renglón dice cuál, como la cargada desde
+			// ARCA, y no «Pago a cuenta» (mes 23).
+			texto = r
+		}
 		if t := strings.TrimSpace(concepto); t != "" {
 			texto = t
 		}
@@ -748,4 +753,17 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 		return ResultadoDeCobro{Ok: "Rechazado. La cuenta del cliente no cambió y se le avisó."}, nil
 	}
 	return ResultadoDeCobro{Ok: "Estado actualizado."}, nil
+}
+
+// conceptoDeRetenciones es «Retención de IIBB · certificado 123» cuando todas
+// las partes son retenciones; vacío si hay algo más.
+func conceptoDeRetenciones(partes []Parte) string {
+	var xs []string
+	for _, p := range partes {
+		if p.Medio != "retencion" || p.Referencia == nil {
+			return ""
+		}
+		xs = append(xs, "Retención de "+NombreDelImpuesto[p.Impuesto]+" · certificado "+*p.Referencia)
+	}
+	return strings.Join(xs, " · ")
 }

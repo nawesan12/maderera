@@ -188,8 +188,10 @@ ORDER BY c.fecha_pago;
 -- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
        c.id AS cheque_id, c.estado AS cheque_estado, c.fecha_pago AS cheque_fecha_pago,
-       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
+       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago,
+       ret.impuesto AS retencion_impuesto, ret.numero AS retencion_certificado
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id
+LEFT JOIN retenciones_sufridas ret ON p.medio = 'retencion' AND ret.receipt_id = p.receipt_id AND ret.numero = p.referencia
 WHERE p.receipt_id = ANY(sqlc.arg(recibos)::uuid[])
 ORDER BY p.orden;

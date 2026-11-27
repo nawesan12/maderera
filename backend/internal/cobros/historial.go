@@ -244,6 +244,9 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 					chequesDe[p.ReceiptID] = append(chequesDe[p.ReceiptID], refCheque(*p.ChequeID, NombreDelCheque(tipo, p.Banco, *p.Numero), p.Importe,
 						string(*p.ChequeEstado), p.ChequeFechaPago))
 				}
+			} else if p.RetencionImpuesto != nil {
+				// «Retención $ X» no decía de qué impuesto (mes 23).
+				t = "Retención de " + NombreDelImpuesto[string(*p.RetencionImpuesto)] + " " + formato.Importe(p.Importe)
 			} else {
 				t = NombreDelMedio[Medio(p.Medio)] + " " + formato.Importe(p.Importe)
 			}

@@ -5774,6 +5774,7 @@ type Order struct {
 	CanceladoAt            pgtype.Timestamptz `json:"canceladoAt"`
 	EfectivoRecibido       *jsmath.Num        `json:"efectivoRecibido"`
 	CajaBranchID           *string            `json:"cajaBranchId"`
+	FleteSinCargo          bool               `json:"fleteSinCargo"`
 }
 
 type OrderItem struct {
@@ -6667,6 +6668,7 @@ type WhatsappConversacione struct {
 	BotDevueltoAt        pgtype.Timestamptz `json:"botDevueltoAt"`
 	BotDerivacionToken   *string            `json:"botDerivacionToken"`
 	BotDerivacionTexto   *string            `json:"botDerivacionTexto"`
+	BotMotivo            *string            `json:"botMotivo"`
 }
 
 type WhatsappMensaje struct {

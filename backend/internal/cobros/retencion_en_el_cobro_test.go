@@ -3,6 +3,8 @@ package cobros
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	"mjbj/internal/auth"
@@ -51,6 +53,32 @@ func TestRetencionDentroDelCobro(t *testing.T) {
 	_ = b.pool.QueryRow(ctx, `select coalesce(sum(monto), 0)::float8 from account_movements where customer_id = $1`, b.cliente).Scan(&deuda)
 	if numero != "SIM-IIBB-000310" || impuesto != "iibb" || deuda != 0 {
 		t.Errorf("certificado %s %s, deuda %v", numero, impuesto, deuda)
+	}
+	// Mes 23: la ficha dice de qué impuesto es, y la que entra sola trae el
+	// certificado en el título, como la cargada desde ARCA.
+	_, _ = b.pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto) values ($1, 'compra', 5000)`, b.cliente)
+	sola := `[{"medio":"retencion","importe":"5000","referencia":"SIM-IIBB-000311","impuesto":"iibb"}]`
+	if _, err := s.CobrarAClienteEn(ctx, ses, b.cliente, "", "", sola, "c-ret-4", ""); err != nil {
+		t.Fatal(err)
+	}
+	movs, _, err := Historial(ctx, sqlc.New(b.pool), b.cliente, nil, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titulos, detalles []string
+	for _, m := range movs {
+		if m.Clase == "pago" {
+			titulos = append(titulos, m.Titulo)
+			if m.Detalle != nil {
+				detalles = append(detalles, *m.Detalle)
+			}
+		}
+	}
+	if !slices.Contains(titulos, "Retención de IIBB · certificado SIM-IIBB-000311") || !slices.Contains(titulos, "Pago a cuenta") {
+		t.Errorf("títulos: %q", titulos)
+	}
+	if !slices.ContainsFunc(detalles, func(d string) bool { return strings.Contains(d, "Retención de IIBB $") }) {
+		t.Errorf("detalles: %q", detalles)
 	}
 	if got := conImpuestoEscrito("Retención de iibb · certificado X"); got != "Retención de IIBB · certificado X" {
 		t.Errorf("concepto: %q", got)

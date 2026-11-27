@@ -892,24 +892,28 @@ func (q *Queries) PagosInformados(ctx context.Context, arg PagosInformadosParams
 const partesDeRecibos = `-- name: PartesDeRecibos :many
 SELECT p.receipt_id, p.medio::text AS medio, p.importe::float8 AS importe, c.banco, c.numero, c.tipo,
        c.id AS cheque_id, c.estado AS cheque_estado, c.fecha_pago AS cheque_fecha_pago,
-       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago
+       (pay.estado IS NOT DISTINCT FROM 'aprobado' AND pay.proveedor IS NOT DISTINCT FROM 'mercado_pago')::boolean AS por_mercado_pago,
+       ret.impuesto AS retencion_impuesto, ret.numero AS retencion_certificado
 FROM receipt_parts p LEFT JOIN cheques c ON c.id = p.cheque_id
 LEFT JOIN payments pay ON pay.id = p.payment_id
+LEFT JOIN retenciones_sufridas ret ON p.medio = 'retencion' AND ret.receipt_id = p.receipt_id AND ret.numero = p.referencia
 WHERE p.receipt_id = ANY($1::uuid[])
 ORDER BY p.orden
 `
 
 type PartesDeRecibosRow struct {
-	ReceiptID       string        `json:"receiptId"`
-	Medio           string        `json:"medio"`
-	Importe         float64       `json:"importe"`
-	Banco           *string       `json:"banco"`
-	Numero          *string       `json:"numero"`
-	Tipo            *TipoCheque   `json:"tipo"`
-	ChequeID        *string       `json:"chequeId"`
-	ChequeEstado    *EstadoCheque `json:"chequeEstado"`
-	ChequeFechaPago *time.Time    `json:"chequeFechaPago"`
-	PorMercadoPago  bool          `json:"porMercadoPago"`
+	ReceiptID            string            `json:"receiptId"`
+	Medio                string            `json:"medio"`
+	Importe              float64           `json:"importe"`
+	Banco                *string           `json:"banco"`
+	Numero               *string           `json:"numero"`
+	Tipo                 *TipoCheque       `json:"tipo"`
+	ChequeID             *string           `json:"chequeId"`
+	ChequeEstado         *EstadoCheque     `json:"chequeEstado"`
+	ChequeFechaPago      *time.Time        `json:"chequeFechaPago"`
+	PorMercadoPago       bool              `json:"porMercadoPago"`
+	RetencionImpuesto    *ImpuestoRetenido `json:"retencionImpuesto"`
+	RetencionCertificado *string           `json:"retencionCertificado"`
 }
 
 func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]PartesDeRecibosRow, error) {
@@ -932,6 +936,8 @@ func (q *Queries) PartesDeRecibos(ctx context.Context, recibos []string) ([]Part
 			&i.ChequeEstado,
 			&i.ChequeFechaPago,
 			&i.PorMercadoPago,
+			&i.RetencionImpuesto,
+			&i.RetencionCertificado,
 		); err != nil {
 			return nil, err
 		}

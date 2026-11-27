@@ -691,6 +691,7 @@ export interface components {
             clienteEmail: string | null;
             clienteLimite: string | null;
             clienteEstado: string | null;
+            clienteBloqueado: boolean;
             conocidos: {
                 [key: string]: string;
             };

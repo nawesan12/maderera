@@ -172,7 +172,7 @@ const PLANTILLAS: Base[] = [
       ENCABEZADO_PDF,
       cuerpo(
         "Hola {{nombre}}, te mandamos {{documento}} de tu compra en la maderera. Si tenés alguna duda, respondé este mensaje.",
-        { nombre: "Marta", documento: "el remito R-0001-00000452" },
+        { nombre: "Marta", documento: "el remito REM-0043" },
       ),
       PIE,
     ],

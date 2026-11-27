@@ -33,7 +33,7 @@ export const NOMBRE_DEL_DOCUMENTO: Record<TipoDeDocumento, string> = {
 export interface DocumentoGenerado {
   contenido: Uint8Array;
   nombre: string;
-  /** «el remito R-0001-00000452», para el texto del mensaje. */
+  /** «el remito REM-0043», para el texto del mensaje. */
   descripcion: string;
   /** De quién es, para encontrar su conversación. */
   customerId: string | null;

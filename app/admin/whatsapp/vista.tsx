@@ -1,6 +1,7 @@
 import { abrirBandeja, requireBandeja } from "@/lib/dal/admin/whatsapp";
 import { Bandeja } from "./bandeja";
 import { AvisoConexion } from "./aviso-conexion";
+import { ajuste } from "@/lib/dal/contenido";
 
 /**
  * La bandeja, compartida por las dos formas de usarla.
@@ -26,7 +27,10 @@ export async function VistaWhatsapp({
   // avisa a WhatsApp (los dos tildes azules del lado del cliente). La
   // conversación abierta se elige por la URL, así el enlace a una charla
   // concreta se puede compartir entre el equipo y sobrevive a recargar.
-  const { conversaciones, estado, plantillas, contadores, personal, gasto, mensajes, detalle, filtro: vista } = await abrirBandeja(filtro, chat);
+  const [{ conversaciones, estado, plantillas, contadores, personal, gasto, mensajes, detalle, filtro: vista }, bot] = await Promise.all([
+    abrirBandeja(filtro, chat),
+    ajuste("whatsapp_bot", "no"),
+  ]);
 
   return (
     <>
@@ -53,6 +57,7 @@ export async function VistaWhatsapp({
         // contesta era jerga (mes simulado).
         gasto={usuario.staffRole === "admin" ? gasto : null}
         mensajes={mensajes}
+        botApagado={bot !== "si"}
       />
     </>
   );

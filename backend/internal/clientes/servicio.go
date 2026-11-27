@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"mjbj/internal/formato"
 	"regexp"
 	"strconv"
 	"strings"
@@ -200,6 +201,12 @@ func (s *Servicio) GuardarConID(ctx context.Context, ses *auth.Sesion, f FormCli
 	c, err := ValidarCliente(f)
 	if err != nil {
 		return "", "", err
+	}
+	// «2235550483» tipeado de corrido se guarda como las demás fichas:
+	// «223 555-0483» (M3S1-069).
+	if c.Telefono != nil {
+		t := formato.Telefono(*c.Telefono)
+		c.Telefono = &t
 	}
 	if c.Cuit != nil {
 		if doc, e := LeerDocumento(*c.Cuit); e == "" && doc.Tipo != "ninguno" {

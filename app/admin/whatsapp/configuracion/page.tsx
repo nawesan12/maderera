@@ -13,7 +13,7 @@ import { CATEGORIAS_COBRO, dolares, NOMBRE_CATEGORIA, tarifaLegible } from "@/li
 import { FilaAviso } from "./aviso";
 import { ConfiguracionDelBot } from "./bot";
 import { ajuste } from "@/lib/dal/contenido";
-import { BotonAccion, FormularioTope, MensajeDePrueba } from "./controles";
+import { BotonAccion, MensajeDePrueba, TopeDelMes } from "./controles";
 
 export const metadata: Metadata = { title: "WhatsApp · Configuración" };
 
@@ -53,7 +53,6 @@ export default async function ConfiguracionWhatsappPage() {
     const d = gasto.porCategoria[c];
     return d.gratis + d.cobrados + d.estimados > 0;
   });
-  const porcentaje = Math.round(gasto.proporcion * 100);
 
   return (
     <div className="space-y-8">
@@ -69,7 +68,7 @@ export default async function ConfiguracionWhatsappPage() {
         titulo="WhatsApp: configuración"
       />
 
-      <ConfiguracionDelBot encendido={botEncendido === "si"} numero={numeroHumano} mensajes={mensajes} />
+      <ConfiguracionDelBot encendido={botEncendido === "si"} numero={numeroHumano} />
 
       {/* 1. Conexión */}
       <section className="space-y-4">
@@ -153,53 +152,29 @@ export default async function ConfiguracionWhatsappPage() {
       {/* 2. Gasto y tope */}
       <section className="space-y-4">
         <div>
-          <h2 className="text-lg font-medium">Lo que va del mes</h2>
+          <h2 className="text-lg font-medium">Tope del mes</h2>
           {/* Desde el 1/10/2026 Meta cobra cada mensaje que sale por la API, también
               las respuestas dentro de las 24 h. Se cuenta con lo que Meta informa en
               cada estado; la factura de Meta es la que vale. */}
           <p className="mt-1 text-base text-muted-foreground">Lo que sale desde el teléfono no se cobra.</p>
         </div>
 
-        <div className={gasto.alcanzado ? "tarjeta-atencion space-y-3 p-5" : "tarjeta space-y-3 p-5"}>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-base">
-              <span className="tabular text-2xl font-semibold">{dolares(gasto.usd)}</span>{" "}
-              <span className="text-muted-foreground">de {dolares(gasto.tope)} este mes</span>
-            </p>
-            <p className="tabular text-base text-muted-foreground">{porcentaje} %</p>
-          </div>
-          <div
-            role="meter"
-            aria-label="Gasto del mes contra el tope"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.min(porcentaje, 100)}
-            className="h-3 overflow-hidden rounded-full bg-muted"
-          >
-            <div
-              className={`h-full rounded-full ${
-                gasto.alcanzado ? "bg-destructive" : gasto.umbral === 80 ? "bg-amber-500" : "bg-brand-green"
-              }`}
-              style={{ width: `${Math.min(porcentaje, 100)}%` }}
-            />
-          </div>
+        <TopeDelMes mensajes={mensajes} gasto={gasto} tarifas={gasto.tarifas} />
+        {(gasto.alcanzado || gasto.umbral === 80 || gasto.usdEstimado > 0) && (
           <p className="text-base">
             {gasto.alcanzado ? (
               <>
                 <span className="font-medium">Se llegó al tope.</span> Los avisos automáticos no salen por WhatsApp
-                hasta el {fechaCorta.format(gasto.reinicio)}; el correo sale igual. Lo que se mande desde la bandeja por
-                la API pide confirmación. Abajo están los que no salieron, para avisar desde el teléfono.
+                hasta el {fechaCorta.format(gasto.reinicio)}; el correo sale igual. Abajo están los que no salieron.
               </>
             ) : gasto.umbral === 80 ? (
               "Pasó el 80 % del tope. Conviene contestar desde el teléfono, que es gratis."
-            ) : (
-              "Al llegar al tope, los avisos automáticos dejan de salir por WhatsApp hasta el mes siguiente."
-            )}
+            ) : null}
             {gasto.usdEstimado > 0 && (
               <span className="text-muted-foreground"> ({dolares(gasto.usdEstimado)} estimados: Meta todavía no informó el cobro.)</span>
             )}
           </p>
-        </div>
+        )}
 
         {categoriasConMovimiento.length > 0 && (
           <table className="tarjeta w-full max-w-2xl text-base">
@@ -235,16 +210,6 @@ export default async function ConfiguracionWhatsappPage() {
             </tbody>
           </table>
         )}
-
-        <div className="tarjeta-hundida p-5">
-          <h3 className="mb-1 text-base font-medium">Tope y tarifas</h3>
-          {/* Las tarifas son las de Meta para un número argentino; Meta las revisa cada
-              trimestre, así que se cambian acá sin tocar el sistema. */}
-          <p className="mb-3 max-w-2xl text-base text-muted-foreground">
-            Un tope de 0 corta todos los avisos automáticos por la API.
-          </p>
-          <FormularioTope tope={gasto.tope} tarifas={gasto.tarifas} />
-        </div>
 
         {cortados.length > 0 && (
           <div>

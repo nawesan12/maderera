@@ -636,7 +636,7 @@ components:
     DetalleConversacion:
       type: object
       required: [id, waJid, displayName, customerId, orderId, estado, notas, ultimoEntranteAt, noLeidos, asignadoAUserId, bajaAt, bajaDetalle,
-        resueltaAt, botEstado, clienteNombre, clienteTipo, clienteLista, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, conocidos, nombre, sinNumero,
+        resueltaAt, botEstado, clienteNombre, clienteTipo, clienteLista, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, clienteBloqueado, conocidos, nombre, sinNumero,
         ventanaAbierta, mensajes, saldo, limiteCredito, pedidos, documentos]
       properties:
         id: { type: string }
@@ -660,6 +660,7 @@ components:
         clienteEmail: { type: string, nullable: true }
         clienteLimite: { type: string, nullable: true }
         clienteEstado: { type: string, nullable: true }
+        clienteBloqueado: { type: boolean }
         conocidos: { type: object, additionalProperties: { type: string } }
         nombre: { type: string }
         sinNumero: { type: boolean }

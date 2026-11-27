@@ -50,13 +50,16 @@ function estado(r: { data?: unknown; error?: unknown; response: Response }): Est
 const texto = (formData: FormData, campo: string) => String(formData.get(campo) ?? "");
 
 /** El PDF de un papel de la plataforma, como parte de un formulario para Go. */
-async function conPdf(form: FormData, doc: { tipo: string; id: string }) {
+async function conPdf(form: FormData, doc: { tipo: string; id: string }, conDescripcion = true) {
   if (!esTipoDeDocumento(doc.tipo) || !doc.id) return null;
   const pdf = await documentoPdf({ tipo: doc.tipo, id: doc.id });
   if (!pdf) return null;
   form.append("archivo", new Blob([new Uint8Array(pdf.contenido)], { type: "application/pdf" }), pdf.nombre);
   form.append("archivoNombre", pdf.nombre);
-  form.append("descripcion", pdf.descripcion);
+  // La plantilla no lleva descripción (el texto ya la dice en {{documento}}):
+  // el contrato de Go no la declara y el envío fallaba con «part
+  // descripcion: undefined» (M2S4-027).
+  if (conDescripcion) form.append("descripcion", pdf.descripcion);
   return pdf;
 }
 
@@ -89,7 +92,7 @@ export async function enviarPlantilla(_previo: EstadoWhatsapp, formData: FormDat
   const elegido = texto(formData, "documento");
   if (elegido) {
     const [tipo, id] = elegido.split(":");
-    if (!(await conPdf(form, { tipo, id }))) return { error: "No encontramos ese documento." };
+    if (!(await conPdf(form, { tipo, id }, false))) return { error: "No encontramos ese documento." };
   }
   const r = await (await api()).POST("/api/v1/admin/whatsapp/conversaciones/{id}/plantilla", {
     params: { path: { id: texto(formData, "conversacionId") || "-" } },

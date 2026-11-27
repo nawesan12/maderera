@@ -27,10 +27,10 @@ export default async function NuevoPresupuestoPage({
 }: {
   /* `cliente` llega desde la lista o la ficha de clientes: el presupuesto
      telefónico casi siempre empieza por saber a quién es. */
-  searchParams: Promise<{ cliente?: string; editar?: string; desde?: string }>;
+  searchParams: Promise<{ cliente?: string; editar?: string; desde?: string; telefono?: string }>;
 }) {
   const usuario = await requireStaff();
-  const { cliente: clienteId, editar, desde } = await searchParams;
+  const { cliente: clienteId, editar, desde, telefono: telefonoDelChat } = await searchParams;
   const origenId = editar ?? desde;
   if (origenId && !esUuid(origenId)) notFound();
 
@@ -91,7 +91,9 @@ export default async function NuevoPresupuestoPage({
                 id: cliente.id,
                 nombre: cliente.nombre,
                 razonSocial: cliente.razonSocial,
-                telefono: cliente.telefono,
+                // Desde una conversación, el número del que escribió: «WhatsApp
+                // con el PDF» salía al de la ficha, que era otro (M2S1-196).
+                telefono: telefonoDelChat?.trim().slice(0, 40) || cliente.telefono,
                 email: cliente.email,
                 priceListId: cliente.priceListId,
               }

@@ -654,6 +654,30 @@ func (s *Servicio) GuardarTextoAviso(ctx context.Context, id, texto string) (Res
 	if !plataforma.UUIDValido(id) || largoJS(t) > 1000 {
 		return conError("Revisá el texto."), nil
 	}
+	// Un dato que no existe saldría con las llaves al cliente: «Hola
+	// {{nombr}}» (M3S1-011). Valen los del texto de siempre del aviso.
+	var evento string
+	if err := s.pool.QueryRow(ctx, `select evento from whatsapp_avisos where id = $1`, id).Scan(&evento); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return conError("Revisá el texto."), nil
+		}
+		return Resultado{}, err
+	}
+	if e := EventoDeAviso(evento); e != nil {
+		validos := Marcadores(e.TextoLibre)
+		var malos []string
+		for _, m := range Marcadores(t) {
+			if !contiene(validos, m) {
+				malos = append(malos, "{{"+m+"}}")
+			}
+		}
+		if len(malos) > 0 {
+			if len(malos) > 1 {
+				return conError(strings.Join(malos, ", ") + " no son datos de este aviso."), nil
+			}
+			return conError(malos[0] + " no es un dato de este aviso."), nil
+		}
+	}
 	if _, err := s.pool.Exec(ctx, `update whatsapp_avisos set texto_libre = $2, updated_at = now() where id = $1`, id, nulo(&t)); err != nil {
 		return Resultado{}, err
 	}

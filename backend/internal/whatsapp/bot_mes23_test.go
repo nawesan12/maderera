@@ -199,6 +199,58 @@ func TestDerivarUsaElEnlaceCorto(t *testing.T) {
 	}
 }
 
+// M3S3-029 y M3S1-017: el costado de la conversación trae el último cheque
+// rechazado para la plantilla y dice si la cuenta está bloqueada.
+func TestConversacionConChequeRechazadoYCuentaBloqueada(t *testing.T) {
+	e := armar(t, false)
+	var cliente, conv string
+	if err := e.pool.QueryRow(e.ctx, `insert into customers (nombre, cuenta_bloqueada) values ('Sim Herrería del Faro', true) returning id`).Scan(&cliente); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(e.ctx, `insert into cheques (sentido, tipo, numero, banco, fecha_pago, importe, estado, motivo_rechazo, customer_id)
+		values ('recibido', 'fisico', '00109101', 'Sim Banco Provincia', now(), 60000, 'rechazado', 'sin fondos', $1)`, cliente); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(e.ctx, `insert into whatsapp_conversaciones (wa_jid, customer_id) values ('5492235550911', $1) returning id`, cliente).Scan(&conv); err != nil {
+		t.Fatal(err)
+	}
+	d, err := e.wa.ObtenerConversacion(e.ctx, conv)
+	if err != nil || d == nil {
+		t.Fatal(err)
+	}
+	if d.Conocidos["cheque_rechazado:cheque"] != "Cheque Sim Banco Provincia N° 00109101" || !strings.HasSuffix(d.Conocidos["cheque_rechazado:importe"], "60.000") ||
+		d.Conocidos["cheque_rechazado:motivo"] != "sin fondos" || d.Conocidos["importe"] != "" {
+		t.Errorf("conocidos: %v", d.Conocidos)
+	}
+	if !d.ClienteBloqueado {
+		t.Error("no dice que la cuenta está bloqueada")
+	}
+}
+
+// M3S1-011: un dato que no existe no se guarda en el texto del aviso.
+func TestTextoDelAvisoConDatosQueNoExisten(t *testing.T) {
+	e := armar(t, false)
+	if err := e.wa.SembrarAvisos(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	var id string
+	if err := e.pool.QueryRow(e.ctx, `select id from whatsapp_avisos where evento = 'entregado'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.wa.GuardarTextoAviso(e.ctx, id, "Hola {{nombr}}, Sim {{pedidoo}}")
+	if err != nil || !strings.Contains(r.Error, "{{nombr}}, {{pedidoo}} no son datos") {
+		t.Fatalf("variables malas: %+v %v", r, err)
+	}
+	var texto string
+	_ = e.pool.QueryRow(e.ctx, `select texto_libre from whatsapp_avisos where id = $1`, id).Scan(&texto)
+	if strings.Contains(texto, "nombr}") {
+		t.Fatalf("se guardó: %q", texto)
+	}
+	if r, err := e.wa.GuardarTextoAviso(e.ctx, id, "Hola {{nombre}}, entregamos {{pedido}}."); err != nil || r.Error != "" {
+		t.Fatalf("texto bueno: %+v %v", r, err)
+	}
+}
+
 // M3S2-018: el enlace de un corte armado en el sitio. El bot no pide el
 // despiece de nuevo, ata la consulta a la conversación y la pasa a una
 // persona.

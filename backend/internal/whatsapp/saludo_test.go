@@ -11,6 +11,9 @@ func TestNombreDeSaludo(t *testing.T) {
 		"Dr. Juan Pérez":           "Dr.",
 		"  ":                       "",
 		"Aberturas Pérez S.A.":     "Aberturas Pérez",
+		"Sim Mueblería Atlántica":  "Sim Mueblería Atlántica",
+		"Sim Obra Barrio Parque":   "Sim Obra Barrio Parque",
+		"Juan Obra":                "Juan",
 	} {
 		if got := NombreDeSaludo(entra); got != sale {
 			t.Errorf("%q: %q, se esperaba %q", entra, got, sale)

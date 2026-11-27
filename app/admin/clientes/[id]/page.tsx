@@ -5,6 +5,8 @@ import { esUuid } from "@/lib/uuid";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
 import { avisoDelUltimoRecibo, avisoManual } from "@/lib/whatsapp/aviso-manual-datos";
+import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { valorDeRegla } from "@/lib/reglas";
 import { ArrowLeft, CalendarClock, ClipboardList, Download, MessageCircle, MessageSquareText, Printer, Scissors } from "lucide-react";
 import { MANEJAN_PLATA, puedeEntrar } from "@/lib/roles";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
@@ -70,12 +72,13 @@ export default async function FichaClientePage({
   const esAdmin = usuario.staffRole === "admin";
   const manejaPlata = usuario.staffRole != null && MANEJAN_PLATA.includes(usuario.staffRole);
 
-  const [recordatorio, resumenCuenta, recibo] = await Promise.all([
+  const [recordatorio, resumenCuenta, recibo, ajustes] = await Promise.all([
     cliente.saldo > 0
       ? avisoManual("recordatorio_saldo", { tipo: "customer", id }, { saldo: formatearMonto(cliente.saldo) })
       : null,
     avisoManual("documento", { tipo: "customer", id }),
     avisoDelUltimoRecibo(id),
+    ajustesDelSitio(),
   ]);
 
   const limite = Number(cliente.limiteCredito);
@@ -149,6 +152,7 @@ export default async function FichaClientePage({
             customerId={cliente.id}
             nombre={cliente.nombre}
             aCobrar={Math.max(cliente.saldo, 0)}
+            conRetencion={esAdmin || valorDeRegla(ajustes, "retencion_en_el_cobro") === "quien_cobra"}
           />
         </div>
       </div>
@@ -406,7 +410,9 @@ export default async function FichaClientePage({
                     // débito de uno rechazado llevan el recibo de referencia:
                     // se anula desde su pago.
                     (r, m) =>
-                      r.porMercadoPago || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
+                      // Con un cheque rechazado tampoco: ya volvió a la cuenta
+                      // con su nota de débito (M2S3-070).
+                      r.porMercadoPago || r.chequeRechazado || m.clase === "cheque" || m.clase === "nota_debito" ? null : (
                         <AnularRecibo
                           id={r.id}
                           numero={r.numero}
@@ -425,6 +431,7 @@ export default async function FichaClientePage({
                         importe={c.importe}
                         cliente={cliente.nombre}
                         conNombre={unoDeVarios}
+                        devolver={c.devolver}
                       />
                     )
                   : undefined

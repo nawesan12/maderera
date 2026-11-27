@@ -338,9 +338,15 @@ func (s *Servicio) AvisoDelUltimoRecibo(ctx context.Context, customerID string) 
 	if !plataforma.UUIDValido(customerID) {
 		return nil, nil
 	}
+	// El último cobro de plata: un certificado de retención no es un «pago»
+	// que se avisa (M3S3-030). Y si después rebotó un cheque, lo que hay que
+	// avisar es lo que debe, no el recibo.
 	var id string
-	err := s.pool.QueryRow(ctx, `select id from receipts where customer_id = $1 and estado = 'emitido' and created_at >= $2
-		order by created_at desc limit 1`, customerID, s.ahora().Add(-3*24*time.Hour)).Scan(&id)
+	err := s.pool.QueryRow(ctx, `select r.id from receipts r where r.customer_id = $1 and r.estado = 'emitido' and r.created_at >= $2
+		and exists (select 1 from receipt_parts p where p.receipt_id = r.id and p.medio <> 'retencion')
+		and not exists (select 1 from account_movements m where m.customer_id = r.customer_id and m.tipo = 'nota_debito'
+			and m.cheque_id is not null and m.created_at > r.created_at)
+		order by r.created_at desc limit 1`, customerID, s.ahora().Add(-3*24*time.Hour)).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

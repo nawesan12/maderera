@@ -227,6 +227,31 @@ func TestConversacionConChequeRechazadoYCuentaBloqueada(t *testing.T) {
 	}
 }
 
+// M3S3-030: el aviso del último recibo es el del último cobro de plata, no
+// el de un certificado de retención; con un cheque rechazado después, no hay
+// aviso de recibo (va primero el de lo que debe).
+func TestAvisoDelUltimoReciboDePlata(t *testing.T) {
+	e := armar(t, false)
+	var cliente, plata, retencion string
+	if err := e.pool.QueryRow(e.ctx, `insert into customers (nombre, telefono) values ('Sim Herrería del Faro', '223 555-0911') returning id`).Scan(&cliente); err != nil {
+		t.Fatal(err)
+	}
+	_ = e.pool.QueryRow(e.ctx, `insert into receipts (numero, recibido_de, total, origen, customer_id, created_at) values ('REC-0090', 'X', 60000, 'panel', $1, now() - interval '2 hours') returning id`, cliente).Scan(&plata)
+	_, _ = e.pool.Exec(e.ctx, `insert into receipt_parts (receipt_id, medio, importe, orden) values ($1, 'transferencia', 60000, 0)`, plata)
+	_ = e.pool.QueryRow(e.ctx, `insert into receipts (numero, recibido_de, total, origen, customer_id) values ('REC-0091', 'X', 1500, 'panel', $1) returning id`, cliente).Scan(&retencion)
+	_, _ = e.pool.Exec(e.ctx, `insert into receipt_parts (receipt_id, medio, importe, orden) values ($1, 'retencion', 1500, 0)`, retencion)
+	a, err := e.wa.AvisoDelUltimoRecibo(e.ctx, cliente)
+	if err != nil || a == nil || a.Referencia == nil || !strings.Contains(*a.Referencia, "REC-0090") {
+		t.Fatalf("aviso: %+v %v", a, err)
+	}
+	var cheque string
+	_ = e.pool.QueryRow(e.ctx, `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, customer_id) values ('recibido', 'fisico', '00109101', now(), 60000, 'rechazado', $1) returning id`, cliente).Scan(&cheque)
+	_, _ = e.pool.Exec(e.ctx, `insert into account_movements (customer_id, tipo, monto, cheque_id, created_at) values ($1, 'nota_debito', 60000, $2, now() - interval '1 hour')`, cliente, cheque)
+	if a, err := e.wa.AvisoDelUltimoRecibo(e.ctx, cliente); err != nil || a != nil {
+		t.Fatalf("con el cheque rechazado después, no va el recibo: %+v %v", a, err)
+	}
+}
+
 // M3S1-011: un dato que no existe no se guarda en el texto del aviso.
 func TestTextoDelAvisoConDatosQueNoExisten(t *testing.T) {
 	e := armar(t, false)

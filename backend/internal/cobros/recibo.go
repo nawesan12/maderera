@@ -418,7 +418,7 @@ func AnularRecibo(ctx context.Context, tx pgx.Tx, recibo, motivo string, usuario
 		}
 		estado, err := q.EstadoDeCheque(ctx, *ch)
 		if err == nil && estado != sqlc.EstadoChequeCartera {
-			return "", nil, errCobro("Un cheque de este recibo ya salió de la cartera: si el banco lo rechaza, se marca desde la cartera de cheques y la deuda vuelve sola.")
+			return "", nil, errCobro(MotivoDelChequeQueTraba(estado))
 		}
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return "", nil, err
@@ -497,4 +497,14 @@ func revisarReferenciasUsadas(ctx context.Context, tx pgx.Tx, partes []Parte) er
 		return errCobro("La referencia " + ref + " ya está en el recibo " + numero + ": una transferencia cancela una sola vez.")
 	}
 	return nil
+}
+
+// MotivoDelChequeQueTraba es por qué no se anula un recibo con un cheque que
+// ya salió de la cartera. El rechazado ya volvió a la cuenta: decir «si el
+// banco lo rechaza» de uno rechazado confundía (M2S3-070).
+func MotivoDelChequeQueTraba(estado sqlc.EstadoCheque) string {
+	if estado == sqlc.EstadoChequeRechazado {
+		return "Un cheque de este recibo ya se rechazó y volvió a la cuenta con una nota de débito: el recibo no se anula."
+	}
+	return "Un cheque de este recibo ya salió de la cartera: si el banco lo rechaza, se marca desde la cartera de cheques y la deuda vuelve sola."
 }

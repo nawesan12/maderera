@@ -139,6 +139,14 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         ],
       },
       {
+        clave: "retencion_en_el_cobro",
+        pregunta: "La retención que trae el cliente con el pago, ¿quién la carga en el cobro?",
+        opciones: [
+          { valor: "admin", texto: "Solo un admin" },
+          { valor: "quien_cobra", texto: "Quien cobra" },
+        ],
+      },
+      {
         clave: "firma_sin_pin",
         pregunta: "Sin ningún PIN cargado, ¿firma la contraseña de un admin?",
         opciones: [

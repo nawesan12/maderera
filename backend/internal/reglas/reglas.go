@@ -58,6 +58,8 @@ const (
 	DatosFiscalesDelCliente = "datos_fiscales_del_cliente"
 	// H032: si la tarjeta en línea pide lote y cupón.
 	LoteYCupon = "lote_y_cupon"
+	// M2S1-093: quién carga la retención sufrida dentro de un cobro.
+	RetencionEnElCobro = "retencion_en_el_cobro"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -77,6 +79,7 @@ var Opciones = map[string][]string{
 	EtiquetaDelCircuito:         {"b", "sin_factura", "interno"},
 	DatosFiscalesDelCliente:     {"hasta_facturar", "ninguno"},
 	LoteYCupon:                  {"obligatorio", "opcional"},
+	RetencionEnElCobro:          {"admin", "quien_cobra"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

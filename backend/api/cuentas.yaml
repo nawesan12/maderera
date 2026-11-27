@@ -869,8 +869,12 @@ components:
           description: Los cheques del renglón que el banco todavía puede rechazar (H272)
           items:
             type: object
-            required: [id, nombre, importe]
-            properties: { id: { type: string }, nombre: { type: string }, importe: { type: number, format: double } }
+            required: [id, nombre, importe, devolver]
+            properties:
+              id: { type: string }
+              nombre: { type: string }
+              importe: { type: number, format: double }
+              devolver: { type: boolean, description: En la cartera y sin vencer, se devuelve al cliente }
     Historial:
       type: object
       required: [movimientos, hayMas, saldo]

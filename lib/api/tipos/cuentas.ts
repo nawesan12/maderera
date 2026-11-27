@@ -753,6 +753,8 @@ export interface components {
                 nombre: string;
                 /** Format: double */
                 importe: number;
+                /** @description En la cartera y sin vencer */
+                devolver: boolean;
             }[];
         };
         Historial: {

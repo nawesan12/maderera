@@ -3,6 +3,7 @@
 import type { PiezaFijada, PlanoDeCorte } from "@/lib/cortes/tipos";
 import type { QuienSeQueda } from "@/lib/cortes/de-quien";
 import { PlanoEditable } from "@/components/cortes/plano-editable";
+import { formatearMonto } from "@/lib/formato";
 
 /**
  * El plano, mientras se carga el despiece.
@@ -24,7 +25,10 @@ export function PlanoEnVivo({
   fijadas,
   onFijadas,
   quien = {},
+  precioPorPasada = null,
 }: {
+  /** El precio de la pasada: el importe va al lado de su número (M2S3-019). */
+  precioPorPasada?: number | null;
   plano: PlanoDeCorte;
   /** Si la medida no salió del catálogo y se está asumiendo una de plaza. */
   medidaSupuesta?: boolean;
@@ -53,7 +57,7 @@ export function PlanoEnVivo({
 
   return (
     <div className="space-y-4">
-      <Numeros plano={plano} quien={quien} />
+      <Numeros plano={plano} quien={quien} precioPorPasada={precioPorPasada} />
 
       {medidaSupuesta && (
         <p className="estado-espera rounded-lg bg-[var(--estado-fondo)] px-4 py-3 text-base">
@@ -87,9 +91,11 @@ export function PlanoEnVivo({
 function Numeros({
   plano,
   quien,
+  precioPorPasada,
 }: {
   plano: PlanoDeCorte;
   quien: QuienSeQueda & { todasDelCliente?: boolean };
+  precioPorPasada: number | null;
 }) {
   const n = plano.placas.length;
   const enteras = quien.todasDelCliente ? n : plano.placasEnteras;
@@ -112,7 +118,9 @@ function Numeros({
         rotulo={
           quien.sinCargo
             ? plano.pasadasCobrables === 1 ? "pasada" : "pasadas"
-            : pasadas === 1 ? "pasada a cobrar" : "pasadas a cobrar"
+            : `${pasadas === 1 ? "pasada a cobrar" : "pasadas a cobrar"}${
+                  precioPorPasada && pasadas > 0 ? ` · ${formatearMonto(pasadas * precioPorPasada)}` : ""
+                }`
         }
       />
       <Celda

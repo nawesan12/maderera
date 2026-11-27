@@ -199,7 +199,10 @@ export function PlanoEditable({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {!sencillo && (
           <p className="text-base text-muted-foreground">
-            Arrastrá una pieza a otra placa para mandarla ahí. Doble clic la gira.
+            Arrastrá una pieza a otra placa para mandarla ahí.
+            {/* En pantalla táctil se toca la pieza y aparece «Girar la
+                pieza»: el doble clic no existe ahí (M3S3-075). */}
+            <span className="[@media(pointer:coarse)]:hidden"> Doble clic la gira.</span>
           </p>
         )}
         {fijadas.length > 0 && (

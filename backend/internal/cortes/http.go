@@ -611,6 +611,22 @@ func (a *API) CalcularPlano(ctx context.Context, r cortesapi.CalcularPlanoReques
 			out["superficies"] = sup
 		}
 	}
+	// El importe de las pasadas al lado de su número, en el alta del panel:
+	// un cambio de tarifa no se veía en ninguna pantalla hasta cobrar (mes
+	// simulado, M2S3-019).
+	if b.VariantId != nil && *b.VariantId != "" && auth.DeContexto(ctx).EsStaff() {
+		cliente := ""
+		if b.CustomerId != nil {
+			cliente = *b.CustomerId
+		}
+		t, err := a.s.TarifaDeLaPlaca(ctx, *b.VariantId, cliente)
+		if err != nil {
+			return nil, err
+		}
+		if t != nil {
+			out["precioPorPasada"] = t.PrecioPorPasada
+		}
+	}
 	if pr := b.Presupuesto; pr != nil {
 		var tarifa *TarifaDeCorte
 		if pr.Tarifa != nil {

@@ -66,7 +66,7 @@ export default async function NuevoCortePage({
     pedidoId ? pedidoParaElTaller(pedidoId) : Promise.resolve(null),
     anchoDeSierra(),
     token ? consultaDeCorte(token) : Promise.resolve(null),
-    token ? placasCortablesPublicas() : Promise.resolve([]),
+    token || pedidoId ? placasCortablesPublicas() : Promise.resolve([]),
     clienteId && esUuid(clienteId) ? obtenerCliente(clienteId) : Promise.resolve(null),
     ajustesDelSitio(),
   ]);
@@ -163,6 +163,22 @@ export default async function NuevoCortePage({
         .filter((k) => k.variantId === it.variantId && k.estado !== "cancelado" && !k.sinCargo && k.id !== corregido?.corte.id)
         .reduce((t, k) => t + k.placasEnteras, 0),
     }));
+
+  // Un pedido que no vende la placa (la venta de un corte, que cobró las
+  // pasadas): la reposición arranca con la placa de sus cortes, no con una
+  // medida supuesta (mes simulado, M3S3-032).
+  const varianteDeSusCortes =
+    placasDelPedido.length === 0 ? otrosCortes.find((k) => k.variantId)?.variantId : undefined;
+  const deSusCortes = varianteDeSusCortes ? placas.find((p) => p.variantId === varianteDeSusCortes) : undefined;
+  const placaDeSusCortes = deSusCortes
+    ? {
+        variantId: deSusCortes.variantId,
+        descripcion: deSusCortes.descripcion,
+        largoMm: deSusCortes.largoMm,
+        anchoMm: deSusCortes.anchoMm,
+        color: deSusCortes.color,
+      }
+    : undefined;
 
   const c = corregido?.corte;
   const deCorregir = c
@@ -300,6 +316,7 @@ export default async function NuevoCortePage({
                 telefono: clienteDelPedido?.telefono ?? null,
                 entregarEl: pedido.entregarEl,
                 placas: placasDelPedido,
+                placaDeSusCortes,
                 cliente: pedido.customerId
                   ? {
                       id: pedido.customerId,

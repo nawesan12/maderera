@@ -1796,6 +1796,10 @@ export interface operations {
                     busqueda?: boolean;
                     /** @description Solo para el staff */
                     hoja?: boolean;
+                    /** @description Solo para el staff: la placa del catálogo, para devolver el precio de la pasada */
+                    variantId?: string;
+                    /** @description Con variantId */
+                    customerId?: string;
                     presupuesto?: {
                         tarifa?: components["schemas"]["TarifaDeCorte"];
                         /** Format: double */
@@ -1819,6 +1823,11 @@ export interface operations {
                         placasACobrar: number;
                         /** @description Las pasadas del plano que se cobra */
                         pasadasACobrar: number;
+                        /**
+                         * Format: double
+                         * @description Con variantId (staff): la pasada con la tarifa de la placa y la lista del cliente
+                         */
+                        precioPorPasada?: number;
                         /** @description Las placas del plano que se cobra que no pasan la mitad: no se venden, se cobra su corte */
                         placasParciales?: number;
                         cuenta?: components["schemas"]["Presupuesto"];

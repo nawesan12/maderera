@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/plataforma"
 	"mjbj/internal/reglas"
 	"mjbj/internal/ventas"
 )
@@ -456,4 +457,35 @@ func (f *Ficha) SinPlataParaElTaller() {
 	}
 	f.Sumar = nil
 	f.Remito = nil
+}
+
+// TarifaDeLaPlaca es la tarifa de corte de una variante con la lista de un
+// cliente (o la general), como la busca la ficha: por la categoría y, de
+// respaldo, por el nombre.
+func (s *Servicio) TarifaDeLaPlaca(ctx context.Context, variantID, customerID string) (*TarifaDeCorte, error) {
+	if !plataforma.UUIDValido(variantID) {
+		return nil, nil
+	}
+	var cat, producto string
+	err := s.pool.QueryRow(ctx, `
+		SELECT coalesce(c.name, ''), p.name FROM product_variants pv
+		JOIN products p ON p.id = pv.product_id LEFT JOIN categories c ON c.id = p.category_id
+		WHERE pv.id = $1`, variantID).Scan(&cat, &producto)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var lista *string
+	if plataforma.UUIDValido(customerID) {
+		if err := s.pool.QueryRow(ctx, `SELECT price_list_id::text FROM customers WHERE id = $1`, customerID).Scan(&lista); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+	}
+	tarifas, err := s.TarifasActivas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return BuscarTarifa(tarifas, []string{cat, producto}, lista), nil
 }

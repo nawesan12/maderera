@@ -27,6 +27,11 @@ func TestBuscarDelMesSimulado(t *testing.T) {
 	if err != nil || len(r) == 0 || r[0].VariantID != diez {
 		t.Fatalf("mdf 18: %+v %v", r, err)
 	}
+	// El código sin la familia (M3S1-067).
+	r, err = e.svc.Buscar(ctx, "MDF-018", e.central, nil)
+	if err != nil || len(r) == 0 || r[0].VariantID != diez {
+		t.Fatalf("MDF-018: %+v %v", r, err)
+	}
 
 	// 100 placas en la sucursal, 40 reservadas para un acopio: hay 60.
 	pedido := e.txt(t, `insert into orders (numero, contacto_nombre, branch_id, origen) values ('PED-9000', 'Obra', $1, 'mostrador') returning id::text`, e.central)

@@ -182,6 +182,8 @@ export function FormularioCorte({
     entregarEl?: string | null;
     /** Las placas que vende: el corte arranca con la primera. */
     placas?: PlacaDelPedido[];
+    /** Sin placas vendidas, la de sus cortes (la reposición, M3S3-032). */
+    placaDeSusCortes?: PlacaElegida;
   };
   /**
    * El corte que alguien mandó por WhatsApp desde el sitio (`?consulta=`):
@@ -250,22 +252,23 @@ export function FormularioCorte({
   // La placa del pedido de entrada: arrancar con una medida supuesta armaba
   // el plano sobre una placa que no era (H188).
   const placaDelPedido = corregir ? undefined : desdePedido?.placas?.[0];
+  const placaDeSusCortes = corregir ? undefined : desdePedido?.placaDeSusCortes;
   const [placa, setPlaca] = useState<PlacaElegida | null>(
-    desdeConsulta?.placa ?? corregir?.placa ?? placaDelPedido ?? null,
+    desdeConsulta?.placa ?? corregir?.placa ?? placaDelPedido ?? placaDeSusCortes ?? null,
   );
   /** La medida de la placa, en milímetros, como está en pantalla. */
   const [largoPlaca, setLargoPlaca] = useState(
-    String(corregir?.largoMm ?? (placaDelPedido?.largoMm || "")),
+    String(corregir?.largoMm ?? (placaDelPedido?.largoMm || placaDeSusCortes?.largoMm || "")),
   );
   const [anchoPlaca, setAnchoPlaca] = useState(
-    String(corregir?.anchoMm ?? (placaDelPedido?.anchoMm || "")),
+    String(corregir?.anchoMm ?? (placaDelPedido?.anchoMm || placaDeSusCortes?.anchoMm || "")),
   );
   /** Si sale de media placa, y en qué sentido se parte. */
   const [mitad, setMitad] = useState<Mitad>(
     desdeConsulta?.mitad ?? corregir?.mitad ?? placaDelPedido?.mitad ?? null,
   );
   const [material, setMaterial] = useState(
-    desdeConsulta?.placa?.descripcion ?? corregir?.material ?? placaDelPedido?.descripcion ?? "",
+    desdeConsulta?.placa?.descripcion ?? corregir?.material ?? placaDelPedido?.descripcion ?? placaDeSusCortes?.descripcion ?? "",
   );
   const [piezas, setPiezas] = useState<Pieza[]>(
     desdeConsulta?.piezas.length ? desdeConsulta.piezas : corregir?.piezas.length ? corregir.piezas : [piezaVacia()],
@@ -345,12 +348,14 @@ export function FormularioCorte({
    * necesita para dos cosas: mostrarlo y proponer cuántas placas. Lo calcula
    * Go mientras se tipea (ver `lib/cortes/en-vivo.ts`).
    */
-  const { plano } = usePlano({
+  const { plano, precioPorPasada } = usePlano({
     piezas: paraElPlano,
     placaLargo: medidaPlaca.largo,
     placaAncho: medidaPlaca.ancho,
     anchoSierra,
     fijadas,
+    ...(placa ? { variantId: placa.variantId } : {}),
+    ...(cliente ? { customerId: cliente.id } : {}),
   });
 
   // Las placas son las del plano: el campo para pisarlas dejaba la tarjeta
@@ -843,6 +848,7 @@ export function FormularioCorte({
           medidaSupuesta={medidaPlaca.supuesta}
           fijadas={fijadas}
           onFijadas={setFijadas}
+          precioPorPasada={precioPorPasada}
           quien={{ sinCargo: sinCargo && Boolean(desdePedido), media: Boolean(mitad), todasDelCliente: todasDelPedido }}
         />
       </section>

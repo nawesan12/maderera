@@ -3273,3 +3273,25 @@ después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
 
 Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
 Next: las pruebas de pantalla la cambian desde `/admin/reglas`.
+
+## 27/11/2026: mes simulado, tanda 23, stock (rama `mes23-stock`)
+
+- **El traslado se recibe contando** (`RecibirTraslado` con
+  `RecepcionDeTraslado`; migración 00420): cada renglón guarda `recibido`;
+  lo que no llegó vuelve al origen o, con `faltante = perdido`, vuelve y
+  sale como «Faltante desde Stock» con su costo. Una medida que llegó y no
+  figuraba entra con `cantidad` 0 y sale del origen al recibir, contra lo
+  disponible. Sin cuerpo, llega todo (como antes).
+- **`POST /admin/stock/traslados/{id}/anular`**: en camino, todo vuelve al
+  origen; estado `anulado`.
+- **Movimientos** con `usuario`, `antes` y `despues` (del «(28 → 27)» que
+  escribe el ajuste). El total de una medida suma solo lo disponible
+  positivo; lo vendido de más va en `faltante`. La grilla acepta
+  `sucursal` (slug): los grupos miran solo esa (`estadosEnSucursal`).
+- **`PrimeroPalabrasEnteras`** suma también la coincidencia sin otra cifra
+  pegada: «MDF 18» ya no pone primero el «1830 × 2600 — 3 mm».
+- **Asientos de inventario** (`asientosDeInventario`): el ajuste congela
+  `variant_costs.costo_promedio` en `inventory_movements.costo_unitario`
+  (00420, con el relleno de los meses abiertos) y asienta contra
+  Mercaderías y 5.1.13 Diferencias de inventario; la reposición sin cargo,
+  contra 5.2.01.

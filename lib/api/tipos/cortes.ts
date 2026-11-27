@@ -678,6 +678,11 @@ export interface components {
             } | null;
             retalesDelCliente: boolean;
             sinPlata: boolean;
+            /**
+             * Format: double
+             * @description Lo que se le dijo al cliente al tomar el corte suelto
+             */
+            totalTomado?: number | null;
             corte: components["schemas"]["Corte"];
             tarifa: components["schemas"]["TarifaDeCorte"] | null;
             /** Format: double */

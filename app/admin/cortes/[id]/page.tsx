@@ -275,7 +275,7 @@ export default async function FichaCortePage({
                   />
                 )}
                 <RenglonesDelCorte cuenta={cuenta} />
-                <Total texto="Total del trabajo" monto={cuenta.total}>
+                <Total texto="Total del trabajo" monto={cuenta.total} antes={ficha.totalTomado}>
                   {cobra && cuenta.total > 0 && corte.estado !== "terminado" && !anulado && <CobrarCorte id={corte.id} conPlaca={corte.variantId != null} />}
                 </Total>
               </dl>
@@ -688,11 +688,28 @@ function RenglonesDelCorte({
   );
 }
 
-function Total({ texto, monto, children }: { texto: React.ReactNode; monto: number; children?: React.ReactNode }) {
+function Total({
+  texto,
+  monto,
+  antes,
+  children,
+}: {
+  texto: React.ReactNode;
+  monto: number;
+  /** Lo que se le dijo al cliente al tomarlo: si cambió, va tachado al lado (M3S2-030). */
+  antes?: number | null;
+  children?: React.ReactNode;
+}) {
+  const cambio = antes != null && Math.abs(antes - monto) > 0.009;
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-linea pt-2">
       <dt className="text-base font-semibold">{texto}</dt>
       <dd className="flex flex-wrap items-center gap-3">
+        {cambio && (
+          <s className="tabular text-base text-muted-foreground" title="Al tomarlo">
+            {formatearMonto(antes)}
+          </s>
+        )}
         <span className="tabular text-xl font-bold">{formatearMonto(monto)}</span>
         {children}
       </dd>

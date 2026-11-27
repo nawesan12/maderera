@@ -749,6 +749,7 @@ components:
                   subtotal: { type: number, format: double }
         retalesDelCliente: { type: boolean }
         sinPlata: { type: boolean }
+        totalTomado: { type: number, format: double, nullable: true, description: "Lo que se le dijo al cliente al tomar el corte suelto" }
         corte: { $ref: "#/components/schemas/Corte" }
         tarifa: { allOf: [{ $ref: "#/components/schemas/TarifaDeCorte" }], nullable: true }
         cargo: { type: number, format: double }

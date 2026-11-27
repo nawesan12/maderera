@@ -144,6 +144,26 @@ func TestTapacantoSinLados(t *testing.T) {
 	}
 }
 
+// M3S2-030: el corte suelto guarda el total con que se tomó; si la tarifa
+// cambia, la ficha tiene los dos.
+func TestElTotalConQueSeTomo(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	id := alta(t, e, ven, melamina(e, "piezas", []any{pieza(600, 300, 3)}))
+	f := leerFicha(t, e, ven, id)
+	antes := f["cuenta"].(map[string]any)["total"].(float64)
+	if f["modo"] != "suelto" || f["totalTomado"] == nil || f["totalTomado"].(float64) != antes {
+		t.Fatalf("sin el total tomado: %v %v", f["modo"], f["totalTomado"])
+	}
+	if _, err := e.pool.Exec(context.Background(), `update cutting_rates set precio_por_pasada = precio_por_pasada + 100`); err != nil {
+		t.Fatal(err)
+	}
+	f = leerFicha(t, e, ven, id)
+	if f["cuenta"].(map[string]any)["total"].(float64) == antes || f["totalTomado"].(float64) != antes {
+		t.Errorf("el total de hoy %v y el tomado %v (antes %v)", f["cuenta"].(map[string]any)["total"], f["totalTomado"], antes)
+	}
+}
+
 // M2S1-064 y M2S2-106: el espesor del PTX es el del tablero, no la primera
 // medida con «mm».
 func TestEspesorConLaMedidaDeLaPlaca(t *testing.T) {

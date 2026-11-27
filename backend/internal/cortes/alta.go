@@ -413,6 +413,13 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaCrear, "corte", numero,
 		"Cargó el corte "+numero+" para "+contacto, nil)
+	// El total con que se tomó el corte suelto, el que se le dice al
+	// cliente: si la tarifa cambia, la ficha muestra los dos (M3S2-030).
+	if f, err := s.Ficha(ctx, id); err == nil && f != nil && f.Modo == "suelto" && f.Cuenta.Total > 0 {
+		if _, err := s.pool.Exec(ctx, `UPDATE cutting_orders SET total_tomado = $2 WHERE id = $1`, id, jsmath.Num(f.Cuenta.Total)); err != nil {
+			s.log.Error("total tomado del corte", "error", err)
+		}
+	}
 	return numero, id, nil
 }
 

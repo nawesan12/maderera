@@ -46,6 +46,10 @@ type Ficha struct {
 	RetalesDelCliente bool `json:"retalesDelCliente"`
 	// SinPlata: la ficha del aserradero, sin importes ni teléfono.
 	SinPlata bool `json:"sinPlata"`
+	// TotalTomado es lo que se le dijo al cliente al tomar el corte suelto:
+	// si la tarifa cambió después, la ficha lo muestra al lado del total de
+	// hoy (mes simulado, M3S2-030). Nulo en lo de antes de la 00390.
+	TotalTomado *float64 `json:"totalTomado"`
 	// Sumar es lo que hace «Sumar al pedido» (H184): nil si no hay nada
 	// fuera del pedido.
 	Sumar *SumaAlPedido `json:"sumar"`
@@ -140,6 +144,16 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	}
 	if f.Sumar, err = s.sumaDeLaFicha(ctx, f); err != nil {
 		return nil, err
+	}
+	if modo == "suelto" {
+		var tomado *jsmath.Num
+		if err := s.pool.QueryRow(ctx, `SELECT total_tomado FROM cutting_orders WHERE id = $1`, c.ID).Scan(&tomado); err != nil {
+			return nil, err
+		}
+		if tomado != nil {
+			v := tomado.F()
+			f.TotalTomado = &v
+		}
 	}
 	if modo == "sinCargo" {
 		if f.Remito, err = s.remitoDeLaFicha(ctx, c.ID); err != nil {
@@ -457,6 +471,7 @@ func (f *Ficha) SinPlataParaElTaller() {
 	}
 	f.Sumar = nil
 	f.Remito = nil
+	f.TotalTomado = nil
 }
 
 // TarifaDeLaPlaca es la tarifa de corte de una variante con la lista de un

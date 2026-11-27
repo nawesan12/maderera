@@ -180,14 +180,18 @@ async function Tabla({ params }: { params: Params }) {
             <li key={producto.id} className="px-4 py-3">
               <p className="text-base font-medium">{producto.name}</p>
               {producto.labels[0] && <p className="text-sm text-muted-foreground">{producto.labels[0]}</p>}
-              <div className="mt-2 flex flex-wrap gap-2">
+              {/* Una sucursal por renglón, alineadas: en fila, la de la
+                  derecha quedaba abajo del WhatsApp flotante (mes 23). */}
+              <dl className="mt-2 grid grid-cols-[auto_auto] items-center justify-start gap-x-3 gap-y-1.5 text-sm">
                 {producto.stock.map((s) => (
-                  <span key={s.sucursal} className="inline-flex items-center gap-1.5 text-sm">
-                    <span className="text-texto-2">{s.nombre}</span>
-                    <StockBadge level={s.nivel} />
-                  </span>
+                  <div key={s.sucursal} className="contents">
+                    <dt className="text-texto-2">{s.nombre}</dt>
+                    <dd>
+                      <StockBadge level={s.nivel} />
+                    </dd>
+                  </div>
                 ))}
-              </div>
+              </dl>
             </li>
           ))}
         </ul>

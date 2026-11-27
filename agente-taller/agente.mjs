@@ -174,7 +174,21 @@ export async function unaVuelta(estado) {
   const vigentes = new Set([...cortes, ...enLaMaquina].map((c) => c.id));
   for (const id of Object.keys(estado.escritos)) {
     if (vigentes.has(id)) continue;
-    const { nombre } = escritoDe(estado, id);
+    let { nombre } = escritoDe(estado, id);
+    // Los anotados por un agente de antes no guardaban el nombre del
+    // archivo, y CRT-28.csv quedaba al lado de CRT-30.csv (M2S4-004, mes
+    // 23): se le pregunta a la plataforma, que lo conoce aunque el corte
+    // esté terminado o reemplazado. Si no contesta, queda como estaba.
+    if (!nombre) {
+      try {
+        const respuesta = await pedir(`/api/cortes/${id}/lista`);
+        await respuesta.body?.cancel();
+        const cd = respuesta.headers.get("content-disposition") ?? "";
+        nombre = cd.match(/filename="?([^";]+)"?/i)?.[1];
+      } catch {
+        nombre = undefined;
+      }
+    }
     if (nombre && (await existe(join(CARPETA, nombre)))) {
       await mkdir(join(CARPETA, FUERA_DE_COLA), { recursive: true });
       await rename(join(CARPETA, nombre), join(CARPETA, FUERA_DE_COLA, nombre));

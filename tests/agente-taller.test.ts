@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { mkdtemp, readdir, stat } from "node:fs/promises";
+import { mkdtemp, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -15,6 +15,8 @@ type Corte = { id: string; numero: string; actualizado: string; contenido: strin
 
 let cola: Corte[] = [];
 let enLaMaquina: { id: string; numero: string }[] = [];
+/** Los que ya no están en la cola ni en la máquina: la lista igual se baja. */
+let historico: { id: string; numero: string }[] = [];
 const consultas: string[] = [];
 let servidor: Server;
 let carpeta: string;
@@ -30,7 +32,7 @@ beforeAll(async () => {
       return;
     }
     const m = url.pathname.match(/^\/api\/cortes\/([^/]+)\/lista$/);
-    const c = m && [...cola, ...enLaMaquina.map((x) => ({ ...x, contenido: "", actualizado: "" }))].find((x) => x.id === m[1]);
+    const c = m && [...cola, ...[...enLaMaquina, ...historico].map((x) => ({ ...x, contenido: "", actualizado: "" }))].find((x) => x.id === m[1]);
     if (!c) {
       res.statusCode = 404;
       res.end();
@@ -80,5 +82,17 @@ describe("agente del taller", () => {
     enLaMaquina = [];
     await unaVuelta(estado);
     expect((await readdir(carpeta)).filter((n) => n.endsWith(".csv"))).toEqual([]);
+  });
+
+  it("también saca los que anotó un agente de antes, sin el nombre del archivo (M2S4-004)", async () => {
+    await writeFile(join(carpeta, "CRT-28.csv"), "1200;700;1");
+    historico = [{ id: "viejo", numero: "CRT-28" }];
+    cola = [];
+    enLaMaquina = [];
+    const estado = { escritos: { viejo: "2026-11-20T10:00:00Z" } as Record<string, unknown> };
+    await unaVuelta(estado);
+    expect((await readdir(carpeta)).filter((n) => n.endsWith(".csv"))).toEqual([]);
+    expect(await readdir(join(carpeta, "fuera-de-cola"))).toContain("CRT-28.csv");
+    expect(estado.escritos).toEqual({});
   });
 });

@@ -262,12 +262,24 @@ export function FormularioCorte({
   const [placa, setPlaca] = useState<PlacaElegida | null>(
     desdeConsulta?.placa ?? corregir?.placa ?? placaDelPedido ?? placaDeSusCortes ?? null,
   );
-  /** La medida de la placa, en milímetros, como está en pantalla. */
+  /**
+   * La medida de la placa, en milímetros, como está en pantalla. La de la
+   * consulta entra en los campos como cuando se elige la placa: con «La trae
+   * el cliente» el corte va sin variante, y sin la medida escrita Go lo
+   * guardaba sobre la de plaza (2750 × 1830) con un plano hecho sobre
+   * 2600 × 1830 (mes simulado, CRT-21).
+   */
   const [largoPlaca, setLargoPlaca] = useState(
-    String(corregir?.largoMm ?? (placaDelPedido?.largoMm || placaDeSusCortes?.largoMm || "")),
+    String(
+      corregir?.largoMm ??
+        (desdeConsulta?.placa?.largoMm || placaDelPedido?.largoMm || placaDeSusCortes?.largoMm || ""),
+    ),
   );
   const [anchoPlaca, setAnchoPlaca] = useState(
-    String(corregir?.anchoMm ?? (placaDelPedido?.anchoMm || placaDeSusCortes?.anchoMm || "")),
+    String(
+      corregir?.anchoMm ??
+        (desdeConsulta?.placa?.anchoMm || placaDelPedido?.anchoMm || placaDeSusCortes?.anchoMm || ""),
+    ),
   );
   /** Si sale de media placa, y en qué sentido se parte. */
   const [mitad, setMitad] = useState<Mitad>(
@@ -552,7 +564,18 @@ export function FormularioCorte({
                 <UserRound className="h-5 w-5" />
               </span>
               <span className="flex-1 text-[15px] font-semibold leading-tight">La trae el cliente</span>
-              <Switch checked={laTraeElCliente} onCheckedChange={(v) => setLaTraeElCliente(v === true)} />
+              <Switch
+                checked={laTraeElCliente}
+                onCheckedChange={(v) => {
+                  setLaTraeElCliente(v === true);
+                  // Sin variante, la medida viaja en los campos: la del
+                  // plano que se está viendo.
+                  if (v === true) {
+                    if (!Number(largoPlaca) && placa.largoMm) setLargoPlaca(String(placa.largoMm));
+                    if (!Number(anchoPlaca) && placa.anchoMm) setAnchoPlaca(String(placa.anchoMm));
+                  }
+                }}
+              />
             </label>
           )}
 

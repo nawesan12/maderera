@@ -314,9 +314,13 @@ function yaVencido(c: ChequeListado): string {
  * «Del cliente»: «De tercero» es el que firmó otro (mes simulado: los del
  * cobro, sin librador, salían como de tercero).
  */
-function deQuien(c: { sentido: string; librador: string | null; cliente: string | null }) {
+function deQuien(c: { sentido: string; librador: string | null; cliente: string | null; clienteRazonSocial?: string | null }) {
   if (c.sentido !== "recibido") return "Propio";
-  if (c.cliente && (!c.librador || mismoNombre(c.librador, c.cliente))) return "Del cliente";
+  // Contra el nombre de la ficha y contra la razón social: «RF Construcciones
+  // SRL» del cliente Roberto Fernández (RF Construcciones) salía de tercero.
+  const delCliente = (l: string) =>
+    (c.cliente !== null && mismoNombre(l, c.cliente)) || (c.clienteRazonSocial != null && mismoNombre(l, c.clienteRazonSocial));
+  if (c.cliente && (!c.librador || delCliente(c.librador))) return "Del cliente";
   return c.librador ? "De tercero" : "Recibido";
 }
 

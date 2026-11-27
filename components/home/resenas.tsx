@@ -14,6 +14,14 @@ import type { ResenaDelNegocio } from "@/lib/google/resenas";
  * sobre todo el sitio. Se muestran porque son verdad y porque sirven, no para
  * sacar estrellitas en el buscador.
  */
+/**
+ * Cuántas publicadas hacen falta para que el bloque aparezca. Con una o dos
+ * opiniones resta: «5,0 sobre 1 opinión» parece un sitio recién armado. El
+ * panel lo cuenta igual, para que quien publica la primera no crea que ya se
+ * ve (mes simulado, M3S3-062).
+ */
+export const MINIMO_EN_PORTADA = 3;
+
 export function ResenasDelNegocio({
   resenas,
   resumen,
@@ -21,9 +29,7 @@ export function ResenasDelNegocio({
   resenas: ResenaDelNegocio[];
   resumen: { promedio: number; cuantas: number } | null;
 }) {
-  // Con una o dos opiniones el bloque resta: «5,0 sobre 1 opinión» parece
-  // un sitio recién armado. Aparece cuando hay con qué convencer.
-  if (resenas.length < 3) return null;
+  if (resenas.length < MINIMO_EN_PORTADA) return null;
 
   return (
     <section className="bg-sitio-alt py-14">

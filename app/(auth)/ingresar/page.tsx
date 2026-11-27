@@ -7,7 +7,6 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getSession } from "@/lib/dal/session";
 import { FormularioIngreso } from "./formulario";
-import { PedirLink } from "./pedir-link";
 
 export const metadata: Metadata = {
   title: "Ingresar",
@@ -61,8 +60,7 @@ export default async function IngresarPage({
             </div>
           </div>
 
-          <FormularioIngreso volver={volver} />
-          <PedirLink abierto={link === "1"} />
+          <FormularioIngreso volver={volver} linkAbierto={link === "1"} />
 
           <p className="mt-6 border-t pt-5 text-center text-sm text-muted-foreground">
             ¿Todavía no tenés cuenta?{" "}

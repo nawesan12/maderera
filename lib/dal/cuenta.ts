@@ -147,6 +147,8 @@ export interface PresupuestoPropio {
   createdAt: Date;
   /** Se acepta o rechaza desde Mi cuenta (Go aplica la regla de H085). */
   aResponder: boolean;
+  /** Ya se pasó a un pedido vivo (M3S1-045). */
+  conPedido: boolean;
 }
 
 export async function misPresupuestos(): Promise<PresupuestoPropio[]> {

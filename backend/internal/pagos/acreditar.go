@@ -74,6 +74,11 @@ func (s *Servicio) EnVivo() bool {
 	return p != nil && p.Real()
 }
 
+// Disponible: hay con qué cobrar en línea (Mercado Pago o el demo). Sin
+// esto la tienda ofrecía Mercado Pago, creaba el pedido y «Pagar» decía que
+// el pago online no estaba disponible (mes simulado, M2S2-002).
+func (s *Servicio) Disponible() bool { return s.elegido() != nil }
+
 // ModoDemo: las rutas de /pago-demo existen solo con el demo encendido.
 func (s *Servicio) ModoDemo() bool { return s.cfg.ModoDemo() }
 

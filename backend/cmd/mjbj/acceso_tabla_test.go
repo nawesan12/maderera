@@ -182,6 +182,8 @@ var pantallaDeCadaRuta = map[string]string{
 	"MarcarAsistencia":                "/admin/eventos",                // PUT /api/v1/admin/eventos/asistencia
 	"CambiarEstadoEvento":             "/admin/eventos",                // PUT /api/v1/admin/eventos/estado
 	"MandarRecordatorios":             "/admin/eventos",                // POST /api/v1/admin/eventos/recordatorios
+	"RecordarEvento":                  "/admin/eventos",                // POST /api/v1/admin/eventos/{id}/recordatorio
+	"BorrarEvento":                    "/admin/eventos",                // DELETE /api/v1/admin/eventos/{id}
 	"AsistentesDeEvento":              "/admin/eventos",                // GET /api/v1/admin/eventos/{id}/asistentes
 	"ListarEventosAdmin":              "/admin/eventos",                // GET /api/v1/admin/eventos
 	"CrearEvento":                     "/admin/eventos",                // POST /api/v1/admin/eventos

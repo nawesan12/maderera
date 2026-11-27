@@ -26,9 +26,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [enVivo]
+                required: [enVivo, disponible]
                 properties:
                   enVivo: { type: boolean }
+                  disponible: { type: boolean, description: hay con qué cobrar en línea (Mercado Pago o el demo) }
   /api/v1/pagos/datos-para-transferir:
     get:
       operationId: DatosParaTransferir
@@ -72,10 +73,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [cobro, enVivo]
+                required: [cobro, enVivo, disponible]
                 properties:
                   cobro: { $ref: "#/components/schemas/CobroDelPedido" }
                   enVivo: { type: boolean }
+                  disponible: { type: boolean }
         "404": { $ref: "#/components/responses/Problema" }
   /api/v1/pagos/comprobante:
     post:

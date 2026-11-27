@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PasadoAPedido } from "@/components/cuenta/pasado-a-pedido";
 import { ChevronRight, ScrollText } from "lucide-react";
 import {
   AcentoEstado,
@@ -194,7 +195,7 @@ function Fila({ presupuesto }: { presupuesto: PresupuestoPropio }) {
           <span className="tabular text-lg font-semibold">
             {formatearMonto(presupuesto.total)}
           </span>
-          <EtiquetaEstado estado={presupuesto.estado} />
+          {presupuesto.conPedido ? <PasadoAPedido /> : <EtiquetaEstado estado={presupuesto.estado} />}
         </div>
       </div>
     </Link>

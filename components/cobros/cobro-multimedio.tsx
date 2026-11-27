@@ -186,6 +186,15 @@ export function CobroMultimedio({
                   <input
                     value={r.importe}
                     onChange={(e) => cambiar(r.clave, "importe", e.target.value)}
+                    // Al salir, con los miles como la suma de abajo: «500000»
+                    // quedaba al lado de «Suma $ 800.000» (M3S1-044).
+                    onBlur={(e) => {
+                      const n = parsearImporte(e.target.value);
+                      if (n && n > 0) {
+                        const prolijo = importeParaElCampo(n);
+                        if (prolijo !== e.target.value) cambiar(r.clave, "importe", prolijo);
+                      }
+                    }}
                     inputMode="decimal"
                     required
                     aria-label={`Importe del medio ${i + 1}`}

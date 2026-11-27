@@ -116,6 +116,22 @@ func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error 
 			return nil
 		}
 	}
+	if estado == "entregado" {
+		// El retiro con el remito sin firmar todavía no está entregado: el
+		// aviso sale con la firma (entregas.RegistrarFirma lo vuelve a
+		// encolar). Salían juntos «Firmá el remito» y «Tu pedido fue
+		// entregado» (mes simulado, M2S1-071). Y una sola vez por pedido.
+		var esperaFirma, yaSalio bool
+		if err := s.pool.QueryRow(ctx, `SELECT
+			  EXISTS (SELECT 1 FROM deliveries WHERE order_id = $1 AND estado = 'preparada' AND tipo = 'retiro'),
+			  EXISTS (SELECT 1 FROM notifications_log WHERE entidad_id = $1 AND evento = 'entregado' AND estado IN ('enviada', 'simulada'))`,
+			id).Scan(&esperaFirma, &yaSalio); err != nil {
+			return err
+		}
+		if esperaFirma || yaSalio {
+			return nil
+		}
+	}
 	s.wa.AvisarCambioDePedido(ctx, id, estado)
 	var numero, token, nombre string
 	var correo *string

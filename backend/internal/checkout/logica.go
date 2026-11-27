@@ -564,6 +564,9 @@ func CalcularEnvio(z Zona, subtotal float64) float64 {
 type Cuentas struct {
 	Subtotal, CostoEnvio, Descuento, Total float64
 	NombreZona                             *string
+	// MotivoDescuento es la etiqueta de la escala («10% por transferencia»):
+	// el pedido la muestra en su renglón (mes simulado, M2S4-044).
+	MotivoDescuento *string
 }
 
 // MsjMayorista es el rechazo del medio que no es de contado.
@@ -572,6 +575,23 @@ const MsjMayorista = "Tu precio de profesional es de contado: pagá por transfer
 // CuentasDeLaCompra suma la mercadería y los cortes, el envío y el descuento
 // por medio de pago (sobre la mercadería, sin el flete).
 func CuentasDeLaCompra(items, cortes []float64, zona *Zona, medio string, diferenciada bool, escalas []ventas.EscalaDePago) (Cuentas, string) {
+	return CuentasDeLaCompraCon(items, cortes, zona, medio, diferenciada, escalas, Politica{})
+}
+
+// Politica son las reglas de /admin/reglas que cambian las cuentas de la
+// compra. El cero es el comportamiento de antes de las reglas.
+type Politica struct {
+	// AlFlete: descuento_al_flete en «si», la escala va sobre la mercadería
+	// y el envío (mes simulado, M3S2-013: la tienda la ignoraba).
+	AlFlete bool
+	// SinEscalaConLista: escala_con_lista en «no», el precio de la lista
+	// propia ya es de contado y no suma el descuento por medio de pago
+	// (M3S3-020).
+	SinEscalaConLista bool
+}
+
+// CuentasDeLaCompraCon es CuentasDeLaCompra con las reglas.
+func CuentasDeLaCompraCon(items, cortes []float64, zona *Zona, medio string, diferenciada bool, escalas []ventas.EscalaDePago, pol Politica) (Cuentas, string) {
 	sc := 0.0
 	for _, c := range cortes {
 		sc += c
@@ -593,8 +613,20 @@ func CuentasDeLaCompra(items, cortes []float64, zona *Zona, medio string, difere
 	if !ventas.MedioPermitido(medio, diferenciada) {
 		return c, MsjMayorista
 	}
-	if e := ventas.DescuentoPorMedioDePago(escalas, medio, c.Subtotal); e != nil {
-		c.Descuento = ventas.MontoDelDescuentoDePago(c.Subtotal, e.Porcentaje)
+	base := c.Subtotal
+	if pol.AlFlete {
+		base = float64(c.Subtotal + c.CostoEnvio)
+	}
+	conEscala := !(diferenciada && pol.SinEscalaConLista)
+	if e := ventas.DescuentoPorMedioDePago(escalas, medio, base); conEscala && e != nil {
+		c.Descuento = ventas.MontoDelDescuentoDePago(base, e.Porcentaje)
+		if c.Descuento > 0 {
+			m := e.Etiqueta
+			if m == "" {
+				m = "Descuento " + strconv.FormatFloat(e.Porcentaje, 'f', -1, 64) + "%"
+			}
+			c.MotivoDescuento = &m
+		}
 	}
 	c.Total = float64(c.Subtotal-c.Descuento) + c.CostoEnvio
 	return c, ""

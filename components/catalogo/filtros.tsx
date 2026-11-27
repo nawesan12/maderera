@@ -82,6 +82,10 @@ export function BarraCatalogo({
   children: React.ReactNode;
 }) {
   const { actualizar } = useFiltros();
+  const { activa } = useTienda();
+  // Sin precios a la vista, ordenar por precio no sirve y deja adivinar cuál
+  // es más barato (mes simulado, M2S1-203).
+  const ordenes = activa ? ORDEN : ORDEN.filter((o) => !o.valor.startsWith("precio"));
   const [texto, setTexto] = useState(busquedaActual);
 
   // Si la búsqueda cambia desde afuera —el botón de atrás, un enlace—, el campo
@@ -129,11 +133,11 @@ export function BarraCatalogo({
           // La etiqueta visible se esconde en el teléfono; sin esto el lector
           // de pantalla anunciaba un desplegable sin nombre.
           aria-label="Ordenar"
-          value={ordenActual}
+          value={ordenes.some((o) => o.valor === ordenActual) ? ordenActual : "relevancia"}
           onChange={(e) => actualizar({ orden: e.target.value })}
           className="h-12 rounded-[10px] superficie px-3.5 text-[15px] outline-none focus:border-accion"
         >
-          {ORDEN.map((o) => (
+          {ordenes.map((o) => (
             <option key={o.valor} value={o.valor}>
               {o.texto}
             </option>
@@ -164,6 +168,7 @@ export function PanelCategorias({
   soloOfertas,
   cantidadOfertas,
   hayBusqueda,
+  cantidadMoldava = null,
 }: {
   categorias: CategoriaFiltro[];
   categoriaActual: string;
@@ -174,6 +179,7 @@ export function PanelCategorias({
   soloOfertas: boolean;
   cantidadOfertas: number;
   hayBusqueda: boolean;
+  cantidadMoldava?: number | null;
 }) {
   const { actualizar, limpiar } = useFiltros();
   const { stockVisible } = useTienda();
@@ -252,9 +258,12 @@ export function PanelCategorias({
             <li>
               <Link
                 href="/moldava"
-                className="flex w-full items-center rounded-lg px-3 py-2.5 text-sm text-texto-2 transition-colors hover:bg-card"
+                className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm text-texto-2 transition-colors hover:bg-card"
               >
-                Moldava
+                <span className="text-left">Moldava</span>
+                {cantidadMoldava !== null && (
+                  <span className="tabular text-xs text-texto-3">{cantidadMoldava}</span>
+                )}
               </Link>
             </li>
           )}

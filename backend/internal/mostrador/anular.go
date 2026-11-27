@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/auth"
 	"mjbj/internal/autorizacion"
 	"mjbj/internal/caja"
+	"mjbj/internal/entregas"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/reservas"
@@ -322,12 +323,19 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		return ResultadoAnulacion{}, err
 	}
 
+	// El remito que la venta a cuenta hizo sola (entregas.ConstanciaParaFirmar,
+	// sin firmar) no es un retiro aparte: se anula con la venta.
 	var conRetiro bool
-	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada')`, id).Scan(&conRetiro); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT exists(SELECT 1 FROM deliveries WHERE order_id = $1 AND estado <> 'anulada'
+		AND NOT (estado = 'preparada' AND notas IS NOT DISTINCT FROM $2))`, id, entregas.NotaConstanciaACuenta).Scan(&conRetiro); err != nil {
 		return ResultadoAnulacion{}, err
 	}
 	if conRetiro {
 		return no("Esta venta ya tiene retiros con remito. Anulá o revisá las entregas desde la ficha del pedido.")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE deliveries SET estado = 'anulada', updated_at = now()
+		WHERE order_id = $1 AND estado = 'preparada' AND notas IS NOT DISTINCT FROM $2`, id, entregas.NotaConstanciaACuenta); err != nil {
+		return ResultadoAnulacion{}, err
 	}
 
 	var sesion *string

@@ -5,14 +5,14 @@ import { notFound } from "next/navigation";
 import {
   ChevronRight,
   FileText,
-  Lock,
   Store,
   Truck,
 } from "lucide-react";
+import { DocumentosReservados } from "@/components/catalogo/documentos-reservados";
+import { reservadosParaQuienMira } from "@/lib/dal/profesionales";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { MedidaElegida } from "@/components/catalogo/medida-elegida";
-import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
 import { tienda } from "@/lib/dal/contenido";
@@ -273,9 +273,7 @@ export default async function ProductoPage({
             imagenes={producto.imagenes}
             fotoDeMedida={producto.fotoDeMedida}
             nombre={producto.name}
-            rubro={producto.subcategory ?? producto.categoryName}
             categoria={producto.categorySlug}
-            marca={producto.brand}
           />
 
           <div>
@@ -344,13 +342,8 @@ export default async function ProductoPage({
               </li>
             </ul>
 
-            {/* Con la tienda apagada el WhatsApp ya es el botón principal del
-                selector, con la medida escrita: otro igual acá abajo sobra. */}
-            {laTienda.activa && (
-              <BotonWhatsapp enlace={whatsapp} variante="secundario" tamano="grande" className="mt-3 w-full">
-                Consultar por WhatsApp
-              </BotonWhatsapp>
-            )}
+            {/* «Consultar por WhatsApp» va dentro del selector, con la medida
+                elegida (M2S4-028). */}
           </div>
         </ZonaSinFlotante>
         </MedidaElegida>
@@ -519,19 +512,10 @@ function FichaTecnica({
                   </li>
                 ))}
                 {producto.documentosReservados > 0 && (
-                  <li>
-                    <Link
-                      href="/profesionales"
-                      className="flex items-center gap-3 px-4 py-3 text-texto-2 transition-colors hover:bg-sitio-alt"
-                    >
-                      <Lock className="h-5 w-5 shrink-0" />
-                      <span className="flex-1">
-                        {producto.documentosReservados === 1
-                          ? "1 documento para profesionales"
-                          : `${producto.documentosReservados} documentos para profesionales`}
-                      </span>
-                    </Link>
-                  </li>
+                  <DocumentosReservados
+                    cantidad={producto.documentosReservados}
+                    paraQuienMira={reservadosParaQuienMira(producto.reservados)}
+                  />
                 )}
               </ul>
             </div>

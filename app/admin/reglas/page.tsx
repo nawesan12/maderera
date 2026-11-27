@@ -154,7 +154,6 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
           { valor: "al_peso", texto: "Al peso, a favor del cliente" },
         ],
       },
-
       {
         clave: "lote_y_cupon",
         pregunta: "Lote y cupón de la tarjeta",
@@ -185,6 +184,27 @@ const SECCIONES: { titulo: string; reglas: Pregunta[] }[] = [
         opciones: [
           { valor: "contrasena", texto: "Sí" },
           { valor: "solo_pin", texto: "No, solo el PIN" },
+        ],
+      },
+    ],
+  },
+  {
+    titulo: "Descuento por medio de pago",
+    reglas: [
+      {
+        clave: "descuento_al_flete",
+        pregunta: "¿Alcanza al flete?",
+        opciones: [
+          { valor: "no", texto: "No" },
+          { valor: "si", texto: "Sí" },
+        ],
+      },
+      {
+        clave: "escala_con_lista",
+        pregunta: "En la tienda, ¿se suma al precio de profesional?",
+        opciones: [
+          { valor: "si", texto: "Sí" },
+          { valor: "no", texto: "No, ese precio ya es de contado" },
         ],
       },
     ],

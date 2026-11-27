@@ -563,6 +563,29 @@ func TestFirmasALaVez(t *testing.T) {
 	}
 }
 
+// M2S1-071: el retiro entero deja el pedido entregado, pero el aviso
+// «entregado» espera la firma (notificaciones.CambioDeEstado lo saltea con el
+// remito sin firmar): firmar lo vuelve a encolar.
+func TestLaFirmaDelRetiroAvisaEntregado(t *testing.T) {
+	e := armar(t)
+	_, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	pedido, r1, r2 := e.pedido(t, "PED-1009", "listo", nil)
+	doc := "30111222"
+	r, err := e.s.CrearEntrega(context.Background(), ses, FormRemito{OrderID: pedido, Tipo: "retiro", ReceptorDocumento: &doc,
+		Lineas: []LineaAEntregar{{r1, 10}, {r2, 4}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	antes := e.uno(t, `select count(*)::text from trabajos where tipo = 'pedido.estado' and carga->>'orderId' = $1 and carga->>'estado' = 'entregado'`, pedido)
+	if _, err := e.s.RegistrarFirma(context.Background(), FormFirma{Token: r.FirmaToken, ReceptorNombre: "Juan Pérez", Firma: "data:image/png;base64,AAAA"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	despues := e.uno(t, `select count(*)::text from trabajos where tipo = 'pedido.estado' and carga->>'orderId' = $1 and carga->>'estado' = 'entregado'`, pedido)
+	if antes == despues {
+		t.Fatalf("la firma no volvió a encolar el aviso de entregado: %s → %s", antes, despues)
+	}
+}
+
 func TestZonasDeEnvio(t *testing.T) {
 	e := armar(t)
 	adm, _ := e.staff(t, "admin@prueba.test", sqlc.StaffRoleAdmin)

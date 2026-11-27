@@ -112,6 +112,13 @@ export default async function PagosPage({
             Mercado Pago apagado
           </span>
         )}
+        {/* Sin CBU ni alias la tienda no ofrece transferencia ni Mi cuenta
+            deja pagar por transferencia (mes simulado, M3S1-016). */}
+        {!banco?.cbu && !banco?.alias && (
+          <span className="estado-problema inline-flex h-11 items-center rounded-full bg-[var(--estado-fondo)] px-4 text-base font-medium text-[var(--estado-tinta)]">
+            Faltan los datos para transferir
+          </span>
+        )}
         <DatosBancarios datos={banco} />
         <Link
           href="/admin/facturacion"

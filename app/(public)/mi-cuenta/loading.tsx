@@ -1,1 +1,1 @@
-export { CargandoSitio as default } from "@/components/sitio/cargando";
+export { CargandoContenido as default } from "./cargando";

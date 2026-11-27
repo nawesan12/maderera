@@ -53,6 +53,8 @@ interface Props {
   cobro: EstadoDelPago | null;
   banco: DatosParaTransferir | null;
   enVivo: boolean;
+  /** Hay con qué cobrar en línea: sin eso no se ofrece «Pagar» (M2S2-002). */
+  disponible: boolean;
 }
 
 const inicial: EstadoPago = {};
@@ -69,6 +71,7 @@ export function BloquePago({
   cobro,
   banco,
   enVivo,
+  disponible,
 }: Props) {
   if (estadoPago === "pagado") {
     return (
@@ -113,9 +116,10 @@ export function BloquePago({
           <Banknote className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
           <div className="text-sm">
             <p className="font-semibold">Cargado a tu cuenta corriente</p>
+            {/* Prometía «podés cancelarlo cuando quieras desde el portal», y
+                el portal no cancela (mes simulado, M2S3-032). */}
             <p className="text-muted-foreground">
-              Lo ves reflejado en el saldo de tu cuenta. Podés cancelarlo cuando
-              quieras desde el portal.
+              Lo ves reflejado en el saldo de tu cuenta.
             </p>
           </div>
         </CardContent>
@@ -123,7 +127,10 @@ export function BloquePago({
     );
   }
 
-  if (medioPago === "efectivo") {
+  // Mercado Pago sin con qué cobrar (pedidos de antes de que la tienda
+  // dejara de ofrecerlo): se paga como el efectivo, no con un «Pagar» que
+  // falla (M2S2-002, M2S2-049).
+  if (medioPago === "efectivo" || (medioPago === "mercado_pago" && !disponible)) {
     return (
       <Card className="border-0 shadow-sm">
         <CardContent className="flex items-start gap-3 p-5">
@@ -308,11 +315,7 @@ function TransferenciaBancaria({
               </p>
             )}
           </dl>
-        ) : (
-          <p className="mb-4 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-            Escribinos por WhatsApp y te pasamos los datos para transferir.
-          </p>
-        )}
+        ) : null}
 
         {estado.ok ? (
           <p className="flex items-start gap-2 rounded-lg bg-brand-green/10 p-3 text-sm">

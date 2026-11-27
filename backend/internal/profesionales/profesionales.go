@@ -34,7 +34,15 @@ type Servicio struct {
 	// enSegundoPlano corre los avisos después de responder (el after() de
 	// Next). Las pruebas lo cambian para esperarlos.
 	enSegundoPlano func(func(context.Context))
+	// PagoOnline dice si hay con qué cobrar en línea (pagos.Config.Elegir);
+	// nil es que sí. Sin eso, un evento pago no reserva lugar.
+	PagoOnline func() bool
 }
+
+// MsjEventoSinPago es lo que se contesta al anotarse a un evento pago con el
+// cobro en línea apagado: reservaba el lugar y no había forma de pagarlo
+// (mes simulado, M2S2-016).
+const MsjEventoSinPago = "El pago online no está disponible. Escribinos por WhatsApp y te anotamos."
 
 // Nuevo arma el servicio. sitio es APP_URL (para los enlaces de los correos).
 func Nuevo(pool *pgxpool.Pool, av *avisos.Servicio, sitio string, log *slog.Logger) *Servicio {
@@ -497,7 +505,7 @@ func (s *Servicio) Solicitar(ctx context.Context, ses *auth.Sesion, f Solicitud)
 		return "", err
 	}
 	if pendiente {
-		return "Ya tenemos tu solicitud y la estamos revisando. Te contestamos dentro de las próximas 24 horas hábiles.", nil
+		return "Ya tenemos tu solicitud. Un asesor la está revisando.", nil
 	}
 	var cu, userID *string
 	if f.DocumentoTipo == "cuit" {
@@ -518,7 +526,8 @@ func (s *Servicio) Solicitar(ctx context.Context, ses *auth.Sesion, f Solicitud)
 		s.avisos.Despachar(ctx, avisos.Despacho{Evento: "solicitud_profesional", Para: f.Email, EntidadTipo: "professional_application",
 			EntidadID: id, Correo: avisos.Correo(AcuseDeRecibo(s.sitio, PrimeraPalabra(f.Nombre)))})
 	})
-	return "Recibimos tu solicitud. Te contestamos dentro de las próximas 24 horas hábiles.", nil
+	// Sin plazo, como «Cómo funciona»: nadie confirmó las 24 horas (M2S1-201).
+	return "Recibimos tu solicitud. Un asesor la va a revisar.", nil
 }
 
 // SolicitudEnCurso es la última solicitud de quien mira.

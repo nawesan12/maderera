@@ -21,6 +21,7 @@ import { cobroDelPedido, datosParaTransferir } from "@/lib/dal/pagos";
 import { BloquePago } from "@/components/pagos/bloque-pago";
 import { formatearPrecio } from "@/lib/formato";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 
 /*
  * El título se resuelve consultando, y no como constante, porque esta ruta cae
@@ -150,6 +151,15 @@ async function Seguimiento({
                 <dt className="text-muted-foreground">Subtotal</dt>
                 <dd className="tabular">{formatearPrecio(pedido.subtotal)}</dd>
               </div>
+              {/* El descuento por medio de pago, con su nombre, como en la
+                  confirmación: entre el subtotal y el total no había nada
+                  (mes simulado, M2S4-044). */}
+              {pedido.descuento > 0.005 && (
+                <div className="flex justify-between text-saldo-favor">
+                  <dt>{pedido.descuentoMotivo ?? "Descuento"}</dt>
+                  <dd className="tabular">− {formatearPrecio(pedido.descuento)}</dd>
+                </div>
+              )}
               {Number(pedido.costoEnvio) > 0 && (
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Envío</dt>
@@ -202,8 +212,10 @@ async function Seguimiento({
         </div>
 
         {/* El pago es lo primero que hay que resolver después de confirmar, así
-            que va entero y ancho, no como una tarjeta más de la grilla. */}
-        <div className="mt-4">
+            que va entero y ancho, no como una tarjeta más de la grilla. El
+            WhatsApp flotante se va mientras se ve: tapaba el borde de la
+            tarjeta en el teléfono (M2S2-142). */}
+        <ZonaSinFlotante soloEnCelular className="mt-4">
           <BloquePago
             numero={pedido.numero}
             token={pedido.publicToken}
@@ -223,8 +235,9 @@ async function Seguimiento({
             }
             banco={banco}
             enVivo={estadoDelCobro?.enVivo ?? false}
+            disponible={estadoDelCobro?.disponible ?? false}
           />
-        </div>
+        </ZonaSinFlotante>
 
         {/* Con sesión, el pedido ya vive en el portal y se puede seguir desde
             ahí. Sin sesión, crear la cuenta es justo lo que hace que este

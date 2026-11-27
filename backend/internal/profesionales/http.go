@@ -11,6 +11,7 @@ import (
 	"mjbj/internal/api/profesionalesapi"
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/cuit"
 	"mjbj/internal/limites"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/roles"
@@ -175,11 +176,17 @@ func (a *API) SolicitarAccesoProfesional(ctx context.Context, r profesionalesapi
 	if err := l.Problema(); err != nil {
 		return nil, err
 	}
-	// El freno, además de la de una pendiente por documento: sin él, la cola
-	// del panel se llena desde un solo lugar cambiando un dígito.
-	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
-	if v := a.lim.Permitido(ctx, limites.Profesional, "ip:"+ip); !v.Permitido {
+	// El freno, además de la de una pendiente por documento: por documento
+	// (el que probó varias veces) y, con un techo alto, por conexión (la cola
+	// del panel no se llena desde un solo lugar cambiando un dígito). Por IP
+	// sola culpaba a quien compartía la conexión (M3S2-033).
+	if v := a.lim.Permitido(ctx, limites.Profesional, "doc:"+cuit.SoloDigitos(f.DocumentoNumero)); !v.Permitido {
 		return nil, espera(v)
+	}
+	ip := plataforma.IPDelCliente(plataforma.PedidoDe(ctx))
+	if v := a.lim.Permitido(ctx, limites.ProfesionalPorIP, "ip:"+ip); !v.Permitido {
+		return nil, plataforma.NuevoProblema(http.StatusTooManyRequests,
+			"Recibimos muchas solicitudes desde esta conexión. Esperá "+limites.CuantoFalta(v.EsperaSegundos)+" o escribinos por WhatsApp.")
 	}
 	m, err := a.s.Solicitar(ctx, auth.DeContexto(ctx), f)
 	if err != nil {
@@ -278,13 +285,41 @@ func (a *API) MandarRecordatorios(ctx context.Context, _ profesionalesapi.Mandar
 	if err != nil {
 		return nil, err
 	}
+	return listo(textoDeRecordatorios(n)), nil
+}
+
+func textoDeRecordatorios(n int) string {
 	switch n {
 	case 0:
-		return listo("No hay eventos mañana con gente sin avisar."), nil
+		return "No hay anotados sin avisar."
 	case 1:
-		return listo("Salieron 1 recordatorio."), nil
+		return "Salió 1 recordatorio."
 	}
-	return listo(fmt.Sprintf("Salieron %d recordatorios.", n)), nil
+	return fmt.Sprintf("Salieron %d recordatorios.", n)
+}
+
+func (o respuesta) VisitBorrarEventoResponse(w http.ResponseWriter) error   { return o.escribir(w) }
+func (o respuesta) VisitRecordarEventoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) BorrarEvento(ctx context.Context, r profesionalesapi.BorrarEventoRequestObject) (profesionalesapi.BorrarEventoResponseObject, error) {
+	if _, err := panelEventos(ctx); err != nil {
+		return nil, err
+	}
+	if err := a.s.BorrarEvento(ctx, r.Id.String()); err != nil {
+		return nil, err
+	}
+	return listo("Evento borrado."), nil
+}
+
+func (a *API) RecordarEvento(ctx context.Context, r profesionalesapi.RecordarEventoRequestObject) (profesionalesapi.RecordarEventoResponseObject, error) {
+	if _, err := panelEventos(ctx); err != nil {
+		return nil, err
+	}
+	n, err := a.s.RecordarEvento(ctx, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	return listo(textoDeRecordatorios(n)), nil
 }
 
 func (a *API) AnotarseAEvento(ctx context.Context, r profesionalesapi.AnotarseAEventoRequestObject) (profesionalesapi.AnotarseAEventoResponseObject, error) {

@@ -7,6 +7,12 @@ import { api, copiarCookies, mensajeDe, type Problema } from "@/lib/api/servidor
 
 export interface EstadoRegistro {
   error?: string;
+  /**
+   * Lo que se escribió, sin las claves: el formulario se limpia solo después
+   * de la acción y con un error había que tipear todo de nuevo (mes
+   * simulado, M2S1-072 y M3S2-023).
+   */
+  valores?: { nombre: string; email: string; telefono: string; novedades: boolean };
 }
 
 /**
@@ -27,21 +33,23 @@ export async function registrarse(
 ): Promise<EstadoRegistro> {
   const texto = (k: string) => String(formData.get(k) ?? "");
   const clave = texto("password");
+  const novedades = formData.get("novedades") === "on";
+  const valores = { nombre: texto("nombre"), email: texto("email"), telefono: texto("telefono"), novedades };
   // Que las dos coincidan es cosa del formulario: Go recibe una sola.
   if (clave !== texto("repetir")) {
-    return { error: "Las dos contraseñas tienen que coincidir." };
+    return { error: "Las dos contraseñas tienen que coincidir.", valores };
   }
 
   let respuesta;
   try {
     respuesta = await (await api()).POST("/api/v1/registro", {
-      body: { nombre: texto("nombre"), correo: texto("email"), telefono: texto("telefono"), clave },
+      body: { nombre: valores.nombre, correo: valores.email, telefono: valores.telefono, clave, novedades },
     });
   } catch {
-    return { error: "No pudimos crear la cuenta. Intentá de nuevo en un momento." };
+    return { error: "No pudimos crear la cuenta. Intentá de nuevo en un momento.", valores };
   }
   if (!respuesta.data) {
-    return { error: mensajeDe(respuesta.error as Problema | undefined, "No pudimos crear la cuenta. Intentá de nuevo en un momento.") };
+    return { error: mensajeDe(respuesta.error as Problema | undefined, "No pudimos crear la cuenta. Intentá de nuevo en un momento."), valores };
   }
 
   await copiarCookies(respuesta.response);

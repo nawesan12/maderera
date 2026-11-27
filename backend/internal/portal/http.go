@@ -119,7 +119,11 @@ func (a *API) ResponderPresupuesto(ctx context.Context, r portalapi.ResponderPre
 	if err != nil {
 		return nil, err
 	}
-	m, err := a.s.Responder(ctx, c, r.Numero, r.Body.Respuesta)
+	motivo := ""
+	if r.Body.Motivo != nil {
+		motivo = *r.Body.Motivo
+	}
+	m, err := a.s.ResponderConMotivo(ctx, c, r.Numero, r.Body.Respuesta, motivo)
 	if err != nil {
 		return nil, err
 	}

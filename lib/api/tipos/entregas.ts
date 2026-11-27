@@ -433,6 +433,8 @@ export interface components {
             firmadoAt: string | null;
             /** Format: date-time */
             createdAt: string;
+            /** @description del remito preparado que espera la firma */
+            firmaToken: string | null;
         };
         EntregasDelPortal: {
             entregas: components["schemas"]["RemitoDelPortal"][];

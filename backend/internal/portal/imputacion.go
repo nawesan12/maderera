@@ -59,9 +59,10 @@ func ImputarConNeto(libro []Asiento) (map[string]float64, map[string]float64) {
 	debe := map[string]float64{}
 	var orden []string
 	var revertido float64
+	var reversiones []Asiento
 	for i, a := range libro {
 		if a.Monto > 0 && a.Revierte {
-			revertido = float64(revertido + a.Monto)
+			reversiones = append(reversiones, a)
 			continue
 		}
 		if a.Monto > 0 {
@@ -91,6 +92,18 @@ func ImputarConNeto(libro []Asiento) (map[string]float64, map[string]float64) {
 			credito = float64(credito - aplica)
 		}
 		libre = float64(libre + credito)
+	}
+	// Lo que se revierte de un pago dirigido (el recibo de un pedido que se
+	// anula, su cheque que rebota) vuelve sobre ese pedido; el resto, sobre
+	// lo libre.
+	for _, a := range reversiones {
+		monto := a.Monto
+		if d, ok := debe[a.Referencia]; ok && a.Referencia != "" {
+			vuelve := math.Min(monto, math.Max(float64(neto[a.Referencia]-d), 0))
+			debe[a.Referencia] = float64(d + vuelve)
+			monto = float64(monto - vuelve)
+		}
+		revertido = float64(revertido + monto)
 	}
 	// Lo revertido que supera lo libre (el pago ya se había aplicado a un
 	// débito con su referencia) queda como deuda suelta, al final.
@@ -124,13 +137,33 @@ func (s *Servicio) pendientesDeLaCuenta(ctx context.Context, c *Cliente) (map[st
 	// que el cliente lee en Movimientos. Para imputar es del pedido: sin esto
 	// el crédito iba a la deuda más vieja y el pedido devuelto en parte
 	// seguía diciendo que faltaba el total (simulación del mes, H302).
-	filas, err := s.pool.Query(ctx, `SELECT m.monto::float8,
-		  coalesce((SELECT o.numero FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
-		            WHERE dv.account_movement_id = m.id LIMIT 1), m.referencia, ''),
+	//
+	// Un pago con destino (el recibo del pedido, el que cobra la factura de
+	// un pedido, o el que lo nombra en el concepto) va primero a ese pedido,
+	// y lo que sobra a la deuda más vieja; su anulación o su cheque
+	// rechazado vuelven sobre el mismo pedido. Sin esto, el pago de PED-1019
+	// cubría primero PED-1004 y cada pedido mostraba lo que se debía del
+	// otro (mes simulado, M2S1-017), y el pedido con la factura cobrada
+	// seguía debiendo todo (M3S3-012).
+	filas, err := s.pool.Query(ctx, `WITH libro AS (
+		SELECT m.id, m.created_at, m.monto, m.referencia, m.tipo, m.receipt_id,
 		  m.monto > 0 AND m.receipt_id IS NOT NULL AND EXISTS (SELECT 1 FROM account_movements p
-		    WHERE p.customer_id = m.customer_id AND p.receipt_id = m.receipt_id AND p.monto < 0),
-		  m.tipo = 'nota_credito'
-		FROM account_movements m WHERE m.customer_id = $1 ORDER BY m.created_at, m.id`, c.ID)
+		    WHERE p.customer_id = m.customer_id AND p.receipt_id = m.receipt_id AND p.monto < 0) AS revierte
+		FROM account_movements m WHERE m.customer_id = $1)
+		SELECT l.monto::float8,
+		  coalesce((SELECT o.numero FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
+		            WHERE dv.account_movement_id = l.id LIMIT 1),
+		    CASE WHEN l.receipt_id IS NOT NULL AND (l.monto < 0 OR l.revierte) THEN
+		      (SELECT coalesce(
+		         (SELECT o.numero FROM orders o WHERE o.id = r.order_id),
+		         (SELECT o.numero FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
+		            JOIN orders o ON o.id = i.order_id WHERE ip.receipt_id = r.id ORDER BY ip.monto DESC LIMIT 1),
+		         substring(r.concepto from 'PED-[0-9]+'))
+		       FROM receipts r WHERE r.id = l.receipt_id) END,
+		    l.referencia, ''),
+		  l.revierte,
+		  l.tipo = 'nota_credito'
+		FROM libro l ORDER BY l.created_at, l.id`, c.ID)
 	if err != nil {
 		return nil, nil, err
 	}

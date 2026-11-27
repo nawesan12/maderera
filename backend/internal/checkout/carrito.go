@@ -47,6 +47,24 @@ type Servicio struct {
 	// SinCandado apaga el bloqueo del carrito al confirmar (solo para ver
 	// fallar la prueba de concurrencia).
 	SinCandado bool
+	// PagoOnline dice si hay con qué cobrar en línea (pagos.Config.Elegir);
+	// nil es que sí (las pruebas).
+	PagoOnline func() bool
+}
+
+// Los medios que la tienda no ofrece cuando falta con qué cobrarlos.
+const (
+	MsjSinPagoOnline     = "El pago online no está disponible. Elegí transferencia, débito o efectivo."
+	MsjSinDatosBancarios = "La transferencia no está disponible. Elegí otro medio de pago."
+)
+
+// HayDatosParaTransferir: la casa cargó un CBU o un alias en /admin/pagos.
+func HayDatosParaTransferir(ctx context.Context, c interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}) (bool, error) {
+	var hay bool
+	err := c.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM datos_bancarios WHERE coalesce(cbu, '') <> '' OR coalesce(alias, '') <> '')`).Scan(&hay)
+	return hay, err
 }
 
 // Nuevo arma el servicio.

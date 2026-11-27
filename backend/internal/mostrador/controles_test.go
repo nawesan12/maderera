@@ -247,6 +247,14 @@ func TestReintentoACuentaCorriente(t *testing.T) {
 	if n := e.num(t, `select count(*)::float8 from orders`); n != 1 {
 		t.Errorf("pedidos: %v", n)
 	}
+	// M2S1-073: lo que se lleva fiado sale con su remito para firmar, sin
+	// volver a sacar el stock (y el reintento no hace otro).
+	if n := e.num(t, `select count(*)::float8 from deliveries where order_id = $1 and estado = 'preparada' and tipo = 'retiro' and firma_token is not null`, pedido); n != 1 {
+		t.Errorf("remitos para firmar de la venta a cuenta: %v", n)
+	}
+	if n := e.num(t, `select count(*)::float8 from inventory_movements where note like 'Remito %'`); n != 0 {
+		t.Errorf("el remito de la venta volvió a sacar stock: %v", n)
+	}
 }
 
 // Pasarse del límite lo autoriza un admin con su PIN: el «autorizado» que

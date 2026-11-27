@@ -3569,3 +3569,40 @@ Migraciones 00410 (`bot_devuelto_at`, la derivación corta y
   (00420, con el relleno de los meses abiertos) y asienta contra
   Mercaderías y 5.1.14 Diferencias de inventario; la reposición sin cargo,
   contra 5.2.01.
+## 27/11/2026: tanda 23, el portal y el sitio público (rama `mes23-portal-publico`)
+
+Migraciones 00430 (regla `escala_con_lista`) y 00431 (Deck Grandis por
+tabla). Lo que cambió en Go:
+
+- **Imputación del portal** (`portal.pendientesDeLaCuenta`): el pago con
+  destino (recibo del pedido, cobro de su factura o el que lo nombra) va
+  primero a ese pedido; su anulación vuelve sobre él.
+- **Documentos técnicos**: sin archivo subido (`tamano_bytes` nulo) no se
+  listan ni cuentan; la descarga se llama como el documento
+  (`subidas.EntregarComo`); la ficha manda los ids de los reservados.
+- **Registro**: `novedades` en el alta; sin tildar, la dirección arranca en
+  `bajas_de_correo`.
+- **Tienda**: `checkout.Servicio.PagoOnline` y `HayDatosParaTransferir`
+  frenan Mercado Pago apagado y la transferencia sin CBU;
+  `CuentasDeLaCompraCon` aplica `descuento_al_flete` y `escala_con_lista`, y
+  guarda `descuento_motivo`. `/pagos/estado` y el cobro del pedido dicen
+  `disponible`.
+- **Remitos**: el portal recibe el `firmaToken` del preparado; el aviso
+  «entregado» de un retiro espera la firma (`notificaciones.CambioDeEstado`,
+  `RegistrarFirma` lo vuelve a encolar) y sale una vez; la venta del
+  mostrador a cuenta que se lleva sale con `entregas.ConstanciaParaFirmar`
+  (sin stock; la anulación de la venta lo anula).
+- **Historial del cliente**: el recibo anulado y su ajuste en un renglón,
+  sin el motivo interno; `cheque_no_tomado`; las devoluciones de contado
+  (`DevolucionesFueraDeLaCuenta`); el detalle del pedido trae `devuelto` y
+  `devoluciones`.
+- **Presupuestos**: el rechazo desde Mi cuenta guarda el motivo
+  (`portal.MotivosDelCliente`); la lista dice `conPedido`.
+- **Profesionales**: el freno de la solicitud cuenta por documento y, con
+  techo de 20, por conexión (`limites.ProfesionalPorIP`); el CUIT con el
+  verificador mal tiene su mensaje; sin el plazo de 24 horas.
+- **Eventos**: un evento pago no se anota sin cobro en línea
+  (`profesionales.Servicio.PagoOnline`); la asistencia desde que empieza;
+  `BorrarEvento` (borrador sin anotados) y `RecordarEvento`; el recordatorio
+  llega también a los marcados «vino»; `eventos-visibles` solo los que no
+  pasaron.

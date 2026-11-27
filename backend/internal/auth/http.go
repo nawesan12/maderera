@@ -198,7 +198,7 @@ func (a *API) Registrarse(ctx context.Context, req sesionapi.RegistrarseRequestO
 	if v := a.lim.Permitido(ctx, limites.Registrarse, "ip:"+ip); !v.Permitido {
 		return nil, espera(v)
 	}
-	ses, err := a.s.Registrar(ctx, plataforma.EscritorDe(ctx), Alta{Nombre: nombre, Correo: b.Correo, Telefono: tel, Clave: b.Clave}, ip, agente)
+	ses, err := a.s.Registrar(ctx, plataforma.EscritorDe(ctx), Alta{Nombre: nombre, Correo: b.Correo, Telefono: tel, Clave: b.Clave, Novedades: b.Novedades != nil && *b.Novedades}, ip, agente)
 	if errors.Is(err, ErrCorreoUsado) {
 		// Acá sí se dice: quien se registra necesita saber que tiene que
 		// ingresar, y el dato no revela nada que un intento de alta no revele.

@@ -670,7 +670,7 @@ func (a *API) DestinosDeDocumento(ctx context.Context, r contenidoapi.DestinosDe
 // técnico, que es un PDF o una planilla y no JSON.
 func (a *API) Rutas(m *http.ServeMux) {
 	m.HandleFunc("GET /api/v1/contenido/documentos/{id}/archivo", func(w http.ResponseWriter, r *http.Request) {
-		datos, tipo, publico, err := a.s.ArchivoDeDocumento(r.Context(), auth.DeContexto(r.Context()), r.PathValue("id"))
+		datos, tipo, publico, nombre, err := a.s.ArchivoDeDocumento(r.Context(), auth.DeContexto(r.Context()), r.PathValue("id"))
 		if err != nil {
 			a.s.log.Error("no se pudo leer el documento", "error", err)
 			plataforma.EscribirProblema(w, plataforma.NuevoProblema(http.StatusInternalServerError, "No pudimos abrir el documento."))
@@ -684,7 +684,7 @@ func (a *API) Rutas(m *http.ServeMux) {
 		if publico {
 			cache = "public, max-age=3600"
 		}
-		subidas.Entregar(w, datos, tipo, cache)
+		subidas.EntregarComo(w, datos, tipo, cache, nombre)
 	})
 }
 

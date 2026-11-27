@@ -195,7 +195,9 @@ function Fila({
             </p>
           )}
 
-          {solicitud.documentoTipo === "dni" && (
+          {/* Solo mientras hay que decidir: en una rechazada ya no
+              corresponde (M2S1-136). */}
+          {solicitud.documentoTipo === "dni" && solicitud.estado !== "rechazada" && (
             <p className="mt-1 text-base text-brand-orange">
               Sin CUIT: la ficha se crea como consumidor final y no se le puede
               facturar A.

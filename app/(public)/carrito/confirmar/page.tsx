@@ -13,7 +13,9 @@ import {
 import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { listaVigente } from "@/lib/dal/precios-sesion";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
-import { tienda } from "@/lib/dal/contenido";
+import { ajustesDelSitio, tienda } from "@/lib/dal/contenido";
+import { datosParaTransferir, pagoOnlineDisponible } from "@/lib/dal/pagos";
+import { valorDeRegla } from "@/lib/reglas";
 import { FormularioDeCompra } from "./formulario";
 import { ACotizar } from "./a-cotizar";
 
@@ -58,7 +60,7 @@ export default async function ConfirmarCompraPage() {
         )
       : "";
 
-  const [zonas, sucursales, sesion, cliente, credito, direcciones, lista] =
+  const [zonas, sucursales, sesion, cliente, credito, direcciones, lista, pagoOnline, banco, ajustes] =
     await Promise.all([
       listarZonasDeEnvio(),
       listarSucursalesPublicas(),
@@ -70,6 +72,9 @@ export default async function ConfirmarCompraPage() {
       creditoDisponible(carrito.subtotal),
       misDirecciones(),
       listaVigente(),
+      pagoOnlineDisponible(),
+      datosParaTransferir(),
+      ajustesDelSitio(),
     ]);
 
   return (
@@ -82,7 +87,7 @@ export default async function ConfirmarCompraPage() {
           className="inline-flex items-center gap-2 text-sm text-texto-2 transition-colors hover:text-acento-texto"
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver al presupuesto
+          Volver al carrito
         </Link>
         <h1 className="mt-3 text-[34px] font-bold tracking-[-0.03em]">
           Finalizar compra
@@ -140,6 +145,12 @@ export default async function ConfirmarCompraPage() {
           // El precio mayorista es de contado: con una lista diferenciada no se
           // ofrecen ni crédito ni Mercado Pago.
           precioMayorista={lista.esDiferenciada}
+          pagoOnline={pagoOnline}
+          hayDatosBancarios={banco !== null}
+          reglas={{
+            alFlete: valorDeRegla(ajustes, "descuento_al_flete") === "si",
+            sinEscalaConLista: valorDeRegla(ajustes, "escala_con_lista") === "no",
+          }}
           zonas={zonas}
           sucursales={sucursales}
           datosIniciales={{
@@ -152,6 +163,7 @@ export default async function ConfirmarCompraPage() {
             disponible: credito.disponible,
             motivo: credito.motivo,
             soloSaldoAFavor: credito.soloSaldoAFavor ?? false,
+            limiteCredito: credito.limiteCredito,
           }}
           direcciones={direcciones.map((d) => ({
             id: d.id,

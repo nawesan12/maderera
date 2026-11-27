@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { CargandoSitio } from "@/components/sitio/cargando";
+import { CargandoCuenta } from "./cargando";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { verifySession } from "@/lib/dal/session";
@@ -35,7 +35,7 @@ export const instant = false;
  */
 export default function CuentaLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<CargandoSitio />}>
+    <Suspense fallback={<CargandoCuenta />}>
       <CuentaConSesion>{children}</CuentaConSesion>
     </Suspense>
   );
@@ -60,12 +60,12 @@ async function CuentaConSesion({
 
   return (
     <div className="min-h-screen bg-sitio-alt" data-sin-flotante-en-celular>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
-        <header className="mb-[26px] flex flex-wrap items-end justify-between gap-5">
+      <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8 lg:py-10">
+        <header className="mb-4 flex flex-wrap items-end justify-between gap-x-5 gap-y-2 lg:mb-[26px]">
           <div>
             <p className="text-[15px] text-texto-3">Hola,</p>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-[30px] font-bold leading-[1.05] tracking-[-0.035em] [overflow-wrap:anywhere] sm:text-[38px]">
+              <h1 className="text-[26px] font-bold leading-[1.05] tracking-[-0.035em] [overflow-wrap:anywhere] sm:text-[38px]">
                 {nombreDePila}
               </h1>
               {distintivo && (
@@ -91,7 +91,7 @@ async function CuentaConSesion({
           </p>
         )}
 
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-[26px] lg:grid-cols-[236px_minmax(0,1fr)]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[236px_minmax(0,1fr)] lg:gap-[26px]">
           <aside className="min-w-0 lg:sticky lg:top-[88px] lg:self-start">
             <NavegacionCuenta
               pedidosEnCurso={resumen.pedidosEnCurso}

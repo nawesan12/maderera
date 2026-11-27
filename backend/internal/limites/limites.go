@@ -53,6 +53,11 @@ const (
 	// una entrada para siempre—, así que cada «?buscar=» que arma un bot
 	// llega a la base. Una persona no escribe dos búsquedas por segundo.
 	Busqueda Accion = "busqueda"
+	// ProfesionalPorIP: las solicitudes de cuenta profesional desde una
+	// misma conexión (solo de Go). La de Profesional cuenta por documento: el
+	// freno por IP le pegaba a la cuarta persona del wifi de un taller en su
+	// primer intento (mes simulado, M3S2-033).
+	ProfesionalPorIP Accion = "profesional-ip"
 )
 
 // Los valores de LIMITES en lib/limites/index.ts.
@@ -71,6 +76,9 @@ var limites = map[Accion]Limite{
 	Carrito:        {60, time.Hour},
 	Plano:          {600, 10 * time.Minute},
 	Busqueda:       {120, time.Minute},
+	// Un techo alto: la cola del panel no se llena desde un solo lugar, y una
+	// oficina con varias personas pide sin chocar.
+	ProfesionalPorIP: {20, 24 * time.Hour},
 }
 
 // porIP es el tope de los intentos que se cuentan por IP cuando no es el de

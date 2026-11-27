@@ -53,6 +53,10 @@ export interface ProductoResenable {
   orderId: string;
   numeroPedido: string;
   yaResenado: boolean;
+  /** La medida que compró: «Fenólico» solo no decía cuál (M3S4-032). */
+  medida: string;
+  /** El estado de su reseña: pendiente, publicada o rechazada (M2S3-077). */
+  estadoResena: string;
 }
 
 /** Lo que quien pide compró en pedidos entregados, con si ya lo reseñó. */

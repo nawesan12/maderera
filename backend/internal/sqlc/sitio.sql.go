@@ -151,7 +151,7 @@ func (q *Queries) DocumentosDelPanel(ctx context.Context) ([]DocumentosDelPanelR
 }
 
 const documentosReservados = `-- name: DocumentosReservados :one
-SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales
+SELECT count(*)::int FROM technical_documents WHERE activo AND solo_profesionales AND tamano_bytes IS NOT NULL
 `
 
 func (q *Queries) DocumentosReservados(ctx context.Context) (int32, error) {
@@ -164,7 +164,7 @@ func (q *Queries) DocumentosReservados(ctx context.Context) (int32, error) {
 const documentosVisibles = `-- name: DocumentosVisibles :many
 SELECT id, titulo, descripcion, categoria, url, formato, tamano_bytes, solo_profesionales
 FROM technical_documents
-WHERE activo AND ($1::boolean OR NOT solo_profesionales)
+WHERE activo AND tamano_bytes IS NOT NULL AND ($1::boolean OR NOT solo_profesionales)
 ORDER BY orden, titulo
 `
 
@@ -180,7 +180,9 @@ type DocumentosVisiblesRow struct {
 }
 
 // El permiso va dentro de la consulta: listar todo y filtrar en la pantalla
-// ya sería haber leído lo que no corresponde.
+// ya sería haber leído lo que no corresponde. Sin archivo subido (tamaño
+// nulo: los de la semilla apuntaban a /fichas/, que la API no sirve) no se
+// lista: daba 404 al tocarlo (mes simulado, M2S1-025).
 func (q *Queries) DocumentosVisibles(ctx context.Context, profesional bool) ([]DocumentosVisiblesRow, error) {
 	rows, err := q.db.Query(ctx, documentosVisibles, profesional)
 	if err != nil {
@@ -552,9 +554,12 @@ func (q *Queries) SitemapEventos(ctx context.Context) ([]SitemapEventosRow, erro
 }
 
 const slugsDeEventosVisibles = `-- name: SlugsDeEventosVisibles :many
-SELECT slug FROM events WHERE estado <> 'borrador' ORDER BY inicia DESC LIMIT $1
+SELECT slug FROM events WHERE estado IN ('publicado', 'cerrado') AND inicia >= now() ORDER BY inicia LIMIT $1
 `
 
+// Los que se pueden ver y no pasaron, como /eventos: devolvía los que ya
+// pasaron mientras /eventos decía que no había ninguno (mes simulado,
+// M2S1-207). El de un evento pasado se sigue abriendo por su dirección.
 func (q *Queries) SlugsDeEventosVisibles(ctx context.Context, limit int32) ([]string, error) {
 	rows, err := q.db.Query(ctx, slugsDeEventosVisibles, limit)
 	if err != nil {

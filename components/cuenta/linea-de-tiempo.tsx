@@ -33,7 +33,8 @@ const ESTILO: Record<ClaseDeMovimiento, { etiqueta: string; familia: string }> =
   pago_rechazado: { etiqueta: "No acreditado", familia: "estado-problema" },
   cheque_por_recibir: { etiqueta: "Cheque por recibir", familia: "estado-espera" },
   cheque: { etiqueta: "Cheque", familia: "estado-cerrado" },
-  cheque_rechazado: { etiqueta: "Cheque rechazado", familia: "estado-problema" },
+  cheque_rechazado: { etiqueta: "Rechazado por el banco", familia: "estado-problema" },
+  cheque_no_tomado: { etiqueta: "No aceptado", familia: "estado-cerrado" },
 };
 
 // En hora argentina: el servidor corre en UTC y lo de después de las 21 h

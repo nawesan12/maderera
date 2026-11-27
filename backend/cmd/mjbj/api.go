@@ -391,9 +391,10 @@ func correrAPI() error {
 		campanasapi.StdHTTPServerOptions{BaseRouter: m, ErrorHandlerFunc: plataforma.ErrorDePedido},
 	)
 	// Profesionales y eventos (tanda 10).
+	profSrv := profesionales.Nuevo(pool, avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log)
+	profSrv.PagoOnline = func() bool { return cfg.Pagos.Elegir() != nil }
 	profesionalesapi.HandlerWithOptions(
-		profesionalesapi.NewStrictHandlerWithOptions(profesionales.NuevaAPI(profesionales.Nuevo(pool,
-			avisos.Nuevo(pool, correoT10, cfg.Email.Remitente, log), cfg.Campanas.URLDelSitio(), log), lim, cfg.Interna),
+		profesionalesapi.NewStrictHandlerWithOptions(profesionales.NuevaAPI(profSrv, lim, cfg.Interna),
 			[]profesionalesapi.StrictMiddlewareFunc{plataforma.ConPedido[profesionalesapi.StrictHandlerFunc]},
 			profesionalesapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,
@@ -499,8 +500,10 @@ func correrAPI() error {
 
 	// El carrito, la compra y los cobros (tanda 6), con el webhook de
 	// Mercado Pago en su dirección de siempre (POST /api/pagos/webhook).
+	tiendaSrv := checkout.Nuevo(pool, log)
+	tiendaSrv.PagoOnline = func() bool { return cfg.Pagos.Elegir() != nil }
 	checkoutapi.HandlerWithOptions(
-		checkoutapi.NewStrictHandlerWithOptions(checkout.NuevaAPI(checkout.Nuevo(pool, log), cfg.Interna, strings.HasPrefix(cfg.Pagos.URLBase(), "https://")),
+		checkoutapi.NewStrictHandlerWithOptions(checkout.NuevaAPI(tiendaSrv, cfg.Interna, strings.HasPrefix(cfg.Pagos.URLBase(), "https://")),
 			[]checkoutapi.StrictMiddlewareFunc{plataforma.ConPedido[checkoutapi.StrictHandlerFunc]},
 			checkoutapi.StrictHTTPServerOptions{
 				RequestErrorHandlerFunc:  plataforma.ErrorDePedido,

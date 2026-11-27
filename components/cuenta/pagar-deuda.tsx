@@ -38,14 +38,20 @@ type Forma = "transferencia" | "deposito" | "cheques";
 export function PagarDeuda({
   saldo,
   propuesto,
+  enRevision = 0,
   banco,
 }: {
   saldo: number;
   /** Lo que se debe menos lo que ya está en revisión (importeAInformar). */
   propuesto: number | null;
+  /** Lo informado que se está verificando: va junto a «Debés» (M2S3-033). */
+  enRevision?: number;
   banco: DatosParaTransferir | null;
 }) {
-  const [forma, setForma] = useState<Forma>("transferencia");
+  // Sin a dónde transferir, la transferencia y el depósito no se ofrecen:
+  // el recuadro mandaba a pedir el CBU por WhatsApp (mes simulado, M2S1-070
+  // y M3S1-016). El panel le avisa a la casa que faltan.
+  const [forma, setForma] = useState<Forma>(banco ? "transferencia" : "cheques");
 
   if (saldo <= 0) return null;
 
@@ -53,22 +59,32 @@ export function PagarDeuda({
     <section className="overflow-hidden rounded-xl border bg-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-3.5">
         <h2 className="font-medium">Pagar tu cuenta</h2>
-        <p className="text-sm text-muted-foreground">Debés {formatearMonto(saldo)}</p>
+        <p className="text-sm text-muted-foreground">
+          Debés <span className="tabular">{formatearMonto(saldo)}</span>
+          {enRevision > 0 && (
+            <>
+              {" · "}
+              <span className="tabular">{formatearMonto(enRevision)}</span> en revisión
+            </>
+          )}
+        </p>
       </div>
 
       {/* Las tres entran a 375 px: se reparten el ancho, sin correrse de
           costado (H217). */}
-      <div className="flex border-b px-2 pt-3 sm:gap-1 sm:px-5">
-        <Pestana activa={forma === "transferencia"} onClick={() => setForma("transferencia")} icono={Banknote}>
-          Transferencia
-        </Pestana>
-        <Pestana activa={forma === "deposito"} onClick={() => setForma("deposito")} icono={Landmark}>
-          Depósito
-        </Pestana>
-        <Pestana activa={forma === "cheques"} onClick={() => setForma("cheques")} icono={ScrollText}>
-          Cheques
-        </Pestana>
-      </div>
+      {banco && (
+        <div className="flex border-b px-2 pt-3 sm:gap-1 sm:px-5">
+          <Pestana activa={forma === "transferencia"} onClick={() => setForma("transferencia")} icono={Banknote}>
+            Transferencia
+          </Pestana>
+          <Pestana activa={forma === "deposito"} onClick={() => setForma("deposito")} icono={Landmark}>
+            Depósito
+          </Pestana>
+          <Pestana activa={forma === "cheques"} onClick={() => setForma("cheques")} icono={ScrollText}>
+            Cheques
+          </Pestana>
+        </div>
+      )}
 
       {forma === "cheques" ? (
         <Cheques saldo={propuesto ?? saldo} />
@@ -119,11 +135,7 @@ function Comprobante({
           <Fila etiqueta="Alias" valor={banco.alias} />
           <Fila etiqueta="CUIT" valor={banco.cuit} />
         </dl>
-      ) : (
-        <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-          Escribinos por WhatsApp y te pasamos los datos de la cuenta.
-        </p>
-      )}
+      ) : null}
 
       {estado.ok ? (
         <p className="flex items-start gap-2 rounded-lg bg-brand-green/10 p-3 text-sm">

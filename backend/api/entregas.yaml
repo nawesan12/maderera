@@ -401,7 +401,7 @@ components:
         estadoRemito: { type: string, description: "preparada, entregada o anulada: el pedido de firma sale solo si sigue preparada" }
     RemitoDelPortal:
       type: object
-      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, createdAt]
+      required: [id, numero, tipo, estado, receptorNombre, firmadoAt, createdAt, firmaToken]
       properties:
         id: { type: string }
         numero: { type: string }
@@ -410,6 +410,7 @@ components:
         receptorNombre: { type: string, nullable: true }
         firmadoAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
+        firmaToken: { type: string, nullable: true, description: del remito preparado que espera la firma }
     EntregasDelPortal:
       type: object
       required: [entregas, acopio]

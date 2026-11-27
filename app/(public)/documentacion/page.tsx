@@ -84,44 +84,41 @@ export default async function DocumentacionPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-8">
-            {[...porCategoria.entries()].map(([categoria, docs]) => (
-              <section key={categoria}>
-                <h2 className="mb-3 text-xl font-bold capitalize tracking-tight">
-                  {categoria}
-                </h2>
-                <ul className="grid gap-3 sm:grid-cols-2">
-                  {docs.map((doc) => (
-                    <li key={doc.id}>
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-start gap-4 rounded-xl border bg-card p-4 transition-shadow hover:shadow-md"
-                      >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-orange/10">
-                          <FileText className="h-5 w-5 text-brand-orange" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium">{doc.titulo}</span>
-                          {doc.descripcion && (
-                            <span className="block text-sm text-muted-foreground">
-                              {doc.descripcion}
-                            </span>
-                          )}
-                          <span className="mt-1 block text-sm uppercase text-muted-foreground">
-                            {doc.formato}
-                            {doc.tamanoBytes ? ` · ${peso(doc.tamanoBytes)}` : ""}
-                          </span>
-                        </span>
-                        <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+          // Una sola grilla, con el rubro como rótulo de cada tarjeta: con un
+          // título por rubro y uno o dos documentos en cada uno, a 1280 la
+          // mitad derecha quedaba vacía (mes simulado, M3S4-044).
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[...porCategoria.values()].flat().map((doc) => (
+              <li key={doc.id}>
+                <a
+                  href={doc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-full items-start gap-4 rounded-xl superficie p-4 transition-shadow hover:shadow-md"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-orange/10">
+                    <FileText className="h-5 w-5 text-brand-orange" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-acento-texto">
+                      {doc.categoria}
+                    </span>
+                    <span className="mt-0.5 block font-medium">{doc.titulo}</span>
+                    {doc.descripcion && (
+                      <span className="block text-sm text-muted-foreground">
+                        {doc.descripcion}
+                      </span>
+                    )}
+                    <span className="mt-1 block text-sm uppercase text-muted-foreground">
+                      {doc.formato}
+                      {doc.tamanoBytes ? ` · ${peso(doc.tamanoBytes)}` : ""}
+                    </span>
+                  </span>
+                  <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </a>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </div>

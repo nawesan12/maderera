@@ -366,7 +366,7 @@ paths:
         - { name: limite, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 500 } }
       responses:
         "200":
-          description: Los slugs de los que no son borrador, los más nuevos primero
+          description: Los slugs de los publicados o cerrados que no pasaron, el más cercano primero
           content:
             application/json:
               schema: { type: array, items: { type: string } }
@@ -663,7 +663,7 @@ components:
         reparto: { type: object, additionalProperties: { type: integer } }
     Resenable:
       type: object
-      required: [productId, slug, nombre, orderId, numeroPedido, yaResenado]
+      required: [productId, slug, nombre, orderId, numeroPedido, yaResenado, medida, estadoResena]
       properties:
         productId: { type: string }
         slug: { type: string }
@@ -671,6 +671,8 @@ components:
         orderId: { type: string }
         numeroPedido: { type: string }
         yaResenado: { type: boolean }
+        medida: { type: string, description: las medidas que compró de ese producto en ese pedido }
+        estadoResena: { type: string, description: "pendiente, publicada o rechazada; vacío si no la dejó" }
     Ajuste:
       type: object
       required: [clave, valor, descripcion, updatedAt]

@@ -87,6 +87,9 @@ const (
 	BaseRetencionIva = "base_retencion_iva"
 	// M2S1-093: quién carga la retención sufrida dentro de un cobro.
 	RetencionEnElCobro = "retencion_en_el_cobro"
+	// M3S3-020: si en la tienda el precio de la lista propia suma el
+	// descuento por medio de pago.
+	EscalaConLista = "escala_con_lista"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -115,6 +118,7 @@ var Opciones = map[string][]string{
 	ExportarSicore:              {"no", "si"},
 	BaseRetencionIva:            {"neto", "total"},
 	RetencionEnElCobro:          {"admin", "quien_cobra"},
+	EscalaConLista:              {"si", "no"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

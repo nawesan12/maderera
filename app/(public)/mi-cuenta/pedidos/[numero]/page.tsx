@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { cuentasDelPedido } from "@/lib/cuenta/cuentas-del-pedido";
+import { cuentasDelPedido, nombreDelDescuento } from "@/lib/cuenta/cuentas-del-pedido";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   MapPin,
+  PenLine,
   Printer,
   Scissors,
   Store,
@@ -35,9 +36,10 @@ import {
   numeroFormateado,
   type TipoComprobante,
 } from "@/lib/fiscal/comprobantes";
-import { estadoDelPago, mensajeDeConsulta } from "@/lib/cuenta/portal";
+import { estadoDelPago, estadoVisibleDelPedido, mensajeDeConsulta, tituloDeRemitos } from "@/lib/cuenta/portal";
 import { VolverAPedir } from "./volver-a-pedir";
 import { tienda } from "@/lib/dal/contenido";
+import { obtenerCarrito } from "@/lib/dal/carrito";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { InformarTransferencia } from "@/components/cuenta/informar-transferencia";
 
@@ -67,11 +69,13 @@ export default async function DetallePedidoPage({
   params: Promise<{ numero: string }>;
 }) {
   const { numero } = await params;
-  const [pedido, laTienda, cliente] = await Promise.all([
+  const [pedido, laTienda, cliente, carrito] = await Promise.all([
     miPedido(numero),
     tienda(),
     clienteDeLaSesion(),
+    obtenerCarrito(),
   ]);
+  const carritoConCosas = carrito.items.length + carrito.cortes.length > 0;
 
   // El DAL ya filtró por dueño: si no vuelve nada, o no existe o no es suyo, y
   // las dos cosas se contestan igual. Decir "existe pero no es tuyo" confirma
@@ -84,6 +88,11 @@ export default async function DetallePedidoPage({
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
   const cancelado = pedido.estado === "cancelado";
+  // Los remitos que valen (el anulado no se lista: decía «retiró» y no
+  // coincidía con el conteo, M3S2-053), y el estado que se muestra: con un
+  // retiro sin firmar el pedido no figura entregado (M2S1-071, M2S2-115).
+  const remitos = pedido.entregas.filter((e) => e.estado !== "anulada");
+  const estadoVisible = estadoVisibleDelPedido(pedido.estado, remitos);
   const quien = cliente ? { nombre: cliente.nombre, cuit: null } : null;
 
   // Un solo `?text=`: enlaceWhatsapp ya lo arma (antes la página le sumaba
@@ -125,6 +134,8 @@ export default async function DetallePedidoPage({
   // cantidad del renglón y no contra la del acopio: la devolución de un
   // faltante baja la del acopio, y ahí las dos daban 110.
   const entregadoPor = new Map(pedido.acopio.map((a) => [a.orderItemId, a]));
+  // Lo devuelto de cada renglón y el total neto (M3S1-046, M2S3-030).
+  const devueltoPor = new Map(pedido.devuelto.map((d) => [d.orderItemId, d]));
   const huboRetiro = pedido.entregas.some((e) => e.estado !== "anulada");
   const sumaRenglones = pedido.items.reduce(
     (s, i) => s + Number(i.subtotal),
@@ -181,7 +192,7 @@ export default async function DetallePedidoPage({
             <h1 className="tabular text-2xl font-bold tracking-tight">
               {pedido.numero}
             </h1>
-            <EtiquetaEstado estado={pedido.estado} contexto="pedido" />
+            <EtiquetaEstado estado={estadoVisible} contexto="pedido" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Hecho el {fechaLarga.format(pedido.createdAt)}
@@ -237,7 +248,7 @@ export default async function DetallePedidoPage({
 
       {!cancelado && (
         <section className="rounded-xl bg-card p-5 tarjeta">
-          <Pasos etapas={etapas} actual={pedido.estado} />
+          <Pasos etapas={etapas} actual={estadoVisible} />
         </section>
       )}
 
@@ -297,40 +308,43 @@ export default async function DetallePedidoPage({
             </section>
           )}
 
-          {/* Retiros: cada remito con su papel y su reclamo; el anulado,
-              apagado (H306, H312, H389). */}
-          {pedido.entregas.length > 0 && (
+          {/* Los remitos: cada uno con su papel y su reclamo, y el que espera
+              la firma con «Firmar» (H306, H312, H389, M2S1-071). Un envío
+              no es un retiro (M2S1-155); la fecha es la de la firma, no la
+              de cuando se armó (M2S4-057). */}
+          {remitos.length > 0 && (
             <section className="tarjeta overflow-hidden rounded-xl bg-card">
-              <h2 className="px-5 pt-4 pb-2 font-medium">
-                {plural(
-                  pedido.entregas.filter((e) => e.estado !== "anulada").length,
-                  "retiro",
-                )}
-              </h2>
+              <h2 className="px-5 pt-4 pb-2 font-medium">{tituloDeRemitos(remitos)}</h2>
               <ul className="divide-y divide-linea">
-                {pedido.entregas.map((entrega, i) => {
-                  const anulado = entrega.estado === "anulada";
+                {remitos.map((entrega) => {
+                  const paraFirmar = entrega.estado === "preparada";
+                  const i = pedido.entregas.indexOf(entrega);
                   return (
-                    <li
-                      key={entrega.id}
-                      className={`px-5 py-3 ${anulado ? "opacity-60" : ""}`}
-                    >
+                    <li key={entrega.id} className="px-5 py-3">
                       <p className="flex flex-wrap items-baseline gap-x-2">
-                        <span
-                          className={`tabular font-medium ${anulado ? "line-through" : ""}`}
-                        >
-                          {entrega.numero}
-                        </span>
+                        <span className="tabular font-medium">{entrega.numero}</span>
                         <span className="text-sm text-muted-foreground">
-                          {fechaCorta.format(entrega.createdAt)}
-                          {entrega.receptorNombre
-                            ? ` · retiró ${entrega.receptorNombre}`
+                          {fechaCorta.format(entrega.firmadoAt ?? entrega.createdAt)}
+                          {!paraFirmar && entrega.receptorNombre
+                            ? ` · ${entrega.tipo === "envio" ? "recibió" : "retiró"} ${entrega.receptorNombre}`
                             : ""}
-                          {anulado ? " · anulado" : ""}
                         </span>
+                        {paraFirmar && (
+                          <span className="estado-espera rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                            Para firmar
+                          </span>
+                        )}
                       </p>
-                      {!anulado && (
-                        <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
+                          {paraFirmar && entrega.firmaToken && (
+                            <Link
+                              href={`/firmar/${entrega.firmaToken}`}
+                              className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 text-sm font-semibold text-white transition-colors hover:bg-accion-hover"
+                            >
+                              <PenLine className="h-4 w-4" />
+                              Firmar
+                            </Link>
+                          )}
                           <Link
                             href={`/remito/${entrega.id}`}
                             target="_blank"
@@ -353,8 +367,7 @@ export default async function DetallePedidoPage({
                           >
                             Reclamar
                           </BotonWhatsapp>
-                        </div>
-                      )}
+                      </div>
                     </li>
                   );
                 })}
@@ -391,6 +404,11 @@ export default async function DetallePedidoPage({
                         {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)} ×{" "}
                         {formatearMonto(item.precioUnitario)}
                       </p>
+                      {devueltoPor.has(item.id) && (
+                        <p className="tabular mt-0.5 text-sm text-saldo-favor">
+                          Devolución: {cantidadConUnidad(devueltoPor.get(item.id)!.cantidad, item.unidad, item.descripcion)}
+                        </p>
+                      )}
                       {corto && (
                         <p className="tabular mt-0.5 text-sm text-brand-orange-dark">
                           Entregado {cantidadConUnidad(r.entregado, null)} de{" "}
@@ -414,11 +432,13 @@ export default async function DetallePedidoPage({
                 <dt className="text-muted-foreground">Subtotal</dt>
                 <dd className="tabular">{formatearMonto(cuentas.subtotal)}</dd>
               </div>
+              {/* El descuento con su nombre («10% por transferencia»), como
+                  en la confirmación, y con un solo signo (M2S4-044). */}
               {cuentas.restaElAhorro && (
-                <div className="flex justify-between text-saldo-favor">
-                  <dt>Ahorraste</dt>
+                <div className="flex justify-between gap-3 text-saldo-favor">
+                  <dt>{nombreDelDescuento(pedido.descuentoMotivo)}</dt>
                   <dd className="tabular">
-                    −{formatearMonto(cuentas.ahorro)}
+                    − {formatearMonto(Math.abs(cuentas.ahorro))}
                   </dd>
                 </div>
               )}
@@ -438,10 +458,24 @@ export default async function DetallePedidoPage({
                   {formatearMonto(pedido.total)}
                 </dd>
               </div>
+              {pedido.devoluciones > 0.005 && (
+                <>
+                  <div className="flex justify-between text-saldo-favor">
+                    <dt>Devuelto</dt>
+                    <dd className="tabular">− {formatearMonto(pedido.devoluciones)}</dd>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <dt className="font-semibold">Total neto</dt>
+                    <dd className="tabular text-lg font-bold">
+                      {formatearMonto(Math.max(Number(pedido.total) - pedido.devoluciones, 0))}
+                    </dd>
+                  </div>
+                </>
+              )}
               {cuentas.ahorro > 0 && !cuentas.restaElAhorro && (
-                <div className="flex justify-between text-saldo-favor">
-                  <dt>Ahorraste</dt>
-                  <dd className="tabular">{formatearMonto(cuentas.ahorro)}</dd>
+                <div className="flex justify-between gap-3 text-saldo-favor">
+                  <dt>Incluye {nombreDelDescuento(pedido.descuentoMotivo).toLowerCase()}</dt>
+                  <dd className="tabular">{formatearMonto(Math.abs(cuentas.ahorro))}</dd>
                 </div>
               )}
             </dl>
@@ -594,9 +628,14 @@ export default async function DetallePedidoPage({
                 ) : (
                   <Truck className="h-4 w-4" />
                 )}
+                {/* Ya retirado no es «lo retirás» (M2S1-159). */}
                 {pedido.tipoEntrega === "retiro"
-                  ? "Lo retirás en"
-                  : "Te lo llevamos a"}
+                  ? estadoVisible === "entregado"
+                    ? "Retiro en"
+                    : "Lo retirás en"
+                  : estadoVisible === "entregado"
+                    ? "Entrega en"
+                    : "Te lo llevamos a"}
               </h2>
 
               {pedido.tipoEntrega === "retiro" ? (
@@ -672,8 +711,13 @@ export default async function DetallePedidoPage({
 
       <div className="flex flex-wrap gap-3">
         {/* Volver a pedir carga el carrito; sin tienda, lo manda por WhatsApp. */}
+        {/* Un pedido con corte no se repite desde acá: el carrito cargaba
+            «13 pasada · A cotizar» sin el despiece y no se podía comprar
+            (M3S4-012). Se consulta por WhatsApp. */}
         {laTienda.activa ? (
-          <VolverAPedir numero={pedido.numero} />
+          pedido.cortes.length === 0 && (
+            <VolverAPedir numero={pedido.numero} carritoConCosas={carritoConCosas} />
+          )
         ) : (
           repetir && (
             <BotonWhatsapp enlace={repetir} variante="secundario">

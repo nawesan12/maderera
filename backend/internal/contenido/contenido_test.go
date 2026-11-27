@@ -290,6 +290,16 @@ func TestAjustesYResenas(t *testing.T) {
 	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", resena); c != 409 {
 		t.Errorf("la segunda reseña de la misma compra: %d", c)
 	}
+	// M3S4-032 y M2S3-077: la medida que compró y el estado de la reseña.
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); !strings.Contains(string(b), `"estadoResena":"pendiente"`) ||
+		strings.Contains(string(b), `"medida":""`) {
+		t.Errorf("la medida y el estado: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update product_reviews set estado = 'rechazada' where order_id = $1`, orderID)
+	if _, b := pedir(t, juan, "GET", u+"contenido/mis-resenas", nil); !strings.Contains(string(b), `"estadoResena":"rechazada"`) {
+		t.Errorf("la rechazada: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update product_reviews set estado = 'pendiente' where order_id = $1`, orderID)
 	if c, _ := pedir(t, juan, "POST", u+"contenido/mis-resenas", map[string]any{"productId": producto, "orderId": orderID, "estrellas": 9}); c != 422 {
 		t.Errorf("nueve estrellas: %d", c)
 	}
@@ -417,8 +427,9 @@ func TestSitio(t *testing.T) {
 	u := e.srv.URL + "/api/v1/contenido/"
 
 	// Documentos: los reservados solo los ve un profesional activo.
-	_, _ = e.pool.Exec(ctx, `insert into technical_documents (titulo, url, solo_profesionales, orden) values
-		('Ficha del fenólico', '/d/1.pdf', false, 1), ('Tabla de cargas', '/d/2.pdf', true, 2), ('Viejo', '/d/3.pdf', false, 0)`)
+	// Con archivo subido (tamaño): sin él no se listan (M2S1-025).
+	_, _ = e.pool.Exec(ctx, `insert into technical_documents (titulo, url, solo_profesionales, orden, tamano_bytes) values
+		('Ficha del fenólico', '/d/1.pdf', false, 1, 100), ('Tabla de cargas', '/d/2.pdf', true, 2, 100), ('Viejo', '/d/3.pdf', false, 0, 100)`)
 	_, _ = e.pool.Exec(ctx, `update technical_documents set activo = false where titulo = 'Viejo'`)
 	juan := e.cliente(t, "juan@prueba.test", "cliente")
 	for _, c := range []struct {
@@ -471,7 +482,7 @@ func TestSitio(t *testing.T) {
 	if _, b := pedir(t, juan, "GET", u+"eventos/taller-de-melamina", nil); !strings.Contains(string(b), `"estado":"reservada"`) {
 		t.Errorf("la inscripción de quien mira: %s", b)
 	}
-	if _, b := pedir(t, anon, "GET", u+"eventos-visibles?limite=5", nil); string(b) != `["taller-de-melamina","el-de-ayer"]`+"\n" {
+	if _, b := pedir(t, anon, "GET", u+"eventos-visibles?limite=5", nil); string(b) != `["taller-de-melamina"]`+"\n" {
 		t.Errorf("slugs: %s", b)
 	}
 	if _, b := pedir(t, anon, "GET", u+"sitemap/eventos", nil); !strings.Contains(string(b), `"ruta":"/eventos/taller-de-melamina"`) || strings.Contains(string(b), "el-de-ayer") {
@@ -719,6 +730,34 @@ func TestPanelDeDocumentacion(t *testing.T) {
 		t.Errorf("abierto a todos y no se ve: %s", b)
 	}
 	baja("anónimo, abierto", anon, 200)
+	// M2S1-171: se guarda con el nombre del documento, no «archivo.pdf».
+	if r, err := anon.Get(archivo); err != nil {
+		t.Fatal(err)
+	} else {
+		_ = r.Body.Close()
+		if d := r.Header.Get("Content-Disposition"); d != `inline; filename="tabla-de-cargas.pdf"` {
+			t.Errorf("el nombre al bajarlo: %q", d)
+		}
+	}
+	// M2S1-025: uno sin archivo subido (los de la semilla, tamaño nulo) no
+	// se lista ni cuenta: daba 404 al tocarlo.
+	if _, err := e.pool.Exec(context.Background(), `insert into technical_documents (titulo, categoria, url, formato, solo_profesionales)
+		values ('Placa OSB estructural', 'Placas', '/fichas/ficha-tecnica-osb.pdf', 'pdf', false),
+		       ('Tirantería de pino', 'Estructura', '/fichas/tabla-de-cargas-tirantes.pdf', 'pdf', true)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); strings.Contains(string(b), "OSB") {
+		t.Errorf("se lista un documento sin archivo: %s", b)
+	}
+	if _, b := pedir(t, pro, "GET", e.srv.URL+"/api/v1/contenido/documentos", nil); strings.Contains(string(b), "Tirantería") {
+		t.Errorf("se lista al profesional un documento sin archivo: %s", b)
+	}
+	if _, b := pedir(t, anon, "GET", e.srv.URL+"/api/v1/contenido/documentos/reservados", nil); string(b) != "0\n" {
+		t.Errorf("cuenta un reservado sin archivo: %s", b)
+	}
+	if _, err := e.pool.Exec(context.Background(), `delete from technical_documents where tamano_bytes is null`); err != nil {
+		t.Fatal(err)
+	}
 	if c, _ := pedir(t, adm, "POST", u+"/"+docs[0].ID+"/activo", map[string]bool{"activo": false}); c != 204 {
 		t.Fatal("baja")
 	}

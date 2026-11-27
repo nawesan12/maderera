@@ -7,7 +7,7 @@ import { pedirEnlace, type EstadoPedidoEnlace } from "./actions";
 const inicial: EstadoPedidoEnlace = {};
 
 /** Entrar sin contraseña: un link de un solo uso al correo de la cuenta. */
-export function PedirLink({ abierto: deEntrada = false }: { abierto?: boolean }) {
+export function PedirLink({ abierto: deEntrada = false, correo = "" }: { abierto?: boolean; correo?: string }) {
   const [abierto, setAbierto] = useState(deEntrada);
   const [estado, accion, pendiente] = useActionState(pedirEnlace, inicial);
 
@@ -44,6 +44,7 @@ export function PedirLink({ abierto: deEntrada = false }: { abierto?: boolean })
           type="email"
           required
           autoComplete="email"
+          defaultValue={correo}
           className="h-11 min-w-0 flex-1 rounded-[10px] border border-linea bg-background px-3 text-base"
         />
         <button

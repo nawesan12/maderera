@@ -22,7 +22,7 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
           id="nombre"
           name="nombre"
           autoComplete="name"
-          placeholder="Juan Pérez"
+          defaultValue={estado.valores?.nombre}
           required
         />
       </div>
@@ -34,7 +34,7 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="juan@ejemplo.com"
+          defaultValue={estado.valores?.email}
           required
         />
       </div>
@@ -46,7 +46,7 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
           name="telefono"
           type="tel"
           autoComplete="tel"
-          placeholder="223 590-3118"
+          defaultValue={estado.valores?.telefono}
           required
         />
         <p className="text-xs text-muted-foreground">
@@ -63,6 +63,8 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
             type="password"
             autoComplete="new-password"
             minLength={8}
+            autoFocus={estado.error === "Las dos contraseñas tienen que coincidir."}
+            aria-invalid={estado.error === "Las dos contraseñas tienen que coincidir." || undefined}
             required
           />
         </div>
@@ -79,10 +81,21 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
         </div>
       </div>
 
+      {/* Destildada: las novedades por correo son con permiso (M2S2-050). */}
+      <label className="flex items-center gap-3 text-[15px]">
+        <input
+          type="checkbox"
+          name="novedades"
+          defaultChecked={estado.valores?.novedades ?? false}
+          className="h-5 w-5 shrink-0 accent-[var(--accion)]"
+        />
+        Quiero recibir novedades y promociones por correo
+      </label>
+
       {estado.error && (
         <p
           role="alert"
-          className="flex items-center gap-2 rounded-lg bg-brand-red/10 px-3 py-2 text-sm text-brand-red"
+          className="estado-problema flex items-center gap-2 rounded-lg bg-[var(--estado-fondo)] px-3 py-2 text-sm font-medium text-[var(--estado-tinta)]"
         >
           <AlertCircle className="h-4 w-4 shrink-0" />
           {estado.error}

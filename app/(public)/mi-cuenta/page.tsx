@@ -9,6 +9,7 @@ import {
   ScrollText,
 } from "lucide-react";
 import { TarjetaPedido } from "@/components/cuenta/tarjeta-pedido";
+import { misMovimientos } from "@/lib/dal/historial-cliente";
 import {
   clienteDeLaSesion,
   miCuentaCorriente,
@@ -51,8 +52,15 @@ export default async function ResumenCuentaPage() {
 
   // Lo último que movió el saldo y cuánto es de pedidos sin entregar: sin
   // eso el saldo subía o bajaba sin decir por qué (H303, H082).
-  const cuenta = operaACuenta ? await miCuentaCorriente() : null;
+  const [cuenta, recientes] = operaACuenta
+    ? await Promise.all([miCuentaCorriente(), misMovimientos({ periodo: "3m", filtro: "todo" })])
+    : [null, null];
   const ultimo = cuenta?.movimientos[0];
+  // Lo informado que se está verificando, como en la cuenta corriente: el
+  // resumen decía «Pendiente de pago» sin mencionarlo (M2S2-117).
+  const enRevision = (recientes?.movimientos ?? [])
+    .filter((m) => m.clase === "pago_en_revision" || m.clase === "cheque_por_recibir")
+    .reduce((t, m) => t + Math.abs(m.importeInformativo ?? 0), 0);
 
   return (
     <div className="space-y-8">
@@ -147,6 +155,12 @@ export default async function ResumenCuentaPage() {
                       {formatearMonto(cuenta.sinEntregar)}
                     </span>{" "}
                     de pedidos sin entregar
+                  </>
+                )}
+                {resumen.saldo > 0 && enRevision > 0 && (
+                  <>
+                    {" · "}
+                    <span className="tabular">{formatearMonto(enRevision)}</span> en revisión
                   </>
                 )}
               </p>
@@ -350,8 +364,14 @@ function UltimoMovimiento({
       <span className="text-muted-foreground">
         {fechaCorta.format(m.createdAt)}
       </span>
+      {/* El ajuste dice qué fue («Anulación del recibo REC-0006»): solo
+          «Ajuste +$ 1.000» no decía nada (M2S1-153). */}
       <span className="font-medium">
-        {chequeRechazado ? "Cheque rechazado" : estiloDeEstado(m.tipo).etiqueta}
+        {chequeRechazado
+          ? "Cheque rechazado"
+          : m.tipo === "ajuste" && m.detalle
+            ? m.detalle
+            : estiloDeEstado(m.tipo).etiqueta}
       </span>
       <span className={`tabular ${m.monto < 0 ? "text-saldo-favor" : ""}`}>
         {m.monto > 0 ? "+" : "−"}

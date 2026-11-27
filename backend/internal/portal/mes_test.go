@@ -351,3 +351,139 @@ func TestLaNotaDeCreditoNoEsUnPago(t *testing.T) {
 		t.Fatalf("con un pago: debe %v, cuesta %v", debe, neto)
 	}
 }
+
+// M2S2-114: el rechazo desde Mi cuenta guarda el motivo (y uno que no es de
+// la lista queda «Otro»).
+func TestRechazarConMotivo(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	for _, n := range []string{"P-2026-0009", "P-2026-0010"} {
+		if _, err := e.pool.Exec(ctx, `insert into quotes (numero, customer_id, contacto_nombre, estado, subtotal, total)
+			values ($1, $2, 'Juan', 'enviado', 1000, 1000)`, n, idJuan); err != nil {
+			t.Fatal(err)
+		}
+	}
+	u := e.srv.URL + "/api/v1/cuenta/presupuestos/"
+	if c, b := pedir(t, juan, "POST", u+"P-2026-0009/respuesta", map[string]string{"respuesta": "rechazado", "motivo": "Plazo de entrega"}); c != 200 {
+		t.Fatalf("rechazar: %d %s", c, b)
+	}
+	if c, b := pedir(t, juan, "POST", u+"P-2026-0010/respuesta", map[string]string{"respuesta": "rechazado", "motivo": "<script>"}); c != 200 {
+		t.Fatalf("rechazar: %d %s", c, b)
+	}
+	var m1, m2 string
+	_ = e.pool.QueryRow(ctx, `select coalesce(motivo_rechazo, '') from quotes where numero = 'P-2026-0009'`).Scan(&m1)
+	_ = e.pool.QueryRow(ctx, `select coalesce(motivo_rechazo, '') from quotes where numero = 'P-2026-0010'`).Scan(&m2)
+	if m1 != "Plazo de entrega" || m2 != "Otro" {
+		t.Errorf("motivos: %q %q", m1, m2)
+	}
+}
+
+// M3S1-046: el pedido dice lo devuelto de cada renglón y cuánto suman las
+// devoluciones, para el total neto.
+func TestPedidoConLoDevuelto(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	var pedido, item, dev string
+	if err := e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, subtotal)
+		values ('PED-1198', 'Juan', $1, 428000, 428000) returning id`, idJuan).Scan(&pedido); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into order_items (order_id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden)
+		values ($1, 'Bisagra', 'u', 10, 4200, 42000, 0) returning id`, pedido).Scan(&item); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pool.QueryRow(ctx, `insert into devoluciones (clave, order_id, importe, destino, motivo) values ('m3s1-046', $1, 8400, 'cuenta', 'cambio') returning id`, pedido).Scan(&dev); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into devolucion_items (devolucion_id, order_item_id, cantidad, al_stock, importe) values ($1, $2, 2, true, 8400)`, dev, item); err != nil {
+		t.Fatal(err)
+	}
+	_, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos/PED-1198", nil)
+	if !strings.Contains(b, `"devoluciones":8400`) || !strings.Contains(b, `"orderItemId":"`+item+`","cantidad":2,"importe":8400`) {
+		t.Errorf("lo devuelto del pedido: %s", b)
+	}
+}
+
+// M2S1-017 y M3S3-012: el pago de un pedido va primero a ese pedido (el
+// recibo del pedido, el que cobra su factura o el que lo nombra), y lo que
+// sobra a la deuda más vieja. Antes cada pedido mostraba lo que se debía
+// del otro.
+func TestElPagoVaASuPedido(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	juan, idJuan := e.web(t, "juan@prueba.test")
+	ids := map[string]string{}
+	for _, p := range []struct {
+		n     string
+		total float64
+	}{{"PED-1004", 836000}, {"PED-1019", 1610400}, {"PED-1250", 486000}, {"PED-1252", 352200}} {
+		var id string
+		if err := e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, customer_id, total, subtotal, medio_pago, estado)
+			values ($1, 'Juan', $2, $3, $3, 'cuenta_corriente', 'entregado') returning id`, p.n, idJuan, p.total).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids[p.n] = id
+	}
+	dia := 0
+	mov := func(tipo string, monto float64, ref string, recibo *string) {
+		dia++
+		if _, err := e.pool.Exec(ctx, `insert into account_movements (customer_id, tipo, monto, referencia, receipt_id, created_at)
+			values ($1, $2::tipo_movimiento_cuenta, $3, $4, $5, now() - make_interval(days => 40 - $6::int))`, idJuan, tipo, monto, ref, recibo, dia); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recibo := func(numero string, total float64, pedido, concepto string) *string {
+		var id string
+		if err := e.pool.QueryRow(ctx, `insert into receipts (numero, customer_id, recibido_de, total, origen, concepto, order_id)
+			values ($1, $2, 'Juan', $3, 'panel', nullif($4, ''), nullif($5, '')::uuid) returning id`, numero, idJuan, total, concepto, ids[pedido]).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return &id
+	}
+	debe := func() map[string]float64 {
+		_, b := pedir(t, juan, "GET", e.srv.URL+"/api/v1/cuenta/pedidos", nil)
+		var lista []Pedido
+		_ = json.Unmarshal([]byte(b), &lista)
+		r := map[string]float64{}
+		for _, p := range lista {
+			if p.DebeEnCuenta != nil {
+				r[p.Numero] = *p.DebeEnCuenta
+			}
+		}
+		return r
+	}
+	mov("compra", 836000, "PED-1004", nil)
+	mov("pago", -25000, "REC-0001", recibo("REC-0001", 25000, "", ""))
+	mov("pago", -300000, "REC-0004", recibo("REC-0004", 300000, "", ""))
+	mov("compra", 1610400, "PED-1019", nil)
+	mov("pago", -1800000, "REC-0005", recibo("REC-0005", 1800000, "PED-1019", "Cobro del pedido PED-1019"))
+	if d := debe(); d["PED-1019"] != 0 || d["PED-1004"] != 321400 {
+		t.Fatalf("el pago del pedido va a ese pedido: %v", d)
+	}
+
+	// El cobro de la factura de un pedido es de ese pedido, aunque haya
+	// otro más viejo.
+	mov("compra", 486000, "PED-1250", nil)
+	mov("compra", 352200, "PED-1252", nil)
+	var factura string
+	if err := e.pool.QueryRow(ctx, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id)
+		values ('factura_a', 15, 101, 'Juan', 291074.38, 61125.62, 0, 0, 0, 352200, 'emitida', now(), $1) returning id`, ids["PED-1252"]).Scan(&factura); err != nil {
+		t.Fatal(err)
+	}
+	r82 := recibo("REC-0082", 352200, "", "Cobro de Factura A 0015-00000101")
+	if _, err := e.pool.Exec(ctx, `insert into invoice_payments (invoice_id, medio, monto, receipt_id) values ($1, 'transferencia', 352200, $2)`, factura, *r82); err != nil {
+		t.Fatal(err)
+	}
+	mov("pago", -352200, "REC-0082", r82)
+	if d := debe(); d["PED-1252"] != 0 || d["PED-1250"] != 486000 || d["PED-1004"] != 321400 {
+		t.Fatalf("la factura cobrada: %v", d)
+	}
+
+	// Anular el recibo del pedido lo vuelve a dejar debiendo a él.
+	mov("ajuste", 352200, "REC-0082", r82)
+	if d := debe(); d["PED-1252"] != 352200 || d["PED-1250"] != 486000 || d["PED-1004"] != 321400 {
+		t.Fatalf("la anulación vuelve sobre su pedido: %v", d)
+	}
+}

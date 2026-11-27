@@ -39,7 +39,19 @@ type EventoAdmin struct {
 	// Lo cobrado de verdad: solo las inscripciones confirmadas.
 	Recaudado float64 `json:"recaudado"`
 	Proximo   bool    `json:"proximo"`
+	// Empezo: desde ahí se toma asistencia (M2S1-129, M3S2-038).
+	Empezo bool `json:"empezo"`
+	// Manana: empieza mañana en Buenos Aires (el botón «Recordar los de
+	// mañana» dice a cuántos les llega, M2S1-130).
+	Manana bool `json:"manana"`
+	// PorRecordar: los anotados que todavía no recibieron el recordatorio.
+	PorRecordar int `json:"porRecordar"`
 }
+
+// QuienesSeRecuerdan son los estados de una inscripción que reciben el
+// recordatorio: los que tienen el lugar (el marcado «vino» antes de tiempo
+// quedaba afuera, M3S4-038).
+const QuienesSeRecuerdan = `('confirmada', 'asistio', 'ausente')`
 
 // Eventos son todos, del más nuevo al más viejo.
 func (s *Servicio) Eventos(ctx context.Context) ([]EventoAdmin, error) {
@@ -47,7 +59,8 @@ func (s *Servicio) Eventos(ctx context.Context) ([]EventoAdmin, error) {
 		e.solo_profesionales, e.estado::text,
 		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado <> 'cancelada'),
 		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado in ('confirmada', 'asistio')),
-		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado = 'reservada')
+		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado = 'reservada'),
+		(select count(*)::int from event_registrations er where er.event_id = e.id and er.estado in `+QuienesSeRecuerdan+` and er.recordado_at is null)
 		from events e left join branches b on b.id = e.branch_id
 		order by e.inicia desc`)
 	if err != nil {
@@ -60,12 +73,15 @@ func (s *Servicio) Eventos(ctx context.Context) ([]EventoAdmin, error) {
 		var e EventoAdmin
 		var precio jsmath.Num
 		if err := filas.Scan(&e.ID, &e.Slug, &e.Titulo, &e.Resumen, &e.Descripcion, &e.Lugar, &e.Sucursal, &e.Inicia, &e.Termina, &e.Cupo, &precio,
-			&e.SoloProfesionales, &e.Estado, &e.Inscriptos, &e.Confirmados, &e.Reservados); err != nil {
+			&e.SoloProfesionales, &e.Estado, &e.Inscriptos, &e.Confirmados, &e.Reservados, &e.PorRecordar); err != nil {
 			return nil, err
 		}
 		e.Precio = precio.F()
 		e.Recaudado = float64(e.Precio * float64(e.Confirmados))
 		e.Proximo = !e.Inicia.Before(ahora)
+		e.Empezo = !e.Proximo
+		desde, hasta := manana(ahora)
+		e.Manana = !e.Inicia.Before(desde) && !e.Inicia.After(hasta)
 		out = append(out, e)
 	}
 	return out, filas.Err()
@@ -191,10 +207,53 @@ func (s *Servicio) CambiarEstadoEvento(ctx context.Context, id, estado string) e
 	return err
 }
 
-// MarcarAsistencia toma asistencia.
+// MarcarAsistencia toma asistencia, desde que empieza el evento: se podía
+// marcar «vino» días antes y el certificado o las estadísticas salían mal
+// (mes simulado, M2S1-129 y M3S2-038). Una cancelada no se marca. Cancelar
+// una inscripción, en cambio, se puede antes.
 func (s *Servicio) MarcarAsistencia(ctx context.Context, id, estado string) error {
-	_, err := s.pool.Exec(ctx, `update event_registrations set estado = $2::estado_inscripcion, updated_at = now() where id = $1`, id, estado)
+	var inicia time.Time
+	var actual string
+	err := s.pool.QueryRow(ctx, `select e.inicia, er.estado::text from event_registrations er join events e on e.id = er.event_id where er.id = $1`, id).
+		Scan(&inicia, &actual)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return invalido("No pudimos registrar la asistencia. Recargá la pantalla y probá de nuevo.")
+	}
+	if err != nil {
+		return err
+	}
+	if estado == "asistio" || estado == "ausente" {
+		if inicia.After(s.ahora()) {
+			return invalido("La asistencia se toma desde que empieza el evento.")
+		}
+		if actual == "cancelada" || actual == "reservada" {
+			return invalido("Esa inscripción no tiene el lugar confirmado.")
+		}
+	}
+	_, err = s.pool.Exec(ctx, `update event_registrations set estado = $2::estado_inscripcion, updated_at = now() where id = $1`, id, estado)
 	return err
+}
+
+// BorrarEvento borra un borrador sin nadie anotado (un evento de prueba no
+// tenía cómo irse, M2S1-119). Con gente anotada o publicado, no: se cierra o
+// se cancela.
+func (s *Servicio) BorrarEvento(ctx context.Context, id string) error {
+	r, err := s.pool.Exec(ctx, `delete from events e where e.id = $1 and e.estado = 'borrador'
+		and not exists (select 1 from event_registrations er where er.event_id = e.id)`, id)
+	if err != nil {
+		return err
+	}
+	if r.RowsAffected() == 0 {
+		return invalido("Solo se borra un borrador sin anotados.")
+	}
+	return nil
+}
+
+// manana es el día de mañana en Buenos Aires, de punta a punta.
+func manana(ahora time.Time) (time.Time, time.Time) {
+	a := ahora.In(Zona)
+	desde := time.Date(a.Year(), a.Month(), a.Day()+1, 0, 0, 0, 0, Zona)
+	return desde, desde.AddDate(0, 0, 1).Add(-time.Millisecond)
 }
 
 // ErrInscripcion es un motivo para no anotar (se dice en la pantalla).
@@ -259,6 +318,9 @@ func (s *Servicio) Anotar(ctx context.Context, a Anotarse, customerID, userID *s
 		}
 		r.Monto = precio.F()
 		r.RequierePago = r.Monto > 0
+		if r.RequierePago && s.PagoOnline != nil && !s.PagoOnline() {
+			return &ErrInscripcion{MsjEventoSinPago}
+		}
 		nuevo := "confirmada"
 		if r.RequierePago {
 			nuevo = "reservada"
@@ -323,12 +385,20 @@ func (s *Servicio) AvisarInscripcionPorPago(ctx context.Context, customerID stri
 // día de mañana en Buenos Aires: el TS usaba el de la zona del servidor).
 // recordado_at evita mandar dos veces el mismo. Devuelve cuántos salieron.
 func (s *Servicio) EnviarRecordatorios(ctx context.Context) (int, error) {
-	a := s.ahora().In(Zona)
-	desde := time.Date(a.Year(), a.Month(), a.Day()+1, 0, 0, 0, 0, Zona)
-	hasta := desde.AddDate(0, 0, 1).Add(-time.Millisecond)
+	desde, hasta := manana(s.ahora())
+	return s.recordar(ctx, `e.inicia >= $1 and e.inicia <= $2`, desde, hasta)
+}
+
+// RecordarEvento manda el recordatorio de un evento que no empezó a los
+// anotados que todavía no lo recibieron, desde su tarjeta (M2S1-130).
+func (s *Servicio) RecordarEvento(ctx context.Context, id string) (int, error) {
+	return s.recordar(ctx, `e.id = $1 and e.inicia > $2`, id, s.ahora())
+}
+
+func (s *Servicio) recordar(ctx context.Context, donde string, args ...any) (int, error) {
 	filas, err := s.pool.Query(ctx, `select er.id, er.nombre, er.email, e.titulo, e.slug, e.inicia, e.lugar
 		from event_registrations er join events e on e.id = er.event_id
-		where e.inicia >= $1 and e.inicia <= $2 and e.estado = 'publicado' and er.estado = 'confirmada' and er.recordado_at is null`, desde, hasta)
+		where `+donde+` and e.estado = 'publicado' and er.estado in `+QuienesSeRecuerdan+` and er.recordado_at is null`, args...)
 	if err != nil {
 		return 0, err
 	}

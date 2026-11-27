@@ -41,7 +41,11 @@ type Seguimiento struct {
 	SucursalSlug     *string            `json:"sucursalSlug"`
 	CreatedAt        time.Time          `json:"createdAt"`
 	Items            []RenglonDelPedido `json:"items"`
-	customerID       *string
+	// Descuento y su motivo («10% por transferencia»): la página del pedido
+	// no tenía nada entre el subtotal y el total (mes simulado, M2S4-044).
+	Descuento       float64 `json:"descuento"`
+	DescuentoMotivo *string `json:"descuentoMotivo"`
+	customerID      *string
 }
 
 // RenglonDelPedido es lo que la página muestra de cada renglón: ni el costo
@@ -64,11 +68,11 @@ func (s *Servicio) Seguir(ctx context.Context, ses *auth.Sesion, numero, token s
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.public_token::text, o.customer_id::text, o.contacto_nombre, o.contacto_telefono, o.tipo_entrega::text,
 		  o.direccion_entrega, o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.medio_pago::text,
-		  o.estado_pago::text, o.estado::text, b.name, b.slug, o.created_at
+		  o.estado_pago::text, o.estado::text, b.name, b.slug, o.created_at, coalesce(o.descuento, 0)::float8, o.descuento_motivo
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.numero = $1`, numero).Scan(&p.ID, &p.Numero, &p.PublicToken, &p.customerID, &p.Cliente, &p.Telefono, &p.TipoEntrega,
 		&p.DireccionEntrega, &p.ZonaEnvio, &p.CostoEnvio, &p.Subtotal, &p.Total, &p.MedioPago, &p.EstadoPago, &p.Estado,
-		&p.Sucursal, &p.SucursalSlug, &p.CreatedAt)
+		&p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.DescuentoMotivo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -126,6 +130,8 @@ type PedidoPropio struct {
 	// Descuento es el que se repartió en los precios de los renglones: los
 	// renglones ya lo traen, y el subtotal guardado es el de antes (H209).
 	Descuento float64 `json:"descuento"`
+	// DescuentoMotivo: lo que dice el renglón del descuento (M2S2-116).
+	DescuentoMotivo *string `json:"descuentoMotivo"`
 	// DebeEnCuenta: ver Pedido.DebeEnCuenta.
 	DebeEnCuenta *float64 `json:"debeEnCuenta"`
 	// CuestaEnCuenta: ver Pedido.CuestaEnCuenta.
@@ -138,7 +144,19 @@ type PedidoPropio struct {
 	// diciendo 120 m² y el cliente no veía la corrección (H302).
 	Ajustes    []AjusteDelPedido `json:"ajustes"`
 	EnRevision *float64          `json:"enRevision"`
-	origen     string
+	// Devuelto es lo devuelto de cada renglón y Devoluciones el importe de
+	// todas: el pedido seguía diciendo «10 u.» y el total de antes de la
+	// devolución (mes simulado, M3S1-046 y M2S3-030).
+	Devuelto     []DevueltoDelRenglon `json:"devuelto"`
+	Devoluciones float64              `json:"devoluciones"`
+	origen       string
+}
+
+// DevueltoDelRenglon es lo devuelto de un renglón del pedido.
+type DevueltoDelRenglon struct {
+	OrderItemID string  `json:"orderItemId"`
+	Cantidad    float64 `json:"cantidad"`
+	Importe     float64 `json:"importe"`
 }
 
 // CorteDelPedido es un trabajo del taller atado al pedido (H210).
@@ -203,11 +221,11 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	err := s.pool.QueryRow(ctx, `
 		SELECT o.id, o.numero, o.estado::text, o.estado_pago::text, o.medio_pago::text, o.tipo_entrega::text, o.direccion_entrega,
 		  o.zona_envio, o.costo_envio::text, o.subtotal::text, o.total::text, o.notas, b.name, b.slug, o.created_at,
-		  coalesce(o.descuento, 0)::float8, o.origen::text
+		  coalesce(o.descuento, 0)::float8, o.origen::text, o.descuento_motivo
 		FROM orders o LEFT JOIN branches b ON b.id = o.branch_id
 		WHERE o.numero = $1 AND o.customer_id = $2`, numero, c.ID).
 		Scan(&p.ID, &p.Numero, &p.Estado, &p.EstadoPago, &p.MedioPago, &p.TipoEntrega, &p.DireccionEntrega, &p.ZonaEnvio,
-			&p.CostoEnvio, &p.Subtotal, &p.Total, &p.Notas, &p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.origen)
+			&p.CostoEnvio, &p.Subtotal, &p.Total, &p.Notas, &p.Sucursal, &p.SucursalSlug, &p.CreatedAt, &p.Descuento, &p.origen, &p.DescuentoMotivo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNoEsta
 	}
@@ -276,6 +294,19 @@ func (s *Servicio) MiPedido(ctx context.Context, c *Cliente, numero string) (*Pe
 	}
 	for i := range p.Ajustes {
 		p.Ajustes[i].Detalle = cobros.DetalleParaElCliente(p.Ajustes[i].Detalle)
+	}
+	filas, err = s.pool.Query(ctx, `SELECT di.order_item_id::text, sum(di.cantidad)::float8, sum(di.importe)::float8
+		FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+		WHERE d.order_id = $1 AND di.order_item_id IS NOT NULL GROUP BY di.order_item_id`, p.ID)
+	if err != nil {
+		return nil, err
+	}
+	if p.Devuelto, err = pgx.CollectRows(filas, pgx.RowToStructByPos[DevueltoDelRenglon]); err != nil {
+		return nil, err
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(importe), 0)::float8 FROM devoluciones WHERE order_id = $1`, p.ID).
+		Scan(&p.Devoluciones); err != nil {
+		return nil, err
 	}
 	var revision float64
 	if err := s.pool.QueryRow(ctx, `SELECT coalesce(sum(monto), 0)::float8 FROM payments

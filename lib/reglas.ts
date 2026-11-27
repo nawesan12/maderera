@@ -30,6 +30,7 @@ export const OPCIONES_DE_REGLAS = {
   exportar_sicore: ["no", "si"],
   base_retencion_iva: ["neto", "total"],
   retencion_en_el_cobro: ["admin", "quien_cobra"],
+  escala_con_lista: ["si", "no"],
 } as const;
 
 

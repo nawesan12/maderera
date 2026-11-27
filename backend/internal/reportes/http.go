@@ -352,6 +352,35 @@ func (a *API) NumerosDelDueno(ctx context.Context, _ reportesapi.NumerosDelDueno
 	return ok(v), err
 }
 
+func (o respuesta) VisitCargarSaldoDelBancoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// CargarSaldoDelBanco: lo que dice el banco ahora, desde la tarjeta «Plata
+// hoy» del inicio (mes simulado, M2S1-027). Solo el admin; queda en la
+// bitácora con el saldo que el sistema llevaba hasta ese momento.
+func (a *API) CargarSaldoDelBanco(ctx context.Context, r reportesapi.CargarSaldoDelBancoRequestObject) (reportesapi.CargarSaldoDelBancoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	antes, err := a.s.PlataHoy(ctx, a.s.ahora())
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.CargarSaldoDelBanco(ctx, r.Body.Monto, ses.UserID)
+	if err != nil {
+		return nil, err
+	}
+	detalle := map[string]any{"despues": jsmath.Redondear2(r.Body.Monto)}
+	if antes.BancoSaldo != nil {
+		detalle["antes"] = *antes.BancoSaldo
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "banco", "",
+		"Cargó el saldo del banco: "+jsmath.Fijo2(r.Body.Monto), detalle)
+	return ok(v), nil
+}
+
 func (a *API) InicioVentasPorSucursal(ctx context.Context, _ reportesapi.InicioVentasPorSucursalRequestObject) (reportesapi.InicioVentasPorSucursalResponseObject, error) {
 	if err := numerosDelNegocio(ctx); err != nil {
 		return nil, err

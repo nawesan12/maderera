@@ -209,6 +209,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/NumerosDelDueno" }
+  /api/v1/admin/inicio/saldo-banco:
+    post:
+      operationId: CargarSaldoDelBanco
+      description: >-
+        Anota lo que dice el banco ahora. Desde ahí «Plata hoy» lleva el saldo con lo que entra y sale (00450). Solo el admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monto]
+              additionalProperties: false
+              properties:
+                monto: { type: number, format: double, minimum: -1000000000000, maximum: 1000000000000 }
+      responses:
+        "200":
+          description: Cómo queda «Plata hoy»
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlataHoy" }
   /api/v1/admin/inicio/ventas-por-sucursal:
     get:
       operationId: InicioVentasPorSucursal
@@ -614,7 +635,7 @@ components:
           description: >-
             El libro de cada proveedor (supplier_movements), como Pagos a proveedores, con los inactivos que deben.
             Lo vencido y lo de esta semana salen de las facturas, sin pasar el libro de cada uno.
-          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana, sinFactura, proveedores]
+          required: [total, facturas, vencido, facturasVencidas, estaSemana, facturasEstaSemana, sinFactura, remitosSinFactura, proveedores]
           properties:
             total: { type: number, format: double }
             facturas: { type: integer }
@@ -623,6 +644,7 @@ components:
             estaSemana: { type: number, format: double }
             facturasEstaSemana: { type: integer }
             sinFactura: { type: number, format: double, description: "Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)" }
+            remitosSinFactura: { type: number, format: double, description: "La parte de sinFactura que es mercadería recibida con remito y sin factura" }
             proveedores: { type: integer }
         cheques:
           type: object
@@ -630,31 +652,34 @@ components:
           properties:
             aCobrar: { $ref: "#/components/schemas/Monto" }
             aCubrir: { $ref: "#/components/schemas/Monto" }
-        plataHoy:
-          type: object
-          required: [cajas, efectivo, cajaFuerte, banco, bancoEntro, bancoSalio, mercadoPago, tarjetas, cheques, chequesDepositados, total]
-          properties:
-            cajas:
-              type: array
-              items:
-                type: object
-                required: [branchId, sucursal, esperado, cerrada]
-                properties:
-                  branchId: { type: string }
-                  sucursal: { type: string }
-                  esperado: { type: number, format: double, description: Lo que tendría que haber, o lo contado si la caja de hoy ya se cerró }
-                  cerrada: { type: boolean }
-            efectivo: { type: number, format: double }
-            cajaFuerte: { type: number, format: double, description: Lo retirado hoy de las cajas a la caja fuerte }
-            banco: { type: number, format: double, description: Lo que se movió hoy en el banco, entradas menos salidas }
-            bancoEntro: { type: number, format: double }
-            bancoSalio: { type: number, format: double }
-            mercadoPago: { type: number, format: double }
-            tarjetas: { type: number, format: double, description: A acreditar; no suma al total }
-            cheques: { $ref: "#/components/schemas/Monto" }
-            chequesDepositados: { $ref: "#/components/schemas/Monto" }
-            total: { type: number, format: double }
+        plataHoy: { $ref: "#/components/schemas/PlataHoy" }
         ganancia: { $ref: "#/components/schemas/ResultadoComparado" }
+    PlataHoy:
+      type: object
+      required: [cajas, efectivo, cajaFuerte, banco, bancoEntro, bancoSalio, mercadoPago, tarjetas, cheques, chequesDepositados, bancoSaldo, bancoSaldoAl, total]
+      properties:
+        cajas:
+          type: array
+          items:
+            type: object
+            required: [branchId, sucursal, esperado, cerrada]
+            properties:
+              branchId: { type: string }
+              sucursal: { type: string }
+              esperado: { type: number, format: double, description: Lo que tendría que haber, o lo contado si la caja de hoy ya se cerró }
+              cerrada: { type: boolean }
+        efectivo: { type: number, format: double }
+        cajaFuerte: { type: number, format: double, description: Lo retirado hoy de las cajas a la caja fuerte }
+        banco: { type: number, format: double, description: Lo que se movió hoy en el banco, entradas menos salidas }
+        bancoEntro: { type: number, format: double }
+        bancoSalio: { type: number, format: double }
+        mercadoPago: { type: number, format: double }
+        tarjetas: { type: number, format: double, description: A acreditar; no suma al total }
+        cheques: { $ref: "#/components/schemas/Monto" }
+        chequesDepositados: { $ref: "#/components/schemas/Monto" }
+        bancoSaldo: { type: number, format: double, nullable: true, description: "El último saldo cargado más lo que entró y menos lo que salió desde entonces; sin saldo cargado, null y el banco no suma al total" }
+        bancoSaldoAl: { type: string, format: date-time, nullable: true }
+        total: { type: number, format: double, description: "Lo que hay: efectivo, caja fuerte, Mercado Pago, cheques y el saldo del banco si se cargó. Lo movido hoy en el banco no suma" }
     Cobranzas:
       type: object
       required: [filas, total, cobrado, porMedio, ventas]

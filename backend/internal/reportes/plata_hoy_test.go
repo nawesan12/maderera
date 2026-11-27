@@ -74,10 +74,11 @@ func TestPlataHoyEntraYSale(t *testing.T) {
 	if p.Cheques != (Monto{600, 1}) || p.ChequesDepositados != (Monto{150, 1}) || p.Tarjetas != 250 {
 		t.Errorf("cheques y tarjetas: %+v", p)
 	}
-	// 1700 de efectivo + 200 de caja fuerte − 400 del banco + 600 + 150 de
-	// cheques. Las tarjetas no.
-	if p.Total != 2250 {
-		t.Errorf("total: %v", p.Total)
+	// 1700 de efectivo + 200 de caja fuerte + 600 + 150 de cheques. Lo
+	// movido hoy en el banco (−400) es un movimiento y no suma: sin un saldo
+	// cargado, el total no es lo que hay (M2S2-100). Las tarjetas tampoco.
+	if p.Total != 2650 || p.BancoSaldo != nil {
+		t.Errorf("total: %v, saldo del banco %v", p.Total, p.BancoSaldo)
 	}
 }
 

@@ -34,7 +34,8 @@ const fechaArgentina = new Intl.DateTimeFormat("es-AR", {
 const MEDIOS: Record<string, string> = {
   efectivo: "Efectivo",
   transferencia: "Transferencia",
-  deposito: "Transferencia",
+  // El depósito y el e-Cheq con su nombre, como el recibo (M3S2-039).
+  deposito: "Depósito",
   mercado_pago: "Mercado Pago",
   tarjeta: "Tarjeta",
   debito: "Tarjeta de débito",
@@ -42,7 +43,8 @@ const MEDIOS: Record<string, string> = {
   tarjeta_debito: "Tarjeta de débito",
   tarjeta_credito: "Tarjeta de crédito",
   cheque: "Cheque",
-  echeq: "Cheque",
+  echeq: "e-Cheq",
+  retencion: "Retención",
 };
 
 const CONDICIONES: Record<string, string> = {

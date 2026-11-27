@@ -540,7 +540,7 @@ components:
     ConversacionListada:
       type: object
       required: [id, waJid, nombre, displayName, customerId, clienteNombre, clienteTipo, estado, ultimoMensajeAt, ultimoMensajePreview,
-        ultimoEntranteAt, noLeidos, ventanaAbierta, asignadoAUserId, asignadoNombre, baja]
+        ultimoEntranteAt, noLeidos, ventanaAbierta, asignadoAUserId, asignadoNombre, baja, paraContestar]
       properties:
         id: { type: string }
         waJid: { type: string }
@@ -558,6 +558,7 @@ components:
         asignadoAUserId: { type: string, nullable: true }
         asignadoNombre: { type: string, nullable: true }
         baja: { type: boolean }
+        paraContestar: { type: boolean, description: lo último es del cliente y el bot no contesta porque la atiende una persona }
     Campo:
       type: object
       required: [clave, donde, marcador, ejemplo]

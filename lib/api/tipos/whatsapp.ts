@@ -584,6 +584,8 @@ export interface components {
             asignadoAUserId: string | null;
             asignadoNombre: string | null;
             baja: boolean;
+            /** @description lo último es del cliente y el bot no contesta porque la atiende una persona */
+            paraContestar: boolean;
         };
         Campo: {
             clave: string;

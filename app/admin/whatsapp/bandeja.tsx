@@ -265,6 +265,9 @@ export function Bandeja({
                       </span>
 
                       <span className="mt-1 flex flex-wrap gap-1.5">
+                        {/* El bot calla porque la atiende una persona: si no
+                            se marca, el pedido queda sin respuesta (mes 23). */}
+                        {c.paraContestar && <Pildora atencion>Para contestar</Pildora>}
                         {!c.customerId && <Pildora>Sin ficha</Pildora>}
                         {c.asignadoAUserId && (
                           <Pildora>{c.asignadoAUserId === usuarioId ? "La atendés vos" : c.asignadoNombre}</Pildora>
@@ -317,11 +320,23 @@ export function Bandeja({
   );
 }
 
-function Pildora({ children, verde = false }: { children: React.ReactNode; verde?: boolean }) {
+function Pildora({
+  children,
+  verde = false,
+  atencion = false,
+}: {
+  children: React.ReactNode;
+  verde?: boolean;
+  atencion?: boolean;
+}) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm ring-1 ring-inset ${
-        verde ? "text-saldo-favor ring-saldo-favor/30" : "text-muted-foreground ring-border"
+        atencion
+          ? "estado-problema bg-[var(--estado-fondo)] font-semibold text-[var(--estado-tinta)] ring-transparent"
+          : verde
+            ? "text-saldo-favor ring-saldo-favor/30"
+            : "text-muted-foreground ring-border"
       }`}
     >
       {children}

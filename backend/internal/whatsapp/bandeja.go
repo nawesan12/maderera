@@ -41,6 +41,11 @@ type ConversacionListada struct {
 	AsignadoAUserID      *string    `json:"asignadoAUserId"`
 	AsignadoNombre       *string    `json:"asignadoNombre"`
 	Baja                 bool       `json:"baja"`
+	// ParaContestar: lo último lo escribió el cliente y el bot no va a
+	// contestar porque la charla es de una persona (derivada, asignada o con
+	// alguien que escribió desde el panel hace poco: botPuedeHablar). La
+	// bandeja no lo marcaba y el pedido de corte quedaba sin respuesta (mes 23).
+	ParaContestar bool `json:"paraContestar"`
 }
 
 // ListarConversaciones son las 150 más recientes del filtro.
@@ -65,7 +70,12 @@ func (s *Servicio) ListarConversaciones(ctx context.Context, filtro, usuarioID s
 	}
 	r, err := s.pool.Query(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, cu.nombre, cu.tipo::text, c.estado::text, c.ultimo_mensaje_at,
-		       c.ultimo_mensaje_preview, c.ultimo_entrante_at, c.no_leidos, c.asignado_a_user_id, u.name, c.baja_at is not null
+		       c.ultimo_mensaje_preview, c.ultimo_entrante_at, c.no_leidos, c.asignado_a_user_id, u.name, c.baja_at is not null,
+		       c.estado = 'abierta' and c.ultimo_entrante_at is not null and c.ultimo_entrante_at >= coalesce(c.ultimo_mensaje_at, c.ultimo_entrante_at)
+		         and (c.bot_estado <> 'activo' or c.asignado_a_user_id is not null or exists (
+		           select 1 from whatsapp_mensajes m where m.conversacion_id = c.id and m.direccion = 'saliente'
+		             and coalesce(m.origen, '') in ('panel', 'telefono', 'aviso') and m.ocurrido_at > now() - interval '12 hours'
+		             and m.ocurrido_at > coalesce(c.bot_devuelto_at, '-infinity'::timestamptz)))
 		  from whatsapp_conversaciones c
 		  left join customers cu on cu.id = c.customer_id
 		  left join "user" u on u.id = c.asignado_a_user_id
@@ -81,7 +91,7 @@ func (s *Servicio) ListarConversaciones(ctx context.Context, filtro, usuarioID s
 	for r.Next() {
 		var c ConversacionListada
 		if err := r.Scan(&c.ID, &c.WaJid, &c.DisplayName, &c.CustomerID, &c.ClienteNombre, &c.ClienteTipo, &c.Estado, &c.UltimoMensajeAt,
-			&c.UltimoMensajePreview, &c.UltimoEntranteAt, &c.NoLeidos, &c.AsignadoAUserID, &c.AsignadoNombre, &c.Baja); err != nil {
+			&c.UltimoMensajePreview, &c.UltimoEntranteAt, &c.NoLeidos, &c.AsignadoAUserID, &c.AsignadoNombre, &c.Baja, &c.ParaContestar); err != nil {
 			return nil, err
 		}
 		c.Nombre = oTexto(primero(c.ClienteNombre, c.DisplayName), "Sin identificar")

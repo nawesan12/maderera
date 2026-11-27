@@ -247,12 +247,12 @@ func (s *Servicio) DejarResena(ctx context.Context, ses *auth.Sesion, r NuevaRes
 
 // enOtraPantalla son los ajustes que se cambian donde se usan, con su control
 // propio: en «Textos del sitio» salían como un campo para escribir «no» o un
-// número (mes simulado, M2S1-043 y M2S2-093). Los de la tienda tienen su
-// tarjeta en Contenido, el bot y el número humano están en la configuración
-// de WhatsApp, y el umbral de candidatos a baja, en Candidatos a dar de baja.
+// número (mes simulado, M2S1-043 y M2S2-093). El bot y el número humano están
+// en la configuración de WhatsApp, y el umbral de candidatos a baja, en
+// Candidatos a dar de baja. Los dos de la tienda siguen viniendo: la tarjeta
+// «Qué muestra el sitio» de Contenido los lee de acá, y sin ellos los daba
+// por encendidos y solo ofrecía «Apagar» (mes 23).
 var enOtraPantalla = map[string]bool{
-	"tienda_activa":                  true,
-	"stock_visible":                  true,
 	"whatsapp_bot":                   true,
 	"whatsapp_numero_humano":         true,
 	"catalogo.meses_sin_vender_baja": true,

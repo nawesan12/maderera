@@ -276,6 +276,13 @@ func TestAjustesYResenas(t *testing.T) {
 		strings.Contains(string(b), "whatsapp_numero_humano") || strings.Contains(string(b), "meses_sin_vender_baja") || !strings.Contains(string(b), "telefono") {
 		t.Errorf("los textos del sitio traen ajustes de otra pantalla: %s", b)
 	}
+	// Los de la tienda sí: la tarjeta «Qué muestra el sitio» los lee de acá, y
+	// sin ellos los daba por encendidos (mes 23).
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('tienda_activa', 'no'), ('stock_visible', 'no') on conflict (clave) do update set valor = 'no'`)
+	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); !strings.Contains(string(b), "tienda_activa") || !strings.Contains(string(b), "stock_visible") {
+		t.Errorf("los ajustes no traen los interruptores de la tienda: %s", b)
+	}
+	_, _ = e.pool.Exec(ctx, `update site_settings set valor = 'si' where clave in ('tienda_activa', 'stock_visible')`)
 
 	// Juan compró un fenólico y el pedido se entregó.
 	var producto, variante, categoria, orderID, clienteID string

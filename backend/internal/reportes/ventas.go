@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Servicio son las lecturas de los reportes.
@@ -126,21 +127,12 @@ const (
 	// cerrado. El que se canceló antes de contar no es ningún hecho. Por eso
 	// los reportes no filtran «o.estado <> 'cancelado'»: lo que trae
 	// hechosDeVenta ya es lo que cuenta.
-	hechosDeVenta = `(SELECT o.*, o.id AS hecho, o.vendido_at AS fecha, o.total AS monto, 1 AS operaciones
-		  FROM orders o WHERE o.vendido_at IS NOT NULL AND ` + cuentaComoVenta + `
-		UNION ALL
-		SELECT o.*, dv.id, dv.created_at, -dv.importe, 0 FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
-		  WHERE ` + cuentaComoVenta + `
-		UNION ALL
-		SELECT o.*, ` + hechoDeLaCancelacion + `, o.cancelado_at,
-		  -(o.total - coalesce((SELECT sum(dv.importe) FROM devoluciones dv WHERE dv.order_id = o.id), 0)), 0
-		  FROM orders o WHERE ` + canceladaDespues + `)`
-	// cuentaComoVenta: el pedido no se canceló, o se canceló después de
-	// contar como venta.
-	cuentaComoVenta  = `(o.estado <> 'cancelado' OR (o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at))`
-	canceladaDespues = `o.estado = 'cancelado' AND o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at`
-	// hechoDeLaCancelacion es el id del hecho que resta la cancelación.
-	hechoDeLaCancelacion = `md5('cancelacion:' || o.id::text)::uuid`
+	// Viven en fragmentos: «Vendido hoy» de Sucursales cuenta con la misma
+	// regla (mes simulado, M2S2-028).
+	hechosDeVenta        = fragmentos.HechosDeVenta
+	cuentaComoVenta      = fragmentos.CuentaComoVenta
+	canceladaDespues     = fragmentos.CanceladaDespues
+	hechoDeLaCancelacion = fragmentos.HechoDeLaCancelacion
 	// renglonesVendidos son los renglones de cada hecho: los de la venta y,
 	// en negativo, lo que se llevó cada devolución, con el costo congelado
 	// del renglón que vuelve.

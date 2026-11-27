@@ -122,7 +122,8 @@ function TarjetaSucursal({ sucursal }: { sucursal: SucursalConMetricas }) {
     },
     {
       icono: Package,
-      etiqueta: "Stock valorizado",
+      // A precio de lista, no de costo: se leía como el costo (M2S1-120).
+      etiqueta: "Stock a precio de lista",
       valor: formatearMonto(sucursal.stockValor),
       href: "/admin/stock",
     },

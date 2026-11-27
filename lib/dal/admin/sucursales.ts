@@ -18,7 +18,7 @@ export interface SucursalConMetricas {
   horario: string | null;
   sortOrder: number;
   active: boolean;
-  /** Importe vendido hoy: pedidos no cancelados con fecha de hoy. */
+  /** Vendido hoy con la regla «venta_reconocida», la misma de Reportes. */
   ventasHoy: number;
   pedidosHoy: number;
   /** Pedidos abiertos, sin importar la fecha: es la cola de trabajo real. */

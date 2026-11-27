@@ -191,6 +191,8 @@ export default async function NuevoCortePage({
         cliente: c.customerId ? { id: c.customerId, nombre: c.cliente, razonSocial: c.empresa } : null,
         branchId: c.branchId,
         sinCargo: c.sinCargo,
+        anchoSierraMm: c.anchoSierraMm,
+        fijadas: corregido?.fijadas ?? [],
         piezas: c.piezas.map((p) => ({
           largoMm: p.largoMm,
           anchoMm: p.anchoMm,

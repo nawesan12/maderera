@@ -740,8 +740,9 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 	}
 	var estado, numero string
 	var pedido *string
-	err := tx.QueryRow(ctx, `SELECT estado::text, numero, order_id::text FROM cutting_orders WHERE id = $1 FOR UPDATE`, id).
-		Scan(&estado, &numero, &pedido)
+	var sinCargo bool
+	err := tx.QueryRow(ctx, `SELECT estado::text, numero, order_id::text, sin_cargo FROM cutting_orders WHERE id = $1 FOR UPDATE`, id).
+		Scan(&estado, &numero, &pedido, &sinCargo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", noEncontrado
 	}
@@ -755,7 +756,11 @@ func anularEnLaTransaccion(ctx context.Context, tx pgx.Tx, id, motivo string) (s
 	if estado != "en-cola" && estado != "en-proceso" {
 		return "", error422(numero + " ya salió de la máquina: no se anula.")
 	}
-	if pedido != nil {
+	// Una reposición sin cargo no se cobró en ninguna venta: los renglones
+	// del pedido son los del corte original, y por ellos CRT-56 decía «se
+	// cobró en la venta PED-1231» y no se podía corregir ni anular (mes
+	// simulado, M3S3-023).
+	if pedido != nil && !sinCargo {
 		var vendido *string
 		err := tx.QueryRow(ctx, `
 			SELECT o.numero FROM orders o

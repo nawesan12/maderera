@@ -90,6 +90,33 @@ func TestElAcomodoCobraSusPasadas(t *testing.T) {
 	}
 }
 
+// M3S3-023, M2S2-104 y M3S4-023: la reposición sin cargo de una venta que
+// cobró su corte se corrige, y el reemplazo conserva la hora del original.
+func TestCorregirLaReposicion(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	pedido := e.pedido(t, "PED-1231",
+		map[string]any{"variante": e.melamina, "descripcion": "Melamina Blanca", "unidad": "placa", "cantidad": 1, "precio": 84500},
+		map[string]any{"descripcion": "Corte a medida · 3 piezas", "unidad": "pasada", "cantidad": 4, "precio": 1200, "delCorte": true})
+	repo := alta(t, e, ven, melamina(e, "orderId", pedido, "sinCargo", true, "piezas", []any{pieza(700, 396, 1)}))
+	if _, err := e.pool.Exec(ctx, `update cutting_orders set created_at = now() - interval '30 minutes' where id = $1`, repo); err != nil {
+		t.Fatal(err)
+	}
+	nuevo := alta(t, e, ven, melamina(e, "orderId", pedido, "sinCargo", true, "reemplaza", repo,
+		"piezas", []any{pieza(700, 396, 1, "etiqueta", "Puerta")}))
+	var espera float64
+	if err := e.pool.QueryRow(ctx, `select extract(epoch from now() - created_at) from cutting_orders where id = $1`, nuevo).Scan(&espera); err != nil {
+		t.Fatal(err)
+	}
+	if espera < 29*60 {
+		t.Errorf("el reemplazo llegó recién: espera %v s", espera)
+	}
+	if f := leerFicha(t, e, ven, repo); f["corte"].(map[string]any)["estado"] != "cancelado" {
+		t.Errorf("la reposición corregida sigue viva: %v", f["corte"].(map[string]any)["estado"])
+	}
+}
+
 // M2S1-064 y M2S2-106: el espesor del PTX es el del tablero, no la primera
 // medida con «mm».
 func TestEspesorConLaMedidaDeLaPlaca(t *testing.T) {

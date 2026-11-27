@@ -363,6 +363,16 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 				return err
 			}
 		}
+		// El reemplazo hereda la hora del trabajo que corrige: su lugar en
+		// la cola y cuánto viene esperando el cliente. Corregir una etiqueta
+		// mandaba un urgente de media hora al final, como recién llegado
+		// (mes simulado, M2S2-104 y M3S4-023).
+		if f.Reemplaza != "" {
+			if _, err := tx.Exec(ctx, `UPDATE cutting_orders n SET created_at = v.created_at
+				FROM cutting_orders v WHERE n.id = $1 AND v.id = $2`, id, f.Reemplaza); err != nil {
+				return err
+			}
+		}
 		if f.Consulta != "" {
 			sql := `UPDATE consultas_corte SET cutting_order_id = $1
 				WHERE token = $2 AND cutting_order_id IS NULL`

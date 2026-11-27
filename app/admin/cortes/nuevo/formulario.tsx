@@ -141,6 +141,9 @@ export function FormularioCorte({
     branchId: string | null;
     sinCargo: boolean;
     piezas: Pieza[];
+    /** El disco y el acomodo a mano del corte: corregir los perdía (M2S1-090, M2S2-071). */
+    anchoSierraMm: number;
+    fijadas: PiezaFijada[];
   };
   /** Desde la ficha del cliente: llega con el cliente ya elegido. */
   clienteInicial?: { id: string; nombre: string; razonSocial: string | null; telefono: string | null };
@@ -266,7 +269,7 @@ export function FormularioCorte({
     desdeConsulta?.piezas.length ? desdeConsulta.piezas : corregir?.piezas.length ? corregir.piezas : [piezaVacia()],
   );
   /** Las piezas que alguien mandó a mano a una placa. */
-  const [fijadas, setFijadas] = useState<PiezaFijada[]>([]);
+  const [fijadas, setFijadas] = useState<PiezaFijada[]>(corregir?.fijadas ?? []);
   const [sinCargo, setSinCargo] = useState(corregir?.sinCargo ?? false);
   /** Confirmado que el corte del pedido va en otra placa (H280). */
   const [otraPlaca, setOtraPlaca] = useState(false);
@@ -321,7 +324,7 @@ export function FormularioCorte({
   // El disco de este trabajo: arranca con el general y se puede cambiar. El
   // trabajo lo guarda, así su plano no cambia si después se toca el general.
   const [sierraTexto, setSierraTexto] = useState(
-    String(anchoSierraGeneral).replace(".", ","),
+    String(corregir?.anchoSierraMm ?? anchoSierraGeneral).replace(".", ","),
   );
   const anchoSierra = leerAnchoDeSierra(sierraTexto) ?? anchoSierraGeneral;
 

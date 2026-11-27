@@ -731,3 +731,23 @@ func TestPanelDeDocumentacion(t *testing.T) {
 		t.Errorf("categorías con todo de baja: %s", b)
 	}
 }
+
+// Un banner con «Desde» y «Hasta» de hoy está al aire todo el día, como una
+// promoción que vence hoy (mes simulado, M2S2-027).
+func TestBannerQueVenceHoySeVe(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/"
+	hoy := time.Now().In(argentina).Format("2006-01-02")
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/banners", armarFormulario(map[string]string{
+		"ubicacion": "catalogo", "titulo": "Vence hoy", "desde": hoy, "hasta": hoy, "activo": "on",
+	}, nil)); c != 204 {
+		t.Fatalf("crear banner: %d %s", c, b)
+	}
+	_, b := pedir(t, &http.Client{}, "GET", u+"contenido/banners?ubicacion=catalogo", nil)
+	var publicados []Banner
+	_ = json.Unmarshal(b, &publicados)
+	if len(publicados) != 1 {
+		t.Fatalf("un banner que vence hoy no se ve: %s", b)
+	}
+}

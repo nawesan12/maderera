@@ -415,7 +415,7 @@ func (s *Servicio) GuardarBanner(ctx context.Context, ses *auth.Sesion, f FormBa
 		return plataforma.Invalido(map[string]string{"orden": "El orden va de 0 a 99."})
 	}
 	desde, err1 := fechaDelFormulario(f.Desde, 0, 0, 0)
-	hasta, err2 := fechaDelFormulario(f.Hasta, 0, 0, 0)
+	hasta, err2 := fechaDelFormulario(f.Hasta, 23, 59, 59)
 	if err1 != nil || err2 != nil {
 		return plataforma.Invalido(map[string]string{"desde": "Revisá la fecha."})
 	}

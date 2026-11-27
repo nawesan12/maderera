@@ -247,8 +247,10 @@ function Renglones({
   return (
     <ul className="space-y-0.5 text-base">
       {renglones.map((r, i) => (
-        <li key={i} className="flex justify-between gap-3">
-          <span className="min-w-0 truncate">{r.descripcion}</span>
+        // Sin «…»: el espesor va al final y es lo que distingue una placa
+        // de otra (a 375 px «MDF — 1830 x 2600mm…» perdía el «18mm»).
+        <li key={i} className="flex items-baseline justify-between gap-3">
+          <span className="min-w-0 break-words leading-snug">{r.descripcion}</span>
           <span className={`tabular shrink-0 ${apagado ? "" : "font-semibold"}`}>{cantidadConUnidad(r.pendiente, r.unidad, r.descripcion)}</span>
         </li>
       ))}

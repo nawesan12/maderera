@@ -301,6 +301,7 @@ function FormularioDeRemito({
   alGenerar: (numero: string) => void;
 }) {
   const [estado, preparar, preparando] = useActionState(prepararRemito, inicial);
+  const router = useRouter();
   // Arranca en lo que queda, o en lo que hay en el galpón si no alcanza
   // (mes simulado 2: proponía 4 lacas con 3 en el estante, y salía igual).
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
@@ -329,8 +330,14 @@ function FormularioDeRemito({
     if (estado.ok && estado.numero) {
       toast.success(estado.ok);
       alGenerar(estado.numero);
+      // En un retiro quien se lleva la mercadería está ahí: lo que sigue
+      // es la firma, en la misma pantalla (mes simulado 2: quedaba «Sin
+      // firmar» y la firma se olvidaba).
+      if (tipoEntrega !== "envio" && estado.linkFirma) {
+        router.push(`${estado.linkFirma}?volver=${encodeURIComponent(`/admin/pedidos/${orderId}`)}`);
+      }
     }
-  }, [estado, alGenerar]);
+  }, [estado, alGenerar, tipoEntrega, orderId, router]);
 
   const conDecimales = (p: RenglonPendiente, valor: string) =>
     Boolean(p.enteros) && llevaDecimales(valor) && valor !== String(p.pendiente);

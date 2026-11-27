@@ -37,6 +37,7 @@ export function AccionesPedido({
   enLaFicha = false,
   porLlevar = false,
   firmar = null,
+  sinAvance = false,
 }: {
   id: string;
   estado: string;
@@ -86,6 +87,11 @@ export function AccionesPedido({
   porLlevar?: boolean;
   /** La firma del remito de envío que está en la calle (la ficha la tiene). */
   firmar?: string | null;
+  /**
+   * En la ficha, cuando lo que sigue es el remito (que va arriba con su
+   * «Preparar remito»): el encabezado deja solo el cobro.
+   */
+  sinAvance?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -188,7 +194,7 @@ export function AccionesPedido({
         />
       )}
 
-      {preparaRemito ? (
+      {sinAvance ? null : preparaRemito ? (
         <Link
           href={enLaFicha ? "?remito=1#remito" : `/admin/pedidos/${id}?remito=1#remito`}
           className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg boton-accion px-3 text-base font-medium ${ancho}`}

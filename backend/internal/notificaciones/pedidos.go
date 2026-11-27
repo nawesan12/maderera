@@ -106,6 +106,15 @@ func (s *Servicio) PedidoRecibido(ctx context.Context, id string) error {
 // CambioDeEstado es avisarCambioDePedido + notificarCambioDeEstado: el
 // WhatsApp y el correo de un pedido que avanzó. El evento es el estado.
 func (s *Servicio) CambioDeEstado(ctx context.Context, id, estado string) error {
+	// Un envío listo no se va a retirar: el aviso es el de «en camino» al
+	// despacharlo (mes simulado 2: le decía «listo para retirar» a quien
+	// esperaba el camión).
+	if estado == "listo" {
+		var envio bool
+		if err := s.pool.QueryRow(ctx, `SELECT tipo_entrega = 'envio' FROM orders WHERE id = $1`, id).Scan(&envio); err == nil && envio {
+			return nil
+		}
+	}
 	s.wa.AvisarCambioDePedido(ctx, id, estado)
 	var numero, token, nombre string
 	var correo *string

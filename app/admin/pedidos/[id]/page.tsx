@@ -94,7 +94,12 @@ export default async function FichaPedidoPage({
 
   // El aviso que corresponde al estado: lo que el cliente tiene que saber ahora.
   // Solo para quien atiende el WhatsApp de la maderera (no depósito).
-  const eventoAviso = puedeEntrar("/admin/whatsapp", usuario.staffRole) ? (EVENTO_DEL_ESTADO[pedido.estado] ?? null) : null;
+  // Un envío listo no se avisa: no se va a retirar, el aviso es el de «en
+  // camino» (mes simulado 2: decía «listo para retirar»).
+  const eventoAviso =
+    puedeEntrar("/admin/whatsapp", usuario.staffRole) && !(pedido.estado === "listo" && pedido.tipoEntrega === "envio")
+      ? (EVENTO_DEL_ESTADO[pedido.estado] ?? null)
+      : null;
 
   const cancelado = pedido.estado === "cancelado";
   const [pendientes, remitos, cortes, aviso, otros] = await Promise.all([
@@ -112,6 +117,12 @@ export default async function FichaPedidoPage({
   // botón principal es «Preparar remito» (mes simulado: era «Marcar
   // entregado», que se lleva todo lo que queda).
   const acopioEnCurso = pedido.acopio && porEntregar.length > 0;
+  // Un retiro listo con mercadería: lo que sigue es el remito, que deja la
+  // firma. Va arriba con «Preparar remito» como botón principal, y el
+  // encabezado no repite otro (mes simulado 2: arriba estaba «Marcar
+  // entregado» y había dos «Preparar remito» en la pantalla).
+  const remitoArriba =
+    acopioEnCurso || (pedido.tipoEntrega === "retiro" && pedido.estado === "listo" && porEntregar.length > 0);
   // El remito del camión sin firmar: en un envío en camino con algo por
   // llevar, firmarlo es lo que sigue (no «Marcar entregado»).
   const remitoEnLaCalle = remitos.find((r) => r.tipo === "envio" && seOfreceLaFirma(r));
@@ -169,7 +180,8 @@ export default async function FichaPedidoPage({
   const entregas = (
     <Entregas
       whatsapp={puedeEntrar("/admin/whatsapp", usuario.staffRole)}
-      avisos={avisosRemito}
+      // Con el aviso de arriba, el del remito no se repite debajo.
+      avisos={aviso ? {} : avisosRemito}
       orderId={pedido.id}
       tipoEntrega={pedido.tipoEntrega}
       estado={pedido.estado}
@@ -362,6 +374,7 @@ export default async function FichaPedidoPage({
               sinCobrar={pedido.sinCobrar ? { numero: pedido.numero, monto: pedido.sinCobrar } : null}
               cortesSinTerminar={cortesSinTerminar}
               acopio={acopioEnCurso}
+              sinAvance={remitoArriba}
               porLlevar={porEntregar.length > 0}
               firmar={firmaEnLaCalle}
               enLaFicha
@@ -401,7 +414,7 @@ export default async function FichaPedidoPage({
           lleva» y lo que seguía quedaban unos 400 px vacíos (mes simulado). */}
       <div className="grid items-start gap-4 lg:grid-cols-[1fr_320px]">
         <div className="min-w-0 space-y-4">
-        {acopioEnCurso && entregas}
+        {remitoArriba && entregas}
 
         <section className="tarjeta overflow-hidden">
           <h2 className="px-5 pt-4 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">Qué lleva</h2>
@@ -475,7 +488,8 @@ export default async function FichaPedidoPage({
             * las anteriores al módulo de compras no lo tienen y se cuentan
             * aparte en vez de promediarse como si hubieran costado cero.
             */}
-          {esAdmin && margen && (
+          {/* Cancelado no hubo venta: sin margen (mes simulado 2). */}
+          {esAdmin && margen && !cancelado && (
             <div className="border-t bg-muted/40 px-5 py-4">
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <div>
@@ -504,7 +518,7 @@ export default async function FichaPedidoPage({
           )}
         </section>
 
-        {!acopioEnCurso && entregas}
+        {!remitoArriba && entregas}
 
         {/* El corte, en la ficha del pedido: «el pedido está listo menos el
             corte». Un pedido cancelado o entregado no manda nada a cortar. */}

@@ -58,7 +58,8 @@ export default async function PedidosPage({
   const cobra = rol != null && MANEJAN_PLATA.includes(rol);
   const [avisosListo, avisosEnCamino] = atiende
     ? await Promise.all([
-        avisosManuales("listo", "order", pedidos.filter((p) => p.estado === "listo").map((p) => p.id)),
+        // Un envío listo no se avisa: no se retira (mes simulado 2).
+        avisosManuales("listo", "order", pedidos.filter((p) => p.estado === "listo" && p.tipoEntrega === "retiro").map((p) => p.id)),
         avisosManuales("en-camino", "order", pedidos.filter((p) => p.estado === "en-camino").map((p) => p.id)),
       ])
     : [{}, {}];

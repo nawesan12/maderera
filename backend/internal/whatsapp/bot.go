@@ -915,7 +915,8 @@ func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoPa
 		// Con el tope del mes el bot no contesta: la conversación pasa a una
 		// persona, a la vista en la bandeja, y se avisa. Antes el cliente
 		// quedaba sin respuesta y nadie se enteraba.
-		if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_pendiente = null where id = $1`, convID); err != nil {
+		if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_pendiente = null,
+			bot_motivo = 'Se llegó al tope de WhatsApp del mes.' where id = $1`, convID); err != nil {
 			return nil, "", err
 		}
 		s.avisar(ctx, push.Aviso{Titulo: "WhatsApp: el bot no contesta (tope del mes)", Cuerpo: "Se llegó al tope de WhatsApp del mes. Contestale vos.",
@@ -923,7 +924,8 @@ func (s *Servicio) botPuedeHablar(ctx context.Context, convID string) (*estadoPa
 		return nil, callaTope, nil
 	}
 	if deLaHora >= TopeBotPorHora || deDiezMinutos >= TopeBotDiezMinutos {
-		if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_pendiente = null where id = $1`, convID); err != nil {
+		if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_pendiente = null,
+			bot_motivo = 'El bot contestó demasiadas veces seguidas.' where id = $1`, convID); err != nil {
 			return nil, "", err
 		}
 		cuerpo := fmt.Sprintf("Contestó %d veces en una hora en la misma conversación. Sigue una persona.", deLaHora)
@@ -1039,7 +1041,7 @@ func (s *Servicio) resolverTexto(ctx context.Context, convID, waJid, entranteID,
 func (s *Servicio) ReactivarBot(ctx context.Context, convID string) error {
 	// bot_devuelto_at: lo que escribió una persona antes ya no lo calla.
 	_, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'activo', bot_fallos = 0, bot_derivada_at = null, bot_pendiente = null,
-		bot_devuelto_at = now() where id = $1`, convID)
+		bot_motivo = null, bot_devuelto_at = now() where id = $1`, convID)
 	return err
 }
 

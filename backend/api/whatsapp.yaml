@@ -637,7 +637,7 @@ components:
     DetalleConversacion:
       type: object
       required: [id, waJid, displayName, customerId, orderId, estado, notas, ultimoEntranteAt, noLeidos, asignadoAUserId, bajaAt, bajaDetalle,
-        resueltaAt, botEstado, clienteNombre, clienteTipo, clienteLista, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, clienteBloqueado, conocidos, nombre, sinNumero,
+        resueltaAt, botEstado, botMotivo, clienteNombre, clienteTipo, clienteLista, clienteTelefono, clienteEmail, clienteLimite, clienteEstado, clienteBloqueado, conocidos, nombre, sinNumero,
         ventanaAbierta, mensajes, saldo, limiteCredito, pedidos, documentos]
       properties:
         id: { type: string }
@@ -654,6 +654,7 @@ components:
         bajaDetalle: { type: string, nullable: true }
         resueltaAt: { type: string, format: date-time, nullable: true }
         botEstado: { type: string, enum: [activo, derivada], description: "«derivada»: el bot la pasó a una persona y no contesta" }
+        botMotivo: { type: string, nullable: true, description: "Por qué el bot la pasó a una persona" }
         clienteNombre: { type: string, nullable: true }
         clienteTipo: { type: string, nullable: true }
         clienteLista: { type: string, nullable: true, description: "La lista de precios propia; null si es la general" }

@@ -243,7 +243,7 @@ export function Hilo({
       </Dialog>
 
       {/* Resuelta, la franja ya no pide nada (M2S3-072). */}
-      {detalle.botEstado === "derivada" && detalle.estado !== "cerrada" && <AvisoDerivada conversacionId={detalle.id} />}
+      {detalle.botEstado === "derivada" && detalle.estado !== "cerrada" && <AvisoDerivada conversacionId={detalle.id} motivo={detalle.botMotivo} />}
 
       {detalle.bajaAt && (
         <p className="flex items-center gap-2 border-b bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
@@ -961,13 +961,17 @@ function SimuladorEntrante({ conversacionId }: { conversacionId: string }) {
 }
 
 /** El bot la pasó a una persona y no contesta más acá hasta que se la devuelvan. */
-function AvisoDerivada({ conversacionId }: { conversacionId: string }) {
+/** El porqué de la derivación iba solo en el push (mes 23): ahora queda acá. */
+function AvisoDerivada({ conversacionId, motivo }: { conversacionId: string; motivo?: string | null }) {
   const router = useRouter();
   const [pendiente, empezar] = useTransition();
   return (
     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-naranja-claro/60 px-4 py-2 text-sm font-medium text-acento-sobre-claro">
       <UserRound className="h-4 w-4 shrink-0" />
-      El bot la pasó a una persona
+      <span className="min-w-0">
+        El bot la pasó a una persona
+        {motivo && <span className="font-normal">: {motivo}</span>}
+      </span>
       <button
         type="button"
         disabled={pendiente}

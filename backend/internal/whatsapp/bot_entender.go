@@ -49,7 +49,7 @@ func pideUnaPersona(texto string) bool {
 // sirva, y contestar el catálogo («Esto tenemos: Deck…») a quien le faltó una
 // tabla es peor que no contestar. Pasa a una persona con el porqué.
 var (
-	reReclamo = regexp.MustCompile(`\b(reclamo|reclamar|queja|quejarme|me falto|me faltaron|faltaron|falto una|falto un|faltante|faltan|vino roto|vino rota|vinieron rotos|vinieron rotas|llego roto|llego rota|vino fallado|vino fallada|vino mal|me cobraron|cobraron de mas|cobraron mal|no me llego|nunca llego|no llego)\b`)
+	reReclamo = regexp.MustCompile(`\b(reclamo|reclamar|queja|quejarme|me falto|me faltaron|faltaron|falto una|falto un|faltante|faltan|vino mal|vinieron mal|me cobraron|cobraron de mas|cobraron mal|no me llego|nunca llego|no llego|defectuos[oa]s?|en mal estado|devolver|devolucion|(?:vino|vinieron|llego|llegaron|esta|estan|salio|salieron|dieron|vendieron|entregaron|trajeron|recibi|recibimos)\s+(?:[a-z0-9]+\s+){0,3}(?:rot[oa]s?|rayad[oa]s?|fallad[oa]s?|golpead[oa]s?|partid[oa]s?|quebrad[oa]s?|manchad[oa]s?|danad[oa]s?|astillad[oa]s?|mojad[oa]s?|hinchad[oa]s?|torcid[oa]s?|combad[oa]s?|doblad[oa]s?|despegad[oa]s?|picad[oa]s?|con fallas?|con una falla|con un golpe))\b`)
 	reCuenta  = regexp.MustCompile(`\b(cheque|cheques|echeq|echeqs|e cheq|rechazaron|rechazado|rechazada|mi cuenta|mi saldo|cuanto debo|lo que debo|deuda|estado de cuenta|resumen de cuenta|mail raro|correo raro|nota de credito|factura mal)\b`)
 )
 

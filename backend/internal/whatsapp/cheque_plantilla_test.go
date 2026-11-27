@@ -1,4 +1,4 @@
-package notificaciones
+package whatsapp
 
 import "testing"
 
@@ -13,7 +13,7 @@ func TestChequeEnLaPlantilla(t *testing.T) {
 		{"echeq", &banco, "electrónico Banco Nación N° 123"},
 		{"fisico", nil, "N° 123"},
 	} {
-		if got := chequeEnLaPlantilla(c.tipo, c.banco, "123"); got != c.want {
+		if got := ChequeEnLaPlantilla(c.tipo, c.banco, "123"); got != c.want {
 			t.Errorf("%s: %q, se esperaba %q", c.tipo, got, c.want)
 		}
 	}

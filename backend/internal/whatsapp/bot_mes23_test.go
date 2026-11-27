@@ -29,11 +29,23 @@ func TestBotDerivaReclamosYCuenta(t *testing.T) {
 	for _, texto := range []string{
 		"Hola, ayer retiré un pedido y me faltó una tabla de deck, me cobraron 20 y vinieron 19", // M2S3-021
 		"Me rechazaron un cheque que les di? me llegó un mail raro",
-		"Aceptan cheques a 30 días?", // M3S4-011
+		"Aceptan cheques a 30 días?",            // M3S4-011
+		"la placa que me vendieron vino rayada", // mes 23: contestaba el catálogo de placa de yeso
+		"Me llegaron dos melaminas golpeadas",
+		"el fenólico está todo hinchado",
+		"Quiero devolver una bisagra defectuosa",
 	} {
 		r := Responder(texto, EstadoBot{}, datosDePrueba, false)
 		if !r.Derivar || r.Motivo == "" {
 			t.Errorf("«%s»: derivar=%v motivo=%q texto=%q", texto, r.Derivar, r.Motivo, r.Texto)
+		}
+	}
+}
+
+func TestBotNoTomaComoReclamoUnaConsulta(t *testing.T) {
+	for _, texto := range []string{"tienen placa de yeso?", "la placa resiste la humedad?", "cuánto sale el fenólico de 18?"} {
+		if m := motivoDePersona(texto); m != "" {
+			t.Errorf("«%s»: lo tomó como %q", texto, m)
 		}
 	}
 }
@@ -219,7 +231,7 @@ func TestConversacionConChequeRechazadoYCuentaBloqueada(t *testing.T) {
 	if err != nil || d == nil {
 		t.Fatal(err)
 	}
-	if d.Conocidos["cheque_rechazado:cheque"] != "Cheque Sim Banco Provincia N° 00109101" || !strings.HasSuffix(d.Conocidos["cheque_rechazado:importe"], "60.000") ||
+	if d.Conocidos["cheque_rechazado:cheque"] != "Sim Banco Provincia N° 00109101" || !strings.HasSuffix(d.Conocidos["cheque_rechazado:importe"], "60.000") ||
 		d.Conocidos["cheque_rechazado:motivo"] != "sin fondos" || d.Conocidos["importe"] != "" {
 		t.Errorf("conocidos: %v", d.Conocidos)
 	}

@@ -190,8 +190,10 @@ type DetalleConversacion struct {
 	BajaDetalle      *string    `json:"bajaDetalle"`
 	ResueltaAt       *time.Time `json:"resueltaAt"`
 	BotEstado        string     `json:"botEstado"`
-	ClienteNombre    *string    `json:"clienteNombre"`
-	ClienteTipo      *string    `json:"clienteTipo"`
+	// BotMotivo es por qué el bot la pasó a una persona (mes 23).
+	BotMotivo     *string `json:"botMotivo"`
+	ClienteNombre *string `json:"clienteNombre"`
+	ClienteTipo   *string `json:"clienteTipo"`
 	// ClienteLista es la lista de precios propia, si no es la general: el
 	// chip dice «Constructora» y no «Profesional» a todos (como el portal).
 	ClienteLista    *string `json:"clienteLista"`
@@ -221,13 +223,13 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 	var d DetalleConversacion
 	err := s.pool.QueryRow(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, c.order_id, c.estado::text, c.notas, c.ultimo_entrante_at, c.no_leidos,
-		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado,
+		       c.asignado_a_user_id, c.baja_at, c.baja_detalle, c.resuelta_at, c.bot_estado, c.bot_motivo,
 		       cu.nombre, cu.tipo::text, cu.telefono, cu.email, cu.limite_credito::text, cu.estado::text,
 		       CASE WHEN pl.is_default THEN NULL ELSE pl.name END, coalesce(cu.cuenta_bloqueada, false)
 		  from whatsapp_conversaciones c left join customers cu on cu.id = c.customer_id
 		  left join price_lists pl on pl.id = cu.price_list_id
 		 where c.id = $1`, id).Scan(&d.ID, &d.WaJid, &d.DisplayName, &d.CustomerID, &d.OrderID, &d.Estado, &d.Notas, &d.UltimoEntranteAt,
-		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado,
+		&d.NoLeidos, &d.AsignadoAUserID, &d.BajaAt, &d.BajaDetalle, &d.ResueltaAt, &d.BotEstado, &d.BotMotivo,
 		&d.ClienteNombre, &d.ClienteTipo, &d.ClienteTelefono, &d.ClienteEmail, &d.ClienteLimite, &d.ClienteEstado, &d.ClienteLista, &d.ClienteBloqueado)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -278,14 +280,7 @@ func (s *Servicio) ObtenerConversacion(ctx context.Context, id string) (*Detalle
 			Scan(&tipo, &numero, &banco, &importe, &motivo)
 		switch {
 		case err == nil:
-			clase := "Cheque"
-			if tipo == "echeq" {
-				clase = "e-Cheq"
-			}
-			if banco != nil && *banco != "" {
-				clase += " " + *banco
-			}
-			d.Conocidos["cheque_rechazado:cheque"] = clase + " N° " + numero
+			d.Conocidos["cheque_rechazado:cheque"] = ChequeEnLaPlantilla(tipo, banco, numero)
 			d.Conocidos["cheque_rechazado:importe"] = formato.Importe(importe)
 			if motivo != nil && strings.TrimSpace(*motivo) != "" {
 				d.Conocidos["cheque_rechazado:motivo"] = strings.TrimSpace(*motivo)
@@ -586,4 +581,18 @@ type GastoChico struct {
 	Tope       float64 `json:"tope"`
 	Proporcion float64 `json:"proporcion"`
 	Alcanzado  bool    `json:"alcanzado"`
+}
+
+// ChequeEnLaPlantilla es el cheque para la plantilla «cheque_rechazado», que ya dice
+// «el cheque {{cheque}}»: con el nombre entero quedaba «el cheque Cheque
+// Banco Nación N° …» (mes 23). La usan el aviso automático y la bandeja.
+func ChequeEnLaPlantilla(tipo string, banco *string, numero string) string {
+	var partes []string
+	if tipo == "echeq" {
+		partes = append(partes, "electrónico")
+	}
+	if banco != nil && strings.TrimSpace(*banco) != "" {
+		partes = append(partes, strings.TrimSpace(*banco))
+	}
+	return strings.Join(append(partes, "N° "+numero), " ")
 }

@@ -362,8 +362,21 @@ func (s *Servicio) contestarTurno(ctx context.Context, convID, waJid string, est
 		// persona, que se entera por el aviso.
 		derivada = true
 	}
+	// El porqué de la derivación: va en el aviso y queda en la conversación,
+	// para que la bandeja lo muestre (mes 23).
+	var motivos []string
+	for _, r := range rs {
+		if r.Motivo != "" {
+			motivos = append(motivos, r.Motivo)
+		}
+	}
 	if derivada {
-		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null where id = $1`, convID)
+		motivo := strings.Join(motivos, " · ")
+		if noSalio != nil {
+			motivo = "El bot no pudo contestar."
+		}
+		_, err = s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null,
+			bot_motivo = nullif($2, '') where id = $1`, convID, motivo)
 		if err == nil && t.Derivar && tokenDerivacion != "" && texto != "" {
 			// Lo que escribió en la última hora, para que el número humano
 			// lo reciba entero: el «persona» solo perdía el reclamo de antes.
@@ -402,12 +415,6 @@ func (s *Servicio) contestarTurno(ctx context.Context, convID, waJid string, est
 	case derivada:
 		// El porqué va primero: quien atiende sabe qué pidió y por qué no
 		// se cotizó solo, sin abrir la charla.
-		var motivos []string
-		for _, r := range rs {
-			if r.Motivo != "" {
-				motivos = append(motivos, r.Motivo)
-			}
-		}
 		cuerpo := cortarJS(strings.Join(append(motivos, textos...), " · "), 200)
 		if cuerpo == "" {
 			cuerpo = "Mandó un archivo para que lo mire alguien."
@@ -434,7 +441,8 @@ func avisoNoSalio(convID string, e *ErrorDeEnvio) push.Aviso {
 // botNoPudoContestar deriva la conversación y avisa: una respuesta del bot
 // que no salió y ya no se reintenta (rechazo, reintentos agotados, tope).
 func (s *Servicio) botNoPudoContestar(ctx context.Context, convID string, e *ErrorDeEnvio) error {
-	if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null where id = $1`, convID); err != nil {
+	if _, err := s.pool.Exec(ctx, `update whatsapp_conversaciones set bot_estado = 'derivada', bot_derivada_at = now(), bot_fallos = 0, bot_pendiente = null,
+		bot_motivo = 'El bot no pudo contestar.' where id = $1`, convID); err != nil {
 		return err
 	}
 	s.avisar(ctx, avisoNoSalio(convID, e))

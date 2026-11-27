@@ -685,6 +685,8 @@ export interface components {
              * @enum {string}
              */
             botEstado: "activo" | "derivada";
+            /** @description Por qué el bot la pasó a una persona */
+            botMotivo: string | null;
             clienteNombre: string | null;
             clienteTipo: string | null;
             /** @description La lista de precios propia; null si es la general */

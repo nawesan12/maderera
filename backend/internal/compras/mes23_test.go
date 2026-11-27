@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"mjbj/internal/jsmath"
+	"mjbj/internal/ventas/fragmentos"
 )
 
 // Las pruebas de la tanda del mes simulado 23 (compras y pagos).
@@ -538,5 +539,41 @@ func TestDiferenciaPorCantidadNoPasaAlCosto(t *testing.T) {
 		"receiptId": rec, "ajustarCosto": true})
 	if c != 422 || !strings.Contains(b, "no llegó") {
 		t.Errorf("pasar al costo una diferencia de cantidad: %d %s", c, b)
+	}
+}
+
+// M2S2-024, M2S2-040: el cheque de una venta con factura A emitida que
+// espera el CAE es del B con la regla asiento_sin_cae de arranque (su
+// cobro todavía no está en el estudio) y blanco con «transitoria».
+func TestChequeDeUnaFacturaQueEsperaElCAE(t *testing.T) {
+	e := armar(t)
+	ctx := context.Background()
+	var pedido, pago, cheque string
+	_ = e.pool.QueryRow(ctx, `insert into orders (numero, contacto_nombre, origen, estado, total) values ('PED-1015', 'Techos', 'mostrador', 'entregado', 886000) returning id`).Scan(&pedido)
+	_ = e.pool.QueryRow(ctx, `insert into order_payments (order_id, medio, importe) values ($1, 'cheque', 886000) returning id`, pedido).Scan(&pago)
+	if _, err := e.pool.Exec(ctx, `insert into invoices (tipo, punto_venta, numero, receptor_nombre, neto, iva21, iva105, iva27, tributos, total, estado, fecha_emision, order_id)
+		values ('factura_a', 15, 7, 'Techos', 732231.4, 153768.6, 0, 0, 0, 886000, 'emitida', now(), $1)`, pedido); err != nil {
+		t.Fatal(err)
+	}
+	_ = e.pool.QueryRow(ctx, `insert into cheques (sentido, tipo, numero, fecha_pago, importe, estado, circuito, order_payment_id)
+		values ('recibido', 'fisico', '55501234', now(), 886000, 'cartera', 'blanco', $1) returning id`, pago).Scan(&cheque)
+	circuito := func() string {
+		var c string
+		if err := e.pool.QueryRow(ctx, `select `+fragmentos.CircuitoDelCheque("ch")+` from cheques ch where ch.id = $1`, cheque).Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	if c := circuito(); c != "negro" {
+		t.Errorf("con la regla de arranque: %s", c)
+	}
+	var espera bool
+	_ = e.pool.QueryRow(ctx, `select `+fragmentos.ChequeEsperaCAE("ch")+` from cheques ch where ch.id = $1`, cheque).Scan(&espera)
+	if !espera {
+		t.Errorf("no dice que espera el CAE")
+	}
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('asiento_sin_cae', 'transitoria') on conflict (clave) do update set valor = 'transitoria'`)
+	if c := circuito(); c != "blanco" {
+		t.Errorf("con la regla en transitoria: %s", c)
 	}
 }

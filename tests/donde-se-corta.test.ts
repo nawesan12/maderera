@@ -31,6 +31,6 @@ describe("dónde se corta", () => {
     const vista = readFileSync(new URL("../app/(public)/corte/vista.tsx", import.meta.url), "utf8");
     expect(vista).toContain("sucursales.filter((s) => cortaPlacas(s.slug))");
     expect(vista).toContain("{ofrecidas.length > 1 && (");
-    expect(vista).toContain("{dondeSeCortaEn(sucursal)}");
+    expect(vista).toContain("dondeSeCortaEn(sucursal)");
   });
 });

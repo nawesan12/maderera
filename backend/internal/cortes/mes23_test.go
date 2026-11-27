@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"mjbj/internal/reglas"
 )
@@ -245,6 +246,35 @@ func TestElStockDeLaPlacaChica(t *testing.T) {
 	paso(dos, "avanzar", "en-proceso")
 	if n := stock(); n != 9 {
 		t.Errorf("terminado otra vez: %v", n)
+	}
+}
+
+// M2S4-039: el relleno de la placa vendida nunca empeora el plano (no vende
+// menos placas, no usa más, no cobra más pasadas) y en el banco de 200
+// despieces baja las pasadas de alguno. Mide cuánto tarda.
+func TestElRellenoDeLaPlacaVendida(t *testing.T) {
+	no := false
+	mejoraron, pasadasAntes, pasadasDespues := 0, 0, 0
+	inicio := time.Now()
+	for i, d := range despiecesDePrueba(200, 20261127) {
+		sinRelleno := d
+		sinRelleno.Relleno = &no
+		base := ConLaHoja(CalcularPlano(sinRelleno))
+		con := ConLaHoja(CalcularPlano(d))
+		if con.PlacasEnteras < base.PlacasEnteras || len(con.Placas) > len(base.Placas) ||
+			con.PasadasCobrables > base.PasadasCobrables || len(con.NoEntran) > len(base.NoEntran) || con.TotalPiezas != base.TotalPiezas {
+			t.Errorf("despiece %d: el relleno empeoró: %d/%d/%d contra %d/%d/%d", i,
+				con.PlacasEnteras, len(con.Placas), con.PasadasCobrables, base.PlacasEnteras, len(base.Placas), base.PasadasCobrables)
+		}
+		if con.PasadasCobrables < base.PasadasCobrables {
+			mejoraron++
+		}
+		pasadasAntes += base.PasadasCobrables
+		pasadasDespues += con.PasadasCobrables
+	}
+	t.Logf("relleno: %d de 200 cobran menos pasadas (%d → %d) en %v", mejoraron, pasadasAntes, pasadasDespues, time.Since(inicio))
+	if mejoraron == 0 {
+		t.Error("el relleno no mejoró ningún despiece del banco")
 	}
 }
 

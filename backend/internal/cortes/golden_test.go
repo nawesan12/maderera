@@ -71,7 +71,9 @@ type datosGolden struct {
 }
 
 func (d datosGolden) motor() DatosDelPlano {
-	return DatosDelPlano{d.Piezas, d.PlacaLargo, d.PlacaAncho, d.AnchoSierra, d.Fijadas, d.Busqueda, d.Semilla, d.Presupuesto}
+	// Sin el relleno de la placa vendida (MotorRelleno): el golden es el
+	// motor del TS.
+	return DatosDelPlano{d.Piezas, d.PlacaLargo, d.PlacaAncho, d.AnchoSierra, d.Fijadas, d.Busqueda, d.Semilla, d.Presupuesto, ptr(false)}
 }
 
 // placasDelTS son las placas del plano del TS y cuántas venían vacías.

@@ -176,6 +176,9 @@ type DatosDelPlano struct {
 	Busqueda    *bool
 	Semilla     *uint32
 	Presupuesto *float64
+	// Relleno: la pieza de una placa que se cobra por pasadas va al sobrante
+	// de una que se vende entera, si entra (MotorRelleno). Nulo: prendido.
+	Relleno *bool
 }
 
 // SuperficieDeSierra es cuánto material se lleva la sierra en una placa, en
@@ -236,7 +239,7 @@ var criterios = []criterio{
 }
 
 // CalcularPlano arma el plano (calcularPlanoDeCorte).
-func CalcularPlano(d DatosDelPlano) Plano {
+func calcularPlanoBase(d DatosDelPlano) Plano {
 	sierra := float64(AnchoDeSierraMm)
 	if d.AnchoSierra != nil {
 		sierra = *d.AnchoSierra

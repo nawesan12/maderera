@@ -15,7 +15,7 @@ type Corte = { id: string; numero: string; actualizado: string; contenido: strin
 
 let cola: Corte[] = [];
 let enLaMaquina: { id: string; numero: string }[] = [];
-let consultas: string[] = [];
+const consultas: string[] = [];
 let servidor: Server;
 let carpeta: string;
 let unaVuelta: (estado: { escritos: Record<string, unknown> }) => Promise<{ total: number; nuevos: number }>;

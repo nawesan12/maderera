@@ -472,9 +472,10 @@ func PlanoDelMotor(c *Corte) Plano {
 	}
 	sierra := c.AnchoSierraMm
 	busqueda := c.MotorPlano >= 2
+	relleno := c.MotorPlano >= MotorRelleno
 	return CalcularPlano(DatosDelPlano{
 		Piezas: piezas, PlacaLargo: c.Medida.Largo, PlacaAncho: c.Medida.Ancho,
-		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(acomodo), Busqueda: &busqueda, Relleno: &relleno,
 	})
 }
 

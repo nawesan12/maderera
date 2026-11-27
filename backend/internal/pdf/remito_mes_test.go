@@ -85,12 +85,14 @@ func textoDelPDF(t *testing.T, b []byte) string {
 	return string(out)
 }
 
-// Mes simulado 2: el remito de una media placa decía «1 placa».
+// Mes simulado 2: el remito de una media placa decía «1 placa». Se cuenta
+// en medias, como el comprobante (M2S3-096): «1 media» al lado de «— Media
+// placa», sin repetir la palabra.
 func TestUnidadDeLaMediaPlaca(t *testing.T) {
-	if u := UnidadPara("placa", 1, "MDF 18 — media placa, partida a lo largo"); u != "media placa" {
+	if u := UnidadPara("placa", 1, "MDF 18 — media placa, partida a lo largo"); u != "media" {
 		t.Errorf("%q", u)
 	}
-	if u := UnidadPara("placa", 2, "Fenólico 15 — Media placa, partida a lo ancho"); u != "medias placas" {
+	if u := UnidadPara("placa", 2, "Fenólico 15 — Media placa, partida a lo ancho"); u != "medias" {
 		t.Errorf("%q", u)
 	}
 }

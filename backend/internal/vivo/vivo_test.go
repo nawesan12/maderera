@@ -95,7 +95,9 @@ func TestVentasAvisaAlFacturarCobrarYCancelar(t *testing.T) {
 	admin := httptest.NewServer(conRol(c, sqlc.StaffRoleAdmin))
 	defer admin.Close()
 	resultado := make(chan []string, 1)
-	go func() { resultado <- leerEventos(t, admin.URL, 3, 5*time.Second) }()
+	// El pedido nuevo y el cancelado avisan también por «pedidos» (00381):
+	// acá cuentan los de «ventas».
+	go func() { resultado <- leerEventos(t, admin.URL, 5, 5*time.Second) }()
 	time.Sleep(500 * time.Millisecond)
 	var pedido string
 	if err := pool.QueryRow(ctx, `INSERT INTO orders (numero, contacto_nombre, origen, subtotal, total, estado) VALUES ('PED-1', 'Ana', 'mostrador', 1, 1, 'pendiente') RETURNING id`).Scan(&pedido); err != nil {
@@ -110,7 +112,14 @@ func TestVentasAvisaAlFacturarCobrarYCancelar(t *testing.T) {
 			t.Fatalf("%s: %v", sql, err)
 		}
 	}
-	if e := <-resultado; strings.Join(e, ",") != "ventas,ventas,ventas" {
+	var ventas []string
+	todos := <-resultado
+	for _, e := range todos {
+		if e != "pedidos" {
+			ventas = append(ventas, e)
+		}
+	}
+	if e := ventas; strings.Join(e, ",") != "ventas,ventas,ventas" || len(todos) != 5 {
 		t.Errorf("eventos: %v", e)
 	}
 }

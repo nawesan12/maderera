@@ -369,7 +369,7 @@ func TestAgenteYArchivos(t *testing.T) {
 		t.Errorf("sin nada en la máquina: %s", b)
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-proceso' where id = $1`, id)
-	if _, b := pedir(t, http.DefaultClient, "GET", u+"/api/cortes/pendientes", nil, "Authorization", "Bearer "+tokenAgente); !strings.Contains(b, `"enProceso":["`+id+`"]`) || strings.Contains(b, `"numero":"CRT-1"`) {
+	if _, b := pedir(t, http.DefaultClient, "GET", u+"/api/cortes/pendientes", nil, "Authorization", "Bearer "+tokenAgente); !strings.Contains(b, `"enProceso":["`+id+`"]`) || !strings.Contains(b, `"cortes":[]`) {
 		t.Errorf("en la máquina: %s", b)
 	}
 	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-cola' where id = $1`, id)

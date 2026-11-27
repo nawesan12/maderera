@@ -19,7 +19,8 @@ import { fechaHora, formatearMonto, formatearPorcentaje, moneda } from "@/compon
 import { datosDeDevolucion, obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
-import { devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
+import { configuracionFiscalActual, devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
+import { letraQueCorresponde, type CondicionIva } from "@/lib/fiscal/comprobantes";
 import { BotonFacturar } from "./facturar";
 import { CorregirPedido, DevolverPedido } from "./corregir-devolver";
 import { DevolverFacturado } from "./devolver-facturado";
@@ -87,6 +88,26 @@ export default async function FichaPedidoPage({
   const factura = puedeEntrar("/admin/facturacion", usuario.staffRole);
   const datosFactura = factura ? await pedidoParaFacturar(id) : null;
   const facturado = datosFactura?.yaFacturado ?? null;
+  // Lo que saldría, para confirmarlo antes de emitir: la letra (con la regla
+  // del monotributista), a quién y cuánto.
+  const porEmitir =
+    datosFactura && !facturado
+      ? await (async () => {
+          const [emisor, ajustesFiscales] = await Promise.all([configuracionFiscalActual(), ajustesDelSitio()]);
+          const p = datosFactura.pedido;
+          return {
+            letra: letraQueCorresponde(
+              (emisor?.condicionIva ?? "responsable_inscripto") as CondicionIva,
+              (p.clienteCondicionIva ?? "consumidor_final") as CondicionIva,
+              valorDeRegla(ajustesFiscales, "factura_al_monotributista"),
+            ),
+            receptor: p.clienteRazonSocial || p.clienteNombre || p.contactoNombre,
+            cuit: p.clienteCuit,
+            condicion: p.clienteCondicionIva,
+            total: Number(p.total),
+          };
+        })()
+      : null;
   const verCliente = puedeEntrar("/admin/clientes", usuario.staffRole);
   const cancelable =
     puedeEntrar("/admin/presupuestos", usuario.staffRole) &&
@@ -344,6 +365,7 @@ export default async function FichaPedidoPage({
               <BotonFacturar
                 discreto={interno}
                 orderId={pedido.id}
+                porEmitir={porEmitir}
                 comprobante={
                   facturado
                     ? {

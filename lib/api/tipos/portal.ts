@@ -268,6 +268,9 @@ export interface components {
             createdAt: string;
         };
         PedidoSeguido: {
+            /** Format: double */
+            descuento: number;
+            descuentoMotivo: string | null;
             id: string;
             numero: string;
             publicToken: string;
@@ -292,6 +295,7 @@ export interface components {
         PedidoPropio: {
             /** Format: double */
             descuento: number;
+            descuentoMotivo?: string | null;
             /** Format: double */
             debeEnCuenta: number | null;
             /**

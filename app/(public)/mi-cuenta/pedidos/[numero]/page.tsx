@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { cuentasDelPedido } from "@/lib/cuenta/cuentas-del-pedido";
+import { cuentasDelPedido, nombreDelDescuento } from "@/lib/cuenta/cuentas-del-pedido";
 import { enlaceWhatsapp } from "@/lib/whatsapp/enlace";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -414,11 +414,13 @@ export default async function DetallePedidoPage({
                 <dt className="text-muted-foreground">Subtotal</dt>
                 <dd className="tabular">{formatearMonto(cuentas.subtotal)}</dd>
               </div>
+              {/* El descuento con su nombre («10% por transferencia»), como
+                  en la confirmación, y con un solo signo (M2S4-044). */}
               {cuentas.restaElAhorro && (
-                <div className="flex justify-between text-saldo-favor">
-                  <dt>Ahorraste</dt>
+                <div className="flex justify-between gap-3 text-saldo-favor">
+                  <dt>{nombreDelDescuento(pedido.descuentoMotivo)}</dt>
                   <dd className="tabular">
-                    −{formatearMonto(cuentas.ahorro)}
+                    − {formatearMonto(Math.abs(cuentas.ahorro))}
                   </dd>
                 </div>
               )}
@@ -439,9 +441,9 @@ export default async function DetallePedidoPage({
                 </dd>
               </div>
               {cuentas.ahorro > 0 && !cuentas.restaElAhorro && (
-                <div className="flex justify-between text-saldo-favor">
-                  <dt>Ahorraste</dt>
-                  <dd className="tabular">{formatearMonto(cuentas.ahorro)}</dd>
+                <div className="flex justify-between gap-3 text-saldo-favor">
+                  <dt>Incluye {nombreDelDescuento(pedido.descuentoMotivo).toLowerCase()}</dt>
+                  <dd className="tabular">{formatearMonto(Math.abs(cuentas.ahorro))}</dd>
                 </div>
               )}
             </dl>

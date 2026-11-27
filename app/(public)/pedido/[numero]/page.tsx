@@ -150,6 +150,15 @@ async function Seguimiento({
                 <dt className="text-muted-foreground">Subtotal</dt>
                 <dd className="tabular">{formatearPrecio(pedido.subtotal)}</dd>
               </div>
+              {/* El descuento por medio de pago, con su nombre, como en la
+                  confirmación: entre el subtotal y el total no había nada
+                  (mes simulado, M2S4-044). */}
+              {pedido.descuento > 0.005 && (
+                <div className="flex justify-between text-saldo-favor">
+                  <dt>{pedido.descuentoMotivo ?? "Descuento"}</dt>
+                  <dd className="tabular">− {formatearPrecio(pedido.descuento)}</dd>
+                </div>
+              )}
               {Number(pedido.costoEnvio) > 0 && (
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Envío</dt>
@@ -223,6 +232,7 @@ async function Seguimiento({
             }
             banco={banco}
             enVivo={estadoDelCobro?.enVivo ?? false}
+            disponible={estadoDelCobro?.disponible ?? false}
           />
         </div>
 

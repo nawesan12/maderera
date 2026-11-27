@@ -305,7 +305,9 @@ function DibujoDePlaca({
          * calcula contra el alto y el ancho disponibles, y solo se cae la
          * etiqueta cuando de verdad no hay lugar para las dos líneas.
          */
-        const medida = `${p.ancho} × ${p.alto}`;
+        // Largo × ancho, como la lista de abajo y la planilla: el dibujo
+        // rotulaba «540 × 764» un estante de 764 × 540 (mes simulado, M2S1-208).
+        const medida = `${p.largoOriginal} × ${p.anchoOriginal}`;
         // Angosta y alta, la medida va parada: acostada se pisaba con la de
         // la pieza de al lado (H194). Un dígito ocupa ~0,6 del cuerpo.
         const parada = p.alto > p.ancho * 1.4;

@@ -205,7 +205,8 @@ function dibujarPatron(
         tamano: cuerpo,
         fuente: h.negrita,
       });
-      const medida = `${n(rect.ancho)} × ${n(rect.alto)}`;
+      // Largo × ancho, como se pidió (M2S1-208).
+      const medida = `${n(pieza.largoOriginal)} × ${n(pieza.anchoOriginal)}`;
       const cuerpoMedida = Math.min(7, cuerpo * 0.8);
       if (
         altoPt > cuerpo * 2.6 &&

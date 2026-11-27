@@ -255,7 +255,7 @@ function Patron({
       {/* En el teléfono las medidas de adentro del dibujo no se leen: van
           debajo, pieza por pieza (H125). */}
       <p className="hc-leyenda">
-        {[...new Map(patron.dibujo.piezas.map(({ rect, pieza }) => [pieza.indice, `P${pieza.indice + 1} ${mm(rect.ancho)} × ${mm(rect.alto)}`])).values()].join(" · ")}
+        {[...new Map(patron.dibujo.piezas.map(({ rect, pieza }) => [pieza.indice, `P${pieza.indice + 1} ${mm(pieza.largoOriginal)} × ${mm(pieza.anchoOriginal)}`])).values()].join(" · ")}
       </p>
 
       {patron.operaciones.length === 0 ? (
@@ -471,7 +471,9 @@ function Dibujo({
       ))}
 
       {patron.dibujo.piezas.map(({ rect, pieza }, i) => {
-        const medida = `${mm(rect.ancho)} × ${mm(rect.alto)}`;
+        // La medida como se pidió, largo × ancho: «P1 400 × 600» era una
+        // pieza de 600 × 400 dibujada parada (M2S1-208).
+        const medida = `${mm(pieza.largoOriginal)} × ${mm(pieza.anchoOriginal)}`;
         const cuerpoP = Math.min(60 * escala, rect.alto * 0.42, rect.ancho * 0.3);
         // Una pieza angosta y alta lleva la medida parada, debajo de su
         // número: acostada se pisaba con la de al lado (H194). Un dígito

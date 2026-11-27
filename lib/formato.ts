@@ -412,8 +412,11 @@ export function cantidadConUnidad(cantidad: number, unidad: string | null, descr
   // cantidad sola no se entendía (simulación del mes, H145).
   if (unidad === "pasada") return `${n} ${cantidad === 1 ? "corte" : "cortes"}`;
   // La media placa se cuenta por medias: «1 media», no «1 placa» al lado de
-  // «— Media placa, al largo» (mes simulado, M2S3-096).
-  if (unidad === "placa" && MEDIA_PLACA.test(descripcion)) return `${n} ${cantidad === 1 ? "media" : "medias"}`;
+  // «— Media placa, al largo» (mes simulado, M2S3-096). unidadDeVenta ya la
+  // pasó a «media_placa»; como UnidadPara en Go.
+  if (unidad === "media_placa" || (unidad === "placa" && MEDIA_PLACA.test(descripcion))) {
+    return `${n} ${cantidad === 1 ? "media" : "medias"}`;
+  }
   const u = formatearUnidad(unidad);
   return `${n} ${cantidad === 1 ? u : unidadEnPlural(u)}`;
 }

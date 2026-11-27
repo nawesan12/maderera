@@ -65,6 +65,12 @@ type PrecioDeLaCopia struct {
 	PriceListID string  `json:"priceListId"`
 	VariantID   string  `json:"variantId"`
 	Precio      float64 `json:"precio"`
+	// PrecioAnterior y OfertaHasta son los de una oferta vigente, para
+	// tachar el de antes también con la copia local (M2S2-030): el buscador
+	// saca el precio de la copia aunque haya conexión, y sin esto la oferta
+	// no se veía en el mostrador.
+	PrecioAnterior *float64 `json:"precioAnterior,omitempty"`
+	OfertaHasta    *string  `json:"ofertaHasta,omitempty"`
 }
 
 // StockDeLaCopia es lo que hay de una variante en una sucursal.
@@ -195,7 +201,9 @@ func (s *Servicio) Copia(ctx context.Context, desde *time.Time) (CopiaDelMostrad
 			args = append(args, *desde)
 		}
 		filas, err := s.pool.Query(ctx, `
-			SELECT price_list_id, variant_id, price FROM price_list_items
+			SELECT price_list_id, variant_id, price,
+			       CASE WHEN oferta_hasta > now() THEN precio_anterior END, CASE WHEN oferta_hasta > now() THEN oferta_hasta END
+			FROM price_list_items
 			WHERE price_list_id = ANY($1::uuid[])`+cambiados, args...)
 		if err != nil {
 			return c, err
@@ -203,11 +211,18 @@ func (s *Servicio) Copia(ctx context.Context, desde *time.Time) (CopiaDelMostrad
 		for filas.Next() {
 			var p PrecioDeLaCopia
 			var precio jsmath.Num
-			if err := filas.Scan(&p.PriceListID, &p.VariantID, &precio); err != nil {
+			var anterior *jsmath.Num
+			var hasta *time.Time
+			if err := filas.Scan(&p.PriceListID, &p.VariantID, &precio, &anterior, &hasta); err != nil {
 				filas.Close()
 				return c, err
 			}
 			p.Precio = precio.F()
+			if anterior != nil && hasta != nil {
+				a := anterior.F()
+				h := FechaJS(*hasta)
+				p.PrecioAnterior, p.OfertaHasta = &a, &h
+			}
 			c.Precios = append(c.Precios, p)
 		}
 		filas.Close()

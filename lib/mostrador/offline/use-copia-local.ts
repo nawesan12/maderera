@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { buscarVariantes, buscarClientesLocal } from "./busqueda-local";
 import type { ClienteLocal, VarianteLocal } from "./busqueda-local";
-import { precioLocal, type PreciosLocales } from "./precio-local";
+import { anteriorLocal, precioLocal, type OfertasLocales, type PreciosLocales } from "./precio-local";
 import {
   cargarIndices,
   sincronizarCatalogo,
@@ -82,6 +82,8 @@ export interface ResultadoLocal {
    */
   formaDeVenta?: "entera" | "entera_o_media" | "metro_cuadrado";
   precioMediaPct?: number;
+  /** El de antes de una oferta vigente, para tacharlo. */
+  precioAnterior?: number | null;
 }
 
 /*
@@ -108,12 +110,14 @@ export function useCopiaLocal(branchId: string): CopiaLista {
     variantes: VarianteLocal[];
     clientes: ClienteLocal[];
     precios: PreciosLocales;
+    ofertas: OfertasLocales;
     stock: Map<string, number>;
     listaGeneralId: string | null;
   }>({
     variantes: [],
     clientes: [],
     precios: new Map(),
+    ofertas: new Map(),
     stock: new Map(),
     listaGeneralId: null,
   });
@@ -259,7 +263,8 @@ export function useCopiaLocal(branchId: string): CopiaLista {
 
   const buscar = useCallback(
     (texto: string, _customerId: string | null, listaDelCliente: string | null) => {
-      const { variantes, precios, stock, listaGeneralId } = indices.current;
+      const { variantes, precios, ofertas, stock, listaGeneralId } = indices.current;
+      const ahora = Date.now();
       const apartado = new Map<string, number>();
       for (const a of apartados.current) {
         apartado.set(a.variantId, (apartado.get(a.variantId) ?? 0) + a.cantidad);
@@ -272,6 +277,7 @@ export function useCopiaLocal(branchId: string): CopiaLista {
         medida: v.medida,
         unidad: v.unidad,
         precio: precioLocal(precios, v.variantId, listaDelCliente, listaGeneralId),
+        precioAnterior: anteriorLocal(precios, ofertas, v.variantId, listaDelCliente, listaGeneralId, ahora),
         stock: Math.max(
           (stock.get(`${branchId}:${v.variantId}`) ?? 0) - (apartado.get(v.variantId) ?? 0),
           0,

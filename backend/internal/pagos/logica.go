@@ -244,6 +244,9 @@ type PagoRemoto struct {
 	Comision *float64        `json:"comision,omitempty"`
 	Neto     *float64        `json:"neto,omitempty"`
 	Crudo    json.RawMessage `json:"crudo"`
+	// ConciliadoPor es quien acreditó a mano una transferencia (Conciliar):
+	// firma el renglón del historial del pedido. No viene de afuera.
+	ConciliadoPor *string `json:"-"`
 }
 
 func cadena(v any) (string, bool) {

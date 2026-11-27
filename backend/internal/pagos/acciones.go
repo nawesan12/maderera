@@ -373,6 +373,7 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 		remoto.MotivoRechazo = &m
 	}
 	remoto.Crudo, _ = jsonDe(map[string]any{"conciliadoPor": ses.UserID, "decision": decision})
+	remoto.ConciliadoPor = &ses.UserID
 	r, err := s.Acreditar(ctx, pagoID, remoto)
 	if err != nil {
 		return Resultado{}, err

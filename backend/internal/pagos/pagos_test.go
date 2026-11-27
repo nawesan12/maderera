@@ -716,3 +716,23 @@ func TestComprobanteEsPrivado(t *testing.T) {
 		t.Fatalf("listado: %s", b)
 	}
 }
+
+// Mes simulado 2 (M2S2-035, M2S2-120): acreditar la transferencia de un
+// pedido web deja en su historial el cobro, con quién lo acreditó.
+func TestLaTransferenciaDelPedidoQuedaEnSuHistorial(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	pedido, _ := e.pedido(t, "PED-1051")
+	pago := e.id(t, `insert into payments (order_id, tipo, proveedor, medio, monto, estado) values ($1, 'pedido', 'transferencia', 'transferencia', 204732, 'en_revision') returning id`, pedido)
+	if _, err := e.ses.AltaDeStaff(ctx, "duena@prueba.test", "una clave larga", "Sim Dueña", sqlc.StaffRoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	usuario := e.texto(t, `select id from "user" where email = 'duena@prueba.test'`)
+	if _, err := e.s.Conciliar(ctx, &auth.Sesion{UserID: usuario}, pago, "aprobar", nil); err != nil {
+		t.Fatal(err)
+	}
+	nota := e.texto(t, `select nota || ' · ' || coalesce(created_by_user_id, '') from order_status_history where order_id = $1`, pedido)
+	if !strings.HasPrefix(nota, "Cobro $") || !strings.Contains(nota, "Transferencia acreditada · "+usuario) {
+		t.Fatalf("historial: %q", nota)
+	}
+}

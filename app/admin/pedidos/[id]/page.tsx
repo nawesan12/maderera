@@ -163,7 +163,10 @@ export default async function FichaPedidoPage({
   // por la factura y su nota). Corregir, además, sin nada cobrado y fuera
   // del mostrador (la venta del mostrador se anula desde ahí).
   const manejaPlata = Boolean(usuario.staffRole && MANEJAN_PLATA.includes(usuario.staffRole));
-  const devolvible = manejaPlata && !cancelado && !pedido.facturado;
+  // Devuelto entero, no queda nada para devolver ni anular: seguía
+  // ofreciendo las dos cosas con el pedido en $ 0 (mes 23).
+  const quedaAlgo = pedido.items.some((i) => Number(i.cantidad) - (i.devuelto ?? 0) > 0.0001);
+  const devolvible = manejaPlata && !cancelado && !pedido.facturado && quedaAlgo;
   // Facturado: la devolución sale del pedido con su nota de crédito mientras
   // no saque plata (H279); lo cobrado vuelve desde la factura.
   const devolucionFacturada =
@@ -365,9 +368,12 @@ export default async function FichaPedidoPage({
                 numero={pedido.numero}
                 sucursal={sucursalSlug}
                 abiertoAlEntrar={falto === "1"}
-                renglones={pedido.items.flatMap((i) =>
-                  i.variantId ? [{ variantId: i.variantId, descripcion: i.descripcion, cantidad: Number(i.cantidad) }] : [],
-                )}
+                // Lo que se llevó: sin lo que ya devolvió («se llevó 6»
+                // con 2 devueltos, mes 23).
+                renglones={pedido.items.flatMap((i) => {
+                  const llevo = Math.round((Number(i.cantidad) - (i.devuelto ?? 0)) * 1000) / 1000;
+                  return i.variantId && llevo > 0 ? [{ variantId: i.variantId, descripcion: i.descripcion, cantidad: llevo }] : [];
+                })}
               />
             )}
             <a

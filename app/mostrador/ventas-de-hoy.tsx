@@ -133,6 +133,9 @@ export function VentasDeHoy({
         {ventas.map((v) => {
           const anulada = v.estado === "cancelado";
           const devuelto = v.devuelto ?? 0;
+          // Devuelta entera ($ 0): no queda nada que devolver, reponer ni
+          // anular (mes 23).
+          const sinNada = !anulada && devuelto > 0 && v.total - devuelto < 0.005;
           return (
             <li key={v.id} className="flex items-center gap-3 py-2.5">
               <span className="min-w-0 flex-1">
@@ -165,7 +168,7 @@ export function VentasDeHoy({
                   <span className="tabular block text-sm text-muted-foreground line-through">{formatearImporte(v.total)}</span>
                 )}
                 <span
-                  className={`tabular block font-semibold ${anulada ? "text-muted-foreground line-through" : ""}`}
+                  className={`tabular block font-semibold ${anulada ? "text-muted-foreground line-through" : sinNada ? "text-muted-foreground" : ""}`}
                 >
                   {formatearImporte(devuelto > 0 && !anulada ? v.total - devuelto : v.total)}
                 </span>
@@ -182,7 +185,7 @@ export function VentasDeHoy({
                   <Printer className="h-4 w-4" />
                 </Link>
 
-                {!anulada ? (
+                {!anulada && !sinNada ? (
                   <>
                     {/* Una parte, con o sin factura (M3S2-060). */}
                     <button

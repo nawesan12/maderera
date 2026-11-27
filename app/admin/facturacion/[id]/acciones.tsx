@@ -11,7 +11,7 @@ import {
   type EstadoFactura,
 } from "../actions";
 import { CobroMultimedio } from "@/components/cobros/cobro-multimedio";
-import { importeParaElCampo } from "@/lib/formato";
+import { formatearCuit, importeParaElCampo } from "@/lib/formato";
 
 const inicial: EstadoFactura = {};
 
@@ -145,7 +145,7 @@ export function CorregirReceptor({
         CUIT o DNI
         <input
           name="receptorCuit"
-          defaultValue={cuit ?? ""}
+          defaultValue={cuit ? formatearCuit(cuit) : ""}
           maxLength={20}
           inputMode="numeric"
           className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-base"

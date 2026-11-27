@@ -98,13 +98,6 @@ func AsientoDeAjusteDeProveedor(fecha time.Time, proveedor, detalle string, mont
 	return asiento(fecha, concepto, []RenglonDeAsiento{renglon(Cuentas.AjustesConProveedores, m, 0), renglon(Cuentas.Proveedores, 0, m)})
 }
 
-// chequeSinOrigen es, sobre la fila de cheques `c`, uno recibido que no
-// entró con un cliente, un recibo, una venta ni un movimiento de cuenta.
-func chequeSinOrigen(c string) string {
-	return strings.ReplaceAll(`c.sentido = 'recibido' AND c.customer_id IS NULL AND c.receipt_id IS NULL AND c.order_payment_id IS NULL
-	  AND NOT EXISTS (SELECT 1 FROM account_movements sm WHERE sm.cheque_id = c.id)`, "c.", c+".")
-}
-
 // CuentaDeRetencionSufrida es la cuenta del crédito por una retención que
 // nos practicaron, según el impuesto ("" o desconocido: 1.1.06).
 func CuentaDeRetencionSufrida(impuesto string) string {

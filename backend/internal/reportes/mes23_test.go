@@ -5,9 +5,10 @@ import (
 	"testing"
 )
 
-// M3S2-012: un cheque cargado sin cliente nunca entró a Valores a
-// depositar: su acreditación no se asienta (descuadraba la cuenta) y el
-// cierre lo marca como pendiente.
+// M3S2-012 y M3S2-004: un cheque cargado sin cliente entra a Valores a
+// depositar contra Movimientos a imputar (asientosAImputar), así su
+// acreditación cancela algo que existe y la cuenta cuadra; el cierre lo
+// marca como pendiente de imputar.
 func TestChequeSinOrigenNoSeAsienta(t *testing.T) {
 	e := armar(t)
 	ch := e.id(t, `insert into cheques (sentido, tipo, numero, banco, fecha_pago, importe, estado, created_at)
@@ -25,7 +26,7 @@ func TestChequeSinOrigenNoSeAsienta(t *testing.T) {
 	}
 	hay := false
 	for _, x := range pendientes {
-		hay = hay || x.Clave == "cheques-sin-origen"
+		hay = hay || x.Clave == "a-imputar"
 	}
 	if !hay {
 		t.Errorf("el cierre no lo marca: %+v", pendientes)

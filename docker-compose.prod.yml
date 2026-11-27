@@ -389,11 +389,18 @@ services:
     # recibir de otros servidores, 465 y 587 para que las personas manden, 993
     # para leer. El panel de administración (8080) solo en la máquina: se
     # entra con un túnel SSH.
+    #
+    # **Con CORREO_ESCUCHA="127.0.0.1" no se abre nada a internet**: Docker
+    # publica sus puertos por encima de `ufw`, así que no alcanza con no
+    # abrirlos en el cortafuegos. Sirve para tener el servidor instalado y
+    # probado antes del cambio de MX; ese día se borra la variable de
+    # `.env.produccion` y se recrea el contenedor (docs/SERVIDOR-PROPIO.md,
+    # «Montarlo antes de mudar el dominio»).
     ports:
-      - "25:25"
-      - "465:465"
-      - "587:587"
-      - "993:993"
+      - "${CORREO_ESCUCHA:-0.0.0.0}:25:25"
+      - "${CORREO_ESCUCHA:-0.0.0.0}:465:465"
+      - "${CORREO_ESCUCHA:-0.0.0.0}:587:587"
+      - "${CORREO_ESCUCHA:-0.0.0.0}:993:993"
       - "127.0.0.1:8081:8080"
     volumes:
       - correo_etc:/etc/stalwart

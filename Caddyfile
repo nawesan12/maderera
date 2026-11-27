@@ -28,6 +28,22 @@
 		client_ip_headers CF-Connecting-IP
 		trusted_proxies_strict
 	}
+	# Los nombres del webmail y de autoconfig sacan su certificado recién
+	# cuando llega la primera conexión que los pide (ver más abajo), y solo si
+	# este permiso dice que sí: sin él, cualquiera que apunte un nombre a esta
+	# IP haría que Caddy pida certificados a su nombre.
+	on_demand_tls {
+		ask http://127.0.0.1:5555/permitido
+	}
+}
+
+# El permiso de arriba: 200 para los nombres del correo, 404 para el resto.
+# Solo lo ve Caddy (escucha en el 127.0.0.1 del contenedor, que no se publica).
+http://127.0.0.1:5555 {
+	bind 127.0.0.1
+	@correo query domain=correo.{$CORREO_DOMINIO} domain=autoconfig.{$CORREO_DOMINIO}
+	respond @correo 200
+	respond 404
 }
 
 # Lo que todos los `reverse_proxy` le pasan a quien atiende: la IP del
@@ -69,7 +85,14 @@
 # viejo hasta vencerse. Mejor que falle a la vista, en el registro de Caddy.
 #
 # Si el correo propio no está encendido y el registro DNS de `mail` no existe,
-# Caddy reintenta en el registro sin afectar al sitio.
+# Caddy reintenta en el registro sin afectar al sitio: cada vez más espaciado
+# (hasta una vez cada 6 horas, contra el entorno de prueba de Let's Encrypt
+# después del primer fallo) y deja de intentar a los 30 días. Si el registro A
+# de `mail` se carga después, `docker compose restart web` lo pide al toque.
+#
+# Este va sin `on_demand`, a diferencia de los dos de abajo: lo lee Stalwart
+# del disco y nadie entra por HTTPS a `mail.`, así que un certificado que se
+# renovara solo al conectarse alguien vencería sin que nadie lo note.
 mail.{$CORREO_DOMINIO} {
 	tls {
 		ca https://acme-v02.api.letsencrypt.org/directory
@@ -79,7 +102,15 @@ mail.{$CORREO_DOMINIO} {
 
 # El webmail (servicio `correo-web`, el binario de Go; solo con el perfil
 # `correo`). Las cabeceras de seguridad y la CSP las pone el propio servicio.
+#
+# **El certificado se pide con la primera visita** (`on_demand`), no al
+# arrancar: así Caddy no le pide a Let's Encrypt un nombre que todavía no
+# apunta acá, y el día que se carga el registro A el webmail anda sin tocar
+# nada más. Se renueva igual, con las visitas.
 correo.{$CORREO_DOMINIO} {
+	tls {
+		on_demand
+	}
 	log {
 		output file /var/log/caddy/webmail.log {
 			roll_size 10MiB
@@ -110,7 +141,11 @@ correo.{$CORREO_DOMINIO} {
 # La configuración automática de Thunderbird (y de otros que leen el mismo
 # formato): se pone la dirección y la clave, y el programa encuentra solo el
 # servidor, los puertos y el cifrado. Necesita el registro DNS `autoconfig`.
+# El certificado, con la primera visita, como el del webmail.
 autoconfig.{$CORREO_DOMINIO} {
+	tls {
+		on_demand
+	}
 	handle /mail/config-v1.1.xml {
 		header Content-Type "application/xml; charset=utf-8"
 		respond <<XML

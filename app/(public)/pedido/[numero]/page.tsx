@@ -21,6 +21,7 @@ import { cobroDelPedido, datosParaTransferir } from "@/lib/dal/pagos";
 import { BloquePago } from "@/components/pagos/bloque-pago";
 import { formatearPrecio } from "@/lib/formato";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 
 /*
  * El título se resuelve consultando, y no como constante, porque esta ruta cae
@@ -211,8 +212,10 @@ async function Seguimiento({
         </div>
 
         {/* El pago es lo primero que hay que resolver después de confirmar, así
-            que va entero y ancho, no como una tarjeta más de la grilla. */}
-        <div className="mt-4">
+            que va entero y ancho, no como una tarjeta más de la grilla. El
+            WhatsApp flotante se va mientras se ve: tapaba el borde de la
+            tarjeta en el teléfono (M2S2-142). */}
+        <ZonaSinFlotante soloEnCelular className="mt-4">
           <BloquePago
             numero={pedido.numero}
             token={pedido.publicToken}
@@ -234,7 +237,7 @@ async function Seguimiento({
             enVivo={estadoDelCobro?.enVivo ?? false}
             disponible={estadoDelCobro?.disponible ?? false}
           />
-        </div>
+        </ZonaSinFlotante>
 
         {/* Con sesión, el pedido ya vive en el portal y se puede seguir desde
             ahí. Sin sesión, crear la cuenta es justo lo que hace que este

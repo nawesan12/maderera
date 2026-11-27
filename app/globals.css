@@ -1018,8 +1018,17 @@ aside.textura *::-webkit-scrollbar-thumb:hover {
   vertical-align: top;
 }
 
-.comprobante-hoja .der {
+.comprobante-hoja .der,
+/* El encabezado alineado como su columna: el `text-align: left` de los th
+   le ganaba a `.der` y los importes de la antigüedad de la deuda caían entre
+   dos títulos (mes simulado, M2S2-131). */
+.comprobante-hoja .detalle .der {
   text-align: right;
+}
+
+/* Las columnas de la antigüedad, del mismo ancho. */
+.comprobante-hoja .detalle.tramos {
+  table-layout: fixed;
 }
 
 .comprobante-hoja .mono {

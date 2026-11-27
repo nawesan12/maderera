@@ -204,9 +204,13 @@ export default async function ReposicionPage({
           ))}
         </div>
 
-        <div className="w-full sm:w-auto">
-          <SelectorDeRubro actual={rubro} grupos={gruposDeRubros} />
-        </div>
+        {/* Sin rubros cargados el selector traía solo «Todos los rubros»:
+            un control que no filtra nada (mes 23, M2S4-034). */}
+        {gruposDeRubros.some((g) => g.rubros.length > 0) && (
+          <div className="w-full sm:w-auto">
+            <SelectorDeRubro actual={rubro} grupos={gruposDeRubros} />
+          </div>
+        )}
       </div>
 
       {/* Lo vendido por categoría, como barras. A mano y sin librería, como
@@ -326,14 +330,18 @@ function unidadDe(f: FilaDeReposicion, n: number): string {
   return unidadConcordada(n, f.unidad, `${f.producto} ${f.medida}`);
 }
 
-/** Lo que una sucursal compra y lo que trae de la otra, en chico debajo de su stock. */
-function Movimiento({ comprar, traer, desde }: { comprar: number; traer: number; desde: string }) {
+/**
+ * Lo que una sucursal compra y lo que trae de la otra, en chico debajo de su
+ * stock, con su unidad: «traer 12» no decía si eran latas o litros (mes 23,
+ * M2S2-086).
+ */
+function Movimiento({ f, comprar, traer, desde }: { f: FilaDeReposicion; comprar: number; traer: number; desde: string }) {
   if (comprar <= 0 && traer <= 0) return null;
   return (
     <span className="block text-sm font-medium">
-      {comprar > 0 && <span className="text-foreground">comprar {cantidad(comprar)}</span>}
+      {comprar > 0 && <span className="text-foreground">comprar {cantidad(comprar)} {unidadDe(f, comprar)}</span>}
       {comprar > 0 && traer > 0 && " · "}
-      {traer > 0 && <span className="estado-espera">traer {cantidad(traer)} {desde}</span>}
+      {traer > 0 && <span className="estado-espera">traer {cantidad(traer)} {unidadDe(f, traer)} {desde}</span>}
     </span>
   );
 }
@@ -393,7 +401,7 @@ function Tabla({
                     <span className="font-medium">
                       <Stock n={f.disponibleCentral} />
                     </span>
-                    {conSugerido && <Movimiento comprar={f.comprarCentral} traer={f.trasladoACentral} desde="del Aserradero" />}
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarCentral} traer={f.trasladoACentral} desde="del Aserradero" />}
                   </p>
                 )}
                 {verAserradero && (
@@ -402,7 +410,7 @@ function Tabla({
                     <span className="font-medium">
                       <Stock n={f.disponibleAserradero} />
                     </span>
-                    {conSugerido && <Movimiento comprar={f.comprarAserradero} traer={f.trasladoAAserradero} desde="de Central" />}
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarAserradero} traer={f.trasladoAAserradero} desde="de Central" />}
                   </p>
                 )}
               </div>
@@ -453,13 +461,13 @@ function Tabla({
                 {verCentral && (
                   <td className="px-4 py-3 text-right text-base">
                     <Stock n={f.disponibleCentral} />
-                    {conSugerido && <Movimiento comprar={f.comprarCentral} traer={f.trasladoACentral} desde="del Aserradero" />}
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarCentral} traer={f.trasladoACentral} desde="del Aserradero" />}
                   </td>
                 )}
                 {verAserradero && (
                   <td className="px-4 py-3 text-right text-base">
                     <Stock n={f.disponibleAserradero} />
-                    {conSugerido && <Movimiento comprar={f.comprarAserradero} traer={f.trasladoAAserradero} desde="de Central" />}
+                    {conSugerido && <Movimiento f={f} comprar={f.comprarAserradero} traer={f.trasladoAAserradero} desde="de Central" />}
                   </td>
                 )}
                 <td className="tabular px-4 py-3 text-right text-base">{cantidad(f.vendido)}</td>

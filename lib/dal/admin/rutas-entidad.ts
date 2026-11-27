@@ -65,6 +65,12 @@ const LISTADOS: Record<string, string> = {
   whatsapp: "/admin/whatsapp",
   documento: "/admin/documentacion",
   usuario: "/admin/personal",
+  // El saldo del banco se carga en Cobros; la devolución vive en su pedido
+  // (la bitácora guarda el id de la devolución, no el del pedido); el
+  // trabajo automático, en Sistema.
+  banco: "/admin/pagos",
+  devolucion: "/admin/pedidos",
+  trabajo: "/admin/sistema",
 };
 
 export function rutaDeEntidad(

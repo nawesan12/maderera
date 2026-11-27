@@ -217,6 +217,10 @@ export function Cobro({
    */
   const precioProfesional = listaDeContado;
 
+  /** La columna de «Cómo paga» no tiene nada: el pago partido lo lleva abajo. */
+  const izquierdaVacia =
+    partes !== null && medio !== "cuenta_corriente" && !(onALista && (precioProfesional || aLista));
+
   /*
    * Lo que mide el pie fijo, para que la página deje ese lugar abajo. Con un
    * `pb-80` fijo, el aviso y el papel de la venta lo hacían más alto y el pie
@@ -315,6 +319,11 @@ export function Cobro({
           que es lo último que se tipea antes de cobrar.
         */}
         <div className="mt-5 grid gap-x-4 gap-y-5 xl:grid-cols-2">
+          {/* Con el pago partido «Cómo paga» se va a los renglones de abajo y
+              la columna quedaba vacía, un hueco al lado del papel y el
+              descuento (M2S2-128): sin nada que mostrar no se arma, y el
+              papel y el descuento se reparten el ancho. */}
+          {!izquierdaVacia && (
           <div className="min-w-0">
             {/* En cuenta corriente no se elige medio: el medio *es* la cuenta
                 corriente, y tenerlo dos veces en pantalla era el control
@@ -450,8 +459,10 @@ export function Cobro({
             )}
 
           </div>
+          )}
 
-          <div className="min-w-0">
+          <div className={izquierdaVacia ? "min-w-0 gap-x-4 xl:col-span-2 xl:grid xl:grid-cols-2" : "min-w-0"}>
+            <div className="min-w-0">
             {/* Antes que el descuento, que es de cada tantas ventas: el papel
                 se elige en todas (H276). */}
             <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -500,8 +511,10 @@ export function Cobro({
                 obligatorio={pideDocumento}
               />
             )}
+            </div>
 
-            <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className={`min-w-0 ${izquierdaVacia ? "mt-4 xl:mt-0" : "mt-4"}`}>
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Descuento
             </p>
             <div className="mt-2.5 flex gap-2">
@@ -539,6 +552,7 @@ export function Cobro({
               placeholder="Motivo del descuento"
               className="mt-2 h-12 w-full rounded-lg border border-linea bg-background px-3 text-base"
             />
+            </div>
 
           </div>
         </div>

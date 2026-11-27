@@ -499,20 +499,30 @@ func (s *Servicio) Rechazar(ctx context.Context, ses *auth.Sesion, id, motivo st
 // alguien del panel). Una pendiente por documento. Devuelve el mensaje.
 func (s *Servicio) Solicitar(ctx context.Context, ses *auth.Sesion, f Solicitud) (string, error) {
 	numero := cuit.SoloDigitos(f.DocumentoNumero)
-	var pendiente bool
-	if err := s.pool.QueryRow(ctx, `select exists(select 1 from professional_applications where documento_numero = $1 and estado = 'pendiente')`,
-		numero).Scan(&pendiente); err != nil {
-		return "", err
-	}
-	if pendiente {
-		return "Ya tenemos tu solicitud. Un asesor la está revisando.", nil
-	}
 	var cu, userID *string
 	if f.DocumentoTipo == "cuit" {
 		cu = &numero
 	}
 	if ses != nil {
 		userID = &ses.UserID
+	}
+	// Una pendiente por documento. Si es de quien la manda (la misma cuenta
+	// o el mismo correo), ya está; si es de otro, se dice: devolvía «Ya
+	// tenemos tu solicitud» de una ajena y el formulario volvía al principio
+	// sin que nada cambiara (mes 23).
+	var pendiente, propia bool
+	if err := s.pool.QueryRow(ctx, `select count(*) > 0,
+		coalesce(bool_or(lower(email) = lower($2) or (user_id is not null and user_id = $3)), false)
+		from professional_applications where documento_numero = $1 and estado = 'pendiente'`,
+		numero, f.Email, userID).Scan(&pendiente, &propia); err != nil {
+		return "", err
+	}
+	if pendiente && propia {
+		return "Ya tenemos tu solicitud. Un asesor la está revisando.", nil
+	}
+	if pendiente {
+		campo := "documentoNumero"
+		return "", plataforma.Invalido(map[string]string{campo: "Ese documento ya tiene una solicitud en revisión. Si es tuya, escribinos por WhatsApp."})
 	}
 	var id string
 	if err := s.pool.QueryRow(ctx, `insert into professional_applications (nombre, razon_social, documento_tipo, documento_numero, cuit,

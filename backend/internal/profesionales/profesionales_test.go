@@ -235,6 +235,15 @@ func TestSolicitudYAprobacion(t *testing.T) {
 	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", form); st != 200 || !strings.HasPrefix(p["ok"].(string), "Ya tenemos tu solicitud") {
 		t.Fatalf("la segunda: %d %v", st, p)
 	}
+	// Mes 23: con el mismo CUIT y otro correo no es «la tuya»: se dice.
+	otra := map[string]any{}
+	for k, v := range form {
+		otra[k] = v
+	}
+	otra["email"] = "otro@prueba.test"
+	if st, p := pedir(t, anon, "POST", e.srv.URL+"/api/v1/profesionales/solicitud", otra); st != 422 || !strings.HasPrefix(primerError(p), "Ese documento ya tiene una solicitud en revisión") {
+		t.Fatalf("de otro: %d %v", st, p)
+	}
 	if got := e.buzon.asuntos(); got != "ana@prueba.test: Recibimos tu solicitud de acceso profesional" {
 		t.Fatalf("acuse: %s", got)
 	}

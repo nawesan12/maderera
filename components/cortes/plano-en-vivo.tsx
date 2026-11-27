@@ -98,8 +98,9 @@ function Numeros({
   precioPorPasada: number | null;
 }) {
   const n = plano.placas.length;
-  const enteras = quien.todasDelCliente ? n : plano.placasEnteras;
-  const pasadas = quien.todasDelCliente ? 0 : plano.pasadasCobrables;
+  // La placa que trae el cliente no se vende: se cobran todas las pasadas.
+  const enteras = quien.placaDelCliente ? 0 : quien.todasDelCliente ? n : plano.placasEnteras;
+  const pasadas = quien.placaDelCliente ? plano.pasadas : quien.todasDelCliente ? 0 : plano.pasadasCobrables;
   const placas = quien.media ? (n === 1 ? "media placa" : "medias placas") : n === 1 ? "placa" : "placas";
   const seVenden = quien.media
     ? enteras === 1 ? "media se vende" : "medias se venden"

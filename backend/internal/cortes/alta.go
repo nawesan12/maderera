@@ -446,8 +446,12 @@ func (s *Servicio) planoDelAlta(ctx context.Context, f FormCorte, piezas []pieza
 		paraElPlano[i] = PiezaAcortar{LargoMm: float64(p.largo), AnchoMm: float64(p.ancho), Cantidad: float64(p.cantidad),
 			RespetaVeta: float64(p.veta), Etiqueta: p.etiqueta, CantoLargo: float64(p.cantoLargo), CantoAncho: float64(p.cantoAncho)}
 	}
-	return PlanoConLaHoja(DatosDelPlano{Piezas: paraElPlano, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho,
-		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(f.AcomodoManual)}), nil
+	plano := PlanoConLaHoja(DatosDelPlano{Piezas: paraElPlano, PlacaLargo: medida.Largo, PlacaAncho: medida.Ancho,
+		AnchoSierra: &sierra, Fijadas: LeerAcomodoManual(f.AcomodoManual)})
+	if f.VariantID == "" {
+		plano = ConPlacaDelCliente(plano)
+	}
+	return plano, nil
 }
 
 // placaDelPedido avisa si el corte de un pedido va en una placa que el pedido

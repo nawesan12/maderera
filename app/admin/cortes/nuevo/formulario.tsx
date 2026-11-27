@@ -276,6 +276,13 @@ export function FormularioCorte({
   /** Las piezas que alguien mandó a mano a una placa. */
   const [fijadas, setFijadas] = useState<PiezaFijada[]>(corregir?.fijadas ?? []);
   const [sinCargo, setSinCargo] = useState(corregir?.sinCargo ?? false);
+  /**
+   * La placa elegida del catálogo la trae el cliente: el corte va sin
+   * variante, cobra solo las pasadas y lo que sobra es suyo. El corte de la
+   * consulta o del teléfono daba por hecho que era de la casa (mes simulado,
+   * M2S1-024 y M2S3-008).
+   */
+  const [laTraeElCliente, setLaTraeElCliente] = useState(false);
   /** Confirmado que el corte del pedido va en otra placa (H280). */
   const [otraPlaca, setOtraPlaca] = useState(false);
   const placasDelPedidoLista = desdePedido?.placas ?? [];
@@ -354,7 +361,7 @@ export function FormularioCorte({
     placaAncho: medidaPlaca.ancho,
     anchoSierra,
     fijadas,
-    ...(placa ? { variantId: placa.variantId } : {}),
+    ...(placa && !laTraeElCliente ? { variantId: placa.variantId } : {}),
     ...(cliente ? { customerId: cliente.id } : {}),
   });
 
@@ -443,7 +450,7 @@ export function FormularioCorte({
         <input type="hidden" name="consultaGrupo" value={desdeConsulta.grupo} />
       )}
       {cliente && <input type="hidden" name="customerId" value={cliente.id} />}
-      {placa && (
+      {placa && !laTraeElCliente && (
         <input type="hidden" name="variantId" value={placa.variantId} />
       )}
       {/* El acomodo corregido a mano viaja con el formulario: sin esto, mover
@@ -532,6 +539,16 @@ export function FormularioCorte({
               }}
             />
           </div>
+
+          {placa && !desdePedido && (
+            <label className="ficha-interruptor flex cursor-pointer items-center gap-3 rounded-xl p-3.5 md:col-span-2">
+              <span className="ficha-icono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                <UserRound className="h-5 w-5" />
+              </span>
+              <span className="flex-1 text-[15px] font-semibold leading-tight">La trae el cliente</span>
+              <Switch checked={laTraeElCliente} onCheckedChange={(v) => setLaTraeElCliente(v === true)} />
+            </label>
+          )}
 
           {/* El pedido vende otra placa: se confirma, no se guarda callado
               (H280: el pedido vendía MDF 18 y el corte quedó en MDF 3 mm). */}
@@ -849,7 +866,12 @@ export function FormularioCorte({
           fijadas={fijadas}
           onFijadas={setFijadas}
           precioPorPasada={precioPorPasada}
-          quien={{ sinCargo: sinCargo && Boolean(desdePedido), media: Boolean(mitad), todasDelCliente: todasDelPedido }}
+          quien={{
+            sinCargo: sinCargo && Boolean(desdePedido),
+            media: Boolean(mitad),
+            todasDelCliente: todasDelPedido,
+            placaDelCliente: !placa || laTraeElCliente,
+          }}
         />
       </section>
 

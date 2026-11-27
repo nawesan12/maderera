@@ -117,6 +117,9 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 	}
 	metros := MetrosDeTapacanto(piezasConCanto(c))
 	plano := PlanoDelCorte(c)
+	if c.VariantID == nil {
+		plano = ConPlacaDelCliente(plano)
+	}
 	sup := make([]float64, len(plano.Placas))
 	for i, p := range plano.Placas {
 		sup[i] = SuperficieDeSierra(p.Cortes, plano.AnchoSierra)
@@ -240,6 +243,9 @@ func TodasDelCliente(plano Plano) Plano {
 // ya marcadas: lo que muestran la ficha y la tarjeta del taller.
 func (s *Servicio) PlanoParaCobrar(ctx context.Context, c *Corte) (Plano, error) {
 	plano := PlanoDelCorte(c)
+	if c.VariantID == nil {
+		return ConPlacaDelCliente(plano), nil
+	}
 	delCliente, err := s.RetalesDelClienteDe(ctx, c, plano)
 	if err != nil {
 		return plano, err
@@ -515,3 +521,19 @@ func (s *Servicio) TarifaDeLaPlaca(ctx context.Context, variantID, customerID st
 // TarifaPlacaDelCliente es el nombre de la tarifa de corte para el material
 // que trae el cliente; sin ella, la de «Placas».
 const TarifaPlacaDelCliente = "Placa del cliente"
+
+// ConPlacaDelCliente es el plano de un corte sobre la placa que trae el
+// cliente (sin variante del catálogo): no se vende ninguna placa, se cobran
+// todas las pasadas y lo que sobra es suyo (mes simulado, M3S2-009, M2S1-024
+// y M2S3-008). Copia las placas: el plano puede venir de un caché.
+func ConPlacaDelCliente(plano Plano) Plano {
+	placas := make([]PlacaDelPlano, len(plano.Placas))
+	for i, p := range plano.Placas {
+		p.SeVendeEntera = false
+		placas[i] = p
+	}
+	plano.Placas = placas
+	plano.PlacasEnteras = 0
+	plano.PasadasCobrables = plano.Pasadas
+	return plano
+}

@@ -178,6 +178,15 @@ func TestLaPlacaDelClienteCobraSusPasadas(t *testing.T) {
 	if f["modo"] != "suelto" || c["subtotalCorte"].(float64) <= 0 || c["precioPorPasada"].(float64) != 1200 {
 		t.Fatalf("la placa del cliente: %v %v", f["modo"], c)
 	}
+	// Con una pieza de más de media placa tampoco se vende la placa: es
+	// suya, y se cobran todas las pasadas (M2S1-024, M2S3-008).
+	grande := alta(t, e, ven, map[string]any{"contactoNombre": "Rodolfo", "materialDescripcion": "Melamina que trae el cliente",
+		"placaLargoMm": "2600", "placaAnchoMm": "1830", "piezas": []any{pieza(2000, 1500, 1)}})
+	g := leerFicha(t, e, ven, grande)
+	if gc := g["cuenta"].(map[string]any); gc["placasEnteras"].(float64) != 0 || gc["subtotalPlacas"].(float64) != 0 ||
+		g["pasadasACobrar"].(float64) == 0 || len(gc["faltan"].([]any)) != 0 {
+		t.Errorf("la placa del cliente grande: %v %v", g["pasadasACobrar"], gc)
+	}
 	if _, err := e.pool.Exec(context.Background(), `insert into cutting_rates (material, precio_por_pasada, precio_por_metro_canto) values ('Placa del cliente', 1500, 0)`); err != nil {
 		t.Fatal(err)
 	}

@@ -654,7 +654,9 @@ export default async function FichaPedidoPage({
                 )}
                 {/* La zona «a cotizar» sin flete: salía y se entregaba sin
                     cotizarlo (mes simulado 2). */}
-                {Number(pedido.costoEnvio) === 0 && /a cotizar/i.test(pedido.zonaEnvio ?? "") && (
+                {/* Con la zona de la lista también, como el reparto: la del
+                    panel no lleva «(a cotizar)» en el nombre (M2S2-054). */}
+                {Number(pedido.costoEnvio) === 0 && (await zonaACotizar(pedido.zonaEnvio)) && (
                   <span className="estado-problema mt-2 inline-block rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
                     Flete sin cotizar
                   </span>
@@ -940,4 +942,12 @@ async function descuentoDelMedio(pedido: {
   if (!escalas.some((e) => e.etiqueta === pedido.descuentoMotivo)) return null;
   const alFlete = valorDeRegla(await ajustesDelSitio(), "descuento_al_flete") === "si";
   return { medio, escalas, alFlete };
+}
+
+/** La zona del envío es «a cotizar»: por el nombre (la tienda) o por la lista. */
+async function zonaACotizar(zona: string | null): Promise<boolean> {
+  if (!zona) return false;
+  if (/a cotizar/i.test(zona)) return true;
+  const nombre = zona.trim().toLowerCase();
+  return (await zonasParaPedido()).some((z) => z.aCotizar && z.nombre.trim().toLowerCase() === nombre);
 }

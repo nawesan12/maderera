@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,14 @@ const estadoInicial: EstadoRegistro = {};
 
 export function FormularioRegistro({ volver }: { volver?: string }) {
   const [estado, accion, pendiente] = useActionState(registrarse, estadoInicial);
+  const clave = useRef<HTMLInputElement>(null);
+  const noCoinciden = estado.error === "Las dos contraseñas tienen que coincidir.";
+
+  // `autoFocus` solo actúa al montar: al volver con el error el foco quedaba
+  // en el cuerpo de la página (mes 23). Cada respuesta es un objeto nuevo.
+  useEffect(() => {
+    if (noCoinciden) clave.current?.focus();
+  }, [estado, noCoinciden]);
 
   return (
     <form action={accion} className="space-y-4">
@@ -63,8 +71,8 @@ export function FormularioRegistro({ volver }: { volver?: string }) {
             type="password"
             autoComplete="new-password"
             minLength={8}
-            autoFocus={estado.error === "Las dos contraseñas tienen que coincidir."}
-            aria-invalid={estado.error === "Las dos contraseñas tienen que coincidir." || undefined}
+            ref={clave}
+            aria-invalid={noCoinciden || undefined}
             required
           />
         </div>

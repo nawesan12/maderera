@@ -410,11 +410,24 @@ func (a *API) LibroIvaDigital(ctx context.Context, r facturacionapi.LibroIvaDigi
 	if err != nil {
 		return nil, err
 	}
+	// Lo emitido en el mes sin CAE no se informa: se dice en el archivo,
+	// para quien recibe solo el .zip (M2S4-045).
+	var sinCae int
+	if err := a.s.pool.QueryRow(ctx, `SELECT count(*)::int FROM invoices WHERE cae IS NULL AND estado IN ('emitida', 'rechazada')
+		AND fecha_emision >= $1 AND fecha_emision <= $2`, p.Desde, p.Hasta).Scan(&sinCae); err != nil {
+		return nil, err
+	}
+	if sinCae > 0 {
+		omitidos = append([]string{fmt.Sprintf("Ventas sin CAE, que no se informan hasta autorizarlas: %d.", sinCae)}, omitidos...)
+	}
 	zip, err := fiscal.ZipLibroIva(p.Clave, fiscal.EscribirLibroIva(ventas, compras), omitidos)
 	if err != nil {
 		return nil, err
 	}
 	nombre := "libro-iva-digital-" + p.Clave + ".zip"
+	if len(ventas) == 0 {
+		nombre = "libro-iva-digital-" + p.Clave + "-solo-compras.zip"
+	}
 	bitacora.Anotar(ctx, a.s.q, a.s.log, ses, sqlc.AccionAuditoriaExportar, "libro_iva", "", "Exportó el Libro IVA Digital de "+p.Clave, nil)
 	return respuesta{datos: zip, tipo: "application/zip", disposicion: `attachment; filename="` + nombre + `"`}, nil
 }

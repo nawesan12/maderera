@@ -135,3 +135,48 @@ func TestCompraASinIvaCierraContraElTotal(t *testing.T) {
 		t.Fatalf("no cierra: total %d, suma de campos %d", total, suma)
 	}
 }
+
+// Sin ventas autorizadas el .zip trae solo las compras, y OMITIDOS.txt dice
+// cuántas ventas sin CAE no se informaron (M2S4-045): bajaba VENTAS_CBTE y
+// VENTAS_ALICUOTAS vacíos sin decirlo.
+func TestLibroIvaDigitalSinVentasAutorizadas(t *testing.T) {
+	e := armar(t, false)
+	ctx := context.Background()
+	id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "Carpintería Muñoz", ReceptorCuit: ptr("30712345671"),
+		ReceptorCondicionIva: "responsable_inscripto", Lineas: []Linea{
+			{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 1210, Alicuota: ptr(21.0)}},
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.exec(t, `UPDATE invoices SET fecha_emision = '2026-10-20T15:00:00Z' WHERE id = $1`, id)
+	var prov string
+	e.uno(t, `INSERT INTO suppliers (nombre, cuit) VALUES ('Faplac', '30-50000000-7') RETURNING id`, &prov)
+	e.exec(t, `INSERT INTO purchase_invoices (supplier_id, tipo, punto_venta, numero, fecha_emision, neto, iva21, total)
+		VALUES ($1, 'factura_a', 2, 1274, '2026-10-05T00:00:00Z', 1000, 210, 1210)`, prov)
+	admin := e.staff(t, "a@mjbj.test", sqlc.StaffRoleAdmin)
+	st, b := pedir(t, admin, "GET", e.srv.URL+"/api/v1/admin/facturacion/libro-iva/digital?periodo=2026-10", nil)
+	if st != 200 {
+		t.Fatalf("admin: %d %s", st, b)
+	}
+	z, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nombres := map[string]string{}
+	for _, f := range z.File {
+		r, _ := f.Open()
+		x, _ := io.ReadAll(r)
+		nombres[f.Name] = string(x)
+	}
+	if _, hay := nombres["VENTAS_CBTE_202610.txt"]; hay {
+		t.Errorf("ventas vacío en el .zip: %v", nombres)
+	}
+	if _, hay := nombres["COMPRAS_CBTE_202610.txt"]; !hay {
+		t.Errorf("faltan las compras: %v", nombres)
+	}
+	if !strings.Contains(nombres["OMITIDOS.txt"], "Ventas sin CAE, que no se informan hasta autorizarlas: 1.") {
+		t.Errorf("omitidos: %q", nombres["OMITIDOS.txt"])
+	}
+}
+

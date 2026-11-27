@@ -152,10 +152,13 @@ type FilaStock struct {
 	LargoMm      *int32            `json:"largoMm"`
 	Imagen       *string           `json:"imagen"`
 	Sucursales   []StockEnSucursal `json:"sucursales"`
-	// Total es la suma de lo disponible de cada sucursal, lo mismo que se
-	// muestra en cada una: sumaba el físico y «109 total» no cerraba con
-	// 65 + 30 (H198).
+	// Total es la suma de lo disponible de las sucursales que tienen: sumaba
+	// el físico y «109 total» no cerraba con 65 + 30 (H198). Un negativo no
+	// resta: «186 disponibles» con Casa Central en −14 tapaba el faltante
+	// (M2S2-122), que va aparte en Faltante.
 	Total float64 `json:"total"`
+	// Faltante es lo vendido de más, sumado de las sucursales en negativo.
+	Faltante float64 `json:"faltante"`
 	// ParaReponer es catalogo.MedidaParaReponer, el mismo criterio que la
 	// pestaña y el inicio.
 	ParaReponer bool `json:"paraReponer"`
@@ -237,6 +240,26 @@ const (
 
 // Listar es listarStock, de a páginas: las medidas activas, por nombre.
 func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock, error) {
+	return s.ListarEn(ctx, f, "")
+}
+
+// estadosEnSucursal son los grupos mirando una sola sucursal (por su slug,
+// en el argumento `arg`): con el Aserradero en cero y mínimo 50, la chapa es
+// «para reponer» en el Aserradero y está bien en Casa Central (M2S1-028).
+func estadosEnSucursal(arg string) map[string]string {
+	en := `i.variant_id = v.id AND i.branch_id = (SELECT id FROM branches WHERE slug = ` + arg + `)`
+	reponer := `EXISTS (SELECT 1 FROM inventory i WHERE ` + en + ` AND ` + catalogo.ReponerEnFila + `)`
+	con := `EXISTS (SELECT 1 FROM inventory i WHERE ` + en + ` AND i.qty - i.reservado > 0)`
+	return map[string]string{
+		"reponer":   reponer,
+		"sin-stock": `NOT ` + reponer + ` AND NOT ` + con,
+		"con-stock": `NOT ` + reponer + ` AND ` + con,
+	}
+}
+
+// ListarEn es Listar con los grupos de una sola sucursal (su slug); vacía,
+// de todas.
+func (s *Servicio) ListarEn(ctx context.Context, f listado.Filtros, sucursal string) (GrillaDeStock, error) {
 	out := GrillaDeStock{Filas: []FilaStock{}, Sucursales: []Sucursal{}}
 	sucs, err := s.Sucursales(ctx)
 	if err != nil {
@@ -247,14 +270,19 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 	desde := ` FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id `
+	estados, paraReponer := estadosDeStock, catalogo.MedidaParaReponer
+	if sucursal = strings.TrimSpace(sucursal); sucursal != "" {
+		estados = estadosEnSucursal(c.Arg(sucursal))
+		paraReponer = estados["reponer"]
+	}
 	k := &out.Conteos
-	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estadosDeStock["sin-stock"]+`),
-		count(*) FILTER (WHERE `+estadosDeStock["reponer"]+`), count(*) FILTER (WHERE `+estadosDeStock["con-stock"]+`)`+desde+c.Donde(),
+	if err := s.pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+estados["sin-stock"]+`),
+		count(*) FILTER (WHERE `+estados["reponer"]+`), count(*) FILTER (WHERE `+estados["con-stock"]+`)`+desde+c.Donde(),
 		c.Args()...).Scan(&k.Todas, &k.SinStock, &k.Reponer, &k.ConStock); err != nil {
 		return out, err
 	}
 	out.Total = map[string]int{"sin-stock": k.SinStock, "reponer": k.Reponer, "con-stock": k.ConStock}[f.Estado]
-	if cond, ok := estadosDeStock[f.Estado]; ok {
+	if cond, ok := estados[f.Estado]; ok {
 		c.Y(cond)
 	} else {
 		out.Total = k.Todas
@@ -266,7 +294,7 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 	filas, err := s.pool.Query(ctx, `
 		SELECT v.id, p.id, p.slug, p.name, v.label, v.sku, v.codigo_barras, c.name, p.unit::text, v.largo_mm,
 		  (SELECT i.url FROM product_images i WHERE i.product_id = p.id ORDER BY i.sort_order LIMIT 1),
-		  `+catalogo.MedidaParaReponer+`
+		  `+paraReponer+`
 		`+desde+c.Donde()+`
 		ORDER BY `+primero+` DESC, p.name, v.sort_order, v.id
 		LIMIT `+c.Arg(limite)+` OFFSET `+c.Arg(salto), c.Args()...)
@@ -322,7 +350,7 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 	for i := range pagina {
 		x := &pagina[i]
 		x.Sucursales = make([]StockEnSucursal, len(sucs))
-		suma := 0.0
+		suma, falta := 0.0, 0.0
 		for j, b := range sucs {
 			c := inv[clave{x.VariantID, b.ID}]
 			disponible := Cantidad(c.qty - c.res)
@@ -330,9 +358,14 @@ func (s *Servicio) Listar(ctx context.Context, f listado.Filtros) (GrillaDeStock
 			x.Sucursales[j] = StockEnSucursal{Sucursal: b, Qty: c.qty, Reservado: c.res, Disponible: disponible,
 				EnReparto: Cantidad(camion[k] + sinRemito[k]), Galpon: Cantidad(c.qty - sinRemito[k]), Llegando: llegando[[2]string{x.VariantID, b.ID}], Min: c.min,
 				Nivel: catalogo.Nivel(catalogo.Disponible(c.qty, c.res), c.min)}
-			suma += disponible
+			if disponible > 0 {
+				suma += disponible
+			} else {
+				falta -= disponible
+			}
 		}
 		x.Total = Cantidad(suma)
+		x.Faltante = Cantidad(falta)
 	}
 	out.Filas = pagina
 	return out, nil
@@ -419,6 +452,34 @@ type Movimiento struct {
 	Qty         float64   `json:"qty"`
 	Note        *string   `json:"note"`
 	CreatedAt   time.Time `json:"createdAt"`
+	// Usuario es quién lo hizo; Antes y Despues, el stock de la sucursal en
+	// un ajuste o un conteo: «Conteo · 28 → 27 · Sim Depósito» (M2S1-169).
+	Usuario *string  `json:"usuario"`
+	Antes   *float64 `json:"antes"`
+	Despues *float64 `json:"despues"`
+}
+
+var reAntesDespues = regexp.MustCompile(`\((-?[\d.]+(?:,\d+)?) → (-?[\d.]+(?:,\d+)?)\)`)
+
+// AntesYDespues lee el «(28 → 27)» que el sistema escribe en la nota de un
+// ajuste, en el formato de formato.Cantidad («1.234,5»).
+func AntesYDespues(nota string) (*float64, *float64) {
+	m := reAntesDespues.FindStringSubmatch(nota)
+	if m == nil {
+		return nil, nil
+	}
+	leer := func(t string) *float64 {
+		n := LeerCantidad(strings.ReplaceAll(t, ".", ""))
+		if math.IsNaN(n) {
+			return nil
+		}
+		return &n
+	}
+	a, d := leer(m[1]), leer(m[2])
+	if a == nil || d == nil {
+		return nil, nil
+	}
+	return a, d
 }
 
 // Movimientos son los últimos de las medidas que pasan el filtro de la
@@ -427,8 +488,9 @@ type Movimiento struct {
 func (s *Servicio) Movimientos(ctx context.Context, f listado.Filtros, limite int) ([]Movimiento, error) {
 	c := filtrar(f)
 	filas, err := s.pool.Query(ctx, `
-		SELECT m.id, v.id, p.id, p.name, v.label, b.name, m.type::text, m.qty::float8, m.note, m.documento_tipo, m.created_at
+		SELECT m.id, v.id, p.id, p.name, v.label, b.name, m.type::text, m.qty::float8, m.note, m.documento_tipo, m.created_at, u.name
 		FROM inventory_movements m
+		LEFT JOIN "user" u ON u.id = m.created_by_user_id
 		JOIN product_variants v ON v.id = m.variant_id
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
@@ -442,9 +504,10 @@ func (s *Servicio) Movimientos(ctx context.Context, f listado.Filtros, limite in
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Movimiento, error) {
 		var x Movimiento
 		var documento *string
-		if err := r.Scan(&x.ID, &x.VariantID, &x.ProductID, &x.ProductName, &x.Label, &x.BranchName, &x.Type, &x.Qty, &x.Note, &documento, &x.CreatedAt); err != nil {
+		if err := r.Scan(&x.ID, &x.VariantID, &x.ProductID, &x.ProductName, &x.Label, &x.BranchName, &x.Type, &x.Qty, &x.Note, &documento, &x.CreatedAt, &x.Usuario); err != nil {
 			return x, err
 		}
+		x.Antes, x.Despues = AntesYDespues(deref(x.Note))
 		concepto, ref := ConceptoDe(x.Type, deref(x.Note), deref(documento))
 		x.Concepto = concepto
 		if ref != "" {
@@ -750,8 +813,11 @@ func (s *Servicio) AjustarCon(ctx context.Context, ses *auth.Sesion, a Ajuste) (
 			}
 		}
 		ok = suc.Name + ": " + formato.Cantidad(previo) + " → " + formato.Cantidad(nuevo)
-		_, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, documento_tipo, documento_id)
-			VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8)`, variante, suc.ID, tipo, jsmath.Texto(cantidad), nota, ses.UserID, docTipo, docID)
+		// El costo promedio de hoy queda congelado en el movimiento: es el
+		// que asienta la baja (o el alta) contra Mercaderías (M3S3-013).
+		_, err := tx.Exec(ctx, `INSERT INTO inventory_movements (variant_id, branch_id, type, qty, note, created_by_user_id, documento_tipo, documento_id, costo_unitario)
+			VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8, (SELECT costo_promedio FROM variant_costs WHERE variant_id = $1))`,
+			variante, suc.ID, tipo, jsmath.Texto(cantidad), nota, ses.UserID, docTipo, docID)
 		return err
 	})
 	return ok, err

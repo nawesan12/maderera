@@ -156,6 +156,8 @@ export const inventoryMovements = pgTable(
     documentoId: uuid(),
     createdByUserId: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** El costo por unidad de stock de un ajuste sin venta, para su asiento (00420). */
+    costoUnitario: numeric({ precision: 14, scale: 4 }),
   },
   (t) => [
     index("inventory_movements_variant_idx").on(t.variantId),

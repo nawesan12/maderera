@@ -74,7 +74,7 @@ func (a *API) GrillaDeStock(ctx context.Context, r stockapi.GrillaDeStockRequest
 	if r.Params.Estado != nil {
 		f.Estado = string(*r.Params.Estado)
 	}
-	v, err := a.s.Listar(ctx, f)
+	v, err := a.s.ListarEn(ctx, f, texto(r.Params.Sucursal))
 	return ok(v), err
 }
 
@@ -214,7 +214,32 @@ func (a *API) RecibirTraslado(ctx context.Context, r stockapi.RecibirTrasladoReq
 	if err != nil {
 		return nil, err
 	}
-	if err := a.s.RecibirTraslado(ctx, ses, r.Id); err != nil {
+	var rec RecepcionDeTraslado
+	if b := r.Body; b != nil {
+		if b.Faltante != nil {
+			rec.Faltante = string(*b.Faltante)
+		}
+		if b.Renglones != nil {
+			rec.Renglones = []RenglonDeTraslado{}
+			for _, x := range *b.Renglones {
+				rec.Renglones = append(rec.Renglones, RenglonDeTraslado{VariantID: x.VariantId, Cantidad: x.Cantidad})
+			}
+		}
+	}
+	if err := a.s.RecibirTraslado(ctx, ses, r.Id, rec); err != nil {
+		return nil, err
+	}
+	return respuesta{codigo: http.StatusNoContent}, nil
+}
+
+func (o respuesta) VisitAnularTrasladoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+func (a *API) AnularTraslado(ctx context.Context, r stockapi.AnularTrasladoRequestObject) (stockapi.AnularTrasladoResponseObject, error) {
+	ses, err := gestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.s.AnularTraslado(ctx, ses, r.Id); err != nil {
 		return nil, err
 	}
 	return respuesta{codigo: http.StatusNoContent}, nil

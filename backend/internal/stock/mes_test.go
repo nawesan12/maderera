@@ -82,7 +82,7 @@ func TestParaReponerEsUnaSolaRegla(t *testing.T) {
 	e.exec(t, `update inventory set min_qty = 0, reservado = 25 where variant_id = $1 and branch_id = $2`, e.placa, e.central)
 	g = grilla(t, e, dep, "?busqueda=fenol")
 	f := g.Filas[0]
-	if !f.ParaReponer || f.Sucursales[0].Disponible != -15 || f.Total != -13 || g.Conteos.Reponer != 1 {
+	if !f.ParaReponer || f.Sucursales[0].Disponible != -15 || f.Total != 2 || f.Faltante != 15 || g.Conteos.Reponer != 1 {
 		t.Errorf("faltante: %+v total %v", f.Sucursales[0], f.Total)
 	}
 	// Con todo bien, nada para reponer.

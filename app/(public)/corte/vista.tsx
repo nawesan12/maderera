@@ -422,7 +422,16 @@ function VistaDeCorte({
       <header className="superficie flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl px-5 py-3.5">
         <div className="mr-auto">
           <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em]">Corte de placas a medida</h1>
-          <p className="text-sm text-texto-2">{dondeSeCortaEn(sucursal)} · {HORARIO_CORTES}</p>
+          <p className="text-sm text-texto-2">
+            {/* Cada tramo entero en su renglón: la «h» quedaba sola abajo a
+                375 px (mes simulado, M2S2-144). */}
+            {[dondeSeCortaEn(sucursal), ...HORARIO_CORTES.split(" · ")].map((tramo, i) => (
+              <span key={i} className="whitespace-nowrap">
+                {i > 0 && " · "}
+                {tramo}
+              </span>
+            ))}
+          </p>
         </div>
 
         <dl className="hidden items-center gap-6 sm:flex">
@@ -558,7 +567,7 @@ function VistaDeCorte({
             </p>
           )}
           {planoActual.placas.length > 0 ? (
-            <PlanoSimple plano={planoActual} unaColumna />
+            <PlanoSimple plano={planoActual} unaColumna piezas={actual.piezas} />
           ) : (
             <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl bg-hundida">
               <span className="tabular-nums text-texto-3">

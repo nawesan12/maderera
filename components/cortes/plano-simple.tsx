@@ -20,12 +20,18 @@ import type { PlacaDelPlano, PlanoDeCorte } from "@/lib/cortes/tipos";
  * sin una sola palabra, por qué dos piezas de 900 no entran en una placa de
  * 1830.
  */
+/** El canto de cada renglón del despiece, por índice: 0, 1 o 2 lados. */
+type CantoDeLaPieza = { cantoLargo?: number | null; cantoAncho?: number | null };
+
 export function PlanoSimple({
   plano,
   unaColumna,
   media,
+  piezas,
 }: {
   plano: PlanoDeCorte;
+  /** El despiece, para marcar los lados con canto (M2S1-208). */
+  piezas?: CantoDeLaPieza[];
   /** En la columna del armador las placas van una abajo de otra, grandes. */
   unaColumna?: boolean;
   /** Sale de media placa: cada recuadro es una media. */
@@ -46,7 +52,7 @@ export function PlanoSimple({
             </span>
           </figcaption>
 
-          <Dibujo placa={placa} plano={plano} />
+          <Dibujo placa={placa} plano={plano} piezas={piezas} />
         </figure>
       ))}
     </div>
@@ -56,9 +62,11 @@ export function PlanoSimple({
 function Dibujo({
   placa,
   plano,
+  piezas,
 }: {
   placa: PlacaDelPlano;
   plano: PlanoDeCorte;
+  piezas?: CantoDeLaPieza[];
 }) {
   const { placaLargo, placaAncho } = plano;
 
@@ -83,7 +91,9 @@ function Dibujo({
       />
 
       {placa.piezas.map((p, i) => {
-        const medida = `${p.ancho}×${p.alto}`;
+        // Largo × ancho, en el orden de la planilla: el dibujo rotulaba
+        // «560×720» al lado de «720 × 560» en la tabla (mes simulado, M2S1-208).
+        const medida = `${p.largoOriginal}×${p.anchoOriginal}`;
         // El texto se achica hasta entrar en vez de desaparecer: una pieza
         // fina sin su medida obliga a ir a buscarla a otro lado.
         // Angosta y alta, la medida va parada: acostada se pisaba con la de
@@ -94,6 +104,29 @@ function Dibujo({
           parada ? p.ancho * 0.55 : p.alto * 0.38,
           ((parada ? p.alto : p.ancho) * 0.85) / (medida.length * 0.6),
         );
+        // El nombre arriba de la medida, si entra: para que el operario
+        // ubique la pieza.
+        const largoDisponible = (parada ? p.alto : p.ancho) * 0.85;
+        const altoDisponible = parada ? p.ancho : p.alto;
+        const cuerpoNombre = p.etiqueta
+          ? Math.min(cuerpo * 0.8, largoDisponible / (p.etiqueta.length * 0.55))
+          : 0;
+        const conNombre = cuerpoNombre >= 22 && altoDisponible >= cuerpo * 1.2 + cuerpoNombre * 1.6;
+        const cx = p.x + p.ancho / 2;
+        const cy = p.y + p.alto / 2;
+        const giro = parada ? `rotate(-90 ${cx} ${cy})` : undefined;
+        // Los lados con canto, en trazo grueso: el largo de la pieza va
+        // acostado salvo que esté girada.
+        const canto = piezas?.[p.indice];
+        const ladosLargo = Math.min(2, Math.max(0, canto?.cantoLargo ?? 0));
+        const ladosAncho = Math.min(2, Math.max(0, canto?.cantoAncho ?? 0));
+        const bordes: [number, number, number, number][] = [];
+        const horizontales = p.girada ? ladosAncho : ladosLargo;
+        const verticales = p.girada ? ladosLargo : ladosAncho;
+        if (horizontales >= 1) bordes.push([p.x, p.y, p.x + p.ancho, p.y]);
+        if (horizontales >= 2) bordes.push([p.x, p.y + p.alto, p.x + p.ancho, p.y + p.alto]);
+        if (verticales >= 1) bordes.push([p.x, p.y, p.x, p.y + p.alto]);
+        if (verticales >= 2) bordes.push([p.x + p.ancho, p.y, p.x + p.ancho, p.y + p.alto]);
 
         return (
           <g key={i}>
@@ -111,15 +144,30 @@ function Dibujo({
               stroke="currentColor"
               strokeWidth={4}
             />
+            {bordes.map(([x1, y1, x2, y2], j) => (
+              <line key={j} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth={22} />
+            ))}
+            {conNombre && (
+              <text
+                x={cx}
+                y={cy - cuerpo * 0.35}
+                fontSize={cuerpoNombre}
+                textAnchor="middle"
+                className="fill-muted-foreground"
+                transform={giro}
+              >
+                {p.etiqueta}
+              </text>
+            )}
             {cuerpo >= 26 && (
               <text
-                x={p.x + p.ancho / 2}
-                y={p.y + p.alto / 2 + cuerpo * 0.35}
+                x={cx}
+                y={conNombre ? cy + cuerpo * 0.95 : cy + cuerpo * 0.35}
                 fontSize={cuerpo}
                 fontWeight={600}
                 textAnchor="middle"
                 className="fill-foreground"
-                transform={parada ? `rotate(-90 ${p.x + p.ancho / 2} ${p.y + p.alto / 2})` : undefined}
+                transform={giro}
               >
                 {medida}
               </text>

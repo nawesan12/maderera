@@ -251,6 +251,21 @@ func (s *Servicio) Alta(ctx context.Context, ses *auth.Sesion, f FormCorte) (str
 	if len(piezas) == 0 {
 		return "", "", error422("Agregá al menos una pieza al despiece.")
 	}
+	// Un tapacanto sin ningún lado marcado no llega a ningún lado: el
+	// archivo, las etiquetas y el cobro salen de los lados de cada pieza, y
+	// «en frentes» quedaba solo en el texto (mes simulado, M2S2-044).
+	if canto != nil && strings.TrimSpace(*canto) != "" {
+		conCanto := false
+		for _, p := range piezas {
+			if p.cantoLargo > 0 || p.cantoAncho > 0 {
+				conCanto = true
+				break
+			}
+		}
+		if !conCanto {
+			return "", "", plataforma.Invalido(map[string]string{"cantoDescripcion": "Marcá en qué lados de cada pieza va el tapacanto, o dejalo vacío."})
+		}
+	}
 	// 500 renglones de 999 eran medio millón de piezas: el alta las
 	// guardaba y la ficha se colgaba armando el plano.
 	unidades := 0

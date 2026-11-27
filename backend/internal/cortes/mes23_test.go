@@ -2,6 +2,7 @@ package cortes
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -114,6 +115,32 @@ func TestCorregirLaReposicion(t *testing.T) {
 	}
 	if f := leerFicha(t, e, ven, repo); f["corte"].(map[string]any)["estado"] != "cancelado" {
 		t.Errorf("la reposición corregida sigue viva: %v", f["corte"].(map[string]any)["estado"])
+	}
+}
+
+// M2S2-044 y M2S2-145: un tapacanto sin ningún lado marcado no se guarda en
+// el panel, y la consulta del sitio no lo nombra.
+func TestTapacantoSinLados(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	code, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/cortes",
+		melamina(e, "cantoDescripcion", "Canto blanco 0,45 en frentes", "piezas", []any{pieza(600, 300, 3)}))
+	if code != 422 || !strings.Contains(b, "en qué lados") {
+		t.Errorf("tapacanto sin lados: %d %s", code, b)
+	}
+	alta(t, e, ven, melamina(e, "cantoDescripcion", "Canto blanco", "piezas", []any{pieza(600, 300, 3, "cantoLargo", 1)}))
+
+	u := e.srv.URL + "/api/v1/cortes/consulta"
+	code, b = pedir(t, http.DefaultClient, "POST", u, map[string]any{"variantId": e.melamina, "sucursal": "casa-central",
+		"cantoDescripcion": "Blanco 22 mm", "piezas": []any{map[string]any{"largoMm": 720, "anchoMm": 560, "cantidad": 2, "respetaVeta": 0, "cantoLargo": 0, "cantoAncho": 0}}})
+	if code != 200 {
+		t.Fatalf("consulta: %d %s", code, b)
+	}
+	var r struct{ Token string }
+	_ = json.Unmarshal([]byte(b), &r)
+	_, b = pedir(t, http.DefaultClient, "GET", u+"/"+r.Token, nil)
+	if strings.Contains(b, "Blanco 22 mm") {
+		t.Errorf("la consulta nombra un tapacanto sin canto: %s", b)
 	}
 }
 

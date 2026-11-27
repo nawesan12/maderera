@@ -165,7 +165,10 @@ func (s *Servicio) GuardarConsulta(ctx context.Context, m map[string]any, ip str
 		} else if n > 1 {
 			return "", cual(i, fmt.Sprintf("Hay %d piezas que no entran en la placa. Revisá esas medidas.", n))
 		}
-		if canto != nil && *canto == "" {
+		// Sin ninguna pieza con canto no hay tapacanto que nombrar: la
+		// consulta decía «Tapacanto: Blanco 22 mm» con 0 m de canto (mes
+		// simulado, M2S2-145 y M2S2-044).
+		if canto != nil && (*canto == "" || !algunaConCanto(piezas)) {
 			canto = nil
 		}
 		crudas, err := json.Marshal(piezas)
@@ -285,4 +288,14 @@ func (s *Servicio) Consulta(ctx context.Context, token string) (*ConsultaDeCorte
 	p := c.Grupos[0]
 	c.PlacaLargoMm, c.PlacaAnchoMm, c.Piezas, c.Plano, c.MetrosCanto = p.PlacaLargoMm, p.PlacaAnchoMm, p.Piezas, p.Plano, p.MetrosCanto
 	return &c, nil
+}
+
+// algunaConCanto dice si alguna pieza lleva canto en algún lado.
+func algunaConCanto(piezas []PiezaAcortar) bool {
+	for _, p := range piezas {
+		if p.CantoLargo > 0 || p.CantoAncho > 0 {
+			return true
+		}
+	}
+	return false
 }

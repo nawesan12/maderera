@@ -1091,6 +1091,7 @@ components:
         precioMediaPct: { type: number, format: double }
         precioPorPasada: { type: number, format: double }
         precioPorMetroCanto: { type: number, format: double }
+        hayStock: { type: boolean, description: Hay alguna disponible en alguna sucursal }
     CorteCotizado:
       type: object
       required: [variantId, materialDescripcion, placaLargoMm, placaAnchoMm, mitad, cantoDescripcion, piezas, placas, pasadas, total]

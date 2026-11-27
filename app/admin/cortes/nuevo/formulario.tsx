@@ -191,6 +191,7 @@ export function FormularioCorte({
     token: string;
     /** Cuál de las placas de la consulta; 0 es la primera. */
     grupo: number;
+    branchId: string | null;
     placa: PlacaElegida | null;
     mitad: Mitad;
     cantoDescripcion: string;
@@ -230,6 +231,7 @@ export function FormularioCorte({
   const [sucursal, setSucursal] = useState(
     desdePedido?.branchId ??
       corregir?.branchId ??
+      desdeConsulta?.branchId ??
       (preguntarSucursal && sucursales.length > 1 ? "" : (sucursales[0]?.id ?? "")),
   );
   const [cliente, setCliente] = useState<{

@@ -248,6 +248,10 @@ export default async function NuevoCortePage({
             ? {
                 token: consulta.token,
                 grupo: grupo.orden,
+                // La sucursal que eligió el cliente al mandarla: arrancaba en
+                // Casa Central y el trabajo iba a la cola de otro taller
+                // (mes simulado, M2S1-091).
+                branchId: sucursales.find((s) => s.slug === consulta.sucursal)?.id ?? null,
                 placa: placaDeLaConsulta
                   ? {
                       variantId: placaDeLaConsulta.variantId,

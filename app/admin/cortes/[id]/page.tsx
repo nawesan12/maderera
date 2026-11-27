@@ -459,7 +459,7 @@ export default async function FichaCortePage({
                 quien={{ sinCargo: corte.sinCargo, media, todasDelCliente: ficha.retalesDelCliente }}
               />
             ) : (
-              <PlanoSimple plano={plano} media={media} />
+              <PlanoSimple plano={plano} media={media} piezas={corte.piezas} />
             )}
           </div>
         </section>

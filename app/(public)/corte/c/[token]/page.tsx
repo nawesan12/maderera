@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Scissors } from "lucide-react";
 import { PlanoSimple } from "@/components/cortes/plano-simple";
@@ -51,8 +50,10 @@ async function Consulta({ params }: { params: Promise<{ token: string }> }) {
     <div className="bg-sitio-alt">
       <div className="contenedor space-y-5 py-10">
         <div>
-          <h1 className="text-[30px] font-bold leading-tight tracking-[-0.03em]">
-            {varios ? "Pedido de corte" : consulta.material}
+          {/* Sin la medida, que va abajo: el título ocupaba tres renglones a
+              375 px y la repetía (mes simulado, M2S4-076). */}
+          <h1 className="text-[24px] font-bold leading-tight tracking-[-0.03em] sm:text-[30px]">
+            {varios ? "Pedido de corte" : sinMedida(consulta.material)}
           </h1>
           <p className="tabular mt-1 text-base text-texto-2">
             {varios ? `${grupos.length} placas` : medidaDelGrupo(grupos[0]!)}
@@ -71,60 +72,64 @@ async function Consulta({ params }: { params: Promise<{ token: string }> }) {
             <div className="flex flex-wrap items-end justify-between gap-4">
               {varios ? (
                 <div>
-                  <h2 className="text-[22px] font-bold leading-tight tracking-[-0.02em]">{g.material}</h2>
+                  <h2 className="text-[22px] font-bold leading-tight tracking-[-0.02em]">{sinMedida(g.material)}</h2>
                   <p className="tabular mt-1 text-base text-texto-2">{medidaDelGrupo(g)}</p>
                 </div>
               ) : (
                 <span />
               )}
+              {/* Del sitio al panel con una navegación entera, no con <Link>:
+                  con cacheComponents la página del sitio queda montada y
+                  oculta, y el panel sumaba un segundo <main id="contenido">
+                  (mes simulado, M2S1-194). */}
               {staff &&
                 (g.corteId ? (
-                  <Link
+                  <a
                     href={`/admin/cortes/${g.corteId}`}
                     className="inline-flex h-11 items-center gap-2 rounded-lg border border-linea bg-card px-4 font-semibold"
                   >
                     Ver el corte
-                  </Link>
+                  </a>
                 ) : (
-                  <Link
+                  <a
                     href={`/admin/cortes/nuevo?consulta=${consulta.token}${g.orden ? `&grupo=${g.orden}` : ""}`}
                     className="inline-flex h-11 items-center gap-2 rounded-lg bg-accion px-4 font-semibold text-white hover:bg-accion-hover"
                   >
                     <Scissors className="h-4 w-4" />
                     Pasar a corte
-                  </Link>
+                  </a>
                 ))}
             </div>
 
+            {/* Una pieza por renglón, en dos líneas: la tabla de cuatro
+                columnas partía las medidas a 375 px (mes simulado, M2S4-076). */}
             <section className="rounded-xl superficie p-5">
-              <table className="w-full text-left text-base">
-                <thead className="text-sm text-texto-2">
-                  <tr>
-                    <th className="pb-2 font-medium">Cant.</th>
-                    <th className="pb-2 font-medium">Medida (mm)</th>
-                    <th className="pb-2 font-medium">Canto</th>
-                    <th className="pb-2 font-medium">Veta</th>
-                  </tr>
-                </thead>
-                <tbody className="tabular divide-y divide-linea-tenue">
-                  {g.piezas.map((p, i) => (
-                    <tr key={i}>
-                      <td className="py-2">{p.cantidad}</td>
-                      <td className="py-2">
-                        {p.etiqueta ? `${p.etiqueta}: ` : ""}
-                        {p.largoMm} × {p.anchoMm}
-                      </td>
-                      <td className="py-2">{canto(p.cantoLargo ?? 0, p.cantoAncho ?? 0)}</td>
-                      <td className="py-2">{p.respetaVeta ? "Sí" : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {g.cantoDescripcion && <p className="mt-3 text-base">Tapacanto: {g.cantoDescripcion}</p>}
+              <ul className="divide-y divide-linea-tenue">
+                {g.piezas.map((p, i) => (
+                  <li key={i} className="py-2.5 first:pt-0 last:pb-0">
+                    <p className="text-base font-semibold">
+                      <span className="tabular">{p.cantidad} ×</span> {p.etiqueta || `${p.largoMm} × ${p.anchoMm}`}
+                    </p>
+                    <p className="tabular text-base text-texto-2">
+                      {[
+                        `${p.largoMm} × ${p.anchoMm} mm`,
+                        canto(p.cantoLargo ?? 0, p.cantoAncho ?? 0),
+                        p.respetaVeta ? "veta" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              {/* El tapacanto solo si alguna pieza lleva canto (M2S2-145). */}
+              {g.cantoDescripcion && g.metrosCanto > 0 && (
+                <p className="mt-3 text-base">Tapacanto: {g.cantoDescripcion}</p>
+              )}
             </section>
 
             <section className="rounded-xl superficie p-5">
-              <PlanoSimple plano={g.plano} />
+              <PlanoSimple plano={g.plano} piezas={g.piezas} />
             </section>
           </div>
         ))}
@@ -138,8 +143,13 @@ function medidaDelGrupo(g: GrupoDeConsulta): string {
 }
 
 function canto(largo: number, ancho: number): string {
-  const partes = [largo ? `${largo} L` : "", ancho ? `${ancho} A` : ""].filter(Boolean);
-  return partes.length ? partes.join(" + ") : "—";
+  const partes = [largo ? `${largo}L` : "", ancho ? `${ancho}A` : ""].filter(Boolean);
+  return partes.length ? `canto ${partes.join("+")}` : "";
+}
+
+/** «Melamina Blanca — 2600 × 1830 mm — 18mm» → «Melamina Blanca — 18mm». */
+function sinMedida(material: string): string {
+  return material.replace(/\s*—\s*\d{3,5}\s*[x×]\s*\d{3,5}\s*(mm)?/i, "");
 }
 
 function Cifra({ valor, nombre }: { valor: number; nombre: string }) {

@@ -1033,6 +1033,8 @@ export interface components {
             precioPorPasada: number;
             /** Format: double */
             precioPorMetroCanto: number;
+            /** @description Hay alguna disponible en alguna sucursal */
+            hayStock?: boolean;
         };
         CorteCotizado: {
             variantId: string;

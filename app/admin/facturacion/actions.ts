@@ -127,9 +127,10 @@ export async function corregirReceptor(
 }
 
 /**
- * Da de baja un comprobante sin CAE: sale de la serie y los pendientes que
- * vienen detrás bajan un número. Después no hay ficha a la que volver: se va
- * al listado de los dados de baja, donde está a quién reenviarle el suyo.
+ * Da de baja un comprobante sin CAE: sale de la serie y el último pendiente
+ * pasa a su número (Go se lo reenvía al cliente y le avisa al del dado de
+ * baja). Después no hay ficha a la que volver: se va al listado de los dados
+ * de baja.
  */
 export async function darDeBaja(
   _previo: EstadoFactura,

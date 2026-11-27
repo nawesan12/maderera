@@ -322,7 +322,10 @@ export default async function NuevoCortePage({
             : undefined
         }
         contactoInicial={
-          !cliente && contacto?.nombre ? { nombre: contacto.nombre, telefono: contacto.telefono ?? "" } : undefined
+          // Sin ficha ni nombre en WhatsApp, por lo menos el teléfono (mes 23).
+          !cliente && (contacto?.nombre || contacto?.telefono)
+            ? { nombre: contacto.nombre ?? "", telefono: contacto.telefono ?? "" }
+            : undefined
         }
         desdePedido={
           pedido

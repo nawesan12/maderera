@@ -3273,3 +3273,38 @@ después). Las dos salidas de cada una tienen prueba. Lo que falta construido:
 
 Cambiar una regla con un PUT directo a Go no invalida la caché de ajustes de
 Next: las pruebas de pantalla la cambian desde `/admin/reglas`.
+
+## 27/11/2026: el mes simulado, segunda vuelta del inicio y lo demás (rama `mes23-inicio-resto`)
+
+Migraciones **00450** (`saldos_de_banco`) y **00451** (trigramas en los
+números de recibos, remitos y cheques).
+
+- **Plata hoy**: lo movido hoy en el banco ya no suma al total; el saldo del
+  banco se carga desde la tarjeta (`POST /admin/inicio/saldo-banco`, admin,
+  bitácora) y Go lo lleva con lo que entra y sale (`movimientosDelBanco`).
+  Debo separa los remitos sin factura de los saldos y ajustes; la ganancia
+  muestra los envíos que suma.
+- **Para hoy**: las recepciones de una factura de varios remitos no cuentan
+  (`compras.FacturaDeLaRecepcion`), el cheque informado que no se aceptó no
+  es un rechazo, cada número abre su lista filtrada (`?estado=por-preparar`,
+  `listo`, `sin-pedido`, `sin-factura`, `filtro=derivadas`), y quien vende ve
+  gestiones, presupuestos por responder y rechazos, con su campana.
+- **Depósito**: «Para entregar» suma los cortes terminados
+  (`CorteListado.cobrado`), la fila se toca entera y lo sin cobrar se marca.
+- **Buscador**: recibos, remitos, cheques y (para quien no ve Facturación)
+  comprobantes por número; los productos los busca Go por nombre, medida,
+  código y rubro, antes que los cortes; estados en palabras.
+- **Seguimiento público**: `PedidoSeguido` suma `descuento`, `sinCobrar`,
+  `entregadoAt` y `conCuenta`; el 404 de un enlace malo lo decide `proxy.ts`
+  (reescribe a `/pedido/0`). `CobroDelPedido.online` dice si hay pago en
+  línea. El rechazo de una transferencia se avisa (`pago_rechazado`).
+- **Correos**: el listo y el remito de un envío no dicen «retiro»
+  (`Despacho.AsuntoPropio`), el remito firmado no se pide firmar, el segundo
+  «salió para la entrega» no sale, y el demo registra los enlaces.
+- **Sistema** (`/admin/sistema`, admin): los trabajos con error, la última
+  corrida de cada tarea y «Reintentar». La tarea horaria anota lo que
+  recupera después de una caída (`PeriodoAnterior`).
+- **Agente del taller**: `/api/cortes/pendientes` suma `enProceso`; el agente
+  mueve a `hechos/` lo que ya no está ni en la cola ni en la máquina.
+- PDF: presupuesto con el vendedor que lo armó, sin repetir la empresa ni el
+  código vacío y la lata por unidad; lista sin «Lista Lista» ni «$0».

@@ -144,6 +144,10 @@ type CargaResultadoDePago struct {
 	Tipo       string  `json:"tipo"`
 	Detalle    string  `json:"detalle"`
 	ReceiptID  *string `json:"receiptId"`
+	// De un rechazo en la conciliación: el pago, su importe y el motivo.
+	PagoID  *string  `json:"pagoId"`
+	Importe *float64 `json:"importe"`
+	Motivo  *string  `json:"motivo"`
 }
 
 // pagoDe es el cobro que se muestra en el correo. El TS tomaba cualquiera
@@ -164,6 +168,31 @@ func (s *Servicio) pagoDe(ctx context.Context, columna, id string) (medio, monto
 // lugar); un pedido avisa al panel y al cliente; un pago de deuda manda el
 // recibo.
 func (s *Servicio) ResultadoDePago(ctx context.Context, c CargaResultadoDePago) error {
+	// La transferencia de la cuenta que no se acreditó: se le avisa con el
+	// motivo, como al cheque no aceptado (M2S1-053). La de un pedido la ve
+	// en el pedido.
+	if c.Detalle == "rechazado" && c.OrderID == nil && c.CustomerID != nil {
+		cl, err := s.cliente(ctx, *c.CustomerID)
+		if err != nil || cl == nil || vacio(cl.email) {
+			return err
+		}
+		importe, motivo := 0.0, ""
+		if c.Importe != nil {
+			importe = *c.Importe
+		}
+		if c.Motivo != nil {
+			motivo = *c.Motivo
+		}
+		entidad := *c.CustomerID
+		if c.PagoID != nil {
+			entidad = *c.PagoID
+		}
+		s.correo.Despachar(ctx, avisos.Despacho{
+			Evento: "transferencia_rechazada", Para: *cl.email, EntidadTipo: "payment", EntidadID: entidad,
+			Correo: avisos.TransferenciaRechazada(s.sitio, primerNombre(cl.nombre), importe, motivo),
+		})
+		return nil
+	}
 	if c.Detalle != "aprobado" {
 		return nil
 	}

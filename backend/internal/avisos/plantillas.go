@@ -66,6 +66,24 @@ func ChequeRechazado(sitio, nombre, cheque string, importe float64, motivo strin
 	})
 }
 
+// TransferenciaRechazada es el correo de una transferencia informada que no
+// se pudo acreditar (M2S1-053): el rechazo de un cheque mandaba aviso y el
+// de una transferencia, no.
+func TransferenciaRechazada(sitio, nombre string, importe float64, motivo string) Correo {
+	datos := []email.Bloque{{Etiqueta: "Importe", Valor: formato.Precio(importe)}}
+	if motivo != "" {
+		datos = append(datos, email.Bloque{Etiqueta: "Motivo", Valor: motivo})
+	}
+	return armar(sitio, "No pudimos acreditar tu transferencia", email.Opciones{
+		Titulo:   "No pudimos acreditar una transferencia",
+		Adelanto: "La transferencia de " + formato.Precio(importe) + " no se acreditó.",
+		Saludo:   nombre,
+		Parrafos: []string{"Revisamos la transferencia que nos informaste y no la pudimos acreditar. Tu cuenta no cambió."},
+		Datos:    datos,
+		CTA:      &email.Enlace{Texto: "Ver mi cuenta", URL: base(sitio) + "/mi-cuenta/movimientos"},
+	})
+}
+
 // FacturaEmitida es el correo con el comprobante adjunto.
 func FacturaEmitida(sitio, nombre, comprobante string, total float64, conCae bool) Correo {
 	parrafos := []string{"Te lo adjuntamos en PDF. También queda disponible en tu cuenta, junto con todos los anteriores."}

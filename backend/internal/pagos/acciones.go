@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -13,6 +14,7 @@ import (
 	"mjbj/internal/bitacora"
 	"mjbj/internal/checkout"
 	"mjbj/internal/cobros"
+	"mjbj/internal/cola"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/limites"
@@ -394,7 +396,25 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 	if aprueba {
 		return Resultado{Ok: "Cobro acreditado.", Trabajo: r.Trabajo}, nil
 	}
-	return Resultado{Ok: "Cobro rechazado. El cliente lo ve en su pedido."}, nil
+	// El rechazo de una transferencia de la cuenta le avisa al cliente con
+	// el motivo, y el mensaje dice dónde lo ve: decía «en su pedido» de un
+	// pago que no tenía pedido (M2S1-053).
+	var orden, cliente *string
+	var importe float64
+	if err := s.pool.QueryRow(ctx, `SELECT order_id, customer_id, monto::float8 FROM payments WHERE id = $1`, pagoID).Scan(&orden, &cliente, &importe); err != nil {
+		return Resultado{}, err
+	}
+	if orden != nil {
+		return Resultado{Ok: "Cobro rechazado. El cliente lo ve en su pedido."}, nil
+	}
+	if cliente != nil {
+		if _, err := cola.Encolar(ctx, sqlc.New(s.pool), TipoResultado, map[string]any{
+			"customerId": cliente, "tipo": "deuda", "detalle": "rechazado", "pagoId": pagoID, "importe": importe, "motivo": remoto.MotivoRechazo,
+		}, time.Time{}); err != nil {
+			return Resultado{}, err
+		}
+	}
+	return Resultado{Ok: "Cobro rechazado. El cliente lo ve en Movimientos y se le avisó."}, nil
 }
 
 // Reconsultar le vuelve a preguntar a Mercado Pago (los webhooks se

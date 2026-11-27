@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { AlertCircle, Check, Link2, Loader2, Pencil, Plus } from "lucide-react";
+import { plural } from "@/lib/formato";
 import {
   alternarRubro,
   crearCategoria,
@@ -186,7 +187,7 @@ export function ListaDeRubros({
             <p className="text-base text-muted-foreground">
               {categoria.rubros.length === 0
                 ? "Sin rubros"
-                : `${categoria.rubros.length} rubros`}
+                : plural(categoria.rubros.length, "rubro")}
             </p>
           </div>
 

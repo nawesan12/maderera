@@ -289,7 +289,9 @@ export function CorregirPedido({
     cambiar(() => {
       setZona(nombre);
       const z = zonas.find((x) => x.nombre === nombre);
-      if (z && !z.aCotizar && z.costo > 0) setFlete(importeParaElCampo(z.costo));
+      // El flete de la zona anterior no queda puesto (M2S1-189): la nueva
+      // trae el suyo, «0» si es sin cargo o vacío si se cotiza.
+      if (z) setFlete(z.costo > 0 ? importeParaElCampo(z.costo) : z.aCotizar ? "" : "0");
     });
   }
 

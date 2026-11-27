@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatearMonto } from "@/components/admin/formato";
+import { importeParaElCampo } from "@/lib/formato";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 import { descuentoPorMedioDePago, montoDelDescuentoDePago, type EscalaDePago } from "@/lib/precios/medio-pago";
@@ -384,13 +385,12 @@ function PasarAPedido({
     // El flete de la tarifa va propuesto y se puede cambiar, también en una
     // zona «a cotizar» que tiene uno de referencia; la de costo cero es sin
     // cargo (M2S1-189: había que tipearlo para que apareciera «Crear»).
-    if (z && z.costo > 0) {
-      setCosto(String(z.costo).replace(".", ","));
-      setSinCargo(false);
-    } else if (z && !z.aCotizar) {
-      setCosto("0");
-      setSinCargo(false);
-    }
+    // Una zona «a cotizar» sin referencia deja el flete vacío: el de la zona
+    // anterior quedaba puesto (M2S1-189, Tandil → Batán seguía en 72.000).
+    if (!z) return;
+    setSinCargo(false);
+    if (z.costo > 0) setCosto(importeParaElCampo(z.costo));
+    else setCosto(z.aCotizar ? "" : "0");
   }
 
   function pasar(pin?: string) {
@@ -584,6 +584,10 @@ function PasarAPedido({
                       value={costo}
                       disabled={sinCargo}
                       onChange={(e) => setCosto(e.target.value)}
+                      // Al salir se muestra con los miles, como el resto.
+                      onBlur={() => {
+                        if (!costoMal && hayCosto) setCosto(importeParaElCampo(costoLeido));
+                      }}
                       aria-invalid={costoMal || faltaFlete || undefined}
                       className="tabular"
                     />

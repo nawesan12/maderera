@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { OPCIONES_DE_REGLAS, valorDeRegla } from "@/lib/reglas";
 
-const migracion = readFileSync(
-  join(__dirname, "../backend/db/migraciones/00290_reglas_que_esperan_al_contador.sql"),
-  "utf8",
-);
+// Las de la 00290 y las que se sumaron después (00371, la deuda sin comprobante).
+const migracion = ["00290_reglas_que_esperan_al_contador.sql", "00371_deuda_sin_comprobante.sql"]
+  .map((f) => readFileSync(join(__dirname, "../backend/db/migraciones", f), "utf8"))
+  .join("\n");
 const go = readFileSync(join(__dirname, "../backend/internal/reglas/reglas.go"), "utf8");
 
 describe("reglas que esperan al contador", () => {

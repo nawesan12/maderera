@@ -481,7 +481,7 @@ export interface paths {
         /** @description Lo que se puede devolver de un pedido facturado desde el pedido (renglones de su factura, el destino de la plata y el tope). 404 si no tiene factura viva. De quien mueve plata. */
         get: operations["DevolucionDesdeElPedido"];
         put?: never;
-        /** @description La devolución de un pedido facturado con su nota de crédito, sin que salga plata (a la cuenta corriente o bajando lo que falta cobrar). La clave hace que el reintento devuelva la misma. De quien mueve plata. */
+        /** @description La devolución de un pedido facturado con su nota de crédito (a la cuenta corriente, bajando lo que falta cobrar, o, ya cobrado, por la caja o por afuera). La clave hace que el reintento devuelva la misma. De quien mueve plata. */
         post: operations["DevolverDesdeElPedido"];
         delete?: never;
         options?: never;
@@ -1836,6 +1836,18 @@ export interface operations {
                         destino: "cuenta" | "deuda";
                         /** Format: double */
                         tope: number;
+                        /**
+                         * Format: double
+                         * @description lo cobrado en efectivo que todavía no volvió
+                         */
+                        caja: number;
+                        /**
+                         * Format: double
+                         * @description lo cobrado por los demás medios que todavía no volvió
+                         */
+                        afuera: number;
+                        /** @description la sucursal del pedido tiene la caja abierta */
+                        cajaAbierta: boolean;
                         renglones: components["schemas"]["RenglonesDevolvibles"];
                     };
                 };
@@ -1859,6 +1871,11 @@ export interface operations {
                     motivo: string;
                     /** Format: double */
                     importe?: number | null;
+                    /**
+                     * @description lo ya cobrado vuelve por la caja de la sucursal del pedido o por afuera; sin él, a la cuenta o a la deuda
+                     * @enum {string}
+                     */
+                    destino?: "caja" | "afuera";
                     renglones: components["schemas"]["RenglonesDelPedidoADevolver"];
                 };
             };

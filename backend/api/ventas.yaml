@@ -164,6 +164,34 @@ paths:
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/pedidos/{id}/devolucion:
     parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      operationId: DatosDeDevolucionDelPedido
+      summary: Lo que queda por devolver de cada renglón y por dónde puede volver la plata.
+      responses:
+        "200":
+          description: Los datos del diálogo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [renglones, deuda, aCuenta, caja, afuera, cajaAbierta]
+                properties:
+                  renglones:
+                    type: array
+                    items:
+                      type: object
+                      required: [orderItemId, queda]
+                      properties:
+                        orderItemId: { type: string }
+                        queda: { type: number, format: double }
+                  deuda: { type: number, format: double }
+                  aCuenta: { type: boolean }
+                  caja: { type: number, format: double }
+                  afuera: { type: number, format: double }
+                  cajaAbierta: { type: boolean }
+        "401": { $ref: "#/components/responses/Problema" }
+        "403": { $ref: "#/components/responses/Problema" }
+        "404": { $ref: "#/components/responses/Problema" }
     post:
       operationId: DevolverPedido
       summary: >-
@@ -190,6 +218,10 @@ paths:
                       cantidad: { type: number, format: double }
                 motivo: { type: string, maxLength: 300 }
                 clave: { type: string, maxLength: 80, description: "la del intento: un reintento devuelve la misma devolución" }
+                destino:
+                  type: string
+                  enum: [caja, afuera]
+                  description: "lo ya cobrado vuelve por la caja o por afuera; sin él, baja lo que falta cobrar o va a la cuenta"
       responses:
         "200":
           description: La devolución
@@ -676,6 +708,27 @@ components:
         costoUnitario: { type: string, nullable: true }
         alicuotaIva: { type: string, nullable: true }
         orden: { type: integer }
+        devuelto: { type: number, format: double, description: Lo que volvió de este renglón }
+    DevolucionEnLaFicha:
+      type: object
+      required: [id, importe, destino, motivo, notaId, nota, quien, createdAt]
+      properties:
+        id: { type: string }
+        importe: { type: number, format: double }
+        destino: { type: string, enum: [caja, cuenta, afuera, deuda] }
+        motivo: { type: string }
+        notaId: { type: string, nullable: true }
+        nota: { type: string, nullable: true, description: "«Nota de crédito B 0015-00000003»" }
+        quien: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ComprobanteDelPedido:
+      type: object
+      required: [id, etiqueta, tipo, estado]
+      properties:
+        id: { type: string }
+        etiqueta: { type: string }
+        tipo: { type: string }
+        estado: { type: string }
     PasoDelPedido:
       type: object
       required: [id, orderId, estado, nota, createdByUserId, quien, createdAt]
@@ -743,9 +796,11 @@ components:
       required: [id, numero, numeroProvisorio, cliente, email, telefono, empresa, branchId, customerId, sucursal, estado, origen,
         tipoEntrega, direccionEntrega, zonaEnvio, costoEnvio, subtotal, descuento, descuentoMotivo, total, medioPago, estadoPago,
         notas, createdAt, items, historial, pagos, margen, quoteId, numeroPresupuesto, saldoCliente, entregarEl, sinCobrar,
-        cobrado, aCobrar, recibos, comprobante, acopio, facturado]
+        cobrado, aCobrar, recibos, comprobante, acopio, facturado, devoluciones, comprobantes]
       properties:
         facturado: { type: boolean, description: Tiene una factura viva }
+        devoluciones: { type: array, items: { $ref: "#/components/schemas/DevolucionEnLaFicha" } }
+        comprobantes: { type: array, items: { $ref: "#/components/schemas/ComprobanteDelPedido" } }
         acopio: { type: boolean, description: Se retira de a partes (ya salió algo, o es la venta del mostrador en acopio) }
         cobrado: { type: number, format: double, description: Lo cobrado con recibos y en línea }
         aCobrar: { type: number, format: double, description: El total menos lo devuelto contra la deuda }

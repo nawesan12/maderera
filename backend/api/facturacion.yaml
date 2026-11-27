@@ -490,17 +490,20 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [facturaId, factura, destino, tope, renglones]
+                required: [facturaId, factura, destino, tope, caja, afuera, cajaAbierta, renglones]
                 properties:
                   facturaId: { type: string }
                   factura: { type: string }
                   destino: { type: string, enum: [cuenta, deuda] }
                   tope: { type: number, format: double }
+                  caja: { type: number, format: double, description: "lo cobrado en efectivo que todavía no volvió" }
+                  afuera: { type: number, format: double, description: "lo cobrado por los demás medios que todavía no volvió" }
+                  cajaAbierta: { type: boolean, description: "la sucursal del pedido tiene la caja abierta" }
                   renglones: { $ref: "#/components/schemas/RenglonesDevolvibles" }
         "404": { $ref: "#/components/responses/Problema" }
     post:
       operationId: DevolverDesdeElPedido
-      description: La devolución de un pedido facturado con su nota de crédito, sin que salga plata (a la cuenta corriente o bajando lo que falta cobrar). La clave hace que el reintento devuelva la misma. De quien mueve plata.
+      description: La devolución de un pedido facturado con su nota de crédito (a la cuenta corriente, bajando lo que falta cobrar, o, ya cobrado, por la caja o por afuera). La clave hace que el reintento devuelva la misma. De quien mueve plata.
       requestBody:
         required: true
         content:
@@ -513,6 +516,10 @@ paths:
                 clave: { type: string }
                 motivo: { type: string }
                 importe: { type: number, format: double, nullable: true }
+                destino:
+                  type: string
+                  enum: [caja, afuera]
+                  description: "lo ya cobrado vuelve por la caja de la sucursal del pedido o por afuera; sin él, a la cuenta o a la deuda"
                 renglones: { $ref: "#/components/schemas/RenglonesDelPedidoADevolver" }
       responses:
         "200":

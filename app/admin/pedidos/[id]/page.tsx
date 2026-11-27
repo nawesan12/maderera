@@ -13,7 +13,7 @@ import {
   Pasos,
 } from "@/components/admin/pasos";
 import { fechaHora, formatearMonto, formatearPorcentaje, moneda } from "@/components/admin/formato";
-import { obtenerPedido } from "@/lib/dal/admin/ventas";
+import { datosDeDevolucion, obtenerPedido } from "@/lib/dal/admin/ventas";
 import { AccionesPedido, CancelarPedido } from "../acciones";
 import { DiaDeEntrega } from "./dia-de-entrega";
 import { devolucionDesdeElPedido, pedidoParaFacturar } from "@/lib/dal/admin/facturacion";
@@ -126,7 +126,11 @@ export default async function FichaPedidoPage({
   // no saque plata (H279); lo cobrado vuelve desde la factura.
   const devolucionFacturada =
     manejaPlata && !cancelado && pedido.facturado ? await devolucionDesdeElPedido(pedido.id) : null;
-  const devuelveDesdeElPedido = devolucionFacturada && devolucionFacturada.tope > 0.005 && devolucionFacturada.renglones.some((r) => r.queda > 0);
+  const paraDevolver = devolvible ? await datosDeDevolucion(pedido.id) : null;
+  const devuelveDesdeElPedido =
+    devolucionFacturada &&
+    devolucionFacturada.tope + devolucionFacturada.caja + devolucionFacturada.afuera > 0.005 &&
+    devolucionFacturada.renglones.some((r) => r.queda > 0);
   const corregible = devolvible && pedido.origen !== "mostrador" && pedido.cobrado < 0.005;
   const renglones = pedido.items.map((i) => ({
     id: i.id,
@@ -148,6 +152,13 @@ export default async function FichaPedidoPage({
 
   const etapas =
     pedido.tipoEntrega === "retiro" ? ETAPAS_RETIRO : ETAPAS_PEDIDO;
+
+  const devueltoTotal = pedido.devoluciones.reduce((t, d) => t + d.importe, 0);
+  const devueltoEnPlata = pedido.devoluciones.filter((d) => d.destino === "caja" || d.destino === "afuera").reduce((t, d) => t + d.importe, 0);
+  const sumaDeRenglones = Math.round(pedido.items.reduce((t, i) => t + Number(i.subtotal) * 100, 0)) / 100;
+  const descuentoAparte =
+    Number(pedido.descuento) > 0.004 &&
+    Math.abs(sumaDeRenglones + Number(pedido.costoEnvio) - Number(pedido.descuento) - Number(pedido.total)) < 0.02;
 
   const entregas = (
     <Entregas
@@ -173,8 +184,10 @@ export default async function FichaPedidoPage({
   const sinCambio = new Set(
     cronologico.filter((h, i) => i > 0 && h.nota && h.estado === cronologico[i - 1].estado).map((h) => h.id),
   );
-  const historial: { clave: string; cuando: Date; titulo: ReactNode; nota?: string | null; quien?: string | null }[] = [
-    ...pedido.historial.map((h) => ({
+  const historial: { clave: string; cuando: Date; titulo: ReactNode; nota?: ReactNode; quien?: string | null }[] = [
+    // Las devoluciones van con su nota de crédito, de la lista de abajo; el
+    // renglón del historial que las anotaba no se repite.
+    ...pedido.historial.filter((h) => !(h.nota?.startsWith("Devolución") && pedido.devoluciones.length > 0)).map((h) => ({
       clave: h.id,
       cuando: h.createdAt,
       titulo: sinCambio.has(h.id) ? (
@@ -196,6 +209,29 @@ export default async function FichaPedidoPage({
       ),
       nota: [r.numero, ...r.medios.split(",").filter(Boolean).map((m) => MEDIOS_DE_COBRO[m] ?? m)].join(" · "),
       quien: r.quien,
+    })),
+    ...pedido.devoluciones.map((d) => ({
+      clave: d.id,
+      cuando: new Date(d.createdAt),
+      titulo: (
+        <p className="text-base font-medium">
+          Devolución <span className="tabular">{formatearMonto(d.importe)}</span>
+        </p>
+      ),
+      nota: (
+        <>
+          {d.notaId && d.nota && (
+            <>
+              <a href={`/api/comprobantes/${d.notaId}/pdf`} target="_blank" rel="noreferrer" className="codigo hover:text-brand-orange">
+                {d.nota}
+              </a>{" "}
+              ·{" "}
+            </>
+          )}
+          {DESTINO_DEVOLUCION[d.destino]} · {d.motivo}
+        </>
+      ),
+      quien: d.quien,
     })),
     ...remitos
       // El remito que completa el pedido ya está en el historial como
@@ -259,7 +295,7 @@ export default async function FichaPedidoPage({
                 descuento={Number(pedido.descuento)}
               />
             )}
-            {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} />}
+            {devolvible && <DevolverPedido id={pedido.id} numero={pedido.numero} renglones={renglones} datos={paraDevolver} />}
             <a
               href={`/ticket/${pedido.id}`}
               target="_blank"
@@ -294,8 +330,10 @@ export default async function FichaPedidoPage({
                 id={pedido.id}
                 numero={pedido.numero}
                 factura={devolucionFacturada.factura}
-                destino={devolucionFacturada.destino}
                 tope={devolucionFacturada.tope}
+                caja={devolucionFacturada.caja}
+                afuera={devolucionFacturada.afuera}
+                cajaAbierta={devolucionFacturada.cajaAbierta}
                 renglones={devolucionFacturada.renglones}
               />
             )}
@@ -379,6 +417,12 @@ export default async function FichaPedidoPage({
                   <td className="px-5 py-3.5 text-base">{item.descripcion}</td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {cantidadConUnidad(Number(item.cantidad), item.unidad, item.descripcion)}
+                    {(item.devuelto ?? 0) > 0 && (
+                      <span className="estado-espera block text-sm font-medium text-[var(--estado-tinta)]">
+                        {(item.devuelto ?? 0) === 1 ? "Volvió" : "Volvieron"}{" "}
+                        {cantidadConUnidad(item.devuelto ?? 0, item.unidad, item.descripcion)}
+                      </span>
+                    )}
                   </td>
                   <td className="tabular px-4 py-3.5 text-right text-base text-muted-foreground">
                     {formatearMonto(Number(item.precioUnitario))}
@@ -389,17 +433,27 @@ export default async function FichaPedidoPage({
             </tbody>
           </table>
           <dl className="space-y-1 border-t bg-hundida/50 px-5 py-4 text-base">
+            {(Number(pedido.costoEnvio) > 0 || descuentoAparte) && (
+              <div className="flex justify-between gap-3">
+                <dt>Subtotal</dt>
+                <dd className="tabular">{formatearMonto(sumaDeRenglones)}</dd>
+              </div>
+            )}
+            {/* El descuento por forma de pago del pedido web o del
+                presupuesto: los renglones van a lista y el total no
+                cerraba a la vista (mes simulado 2). El del mostrador ya
+                rebajó cada renglón: ahí no va. */}
+            {descuentoAparte && (
+              <div className="flex justify-between gap-3">
+                <dt>{pedido.descuentoMotivo || "Descuento"}</dt>
+                <dd className="tabular">−{formatearMonto(Number(pedido.descuento))}</dd>
+              </div>
+            )}
             {Number(pedido.costoEnvio) > 0 && (
-              <>
-                <div className="flex justify-between gap-3">
-                  <dt>Subtotal</dt>
-                  <dd className="tabular">{formatearMonto(Number(pedido.subtotal))}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt>Envío{pedido.zonaEnvio ? ` · ${pedido.zonaEnvio}` : ""}</dt>
-                  <dd className="tabular">{formatearMonto(Number(pedido.costoEnvio))}</dd>
-                </div>
-              </>
+              <div className="flex justify-between gap-3">
+                <dt>Envío{pedido.zonaEnvio ? ` · ${pedido.zonaEnvio}` : ""}</dt>
+                <dd className="tabular">{formatearMonto(Number(pedido.costoEnvio))}</dd>
+              </div>
             )}
             <div className="flex items-baseline justify-between gap-3 pt-1">
               <dt className="font-medium">Total</dt>
@@ -561,17 +615,58 @@ export default async function FichaPedidoPage({
                   </dd>
                 </div>
               )}
+              {/* Cada recibo con el medio por el que entró: la forma de pago
+                  es la que se acordó, y decía «Transferencia» de un cobro en
+                  efectivo (mes simulado 2). */}
               {pedido.recibos.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
+                <ul className="space-y-1 pt-1">
                   {pedido.recibos.map((r) => (
+                    <li key={r.id} className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0">
+                        <a
+                          href={`/api/recibos/${r.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`codigo hover:text-brand-orange ${r.estado === "anulado" ? "line-through" : ""}`}
+                        >
+                          {r.numero}
+                        </a>{" "}
+                        <span className="text-sm text-muted-foreground">
+                          {r.medios.split(",").filter(Boolean).map((m) => MEDIOS_DE_COBRO[m] ?? m).join(" · ")}
+                        </span>
+                      </span>
+                      <span className={`tabular text-sm ${r.estado === "anulado" ? "text-muted-foreground line-through" : ""}`}>
+                        {formatearMonto(r.total)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* Lo que volvió por la caja o el banco, y lo neto (M2S1-082). */}
+              {devueltoEnPlata > 0.004 && (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Devuelto</dt>
+                    <dd className="tabular">−{formatearMonto(devueltoEnPlata)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Neto</dt>
+                    <dd className="tabular font-semibold">{formatearMonto(Number(pedido.total) - devueltoTotal)}</dd>
+                  </div>
+                </>
+              )}
+              {/* Las facturas y notas, para quien no entra a Facturación. */}
+              {pedido.comprobantes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 border-t pt-2">
+                  {pedido.comprobantes.map((c) => (
                     <a
-                      key={r.id}
-                      href={`/api/recibos/${r.id}/pdf`}
-                      target="_blank"
+                      key={c.id}
+                      href={factura ? `/admin/facturacion/${c.id}` : `/api/comprobantes/${c.id}/pdf`}
+                      target={factura ? undefined : "_blank"}
                       rel="noreferrer"
-                      className={`codigo hover:text-brand-orange ${r.estado === "anulado" ? "line-through" : ""}`}
+                      className={`codigo hover:text-brand-orange ${c.estado === "anulada" ? "line-through" : ""}`}
                     >
-                      {r.numero}
+                      {c.etiqueta}
                     </a>
                   ))}
                 </div>
@@ -674,6 +769,13 @@ export default async function FichaPedidoPage({
     </div>
   );
 }
+
+const DESTINO_DEVOLUCION: Record<string, string> = {
+  caja: "Salió de la caja",
+  afuera: "Volvió por el banco",
+  cuenta: "A la cuenta corriente",
+  deuda: "Bajó lo que debía",
+};
 
 const MEDIOS_DE_COBRO: Record<string, string> = {
   efectivo: "Efectivo",

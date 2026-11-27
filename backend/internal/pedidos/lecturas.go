@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"mjbj/internal/entregas"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/precios"
 	"mjbj/internal/ventas"
@@ -632,6 +633,32 @@ type ItemDePedido struct {
 	CostoUnitario  *string `json:"costoUnitario"`
 	AlicuotaIva    *string `json:"alicuotaIva"`
 	Orden          int     `json:"orden"`
+	// Devuelto es lo que volvió de este renglón (mes simulado 2, M2S1-082:
+	// la ficha seguía mostrando las 3 placas con una devuelta).
+	Devuelto float64 `json:"devuelto"`
+}
+
+// DevolucionEnLaFicha es una devolución del pedido, con su nota de crédito
+// si la tuvo (M2S1-082, M3S2-049: la ficha no la mostraba y no había cómo
+// llegar a la nota).
+type DevolucionEnLaFicha struct {
+	ID        string    `json:"id"`
+	Importe   float64   `json:"importe"`
+	Destino   string    `json:"destino"`
+	Motivo    string    `json:"motivo"`
+	NotaID    *string   `json:"notaId"`
+	Nota      *string   `json:"nota"`
+	Quien     *string   `json:"quien"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ComprobanteDelPedido es una factura o nota del pedido, para quien no entra
+// a Facturación (M2S3-027: el vendedor no veía ni el número de la factura).
+type ComprobanteDelPedido struct {
+	ID       string `json:"id"`
+	Etiqueta string `json:"etiqueta"`
+	Tipo     string `json:"tipo"`
+	Estado   string `json:"estado"`
 }
 
 // PasoDelPedido es una fila de order_status_history.
@@ -716,7 +743,9 @@ type FichaDePedido struct {
 	Acopio bool `json:"acopio"`
 	// Facturado: tiene una factura viva (no se corrige ni se devuelve desde
 	// el pedido: va por la factura).
-	Facturado bool `json:"facturado"`
+	Facturado    bool                   `json:"facturado"`
+	Devoluciones []DevolucionEnLaFicha  `json:"devoluciones"`
+	Comprobantes []ComprobanteDelPedido `json:"comprobantes"`
 }
 
 // ReciboDelPedido es un recibo que cobró el pedido.
@@ -863,6 +892,83 @@ func (s *Servicio) Pedido(ctx context.Context, id string, conMargen bool) (*Fich
 	filas.Close()
 	if err := filas.Err(); err != nil {
 		return nil, err
+	}
+
+	filas, err = s.pool.Query(ctx, `
+		SELECT d.id::text, d.importe::float8, d.destino, d.motivo, n.id::text, n.tipo::text, n.punto_venta::int8, n.numero::int8,
+		       u.name, d.created_at
+		FROM devoluciones d LEFT JOIN invoices n ON n.id = d.nota_id LEFT JOIN "user" u ON u.id = d.created_by_user_id
+		WHERE d.order_id = $1 ORDER BY d.created_at, d.id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Devoluciones = []DevolucionEnLaFicha{}
+	for filas.Next() {
+		var d DevolucionEnLaFicha
+		var tipo *string
+		var pv, n *int64
+		if err := filas.Scan(&d.ID, &d.Importe, &d.Destino, &d.Motivo, &d.NotaID, &tipo, &pv, &n, &d.Quien, &d.CreatedAt); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		if tipo != nil && pv != nil && n != nil {
+			x := fiscal.NombreComprobante(*tipo) + " " + fiscal.NumeroFormateado(*pv, *n)
+			d.Nota = &x
+		}
+		p.Devoluciones = append(p.Devoluciones, d)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	filas, err = s.pool.Query(ctx, `
+		SELECT id::text, tipo::text, punto_venta, numero, estado::text FROM invoices
+		WHERE order_id = $1 AND estado <> 'borrador' ORDER BY created_at, id`, id)
+	if err != nil {
+		return nil, err
+	}
+	p.Comprobantes = []ComprobanteDelPedido{}
+	for filas.Next() {
+		var c ComprobanteDelPedido
+		var pv, n int64
+		if err := filas.Scan(&c.ID, &c.Tipo, &pv, &n, &c.Estado); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		c.Etiqueta = fiscal.NombreComprobante(c.Tipo) + " " + fiscal.NumeroFormateado(pv, n)
+		p.Comprobantes = append(p.Comprobantes, c)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+
+	{
+		devueltos := map[string]float64{}
+		filas, err = s.pool.Query(ctx, `
+			SELECT di.order_item_id::text, sum(di.cantidad)::float8
+			FROM devolucion_items di JOIN devoluciones d ON d.id = di.devolucion_id
+			WHERE d.order_id = $1 AND di.order_item_id IS NOT NULL GROUP BY di.order_item_id`, id)
+		if err != nil {
+			return nil, err
+		}
+		for filas.Next() {
+			var item string
+			var c float64
+			if err := filas.Scan(&item, &c); err != nil {
+				filas.Close()
+				return nil, err
+			}
+			devueltos[item] = c
+		}
+		filas.Close()
+		if err := filas.Err(); err != nil {
+			return nil, err
+		}
+		for i := range p.Items {
+			p.Items[i].Devuelto = devueltos[p.Items[i].ID]
+		}
 	}
 
 	if conMargen {

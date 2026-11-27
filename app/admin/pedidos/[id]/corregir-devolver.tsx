@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cantidadConUnidad, formatearMonto, importeParaElCampo, parsearImporte } from "@/lib/formato";
+import { Opciones } from "@/components/admin/opciones";
+import type { DatosDeDevolucion } from "@/lib/dal/admin/ventas";
 
 /** Un renglón del pedido, como lo necesitan los dos diálogos. */
 export interface RenglonDelPedido {
@@ -32,26 +34,53 @@ const claseQuieta =
 
 /**
  * Devolver lo que el cliente trae (o deja) de un pedido sin factura. Lo que
- * sigue en acopio baja la reserva y lo que se llevó vuelve al stock; la plata
- * baja lo que falta cobrar. Con factura, se devuelve desde la factura (mes
- * simulado: no había camino, y el pedido seguía cobrando lo devuelto).
+ * sigue en acopio baja la reserva y lo que se llevó vuelve al stock. La
+ * plata baja lo que falta cobrar o va a la cuenta corriente; si ya está
+ * cobrado, vuelve por donde entró: la caja o el banco (mes simulado 2: se
+ * frenaba sin otra salida).
  */
-export function DevolverPedido({ id, numero, renglones }: { id: string; numero: string; renglones: RenglonDelPedido[] }) {
+export function DevolverPedido({
+  id,
+  numero,
+  renglones,
+  datos,
+}: {
+  id: string;
+  numero: string;
+  renglones: RenglonDelPedido[];
+  datos: DatosDeDevolucion | null;
+}) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [motivo, setMotivo] = useState("");
   const [clave, setClave] = useState("");
+  const [destino, setDestino] = useState<"caja" | "afuera" | null>(null);
   const [pendiente, startTransition] = useTransition();
 
-  const elegidos = renglones
+  // Lo que queda de cada renglón: con dos ya devueltas decía «de 8 u.».
+  const queda = new Map(datos?.renglones.map((r) => [r.orderItemId, r.queda]) ?? []);
+  const disponibles = renglones
+    .map((r) => ({ ...r, queda: queda.get(r.id) ?? r.cantidad }))
+    .filter((r) => r.queda > 0);
+  const elegidos = disponibles
     .map((r) => ({ r, cantidad: leerCantidad(cantidades[r.id] ?? "") }))
     .filter((x) => Number.isFinite(x.cantidad) && x.cantidad > 0);
   const total = elegidos.reduce((s, x) => s + Math.round((x.r.subtotal * x.cantidad * 100) / x.r.cantidad) / 100, 0);
-  const mal = renglones.some((r) => {
+  const mal = disponibles.some((r) => {
     const c = leerCantidad(cantidades[r.id] ?? "");
-    return !Number.isFinite(c) || c < 0 || c > r.cantidad;
+    return !Number.isFinite(c) || c < 0 || c > r.queda;
   });
+  // Ya cobrado: la plata sale por la caja o por el banco, hasta lo que entró
+  // por cada uno.
+  const cobrado = Boolean(datos && !datos.aCuenta && total > datos.deuda + 0.005);
+  const opciones = datos
+    ? [
+        { valor: "caja" as const, texto: "De la caja", deshabilitada: !datos.cajaAbierta || datos.caja + 0.005 < total },
+        { valor: "afuera" as const, texto: "Por el banco", deshabilitada: datos.afuera + 0.005 < total },
+      ]
+    : [];
+  const elegido = cobrado ? (opciones.find((o) => o.valor === destino && !o.deshabilitada)?.valor ?? null) : null;
 
   function abrir(v: boolean) {
     if (v && !abierto) {
@@ -59,6 +88,7 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
       setClave(crypto.randomUUID());
       setCantidades({});
       setMotivo("");
+      setDestino(null);
     }
     setAbierto(v);
   }
@@ -70,6 +100,7 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
         elegidos.map((x) => ({ orderItemId: x.r.id, cantidad: x.cantidad })),
         motivo.trim(),
         clave,
+        elegido ?? undefined,
       );
       if (r.error) {
         toast.error(r.error);
@@ -80,6 +111,8 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
       router.refresh();
     });
   }
+
+  if (disponibles.length === 0) return null;
 
   return (
     <>
@@ -95,11 +128,11 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            {renglones.map((r) => (
+            {disponibles.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <label htmlFor={`devuelve-${r.id}`} className="min-w-0 flex-1 basis-48 text-base">
                   {r.descripcion}
-                  <span className="block text-sm text-muted-foreground">de {cantidadConUnidad(r.cantidad, r.unidad, r.descripcion)}</span>
+                  <span className="block text-sm text-muted-foreground">de {cantidadConUnidad(r.queda, r.unidad, r.descripcion)}</span>
                 </label>
                 <Input
                   id={`devuelve-${r.id}`}
@@ -107,12 +140,18 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
                   placeholder="0"
                   value={cantidades[r.id] ?? ""}
                   onChange={(e) => setCantidades((c) => ({ ...c, [r.id]: e.target.value }))}
-                  aria-invalid={leerCantidad(cantidades[r.id] ?? "") > r.cantidad || undefined}
+                  aria-invalid={leerCantidad(cantidades[r.id] ?? "") > r.queda || undefined}
                   className="tabular h-11 w-24 text-right text-base"
                 />
               </div>
             ))}
           </div>
+          {cobrado && (
+            <div className="space-y-2">
+              <p className="text-base font-medium">La plata</p>
+              <Opciones etiqueta="Por dónde vuelve la plata" valor={elegido} alCambiar={setDestino} opciones={opciones} />
+            </div>
+          )}
           <div className="space-y-1.5">
             <label htmlFor="motivo-devolucion" className="text-base font-medium">
               Por qué
@@ -125,7 +164,7 @@ export function DevolverPedido({ id, numero, renglones }: { id: string; numero: 
             </button>
             <button
               type="button"
-              disabled={pendiente || mal || elegidos.length === 0 || !motivo.trim()}
+              disabled={pendiente || mal || elegidos.length === 0 || !motivo.trim() || (cobrado && !elegido)}
               onClick={devolver}
               className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-50"
             >

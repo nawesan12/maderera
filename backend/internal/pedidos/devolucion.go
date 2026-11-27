@@ -10,6 +10,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/entregas"
+	"mjbj/internal/facturacion"
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/numeracion"
@@ -61,7 +62,18 @@ const MsjDevolverDesdeLaFactura = "Está facturado: la devolución sale desde la
 
 // DevolverSinFactura hace la devolución de un pedido sin factura.
 func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, pedido string, renglones []RenglonDevuelto, motivo, clave string) (*DevolucionDelPedido, error) {
+	return s.DevolverSinFacturaPor(ctx, ses, pedido, renglones, motivo, clave, "")
+}
+
+// DevolverSinFacturaPor es DevolverSinFactura eligiendo por dónde vuelve la
+// plata: "" es lo de siempre (la cuenta corriente o lo que falta cobrar);
+// "caja" o "afuera" devuelven lo ya cobrado por donde entró (M2S2-022: el
+// pedido cobrado y sin factura no tenía salida).
+func (s *Servicio) DevolverSinFacturaPor(ctx context.Context, ses *auth.Sesion, pedido string, renglones []RenglonDevuelto, motivo, clave, plata string) (*DevolucionDelPedido, error) {
 	motivo = zodjs.TrimJS(motivo)
+	if plata != "" && plata != facturacion.DevolverPorCaja && plata != facturacion.DevolverPorAfuera {
+		return nil, plataforma.Invalido(map[string]string{"destino": "Elegí por dónde vuelve la plata."})
+	}
 	if motivo == "" {
 		return nil, plataforma.Invalido(map[string]string{"motivo": "Escribí por qué devuelve."})
 	}
@@ -98,7 +110,7 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 		var sucursal *string
 		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador') AND f.tipo::text LIKE 'factura%'),
-			       o.customer_id IS NOT NULL AND (o.medio_pago = 'cuenta_corriente' OR EXISTS (SELECT 1 FROM account_movements am
+			       o.customer_id IS NOT NULL AND (coalesce(o.medio_pago = 'cuenta_corriente', false) OR EXISTS (SELECT 1 FROM account_movements am
 			         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')),
 			       o.branch_id::text
 			FROM orders o WHERE o.id = $1`, pedido).Scan(&facturado, &aCuenta, &sucursal); err != nil {
@@ -201,9 +213,12 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 		}
 
 		destino := "deuda"
-		if aCuenta {
+		switch {
+		case plata != "":
+			destino = plata
+		case aCuenta:
 			destino = "cuenta"
-		} else {
+		default:
 			var falta float64
 			if err := tx.QueryRow(ctx, `SELECT greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`, 0)::float8
 				FROM orders o WHERE o.id = $1`, pedido).Scan(&falta); err != nil {
@@ -214,6 +229,17 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 					return fallo("El pedido ya está cobrado: la plata vuelve por la caja o el banco, no desde acá.")
 				}
 				return fallo("Lo devuelto (" + formato.Importe(total) + ") pasa lo que falta cobrar (" + formato.Importe(falta) + ").")
+			}
+		}
+
+		var salida *facturacion.PlataDeLaDevolucion
+		if destino == facturacion.DevolverPorCaja || destino == facturacion.DevolverPorAfuera {
+			salida, err = facturacion.PrepararPlata(ctx, tx, pedido, destino, total, sucursal)
+			if m := facturacion.Mensaje(err); m != "" {
+				return fallo(m)
+			}
+			if err != nil {
+				return err
 			}
 		}
 
@@ -263,7 +289,14 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 		}
 
 		// La plata.
-		if destino == "cuenta" {
+		if salida != nil {
+			if err := salida.Mover(ctx, tx, out.ID, nota, motivo, ses.UserID); err != nil {
+				if m := facturacion.Mensaje(err); m != "" {
+					return fallo(m)
+				}
+				return err
+			}
+		} else if destino == "cuenta" {
 			var mov string
 			if err := tx.QueryRow(ctx, `INSERT INTO account_movements (customer_id, tipo, monto, detalle, referencia, created_by_user_id)
 				VALUES ($1, 'nota_credito', $2::numeric, $3, $4, $5) RETURNING id::text`, *p.customerID, jsmath.Fijo2(-total),
@@ -285,6 +318,14 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 			partes = append(partes, jsmath.Texto(v.cantidad)+" "+v.descripcion)
 		}
 		renglon := "Devolución · " + strings.Join(partes, ", ") + " · " + formato.Importe(total) + " · " + motivo
+		switch destino {
+		case facturacion.DevolverPorCaja:
+			renglon += " · Sale de la caja"
+		case facturacion.DevolverPorAfuera:
+			renglon += " · Vuelve por el banco"
+		case "cuenta":
+			renglon += " · A la cuenta corriente"
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2, $3, $4)`,
 			pedido, p.estado, renglon, ses.UserID); err != nil {
 			return err
@@ -298,6 +339,72 @@ func (s *Servicio) DevolverSinFactura(ctx context.Context, ses *auth.Sesion, ped
 	}
 	if !out.Repetida {
 		s.anotar(ctx, ses, sqlc.AccionAuditoriaCrear, "devolucion", out.ID, "Devolución sin factura del pedido "+numero+" por "+formato.Importe(out.Importe), nil)
+	}
+	return &out, nil
+}
+
+// ParaDevolverSinFactura es lo que necesita el diálogo de la devolución sin
+// factura: cuánto queda por devolver de cada renglón (decía «de 8 u.» con
+// dos ya devueltas) y por dónde puede volver la plata.
+type ParaDevolverSinFactura struct {
+	Renglones []RenglonQueQueda `json:"renglones"`
+	// Deuda es lo que falta cobrar (lo devuelto la baja); ACuenta, que la
+	// nota va a la cuenta corriente del cliente.
+	Deuda   float64 `json:"deuda"`
+	ACuenta bool    `json:"aCuenta"`
+	// Caja y Afuera: lo cobrado en efectivo y por los demás medios que
+	// todavía no volvió.
+	Caja        float64 `json:"caja"`
+	Afuera      float64 `json:"afuera"`
+	CajaAbierta bool    `json:"cajaAbierta"`
+}
+
+// RenglonQueQueda es lo que todavía se puede devolver de un renglón.
+type RenglonQueQueda struct {
+	OrderItemID string  `json:"orderItemId"`
+	Queda       float64 `json:"queda"`
+}
+
+// DatosDeDevolucion arma ParaDevolverSinFactura.
+func (s *Servicio) DatosDeDevolucion(ctx context.Context, pedido string) (*ParaDevolverSinFactura, error) {
+	out := ParaDevolverSinFactura{Renglones: []RenglonQueQueda{}}
+	err := s.pool.QueryRow(ctx, `
+		SELECT o.customer_id IS NOT NULL AND (coalesce(o.medio_pago = 'cuenta_corriente', false) OR EXISTS (SELECT 1 FROM account_movements am
+		         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra')),
+		       greatest(`+fragmentos.ACobrarDelPedido+` - `+fragmentos.CobradoDelPedido+`, 0)::float8,
+		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = o.branch_id AND cs.estado = 'abierta')
+		FROM orders o WHERE o.id = $1`, pedido).Scan(&out.ACuenta, &out.Deuda, &out.CajaAbierta)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, noEsta("No se encontró el pedido.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT oi.id::text, oi.cantidad::float8 - coalesce((SELECT sum(di.cantidad) FROM devolucion_items di WHERE di.order_item_id = oi.id), 0)::float8
+		FROM order_items oi WHERE oi.order_id = $1 ORDER BY oi.id`, pedido)
+	if err != nil {
+		return nil, err
+	}
+	for filas.Next() {
+		var r RenglonQueQueda
+		if err := filas.Scan(&r.OrderItemID, &r.Queda); err != nil {
+			filas.Close()
+			return nil, err
+		}
+		r.Queda = ventas.CantidadDeStock(math.Max(0, r.Queda))
+		out.Renglones = append(out.Renglones, r)
+	}
+	filas.Close()
+	if err := filas.Err(); err != nil {
+		return nil, err
+	}
+	if !out.ACuenta {
+		t, err := facturacion.TopesDelPedido(ctx, s.pool, pedido)
+		if err != nil {
+			return nil, err
+		}
+		out.Caja, out.Afuera = t.Caja, t.Afuera
 	}
 	return &out, nil
 }

@@ -237,7 +237,27 @@ func (a *API) DevolverPedido(ctx context.Context, r ventasapi.DevolverPedidoRequ
 	for _, x := range r.Body.Renglones {
 		renglones = append(renglones, RenglonDevuelto{OrderItemID: x.OrderItemId, Cantidad: x.Cantidad})
 	}
-	v, err := a.s.DevolverSinFactura(ctx, ses, r.Id.String(), renglones, r.Body.Motivo, r.Body.Clave)
+	plata := ""
+	if r.Body.Destino != nil {
+		plata = string(*r.Body.Destino)
+	}
+	v, err := a.s.DevolverSinFacturaPor(ctx, ses, r.Id.String(), renglones, r.Body.Motivo, r.Body.Clave, plata)
+	if err != nil {
+		return nil, err
+	}
+	return ok(v), nil
+}
+
+func (o respuesta) VisitDatosDeDevolucionDelPedidoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// DatosDeDevolucionDelPedido: el diálogo de la devolución sin factura.
+func (a *API) DatosDeDevolucionDelPedido(ctx context.Context, r ventasapi.DatosDeDevolucionDelPedidoRequestObject) (ventasapi.DatosDeDevolucionDelPedidoResponseObject, error) {
+	if _, err := auth.Exigir(ctx, roles.ManejanPlata...); err != nil {
+		return nil, err
+	}
+	v, err := a.s.DatosDeDevolucion(ctx, r.Id.String())
 	if err != nil {
 		return nil, err
 	}

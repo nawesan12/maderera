@@ -141,7 +141,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** Lo que queda por devolver de cada renglón y por dónde puede volver la plata. */
+        get: operations["DatosDeDevolucionDelPedido"];
         put?: never;
         /** La devolución de un pedido sin factura: baja lo que falta cobrar (o la cuenta corriente) y lo que vuelve al stock queda atado a ella. Con factura, se devuelve desde la factura. */
         post: operations["DevolverPedido"];
@@ -515,6 +516,31 @@ export interface components {
             costoUnitario: string | null;
             alicuotaIva: string | null;
             orden: number;
+            /**
+             * Format: double
+             * @description Lo que volvió de este renglón
+             */
+            devuelto?: number;
+        };
+        DevolucionEnLaFicha: {
+            id: string;
+            /** Format: double */
+            importe: number;
+            /** @enum {string} */
+            destino: "caja" | "cuenta" | "afuera" | "deuda";
+            motivo: string;
+            notaId: string | null;
+            /** @description «Nota de crédito B 0015-00000003» */
+            nota: string | null;
+            quien: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ComprobanteDelPedido: {
+            id: string;
+            etiqueta: string;
+            tipo: string;
+            estado: string;
         };
         PasoDelPedido: {
             id: string;
@@ -575,6 +601,8 @@ export interface components {
         FichaDePedido: {
             /** @description Tiene una factura viva */
             facturado: boolean;
+            devoluciones: components["schemas"]["DevolucionEnLaFicha"][];
+            comprobantes: components["schemas"]["ComprobanteDelPedido"][];
             /** @description Se retira de a partes (ya salió algo */
             acopio: boolean;
             /**
@@ -849,6 +877,45 @@ export interface operations {
             422: components["responses"]["Problema"];
         };
     };
+    DatosDeDevolucionDelPedido: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Los datos del diálogo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        renglones: {
+                            orderItemId: string;
+                            /** Format: double */
+                            queda: number;
+                        }[];
+                        /** Format: double */
+                        deuda: number;
+                        aCuenta: boolean;
+                        /** Format: double */
+                        caja: number;
+                        /** Format: double */
+                        afuera: number;
+                        cajaAbierta: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Problema"];
+            403: components["responses"]["Problema"];
+            404: components["responses"]["Problema"];
+        };
+    };
     DevolverPedido: {
         parameters: {
             query?: never;
@@ -869,6 +936,11 @@ export interface operations {
                     motivo: string;
                     /** @description la del intento: un reintento devuelve la misma devolución */
                     clave: string;
+                    /**
+                     * @description lo ya cobrado vuelve por la caja o por afuera; sin él, baja lo que falta cobrar o va a la cuenta
+                     * @enum {string}
+                     */
+                    destino?: "caja" | "afuera";
                 };
             };
         };

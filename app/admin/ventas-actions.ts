@@ -227,15 +227,17 @@ export async function devolverPedido(
   renglones: { orderItemId: string; cantidad: number }[],
   motivo: string,
   clave: string,
+  destino?: "caja" | "afuera",
 ): Promise<EstadoVenta> {
   const r = await (await api()).POST("/api/v1/admin/pedidos/{id}/devolucion", {
     params: { path: { id } },
-    body: { renglones, motivo, clave },
+    body: { renglones, motivo, clave, ...(destino ? { destino } : {}) },
   });
   if (!r.data) return fallo(r);
   refrescar();
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/stock");
+  if (destino === "caja") revalidatePath("/admin/caja");
   return { ok: r.data.ok };
 }
 
@@ -262,17 +264,19 @@ export async function devolverPedidoFacturado(
   motivo: string,
   clave: string,
   importe: number | null,
-): Promise<EstadoVenta> {
+  destino?: "caja" | "afuera",
+): Promise<EstadoVenta & { notaId?: string }> {
   const r = await (await api()).POST("/api/v1/admin/facturacion/pedidos/{id}/devolucion", {
     params: { path: { id } },
-    body: { renglones, motivo, clave, importe },
+    body: { renglones, motivo, clave, importe, ...(destino ? { destino } : {}) },
   });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   refrescar();
   revalidatePath(`/admin/pedidos/${id}`);
   revalidatePath("/admin/stock");
   revalidatePath("/admin/facturacion");
-  return { ok: "Devolución registrada." };
+  if (destino === "caja") revalidatePath("/admin/caja");
+  return { ok: "Devolución registrada.", notaId: r.data.notaId || undefined };
 }
 
 /**

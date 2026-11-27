@@ -44,8 +44,14 @@ type DevolucionDesdeElPedido struct {
 	// Tope es lo que se puede devolver desde el pedido: lo que se cargó a la
 	// cuenta o lo que falta cobrar. 0: ya está cobrado, la plata vuelve desde
 	// la factura.
-	Tope      float64             `json:"tope"`
-	Renglones []RenglonDevolvible `json:"renglones"`
+	Tope float64 `json:"tope"`
+	// Caja y Afuera: lo ya cobrado que puede volver por la caja de la
+	// sucursal del pedido (con la caja abierta) o por afuera (mes simulado
+	// 2: el pedido cobrado no tenía por dónde devolverse desde el pedido).
+	Caja        float64             `json:"caja"`
+	Afuera      float64             `json:"afuera"`
+	CajaAbierta bool                `json:"cajaAbierta"`
+	Renglones   []RenglonDevolvible `json:"renglones"`
 }
 
 // facturaVivaDelPedido es la factura (no nota, no borrador, no anulada) del
@@ -92,6 +98,12 @@ func (s *Servicio) ParaDevolverDesdeElPedido(ctx context.Context, pedido string)
 	}
 	out := &DevolucionDesdeElPedido{FacturaID: factura, Factura: etiqueta(o.tipo, o.puntoVenta, o.numero), Renglones: d.Renglones}
 	out.Destino, out.Tope = destinoDesdeElPedido(d)
+	out.Caja, out.Afuera = d.Caja, d.Afuera
+	for _, x := range d.Sucursales {
+		if d.Sucursal != nil && x.ID == *d.Sucursal {
+			out.CajaAbierta = x.CajaAbierta
+		}
+	}
 	return out, nil
 }
 
@@ -158,6 +170,17 @@ func (s *Servicio) CalcularDesdeElPedido(ctx context.Context, pedido string, ren
 // lo que se lee acá solo elige el destino.
 func (s *Servicio) DevolverDesdeElPedido(ctx context.Context, userID, pedido, clave, motivo string,
 	renglones []RenglonDelPedidoADevolver, importe *float64) (Devolucion, error) {
+	return s.DevolverDesdeElPedidoPor(ctx, userID, pedido, clave, motivo, renglones, importe, "")
+}
+
+// DevolverDesdeElPedidoPor es DevolverDesdeElPedido eligiendo por dónde
+// vuelve lo ya cobrado: "caja" (la de la sucursal del pedido) o "afuera".
+// Los topes los controla DevolucionParcial, como desde la factura.
+func (s *Servicio) DevolverDesdeElPedidoPor(ctx context.Context, userID, pedido, clave, motivo string,
+	renglones []RenglonDelPedidoADevolver, importe *float64, plata string) (Devolucion, error) {
+	if plata != "" && plata != DevolverPorCaja && plata != DevolverPorAfuera {
+		return Devolucion{}, errEmision("Elegí por dónde vuelve la plata.")
+	}
 	if d, err := porClave(ctx, s.pool, clave); err != nil || d != nil {
 		if d != nil {
 			return *d, nil
@@ -183,6 +206,9 @@ func (s *Servicio) DevolverDesdeElPedido(ctx context.Context, userID, pedido, cl
 		return Devolucion{}, err
 	}
 	destino, tope := destinoDesdeElPedido(d)
+	if plata != "" {
+		destino, tope = plata, math.Inf(1)
+	}
 	if tope <= 0.005 {
 		return Devolucion{}, errEmision("El pedido ya está cobrado: la plata vuelve por la caja o el banco, desde la factura.")
 	}
@@ -200,10 +226,27 @@ func (s *Servicio) DevolverDesdeElPedido(ctx context.Context, userID, pedido, cl
 		return Devolucion{}, err
 	}
 	if !out.Repetida {
-		// En el historial del pedido, como la devolución sin factura.
+		// En el historial del pedido, como la devolución sin factura, con el
+		// número de la nota (M3S2-049: no se sabía qué nota salió).
+		nota := "Devolución con nota de crédito"
+		if out.NotaID != "" {
+			var tipo string
+			var pv, n int64
+			if err := s.pool.QueryRow(ctx, `SELECT tipo::text, punto_venta, numero FROM invoices WHERE id = $1`, out.NotaID).Scan(&tipo, &pv, &n); err == nil {
+				nota = "Devolución · " + etiqueta(tipo, pv, n)
+			}
+		}
+		nota += " · " + formato.Importe(out.Importe) + " · " + motivo
+		switch destino {
+		case DevolverPorCaja:
+			nota += " · Sale de la caja"
+		case DevolverPorAfuera:
+			nota += " · Vuelve por el banco"
+		case DevolverPorCuenta:
+			nota += " · A la cuenta corriente"
+		}
 		_, _ = s.pool.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id)
-			SELECT id, estado, $2, $3 FROM orders WHERE id = $1`, pedido,
-			"Devolución con nota de crédito · "+formato.Importe(out.Importe)+" · "+motivo, userID)
+			SELECT id, estado, $2, $3 FROM orders WHERE id = $1`, pedido, nota, userID)
 	}
 	return out, nil
 }

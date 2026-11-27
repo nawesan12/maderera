@@ -398,7 +398,7 @@ export default async function CajaPage({
           <Paginador
             pagina={pagina}
             total={turnosDelMes.total}
-            params={{ periodo: crudo }}
+            params={{ periodo: crudo, emitidos: emitidosCruda }}
           />
         </div>
       </section>
@@ -415,10 +415,11 @@ export default async function CajaPage({
         El número provisorio va al lado del definitivo porque es el que trae el
         cliente escrito en el ticket cuando la venta se cobró sin internet.
       */}
-      {/* Plegado: son hasta 200 ventas, y abierto era lo que más alargaba la
+      {/* Plegado: son de a 100 ventas, y abierto era lo que más alargaba la
           página en el teléfono (H242). Las anulaciones por persona se ven
-          sin desplegar. */}
-      <details className="tarjeta group @container overflow-hidden">
+          sin desplegar. Desde la segunda página llega abierto: «Siguiente»
+          lo volvía a plegar y parecía que no había pasado nada (M3S2-040). */}
+      <details open={paginaEmitidos > 1} className="tarjeta group @container overflow-hidden">
         <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-3 border-b border-linea px-5 py-4 [&::-webkit-details-marker]:hidden">
           <h2 className="inline-flex items-center gap-2 text-base font-semibold">
             Emitido en el mostrador

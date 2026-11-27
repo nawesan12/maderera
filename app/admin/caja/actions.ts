@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 
 /*
@@ -18,6 +18,10 @@ export interface EstadoCajas {
 function refrescar() {
   revalidatePath("/admin/caja");
   revalidatePath("/mostrador");
+  // La pantalla que llamó vuelve a pedir sus datos: con solo revalidar, la
+  // caja recién creada no aparecía y la dada de baja seguía con «Dar de
+  // baja» hasta recargar (mes 23).
+  refresh();
 }
 
 /**

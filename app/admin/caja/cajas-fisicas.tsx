@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2, Monitor, Plus } from "lucide-react";
 import { Confirmar } from "@/components/admin/confirmar";
 import { crearCaja, darDeBajaCaja, type EstadoCajas } from "./actions";
@@ -37,8 +38,11 @@ export function CajasFisicas({
   cajas: CajaFisica[];
   sucursales: { id: string; nombre: string }[];
 }) {
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [estado, setEstado] = useState<EstadoCajas>({});
+  // La baja se ve en el acto, sin esperar a que vuelva la página.
+  const [dadas, setDadas] = useState<string[]>([]);
   const [enCurso, empezar] = useTransition();
   const [porDarDeBaja, setPorDarDeBaja] = useState<{
     id: string;
@@ -57,12 +61,14 @@ export function CajasFisicas({
         setCodigo("");
         setNombre("");
         setAbierto(false);
+        router.refresh();
       }
     });
   }
 
-  const activas = cajas.filter((c) => c.activo);
-  const bajas = cajas.filter((c) => !c.activo);
+  const todas = cajas.map((c) => (dadas.includes(c.id) ? { ...c, activo: false } : c));
+  const activas = todas.filter((c) => c.activo);
+  const bajas = todas.filter((c) => !c.activo);
 
   function renglon(c: CajaFisica) {
     return (
@@ -234,8 +240,13 @@ export function CajasFisicas({
           const caja = porDarDeBaja;
           if (!caja) return;
           empezar(async () => {
-            setEstado(await darDeBajaCaja(caja.id));
+            const r = await darDeBajaCaja(caja.id);
+            setEstado(r);
             setPorDarDeBaja(null);
+            if (r.ok) {
+              setDadas((d) => [...d, caja.id]);
+              router.refresh();
+            }
           });
         }}
       />

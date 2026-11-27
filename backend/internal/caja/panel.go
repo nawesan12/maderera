@@ -702,7 +702,9 @@ func (p *Panel) EmitidoPorCaja(ctx context.Context, desde, hasta time.Time, limi
 		                   WHERE h.order_id = o.id AND h.estado = 'cancelado'
 		                   ORDER BY h.created_at DESC LIMIT 1) anulacion ON o.estado = 'cancelado'
 		WHERE o.origen = 'mostrador' AND o.created_at >= $1 AND o.created_at <= $2
-		ORDER BY o.created_at DESC
+		-- El id desempata: dos ventas en el mismo instante (la cola sin
+		-- conexión sube de a varias) caían en las dos páginas o en ninguna.
+		ORDER BY o.created_at DESC, o.id
 		LIMIT $3 OFFSET $4`, desde, hasta, limite, desplazamiento)
 	if err != nil {
 		return nil, err

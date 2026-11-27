@@ -212,6 +212,8 @@ export const supplierMovements = pgTable(
     supplierPaymentId: uuid(),
     /** El cheque que le dimos y rebotó (goose 00250). */
     chequeId: uuid(),
+    /** La factura a la que se aplica un ajuste que baja la deuda (goose 00401). */
+    aplicaAId: uuid(),
   },
   (t) => [
     index("supplier_movements_supplier_idx").on(t.supplierId),

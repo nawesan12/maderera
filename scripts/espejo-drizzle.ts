@@ -31,6 +31,9 @@ const SOLO_EN_GO = new Set([
   "bases_de_retencion",
   "purchase_invoice_receipts",
   "supplier_payment_cheques",
+  // Los ajustes que paga un pago y lo que cubría un pago anulado (00401).
+  "supplier_payment_ajustes",
+  "supplier_payment_anulado_items",
   "cheque_estados",
   "consultas_corte",
   "consultas_corte_grupos",

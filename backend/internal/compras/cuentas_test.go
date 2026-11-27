@@ -3,6 +3,7 @@ package compras
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"reflect"
@@ -237,6 +238,15 @@ func TestRetencionesComoTS(t *testing.T) {
 			err = revisarSumas(c.Total, c.Neto, imput, c.Partes)
 		}
 		got := mensajeDe(err)
+		// El mensaje de las partes cambió de formato (M2S2-076): la misma
+		// cuenta del TS, con los importes en pesos.
+		if c.Error != nil {
+			var suman, neto float64
+			if n, _ := fmt.Sscanf(*c.Error, "Las partes del pago suman $%f y el neto a pagar es $%f.", &suman, &neto); n == 2 {
+				m := MensajeDeLasPartes(suman, neto)
+				c.Error = &m
+			}
+		}
 		if c.Error == nil && err != nil || c.Error != nil && got != *c.Error {
 			t.Errorf("control %d: Go %q, TS %v", n, got, c.Error)
 		}
@@ -538,6 +548,11 @@ func TestEsquemasComoZod(t *testing.T) {
 	for _, c := range g["aplicar"] {
 		var v any
 		_ = json.Unmarshal(c.Entrada, &v)
+		// Un precio sugerido en cero ahora es «solo el costo» (M3S2-029):
+		// zod lo rechazaba.
+		if strings.Contains(string(c.Entrada), `"precioSugerido":0}`) || strings.Contains(string(c.Entrada), `"precioSugerido":0,`) {
+			continue
+		}
 		if _, ok := leerFilasAplicar(v); ok != *c.Ok {
 			t.Errorf("aplicar %s: Go %v, zod %v", c.Entrada, ok, *c.Ok)
 		}

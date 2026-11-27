@@ -360,10 +360,46 @@ func (s *Servicio) RegistrarMovimiento(ctx context.Context, ses *auth.Sesion, m 
 	default:
 		return "", fallo("Elegí si el ajuste sube o baja la deuda.")
 	}
-	if _, err := s.pool.Exec(ctx, `
-		INSERT INTO supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_by_user_id)
-		VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, $5, $6)`,
-		x.SupplierID, x.Tipo, jsmath.Fijo2(conSigno), x.Detalle, x.Referencia, ses.UserID); err != nil {
+	// Un ajuste que baja la deuda se puede aplicar a una factura, como una
+	// nota de crédito (una bonificación pactada, M3S2-028): la factura queda
+	// pagada por lo que cubre.
+	var aplicaA *string
+	if v, _ := m["aplicaA"].(string); v != "" {
+		if conSigno > 0 {
+			return "", fallo("Solo un ajuste que baja la deuda se aplica a una factura.")
+		}
+		aplicaA = &v
+	}
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if aplicaA != nil {
+			if !plataforma.UUIDValido(*aplicaA) {
+				return fallo("Esa factura no existe.")
+			}
+			var dueno, tipo string
+			var anulada bool
+			var total, imputado jsmath.Num
+			err := tx.QueryRow(ctx, `SELECT supplier_id, tipo::text, anulada_at IS NOT NULL, total, `+AplicadoA("f")+`
+				FROM purchase_invoices f WHERE id = $1 FOR UPDATE`, *aplicaA).Scan(&dueno, &tipo, &anulada, &total, &imputado)
+			if errors.Is(err, pgx.ErrNoRows) || err == nil && dueno != x.SupplierID {
+				return fallo("Esa factura no es de este proveedor.")
+			}
+			if err != nil {
+				return err
+			}
+			if anulada || strings.HasPrefix(tipo, "nota_credito") {
+				return fallo("Ese comprobante no se paga.")
+			}
+			if saldo := SaldoDeFactura(total.F(), imputado.F()); x.Monto-saldo > 0.009 {
+				return fallo("A esa factura le quedan " + formato.Importe(saldo) + ": el ajuste no puede ser mayor.")
+			}
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO supplier_movements (supplier_id, tipo, monto, detalle, referencia, created_by_user_id, aplica_a_id)
+			VALUES ($1, $2::tipo_movimiento_proveedor, $3::numeric, $4, $5, $6, $7)`,
+			x.SupplierID, x.Tipo, jsmath.Fijo2(conSigno), x.Detalle, x.Referencia, ses.UserID, aplicaA)
+		return err
+	})
+	if err != nil {
 		if strings.Contains(err.Error(), "foreign key") {
 			return "", fallo("Ese proveedor no existe.")
 		}

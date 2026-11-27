@@ -447,7 +447,7 @@ func TestPagoConRetencionesYCheques(t *testing.T) {
 	// Las partes tienen que sumar el neto.
 	c, b = pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 100, "medio": "transferencia", "retenciones": []any{},
 		"partes": []any{map[string]any{"medio": "transferencia", "importe": 90}}})
-	if c != 422 || !strings.Contains(b, "Las partes del pago suman $90.00 y el neto a pagar es $100.00.") {
+	if c != 422 || !strings.Contains(b, "Los medios suman $\u00a090 y salen $\u00a0100: faltan $\u00a010.") {
 		t.Errorf("partes: %d %s", c, b)
 	}
 	// Y el libro IVA compras con la factura.

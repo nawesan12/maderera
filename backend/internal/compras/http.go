@@ -95,7 +95,8 @@ func (o respuesta) VisitRecibirDeLaOrdenResponse(w http.ResponseWriter) error   
 func (o respuesta) VisitListarPagosAProveedoresResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
-func (o respuesta) VisitPagarAProveedorResponse(w http.ResponseWriter) error { return o.escribir(w) }
+func (o respuesta) VisitPagarAProveedorResponse(w http.ResponseWriter) error    { return o.escribir(w) }
+func (o respuesta) VisitSimularRetencionesResponse(w http.ResponseWriter) error { return o.escribir(w) }
 func (o respuesta) VisitAnularPagoAProveedorResponse(w http.ResponseWriter) error {
 	return o.escribir(w)
 }
@@ -737,6 +738,18 @@ func (a *API) OrdenDePagoPdf(ctx context.Context, r comprasapi.OrdenDePagoPdfReq
 
 // AnularPagoAProveedor es solo del admin (con nombre, no por pantalla):
 // deshace plata ya pagada y certificados ya entregados.
+func (a *API) SimularRetenciones(ctx context.Context, r comprasapi.SimularRetencionesRequestObject) (comprasapi.SimularRetencionesResponseObject, error) {
+	if _, err := compras(ctx); err != nil {
+		return nil, err
+	}
+	pedidas := make([]RetencionPedida, len(r.Body.Retenciones))
+	for i, x := range r.Body.Retenciones {
+		pedidas[i] = RetencionPedida{RegimenID: x.RegimenId, Base: x.Base}
+	}
+	v, err := a.s.SimularRetenciones(ctx, r.Body.SupplierId, r.Body.Fecha, pedidas)
+	return ok(v), err
+}
+
 func (a *API) AnularPagoAProveedor(ctx context.Context, r comprasapi.AnularPagoAProveedorRequestObject) (comprasapi.AnularPagoAProveedorResponseObject, error) {
 	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"mjbj/internal/jsmath"
 )
 
 // Las pruebas de la tanda del mes simulado 23 (compras y pagos).
@@ -116,5 +118,166 @@ func TestBuscarMercaderiaPrimeroLoQueEmpiezaIgual(t *testing.T) {
 	_ = json.Unmarshal([]byte(b), &xs)
 	if len(xs) < 2 || xs[0].Producto != "Laca 4 L" {
 		t.Errorf("orden: %s", b)
+	}
+}
+
+// M2S1-026, M2S1-036, M2S1-110: la pantalla ve la cuenta del certificado
+// antes de pagar: base − mínimo = sujeto × alícuota.
+func TestSimularRetencionesComoElCertificado(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	gan := e.regimen(t, "78", "ganancias", 2)
+	_, _ = e.pool.Exec(ctx, `update regimenes_retencion set minimo_no_imponible = 224000, minimo_retencion = 0 where id = $1`, gan)
+	_, _ = e.pool.Exec(ctx, `update suppliers set cuit = '30712345679', condicion_ganancias = 'inscripto' where id = $1`, e.proveedor)
+	c, b := pedir(t, adm, "POST", e.u+"compras/pagos/simular", map[string]any{"supplierId": e.proveedor,
+		"retenciones": []any{map[string]any{"regimenId": gan, "base": 4352000}}})
+	var v []RetencionSimulada
+	_ = json.Unmarshal([]byte(b), &v)
+	if c != 200 || len(v) != 1 || v[0].Minimo != 224000 || v[0].Imponible != 4128000 || v[0].Retencion != 82560 {
+		t.Fatalf("simular: %d %s", c, b)
+	}
+	if n := e.numero(t, `select count(*)::float8 from bases_de_retencion`); n != 0 {
+		t.Errorf("simular anotó %v bases", n)
+	}
+	// Por debajo del mínimo dice por qué.
+	_, b = pedir(t, adm, "POST", e.u+"compras/pagos/simular", map[string]any{"supplierId": e.proveedor,
+		"retenciones": []any{map[string]any{"regimenId": gan, "base": 1000}}})
+	if !strings.Contains(b, `"retencion":0`) || !strings.Contains(b, "mínimo no imponible") {
+		t.Errorf("bajo el mínimo: %s", b)
+	}
+}
+
+func (e *entorno) facturaDeCompra(t *testing.T, c *http.Client, numero int, extra map[string]any) string {
+	t.Helper()
+	f := map[string]any{"supplierId": e.proveedor, "tipo": "factura_a", "puntoVenta": 3, "numero": numero, "fechaEmision": "2026-10-20",
+		"neto": 100000, "iva21": 21000, "iva105": 0, "iva27": 0, "exento": 0, "percepciones": 0}
+	for k, v := range extra {
+		f[k] = v
+	}
+	code, b := pedir(t, c, "POST", e.u+"compras/facturas", f)
+	if code != 200 {
+		t.Fatalf("factura %d: %d %s", numero, code, b)
+	}
+	return idDe(t, b)
+}
+
+// M2S2-013: un pago con el interruptor apagado también suma su base al
+// acumulado del mes, si el proveedor ya tiene base en ese régimen.
+func TestPagoSinRetenerSumaAlAcumulado(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	gan := e.regimen(t, "78", "ganancias", 2)
+	_, _ = e.pool.Exec(ctx, `update regimenes_retencion set minimo_no_imponible = 224000, minimo_retencion = 0 where id = $1`, gan)
+	_, _ = e.pool.Exec(ctx, `update suppliers set cuit = '30712345679', condicion_ganancias = 'inscripto' where id = $1`, e.proveedor)
+	f1, f2 := e.facturaDeCompra(t, adm, 1, nil), e.facturaDeCompra(t, adm, 2, nil)
+	c, b := pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 121000, "medio": "transferencia",
+		"retenciones":  []any{map[string]any{"regimenId": gan, "base": 100000}},
+		"imputaciones": []any{map[string]any{"purchaseInvoiceId": f1, "importe": 121000}}})
+	if c != 200 {
+		t.Fatalf("primer pago: %d %s", c, b)
+	}
+	c, b = pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 60500, "medio": "transferencia",
+		"retenciones":  []any{},
+		"imputaciones": []any{map[string]any{"purchaseInvoiceId": f2, "importe": 60500}}})
+	if c != 200 {
+		t.Fatalf("segundo pago: %d %s", c, b)
+	}
+	if n := e.numero(t, `select coalesce(sum(base), 0)::float8 from bases_de_retencion where supplier_id = $1`, e.proveedor); n != 150000 {
+		t.Errorf("el acumulado del mes tiene que contar los dos pagos: %v", n)
+	}
+}
+
+// M2S2-077: la base de una factura con una nota de crédito aplicada sale de
+// sus netos, no de la proporción de la factura sola.
+func TestBaseDeUnaFacturaConNotaDeCredito(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	fc := e.facturaDeCompra(t, adm, 8950, map[string]any{"neto": 2540000, "iva21": 533400, "percepciones": 76200})
+	e.facturaDeCompra(t, adm, 930, map[string]any{"tipo": "nota_credito_a", "neto": 10500, "iva21": 2205, "aplicaA": fc, "fechaEmision": "2026-10-21"})
+	_, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/facturas-con-saldo", nil)
+	var fs []FacturaConSaldo
+	_ = json.Unmarshal([]byte(b), &fs)
+	var f *FacturaConSaldo
+	for i := range fs {
+		if fs[i].ID == fc {
+			f = &fs[i]
+		}
+	}
+	if f == nil {
+		t.Fatalf("sin la factura: %s", b)
+	}
+	if base := jsmath.Redondear2(f.Saldo * f.NetoSinIva / f.Total); base != 2529500 {
+		t.Errorf("base del saldo: %v (%+v)", base, *f)
+	}
+}
+
+// M2S1-125: un ajuste que subió la deuda se paga como una factura y el pago
+// dice qué canceló. M2S2-078: anulado, lo sigue diciendo.
+func TestPagarUnAjusteYAnularlo(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+e.proveedor+"/movimientos", map[string]any{"supplierId": e.proveedor, "tipo": "ajuste",
+		"sentido": "sube", "monto": 150000, "detalle": "Saldo inicial", "referencia": "SIM-SALDO-INI"}); c != 200 {
+		t.Fatalf("ajuste: %d %s", c, b)
+	}
+	_, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/facturas-con-saldo", nil)
+	var fs []FacturaConSaldo
+	_ = json.Unmarshal([]byte(b), &fs)
+	if len(fs) != 1 || fs[0].Tipo != "ajuste" || fs[0].Numero != "Ajuste SIM-SALDO-INI" || fs[0].Saldo != 150000 {
+		t.Fatalf("el ajuste por pagar: %s", b)
+	}
+	c, b := pedir(t, adm, "POST", e.u+"compras/pagos", map[string]any{"supplierId": e.proveedor, "total": 150000, "medio": "transferencia",
+		"retenciones": []any{}, "ajustes": []any{map[string]any{"movimientoId": fs[0].ID, "importe": 150000}}})
+	if c != 200 {
+		t.Fatalf("pago: %d %s", c, b)
+	}
+	pago := idDe(t, b)
+	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/facturas-con-saldo", nil); b != "[]\n" {
+		t.Errorf("el ajuste sigue por pagar: %s", b)
+	}
+	ficha, _ := e.ficha(t, pago)
+	if len(ficha.Facturas) != 1 || ficha.Facturas[0].Numero != "Ajuste SIM-SALDO-INI" || ficha.Facturas[0].Aplicado != 150000 {
+		t.Errorf("el pago no dice qué canceló: %+v", ficha.Facturas)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"compras/pagos/"+pago+"/anular", map[string]string{"motivo": "Prueba"}); c != 200 {
+		t.Fatalf("anular: %d %s", c, b)
+	}
+	ficha, _ = e.ficha(t, pago)
+	if len(ficha.Facturas) != 1 || ficha.Facturas[0].Aplicado != 150000 {
+		t.Errorf("el pago anulado perdió lo que cubría: %+v", ficha.Facturas)
+	}
+	if _, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/facturas-con-saldo", nil); !strings.Contains(b, `"saldo":150000`) {
+		t.Errorf("anulado, el ajuste vuelve a deberse: %s", b)
+	}
+}
+
+func (e *entorno) ficha(t *testing.T, pago string) (FichaDePago, string) {
+	t.Helper()
+	adm := e.staff(t, "otro-"+pago[:8]+"@prueba.test", "admin")
+	_, b := pedir(t, adm, "GET", e.u+"compras/pagos/"+pago, nil)
+	var f FichaDePago
+	_ = json.Unmarshal([]byte(b), &f)
+	return f, b
+}
+
+// M3S2-028: un ajuste que baja la deuda se aplica a la factura: queda
+// pagada y no figura «por pagar» con la cuenta en cero.
+func TestAjusteAplicadoAUnaFactura(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	fc := e.facturaDeCompra(t, adm, 7710, nil)
+	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+e.proveedor+"/movimientos", map[string]any{"supplierId": e.proveedor, "tipo": "ajuste",
+		"sentido": "baja", "monto": 200000, "detalle": "Bonificación 3 %", "aplicaA": fc}); c != 422 || !strings.Contains(b, "le quedan") {
+		t.Errorf("un ajuste mayor que la factura: %d %s", c, b)
+	}
+	if c, b := pedir(t, adm, "POST", e.u+"proveedores/"+e.proveedor+"/movimientos", map[string]any{"supplierId": e.proveedor, "tipo": "ajuste",
+		"sentido": "baja", "monto": 3630, "detalle": "Bonificación 3 %", "aplicaA": fc}); c != 200 {
+		t.Fatalf("ajuste: %d %s", c, b)
+	}
+	_, b := pedir(t, adm, "GET", e.u+"proveedores/"+e.proveedor+"/facturas-con-saldo", nil)
+	if !strings.Contains(b, `"saldo":117370`) {
+		t.Errorf("la factura tiene que quedar con 121.000 − 3.630: %s", b)
 	}
 }

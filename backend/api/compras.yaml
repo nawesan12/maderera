@@ -595,6 +595,50 @@ paths:
             application/pdf:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Problema" }
+  /api/v1/admin/compras/pagos/simular:
+    post:
+      operationId: SimularRetenciones
+      description: Lo que retendría un pago, con la cuenta del certificado, sin anotar nada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplierId, retenciones]
+              properties:
+                supplierId: { type: string }
+                fecha: { type: string, description: aaaa-mm-dd; si falta, hoy }
+                retenciones:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [regimenId, base]
+                    properties:
+                      regimenId: { type: string }
+                      base: { type: number, format: double }
+      responses:
+        "200":
+          description: Una por régimen pedido
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [regimenId, base, acumulado, minimo, imponible, alicuota, retenidoAntes, retencion, motivo]
+                  properties:
+                    regimenId: { type: string }
+                    base: { type: number, format: double }
+                    acumulado: { type: number, format: double }
+                    minimo: { type: number, format: double }
+                    imponible: { type: number, format: double }
+                    alicuota: { type: number, format: double }
+                    retenidoAntes: { type: number, format: double }
+                    retencion: { type: number, format: double }
+                    motivo: { type: string, nullable: true }
+        "422": { $ref: "#/components/responses/Problema" }
   /api/v1/admin/compras/pagos/{id}/anular:
     parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:

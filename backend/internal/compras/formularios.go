@@ -439,6 +439,9 @@ type FormPago struct {
 	// del cheque) y las notas de crédito a favor que se descuentan.
 	Cheques        []Imputacion `json:"-"`
 	NotasDeCredito []string     `json:"-"`
+	// Los ajustes que subieron la deuda (un saldo inicial) que se pagan: el
+	// id es el del movimiento (M2S1-125).
+	Ajustes []Imputacion `json:"-"`
 }
 
 var mediosDePago = []string{"transferencia", "efectivo", "cheque", "echeq"}
@@ -465,6 +468,10 @@ func leerPago(m map[string]any) (FormPago, error) {
 	p.Cheques = []Imputacion{}
 	l.lista("cheques", true, 0, "", 30, func(_ int, e *lector) {
 		p.Cheques = append(p.Cheques, Imputacion{e.uuid("chequeId", ""), e.numero("importe", nil, minimo(0))})
+	})
+	p.Ajustes = []Imputacion{}
+	l.lista("ajustes", true, 0, "", 30, func(_ int, e *lector) {
+		p.Ajustes = append(p.Ajustes, Imputacion{e.uuid("movimientoId", ""), e.numero("importe", nil, minimo(0))})
 	})
 	p.NotasDeCredito = []string{}
 	if lista, ok := m["notasDeCredito"].([]any); ok {

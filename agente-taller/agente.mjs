@@ -141,7 +141,11 @@ export async function unaVuelta(estado) {
   let nuevos = 0;
   let cambio = false;
 
-  for (const corte of cortes) {
+  // Los de la máquina también: el que se empezó entre dos vueltas no había
+  // pasado nunca por la cola del agente y se quedaba sin archivo. Un agente
+  // de antes de la fecha en «enLaMaquina» solo deja el que ya escribió.
+  const aEscribir = [...cortes, ...enLaMaquina.filter((c) => c.actualizado && (c.piezas ?? 1) > 0)];
+  for (const corte of aEscribir) {
     const yaEscrito = escritoDe(estado, corte.id);
     // Si cambió el corte después de que lo bajamos, se vuelve a bajar: en el
     // mostrador se corrigen medidas y el archivo viejo cortaría mal.

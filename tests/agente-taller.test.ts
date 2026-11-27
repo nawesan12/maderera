@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 type Corte = { id: string; numero: string; actualizado: string; contenido: string };
 
 let cola: Corte[] = [];
-let enLaMaquina: { id: string; numero: string }[] = [];
+let enLaMaquina: { id: string; numero: string; actualizado?: string; contenido?: string }[] = [];
 /** Los que ya no están en la cola ni en la máquina: la lista igual se baja. */
 let historico: { id: string; numero: string }[] = [];
 const consultas: string[] = [];
@@ -28,11 +28,16 @@ beforeAll(async () => {
     if (url.pathname === "/api/cortes/pendientes") {
       consultas.push(url.search);
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ cortes: cola.map(({ contenido: _c, ...r }) => ({ ...r, piezas: 1 })), enLaMaquina }));
+      res.end(
+        JSON.stringify({
+          cortes: cola.map(({ contenido: _c, ...r }) => ({ ...r, piezas: 1 })),
+          enLaMaquina: enLaMaquina.map(({ contenido: _c, ...r }) => (r.actualizado ? { ...r, piezas: 1 } : r)),
+        }),
+      );
       return;
     }
     const m = url.pathname.match(/^\/api\/cortes\/([^/]+)\/lista$/);
-    const c = m && [...cola, ...[...enLaMaquina, ...historico].map((x) => ({ ...x, contenido: "", actualizado: "" }))].find((x) => x.id === m[1]);
+    const c = m && [...cola, ...[...enLaMaquina, ...historico].map((x) => ({ contenido: "", actualizado: "", ...x }))].find((x) => x.id === m[1]);
     if (!c) {
       res.statusCode = 404;
       res.end();
@@ -82,6 +87,18 @@ describe("agente del taller", () => {
     enLaMaquina = [];
     await unaVuelta(estado);
     expect((await readdir(carpeta)).filter((n) => n.endsWith(".csv"))).toEqual([]);
+  });
+
+  it("escribe el que se empezó entre dos vueltas, sin haber pasado por la cola", async () => {
+    const estado = { escritos: {} };
+    cola = [];
+    enLaMaquina = [{ id: "d", numero: "CRT-23", actualizado: "1", contenido: "650;420;2" }];
+    expect((await unaVuelta(estado)).nuevos).toBe(1);
+    expect((await readdir(carpeta)).filter((n) => n.endsWith(".csv"))).toEqual(["CRT-23.csv"]);
+    // La vuelta siguiente no lo reescribe.
+    expect((await unaVuelta(estado)).nuevos).toBe(0);
+    enLaMaquina = [];
+    await unaVuelta(estado);
   });
 
   it("también saca los que anotó un agente de antes, sin el nombre del archivo (M2S4-004)", async () => {

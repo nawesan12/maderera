@@ -805,9 +805,15 @@ func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 		Sucursal    *string `json:"sucursal"`
 		Actualizado string  `json:"actualizado"`
 	}
+	// Con la fecha y las piezas, como los de la cola: el que se empezó antes
+	// de la vuelta del agente no llegaba nunca a la carpeta (CRT-23 y CRT-24
+	// quedaron en la máquina sin archivo).
 	type enLaMaquina struct {
-		ID     string `json:"id"`
-		Numero string `json:"numero"`
+		ID          string `json:"id"`
+		Numero      string `json:"numero"`
+		Piezas      int32  `json:"piezas"`
+		Urgente     bool   `json:"urgente"`
+		Actualizado string `json:"actualizado"`
 	}
 	out := []pendiente{}
 	for _, c := range cortes {
@@ -824,7 +830,7 @@ func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 	maquina := []enLaMaquina{}
 	enProceso := make([]string, 0, len(enMaquina))
 	for _, c := range enMaquina {
-		maquina = append(maquina, enLaMaquina{c.ID, c.Numero})
+		maquina = append(maquina, enLaMaquina{c.ID, c.Numero, c.Piezas, c.Urgente, c.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z")})
 		enProceso = append(enProceso, c.ID)
 	}
 	w.Header().Set("Content-Type", "application/json")

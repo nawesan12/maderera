@@ -462,6 +462,45 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 	return &res, nil
 }
 
+// BajaDeLaVentaAnulada da de baja, en el mismo paso que anula la venta, la
+// factura sin CAE de un pedido cancelado: no se va a autorizar nunca y
+// seguía viva, sumando en Facturación, hasta que alguien la daba de baja a
+// mano (mes simulado, M2S2-034). Devuelve la etiqueta de lo que dio de baja,
+// o "" si no había nada o la baja está frenada (un recibo vivo, un posterior
+// con CAE): entonces queda como antes, a la vista en Facturación y en Caja,
+// para resolverla a mano.
+func (s *Servicio) BajaDeLaVentaAnulada(ctx context.Context, ses *auth.Sesion, pedido, motivo string) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `SELECT i.id FROM invoices i JOIN orders o ON o.id = i.order_id
+		WHERE i.order_id = $1 AND o.estado = 'cancelado' AND i.cae IS NULL AND i.tipo::text LIKE 'factura%'
+		  AND i.estado NOT IN ('anulada', 'borrador') ORDER BY i.created_at LIMIT 1`, pedido).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	serie, err := s.Serie(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if serie.Bloqueo != nil {
+		return "", nil
+	}
+	vistos := make([]string, len(serie.Corren))
+	for i, k := range serie.Corren {
+		vistos[i] = k.InvoiceID
+	}
+	res, err := s.DarDeBaja(ctx, ses, id, "Venta anulada: "+motivo, vistos)
+	if err != nil {
+		if Mensaje(err) != "" {
+			return "", nil
+		}
+		return "", err
+	}
+	return res.Etiqueta, nil
+}
+
 // mismosCorridos compara los corridos de ahora con los que vio el admin, en
 // orden.
 func mismosCorridos(corren []Corrimiento, vistos []string) bool {

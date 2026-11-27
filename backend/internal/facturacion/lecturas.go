@@ -262,8 +262,11 @@ type PaginaDeComprobantes struct {
 
 // cuentaComoFacturado: lo que suma el encabezado de Facturación y la
 // tarjeta del período. Un rechazo real de ARCA tampoco es facturación (hay
-// que corregirlo o darlo de baja).
-const cuentaComoFacturado = `i.estado NOT IN ('anulada', 'rechazada', 'borrador')`
+// que corregirlo o darlo de baja). Lo sin CAE de una venta anulada tampoco:
+// no se va a autorizar, se da de baja, y mientras tanto sumaba ventas que no
+// existen (mes simulado, M2S2-034).
+const cuentaComoFacturado = `i.estado NOT IN ('anulada', 'rechazada', 'borrador')
+	AND NOT (i.cae IS NULL AND i.order_id IS NOT NULL AND EXISTS (SELECT 1 FROM orders ocf WHERE ocf.id = i.order_id AND ocf.estado = 'cancelado'))`
 
 // ListarPagina es el listado de a páginas. Antes la pantalla pedía 200 (o
 // 500 con un rango o una búsqueda), sumaba en Next lo que había llegado y no

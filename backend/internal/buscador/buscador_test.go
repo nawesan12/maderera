@@ -25,7 +25,7 @@ func TestBuscar(t *testing.T) {
 	for _, x := range r {
 		tipos[x.Tipo] = x.Titulo + " | " + x.Detalle
 	}
-	if tipos["Cliente"] != "Carpintería Ñandú | 30-58944525-9" || tipos["Proveedor"] == "" || tipos["Pedido"] != "PED-0042 · Juan Ñandú | pendiente · 10/11/2026" {
+	if tipos["Cliente"] != "Carpintería Ñandú | 30-58944525-9" || tipos["Proveedor"] == "" || tipos["Pedido"] != "PED-0042 · Juan Ñandú | Sin preparar · 10/11/2026" {
 		t.Errorf("admin: %v", tipos)
 	}
 	// Una palabra corta no busca nada.

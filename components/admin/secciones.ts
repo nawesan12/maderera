@@ -16,6 +16,7 @@ import {
   HandCoins,
   HardHat,
   History,
+  ServerCog,
   Landmark,
   LayoutDashboard,
   Mail,
@@ -180,6 +181,7 @@ export const secciones: { titulo: string; items: ItemNav[] }[] = [
       { href: "/admin/clientes/vendedores", icon: UserCog, label: "Vendedores" },
       { href: "/admin/migracion", icon: DatabaseZap, label: "Importar planillas" },
       { href: "/admin/bitacora", icon: History, label: "Bitácora" },
+      { href: "/admin/sistema", icon: ServerCog, label: "Sistema" },
     ],
   },
 ];

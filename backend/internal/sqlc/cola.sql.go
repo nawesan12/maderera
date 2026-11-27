@@ -60,6 +60,26 @@ func (q *Queries) Encolar(ctx context.Context, arg EncolarParams) (string, error
 	return id, err
 }
 
+const periodoAnterior = `-- name: PeriodoAnterior :one
+SELECT periodo FROM tareas_corridas
+WHERE tarea = $1 AND periodo < $2 AND estado = 'ok'
+ORDER BY periodo DESC LIMIT 1
+`
+
+type PeriodoAnteriorParams struct {
+	Tarea   string `json:"tarea"`
+	Periodo string `json:"periodo"`
+}
+
+// El último período que corrió bien antes de este: con él la tarea horaria
+// sabe cuántas horas se perdió mientras el worker estuvo caído.
+func (q *Queries) PeriodoAnterior(ctx context.Context, arg PeriodoAnteriorParams) (string, error) {
+	row := q.db.QueryRow(ctx, periodoAnterior, arg.Tarea, arg.Periodo)
+	var periodo string
+	err := row.Scan(&periodo)
+	return periodo, err
+}
+
 const terminarCorrida = `-- name: TerminarCorrida :exec
 UPDATE tareas_corridas
    SET estado = $2, terminada_at = now(), resultado = $3, error = $4

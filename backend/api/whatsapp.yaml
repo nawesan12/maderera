@@ -704,7 +704,7 @@ components:
       type: object
       required: [filtro, conversaciones, contadores, estado, plantillas, personal, gasto, mensajes, detalle]
       properties:
-        filtro: { type: string, enum: [todas, sin-leer, mias, sin-asignar, resueltas] }
+        filtro: { type: string, enum: [todas, sin-leer, mias, sin-asignar, derivadas, resueltas] }
         conversaciones: { type: array, items: { $ref: "#/components/schemas/ConversacionListada" } }
         contadores:
           type: object

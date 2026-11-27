@@ -38,11 +38,23 @@ type RecepcionListada struct {
 	FaltanteNeto float64    `json:"faltanteNeto"`
 }
 
+// FacturaDeLaRecepcion es, para EXISTS, la factura de compra viva que cubre
+// la recepción con alias `g`: la que la nombra como su primer remito
+// (receipt_id) o la que la suma entre los que cubre
+// (purchase_invoice_receipts). El inicio miraba solo receipt_id y contaba
+// sin factura las recepciones de una factura de varios remitos (mes
+// simulado, M2S2-043); el listado contaba facturada la de una factura
+// anulada.
+func FacturaDeLaRecepcion(g string) string {
+	return `SELECT 1 FROM purchase_invoices f WHERE f.anulada_at IS NULL AND (f.receipt_id = ` + g + `.id OR EXISTS (
+	  SELECT 1 FROM purchase_invoice_receipts x WHERE x.purchase_invoice_id = f.id AND x.goods_receipt_id = ` + g + `.id))`
+}
+
 // ListarRecepciones es listarRecepciones: el neto de las líneas más el flete.
 func (s *Servicio) ListarRecepciones(ctx context.Context, limite int) ([]RecepcionListada, error) {
 	filas, err := s.pool.Query(ctx, `
 		SELECT r.id, r.numero_remito, r.fecha, r.estado::text, r.gastos::text, s.nombre, r.supplier_id, b.name, coalesce(t.lineas, 0), t.neto, r.gastos,
-		  EXISTS (SELECT 1 FROM purchase_invoice_receipts x WHERE x.goods_receipt_id = r.id)
+		  EXISTS (`+FacturaDeLaRecepcion("r")+`)
 		FROM goods_receipts r
 		JOIN suppliers s ON s.id = r.supplier_id
 		LEFT JOIN branches b ON b.id = r.branch_id

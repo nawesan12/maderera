@@ -117,8 +117,36 @@ func (d *demo) Enviar(_ context.Context, m Mensaje) Resultado {
 	for i, a := range m.Adjuntos {
 		nombres[i] = a.Nombre
 	}
-	d.log.Info("email.demo", "para", m.Para, "asunto", m.Asunto, "adjuntos", nombres)
+	d.log.Info("email.demo", "para", m.Para, "asunto", m.Asunto, "adjuntos", nombres, "enlaces", EnlacesDe(m.HTML, m.Texto))
 	return Resultado{Simulado: true}
+}
+
+var reEnlace = regexp.MustCompile(`href\s*=\s*["']([^"']+)["']|https?://[^\s"'<>)]+`)
+
+// EnlacesDe son los enlaces del correo, sin repetir y en orden: el de
+// entrar, el de firmar el remito, el del seguimiento del pedido. Sin
+// proveedor de correo, el registro del modo demostración es la única forma
+// de recorrer esos circuitos (mes simulado, M2S1-068, M2S2-119): traía solo
+// el destinatario y el asunto, y había que leer el token de la base. Los
+// mailto: y tel: no son enlaces que se recorran.
+func EnlacesDe(html, texto string) []string {
+	vistos := map[string]bool{}
+	out := []string{}
+	for _, fuente := range []string{html, texto} {
+		for _, m := range reEnlace.FindAllStringSubmatch(fuente, -1) {
+			u := m[1]
+			if u == "" {
+				u = m[0]
+			}
+			u = strings.ReplaceAll(strings.TrimSpace(u), "&amp;", "&")
+			if u == "" || vistos[u] || strings.HasPrefix(u, "mailto:") || strings.HasPrefix(u, "tel:") || strings.HasPrefix(u, "#") {
+				continue
+			}
+			vistos[u] = true
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 // --- smtp ---

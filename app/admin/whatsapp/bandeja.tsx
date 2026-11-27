@@ -23,6 +23,7 @@ const FILTROS: { valor: FiltroBandeja; texto: string; contador?: "sinLeer" | "mi
   { valor: "sin-leer", texto: "Sin leer", contador: "sinLeer" },
   { valor: "mias", texto: "Mías", contador: "mias" },
   { valor: "sin-asignar", texto: "Sin asignar", contador: "sinAsignar" },
+  { valor: "derivadas", texto: "Derivadas" },
   { valor: "resueltas", texto: "Resueltas" },
 ];
 
@@ -214,7 +215,7 @@ export function Bandeja({
                   ? "No hay conversaciones resueltas."
                   : filtro === "mias"
                     ? "No tenés conversaciones asignadas."
-                    : filtro === "sin-leer" || filtro === "sin-asignar"
+                    : filtro === "sin-leer" || filtro === "sin-asignar" || filtro === "derivadas"
                       ? "Nada por acá: está todo atendido."
                       : "Todavía no entró ningún mensaje."}
             </li>

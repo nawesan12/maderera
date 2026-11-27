@@ -35,12 +35,14 @@ const ESTADOS = {
   revision: "En revisión",
   enviado: "Enviados",
   aceptado: "Aceptados",
+  // A donde lleva «presupuestos aceptados sin pedido» del inicio.
+  "sin-pedido": "Sin pedido",
   rechazado: "Rechazados",
   cerrados: "Cerrados",
 };
 
 /** Los estados que todavía esperan algo (el «abiertos» de Go). */
-const ABIERTOS = new Set(["abiertos", "pendiente", "revision", "enviado"]);
+const ABIERTOS = new Set(["abiertos", "pendiente", "revision", "enviado", "sin-pedido"]);
 
 const ORIGEN: Record<string, string> = {
   sitio: "Pedido desde el sitio",

@@ -444,19 +444,29 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	}
 	agregar(c.seguimientos, Pendiente{Clave: "seguimiento", Texto: uno(c.seguimientos, "cliente para llamar hoy", "clientes para llamar hoy"),
 		Detalle: detalle("Seguimientos con la fecha cumplida"), Href: "/admin/clientes/seguimiento", Urgente: true})
+	// Las que siguen abiertas para más adelante: la cobranza de quien vende
+	// no se veía sin entrar a Seguimiento (mes simulado, M2S4-026).
+	agregar(o.gestiones, Pendiente{Clave: "gestiones", Texto: uno(o.gestiones, "gestión abierta con clientes", "gestiones abiertas con clientes"),
+		Href: "/admin/clientes/seguimiento"})
 	agregar(c.porPreparar, Pendiente{Clave: "preparar", Texto: uno(c.porPreparar, "pedido por preparar", "pedidos por preparar"),
-		Detalle: detalle("Todavía no salieron a armarse"), Href: "/admin/pedidos", Urgente: true})
+		Detalle: detalle("Todavía no salieron a armarse"), Href: "/admin/pedidos?estado=por-preparar", Urgente: true})
 	// Solo los listos: los que están en camino ya salieron, y Pedidos, a
 	// donde lleva, los muestra en otra columna (H102, H323). Para el
 	// depósito es el trabajo del día: entregar y despachar (H396).
 	agregar(c.listos, Pendiente{Clave: "entregar", Texto: uno(c.listos, "pedido listo sin entregar", "pedidos listos sin entregar"),
-		Detalle: detalle("Armados y esperando que los retiren o salgan"), Href: "/admin/pedidos", Urgente: rol == sqlc.StaffRoleDeposito})
+		Detalle: detalle("Armados y esperando que los retiren o salgan"), Href: "/admin/pedidos?estado=listo", Urgente: rol == sqlc.StaffRoleDeposito})
 	agregar(c.cortes, Pendiente{Clave: "cortes", Texto: uno(c.cortes, "corte en la cola", "cortes en la cola"),
 		Detalle: detalle("Esperando la seccionadora"), Href: "/admin/cortes", Urgente: !vende})
 	agregar(o.cortesHoy, Pendiente{Clave: "cortes-hoy", Texto: uno(o.cortesHoy, "corte para retirar hoy", "cortes para retirar hoy"),
 		Href: "/admin/cortes", Urgente: true})
+	// Quien vende no entra a Cheques: el rechazo se reclama desde el
+	// seguimiento del cliente (mes simulado, M2S4-026).
+	hrefRechazados := "/admin/cheques"
+	if !ve("/admin/cheques") {
+		hrefRechazados = "/admin/clientes/seguimiento"
+	}
 	agregar(o.chequesRechazados, Pendiente{Clave: "cheques-rechazados", Texto: uno(o.chequesRechazados, "cheque rechazado", "cheques rechazados"),
-		Href: "/admin/cheques", Urgente: true, Vencido: true})
+		Href: hrefRechazados, Urgente: true, Vencido: true})
 	agregar(c.chequesVencidos, Pendiente{Clave: "cheques-vencidos", Texto: uno(c.chequesVencidos, "cheque pasado de fecha", "cheques pasados de fecha"),
 		Detalle: detalle("Venció y sigue en cartera"), Href: "/admin/cheques", Urgente: true, Vencido: true})
 	// Lo que vence en las próximas 48 horas es de hoy: un cheque que vence
@@ -484,11 +494,11 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	agregar(o.ordenesPorLlegar, Pendiente{Clave: "ordenes-por-llegar", Texto: uno(o.ordenesPorLlegar, "orden de compra llega hoy o mañana", "órdenes de compra llegan hoy o mañana"),
 		Href: "/admin/compras/ordenes", Urgente: true})
 	agregar(o.recepcionesSinFactura, Pendiente{Clave: "recepciones-sin-factura", Texto: uno(o.recepcionesSinFactura,
-		"recepción sin factura de compra", "recepciones sin factura de compra"), Href: "/admin/recepciones"})
+		"recepción sin factura de compra", "recepciones sin factura de compra"), Href: "/admin/recepciones?estado=sin-factura"})
 	agregar(o.presupuestosEnviados, Pendiente{Clave: "presupuestos-enviados", Texto: uno(o.presupuestosEnviados,
 		"presupuesto enviado sin respuesta", "presupuestos enviados sin respuesta"), Href: "/admin/presupuestos?estado=enviado", Urgente: vende})
 	agregar(o.aceptadosSinPedido, Pendiente{Clave: "presupuestos-aceptados", Texto: uno(o.aceptadosSinPedido,
-		"presupuesto aceptado sin pedido", "presupuestos aceptados sin pedido"), Href: "/admin/presupuestos?estado=aceptado", Urgente: true})
+		"presupuesto aceptado sin pedido", "presupuestos aceptados sin pedido"), Href: "/admin/presupuestos?estado=sin-pedido", Urgente: true})
 	agregar(c.presupuestos, Pendiente{Clave: "presupuestos", Texto: uno(c.presupuestos, "presupuesto enviado vence en 3 días", "presupuestos enviados vencen en 3 días"),
 		Detalle: detalle("Un llamado antes de que venza suele cerrar la venta"), Href: "/admin/presupuestos"})
 	agregar(c.solicitudes, Pendiente{Clave: "profesionales", Texto: uno(c.solicitudes, "profesional esperando respuesta", "profesionales esperando respuesta"),
@@ -525,7 +535,12 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	agregar(o.whatsapp, Pendiente{Clave: "whatsapp", Texto: uno(o.whatsapp, "conversación de WhatsApp sin contestar", "conversaciones de WhatsApp sin contestar"),
 		Href: "/admin/whatsapp?filtro=sin-leer", Urgente: true})
 	agregar(o.whatsappSinAsignar, Pendiente{Clave: "whatsapp-sin-asignar", Texto: uno(o.whatsappSinAsignar,
-		"conversación derivada sin asignar", "conversaciones derivadas sin asignar"), Href: "/admin/whatsapp?filtro=sin-asignar", Urgente: true})
+		"conversación derivada sin asignar", "conversaciones derivadas sin asignar"), Href: "/admin/whatsapp?filtro=derivadas", Urgente: true})
+	// El pedido de presupuesto que entró (de la web, del bot, del teléfono) y
+	// todavía está en plazo: es lo primero de quien vende, y ni «Para hoy» ni
+	// la campana lo decían hasta que se vencía (mes simulado, M2S1-191).
+	agregar(o.porResponder, Pendiente{Clave: "presupuestos-por-responder", Texto: uno(o.porResponder,
+		"presupuesto por responder", "presupuestos por responder"), Href: "/admin/presupuestos?estado=abiertos", Urgente: vende})
 	agregar(o.presupuestosVencidos, Pendiente{Clave: "presupuestos-sin-responder", Texto: uno(o.presupuestosVencidos,
 		"presupuesto pasado del plazo de respuesta", "presupuestos pasados del plazo de respuesta"),
 		Href: "/admin/presupuestos?estado=abiertos", Urgente: true, Vencido: true})
@@ -538,6 +553,11 @@ func (s *Servicio) PendientesDelRol(ctx context.Context, rol sqlc.StaffRole) ([]
 	// Sin CAE: no es urgente (no depende de la maderera), pero tiene que
 	// verse sin entrar a Facturación (H141).
 	agregar(o.sinCAE, Pendiente{Clave: "sin-cae", Texto: uno(o.sinCAE, "comprobante sin CAE", "comprobantes sin CAE"), Href: "/admin/facturacion"})
+	// La carga del catálogo es de quien administra: a quien vende, «40
+	// medidas sin foto» le tapaba lo suyo (M2S4-026).
+	if vende {
+		o.sinPrecio, o.sinFoto = 0, 0
+	}
 	agregar(o.sinPrecio, Pendiente{Clave: "catalogo-precio", Texto: uno(o.sinPrecio, "medida sin precio", "medidas sin precio"), Href: "/admin/precios"})
 	agregar(o.sinFoto, Pendiente{Clave: "catalogo-foto", Texto: uno(o.sinFoto, "medida sin foto", "medidas sin foto"), Href: "/admin/productos"})
 	// Sin nada para vender: lo vendido de más no cuenta como stock (H218).
@@ -577,6 +597,7 @@ type otros struct {
 	cortesHoy, chequesRechazados, chequesInformados, transferencias   int
 	ordenesAtrasadas, ordenesPorLlegar, recepcionesSinFactura, sinCAE int
 	presupuestosEnviados, aceptadosSinPedido, whatsappSinAsignar      int
+	gestiones, porResponder                                           int
 }
 
 // otrosPendientes los cuenta, solo para lo que el rol puede abrir.
@@ -635,8 +656,9 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 		SELECT
 		  CASE WHEN $1 THEN (SELECT count(*)::int FROM cutting_orders WHERE estado NOT IN ('retirado', 'cancelado')
 		                     AND retira_el = ($9 AT TIME ZONE 'America/Argentina/Buenos_Aires')::date) ELSE 0 END,
-		  CASE WHEN $2 THEN (SELECT count(DISTINCT e.cheque_id)::int FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
-		                     WHERE e.hacia = 'rechazado' AND c.estado = 'rechazado' AND e.at >= $9::timestamptz - interval '6 days') ELSE 0 END,
+		  CASE WHEN $2 OR $11 THEN (SELECT count(DISTINCT e.cheque_id)::int FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
+		                     WHERE e.hacia = 'rechazado' AND e.desde <> 'informado' AND c.estado = 'rechazado'
+		                       AND ($2 OR c.sentido = 'recibido') AND e.at >= $9::timestamptz - interval '6 days') ELSE 0 END,
 		  CASE WHEN $2 THEN (SELECT count(*)::int FROM cheques WHERE estado = 'informado') ELSE 0 END,
 		  CASE WHEN $3 THEN (SELECT count(*)::int FROM payments WHERE estado = 'en_revision') ELSE 0 END,
 		  CASE WHEN $4 THEN (SELECT count(*)::int FROM purchase_orders WHERE estado IN ('enviada', 'parcial') AND fecha_prometida < $9) ELSE 0 END,
@@ -649,11 +671,15 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes q WHERE q.estado = 'aceptado'
 		                     AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.quote_id = q.id AND o.estado <> 'cancelado')) ELSE 0 END,
 		  CASE WHEN $8 THEN (SELECT count(*)::int FROM whatsapp_conversaciones WHERE estado = 'abierta'
-		                     AND asignado_a_user_id IS NULL AND bot_estado = 'derivada') ELSE 0 END`,
+		                     AND asignado_a_user_id IS NULL AND bot_estado = 'derivada') ELSE 0 END,
+		  CASE WHEN $11 THEN (SELECT count(*)::int FROM customer_follow_ups
+		                      WHERE etapa <> 'cerrado' AND (proxima_accion_at IS NULL OR proxima_accion_at > $12)) ELSE 0 END,
+		  CASE WHEN $7 THEN (SELECT count(*)::int FROM quotes WHERE estado IN ('pendiente', 'revision')
+		                     AND (responde_hasta IS NULL OR responde_hasta >= $12)) ELSE 0 END`,
 		ve("/admin/cortes"), ve("/admin/cheques"), ve("/admin/pagos"), ve("/admin/compras/ordenes"), ve("/admin/compras/facturas"),
-		ve("/admin/facturacion"), ve("/admin/presupuestos"), ve("/admin/whatsapp"), hoy, hoy.AddDate(0, 0, 2)).
+		ve("/admin/facturacion"), ve("/admin/presupuestos"), ve("/admin/whatsapp"), hoy, hoy.AddDate(0, 0, 2), ve("/admin/clientes"), ahora).
 		Scan(&o.cortesHoy, &o.chequesRechazados, &o.chequesInformados, &o.transferencias, &o.ordenesAtrasadas, &o.ordenesPorLlegar,
-			&o.recepcionesSinFactura, &o.sinCAE, &o.presupuestosEnviados, &o.aceptadosSinPedido, &o.whatsappSinAsignar)
+			&o.recepcionesSinFactura, &o.sinCAE, &o.presupuestosEnviados, &o.aceptadosSinPedido, &o.whatsappSinAsignar, &o.gestiones, &o.porResponder)
 	if err != nil {
 		return o, err
 	}
@@ -693,6 +719,7 @@ func (s *Servicio) otrosPendientes(ctx context.Context, ve func(string) bool, ah
 // viva que la cubra (purchase_invoice_receipts: una factura puede cubrir
 // varios remitos). La misma regla en el inicio y en el cierre (mes simulado,
 // M3S2-034: el inicio miraba purchase_invoices.receipt_id y contaba 8 donde
-// el cierre contaba 3).
-const RecepcionSinFactura = `NOT EXISTS (SELECT 1 FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
-	WHERE x.goods_receipt_id = g.id AND f.anulada_at IS NULL)`
+// el cierre contaba 3). La factura la cubre por cualquiera de los dos
+// caminos, como en la lista de recepciones (compras.FacturaDeLaRecepcion).
+const RecepcionSinFactura = `NOT EXISTS (SELECT 1 FROM purchase_invoices f WHERE f.anulada_at IS NULL AND (f.receipt_id = g.id OR EXISTS (
+	  SELECT 1 FROM purchase_invoice_receipts x WHERE x.purchase_invoice_id = f.id AND x.goods_receipt_id = g.id)))`

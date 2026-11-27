@@ -171,8 +171,28 @@ async function Tabla({ params }: { params: Params }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <div tabIndex={0} role="region" aria-label="Stock por sucursal" className="overflow-x-auto">
-          <table className="w-full">
+        {/* En el teléfono, una tarjeta por producto con la disponibilidad de
+            cada sucursal abajo: la tabla medía 556 px y lo que se vino a
+            mirar quedaba tapado a la derecha (mes simulado, M2S4-029). La
+            categoría ya está en el filtro. */}
+        <ul className="divide-y sm:hidden">
+          {productos.map((producto) => (
+            <li key={producto.id} className="px-4 py-3">
+              <p className="text-base font-medium">{producto.name}</p>
+              {producto.labels[0] && <p className="text-sm text-muted-foreground">{producto.labels[0]}</p>}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {producto.stock.map((s) => (
+                  <span key={s.sucursal} className="inline-flex items-center gap-1.5 text-sm">
+                    <span className="text-texto-2">{s.nombre}</span>
+                    <StockBadge level={s.nivel} />
+                  </span>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div tabIndex={0} role="region" aria-label="Stock por sucursal" className="hidden overflow-x-auto sm:block">
+          <table className="w-full" data-tabla="fija">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-4 text-sm font-semibold">Producto</th>

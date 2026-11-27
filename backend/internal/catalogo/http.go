@@ -12,6 +12,7 @@ import (
 
 	"mjbj/internal/api/catalogoapi"
 	"mjbj/internal/auth"
+	"mjbj/internal/pdf"
 	"mjbj/internal/plataforma"
 )
 
@@ -406,7 +407,7 @@ func (a *API) MiLista(ctx context.Context, _ catalogoapi.MiListaRequestObject) (
 	}
 	titulo := "Lista de precios"
 	if l.EsDiferenciada && l.Nombre != nil {
-		titulo = "Lista " + *l.Nombre
+		titulo = pdf.TituloDeLista(*l.Nombre)
 	}
 	return ok{map[string]any{"titulo": titulo, "filas": plataforma.SinNulos(filas)}}, nil
 }

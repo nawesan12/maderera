@@ -64,9 +64,11 @@ type Despacho struct {
 	// temporalmente, viajan con el reintento.
 	Adjuntos []email.Adjunto
 	// AsuntoPropio deja el asunto del correo aunque /admin/avisos tenga uno
-	// editado para el evento: el de «cheque_rechazado» dice que lo rechazó
-	// el banco, y al cliente de un cheque no aceptado le llegaba «Un cheque
-	// tuyo fue rechazado» (M2S4-017).
+	// editado para el evento: lo usan las variantes que el asunto configurado
+	// no describe. El de «cheque_rechazado» dice que lo rechazó el banco, y al
+	// cliente de un cheque no aceptado le llegaba «Un cheque tuyo fue
+	// rechazado» (M2S4-017); el envío llevaba el asunto «listo para retirar»
+	// (M2S1-074).
 	AsuntoPropio bool
 }
 

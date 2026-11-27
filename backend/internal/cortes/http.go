@@ -816,12 +816,19 @@ func (a *API) pendientes(w http.ResponseWriter, r *http.Request) {
 				c.UpdatedAt.UTC().Format("2006-01-02T15:04:05.000Z")})
 		}
 	}
+	// Los que están en la máquina: su archivo sigue haciendo falta. El
+	// agente saca de la carpeta los que no están ni en la cola ni acá
+	// (terminados, anulados o reemplazados por una corrección): CRT-28.csv
+	// quedaba con las medidas viejas al lado de CRT-30.csv (mes simulado,
+	// M2S4-004). «enProceso» son solo los ids, para el agente de antes.
 	maquina := []enLaMaquina{}
+	enProceso := make([]string, 0, len(enMaquina))
 	for _, c := range enMaquina {
 		maquina = append(maquina, enLaMaquina{c.ID, c.Numero})
+		enProceso = append(enProceso, c.ID)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"cortes": out, "enLaMaquina": maquina})
+	_ = json.NewEncoder(w).Encode(map[string]any{"cortes": out, "enLaMaquina": maquina, "enProceso": enProceso})
 }
 
 var errSucursalDesconocida = errors.New("sucursal desconocida")

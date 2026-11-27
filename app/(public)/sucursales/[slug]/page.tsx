@@ -242,7 +242,8 @@ export default async function SucursalPage({
               </Link>{" "}
               o mirá el{" "}
               <Link href="/catalogo" className="font-medium text-acento-texto hover:underline">
-                catálogo con precios
+                {/* Con la tienda apagada el catálogo no muestra precios (M3S1-075). */}
+                {laTienda.activa ? "catálogo con precios" : "catálogo"}
               </Link>
               .
             </p>

@@ -15,6 +15,7 @@ import { MenuUsuario } from "@/components/admin/menu-usuario";
 import {
   ActivityBell,
   ActivityBellSkeleton,
+  CampanaDePendientes,
 } from "@/components/admin/activity-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { EnterAvanza } from "@/components/admin/enter-avanza";
@@ -210,9 +211,13 @@ async function PanelConSesion({
             {/* La actividad sale de la bitácora, que es del admin: para los
                 otros roles la API da 403, y como el encabezado está en todas
                 las pantallas, ese 403 tiraba abajo el panel entero. */}
-            {puedeEntrar("/admin/bitacora", usuario.staffRole) && (
+            {puedeEntrar("/admin/bitacora", usuario.staffRole) ? (
               <Suspense fallback={<ActivityBellSkeleton />}>
                 <ActivityBell />
+              </Suspense>
+            ) : (
+              <Suspense fallback={<ActivityBellSkeleton />}>
+                <CampanaDePendientes />
               </Suspense>
             )}
             <div className="border-l border-linea pl-2 sm:pl-3.5">

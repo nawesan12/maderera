@@ -17,7 +17,9 @@ import {
  * mientras se carga mercadería.
  */
 export function BuscadorGlobal({
-  queBusca = "Buscar cliente, pedido, comprobante, producto…",
+  // Corto: a 375 px la promesa larga se cortaba en «Buscar cliente, ped»
+  // (M2S4-050).
+  queBusca = "Buscar",
 }: {
   /** Lo que de verdad encuentra para el rol: el aserradero solo cortes (M2S4-041). */
   queBusca?: string;

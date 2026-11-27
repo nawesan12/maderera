@@ -41,6 +41,7 @@ import { VolverAPedir } from "./volver-a-pedir";
 import { tienda } from "@/lib/dal/contenido";
 import { obtenerCarrito } from "@/lib/dal/carrito";
 import { BotonWhatsapp } from "@/components/whatsapp/boton";
+import { CompartirSeguimiento } from "@/components/cuenta/compartir-seguimiento";
 import { InformarTransferencia } from "@/components/cuenta/informar-transferencia";
 
 export async function generateMetadata({
@@ -728,6 +729,7 @@ export default async function DetallePedidoPage({
         <BotonWhatsapp enlace={consulta}>
           Consultar por este pedido
         </BotonWhatsapp>
+        {pedido.estado !== "cancelado" && <CompartirSeguimiento numero={pedido.numero} token={pedido.publicToken} />}
       </div>
     </div>
   );

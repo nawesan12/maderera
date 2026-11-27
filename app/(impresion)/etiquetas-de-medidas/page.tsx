@@ -101,10 +101,14 @@ async function Contenido({
         .etiquetas-medidas .barras { margin-top: auto; width: 100%; }
         .etiquetas-medidas .a4 .barras { height: 13mm; }
         .etiquetas-medidas .rollo .barras { height: 9mm; }
-        .etiquetas-medidas .codigo { text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; line-height: 1.1; }
-        .etiquetas-medidas .a4 .codigo { font-size: 8pt; }
-        .etiquetas-medidas .rollo .codigo { font-size: 6pt; }
+        .etiquetas-medidas .numero { margin-top: 0.8mm; text-align: center; color: #000; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; line-height: 1.1; }
+        .etiquetas-medidas .a4 .numero { font-size: 8pt; }
+        .etiquetas-medidas .rollo .numero { font-size: 6pt; }
+        /* La hoja es papel: siempre clara, aunque el panel esté en oscuro. */
+        :root { color-scheme: light; }
+        html, body { background: #e9e6e1; }
         @media print {
+          html, body { background: #fff !important; }
           .etiquetas-medidas { background: none; padding: 0; min-height: 0; }
           .etiquetas-medidas .barra { display: none; }
           .etiquetas-medidas .hoja { margin: 0; box-shadow: none; break-after: page; }
@@ -133,7 +137,10 @@ async function Contenido({
               {e.barras && (
                 <CodigoDeBarras modulos={e.barras.modulos} etiqueta={e.codigo} className="barras" />
               )}
-              <p className="codigo">{e.codigo}</p>
+              {/* No es el `.codigo` del panel: ese es una pastilla hundida que
+                  en oscuro salía como una banda negra pegada a las barras
+                  (mes simulado, M2S2-056, M3S1-056). */}
+              <p className="numero">{e.codigo}</p>
             </article>
           ))}
         </div>

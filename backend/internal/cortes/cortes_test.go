@@ -363,6 +363,16 @@ func TestAgenteYArchivos(t *testing.T) {
 	if code != 200 || !strings.Contains(b, `"numero":"CRT-1"`) || !strings.Contains(b, `"piezas":2`) {
 		t.Fatalf("pendientes: %d %s", code, b)
 	}
+	// Lo que está en la máquina va aparte: el agente conserva su archivo y
+	// saca los que no están ni en la cola ni ahí (M2S4-004).
+	if !strings.Contains(b, `"enProceso":[]`) {
+		t.Errorf("sin nada en la máquina: %s", b)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-proceso' where id = $1`, id)
+	if _, b := pedir(t, http.DefaultClient, "GET", u+"/api/cortes/pendientes", nil, "Authorization", "Bearer "+tokenAgente); !strings.Contains(b, `"enProceso":["`+id+`"]`) || strings.Contains(b, `"numero":"CRT-1"`) {
+		t.Errorf("en la máquina: %s", b)
+	}
+	_, _ = e.pool.Exec(context.Background(), `update cutting_orders set estado = 'en-cola' where id = $1`, id)
 	// La lista: con el genérico, BOM y CRLF.
 	code, b = pedir(t, http.DefaultClient, "GET", u+"/api/cortes/"+id+"/lista", nil, "Authorization", "Bearer "+tokenAgente)
 	quiere := "\xef\xbb\xbfLargo;Ancho;Cantidad;Material;Etiqueta;Veta;Canto largo;Canto ancho\r\n1229;600;2;\"Melamina 18mm; blanca\";Lateral;No;2;0\r\n"

@@ -259,10 +259,19 @@ describe("feed de Merchant", () => {
     expect(escaparXml("a\u0001b")).toBe("ab");
   });
 
+  // Con la tienda apagada la causa es esa, no «40 medidas sin precio»
+  // (mes simulado, M2S1-175).
+  it("con la tienda apagada no publica nada y dice por qué", () => {
+    const xml = armarFeedMerchant([placa], origen, new Date(), false);
+    expect(xml.match(/<item>/g)).toBeNull();
+    expect(xml).toContain("0 artículos: la tienda está apagada");
+    expect(xml).not.toContain("sin precio");
+  });
+
   it("deja afuera lo que no tiene foto, y lo dice", () => {
     const xml = armarFeedMerchant([{ ...placa, imagenes: [] }], origen);
     expect(xml).not.toContain("<item>");
-    expect(xml).toMatch(/Afuera: 2 sin foto, 1 medidas sin precio/);
+    expect(xml).toMatch(/Afuera: 2 medidas sin foto, 1 medida sin precio/);
   });
 
   it("no inventa la marca", () => {

@@ -1,6 +1,11 @@
 package pdf
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"mjbj/internal/jsmath"
+)
 
 // La lista de precios en PDF (lib/pdf/lista-precios.ts): la que baja el
 // profesional desde /mi-lista-de-precios y la que exporta el panel. Lleva la
@@ -40,6 +45,17 @@ var (
 	listaAnchoMedida = Mm(48)
 	listaInterlinea  = 10.0
 )
+
+// TituloDeLista es «Lista profesional» a partir del nombre de la lista: si
+// el nombre ya empieza con «Lista», no se repite (mes simulado, M2S3-093:
+// «Lista Lista profesional»).
+func TituloDeLista(nombre string) string {
+	n := strings.TrimSpace(nombre)
+	if strings.HasPrefix(strings.ToLower(n), "lista") {
+		return n
+	}
+	return "Lista " + n
+}
 
 // ListaDePrecios arma el PDF de la lista. ahora es la fecha de vigencia.
 func ListaDePrecios(d DatosLista, ahora time.Time) ([]byte, error) {
@@ -83,7 +99,9 @@ func ListaDePrecios(d DatosLista, ahora time.Time) ([]byte, error) {
 		// `fila.precio ? … : …`: la tira vacía también es «a consultar». La
 		// lista va en pesos redondos a propósito (Moneda, no Moneda2): es
 		// para consultar precios, no un importe a pagar.
-		if f.Precio != nil && *f.Precio != "" {
+		// En cero tampoco es un precio: la escalera a medida salía a «$0»
+		// (M2S3-093).
+		if f.Precio != nil && *f.Precio != "" && jsmath.Numero(*f.Precio) > 0 {
 			h.EscribirNumero(MonedaDe(*f.Precio), Opciones{X: derecha, Y: y, Tamano: 8.5, Fuente: Negrita, Derecha: true}, Mm(27))
 		} else {
 			h.Escribir("a consultar", Opciones{X: derecha, Y: y, Tamano: 8.5, Color: TintaSuave, Derecha: true})

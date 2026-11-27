@@ -58,6 +58,8 @@ const SOLO_EN_GO = new Set([
   // Copia de respaldo que dejó la 00150 al normalizar los rubros.
   "product_images_rubro_00150",
   "receipt_refunds",
+  // El saldo del banco que se carga desde el inicio (00450): solo Go.
+  "saldos_de_banco",
   // Los traslados entre sucursales (00270): los escribe solo Go.
   "stock_traslado_items",
   "stock_traslados",

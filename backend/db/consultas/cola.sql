@@ -45,6 +45,13 @@ UPDATE trabajos
        terminado_at = CASE WHEN sqlc.arg(estado)::estado_trabajo = 'fallido' THEN now() END
  WHERE id = sqlc.arg(id) AND estado = 'procesando' AND tomado_hasta = sqlc.arg(toma)::timestamptz;
 
+-- name: PeriodoAnterior :one
+-- El último período que corrió bien antes de este: con él la tarea horaria
+-- sabe cuántas horas se perdió mientras el worker estuvo caído.
+SELECT periodo FROM tareas_corridas
+WHERE tarea = $1 AND periodo < $2 AND estado = 'ok'
+ORDER BY periodo DESC LIMIT 1;
+
 -- name: EmpezarCorrida :one
 -- Una tarea corre una vez por período. Si la corrida anterior falló, o quedó
 -- «corriendo» hace más de media hora (el proceso se murió), se reintenta.

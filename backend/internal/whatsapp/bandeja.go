@@ -21,7 +21,7 @@ import (
 // el rol de la bandeja.
 
 // Filtros de la bandeja.
-var Filtros = []string{"todas", "sin-leer", "mias", "sin-asignar", "resueltas"}
+var Filtros = []string{"todas", "sin-leer", "mias", "sin-asignar", "derivadas", "resueltas"}
 
 // ConversacionListada es una fila de la lista.
 type ConversacionListada struct {
@@ -57,6 +57,11 @@ func (s *Servicio) ListarConversaciones(ctx context.Context, filtro, usuarioID s
 		args = append(args, usuarioID)
 	case "sin-asignar":
 		cond += ` and c.asignado_a_user_id is null`
+	case "derivadas":
+		// Las que el bot pasó a una persona y nadie tomó: a donde lleva
+		// «conversación derivada sin asignar» del inicio (mes simulado,
+		// M3S2-020; «Sin asignar» abría también las que atiende el bot).
+		cond += ` and c.asignado_a_user_id is null and c.bot_estado = 'derivada'`
 	}
 	r, err := s.pool.Query(ctx, `
 		select c.id, c.wa_jid, c.display_name, c.customer_id, cu.nombre, cu.tipo::text, c.estado::text, c.ultimo_mensaje_at,

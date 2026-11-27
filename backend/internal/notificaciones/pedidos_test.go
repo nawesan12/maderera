@@ -197,9 +197,11 @@ func TestResultadoDePago(t *testing.T) {
 	if r := e.uno(t, `select count(*)::text from notifications_log where canal = 'push' and asunto = 'Pago acreditado · PED-000300'`); r != "1" {
 		t.Errorf("aviso al panel: %s", r)
 	}
-	// Lo que no es «aprobado» no avisa; una inscripción sin eventos, tampoco.
+	// Lo que no es «aprobado» ni un rechazo de la conciliación (que tiene su
+	// aviso, TestElRechazoSeAvisa) no avisa; una inscripción sin eventos,
+	// tampoco.
 	antes := e.correos()
-	_ = e.s.ResultadoDePago(ctx, CargaResultadoDePago{OrderID: &id, Tipo: "pedido", Detalle: "rechazado"})
+	_ = e.s.ResultadoDePago(ctx, CargaResultadoDePago{OrderID: &id, Tipo: "pedido", Detalle: "en_proceso"})
 	cliente := e.uno(t, `insert into customers (nombre, email) values ('Ana Gómez', 'ana@prueba.test') returning id`)
 	_ = e.s.ResultadoDePago(ctx, CargaResultadoDePago{CustomerID: &cliente, Tipo: "inscripcion", Detalle: "aprobado"})
 	if e.correos() != antes {

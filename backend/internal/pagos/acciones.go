@@ -412,25 +412,33 @@ func (s *Servicio) Conciliar(ctx context.Context, ses *auth.Sesion, pagoID, deci
 	if aprueba {
 		return Resultado{Ok: "Cobro acreditado.", Trabajo: r.Trabajo}, nil
 	}
-	// El rechazo de una transferencia de la cuenta le avisa al cliente con
-	// el motivo, y el mensaje dice dónde lo ve: decía «en su pedido» de un
-	// pago que no tenía pedido (M2S1-053).
+	// El rechazo también se avisa, como la acreditación, con el motivo
+	// (mes simulado, M2S1-053 y M3S2-014): el panel decía «el cliente lo ve
+	// en su pedido» y nadie se lo decía; la persona creía haber pagado. Y el
+	// mensaje dice dónde lo ve: decía «en su pedido» de un pago que no tenía
+	// pedido.
 	var orden, clienteID *string
 	var importe float64
 	if err := s.pool.QueryRow(ctx, `SELECT order_id, customer_id, monto::float8 FROM payments WHERE id = $1`, pagoID).Scan(&orden, &clienteID, &importe); err != nil {
 		return Resultado{}, err
 	}
+	if r.Cambio && r.Estado == Rechazado && (orden != nil || clienteID != nil) {
+		id, err := cola.Encolar(ctx, sqlc.New(s.pool), TipoResultado, map[string]any{
+			"orderId": orden, "customerId": clienteID, "tipo": r.Tipo, "detalle": "rechazado", "pagoId": pagoID, "importe": importe,
+			"motivo": remoto.MotivoRechazo,
+		}, time.Time{})
+		if err != nil {
+			return Resultado{}, err
+		}
+		if orden != nil {
+			return Resultado{Ok: "Cobro rechazado. Le avisamos al cliente y lo ve en su pedido.", Trabajo: &id}, nil
+		}
+		return Resultado{Ok: "Cobro rechazado. El cliente lo ve en Movimientos y se le avisó.", Trabajo: &id}, nil
+	}
 	if orden != nil {
 		return Resultado{Ok: "Cobro rechazado. El cliente lo ve en su pedido."}, nil
 	}
-	if clienteID != nil {
-		if _, err := cola.Encolar(ctx, sqlc.New(s.pool), TipoResultado, map[string]any{
-			"customerId": clienteID, "tipo": "deuda", "detalle": "rechazado", "pagoId": pagoID, "importe": importe, "motivo": remoto.MotivoRechazo,
-		}, time.Time{}); err != nil {
-			return Resultado{}, err
-		}
-	}
-	return Resultado{Ok: "Cobro rechazado. El cliente lo ve en Movimientos y se le avisó."}, nil
+	return Resultado{Ok: "Cobro rechazado. El cliente lo ve en Movimientos."}, nil
 }
 
 // Reconsultar le vuelve a preguntar a Mercado Pago (los webhooks se

@@ -19,7 +19,7 @@ import {
  * **Sin claves VAPID en el servidor no se ofrece nada**: un botón que promete
  * avisos y no los manda es peor que no tenerlo. Se dice qué falta.
  */
-export function AvisosPush() {
+export function AvisosPush({ soloSiFaltan = false }: { soloSiFaltan?: boolean } = {}) {
   const [estado, setEstado] = useState<
     "cargando" | "sin-claves" | "sin-soporte" | "apagado" | "prendido"
   >("cargando");
@@ -132,6 +132,11 @@ export function AvisosPush() {
   }
 
   if (estado === "cargando") return null;
+
+  // En el inicio solo se ofrece si este dispositivo no los tiene: el parte
+  // del día y los candidatos a baja salían «omitida: ningún dispositivo»
+  // semanas enteras (mes simulado, M3S1-058). Prendidos, se dice una vez.
+  if (soloSiFaltan && estado !== "apagado" && !(estado === "prendido" && aviso)) return null;
 
   if (estado === "sin-soporte") {
     return (

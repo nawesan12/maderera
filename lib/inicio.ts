@@ -27,7 +27,7 @@ export function partirPendientes<T extends { clave: string; urgente?: boolean }>
 }
 
 /** Lo que el depósito ve en sus listas de Inicio, y no en «Para hoy». */
-export const CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO = ["entregar", "cortes", "preparar"] as const;
+export const CLAVES_EN_LAS_LISTAS_DEL_DEPOSITO = ["entregar", "cortes", "preparar", "cortes-sin-retirar"] as const;
 
 /**
  * Cuántos de los meses del gráfico tienen ventas (en alguna sucursal).
@@ -65,6 +65,12 @@ export interface RenglonParaPreparar {
    * «Marcar entregado», que se llevaba todo lo que queda (H104).
    */
   acopio: boolean;
+  /**
+   * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` de Go): el
+   * renglón lo marca, para no preparar y entregar algo que se cobra después
+   * en el mostrador sin saberlo (mes simulado, M3S3-038).
+   */
+  sinCobrar: number | null;
 }
 
 /**
@@ -84,6 +90,7 @@ export function paraPreparar(
     zonaEnvio: string | null;
     estadoPago: string;
     acopio?: boolean;
+    sinCobrar?: number | null;
     createdAt: Date;
   }[],
   tope = 5,
@@ -104,18 +111,16 @@ export function paraPreparar(
       zonaEnvio: p.zonaEnvio,
       estadoPago: p.estadoPago,
       acopio: Boolean(p.acopio),
+      sinCobrar: p.sinCobrar ?? null,
     })),
   };
 }
 
-export interface RenglonParaEntregar extends RenglonParaPreparar {
-  /**
-   * Lo que falta cobrar fuera de la cuenta corriente (`sinCobrar` de Go): el
-   * «Marcar entregado» pregunta antes con eso, como en el tablero de Pedidos,
-   * que el depósito ya ve.
-   */
-  sinCobrar: number | null;
-}
+/**
+ * El renglón de «Para entregar»: el «Marcar entregado» pregunta antes con
+ * `sinCobrar`, como en el tablero de Pedidos, que el depósito ya ve.
+ */
+export type RenglonParaEntregar = RenglonParaPreparar;
 
 /**
  * Lo que el depósito tiene que entregar o despachar hoy: los pedidos listos,

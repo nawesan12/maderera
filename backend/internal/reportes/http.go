@@ -368,6 +368,66 @@ func (a *API) NumerosDelDueno(ctx context.Context, _ reportesapi.NumerosDelDueno
 	return ok(v), err
 }
 
+func (o respuesta) VisitCargarSaldoDelBancoResponse(w http.ResponseWriter) error {
+	return o.escribir(w)
+}
+
+// CargarSaldoDelBanco: lo que dice el banco ahora, desde la tarjeta «Plata
+// hoy» del inicio (mes simulado, M2S1-027). Solo el admin; queda en la
+// bitácora con el saldo que el sistema llevaba hasta ese momento.
+func (a *API) CargarSaldoDelBanco(ctx context.Context, r reportesapi.CargarSaldoDelBancoRequestObject) (reportesapi.CargarSaldoDelBancoResponseObject, error) {
+	ses, err := auth.Exigir(ctx, sqlc.StaffRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	antes, err := a.s.PlataHoy(ctx, a.s.ahora())
+	if err != nil {
+		return nil, err
+	}
+	v, err := a.s.CargarSaldoDelBanco(ctx, r.Body.Monto, ses.UserID)
+	if err != nil {
+		return nil, err
+	}
+	detalle := map[string]any{"despues": jsmath.Redondear2(r.Body.Monto)}
+	if antes.BancoSaldo != nil {
+		detalle["antes"] = *antes.BancoSaldo
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "banco", "",
+		"Cargó el saldo del banco: "+jsmath.Fijo2(r.Body.Monto), detalle)
+	return ok(v), nil
+}
+
+func (o respuesta) VisitEstadoDelSistemaResponse(w http.ResponseWriter) error  { return o.escribir(w) }
+func (o respuesta) VisitReintentarTrabajoResponse(w http.ResponseWriter) error { return o.escribir(w) }
+
+// EstadoDelSistema: /admin/sistema, a donde lleva el aviso de un trabajo
+// fallido (M2S2-061).
+func (a *API) EstadoDelSistema(ctx context.Context, _ reportesapi.EstadoDelSistemaRequestObject) (reportesapi.EstadoDelSistemaResponseObject, error) {
+	if _, err := pantalla(ctx, "/admin/sistema"); err != nil {
+		return nil, err
+	}
+	v, err := a.s.Sistema(ctx)
+	return ok(v), err
+}
+
+// ReintentarTrabajo vuelve a poner en la cola un trabajo fallido; queda en
+// la bitácora.
+func (a *API) ReintentarTrabajo(ctx context.Context, r reportesapi.ReintentarTrabajoRequestObject) (reportesapi.ReintentarTrabajoResponseObject, error) {
+	ses, err := pantalla(ctx, "/admin/sistema")
+	if err != nil {
+		return nil, err
+	}
+	hecho, err := a.s.ReintentarTrabajo(ctx, r.Id.String())
+	if err != nil {
+		return nil, err
+	}
+	if !hecho {
+		return nil, plataforma.NuevoProblema(http.StatusNotFound, "Ese trabajo ya no está fallido.")
+	}
+	bitacora.Anotar(ctx, sqlc.New(a.s.pool), a.s.log, ses, sqlc.AccionAuditoriaEditar, "trabajo", r.Id.String(), "Volvió a intentar un trabajo automático", nil)
+	return ok(map[string]string{"ok": "Vuelve a la cola."}), nil
+}
+
 func (a *API) InicioVentasPorSucursal(ctx context.Context, _ reportesapi.InicioVentasPorSucursalRequestObject) (reportesapi.InicioVentasPorSucursalResponseObject, error) {
 	if err := numerosDelNegocio(ctx); err != nil {
 		return nil, err

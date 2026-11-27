@@ -262,6 +262,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/inicio/saldo-banco": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Anota lo que dice el banco ahora. Desde ahí «Plata hoy» lleva el saldo con lo que entra y sale (00450). Solo el admin. */
+        post: operations["CargarSaldoDelBanco"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sistema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Los trabajos de la cola que fallaron y la última corrida de cada tarea del worker. Solo el admin. */
+        get: operations["EstadoDelSistema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sistema/trabajos/{id}/reintentar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ReintentarTrabajo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/inicio/ventas-por-sucursal": {
         parameters: {
             query?: never;
@@ -773,52 +823,93 @@ export interface components {
                  * @description Lo que el libro debe por encima de las facturas con saldo (saldo inicial, ajustes, remitos)
                  */
                 sinFactura: number;
+                /**
+                 * Format: double
+                 * @description La parte de sinFactura que es mercadería recibida con remito y sin factura
+                 */
+                remitosSinFactura: number;
                 proveedores: number;
             };
             cheques: {
                 aCobrar: components["schemas"]["Monto"];
                 aCubrir: components["schemas"]["Monto"];
             };
-            plataHoy: {
-                cajas: {
-                    branchId: string;
-                    sucursal: string;
-                    /**
-                     * Format: double
-                     * @description Lo que tendría que haber
-                     */
-                    esperado: number;
-                    cerrada: boolean;
-                }[];
-                /** Format: double */
-                efectivo: number;
-                /**
-                 * Format: double
-                 * @description Lo retirado hoy de las cajas a la caja fuerte
-                 */
-                cajaFuerte: number;
-                /**
-                 * Format: double
-                 * @description Lo que se movió hoy en el banco
-                 */
-                banco: number;
-                /** Format: double */
-                bancoEntro: number;
-                /** Format: double */
-                bancoSalio: number;
-                /** Format: double */
-                mercadoPago: number;
-                /**
-                 * Format: double
-                 * @description A acreditar; no suma al total
-                 */
-                tarjetas: number;
-                cheques: components["schemas"]["Monto"];
-                chequesDepositados: components["schemas"]["Monto"];
-                /** Format: double */
-                total: number;
-            };
+            plataHoy: components["schemas"]["PlataHoy"];
             ganancia: components["schemas"]["ResultadoComparado"];
+        };
+        PlataHoy: {
+            cajas: {
+                branchId: string;
+                sucursal: string;
+                /**
+                 * Format: double
+                 * @description Lo que tendría que haber
+                 */
+                esperado: number;
+                cerrada: boolean;
+            }[];
+            /** Format: double */
+            efectivo: number;
+            /**
+             * Format: double
+             * @description Lo retirado hoy de las cajas a la caja fuerte
+             */
+            cajaFuerte: number;
+            /**
+             * Format: double
+             * @description Lo que se movió hoy en el banco
+             */
+            banco: number;
+            /** Format: double */
+            bancoEntro: number;
+            /** Format: double */
+            bancoSalio: number;
+            /** Format: double */
+            mercadoPago: number;
+            /**
+             * Format: double
+             * @description A acreditar; no suma al total
+             */
+            tarjetas: number;
+            cheques: components["schemas"]["Monto"];
+            chequesDepositados: components["schemas"]["Monto"];
+            /**
+             * Format: double
+             * @description El último saldo cargado más lo que entró y menos lo que salió desde entonces; sin saldo cargado, null y el banco no suma al total
+             */
+            bancoSaldo: number | null;
+            /** Format: date-time */
+            bancoSaldoAl: string | null;
+            /**
+             * Format: double
+             * @description Lo que hay: efectivo, caja fuerte, Mercado Pago, cheques y el saldo del banco si se cargó. Lo movido hoy en el banco no suma
+             */
+            total: number;
+        };
+        EstadoDelSistema: {
+            pendientes: number;
+            trabajos: {
+                id: string;
+                tipo: string;
+                estado: string;
+                intentos: number;
+                maxIntentos: number;
+                ultimoError: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                terminadoAt: string | null;
+            }[];
+            tareas: {
+                tarea: string;
+                periodo: string;
+                estado: string;
+                error: string | null;
+                /** Format: date-time */
+                iniciadaAt: string;
+                /** Format: date-time */
+                terminadaAt: string | null;
+            }[];
         };
         Cobranzas: {
             /** @description Cuántos renglones hay en el período */
@@ -1293,6 +1384,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NumerosDelDueno"];
+                };
+            };
+        };
+    };
+    CargarSaldoDelBanco: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: double */
+                    monto: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Cómo queda «Plata hoy» */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlataHoy"];
+                };
+            };
+        };
+    };
+    EstadoDelSistema: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lo que falló y lo que corrió */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoDelSistema"];
+                };
+            };
+        };
+    };
+    ReintentarTrabajo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vuelve a la cola */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: string;
+                    };
                 };
             };
         };

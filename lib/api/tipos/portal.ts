@@ -268,9 +268,21 @@ export interface components {
             createdAt: string;
         };
         PedidoSeguido: {
-            /** Format: double */
+            /**
+             * Format: double
+             * @description El repartido en los renglones
+             */
             descuento: number;
             descuentoMotivo: string | null;
+            /**
+             * Format: double
+             * @description Lo que falta cobrar fuera de la cuenta corriente; 0 si nada o en revisión
+             */
+            sinCobrar: number;
+            /** Format: date-time */
+            entregadoAt: string | null;
+            /** @description El cliente ya tiene usuario en el sitio */
+            conCuenta: boolean;
             id: string;
             numero: string;
             publicToken: string;
@@ -293,6 +305,8 @@ export interface components {
             items: components["schemas"]["RenglonDelPedido"][];
         };
         PedidoPropio: {
+            /** @description El del enlace de seguimiento */
+            publicToken: string;
             /** Format: double */
             descuento: number;
             descuentoMotivo?: string | null;

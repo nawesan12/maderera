@@ -1,7 +1,9 @@
 import { Bell } from "lucide-react";
 import { actividadReciente } from "@/lib/dal/admin/auditoria";
 import { rutaDeEntidad } from "@/lib/dal/admin/rutas-entidad";
+import { trabajoPendiente } from "@/lib/dal/admin/pendientes";
 import { PanelDeActividad } from "./panel-actividad";
+import { PanelDePendientes } from "./panel-pendientes";
 
 /**
  * La campana de actividad, contra la bitácora.
@@ -30,6 +32,23 @@ export async function ActivityBell() {
         // de cliente y no tiene por qué conocer el mapa de rutas del sistema.
         href: rutaDeEntidad(e.entidad, e.entidadId),
       }))}
+    />
+  );
+}
+
+/**
+ * La campana de quien no entra a la bitácora: lo urgente de su rol, lo
+ * mismo que «Para hoy» (mes simulado, M2S1-191). El PIN se carga desde el
+ * inicio y no va acá. Si la API falla, la campana queda vacía: está en todas
+ * las pantallas y no puede tirar abajo el panel.
+ */
+export async function CampanaDePendientes() {
+  const pendientes = await trabajoPendiente().catch(() => []);
+  return (
+    <PanelDePendientes
+      pendientes={pendientes
+        .filter((p) => p.urgente && p.clave !== "pin")
+        .map((p) => ({ clave: p.clave, cantidad: p.cantidad, texto: p.texto, href: p.href, vencido: p.vencido }))}
     />
   );
 }

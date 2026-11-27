@@ -320,6 +320,11 @@ func diferencia(a, b string) (float64, error) {
 //     como el del cliente), el CUIT y la condición de IVA del destinatario,
 //     «Remito de entrega final» al completar un pedido que salió en partes
 //     y la media placa en medias.
+//   - presupuesto y lista-precios (27/11, mes simulado, segunda vuelta): el
+//     presupuesto dice el vendedor que lo armó, no repite la empresa ni el
+//     «Cód. cliente» vacío y vende la lata por unidad; la lista dice «a
+//     consultar» en lugar de «$0», y el encabezado no repite el nombre de
+//     fantasía que ya está en la razón social.
 func TestActualizarGolden(t *testing.T) {
 	pedido := os.Getenv("PDF_ACTUALIZAR")
 	if pedido == "" {

@@ -25,6 +25,8 @@ export interface Equipaje {
   sucursales: DatoSuelto[];
   envios: DatoSuelto[];
   pagos: DatoSuelto[];
+  /** Las promociones vigentes de la portada (cuotas, bancos). */
+  promociones?: DatoSuelto[];
 }
 
 export interface RespuestaLocal {
@@ -34,6 +36,10 @@ export interface RespuestaLocal {
   aPersona?: boolean;
   /** Un botón que lleva a una pantalla: el cortador con el despiece cargado. */
   enlace?: { texto: string; href: string };
+}
+
+function sinTildes(texto: string): string {
+  return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 /** Qué intenciones se pueden contestar sin el servidor. */
@@ -88,12 +94,16 @@ export function responderLocal(
         texto: "De nada. Si necesitás algo más, escribime.",
       };
 
-    case "envios":
-      return {
-        texto:
-          "Sí, entregamos en Mar del Plata y la zona. Estas son las zonas y lo que sale el flete:",
-        datos: equipaje.envios,
-      };
+    case "envios": {
+      // Si se preguntó por una zona que está en la lista, se contesta esa;
+      // si no, la lista sin el «Sí»: a «¿hacen envíos a Batán?» le decía
+      // que sí sin tener Batán (mes simulado, M2S1-104).
+      const pregunta = sinTildes(leido.texto);
+      const zona = equipaje.envios.find((z) => pregunta.includes(sinTildes(z.titulo)));
+      return zona
+        ? { texto: `A ${zona.titulo}, así:`, datos: [zona] }
+        : { texto: "Estas son las zonas a las que entregamos:", datos: equipaje.envios, aPersona: true };
+    }
 
     case "horarios":
       return {
@@ -102,7 +112,12 @@ export function responderLocal(
       };
 
     case "pagos":
-      return { texto: "Se puede pagar así:", datos: equipaje.pagos };
+      // Las promociones de la portada van primero: a «¿puedo pagar con
+      // cuotas?» le contestaba sin ninguna cuota (M2S1-200).
+      return {
+        texto: "Se puede pagar así:",
+        datos: [...(equipaje.promociones ?? []), ...equipaje.pagos],
+      };
 
     case "cortes":
       return {

@@ -137,6 +137,11 @@ func (s *Servicio) ListarPresupuestos(ctx context.Context, f Filtros, limite, de
 	case "cerrados":
 		cond = append(cond, "NOT (q.estado::text = ANY("+a.poner(estadosAbiertos)+") OR "+sinPedido+")")
 		cerrados = true
+	case "sin-pedido":
+		// A donde lleva «presupuestos aceptados sin pedido» del inicio: con
+		// «aceptado» salían los 27, encabezados por uno que ya tenía pedido
+		// (mes simulado, M3S2-020).
+		cond = append(cond, sinPedido)
 	case "", "todos":
 	default:
 		cond = append(cond, "q.estado::text = "+a.poner(f.Estado))

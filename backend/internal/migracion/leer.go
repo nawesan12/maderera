@@ -546,7 +546,9 @@ func describir(entidad string, d map[string]string) (identificador, resumen stri
 	}
 	// El saldo como en el resto del panel: salía «1234.50» (mes 23).
 	saldo := d["saldo"]
-	if n := numeroJS(saldo); saldo != "" && !math.IsNaN(n) {
+	// Una cifra absurda (de otra columna) queda como vino: formato.Importe
+	// cuenta con plata de verdad.
+	if n := numeroJS(saldo); saldo != "" && !math.IsNaN(n) && math.Abs(n) < 1e12 {
 		saldo = formato.Importe(n)
 	}
 	return primero(d["codigo"], d["cuit"], d["email"], "—"), unir(d["nombre"], saldo)

@@ -90,6 +90,12 @@ type VentaPedida struct {
 	// PresupuestoID es el presupuesto que armó la venta (se tipeó su número
 	// en el buscador): al cobrar queda aceptado y atado al pedido.
 	PresupuestoID *string
+	// EfectivoRecibido: con cuánto pagó en efectivo, para el vuelto del
+	// ticket (00350, M3S1-061).
+	EfectivoRecibido *float64
+	// RepetidaOk: quien atiende vio que es igual a una venta de recién al
+	// mismo cliente y la cobra igual (M3S4-015).
+	RepetidaOk bool
 
 	NumeroProvisorio *string
 	CobradaAt        *time.Time
@@ -233,6 +239,8 @@ func leerComun(l *zodjs.Lector, cola bool) VentaPedida {
 	v.Descuento = l.Numero("descuento", zodjs.Num{Opcional: true}, zodjs.Min(0))
 	v.DescuentoMotivo = l.Cadena("descuentoMotivo", zodjs.Texto{Nulo: true, Opcional: true})
 	v.Notas = l.Cadena("notas", zodjs.Texto{Nulo: true, Opcional: true})
+	// Con cuánto pagó en efectivo (00350): el ticket dice el vuelto.
+	v.EfectivoRecibido = l.Numero("efectivoRecibido", zodjs.Num{Opcional: true, Nulo: true}, zodjs.Min(0))
 	return v
 }
 
@@ -243,6 +251,8 @@ func LeerVentaDeAccion(crudo any) (VentaPedida, *zodjs.Lector) {
 	v.Autorizado = booleano(l.Booleano("autorizado", true))
 	v.SinEscala = booleano(l.Booleano("sinEscala", true))
 	v.ALista = booleano(l.Booleano("aLista", true))
+	v.RepetidaOk = booleano(l.Booleano("repetidaOk", true))
+
 	// «corte» es el de antes, uno solo y sin renglones atados (lo arma
 	// atarRenglonesAlCorte); «cortes», la lista de ahora.
 	if c := l.Objeto("corte", true, false); c != nil {
@@ -328,9 +338,11 @@ type PresupuestoPedido struct {
 	ContactoNombre   string
 	ContactoTelefono *string
 	Notas            *string
+	Clave            *string
 }
 
 // LeerPresupuesto es presupuestoMostradorSchema.
+
 func LeerPresupuesto(crudo any) (PresupuestoPedido, *zodjs.Lector) {
 	l := zodjs.Raiz(crudo)
 	var p PresupuestoPedido
@@ -340,8 +352,11 @@ func LeerPresupuesto(crudo any) (PresupuestoPedido, *zodjs.Lector) {
 	p.ContactoNombre = l.Requerido("contactoNombre", zodjs.Texto{Min: 1})
 	p.ContactoTelefono = l.Cadena("contactoTelefono", zodjs.Texto{Nulo: true, Opcional: true})
 	p.Notas = l.Cadena("notas", zodjs.Texto{Nulo: true, Opcional: true, Max: 1000})
+	// La clave por intento (00350): el segundo toque devuelve el mismo.
+	p.Clave = l.Cadena("clave", zodjs.Texto{Nulo: true, Opcional: true, Max: 80})
 	return p, l
 }
+
 
 // AltaRapida es el cliente que se da de alta sin salir de la venta.
 type AltaRapida struct {

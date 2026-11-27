@@ -81,6 +81,8 @@ func TestListaDelClienteYCheque(t *testing.T) {
 		if aLista {
 			v["aLista"] = true
 		}
+		// Son ventas iguales al mismo cliente a propósito (M3S4-015).
+		v["repetidaOk"] = true
 		return v
 	}
 	u := e.u + "/api/v1/mostrador/ventas"

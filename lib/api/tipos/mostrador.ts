@@ -374,6 +374,8 @@ export interface components {
             autorizacion?: components["schemas"]["MostradorAutorizacion"];
             /** @description un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha */
             ficha?: string;
+            /** @description el número de una venta igual al mismo cliente de recién: se reenvía con repetidaOk para cobrarla igual */
+            repetida?: string;
         };
         MostradorRenglonADevolver: {
             itemId: string;
@@ -781,6 +783,8 @@ export interface operations {
                     /** @description el PIN de un admin, o su contraseña si ninguno cargó PIN */
                     pin?: string;
                     ficha?: string;
+                    /** @description se anula para volver a cobrarla: el corte que no se terminó queda en la cola, sin venta, para atarlo a la nueva */
+                    rehacer?: boolean;
                 };
             };
         };
@@ -815,6 +819,30 @@ export interface operations {
                         }[];
                         /** @description la venta tenía un corte, que no se rehace solo */
                         conCorte?: boolean;
+                        /** @description el cliente de la venta, para rehacerla */
+                        customerId?: string | null;
+                        /** @description interno o fiscal */
+                        comprobante?: string | null;
+                        /** @description cómo se pagó, con los datos de la tarjeta y del cheque, para rehacerla */
+                        pagos?: {
+                            medio: string;
+                            /** Format: double */
+                            importe: number;
+                            nroLote: string | null;
+                            nroCupon: string | null;
+                            tarjeta: string | null;
+                            cuotas: number;
+                            cheque: {
+                                tipo: string;
+                                numero: string;
+                                banco: string;
+                                librador: string | null;
+                                /** @description AAAA-MM-DD */
+                                fechaPago: string;
+                            } | null;
+                        }[];
+                        /** @description los cortes que quedaron en la cola sin venta, para atarlos a la venta rehecha */
+                        cortes?: string[];
                         error?: string;
                         autorizacion?: components["schemas"]["MostradorAutorizacion"];
                     };

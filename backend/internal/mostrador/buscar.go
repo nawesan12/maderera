@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"mjbj/internal/busqueda"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -72,6 +73,28 @@ func (a *args) coincide(texto string, columnas ...string) string {
 	return "(" + strings.Join(por, " AND ") + ")"
 }
 
+// coincidePalabra es coincide con cada palabra al principio de una palabra
+// de la columna: «laca» no trae las «placas» (mes simulado, M2S1-187).
+func (a *args) coincidePalabra(texto string, columnas ...string) string {
+	terminos := strings.FieldsFunc(zodjs.TrimJS(texto), zodjs.EspacioJS)
+	if len(terminos) > 6 {
+		terminos = terminos[:6]
+	}
+	if len(terminos) == 0 {
+		return ""
+	}
+	var por []string
+	for _, t := range terminos {
+		p := a.poner("(^|[^[:alnum:]])" + regexp.QuoteMeta(t))
+		var col []string
+		for _, c := range columnas {
+			col = append(col, "f_unaccent("+c+") ~* f_unaccent("+p+")")
+		}
+		por = append(por, "("+strings.Join(col, " OR ")+")")
+	}
+	return "(" + strings.Join(por, " AND ") + ")"
+}
+
 // joinDePrecios son los dos left join de la lista propia y la general.
 func joinDePrecios(a *args, l Lista, propia, general string) string {
 	on := func(alias string, lista *string) string {
@@ -121,8 +144,17 @@ func soloDigitos(t string) bool {
 	return t != ""
 }
 
-// Buscar es buscarParaMostrador.
+// Buscar es buscarParaMostrador. Primero lo que tiene una palabra que empieza
+// con cada término; si no hay nada, lo que lo contiene en cualquier lado.
 func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *string) ([]ResultadoDeMostrador, error) {
+	out, err := s.buscar(ctx, texto, sucursal, cliente, true)
+	if err != nil || len(out) > 0 {
+		return out, err
+	}
+	return s.buscar(ctx, texto, sucursal, cliente, false)
+}
+
+func (s *Servicio) buscar(ctx context.Context, texto, sucursal string, cliente *string, porPalabra bool) ([]ResultadoDeMostrador, error) {
 	consulta := zodjs.TrimJS(texto)
 	out := []ResultadoDeMostrador{}
 	if zodjs.LargoJS(consulta) < 2 {
@@ -141,9 +173,14 @@ func (s *Servicio) Buscar(ctx context.Context, texto, sucursal string, cliente *
 	exacto := a.poner(consulta)
 	// El lector de código de barras escribe el número entero y un Enter.
 	cond := "(v.sku = " + exacto + " OR v.codigo_barras = " + exacto + " OR v.sku ILIKE " + prefijo + ")"
-	if t := a.coincide(consulta, "p.name", "v.label", "p.brand", "c.name"); t != "" {
+	coincide := a.coincide
+	if porPalabra {
+		coincide = a.coincidePalabra
+	}
+	if t := coincide(consulta, "p.name", "v.label", "p.brand", "c.name"); t != "" {
 		cond = "(" + cond + " OR " + t + ")"
 	}
+
 	joins := joinDePrecios(&a, lista, "propio", "general")
 	pr := precio(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)

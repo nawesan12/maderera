@@ -430,10 +430,9 @@ func (s *Servicio) MovimientoDiferido(ctx context.Context, ses *auth.Sesion, m M
 			}
 			bajoLaBase = enCaja.F()-m.Monto < base.F()
 		}
-		var destino *string
-		if m.Tipo == "retiro" {
-			destino = m.Destino
-		}
+		// El ingreso también dice de dónde viene (00350).
+		destino := m.Destino
+
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO cash_movements (session_id, tipo, monto, motivo, clave, creado_por, created_at, declarado_at, bajo_la_base, destino)
 			VALUES ($1, $2, $3::numeric, $4, $5, $6, $7, $8, $9, $10)

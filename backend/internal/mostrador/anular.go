@@ -34,7 +34,10 @@ type ResultadoAnulacion struct {
 	// AutorizadoPor: el admin que la autorizó (con su PIN o su sesión).
 	AutorizadoPor string
 	Total         float64
+	// Cortes son los que quedaron en la cola sin venta (Rehacer).
+	Cortes []string
 	// PorAfuera es lo que falta devolver por el posnet o el banco: lo cobrado
+
 	// con tarjeta o transferencia menos lo que ya devolvieron las
 	// devoluciones por afuera. El cheque en cartera vuelve en mano.
 	PorAfuera float64
@@ -47,6 +50,11 @@ type PedidoDeAnulacion struct {
 	// (antes volvía siempre, y el faltante aparecía recién en el inventario).
 	VolvioLaMercaderia bool
 	PIN, Ficha         string
+	// Rehacer: se anula para volver a cobrarla. El corte que no se terminó
+	// no se cae: queda en la cola sin venta y la venta rehecha lo ata (había
+	// que volver a tipear el despiece, y el taller recibía otro corte; mes
+	// simulado, M2S3-047).
+	Rehacer bool
 }
 
 // minutosParaCorregir: una venta propia recién hecha con tarjeta o
@@ -95,7 +103,7 @@ func (s *Servicio) Anular(ctx context.Context, ses *auth.Sesion, pedido string, 
 	var r ResultadoAnulacion
 	err = plataforma.EnTransaccion(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		r, err = anularEnTransaccion(ctx, tx, pedido, motivo, ses.UserID, a.VolvioLaMercaderia, autorizadoPor)
+		r, err = anularEnTransaccion(ctx, tx, pedido, motivo, ses.UserID, a.VolvioLaMercaderia, autorizadoPor, a.Rehacer)
 		if err == nil && !r.Ok {
 			return errSinEscribir
 		}
@@ -178,7 +186,7 @@ func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido
 	return firma, nil, err
 }
 
-func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario string, volvio bool, autorizadoPor *string) (ResultadoAnulacion, error) {
+func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario string, volvio bool, autorizadoPor *string, rehacer bool) (ResultadoAnulacion, error) {
 	// El candado es por pedido: dos toques no revierten dos veces.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1::text))`, id); err != nil {
 		return ResultadoAnulacion{}, err
@@ -400,8 +408,28 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		return ResultadoAnulacion{}, err
 	}
 
-	// El trabajo de corte que todavía no se cortó se cae con la venta.
-	if _, err := tx.Exec(ctx, `UPDATE cutting_orders SET estado = 'cancelado', updated_at = now() WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`, id); err != nil {
+	// El trabajo de corte que todavía no se cortó se cae con la venta; si se
+	// rehace, queda en la cola sin venta para atarlo a la nueva.
+	var cortesSueltos []string
+	if rehacer {
+		filas, err := tx.Query(ctx, `UPDATE cutting_orders SET order_id = NULL, updated_at = now()
+			WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso') RETURNING id::text`, id)
+		if err != nil {
+			return ResultadoAnulacion{}, err
+		}
+		for filas.Next() {
+			var c string
+			if err := filas.Scan(&c); err != nil {
+				filas.Close()
+				return ResultadoAnulacion{}, err
+			}
+			cortesSueltos = append(cortesSueltos, c)
+		}
+		filas.Close()
+		if err := filas.Err(); err != nil {
+			return ResultadoAnulacion{}, err
+		}
+	} else if _, err := tx.Exec(ctx, `UPDATE cutting_orders SET estado = 'cancelado', updated_at = now() WHERE order_id = $1 AND estado IN ('en-cola', 'en-proceso')`, id); err != nil {
 		return ResultadoAnulacion{}, err
 	}
 
@@ -411,7 +439,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		sinCAE bool
 	}
 	err = tx.QueryRow(ctx, `SELECT id, estado::text, cae IS NULL FROM invoices WHERE order_id = $1 LIMIT 1`, id).Scan(&factura.id, &factura.estado, &factura.sinCAE)
-	r := ResultadoAnulacion{Ok: true, Numero: p.numero, Total: total, PorAfuera: jsmath.Redondear2(max(0, porAfuera))}
+	r := ResultadoAnulacion{Ok: true, Numero: p.numero, Total: total, PorAfuera: jsmath.Redondear2(max(0, porAfuera)), Cortes: cortesSueltos}
 	if err == nil && factura.estado != "anulada" {
 		r.FacturaPendiente = &factura.id
 		r.FacturaSinCAE = factura.sinCAE

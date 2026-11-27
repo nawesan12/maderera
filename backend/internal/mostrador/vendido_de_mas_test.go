@@ -27,7 +27,8 @@ func TestLaVentaAvisaLoVendidoDeMas(t *testing.T) {
 	if r := vender(inicial - 5); r.AvisoStock != "" {
 		t.Errorf("con stock, avisó: %q", r.AvisoStock)
 	}
-	if r := vender(12); r.AvisoStock != "Se vendió más de lo que hay: Fenólico 18 mm (faltan 7)." {
+	// Con lo que queda en el estante y para quién está apartado (M3S1-064).
+	if r := vender(12); r.AvisoStock != "Se vendió más de lo que hay: Fenólico 18 mm (faltan 7; quedan 100 apartadas para PED-1000)." {
 		t.Errorf("vendido de más: %q", r.AvisoStock)
 	}
 }

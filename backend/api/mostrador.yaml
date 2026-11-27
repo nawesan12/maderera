@@ -82,6 +82,7 @@ paths:
                 volvioLaMercaderia: { type: boolean, default: true, description: "false: el cliente se la llevó y el stock no vuelve (pide el PIN)" }
                 pin: { type: string, maxLength: 128, description: "el PIN de un admin, o su contraseña si ninguno cargó PIN" }
                 ficha: { type: string, maxLength: 400 }
+                rehacer: { type: boolean, description: "se anula para volver a cobrarla: el corte que no se terminó queda en la cola, sin venta, para atarlo a la nueva" }
       responses:
         "200":
           description: Anulada (y si tenía factura, cuál espera su nota de crédito), o el PIN que falta
@@ -109,7 +110,34 @@ paths:
                         precioUnitario: { type: number, format: double }
                         presentacion: { type: string, nullable: true }
                   conCorte: { type: boolean, description: "la venta tenía un corte, que no se rehace solo" }
+                  customerId: { type: string, nullable: true, description: "el cliente de la venta, para rehacerla" }
+                  comprobante: { type: string, nullable: true, description: "interno o fiscal" }
+                  pagos:
+                    type: array
+                    description: "cómo se pagó, con los datos de la tarjeta y del cheque, para rehacerla"
+                    items:
+                      type: object
+                      required: [medio, importe, nroLote, nroCupon, tarjeta, cuotas, cheque]
+                      properties:
+                        medio: { type: string }
+                        importe: { type: number, format: double }
+                        nroLote: { type: string, nullable: true }
+                        nroCupon: { type: string, nullable: true }
+                        tarjeta: { type: string, nullable: true }
+                        cuotas: { type: integer }
+                        cheque:
+                          type: object
+                          nullable: true
+                          required: [tipo, numero, banco, librador, fechaPago]
+                          properties:
+                            tipo: { type: string }
+                            numero: { type: string }
+                            banco: { type: string }
+                            librador: { type: string, nullable: true }
+                            fechaPago: { type: string, description: AAAA-MM-DD }
+                  cortes: { type: array, items: { type: string }, description: "los cortes que quedaron en la cola sin venta, para atarlos a la venta rehecha" }
                   error: { type: string }
+
                   autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         "422": { $ref: "#/components/responses/Problema" }
   /api/v1/mostrador/ventas/{id}/devolucion:
@@ -490,6 +518,7 @@ components:
         avisoStock: { type: string, description: "la venta dejó medidas con lo disponible en negativo (se vendió más de lo que hay)" }
         autorizacion: { $ref: "#/components/schemas/MostradorAutorizacion" }
         ficha: { type: string, description: "un PIN ya tecleado para esta venta: si falló por otra cosa, se reenvía con la ficha" }
+        repetida: { type: string, description: "el número de una venta igual al mismo cliente de recién: se reenvía con repetidaOk para cobrarla igual" }
     MostradorRenglonADevolver:
       type: object
       required: [itemId, cantidad, alStock]

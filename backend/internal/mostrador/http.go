@@ -7,6 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"math"
 	"net/http"
+	"slices"
+	"sort"
 	"strings"
 
 	"mjbj/internal/api/mostradorapi"
@@ -152,7 +154,8 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 		return nil, err
 	}
 	b := r.Body
-	pedido := PedidoDeAnulacion{Motivo: b.Motivo, VolvioLaMercaderia: b.VolvioLaMercaderia == nil || *b.VolvioLaMercaderia}
+	pedido := PedidoDeAnulacion{Motivo: b.Motivo, VolvioLaMercaderia: b.VolvioLaMercaderia == nil || *b.VolvioLaMercaderia,
+		Rehacer: b.Rehacer != nil && *b.Rehacer}
 	if b.Pin != nil {
 		pedido.PIN = *b.Pin
 	}
@@ -209,7 +212,66 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 		return nil, err
 	}
 	out["renglones"], out["conCorte"] = renglones, conCorte
+	// El cliente, el papel y cómo pagó, con la tarjeta y el cheque: Rehacer
+	// volvía con los renglones solos y había que tipear todo otra vez (mes
+	// simulado, M2S1-178, M2S2-133 y M3S2-060). Y los cortes que quedaron en
+	// la cola sin venta, para atarlos a la nueva (M2S3-047).
+	if err := datosParaRehacer(ctx, a.s, r.Id, out); err != nil {
+		return nil, err
+	}
+	out["cortes"] = res.Cortes
+	if res.Cortes == nil {
+		out["cortes"] = []string{}
+	}
 	return ok(out), nil
+}
+
+// datosParaRehacer suma a `out` el cliente, el comprobante y los pagos de la
+// venta.
+func datosParaRehacer(ctx context.Context, s *Servicio, pedido string, out map[string]any) error {
+	var cliente, comprobante *string
+	if err := s.pool.QueryRow(ctx, `SELECT customer_id::text, comprobante FROM orders WHERE id::text = $1`, pedido).Scan(&cliente, &comprobante); err != nil {
+		return err
+	}
+	out["customerId"], out["comprobante"] = cliente, comprobante
+	filas, err := s.pool.Query(ctx, `
+		SELECT p.medio::text, p.importe, p.nro_lote, p.nro_cupon, p.tarjeta, p.cuotas,
+		       c.tipo::text, c.numero, c.banco, c.librador, to_char(c.fecha_pago AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD')
+		FROM order_payments p LEFT JOIN cheques c ON c.order_payment_id = p.id
+		WHERE p.order_id::text = $1 ORDER BY p.importe DESC, p.id`, pedido)
+	if err != nil {
+		return err
+	}
+	defer filas.Close()
+	pagos := []map[string]any{}
+	for filas.Next() {
+		var medio string
+		var importe jsmath.Num
+		var lote, cupon, tarjeta, tipo, numero, banco, librador, fecha *string
+		var cuotas int32
+		if err := filas.Scan(&medio, &importe, &lote, &cupon, &tarjeta, &cuotas, &tipo, &numero, &banco, &librador, &fecha); err != nil {
+			return err
+		}
+		p := map[string]any{"medio": medio, "importe": importe.F(), "nroLote": lote, "nroCupon": cupon, "tarjeta": tarjeta, "cuotas": cuotas, "cheque": nil}
+		if medio == ventas.Cheque {
+			// El número y el banco del cheque viajan en cupón y tarjeta del
+			// renglón; el cheque de la cartera dice el resto.
+			p["nroCupon"], p["tarjeta"] = nil, nil
+			if numero != nil && fecha != nil {
+				p["cheque"] = map[string]any{"tipo": deref(tipo), "numero": *numero, "banco": deref(banco), "librador": librador, "fechaPago": *fecha}
+			}
+		}
+		pagos = append(pagos, p)
+	}
+	out["pagos"] = pagos
+	return filas.Err()
+}
+
+func deref(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }
 
 // renglonesParaRehacer son los renglones de la venta que no salen de un
@@ -723,6 +785,16 @@ type Descarga struct {
 // corriente: ya sucedieron.
 func (s *Servicio) Descargar(ctx context.Context, ses *auth.Sesion, lote []VentaPedida) Descarga {
 	out := Descarga{Resultados: []ResultadoDeCola{}}
+	// En el orden en que se cobraron: la cola de la PC las lee por clave, al
+	// azar, y A, B y C salían PED-1111, 1110 y 1109 (mes simulado, M2S3-099).
+	lote = slices.Clone(lote)
+	sort.SliceStable(lote, func(i, j int) bool {
+		a, b := lote[i].CobradaAt, lote[j].CobradaAt
+		if a == nil || b == nil {
+			return a != nil
+		}
+		return a.Before(*b)
+	})
 	for _, v := range lote {
 		// Quien vendió, no quien drena, si es alguien real. El TS lo decía y
 		// no lo miraba: con un usuario que ya no existe, la caja (y el

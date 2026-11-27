@@ -58,6 +58,11 @@ const (
 	DatosFiscalesDelCliente = "datos_fiscales_del_cliente"
 	// H032: si la tarjeta en línea pide lote y cupón.
 	LoteYCupon = "lote_y_cupon"
+	// M2S2-018 (00351): si el descuento tipeado reemplaza al de la forma de
+	// pago o se suma.
+	DescuentoConEscala = "descuento_con_escala"
+	// M2S1-180 (00351): si lo que se paga todo en efectivo va sin centavos.
+	RedondeoEfectivo = "redondeo_efectivo"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -77,6 +82,8 @@ var Opciones = map[string][]string{
 	EtiquetaDelCircuito:         {"b", "sin_factura", "interno"},
 	DatosFiscalesDelCliente:     {"hasta_facturar", "ninguno"},
 	LoteYCupon:                  {"obligatorio", "opcional"},
+	DescuentoConEscala:          {"reemplaza", "suma"},
+	RedondeoEfectivo:            {"no", "al_peso"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

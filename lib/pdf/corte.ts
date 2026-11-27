@@ -226,7 +226,7 @@ export async function cortePdf(
 
   escribirParrafo(
     hoja,
-    `De lo comprado, el ${Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se come ${metros(sierra / 1_000_000)} m² en ${plano.pasadas} ${plano.pasadas === 1 ? "pasada" : "pasadas"} de ${formatearSierra(plano.anchoSierra)}, y el resto queda en los sobrantes de la tabla. De una placa que se vende entera el recorte es del cliente y se va con él; de una que se cobró por corte, vuelve al stock.`,
+    `El ${Math.round(plano.aprovechadoTotal * 100)}% sale en piezas. La sierra se come ${metros(sierra / 1_000_000)} m² en ${plano.pasadas} ${plano.pasadas === 1 ? "pasada" : "pasadas"} de ${formatearSierra(plano.anchoSierra)}, y el resto queda en los sobrantes de la tabla. De una placa que se vende entera el recorte es del cliente y se va con él; de una que se cobró por corte, vuelve al stock.`,
     { x: MARGEN, y, ancho: anchoUtil, tamano: 8, color: TINTA_SUAVE },
   );
 

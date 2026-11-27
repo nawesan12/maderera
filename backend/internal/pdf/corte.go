@@ -171,7 +171,7 @@ func Corte(d DatosCorte, _ time.Time) ([]byte, error) {
 	if plano.Pasadas == 1 {
 		pasadas = "pasada"
 	}
-	h.EscribirParrafo("De lo comprado, el "+aprovechado+" sale en piezas. La sierra se come "+metrosCorte(sierra/1_000_000)+" m² en "+numeroJS(plano.Pasadas)+" "+pasadas+" de "+formatearSierra(plano.AnchoSierra)+", y el resto queda en los sobrantes de la tabla. De una placa que se vende entera el recorte es del cliente y se va con él; de una que se cobró por corte, vuelve al stock.",
+	h.EscribirParrafo("El "+aprovechado+" sale en piezas. La sierra se come "+metrosCorte(sierra/1_000_000)+" m² en "+numeroJS(plano.Pasadas)+" "+pasadas+" de "+formatearSierra(plano.AnchoSierra)+", y el resto queda en los sobrantes de la tabla. De una placa que se vende entera el recorte es del cliente y se va con él; de una que se cobró por corte, vuelve al stock.",
 		Parrafo{Opciones: Opciones{X: Margen, Y: y, Tamano: 8, Color: TintaSuave}, Ancho: anchoUtil})
 
 	return h.Bytes()

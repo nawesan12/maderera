@@ -441,16 +441,16 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 			// El cliente tenía el PDF con el número viejo: se le reenvía con
 			// el nuevo, en la misma transacción (M2S1-010). Antes quedaba con
 			// una factura que el sistema ya no tenía.
-			reenviado := ""
+			reenviado := false
 			if k.CustomerID != nil {
 				if _, err := cola.Encolar(ctx, q, TrabajoAvisoDeRenumerada, map[string]string{"invoiceId": k.InvoiceID, "anterior": viejo}, time.Time{}); err != nil {
 					return err
 				}
-				reenviado = "; se le reenvía al cliente"
+				reenviado = true
 			}
 			bitacora.Anotar(ctx, q, s.log, ses, sqlc.AccionAuditoriaEditar, "factura", k.InvoiceID,
-				viejo+" pasa a ser el "+fiscal.NumeroFormateado(x.pv, k.A)+" por la baja del "+fiscal.NumeroFormateado(x.pv, x.numero)+reenviado,
-				map[string]any{"de": k.De, "a": k.A, "bajaId": res.ID})
+				viejo+" pasa a ser el "+fiscal.NumeroFormateado(x.pv, k.A)+" por la baja del "+fiscal.NumeroFormateado(x.pv, x.numero),
+				map[string]any{"de": k.De, "a": k.A, "bajaId": res.ID, "reenviado": reenviado})
 		}
 		res.Etiqueta = et
 		res.Corridos = corren

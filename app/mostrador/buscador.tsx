@@ -8,6 +8,7 @@ import { leerTipeo, vaSinDecimales, type LineaDeVenta } from "@/lib/mostrador/im
 import type { CopiaLista } from "@/lib/mostrador/offline/use-copia-local";
 import type { ResultadoDeMostrador } from "@/lib/mostrador/tipos";
 import { formatearCantidad } from "@/lib/unidades";
+import { medidaEnOrden } from "@/lib/cortes/placa";
 import {
   admiteMedia,
   descripcionConPresentacion,
@@ -185,7 +186,7 @@ export function Buscador({
    */
   /** El aviso de lo que no tiene precio, con las dos salidas que hay. */
   function sinPrecio(r: (typeof resultados)[number]) {
-    return `${r.producto} — ${r.medida} no tiene precio. Cargalo a mano o ponele precio en Precios.`;
+    return `${r.producto} — ${medidaEnOrden(r.medida)} no tiene precio. Cargalo a mano o ponele precio en Precios.`;
   }
 
   function elegir(r: (typeof resultados)[number], presentacion: Presentacion = null, yCobrar = false) {
@@ -195,12 +196,12 @@ export function Buscador({
     // «2,5*bisagra» no se redondea a tres sin decir nada: no entra, y se
     // dice por qué (revisión del carril F).
     if (vaSinDecimales({ variantId: r.variantId, unidad }, cantidad)) {
-      onNoEntra(`${r.producto} — ${r.medida} va sin decimales.`);
+      onNoEntra(`${r.producto} — ${medidaEnOrden(r.medida)} va sin decimales.`);
       return;
     }
     onElegir({
       variantId: r.variantId,
-      descripcion: descripcionConPresentacion(`${r.producto} — ${r.medida}`, pres),
+      descripcion: descripcionConPresentacion(`${r.producto} — ${medidaEnOrden(r.medida)}`, pres),
       unidad,
       cantidad,
       precioUnitario: precioDeLinea(r.precio, producto, pres),
@@ -419,7 +420,7 @@ function FilaDeResultado({
         >
           <span className="min-w-0 flex-1">
             <span className="line-clamp-2 break-words text-base font-medium">
-              {r.producto} — {r.medida}
+              {r.producto} — {medidaEnOrden(r.medida)}
             </span>
             <span className="block text-sm text-muted-foreground">
               {r.sku} · {r.stock > 0 ? `${formatearCantidad(r.stock)} disponibles acá` : "sin stock acá"}

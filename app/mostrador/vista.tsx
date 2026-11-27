@@ -5,6 +5,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useT
 import { useRouter } from "next/navigation";
 import { VincularCaja } from "@/components/mostrador/vincular-caja";
 import { tarifaDeCorte, type TarifaDeCorte } from "@/lib/cortes/tarifa";
+import { medidaEnOrden } from "@/lib/cortes/placa";
 import type { PromoVigente } from "@/lib/dal/contenido";
 import { formatearMonto, importeDelCampo, importeIlegible, importeParaElCampo } from "@/lib/formato";
 import { medioPermitido } from "@/lib/precios/medio-pago";
@@ -1777,7 +1778,9 @@ export function VistaMostrador({
           <CorteAMedida
             placa={{
               variantId: cortando.variantId,
-              descripcion: cortando.medida ? `${cortando.producto} — ${cortando.medida}` : cortando.producto,
+              // La medida con el lado largo primero, como el catálogo y el corte
+              // («1830 x 2600mm» era el formato viejo, mes 23).
+              descripcion: cortando.medida ? `${cortando.producto} — ${medidaEnOrden(cortando.medida)}` : cortando.producto,
               unidad: cortando.unidad,
               precio: cortando.precio,
               largoMm: cortando.largoMm ?? null,

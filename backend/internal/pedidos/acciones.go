@@ -22,6 +22,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/reservas"
 	"mjbj/internal/roles"
 	"mjbj/internal/sqlc"
@@ -809,6 +810,40 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			}
 			aCuenta = true
 		}
+		// El descuento por forma de pago, como en el mostrador (mes simulado
+		// 2, M2S1-080: el presupuesto prometía «10 % en efectivo o
+		// transferencia» y el pedido cobraba la lista): sobre lo que se vende
+		// del catálogo (con la regla descuento_al_flete, también lo cargado a
+		// mano), con el pedido entero por un solo medio. Los renglones quedan
+		// a lista y el descuento va al pedido, como el de la tienda.
+		var descuento float64
+		var motivoDescuento *string
+		if ent.MedioPago != nil && !aCuenta {
+			esc, err := s.q.WithTx(tx).EscalasDePago(ctx)
+			if err != nil {
+				return err
+			}
+			escalas := make([]ventas.EscalaDePago, len(esc))
+			for i, f := range esc {
+				escalas[i] = ventas.EscalaDePago{Medio: string(f.Medio), DesdeMonto: f.DesdeMonto.F(), Porcentaje: f.Porcentaje.F(), Etiqueta: f.Etiqueta}
+			}
+			alFlete := reglas.Es(ctx, tx, reglas.DescuentoAlFlete, "si")
+			base := 0.0
+			for _, l := range lineas {
+				if l.variantID != nil || alFlete {
+					base += jsmath.Numero(l.subt)
+				}
+			}
+			base = ventas.ACentavos(base)
+			if e := ventas.DescuentoPorMedioDePago(escalas, *ent.MedioPago, base); e != nil {
+				descuento = ventas.MontoDelDescuentoDePago(base, e.Porcentaje)
+				if e.Etiqueta != "" {
+					m := e.Etiqueta
+					motivoDescuento = &m
+				}
+				totalPedido = ventas.ACentavos(totalPedido - descuento)
+			}
+		}
 		deuda := totalPedido
 		if partido != nil {
 			deuda = jsmath.Numero(*partido)
@@ -843,13 +878,20 @@ func (s *Servicio) ConvertirConEntrega(ctx context.Context, ses *auth.Sesion, qu
 			        CASE WHEN $13::tipo_entrega = 'retiro'
 			             THEN coalesce($7::uuid, (SELECT id FROM branches WHERE active ORDER BY sort_order LIMIT 1))
 			             ELSE $7::uuid END,
-			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric, $10, $11, $12,
+			        'pendiente', 'presupuesto', $8::numeric, $9::numeric + $14::numeric - $22::numeric, $10, $11, $12,
 			        $13::tipo_entrega, $15, $16, $14::numeric, $17::medio_pago,
 			        coalesce($18::date, (SELECT (necesita_para AT TIME ZONE 'America/Argentina/Buenos_Aires')::date FROM quotes WHERE id = $3)),
 			        $19::numeric, $20, $21::numeric)
 			RETURNING id`, numero, q.customerID, quoteID, q.nombre, q.email, q.telefono, q.branchID, q.subtotal, q.total, q.notas,
-			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido).Scan(&pedidoID); err != nil {
+			q.sellerID, ses.UserID, tipo, costo, direccion, zona, ent.MedioPago, entregarEl, jsmath.Fijo2(dejado), autorizadoPor, partido,
+			jsmath.Fijo2(descuento)).Scan(&pedidoID); err != nil {
 			return err
+		}
+		if descuento > 0 {
+			if _, err := tx.Exec(ctx, `UPDATE orders SET descuento = $2::numeric, descuento_motivo = $3 WHERE id = $1`,
+				pedidoID, jsmath.Fijo2(descuento), motivoDescuento); err != nil {
+				return err
+			}
 		}
 
 		var variantes []string

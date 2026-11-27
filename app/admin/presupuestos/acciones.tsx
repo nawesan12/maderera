@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { formatearMonto } from "@/components/admin/formato";
 import { CampoPin, type Autorizacion } from "@/components/autorizacion/campo-pin";
 import { CampoFecha } from "@/components/ui/campo-fecha";
+import { descuentoPorMedioDePago, montoDelDescuentoDePago, type EscalaDePago } from "@/lib/precios/medio-pago";
 
 export interface ZonaParaPedido {
   nombre: string;
@@ -81,7 +82,12 @@ export function AccionesPresupuesto({
   abrirPasar = false,
   credito = null,
   bajoCosto = 0,
+  escalas = [],
+  baseEscala = 0,
 }: {
+  /** Las escalas del descuento por forma de pago y sobre cuánto van. */
+  escalas?: EscalaDePago[];
+  baseEscala?: number;
   /** Pasó su validez: al pasarlo a pedido se eligen los precios. */
   vencido?: { totalDeHoy: number } | null;
   /** Recién guardado con «Guardar y pasar a pedido»: el paso ya abierto. */
@@ -145,6 +151,8 @@ export function AccionesPresupuesto({
           abierto={abrirPasar}
           credito={credito}
           bajoCosto={bajoCosto}
+          escalas={escalas}
+          baseEscala={baseEscala}
         />
       )}
       {decidible && estado !== "aceptado" && (
@@ -255,7 +263,11 @@ function PasarAPedido({
   abierto: abiertoDeEntrada = false,
   credito,
   bajoCosto,
+  escalas,
+  baseEscala,
 }: {
+  escalas: EscalaDePago[];
+  baseEscala: number;
   abierto?: boolean;
   id: string;
   numero: string;
@@ -308,8 +320,13 @@ function PasarAPedido({
   // Un envío sin flete no sale: se carga o se elige «Sin cargo» (mes
   // simulado: se creaban pedidos con envío y $0 de flete sin aviso).
   const faltaFlete = tipo === "envio" && !hayCosto && !sinCargo;
-  const totalPedido = totalBase + costoEnvio;
   const aCuenta = medio === "cuenta_corriente";
+  // El descuento por forma de pago, el mismo que Go aplica al crear (y que
+  // el mostrador hace en la venta): con «Transferencia» salía la lista.
+  const base = total > 0 ? Math.round(baseEscala * (totalBase / total) * 100) / 100 : 0;
+  const escala = medio && !aCuenta ? descuentoPorMedioDePago(escalas, medio, base) : null;
+  const descuento = escala ? montoDelDescuentoDePago(base, escala.porcentaje) : 0;
+  const totalPedido = Math.round((totalBase - descuento + costoEnvio) * 100) / 100;
   const disponible = credito && !credito.bloqueada ? Math.max(credito.disponible, 0) : null;
   const parteLeida = Number(parteTexto.trim().replace(/\./g, "").replace(",", "."));
   const parteMal = aCuenta && parteTexto.trim() !== "" && !(Number.isFinite(parteLeida) && parteLeida > 0);
@@ -576,7 +593,13 @@ function PasarAPedido({
               )}
             </div>
 
-            <div className="flex items-baseline justify-between border-t border-linea pt-4">
+            {descuento > 0 && (
+              <div className="flex items-baseline justify-between border-t border-linea pt-4">
+                <span className="text-base text-muted-foreground">{escala?.etiqueta || "Descuento"}</span>
+                <span className="tabular text-base">−{formatearMonto(descuento)}</span>
+              </div>
+            )}
+            <div className={`flex items-baseline justify-between pt-4 ${descuento > 0 ? "" : "border-t border-linea"}`}>
               <span className="text-base text-muted-foreground">Total del pedido</span>
               <span className="tabular text-xl font-semibold">{formatearMonto(totalPedido)}</span>
             </div>
@@ -607,6 +630,7 @@ function PasarAPedido({
                   pasaElLimite ||
                   parteMal ||
                   faltaResto ||
+                  !medio ||
                   (tipo === "envio" && !direccion.trim())
                 }
                 onClick={() => pasar()}
@@ -625,7 +649,9 @@ function PasarAPedido({
                       ? "Revisá el flete"
                       : faltaResto
                         ? "Falta cómo paga el resto"
-                        : "Crear el pedido"}
+                        : !medio
+                          ? "Falta cómo paga"
+                          : "Crear el pedido"}
               </button>
             </div>
           </div>

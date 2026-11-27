@@ -503,10 +503,10 @@ func (a *API) BuscarMercaderia(ctx context.Context, r comprasapi.BuscarMercaderi
 		return nil, err
 	}
 	if r.Params.Ids != nil {
-		v, err := a.s.VariantesParaPedir(ctx, strings.Split(*r.Params.Ids, ","))
+		v, err := a.s.VariantesParaPedir(ctx, strings.Split(*r.Params.Ids, ","), deTexto(r.Params.Proveedor))
 		return ok(v), err
 	}
-	v, err := a.s.BuscarParaRecibir(ctx, deTexto(r.Params.Texto))
+	v, err := a.s.BuscarParaRecibir(ctx, deTexto(r.Params.Texto), deTexto(r.Params.Proveedor))
 	return ok(v), err
 }
 

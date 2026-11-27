@@ -97,10 +97,10 @@ export function FormularioOrden({
         setHallazgos([]);
         return;
       }
-      void buscarParaPedir(texto).then(setHallazgos);
+      void buscarParaPedir(texto, supplierId || undefined).then(setHallazgos);
     }, 250);
     return () => clearTimeout(t);
-  }, [texto]);
+  }, [texto, supplierId]);
 
   function agregar(h: Hallazgo) {
     setLineas((prev) =>
@@ -277,8 +277,10 @@ export function FormularioOrden({
                       </span>
                     </span>
                     <span className="tabular shrink-0 text-sm text-muted-foreground">
+                      {/* En pesos, como lo carga el renglón (costoPropuesto):
+                          decía $ 57.037,55 y el renglón 57.038 (M2S4-035). */}
                       {h.costoActual
-                        ? formatearMonto(Number(h.costoActual))
+                        ? formatearMonto(Math.round(Number(h.costoActual)))
                         : "sin costo"}
                     </span>
                   </button>

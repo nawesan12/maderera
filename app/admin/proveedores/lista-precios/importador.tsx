@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
-import { AlertCircle, Check, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { AlertCircle, ArrowDown, ArrowUp, Check, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { Confirmar } from "@/components/admin/confirmar";
 import { moneda } from "@/lib/formato";
 import {
   aplicarLista,
@@ -11,6 +12,21 @@ import {
 } from "./actions";
 
 const inicial: EstadoLista = {};
+
+/** Una fila apareada que no cambia ni el costo ni el precio. */
+function sinCambios(f: FilaPrevia) {
+  return (f.cambio === "igual" || f.cambio === "sin_sugerido") && f.costoAnterior === f.costoNeto;
+}
+
+/**
+ * Las filas que se aplican de entrada: todo lo apareado que cambia, menos lo
+ * que baja el precio de venta (M2S1-001, M2S1-003: una lista mal leída
+ * bajaba de un clic los precios de productos reales). Lo que baja queda en
+ * rojo y hay que tildarlo a propósito.
+ */
+function deEntrada(filas: FilaPrevia[]) {
+  return new Set(filas.filter((f) => f.variantId && !sinCambios(f) && f.cambio !== "baja").map((f) => f.codigo));
+}
 
 /**
  * Importar la lista de precios de un proveedor.
@@ -24,6 +40,8 @@ const inicial: EstadoLista = {};
  * doscientos productos de una, y eso se descubre mirando el margen a fin de
  * mes.
  */
+type FilaPrevia = VistaPreviaProveedor["filas"][number];
+
 export function ImportadorDeLista({
   supplierId,
   perfil,
@@ -50,11 +68,28 @@ export function ImportadorDeLista({
   const [mirando, mirar] = useTransition();
   const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
   const [estado, aplicar, aplicando] = useActionState(aplicarLista, inicial);
+  const [elegidas, setElegidas] = useState<Set<string>>(new Set());
+  const [confirmando, setConfirmando] = useState(false);
+  const formAplicar = useRef<HTMLFormElement>(null);
+  // Después de aplicar, la vista previa ya no se ofrece de nuevo: el botón
+  // seguía activo y se podía volver a tocar (M2S3-056).
+  const [aplicada, setAplicada] = useState(false);
+  useEffect(() => {
+    if (estado.ok) {
+      setAplicada(true);
+      setConfirmando(false);
+    }
+  }, [estado]);
 
   // Las columnas que ofrece el select salen del archivo que se acaba de subir.
   const columnas = vista?.columnas ?? [];
 
   const apareadas = (vista?.filas ?? []).filter((f) => f.variantId);
+  const conCambios = apareadas.filter((f) => !sinCambios(f));
+  const aAplicar = conCambios.filter((f) => elegidas.has(f.codigo));
+  const quietas = apareadas.length - conCambios.length;
+  const noApareadas = (vista?.filas ?? []).filter((f) => !f.variantId);
+  const textoAplicar = aAplicar.length === 1 ? "Aplicar 1 precio" : `Aplicar ${aAplicar.length} precios`;
 
   return (
     <section className="tarjeta">
@@ -78,7 +113,10 @@ export function ImportadorDeLista({
               margenPorcentaje: String(datos.get("margenPorcentaje") ?? "0"),
               precioEsNeto: datos.get("precioEsNeto") === "on" ? "on" : "",
             });
-            setVista(await previsualizarLista(datos));
+            const v = await previsualizarLista(datos);
+            setVista(v);
+            setElegidas(deEntrada(v.filas));
+            setAplicada(false);
           })
         }
         className="space-y-4 px-5 py-4"
@@ -144,6 +182,10 @@ export function ImportadorDeLista({
             }
             opcional
           />
+          {/* Vacío es «el margen que ya tiene cada producto»: el precio se
+              mueve en la misma proporción que el costo. Antes venía en 40 y
+              proponía bajar precios reales (M2S1-001). No se toma el del
+              perfil guardado: un margen en blanco se guarda como 0. */}
           <div>
             <label htmlFor="margenPorcentaje" className="block text-base font-medium">
               Margen sobre el costo
@@ -153,10 +195,9 @@ export function ImportadorDeLista({
                 id="margenPorcentaje"
                 name="margenPorcentaje"
                 inputMode="decimal"
-                key={usado?.margenPorcentaje ?? perfil?.margenPorcentaje ?? "40"}
-                defaultValue={
-                  usado?.margenPorcentaje ?? perfil?.margenPorcentaje ?? "40"
-                }
+                key={usado?.margenPorcentaje ?? ""}
+                defaultValue={usado?.margenPorcentaje ?? ""}
+                placeholder="El de cada producto"
                 className="tabular h-10 w-full rounded-lg border bg-background px-3 text-base"
               />
               <span className="text-base text-muted-foreground">%</span>
@@ -164,31 +205,32 @@ export function ImportadorDeLista({
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-base">
-          <input
-            type="checkbox"
-            name="precioEsNeto"
-            key={usado ? usado.precioEsNeto : String(perfil?.precioEsNeto)}
-            defaultChecked={
-              usado ? usado.precioEsNeto === "on" : perfil?.precioEsNeto
-            }
-            className="h-4 w-4"
-          />
-          Los precios de la planilla vienen sin IVA
-        </label>
-
-        <button
-          type="submit"
-          disabled={mirando}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
-        >
-          {mirando ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
-          Ver qué va a pasar
-        </button>
+        {/* El IVA, junto al botón: las listas de un proveedor inscripto
+            vienen netas, así que la primera vez arranca tildada (M2S1-003). */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <button
+            type="submit"
+            disabled={mirando}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
+          >
+            {mirando ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Ver qué va a pasar
+          </button>
+          <label className="flex min-h-10 items-center gap-2 text-base">
+            <input
+              type="checkbox"
+              name="precioEsNeto"
+              key={usado ? usado.precioEsNeto : String(perfil?.precioEsNeto ?? true)}
+              defaultChecked={usado ? usado.precioEsNeto === "on" : (perfil?.precioEsNeto ?? true)}
+              className="h-5 w-5"
+            />
+            Precios sin IVA
+          </label>
+        </div>
       </form>
 
       {vista?.error && (
@@ -215,12 +257,15 @@ export function ImportadorDeLista({
         </p>
       )}
 
-      {vista && !vista.error && vista.filas.length > 0 && (
+      {vista && !vista.error && vista.filas.length > 0 && !aplicada && (
         <div className="border-t">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-5 py-3">
             <span className="text-base font-medium">
-              {vista.apareadas} para actualizar
+              {conCambios.length} para actualizar
             </span>
+            {quietas > 0 && (
+              <span className="text-base text-muted-foreground">{quietas} sin cambios</span>
+            )}
             {vista.sinAparear > 0 && (
               <span className="text-base text-muted-foreground">
                 {vista.sinAparear} sin aparear: no se tocan
@@ -233,35 +278,76 @@ export function ImportadorDeLista({
             )}
           </div>
 
-          <ul className="max-h-80 divide-y overflow-y-auto border-t">
-            {vista.filas.slice(0, 100).map((f) => (
-              <li
-                key={f.codigo}
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5"
-              >
-                <span className="min-w-[8rem] text-base">{f.codigo}</span>
-                <span className="min-w-[12rem] flex-1 text-base text-muted-foreground">
-                  {f.nuestro ?? f.descripcion ?? "—"}
-                </span>
-                {f.variantId ? (
-                  <>
-                    <span className="tabular text-base text-muted-foreground">
-                      {f.precioActual !== null
-                        ? moneda.format(f.precioActual)
-                        : "sin precio"}
-                    </span>
-                    <span aria-hidden className="text-muted-foreground">→</span>
-                    <span className="tabular text-base font-medium">
-                      {moneda.format(f.precioSugerido)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-base text-brand-orange">
-                    No está en nuestro catálogo
-                  </span>
-                )}
-              </li>
-            ))}
+          {/* Cada renglón: el costo de antes y el de ahora arriba, chico;
+              el precio de venta abajo, grande, con flecha y color si sube o
+              baja. Lo que baja arranca destildado. */}
+          <ul className="max-h-[32rem] divide-y overflow-y-auto border-t">
+            {[...conCambios, ...noApareadas].slice(0, 100).map((f) => {
+              const baja = f.cambio === "baja";
+              const sube = f.cambio === "sube" || f.cambio === "nuevo";
+              return (
+                <li key={f.codigo} className={`flex items-start gap-3 px-5 py-3 ${baja ? "bg-saldo-debe/5" : ""}`}>
+                  {f.variantId ? (
+                    <input
+                      type="checkbox"
+                      checked={elegidas.has(f.codigo)}
+                      onChange={(e) =>
+                        setElegidas((prev) => {
+                          const n = new Set(prev);
+                          if (e.target.checked) n.add(f.codigo);
+                          else n.delete(f.codigo);
+                          return n;
+                        })
+                      }
+                      aria-label={`Aplicar ${f.nuestro ?? f.codigo}`}
+                      className="mt-1 h-5 w-5 shrink-0"
+                    />
+                  ) : (
+                    <span className="h-5 w-5 shrink-0" aria-hidden />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base">{f.nuestro ?? f.descripcion ?? "—"}</p>
+                    <p className="codigo text-sm text-muted-foreground">{f.codigo}</p>
+                  </div>
+                  {f.variantId ? (
+                    <div className="shrink-0 text-right">
+                      <p className="tabular text-sm text-muted-foreground">
+                        {f.costoAnterior !== null ? moneda.format(f.costoAnterior) : "—"}
+                        {" → "}
+                        {moneda.format(f.costoNeto)}
+                      </p>
+                      <p
+                        className={`tabular flex items-center justify-end gap-1 text-base font-medium ${
+                          baja ? "text-saldo-debe" : sube ? "text-saldo-favor" : ""
+                        }`}
+                      >
+                        {f.precioSugerido > 0 ? (
+                          <>
+                            <span className="font-normal text-muted-foreground">
+                              {f.precioActual !== null ? moneda.format(f.precioActual) : "sin precio"}
+                            </span>
+                            {baja ? (
+                              <ArrowDown className="h-4 w-4" aria-label="baja" />
+                            ) : sube ? (
+                              <ArrowUp className="h-4 w-4" aria-label="sube" />
+                            ) : (
+                              <span aria-hidden>→</span>
+                            )}
+                            {moneda.format(f.precioSugerido)}
+                          </>
+                        ) : (
+                          <span className="font-normal text-muted-foreground">
+                            {f.precioActual !== null ? moneda.format(f.precioActual) : "sin precio"}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="shrink-0 text-base text-brand-orange">No está en el catálogo</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
 
           {vista.problemas.length > 0 && (
@@ -274,8 +360,8 @@ export function ImportadorDeLista({
             </ul>
           )}
 
-          {apareadas.length > 0 && (
-            <form action={aplicar} className="border-t px-5 py-4">
+          {conCambios.length > 0 && (
+            <form ref={formAplicar} action={aplicar} className="border-t px-5 py-4">
               <input type="hidden" name="supplierId" value={supplierId} />
               {/* El mismo mapeo con el que se armó la vista previa: lo que se
                   aplica es exactamente lo que se miró. */}
@@ -298,22 +384,35 @@ export function ImportadorDeLista({
                 type="hidden"
                 name="filas"
                 value={JSON.stringify(
-                  apareadas.map((f) => ({
+                  aAplicar.map((f) => ({
                     codigo: f.codigo,
                     variantId: f.variantId,
                     costo: f.costo,
+                    costoNeto: f.costoNeto,
                     precioSugerido: f.precioSugerido,
                   })),
                 )}
               />
+              {/* Pide confirmar: cambia la lista general de un clic (M2S2-026). */}
               <button
-                type="submit"
-                disabled={aplicando}
-                className="boton-accion inline-flex h-10 items-center gap-2 rounded-lg px-4 text-base font-medium disabled:opacity-60"
+                type="button"
+                disabled={aplicando || aAplicar.length === 0}
+                onClick={() => setConfirmando(true)}
+                className="boton-accion inline-flex h-11 items-center gap-2 rounded-lg px-5 text-base font-medium disabled:opacity-60"
               >
                 {aplicando && <Loader2 className="h-4 w-4 animate-spin" />}
-                Aplicar {apareadas.length} precios
+                {textoAplicar}
               </button>
+              <Confirmar
+                abierto={confirmando}
+                alCerrar={() => setConfirmando(false)}
+                titulo={textoAplicar}
+                detalle={`Cambia la lista general. ${aAplicar.filter((f) => f.cambio === "baja").length > 0 ? "Hay precios que bajan." : ""}`.trim()}
+                confirmar={textoAplicar}
+                cancelar="Volver"
+                pendiente={aplicando}
+                alConfirmar={() => formAplicar.current?.requestSubmit()}
+              />
             </form>
           )}
         </div>

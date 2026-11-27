@@ -2,6 +2,7 @@ package compras
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -131,11 +132,61 @@ func (s *Servicio) resolverCodigos(ctx context.Context, proveedor string, codigo
 }
 
 // FilaPreviaProveedor es una fila de la vista previa, con su pareja.
+//
+// CostoNeto es el costo de la planilla sin IVA, y CostoAnterior el último
+// que se conocía de esa variante (el de la lista anterior del proveedor, o
+// el promedio). Cambio dice qué le pasa al precio de venta: «sube», «baja»,
+// «igual», «nuevo» (no tenía precio) o «sin_sugerido» (sin margen escrito y
+// sin costo anterior contra el cual mantenerlo: solo se guarda el costo).
 type FilaPreviaProveedor struct {
 	FilaDeProveedor
-	VariantID    *string  `json:"variantId"`
-	Nuestro      *string  `json:"nuestro"`
-	PrecioActual *float64 `json:"precioActual"`
+	VariantID     *string  `json:"variantId"`
+	Nuestro       *string  `json:"nuestro"`
+	PrecioActual  *float64 `json:"precioActual"`
+	CostoNeto     float64  `json:"costoNeto"`
+	CostoAnterior *float64 `json:"costoAnterior"`
+	Cambio        string   `json:"cambio"`
+}
+
+// Lo que le pasa al precio de venta de una fila.
+const (
+	CambioSube        = "sube"
+	CambioBaja        = "baja"
+	CambioIgual       = "igual"
+	CambioNuevo       = "nuevo"
+	CambioSinSugerido = "sin_sugerido"
+)
+
+// netoDeLaLista es el costo de la planilla sin IVA: Costo ya viene con el
+// 21 % puesto (LeerListaDeProveedor, igual que el TS).
+func netoDeLaLista(f FilaDeProveedor) float64 {
+	return jsmath.Redondear2(f.Costo / (1 + float64(ivaPorDefecto)/100))
+}
+
+// precioConMargenActual es el precio que mantiene el margen que la variante
+// tiene hoy: el actual movido en la misma proporción que el costo. Sin
+// margen escrito, la vista previa ya no inventa uno (venía en 40 % y
+// proponía bajar precios reales: M2S1-001).
+func precioConMargenActual(actual, costoAnterior, costoNuevo float64) float64 {
+	if !(actual > 0) || !(costoAnterior > 0) || !(costoNuevo > 0) {
+		return 0
+	}
+	return jsmath.Redondear2(float64(actual*costoNuevo) / costoAnterior)
+}
+
+// cambioDelPrecio clasifica una fila apareada.
+func cambioDelPrecio(actual *float64, sugerido float64) string {
+	switch {
+	case !(sugerido > 0):
+		return CambioSinSugerido
+	case actual == nil:
+		return CambioNuevo
+	case sugerido > *actual:
+		return CambioSube
+	case sugerido < *actual:
+		return CambioBaja
+	}
+	return CambioIgual
 }
 
 // VistaPreviaProveedor es lo que va a pasar si se aplica.
@@ -144,6 +195,9 @@ type VistaPreviaProveedor struct {
 	Problemas  []ProblemaDeFila      `json:"problemas"`
 	Apareadas  int                   `json:"apareadas"`
 	SinAparear int                   `json:"sinAparear"`
+	// SinCambios son las apareadas con el mismo costo y el mismo precio: no
+	// cuentan como «para actualizar» (M2S3-056).
+	SinCambios int `json:"sinCambios"`
 	Columnas   []string              `json:"columnas"`
 	Error      *string               `json:"error,omitempty"`
 }
@@ -231,13 +285,31 @@ func (s *Servicio) PrevisualizarLista(ctx context.Context, archivo []byte, form 
 			return VistaPreviaProveedor{}, rows.Err()
 		}
 	}
+	anteriores, err := s.costosAnteriores(ctx, perfil.SupplierID, variantes)
+	if err != nil {
+		return VistaPreviaProveedor{}, err
+	}
+	mantener := margenEnBlanco(form)
 	vista := VistaPreviaProveedor{Filas: []FilaPreviaProveedor{}, Problemas: problemas, Columnas: columnas}
 	for _, f := range filas {
-		x := FilaPreviaProveedor{FilaDeProveedor: f}
+		x := FilaPreviaProveedor{FilaDeProveedor: f, CostoNeto: netoDeLaLista(f)}
 		if r, ok := porCodigo[f.Codigo]; ok && r.VariantID != nil {
 			x.VariantID, x.Nuestro = r.VariantID, r.Descripcion
 			if p, ok := actuales[*r.VariantID]; ok {
 				x.PrecioActual = &p
+			}
+			if c, ok := anteriores[*r.VariantID]; ok {
+				x.CostoAnterior = &c
+			}
+			if mantener {
+				x.PrecioSugerido = 0
+				if x.PrecioActual != nil && x.CostoAnterior != nil {
+					x.PrecioSugerido = precioConMargenActual(*x.PrecioActual, *x.CostoAnterior, x.CostoNeto)
+				}
+			}
+			x.Cambio = cambioDelPrecio(x.PrecioActual, x.PrecioSugerido)
+			if (x.Cambio == CambioIgual || x.Cambio == CambioSinSugerido) && x.CostoAnterior != nil && *x.CostoAnterior == x.CostoNeto {
+				vista.SinCambios++
 			}
 			vista.Apareadas++
 		} else {
@@ -249,6 +321,43 @@ func (s *Servicio) PrevisualizarLista(ctx context.Context, archivo []byte, form 
 		vista.Filas = append(vista.Filas, x)
 	}
 	return vista, nil
+}
+
+// margenEnBlanco es que no se escribió un margen: cada variante mantiene el
+// suyo.
+func margenEnBlanco(form map[string]*string) bool {
+	v := form["margenPorcentaje"]
+	return v == nil || trimJS(*v) == ""
+}
+
+// costosAnteriores es el último costo neto conocido de cada variante: el de
+// la lista anterior de este proveedor y, si no, el promedio.
+func (s *Servicio) costosAnteriores(ctx context.Context, proveedor string, variantes []string) (map[string]float64, error) {
+	out := map[string]float64{}
+	if len(variantes) == 0 || !plataforma.UUIDValido(proveedor) {
+		return out, nil
+	}
+	filas, err := s.pool.Query(ctx, `
+		SELECT v.id, coalesce(
+		  (SELECT x.costo_neto FROM supplier_variant_codes x WHERE x.supplier_id = $1::uuid AND x.variant_id = v.id AND x.costo_neto IS NOT NULL
+		   ORDER BY x.costo_at DESC NULLS LAST LIMIT 1),
+		  (SELECT nullif(vc.costo_promedio, 0) FROM variant_costs vc WHERE vc.variant_id = v.id))
+		FROM product_variants v WHERE v.id = ANY($2::uuid[])`, proveedor, variantes)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+	for filas.Next() {
+		var v string
+		var c *jsmath.Num
+		if err := filas.Scan(&v, &c); err != nil {
+			return nil, err
+		}
+		if c != nil {
+			out[v] = float64(*c)
+		}
+	}
+	return out, filas.Err()
 }
 
 func mensajeDelProblema(err error) string {
@@ -288,6 +397,7 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 	if !hay {
 		return "", "", fallo("No hay una lista de precios general.")
 	}
+	precios, costos := 0, 0
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var existe string
 		err := tx.QueryRow(ctx, `SELECT id FROM supplier_price_profiles WHERE supplier_id = $1 LIMIT 1`, perfil.SupplierID).Scan(&existe)
@@ -307,18 +417,54 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 		if err != nil {
 			return err
 		}
+		var nombre string
+		if err := tx.QueryRow(ctx, `SELECT nombre FROM suppliers WHERE id = $1`, perfil.SupplierID).Scan(&nombre); err != nil {
+			return err
+		}
+		motivo := "Lista de " + nombre
+		lote := uuidNuevo()
 		for _, f := range filas {
+			// El costo neto de la planilla queda como costo de reposición con
+			// este proveedor: la orden siguiente lo sugiere (M3S2-029).
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO supplier_variant_codes (supplier_id, variant_id, codigo) VALUES ($1, $2, $3)
-				ON CONFLICT (supplier_id, codigo) DO UPDATE SET variant_id = excluded.variant_id`, perfil.SupplierID, f.VariantID, f.Codigo); err != nil {
+				INSERT INTO supplier_variant_codes (supplier_id, variant_id, codigo, costo_neto, costo_at)
+				VALUES ($1, $2, $3, $4::numeric, CASE WHEN $4::numeric IS NULL THEN NULL ELSE now() END)
+				ON CONFLICT (supplier_id, codigo) DO UPDATE SET variant_id = excluded.variant_id,
+				  costo_neto = coalesce(excluded.costo_neto, supplier_variant_codes.costo_neto),
+				  costo_at = coalesce(excluded.costo_at, supplier_variant_codes.costo_at)`,
+				perfil.SupplierID, f.VariantID, f.Codigo, f.CostoNeto); err != nil {
 				return err
 			}
+			if !(f.PrecioSugerido > 0) {
+				costos++
+				continue
+			}
+			// El precio, con su renglón en el historial como cualquier
+			// importación (M2S2-042): sin eso «Últimos cambios» no lo
+			// mostraba y el deshacer no tenía de dónde volver.
 			precio := jsmath.Fijo2(f.PrecioSugerido)
+			var anterior *string
+			err := tx.QueryRow(ctx, `SELECT price::text FROM price_list_items WHERE price_list_id = $1 AND variant_id = $2 FOR UPDATE`,
+				general, f.VariantID).Scan(&anterior)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if anterior != nil && jsmath.Numero(*anterior) == jsmath.Numero(precio) {
+				costos++
+				continue
+			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO price_list_items (price_list_id, variant_id, price) VALUES ($1, $2, $3::numeric)
 				ON CONFLICT (price_list_id, variant_id) DO UPDATE SET price = $3::numeric, updated_at = now()`, general, f.VariantID, precio); err != nil {
 				return err
 			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO price_history (variant_id, price_list_id, precio_anterior, precio_nuevo, origen, motivo, lote_id, created_by_user_id)
+				VALUES ($1, $2, $3::numeric, $4::numeric, 'importacion', $5, $6::uuid, $7)`,
+				f.VariantID, general, anterior, precio, motivo, lote, ses.UserID); err != nil {
+				return err
+			}
+			precios++
 		}
 		return nil
 	})
@@ -326,6 +472,26 @@ func (s *Servicio) AplicarLista(ctx context.Context, ses *auth.Sesion, form map[
 		return "", "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "precio", perfil.SupplierID,
-		fmt.Sprintf("Importó %d precios desde la lista de un proveedor", len(filas)), nil)
-	return fmt.Sprintf("Listo: %d precios actualizados. El mapeo quedó guardado.", len(filas)), perfil.SupplierID, nil
+		"Importó "+plural(precios, "precio", "precios")+" desde la lista de un proveedor", nil)
+	texto := "Listo: " + plural(precios, "precio actualizado", "precios actualizados")
+	if costos > 0 {
+		texto += " y " + plural(costos, "costo guardado", "costos guardados")
+	}
+	return texto + ".", perfil.SupplierID, nil
+}
+
+// plural es «1 precio» o «3 precios».
+func plural(n int, uno, varios string) string {
+	if n == 1 {
+		return "1 " + uno
+	}
+	return fmt.Sprintf("%d %s", n, varios)
+}
+
+func uuidNuevo() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }

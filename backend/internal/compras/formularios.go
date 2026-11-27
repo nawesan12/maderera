@@ -599,6 +599,10 @@ type FilaAplicar struct {
 	VariantID      string  `json:"variantId"`
 	Costo          float64 `json:"costo"`
 	PrecioSugerido float64 `json:"precioSugerido"`
+	// CostoNeto es el de la planilla sin IVA; nil si no vino. Un
+	// PrecioSugerido 0 es «solo el costo»: sin margen escrito y sin costo
+	// anterior, el precio de venta no se toca.
+	CostoNeto *float64 `json:"costoNeto"`
 }
 
 // leerFilasAplicar es el z.array(...) de aplicarLista, sin coerción: los
@@ -618,10 +622,14 @@ func leerFilasAplicar(v any) ([]FilaAplicar, bool) {
 		variante, ok2 := m["variantId"].(string)
 		costo, ok3 := m["costo"].(float64)
 		precio, ok4 := m["precioSugerido"].(float64)
-		if !ok1 || !ok2 || !ok3 || !ok4 || !plataforma.UUIDValido(variante) || !(precio > 0) {
+		if !ok1 || !ok2 || !ok3 || !ok4 || !plataforma.UUIDValido(variante) || precio < 0 {
 			return nil, false
 		}
-		out = append(out, FilaAplicar{codigo, variante, costo, precio})
+		fila := FilaAplicar{Codigo: codigo, VariantID: variante, Costo: costo, PrecioSugerido: precio}
+		if n, ok := m["costoNeto"].(float64); ok && n > 0 {
+			fila.CostoNeto = &n
+		}
+		out = append(out, fila)
 	}
 	return out, true
 }

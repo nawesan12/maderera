@@ -596,7 +596,7 @@ func TestListaDeProveedor(t *testing.T) {
 	if c, _ := pedir(t, ven, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 403 {
 		t.Errorf("el vendedor no aplica precios: %d", c)
 	}
-	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 1 precios actualizados.") {
+	if c, b := pedir(t, adm, "POST", e.u+"compras/lista-proveedor/aplicar", aplicar); c != 200 || !strings.Contains(b, "Listo: 1 precio actualizado.") {
 		t.Fatalf("aplicar: %d %s", c, b)
 	}
 	if p := e.numero(t, `select price::float8 from price_list_items where variant_id = $1`, e.placa); p != 1573 {

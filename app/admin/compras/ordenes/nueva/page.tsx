@@ -34,7 +34,7 @@ export default async function NuevaOrdenPage({
     proveedoresParaElegir(),
     sucursalesParaGasto(),
     pedidos.length > 0
-      ? variantesParaPedir(pedidos.map((p) => p.variantId))
+      ? variantesParaPedir(pedidos.map((p) => p.variantId), proveedor)
       : Promise.resolve([]),
   ]);
 
@@ -77,12 +77,6 @@ export default async function NuevaOrdenPage({
         </p>
       </div>
 
-      {renglones.length > 0 && (
-        <p className="tarjeta-atencion px-4 py-3 text-base">
-          Vienen <strong>{renglones.length}</strong> renglones del reporte de
-          reposición. {proveedor ? "Revisá los costos." : "Falta elegir el proveedor y revisar los costos."}
-        </p>
-      )}
 
       <FormularioOrden
         proveedores={proveedores}

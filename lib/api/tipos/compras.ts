@@ -950,6 +950,12 @@ export interface components {
                 nuestro: string | null;
                 /** Format: double */
                 precioActual: number | null;
+                /** Format: double */
+                costoNeto: number;
+                /** Format: double */
+                costoAnterior: number | null;
+                /** @description sube, baja, igual, nuevo, sin_sugerido o vacío (sin aparear) */
+                cambio: string;
             }[];
             problemas: {
                 fila: number;
@@ -957,6 +963,7 @@ export interface components {
             }[];
             apareadas: number;
             sinAparear: number;
+            sinCambios?: number;
             columnas: string[];
             error?: string;
         };
@@ -1908,6 +1915,8 @@ export interface operations {
                 texto?: string;
                 /** @description ids separados por coma (hasta 40) */
                 ids?: string;
+                /** @description a quién se le compra (el costo sale de su lista si la tiene) */
+                proveedor?: string;
             };
             header?: never;
             path?: never;

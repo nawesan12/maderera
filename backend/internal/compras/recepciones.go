@@ -133,8 +133,12 @@ type Mercaderia struct {
 	CostoActual *string `json:"costoActual"`
 }
 
-// BuscarParaRecibir es buscarParaRecibir: hasta 20, por nombre.
-func (s *Servicio) BuscarParaRecibir(ctx context.Context, texto string) ([]Mercaderia, error) {
+// BuscarParaRecibir es buscarParaRecibir: hasta 20, por nombre. Primero los
+// que empiezan con lo buscado y después los que lo tienen al empezar una
+// palabra: «laca» traía tres fenólicos antes que las lacas (M3S2-057),
+// porque «placa» la contiene. Con un proveedor, el costo que se propone es
+// el de su lista, si la tiene (M3S2-029).
+func (s *Servicio) BuscarParaRecibir(ctx context.Context, texto, proveedor string) ([]Mercaderia, error) {
 	consulta := trimJS(texto)
 	if plataforma.LargoJS(consulta) < 2 {
 		return []Mercaderia{}, nil
@@ -144,22 +148,39 @@ func (s *Servicio) BuscarParaRecibir(ctx context.Context, texto string) ([]Merca
 	if c := a.coincide(consulta, "p.name", "v.label", "v.sku", "p.brand", "c.name"); c != "" {
 		cond = append(cond, c)
 	}
+	prefijo := a.poner(consulta)
+	costo, union := costoPropuestoSQL(&a, proveedor)
 	filas, err := s.pool.Query(ctx, `
-		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, vc.costo_promedio::text
+		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, `+costo+`
 		FROM product_variants v
 		JOIN products p ON p.id = v.product_id
 		JOIN categories c ON c.id = p.category_id
-		LEFT JOIN variant_costs vc ON vc.variant_id = v.id
-		WHERE `+strings.Join(cond, " AND ")+` ORDER BY p.name LIMIT 20`, a...)
+		LEFT JOIN variant_costs vc ON vc.variant_id = v.id`+union+`
+		WHERE `+strings.Join(cond, " AND ")+`
+		ORDER BY CASE WHEN f_unaccent(p.name) ILIKE f_unaccent(`+prefijo+`) || '%' THEN 0
+		  WHEN f_unaccent(p.name) ILIKE '% ' || f_unaccent(`+prefijo+`) || '%' THEN 1 ELSE 2 END, p.name LIMIT 20`, a...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(filas, pgx.RowToStructByPos[Mercaderia])
 }
 
+// costoPropuestoSQL es la columna del costo: el de la lista del proveedor,
+// si se sabe a quién se le compra y la tiene, y si no el promedio.
+func costoPropuestoSQL(a *argumentos, proveedor string) (string, string) {
+	if !plataforma.UUIDValido(proveedor) {
+		return "vc.costo_promedio::text", ""
+	}
+	p := a.poner(proveedor)
+	return "coalesce(svc.costo_neto, vc.costo_promedio)::text", `
+		LEFT JOIN LATERAL (SELECT x.costo_neto FROM supplier_variant_codes x
+		  WHERE x.supplier_id = ` + p + `::uuid AND x.variant_id = v.id AND x.costo_neto IS NOT NULL
+		  ORDER BY x.costo_at DESC NULLS LAST LIMIT 1) svc ON true`
+}
+
 // VariantesParaPedir es variantesParaPedir: las mismas, por id (hasta 40),
 // para abrir una orden con los renglones del reporte de reposición.
-func (s *Servicio) VariantesParaPedir(ctx context.Context, ids []string) ([]Mercaderia, error) {
+func (s *Servicio) VariantesParaPedir(ctx context.Context, ids []string, proveedor string) ([]Mercaderia, error) {
 	var acotados []string
 	for _, id := range ids {
 		if id != "" {
@@ -178,10 +199,12 @@ func (s *Servicio) VariantesParaPedir(ctx context.Context, ids []string) ([]Merc
 	if len(validos) == 0 {
 		return []Mercaderia{}, nil
 	}
+	a := argumentos{validos}
+	costo, union := costoPropuestoSQL(&a, proveedor)
 	filas, err := s.pool.Query(ctx, `
-		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, vc.costo_promedio::text
-		FROM product_variants v JOIN products p ON p.id = v.product_id LEFT JOIN variant_costs vc ON vc.variant_id = v.id
-		WHERE v.id = ANY($1::uuid[])`, validos)
+		SELECT v.id, p.name, v.label, v.sku, p.unit::text, p.alicuota_iva::text, `+costo+`
+		FROM product_variants v JOIN products p ON p.id = v.product_id LEFT JOIN variant_costs vc ON vc.variant_id = v.id`+union+`
+		WHERE v.id = ANY($1::uuid[])`, a...)
 	if err != nil {
 		return nil, err
 	}

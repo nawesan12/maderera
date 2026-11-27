@@ -298,6 +298,7 @@ paths:
       parameters:
         - { name: texto, in: query, schema: { type: string, maxLength: 200 } }
         - { name: ids, in: query, description: ids separados por coma (hasta 40), schema: { type: string } }
+        - { name: proveedor, in: query, description: a quién se le compra (el costo sale de su lista si la tiene), schema: { type: string } }
       responses:
         "200":
           description: Las variantes con lo que cuestan hoy
@@ -932,7 +933,7 @@ components:
           type: array
           items:
             type: object
-            required: [codigo, descripcion, costo, precioSugerido, fila, variantId, nuestro, precioActual]
+            required: [codigo, descripcion, costo, precioSugerido, fila, variantId, nuestro, precioActual, costoNeto, costoAnterior, cambio]
             properties:
               codigo: { type: string }
               descripcion: { type: string }
@@ -942,6 +943,9 @@ components:
               variantId: { type: string, nullable: true }
               nuestro: { type: string, nullable: true }
               precioActual: { type: number, format: double, nullable: true }
+              costoNeto: { type: number, format: double }
+              costoAnterior: { type: number, format: double, nullable: true }
+              cambio: { type: string, description: "sube, baja, igual, nuevo, sin_sugerido o vacío (sin aparear)" }
         problemas:
           type: array
           items:
@@ -952,6 +956,7 @@ components:
               motivo: { type: string }
         apareadas: { type: integer }
         sinAparear: { type: integer }
+        sinCambios: { type: integer }
         columnas: { type: array, items: { type: string } }
         error: { type: string }
     OrdenListada:

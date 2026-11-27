@@ -178,7 +178,7 @@ export function BorradorDeRecepcion({
                 onClick={() => setSeguro(false)}
                 className="h-12 flex-1 rounded-xl border border-linea px-4 text-base sm:flex-none"
               >
-                Mejor no
+                Volver
               </button>
             </div>
           </div>

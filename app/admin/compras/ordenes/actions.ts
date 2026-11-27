@@ -77,7 +77,10 @@ export async function recibirDeLaOrden(purchaseOrderId: string, numeroRemito: st
   return { ok: r.data.ok, id: r.data.id };
 }
 
-/** El mismo buscador que usa la carga de recepciones. */
-export async function buscarParaPedir(texto: string) {
-  return buscarParaRecibir(texto);
+/**
+ * El mismo buscador que usa la carga de recepciones; con el proveedor, el
+ * costo que propone es el de su lista.
+ */
+export async function buscarParaPedir(texto: string, proveedor?: string) {
+  return buscarParaRecibir(texto, proveedor);
 }

@@ -717,6 +717,9 @@ export const supplierVariantCodes = pgTable(
       .references(() => productVariants.id, { onDelete: "cascade" }),
     /** Tal cual lo escribe el proveedor en su planilla. */
     codigo: text().notNull(),
+    /** El último costo neto que trajo su lista (la orden lo sugiere). */
+    costoNeto: numeric({ precision: 14, scale: 4 }),
+    costoAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

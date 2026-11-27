@@ -165,7 +165,7 @@ func (q *Queries) CambiarRubroActivo(ctx context.Context, arg CambiarRubroActivo
 }
 
 const candidatosDeBaja = `-- name: CandidatosDeBaja :many
-SELECT p.id, p.name AS nombre, p.slug, c.name AS categoria, p.created_at AS creado,
+SELECT p.id, p.name AS nombre, p.slug, c.name AS categoria, p.created_at AS creado, p.a_pedido,
   (SELECT count(*) FROM product_variants v WHERE v.product_id = p.id AND v.active)::int AS variantes,
   coalesce((SELECT sum(greatest(i.qty - i.reservado, 0)) FROM inventory i
             JOIN product_variants pv ON pv.id = i.variant_id
@@ -173,7 +173,10 @@ SELECT p.id, p.name AS nombre, p.slug, c.name AS categoria, p.created_at AS crea
   (SELECT count(*) FROM product_variants pv WHERE pv.product_id = p.id AND pv.active
      AND NOT EXISTS (SELECT 1 FROM price_list_items pli WHERE pli.variant_id = pv.id AND pli.price > 0))::int AS variantes_sin_precio,
   (SELECT max(o.created_at) FROM order_items oi JOIN orders o ON o.id = oi.order_id
-     JOIN product_variants pv ON pv.id = oi.variant_id WHERE pv.product_id = p.id)::timestamptz AS ultima_venta
+     JOIN product_variants pv ON pv.id = oi.variant_id WHERE pv.product_id = p.id)::timestamptz AS ultima_venta,
+  (SELECT max(gr.confirmada_at) FROM goods_receipt_items gi JOIN goods_receipts gr ON gr.id = gi.receipt_id
+     JOIN product_variants pv ON pv.id = gi.variant_id
+     WHERE pv.product_id = p.id AND gr.estado = 'confirmada')::timestamptz AS ultima_compra
 FROM products p JOIN categories c ON c.id = p.category_id
 WHERE p.active
 ORDER BY p.name
@@ -185,10 +188,12 @@ type CandidatosDeBajaRow struct {
 	Slug               string             `json:"slug"`
 	Categoria          string             `json:"categoria"`
 	Creado             time.Time          `json:"creado"`
+	APedido            bool               `json:"aPedido"`
 	Variantes          int32              `json:"variantes"`
 	Stock              float64            `json:"stock"`
 	VariantesSinPrecio int32              `json:"variantesSinPrecio"`
 	UltimaVenta        pgtype.Timestamptz `json:"ultimaVenta"`
+	UltimaCompra       pgtype.Timestamptz `json:"ultimaCompra"`
 }
 
 func (q *Queries) CandidatosDeBaja(ctx context.Context) ([]CandidatosDeBajaRow, error) {
@@ -206,10 +211,12 @@ func (q *Queries) CandidatosDeBaja(ctx context.Context) ([]CandidatosDeBajaRow, 
 			&i.Slug,
 			&i.Categoria,
 			&i.Creado,
+			&i.APedido,
 			&i.Variantes,
 			&i.Stock,
 			&i.VariantesSinPrecio,
 			&i.UltimaVenta,
+			&i.UltimaCompra,
 		); err != nil {
 			return nil, err
 		}

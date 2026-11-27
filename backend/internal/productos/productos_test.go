@@ -384,5 +384,41 @@ func TestRubrosSugeridosImagenesYCandidatos(t *testing.T) {
 		strings.Join(cands.Candidatos[0].Motivos, "|") != "Nunca se vendió|Sin stock en ninguna sucursal" {
 		t.Errorf("candidatos: %s", b)
 	}
+
+	// Lo recibido hace poco no es «Nunca se vendió» (M2S1-124), y un producto
+	// a pedido no entra por no tener stock ni precio (M2S4-033).
+	var proveedor, sucursal, variante string
+	_ = e.pool.QueryRow(ctx, `insert into suppliers (nombre) values ('Proveedor de prueba') returning id`).Scan(&proveedor)
+	_ = e.pool.QueryRow(ctx, `select id from branches limit 1`).Scan(&sucursal)
+	_ = e.pool.QueryRow(ctx, `select id from product_variants where product_id = $1 limit 1`, ids[1]).Scan(&variante)
+	var recepcion string
+	if err := e.pool.QueryRow(ctx, `insert into goods_receipts (supplier_id, branch_id, estado, confirmada_at)
+		values ($1, $2, 'confirmada', now()) returning id`, proveedor, sucursal).Scan(&recepcion); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `insert into goods_receipt_items (receipt_id, variant_id, cantidad, costo_unitario) values ($1, $2, 10, 100)`, recepcion, variante); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = e.pool.Exec(ctx, `update products set a_pedido = true where id = $1`, ids[0])
+	_, b = pedir(t, ven, "GET", u+"productos-candidatos", nil)
+	cands.Candidatos = nil
+	_ = json.Unmarshal([]byte(b), &cands)
+	if len(cands.Candidatos) != 1 || cands.Candidatos[0].ID != ids[1] ||
+		strings.Join(cands.Candidatos[0].Motivos, "|") != "Nunca se vendió|Sin stock en ninguna sucursal" {
+		t.Errorf("con compra reciente y a pedido: %s", b)
+	}
+	// El chip «Nunca se vendió» va adelante aunque no sea el motivo, pero el
+	// motivo de las ventas no cuenta: se lo saca el stock.
+	_, _ = e.pool.Exec(ctx, `update inventory set qty = 5 where variant_id = $1`, variante)
+	_, _ = e.pool.Exec(ctx, `insert into inventory (variant_id, branch_id, qty) values ($1, $2, 5) on conflict do nothing`, variante, sucursal)
+	_, b = pedir(t, ven, "GET", u+"productos-candidatos", nil)
+	cands.Candidatos = nil
+	_ = json.Unmarshal([]byte(b), &cands)
+	if len(cands.Candidatos) != 0 {
+		t.Errorf("recibido esta semana y con stock sigue de candidato: %s", b)
+	}
+	if c, b := pedir(t, adm, "PUT", u+"productos-candidatos", map[string]int{"meses": 1}); c != 200 || !strings.Contains(b, "hace 1 mes.") {
+		t.Errorf("1 mes: %d %s", c, b)
+	}
 	_ = time.Now
 }

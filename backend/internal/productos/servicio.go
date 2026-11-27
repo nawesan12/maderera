@@ -742,8 +742,16 @@ func (s *Servicio) GuardarMesesSinVender(ctx context.Context, ses *auth.Sesion, 
 		return "", err
 	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEditar, "producto", "",
-		"Cambió el umbral de candidatos a baja a "+strconv.Itoa(meses)+" meses sin ventas", nil)
-	return "Ahora se señalan los que no se venden hace " + strconv.Itoa(meses) + " meses.", nil
+		"Cambió el umbral de candidatos a baja a "+Meses(meses)+" sin ventas", nil)
+	return "Ahora se señalan los que no se venden hace " + Meses(meses) + ".", nil
+}
+
+// Meses es «1 mes» o «12 meses» (mes simulado, M2S3-060 y M2S3-064).
+func Meses(n int) string {
+	if n == 1 {
+		return "1 mes"
+	}
+	return strconv.Itoa(n) + " meses"
 }
 
 // Candidato es un producto que quizá haya que dar de baja.
@@ -771,28 +779,47 @@ func (s *Servicio) Candidatos(ctx context.Context, meses int, ahora time.Time) (
 		return nil, err
 	}
 	out := []Candidato{}
+	// Cuántos motivos de verdad tiene cada uno, para ordenar: el chip
+	// informativo de «Nunca se vendió» no suma.
+	peso := map[string]int{}
 	for _, f := range filas {
 		c := Candidato{ID: f.ID, Nombre: f.Nombre, Slug: f.Slug, Categoria: f.Categoria, Stock: f.Stock,
 			Variantes: f.Variantes, VariantesSinPrecio: f.VariantesSinPrecio, Motivos: []string{}}
+		// Lo que entró hace poco no es un candidato aunque no se haya vendido:
+		// la referencia es la última venta, la última compra recibida o el
+		// alta, la más nueva. Contando desde siempre, la mercadería recibida
+		// esa semana salía «Nunca se vendió» con 200 en stock (M2S1-124).
+		referencia := f.Creado
+		if f.UltimaCompra.Valid && f.UltimaCompra.Time.After(referencia) {
+			referencia = f.UltimaCompra.Time
+		}
 		if f.UltimaVenta.Valid {
 			d := int(math.Floor(float64(ahora.Sub(f.UltimaVenta.Time).Milliseconds()) / 86_400_000))
 			c.DiasSinVender = &d
-			if f.UltimaVenta.Time.Before(corte) {
-				c.Motivos = append(c.Motivos, "Sin ventas hace "+strconv.Itoa(int(math.Floor(float64(d)/30)))+" meses")
+			if f.UltimaVenta.Time.Before(corte) && referencia.Before(corte) {
+				c.Motivos = append(c.Motivos, "Sin ventas hace "+Meses(int(math.Floor(float64(d)/30))))
 			}
-		} else if f.Creado.Before(corte) {
+		} else if referencia.Before(corte) {
 			c.Motivos = append(c.Motivos, "Nunca se vendió")
 		}
-		if c.Stock <= 0 {
+		// Un producto a pedido no tiene stock ni precio por naturaleza: por eso
+		// solo, la escalera a medida volvía en cada aviso (M2S4-033).
+		if c.Stock <= 0 && !f.APedido {
 			c.Motivos = append(c.Motivos, "Sin stock en ninguna sucursal")
 		}
-		if c.Variantes > 0 && c.VariantesSinPrecio == c.Variantes {
+		if c.Variantes > 0 && c.VariantesSinPrecio == c.Variantes && !f.APedido {
 			c.Motivos = append(c.Motivos, "Ninguna medida tiene precio")
+		}
+		// «Nunca se vendió» se dice con cualquier umbral: con 12 meses no salía
+		// y con 1 sí, siendo el mismo producto (M2S4-033).
+		peso[c.ID] = len(c.Motivos)
+		if len(c.Motivos) > 0 && !f.UltimaVenta.Valid && !slices.Contains(c.Motivos, "Nunca se vendió") {
+			c.Motivos = append([]string{"Nunca se vendió"}, c.Motivos...)
 		}
 		if len(c.Motivos) > 0 {
 			out = append(out, c)
 		}
 	}
-	slices.SortStableFunc(out, func(a, b Candidato) int { return len(b.Motivos) - len(a.Motivos) })
+	slices.SortStableFunc(out, func(a, b Candidato) int { return peso[b.ID] - peso[a.ID] })
 	return out, nil
 }

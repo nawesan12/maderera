@@ -158,7 +158,7 @@ func PagoRechazado(sitio, nombre, numero, token, motivo string) Correo {
 func PresupuestoRecibido(sitio, nombre, numero string, express bool, respondeHasta *time.Time) Correo {
 	parrafo := "Lo estamos armando y te contestamos a la brevedad."
 	if express {
-		parrafo = "Como sos cliente profesional, entra por la cola express: te contestamos dentro de las 24 horas hábiles."
+		parrafo = "Como sos cliente profesional, entra por la cola express."
 	}
 	datos := []email.Bloque{{Etiqueta: "Número", Valor: numero}}
 	if respondeHasta != nil {

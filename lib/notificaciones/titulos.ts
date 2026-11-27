@@ -59,7 +59,7 @@ export const TITULOS_EVENTO: Record<
   },
   solicitud_profesional: {
     titulo: "Cuando alguien pide acceso profesional",
-    cuando: "El acuse, con el plazo de respuesta de 24 horas hábiles.",
+    cuando: "El acuse de recibo.",
   },
   profesional_aprobado: {
     titulo: "Cuando se aprueba el acceso profesional",

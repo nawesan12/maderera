@@ -277,7 +277,7 @@ func Bienvenida(sitio, nombre string, lista *string, limite float64, enlace stri
 		Parrafos: parrafos,
 		Datos:    datos,
 		CTA:      cta,
-		Cierre:   "Desde tu cuenta también podés pedir presupuestos express, con respuesta en 24 horas, y descargar la documentación técnica.",
+		Cierre:   "Desde tu cuenta también podés pedir presupuestos express y descargar la documentación técnica.",
 	})
 }
 

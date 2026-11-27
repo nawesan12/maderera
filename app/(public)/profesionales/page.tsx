@@ -383,7 +383,7 @@ function PanelDelProfesional({
       href: "/carrito",
       icono: Clock,
       titulo: "Presupuesto express",
-      detalle: "Mandá la lista de la obra y contestamos en 24 horas hábiles.",
+      detalle: "Mandá la lista de la obra.",
     },
     {
       href: "/documentacion",

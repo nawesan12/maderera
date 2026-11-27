@@ -152,7 +152,7 @@ func (s *Servicio) PedirPresupuesto(ctx context.Context, q Quien, ip string, m m
 		return nil, err
 	}
 	if express {
-		p.Ok = "Recibimos tu pedido " + p.Numero + ". Como sos cliente profesional, te contestamos dentro de las 24 horas hábiles."
+		p.Ok = "Recibimos tu pedido " + p.Numero + ". Como sos cliente profesional, entra por la cola express."
 	} else {
 		p.Ok = "Recibimos tu pedido " + p.Numero + ". Te contestamos a la brevedad con el presupuesto armado."
 	}

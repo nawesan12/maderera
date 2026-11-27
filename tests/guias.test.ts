@@ -41,3 +41,16 @@ describe("buscar en las guías", () => {
     expect(await buscarEnGuias("de la")).toEqual([]);
   });
 });
+
+describe("el mapa de guías del Proxy", () => {
+  it("coincide con los archivos de docs/GUIAS", async () => {
+    const { PARA_DE_CADA_GUIA, guiaVisible } = await import("@/lib/guias-para");
+    const todas = await listarGuias(null);
+    expect(Object.keys(PARA_DE_CADA_GUIA).sort()).toEqual(todas.map((g) => g.slug).sort());
+    for (const g of todas) expect(PARA_DE_CADA_GUIA[g.slug] ?? null).toEqual(g.para);
+    expect(guiaVisible("compras", "vendedor")).toBe(false);
+    expect(guiaVisible("compras", "admin")).toBe(true);
+    expect(guiaVisible("no-existe", "admin")).toBe(false);
+    expect(guiaVisible("primeros-pasos", "aserradero")).toBe(true);
+  });
+});

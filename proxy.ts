@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SENAL_ESTADO } from "@/lib/senal-navegador";
+import { guiaVisible } from "@/lib/guias-para";
+import type { RolStaff } from "@/lib/roles";
 
 /**
  * En Next.js 16 el middleware se llama Proxy.
@@ -64,6 +66,12 @@ export async function proxy(request: NextRequest) {
   // layout no la recibe: solo ve sus `params`, y `/admin/cortes/formato` y
   // `/admin/cobros` le llegan igual. El aserradero entra a lo primero y no a lo
   // segundo, y esa decisión se toma con la ruta en la mano.
+  const guia = request.nextUrl.pathname.match(/^\/admin\/ayuda\/([^/]+)\/?$/);
+  if (guia) {
+    const fuera = await guiaAjena(request, decodeURIComponent(guia[1]));
+    if (fuera) return fuera;
+  }
+
   const cabeceras = new Headers(request.headers);
   cabeceras.set("x-ruta", request.nextUrl.pathname);
 
@@ -138,6 +146,36 @@ async function seguimiento(request: NextRequest): Promise<NextResponse> {
     // Go no contestó: decide la página.
   }
   return NextResponse.next();
+}
+
+/**
+ * La guía que no existe o es de otro puesto da un 404 de verdad (mes 23): la
+ * página decide adentro del `<Suspense>` del panel, con la respuesta ya en
+ * 200, como el seguimiento de arriba. Reescribe a una dirección sin ruta,
+ * que sale con su 404 (app/not-found.tsx). Sin rol (Go no contestó, o no
+ * es del personal) decide la página.
+ */
+async function guiaAjena(request: NextRequest, slug: string): Promise<NextResponse | null> {
+  if (guiaVisible(slug, null)) return null;
+  let rol: RolStaff | null = null;
+  if (guiaVisible(slug, "admin")) {
+    try {
+      const cabeceras: Record<string, string> = {};
+      const cookie = request.headers.get("cookie");
+      if (cookie) cabeceras.cookie = cookie;
+      const r = await fetch(new URL("/api/v1/sesion", API_URL), {
+        headers: cabeceras,
+        cache: "no-store",
+        signal: AbortSignal.timeout(4000),
+      });
+      if (!r.ok) return null;
+      rol = ((await r.json()) as { rolStaff?: RolStaff | null }).rolStaff ?? null;
+    } catch {
+      return null;
+    }
+    if (rol === null || guiaVisible(slug, rol)) return null;
+  }
+  return NextResponse.rewrite(new URL("/admin-ayuda-no-encontrada", request.url));
 }
 
 export const config = {

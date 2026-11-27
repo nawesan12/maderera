@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/numeracion"
 	"mjbj/internal/plataforma"
 	"mjbj/internal/precios"
+	"mjbj/internal/reglas"
 	"mjbj/internal/reservas"
 	"mjbj/internal/sqlc"
 	"mjbj/internal/ventas"
@@ -110,14 +111,22 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 		var envio, descuento float64
 		var aCuenta bool
 		var partido *float64
+		// El descuento por forma de pago (el del presupuesto pasado a pedido
+		// o el de la tienda) sigue a lo que se vende: quedaba fijo y sumar un
+		// renglón no lo recalculaba (PED-1132: subtotal $ 16.545 con el 10 %
+		// de antes, −$ 1.234,50). Uno puesto a mano, con otro motivo, queda.
+		var medio *string
+		var porMedio bool
 		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (SELECT 1 FROM invoices f WHERE f.order_id = o.id AND f.estado NOT IN ('anulada', 'borrador')),
 			       `+fragmentos.CobradoDelPedido+` > 0.005 OR `+fragmentos.PagoEnRevision+`,
 			       o.costo_envio::float8, o.descuento::float8,
 			       o.customer_id IS NOT NULL AND EXISTS (SELECT 1 FROM account_movements am
 			         WHERE am.customer_id = o.customer_id AND am.referencia = o.numero AND am.tipo = 'compra'),
-			       o.a_cuenta::float8
-			FROM orders o WHERE o.id = $1`, pedido).Scan(&facturado, &cobrado, &envio, &descuento, &aCuenta, &partido); err != nil {
+			       o.a_cuenta::float8, o.medio_pago::text,
+			       o.medio_pago IS NOT NULL AND o.a_cuenta IS NULL AND o.descuento > 0
+			         AND EXISTS (SELECT 1 FROM payment_discounts pd WHERE pd.medio = o.medio_pago AND pd.etiqueta = o.descuento_motivo)
+			FROM orders o WHERE o.id = $1`, pedido).Scan(&facturado, &cobrado, &envio, &descuento, &aCuenta, &partido, &medio, &porMedio); err != nil {
 			return err
 		}
 		if facturado {
@@ -349,8 +358,17 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 
 		// La reserva sigue a lo que falta entregar.
 		var subtotal float64
+		// Sobre qué va el descuento por forma de pago: lo del catálogo, y con
+		// la regla descuento_al_flete también lo cargado a mano (como al
+		// pasar el presupuesto a pedido).
+		alFlete := porMedio && reglas.Es(ctx, tx, reglas.DescuentoAlFlete, "si")
+		var base float64
 		for _, id := range orden {
-			subtotal = ventas.ACentavos(subtotal + ventas.ACentavos(float64(items[id].cantidad*items[id].precio)))
+			sub := ventas.ACentavos(float64(items[id].cantidad * items[id].precio))
+			subtotal = ventas.ACentavos(subtotal + sub)
+			if items[id].variante != nil || alFlete {
+				base = ventas.ACentavos(base + sub)
+			}
 		}
 		var ultimoOrden int
 		if err := tx.QueryRow(ctx, `SELECT coalesce(max(orden), 0) FROM order_items WHERE order_id = $1`, pedido).Scan(&ultimoOrden); err != nil {
@@ -360,6 +378,8 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 			cantidad, precio := ventas.CantidadDeStock(n.Cantidad), ventas.ACentavos(n.PrecioUnitario)
 			sub := ventas.ACentavos(float64(cantidad * precio))
 			subtotal = ventas.ACentavos(subtotal + sub)
+			// Lo que se suma es del catálogo: entra siempre.
+			base = ventas.ACentavos(base + sub)
 			var item string
 			if err := tx.QueryRow(ctx, `
 				INSERT INTO order_items (order_id, variant_id, descripcion, unidad, cantidad, precio_unitario, subtotal,
@@ -424,6 +444,32 @@ func (s *Servicio) Corregir(ctx context.Context, ses *auth.Sesion, pedido string
 			if ok {
 				if err := reservas.VolverAReservar(ctx, tx, []reservas.ReservaDeVuelta{{OrderID: pedido, OrderItemID: ch.id,
 					VariantID: *ch.antes.variante, BranchID: suc, Cantidad: delta}}); err != nil {
+					return err
+				}
+			}
+		}
+		if porMedio && medio != nil {
+			esc, err := s.q.WithTx(tx).EscalasDePago(ctx)
+			if err != nil {
+				return err
+			}
+			escalas := make([]ventas.EscalaDePago, len(esc))
+			for i, f := range esc {
+				escalas[i] = ventas.EscalaDePago{Medio: string(f.Medio), DesdeMonto: f.DesdeMonto.F(), Porcentaje: f.Porcentaje.F(), Etiqueta: f.Etiqueta}
+			}
+			nuevo, motivo := 0.0, (*string)(nil)
+			if e := ventas.DescuentoPorMedioDePago(escalas, *medio, base); e != nil {
+				nuevo = ventas.MontoDelDescuentoDePago(base, e.Porcentaje)
+				if e.Etiqueta != "" {
+					m := e.Etiqueta
+					motivo = &m
+				}
+			}
+			if nuevo != descuento {
+				notas = append(notas, "Descuento: "+formato.Importe(descuento)+" → "+formato.Importe(nuevo))
+				descuento = nuevo
+				if _, err := tx.Exec(ctx, `UPDATE orders SET descuento = $2::numeric, descuento_motivo = CASE WHEN $2::numeric > 0 THEN $3 END WHERE id = $1`,
+					pedido, jsmath.Fijo2(descuento), motivo); err != nil {
 					return err
 				}
 			}

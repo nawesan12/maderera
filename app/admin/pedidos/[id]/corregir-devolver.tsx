@@ -14,6 +14,7 @@ import { Opciones } from "@/components/admin/opciones";
 import type { DatosDeDevolucion } from "@/lib/dal/admin/ventas";
 import { BuscadorDeProductos, type Linea } from "@/app/admin/presupuestos/nuevo/formulario";
 import type { ZonaParaPedido } from "@/app/admin/presupuestos/acciones";
+import { descuentoPorMedioDePago, montoDelDescuentoDePago, type EscalaDePago } from "@/lib/precios/medio-pago";
 
 /** Un renglón del pedido, como lo necesitan los dos diálogos. */
 export interface RenglonDelPedido {
@@ -23,6 +24,8 @@ export interface RenglonDelPedido {
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
+  /** Del catálogo: entra en el descuento por forma de pago. */
+  deCatalogo?: boolean;
 }
 
 /** «1,5» y «1.5» son lo mismo en una cantidad. */
@@ -195,6 +198,7 @@ export function CorregirPedido({
   descuento,
   entrega,
   zonas = [],
+  porMedio = null,
   branchId = null,
   customerId = null,
 }: {
@@ -207,6 +211,8 @@ export function CorregirPedido({
   /** Cómo se entrega hoy; null si ya salió algo (no se cambia). */
   entrega?: { tipo: "retiro" | "envio"; direccion: string; zona: string } | null;
   zonas?: ZonaParaPedido[];
+  /** El descuento salió de la forma de pago: se recalcula con lo que queda. */
+  porMedio?: { medio: string; escalas: EscalaDePago[]; alFlete: boolean } | null;
   branchId?: string | null;
   customerId?: string | null;
 }) {
@@ -254,11 +260,20 @@ export function CorregirPedido({
     !Number.isFinite(fleteLeido) ||
     fleteLeido < 0 ||
     (conEnvioAhora && !direccion.trim());
+  const centavos = (n: number) => Math.round(n * 100) / 100;
+  // El 10 % por transferencia sigue a lo que se vende, como en Go: sumar un
+  // renglón lo dejaba fijo (PED-1132).
+  const base = centavos(
+    leidos.filter((x) => x.r.deCatalogo || porMedio?.alFlete).reduce((s, x) => s + centavos(x.cantidad * x.precio), 0) +
+      nuevos.reduce((s, n) => s + centavos(n.cantidad * n.precioUnitario), 0),
+  );
+  const escala = porMedio ? descuentoPorMedioDePago(porMedio.escalas, porMedio.medio, base) : null;
+  const descuentoAhora = porMedio ? (escala ? montoDelDescuentoDePago(base, escala.porcentaje) : 0) : descuento;
   const total =
-    leidos.reduce((s, x) => s + Math.round(x.cantidad * x.precio * 100) / 100, 0) +
-    nuevos.reduce((s, n) => s + Math.round(n.cantidad * n.precioUnitario * 100) / 100, 0) +
+    leidos.reduce((s, x) => s + centavos(x.cantidad * x.precio), 0) +
+    nuevos.reduce((s, n) => s + centavos(n.cantidad * n.precioUnitario), 0) +
     (conEnvioAhora ? fleteLeido : 0) -
-    descuento;
+    descuentoAhora;
 
   function elegirZona(nombre: string) {
     cambiar(() => {

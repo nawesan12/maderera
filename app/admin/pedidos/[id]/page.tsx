@@ -1,5 +1,6 @@
 import { cantidadConUnidad } from "@/lib/formato";
 import { ajustesDelSitio } from "@/lib/dal/contenido";
+import { escalasDePago } from "@/lib/dal/descuentos-pago";
 import { valorDeRegla } from "@/lib/reglas";
 import { rotuloDelCircuito } from "@/lib/circuito";
 import Link from "next/link";
@@ -188,6 +189,7 @@ export default async function FichaPedidoPage({
 
   const renglones = pedido.items.map((i) => ({
     id: i.id,
+    deCatalogo: i.variantId != null,
     descripcion: i.descripcion,
     unidad: i.unidad,
     cantidad: Number(i.cantidad),
@@ -358,6 +360,7 @@ export default async function FichaPedidoPage({
                       }
                 }
                 zonas={corregible ? await zonasParaPedido() : []}
+                porMedio={corregible ? await descuentoDelMedio(pedido) : null}
                 branchId={pedido.branchId}
                 customerId={pedido.customerId}
               />
@@ -919,3 +922,22 @@ const EVENTO_DEL_ESTADO: Partial<Record<string, EventoManual>> = {
   "en-camino": "en-camino",
   entregado: "entregado",
 };
+
+/**
+ * El descuento por forma de pago del pedido, para que «Corregir» lo
+ * recalcule como Go (pedidos.Corregir): solo si el que tiene salió de una
+ * escala del medio (el motivo es su etiqueta). Uno a mano queda fijo.
+ */
+async function descuentoDelMedio(pedido: {
+  medioPago: string | null;
+  aCuenta?: number | null;
+  descuento: string;
+  descuentoMotivo: string | null;
+}) {
+  const medio = pedido.medioPago;
+  if (!medio || pedido.aCuenta != null || !(Number(pedido.descuento) > 0)) return null;
+  const escalas = (await escalasDePago()).filter((e) => e.medio === medio);
+  if (!escalas.some((e) => e.etiqueta === pedido.descuentoMotivo)) return null;
+  const alFlete = valorDeRegla(await ajustesDelSitio(), "descuento_al_flete") === "si";
+  return { medio, escalas, alFlete };
+}

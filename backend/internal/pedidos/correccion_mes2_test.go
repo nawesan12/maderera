@@ -43,3 +43,44 @@ func TestCorregirSumaRenglonesYCambiaLaEntrega(t *testing.T) {
 		t.Errorf("entregado: %d %s", c, b)
 	}
 }
+
+// Mes 23 (PED-1132): sumar un renglón recalcula el 10 % por transferencia
+// sobre lo que se vende ahora; un descuento puesto a mano, con otro motivo,
+// queda como estaba.
+func TestCorregirRecalculaElDescuentoPorFormaDePago(t *testing.T) {
+	e := armar(t)
+	ven, ses := e.staff(t, "vendedor@prueba.test", sqlc.StaffRoleVendedor)
+	e.exec(t, `insert into payment_discounts (medio, desde_monto, porcentaje, etiqueta, activo) values ('transferencia', 0, 10, '10% por transferencia', true)`)
+	transferencia := "transferencia"
+	r, err := e.s.ConvertirConEntrega(t.Context(), ses, e.presupuesto(t, ses, 2), Entrega{MedioPago: &transferencia})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := e.numero(t, `select descuento from orders where id = $1`, r.ID); d != 16900 {
+		t.Fatalf("descuento al pasar a pedido: %v", d)
+	}
+	u := e.srv.URL + "/api/v1/admin/pedidos/" + r.ID + "/correccion"
+	cuerpo := map[string]any{"renglones": []any{}, "motivo": "Suma una placa",
+		"nuevos": []any{map[string]any{"variantId": e.placa, "descripcion": "Fenólico 18 mm", "unidad": "placa", "cantidad": 1, "precioUnitario": 84500}}}
+	if c, b := pedir(t, ven, "POST", u, cuerpo); c != 200 {
+		t.Fatalf("corregir: %d %s", c, b)
+	}
+	// 3 × 84.500 = 253.500: el 10 % es 25.350.
+	if d := e.numero(t, `select descuento from orders where id = $1`, r.ID); d != 25350 {
+		t.Errorf("descuento después: %v", d)
+	}
+	if v := e.numero(t, `select (subtotal + costo_envio - descuento - total) from orders where id = $1`, r.ID); v != 0 {
+		t.Errorf("el total no cierra: %v", v)
+	}
+	if m := e.texto(t, `select descuento_motivo from orders where id = $1`, r.ID); m != "10% por transferencia" {
+		t.Errorf("motivo: %q", m)
+	}
+	// A mano, con su motivo: no se toca.
+	e.exec(t, `update orders set descuento = 1000, descuento_motivo = 'Cliente de siempre', total = subtotal + costo_envio - 1000 where id = $1`, r.ID)
+	if c, b := pedir(t, ven, "POST", u, cuerpo); c != 200 {
+		t.Fatalf("corregir 2: %d %s", c, b)
+	}
+	if d := e.numero(t, `select descuento from orders where id = $1`, r.ID); d != 1000 {
+		t.Errorf("el de a mano: %v", d)
+	}
+}

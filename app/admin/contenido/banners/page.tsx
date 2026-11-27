@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Megaphone } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { EncabezadoPanel } from "@/components/admin/encabezado";
+import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
 import { requireStaff } from "@/lib/dal/session";
 import { fechaParaInput, listarBannersDelPanel } from "@/lib/dal/admin/contenido";
 import { EditorDeBanner } from "./editor";
@@ -37,6 +38,8 @@ export default async function BannersPage() {
 
   const enVivo = filas.filter(alAire).length;
 
+  // Una lista que se abre de a un aviso: con todos abiertos, cada banner era
+  // un formulario entero y solo se distinguían leyendo los campos (M2S1-133).
   return (
     <div className="space-y-6">
       <Link
@@ -49,71 +52,81 @@ export default async function BannersPage() {
 
       <EncabezadoPanel
         titulo="Avisos y promociones"
+        resumen={enVivo === 0 ? "Ninguno al aire" : `${enVivo} al aire`}
       />
 
-      <div className="tarjeta p-5">
-        <p className="flex items-start gap-2.5 text-base text-muted-foreground">
-          <Megaphone className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
-          <span>
-            {/* Una promoción, un descuento por transferencia, una semana temática.
-                La fecha de fin importa: un banner vencido que sigue anunciando
-                un descuento termina en un reclamo en el mostrador. */}
-            {enVivo === 0 ? (
-              <>No hay ningún aviso al aire.</>
-            ) : (
-              <>
-                Hay <strong className="text-foreground">{enVivo}</strong>{" "}
-                {enVivo === 1 ? "aviso" : "avisos"} al aire.{" "}
-                <strong>Poné siempre la fecha de fin.</strong>
-              </>
-            )}
-          </span>
-        </p>
-      </div>
+      <details className="tarjeta group overflow-hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-base font-semibold hover:bg-muted/40">
+          <Plus className="h-5 w-5 text-brand-orange transition-transform group-open:rotate-45" aria-hidden />
+          Crear un aviso
+        </summary>
+        <div className="px-5 pb-5 sm:px-8">
+          <EditorDeBanner banner={null} />
+        </div>
+      </details>
 
       {UBICACIONES.map((ubicacion) => {
         const deAca = filas.filter((b) => b.ubicacion === ubicacion.valor);
 
         return (
           <section key={ubicacion.valor} className="space-y-3">
-            <div>
-              <h2 className="text-base font-semibold">{ubicacion.etiqueta}</h2>
-            </div>
+            <h2 className="text-base font-semibold">{ubicacion.etiqueta}</h2>
 
             {deAca.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-4 py-3 text-base text-muted-foreground">
+              <p className="tarjeta-hundida rounded-lg px-4 py-3 text-base text-muted-foreground">
                 Sin avisos acá.
               </p>
             ) : (
-              deAca.map((b) => (
-                <EditorDeBanner
-                  key={b.id}
-                  banner={{
-                    id: b.id,
-                    ubicacion: b.ubicacion,
-                    etiqueta: b.etiqueta,
-                    titulo: b.titulo,
-                    bajada: b.bajada,
-                    enlace: b.enlace,
-                    textoEnlace: b.textoEnlace,
-                    imagenUrl: b.imagenUrl,
-                    desde: paraInput(b.desde),
-                    hasta: paraInput(b.hasta),
-                    orden: b.orden,
-                    activo: b.activo,
-                    alAire: alAire(b),
-                  }}
-                />
-              ))
+              <div className="tarjeta divide-y overflow-hidden">
+                {deAca.map((b) => {
+                  const estado = !b.activo ? "apagado" : alAire(b) ? "al_aire" : "fuera_de_fecha";
+                  return (
+                    <details key={b.id} className="group">
+                      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 hover:bg-muted/40">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-base font-semibold">{b.titulo}</span>
+                          <span className="tabular block text-sm text-muted-foreground">
+                            {vigencia(b.desde, b.hasta)}
+                          </span>
+                        </span>
+                        <EtiquetaEstado estado={estado} />
+                      </summary>
+                      <div className="px-5 pb-5 sm:px-8">
+                        <EditorDeBanner
+                          banner={{
+                            id: b.id,
+                            ubicacion: b.ubicacion,
+                            etiqueta: b.etiqueta,
+                            titulo: b.titulo,
+                            bajada: b.bajada,
+                            enlace: b.enlace,
+                            textoEnlace: b.textoEnlace,
+                            imagenUrl: b.imagenUrl,
+                            desde: paraInput(b.desde),
+                            hasta: paraInput(b.hasta),
+                            orden: b.orden,
+                            activo: b.activo,
+                          }}
+                        />
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
             )}
           </section>
         );
       })}
-
-      <section className="space-y-2">
-        <h2 className="text-base font-semibold">Crear un aviso</h2>
-        <EditorDeBanner banner={null} />
-      </section>
     </div>
   );
+}
+
+/** «26/11 al 30/11», «desde 26/11», «hasta 30/11» o «sin fechas». */
+function vigencia(desde: Date | null, hasta: Date | null): string {
+  const dia = (f: Date) =>
+    f.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", timeZone: "America/Argentina/Buenos_Aires" });
+  if (desde && hasta) return `${dia(desde)} al ${dia(hasta)}`;
+  if (desde) return `desde ${dia(desde)}`;
+  if (hasta) return `hasta ${dia(hasta)}`;
+  return "sin fechas";
 }

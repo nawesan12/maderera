@@ -318,19 +318,29 @@ func Buscar(ctx context.Context, pool Consultor, rol *sqlc.StaffRole, texto stri
 			if !ok {
 				return nil, nil
 			}
-			filas, err := pool.Query(ctx, `SELECT r.id, r.numero, r.customer_id, r.recibido_de, r.estado::text, r.total::float8, r.created_at
-				FROM receipts r WHERE r.customer_id IS NOT NULL AND f_unaccent(r.numero) ILIKE f_unaccent($1)
+			// El recibo tiene renglón en la ficha si pasó por la cuenta o si
+			// cobró un pedido (el suyo o el de la factura que paga). El que
+			// cobró una factura suelta, o uno sin cliente, va a esa factura
+			// (M2S1-096: REC-0014 llevaba a un ancla que no existía).
+			filas, err := pool.Query(ctx, `SELECT r.id, r.numero, r.customer_id, r.recibido_de, r.estado::text, r.total::float8, r.created_at,
+				  (r.account_movement_id IS NOT NULL OR r.order_id IS NOT NULL OR EXISTS (SELECT 1 FROM account_movements m WHERE m.receipt_id = r.id)
+				    OR EXISTS (SELECT 1 FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id WHERE ip.receipt_id = r.id AND i.order_id IS NOT NULL)) AS en_la_ficha,
+				  (SELECT ip.invoice_id FROM invoice_payments ip WHERE ip.receipt_id = r.id ORDER BY ip.created_at LIMIT 1) AS factura
+				FROM receipts r WHERE f_unaccent(r.numero) ILIKE f_unaccent($1)
+				  AND (r.customer_id IS NOT NULL OR EXISTS (SELECT 1 FROM invoice_payments ip WHERE ip.receipt_id = r.id))
 				ORDER BY r.created_at DESC LIMIT 4`, "%"+n+"%")
 			if err != nil {
 				return nil, err
 			}
 			return pgx.CollectRows(filas, func(r pgx.CollectableRow) (Resultado, error) {
-				var id, numero, cliente, de, e string
+				var id, numero, de, e string
+				var cliente, factura *string
 				var total float64
 				var creado time.Time
-				err := r.Scan(&id, &numero, &cliente, &de, &e, &total, &creado)
+				var enLaFicha bool
+				err := r.Scan(&id, &numero, &cliente, &de, &e, &total, &creado, &enLaFicha, &factura)
 				return Resultado{id, "Recibo", numero + " · " + de, estado("recibo", e) + " · " + plata(total) + " · " + fecha(creado),
-					"/admin/clientes/" + cliente + "?periodo=todo#recibo-" + numero}, err
+					destinoDelRecibo(numero, cliente, factura, enLaFicha)}, err
 			})
 		}},
 		{"/admin/pedidos", func() ([]Resultado, error) {
@@ -558,4 +568,19 @@ func (a *API) BuscarEnElPanel(ctx context.Context, r buscadorapi.BuscarEnElPanel
 		return nil, err
 	}
 	return respuesta(v), nil
+}
+
+// destinoDelRecibo es adónde lleva un recibo del buscador: a su renglón en la
+// ficha del cliente si lo tiene, si no a la factura que cobró, y si no a la
+// ficha a secas.
+func destinoDelRecibo(numero string, cliente, factura *string, enLaFicha bool) string {
+	switch {
+	case cliente != nil && enLaFicha:
+		return "/admin/clientes/" + *cliente + "?periodo=todo#recibo-" + numero
+	case factura != nil:
+		return "/admin/facturacion/" + *factura
+	case cliente != nil:
+		return "/admin/clientes/" + *cliente + "?periodo=todo"
+	}
+	return "/admin/facturacion"
 }

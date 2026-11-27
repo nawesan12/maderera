@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"mjbj/internal/cobros"
 	"mjbj/internal/pruebas"
 	"mjbj/internal/sqlc"
 )
@@ -33,7 +34,7 @@ func TestBuscarLoQueFaltaba(t *testing.T) {
 	cli := id(`insert into customers (nombre) values ('Rocío Lamas') returning id`)
 	b := id(`insert into branches (slug, name) values ('casa-central', 'Casa Central') returning id`)
 	ped := id(`insert into orders (numero, contacto_nombre, customer_id, branch_id, estado) values ('PED-1163', 'Rocío Lamas', $1, $2, 'pendiente') returning id`, cli, b)
-	exec(`insert into receipts (numero, customer_id, recibido_de, total, estado, origen) values ('REC-0050', $1, 'Rocío Lamas', 1234.5, 'emitido', 'panel')`, cli)
+	exec(`insert into receipts (numero, customer_id, recibido_de, total, estado, origen, order_id) values ('REC-0050', $1, 'Rocío Lamas', 1234.5, 'emitido', 'panel', $2)`, cli, ped)
 	exec(`insert into deliveries (numero, order_id, branch_id) values ('REM-0015', $1, $2)`, ped, b)
 	exec(`insert into cheques (sentido, numero, banco, fecha_pago, importe, estado, customer_id) values ('recibido', '00092001', 'Galicia', now(), 5000, 'cartera', $1)`, cli)
 	exec(`insert into invoices (tipo, punto_venta, numero, estado, receptor_nombre, neto, total, order_id) values ('factura_b', 15, 2, 'emitida', 'Rocío Lamas', 100, 121, $1)`, ped)
@@ -106,5 +107,68 @@ func TestBuscarLoQueFaltaba(t *testing.T) {
 	// «melamina 1830» no es «18»: el número corto es un número entero.
 	if r := primero(buscar(ven, "bisagra 18"), "Producto"); r != nil {
 		t.Errorf("18 no es 35: %+v", r)
+	}
+}
+
+// El recibo que cobra una factura (invoice_payments) no pasa por el libro ni
+// lleva order_id: el buscador llevaba a #recibo-REC-0014 y la ficha no tenía
+// ese renglón (mes 23, M2S1-096). Ahora la compra de contado lo muestra, y el
+// que cobró una factura sin pedido lleva a esa factura.
+func TestReciboQueCobraUnaFactura(t *testing.T) {
+	pool := pruebas.Base(t)
+	ctx := context.Background()
+	id := func(sql string, args ...any) string {
+		t.Helper()
+		var v string
+		if err := pool.QueryRow(ctx, sql, args...).Scan(&v); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+		return v
+	}
+	cli := id(`insert into customers (nombre) values ('Rocío Lamas') returning id`)
+	b := id(`insert into branches (slug, name) values ('casa-central', 'Casa Central') returning id`)
+	ped := id(`insert into orders (numero, contacto_nombre, customer_id, branch_id, estado, total) values ('PED-1170', 'Rocío Lamas', $1, $2, 'entregado', 121) returning id`, cli, b)
+	conPedido := id(`insert into invoices (tipo, punto_venta, numero, estado, receptor_nombre, neto, total, order_id, customer_id) values ('factura_b', 15, 7, 'emitida', 'Rocío Lamas', 100, 121, $1, $2) returning id`, ped, cli)
+	suelta := id(`insert into invoices (tipo, punto_venta, numero, estado, receptor_nombre, neto, total, customer_id) values ('factura_b', 15, 8, 'emitida', 'Rocío Lamas', 100, 121, $1) returning id`, cli)
+	r14 := id(`insert into receipts (numero, customer_id, recibido_de, total, estado, origen) values ('REC-0014', $1, 'Rocío Lamas', 121, 'emitido', 'factura') returning id`, cli)
+	r15 := id(`insert into receipts (numero, customer_id, recibido_de, total, estado, origen) values ('REC-0015', $1, 'Rocío Lamas', 121, 'emitido', 'factura') returning id`, cli)
+	if _, err := pool.Exec(ctx, `insert into invoice_payments (invoice_id, medio, monto, receipt_id) values ($1, 'efectivo', 121, $2), ($3, 'efectivo', 121, $4)`,
+		conPedido, r14, suelta, r15); err != nil {
+		t.Fatal(err)
+	}
+
+	ven := sqlc.StaffRoleVendedor
+	buscar := func(q string) *Resultado {
+		t.Helper()
+		v, err := Buscar(ctx, pool, &ven, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range v {
+			if v[i].Tipo == "Recibo" {
+				return &v[i]
+			}
+		}
+		return nil
+	}
+	if r := buscar("REC-0014"); r == nil || r.Href != "/admin/clientes/"+cli+"?periodo=todo#recibo-REC-0014" {
+		t.Errorf("el recibo del pedido va a su renglón: %+v", r)
+	}
+	if r := buscar("REC-0015"); r == nil || r.Href != "/admin/facturacion/"+suelta {
+		t.Errorf("el de una factura suelta va a la factura: %+v", r)
+	}
+
+	movs, _, err := cobros.Historial(ctx, sqlc.New(pool), cli, nil, "todo", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hay bool
+	for _, m := range movs {
+		if m.Clase == "compra_contado" && m.Recibo != nil && m.Recibo.Numero == "REC-0014" {
+			hay = true
+		}
+	}
+	if !hay {
+		t.Errorf("la ficha tiene el renglón de REC-0014: %+v", movs)
 	}
 }

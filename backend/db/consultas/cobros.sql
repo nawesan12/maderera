@@ -122,10 +122,16 @@ LIMIT $2;
 -- El recibo, si la compra se cobró después con uno (una transferencia
 -- conciliada): no fue «pagada en el momento» (H305). Del pedido partido
 -- (H047), el resto: la parte a cuenta es su «compra» en el libro.
+-- El recibo que cobró la factura del pedido (invoice_payments) también
+-- cuenta: no lleva order_id ni pasa por el libro, y sin esto no quedaba
+-- ningún renglón suyo en la ficha (el buscador llevaba a un ancla que no
+-- existía, mes 23, M2S1-096).
 SELECT o.id, o.created_at, o.numero, (o.total - coalesce(o.a_cuenta, 0))::float8 AS total, o.estado_pago::text AS estado_pago,
   r.id AS recibo_id, r.numero AS recibo_numero, r.estado AS recibo_estado
 FROM orders o
-LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.order_id = o.id AND x.estado <> 'anulado'
+LEFT JOIN receipts r ON r.id = (SELECT x.id FROM receipts x WHERE x.estado <> 'anulado'
+  AND (x.order_id = o.id OR x.id IN (SELECT ip.receipt_id FROM invoice_payments ip JOIN invoices fi ON fi.id = ip.invoice_id
+    WHERE fi.order_id = o.id AND ip.receipt_id IS NOT NULL))
   ORDER BY x.created_at DESC LIMIT 1)
 WHERE o.customer_id = $1 AND (o.medio_pago IS NULL OR o.medio_pago <> 'cuenta_corriente') AND o.estado <> 'cancelado'
   AND (sqlc.narg(desde)::timestamptz IS NULL OR o.created_at >= sqlc.narg(desde))

@@ -34,7 +34,7 @@ func LimiteEnLaTransaccion(ctx context.Context, tx pgx.Tx, cliente string, monto
 		if monto <= aFavor+0.005 {
 			return "", nil
 		}
-		return "Tiene " + formato.Moneda(aFavor) + " a favor y no alcanza: el resto, con otro medio.", nil
+		return "No tiene cuenta corriente: tiene " + formato.Importe(aFavor) + " a favor y no alcanza. El resto, con otro medio.", nil
 	}
 	if saldo+monto > limite+0.005 {
 		return "Supera el límite de crédito. Disponible: $" + formato.Numero(math.Max(limite-saldo, 0)) + ".", nil

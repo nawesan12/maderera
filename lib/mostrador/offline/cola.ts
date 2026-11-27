@@ -66,6 +66,14 @@ export interface VentaEncolada {
   firmaUsuario?: string;
   /** ISO. La hora real del mostrador. */
   cobradaAt: string;
+  /** Con cuánto pagó en efectivo, para el vuelto del ticket. */
+  efectivoRecibido?: number | null;
+  /**
+   * La parte en efectivo, como la vio la pantalla: el chip de la caja la suma
+   * mientras la venta espera (M2S1-086). No viaja con sentido para Go, que
+   * vuelve a calcular todo.
+   */
+  efectivo?: number;
 }
 
 /** Un ingreso o un retiro de caja hecho sin conexión. */
@@ -75,7 +83,7 @@ export interface MovimientoEncolado {
   tipo: "ingreso" | "retiro";
   monto: number;
   motivo: string;
-  /** A dónde fue un retiro (00310). Las filas encoladas antes no lo traen. */
+  /** A dónde fue un retiro, o de dónde vino un ingreso (00310, 00350). Las filas encoladas antes no lo traen. */
   destino?: "banco" | "caja_fuerte" | "otro";
   /** ISO. El momento real, que es el que decide a qué turno pertenece. */
   hechoAt: string;
@@ -103,6 +111,11 @@ function esVenta(fila: FilaDeCola): fila is ItemDeCola & { venta: VentaEncolada 
 }
 
 const LOTE = 25;
+
+/** Cuándo pasó lo encolado (ISO), para subirlo en orden. */
+function momentoDe(fila: FilaDeCola): string {
+  return esVenta(fila) ? fila.venta.cobradaAt : fila.movimiento.hechoAt;
+}
 
 /** Guarda la venta y su ticket juntos, o no guarda ninguno. */
 export async function encolarVenta(
@@ -149,6 +162,32 @@ export async function resumenDeCola(): Promise<ResumenDeCola> {
   return resumir(await leerCola());
 }
 
+/** El efectivo de lo que espera en la cola: ya está en el cajón y todavía no en el turno. */
+export interface EfectivoEnCola {
+  ventas: number;
+  ingresos: number;
+  retiros: number;
+}
+
+export function efectivoEnCola(filas: FilaDeCola[], branchId: string): EfectivoEnCola {
+  const out: EfectivoEnCola = { ventas: 0, ingresos: 0, retiros: 0 };
+  for (const f of filas) {
+    if (f.estado !== "pendiente" && f.estado !== "enviando" && f.estado !== "atascada") continue;
+    if (esVenta(f)) {
+      if (f.venta.branchId === branchId) out.ventas += f.venta.efectivo ?? 0;
+    } else if (f.movimiento.branchId === branchId) {
+      if (f.movimiento.tipo === "ingreso") out.ingresos += f.movimiento.monto;
+      else out.retiros -= f.movimiento.monto;
+    }
+  }
+  const r = (n: number) => Math.round(n * 100) / 100;
+  return { ventas: r(out.ventas), ingresos: r(out.ingresos), retiros: r(out.retiros) };
+}
+
+export async function efectivoDeLaCola(branchId: string): Promise<EfectivoEnCola> {
+  return efectivoEnCola(await leerCola(), branchId);
+}
+
 /** Saca de la cola una venta que todavía no salió. Es lo que permite deshacer. */
 export async function descartarSiSigueLocal(clave: string): Promise<boolean> {
   const filas = await leerCola();
@@ -193,7 +232,12 @@ export async function drenar(): Promise<ResultadoDrenaje | null> {
   const correr = async (): Promise<ResultadoDrenaje> => {
     const ahora = Date.now();
     const todas = await leerCola();
-    const listas = todas.filter((f) => estaListo(f, ahora)).slice(0, LOTE);
+    // En el orden en que pasaron: el almacén las devuelve por clave, al azar,
+    // y la serie PED salía al revés del cajón (mes simulado, M2S3-099).
+    const listas = todas
+      .filter((f) => estaListo(f, ahora))
+      .sort((a, b) => momentoDe(a).localeCompare(momentoDe(b)))
+      .slice(0, LOTE);
 
     if (listas.length === 0) {
       const r = resumir(todas);

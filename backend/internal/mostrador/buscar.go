@@ -308,13 +308,16 @@ type ClienteDelMostrador struct {
 	Direccion     *string  `json:"direccion"`
 	Estado        string   `json:"estado"`
 	LimiteCredito *float64 `json:"limiteCredito,omitempty"`
-	PriceListID   *string  `json:"priceListId"`
+	// CuentaBloqueada: la pantalla apaga «Cuenta corriente» apenas se elige
+	// al cliente, y no recién al cobrar (mes simulado, M3S3-050).
+	CuentaBloqueada bool    `json:"cuentaBloqueada"`
+	PriceListID     *string `json:"priceListId"`
 	// Para completar el presupuesto al elegir al cliente.
 	Telefono *string `json:"telefono"`
 	Email    *string `json:"email"`
 }
 
-const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id, telefono, email`
+const columnasCliente = `id, nombre, razon_social, cuit, condicion_iva::text, direccion, estado::text, limite_credito, price_list_id, telefono, email, cuenta_bloqueada`
 
 func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 	defer filas.Close()
@@ -323,7 +326,7 @@ func leerClientes(filas pgx.Rows) ([]ClienteDelMostrador, error) {
 		var c ClienteDelMostrador
 		var lim jsmath.Num
 		if err := filas.Scan(&c.ID, &c.Nombre, &c.RazonSocial, &c.Cuit, &c.CondicionIva, &c.Direccion, &c.Estado, &lim, &c.PriceListID,
-			&c.Telefono, &c.Email); err != nil {
+			&c.Telefono, &c.Email, &c.CuentaBloqueada); err != nil {
 			return nil, err
 		}
 		l := lim.F()
@@ -409,9 +412,11 @@ func (s *Servicio) ClientePorID(ctx context.Context, id string) (*ClienteDelMost
 	if err != nil || len(cs) == 0 {
 		return nil, err
 	}
+	// Con el límite: la pantalla apaga «Cuenta corriente» a quien no tiene
+	// (M2S4-061). clientePorId no lo traía.
 	c := cs[0]
-	c.LimiteCredito = nil // clientePorId no lo trae
 	return &c, nil
+
 }
 
 // PedidoSinCobrar es un pedido del cliente con mercadería que salió y algo

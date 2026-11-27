@@ -66,7 +66,7 @@ func Credito(ctx context.Context, q *sqlc.Queries, cliente string, monto float64
 			alcanza := monto <= aFavor+0.005
 			e := EstadoDeCredito{Saldo: saldo, Disponible: aFavor, SoloSaldoAFavor: true, Puede: alcanza}
 			if !alcanza {
-				e.Motivo = texto("Tiene " + formato.Moneda(aFavor) + " a favor y no alcanza: el resto, con otro medio.")
+				e.Motivo = texto("No tiene cuenta corriente: tiene " + formato.Importe(aFavor) + " a favor y no alcanza. El resto, con otro medio.")
 			}
 			return e, nil
 		}

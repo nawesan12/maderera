@@ -18,7 +18,14 @@ export function BarraSuperior({
   cajaAbierta,
   onCaja,
   terminal,
+  deOtros = null,
 }: {
+  /**
+   * Lo que cobró otra persona y entró a este cajón (un recibo desde el
+   * panel): «Debería haber» subía en silencio y el arqueo daba un faltante
+   * que no era (mes simulado, M2S2-063).
+   */
+  deOtros?: { monto: number; quien: string } | null;
   conexion: EstadoConexion;
   cola: EstadoCola;
   usuario: { nombre: string };
@@ -108,8 +115,17 @@ export function BarraSuperior({
       >
         <Banknote className="h-4 w-4" />
         {cajaAbierta ? (
-          turno ? `Caja ${formatearMonto(turno.esperado)}` : "Caja abierta"
+          <>
+            {turno ? `Caja ${formatearMonto(turno.esperado)}` : "Caja abierta"}
+            {deOtros && (
+              <span className="tabular rounded-md bg-background/60 px-1.5 py-0.5 text-xs font-semibold">
+                +{formatearMonto(deOtros.monto)}
+                {deOtros.quien && ` · ${deOtros.quien}`}
+              </span>
+            )}
+          </>
         ) : (
+
           <>
             Abrir caja
             <ArrowRight className="h-4 w-4" />

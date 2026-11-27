@@ -86,7 +86,26 @@ export function Cobro({
   enLinea,
   onRemito,
   onPresupuesto,
+  onSaldo,
+  cuentaNoDisponible = null,
+  escalaReemplazada = null,
+  repetida = null,
+  onCobrarRepetida,
+  onCancelarRepetida,
+  onIrALoQueFalta,
 }: {
+  /** Sin poder cobrar, lleva el cursor a lo que falta (M2S1-185). */
+  onIrALoQueFalta?: () => void;
+  /** El saldo del cliente elegido, leído al elegirlo. */
+  onSaldo?: (de: string, monto: number) => void;
+  /** La cuenta corriente no se puede usar: está bloqueada o no tiene (M3S2-031, M3S3-050). */
+  cuentaNoDisponible?: string | null;
+  /** El descuento por forma de pago que el tipeado reemplazó: se ve tachado (M2S2-018). */
+  escalaReemplazada?: string | null;
+  /** Igual a una venta de recién al mismo cliente: se confirma (M3S4-015). */
+  repetida?: string | null;
+  onCobrarRepetida?: () => void;
+  onCancelarRepetida?: () => void;
   subtotal: number;
   descuento: number;
   /** El motivo tipeado o el nombre de la escala de la forma de pago. */
@@ -147,7 +166,7 @@ export function Cobro({
   pidePin: Autorizacion | null;
   onPin: (pin: string) => void;
   onCancelarPin: () => void;
-  aviso: { tipo: "ok" | "error"; texto: string } | null;
+  aviso: { tipo: "ok" | "error"; texto: string; vuelto?: number } | null;
   ultima: UltimaVenta | null;
   /** Ya empezó otra venta: el papel de la anterior queda en un botón. */
   ultimaCompacta: boolean;
@@ -228,6 +247,7 @@ export function Cobro({
           enLinea={enLinea}
           buscarLocal={buscarClienteLocal}
           sinFicha={sinFicha}
+          onSaldo={onSaldo}
           aCuenta={medio === "cuenta_corriente" && !partes ? total : (partes?.filter((p) => p.medio === "cuenta_corriente").reduce((s, p) => s + importeDelCampo(p.importe), 0) ?? 0)}
         />
       </div>
@@ -261,18 +281,24 @@ export function Cobro({
         >
           {TIPOS_DE_OPERACION.map((t) => {
             const activo = esElTipo(t.clave, acopio, medio);
+            // La cuenta bloqueada, o el cliente sin cuenta, no se ofrece: se
+            // elegía y recién al cobrar decía otra cosa (M3S2-031, M3S3-050).
+            const apagado = t.clave === "cuenta" && Boolean(cuentaNoDisponible) && !activo;
             return (
               <button
                 key={t.clave}
                 type="button"
                 aria-pressed={activo}
+                disabled={apagado}
                 onClick={() => onTipo(t.clave)}
                 // Una sola línea: con la bajada de cada tarjeta, a 1024 «Qué
                 // se lleva» quedaba abajo del pliegue (mes simulado, H276).
-                title={t.detalle}
-                className={`h-11 whitespace-nowrap rounded-xl border px-3 text-center text-base font-medium transition-colors ${
+                title={apagado ? (cuentaNoDisponible ?? undefined) : t.detalle}
+                // Elegido, igual que el medio y el papel: lleno. Con el tinte
+                // de antes, en oscuro casi no se distinguía (M2S1-184).
+                className={`h-11 whitespace-nowrap rounded-xl border px-3 text-center text-base font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                   activo
-                    ? "border-accion bg-accion/10"
+                    ? "border-accion bg-accion text-white"
                     : "border-linea hover:bg-hundida"
                 }`}
               >
@@ -321,28 +347,32 @@ export function Cobro({
 
             {medio !== "cuenta_corriente" && (
               <>
+                {/* Con el pago partido los medios van en cada renglón de
+                    abajo: la grilla de arriba quedaba marcada y parecían dos
+                    selectores activos (mes simulado, M2S2-128). */}
+                {partes === null && (
+                  <>
                 <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Cómo paga
                 </p>
                 <div className="mt-2.5 grid grid-cols-2 gap-2">
                   {MEDIOS_DE_CONTADO.map(({ valor, texto }, i) => {
-                    const bloqueado =
+                    // El que la lista del cliente no admite no se apaga: al
+                    // elegirlo, la venta pasa a precio de lista (M3S4-017).
+                    const conLista =
                       precioProfesional && !medioPermitido(valor, true);
 
                     return (
                       <button
                         key={valor}
-                        onClick={() => !bloqueado && onMedio(valor)}
-                        disabled={bloqueado}
-                        title={bloqueado ? "Su lista es de contado." : `Alt + ${i + 1}`}
+                        onClick={() => onMedio(valor)}
+                        title={conLista ? "A precio de lista" : `Alt + ${i + 1}`}
                         className={`inline-flex h-12 items-center justify-center gap-1.5 rounded-xl border px-2 text-base font-medium transition-colors ${
                           medio === valor
                             ? "border-accion bg-accion text-white"
-                            : "border-linea hover:bg-hundida"
-                        } ${
-                          bloqueado
-                            ? "cursor-not-allowed opacity-40 hover:bg-transparent"
-                            : ""
+                            : conLista
+                              ? "border-dashed border-linea text-muted-foreground hover:bg-hundida"
+                              : "border-linea hover:bg-hundida"
                         }`}
                       >
                         {texto}
@@ -350,6 +380,8 @@ export function Cobro({
                     );
                   })}
                 </div>
+                  </>
+                )}
 
 
                 {/* Lo que antes estaba solo en el title, a la vista, y la salida
@@ -365,6 +397,7 @@ export function Cobro({
                       type="button"
                       onClick={onALista}
                       aria-pressed={aLista}
+                      data-foco="a-lista"
                       className="inline-flex h-9 items-center rounded-lg bg-background px-3 text-sm font-medium shadow-[var(--sombra-hoja)] transition-colors hover:bg-card"
                     >
                       {aLista ? "Volver a su lista" : "A precio de lista"}
@@ -576,11 +609,19 @@ export function Cobro({
           nadie lee. */}
       {aviso && (
         <div
-          className={`border-t border-linea px-4 py-3 text-base ${
+          className={`flex items-baseline justify-between gap-3 border-t border-linea px-4 py-3 text-base ${
             aviso.tipo === "ok" ? "estado-ok" : "estado-problema"
           } bg-[var(--estado-fondo)] text-[var(--estado-tinta)]`}
         >
-          <p>{aviso.texto}</p>
+          <p className="min-w-0">{aviso.texto}</p>
+          {/* El vuelto, grande y hasta la próxima venta: es lo que se cuenta
+              con el cliente delante (mes simulado, M2S1-176). */}
+          {aviso.vuelto !== undefined && (
+            <p className="shrink-0 text-right">
+              <span className="block text-sm">Vuelto</span>
+              <span className="tabular block text-2xl font-bold">{formatearMonto(aviso.vuelto)}</span>
+            </p>
+          )}
         </div>
       )}
 
@@ -661,14 +702,20 @@ export function Cobro({
               <span>Subtotal</span>
               <span className="tabular">{formatearMonto(subtotal)}</span>
             </p>
-            <p className="flex items-baseline justify-between text-base">
-              <span className="text-muted-foreground">
+            {/* El motivo se recorta y el importe va entero en su columna: con
+                un motivo largo el «−» quedaba en un renglón y el importe en
+                otro (mes simulado, M2S1-180 y M3S3-053). */}
+            <p className="flex items-baseline justify-between gap-3 text-base">
+              <span className="min-w-0 truncate text-muted-foreground" title={etiquetaDelDescuento || undefined}>
                 Descuento{etiquetaDelDescuento ? ` · ${etiquetaDelDescuento}` : ""}
               </span>
-              <span className="tabular font-semibold text-saldo-favor">
+              <span className="tabular shrink-0 whitespace-nowrap font-semibold text-saldo-favor">
                 −{formatearMonto(descuento)}
               </span>
             </p>
+            {escalaReemplazada && (
+              <p className="truncate text-sm text-muted-foreground line-through">{escalaReemplazada}</p>
+            )}
           </>
         )}
 
@@ -695,7 +742,33 @@ export function Cobro({
 
         {/* El PIN de un admin en el lugar del botón: la venta no se corta, no
             abre otra pantalla. Enter reenvía la misma venta y Esc vuelve. */}
-        {pidePin ? (
+        {repetida ? (
+          /* Igual a una venta de recién al mismo cliente: se cobra solo si
+             quien atiende lo confirma (M3S4-015). */
+          <div className="mt-3.5 space-y-2">
+            <p role="status" className="text-base font-semibold text-brand-orange">
+              Igual a <span className="codigo">{repetida}</span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={onCancelarRepetida}
+                className="inline-flex h-16 min-w-0 flex-1 items-center justify-center rounded-xl border border-linea text-lg font-semibold transition-colors hover:bg-hundida"
+              >
+                No cobrar
+              </button>
+              <button
+                type="button"
+                onClick={onCobrarRepetida}
+                disabled={enviando}
+                className="inline-flex h-16 min-w-0 flex-1 items-center justify-center rounded-xl bg-accion text-lg font-bold text-white transition-colors hover:bg-accion-hover disabled:opacity-40"
+              >
+                Cobrar igual
+              </button>
+            </div>
+          </div>
+        ) : pidePin ? (
           <div className="mt-3.5">
             <CampoPin autorizacion={pidePin} enviando={enviando} onEnviar={onPin} onCancelar={onCancelarPin} grande />
           </div>
@@ -705,12 +778,16 @@ export function Cobro({
             son los que hacían falta arriba. */
         <div className="mt-3.5 flex gap-2">
           <button
-            onClick={() => alCobrar()}
-            disabled={faltaCaja ? enviando : !puedeCobrar}
+            // Sin poder cobrar, el botón lleva a lo que falta, como Ctrl+Enter.
+            onClick={() => (faltaCaja || puedeCobrar ? alCobrar() : onIrALoQueFalta?.())}
+            disabled={faltaCaja ? enviando : !puedeCobrar && !onIrALoQueFalta}
+            aria-disabled={!faltaCaja && !puedeCobrar ? true : undefined}
             data-foco="cobrar"
+
             // Sin caja es la acción primaria, como cobrar, y no una alarma:
             // abrirla es el primer paso de cada mañana (comité de T4).
-            className="inline-flex h-16 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl bg-accion text-xl font-bold text-white transition-colors hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-16 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl bg-accion text-xl font-bold text-white transition-colors hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-40"
+
           >
             {enviando ? (
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -738,6 +815,7 @@ export function Cobro({
             type="button"
             onClick={onPresupuesto}
             disabled={!puede || enviando || !enLinea}
+            aria-busy={enviando || undefined}
             title={
               !enLinea
                 ? "Sin conexión no se puede numerar el presupuesto."
@@ -745,7 +823,7 @@ export function Cobro({
             }
             className="inline-flex h-16 w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-linea text-sm font-medium transition-colors hover:bg-hundida disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <ClipboardList className="h-4 w-4" />
+            {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
             Presupuesto
           </button>
         </div>

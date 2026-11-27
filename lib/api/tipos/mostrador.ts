@@ -508,6 +508,8 @@ export interface components {
             estado: string;
             /** Format: double */
             limiteCredito?: number;
+            /** @description la cuenta corriente está bloqueada: no se le anota */
+            cuentaBloqueada?: boolean;
             priceListId: string | null;
         };
         MostradorAltaRapida: {
@@ -1000,8 +1002,11 @@ export interface operations {
             content: {
                 "application/json": {
                     clave: string;
-                    /** @enum {string} */
-                    destino: "caja" | "afuera";
+                    /**
+                     * @description cuenta: la venta fue a cuenta corriente y vuelve a la cuenta (o baja lo que falta cobrar)
+                     * @enum {string}
+                     */
+                    destino: "caja" | "afuera" | "cuenta";
                     motivo: string;
                     renglones: {
                         orderItemId: string;

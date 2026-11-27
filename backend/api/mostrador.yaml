@@ -232,7 +232,7 @@ paths:
               additionalProperties: false
               properties:
                 clave: { type: string, maxLength: 80 }
-                destino: { type: string, enum: [caja, afuera] }
+                destino: { type: string, enum: [caja, afuera, cuenta], description: "cuenta: la venta fue a cuenta corriente y vuelve a la cuenta (o baja lo que falta cobrar)" }
                 motivo: { type: string }
                 renglones:
                   type: array
@@ -695,6 +695,7 @@ components:
         direccion: { type: string, nullable: true }
         estado: { type: string }
         limiteCredito: { type: number, format: double }
+        cuentaBloqueada: { type: boolean, description: "la cuenta corriente está bloqueada: no se le anota" }
         priceListId: { type: string, nullable: true }
     MostradorAltaRapida:
       type: object

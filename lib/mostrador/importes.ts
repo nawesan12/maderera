@@ -52,6 +52,12 @@ export interface LineaDeVenta {
    */
   precioLista?: number | null;
   /**
+   * Lo disponible en la sucursal al agregarlo (el del buscador), para que el
+   * renglón diga «faltan» antes de cobrar (mes simulado, M2S3-050). Solo de
+   * la pantalla: Go no lo lee.
+   */
+  disponible?: number | null;
+  /**
    * El corte de la venta del que salió el renglón, en la pantalla (ver
    * `lib/mostrador/cortes-de-la-venta.ts`). A Go viaja como `corte`, el
    * índice del despiece en la venta.

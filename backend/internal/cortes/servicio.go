@@ -687,7 +687,15 @@ func (s *Servicio) listoConElCorte(ctx context.Context, ses *auth.Sesion, corte,
 			pedido).Scan(&faltan); err != nil {
 			return err
 		}
-		if faltan > 0 || (origen != "mostrador" && !todos) {
+		// El pedido que solo lleva lo del corte (el que nació de «Cobrar» en
+		// la ficha) no tiene nada más que preparar: pasa a listo como el del
+		// mostrador (M3S4-040).
+		var soloElCorte bool
+		if err := tx.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = $1 AND NOT coalesce(del_corte, false))`,
+			pedido).Scan(&soloElCorte); err != nil {
+			return err
+		}
+		if faltan > 0 || (origen != "mostrador" && !todos && !soloElCorte) {
 			// Sigue en su estado, con el renglón en el historial.
 			_, err := tx.Exec(ctx, `INSERT INTO order_status_history (order_id, estado, nota, created_by_user_id) VALUES ($1, $2::estado_pedido, $3, $4)`,
 				pedido, estado, "Corte "+numero+" terminado", usuario)

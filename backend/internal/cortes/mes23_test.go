@@ -237,6 +237,16 @@ func TestElCorteTerminadoNacePedidoListo(t *testing.T) {
 	if got := estadoDelPedido(enCola); got != "pendiente" {
 		t.Errorf("en cola: %s", got)
 	}
+	// Cobrado antes de cortarlo, pasa a listo cuando sale de la máquina:
+	// no tiene nada más que preparar.
+	for _, desde := range []string{"en-cola", "en-proceso"} {
+		if code, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/cortes/"+enCola+"/avanzar?desde="+desde, nil); code != 200 {
+			t.Fatalf("avanzar desde %s: %d %s", desde, code, b)
+		}
+	}
+	if got := e.txt(t, `select o.estado::text from orders o join cutting_orders c on c.order_id = o.id where c.id = $1`, enCola); got != "listo" {
+		t.Errorf("cobrado y terminado después: %s", got)
+	}
 	terminado := nuevo()
 	for _, desde := range []string{"en-cola", "en-proceso"} {
 		if code, b := pedir(t, ven, "POST", e.srv.URL+"/api/v1/admin/cortes/"+terminado+"/avanzar?desde="+desde, nil); code != 200 {

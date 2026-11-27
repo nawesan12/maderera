@@ -255,7 +255,7 @@ function Patron({
       {/* En el teléfono las medidas de adentro del dibujo no se leen: van
           debajo, pieza por pieza (H125). */}
       <p className="hc-leyenda">
-        {[...new Map(patron.dibujo.piezas.map(({ rect, pieza }) => [pieza.indice, `P${pieza.indice + 1} ${mm(pieza.largoOriginal)} × ${mm(pieza.anchoOriginal)}`])).values()].join(" · ")}
+        {[...new Map(patron.dibujo.piezas.map(({ pieza }) => [pieza.indice, `P${pieza.indice + 1} ${mm(pieza.largoOriginal)} × ${mm(pieza.anchoOriginal)}`])).values()].join(" · ")}
       </p>
 
       {patron.operaciones.length === 0 ? (

@@ -165,12 +165,42 @@ const facturaSinAcreditar = `fv.estado <> 'borrador' AND fv.cae IS NOT NULL AND 
 // el valor guardado quedaría viejo. Por eso es blanco solo si el pedido
 // tiene la misma factura que mira la sección 4 (con CAE y no de prueba).
 // Los demás cheques (los de un recibo, los entregados) llevan el suyo.
+//
+// Del mes simulado 23:
+//
+//   - El cheque de un recibo que el reparto mandó entero al B (nada a
+//     Deudores ni a Anticipos) es del B: entraba a Valores a depositar del
+//     archivo B y su acreditación salía del A, y las dos cuentas no se
+//     cancelaban nunca (M3S3-005).
+//   - El cheque de una venta con su factura emitida esperando el CAE es
+//     blanco si la regla «asiento_sin_cae» está en «transitoria»: con ella
+//     el cobro ya entra al archivo del estudio (contra Cobros a imputar) y
+//     el cheque se puede endosar a una factura A (M2S2-024, M2S2-040). Con
+//     la de arranque espera el CAE como su asiento; la pantalla lo dice
+//     («Espera CAE», ChequeEsperaCAE) en vez de «Circuito B».
 func CircuitoDelCheque(ch string) string {
-	return strings.ReplaceAll(`(CASE WHEN ch.order_payment_id IS NULL THEN ch.circuito::text
+	return strings.ReplaceAll(`(CASE WHEN ch.order_payment_id IS NULL THEN
+	    CASE WHEN ch.receipt_id IS NOT NULL AND EXISTS (SELECT 1 FROM receipts cre WHERE cre.id = ch.receipt_id
+	           AND cre.reparto_b > 0.005 AND coalesce(cre.reparto_deudores, 0) + coalesce(cre.reparto_anticipo, 0) < 0.005)
+	      THEN 'negro' ELSE ch.circuito::text END
 	  WHEN EXISTS (SELECT 1 FROM order_payments cop JOIN invoices cfi ON cfi.order_id = cop.order_id
 	               WHERE cop.id = ch.order_payment_id AND cfi.tipo::text LIKE 'factura%' AND cfi.estado <> 'borrador'
 	                 AND cfi.cae IS NOT NULL AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion')
+	  THEN 'blanco'
+	  WHEN (SELECT cst.valor FROM site_settings cst WHERE cst.clave = 'asiento_sin_cae') = 'transitoria' AND `+chequeEsperaCAE+`
 	  THEN 'blanco' ELSE 'negro' END)`, "ch.", ch+".")
+}
+
+// chequeEsperaCAE es que el cheque es de una venta con su factura emitida y
+// sin CAE todavía (ni anulada ni de prueba).
+const chequeEsperaCAE = `EXISTS (SELECT 1 FROM order_payments eop JOIN invoices efi ON efi.order_id = eop.order_id
+	  WHERE eop.id = ch.order_payment_id AND efi.tipo::text LIKE 'factura%' AND efi.estado NOT IN ('borrador', 'anulada')
+	    AND efi.cae IS NULL)`
+
+// ChequeEsperaCAE es chequeEsperaCAE sobre la fila `ch` (con otro alias si
+// se pasa): la pantalla de cheques dice «Espera CAE» y no «Circuito B».
+func ChequeEsperaCAE(ch string) string {
+	return "(" + strings.ReplaceAll(chequeEsperaCAE, "ch.", ch+".") + ")"
 }
 
 // FechaDelCheque es, sobre la fila `ch` de cheques, la fecha con la que el

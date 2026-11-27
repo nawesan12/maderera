@@ -887,6 +887,12 @@ export interface components {
              * @description lo que debe hoy el cliente (solo en los informados)
              */
             saldoCliente: number | null;
+            /** @description rechazado sin haberse aceptado (era informado) */
+            noAceptado?: boolean;
+            /** @description rechazado desde la cartera */
+            devuelto?: boolean;
+            /** @description de una venta con su factura esperando el CAE */
+            esperaCae?: boolean;
         };
         Gestion: {
             id: string;

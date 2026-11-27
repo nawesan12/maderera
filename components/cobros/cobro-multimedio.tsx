@@ -98,6 +98,8 @@ export function CobroMultimedio({
   ]);
   /** El renglón recién agregado recibe el foco: «Otro medio» y se sigue tipeando. */
   const [recienAgregado, setRecienAgregado] = useState<number | null>(null);
+  /** Los renglones de cheque que se quisieron registrar sin fecha. */
+  const [sinFecha, setSinFecha] = useState<number[]>([]);
 
   const disponibles = medios.filter((m) => !(m === "echeq" && circuito === "negro"));
   const total = renglones.reduce((s, r) => s + (parsearImporte(r.importe) || 0), 0);
@@ -213,13 +215,19 @@ export function CobroMultimedio({
                       className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
                     />
                   </label>
-                  <label className="text-sm text-muted-foreground">
+                  {/* Vacía al registrar, se marca: «Registrar» no hacía nada y no
+                      decía qué faltaba (M2S1-057). */}
+                  <label className={`text-sm ${sinFecha.includes(r.clave) && !r.fechaPago ? "font-semibold text-saldo-debe" : "text-muted-foreground"}`}>
                     Fecha de pago
                     <CampoFecha
                       value={r.fechaPago}
                       onChange={(e) => cambiar(r.clave, "fechaPago", e.target.value)}
+                      onInvalid={() => setSinFecha((p) => (p.includes(r.clave) ? p : [...p, r.clave]))}
                       required
-                      className="tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground"
+                      aria-invalid={(sinFecha.includes(r.clave) && !r.fechaPago) || undefined}
+                      className={`tabular mt-1 block h-11 w-full rounded-lg border border-linea bg-background px-3 text-base text-foreground ${
+                        sinFecha.includes(r.clave) && !r.fechaPago ? "ring-2 ring-saldo-debe" : ""
+                      }`}
                     />
                   </label>
                   <label className="text-sm text-muted-foreground sm:col-span-3">

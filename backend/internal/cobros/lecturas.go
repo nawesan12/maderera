@@ -39,6 +39,14 @@ type ChequeListado struct {
 	// aceptar uno de una cuenta ya saldada es cobrar de más (mes simulado,
 	// H240).
 	SaldoCliente *float64 `json:"saldoCliente"`
+	// Cómo terminó un rechazado: no se aceptó (era informado, la cuenta no
+	// cambió) o se le devolvió al cliente desde la cartera; si no, lo
+	// rechazó el banco (M2S4-017, M2S3-088).
+	NoAceptado bool `json:"noAceptado"`
+	Devuelto   bool `json:"devuelto"`
+	// EsperaCae es el cheque de una venta con su factura esperando el CAE:
+	// la pantalla dice eso y no «Circuito B» (M2S1-061, M2S3-035).
+	EsperaCae bool `json:"esperaCae"`
 }
 
 // EstadosVivos son los cheques que todavía mueven plata; el resto terminó.
@@ -51,7 +59,10 @@ var columnasDeCheque = `
 		SELECT ch.id, ch.sentido::text, ch.tipo::text, ch.numero, ch.banco, ch.librador, ch.fecha_pago, ch.importe::float8,
 		  ch.estado::text, cu.nombre, ch.customer_id, ` + fragmentos.CircuitoDelCheque("ch") + `, pr.nombre, pr.id, ch.notas, ch.receipt_id, r.numero, ch.motivo_rechazo,
 		  CASE WHEN ch.estado = 'informado' AND ch.customer_id IS NOT NULL THEN
-		    (SELECT coalesce(sum(m.monto), 0)::float8 FROM account_movements m WHERE m.customer_id = ch.customer_id) END
+		    (SELECT coalesce(sum(m.monto), 0)::float8 FROM account_movements m WHERE m.customer_id = ch.customer_id) END,
+		  ch.estado = 'rechazado' AND EXISTS (SELECT 1 FROM cheque_estados ce WHERE ce.cheque_id = ch.id AND ce.desde = 'informado' AND ce.hacia = 'rechazado'),
+		  ch.estado = 'rechazado' AND EXISTS (SELECT 1 FROM cheque_estados ce WHERE ce.cheque_id = ch.id AND ce.desde = 'cartera' AND ce.hacia = 'rechazado'),
+		  ch.order_payment_id IS NOT NULL AND ` + fragmentos.ChequeEsperaCAE("ch") + `
 		FROM cheques ch
 		LEFT JOIN customers cu ON cu.id = ch.customer_id
 		LEFT JOIN LATERAL (
@@ -64,7 +75,8 @@ func leerCheques(filas pgx.Rows) ([]ChequeListado, error) {
 	return pgx.CollectRows(filas, func(r pgx.CollectableRow) (ChequeListado, error) {
 		var c ChequeListado
 		return c, r.Scan(&c.ID, &c.Sentido, &c.Tipo, &c.Numero, &c.Banco, &c.Librador, &c.FechaPago, &c.Importe, &c.Estado,
-			&c.Cliente, &c.CustomerID, &c.Circuito, &c.Proveedor, &c.ProveedorID, &c.Notas, &c.ReceiptID, &c.Recibo, &c.MotivoRechazo, &c.SaldoCliente)
+			&c.Cliente, &c.CustomerID, &c.Circuito, &c.Proveedor, &c.ProveedorID, &c.Notas, &c.ReceiptID, &c.Recibo, &c.MotivoRechazo, &c.SaldoCliente,
+			&c.NoAceptado, &c.Devuelto, &c.EsperaCae)
 	})
 }
 

@@ -479,7 +479,11 @@ func (s *Servicio) asientosDeCheques(ctx context.Context, idesde, ihasta time.Ti
 		  EXISTS (SELECT 1 FROM account_movements m WHERE m.cheque_id = c.id AND m.tipo = 'nota_debito'),
 		  c.order_payment_id IS NOT NULL
 		FROM cheque_estados e JOIN cheques c ON c.id = e.cheque_id
-		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')) x
+		WHERE e.at <= $2 AND e.hacia IN ('acreditado', 'rechazado')
+		  -- Un cheque recibido sin origen (sin cliente, recibo ni venta) nunca
+		  -- entró a Valores a depositar: su acreditación cancelaba algo que no
+		  -- existía (M3S2-012). No se asienta y el cierre lo marca.
+		  AND NOT (`+chequeSinOrigen("c")+`)) x
 		WHERE x.asentado >= $1 AND x.asentado <= $2 ORDER BY x.asentado`, idesde, ihasta)
 	if err != nil {
 		return nil, err
@@ -537,6 +541,15 @@ func (s *Servicio) PendientesDelCierre(ctx context.Context, desde, hasta time.Ti
 	if cajas > 0 {
 		out = append(out, PendienteDelCierre{"caja", "Turnos de caja sin cerrar",
 			"Efectivo sin arquear: la diferencia del mes no se puede calcular.", cajas, "/admin/caja"})
+	}
+	var sinOrigen int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*)::int FROM cheques c WHERE `+chequeSinOrigen("c")+` AND c.estado NOT IN ('anulado')
+		AND c.created_at <= $1`, ihasta).Scan(&sinOrigen); err != nil {
+		return nil, err
+	}
+	if sinOrigen > 0 {
+		out = append(out, PendienteDelCierre{"cheques-sin-origen", "Cheques recibidos sin origen",
+			"Se cargaron sin cliente ni recibo: no entran a los asientos hasta saber de dónde vino la plata.", sinOrigen, "/admin/cheques"})
 	}
 	if sinFactura > 0 {
 		out = append(out, PendienteDelCierre{"facturas", "Recepciones sin factura de compra",

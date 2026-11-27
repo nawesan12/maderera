@@ -1004,6 +1004,9 @@ components:
         recibo: { type: string, nullable: true }
         motivoRechazo: { type: string, nullable: true }
         saldoCliente: { type: number, format: double, nullable: true, description: lo que debe hoy el cliente (solo en los informados) }
+        noAceptado: { type: boolean, description: rechazado sin haberse aceptado (era informado) }
+        devuelto: { type: boolean, description: rechazado desde la cartera, devuelto al cliente }
+        esperaCae: { type: boolean, description: de una venta con su factura esperando el CAE }
     Gestion:
       type: object
       required: [id, customerId, cliente, etapa, asunto, notas, proximaAccionAt, vencida, createdAt]

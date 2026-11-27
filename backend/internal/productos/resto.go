@@ -27,6 +27,7 @@ type RubroDeCategoria struct {
 	Slug      string `json:"slug"`
 	Active    bool   `json:"active"`
 	Productos int32  `json:"productos"`
+	Inactivos int32  `json:"inactivos"`
 	Sueltos   int32  `json:"sueltos"`
 }
 
@@ -55,10 +56,11 @@ func (s *Servicio) RubrosPorCategoria(ctx context.Context) ([]CategoriaConRubros
 	if err != nil {
 		return nil, err
 	}
-	porRubro := map[string]int32{}
+	porRubro, apagados := map[string]int32{}, map[string]int32{}
 	for _, c := range conteos {
 		if c.SubcategoryID != nil {
 			porRubro[*c.SubcategoryID] = c.Cuantos
+			apagados[*c.SubcategoryID] = c.Inactivos
 		}
 	}
 	porTexto := map[string]int32{}
@@ -70,7 +72,7 @@ func (s *Servicio) RubrosPorCategoria(ctx context.Context) ([]CategoriaConRubros
 		g := CategoriaConRubros{ID: c.ID, Name: c.Name, Rubros: []RubroDeCategoria{}}
 		for _, r := range rubros {
 			if r.CategoryID == c.ID {
-				g.Rubros = append(g.Rubros, RubroDeCategoria{r.ID, r.Name, r.Slug, r.Active, porRubro[r.ID],
+				g.Rubros = append(g.Rubros, RubroDeCategoria{r.ID, r.Name, r.Slug, r.Active, porRubro[r.ID], apagados[r.ID],
 					porTexto[c.ID+":"+strings.ToLower(quitarTildes(r.Name))]})
 			}
 		}

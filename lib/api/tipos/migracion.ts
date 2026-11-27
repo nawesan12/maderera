@@ -210,12 +210,18 @@ export interface components {
             resumen: string;
             errores: string[];
             avisos: string[];
+            /** @description La fila cae sobre una ficha que ya existe */
+            actualiza?: boolean;
+            /** @description «Domicilio — A → B» */
+            cambios?: string[];
         };
         VistaPreviaDeMigracion: {
             error?: string;
             validas?: number;
             conAviso?: number;
             conError?: number;
+            /** @description Las válidas que caen sobre una ficha que ya existe */
+            actualizan?: number;
             muestra?: components["schemas"]["FilaPreviaDeMigracion"][];
             rechazos?: components["schemas"]["RechazoDeMigracion"][];
         };

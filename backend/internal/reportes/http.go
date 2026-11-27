@@ -414,6 +414,13 @@ func (a *API) PendientesDelRol(ctx context.Context, r reportesapi.PendientesDelR
 	return ok(v), err
 }
 
+// ArchivoDelDia es «deudores-2026-11-26.csv» con el día de acá: a las 22:15
+// la fecha UTC ya era la de mañana y el mismo listado salía con otro nombre
+// que el de /admin/cierre (mes simulado, M2S2-103 y M2S3-082).
+func ArchivoDelDia(prefijo string, ahora time.Time) string {
+	return prefijo + "-" + ahora.In(Argentina).Format("2006-01-02") + ".csv"
+}
+
 // DeudoresCsv y CuentasAPagarCsv: los listados del contador. Solo el admin.
 func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestObject) (reportesapi.DeudoresCsvResponseObject, error) {
 	if err := numerosDelNegocio(ctx); err != nil {
@@ -437,13 +444,6 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 		return nil, err
 	}
 	return csv(ArchivoDelDia("cuentas-a-pagar", ahora), v), nil
-}
-
-// ArchivoDelDia es el nombre del CSV con el día argentino: el de la API y el
-// del cierre se llamaban distinto bajados en el mismo minuto, a las 23:49 del
-// 26 (mes simulado, M2S3-082).
-func ArchivoDelDia(prefijo string, ahora time.Time) string {
-	return prefijo + "-" + ahora.In(Argentina).Format("2006-01-02") + ".csv"
 }
 
 // CargarLiquidacion anota lo que liquidó la tarjeta (M2S1-058): la fecha es

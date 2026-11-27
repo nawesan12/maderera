@@ -163,7 +163,12 @@ async function PanelConSesion({
   // El contador de conversaciones sin leer es un adorno del menú: si falla, el
   // panel tiene que abrirse igual y sin la pelotita.
   const [sinLeer, circuito] = await Promise.all([
-    degradar("las conversaciones sin leer", conversacionesSinLeer, 0),
+    // Solo para quien ve la bandeja: para el resto la API contesta 403 en cada
+    // navegación, y un intento real de entrar sin permiso quedaba perdido
+    // entre cientos iguales en el registro (mes simulado, M3S3-033).
+    puedeEntrar("/admin/whatsapp", usuario.staffRole)
+      ? degradar("las conversaciones sin leer", conversacionesSinLeer, 0)
+      : 0,
     // La palabra del circuito sin factura (H167); si falla, la de arranque.
     degradar("el nombre del circuito", nombreDelCircuito, "b" as const),
   ]);

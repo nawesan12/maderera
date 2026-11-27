@@ -5,6 +5,7 @@ import { EncabezadoPanel } from "@/components/admin/encabezado";
 import { requireStaff } from "@/lib/dal/session";
 import { listarResenasDelNegocio } from "@/lib/google/resenas";
 import { EditorDeResenas } from "./editor";
+import { MINIMO_EN_PORTADA } from "@/components/home/resenas";
 
 export const metadata: Metadata = { title: "Reseñas del negocio" };
 
@@ -41,11 +42,7 @@ export default async function ResenasDelNegocioPage() {
 
       <EncabezadoPanel
         titulo="Reseñas del negocio"
-        resumen={
-          resenas.length > 0
-            ? `${resenas.filter((r) => r.publicada).length} publicadas de ${resenas.length} cargadas`
-            : "Ninguna cargada"
-        }
+        resumen={resumen(resenas.filter((r) => r.publicada).length, resenas.length)}
       />
 
       {!hayGoogle && (
@@ -66,7 +63,12 @@ export default async function ResenasDelNegocioPage() {
           autor: r.autor,
           estrellas: r.estrellas,
           texto: r.texto,
-          fecha: r.fecha.toISOString().slice(0, 10),
+          fecha: r.fecha.toLocaleDateString("es-AR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "2-digit",
+            timeZone: "America/Argentina/Buenos_Aires",
+          }),
           origen: r.origen,
           publicada: r.publicada,
         }))}
@@ -74,4 +76,14 @@ export default async function ResenasDelNegocioPage() {
       />
     </div>
   );
+}
+
+/**
+ * Por debajo del mínimo, cuántas faltan para la portada: «1 publicada de 1»
+ * hacía creer que ya se veía (M2S1-131, M3S3-062).
+ */
+function resumen(publicadas: number, cargadas: number): string {
+  if (cargadas === 0) return "Ninguna cargada";
+  if (publicadas < MINIMO_EN_PORTADA) return `${publicadas} de ${MINIMO_EN_PORTADA} para mostrarse en la portada`;
+  return `${publicadas} publicadas de ${cargadas} cargadas`;
 }

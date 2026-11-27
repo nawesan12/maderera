@@ -2,11 +2,12 @@
 titulo: Facturación y ARCA
 resumen: Emitir, autorizar, cobrar y anular un comprobante, y qué significa cada estado.
 orden: 5
+para: admin
 ---
 
 ## Qué comprobante sale
 
-El tipo lo decide la condición frente al IVA **del cliente**, no usted:
+El tipo lo decide la condición frente al IVA **del cliente**, no vos:
 
 | El cliente es | Sale |
 |---|---|

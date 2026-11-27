@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useId, useState, useTransition } from "react";
-import Image from "next/image";
 import {
   AppWindow,
   CalendarDays,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { borrarBanner, guardarBanner, type EstadoBanner } from "./actions";
 import { Confirmar } from "@/components/admin/confirmar";
+import { ElegirImagen } from "@/components/admin/elegir-imagen";
 import { UBICACIONES } from "./ubicaciones";
 import {
   Hoja,
@@ -46,8 +46,6 @@ export interface BannerEditable {
   hasta: string;
   orden: number;
   activo: boolean;
-  /** Si hoy está efectivamente al aire, contando las fechas. */
-  alAire: boolean;
 }
 
 export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
@@ -56,17 +54,16 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
   const [borrando, empezarBorrado] = useTransition();
   const [avisoBorrado, setAvisoBorrado] = useState<string | null>(null);
   const [confirmarBorrado, setConfirmarBorrado] = useState(false);
-  const id = useId();
 
   // El aviso de bienvenida era una franja de una línea y no admitía ni bajada
   // ni imagen. Como diálogo sí las muestra, así que los tres lugares llevan los
   // mismos campos y no hay nada que esconder según dónde vaya.
 
   return (
-    <form {...sinReiniciar(guardar)} className="space-y-4">
+    <form {...sinReiniciar(guardar)} className="space-y-5">
       {banner && <input type="hidden" name="id" value={banner.id} />}
 
-      <Hoja>
+      <Hoja plana>
         <Seccion titulo="Qué dice" icono={Megaphone}>
           <Campo
             nombre="titulo"
@@ -119,30 +116,11 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
           />
         </Seccion>
         <Seccion titulo="Imagen" icono={ImageIcon} columnas={1}>
-          <div>
-            <label
-              htmlFor={`${id}-img`}
-              className="block text-base font-medium"
-            >
-              Imagen de fondo
-            </label>
-            <input
-              id={`${id}-img`}
-              type="file"
-              name="imagen"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              className="mt-1 block w-full text-base"
-            />
-            {banner?.imagenUrl && (
-              <Image
-                src={banner.imagenUrl}
-                alt=""
-                width={280}
-                height={90}
-                className="mt-2 h-[90px] w-[280px] rounded-lg object-cover"
-              />
-            )}
-          </div>
+          <ElegirImagen
+            nombre="imagen"
+            etiqueta="Imagen de fondo"
+            actual={banner?.imagenUrl ?? null}
+          />
         </Seccion>
         <Seccion titulo="Cuándo" icono={CalendarDays} columnas={3}>
           <Campo
@@ -169,11 +147,6 @@ export function EditorDeBanner({ banner }: { banner: BannerEditable | null }) {
               icono={Power}
               defecto={banner?.activo ?? true}
             />
-            {banner && !banner.alAire && banner.activo && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Hoy no se ve: está fuera de las fechas.
-              </p>
-            )}
           </div>
         </Seccion>
       </Hoja>

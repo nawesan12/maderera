@@ -2,6 +2,7 @@
 titulo: Stock, transferencias y acopio
 resumen: Qué número mira cada pantalla, cómo se corrige el inventario y cómo funciona el acopio con remito firmado.
 orden: 3
+para: admin, vendedor, deposito
 ---
 
 ## Tres números distintos

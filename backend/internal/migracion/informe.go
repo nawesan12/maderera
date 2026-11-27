@@ -4,8 +4,12 @@ import (
 	"math"
 	"strconv"
 
+	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 )
+
+// pesos es el importe para leer: «$ 1.234,50» y no «1234.50» (M3S3-040).
+func pesos(v float64) string { return formato.Moneda(v) }
 
 // Control es un renglón del informe de integridad: lo que decía el archivo
 // contra lo que quedó en la base.
@@ -71,17 +75,17 @@ func Controles(entidad string, filas []Fila, base EnLaBase) []Control {
 		return []Control{
 			{
 				Titulo:         "Suma de los saldos",
-				Detalle:        "El archivo entero contra todo lo migrado hasta ahora. Si no da igual, hay filas que no entraron y la diferencia es deuda de alguien: está en el listado de abajo. Migrando en varias partes, el número del sistema va a ser mayor.",
-				SegunElArchivo: jsmath.ToFixed(esperado, 2),
-				EnElSistema:    jsmath.ToFixed(total, 2),
-				Ok:             float64(total+0.01) >= esperado,
+				Detalle:        "El archivo contra los saldos iniciales de sus clientes. Si no da igual, hay filas que no entraron y la diferencia es deuda de alguien: está en el listado de abajo.",
+				SegunElArchivo: pesos(esperado),
+				EnElSistema:    pesos(total),
+				Ok:             math.Abs(float64(esperado-total)) < 0.01,
 			},
 			{
 				Titulo:         "Clientes con saldo inicial",
 				Detalle:        "Sin contar los que venían en cero, que no generan movimiento porque un movimiento en cero solo ensucia el resumen de cuenta.",
 				SegunElArchivo: itoa(conSaldo),
 				EnElSistema:    itoa(base.Cuantos),
-				Ok:             base.Cuantos >= conSaldo,
+				Ok:             base.Cuantos == conSaldo,
 			},
 		}
 
@@ -96,10 +100,10 @@ func Controles(entidad string, filas []Fila, base EnLaBase) []Control {
 		return []Control{
 			{
 				Titulo:         "Fichas con código del sistema anterior",
-				Detalle:        "Si el archivo trae códigos repetidos, este número va a ser menor: dos filas con el mismo código son la misma ficha.",
+				Detalle:        "Los códigos del archivo que quedaron en una ficha. Dos filas con el mismo código son la misma ficha.",
 				SegunElArchivo: itoa(len(codigos)),
 				EnElSistema:    itoa(base.Cuantos),
-				Ok:             base.Cuantos >= len(codigos),
+				Ok:             base.Cuantos == len(codigos),
 			},
 			{
 				Titulo:         "Fichas sin CUIT",
@@ -118,23 +122,33 @@ func Controles(entidad string, filas []Fila, base EnLaBase) []Control {
 			}
 		}
 		esperado := sumar(conSaldo, "saldo")
-		conCodigo := contar(v, func(f Fila) bool { return f.Datos["codigo"] != "" })
-		return []Control{
+		codigos := map[string]bool{}
+		for _, f := range v {
+			if c := f.Datos["codigo"]; c != "" {
+				codigos[c] = true
+			}
+		}
+		controles := []Control{
 			{
 				Titulo:         "Proveedores con código del sistema anterior",
 				Detalle:        "Los que se pueden volver a actualizar subiendo el archivo de nuevo.",
-				SegunElArchivo: itoa(conCodigo),
+				SegunElArchivo: itoa(len(codigos)),
 				EnElSistema:    itoa(base.Fichas),
-				Ok:             base.Fichas >= conCodigo,
-			},
-			{
-				Titulo:         "Suma de los saldos",
-				Detalle:        "Tiene que dar igual. Una diferencia es un proveedor cuyo saldo no se cargó, y eso no lo muestra ningún contador de filas.",
-				SegunElArchivo: jsmath.ToFixed(esperado, 2),
-				EnElSistema:    jsmath.ToFixed(total, 2),
-				Ok:             math.Abs(float64(esperado-total)) < 0.01,
+				Ok:             base.Fichas == len(codigos),
 			},
 		}
+		// Sin ningún saldo en el archivo, el control no aplica: comparaba 0
+		// contra lo de una corrida anterior y avisaba una diferencia (M3S3-040).
+		if len(conSaldo) > 0 {
+			controles = append(controles, Control{
+				Titulo:         "Suma de los saldos",
+				Detalle:        "Tiene que dar igual. Una diferencia es un proveedor cuyo saldo no se cargó, y eso no lo muestra ningún contador de filas.",
+				SegunElArchivo: pesos(esperado),
+				EnElSistema:    pesos(total),
+				Ok:             math.Abs(float64(esperado-total)) < 0.01,
+			})
+		}
+		return controles
 
 	case "ventas_historicas":
 		esperado := sumar(v, "total")
@@ -150,8 +164,8 @@ func Controles(entidad string, filas []Fila, base EnLaBase) []Control {
 			{
 				Titulo:         "Suma de los totales",
 				Detalle:        "El del sistema incluye las veces anteriores; el del archivo, solo esta.",
-				SegunElArchivo: jsmath.ToFixed(esperado, 2),
-				EnElSistema:    jsmath.ToFixed(total, 2),
+				SegunElArchivo: pesos(esperado),
+				EnElSistema:    pesos(total),
 				Ok:             total >= float64(esperado-0.01),
 			},
 			{
@@ -177,8 +191,8 @@ func Controles(entidad string, filas []Fila, base EnLaBase) []Control {
 			{
 				Titulo:         "Suma de los totales",
 				Detalle:        "Es la cifra que el estudio contable va a querer cruzar.",
-				SegunElArchivo: jsmath.ToFixed(esperado, 2),
-				EnElSistema:    jsmath.ToFixed(total, 2),
+				SegunElArchivo: pesos(esperado),
+				EnElSistema:    pesos(total),
 				Ok:             total >= float64(esperado-0.01),
 			},
 			{

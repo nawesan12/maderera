@@ -2,7 +2,8 @@ import { cache } from "react";
 import "server-only";
 
 import { apiPublica, datos } from "@/lib/api/servidor";
-import { sucursalPublicada } from "@/lib/sucursales";
+import { conWhatsappDelSitio, sucursalPublicada } from "@/lib/sucursales";
+import { ajuste } from "@/lib/dal/contenido";
 import type { ZonaEnvio } from "@/lib/envios";
 import { cachearPublico, ETIQUETAS } from "@/lib/cache-publico";
 
@@ -19,7 +20,7 @@ export const listarZonasDeEnvio = cachearPublico(
   ETIQUETAS.sucursales,
 );
 
-export const listarSucursalesPublicas = cache(
+const sucursalesCacheadas = cache(
   cachearPublico(
     async () => {
       // Las filas las da la API de Go; la ficha publicada es la constante.
@@ -55,3 +56,13 @@ export const listarSucursalesPublicas = cache(
     ETIQUETAS.sucursales,
   ),
 );
+
+/**
+ * Las sucursales publicadas, con el WhatsApp del sitio en la que lo atiende.
+ * El número se pone afuera del caché de las sucursales: cambia con los ajustes
+ * (`ETIQUETAS.ajustes`), y adentro quedaría el viejo hasta que venza.
+ */
+export const listarSucursalesPublicas = cache(async () => {
+  const [sucursales, numero] = await Promise.all([sucursalesCacheadas(), ajuste("whatsapp_principal")]);
+  return conWhatsappDelSitio(sucursales, numero);
+});

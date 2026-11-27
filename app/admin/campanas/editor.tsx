@@ -420,7 +420,9 @@ export function EditorDeCampana({
           <button
             type="button"
             onClick={prueba}
-            disabled={pendiente}
+            // Sin correo conectado la prueba no sale: se ofrecía igual y
+            // contestaba con un error (mes simulado, F076).
+            disabled={pendiente || Boolean(impedimento)}
             className="inline-flex h-11 items-center gap-1.5 rounded-lg border px-4 text-base font-medium transition-colors hover:bg-muted disabled:opacity-60"
           >
             <TestTube2 className="h-5 w-5" />

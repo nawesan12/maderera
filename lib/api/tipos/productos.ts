@@ -1018,6 +1018,8 @@ export interface operations {
                             slug: string;
                             active: boolean;
                             productos: number;
+                            /** @description Los productos apagados del rubro */
+                            inactivos: number;
                             sueltos: number;
                         }[];
                     }[];

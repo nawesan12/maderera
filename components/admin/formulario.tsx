@@ -47,14 +47,17 @@ export function sinReiniciar(accion: (datos: FormData) => void) {
 export function Hoja({
   children,
   hidden,
+  plana = false,
 }: {
   children: ReactNode;
   hidden?: boolean;
+  /** Sin superficie propia: para una hoja que se abre dentro de otra tarjeta. */
+  plana?: boolean;
 }) {
   return (
     <div
       hidden={hidden}
-      className="tarjeta divide-y divide-linea-suave px-5 sm:px-8"
+      className={plana ? "divide-y divide-linea-suave" : "tarjeta divide-y divide-linea-suave px-5 sm:px-8"}
     >
       {children}
     </div>

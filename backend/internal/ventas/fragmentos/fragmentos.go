@@ -213,3 +213,25 @@ func FechaDelCheque(ch, at string) string {
 	                 AND cfi.cae_ambiente IS DISTINCT FROM 'homologacion'
 	               ORDER BY cfi.created_at, cfi.id LIMIT 1), {AT})) END)`)
 }
+
+// Los hechos de venta de los reportes (ver internal/reportes/ventas.go): la
+// venta en la fecha que dice la regla «venta_reconocida» (orders.vendido_at),
+// cada devolución en la suya en negativo y la cancelación posterior también.
+// Columnas: las de orders más hecho, fecha, monto (con IVA) y operaciones.
+const (
+	HechosDeVenta = `(SELECT o.*, o.id AS hecho, o.vendido_at AS fecha, o.total AS monto, 1 AS operaciones
+		  FROM orders o WHERE o.vendido_at IS NOT NULL AND ` + CuentaComoVenta + `
+		UNION ALL
+		SELECT o.*, dv.id, dv.created_at, -dv.importe, 0 FROM devoluciones dv JOIN orders o ON o.id = dv.order_id
+		  WHERE ` + CuentaComoVenta + `
+		UNION ALL
+		SELECT o.*, ` + HechoDeLaCancelacion + `, o.cancelado_at,
+		  -(o.total - coalesce((SELECT sum(dv.importe) FROM devoluciones dv WHERE dv.order_id = o.id), 0)), 0
+		  FROM orders o WHERE ` + CanceladaDespues + `)`
+	// cuentaComoVenta: el pedido no se canceló, o se canceló después de
+	// contar como venta.
+	CuentaComoVenta  = `(o.estado <> 'cancelado' OR (o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at))`
+	CanceladaDespues = `o.estado = 'cancelado' AND o.vendido_at IS NOT NULL AND o.cancelado_at > o.vendido_at`
+	// hechoDeLaCancelacion es el id del hecho que resta la cancelación.
+	HechoDeLaCancelacion = `md5('cancelacion:' || o.id::text)::uuid`
+)

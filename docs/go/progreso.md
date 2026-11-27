@@ -3606,3 +3606,27 @@ tabla). Lo que cambió en Go:
   `BorrarEvento` (borrador sin anotados) y `RecordarEvento`; el recordatorio
   llega también a los marcados «vino»; `eventos-visibles` solo los que no
   pasaron.
+## 27/11/2026: mes simulado 2 y 3, la configuración del panel (rama `mes23-configuracion`)
+
+- **Migraciones 00440–00442.** 00440: el «Hasta» de un banner vale el día
+  entero (23:59:59, como la promo). 00441: salen `aviso_barra_superior` y
+  `envio_gratis_leyenda`, que nadie leía. 00442: CUIT con guiones en
+  clientes y proveedores migrados.
+- **`fragmentos.HechosDeVenta`**: los hechos de venta de Reportes pasan a
+  `internal/ventas/fragmentos` para que «Vendido hoy» de Sucursales cuente con
+  la misma regla `venta_reconocida`.
+- **Migración**: la vista previa mira la base (`Servicio.Previsualizar`,
+  `previa_base.go`) y dice qué fila pisa una ficha y qué le cambia; el rubro
+  del cliente (campo nuevo, o del tipo cuando nombra el oficio) y el vendedor
+  (`sellers` por nombre) llegan a la ficha; el informe cuenta solo lo del
+  archivo. Los golden se regeneraron con `MIGRACION_ACTUALIZAR=1` (ahora
+  también `controles.json.gz`).
+- **Candidatos a baja**: la referencia es la última venta, la última compra
+  recibida o el alta; los productos a pedido no entran por stock ni precio.
+- **Textos del sitio** (`AdminAjustes`): los ajustes con pantalla propia
+  (`enOtraPantalla`) no salen como texto.
+- **Guías**: cabecera `para:` y bloques `<!-- solo: … -->` por puesto
+  (`lib/guias.ts`); búsqueda por palabra.
+- `soloCampos(formData, "id")`: el id de una edición va en la ruta, no como
+  parte del formulario (el validador lo rechazaba).
+

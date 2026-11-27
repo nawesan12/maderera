@@ -2,6 +2,7 @@
 titulo: Vender, del presupuesto a la entrega
 resumen: El recorrido completo de una venta y qué pasa en el sistema en cada paso.
 orden: 1
+para: admin, vendedor
 ---
 
 ## El recorrido
@@ -31,9 +32,9 @@ En *Presupuestos* están agrupados por lo que está esperando respuesta, que es 
 
 Los presupuestos que el cliente pide desde el sitio caen acá solos.
 
-### Convertirlo en pedido
+### Pasarlo a pedido
 
-Desde la ficha del presupuesto aceptado, botón **Convertir en pedido**. Eso hace
+Desde la ficha del presupuesto aceptado, botón **Pasar a pedido**. Eso hace
 tres cosas a la vez:
 
 1. Crea el pedido con las mismas líneas y los mismos precios.
@@ -41,7 +42,7 @@ tres cosas a la vez:
    otro, aunque siga en el galpón.
 3. Deja el presupuesto marcado como aceptado.
 
-Un presupuesto se convierte **una sola vez**. Si intenta de nuevo, el sistema le
+Un presupuesto se convierte **una sola vez**. Si lo intentás de nuevo, el sistema te
 dice cuál es el pedido que ya se creó.
 
 ## Pedidos
@@ -80,7 +81,7 @@ memoria.
 
 ## Cobrar
 
-En la ficha del pedido, **Marcar como cobrado**. Si el pedido era a cuenta
+En la ficha del pedido, **Cobrar**. Si el pedido era a cuenta
 corriente, esa misma acción le baja la deuda al cliente. Es una sola operación y
 no dos: cobrar en un lado y no en el otro es exactamente como se desincroniza
 una cuenta.

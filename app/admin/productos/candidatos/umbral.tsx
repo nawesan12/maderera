@@ -18,6 +18,9 @@ export function UmbralDeBaja({ meses }: { meses: number }) {
   const router = useRouter();
   const [valor, setValor] = useState(String(meses));
   const [guardando, empezar] = useTransition();
+  // El error va al lado del campo y el valor no se pisa: «0» se rechazaba con
+  // un aviso que se iba solo y el campo volvía a 1 (mes simulado, M2S1-134).
+  const [error, setError] = useState<string | null>(null);
 
   const cambio = Number(valor) !== meses;
 
@@ -26,11 +29,11 @@ export function UmbralDeBaja({ meses }: { meses: number }) {
       className="flex flex-wrap items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
+        setError(null);
         empezar(async () => {
           const r = await cambiarMesesSinVender(Number(valor));
           if (r.error) {
-            toast.error(r.error);
-            setValor(String(meses));
+            setError(r.error);
           } else {
             toast.success(r.ok);
             router.refresh();
@@ -45,11 +48,17 @@ export function UmbralDeBaja({ meses }: { meses: number }) {
           min={1}
           max={60}
           value={valor}
-          onChange={(e) => setValor(e.target.value)}
+          onChange={(e) => {
+            setValor(e.target.value);
+            setError(null);
+          }}
+          required
           aria-label="Meses sin ventas para señalar un producto"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? "umbral-error" : undefined}
           className="tabular h-11 w-20 rounded-lg border border-linea bg-card px-3 text-right text-base"
         />
-        <span className="text-muted-foreground">meses</span>
+        <span className="text-muted-foreground">{Number(valor) === 1 ? "mes" : "meses"}</span>
       </label>
 
       {cambio && (
@@ -61,6 +70,11 @@ export function UmbralDeBaja({ meses }: { meses: number }) {
           {guardando && <Loader2 className="h-4 w-4 animate-spin" />}
           Aplicar
         </button>
+      )}
+      {error && (
+        <p id="umbral-error" role="alert" className="basis-full text-base text-destructive">
+          {error}
+        </p>
       )}
     </form>
   );

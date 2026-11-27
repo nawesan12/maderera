@@ -197,11 +197,16 @@ type EstadoDeMigracion struct {
 
 // FilaPreviaDeMigracion defines model for FilaPreviaDeMigracion.
 type FilaPreviaDeMigracion struct {
-	Avisos        []string `json:"avisos"`
-	Errores       []string `json:"errores"`
-	Identificador string   `json:"identificador"`
-	Linea         int      `json:"linea"`
-	Resumen       string   `json:"resumen"`
+	// Actualiza La fila cae sobre una ficha que ya existe
+	Actualiza *bool    `json:"actualiza,omitempty"`
+	Avisos    []string `json:"avisos"`
+
+	// Cambios «Domicilio — A → B»
+	Cambios       *[]string `json:"cambios,omitempty"`
+	Errores       []string  `json:"errores"`
+	Identificador string    `json:"identificador"`
+	Linea         int       `json:"linea"`
+	Resumen       string    `json:"resumen"`
 }
 
 // FilasDeMigracion defines model for FilasDeMigracion.
@@ -242,12 +247,14 @@ type RechazoDeMigracion struct {
 
 // VistaPreviaDeMigracion defines model for VistaPreviaDeMigracion.
 type VistaPreviaDeMigracion struct {
-	ConAviso *int                     `json:"conAviso,omitempty"`
-	ConError *int                     `json:"conError,omitempty"`
-	Error    *string                  `json:"error,omitempty"`
-	Muestra  *[]FilaPreviaDeMigracion `json:"muestra,omitempty"`
-	Rechazos *[]RechazoDeMigracion    `json:"rechazos,omitempty"`
-	Validas  *int                     `json:"validas,omitempty"`
+	// Actualizan Las válidas que caen sobre una ficha que ya existe
+	Actualizan *int                     `json:"actualizan,omitempty"`
+	ConAviso   *int                     `json:"conAviso,omitempty"`
+	ConError   *int                     `json:"conError,omitempty"`
+	Error      *string                  `json:"error,omitempty"`
+	Muestra    *[]FilaPreviaDeMigracion `json:"muestra,omitempty"`
+	Rechazos   *[]RechazoDeMigracion    `json:"rechazos,omitempty"`
+	Validas    *int                     `json:"validas,omitempty"`
 }
 
 // AnalizarArchivoMultipartBody defines parameters for AnalizarArchivo.
@@ -1096,40 +1103,41 @@ func (sh *strictHandler) PrevisualizarMigracion(w http.ResponseWriter, r *http.R
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"l9zw7u7fAwA=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

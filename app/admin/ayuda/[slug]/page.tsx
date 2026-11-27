@@ -27,10 +27,11 @@ export default async function GuiaPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  await requireStaff();
+  const usuario = await requireStaff();
+  const rol = usuario.staffRole ?? null;
 
   const { slug } = await params;
-  const [guia, todas] = await Promise.all([obtenerGuia(slug), listarGuias()]);
+  const [guia, todas] = await Promise.all([obtenerGuia(slug, rol), listarGuias(rol)]);
 
   if (!guia) notFound();
 

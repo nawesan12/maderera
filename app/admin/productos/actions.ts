@@ -62,6 +62,7 @@ export async function guardarProducto(_previo: EstadoFormulario, formData: FormD
   revalidatePath("/catalogo");
   revalidatePath("/stock");
   revalidatePath("/admin/productos");
+  revalidatePath("/admin/productos/rubros");
   // Después de guardar se queda con el producto: volver a la lista obligaba a
   // buscarlo de nuevo entre miles para cargarle las fotos.
   // El número distinto en cada alta hace que la ficha vuelva a empezar vacía.
@@ -79,4 +80,5 @@ export async function alternarActivo(id: string, activo: boolean) {
   updateTag(ETIQUETAS.catalogo);
   revalidatePath("/catalogo");
   revalidatePath("/admin/productos");
+  revalidatePath("/admin/productos/rubros");
 }

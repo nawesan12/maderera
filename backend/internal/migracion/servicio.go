@@ -11,6 +11,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/cuit"
 	"mjbj/internal/fotos"
 	"mjbj/internal/sqlc"
 )
@@ -90,7 +91,7 @@ func (s *Servicio) EstadoDelSistema(ctx context.Context) (Estado, error) {
 		(SELECT count(*)::int FROM customers),
 		(SELECT count(*)::int FROM customers WHERE codigo_legacy IS NOT NULL),
 		(SELECT count(*)::int FROM product_variants),
-		(SELECT count(*)::int FROM inventory WHERE qty > 0),
+		(SELECT count(DISTINCT variant_id)::int FROM inventory WHERE qty > 0),
 		(SELECT count(*)::int FROM account_movements WHERE referencia = $1)`, ReferenciaSaldo).
 		Scan(&e.Clientes, &e.ClientesMigrados, &e.Medidas, &e.ConExistencia, &e.SaldosMigrados)
 	return e, err
@@ -157,11 +158,12 @@ func (s *Servicio) Cerrar(ctx context.Context, ses *auth.Sesion, corrida string,
 	if _, err := s.pool.Exec(ctx, `UPDATE migration_runs SET estado = 'completada', finished_at = now() WHERE id = $1`, corrida); err != nil {
 		return nil, err
 	}
-	base, err := s.enLaBase(ctx, e.Clave)
+	normalizadas := NormalizarFilas(e, m, filas)
+	base, err := s.enLaBase(ctx, e.Clave, validas(normalizadas))
 	if err != nil {
 		return nil, err
 	}
-	controles := Controles(e.Clave, NormalizarFilas(e, m, filas), base)
+	controles := Controles(e.Clave, normalizadas, base)
 
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaImportar, "migracion", corrida,
 		"Cerró una corrida de migración de "+e.Clave, struct {
@@ -172,19 +174,39 @@ func (s *Servicio) Cerrar(ctx context.Context, ses *auth.Sesion, corrida string,
 	return controles, nil
 }
 
-// enLaBase es lo que el informe de cada entidad le pregunta a la base.
-func (s *Servicio) enLaBase(ctx context.Context, entidad string) (EnLaBase, error) {
+// enLaBase es lo que el informe de cada entidad le pregunta a la base. En
+// clientes, proveedores y saldos se cuenta solo lo de las fichas del archivo:
+// contra todo el sistema, «Archivo 2 · Sistema 6» salía con tilde verde porque
+// el 6 sumaba las corridas anteriores (mes simulado, M3S2-034 y M3S3-040).
+func (s *Servicio) enLaBase(ctx context.Context, entidad string, filas []Fila) (EnLaBase, error) {
 	var b EnLaBase
 	var err error
+	recoger := func(campo string, variantes bool) []string {
+		out := []string{}
+		for _, f := range filas {
+			if v := f.Datos[campo]; v != "" {
+				if variantes {
+					out = append(out, cuit.Variantes(v)...)
+				} else {
+					out = append(out, v)
+				}
+			}
+		}
+		return out
+	}
+	codigos, cuits, correos := recoger("codigo", false), recoger("cuit", true), recoger("email", false)
 	switch entidad {
 	case "saldos":
-		err = s.pool.QueryRow(ctx, `SELECT coalesce(sum(monto), 0)::text, count(*)::int FROM account_movements WHERE referencia = $1`,
-			ReferenciaSaldo).Scan(&b.Total, &b.Cuantos)
+		err = s.pool.QueryRow(ctx, `SELECT coalesce(sum(m.monto), 0)::text, count(*)::int FROM account_movements m
+			JOIN customers c ON c.id = m.customer_id
+			WHERE m.referencia = $1 AND (c.codigo_legacy = ANY($2) OR c.cuit = ANY($3) OR lower(c.email) = ANY($4))`,
+			ReferenciaSaldo, codigos, cuits, correos).Scan(&b.Total, &b.Cuantos)
 	case "clientes":
-		err = s.pool.QueryRow(ctx, `SELECT count(*)::int FROM customers WHERE codigo_legacy IS NOT NULL`).Scan(&b.Cuantos)
+		err = s.pool.QueryRow(ctx, `SELECT count(*)::int FROM customers WHERE codigo_legacy = ANY($1)`, codigos).Scan(&b.Cuantos)
 	case "proveedores":
-		err = s.pool.QueryRow(ctx, `SELECT (SELECT count(*)::int FROM suppliers WHERE codigo_legacy IS NOT NULL),
-			(SELECT coalesce(sum(monto), 0)::text FROM supplier_movements WHERE referencia = $1)`, ReferenciaSaldoProveedor).
+		err = s.pool.QueryRow(ctx, `SELECT (SELECT count(*)::int FROM suppliers WHERE codigo_legacy = ANY($2)),
+			(SELECT coalesce(sum(m.monto), 0)::text FROM supplier_movements m JOIN suppliers p ON p.id = m.supplier_id
+			 WHERE m.referencia = $1 AND (p.codigo_legacy = ANY($2) OR p.cuit = ANY($3)))`, ReferenciaSaldoProveedor, codigos, cuits).
 			Scan(&b.Fichas, &b.Total)
 	case "ventas_historicas":
 		err = s.pool.QueryRow(ctx, `SELECT count(*)::int, coalesce(sum(total), 0)::text FROM historical_sales`).Scan(&b.Cuantos, &b.Total)

@@ -25,6 +25,7 @@ export function AvisosPush() {
   >("cargando");
   const [clave, setClave] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [trabajando, empezar] = useTransition();
 
   useEffect(() => {
@@ -63,6 +64,7 @@ export function AvisosPush() {
 
   async function prender() {
     setAviso(null);
+    setError(null);
 
     const permiso = await Notification.requestPermission();
 
@@ -84,12 +86,21 @@ export function AvisosPush() {
 
     await navigator.serviceWorker.ready;
 
-    const suscripcion = await registro.pushManager.subscribe({
-      // Sin esto el navegador no entrega mensajes sin notificación visible, y
-      // Chrome directamente rechaza la suscripción.
-      userVisibleOnly: true,
-      applicationServerKey: clave!,
-    });
+    // El navegador puede rechazar la suscripción aunque el permiso esté dado
+    // (sin servicio de push, en modo privado): sin esto el botón quedaba igual
+    // y no se decía nada (mes simulado, M2S1-048).
+    let suscripcion: PushSubscription;
+    try {
+      suscripcion = await registro.pushManager.subscribe({
+        // Sin esto el navegador no entrega mensajes sin notificación visible, y
+        // Chrome directamente rechaza la suscripción.
+        userVisibleOnly: true,
+        applicationServerKey: clave!,
+      });
+    } catch {
+      setError("Este navegador no pudo suscribirse a los avisos.");
+      return;
+    }
 
     const datos = suscripcion.toJSON();
 
@@ -100,8 +111,11 @@ export function AvisosPush() {
       descripcion: navigator.userAgent.slice(0, 120),
     });
 
-    setAviso(r.error ?? r.ok ?? null);
-    if (!r.error) setEstado("prendido");
+    if (r.error) setError(r.error);
+    else {
+      setAviso(r.ok ?? null);
+      setEstado("prendido");
+    }
   }
 
   async function apagar() {
@@ -189,6 +203,11 @@ export function AvisosPush() {
 
       {aviso && (
         <span className="text-base text-muted-foreground">{aviso}</span>
+      )}
+      {error && (
+        <span role="alert" className="text-base text-destructive">
+          {error}
+        </span>
       )}
     </div>
   );

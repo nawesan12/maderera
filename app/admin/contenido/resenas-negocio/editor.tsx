@@ -33,7 +33,7 @@ export interface ResenaEditable {
   autor: string;
   estrellas: number;
   texto: string;
-  /** "2026-03-15", como lo espera el input de fecha. */
+  /** «15/03/26», para mostrar. */
   fecha: string;
   origen: "manual" | "google";
   publicada: boolean;
@@ -133,7 +133,6 @@ export function EditorDeResenas({
                 nombre="publicada"
                 etiqueta="Mostrarla en el sitio"
                 icono={Eye}
-                defecto
               />
             </div>
           </Seccion>
@@ -175,13 +174,11 @@ function Fila({ resena }: { resena: ResenaEditable }) {
           ))}
         </span>
 
-        <div className="min-w-[14rem] flex-1">
-          <p className="text-base font-medium">
-            {resena.autor}
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              {resena.fecha}
-              {resena.origen === "google" && " · de Google"}
-            </span>
+        <div className="min-w-0 flex-[1_1_14rem]">
+          <p className="text-base font-medium">{resena.autor}</p>
+          <p className="tabular text-sm text-muted-foreground">
+            {resena.fecha}
+            {resena.origen === "google" && " · de Google"}
           </p>
           <p className="mt-0.5 text-base text-muted-foreground">
             {resena.texto}

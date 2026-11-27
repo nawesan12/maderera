@@ -12,6 +12,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"mjbj/internal/catalogo"
+	"mjbj/internal/cuit"
 	"mjbj/internal/fotos"
 	"mjbj/internal/productos"
 	"mjbj/internal/sqlc"
@@ -201,7 +202,8 @@ func buscarCliente(ctx context.Context, tx pgx.Tx, d map[string]string, nombres 
 		}
 	}
 	if d["cuit"] != "" {
-		if id, err := unID(ctx, tx, `SELECT id FROM customers WHERE cuit = $1 LIMIT 1`, d["cuit"]); id != "" || err != nil {
+		// En las dos formas: las fichas cargadas a mano lo tienen con guiones.
+		if id, err := unID(ctx, tx, `SELECT id FROM customers WHERE cuit = ANY($1) LIMIT 1`, cuit.Variantes(d["cuit"])); id != "" || err != nil {
 			return id, err
 		}
 	}
@@ -213,6 +215,7 @@ func buscarCliente(ctx context.Context, tx pgx.Tx, d map[string]string, nombres 
 
 func aplicarClientes(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultado) error {
 	nombres := &porNombre{consulta: `SELECT id::text, nombre, '' FROM customers ORDER BY created_at, id`}
+	vendedores := &porNombre{consulta: `SELECT id::text, nombre, '' FROM sellers WHERE activo ORDER BY created_at, id`}
 	for _, f := range filas {
 		d := f.Datos
 		id, err := buscarCliente(ctx, tx, d, nombres)
@@ -223,17 +226,31 @@ func aplicarClientes(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resultad
 		if limite == "" {
 			limite = "0"
 		}
-		args := []any{d["nombre"], nulo(d["razonSocial"]), nulo(d["cuit"]), d["condicionIva"], nulo(d["email"]),
-			nulo(d["telefono"]), nulo(d["direccion"]), d["tipo"], limite, nulo(d["asesor"]), nulo(d["notas"]), nulo(d["codigo"])}
+		// El vendedor se busca por nombre entre los activos; el texto queda
+		// en «asesor» como estaba. Se perdía aunque la vista previa lo
+		// mostrara asignado (mes simulado, M2S3-018).
+		var vendedor *string
+		if d["asesor"] != "" {
+			v, err := vendedores.buscar(ctx, tx, d["asesor"], "")
+			if err != nil {
+				return err
+			}
+			vendedor = nulo(v)
+		}
+		args := []any{d["nombre"], nulo(d["razonSocial"]), nulo(cuit.FormatearLargo(d["cuit"])), d["condicionIva"], nulo(d["email"]),
+			nulo(d["telefono"]), nulo(d["direccion"]), d["tipo"], limite, nulo(d["asesor"]), nulo(d["notas"]), nulo(d["codigo"]),
+			nulo(d["rubro"]), vendedor}
 		if id != "" {
+			// El rubro y el vendedor que no vienen no borran los que había.
 			_, err = tx.Exec(ctx, `UPDATE customers SET nombre = $1, razon_social = $2, cuit = $3, condicion_iva = $4::condicion_iva,
 				email = $5, telefono = $6, direccion = $7, tipo = $8::tipo_cliente, limite_credito = $9::numeric, asesor = $10,
-				notas = $11, codigo_legacy = $12, updated_at = now() WHERE id = $13`, append(args, id)...)
+				notas = $11, codigo_legacy = $12, rubro = coalesce($13, rubro), seller_id = coalesce($14::uuid, seller_id),
+				updated_at = now() WHERE id = $15`, append(args, id)...)
 			res.Actualizados++
 		} else {
 			err = tx.QueryRow(ctx, `INSERT INTO customers (nombre, razon_social, cuit, condicion_iva, email, telefono, direccion,
-				tipo, limite_credito, asesor, notas, codigo_legacy, updated_at)
-				VALUES ($1, $2, $3, $4::condicion_iva, $5, $6, $7, $8::tipo_cliente, $9::numeric, $10, $11, $12, now())
+				tipo, limite_credito, asesor, notas, codigo_legacy, rubro, seller_id, updated_at)
+				VALUES ($1, $2, $3, $4::condicion_iva, $5, $6, $7, $8::tipo_cliente, $9::numeric, $10, $11, $12, $13, $14::uuid, now())
 				RETURNING id::text`, args...).Scan(&id)
 			res.Creados++
 		}
@@ -608,7 +625,7 @@ func aplicarProveedores(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resul
 			}
 		}
 		if proveedor == "" && d["cuit"] != "" {
-			if proveedor, err = unID(ctx, tx, `SELECT id FROM suppliers WHERE cuit = $1 LIMIT 1`, d["cuit"]); err != nil {
+			if proveedor, err = unID(ctx, tx, `SELECT id FROM suppliers WHERE cuit = ANY($1) LIMIT 1`, cuit.Variantes(d["cuit"])); err != nil {
 				return err
 			}
 		}
@@ -623,7 +640,7 @@ func aplicarProveedores(ctx context.Context, tx pgx.Tx, filas []Fila, res *Resul
 			condicion = "responsable_inscripto"
 		}
 		// La razón social es el nombre, como en el TS.
-		args := []any{d["nombre"], nulo(d["cuit"]), condicion, nulo(d["email"]), nulo(d["telefono"]), nulo(d["direccion"]),
+		args := []any{d["nombre"], nulo(cuit.FormatearLargo(d["cuit"])), condicion, nulo(d["email"]), nulo(d["telefono"]), nulo(d["direccion"]),
 			nulo(d["notas"]), nulo(d["codigo"])}
 		if proveedor != "" {
 			_, err = tx.Exec(ctx, `UPDATE suppliers SET nombre = $1, razon_social = $1, cuit = $2, condicion_iva = $3::condicion_iva,

@@ -269,6 +269,13 @@ func TestAjustesYResenas(t *testing.T) {
 	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_tope_mensajes") {
 		t.Errorf("el tope de mensajes tiene su pantalla: %s", b)
 	}
+	// El bot, el número humano y el umbral de candidatos se cambian en su
+	// pantalla, no como un texto del sitio (M2S1-043, M2S2-093).
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_bot', 'no'), ('whatsapp_numero_humano', ''), ('catalogo.meses_sin_vender_baja', '12') on conflict (clave) do nothing`)
+	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_bot") ||
+		strings.Contains(string(b), "whatsapp_numero_humano") || strings.Contains(string(b), "meses_sin_vender_baja") || !strings.Contains(string(b), "telefono") {
+		t.Errorf("los textos del sitio traen ajustes de otra pantalla: %s", b)
+	}
 
 	// Juan compró un fenólico y el pedido se entregó.
 	var producto, variante, categoria, orderID, clienteID string
@@ -768,5 +775,25 @@ func TestPanelDeDocumentacion(t *testing.T) {
 	baja("admin, de baja", adm, 200)
 	if _, b := pedir(t, adm, "GET", u+"/categorias", nil); string(b) != "[]\n" {
 		t.Errorf("categorías con todo de baja: %s", b)
+	}
+}
+
+// Un banner con «Desde» y «Hasta» de hoy está al aire todo el día, como una
+// promoción que vence hoy (mes simulado, M2S2-027).
+func TestBannerQueVenceHoySeVe(t *testing.T) {
+	e := armar(t)
+	adm := e.cliente(t, "admin@prueba.test", "admin")
+	u := e.srv.URL + "/api/v1/"
+	hoy := time.Now().In(argentina).Format("2006-01-02")
+	if c, b := pedir(t, adm, "POST", u+"admin/contenido/banners", armarFormulario(map[string]string{
+		"ubicacion": "catalogo", "titulo": "Vence hoy", "desde": hoy, "hasta": hoy, "activo": "on",
+	}, nil)); c != 204 {
+		t.Fatalf("crear banner: %d %s", c, b)
+	}
+	_, b := pedir(t, &http.Client{}, "GET", u+"contenido/banners?ubicacion=catalogo", nil)
+	var publicados []Banner
+	_ = json.Unmarshal(b, &publicados)
+	if len(publicados) != 1 {
+		t.Fatalf("un banner que vence hoy no se ve: %s", b)
 	}
 }

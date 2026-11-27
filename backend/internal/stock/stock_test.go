@@ -309,7 +309,9 @@ func TestMetricasDeSucursales(t *testing.T) {
 	_, b := pedir(t, adm, "GET", e.srv.URL+"/api/v1/admin/sucursales/metricas", nil)
 	var m []MetricasDeSucursal
 	_ = json.Unmarshal([]byte(b), &m)
-	if len(m) != 2 || m[0].Slug != "casa-central" || m[0].VentasHoy != 1500 || m[0].PedidosHoy != 2 || m[0].ClientesAtendidos != 2 ||
+	// «Vendido hoy» con la regla de Reportes (al entregar o facturar): el
+	// pendiente de $1000 todavía no es venta (M2S2-028).
+	if len(m) != 2 || m[0].Slug != "casa-central" || m[0].VentasHoy != 500 || m[0].PedidosHoy != 2 || m[0].ClientesAtendidos != 2 ||
 		m[0].PedidosAbiertos != 1 || m[0].ProductosStockBajo != 1 {
 		t.Errorf("métricas: %s", b)
 	}

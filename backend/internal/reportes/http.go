@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"mjbj/internal/api/reportesapi"
 	"mjbj/internal/auth"
@@ -398,6 +399,13 @@ func (a *API) PendientesDelRol(ctx context.Context, r reportesapi.PendientesDelR
 	return ok(v), err
 }
 
+// ArchivoDelDia es «deudores-2026-11-26.csv» con el día de acá: a las 22:15
+// la fecha UTC ya era la de mañana y el mismo listado salía con otro nombre
+// que el de /admin/cierre (mes simulado, M2S2-103).
+func ArchivoDelDia(prefijo string, ahora time.Time) string {
+	return prefijo + "-" + ahora.In(Argentina).Format("2006-01-02") + ".csv"
+}
+
 // DeudoresCsv y CuentasAPagarCsv: los listados del contador. Solo el admin.
 func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestObject) (reportesapi.DeudoresCsvResponseObject, error) {
 	if err := numerosDelNegocio(ctx); err != nil {
@@ -408,7 +416,7 @@ func (a *API) DeudoresCsv(ctx context.Context, _ reportesapi.DeudoresCsvRequestO
 	if err != nil {
 		return nil, err
 	}
-	return csv("deudores-"+ahora.Format("2006-01-02")+".csv", v), nil
+	return csv(ArchivoDelDia("deudores", ahora), v), nil
 }
 
 func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarCsvRequestObject) (reportesapi.CuentasAPagarCsvResponseObject, error) {
@@ -420,5 +428,5 @@ func (a *API) CuentasAPagarCsv(ctx context.Context, _ reportesapi.CuentasAPagarC
 	if err != nil {
 		return nil, err
 	}
-	return csv("cuentas-a-pagar-"+ahora.Format("2006-01-02")+".csv", v), nil
+	return csv(ArchivoDelDia("cuentas-a-pagar", ahora), v), nil
 }

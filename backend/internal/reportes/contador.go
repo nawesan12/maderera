@@ -215,7 +215,13 @@ func (s *Servicio) CsvCuentasAPagar(ctx context.Context, ahora time.Time) (strin
 			atraso = strconv.Itoa(int(hoy.Sub(*vence).Hours() / 24))
 		}
 		comp := nombreDeComprobante(tipo) + " " + pad(pv, 4) + "-" + pad(numero, 8)
-		out = append(out, []string{csvexcel.Texto(proveedor), csvexcel.Texto(cuit), csvexcel.Texto(comp), dia(&emision),
+		// Con guiones como en deudores: un proveedor migrado lo tenía sin
+		// ellos y la columna salía mezclada (M2S2-103).
+		conGuiones := cuit
+		if conGuiones != "" {
+			conGuiones = pdf.Cuit(conGuiones)
+		}
+		out = append(out, []string{csvexcel.Texto(proveedor), csvexcel.Texto(conGuiones), csvexcel.Texto(comp), dia(&emision),
 			dia(vence), atraso, csvexcel.NumeroCsv(total.F(), 2), csvexcel.NumeroCsv(saldo.F(), 2)})
 		totalSaldo += saldo.F()
 		facturado[id] = float64(facturado[id] + saldo.F())

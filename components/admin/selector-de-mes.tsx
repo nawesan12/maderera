@@ -40,8 +40,11 @@ export function mesCorrido(clave: string, delta: number): string {
  * Los meses que ofrece el selector: los tres años hasta el corriente, más el
  * elegido si está fuera de ese rango (una dirección vieja tecleada a mano).
  */
-function mesesParaElegir(actual: string, hoy: string): string[] {
-  const meses = Array.from({ length: 36 }, (_, i) => mesCorrido(hoy, -i));
+function mesesParaElegir(actual: string, hoy: string, desde?: string): string[] {
+  // Con `desde` (el primer mes con datos), la lista arranca ahí: treinta y
+  // seis meses vacíos no le sirven a nadie (mes simulado, M3S4-035).
+  const meses = Array.from({ length: 36 }, (_, i) => mesCorrido(hoy, -i)).filter((m) => !desde || m >= desde);
+  if (meses.length === 0) meses.push(hoy);
   if (!meses.includes(actual)) meses.push(actual);
   return meses.sort().reverse();
 }
@@ -54,10 +57,13 @@ function mesesParaElegir(actual: string, hoy: string): string[] {
 export function SelectorDeMes({
   actual,
   etiqueta = "Mes",
+  desde,
 }: {
   /** En formato `YYYY-MM`, el mismo que devuelve `leerPeriodoMensual`. */
   actual: string;
   etiqueta?: string;
+  /** El primer mes que se ofrece (`YYYY-MM`): el primero con datos. */
+  desde?: string;
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
@@ -82,7 +88,13 @@ export function SelectorDeMes({
 
   return (
     <div className="flex items-center gap-1" role="group" aria-label={etiqueta} aria-busy={pendiente}>
-      <button type="button" onClick={() => elegir(mesCorrido(actual, -1))} aria-label="Mes anterior" className={flecha}>
+      <button
+        type="button"
+        onClick={() => elegir(mesCorrido(actual, -1))}
+        disabled={Boolean(desde) && mesCorrido(actual, -1) < (desde ?? "")}
+        aria-label="Mes anterior"
+        className={flecha}
+      >
         <ChevronLeft className="h-5 w-5" />
       </button>
       <label>
@@ -92,7 +104,7 @@ export function SelectorDeMes({
           onChange={(e) => elegir(e.target.value)}
           className="h-11 rounded-lg border border-linea bg-card px-3 text-base outline-none transition-colors focus:border-accion/50"
         >
-          {mesesParaElegir(actual, hoy).map((m) => (
+          {mesesParaElegir(actual, hoy, desde).map((m) => (
             <option key={m} value={m}>
               {nombreDelMes(m)}
             </option>

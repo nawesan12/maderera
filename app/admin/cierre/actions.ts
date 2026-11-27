@@ -16,7 +16,11 @@ export async function cerrarElMes(_previo: EstadoDelCierre, formData: FormData):
   const periodo = String(formData.get("periodo") ?? "");
   if (!/^\d{4}-\d{2}$/.test(periodo)) return { error: "No entendimos el mes." };
   const cerrado = formData.get("cerrado") === "si";
-  const r = await (await api()).POST("/api/v1/admin/cierre/cerrado", { body: { periodo, cerrado } });
+  const motivo = String(formData.get("motivo") ?? "").trim();
+  if (!cerrado && !motivo) return { error: "Escribí por qué se reabre el mes." };
+  const r = await (await api()).POST("/api/v1/admin/cierre/cerrado", {
+    body: { periodo, cerrado, ...(motivo ? { motivo: motivo.slice(0, 300) } : {}) },
+  });
   if (!r.data) return { error: mensajeDe(r.error as Problema | undefined) };
   revalidatePath("/admin/cierre");
   return {};

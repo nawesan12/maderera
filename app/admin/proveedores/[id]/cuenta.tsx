@@ -285,7 +285,16 @@ export function CuentaDelProveedor({
                 </span>
                 <span className="order-1 min-w-0 @2xl:order-none">
                   {titulo}
-                  {n.numero && <span className="codigo block break-all text-sm text-muted-foreground">{n.numero}</span>}
+                  {/* `.codigo` no parte (va sin @layer y le gana a las utilidades):
+                      una referencia de un pago partido o de un ajuste aplicado
+                      se montaba sobre el detalle a 1280 y se salía de la
+                      tarjeta a 375 (mes 23). Parte en los espacios y, si no
+                      alcanza, donde haga falta. */}
+                  {n.numero && (
+                    <span className="codigo mt-0.5 block w-fit max-w-full text-sm text-muted-foreground [overflow-wrap:anywhere] !whitespace-normal">
+                      {n.numero}
+                    </span>
+                  )}
                 </span>
                 <span className="order-3 col-span-2 min-w-0 text-base text-muted-foreground @2xl:order-none @2xl:col-span-1">
                   {m.detalle ?? ""}

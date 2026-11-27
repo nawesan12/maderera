@@ -182,13 +182,13 @@ const consultaDeTurnos = `
 		       d.codigo,
 		       count(m.id) FILTER (WHERE m.created_at > s.cerrada_at)::int,
 		       coalesce(sum(m.monto) FILTER (WHERE m.created_at > s.cerrada_at), 0),
-		       (SELECT count(*)::int FROM orders o WHERE o.bajo_lista_sin_autorizar AND o.branch_id = s.branch_id
+		       (SELECT count(*)::int FROM orders o WHERE o.bajo_lista_sin_autorizar AND coalesce(o.caja_branch_id, o.branch_id) = s.branch_id
 		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at),
-		       (SELECT coalesce(sum(o.dejado_de_cobrar), 0) FROM orders o WHERE o.bajo_lista_sin_autorizar AND o.branch_id = s.branch_id
+		       (SELECT coalesce(sum(o.dejado_de_cobrar), 0) FROM orders o WHERE o.bajo_lista_sin_autorizar AND coalesce(o.caja_branch_id, o.branch_id) = s.branch_id
 		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at),
-		       (SELECT count(*)::int FROM orders o WHERE o.credito_sin_autorizar > 0 AND o.branch_id = s.branch_id
+		       (SELECT count(*)::int FROM orders o WHERE o.credito_sin_autorizar > 0 AND coalesce(o.caja_branch_id, o.branch_id) = s.branch_id
 		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at),
-		       (SELECT coalesce(sum(o.credito_sin_autorizar), 0) FROM orders o WHERE o.credito_sin_autorizar > 0 AND o.branch_id = s.branch_id
+		       (SELECT coalesce(sum(o.credito_sin_autorizar), 0) FROM orders o WHERE o.credito_sin_autorizar > 0 AND coalesce(o.caja_branch_id, o.branch_id) = s.branch_id
 		          AND coalesce(o.cobrada_at, o.created_at) BETWEEN s.abierta_at AND s.cerrada_at)
 		FROM cash_sessions s
 		JOIN branches b ON b.id = s.branch_id
@@ -461,10 +461,10 @@ const parteEnEfectivo = `coalesce(
 func (p *Panel) VentasSinCaja(ctx context.Context) ([]VentaSuelta, error) {
 	filas, err := p.pool.Query(ctx, `
 		SELECT id, numero, numero_provisorio, branch_id, sucursal, contacto_nombre, total, efectivo, cobrada_at, created_at FROM (
-		  SELECT o.id, o.numero, o.numero_provisorio, o.branch_id, b.name AS sucursal, o.contacto_nombre, o.total,
+		  SELECT o.id, o.numero, o.numero_provisorio, coalesce(o.caja_branch_id, o.branch_id) AS branch_id, b.name AS sucursal, o.contacto_nombre, o.total,
 		         `+parteEnEfectivo+` AS efectivo, o.cobrada_at, o.created_at
 		  FROM orders o
-		  LEFT JOIN branches b ON b.id = o.branch_id
+		  LEFT JOIN branches b ON b.id = coalesce(o.caja_branch_id, o.branch_id)
 		  LEFT JOIN cash_movements m ON m.order_id = o.id
 		  WHERE o.origen = 'mostrador' AND o.estado <> 'cancelado'
 		    AND o.cobrada_at IS NOT NULL AND m.id IS NULL
@@ -809,7 +809,7 @@ func (p *Panel) AsignarVentaAlTurno(ctx context.Context, ses *auth.Sesion, order
 	var branch *string
 	var cobrada *time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT o.numero, `+parteEnEfectivo+`, o.branch_id, o.cobrada_at FROM orders o
+		SELECT o.numero, `+parteEnEfectivo+`, coalesce(o.caja_branch_id, o.branch_id), o.cobrada_at FROM orders o
 		LEFT JOIN cash_movements m ON m.order_id = o.id
 		WHERE o.id = $1 AND m.id IS NULL LIMIT 1`, orderID).Scan(&numero, &efectivo, &branch, &cobrada)
 	if errors.Is(err, pgx.ErrNoRows) {

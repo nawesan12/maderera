@@ -144,11 +144,11 @@ func (s *Servicio) firmaParaAnular(ctx context.Context, ses *auth.Sesion, pedido
 		noSeAnula bool
 	}
 	err := s.pool.QueryRow(ctx, `
-		SELECT o.total, o.branch_id, o.created_by_user_id, o.created_at,
+		SELECT o.total, coalesce(o.caja_branch_id, o.branch_id), o.created_by_user_id, o.created_at,
 		       coalesce((SELECT sum(importe) FROM order_payments WHERE order_id = o.id AND medio IN ('efectivo', 'cuenta_corriente')), 0) > 0
 		         OR (NOT EXISTS (SELECT 1 FROM order_payments WHERE order_id = o.id)
 		             AND (o.medio_pago IS NULL OR o.medio_pago IN ('efectivo', 'cuenta_corriente'))),
-		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = o.branch_id AND cs.estado = 'abierta' AND cs.abierta_at <= o.created_at),
+		       EXISTS (SELECT 1 FROM cash_sessions cs WHERE cs.branch_id = coalesce(o.caja_branch_id, o.branch_id) AND cs.estado = 'abierta' AND cs.abierta_at <= o.created_at),
 		       o.estado = 'cancelado' OR o.origen <> 'mostrador'
 		FROM orders o WHERE o.id::text = $1`, pedido).
 		Scan(&p.total, &p.sucursal, &p.vendio, &p.creada, &p.cajonODeuda, &p.enElTurno, &p.noSeAnula)
@@ -201,7 +201,7 @@ func anularEnTransaccion(ctx context.Context, tx pgx.Tx, id, motivo, usuario str
 		cliente, notas         *string
 	}
 	err := tx.QueryRow(ctx, `
-		SELECT numero, origen::text, estado::text, total, medio_pago::text, branch_id, customer_id, notas
+		SELECT numero, origen::text, estado::text, total, medio_pago::text, coalesce(caja_branch_id, branch_id), customer_id, notas
 		FROM orders WHERE id::text = $1 LIMIT 1 FOR UPDATE`, id).
 		Scan(&p.numero, &p.origen, &p.estado, &p.total, &p.medio, &p.sucursal, &p.cliente, &p.notas)
 	if errors.Is(err, pgx.ErrNoRows) {

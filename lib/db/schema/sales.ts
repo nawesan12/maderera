@@ -295,6 +295,8 @@ export const orders = pgTable(
     aCuenta: numeric({ precision: 12, scale: 2 }),
     /** Con cuánto pagó en efectivo, para el vuelto del ticket (00350). */
     efectivoRecibido: numeric({ precision: 12, scale: 2 }),
+    /** La sucursal de la caja que la cobró, si no es branchId: la venta de un corte de otra sucursal (00452). */
+    cajaBranchId: uuid().references(() => branches.id, { onDelete: "set null" }),
   },
 
   (t) => [

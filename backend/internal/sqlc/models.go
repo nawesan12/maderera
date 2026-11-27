@@ -5773,6 +5773,7 @@ type Order struct {
 	FacturadoAt            pgtype.Timestamptz `json:"facturadoAt"`
 	CanceladoAt            pgtype.Timestamptz `json:"canceladoAt"`
 	EfectivoRecibido       *jsmath.Num        `json:"efectivoRecibido"`
+	CajaBranchID           *string            `json:"cajaBranchId"`
 }
 
 type OrderItem struct {

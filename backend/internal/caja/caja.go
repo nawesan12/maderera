@@ -273,7 +273,7 @@ func VentasDeHoy(ctx context.Context, c Consultador, sucursal string, ahora time
 		       EXISTS (SELECT 1 FROM invoices i WHERE i.order_id = orders.id AND i.tipo::text NOT LIKE 'nota%' AND i.estado <> 'anulada'),
 		       estado::text, created_at
 		FROM orders
-		WHERE branch_id = $1 AND origen = 'mostrador' AND clave_mostrador IS NOT NULL AND created_at >= $2
+		WHERE coalesce(caja_branch_id, branch_id) = $1 AND origen = 'mostrador' AND clave_mostrador IS NOT NULL AND created_at >= $2
 		ORDER BY created_at DESC LIMIT 40`, sucursal, InicioDelDia(ahora))
 	if err != nil {
 		return nil, err
@@ -358,7 +358,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		       count(DISTINCT o.id)::int,
 		       coalesce(sum(coalesce(p.importe, o.total)), 0), NULL::text, false, NULL::text, false
 		FROM cash_sessions s
-		JOIN orders o ON o.branch_id = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL
+		JOIN orders o ON coalesce(o.caja_branch_id, o.branch_id) = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL
 		     AND o.created_at >= s.abierta_at
 		     AND (s.cerrada_at IS NULL OR o.created_at <= s.cerrada_at)
 		LEFT JOIN order_payments p ON p.order_id = o.id
@@ -376,7 +376,7 @@ func CierresDeTurnos(ctx context.Context, c Consultador, sesiones []string) (map
 		         coalesce((SELECT max(h.created_at) FROM order_status_history h WHERE h.order_id = o.id AND h.estado = 'cancelado'),
 		                  o.updated_at) AS anulada_at
 		  FROM orders o
-		  WHERE o.branch_id = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL AND o.estado = 'cancelado'
+		  WHERE coalesce(o.caja_branch_id, o.branch_id) = s.branch_id AND o.origen = 'mostrador' AND o.clave_mostrador IS NOT NULL AND o.estado = 'cancelado'
 		    AND o.created_at <= coalesce(s.cerrada_at, now())
 		) a ON a.anulada_at >= s.abierta_at AND (s.cerrada_at IS NULL OR a.anulada_at <= s.cerrada_at)
 		LEFT JOIN order_payments p ON p.order_id = a.id

@@ -52,6 +52,36 @@ export function formatearMonto(valor: string | number | null): string {
 }
 
 /**
+ * El precio unitario de un renglón, con los decimales que hagan falta (de
+ * dos a seis) para que cantidad × unitario dé el subtotal, a centavos. Con el
+ * unitario redondeado no cerraba: «13 cortes × $ 823» daba 10.699 y el
+ * renglón decía 10.701 (mes simulado, M3S2-063). Gemelo de
+ * pdf.UnitarioQueCierra en Go.
+ */
+export function unitarioQueCierra(subtotal: number, cantidad: number): string {
+  if (!(cantidad > 0) || !Number.isFinite(subtotal)) return formatearMonto(subtotal);
+  const objetivo = Math.round(subtotal * 100);
+  const exacto = subtotal / cantidad;
+  for (let d = 2; d <= 6; d++) {
+    const f = 10 ** d;
+    const u = Math.round(exacto * f) / f;
+    if (Math.round(u * cantidad * 100) === objetivo) {
+      return d === 2 ? formatearMonto(u) : conDecimales(u, d);
+    }
+  }
+  return conDecimales(Math.round(exacto * 1e6) / 1e6, 6);
+}
+
+function conDecimales(valor: number, decimales: number): string {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: decimales,
+  }).format(valor);
+}
+
+/**
  * La plata de la caja: los pesos enteros como `formatearMonto` y los
  * centavos solo cuando los hay («$ 50.000», «-$ 0,40»). El efectivo con el
  * descuento del 10 % deja centavos, y redondeados a pesos el arqueo escondía
@@ -334,6 +364,8 @@ export function unidadDeVenta(unidad: string | null, descripcion: string | null 
  * «2,5 m²». Se leía «Quedan 25 placa» y «4 rollo» en las entregas y «3 placa»
  * en el papel del cliente (mes simulado, H095). Sin unidad, la cifra sola.
  */
+const MEDIA_PLACA = /media placa/i;
+
 export function cantidadConUnidad(cantidad: number, unidad: string | null, descripcion = ""): string {
   const n = cantidadLegible.format(cantidad);
   unidad = unidadDeVenta(unidad, descripcion);
@@ -342,6 +374,9 @@ export function cantidadConUnidad(cantidad: number, unidad: string | null, descr
   // cliente es «4 cortes», al lado de «Corte a medida · 3 piezas»: la
   // cantidad sola no se entendía (simulación del mes, H145).
   if (unidad === "pasada") return `${n} ${cantidad === 1 ? "corte" : "cortes"}`;
+  // La media placa se cuenta por medias: «1 media», no «1 placa» al lado de
+  // «— Media placa, al largo» (mes simulado, M2S3-096).
+  if (unidad === "placa" && MEDIA_PLACA.test(descripcion)) return `${n} ${cantidad === 1 ? "media" : "medias"}`;
   const u = formatearUnidad(unidad);
   return `${n} ${cantidad === 1 ? u : unidadEnPlural(u)}`;
 }

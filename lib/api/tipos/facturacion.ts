@@ -913,6 +913,22 @@ export interface components {
             }[];
             /** @description El enlace de verificación de ARCA (solo con CAE) */
             qrUrl: string | null;
+            /** @description En una nota, el comprobante que corrige, para el papel (Anula parcialmente: Factura A 0015-00000105 del 27/11/26) */
+            asociado?: string | null;
+            /** @description En la nota de una devolución, cómo y cuándo salió la plata */
+            devolucion?: {
+                /** @enum {string} */
+                destino: "caja" | "cuenta" | "afuera" | "deuda";
+                /** Format: date-time */
+                fecha: string;
+                /** Format: double */
+                importe: number;
+                partes: {
+                    medio: string;
+                    /** Format: double */
+                    importe: number;
+                }[];
+            } | null;
         };
         ResultadoDeAutorizacion: {
             ok?: string;

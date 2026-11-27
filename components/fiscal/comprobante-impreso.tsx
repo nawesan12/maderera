@@ -13,7 +13,8 @@ import {
   fechaCorta,
   fechaSolaCorta,
   formatearCuit,
-  moneda,
+  formatearMonto,
+  unitarioQueCierra,
 } from "@/lib/formato";
 import type { EmisorFiscal } from "@/lib/dal/admin/facturacion";
 import { LogoEmisor } from "@/components/impresion/logo-emisor";
@@ -79,6 +80,8 @@ interface ComprobanteImprimible {
   enCuenta?: boolean;
   /** El pedido que factura. */
   pedido?: string | null;
+  /** En una nota, el comprobante que corrige, ya escrito (Go). */
+  asociado?: string | null;
   /** Los cobros, para el medio de pago. */
   cobros?: { medio: string }[];
   cobrosDelPedido?: { medio: string }[];
@@ -207,11 +210,21 @@ export async function ComprobanteImpreso({
                   {!comprobante.enCuenta && medios.length > 0 && ` · ${medios.join(", ")}`}
                 </>
               )}
-              {comprobante.pedido && (
+              {/* En una nota, el comprobante que corrige en el lugar del
+                  pedido: es lo que pide ARCA y lo que busca el contador
+                  (M3S3-006). */}
+              {comprobante.asociado ? (
                 <>
                   <br />
-                  Pedido: {comprobante.pedido}
+                  <strong>{comprobante.asociado}</strong>
                 </>
+              ) : (
+                comprobante.pedido && (
+                  <>
+                    <br />
+                    Pedido: {comprobante.pedido}
+                  </>
+                )
               )}
               {comprobante.fechaVencimiento && (
                 <>
@@ -268,12 +281,6 @@ export async function ComprobanteImpreso({
           <tbody>
             {comprobante.items.map((item) => {
               const cantidad = Number(item.cantidad);
-              const unitario = discrimina
-                ? Number(item.precioUnitario)
-                : cantidad > 0
-                  ? Number(item.subtotal) / cantidad
-                  : 0;
-
               return (
                 <tr key={item.id}>
                   <td>{item.descripcion}</td>
@@ -282,13 +289,17 @@ export async function ComprobanteImpreso({
                   <td className="der mono" data-label="Cant.">
                     {cantidadConUnidad(cantidad, item.unidad === "unidad" ? null : item.unidad, item.descripcion)}
                   </td>
-                  <td className="der mono" data-label="P. unitario">{moneda.format(unitario)}</td>
+                  <td className="der mono" data-label="P. unitario">
+                    {/* Con los decimales que hagan falta para que cantidad ×
+                        unitario dé el subtotal (M3S2-063). */}
+                    {unitarioQueCierra(Number(discrimina ? item.neto : item.subtotal), cantidad)}
+                  </td>
                   {discrimina && (
                     <td className="der mono" data-label="IVA">{Number(item.alicuotaIva)}%</td>
                   )}
                   {/* En la A, la fila neta: cantidad × unitario neto. */}
                   <td className="der mono" data-label="Subtotal">
-                    {moneda.format(Number(discrimina ? item.neto : item.subtotal))}
+                    {formatearMonto(discrimina ? item.neto : item.subtotal)}
                   </td>
                 </tr>
               );
@@ -332,7 +343,7 @@ export async function ComprobanteImpreso({
             <div className="total-final">
               <span>Total</span>
               <span className="mono">
-                {moneda.format(Number(comprobante.total))}
+                {formatearMonto(comprobante.total)}
               </span>
             </div>
             {letra === "B" && comprobante.receptorCondicionIva === "consumidor_final" && ivaContenido > 0 && (
@@ -403,7 +414,7 @@ function Linea({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
     <div className="linea">
       <span>{etiqueta}</span>
-      <span className="mono">{moneda.format(Number(valor))}</span>
+      <span className="mono">{formatearMonto(valor)}</span>
     </div>
   );
 }

@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"encoding/base64"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -127,6 +128,13 @@ func UnidadPara(u string, cantidad float64, descripcion string) string {
 		}
 		return "cortes"
 	}
+	// La media placa se cuenta por medias (M2S3-096), como cantidadConUnidad.
+	if u == "placa" && mediaPlaca.MatchString(descripcion) {
+		if cantidad == 1 {
+			return "media"
+		}
+		return "medias"
+	}
 	a := Unidad(UnidadDeVenta(u, descripcion))
 	if cantidad == 1 || strings.ContainsAny(a, ". ²") || len([]rune(a)) <= 2 || strings.HasSuffix(a, "s") {
 		return a
@@ -136,6 +144,8 @@ func UnidadPara(u string, cantidad float64, descripcion string) string {
 	}
 	return a + "es"
 }
+
+var mediaPlaca = regexp.MustCompile(`(?i)media placa`)
 
 // DatosRemito son los dos argumentos de remitoPdf(remito, emisor).
 type DatosRemito struct {

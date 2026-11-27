@@ -71,7 +71,13 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 	if strings.HasPrefix(c.Tipo, "factura") {
 		cp.CondicionVenta = condicionDeVenta(c)
 	}
-	cp.Pedido = de(c.Pedido)
+	// En una nota, el comprobante que corrige va en el lugar del pedido
+	// (M3S3-006).
+	if c.Asociado != nil {
+		cp.Asociado = *c.Asociado
+	} else {
+		cp.Pedido = de(c.Pedido)
+	}
 	for i, t := range c.Tributos {
 		cp.Tributos[i] = pdf.TributoComprobante{Descripcion: t.Descripcion, Alicuota: t.Alicuota, Importe: t.Importe}
 	}
@@ -84,9 +90,9 @@ func (s *Servicio) Pdf(ctx context.Context, c *Completo) ([]byte, string, error)
 }
 
 var mediosImpresos = map[string]string{
-	"efectivo": "Efectivo", "transferencia": "Transferencia", "deposito": "Transferencia", "mercado_pago": "Mercado Pago",
+	"efectivo": "Efectivo", "transferencia": "Transferencia", "deposito": "Depósito", "mercado_pago": "Mercado Pago",
 	"tarjeta": "Tarjeta", "debito": "Tarjeta de débito", "credito": "Tarjeta de crédito", "tarjeta_debito": "Tarjeta de débito",
-	"tarjeta_credito": "Tarjeta de crédito", "cheque": "Cheque", "echeq": "Cheque",
+	"tarjeta_credito": "Tarjeta de crédito", "cheque": "Cheque", "echeq": "e-Cheq", "retencion": "Retención",
 }
 
 // condicionDeVenta es lo que va en «Condición de venta» del papel: cuenta

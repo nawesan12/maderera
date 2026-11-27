@@ -318,12 +318,12 @@ type Item struct {
 
 // CobroDeFactura es una fila de invoice_payments.
 type CobroDeFactura struct {
-	ID              string    `json:"id"`
-	InvoiceID       string    `json:"invoiceId"`
-	Medio           string    `json:"medio"`
-	Monto           string    `json:"monto"`
-	Referencia      *string   `json:"referencia"`
-	ReceiptID       *string   `json:"receiptId"`
+	ID         string  `json:"id"`
+	InvoiceID  string  `json:"invoiceId"`
+	Medio      string  `json:"medio"`
+	Monto      string  `json:"monto"`
+	Referencia *string `json:"referencia"`
+	ReceiptID  *string `json:"receiptId"`
 	// Recibo es el número del recibo: la manual cobrada decía «recibo» sin
 	// número y la de un pedido «REC-0035» (M2S3-090).
 	Recibo          *string   `json:"recibo"`
@@ -399,6 +399,45 @@ type Completo struct {
 	// QrURL es el enlace de verificación de ARCA (solo con CAE): el QR que
 	// dibujan la hoja impresa y el PDF.
 	QrURL *string `json:"qrUrl"`
+	// Asociado es, en una nota, el comprobante que corrige, escrito para el
+	// papel («Anula parcialmente: Factura A 0015-00000105 del 27/11/26»). Es
+	// lo que pide ARCA y lo que busca el contador; la nota impresa decía solo
+	// el pedido (mes simulado, M3S3-006).
+	Asociado *string `json:"asociado"`
+	// Devolucion: la nota de una devolución dice cómo y cuándo salió la
+	// plata (por la caja, a la cuenta, por afuera con cada medio). La nota
+	// tenía «Cobros» vacío y el egreso no estaba en ningún lado (M2S3-046).
+	Devolucion *DevolucionDeNota `json:"devolucion"`
+}
+
+// DevolucionDeNota es la plata de la devolución que hizo una nota.
+type DevolucionDeNota struct {
+	Destino string          `json:"destino"`
+	Fecha   time.Time       `json:"fecha"`
+	Importe float64         `json:"importe"`
+	Partes  []ParteDevuelta `json:"partes"`
+}
+
+// ParteDevuelta es lo que volvió por un medio.
+type ParteDevuelta struct {
+	Medio   string  `json:"medio"`
+	Importe float64 `json:"importe"`
+}
+
+// leyendaDelAsociado es cómo se nombra en una nota el comprobante que
+// corrige: la de crédito por el total lo anula, la parcial lo anula en
+// parte, y la de débito lo ajusta (o anula la nota de crédito que revierte).
+func leyendaDelAsociado(tipoNota string, totalNota float64, tipo string, pv, numero int64, fecha time.Time, total float64) string {
+	verbo := "Ajusta"
+	switch {
+	case fiscal.EsNotaDeCredito(tipoNota) && totalNota+0.005 >= total:
+		verbo = "Anula"
+	case fiscal.EsNotaDeCredito(tipoNota):
+		verbo = "Anula parcialmente"
+	case strings.HasPrefix(tipo, "nota_credito"):
+		verbo = "Anula"
+	}
+	return verbo + ": " + etiqueta(tipo, pv, numero) + " del " + pdf.FechaSolaCorta(DiaArgentino(fecha))
 }
 
 // CobroDelPedido es un cobro del pedido de la factura que no pasó por
@@ -545,6 +584,50 @@ func (s *Servicio) Obtener(ctx context.Context, id string) (*Completo, error) {
 	c.Saldo = saldo.F()
 	if err := s.cobrosDelPedido(ctx, &c); err != nil {
 		return nil, err
+	}
+	if strings.HasPrefix(c.Tipo, "nota_credito") {
+		var d DevolucionDeNota
+		var devolucion string
+		err := s.pool.QueryRow(ctx, `SELECT id, destino, created_at, importe::float8 FROM devoluciones WHERE nota_id = $1 ORDER BY created_at LIMIT 1`, id).
+			Scan(&devolucion, &d.Destino, &d.Fecha, &d.Importe)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		if err == nil {
+			d.Partes = []ParteDevuelta{}
+			filas, err := s.pool.Query(ctx, `SELECT medio, sum(importe)::float8 FROM (
+				  SELECT coalesce(p.medio, 'mercado_pago') AS medio, t.importe FROM payment_refunds t JOIN payments p ON p.id = t.payment_id WHERE t.devolucion_id = $1
+				  UNION ALL
+				  SELECT t.medio::text, t.importe FROM receipt_refunds t WHERE t.devolucion_id = $1) x GROUP BY medio ORDER BY medio`, devolucion)
+			if err != nil {
+				return nil, err
+			}
+			for filas.Next() {
+				var p ParteDevuelta
+				if err := filas.Scan(&p.Medio, &p.Importe); err != nil {
+					filas.Close()
+					return nil, err
+				}
+				d.Partes = append(d.Partes, p)
+			}
+			filas.Close()
+			c.Devolucion = &d
+		}
+	}
+	if c.ComprobanteOrigenID != nil {
+		var tipo string
+		var pv, numero int64
+		var fecha time.Time
+		var total float64
+		err := s.pool.QueryRow(ctx, `SELECT tipo::text, punto_venta, numero, fecha_emision, total::float8 FROM invoices WHERE id = $1`,
+			*c.ComprobanteOrigenID).Scan(&tipo, &pv, &numero, &fecha, &total)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		if err == nil {
+			l := leyendaDelAsociado(c.Tipo, jsmath.Numero(c.Total), tipo, pv, numero, fecha, total)
+			c.Asociado = &l
+		}
 	}
 	if c.Cae != nil && *c.Cae != "" {
 		emisor, err := s.ObtenerEmisor(ctx)

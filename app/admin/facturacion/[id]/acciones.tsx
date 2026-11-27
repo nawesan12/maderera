@@ -27,10 +27,13 @@ export function BotonAutorizar({
   id,
   rechazado,
   consecuencias = [],
+  etiqueta,
 }: {
   id: string;
   rechazado: boolean;
   consecuencias?: string[];
+  /** El texto del botón, si no es el de siempre (el tramo de la serie). */
+  etiqueta?: string;
 }) {
   const [estado, accion, pendiente] = useActionState(autorizar, inicial);
 
@@ -48,7 +51,7 @@ export function BotonAutorizar({
           ) : (
             <Send className="h-5 w-5" />
           )}
-          {rechazado ? "Reenviar a ARCA" : "Autorizar en ARCA"}
+          {etiqueta ?? (rechazado ? "Reenviar a ARCA" : "Autorizar en ARCA")}
         </button>
       </form>
       {consecuencias.length > 0 && (

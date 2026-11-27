@@ -426,8 +426,28 @@ func (s *Servicio) Editar(ctx context.Context, ses *auth.Sesion, variante, lista
 	}
 	valor := jsmath.Fijo2(n)
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		_, err := cambiar(ctx, s.q.WithTx(tx), ses, variante, lista, valor, sqlc.PriceChangeSourceManual, nil, nil)
-		return err
+		var antes *string
+		var producto, nombreLista string
+		if err := tx.QueryRow(ctx, `SELECT (SELECT price::text FROM price_list_items WHERE variant_id = v.id AND price_list_id = l.id),
+			  p.name || CASE WHEN v.label <> '' AND v.label <> p.name THEN ' · ' || v.label ELSE '' END, l.name
+			FROM product_variants v JOIN products p ON p.id = v.product_id, price_lists l WHERE v.id = $1 AND l.id = $2`,
+			variante, lista).Scan(&antes, &producto, &nombreLista); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		cambio, err := cambiar(ctx, s.q.WithTx(tx), ses, variante, lista, valor, sqlc.PriceChangeSourceManual, nil, nil)
+		if err != nil || !cambio {
+			return err
+		}
+		// El precio cambiado a mano, con el de antes: quedaba solo en el
+		// historial de precios y la bitácora no lo mostraba (mes 23, M2S1-047).
+		desde := "sin precio"
+		if antes != nil {
+			desde = formato.Importe(jsmath.Numero(*antes))
+		}
+		bitacora.Anotar(ctx, sqlc.New(tx), s.log, ses, sqlc.AccionAuditoriaEditar, "precio", variante,
+			"Precio "+nombreLista+" de "+producto+": "+desde+" → "+formato.Importe(n),
+			map[string]any{"priceListId": lista, "antes": antes, "despues": valor})
+		return nil
 	})
 }
 

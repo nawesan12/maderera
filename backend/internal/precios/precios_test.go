@@ -341,6 +341,12 @@ func TestImportacion(t *testing.T) {
 	if c, b := pedir(t, adm, "POST", e.srv.URL+"/api/v1/admin/precios/editar", map[string]string{"variantId": e.fen12, "priceListId": e.general, "precio": "63000"}); c != 204 {
 		t.Fatalf("precio a mano en el medio: %d %s", c, b)
 	}
+	// El precio a mano queda en la bitácora con el de antes (mes 23, M2S1-047).
+	var renglon string
+	_ = e.pool.QueryRow(context.Background(), `select descripcion from audit_log where entidad = 'precio' and entidad_id = $1 order by created_at desc limit 1`, e.fen12).Scan(&renglon)
+	if !strings.HasPrefix(renglon, "Precio ") || !strings.HasSuffix(renglon, "$\u00a061.500 → $\u00a063.000") {
+		t.Errorf("la bitácora del precio a mano: %q", renglon)
+	}
 	cero := visto(v.Filas[0])
 	cero["generalNuevo"] = "0"
 	cambios = map[string]any{"cambios": []map[string]string{visto(v.Filas[0]), visto(v.Filas[1]), cero}}

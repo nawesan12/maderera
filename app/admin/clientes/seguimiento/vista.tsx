@@ -158,7 +158,7 @@ function Deuda({ saldo, vencido, dias }: { saldo: number; vencido: number; dias:
   return (
     <span className="block text-sm">
       <span className="tabular font-semibold text-saldo-debe">{formatearMonto(saldo)}</span>
-      {vencido > 0.004 && dias != null && (
+      {vencido > 0.004 && dias != null && dias > 0 && (
         <span className="text-muted-foreground"> · {plural(dias, "día", "días")} de atraso</span>
       )}
     </span>

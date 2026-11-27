@@ -53,7 +53,9 @@ export default async function SeguimientoPage({
     nombre: c.razonSocial || c.nombre,
     saldo: c.saldo,
     vencido: c.deuda?.vencido ?? 0,
-    dias: c.deuda?.diasDeLaMasVieja ?? null,
+    // Desde el vencimiento, no desde la compra (mes 23): los días de crédito
+    // no son atraso, como en Clientes.
+    dias: c.deuda?.prioridad.diasVencida ?? null,
     razonSocial: c.razonSocial,
     cuit: c.cuit,
     seguido: conGestion.has(c.id),

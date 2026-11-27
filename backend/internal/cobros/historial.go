@@ -68,8 +68,12 @@ type RefRecibo struct {
 // guarda igual («Cancelación del pedido PED-1219: se cargó a la
 // Constructora…», tercera prueba). El motivo sigue en el pedido y en la
 // bitácora.
+//
+// La anulación de un recibo también: el cliente leía «Anulación del recibo
+// REC-0006: Sim: se cargó por error» (mes simulado, M2S1-153).
 func DetalleParaElCliente(detalle *string) *string {
-	if detalle == nil || !(strings.HasPrefix(*detalle, "Anulación de la venta ") || strings.HasPrefix(*detalle, "Cancelación del pedido ")) {
+	if detalle == nil || !(strings.HasPrefix(*detalle, "Anulación de la venta ") || strings.HasPrefix(*detalle, "Cancelación del pedido ") ||
+		strings.HasPrefix(*detalle, PrefijoAnulacionDeRecibo)) {
 		return detalle
 	}
 	if i := strings.Index(*detalle, ": "); i > 0 {
@@ -79,12 +83,38 @@ func DetalleParaElCliente(detalle *string) *string {
 	return detalle
 }
 
+// PrefijoAnulacionDeRecibo es cómo empieza el asiento que deshace un recibo.
+const PrefijoAnulacionDeRecibo = "Anulación del recibo "
+
 // HistorialParaElCliente es el historial como lo lee el cliente en Mi cuenta.
+//
+// El pago de un recibo anulado y el ajuste que lo deshace se compensan: al
+// cliente le queda un solo renglón, «Recibo REC-0006 anulado», sin importe
+// que sume (M2S1-153). El panel los sigue viendo por separado.
 func HistorialParaElCliente(movs []MovimientoDelCliente) []MovimientoDelCliente {
-	for i := range movs {
-		movs[i].Detalle = DetalleParaElCliente(movs[i].Detalle)
+	anulados := map[string]bool{}
+	for _, m := range movs {
+		if m.Clase == "pago" && m.Recibo != nil && m.Recibo.Anulado && m.Recibo.Numero != "" {
+			anulados[m.Recibo.Numero] = true
+		}
 	}
-	return movs
+	out := movs[:0]
+	for _, m := range movs {
+		m.Detalle = DetalleParaElCliente(m.Detalle)
+		if m.Clase != "pago" && m.Detalle != nil && strings.HasPrefix(*m.Detalle, PrefijoAnulacionDeRecibo) &&
+			anulados[strings.TrimPrefix(*m.Detalle, PrefijoAnulacionDeRecibo)] {
+			continue
+		}
+		if m.Clase == "pago" && m.Recibo != nil && anulados[m.Recibo.Numero] {
+			m.Titulo = "Recibo " + m.Recibo.Numero + " anulado"
+			m.Detalle = nil
+			m.ImporteInformativo = m.Importe
+			m.Importe = nil
+			m.Cheques = nil
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 // ClasesPorFiltro son las clases que muestra cada filtro (nil: todas).
@@ -92,7 +122,7 @@ var ClasesPorFiltro = map[string][]string{
 	"todo":    nil,
 	"compras": {"compra", "compra_contado"},
 	"pagos":   {"pago", "pago_en_revision", "pago_rechazado"},
-	"cheques": {"cheque_por_recibir", "cheque", "cheque_rechazado", "nota_debito"},
+	"cheques": {"cheque_por_recibir", "cheque", "cheque_rechazado", "cheque_no_tomado", "nota_debito"},
 	"ajustes": {"ajuste", "nota_credito", "nota_debito"},
 }
 
@@ -265,7 +295,12 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 				titulo = t
 			}
 		}
-		movs = append(movs, MovimientoDelCliente{ID: p.ID, Fecha: p.CreatedAt, Clase: clase, Titulo: titulo + " informada",
+		// «Depósito informado», no «informada» (M2S1-157).
+		informado := " informada"
+		if titulo == "Depósito" {
+			informado = " informado"
+		}
+		movs = append(movs, MovimientoDelCliente{ID: p.ID, Fecha: p.CreatedAt, Clase: clase, Titulo: titulo + informado,
 			Detalle: &detalle, ImporteInformativo: f64(p.Monto)})
 	}
 	if filtro == "cheques" {
@@ -283,9 +318,12 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		}
 	}
 	for _, c := range sueltos {
-		clase := "cheque_rechazado"
+		// El que no se tomó (no mueve la cuenta) no es el que rebotó en el
+		// banco: llevaban el mismo «Cheque rechazado» (M3S2-052).
+		clase := "cheque_no_tomado"
 		detalle := "No lo pudimos tomar"
 		if c.DeUnaVenta {
+			clase = "cheque_rechazado"
 			// Se tomó con la venta y después lo rechazó el banco: la nota de
 			// débito del renglón de al lado es la que lo vuelve a cobrar.
 			detalle = "Rechazado por el banco"

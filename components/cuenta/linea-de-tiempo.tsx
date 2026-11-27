@@ -4,7 +4,7 @@ import { FileText } from "lucide-react";
 import type { ClaseDeMovimiento, MovimientoDelCliente } from "@/lib/dal/historial-cliente";
 // Los centavos solo cuando los hay, como en el resto de la ficha (mes simulado:
 // «$ 339.100,00» acá y «$ 339.100» en Pedidos).
-import { formatearMonto } from "@/lib/formato";
+import { formatearMonto, ZONA } from "@/lib/formato";
 
 /**
  * Los movimientos de un cliente, agrupados por mes.
@@ -33,11 +33,15 @@ const ESTILO: Record<ClaseDeMovimiento, { etiqueta: string; familia: string }> =
   pago_rechazado: { etiqueta: "No acreditado", familia: "estado-problema" },
   cheque_por_recibir: { etiqueta: "Cheque por recibir", familia: "estado-espera" },
   cheque: { etiqueta: "Cheque", familia: "estado-cerrado" },
-  cheque_rechazado: { etiqueta: "Cheque rechazado", familia: "estado-problema" },
+  cheque_rechazado: { etiqueta: "Rechazado por el banco", familia: "estado-problema" },
+  cheque_no_tomado: { etiqueta: "No aceptado", familia: "estado-cerrado" },
 };
 
-const MES = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" });
-const DIA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit" });
+// En hora argentina: el servidor corre en UTC y lo de la noche del 26/11
+// salía el 27/11, distinto de la cuenta corriente (M2S2-048).
+const MES = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: ZONA });
+const DIA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", timeZone: ZONA });
+const CLAVE_DEL_MES = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: ZONA });
 
 type ReciboDelMovimiento = NonNullable<MovimientoDelCliente["recibo"]>;
 type ChequeDelMovimiento = NonNullable<MovimientoDelCliente["cheques"]>[number];
@@ -71,7 +75,7 @@ export function LineaDeTiempo({
   // Agrupados por mes, en el orden en que llegan (lo más nuevo arriba).
   const meses: { clave: string; titulo: string; filas: MovimientoDelCliente[] }[] = [];
   for (const m of movimientos) {
-    const clave = `${m.fecha.getFullYear()}-${m.fecha.getMonth()}`;
+    const clave = CLAVE_DEL_MES.format(m.fecha);
     const ultimo = meses.at(-1);
     if (ultimo?.clave === clave) ultimo.filas.push(m);
     else {

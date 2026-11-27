@@ -360,8 +360,14 @@ function UltimoMovimiento({
       <span className="text-muted-foreground">
         {fechaCorta.format(m.createdAt)}
       </span>
+      {/* El ajuste dice qué fue («Anulación del recibo REC-0006»): solo
+          «Ajuste +$ 1.000» no decía nada (M2S1-153). */}
       <span className="font-medium">
-        {chequeRechazado ? "Cheque rechazado" : estiloDeEstado(m.tipo).etiqueta}
+        {chequeRechazado
+          ? "Cheque rechazado"
+          : m.tipo === "ajuste" && m.detalle
+            ? m.detalle
+            : estiloDeEstado(m.tipo).etiqueta}
       </span>
       <span className={`tabular ${m.monto < 0 ? "text-saldo-favor" : ""}`}>
         {m.monto > 0 ? "+" : "−"}

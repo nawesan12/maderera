@@ -728,7 +728,7 @@ export interface components {
             /** Format: date-time */
             fecha: string;
             /** @enum {string} */
-            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque" | "cheque_rechazado";
+            clase: "compra" | "pago" | "nota_credito" | "nota_debito" | "ajuste" | "compra_contado" | "pago_en_revision" | "pago_rechazado" | "cheque_por_recibir" | "cheque" | "cheque_rechazado" | "cheque_no_tomado";
             titulo: string;
             detalle: string | null;
             /** Format: double */

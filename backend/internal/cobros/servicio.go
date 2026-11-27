@@ -321,7 +321,9 @@ type FormCheque struct {
 // fechaCorta es toLocaleDateString("es-AR"): «1/11/2026».
 func fechaCorta(t time.Time) string {
 	l := t.In(argentina)
-	return fmt.Sprintf("%d/%d/%d", l.Day(), int(l.Month()), l.Year())
+	// Con ceros, como el resto de las fechas: «al 15/1/2027» y «al
+	// 20/12/2026» en la misma lista (M3S1-044).
+	return fmt.Sprintf("%02d/%02d/%d", l.Day(), int(l.Month()), l.Year())
 }
 
 // CargarCheque es cargarCheque: uno recibido entra a la cartera, uno

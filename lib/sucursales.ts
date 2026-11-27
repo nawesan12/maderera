@@ -168,6 +168,24 @@ export const SUCURSALES: SucursalPublicada[] = [
   },
 ];
 
+/**
+ * La sucursal que atiende el WhatsApp del sitio. Su número es el ajuste
+ * `whatsapp_principal`, que la clienta cambia desde el panel: con el de la
+ * constante, cambiarlo dejaba los botones mezclados entre el número nuevo y el
+ * viejo (mes simulado, M2S2-029).
+ */
+export const SUCURSAL_DEL_WHATSAPP = "casa-central";
+
+/** Las sucursales con el WhatsApp del sitio puesto en la que lo atiende. */
+export function conWhatsappDelSitio<T extends { slug: string; whatsapp: string | null }>(
+  sucursales: T[],
+  numero: string,
+): T[] {
+  const digitos = numero.replace(/\D/g, "");
+  if (!digitos) return sucursales;
+  return sucursales.map((s) => (s.slug === SUCURSAL_DEL_WHATSAPP ? { ...s, whatsapp: digitos } : s));
+}
+
 /** La ficha publicada de una sucursal, por su slug. */
 export function sucursalPublicada(slug: string): SucursalPublicada | undefined {
   return SUCURSALES.find((s) => s.slug === slug);

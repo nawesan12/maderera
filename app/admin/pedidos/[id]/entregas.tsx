@@ -26,6 +26,7 @@ import type { RenglonPendiente } from "@/lib/entregas";
 import { formatearCantidad, llevaDecimales } from "@/lib/unidades";
 import { cantidadConUnidad, plural } from "@/lib/formato";
 import { seOfreceLaFirma } from "@/lib/entregas/firma";
+import { revisarDocumentoDeRetiro } from "@/lib/entregas/documento";
 import type { OtroAcopio, RemitoListado } from "@/lib/dal/admin/entregas";
 import { MandarPorWhatsapp } from "@/app/admin/whatsapp/mandar-por-whatsapp";
 import { AvisarPorWhatsapp } from "@/components/admin/avisar-por-whatsapp";
@@ -301,7 +302,6 @@ function FormularioDeRemito({
   alGenerar: (numero: string) => void;
 }) {
   const [estado, preparar, preparando] = useActionState(prepararRemito, inicial);
-  const router = useRouter();
   // Arranca en lo que queda, o en lo que hay en el galpón si no alcanza
   // (mes simulado 2: proponía 4 lacas con 3 en el estante, y salía igual).
   const [cantidades, setCantidades] = useState<Record<string, string>>(() =>
@@ -329,15 +329,10 @@ function FormularioDeRemito({
     visto.current = estado;
     if (estado.ok && estado.numero) {
       toast.success(estado.ok);
+      // Un retiro no vuelve acá: la acción ya navega a la firma.
       alGenerar(estado.numero);
-      // En un retiro quien se lleva la mercadería está ahí: lo que sigue
-      // es la firma, en la misma pantalla (mes simulado 2: quedaba «Sin
-      // firmar» y la firma se olvidaba).
-      if (tipoEntrega !== "envio" && estado.linkFirma) {
-        router.push(`${estado.linkFirma}?volver=${encodeURIComponent(`/admin/pedidos/${orderId}`)}`);
-      }
     }
-  }, [estado, alGenerar, tipoEntrega, orderId, router]);
+  }, [estado, alGenerar]);
 
   const conDecimales = (p: RenglonPendiente, valor: string) =>
     Boolean(p.enteros) && llevaDecimales(valor) && valor !== String(p.pendiente);
@@ -353,9 +348,19 @@ function FormularioDeRemito({
   const [pin, setPin] = useState<{ visto: EstadoEntrega; abierto: boolean }>({ visto: inicial, abierto: false });
   if (estado.autorizacion && pin.visto !== estado) setPin({ visto: estado, abierto: true });
 
+  // El documento se revisa antes de preguntar «sin cobrar»: primero se
+  // preguntaba y después avisaba que el documento no servía.
+  const [errorDocumento, setErrorDocumento] = useState<string | null>(null);
+
   function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (preparando || malEscritos.length > 0 || sinStock.length > 0) return;
+    const problema = envio ? null : revisarDocumentoDeRetiro(campos.receptorDocumento);
+    setErrorDocumento(problema);
+    if (problema) {
+      document.getElementById("receptorDocumento")?.focus();
+      return;
+    }
     if (debe) {
       setPreguntando(true);
       return;
@@ -428,11 +433,13 @@ function FormularioDeRemito({
           nombre="receptorDocumento"
           etiqueta="Documento"
           valor={campos.receptorDocumento}
-          alCambiar={(v) => setCampos((c) => ({ ...c, receptorDocumento: v }))}
+          alCambiar={(v) => {
+            setCampos((c) => ({ ...c, receptorDocumento: v }));
+            if (errorDocumento) setErrorDocumento(null);
+          }}
           maximo={30}
-          // En el retiro es obligatorio: sin el documento la firma no identifica a nadie.
-          obligatorio={!envio}
           enfocar={Boolean(campos.receptorNombre)}
+          error={errorDocumento}
         />
         {envio && (
           <>
@@ -454,7 +461,7 @@ function FormularioDeRemito({
         )}
       </div>
 
-      {estado.error && !estado.autorizacion && (
+      {estado.error && !estado.autorizacion && !errorDocumento && (
         <p role="alert" className="flex items-start gap-2 text-base text-destructive">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           {estado.error}
@@ -873,6 +880,7 @@ function Campo({
   maximo,
   obligatorio = false,
   enfocar = false,
+  error = null,
 }: {
   nombre: string;
   etiqueta: string;
@@ -881,6 +889,7 @@ function Campo({
   maximo: number;
   obligatorio?: boolean;
   enfocar?: boolean;
+  error?: string | null;
 }) {
   return (
     <div className="space-y-1.5">
@@ -896,8 +905,15 @@ function Campo({
         required={obligatorio}
         autoFocus={enfocar}
         autoComplete="off"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${nombre}-error` : undefined}
         className="h-11 text-base"
       />
+      {error && (
+        <p id={`${nombre}-error`} role="alert" className="estado-problema text-sm font-medium">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

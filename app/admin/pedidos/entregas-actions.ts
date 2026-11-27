@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { api, mensajeDe, type Problema } from "@/lib/api/servidor";
 import type { Autorizacion } from "@/components/autorizacion/campo-pin";
 
@@ -79,7 +80,16 @@ export async function prepararRemito(
   revalidatePath("/admin/reparto");
   revalidatePath("/admin/stock");
 
-  return { ok: entrega.ok, numero: entrega.numero, linkFirma: `/firmar/${entrega.firmaToken}` };
+  const linkFirma = `/firmar/${entrega.firmaToken}`;
+  // En un retiro quien se lleva la mercadería está en el mostrador: lo que
+  // sigue es la firma. Se navega desde acá y no desde el formulario: al
+  // entregar todo, la ficha revalidada ya no tiene acopio, el formulario se
+  // desmonta antes de su efecto y la pantalla quedaba en «Sin firmar» (mes
+  // simulado 2, M2S1-163).
+  if (String(formData.get("tipo") ?? "retiro") !== "envio" && entrega.firmaToken) {
+    redirect(`${linkFirma}?volver=${encodeURIComponent(`/admin/pedidos/${orderId}`)}`);
+  }
+  return { ok: entrega.ok, numero: entrega.numero, linkFirma };
 }
 
 /** El 422 del PIN para soltar lo que no se cobró, o null. */

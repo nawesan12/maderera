@@ -86,6 +86,11 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "20mb" },
     proxyClientMaxBodySize: "20mb",
+    // La validación de navegación instantánea (dev) solo en los segmentos
+    // que exportan `instant`: con la de todas las páginas, el globo «1
+    // Insight» tapaba la barra de guardar a 375 px (mes 23). Adoptar
+    // `partialPrefetching` es una decisión aparte (ver arriba).
+    instantInsights: { validationLevel: "manual-warning" },
   },
   /**
    * Empaquetado para servidor propio.

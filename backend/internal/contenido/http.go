@@ -206,7 +206,7 @@ func (a *API) AdminAjustes(ctx context.Context, _ contenidoapi.AdminAjustesReque
 	// del sitio para escribir a mano.
 	v := todos[:0]
 	for _, f := range todos {
-		if !EsRegla(f.Clave) && !numericos[f.Clave] {
+		if !EsRegla(f.Clave) && !numericos[f.Clave] && !enOtraPantalla[f.Clave] {
 			v = append(v, f)
 		}
 	}

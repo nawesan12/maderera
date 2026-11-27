@@ -37,18 +37,11 @@ async function main() {
         valor: "542235903118",
         descripcion: "Número al que van los botones de WhatsApp del sitio.",
       },
-      {
-        clave: "aviso_barra_superior",
-        valor: "",
-        descripcion: "Texto de la franja de arriba de todo. Vacío la oculta.",
-      },
-      {
-        clave: "envio_gratis_leyenda",
-        valor: "Envío sin cargo en Mar del Plata a partir de $200.000",
-        descripcion: "Leyenda de la franja de confianza del catálogo.",
-      },
     ])
-    // `DoNothing` y no `DoUpdate`: el valor de estas tres claves se edita desde
+    // La franja de arriba y la leyenda de envío gratis salieron (00441): el
+    // aviso va como diálogo (banners, «Aviso de bienvenida») y el envío sin
+    // cargo sale de cada zona de envío.
+    // `DoNothing` y no `DoUpdate`: el valor de esta clave se edita desde
     // el panel, y volver a correr el sembrado no puede pisar lo que la clienta
     // cargó.
     .onConflictDoNothing({ target: siteSettings.clave });

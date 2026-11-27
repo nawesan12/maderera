@@ -269,6 +269,13 @@ func TestAjustesYResenas(t *testing.T) {
 	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_tope_mensajes") {
 		t.Errorf("el tope de mensajes tiene su pantalla: %s", b)
 	}
+	// El bot, el número humano y el umbral de candidatos se cambian en su
+	// pantalla, no como un texto del sitio (M2S1-043, M2S2-093).
+	_, _ = e.pool.Exec(ctx, `insert into site_settings (clave, valor) values ('whatsapp_bot', 'no'), ('whatsapp_numero_humano', ''), ('catalogo.meses_sin_vender_baja', '12') on conflict (clave) do nothing`)
+	if _, b := pedir(t, adm, "GET", u+"admin/contenido/ajustes", nil); strings.Contains(string(b), "whatsapp_bot") ||
+		strings.Contains(string(b), "whatsapp_numero_humano") || strings.Contains(string(b), "meses_sin_vender_baja") || !strings.Contains(string(b), "telefono") {
+		t.Errorf("los textos del sitio traen ajustes de otra pantalla: %s", b)
+	}
 
 	// Juan compró un fenólico y el pedido se entregó.
 	var producto, variante, categoria, orderID, clienteID string

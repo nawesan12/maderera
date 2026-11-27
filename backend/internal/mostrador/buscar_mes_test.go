@@ -100,6 +100,20 @@ func TestBuscarMedidaDeCorrido(t *testing.T) {
 	if r, err := e.svc.Buscar(ctx, "tirante", e.central, nil); err != nil || len(r) != 1 || r[0].Precio != 800 || r[0].PrecioAnterior == nil || *r[0].PrecioAnterior != 1000 {
 		t.Errorf("en oferta: %+v %v", r, err)
 	}
+	// Y la copia local también, que es de donde busca la caja.
+	copia, err := e.svc.Copia(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enOferta := false
+	for _, p := range copia.Precios {
+		if p.VariantID == v && p.PrecioAnterior != nil && *p.PrecioAnterior == 1000 && p.OfertaHasta != nil {
+			enOferta = true
+		}
+	}
+	if !enOferta {
+		t.Error("la copia local no trae la oferta")
+	}
 	if _, err := e.pool.Exec(ctx, `update price_list_items set oferta_hasta = now() - interval '1 minute' where variant_id = $1`, v); err != nil {
 		t.Fatal(err)
 	}

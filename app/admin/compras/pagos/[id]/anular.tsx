@@ -15,23 +15,37 @@ export function AnularPago({
   supplierId,
   titulo,
   detalle,
+  anulado,
 }: {
   id: string;
   supplierId: string;
   titulo: string;
   detalle: string;
+  /**
+   * Ya anulado, queda solo la respuesta de Go. Se monta igual: si la ficha lo
+   * sacaba al anular, el router.refresh lo desmontaba y se perdía el aviso de
+   * los certificados posteriores (mes 23, M2S2-013).
+   */
+  anulado: boolean;
 }) {
   const [resultado, setResultado] = useState("");
+  if (anulado && !resultado) return null;
   return (
     <div className="flex flex-col items-end gap-2">
-      <AnularConMotivo
-        titulo={titulo}
-        detalle={detalle}
-        confirmar="Anular el pago"
-        anular={(motivo) => anularPago(id, supplierId, motivo)}
-        alTerminar={setResultado}
-      />
-      {resultado && <p className="max-w-md text-right text-base text-saldo-favor">{resultado}</p>}
+      {!anulado && (
+        <AnularConMotivo
+          titulo={titulo}
+          detalle={detalle}
+          confirmar="Anular el pago"
+          anular={(motivo) => anularPago(id, supplierId, motivo)}
+          alTerminar={setResultado}
+        />
+      )}
+      {resultado && (
+        <p role="status" className="max-w-md text-right text-base text-saldo-favor">
+          {resultado}
+        </p>
+      )}
     </div>
   );
 }

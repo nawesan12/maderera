@@ -69,25 +69,24 @@ export default async function PagoPage({
               <FileText className="h-4 w-4" aria-hidden="true" />
               Orden de pago
             </a>
-            {!p.anuladoAt && (
-              <AnularPago
-                id={p.id}
-                supplierId={p.supplierId}
-                titulo={`Anular el pago de ${formatearMonto(p.total)} a ${p.proveedor}`}
-                detalle={[
-                  `La deuda con ${p.proveedor} vuelve a su cuenta y las facturas quedan otra vez por pagar.`,
-                  p.retenciones.length > 0 ? "Los certificados de retención quedan anulados." : "",
-                  p.partes.some((x) => x.chequeNumero)
-                    ? "Los cheques endosados vuelven a la cartera y los propios se anulan."
-                    : "",
-                  p.efectivoEnCaja > 0
-                    ? `Los ${formatearMonto(p.efectivoEnCaja)} en efectivo vuelven a la caja de ${p.caja}.`
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              />
-            )}
+            <AnularPago
+              anulado={anulado}
+              id={p.id}
+              supplierId={p.supplierId}
+              titulo={`Anular el pago de ${formatearMonto(p.total)} a ${p.proveedor}`}
+              detalle={[
+                `La deuda con ${p.proveedor} vuelve a su cuenta y las facturas quedan otra vez por pagar.`,
+                p.retenciones.length > 0 ? "Los certificados de retención quedan anulados." : "",
+                p.partes.some((x) => x.chequeNumero)
+                  ? "Los cheques endosados vuelven a la cartera y los propios se anulan."
+                  : "",
+                p.efectivoEnCaja > 0
+                  ? `Los ${formatearMonto(p.efectivoEnCaja)} en efectivo vuelven a la caja de ${p.caja}.`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            />
           </>
         }
       />

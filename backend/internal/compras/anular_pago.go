@@ -209,6 +209,11 @@ func (s *Servicio) AnularPago(ctx context.Context, ses *auth.Sesion, id, motivo 
 	if len(certificados) > 0 {
 		desc += "; certificados anulados: " + strings.Join(certificados, ", ")
 	}
+	// El aviso de la pantalla se pierde al salir de la ficha: la bitácora lo
+	// guarda (M2S2-013).
+	if len(posteriores) > 0 {
+		desc += "; a revisar, calculados con este pago en el acumulado: " + strings.Join(posteriores, ", ")
+	}
 	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaAnular, "pago_proveedor", id, desc, struct {
 		Motivo       string   `json:"motivo"`
 		Certificados []string `json:"certificados"`

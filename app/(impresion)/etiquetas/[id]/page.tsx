@@ -90,9 +90,9 @@ async function Contenido({
 
       <div className="etiquetas-barra">
         <div>
-          <p style={{ fontWeight: 700 }}>
+          <h1 style={{ fontWeight: 700, fontSize: "inherit", margin: 0 }}>
             Etiquetas del corte {corte.numero} · {corte.cliente}
-          </p>
+          </h1>
           <p style={{ fontSize: "13px", color: "#666" }}>
             {recortadas.length} etiquetas — una por pieza. El lado grueso del
             croquis es el que lleva tapacanto

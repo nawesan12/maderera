@@ -1,4 +1,5 @@
 import { BotonImprimir } from "@/components/fiscal/boton-imprimir";
+import { Ampliable } from "./ampliable";
 import { fechaCorta } from "@/lib/formato";
 import { formatearDecimal } from "@/lib/unidades";
 import type { PlanoDeCorte, PlacaDelPlano } from "@/lib/cortes/tipos";
@@ -49,6 +50,7 @@ export function PlanoImpreso({
   const quien: QuienSeQueda = { sinCargo: corte.sinCargo, media: corte.media };
   const nombre = corte.media ? "Media" : "Placa";
   const enteras = corte.sinCargo ? 0 : plano.placasEnteras;
+  const todasDelCliente = plano.placas.every((p) => sobraDelCliente(p.seVendeEntera, quien));
 
   return (
     <div className="plano-pagina">
@@ -56,7 +58,7 @@ export function PlanoImpreso({
         .plano-pagina { max-width: 297mm; margin: 0 auto; padding: 10mm; font-family: var(--font-sans, sans-serif); color: #1a1a1a; background: #fff; color-scheme: light; }
         .plano-pagina .boton-imprimir { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 12pt; font-weight: 600; color: #1a1a1a; text-decoration: none; cursor: pointer; }
         .plano-barra { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 6mm; }
-        .plano-titulo { font-size: 15pt; font-weight: 700; }
+        .plano-titulo { font-size: 15pt; font-weight: 700; margin: 0; }
         .plano-sub { font-size: 10pt; color: #555; margin-top: 1mm; }
         .plano-numeros { display: flex; flex-wrap: wrap; gap: 4mm 6mm; margin: 0 0 6mm; padding: 3mm 4mm; border: 1px solid #ddd; border-radius: 2mm; background: #faf8f5; }
         .plano-numero .valor { font-size: 16pt; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -93,14 +95,20 @@ export function PlanoImpreso({
           .plano-tabla tr { padding: 2mm 0; border-bottom: 1px solid #ddd; }
           .plano-tabla td { border: 0; padding: 0.5mm 0; text-align: left !important; font-size: 11pt; }
           .plano-tabla td[data-label]::before { content: attr(data-label) " · "; color: #666; }
+          /* Las piezas, una por renglón: n.º, medida y etiqueta (M2S2-105). */
+          .plano-piezas tr { display: flex; flex-wrap: wrap; gap: 0 3mm; align-items: baseline; }
+          .plano-piezas td { width: auto; }
+          .plano-piezas td::before { content: none !important; }
+          .plano-piezas .solo-papel { display: none; }
         }
       `}</style>
 
       <div className="plano-barra">
         <div>
-          <p className="plano-titulo">
+          {/* El título de la página es el h1 (M3S4-025). */}
+          <h1 className="plano-titulo">
             Plano de corte {corte.numero} · {corte.cliente}
-          </p>
+          </h1>
           <p className="plano-sub">
             {corte.material} · {corte.deQueSale ?? "placa"} de{" "}
             {plano.placaLargo} × {plano.placaAncho} mm
@@ -110,7 +118,7 @@ export function PlanoImpreso({
           </p>
         </div>
         <div className="no-imprimir" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <BotonImprimir />
+          <BotonImprimir corto />
           {/* La secuencia para tipear en la seccionadora, del mismo plano. */}
           {corte.id && (
             <a href={`/hoja-de-corte/${corte.id}`} className="boton-imprimir">
@@ -148,10 +156,19 @@ export function PlanoImpreso({
           <p className="valor">{plano.pasadas}</p>
           <p className="rotulo">{plano.pasadas === 1 ? "pasada de sierra" : "pasadas de sierra"}</p>
         </div>
-        <div className="plano-numero">
-          <p className="valor">{Math.round(desperdicio * 100)}%</p>
-          <p className="rotulo">sobra de lo comprado</p>
-        </div>
+        {/* «Sobra de lo comprado» solo si el cliente compró todas las
+            placas; si se cobra el corte, lo que se aprovecha (M2S2-107). */}
+        {todasDelCliente ? (
+          <div className="plano-numero">
+            <p className="valor">{Math.round(desperdicio * 100)}%</p>
+            <p className="rotulo">sobra de lo comprado</p>
+          </div>
+        ) : (
+          <div className="plano-numero">
+            <p className="valor">{Math.round(plano.aprovechadoTotal * 100)}%</p>
+            <p className="rotulo">aprovechado</p>
+          </div>
+        )}
         <div className="plano-numero">
           <p className="valor">{plano.totalPiezas}</p>
           <p className="rotulo">{plano.totalPiezas === 1 ? "pieza" : "piezas"}</p>
@@ -204,7 +221,9 @@ export function PlanoImpreso({
                 : " · el recorte queda en la maderera"}
             </span>
           </h3>
-          <DibujoDePlaca placa={placa} plano={plano} delCliente={sobraDelCliente(placa.seVendeEntera, quien)} />
+          <Ampliable etiqueta={`${nombre} ${placa.numero}`} proporcion={(plano.placaLargo + 12) / (plano.placaAncho + 12)}>
+            <DibujoDePlaca placa={placa} plano={plano} delCliente={sobraDelCliente(placa.seVendeEntera, quien)} />
+          </Ampliable>
         </section>
       ))}
 
@@ -434,7 +453,7 @@ function DibujoDePlaca({
 /** El listado de piezas, en el mismo orden que el dibujo. */
 function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
   return (
-    <table className="plano-tabla">
+    <table className="plano-tabla plano-piezas">
       <thead>
         <tr>
           <th>Placa</th>
@@ -449,16 +468,18 @@ function TablaDePiezas({ plano }: { plano: PlanoDeCorte }) {
         {plano.placas.flatMap((placa) =>
           placa.piezas.map((p, i) => (
             <tr key={`${placa.numero}-${i}`}>
-              <td data-label="Placa">{placa.numero}</td>
-              <td data-label="N.º">{i + 1}</td>
-              <td data-label="Sobre la placa">
+              <td data-label="Placa" className="solo-papel">{placa.numero}</td>
+              <td data-label="N.º" style={{ fontWeight: 700 }}>
+                {placa.numero}.{i + 1}
+              </td>
+              <td data-label="Sobre la placa" className="solo-papel">
                 {p.ancho} × {p.alto} mm{p.girada ? " (girada)" : ""}
               </td>
               <td data-label="Como se pidió">
                 {p.largoOriginal} × {p.anchoOriginal} mm
               </td>
-              <td data-label="Etiqueta">{p.etiqueta || "—"}</td>
-              <td className="num" data-label="Posición">
+              <td data-label="Etiqueta">{p.etiqueta || ""}</td>
+              <td className="num solo-papel" data-label="Posición">
                 x {p.x} · y {p.y}
               </td>
             </tr>

@@ -337,8 +337,9 @@ func (s *Servicio) CorregirReceptor(ctx context.Context, id string, c map[string
 		}
 		// También el emitido sin CAE: todavía no salió a ARCA y el dato mal
 		// cargado se corrige con el mismo número, sin darlo de baja y correr
-		// la serie (mes simulado, FLUJO-F092). El cliente recibe el papel
-		// corregido.
+		// la serie (mes simulado, FLUJO-F092). Si el cliente ya tenía el
+		// papel, le llega el corregido; si no, le llega con el CAE
+		// (notificaciones.Factura).
 		if (estado != "rechazada" && estado != "emitida") || cae != nil {
 			return errEmision("Solo se corrigen los datos de un comprobante sin CAE.")
 		}

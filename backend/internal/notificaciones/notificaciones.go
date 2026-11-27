@@ -302,9 +302,15 @@ func (s *Servicio) Factura(ctx context.Context, id string) error {
 	}
 	// Sin CAE el número todavía no es definitivo: una baja anterior lo corre
 	// y el cliente se quedaba con el PDF de un número que ya no existe (mes
-	// simulado 2). Sale con el CAE (AvisarFactura, al autorizar).
+	// simulado 2). Sale con el CAE (AvisarFactura, al autorizar). La
+	// excepción es el cliente que ya lo tiene (se lo mandaron por WhatsApp
+	// desde el panel): si se le corrigen los datos, le llega el corregido
+	// (mes 23, FLUJO-F092). Antes la corrección encolaba este aviso y no
+	// salía nada.
 	if c.Cae == nil || *c.Cae == "" {
-		return nil
+		if recibio, err := s.loRecibio(ctx, id); err != nil || !recibio {
+			return err
+		}
 	}
 	cl, err := s.cliente(ctx, *c.CustomerID)
 	if err != nil || cl == nil || cl.email == nil || *cl.email == "" {
@@ -329,13 +335,18 @@ func (s *Servicio) Factura(ctx context.Context, id string) error {
 }
 
 // FacturaRenumerada le reenvía al cliente el comprobante sin CAE que cambió
-// de número por una baja, con el PDF nuevo (M2S1-010).
+// de número por una baja, con el PDF nuevo (M2S1-010). Solo a quien tenía el
+// número viejo: «Tu comprobante X ahora es Y» le llegaba a un cliente que
+// nunca recibió X (mes 23).
 func (s *Servicio) FacturaRenumerada(ctx context.Context, id, anterior string) error {
 	c, err := s.facturacion.Obtener(ctx, id)
 	if err != nil || c == nil || c.CustomerID == nil {
 		if errors.Is(err, facturacion.ErrNoEsta) {
 			return nil
 		}
+		return err
+	}
+	if recibio, err := s.loRecibio(ctx, id); err != nil || !recibio {
 		return err
 	}
 	cl, err := s.cliente(ctx, *c.CustomerID)
@@ -358,6 +369,15 @@ func (s *Servicio) FacturaRenumerada(ctx context.Context, id, anterior string) e
 		Adjuntos: []email.Adjunto{{Nombre: nombreArchivo, Contenido: archivo, Tipo: "application/pdf"}},
 	})
 	return nil
+}
+
+// loRecibio: el comprobante ya le llegó al cliente por algún canal (el
+// correo, el WhatsApp automático o el que se manda desde el panel).
+func (s *Servicio) loRecibio(ctx context.Context, id string) (bool, error) {
+	var hay bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM notifications_log WHERE entidad_id = $1::uuid
+		AND estado IN ('enviada', 'simulada'))`, id).Scan(&hay)
+	return hay, err
 }
 
 // FacturaDadaDeBaja le avisa al cliente que el comprobante que recibió se

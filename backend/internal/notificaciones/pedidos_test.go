@@ -433,8 +433,23 @@ func TestLaFacturaSinCaeNoSaleSola(t *testing.T) {
 	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes {
 		t.Fatalf("sin CAE: %v, %d correos", err, e.correos()-antes)
 	}
-	e.uno(t, `update invoices set cae = '12345678901234', cae_vencimiento = now() + interval '10 days' where id = $1 returning 'ok'`, factura)
+	// Renumerada sin que el cliente la haya recibido: no le llega «tu
+	// comprobante X ahora es Y» de un X que nunca vio (mes 23).
+	if err := e.s.FacturaRenumerada(ctx, factura, "Factura A 0015-00000012"); err != nil || e.correos() != antes {
+		t.Fatalf("renumerada sin haberla recibido: %v, %d correos", err, e.correos()-antes)
+	}
+	// Se la mandaron por WhatsApp desde el panel: corregida o renumerada, le
+	// llega el papel nuevo (FLUJO-F092).
+	e.uno(t, `insert into notifications_log (canal, evento, destinatario, entidad_tipo, entidad_id, estado)
+		values ('whatsapp_manual', 'factura_emitida', '5492235550000', 'invoice', $1, 'enviada') returning 'ok'`, factura)
 	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes+1 {
+		t.Fatalf("corregida después de mandarla: %v, %d correos", err, e.correos()-antes)
+	}
+	if err := e.s.FacturaRenumerada(ctx, factura, "Factura A 0015-00000012"); err != nil || e.correos() != antes+2 {
+		t.Fatalf("renumerada después de mandarla: %v, %d correos", err, e.correos()-antes)
+	}
+	e.uno(t, `update invoices set cae = '12345678901234', cae_vencimiento = now() + interval '10 days' where id = $1 returning 'ok'`, factura)
+	if err := e.s.Factura(ctx, factura); err != nil || e.correos() != antes+3 {
 		t.Fatalf("con CAE: %v, %d correos", err, e.correos()-antes)
 	}
 }

@@ -475,6 +475,11 @@ export interface components {
              * @description el precio final que apenas cubre el costo (sin costo cargado, null)
              */
             piso?: number | null;
+            /**
+             * Format: double
+             * @description en oferta vigente: el precio de antes, para tacharlo
+             */
+            precioAnterior?: number | null;
         };
         MostradorPresupuesto: {
             id: string;

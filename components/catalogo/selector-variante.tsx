@@ -14,7 +14,7 @@ import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { useEstado } from "@/lib/estado-context";
 import { mensajeDeConsulta, quienConsulta } from "@/lib/cuenta/portal";
 import { cantidadDeConsulta, enlaceDeConsulta, problemaDeCantidad, textoDeConsulta } from "@/lib/catalogo/consulta";
-import { presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
+import { presentarComparado, presentarPrecio, type VistaDePrecio } from "@/lib/precios/vista";
 import type { PreciosDeFicha } from "@/lib/dal/visitante";
 import type { VarianteDetalle } from "@/lib/dal/catalog";
 import {
@@ -132,7 +132,8 @@ export function SelectorVariante({
   const vistaVigente = precios?.vista ?? vista;
 
   const conPrecioPropio = (v: VarianteDetalle): VarianteDetalle =>
-    propios[v.id] ? { ...v, precio: propios[v.id] } : v;
+    // La oferta tachada es de la lista de público: con precio propio no va.
+    propios[v.id] ? { ...v, precio: propios[v.id], precioAnterior: null } : v;
 
   const elegida = medida ? conPrecioPropio(medida) : medida;
   // La galería de la ficha pasa a la foto de la medida elegida.
@@ -149,6 +150,14 @@ export function SelectorVariante({
     conMedia ? presentacion : null,
   );
   const mostrado = presentarPrecio(precioElegido, alicuota, vistaVigente);
+  const anterior =
+    elegida?.precioAnterior && Number(elegida.precioAnterior) > precioElegido
+      ? presentarComparado(
+          precioDeLinea(Number(elegida.precioAnterior), producto, conMedia ? presentacion : null),
+          alicuota,
+          vistaVigente,
+        )
+      : null;
   const area = porM2 ? areaDePlacaM2(elegida?.largoMm, elegida?.anchoMm) : null;
 
   if (!elegida) {
@@ -268,14 +277,23 @@ export function SelectorVariante({
         <>
           {/* Precio de la medida elegida */}
           <div className="rounded-[14px] superficie px-[22px] py-5 shadow-[0_1px_2px_rgb(60_50_40_/_0.05)]">
-            <p className="flex items-baseline gap-2">
-              <span className="tabular text-4xl font-bold leading-none tracking-[-0.03em]">
+            <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span
+                className={`tabular text-4xl font-bold leading-none tracking-[-0.03em] ${
+                  anterior ? "text-rojo-oferta" : ""
+                }`}
+              >
                 {formatearPrecio(String(mostrado.principal))}
               </span>
               {mostrado.sufijo && (
                 <span className="text-base font-semibold text-texto-2">
                   {mostrado.sufijo}
                 </span>
+              )}
+              {anterior !== null && (
+                <s className="tabular text-lg leading-none text-texto-3">
+                  {formatearPrecio(String(anterior))}
+                </s>
               )}
             </p>
             <p className="mt-1.5 text-[14.5px] text-texto-2">

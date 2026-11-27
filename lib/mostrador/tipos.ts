@@ -53,6 +53,8 @@ export interface ResultadoDeMostrador {
   categoria?: string | null;
   formaDeVenta?: "entera" | "entera_o_media" | "metro_cuadrado";
   precioMediaPct?: number;
+  /** El de antes de una oferta vigente; la copia local no lo guarda. */
+  precioAnterior?: number | null;
 }
 
 /** Una fila del cierre Z: cuánto entró por cada medio. */

@@ -937,8 +937,8 @@ export function VistaMostrador({
       prev.map((l) =>
         l.variantId && !l.presentacion && precios[l.variantId] > 0
           ? aLaLista(l)
-            ? { ...l, precioUnitario: precios[l.variantId], precioLista: precios[l.variantId] }
-            : { ...l, precioLista: precios[l.variantId] }
+            ? { ...l, precioUnitario: precios[l.variantId], precioLista: precios[l.variantId], precioAnterior: ofertaQueSigue(l, precios[l.variantId]) }
+            : { ...l, precioLista: precios[l.variantId], precioAnterior: ofertaQueSigue(l, precios[l.variantId]) }
           : l,
       ),
     );
@@ -1157,7 +1157,7 @@ export function VistaMostrador({
         // La media placa y lo del corte se dejan: el precio que vuelve es el
         // de la placa entera.
         l.variantId && !l.presentacion && !l.corteId && precios[l.variantId] > 0
-          ? { ...l, precioUnitario: precios[l.variantId], precioLista: precios[l.variantId] }
+          ? { ...l, precioUnitario: precios[l.variantId], precioLista: precios[l.variantId], precioAnterior: ofertaQueSigue(l, precios[l.variantId]) }
           : l,
       ),
     );
@@ -1193,7 +1193,7 @@ export function VistaMostrador({
         // La media placa se deja: el precio que vuelve es el de la placa
         // entera, y ponérselo la cobraba el doble.
         l.variantId && !l.presentacion && otrosPrecios[l.variantId] > 0
-          ? { ...l, precioUnitario: otrosPrecios[l.variantId], precioLista: otrosPrecios[l.variantId] }
+          ? { ...l, precioUnitario: otrosPrecios[l.variantId], precioLista: otrosPrecios[l.variantId], precioAnterior: ofertaQueSigue(l, otrosPrecios[l.variantId]) }
           : l,
       ),
     );
@@ -1928,4 +1928,12 @@ function placaDelCorte(c: CorteTraido): ResultadoDeMostrador {
 /** El cheque de un pago, como lo edita la pantalla. */
 function aChequeEnPantalla(c: NonNullable<PagoDeVenta["cheque"]>): ChequeEnPantalla {
   return { tipo: c.tipo === "echeq" ? "echeq" : "fisico", banco: c.banco, numero: c.numero, fechaPago: c.fechaPago, librador: c.librador ?? "" };
+}
+
+/**
+ * El precio tachado de la oferta sigue solo si la lista no cambió: con la
+ * lista de otro cliente el precio ya no es el de la oferta.
+ */
+function ofertaQueSigue(l: LineaDeVenta, precio: number): number | null {
+  return l.precioLista != null && Math.abs(l.precioLista - precio) <= 0.005 ? (l.precioAnterior ?? null) : null;
 }

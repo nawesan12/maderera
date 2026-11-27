@@ -116,6 +116,8 @@ export interface VarianteDetalle {
   anchoMm: number | null;
   espesorMm: number | null;
   precio: string | null;
+  /** El de antes de la oferta vigente, para tacharlo; null sin oferta. */
+  precioAnterior: string | null;
   /** El nivel en cada sucursal activa, en el orden de `branches`. */
   stock: StockDeSucursal[];
   /** La de antes, por el slug; lo nuevo lee `stock`. */

@@ -768,6 +768,8 @@ type VarianteDetalle struct {
 	AnchoMm     *int32  `json:"anchoMm"`
 	EspesorMm   *int32  `json:"espesorMm"`
 	Precio      *string `json:"precio"`
+	// PrecioAnterior es el de antes de la oferta vigente; nil sin oferta.
+	PrecioAnterior *string `json:"precioAnterior"`
 	// Stock es el nivel en cada sucursal activa, como en ProductoListado.
 	Stock           []StockDeSucursal `json:"stock"`
 	StockCentral    NivelStock        `json:"stockCentral"`
@@ -889,6 +891,10 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		SELECT v.id, v.sku, v.label, v.material, v.color, v.terminacion, v.calidad,
 		       v.largo_mm, v.ancho_mm, v.espesor_mm,
 		       coalesce(pr.price, round((g.price * $3::numeric)::numeric, 2))::text,
+		       (CASE WHEN pr.price IS NOT NULL
+		             THEN CASE WHEN pr.oferta_hasta IS NULL OR pr.oferta_hasta > now() THEN pr.precio_anterior END
+		             WHEN g.oferta_hasta IS NULL OR g.oferta_hasta > now() THEN round((g.precio_anterior * $3::numeric)::numeric, 2)
+		        END)::text,
 		       b.slug, i.qty, i.reservado, i.min_qty
 		FROM product_variants v
 		LEFT JOIN price_list_items pr ON pr.variant_id = v.id AND pr.price_list_id = $1::uuid
@@ -906,10 +912,10 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 	niveles := map[string]map[string]NivelStock{}
 	for filas.Next() {
 		var v VarianteDetalle
-		var precio, sucursal *string
+		var precio, anterior, sucursal *string
 		var qty, reservado, minQty *jsmath.Num
 		if err := filas.Scan(&v.ID, &v.Sku, &v.Label, &v.Material, &v.Color, &v.Terminacion, &v.Calidad,
-			&v.LargoMm, &v.AnchoMm, &v.EspesorMm, &precio, &sucursal, &qty, &reservado, &minQty); err != nil {
+			&v.LargoMm, &v.AnchoMm, &v.EspesorMm, &precio, &anterior, &sucursal, &qty, &reservado, &minQty); err != nil {
 			return nil, err
 		}
 		i, ok := indice[v.ID]
@@ -922,6 +928,11 @@ func (s *Servicio) Producto(ctx context.Context, slug string, lista Lista) (*Pro
 		actual := &p.Variantes[i]
 		if precio != nil {
 			actual.Precio = precio
+		}
+		// La oferta de la medida, vigente: la ficha la muestra tachada como
+		// la tarjeta del listado (M2S2-030).
+		if anterior != nil {
+			actual.PrecioAnterior = anterior
 		}
 		if sucursal != nil && activa[*sucursal] && qty != nil && minQty != nil {
 			res := 0.0

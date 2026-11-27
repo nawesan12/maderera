@@ -398,6 +398,8 @@ export interface components {
             anchoMm: number | null;
             espesorMm: number | null;
             precio: string | null;
+            /** @description en oferta: el precio de antes */
+            precioAnterior: string | null;
             stock: components["schemas"]["StockDeSucursal"][];
             stockCentral: components["schemas"]["NivelStock"];
             stockAserradero: components["schemas"]["NivelStock"];

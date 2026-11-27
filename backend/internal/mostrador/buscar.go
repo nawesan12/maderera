@@ -41,6 +41,9 @@ type ResultadoDeMostrador struct {
 	// Piso es el precio final que apenas cubre el costo (precios.PisoDeCosto);
 	// nil sin costo cargado. El presupuesto marca un renglón por debajo.
 	Piso *float64 `json:"piso"`
+	// PrecioAnterior es el de antes de una oferta vigente, para tacharlo en
+	// el buscador y en el renglón (M2S2-030); nil sin oferta.
+	PrecioAnterior *float64 `json:"precioAnterior"`
 }
 
 // args junta los parámetros de una consulta armada a mano.
@@ -123,6 +126,13 @@ func precio(a *args, l Lista, propia, general string) string {
 	return "coalesce(" + propia + ".price, round((" + general + ".price * " + a.poner(jsmath.Texto(l.FactorDerivado)) + "::numeric)::numeric, 2))"
 }
 
+// anterior es el precio de antes de la oferta vigente de la lista que da el
+// precio: la propia si tiene la medida, si no la general por el factor.
+func anterior(a *args, l Lista, propia, general string) string {
+	return "(CASE WHEN " + propia + ".price IS NOT NULL THEN CASE WHEN " + propia + ".oferta_hasta > now() THEN " + propia + ".precio_anterior END" +
+		" WHEN " + general + ".oferta_hasta > now() THEN round((" + general + ".precio_anterior * " + a.poner(jsmath.Texto(l.FactorDerivado)) + "::numeric)::numeric, 2) END)"
+}
+
 // numerosSueltos cuenta los números tipeados que no aparecen enteros en el
 // nombre y la medida: «mdf 18» pone primero el de «18 mm» y no el de «1830 x
 // 2600mm» (mes simulado, H017). Cero si no se tipeó ningún número.
@@ -197,6 +207,7 @@ func (s *Servicio) buscar(ctx context.Context, texto, sucursal string, cliente *
 
 	joins := joinDePrecios(&a, lista, "propio", "general")
 	pr := precio(&a, lista, "propio", "general")
+	ant := anterior(&a, lista, "propio", "general")
 	suc := a.poner(sucursal)
 	sueltos := numerosSueltos(&a, consulta)
 	// Lo que coincide por el nombre va antes que lo que coincide por la
@@ -214,7 +225,7 @@ func (s *Servicio) buscar(ctx context.Context, texto, sucursal string, cliente *
 	porNombre := "CASE WHEN " + nombre + " ILIKE f_unaccent(" + empieza + ") THEN 0 WHEN ' ' || " + nombre + " ILIKE f_unaccent(" + palabra + ") THEN 1 ELSE 2 END"
 	sql := `
 		SELECT v.id, v.sku, p.name, v.label, v.largo_mm, v.ancho_mm, v.color, c.name, p.unit::text,
-		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `,
+		       p.forma_de_venta::text, p.precio_media_pct, ` + pr + `, ` + ant + `,
 		       -- Lo disponible y no el físico: lo reservado para un acopio
 		       -- aparecía libre y se volvía a vender (mes simulado, H023).
 		       greatest(coalesce(i.qty, 0) - coalesce((SELECT sum(r.cantidad) FROM stock_reservations r
@@ -239,10 +250,14 @@ func (s *Servicio) buscar(ctx context.Context, texto, sucursal string, cliente *
 		var r ResultadoDeMostrador
 		var cat string
 		var pct, stock jsmath.Num
-		var pre *jsmath.Num
+		var pre, ant *jsmath.Num
 		if err := filas.Scan(&r.VariantID, &r.Sku, &r.Producto, &r.Medida, &r.LargoMm, &r.AnchoMm, &r.Color, &cat, &r.Unidad,
-			&r.FormaDeVenta, &pct, &pre, &stock); err != nil {
+			&r.FormaDeVenta, &pct, &pre, &ant, &stock); err != nil {
 			return nil, err
+		}
+		if ant != nil && pre != nil && ant.F() > pre.F() {
+			v := ant.F()
+			r.PrecioAnterior = &v
 		}
 		r.Categoria = &cat
 		r.PrecioMediaPct = pct.F()

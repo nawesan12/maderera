@@ -93,6 +93,19 @@ func TestBuscarMedidaDeCorrido(t *testing.T) {
 			t.Errorf("%q: %+v %v", q, r, err)
 		}
 	}
+	// M2S2-030: la oferta vigente trae el precio de antes para tacharlo.
+	if _, err := e.pool.Exec(ctx, `update price_list_items set price = 800, precio_anterior = 1000, oferta_hasta = now() + interval '2 days' where variant_id = $1`, v); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := e.svc.Buscar(ctx, "tirante", e.central, nil); err != nil || len(r) != 1 || r[0].Precio != 800 || r[0].PrecioAnterior == nil || *r[0].PrecioAnterior != 1000 {
+		t.Errorf("en oferta: %+v %v", r, err)
+	}
+	if _, err := e.pool.Exec(ctx, `update price_list_items set oferta_hasta = now() - interval '1 minute' where variant_id = $1`, v); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := e.svc.Buscar(ctx, "tirante", e.central, nil); err != nil || len(r) != 1 || r[0].PrecioAnterior != nil {
+		t.Errorf("vencida: %+v %v", r, err)
+	}
 	if r, err := e.svc.Buscar(ctx, "2x6", e.central, nil); err != nil || len(r) != 0 {
 		t.Errorf("2x6 trajo %+v %v", r, err)
 	}

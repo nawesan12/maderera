@@ -117,6 +117,8 @@ export function Lineas({
           // Cambiado a mano respecto de la lista: en naranja, con la lista
           // tachada al lado. Quien mira la pantalla ve qué se tocó.
           const tocado = l.precioLista != null && Math.abs(l.precioLista - l.precioUnitario) > 0.005;
+          // En oferta y sin tocar: el de antes tachado en el mismo lugar.
+          const oferta = !tocado && l.precioAnterior != null && l.precioAnterior > l.precioUnitario + 0.005;
           // Lo del corte se lee por su importe y se corrige reabriéndolo: Go
           // rechaza un corte que no cobra lo de su plano (comité final, A2).
           // La pasada suelta, sin corte atado, también: su cantidad es de
@@ -212,7 +214,7 @@ export function Lineas({
                     <PrecioDelRenglon
                       valor={l.precioUnitario}
                       alCambiar={(n) => cambiar(i, "precioUnitario", n)}
-                      aria-describedby={tocado ? `lista-${i}` : undefined}
+                      aria-describedby={tocado || oferta ? `lista-${i}` : undefined}
                       className={`tabular h-11 w-28 rounded-lg border bg-background px-2.5 text-right text-base ${
                         tocado ? "border-brand-orange font-semibold text-brand-orange" : "border-linea"
                       }`}
@@ -224,6 +226,14 @@ export function Lineas({
                       >
                         {formatearMonto(l.precioLista!)}
                       </span>
+                    )}
+                    {oferta && (
+                      <s
+                        id={`lista-${i}`}
+                        className="tabular absolute -bottom-4 right-1 text-xs text-muted-foreground"
+                      >
+                        {formatearMonto(l.precioAnterior!)}
+                      </s>
                     )}
                   </label>
                 </>

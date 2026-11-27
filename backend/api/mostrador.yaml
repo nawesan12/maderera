@@ -658,6 +658,7 @@ components:
         formaDeVenta: { type: string, enum: [entera, entera_o_media, metro_cuadrado] }
         precioMediaPct: { type: number, format: double }
         piso: { type: number, format: double, nullable: true, description: "el precio final que apenas cubre el costo (sin costo cargado, null)" }
+        precioAnterior: { type: number, format: double, nullable: true, description: "en oferta vigente: el precio de antes, para tacharlo" }
     MostradorPresupuesto:
       type: object
       required: [id, numero, customerId, contactoNombre, contactoTelefono, vencido, lineas]

@@ -205,6 +205,7 @@ export function Buscador({
       cantidad,
       precioUnitario: precioDeLinea(r.precio, producto, pres),
       precioLista: precioDeLinea(r.precio, producto, pres),
+      precioAnterior: r.precioAnterior ? precioDeLinea(r.precioAnterior, producto, pres) : null,
       presentacion: pres,
       // Lo disponible acá, para que el renglón diga «faltan» antes de cobrar
       // y no recién después (mes simulado, M2S3-050).
@@ -395,6 +396,7 @@ function FilaDeResultado({
     producto: string;
     medida: string;
     precio: number;
+    precioAnterior?: number | null;
     stock: number;
   };
   elegido: boolean;
@@ -424,7 +426,12 @@ function FilaDeResultado({
             </span>
           </span>
           <span className="tabular shrink-0 text-right text-lg font-semibold">
-            {r.precio > 0 ? formatearPrecio(r.precio) : "sin precio"}
+            {r.precioAnterior != null && r.precio > 0 && (
+              <s className="block text-sm font-normal text-muted-foreground">{formatearPrecio(r.precioAnterior)}</s>
+            )}
+            <span className={r.precioAnterior != null && r.precio > 0 ? "text-rojo-oferta" : undefined}>
+              {r.precio > 0 ? formatearPrecio(r.precio) : "sin precio"}
+            </span>
             {seVendePorM2(comoSeVende(r)) && (
               <span className="block text-sm font-normal text-muted-foreground">
                 el m²

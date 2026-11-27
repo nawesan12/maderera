@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { urlParaSitemap } from "@/lib/seo";
 import { SUCURSALES } from "@/lib/sucursales";
+import { tienda } from "@/lib/dal/contenido";
 import {
   rutasDeCategorias,
   rutasDeEventos,
@@ -36,10 +37,13 @@ const FIJAS: {
   prioridad: number;
   frecuencia: MetadataRoute.Sitemap[number]["changeFrequency"];
   conElCatalogo?: boolean;
+  soloConStock?: boolean;
 }[] = [
   { ruta: "/", prioridad: 1, frecuencia: "weekly", conElCatalogo: true },
   { ruta: "/catalogo", prioridad: 0.9, frecuencia: "daily", conElCatalogo: true },
-  { ruta: "/stock", prioridad: 0.6, frecuencia: "daily", conElCatalogo: true },
+  // Solo con el stock a la vista: apagado, /stock lleva al catálogo y era
+  // una página duplicada en el sitemap (mes simulado, M2S1-206).
+  { ruta: "/stock", prioridad: 0.6, frecuencia: "daily", conElCatalogo: true, soloConStock: true },
   // La busca gente que todavía no conoce la maderera: "cuántas placas
   // necesito" se escribe en el buscador, no en el catálogo.
   // Lo mismo con "corte de melamina a medida": es el servicio que trae gente
@@ -58,10 +62,11 @@ const FIJAS: {
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [productos, categorias, eventos] = await Promise.all([
+  const [productos, categorias, eventos, { stockVisible }] = await Promise.all([
     rutasDelCatalogo(),
     rutasDeCategorias(),
     rutasDeEventos(),
+    tienda(),
   ]);
 
   // La consulta viene ordenada por fecha: la primera es el último cambio.
@@ -71,7 +76,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lista && lista.length > 0 ? { images: lista.map((i) => urlParaSitemap(i)) } : {};
 
   return [
-    ...FIJAS.map((f) => ({
+    ...FIJAS.filter((f) => stockVisible || !f.soloConStock).map((f) => ({
       url: urlParaSitemap(f.ruta),
       ...(f.conElCatalogo && ultimoCambio ? { lastModified: ultimoCambio } : {}),
       changeFrequency: f.frecuencia,

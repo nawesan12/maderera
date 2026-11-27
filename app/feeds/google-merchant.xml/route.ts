@@ -3,6 +3,7 @@ import { listarProductosPublicos, obtenerProductoPublico } from "@/lib/dal/catal
 import { armarFeedMerchant, type ProductoParaFeed } from "@/lib/merchant";
 import { combinedStockLevel } from "@/lib/stock-level";
 import { NOMBRE, urlSitio } from "@/lib/seo";
+import { tienda } from "@/lib/dal/contenido";
 
 /**
  * El feed de productos para Google Merchant Center (ver `lib/merchant.ts`).
@@ -21,7 +22,8 @@ import { NOMBRE, urlSitio } from "@/lib/seo";
 const EN_PARALELO = 6;
 
 const feedCacheado = cachearPublico(
-  async (): Promise<string> => {
+  async (activa: boolean): Promise<string> => {
+    if (!activa) return armarFeedMerchant([], { urlSitio: urlSitio(), nombreTienda: NOMBRE }, new Date(), false);
     const listado = await listarProductosPublicos();
     const productos: ProductoParaFeed[] = [];
 
@@ -59,7 +61,10 @@ const feedCacheado = cachearPublico(
 );
 
 export async function GET() {
-  return new Response(await feedCacheado(), {
+  // El interruptor va en la clave: prender la tienda no invalida el
+  // catálogo.
+  const { activa } = await tienda();
+  return new Response(await feedCacheado(activa), {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
       "Cache-Control": "public, max-age=3600",

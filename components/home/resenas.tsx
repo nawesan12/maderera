@@ -46,7 +46,9 @@ export function ResenasDelNegocio({
                     />
                   ))}
                 </span>
-                <span className="tabular font-semibold text-foreground">
+                {/* Las cifras de la letra del bloque: en la mono de las
+                    tablas, el «4,0» parecía de otra página (M3S1-073). */}
+                <span className="font-semibold text-foreground [font-variant-numeric:tabular-nums]">
                   {resumen.promedio.toLocaleString("es-AR", {
                     minimumFractionDigits: 1,
                   })}
@@ -59,7 +61,10 @@ export function ResenasDelNegocio({
         </div>
 
         <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {resenas.slice(0, 6).map((resena) => (
+          {/* Las de más estrellas primero, y entre iguales la más nueva:
+              por fecha, la de 3 estrellas encabezaba (M3S1-073). El orden
+              de las que llegan es el de la base (fecha), y es estable. */}
+          {[...resenas].sort((a, b) => b.estrellas - a.estrellas).slice(0, 6).map((resena) => (
             <li
               key={resena.id}
               className="flex flex-col rounded-2xl superficie px-5 py-[18px]"

@@ -926,6 +926,10 @@ export interface components {
                 goodsReceiptId: string | null;
                 /** @description la factura que cubrió ese remito */
                 facturaDelRemito: string | null;
+                /** @description el cheque que le dimos y rebotó */
+                chequeId?: string | null;
+                /** @description la factura a la que se aplicó un ajuste */
+                aplicaA?: string | null;
             }[];
             /** @description los gastos pagados en el acto a este proveedor */
             gastos: {

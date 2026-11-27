@@ -942,6 +942,8 @@ components:
               supplierPaymentId: { type: string, nullable: true, description: el pago del que salió }
               goodsReceiptId: { type: string, nullable: true, description: la recepción (el remito) que lo cargó }
               facturaDelRemito: { type: string, nullable: true, description: la factura que cubrió ese remito }
+              chequeId: { type: string, nullable: true, description: el cheque que le dimos y rebotó }
+              aplicaA: { type: string, nullable: true, description: la factura a la que se aplicó un ajuste }
         gastos:
           type: array
           description: los gastos pagados en el acto a este proveedor

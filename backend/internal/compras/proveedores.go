@@ -126,6 +126,11 @@ type MovimientoDeCuenta struct {
 	// factura: mes simulado, H070) y FacturaDelRemito la factura que la cubrió.
 	GoodsReceiptID   *string `json:"goodsReceiptId"`
 	FacturaDelRemito *string `json:"facturaDelRemito"`
+	// ChequeID es el cheque que rebotó (el renglón se llama «Cheque
+	// rechazado», no «Ajuste»: M2S3-055) y AplicaA la factura a la que se
+	// aplicó un ajuste que bajó la deuda.
+	ChequeID *string `json:"chequeId"`
+	AplicaA  *string `json:"aplicaA"`
 }
 
 // GastoDelProveedor es un gasto pagado en el acto a un proveedor (un flete,
@@ -202,7 +207,9 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		    LIMIT 1), m.detalle) ELSE m.detalle END,
 		  m.referencia, m.created_at, m.purchase_invoice_id, m.supplier_payment_id, m.goods_receipt_id,
 		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoice_receipts x JOIN purchase_invoices f ON f.id = x.purchase_invoice_id
-		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1)
+		   WHERE x.goods_receipt_id = m.goods_receipt_id LIMIT 1),
+		  m.cheque_id,
+		  (SELECT lpad(f.punto_venta::text, 4, '0') || '-' || lpad(f.numero::text, 8, '0') FROM purchase_invoices f WHERE f.id = m.aplica_a_id)
 		FROM supplier_movements m
 		WHERE m.supplier_id = $1 ORDER BY m.created_at DESC LIMIT 200`, id)
 	if err != nil {
@@ -212,7 +219,7 @@ func (s *Servicio) ObtenerProveedor(ctx context.Context, id string) (*Proveedor,
 		var m MovimientoDeCuenta
 		var monto jsmath.Num
 		err := r.Scan(&m.ID, &m.Tipo, &monto, &m.Detalle, &m.Referencia, &m.CreatedAt, &m.PurchaseInvoiceID, &m.SupplierPaymentID,
-			&m.GoodsReceiptID, &m.FacturaDelRemito)
+			&m.GoodsReceiptID, &m.FacturaDelRemito, &m.ChequeID, &m.AplicaA)
 		m.Monto = float64(monto)
 		return m, err
 	})
@@ -306,6 +313,22 @@ func (s *Servicio) GuardarProveedor(ctx context.Context, ses *auth.Sesion, m map
 	f, err := leerFicha(m)
 	if err != nil {
 		return "", "", err
+	}
+	// Un CUIT que ya tiene otro proveedor: las facturas y los pagos se
+	// repartían entre dos cuentas y el acumulado del mes para retener se
+	// contaba por separado (M3S3-008).
+	if f.Cuit != nil && NormalizarNumeroDeCheque(*f.Cuit) != "" {
+		var otro, nombre string
+		err := s.pool.QueryRow(ctx, `
+			SELECT id, nombre FROM suppliers
+			WHERE regexp_replace(coalesce(cuit, ''), '\D', '', 'g') = $1 AND ($2::uuid IS NULL OR id <> $2::uuid)
+			ORDER BY estado = 'activo' DESC LIMIT 1`, NormalizarNumeroDeCheque(*f.Cuit), f.ID).Scan(&otro, &nombre)
+		if err == nil {
+			return "", "", plataforma.Invalido(map[string]string{"cuit": "Ya existe " + nombre + " con ese CUIT."})
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return "", "", err
+		}
 	}
 	args := []any{f.Nombre, f.RazonSocial, f.Cuit, f.CondicionIva, f.Contacto, f.Telefono, f.Email, f.Direccion, f.Rubro,
 		f.Cbu, f.AliasCbu, int32(f.DiasPago), f.Notas, f.CondicionGanancias, f.ExentoGananciasHasta}
@@ -471,10 +494,33 @@ func (s *Servicio) BorrarCondicion(ctx context.Context, ses *auth.Sesion, id, su
 	if !plataforma.UUIDValido(id) {
 		return nil
 	}
-	if _, err := s.pool.Exec(ctx, `DELETE FROM supplier_terms WHERE id = $1 AND supplier_id = $2`, id, supplierID); err != nil {
+	// La bitácora dice cuál era (M3S4-022): «Borró una condición» sola no
+	// dejaba saber qué se había pactado.
+	var modalidad string
+	var plazo int32
+	var bonif jsmath.Num
+	var detalle *string
+	err := s.pool.QueryRow(ctx, `DELETE FROM supplier_terms WHERE id = $1 AND supplier_id = $2
+		RETURNING modalidad::text, plazo_dias, bonificacion_pct, detalle`, id, supplierID).Scan(&modalidad, &plazo, &bonif, &detalle)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEliminar, "condicion_proveedor", id, "Borró una condición de pago del proveedor", nil)
+	cual := NombreDelMedio(modalidad)
+	if plazo == 0 {
+		cual += " contado"
+	} else {
+		cual += fmt.Sprintf(" a %d días", plazo)
+	}
+	if bonif.F() > 0 {
+		cual += " · " + strings.Replace(jsmath.Texto(bonif.F()), ".", ",", 1) + " % de bonificación"
+	}
+	if detalle != nil && *detalle != "" {
+		cual += " (" + *detalle + ")"
+	}
+	bitacora.Anotar(ctx, s.q, s.log, ses, sqlc.AccionAuditoriaEliminar, "condicion_proveedor", id, "Borró la condición de pago «"+cual+"»", nil)
 	return nil
 }
 

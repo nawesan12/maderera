@@ -351,3 +351,38 @@ func TestReglaDeLaBaseDeIva(t *testing.T) {
 		})
 	}
 }
+
+// M3S3-008: un segundo proveedor con el mismo CUIT (con o sin guiones) no
+// se da de alta.
+func TestProveedorConUnCuitQueYaExiste(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	c, b := pedir(t, adm, "POST", e.u+"proveedores", map[string]any{"nombre": "Maderas del Sur bis", "cuit": "30123456789",
+		"condicionIva": "responsable_inscripto", "diasPago": 30})
+	if c != 422 || !strings.Contains(b, "Ya existe Maderas del Sur con ese CUIT.") {
+		t.Errorf("alta duplicada: %d %s", c, b)
+	}
+	// Editar el mismo proveedor con su CUIT sí.
+	if c, b := pedir(t, adm, "POST", e.u+"proveedores", map[string]any{"id": e.proveedor, "nombre": "Maderas del Sur", "cuit": "30-12345678-9",
+		"condicionIva": "responsable_inscripto", "diasPago": 30}); c != 200 {
+		t.Errorf("editar el propio: %d %s", c, b)
+	}
+}
+
+// M3S4-022: la bitácora dice qué condición se borró.
+func TestBorrarCondicionDiceCual(t *testing.T) {
+	e := armar(t)
+	adm := e.staff(t, "admin@prueba.test", "admin")
+	ctx := context.Background()
+	var id string
+	if err := e.pool.QueryRow(ctx, `insert into supplier_terms (supplier_id, modalidad, plazo_dias, bonificacion_pct) values ($1, 'cheque', 60, 3) returning id`,
+		e.proveedor).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if c, b := pedir(t, adm, "DELETE", e.u+"proveedores/"+e.proveedor+"/condiciones/"+id, nil); c >= 300 {
+		t.Fatalf("borrar: %d %s", c, b)
+	}
+	if n := e.numero(t, `select count(*)::float8 from audit_log where descripcion = 'Borró la condición de pago «cheque a 60 días · 3 % de bonificación»'`); n != 1 {
+		t.Errorf("la bitácora no dice cuál")
+	}
+}

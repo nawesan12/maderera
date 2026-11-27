@@ -23,6 +23,15 @@ interface Movimiento {
   supplierPaymentId: string | null;
   goodsReceiptId?: string | null;
   facturaDelRemito?: string | null;
+  chequeId?: string | null;
+  aplicaA?: string | null;
+}
+
+/** Una factura con saldo, a la que se puede aplicar un ajuste que baja la deuda. */
+interface FacturaPendiente {
+  id: string;
+  numero: string;
+  saldo: number;
 }
 
 const TIPOS: Record<string, string> = {
@@ -38,7 +47,22 @@ function destino(m: Movimiento): string | null {
   if (m.purchaseInvoiceId) return `/admin/compras/facturas/${m.purchaseInvoiceId}`;
   if (m.supplierPaymentId) return `/admin/compras/pagos/${m.supplierPaymentId}`;
   if (m.goodsReceiptId) return `/admin/recepciones/${m.goodsReceiptId}`;
+  if (m.chequeId) return "/admin/cheques";
   return null;
+}
+
+/**
+ * Cómo se llama un ajuste que no anotó nadie a mano: el cheque que rebotó,
+ * la anulación de un pago o de una factura, la corrección de una factura.
+ * Todos decían «Ajuste», igual que uno manual (M2S3-055).
+ */
+function nombreDelAjuste(m: Movimiento): string {
+  if (m.chequeId) return "Cheque rechazado";
+  if (m.supplierPaymentId) return "Anulación del pago";
+  if (m.purchaseInvoiceId && m.detalle?.startsWith("Anulación")) return "Anulación";
+  if (m.purchaseInvoiceId && m.detalle?.startsWith("Corrección")) return "Corrección";
+  if (m.purchaseInvoiceId) return "Diferencia";
+  return "Ajuste";
 }
 
 /**
@@ -53,8 +77,22 @@ function nombreDelMovimiento(m: Movimiento): { titulo: string; numero: string | 
       numero: [m.referencia, m.facturaDelRemito && `factura ${m.facturaDelRemito}`].filter(Boolean).join(" · ") || null,
     };
   }
+  if (m.tipo === "ajuste") {
+    return {
+      titulo: nombreDelAjuste(m),
+      numero: [m.referencia, m.aplicaA && `a la factura ${m.aplicaA}`].filter(Boolean).join(" · ") || null,
+    };
+  }
   return { titulo: TIPOS[m.tipo] ?? m.tipo, numero: m.referencia };
 }
+
+const fechaDelRenglon = (d: Date) =>
+  new Date(d).toLocaleDateString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
 
 /**
  * El libro de la cuenta, con el saldo de cada renglón.
@@ -73,9 +111,12 @@ function nombreDelMovimiento(m: Movimiento): { titulo: string; numero: string | 
 export function CuentaDelProveedor({
   supplierId,
   movimientos,
+  facturas = [],
 }: {
   supplierId: string;
   movimientos: Movimiento[];
+  /** Las facturas con saldo: un ajuste que baja la deuda se aplica a una (M3S2-028). */
+  facturas?: FacturaPendiente[];
 }) {
   const router = useRouter();
   const [estado, setEstado] = useState<EstadoProveedor>({});
@@ -86,6 +127,7 @@ export function CuentaDelProveedor({
   const [monto, setMonto] = useState("");
   const [referencia, setReferencia] = useState("");
   const [detalle, setDetalle] = useState("");
+  const [aplicaA, setAplicaA] = useState("");
 
   function anotar() {
     empezar(async () => {
@@ -95,12 +137,14 @@ export function CuentaDelProveedor({
         monto: importeDelCampo(monto),
         referencia,
         detalle,
+        aplicaA: sentido === "baja" && aplicaA ? aplicaA : undefined,
       });
       setEstado(resultado);
       if (resultado.ok) {
         setMonto("");
         setReferencia("");
         setDetalle("");
+        setAplicaA("");
         setAjustando(false);
         router.refresh();
       }
@@ -164,6 +208,25 @@ export function CuentaDelProveedor({
               className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
             />
           </label>
+          {/* Una bonificación se aplica a su factura, como una nota de
+              crédito: la factura queda pagada por lo que cubre. */}
+          {sentido === "baja" && facturas.length > 0 && (
+            <label className="block md:col-span-2">
+              <span className="text-base font-medium">Factura</span>
+              <select
+                value={aplicaA}
+                onChange={(e) => setAplicaA(e.target.value)}
+                className="mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              >
+                <option value="">Ninguna</option>
+                {facturas.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.numero} · {formatearMonto(f.saldo)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="flex flex-wrap items-center gap-2 md:col-span-2">
             <button
               type="button"
@@ -179,7 +242,7 @@ export function CuentaDelProveedor({
               onClick={() => setAjustando(false)}
               className="tarjeta h-11 rounded-xl px-4 text-base font-medium"
             >
-              Cerrar
+              Volver
             </button>
           </div>
         </div>
@@ -194,61 +257,53 @@ export function CuentaDelProveedor({
       {movimientos.length === 0 ? (
         <p className="px-5 py-10 text-center text-base text-muted-foreground">Sin movimientos</p>
       ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-base">
-            <thead>
-              <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
-                <th className="px-5 py-2.5 font-semibold">Fecha</th>
-                <th className="px-5 py-2.5 font-semibold">Movimiento</th>
-                <th className="px-5 py-2.5 font-semibold">Detalle</th>
-                <th className="px-5 py-2.5 text-right font-semibold">Monto</th>
-                <th className="px-5 py-2.5 text-right font-semibold">Saldo</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-linea">
-              {movimientos.map((m) => {
-                const href = destino(m);
-                const n = nombreDelMovimiento(m);
-                const nombre = (
-                  <>
-                    <span className="block">{n.titulo}</span>
-                    {n.numero && <span className="codigo block text-sm text-muted-foreground">{n.numero}</span>}
-                  </>
-                );
-                return (
-                  <tr key={m.id}>
-                    <td className="tabular px-5 py-3 text-muted-foreground">
-                      {new Date(m.createdAt).toLocaleDateString("es-AR", {
-                        timeZone: "America/Argentina/Buenos_Aires",
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "2-digit",
-                      })}
-                    </td>
-                    <td className="px-5 py-3">
-                      {href ? (
-                        <Link href={href} className="block font-medium hover:underline">
-                          {nombre}
-                        </Link>
-                      ) : (
-                        nombre
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{m.detalle ?? "—"}</td>
-                    <td
-                      className={`tabular px-5 py-3 text-right font-semibold ${
-                        m.monto > 0 ? "text-saldo-debe" : "text-saldo-favor"
-                      }`}
-                    >
-                      {formatearMonto(m.monto)}
-                    </td>
-                    <td className="tabular px-5 py-3 text-right">{formatearMonto(m.saldo)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        /* Un renglón por movimiento, sin tabla (M3S4-021): con la tabla, a
+           1280 el detalle se apilaba palabra por palabra contra columnas
+           vacías y a 375 los rótulos se cortaban («D…», «Movimi…») y la
+           referencia se salía de la tarjeta. En el teléfono: el tipo y el
+           monto arriba, la referencia en su renglón (se corta donde haga
+           falta), el detalle y al pie la fecha y el saldo. Desde 640 de
+           ancho de la tarjeta, una fila con el detalle tomando el espacio. */
+        <ul className="@container mt-3 divide-y divide-linea border-t border-linea">
+          {movimientos.map((m) => {
+            const href = destino(m);
+            const n = nombreDelMovimiento(m);
+            const titulo = href ? (
+              <Link href={href} className="font-semibold hover:underline">
+                {n.titulo}
+              </Link>
+            ) : (
+              <span className="font-semibold">{n.titulo}</span>
+            );
+            return (
+              <li
+                key={m.id}
+                className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 px-5 py-3 @2xl:grid-cols-[5.5rem_minmax(9rem,14rem)_1fr_8rem_8rem] @2xl:items-baseline"
+              >
+                <span className="tabular order-4 text-sm text-muted-foreground @2xl:order-none @2xl:text-base">
+                  {fechaDelRenglon(m.createdAt)}
+                </span>
+                <span className="order-1 min-w-0 @2xl:order-none">
+                  {titulo}
+                  {n.numero && <span className="codigo block break-all text-sm text-muted-foreground">{n.numero}</span>}
+                </span>
+                <span className="order-3 col-span-2 min-w-0 text-base text-muted-foreground @2xl:order-none @2xl:col-span-1">
+                  {m.detalle ?? ""}
+                </span>
+                <span
+                  className={`tabular order-2 text-right font-semibold @2xl:order-none ${
+                    m.monto > 0 ? "text-saldo-debe" : "text-saldo-favor"
+                  }`}
+                >
+                  {formatearMonto(m.monto)}
+                </span>
+                <span className="tabular order-5 text-right text-sm text-muted-foreground @2xl:order-none @2xl:text-base @2xl:text-foreground">
+                  {formatearMonto(m.saldo)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );

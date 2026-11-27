@@ -166,7 +166,8 @@ func TestZipDelLibro(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(nombres, ",") != "VENTAS_CBTE_202610.txt,VENTAS_ALICUOTAS_202610.txt,COMPRAS_CBTE_202610.txt,COMPRAS_ALICUOTAS_202610.txt,OMITIDOS.txt" {
+	// Los vacíos no van (M2S4-045): lo que no se informó está en OMITIDOS.txt.
+	if strings.Join(nombres, ",") != "VENTAS_CBTE_202610.txt,OMITIDOS.txt" {
 		t.Fatal(nombres)
 	}
 }

@@ -126,6 +126,7 @@ export function CargarGasto({
   const [tipo, setTipo] = useState("factura_a");
   const [puntoVenta, setPuntoVenta] = useState("");
   const [numero, setNumero] = useState("");
+  const [cae, setCae] = useState("");
   const [alicuota, setAlicuota] = useState("21");
   const [iva, setIva] = useState("");
 
@@ -231,6 +232,18 @@ export function CargarGasto({
                 inputMode="numeric"
                 value={numero}
                 onChange={(e) => setNumero(e.target.value.replace(/\D/g, ""))}
+                className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
+              />
+            </label>
+            {/* El CAE, como en la factura de compra: entraba al libro IVA
+                compras sin él (M2S2-039). */}
+            <label className="block sm:col-span-3">
+              <span className="text-sm font-medium">CAE</span>
+              <input
+                inputMode="numeric"
+                maxLength={14}
+                value={cae}
+                onChange={(e) => setCae(e.target.value.replace(/\D/g, ""))}
                 className="tabular mt-1 h-11 w-full rounded-lg border border-linea bg-card px-3 text-base"
               />
             </label>
@@ -370,6 +383,7 @@ export function CargarGasto({
                         tipo,
                         puntoVenta: Number(puntoVenta || 0),
                         numero: Number(numero || 0),
+                        cae: cae || undefined,
                         iva21: tipo === "factura_a" && alicuota === "21" ? ivaFinal : 0,
                         iva105: tipo === "factura_a" && alicuota === "10.5" ? ivaFinal : 0,
                         iva27: tipo === "factura_a" && alicuota === "27" ? ivaFinal : 0,
@@ -381,6 +395,7 @@ export function CargarGasto({
                   setDescripcion("");
                   setImporte("");
                   setNumero("");
+                  setCae("");
                   setIva("");
                   router.refresh();
                 }

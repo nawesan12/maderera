@@ -13,6 +13,7 @@ import { todosLosRegimenes } from "@/lib/dal/admin/pagos-proveedor";
 import { CargarSufrida } from "./cargar";
 import { Regimenes } from "./regimenes";
 import { Vacio } from "@/components/admin/vacio";
+import { AnularRecibo } from "@/components/cobros/anular-recibo";
 
 export const metadata: Metadata = { title: "Retenciones" };
 
@@ -96,8 +97,71 @@ export default async function RetencionesSufridasPage({
         </section>
       )}
 
-      {/* Con qué se retiene. Arriba de lo sufrido porque es lo que se
-          configura una vez y se mira cuando algo no cuadra. */}
+      <CargarSufrida />
+
+      <section className="tarjeta overflow-hidden">
+        {sufridas.length === 0 ? (
+          <Vacio
+            icono={FileCheck2}
+            titulo="Todavía no se cargó ningún certificado"
+          />
+        ) : (
+          // Sin ancho mínimo: debajo de 640 px la tabla se apila sola
+          // (tablas-apilables), en vez de correrse de costado.
+          <table className="w-full text-base">
+            <thead>
+              <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
+                <th className="px-5 py-2.5 font-semibold">Fecha</th>
+                <th className="px-5 py-2.5 font-semibold">Certificado</th>
+                <th className="px-5 py-2.5 font-semibold">Cliente</th>
+                <th className="px-5 py-2.5 font-semibold">Impuesto</th>
+                <th className="px-5 py-2.5 text-right font-semibold">Base</th>
+                <th className="px-5 py-2.5 text-right font-semibold">Retenido</th>
+                <th className="px-5 py-2.5">
+                  <span className="sr-only">Anular</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-linea">
+              {sufridas.map((r) => (
+                <tr key={r.id}>
+                  <td className="tabular px-5 py-3 text-muted-foreground">
+                    {fechaCorta.format(r.fecha)}
+                  </td>
+                  <td className="codigo px-5 py-3">{r.numero}</td>
+                  <td className="px-5 py-3">
+                    <Link href={`/admin/clientes/${r.customerId}`} className="hover:underline">
+                      {r.cliente}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {IMPUESTOS[r.impuesto] ?? r.impuesto}
+                    {r.codigoRegimen && ` · ${r.codigoRegimen}`}
+                  </td>
+                  <td className="tabular px-5 py-3 text-right text-muted-foreground">
+                    {formatearMonto(Number(r.base))}
+                  </td>
+                  <td className="tabular px-5 py-3 text-right font-semibold">
+                    {formatearMonto(Number(r.importe))}
+                  </td>
+                  {/* Mal cargado se corrige acá: se anula su recibo (con el
+                      PIN, como en la ficha) y se vuelve a cargar. Había que
+                      buscar el recibo en la ficha del cliente (M3S1-027). */}
+                  <td className="px-5 py-3 text-right">
+                    {r.reciboId && r.recibo && (
+                      <AnularRecibo id={r.reciboId} numero={r.recibo} importe={Number(r.importe)} cliente={r.cliente} />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Con qué se retiene, plegado y al final: se configura una vez y se
+          mira cuando algo no cuadra. Arriba tapaba la carga del día (a 375
+          px eran 2.000 px de configuración antes del certificado, M2S1-041). */}
       <Regimenes
         regimenes={regimenes.map((r) => ({
           id: r.id,
@@ -112,63 +176,6 @@ export default async function RetencionesSufridasPage({
           activo: r.activo,
         }))}
       />
-
-      <CargarSufrida />
-
-      <section className="tarjeta overflow-hidden">
-        {sufridas.length === 0 ? (
-          <Vacio
-            icono={FileCheck2}
-            titulo="Todavía no se cargó ningún certificado"
-            detalle="Se cargan con el formulario de acá arriba, a medida que llegan. Son los que después se descuentan del impuesto."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-base">
-              <thead>
-                <tr className="border-b border-linea text-left text-sm uppercase tracking-wide text-muted-foreground">
-                  <th className="px-5 py-2.5 font-semibold">Fecha</th>
-                  <th className="px-5 py-2.5 font-semibold">Certificado</th>
-                  <th className="px-5 py-2.5 font-semibold">Cliente</th>
-                  <th className="px-5 py-2.5 font-semibold">Impuesto</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Base</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">
-                    Retenido
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-linea">
-                {sufridas.map((r) => (
-                  <tr key={r.id}>
-                    <td className="tabular px-5 py-3 text-muted-foreground">
-                      {fechaCorta.format(r.fecha)}
-                    </td>
-                    <td className="tabular px-5 py-3">{r.numero}</td>
-                    <td className="px-5 py-3">
-                      <Link
-                        href={`/admin/clientes/${r.customerId}`}
-                        className="hover:underline"
-                      >
-                        {r.cliente}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {IMPUESTOS[r.impuesto] ?? r.impuesto}
-                      {r.codigoRegimen && ` · ${r.codigoRegimen}`}
-                    </td>
-                    <td className="tabular px-5 py-3 text-right text-muted-foreground">
-                      {formatearMonto(Number(r.base))}
-                    </td>
-                    <td className="tabular px-5 py-3 text-right font-semibold">
-                      {formatearMonto(Number(r.importe))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </div>
   );
 }

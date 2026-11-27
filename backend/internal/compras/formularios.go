@@ -368,6 +368,8 @@ func leerGasto(m map[string]any) (FormGasto, error) {
 		x.Iva105 = c.numero("iva105", f(0), minimo(0))
 		x.Iva27 = c.numero("iva27", f(0), minimo(0))
 		x.Percepciones = c.numero("percepciones", f(0), minimo(0))
+		// El CAE del comprobante, como en la factura de compra (M2S2-039).
+		x.Cae = c.opcionalONulo("cae", 20)
 		if g.SupplierID == nil {
 			l.mal("supplierId", "Elegí a quién se le pagó: la factura es de un proveedor.")
 		}
@@ -382,6 +384,7 @@ func leerGasto(m map[string]any) (FormGasto, error) {
 // FacturaDelGasto es el comprobante de un gasto: el neto es el importe menos
 // el IVA y las percepciones.
 type FacturaDelGasto struct {
+	Cae                                *string
 	Tipo                               string
 	PuntoVenta, Numero                 float64
 	Iva21, Iva105, Iva27, Percepciones float64

@@ -63,6 +63,9 @@ const (
 	DescuentoConEscala = "descuento_con_escala"
 	// M2S1-180 (00351): si lo que se paga todo en efectivo va sin centavos.
 	RedondeoEfectivo = "redondeo_efectivo"
+	// M2S2-039 (00362): si la factura de compra que da crédito fiscal (A, M)
+	// se carga sin CAE. «opcional» es lo de siempre; «exigido» la frena.
+	CaeEnCompras = "cae_en_compras"
 )
 
 // Opciones son los valores posibles de cada regla, el de arranque primero.
@@ -84,6 +87,7 @@ var Opciones = map[string][]string{
 	LoteYCupon:                  {"obligatorio", "opcional"},
 	DescuentoConEscala:          {"reemplaza", "suma"},
 	RedondeoEfectivo:            {"no", "al_peso"},
+	CaeEnCompras:                {"opcional", "exigido"},
 }
 
 // Arranque es el valor de una regla cuando la fila no está o tiene algo que

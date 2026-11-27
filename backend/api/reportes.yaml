@@ -681,7 +681,7 @@ components:
             required: [id, tipo, numero, fecha, cliente, customerId, orderId, pedido, origen, anulado, total, partes]
             properties:
               id: { type: string }
-              tipo: { type: string, enum: [recibo, en-linea] }
+              tipo: { type: string, enum: [recibo, en-linea, devolucion] }
               numero: { type: string, nullable: true }
               fecha: { type: string, format: date-time }
               cliente: { type: string }

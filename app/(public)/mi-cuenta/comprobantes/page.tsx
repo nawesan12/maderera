@@ -137,11 +137,16 @@ export default async function MisComprobantesPage() {
   );
 }
 
-/** La factura sin CAE: el estado «Sin autorizar», dicho para el cliente. */
+/**
+ * La factura sin CAE: el estado «Sin autorizar», dicho para el cliente como
+ * un trámite pendiente y no como un papel inválido. «Sin valor fiscal» en
+ * cada tarjeta se leía como una factura que no vale (M3S1-049). El PDF sigue
+ * con su marca de agua: eso es lo que el cliente podría entregar.
+ */
 function EtiquetaSinValor() {
   return (
     <span className="estado-espera inline-flex shrink-0 items-center rounded-full bg-[var(--estado-fondo)] px-2.5 py-1 text-sm font-medium text-[var(--estado-tinta)]">
-      Sin valor fiscal
+      CAE pendiente
     </span>
   );
 }

@@ -24,7 +24,7 @@ func TestLaDevolucionPorAfueraVaPrimeroAMercadoPago(t *testing.T) {
 	if _, err := fac.ObtenerEmisor(ctx); err != nil {
 		t.Fatal(err)
 	}
-	e.exec(t, `update configuracion_fiscal set cuit = '30589445259', condicion_iva = 'responsable_inscripto'`)
+	e.exec(t, `update configuracion_fiscal set cuit = '30589445259', condicion_iva = 'responsable_inscripto', ingresos_brutos = '901-123456-7', inicio_actividades = '1981-03-01'`)
 	e.exec(t, `insert into puntos_venta (numero, nombre, numero_inicial) values (3, 'Mostrador', 0)`)
 
 	cae := 71234567890100

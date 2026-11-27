@@ -26,7 +26,7 @@ import {
   letraQueCorresponde,
   type CondicionIva,
 } from "@/lib/fiscal/comprobantes";
-import { moneda } from "@/lib/formato";
+import { formatearCuit, moneda } from "@/lib/formato";
 import {
   BarraGuardar,
   Hoja,
@@ -173,7 +173,8 @@ export function FormularioFacturaManual({
                   setCondicion(c.condicionIva as CondicionIva);
                   setReceptor({
                     nombre: c.razonSocial || c.nombre,
-                    cuit: c.cuit ?? "",
+                    // Con guiones, como sale en la factura (M2S1-143).
+                    cuit: c.cuit ? formatearCuit(c.cuit) : "",
                     domicilio: c.direccion ?? "",
                   });
                 }
@@ -288,63 +289,77 @@ export function FormularioFacturaManual({
         {/* Ítems */}
         <Seccion titulo="Qué se factura" icono={ReceiptText} columnas={1}>
           <div className="space-y-2">
-            {lineas.map((linea, i) => (
-              <div
-                key={i}
-                className="grid gap-2 sm:grid-cols-[1fr_5rem_8rem_6rem_2.5rem]"
-              >
-                <input
-                  name="descripcion"
-                  value={linea.descripcion}
-                  onChange={(e) => cambiar(i, "descripcion", e.target.value)}
-                  placeholder="Descripción"
-                  className="h-10 rounded-lg border bg-background px-3 text-base"
-                  aria-label={`Descripción del renglón ${i + 1}`}
-                />
-                <input
-                  name="cantidad"
-                  value={linea.cantidad}
-                  onChange={(e) => cambiar(i, "cantidad", e.target.value)}
-                  inputMode="decimal"
-                  className="tabular h-10 rounded-lg border bg-background px-3 text-base"
-                  aria-label={`Cantidad del renglón ${i + 1}`}
-                />
-                <input
-                  name="precio"
-                  value={linea.precio}
-                  onChange={(e) => cambiar(i, "precio", e.target.value)}
-                  inputMode="decimal"
-                  placeholder="Precio final"
-                  className="tabular h-10 rounded-lg border bg-background px-3 text-base"
-                  aria-label={`Precio del renglón ${i + 1}`}
-                />
-                <select
-                  name="alicuota"
-                  value={linea.alicuota}
-                  onChange={(e) => cambiar(i, "alicuota", e.target.value)}
-                  className="h-10 rounded-lg border bg-background px-2 text-base"
-                  aria-label={`IVA del renglón ${i + 1}`}
+            {lineas.map((linea, i) => {
+              // A 375 px la descripción va entera arriba y abajo, en una
+              // fila, cantidad, precio, IVA y el tachito, cada uno con su
+              // rótulo chico: eran cuatro campos apilados sin decir cuál era
+              // cuál (M2S2-098). En la computadora el rótulo queda solo en el
+              // primer renglón, como encabezado de la columna.
+              const rotulo = `mb-1 block text-sm text-muted-foreground ${i > 0 ? "sm:sr-only" : ""}`;
+              return (
+                <div
+                  key={i}
+                  className="grid grid-cols-[4rem_1fr_5.5rem_2.5rem] items-end gap-2 sm:grid-cols-[1fr_5rem_8rem_6rem_2.5rem]"
                 >
-                  <option value="21">21%</option>
-                  <option value="10.5">10,5%</option>
-                  <option value="0">Exento</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLineas((previas) =>
-                      previas.length === 1
-                        ? [{ ...LINEA_VACIA }]
-                        : previas.filter((_, indice) => indice !== i),
-                    )
-                  }
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  aria-label={`Quitar el renglón ${i + 1}`}
-                >
-                  <Trash2 className="h-5 w-5" />
-                </button>
-              </div>
-            ))}
+                  <label className="col-span-4 block sm:col-span-1">
+                    <span className={rotulo}>Descripción</span>
+                    <input
+                      name="descripcion"
+                      value={linea.descripcion}
+                      onChange={(e) => cambiar(i, "descripcion", e.target.value)}
+                      className="h-10 w-full rounded-lg border bg-background px-3 text-base"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={rotulo}>Cantidad</span>
+                    <input
+                      name="cantidad"
+                      value={linea.cantidad}
+                      onChange={(e) => cambiar(i, "cantidad", e.target.value)}
+                      inputMode="decimal"
+                      className="tabular h-10 w-full rounded-lg border bg-background px-3 text-right text-base"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={rotulo}>Precio final</span>
+                    <input
+                      name="precio"
+                      value={linea.precio}
+                      onChange={(e) => cambiar(i, "precio", e.target.value)}
+                      inputMode="decimal"
+                      className="tabular h-10 w-full rounded-lg border bg-background px-3 text-right text-base"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={rotulo}>IVA</span>
+                    <select
+                      name="alicuota"
+                      value={linea.alicuota}
+                      onChange={(e) => cambiar(i, "alicuota", e.target.value)}
+                      className="h-10 w-full rounded-lg border bg-background px-2 text-base"
+                    >
+                      <option value="21">21%</option>
+                      <option value="10.5">10,5%</option>
+                      <option value="0">Exento</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLineas((previas) =>
+                        previas.length === 1
+                          ? [{ ...LINEA_VACIA }]
+                          : previas.filter((_, indice) => indice !== i),
+                      )
+                    }
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Quitar el renglón ${i + 1}`}
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           <button
@@ -557,14 +572,18 @@ function BuscadorDeCliente({
   }, [consulta]);
 
   if (elegido) {
+    // El nombre entero arriba y el CUIT con guiones abajo; «Quitar» es un
+    // ícono que no tapa nada. A 375 px el botón cortaba el CUIT (M2S4-038).
     return (
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-linea bg-hundida px-4 py-3">
+      <div className="tarjeta-hundida flex items-center gap-3 px-4 py-2.5">
         <UserRound className="h-5 w-5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 text-base font-medium">
-          {elegido.razonSocial || elegido.nombre}
+        <span className="min-w-0 flex-1">
+          <span className="block break-words text-base font-medium">
+            {elegido.razonSocial || elegido.nombre}
+          </span>
           {elegido.cuit && (
-            <span className="tabular ml-2 text-sm font-normal text-muted-foreground">
-              {elegido.cuit}
+            <span className="tabular block text-sm text-muted-foreground">
+              {formatearCuit(elegido.cuit)}
             </span>
           )}
         </span>
@@ -574,10 +593,11 @@ function BuscadorDeCliente({
             onElegir(null);
             setTexto("");
           }}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-linea px-3 text-sm font-medium transition-colors hover:bg-background"
+          aria-label="Quitar el cliente"
+          title="Quitar el cliente"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
         >
-          <X className="h-4 w-4" />
-          Quitar
+          <X className="h-5 w-5" />
         </button>
       </div>
     );
@@ -632,7 +652,7 @@ function BuscadorDeCliente({
                 </span>
                 {c.cuit && (
                   <span className="tabular text-sm text-muted-foreground">
-                    {c.cuit}
+                    {formatearCuit(c.cuit)}
                   </span>
                 )}
               </button>

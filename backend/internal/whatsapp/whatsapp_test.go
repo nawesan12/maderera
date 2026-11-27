@@ -631,6 +631,22 @@ func TestAvisoManual(t *testing.T) {
 	}
 }
 
+// La factura de un pedido web sin ficha se manda al teléfono del pedido,
+// como el aviso del pedido (M2S3-043).
+func TestLaFacturaSinFichaUsaElTelefonoDelPedido(t *testing.T) {
+	e := armar(t, false)
+	vendedora := e.staff(t, "vera@prueba.test", sqlc.StaffRoleVendedor)
+	pedido := e.uno(t, `insert into orders (numero, estado, subtotal, total, contacto_nombre, contacto_telefono)
+		values ('PED-1098', 'listo', 100, 100, 'Gimena', '223 555-0181') returning id::text`)
+	factura := e.uno(t, `insert into invoices (tipo, punto_venta, numero, estado, receptor_nombre, total, order_id)
+		values ('factura_b', 3, 12, 'emitida', 'Gimena', 100, $1) returning id::text`, pedido)
+	c, b := pedir(t, vendedora, "GET", e.srv.URL+"/api/v1/admin/whatsapp/avisos-manuales?evento=documento&tipo=invoice&ids="+factura, nil)
+	a := leer[map[string]AvisoManualListo](t, b)[factura]
+	if c != 200 || a.Href == nil || !strings.HasPrefix(*a.Href, "https://wa.me/5492235550181?text=") {
+		t.Fatalf("factura sin ficha: %d %s", c, b)
+	}
+}
+
 // TestEnviarArchivo: la foto que sube la bandeja sale por id y queda una
 // copia privada; un «JPG» que no lo es va como documento.
 func TestEnviarArchivo(t *testing.T) {

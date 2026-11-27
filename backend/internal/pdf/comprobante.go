@@ -78,6 +78,10 @@ type ComprobantePdf struct {
 	// el encabezado si vienen (H030, H311).
 	CondicionVenta string `json:"condicionVenta,omitempty"`
 	Pedido         string `json:"pedido,omitempty"`
+	// Asociado: en una nota, el comprobante que corrige, ya escrito
+	// («Anula parcialmente: Factura A 0015-00000105 del 27/11/26»). Va en el
+	// lugar del pedido (M3S3-006).
+	Asociado string `json:"asociado,omitempty"`
 }
 
 // EmisorFiscal es el emisor del comprobante: el del encabezado más los
@@ -153,15 +157,21 @@ func comprobanteCodigo(tipo string) string {
 // va en su columna); en la B y la C, que no discriminan, el final con IVA,
 // el mismo que da el subtotal impreso. El TS imprimía el neto en todas: en
 // la B, precio por cantidad no daba el subtotal.
+//
+// En las dos, con los decimales que hagan falta para que cantidad ×
+// unitario dé el subtotal impreso (UnitarioQueCierra, M2S1-154).
 func precioImpreso(item ItemComprobante, discrimina bool) string {
-	if discrimina {
-		return Moneda2De(item.PrecioUnitario)
-	}
 	cantidad := jsmath.Numero(item.Cantidad)
 	if !(cantidad > 0) {
 		return Moneda2De(item.PrecioUnitario)
 	}
-	return Moneda2(jsmath.Numero(item.Subtotal) / cantidad)
+	if discrimina {
+		if item.Neto == "" {
+			return Moneda2De(item.PrecioUnitario)
+		}
+		return UnitarioQueCierra(jsmath.Numero(item.Neto), cantidad)
+	}
+	return UnitarioQueCierra(jsmath.Numero(item.Subtotal), cantidad)
 }
 
 // Comprobante arma el PDF del comprobante fiscal.
@@ -240,6 +250,10 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 	}
 	if c.CondicionVenta != "" {
 		h.Escribir("Condición de venta: "+c.CondicionVenta, Opciones{X: derecha, Y: y, Tamano: 7.5, Color: TintaSuave, Derecha: true})
+		y -= 10
+	}
+	if c.Asociado != "" {
+		h.Escribir(c.Asociado, Opciones{X: derecha, Y: y, Tamano: 7.5, Fuente: Negrita, Derecha: true})
 		y -= 10
 	}
 	if c.Pedido != "" {
@@ -329,11 +343,14 @@ func Comprobante(d DatosComprobante, _ time.Time) ([]byte, error) {
 
 	for _, item := range c.Items {
 		renglones := len(Renglones(item.Descripcion, Helvetica, 8.5, anchoDescripcion))
-		renglonesUnidad := len(Renglones(Unidad(item.Unidad), Helvetica, 8, anchoUnidad))
+		// La unidad concordada con la cantidad y la media placa como medias
+		// (UnidadPara): la A decía «1 placa» de una media (M2S3-096).
+		unidad := UnidadPara(item.Unidad, num(item.Cantidad), item.Descripcion)
+		renglonesUnidad := len(Renglones(unidad, Helvetica, 8, anchoUnidad))
 		espacio(maximo(maximo(float64(renglones)*8.5*1.35, float64(renglonesUnidad)*10), 12)+4, true)
 		alto := h.EscribirParrafo(item.Descripcion, Parrafo{Opciones: Opciones{X: Margen, Y: cursor, Tamano: 8.5}, Ancho: anchoDescripcion})
 		h.EscribirNumero(numeroJS(num(item.Cantidad)), Opciones{X: colCantidad, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoCantidad)
-		alto = maximo(alto, h.EscribirParrafo(Unidad(item.Unidad), Parrafo{Opciones: Opciones{X: colUnidad, Y: cursor, Tamano: 8, Derecha: true}, Ancho: anchoUnidad, Interlineado: 10}))
+		alto = maximo(alto, h.EscribirParrafo(unidad, Parrafo{Opciones: Opciones{X: colUnidad, Y: cursor, Tamano: 8, Derecha: true}, Ancho: anchoUnidad, Interlineado: 10}))
 		h.EscribirNumero(precioImpreso(item, discrimina), Opciones{X: colPrecio, Y: cursor, Tamano: 8.5, Fuente: Mono, Derecha: true}, anchoPrecio)
 		if discrimina {
 			h.EscribirNumero(numeroJS(num(item.AlicuotaIva))+"%", Opciones{X: colIva, Y: cursor, Tamano: 8, Derecha: true}, anchoIva)

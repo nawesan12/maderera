@@ -671,7 +671,7 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [id, numero, fecha, impuesto, codigoRegimen, base, alicuota, importe, referencia, cliente, customerId, cuit]
+                  required: [id, numero, fecha, impuesto, codigoRegimen, base, alicuota, importe, referencia, cliente, customerId, cuit, reciboId, recibo]
                   properties:
                     id: { type: string }
                     numero: { type: string }
@@ -685,6 +685,8 @@ paths:
                     cliente: { type: string }
                     customerId: { type: string }
                     cuit: { type: string, nullable: true }
+                    reciboId: { type: string, nullable: true, description: el recibo con el que bajó la cuenta; anularlo anula el certificado }
+                    recibo: { type: string, nullable: true }
   /api/v1/admin/compras/retenciones-sufridas/credito:
     get:
       operationId: CreditoPorRetenciones

@@ -3318,3 +3318,42 @@ Espejo drizzle al día (`caja_fuerte_movimientos` es solo de Go).
 - [ ] **Las reglas nuevas** arrancan como antes: el descuento tipeado
       reemplaza al de la forma de pago, y el efectivo va con centavos.
 
+## 27/11/2026: el mes simulado, facturación, ARCA y libro IVA (rama `mes23-facturacion`)
+
+Migraciones 00360–00363. Cada arreglo con su prueba.
+
+- **El saldo de cada factura a cuenta es su parte de la deuda**
+  (`deudaQueLeTocaALaFactura`): los recibos cancelan primero lo más viejo,
+  así que una factura debe el saldo de la cuenta menos los cargos
+  posteriores al suyo, sin pasar su total menos lo acreditado. La columna
+  sumaba el saldo de la cuenta una vez por factura. La manual emitida a
+  cuenta corriente ya se lee «en cuenta» (no ofrece pasarla otra vez).
+- **El cobro de una factura guarda el depósito, el e-Cheq y la retención**
+  con su nombre (00360) y trae el número de su recibo.
+- **Retenciones**: los regímenes como los decidió la clienta (00361: IIBB
+  Misiones y Buenos Aires; los nacionales en cero si nadie los cambió desde
+  la pantalla), alta de un régimen nuevo (el mismo POST sin `id`), anular el
+  certificado desde la lista (su recibo, con el PIN) y la carga propone la
+  factura con saldo. `pruebas.Base` borra los regímenes sembrados, como las
+  sucursales.
+- **La baja** avisa al cliente del comprobante dado de baja
+  (`factura.baja`), le reenvía al del corrido su comprobante con el número
+  nuevo (`factura.renumerada`) y Dados de baja dice quién usa hoy el número.
+  Las notas de crédito y de débito salen por correo como las facturas.
+- **Anular una venta en el mostrador da de baja su factura sin CAE**
+  (`BajaDeLaVentaAnulada`); la que quede viva no suma en lo facturado.
+- **El comprobante**: el unitario con los decimales que hagan falta para
+  cerrar con el subtotal (`pdf.UnitarioQueCierra`, `unitarioQueCierra` en
+  TS), la media placa por medias, y la nota dice qué factura corrige
+  (`Completo.Asociado`) y cómo salió la plata de su devolución
+  (`Completo.Devolucion`). El golden del comprobante pasa a ser el de Go.
+- **ARCA**: sin N° de IIBB ni inicio de actividades no se pide el CAE
+  (`faltaDelEmisor`). El emitido sin CAE corrige los datos del cliente con
+  el mismo número. El Libro IVA Digital no lleva archivos vacíos y dice en
+  OMITIDOS.txt cuántas ventas sin CAE no informa.
+- **Compras**: un CAE que ya está en otro comprobante no entra; el gasto con
+  factura lleva su CAE; la regla `cae_en_compras` (00362, arranca en
+  «opcional») decide si la A sin CAE entra.
+- **Tiempo real**: canal `ventas` (00363, por sentencia en invoices,
+  receipts y el estado de orders); Facturación, Cobranzas y Pedidos se
+  refrescan solos. Cobranzas lista las devoluciones que sacaron plata.

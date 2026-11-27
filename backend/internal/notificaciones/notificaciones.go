@@ -29,6 +29,7 @@ import (
 	"mjbj/internal/email"
 	"mjbj/internal/entregas"
 	"mjbj/internal/facturacion"
+	"mjbj/internal/fiscal"
 	"mjbj/internal/formato"
 	"mjbj/internal/pagos"
 	"mjbj/internal/pdf"
@@ -119,6 +120,25 @@ func (s *Servicio) Registrar(c *cola.Cola) {
 			return err
 		}
 		return s.ChequeRechazado(ctx, carga.ChequeID, carga.PorElBanco)
+	}))
+	c.Registrar(facturacion.TrabajoAvisoDeRenumerada, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
+		var carga struct {
+			InvoiceID string `json:"invoiceId"`
+			Anterior  string `json:"anterior"`
+		}
+		if err := json.Unmarshal(crudo, &carga); err != nil {
+			return err
+		}
+		return s.FacturaRenumerada(ctx, carga.InvoiceID, carga.Anterior)
+	}))
+	c.Registrar(facturacion.TrabajoAvisoDeBaja, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
+		var carga struct {
+			BajaID string `json:"bajaId"`
+		}
+		if err := json.Unmarshal(crudo, &carga); err != nil {
+			return err
+		}
+		return s.FacturaDadaDeBaja(ctx, carga.BajaID)
 	}))
 	c.Registrar(facturacion.TrabajoAvisoDeFactura, s.manejador(func(ctx context.Context, crudo json.RawMessage) error {
 		var carga struct {
@@ -291,6 +311,69 @@ func (s *Servicio) Factura(ctx context.Context, id string) error {
 		Evento: "factura_emitida", Para: *cl.email, EntidadTipo: "invoice", EntidadID: id,
 		Correo:   avisos.FacturaEmitida(s.sitio, nombre, etiqueta, total, c.Cae != nil && *c.Cae != ""),
 		Adjuntos: []email.Adjunto{{Nombre: nombreArchivo, Contenido: archivo, Tipo: "application/pdf"}},
+	})
+	return nil
+}
+
+// FacturaRenumerada le reenvía al cliente el comprobante sin CAE que cambió
+// de número por una baja, con el PDF nuevo (M2S1-010).
+func (s *Servicio) FacturaRenumerada(ctx context.Context, id, anterior string) error {
+	c, err := s.facturacion.Obtener(ctx, id)
+	if err != nil || c == nil || c.CustomerID == nil {
+		if errors.Is(err, facturacion.ErrNoEsta) {
+			return nil
+		}
+		return err
+	}
+	cl, err := s.cliente(ctx, *c.CustomerID)
+	if err != nil || cl == nil || cl.email == nil || *cl.email == "" {
+		return err
+	}
+	archivo, nombreArchivo, err := s.facturacion.Pdf(ctx, c)
+	if err != nil {
+		return err
+	}
+	nuevo := fiscal.NombreComprobante(c.Tipo) + " " + fiscal.NumeroFormateado(c.PuntoVenta, c.Numero)
+	nombre := primerNombre(c.ReceptorNombre)
+	if nombre == "" {
+		nombre = "cliente"
+	}
+	total, _ := strconv.ParseFloat(c.Total, 64)
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "comprobante_renumerado", Para: *cl.email, EntidadTipo: "invoice", EntidadID: id,
+		Correo:   avisos.ComprobanteRenumerado(s.sitio, nombre, anterior, nuevo, total),
+		Adjuntos: []email.Adjunto{{Nombre: nombreArchivo, Contenido: archivo, Tipo: "application/pdf"}},
+	})
+	return nil
+}
+
+// FacturaDadaDeBaja le avisa al cliente que el comprobante que recibió se
+// dio de baja y no vale (M3S4-009). El motivo es interno: no va.
+func (s *Servicio) FacturaDadaDeBaja(ctx context.Context, bajaID string) error {
+	var tipo, receptor string
+	var pv, numero int64
+	var cliente *string
+	var total float64
+	err := s.pool.QueryRow(ctx, `SELECT tipo::text, punto_venta, numero, customer_id, receptor_nombre, total::float8
+		FROM invoices_dadas_de_baja WHERE id = $1`, bajaID).Scan(&tipo, &pv, &numero, &cliente, &receptor, &total)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cliente == nil) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	cl, err := s.cliente(ctx, *cliente)
+	if err != nil || cl == nil || cl.email == nil || *cl.email == "" {
+		return err
+	}
+	nombre := primerNombre(receptor)
+	if nombre == "" {
+		nombre = "cliente"
+	}
+	etiqueta := fiscal.NombreComprobante(tipo) + " " + fiscal.NumeroFormateado(pv, numero)
+	s.correo.Despachar(ctx, avisos.Despacho{
+		Evento: "comprobante_dado_de_baja", Para: *cl.email, EntidadTipo: "baja", EntidadID: bajaID,
+		Correo: avisos.ComprobanteDadoDeBaja(s.sitio, nombre, etiqueta, total),
 	})
 	return nil
 }

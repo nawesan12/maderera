@@ -3,12 +3,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { OPCIONES_DE_REGLAS, valorDeRegla } from "@/lib/reglas";
 
-// Las de la 00290 y las que sumaron migraciones después (00351, las del
-// mostrador del mes simulado): cada regla nace en la migración que la trae.
+// Las reglas nacen en la 00290 y en las migraciones que suman otras después
+// (cada carril del mes simulado trae las suyas): todas las que siembran
+// site_settings.
 const carpeta = join(__dirname, "../backend/db/migraciones");
 const migracion = readdirSync(carpeta)
   .filter((f) => f.endsWith(".sql") && f >= "00290")
   .map((f) => readFileSync(join(carpeta, f), "utf8"))
+  .filter((t) => t.includes("INSERT INTO site_settings"))
   .join("\n");
 const go = readFileSync(join(__dirname, "../backend/internal/reglas/reglas.go"), "utf8");
 

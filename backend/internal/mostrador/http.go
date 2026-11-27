@@ -186,6 +186,19 @@ func (a *API) AnularVentaDeMostrador(ctx context.Context, r mostradorapi.AnularV
 	if res.PorAfuera > 0.005 {
 		out["ok"] = "Venta anulada. Por afuera se devuelven " + formato.Importe(res.PorAfuera) + "."
 	}
+	// La factura sin CAE de la venta anulada se da de baja en el mismo paso
+	// (M2S2-034): no se va a autorizar y seguía sumando en Facturación. Si la
+	// baja está frenada, queda como antes, avisada.
+	if res.FacturaPendiente != nil && res.FacturaSinCAE && a.s.fac != nil {
+		et, err := a.s.fac.BajaDeLaVentaAnulada(ctx, ses, r.Id, zodjs.TrimJS(b.Motivo))
+		if err != nil {
+			return nil, err
+		}
+		if et != "" {
+			res.FacturaPendiente = nil
+			out["ok"] = out["ok"].(string) + " " + et + " se dio de baja."
+		}
+	}
 	if res.FacturaPendiente != nil {
 		out["facturaPendiente"] = *res.FacturaPendiente
 		out["facturaSinCae"] = res.FacturaSinCAE

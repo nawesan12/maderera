@@ -84,7 +84,7 @@ func TestElClienteNuevoFiguraEnElPadron(t *testing.T) {
 	if _, err := e.s.ImportarPadron(ctx, "", strings.NewReader(archivo)); err != nil {
 		t.Fatal(err)
 	}
-	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true, cuit = $1, condicion_iva = 'responsable_inscripto'`, cuitEmisor)
+	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true, cuit = $1, condicion_iva = 'responsable_inscripto', ingresos_brutos = '901-123456-7', inicio_actividades = '1981-03-01'`, cuitEmisor)
 	e.exec(t, `INSERT INTO customers (nombre, cuit, condicion_iva) VALUES ('Nueva SA', '30-58944525-9', 'responsable_inscripto')`)
 	cuit := "30589445259"
 	id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "Nueva SA", ReceptorCuit: &cuit, ReceptorCondicionIva: "responsable_inscripto",
@@ -108,7 +108,7 @@ func TestConElPadronVencido(t *testing.T) {
 	admin := e.staff(t, "vencido@mjbj.test", sqlc.StaffRoleAdmin)
 	e.exec(t, `INSERT INTO padron_iibb_importaciones (vigencia_desde, vigencia_hasta, renglones) VALUES (current_date - 40, current_date - 10, 1)`)
 	e.exec(t, `INSERT INTO padron_iibb (cuit, alicuota, vigencia_desde, vigencia_hasta) VALUES ('30712345671', 0.5, current_date - 40, current_date - 10)`)
-	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true, alicuota_iibb_sin_padron = 5, cuit = $1, condicion_iva = 'responsable_inscripto'`, cuitEmisor)
+	e.exec(t, `UPDATE configuracion_fiscal SET percibe_iibb = true, alicuota_iibb_sin_padron = 5, cuit = $1, condicion_iva = 'responsable_inscripto', ingresos_brutos = '901-123456-7', inicio_actividades = '1981-03-01'`, cuitEmisor)
 	ri := "30712345671"
 	id, err := e.s.EmitirComprobante(ctx, DatosEmision{ReceptorNombre: "Cliente", ReceptorCuit: &ri, ReceptorCondicionIva: "responsable_inscripto",
 		Lineas: []Linea{{LineaEntrada: fiscal.LineaEntrada{Descripcion: "Placa", Cantidad: 1, PrecioFinalUnitario: 12100}}}})

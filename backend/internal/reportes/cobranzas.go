@@ -23,6 +23,10 @@ import (
 //   - **Los cobros en línea que ningún recibo nombra**: el pedido pagado en
 //     el sitio con Mercado Pago o con una transferencia informada y
 //     acreditada. No emiten recibo, pero son plata cobrada.
+//   - **Las devoluciones que sacaron plata** (por la caja o por afuera), en
+//     negativo y con la nota de crédito: la que se pagaba por «Otro medio»
+//     no aparecía en ningún lado (mes simulado, M2S3-046). Se listan como
+//     egreso y no cambian «Cobrado», que es lo que entró.
 //
 // Y, desde el mes simulado (H137/H349), **lo cobrado en el mostrador**: con
 // 36 ventas cobradas la pantalla decía «Cobrado $ 0». Las ventas no se
@@ -40,7 +44,7 @@ type ParteDeCobranza struct {
 // Cobranza es un renglón: un recibo o un cobro en línea sin recibo.
 type Cobranza struct {
 	ID         string    `json:"id"`
-	Tipo       string    `json:"tipo"` // «recibo» o «en-linea»
+	Tipo       string    `json:"tipo"` // «recibo», «en-linea» o «devolucion» (en negativo)
 	Numero     *string   `json:"numero"`
 	Fecha      time.Time `json:"fecha"`
 	Cliente    string    `json:"cliente"`
@@ -108,13 +112,19 @@ const cobranzasDelPeriodo = `
 	WHERE p.estado = 'aprobado' AND p.proveedor IN ('mercado_pago', 'transferencia')
 	  AND NOT EXISTS (SELECT 1 FROM receipt_parts rp WHERE rp.payment_id = p.id)
 	  AND ($1::timestamptz IS NULL OR coalesce(p.acreditado_at, p.created_at) >= $1)
-	  AND ($2::timestamptz IS NULL OR coalesce(p.acreditado_at, p.created_at) < $2)`
+	  AND ($2::timestamptz IS NULL OR coalesce(p.acreditado_at, p.created_at) < $2)
+	UNION ALL
+	SELECT 'devolucion', coalesce(d.nota_id, d.id), (SELECT lpad(n.punto_venta::text, 4, '0') || '-' || lpad(n.numero::text, 8, '0') FROM invoices n WHERE n.id = d.nota_id),
+	       d.created_at, coalesce(cu.nombre, o.contacto_nombre, 'Sin ficha'), o.customer_id, d.order_id, o.numero, d.destino, false, -d.importe
+	FROM devoluciones d JOIN orders o ON o.id = d.order_id LEFT JOIN customers cu ON cu.id = o.customer_id
+	WHERE d.destino IN ('caja', 'afuera')
+	  AND ($1::timestamptz IS NULL OR d.created_at >= $1) AND ($2::timestamptz IS NULL OR d.created_at < $2)`
 
 // Cobranzas arma la página y los totales por medio.
 func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamiento int) (Cobranzas, error) {
 	out := Cobranzas{Filas: []Cobranza{}, PorMedio: []TotalPorMedio{}}
 	var cobrado jsmath.Num
-	if err := s.lectura.QueryRow(ctx, `SELECT count(*)::int, coalesce(sum(total) FILTER (WHERE NOT anulado), 0) FROM (`+cobranzasDelPeriodo+`) c`,
+	if err := s.lectura.QueryRow(ctx, `SELECT count(*)::int, coalesce(sum(total) FILTER (WHERE NOT anulado AND tipo <> 'devolucion'), 0) FROM (`+cobranzasDelPeriodo+`) c`,
 		p.Desde, p.Hasta).Scan(&out.Total, &cobrado); err != nil {
 		return out, err
 	}
@@ -160,6 +170,8 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 	}
 	recibos := []string{}
 	indice := map[string]int{}
+	devoluciones := []string{}
+	indiceDev := map[string]int{}
 	var c Cobranza
 	if _, err := pgx.ForEachRow(rs, []any{&c.Tipo, &c.ID, &c.Numero, &c.Fecha, &c.Cliente, &c.CustomerID, &c.OrderID, &c.Pedido, &c.Origen, &c.Anulado, &total}, func() error {
 		c.Total = total.F()
@@ -167,6 +179,11 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 		if c.Tipo == "recibo" {
 			indice[c.ID] = len(out.Filas)
 			recibos = append(recibos, c.ID)
+		} else if c.Tipo == "devolucion" {
+			// Por dónde salió: el efectivo de la caja o, por afuera, cada
+			// medio de los cobros que devolvió (devolucionesPorMedio).
+			indiceDev[c.ID] = len(out.Filas)
+			devoluciones = append(devoluciones, c.ID)
 		} else {
 			// El cobro en línea es una sola parte: su proveedor.
 			c.Partes = append(c.Partes, ParteDeCobranza{Medio: c.Origen, Importe: c.Total})
@@ -175,6 +192,30 @@ func (s *Servicio) Cobranzas(ctx context.Context, p Periodo, limite, desplazamie
 		return nil
 	}); err != nil {
 		return out, err
+	}
+	if len(devoluciones) > 0 {
+		rs, err = s.lectura.Query(ctx, `
+			SELECT coalesce(d.nota_id, d.id)::text, x.medio, -sum(x.importe) FROM devoluciones d JOIN LATERAL (
+			  SELECT 'efectivo' AS medio, d.importe AS importe WHERE d.destino = 'caja'
+			  UNION ALL
+			  SELECT coalesce(p.medio, 'mercado_pago'), t.importe FROM payment_refunds t JOIN payments p ON p.id = t.payment_id
+			    WHERE t.devolucion_id = d.id AND d.destino = 'afuera'
+			  UNION ALL
+			  SELECT t.medio::text, t.importe FROM receipt_refunds t WHERE t.devolucion_id = d.id AND d.destino = 'afuera') x ON true
+			WHERE coalesce(d.nota_id, d.id)::text = ANY($1::text[]) GROUP BY 1, 2 ORDER BY 1, 2`, devoluciones)
+		if err != nil {
+			return out, err
+		}
+		var id string
+		var parte ParteDeCobranza
+		if _, err := pgx.ForEachRow(rs, []any{&id, &parte.Medio, &total}, func() error {
+			parte.Importe = total.F()
+			f := &out.Filas[indiceDev[id]]
+			f.Partes = append(f.Partes, parte)
+			return nil
+		}); err != nil {
+			return out, err
+		}
 	}
 	if len(recibos) == 0 {
 		return out, nil

@@ -66,6 +66,47 @@ func Moneda2(v float64) string {
 	return signo + "$\u00a0" + formato.Miles(entero) + "," + dec
 }
 
+// UnitarioQueCierra es el precio unitario de un renglón escrito con los
+// decimales que hagan falta (de dos a seis) para que cantidad × unitario dé
+// el subtotal impreso, a centavos. Con dos decimales no cerraba: «5 ×
+// $ 58.857,02» daba 294.285,10 y el renglón decía 294.285,12 (mes simulado,
+// M2S1-154). El subtotal y los totales no cambian: es solo cómo se escribe
+// el unitario.
+func UnitarioQueCierra(subtotal, cantidad float64) string {
+	if !(cantidad > 0) || math.IsNaN(subtotal) || math.IsInf(subtotal, 0) {
+		return Moneda2(subtotal)
+	}
+	objetivo := jsmath.Round(float64(subtotal * 100))
+	exacto := subtotal / cantidad
+	for d := 2; d <= 6; d++ {
+		f := math.Pow(10, float64(d))
+		u := jsmath.Round(float64(exacto*f)) / f
+		if jsmath.Round(float64(u*cantidad*100)) == objetivo {
+			if d == 2 {
+				return Moneda2(u)
+			}
+			return monedaConDecimales(u, d)
+		}
+	}
+	return monedaConDecimales(jsmath.Round(float64(exacto*1e6))/1e6, 6)
+}
+
+// monedaConDecimales escribe un importe con d decimales, sin los ceros de
+// más a la derecha pasados los dos primeros.
+func monedaConDecimales(v float64, d int) string {
+	signo := ""
+	if v < 0 {
+		signo = "-"
+		v = -v
+	}
+	t := strconv.FormatFloat(v, 'f', d, 64)
+	entero, dec, _ := strings.Cut(t, ".")
+	for len(dec) > 2 && dec[len(dec)-1] == '0' {
+		dec = dec[:len(dec)-1]
+	}
+	return signo + "$\u00a0" + formato.Miles(entero) + "," + dec
+}
+
 // Moneda2De es Moneda2 para un importe que llega como texto de la base.
 func Moneda2De(texto string) string { return Moneda2(jsmath.Numero(texto)) }
 

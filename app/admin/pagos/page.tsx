@@ -17,6 +17,7 @@ import {
 import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador";
 import { AccionesCobro } from "./acciones";
 import { DatosBancarios } from "./banco";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
 export const metadata: Metadata = { title: "Cobranzas" };
 
@@ -96,6 +97,9 @@ export default async function PagosPage({
 
   return (
     <div className="space-y-6">
+      {/* Se factura, se cobra o se cancela en otra pantalla: esta se
+          refresca sola (canal «ventas», M2S2-099 y M3S1-034). */}
+      <RefrescarEnVivo canales={["ventas"]} />
       {/* El mismo nombre que el menú (mes simulado, H137). */}
       <EncabezadoPanel titulo="Cobranzas" resumen={periodo.etiqueta}>
         <FiltroPeriodo actual={periodo.clave} />
@@ -271,6 +275,8 @@ function Quien({ c }: { c: Cobranza }) {
 
 /** De dónde vino: un recibo de un pedido puntual no es «Cuenta corriente» (H268). */
 function Origen({ c }: { c: Cobranza }) {
+  // La plata que salió con una devolución (M2S3-046).
+  if (c.tipo === "devolucion") return <>Devolución{c.pedido ? ` · ${c.pedido}` : ""}</>;
   if (c.tipo === "recibo" && c.pedido) return <>Pedido {c.pedido}</>;
   return <>{ORIGENES[c.origen] ?? c.origen}</>;
 }
@@ -287,6 +293,14 @@ function Comprobante({ c }: { c: Cobranza }) {
         >
           Recibo {c.numero}
         </a>
+      ) : c.tipo === "devolucion" ? (
+        c.numero ? (
+          <Link href={`/admin/facturacion/${c.id}`} className="codigo whitespace-nowrap font-medium hover:text-brand-orange hover:underline">
+            NC {c.numero}
+          </Link>
+        ) : (
+          "Devolución"
+        )
       ) : c.orderId ? (
         <Link href={`/admin/pedidos/${c.orderId}`} className="whitespace-nowrap font-medium hover:text-brand-orange hover:underline">
           Pedido en línea

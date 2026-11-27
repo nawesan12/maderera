@@ -81,3 +81,31 @@ func FacturaEmitida(sitio, nombre, comprobante string, total float64, conCae boo
 		CTA:      &email.Enlace{Texto: "Ver mis comprobantes", URL: base(sitio) + "/mi-cuenta/comprobantes"},
 	})
 }
+
+// ComprobanteRenumerado es el correo del comprobante sin CAE que cambió de
+// número por la baja de otro de su serie: el cliente tenía el PDF con el
+// número viejo y recibe el nuevo (mes simulado, M2S1-010).
+func ComprobanteRenumerado(sitio, nombre, anterior, nuevo string, total float64) Correo {
+	return armar(sitio, "Tu comprobante "+anterior+" ahora es "+nuevo, email.Opciones{
+		Titulo:   "Tu comprobante cambió de número",
+		Adelanto: "El " + anterior + " ahora es el " + nuevo + ".",
+		Saludo:   nombre,
+		Parrafos: []string{"Te adjuntamos el comprobante con su número nuevo: reemplaza al que te mandamos antes. El importe no cambió."},
+		Datos: []email.Bloque{{Etiqueta: "Antes", Valor: anterior}, {Etiqueta: "Ahora", Valor: nuevo},
+			{Etiqueta: "Total", Valor: formato.Precio(total)}},
+		CTA: &email.Enlace{Texto: "Ver mis comprobantes", URL: base(sitio) + "/mi-cuenta/comprobantes"},
+	})
+}
+
+// ComprobanteDadoDeBaja es el correo del comprobante sin CAE que se dio de
+// baja: el cliente lo tenía por correo y no vale más (M3S4-009).
+func ComprobanteDadoDeBaja(sitio, nombre, comprobante string, total float64) Correo {
+	return armar(sitio, "El comprobante "+comprobante+" quedó sin efecto", email.Opciones{
+		Titulo:   "Un comprobante quedó sin efecto",
+		Adelanto: "El " + comprobante + " quedó sin efecto.",
+		Saludo:   nombre,
+		Parrafos: []string{"Lo dimos de baja antes de autorizarlo en ARCA: no tiene validez y podés descartar el que te mandamos."},
+		Datos:    []email.Bloque{{Etiqueta: "Comprobante", Valor: comprobante}, {Etiqueta: "Total", Valor: formato.Precio(total)}},
+		CTA:      &email.Enlace{Texto: "Ver mis comprobantes", URL: base(sitio) + "/mi-cuenta/comprobantes"},
+	})
+}

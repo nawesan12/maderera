@@ -82,6 +82,8 @@ paths:
         - { name: hasta, in: query, description: inclusive, schema: { type: string, format: date-time } }
         - { name: cobro, in: query, schema: { type: string, enum: [contado, cuenta, todos] } }
         - { name: busqueda, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: cliente, in: query, description: las de esa ficha, schema: { type: string, format: uuid } }
+        - { name: conSaldo, in: query, description: solo las que todavía deben algo, schema: { type: boolean } }
         - { name: limite, in: query, schema: { type: integer, minimum: 1, maximum: 200 } }
         - { name: desplazamiento, in: query, schema: { type: integer, minimum: 0 } }
       responses:
@@ -705,7 +707,7 @@ components:
         corridos: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
     DadoDeBaja:
       type: object
-      required: [id, tipo, puntoVenta, numero, receptorNombre, total, fechaEmision, motivo, usuarioNombre, createdAt, renumerados]
+      required: [id, tipo, puntoVenta, numero, receptorNombre, total, fechaEmision, motivo, usuarioNombre, createdAt, renumerados, reuso]
       properties:
         id: { type: string }
         tipo: { type: string }
@@ -718,6 +720,15 @@ components:
         usuarioNombre: { type: string }
         createdAt: { type: string, format: date-time }
         renumerados: { type: array, items: { $ref: "#/components/schemas/Corrimiento" } }
+        reuso:
+          description: el comprobante vivo que tiene hoy ese número
+          nullable: true
+          type: object
+          required: [invoiceId, receptorNombre, pedido]
+          properties:
+            invoiceId: { type: string }
+            receptorNombre: { type: string }
+            pedido: { type: string, nullable: true }
     RenglonesADevolver:
       type: array
       items:
@@ -890,14 +901,15 @@ components:
         orden: { type: integer }
     CobroDeComprobante:
       type: object
-      required: [id, invoiceId, medio, monto, referencia, receiptId, fecha, createdByUserId, createdAt]
+      required: [id, invoiceId, medio, monto, referencia, receiptId, recibo, fecha, createdByUserId, createdAt]
       properties:
         id: { type: string }
         invoiceId: { type: string }
-        medio: { type: string, enum: [efectivo, transferencia, mercado_pago, tarjeta, cheque, cuenta_corriente] }
+        medio: { type: string, enum: [efectivo, transferencia, mercado_pago, tarjeta, cheque, cuenta_corriente, deposito, echeq, retencion] }
         monto: { type: string }
         referencia: { type: string, nullable: true }
         receiptId: { type: string, nullable: true }
+        recibo: { type: string, nullable: true, description: el número del recibo (REC-0041) }
         fecha: { type: string, format: date-time }
         createdByUserId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
@@ -967,6 +979,24 @@ components:
               recibo: { type: string, nullable: true }
               reciboId: { type: string, nullable: true }
         qrUrl: { type: string, nullable: true, description: El enlace de verificación de ARCA (solo con CAE) }
+        asociado: { type: string, nullable: true, description: "En una nota, el comprobante que corrige, para el papel (Anula parcialmente: Factura A 0015-00000105 del 27/11/26)" }
+        devolucion:
+          description: En la nota de una devolución, cómo y cuándo salió la plata
+          nullable: true
+          type: object
+          required: [destino, fecha, importe, partes]
+          properties:
+            destino: { type: string, enum: [caja, cuenta, afuera, deuda] }
+            fecha: { type: string, format: date-time }
+            importe: { type: number, format: double }
+            partes:
+              type: array
+              items:
+                type: object
+                required: [medio, importe]
+                properties:
+                  medio: { type: string }
+                  importe: { type: number, format: double }
     ResultadoDeAutorizacion:
       type: object
       properties:

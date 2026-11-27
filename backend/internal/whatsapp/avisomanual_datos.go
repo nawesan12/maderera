@@ -159,14 +159,22 @@ func (s *Servicio) cargarAviso(ctx context.Context, evento, tipo, id string) (*b
 		return &baseAviso{nombre: &nombre, telefono: tel, valores: map[string]string{"fecha": FechaCorta(s.ahora()),
 			"documento": "el resumen de tu cuenta corriente"}, pdf: pdf}, nil
 	case "invoice":
+		// Sin ficha, o con la ficha sin teléfono, el del pedido que factura,
+		// como «Avisar por WhatsApp» del pedido: la factura de un pedido web
+		// sin ficha no se podía mandar aunque el pedido tenía el número
+		// (mes simulado, M2S3-043).
 		var pv, n int32
-		var nombre, tel *string
-		ok, err := fila(`select f.punto_venta, f.numero, c.nombre, c.telefono from invoices f left join customers c on c.id = f.customer_id
-			where f.id = $1`, &pv, &n, &nombre, &tel)
+		var nombre, tel, cNombre, cTel *string
+		ok, err := fila(`select f.punto_venta, f.numero, c.nombre, c.telefono, o.contacto_nombre, o.contacto_telefono
+			from invoices f left join customers c on c.id = f.customer_id left join orders o on o.id = f.order_id
+			where f.id = $1`, &pv, &n, &nombre, &tel, &cNombre, &cTel)
 		if !ok {
 			return nil, err
 		}
-		return &baseAviso{nombre: nombre, telefono: tel, valores: map[string]string{"documento": "la factura " + numeroFormateado(pv, n)},
+		if vacio(tel) {
+			tel = cTel
+		}
+		return &baseAviso{nombre: primero(nombre, cNombre), telefono: tel, valores: map[string]string{"documento": "la factura " + numeroFormateado(pv, n)},
 			pdf: ptr("/api/comprobantes/" + id + "/pdf")}, nil
 	case "delivery":
 		var numero string

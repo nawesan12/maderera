@@ -10,6 +10,7 @@ import (
 
 	"mjbj/internal/auth"
 	"mjbj/internal/bitacora"
+	"mjbj/internal/cola"
 	"mjbj/internal/fiscal"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/sqlc"
@@ -386,6 +387,13 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 			json.RawMessage(renumerados), foto).Scan(&res.ID); err != nil {
 			return err
 		}
+		// El cliente que lo recibió se entera de que no vale (sale solo si
+		// la baja se confirma; el worker mira si tiene correo).
+		if x.customerID != nil {
+			if _, err := cola.Encolar(ctx, s.q.WithTx(tx), TrabajoAvisoDeBaja, map[string]string{"bajaId": res.ID}, time.Time{}); err != nil {
+				return err
+			}
+		}
 		// La deuda que cargó se va con él, borrada y no contramovida: con un
 		// contramovimiento la cuenta mostraba dos «0003» de importes
 		// distintos apenas el 0004 bajaba a 0003. Queda en la foto.
@@ -430,9 +438,19 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 				WHERE receipt_id IN (SELECT receipt_id FROM r) AND detalle LIKE '%' || $2 || '%'`, k.InvoiceID, viejo, nuevo); err != nil {
 				return err
 			}
+			// El cliente tenía el PDF con el número viejo: se le reenvía con
+			// el nuevo, en la misma transacción (M2S1-010). Antes quedaba con
+			// una factura que el sistema ya no tenía.
+			reenviado := false
+			if k.CustomerID != nil {
+				if _, err := cola.Encolar(ctx, q, TrabajoAvisoDeRenumerada, map[string]string{"invoiceId": k.InvoiceID, "anterior": viejo}, time.Time{}); err != nil {
+					return err
+				}
+				reenviado = true
+			}
 			bitacora.Anotar(ctx, q, s.log, ses, sqlc.AccionAuditoriaEditar, "factura", k.InvoiceID,
 				viejo+" pasa a ser el "+fiscal.NumeroFormateado(x.pv, k.A)+" por la baja del "+fiscal.NumeroFormateado(x.pv, x.numero),
-				map[string]any{"de": k.De, "a": k.A, "bajaId": res.ID})
+				map[string]any{"de": k.De, "a": k.A, "bajaId": res.ID, "reenviado": reenviado})
 		}
 		res.Etiqueta = et
 		res.Corridos = corren
@@ -442,6 +460,45 @@ func (s *Servicio) DarDeBaja(ctx context.Context, ses *auth.Sesion, id, motivo s
 		return nil, s.comoEmision(err, "fiscal.baja", "No se pudo dar de baja el comprobante.")
 	}
 	return &res, nil
+}
+
+// BajaDeLaVentaAnulada da de baja, en el mismo paso que anula la venta, la
+// factura sin CAE de un pedido cancelado: no se va a autorizar nunca y
+// seguía viva, sumando en Facturación, hasta que alguien la daba de baja a
+// mano (mes simulado, M2S2-034). Devuelve la etiqueta de lo que dio de baja,
+// o "" si no había nada o la baja está frenada (un recibo vivo, un posterior
+// con CAE): entonces queda como antes, a la vista en Facturación y en Caja,
+// para resolverla a mano.
+func (s *Servicio) BajaDeLaVentaAnulada(ctx context.Context, ses *auth.Sesion, pedido, motivo string) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `SELECT i.id FROM invoices i JOIN orders o ON o.id = i.order_id
+		WHERE i.order_id = $1 AND o.estado = 'cancelado' AND i.cae IS NULL AND i.tipo::text LIKE 'factura%'
+		  AND i.estado NOT IN ('anulada', 'borrador') ORDER BY i.created_at LIMIT 1`, pedido).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	serie, err := s.Serie(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if serie.Bloqueo != nil {
+		return "", nil
+	}
+	vistos := make([]string, len(serie.Corren))
+	for i, k := range serie.Corren {
+		vistos[i] = k.InvoiceID
+	}
+	res, err := s.DarDeBaja(ctx, ses, id, "Venta anulada: "+motivo, vistos)
+	if err != nil {
+		if Mensaje(err) != "" {
+			return "", nil
+		}
+		return "", err
+	}
+	return res.Etiqueta, nil
 }
 
 // mismosCorridos compara los corridos de ahora con los que vio el admin, en
@@ -613,12 +670,27 @@ type DadoDeBaja struct {
 	UsuarioNombre  string        `json:"usuarioNombre"`
 	CreatedAt      time.Time     `json:"createdAt"`
 	Renumerados    []Corrimiento `json:"renumerados"`
+	// Reuso es el comprobante vivo que tiene hoy el número que se liberó: el
+	// que se corrió a ese lugar o el que se emitió después con él. Dos
+	// comprobantes con el mismo número y nada que lo dijera (M3S2-044).
+	Reuso *ReusoDelNumero `json:"reuso"`
+}
+
+// ReusoDelNumero es quién usa hoy un número dado de baja.
+type ReusoDelNumero struct {
+	InvoiceID      string  `json:"invoiceId"`
+	ReceptorNombre string  `json:"receptorNombre"`
+	Pedido         *string `json:"pedido"`
 }
 
 // DadosDeBaja lista las bajas, la más nueva primero.
 func (s *Servicio) DadosDeBaja(ctx context.Context) ([]DadoDeBaja, error) {
-	filas, err := s.pool.Query(ctx, `SELECT id, tipo::text, punto_venta, numero, receptor_nombre, total::float8, fecha_emision, motivo,
-		usuario_nombre, created_at, renumerados FROM invoices_dadas_de_baja ORDER BY created_at DESC LIMIT 500`)
+	filas, err := s.pool.Query(ctx, `SELECT b.id, b.tipo::text, b.punto_venta, b.numero, b.receptor_nombre, b.total::float8, b.fecha_emision, b.motivo,
+		b.usuario_nombre, b.created_at, b.renumerados, v.id::text, v.receptor_nombre, v.pedido
+		FROM invoices_dadas_de_baja b
+		LEFT JOIN LATERAL (SELECT i.id, i.receptor_nombre, o.numero AS pedido FROM invoices i LEFT JOIN orders o ON o.id = i.order_id
+		  WHERE i.tipo = b.tipo AND i.punto_venta = b.punto_venta AND i.numero = b.numero LIMIT 1) v ON true
+		ORDER BY b.created_at DESC LIMIT 500`)
 	if err != nil {
 		return nil, err
 	}
@@ -627,9 +699,14 @@ func (s *Servicio) DadosDeBaja(ctx context.Context) ([]DadoDeBaja, error) {
 	for filas.Next() {
 		var d DadoDeBaja
 		var ren []byte
+		var reuso, reusoNombre *string
+		var reusoPedido *string
 		if err := filas.Scan(&d.ID, &d.Tipo, &d.PuntoVenta, &d.Numero, &d.ReceptorNombre, &d.Total, &d.FechaEmision, &d.Motivo,
-			&d.UsuarioNombre, &d.CreatedAt, &ren); err != nil {
+			&d.UsuarioNombre, &d.CreatedAt, &ren, &reuso, &reusoNombre, &reusoPedido); err != nil {
 			return nil, err
+		}
+		if reuso != nil {
+			d.Reuso = &ReusoDelNumero{InvoiceID: *reuso, ReceptorNombre: de(reusoNombre), Pedido: reusoPedido}
 		}
 		d.Renumerados = []Corrimiento{}
 		if err := json.Unmarshal(ren, &d.Renumerados); err != nil {

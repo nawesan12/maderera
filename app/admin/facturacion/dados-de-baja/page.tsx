@@ -67,6 +67,23 @@ export default async function DadosDeBajaPage() {
                   {b.usuarioNombre} · {fechaHora.format(b.createdAt)}
                 </p>
               </div>
+              {/* Quién tiene hoy ese número, si no es uno de los corridos de
+                  abajo: el que se emitió después con él. Eran dos
+                  comprobantes con el mismo número y nada que lo dijera
+                  (M3S2-044). */}
+              {b.reuso && !b.renumerados.some((r) => r.invoiceId === b.reuso?.invoiceId) && (
+                <Link
+                  href={`/admin/facturacion/${b.reuso.invoiceId}`}
+                  className="flex flex-wrap items-center gap-x-2 border-t bg-hundida px-5 py-3 text-base hover:bg-muted/50"
+                >
+                  <span className="codigo font-medium">{numeroFormateado(b.puntoVenta, b.numero)}</span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="lo usa" />
+                  <span className="min-w-0">
+                    {b.reuso.receptorNombre}
+                    {b.reuso.pedido && <span className="codigo ml-2 text-muted-foreground">{b.reuso.pedido}</span>}
+                  </span>
+                </Link>
+              )}
               {b.renumerados.length > 0 && (
                 <ul className="divide-y border-t bg-hundida">
                   {b.renumerados.map((r) => (

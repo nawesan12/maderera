@@ -15,6 +15,7 @@ import (
 	"mjbj/internal/formato"
 	"mjbj/internal/jsmath"
 	"mjbj/internal/plataforma"
+	"mjbj/internal/reglas"
 	"mjbj/internal/sqlc"
 )
 
@@ -379,6 +380,46 @@ func totalDeFactura(d FormFactura) float64 {
 	return d.Neto + d.Iva21 + d.Iva105 + d.Iva27 + d.Exento + d.Percepciones
 }
 
+// revisarCae controla el CAE de un comprobante de compra antes de guardarlo:
+// que sea un CAE (14 números), que no esté ya en otro comprobante (ARCA no
+// da dos veces el mismo: el libro IVA compras tenía el mismo CAE en facturas
+// de tres proveedores, M2S2-039 y M3S1-051) y, si la regla cae_en_compras
+// lo exige, que esté en la que da crédito fiscal. excluir es el comprobante
+// que se corrige. Devuelve el CAE limpio.
+func revisarCae(ctx context.Context, tx pgx.Tx, tipo string, cae *string, excluir string) (*string, error) {
+	limpio := ""
+	if cae != nil {
+		limpio = strings.TrimSpace(*cae)
+	}
+	if limpio == "" {
+		if DaCreditoFiscal(tipo) && reglas.Es(ctx, tx, reglas.CaeEnCompras, "exigido") {
+			return nil, plataforma.Invalido(map[string]string{"cae": "Poné el CAE: sin él no da crédito fiscal."})
+		}
+		return nil, nil
+	}
+	for _, r := range limpio {
+		if r < '0' || r > '9' {
+			return nil, plataforma.Invalido(map[string]string{"cae": "El CAE son 14 números."})
+		}
+	}
+	if len(limpio) != 14 {
+		return nil, plataforma.Invalido(map[string]string{"cae": "El CAE son 14 números."})
+	}
+	var tipoOtro, proveedor string
+	var pv, numero int64
+	err := tx.QueryRow(ctx, `SELECT f.tipo::text, f.punto_venta, f.numero, coalesce(s.nombre, '') FROM purchase_invoices f
+		LEFT JOIN suppliers s ON s.id = f.supplier_id
+		WHERE f.cae = $1 AND f.anulada_at IS NULL AND ($2 = '' OR f.id::text <> $2) LIMIT 1`, limpio, excluir).Scan(&tipoOtro, &pv, &numero, &proveedor)
+	if err == nil {
+		return nil, plataforma.Invalido(map[string]string{"cae": "Ese CAE ya está en " + NombreComprobanteCompra(tipoOtro) + " " +
+			NumeroDeCompra(pv, numero) + " de " + proveedor + "."})
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	return &limpio, nil
+}
+
 // errorDeFactura traduce los índices únicos a lo que se le dice a quien carga.
 func errorDeFactura(err error) error {
 	switch {
@@ -437,6 +478,11 @@ func (s *Servicio) CargarFactura(ctx context.Context, ses *auth.Sesion, m map[st
 	var id string
 	var ajuste ajusteDeCosto
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		cae, err := revisarCae(ctx, tx, d.Tipo, d.Cae, "")
+		if err != nil {
+			return err
+		}
+		d.Cae = cae
 		var yaCargado float64
 		netoRecibido := 0.0
 		if len(recepciones) > 0 && (esCredito || strings.HasPrefix(d.Tipo, "nota_debito")) {
@@ -797,6 +843,11 @@ func (s *Servicio) CorregirFactura(ctx context.Context, ses *auth.Sesion, id str
 		if f.pagado-total > 0.01 {
 			return fallo("Ya se le pagaron " + Monto(f.pagado) + " a esta factura: el total no puede quedar por debajo.")
 		}
+		cae, err := revisarCae(ctx, tx, d.Tipo, d.Cae, id)
+		if err != nil {
+			return err
+		}
+		d.Cae = cae
 		cargado, err := loQueCargo(ctx, tx, id, f)
 		if err != nil {
 			return err

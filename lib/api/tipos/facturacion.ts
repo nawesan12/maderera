@@ -649,6 +649,12 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             renumerados: components["schemas"]["Corrimiento"][];
+            /** @description el comprobante vivo que tiene hoy ese número */
+            reuso: {
+                invoiceId: string;
+                receptorNombre: string;
+                pedido: string | null;
+            } | null;
         };
         RenglonesADevolver: {
             itemId: string;
@@ -825,10 +831,12 @@ export interface components {
             id: string;
             invoiceId: string;
             /** @enum {string} */
-            medio: "efectivo" | "transferencia" | "mercado_pago" | "tarjeta" | "cheque" | "cuenta_corriente";
+            medio: "efectivo" | "transferencia" | "mercado_pago" | "tarjeta" | "cheque" | "cuenta_corriente" | "deposito" | "echeq" | "retencion";
             monto: string;
             referencia: string | null;
             receiptId: string | null;
+            /** @description el número del recibo (REC-0041) */
+            recibo: string | null;
             /** Format: date-time */
             fecha: string;
             createdByUserId: string | null;
@@ -905,6 +913,22 @@ export interface components {
             }[];
             /** @description El enlace de verificación de ARCA (solo con CAE) */
             qrUrl: string | null;
+            /** @description En una nota, el comprobante que corrige, para el papel (Anula parcialmente: Factura A 0015-00000105 del 27/11/26) */
+            asociado?: string | null;
+            /** @description En la nota de una devolución, cómo y cuándo salió la plata */
+            devolucion?: {
+                /** @enum {string} */
+                destino: "caja" | "cuenta" | "afuera" | "deuda";
+                /** Format: date-time */
+                fecha: string;
+                /** Format: double */
+                importe: number;
+                partes: {
+                    medio: string;
+                    /** Format: double */
+                    importe: number;
+                }[];
+            } | null;
         };
         ResultadoDeAutorizacion: {
             ok?: string;
@@ -1222,6 +1246,10 @@ export interface operations {
                 hasta?: string;
                 cobro?: "contado" | "cuenta" | "todos";
                 busqueda?: string;
+                /** @description las de esa ficha */
+                cliente?: string;
+                /** @description solo las que todavía deben algo */
+                conSaldo?: boolean;
                 limite?: number;
                 desplazamiento?: number;
             };

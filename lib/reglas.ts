@@ -23,6 +23,7 @@ export const OPCIONES_DE_REGLAS = {
   lote_y_cupon: ["obligatorio", "opcional"],
   descuento_con_escala: ["reemplaza", "suma"],
   redondeo_efectivo: ["no", "al_peso"],
+  cae_en_compras: ["opcional", "exigido"],
 } as const;
 
 

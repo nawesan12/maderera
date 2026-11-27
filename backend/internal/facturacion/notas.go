@@ -239,6 +239,11 @@ func (s *Servicio) emitirNota(ctx context.Context, tx pgx.Tx, o *original, motiv
 		updated_at = now() WHERE id = $1`, o.id, jsmath.Fijo2(fiscal.Redondear(o.acreditado+calc.Total)), estado); err != nil {
 		return "", err
 	}
+	// La nota le llega al cliente como la factura que corrige: la recibía
+	// la factura y nunca la nota que la baja (M3S3-042).
+	if err := s.encolarAviso(ctx, tx, nueva); err != nil {
+		return "", err
+	}
 	return nueva, nil
 }
 
@@ -465,7 +470,7 @@ func (s *Servicio) NotaDeDebito(ctx context.Context, invoiceID, motivo string, l
 				return err
 			}
 		}
-		return nil
+		return s.encolarAviso(ctx, tx, nueva)
 	})
 	if err != nil {
 		return "", s.comoEmision(err, "fiscal.nota-debito", "No se pudo emitir la nota de débito.")

@@ -20,6 +20,7 @@ import { numerosDelDueno } from "@/lib/dal/admin/resumen";
 import { listarSucursalesPublicas } from "@/lib/dal/envios";
 import { AccionesPedido } from "./acciones";
 import { EtiquetaEstado } from "@/components/admin/etiqueta-estado";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
 /** Las etapas por las que pasa un pedido, en orden. */
 const COLUMNAS = [
@@ -73,6 +74,9 @@ export default async function PedidosPage({
 
   return (
     <div>
+      {/* Se factura, se cobra o se cancela en otra pantalla: esta se
+          refresca sola (canal «ventas», M2S2-099 y M3S1-034). */}
+      <RefrescarEnVivo canales={["ventas"]} />
       <EncabezadoPanel
         titulo="Pedidos"
         resumen={

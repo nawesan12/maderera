@@ -86,8 +86,14 @@ export default async function ConfiguracionArcaPage() {
 
         {!estado.operativo && (
           <ol className="mt-4 space-y-2 pt-2">
+            {/* Hecho con todo lo que va impreso en el comprobante (RG 1415):
+                se tildaba con el CUIT solo, con el N° de Ingresos Brutos y el
+                inicio de actividades vacíos (M2S1-051). Sin ellos ARCA no se
+                pide (Go lo frena al autorizar). */}
             <Paso
-              hecho={Boolean(emisor.cuit)}
+              hecho={Boolean(
+                emisor.cuit && emisor.razonSocial && emisor.domicilio && emisor.ingresosBrutos && emisor.inicioActividades,
+              )}
               titulo="Cargar el CUIT y los datos fiscales de la empresa"
             />
             <Paso

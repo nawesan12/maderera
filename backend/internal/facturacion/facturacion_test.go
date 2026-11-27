@@ -82,7 +82,7 @@ func armar(t *testing.T, conArca bool) *entorno {
 	if _, err := s.ObtenerEmisor(ctx); err != nil {
 		t.Fatal(err)
 	}
-	e.exec(t, `UPDATE configuracion_fiscal SET cuit = $1, condicion_iva = 'responsable_inscripto'`, cuitEmisor)
+	e.exec(t, `UPDATE configuracion_fiscal SET cuit = $1, condicion_iva = 'responsable_inscripto', ingresos_brutos = '901-123456-7', inicio_actividades = '1981-03-01'`, cuitEmisor)
 	e.exec(t, `INSERT INTO puntos_venta (numero, nombre, numero_inicial) VALUES (3, 'Mostrador', 0)`)
 	return e
 }

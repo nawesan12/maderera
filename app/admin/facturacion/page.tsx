@@ -20,6 +20,7 @@ import {
   nombreComprobante,
   numeroFormateado,
 } from "@/lib/fiscal/comprobantes";
+import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
 export const metadata: Metadata = { title: "Facturación" };
 
@@ -104,6 +105,9 @@ export default async function FacturacionPage({
 
   return (
     <div className="space-y-6">
+      {/* Se factura, se cobra o se cancela en otra pantalla: esta se
+          refresca sola (canal «ventas», M2S2-099 y M3S1-034). */}
+      <RefrescarEnVivo canales={["ventas"]} />
       <EncabezadoPanel
         titulo="Facturación"
         resumen={`${queSeMira.charAt(0).toUpperCase()}${queSeMira.slice(1)}${cobro === "contado" ? ", cobrados de contado" : cobro === "cuenta" ? ", en cuenta corriente" : ""} · ${estado === "rechazada" ? plural(lista.total, "comprobante") : `${moneda.format(lista.suma)} en ${plural(lista.cantidad, "comprobante")}`}`}

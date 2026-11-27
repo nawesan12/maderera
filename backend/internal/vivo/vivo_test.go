@@ -84,6 +84,37 @@ func TestRepartoPorRol(t *testing.T) {
 	}
 }
 
+// Facturar, cobrar con un recibo o cancelar un pedido avisa por «ventas»
+// (00363): las otras pantallas no se enteraban (M2S2-099, M3S1-034).
+func TestVentasAvisaAlFacturarCobrarYCancelar(t *testing.T) {
+	pool := pruebas.Base(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := Nueva(pool.Config().ConnString(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	go c.Correr(ctx)
+	admin := httptest.NewServer(conRol(c, sqlc.StaffRoleAdmin))
+	defer admin.Close()
+	resultado := make(chan []string, 1)
+	go func() { resultado <- leerEventos(t, admin.URL, 3, 5*time.Second) }()
+	time.Sleep(500 * time.Millisecond)
+	var pedido string
+	if err := pool.QueryRow(ctx, `INSERT INTO orders (numero, contacto_nombre, origen, subtotal, total, estado) VALUES ('PED-1', 'Ana', 'mostrador', 1, 1, 'pendiente') RETURNING id`).Scan(&pedido); err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{
+		`INSERT INTO invoices (tipo, punto_venta, numero, estado, receptor_nombre, total, order_id) VALUES ('factura_b', 3, 1, 'emitida', 'Ana', 1, '` + pedido + `')`,
+		`INSERT INTO receipts (numero, recibido_de, total, origen) VALUES ('REC-0001', 'Ana', 1, 'panel')`,
+		`UPDATE orders SET estado = 'cancelado' WHERE id = '` + pedido + `'`,
+	} {
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	if e := <-resultado; strings.Join(e, ",") != "ventas,ventas,ventas" {
+		t.Errorf("eventos: %v", e)
+	}
+}
+
 func TestSinPersonalNoHayStream(t *testing.T) {
 	c := Nueva("", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	w := httptest.NewRecorder()

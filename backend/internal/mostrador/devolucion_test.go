@@ -60,7 +60,7 @@ func (e *entorno) vendidaSinFactura(t *testing.T, correo string, v VentaPedida) 
 	} else {
 		c.turno = e.txt(t, `select id::text from cash_sessions where branch_id = $1 and estado = 'abierta'`, e.central)
 	}
-	if _, err := e.pool.Exec(ctx, `UPDATE configuracion_fiscal SET cuit = '30589445259', condicion_iva = 'responsable_inscripto'`); err != nil {
+	if _, err := e.pool.Exec(ctx, `UPDATE configuracion_fiscal SET cuit = '30589445259', condicion_iva = 'responsable_inscripto', ingresos_brutos = '901-123456-7', inicio_actividades = '1981-03-01'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.pool.Exec(ctx, `INSERT INTO puntos_venta (numero, nombre, numero_inicial) VALUES (3, 'Mostrador', 0) ON CONFLICT DO NOTHING`); err != nil {

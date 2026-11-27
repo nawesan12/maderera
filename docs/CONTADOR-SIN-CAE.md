@@ -20,15 +20,19 @@ se cargue el certificado, hay que resolver lo pendiente de una de dos formas.
    queda guardada y anotada en la bitácora.
 2. **Darlo de baja y reemitir.** Si el comprobante no tiene que salir así
    (letra equivocada, datos que no corresponden, una venta que se anuló), se
-   da de baja: se libera su número y los pendientes que vienen detrás bajan
-   uno. Después se emite de nuevo lo que corresponda. Antes de dar de baja un
-   comprobante cobrado, hay que anular su recibo, y queda registrado quién lo
-   hizo, cuándo y por qué.
+   da de baja: se libera su número y el último pendiente de la serie pasa a
+   ocuparlo, así la serie no queda con huecos y ningún otro comprobante
+   cambia de número. Al cliente del que se dio de baja se le avisa que quedó
+   sin efecto, y al del que cambió de número se le reenvía con el número
+   nuevo. Después se emite de nuevo lo que corresponda. Antes de dar de baja
+   un comprobante cobrado, hay que anular su recibo, y queda registrado quién
+   lo hizo, cuándo y por qué.
 
 Nada de esto se hace solo: cada comprobante lo decide alguien desde el panel.
 Una venta nueva del mostrador no arrastra lo pendiente de días anteriores:
 queda esperando hasta que esto se resuelva. Un comprobante de una venta que
-se anuló no se manda a ARCA: se da de baja.
+se anuló no se manda a ARCA: se da de baja en el mismo paso en que se anula
+la venta en el mostrador, y mientras no se dé de baja no suma en lo facturado.
 
 **A decidir:** ¿se autoriza todo lo pendiente con fecha de hoy, o prefieren
 dar de baja y reemitir alguna parte (por ejemplo, lo de meses ya cerrados)?

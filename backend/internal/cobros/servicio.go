@@ -691,7 +691,7 @@ func (s *Servicio) CambiarEstado(ctx context.Context, ses *auth.Sesion, id, nuev
 			// Desde la cartera el banco nunca lo tuvo: se le devolvió al
 			// cliente (M2S3-069, M2S3-088, M3S3-010).
 			if devuelto {
-				detalle = NombreDelCheque(string(cheque.Tipo), cheque.Banco, cheque.Numero) + " devuelto al cliente"
+				detalle = NombreDelCheque(string(cheque.Tipo), cheque.Banco, cheque.Numero) + SufijoChequeDevuelto
 			}
 			if m != "" {
 				detalle += ": " + m

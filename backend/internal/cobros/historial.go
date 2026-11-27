@@ -85,10 +85,13 @@ type RefRecibo struct {
 // bitácora.
 //
 // La anulación de un recibo también: el cliente leía «Anulación del recibo
-// REC-0006: Sim: se cargó por error» (mes simulado, M2S1-153).
+// REC-0006: Sim: se cargó por error» (mes simulado, M2S1-153). Y la
+// devolución de un pedido, el cheque que se le devolvió y el que no se tomó
+// («… devuelto al cliente: El cliente lo pidió de vuelta», «No lo pudimos
+// tomar: No recibimos el cheque físico», mes 23). El rechazo del banco sí
+// conserva el suyo («Sin fondos»): es lo que el cliente tiene que resolver.
 func DetalleParaElCliente(detalle *string) *string {
-	if detalle == nil || !(strings.HasPrefix(*detalle, "Anulación de la venta ") || strings.HasPrefix(*detalle, "Cancelación del pedido ") ||
-		strings.HasPrefix(*detalle, PrefijoAnulacionDeRecibo)) {
+	if detalle == nil || !conMotivoDeLaCasa(*detalle) {
 		return detalle
 	}
 	if i := strings.Index(*detalle, ": "); i > 0 {
@@ -97,6 +100,28 @@ func DetalleParaElCliente(detalle *string) *string {
 	}
 	return detalle
 }
+
+// prefijosConMotivoDeLaCasa son los asientos cuyo «: …» lo escribió alguien
+// de la casa para la casa.
+var prefijosConMotivoDeLaCasa = []string{"Anulación de la venta ", "Cancelación del pedido ", PrefijoAnulacionDeRecibo,
+	"Devolución del pedido ", DetalleChequeNoTomado}
+
+func conMotivoDeLaCasa(d string) bool {
+	for _, p := range prefijosConMotivoDeLaCasa {
+		if strings.HasPrefix(d, p) {
+			return true
+		}
+	}
+	i := strings.Index(d, ": ")
+	return i > 0 && strings.HasSuffix(d[:i], SufijoChequeDevuelto)
+}
+
+// SufijoChequeDevuelto cierra el asiento del cheque de la cartera que se le
+// devolvió al cliente (CambiarEstado).
+const SufijoChequeDevuelto = " devuelto al cliente"
+
+// DetalleChequeNoTomado es el renglón del cheque que no se tomó.
+const DetalleChequeNoTomado = "No lo pudimos tomar"
 
 // PrefijoAnulacionDeRecibo es cómo empieza el asiento que deshace un recibo.
 const PrefijoAnulacionDeRecibo = "Anulación del recibo "
@@ -265,7 +290,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		if m.Tipo == "nota_debito" && m.ReciboID != nil {
 			// CambiarEstado escribe «… devuelto al cliente» o «… rechazado
 			// por el banco» en la nota de débito.
-			if m.Detalle != nil && strings.Contains(*m.Detalle, " devuelto al cliente") {
+			if m.Detalle != nil && strings.Contains(*m.Detalle, SufijoChequeDevuelto) {
 				devueltos[*m.ReciboID] = true
 			} else {
 				rebotados[*m.ReciboID] = true
@@ -378,7 +403,7 @@ func Historial(ctx context.Context, q *sqlc.Queries, cliente string, desde *time
 		// El que no se tomó (no mueve la cuenta) no es el que rebotó en el
 		// banco: llevaban el mismo «Cheque rechazado» (M3S2-052).
 		clase := "cheque_no_tomado"
-		detalle := "No lo pudimos tomar"
+		detalle := DetalleChequeNoTomado
 		if c.DeUnaVenta {
 			clase = "cheque_rechazado"
 			// Se tomó con la venta y después lo rechazó el banco: la nota de

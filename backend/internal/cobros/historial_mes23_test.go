@@ -36,6 +36,23 @@ func TestElReciboAnuladoEnUnRenglon(t *testing.T) {
 	}
 }
 
+// Mes 23: tampoco el de la devolución de un pedido, el del cheque que se le
+// devolvió ni el del que no se tomó. El del banco queda: es lo que el
+// cliente tiene que resolver.
+func TestElClienteNoLeeLosMotivosDeLaCasa(t *testing.T) {
+	for entra, sale := range map[string]string{
+		"Cheque Banco Galicia N° 00088123 devuelto al cliente: El cliente lo pidió de vuelta": "Cheque Banco Galicia N° 00088123 devuelto al cliente",
+		"No lo pudimos tomar: No recibimos el cheque físico":                                  "No lo pudimos tomar",
+		"Devolución del pedido PED-1125: V2M admin devuelve una lata":                         "Devolución del pedido PED-1125",
+		"Cheque Banco Nación N° 1 rechazado por el banco: Sin fondos":                         "Cheque Banco Nación N° 1 rechazado por el banco: Sin fondos",
+		"Pago: Transferencia": "Pago: Transferencia",
+	} {
+		if v := DetalleParaElCliente(&entra); v == nil || *v != sale {
+			t.Errorf("%q: %v", entra, v)
+		}
+	}
+}
+
 // M2S3-030: la devolución de lo que se pagó de contado (el reintegro no pasa
 // por la cuenta) aparece en Movimientos, también con «Notas y ajustes»; el
 // cheque informado que no se tomó no dice «rechazado» (M3S2-052).

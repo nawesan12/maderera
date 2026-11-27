@@ -37,8 +37,17 @@ export function nombreDeSaludo(nombre: string | null | undefined, primera: (n: s
       break;
     }
   }
-  // El rubro va primero («Carpintería Ferreyra») o segundo, detrás de una sigla o un apodo («Sim Mueblería»).
-  const esNegocio = RUBROS.has(clave(palabras[0])) || (palabras.length > 2 && RUBROS.has(clave(palabras[1])));
-  if (corte === palabras.length && !esNegocio) return primera(nombre ?? "");
+  if (corte === palabras.length && !esNegocio(palabras)) return primera(nombre ?? "");
   return palabras.slice(0, corte).join(" ").replace(/[,;]+$/, "");
+}
+
+/**
+ * El rubro va primero («Carpintería Ferreyra»), o segundo o tercero detrás de
+ * una sigla o un apodo, con algo después («Sim V1at Carpintería Ruiz»: el mes
+ * 23 saludaba «Hola Sim»).
+ */
+function esNegocio(palabras: string[]): boolean {
+  if (RUBROS.has(clave(palabras[0]))) return true;
+  for (let i = 1; i <= 2 && i < palabras.length - 1; i++) if (RUBROS.has(clave(palabras[i]))) return true;
+  return false;
 }

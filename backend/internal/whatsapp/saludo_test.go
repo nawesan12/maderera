@@ -14,6 +14,11 @@ func TestNombreDeSaludo(t *testing.T) {
 		"Sim Mueblería Atlántica":  "Sim Mueblería Atlántica",
 		"Sim Obra Barrio Parque":   "Sim Obra Barrio Parque",
 		"Juan Obra":                "Juan",
+		// Mes 23: el rubro en la tercera palabra.
+		"Sim V1at Carpintería Ruiz":    "Sim V1at Carpintería Ruiz",
+		"Sim V1at Aberturas Norte SRL": "Sim V1at Aberturas Norte",
+		"Sim V1at Bruno Arce":          "Sim",
+		"Ana María Taller":             "Ana",
 	} {
 		if got := NombreDeSaludo(entra); got != sale {
 			t.Errorf("%q: %q, se esperaba %q", entra, got, sale)

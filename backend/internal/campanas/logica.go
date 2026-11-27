@@ -13,6 +13,7 @@ import (
 
 	"mjbj/internal/email"
 	"mjbj/internal/jsmath"
+	"mjbj/internal/whatsapp"
 	"mjbj/internal/zod"
 )
 
@@ -427,8 +428,13 @@ func Personalizar(cuerpo, nombre string) (string, bool) {
 	return reMarcaConEspacio.ReplaceAllLiteralString(cuerpo, ""), propio
 }
 
-// PrimerNombre es primerNombre de lib/formato: sin los títulos (Arq., Ing.).
-func PrimerNombre(nombre string) string {
+// PrimerNombre es el saludo de whatsapp.NombreDeSaludo con el nombre de una
+// persona sin los títulos (Arq., Ing.): a una empresa no se la saluda por su
+// primera palabra (mes 23: «Hola Sim» a «Sim V1at Carpintería Ruiz»).
+func PrimerNombre(nombre string) string { return whatsapp.NombreDeSaludoCon(nombre, sinTitulo) }
+
+// sinTitulo es primerNombre de lib/formato: la primera palabra que no es un título.
+func sinTitulo(nombre string) string {
 	var partes []string
 	for _, p := range reEspaciosJ.Split(zod.Trim(nombre), -1) {
 		if p != "" {

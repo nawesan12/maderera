@@ -13,5 +13,9 @@ describe("nombreDeSaludo", () => {
     expect(nombreDeSaludo("Sim Mueblería Atlántica")).toBe("Sim Mueblería Atlántica");
     expect(nombreDeSaludo("Sim Obra Barrio Parque")).toBe("Sim Obra Barrio Parque");
     expect(nombreDeSaludo("Juan Obra")).toBe("Juan");
+    // Mes 23: el rubro en la tercera palabra.
+    expect(nombreDeSaludo("Sim V1at Carpintería Ruiz")).toBe("Sim V1at Carpintería Ruiz");
+    expect(nombreDeSaludo("Sim V1at Aberturas Norte SRL")).toBe("Sim V1at Aberturas Norte");
+    expect(nombreDeSaludo("Ana María Taller")).toBe("Ana");
   });
 });

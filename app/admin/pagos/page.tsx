@@ -18,7 +18,6 @@ import { leerPagina, Paginador, POR_PAGINA } from "@/components/admin/paginador"
 import { AccionesCobro } from "./acciones";
 import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 import { DatosBancarios } from "./banco";
-import { RefrescarEnVivo } from "@/components/vivo/refrescar-en-vivo";
 
 export const metadata: Metadata = { title: "Cobranzas" };
 

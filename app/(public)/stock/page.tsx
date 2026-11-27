@@ -19,9 +19,12 @@ interface Params {
 const estilo: Record<StockLevel, { clase: string; texto: string }> = {
   // Tintas un punto más oscuras que el fondo de su color: con las de antes
   // el texto no llegaba a 4,5:1 sobre su propia insignia.
-  alto: { clase: "bg-brand-green/15 text-verde-whatsapp", texto: "En stock" },
-  medio: { clase: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", texto: "Stock limitado" },
-  bajo: { clase: "bg-brand-red/15 text-saldo-debe", texto: "Poco stock" },
+  //
+  // Las mismas tres palabras que la ficha: «Stock limitado» y «Poco stock»
+  // no se distinguían y la ficha decía «Hay / Quedan pocas» (M3S3-046).
+  alto: { clase: "bg-brand-green/15 text-verde-whatsapp", texto: "Hay" },
+  medio: { clase: "bg-brand-green/15 text-verde-whatsapp", texto: "Hay" },
+  bajo: { clase: "bg-yellow-500/15 text-yellow-800 dark:text-yellow-300", texto: "Quedan pocas" },
   "sin-stock": { clase: "bg-muted text-muted-foreground", texto: "Sin stock" },
 };
 

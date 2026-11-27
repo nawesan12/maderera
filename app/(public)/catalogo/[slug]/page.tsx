@@ -13,7 +13,6 @@ import { reservadosParaQuienMira } from "@/lib/dal/profesionales";
 import { ProductCard } from "@/components/product-card";
 import { GaleriaProducto } from "@/components/catalogo/galeria-producto";
 import { MedidaElegida } from "@/components/catalogo/medida-elegida";
-import { BotonWhatsapp } from "@/components/whatsapp/boton";
 import { ZonaSinFlotante } from "@/components/whatsapp/zona-sin-flotante";
 import { SelectorVarianteDeQuienMira } from "@/components/catalogo/selector-variante";
 import { tienda } from "@/lib/dal/contenido";
@@ -274,9 +273,7 @@ export default async function ProductoPage({
             imagenes={producto.imagenes}
             fotoDeMedida={producto.fotoDeMedida}
             nombre={producto.name}
-            rubro={producto.subcategory ?? producto.categoryName}
             categoria={producto.categorySlug}
-            marca={producto.brand}
           />
 
           <div>
@@ -345,13 +342,8 @@ export default async function ProductoPage({
               </li>
             </ul>
 
-            {/* Con la tienda apagada el WhatsApp ya es el botón principal del
-                selector, con la medida escrita: otro igual acá abajo sobra. */}
-            {laTienda.activa && (
-              <BotonWhatsapp enlace={whatsapp} variante="secundario" tamano="grande" className="mt-3 w-full">
-                Consultar por WhatsApp
-              </BotonWhatsapp>
-            )}
+            {/* «Consultar por WhatsApp» va dentro del selector, con la medida
+                elegida (M2S4-028). */}
           </div>
         </ZonaSinFlotante>
         </MedidaElegida>

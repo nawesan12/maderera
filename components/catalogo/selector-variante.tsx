@@ -407,7 +407,9 @@ export function SelectorVariante({
                   ) : (
                     <Plus className="h-4 w-4" />
                   )}
-                  Agregar al presupuesto
+                  {/* Con la tienda prendida se compra: es el carrito, no un
+                      presupuesto (M2S2-140). */}
+                  Agregar al carrito
                 </Button>
               </div>
 
@@ -419,6 +421,31 @@ export function SelectorVariante({
                   </span>
                 </p>
               )}
+
+              {/* La consulta lleva la medida, la forma y el código elegidos,
+                  como con la tienda apagada: quedaba fijo en «Me interesa:
+                  MDF» aunque se cambiara la medida (M2S4-028). */}
+              <BotonWhatsapp
+                variante="secundario"
+                tamano="grande"
+                className="w-full"
+                enlace={
+                  numeroWhatsapp
+                    ? enlaceDeConsulta(
+                        numeroWhatsapp,
+                        textoDeConsulta({
+                          producto: productName,
+                          medida: elegida.label,
+                          como: conMedia && presentacion ? nombreDePresentacion(presentacion)?.toLowerCase() : null,
+                          unidad: unidadVendida,
+                          codigo: elegida.sku,
+                        }),
+                      )
+                    : whatsapp
+                }
+              >
+                Consultar por WhatsApp
+              </BotonWhatsapp>
             </>
           )}
         </>

@@ -72,6 +72,8 @@ export function HojaDeCorteImpresa({
     mitad?: { sentido: "largo" | "ancho"; enteraLargo: number; enteraAncho: number } | null;
     /** Una reposición sin cargo: el retal queda en la maderera. */
     sinCargo?: boolean;
+    /** La placa la trae el cliente: lo que sobra es suyo. */
+    placaDelCliente?: boolean;
   };
 }) {
   const media = Boolean(corte.mitad);
@@ -186,7 +188,7 @@ export function HojaDeCorteImpresa({
       )}
 
       {hoja.patrones.map((patron, i) => (
-        <Patron key={i} patron={patron} hoja={hoja} indice={i} cantos={corte.cantos ?? []} media={media} sinCargo={Boolean(corte.sinCargo)} />
+        <Patron key={i} patron={patron} hoja={hoja} indice={i} cantos={corte.cantos ?? []} media={media} sinCargo={Boolean(corte.sinCargo)} placaDelCliente={Boolean(corte.placaDelCliente)} />
       ))}
 
       <p className="hc-pie">
@@ -215,6 +217,7 @@ function Patron({
   cantos,
   media,
   sinCargo,
+  placaDelCliente,
 }: {
   patron: PatronDeCorte;
   hoja: HojaDeCorte;
@@ -222,8 +225,9 @@ function Patron({
   cantos: CantoDePieza[];
   media: boolean;
   sinCargo: boolean;
+  placaDelCliente: boolean;
 }) {
-  const delCliente = sobraDelCliente(patron.seVendeEntera, { sinCargo });
+  const delCliente = sobraDelCliente(patron.seVendeEntera, { sinCargo, placaDelCliente });
   const cuantas = patron.placas.length;
   const nombre = media ? "Media" : "Placa";
   const placas =
@@ -243,7 +247,7 @@ function Patron({
         </span>
       </h2>
       <p className="hc-duenio">
-        {queSeHaceConLaPlaca(patron.seVendeEntera, { sinCargo, media })}
+        {queSeHaceConLaPlaca(patron.seVendeEntera, { sinCargo, media, placaDelCliente })}
         {delCliente ? ": los retales son del cliente y se van con él." : ": los retales quedan en la maderera."}
       </p>
 

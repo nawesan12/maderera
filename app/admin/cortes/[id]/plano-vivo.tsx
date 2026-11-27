@@ -50,7 +50,9 @@ export function SobrantesVivos({
   media,
   sinCargo,
   todasDelCliente,
+  placaDelCliente = false,
 }: {
+  placaDelCliente?: boolean;
   guardado: PlanoDeCorte;
   media: boolean;
   sinCargo: boolean;
@@ -71,7 +73,7 @@ export function SobrantesVivos({
             <>
               {placa.recortes.map((r) => `${r.ancho} × ${r.alto} mm`).join(" · ")}{" "}
               <span className="text-muted-foreground">
-                ({sobraDelCliente(placa.seVendeEntera || todasDelCliente, { sinCargo }) ? "del cliente" : "al stock"})
+                ({sobraDelCliente(placa.seVendeEntera || todasDelCliente, { sinCargo, placaDelCliente }) ? "del cliente" : "al stock"})
               </span>
             </>
           )}

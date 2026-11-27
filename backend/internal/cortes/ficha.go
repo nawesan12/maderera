@@ -108,6 +108,13 @@ func (s *Servicio) Ficha(ctx context.Context, id string) (*Ficha, error) {
 		cat = *c.Categoria
 	}
 	tarifa := BuscarTarifa(tarifas, []string{cat, c.Material}, c.PriceListID)
+	// La placa que trae el cliente (escrita a mano, sin variante) no tiene
+	// categoría: se cobra con la tarifa «Placa del cliente» si el admin la
+	// cargó, y si no con la de «Placas». Sin esto quedaba en $ 0, sin
+	// «Cobrar», y el taller la cortaba gratis (mes simulado, M3S2-009).
+	if tarifa == nil && c.VariantID == nil {
+		tarifa = BuscarTarifa(tarifas, []string{TarifaPlacaDelCliente, "Placas"}, c.PriceListID)
+	}
 	metros := MetrosDeTapacanto(piezasConCanto(c))
 	plano := PlanoDelCorte(c)
 	sup := make([]float64, len(plano.Placas))
@@ -504,3 +511,7 @@ func (s *Servicio) TarifaDeLaPlaca(ctx context.Context, variantID, customerID st
 	}
 	return BuscarTarifa(tarifas, []string{cat, producto}, lista), nil
 }
+
+// TarifaPlacaDelCliente es el nombre de la tarifa de corte para el material
+// que trae el cliente; sin ella, la de «Placas».
+const TarifaPlacaDelCliente = "Placa del cliente"

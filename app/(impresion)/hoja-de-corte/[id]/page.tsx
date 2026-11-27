@@ -71,6 +71,7 @@ async function Contenido({ params }: { params: Promise<{ id: string }> }) {
             }
           : null,
         sinCargo: corte.sinCargo,
+        placaDelCliente: corte.variantId == null,
       }}
     />
   );

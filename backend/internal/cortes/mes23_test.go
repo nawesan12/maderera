@@ -164,6 +164,26 @@ func TestElTotalConQueSeTomo(t *testing.T) {
 	}
 }
 
+// M3S2-009: la placa que trae el cliente (escrita a mano) cobra sus pasadas
+// con la tarifa de «Placas», y con «Placa del cliente» si se cargó.
+func TestLaPlacaDelClienteCobraSusPasadas(t *testing.T) {
+	e := armar(t)
+	ven := e.staff(t, "vendedor@prueba.test", "vendedor")
+	id := alta(t, e, ven, map[string]any{"contactoNombre": "Rodolfo", "materialDescripcion": "MDF 18 que trae el cliente",
+		"placaLargoMm": "2600", "placaAnchoMm": "1830", "piezas": []any{pieza(600, 300, 3)}})
+	f := leerFicha(t, e, ven, id)
+	c := f["cuenta"].(map[string]any)
+	if f["modo"] != "suelto" || c["subtotalCorte"].(float64) <= 0 || c["precioPorPasada"].(float64) != 1200 {
+		t.Fatalf("la placa del cliente: %v %v", f["modo"], c)
+	}
+	if _, err := e.pool.Exec(context.Background(), `insert into cutting_rates (material, precio_por_pasada, precio_por_metro_canto) values ('Placa del cliente', 1500, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	if c := leerFicha(t, e, ven, id)["cuenta"].(map[string]any); c["precioPorPasada"].(float64) != 1500 {
+		t.Errorf("con su tarifa: %v", c["precioPorPasada"])
+	}
+}
+
 // M2S1-064 y M2S2-106: el espesor del PTX es el del tablero, no la primera
 // medida con «mm».
 func TestEspesorConLaMedidaDeLaPlaca(t *testing.T) {

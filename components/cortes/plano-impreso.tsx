@@ -42,15 +42,18 @@ export function PlanoImpreso({
     deQueSale?: string;
     /** Una reposición sin cargo: no se vende ni se cobra nada. */
     sinCargo?: boolean;
+    /** La placa la trae el cliente: lo que sobra es suyo. */
+    placaDelCliente?: boolean;
     /** Sale de media placa. */
     media?: boolean;
   };
 }) {
   const desperdicio = 1 - plano.aprovechadoTotal;
-  const quien: QuienSeQueda = { sinCargo: corte.sinCargo, media: corte.media };
+  const quien: QuienSeQueda = { sinCargo: corte.sinCargo, media: corte.media, placaDelCliente: corte.placaDelCliente };
   const nombre = corte.media ? "Media" : "Placa";
   const enteras = corte.sinCargo ? 0 : plano.placasEnteras;
-  const todasDelCliente = plano.placas.every((p) => sobraDelCliente(p.seVendeEntera, quien));
+  const todasDelCliente =
+    !corte.placaDelCliente && plano.placas.every((p) => sobraDelCliente(p.seVendeEntera, quien));
 
   return (
     <div className="plano-pagina">

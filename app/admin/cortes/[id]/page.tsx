@@ -402,7 +402,7 @@ export default async function FichaCortePage({
               lleva el cliente. */}
           <div className="border-t border-linea px-5 py-4">
             <h3 className="text-base font-medium">Lo que sobra</h3>
-            <SobrantesVivos guardado={plano} media={media} sinCargo={corte.sinCargo} todasDelCliente={ficha.retalesDelCliente} />
+            <SobrantesVivos guardado={plano} media={media} sinCargo={corte.sinCargo} todasDelCliente={ficha.retalesDelCliente} placaDelCliente={corte.variantId == null} />
             <p className="mt-2 text-sm text-muted-foreground">
               {Math.round(plano.aprovechadoTotal * 100)}% del material sale en
               piezas · sierra de {formatearSierra(plano.anchoSierra)}
@@ -425,7 +425,7 @@ export default async function FichaCortePage({
                 anchoSierra={plano.anchoSierra}
                 busqueda={corte.motorPlano >= 2}
                 inicial={ficha.fijadas}
-                quien={{ sinCargo: corte.sinCargo, media, todasDelCliente: ficha.retalesDelCliente }}
+                quien={{ sinCargo: corte.sinCargo, media, todasDelCliente: ficha.retalesDelCliente, placaDelCliente: corte.variantId == null }}
               />
             ) : (
               <PlanoSimple plano={plano} media={media} piezas={corte.piezas} />

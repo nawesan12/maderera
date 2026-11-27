@@ -104,6 +104,8 @@ const ESTADOS: Record<string, Estilo> = {
 
   // Reseñas de producto.
   publicada: { etiqueta: "Publicada", familia: "ok", abierto: false },
+  // «rechazada» a secas es la de ARCA.
+  resena_rechazada: { etiqueta: "Rechazada", familia: "cerrado", abierto: false },
 
   // Eventos. «Publicado» salía en gris, como si estuviera cerrado.
   publicado: { etiqueta: "Publicado", familia: "ok", abierto: true },

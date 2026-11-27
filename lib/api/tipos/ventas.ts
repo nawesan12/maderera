@@ -446,6 +446,16 @@ export interface components {
             porEntregar: components["schemas"]["PorEntregar"][];
             /** @description Los cortes del pedido en cola o en la máquina */
             cortesSinTerminar: string[];
+            /** @description Lo que falta llevar de un envío sin entregar (vacío en un retiro) */
+            aLlevar?: components["schemas"]["PorEntregar"][];
+            /** @description Los remitos de envío sin firmar, con lo que lleva cada uno */
+            enElCamion?: {
+                numero: string;
+                firmaToken: string;
+                lineas: components["schemas"]["PorEntregar"][];
+            }[];
+            /** @description Un envío a una zona a cotizar sin flete cargado */
+            fleteACotizar?: boolean;
             /**
              * @description Con qué salió la venta del mostrador
              * @enum {string|null}

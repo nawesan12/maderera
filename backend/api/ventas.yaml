@@ -647,6 +647,21 @@ components:
           description: Lo que falta de un pedido que ya salió en parte; vacío si no salió nada
           items: { $ref: "#/components/schemas/PorEntregar" }
         cortesSinTerminar: { type: array, items: { type: string }, description: Los cortes del pedido en cola o en la máquina }
+        aLlevar:
+          type: array
+          description: Lo que falta llevar de un envío sin entregar (vacío en un retiro)
+          items: { $ref: "#/components/schemas/PorEntregar" }
+        enElCamion:
+          type: array
+          description: Los remitos de envío sin firmar, con lo que lleva cada uno
+          items:
+            type: object
+            required: [numero, firmaToken, lineas]
+            properties:
+              numero: { type: string }
+              firmaToken: { type: string }
+              lineas: { type: array, items: { $ref: "#/components/schemas/PorEntregar" } }
+        fleteACotizar: { type: boolean, description: Un envío a una zona a cotizar sin flete cargado }
         comprobante: { type: string, nullable: true, enum: [interno, fiscal, null], description: Con qué salió la venta del mostrador }
         facturado: { type: boolean, description: Tiene una factura viva }
         id: { type: string }

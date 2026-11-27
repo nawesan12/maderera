@@ -552,8 +552,15 @@ export default async function FichaPedidoPage({
                 {pedido.zonaEnvio && (
                   <p className="mt-1.5 flex items-center gap-2 text-base text-muted-foreground">
                     <MapPin className="h-5 w-5 shrink-0" />
-                    {pedido.zonaEnvio}
+                    {pedido.zonaEnvio.replace(/\s*\([^)]*\)\s*$/, "")}
                   </p>
+                )}
+                {/* La zona «a cotizar» sin flete: salía y se entregaba sin
+                    cotizarlo (mes simulado 2). */}
+                {Number(pedido.costoEnvio) === 0 && /a cotizar/i.test(pedido.zonaEnvio ?? "") && (
+                  <span className="estado-problema mt-2 inline-block rounded-full bg-[var(--estado-fondo)] px-2.5 py-0.5 text-sm font-medium text-[var(--estado-tinta)]">
+                    Flete sin cotizar
+                  </span>
                 )}
               </>
             ) : (
